@@ -42,8 +42,8 @@ tree (``parent_id``), with where it runs, the work item it serves, its times, it
                                                          ``unknown`` with ``ended_at`` null: its end was not seen)
     an ended parent (or ancestor), no end of its own     ``unknown: end_unobserved``, ``ended_at`` null
     a parent whose process could not be verified          ``unknown: parent_unverified``
-    a row with no start seen, or whose parent's row is    ``unknown: parent_unknown``, never ``running``
-    not known
+    a row whose own start was never seen                 ``unknown: start_unseen``, never ``running``
+    a row whose parent's row is not known                ``unknown: parent_unknown``, never ``running``
     its host not reachable                               ``unknown: host_unreachable`` (``host_stopped`` when the
                                                          host announced a stop), never ``running``
     frozen (it, or the runtime child it runs inside,     ``idle: frozen``
@@ -942,9 +942,13 @@ class Fold:
             return "unknown", "end_unobserved"
         if any(r["state"] == "unknown" and r["reason"] == "process_unverified" for r in chain[1:]):
             return "unknown", "parent_unverified"           # its process may run or not: nothing below is known
-        if not rec["started"] or any(r["placeholder"] for r in chain[1:]):
-            # Its start was never seen (so neither was its parent), or its parent's row is not known: whatever it last
-            # said, nothing closes it when its parent ends, so it is never shown running (CEN-3, CEN-4).
+        if not rec["started"]:
+            # Its own start was never seen (a root whose SessionStart was missed, or a subagent whose start was lost):
+            # whatever it last said, nothing ties it to a parent that would close it, so it is never shown running
+            # (CEN-3, CEN-4; S1-F review N-F2: named for what is missing, its start).
+            return "unknown", "start_unseen"
+        if any(r["placeholder"] for r in chain[1:]):
+            # Its start was seen, naming a parent whose row is not known: nothing closes it when that parent ends.
             return "unknown", "parent_unknown"
         host = rec["host_id"] if host_override is None else None
         reach = reachability.get(host, "unknown")
