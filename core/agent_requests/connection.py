@@ -14,6 +14,10 @@ Rules (design 2026-10-08 sections 7 and 12; Codex's acceptance criteria of 11 Oc
   one is refused unless adoption is explicit and recorded.
 * **Honest listening.** The ``.armed`` marker is touched only while the provider reports idle or busy, so the portal's "listening" means a live session, not a hope.
 * The notice carries validated tokens only (request id, sender, recipient, how to read, receipt and report); never the request's own words.
+* **The census** (host runtime spec v0.5 §6.6; ``core/mc_delegation_runner/census.py``): given the host runtime's census folder, the manager writes the session's
+  root row at each start, beside its launch record and before the spawn (``start_path: connection``, its route, the launch record's names and digests, and where
+  the vendor keeps the transcript), and a state change each time a pass sees one (running, idle, offline, unknown). It never writes content. A census row that
+  cannot be written refuses the start, as an unwritten launch record does.
 Standard library only. Nothing here starts a session: a provider's ``start`` is called only by an operator action (scripts/agent_connection.py --start)."""
 from __future__ import annotations
 
@@ -156,7 +160,7 @@ def _safe_dir(path: str) -> None:
 
 class ConnectionManager:
     def __init__(self, root: str, agent: str, provider: Provider, *, session_id: str, clock=time.time, helper: str = DEFAULT_HELPER, python: str = sys.executable,
-                 adopt_identity: bool = False, limits=None):
+                 adopt_identity: bool = False, limits=None, census_dir: str | None = None):
         if agent not in L.CONNECTED:
             raise L.Refused("invalid", "A connection is for claude-code or codex.")
         if not isinstance(session_id, str) or not _SESSION_ID.fullmatch(session_id):
@@ -165,6 +169,11 @@ class ConnectionManager:
             raise L.Refused("invalid", "The ledger root, the helper and the interpreter must be absolute paths that exist; there is no fallback to a default ledger.")
         self.root, self.agent, self.provider, self.session_id, self.clock, self.helper, self.python = root, agent, provider, session_id, clock, helper, python
         self.limits = limits                                    # the limits registry (core.limits.Limits), or None: no daily ceiling is enforced then
+        if census_dir is not None and (not isinstance(census_dir, str) or not os.path.isabs(census_dir)):
+            raise L.Refused("invalid", "The census folder must be an absolute path.")
+        from core.mc_delegation_runner.census import CensusFile
+        self.census = None if census_dir is None else CensusFile(census_dir)   # the host runtime's census folder, or None: no row (today's behaviour)
+        self._census_state = None                               # the state last written to the census for this session
         self.instance = secrets.token_hex(6)
         self._last_pass, self._last_error, self._anchors, self._restart_info = None, "", {}, {}
         self.dir = os.path.join(root, "connection", agent)
@@ -246,8 +255,8 @@ class ConnectionManager:
                 self._lock_fd = None
 
     def _record_launch(self, rec: dict) -> None:
-        """Append one launch record (names and digests only) to connection/<agent>/launch.jsonl, fsynced: the root
-        record seam the census reads (spec v0.5 R6.6-c). Raises when it cannot be written, so the start is refused."""
+        """Append one launch record (names and digests only) to connection/<agent>/launch.jsonl, fsynced, and with a census, the session's root row
+        (spec v0.5 R6.6-c, R6.7-g). Raises when either cannot be written, so the start is refused."""
         line = json.dumps(rec, sort_keys=True)
         fd = os.open(os.path.join(self.dir, "launch.jsonl"), os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
         try:
@@ -256,6 +265,34 @@ class ConnectionManager:
             os.fsync(fd)
         finally:
             os.close(fd)
+        if self.census is not None:
+            self.census.append("census.start", self._census_root(rec))
+            self._census_state = ("running", None)
+
+    # The vendor and where its own transcript is kept, per agent: the memory shelf reads these folders (core/memory_shelf/config.py, sessions.py).
+    _CENSUS_VENDOR = {"claude-code": ("anthropic", "~/.claude/projects/*/{session}.jsonl"), "codex": ("openai", "~/.codex/sessions/**/rollout-*.jsonl")}
+
+    def _census_root(self, rec: dict) -> dict:
+        from core.mc_delegation_runner import census as C, launch_env
+        vendor, path = self._CENSUS_VENDOR[self.agent]
+        return C.start(self.session_id, source="connection.start", verified=True, children="not_exposed", vendor=vendor, role="session",
+                       start_path="connection", route=C.route_label(rec.get("route"), launch_env.ROUTES.get(rec.get("route"))),
+                       launch=C.launch_summary(rec), transcript_ref=C.kept(self.session_id, path.format(session=self.session_id)))
+
+    def _census_seen(self, state: str) -> None:
+        """A pass's probe, as the session's census state, written only when it changed: busy is running, idle idle, offline idle (no process serves the
+        session until it is resumed), anything else unknown. A census that cannot be written never costs the pass."""
+        if self.census is None or self._census_state is None:
+            return
+        now = {"busy": ("running", None), "idle": ("idle", None), "offline": ("idle", "offline")}.get(state, ("unknown", "probe_unknown"))
+        if now == self._census_state:
+            return
+        from core.mc_delegation_runner import census as C
+        try:
+            self.census.append("census.update", C.update(self.session_id, source="connection.probe", state=now[0], reason=now[1]))
+            self._census_state = now
+        except Exception:
+            pass
 
     # ── attempts (append-only; the INTENT is written before the provider is called) ──
     def _attempts_path(self) -> str:
@@ -629,6 +666,7 @@ class ConnectionManager:
         if ref and ref != self.session_id:                      # the provider is talking to a different session than the one configured: fail closed
             probe = Probe("unknown", ref, f"identity_mismatch:{ref[:60]}")
             state = "unknown"
+        self._census_seen(state)
         usage, hold, spent = self._usage()
         attention = probe.attention
         if hold and not attention:

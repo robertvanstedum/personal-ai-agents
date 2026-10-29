@@ -61,6 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--writable-root", action="append", default=[], help="Codex: an extra exact folder the session may write (the ledger is always included)")
     p.add_argument("--request-timeout", type=float, default=30.0)
     p.add_argument("--adopt-identity", action="store_true")
+    p.add_argument("--census-dir", help="the host runtime's census folder (absolute; spec v0.5 §6.6): each start writes the session's root row there")
     p.add_argument("--print-argv", action="store_true")
     p.add_argument("--interval", type=float, default=1.0)
     sub = p.add_subparsers(dest="cmd")
@@ -185,7 +186,8 @@ def main(argv=None) -> int:
             session_id = provider.thread_id
         else:
             session_id = a.session_id if a.provider == "claude-stream" else provider.thread_id
-        manager = ConnectionManager(root, a.agent, provider, session_id=session_id, adopt_identity=a.adopt_identity, limits=getattr(a, "limits_obj", None))
+        manager = ConnectionManager(root, a.agent, provider, session_id=session_id, adopt_identity=a.adopt_identity, limits=getattr(a, "limits_obj", None),
+                                    census_dir=a.census_dir)
 
         def start_or_resume():
             """(Re)start the child. A Claude session exists on disk only after its FIRST TURN, so until then a restart creates it again with the same id; after that every start
