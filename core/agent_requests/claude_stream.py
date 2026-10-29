@@ -15,9 +15,13 @@ import re
 import subprocess
 import threading
 import uuid
+from datetime import datetime, timezone
 
 from core.agent_requests.connection import Delivery, Probe, Provider, _UUID
-from core.mc_delegation_runner import launch_env
+from core.mc_delegation_runner import launch, launch_env
+
+ROUTE = "claude-code.subscription"                              # the plan sign-in; no key can reach the session (R6.7-e)
+LaunchRefused = launch.LaunchRefused                            # a start the launch contract refuses, before any spawn (names only)
 
 PERMISSION_MODES = ("default", "acceptEdits", "plan")          # bypassPermissions is not offered
 _TOOL = re.compile(r"^[A-Za-z0-9_:*.\-/ ()]{1,400}$")
@@ -35,7 +39,8 @@ class ClaudeStreamProvider(Provider):
     dedupes_by_correlation = False
 
     def __init__(self, *, claude_bin: str, session_id: str, cwd: str, allowed_tools: list[str], ledger_root: str, permission_mode: str = "default",
-                 max_budget_usd=5.0, resume: bool = False, display_name: str = "", helper_bash: str | None = None, popen=subprocess.Popen, recycle_fraction: float = 0.6):
+                 max_budget_usd=5.0, resume: bool = False, display_name: str = "", helper_bash: str | None = None, popen=subprocess.Popen, recycle_fraction: float = 0.6,
+                 binary_sha256: str | None = None):
         if not os.path.isabs(ledger_root):
             raise ValueError("ledger_root must be an absolute path (there is no default ledger for a managed session)")
         self.ledger_root = ledger_root
@@ -61,6 +66,7 @@ class ClaudeStreamProvider(Provider):
             raise ValueError("recycle_fraction must be between 0 and 1")
         self.recycle_fraction = float(recycle_fraction)
         self.claude_bin, self.session_id, self.cwd = claude_bin, session_id, cwd
+        self.binary_sha256 = binary_sha256                 # the pin (--claude-bin-sha256); a start without one is refused binary_unpinned
         self.allowed_tools, self.permission_mode, self.resume = list(allowed_tools), permission_mode, resume
         self.max_budget_usd = first                      # kept for callers that read it; the effective cap of a live process is _proc_cap
         self._proc_cap = None                            # the cap THIS process was started with
@@ -107,6 +113,16 @@ class ClaudeStreamProvider(Provider):
         child's own ledger (never the global default), ``DISABLE_AUTOUPDATER`` so the pinned CLI never replaces itself, and a UTF-8 ``LANG``."""
         return launch_env.child_env({"MINIMOI_AGENT_REQUESTS_DIR": self.ledger_root, "DISABLE_AUTOUPDATER": "1", "LANG": "en_US.UTF-8"})
 
+    def verify_pin(self) -> str:
+        """The binary's digest when it matches its pin (launch contract step 1), else ``LaunchRefused('binary_unpinned')``."""
+        return launch.verify_binary(self.claude_bin, self.binary_sha256)
+
+    def launch_record(self, env: dict) -> dict:
+        """The launch contract around the environment (``launch.connection_start``): the pinned binary, the sign-in and the key-setting checks
+        (names only), and the launch record. Raises ``launch.LaunchRefused`` before any spawn."""
+        return launch.connection_start(tool="claude-code", route_name=ROUTE, binary=self.claude_bin, pinned=self.binary_sha256, env=env, parent=os.environ,
+                                       project=self.cwd, argv=(), at=datetime.now(timezone.utc).isoformat(), session_ref=self.session_id)
+
     # ── operator action ──
     def start(self) -> None:
         with self._lock:
@@ -114,6 +130,8 @@ class ClaudeStreamProvider(Provider):
         if alive:
             return
         self.close()                                                                # a previous process that lives but has a closed transport is ended first
+        env = self.child_env()
+        self._launched(self.launch_record(env))                                     # refused (or unrecorded) means never started
         with self._lock:
             self._closed = False
             self._ref, self._attention = "", ""
@@ -131,7 +149,7 @@ class ClaudeStreamProvider(Provider):
                 origin = float(hint) if isinstance(hint, (int, float)) and not isinstance(hint, bool) and hint == hint and hint >= 0 else None
             self._origin = self._last_cum = origin
             self._proc = self._popen(self.argv(cap, origin or 0.0), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd=self.cwd, text=True, bufsize=1,
-                                     env=self.child_env())
+                                     env=env)
             self._busy = False
             self.resume = True                                  # any later start continues the same saved session
             threading.Thread(target=self._read, args=(self._proc,), daemon=True).start()

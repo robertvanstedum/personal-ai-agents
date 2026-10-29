@@ -83,6 +83,25 @@ class Provider:
     def close(self) -> None:
         return None
 
+    # The launch record (host runtime spec v0.5 R6.7-d step 4): a provider that starts its own process hands each
+    # start's record to its manager, which appends it to connection/<agent>/launch.jsonl (the census seam, S1-F). A
+    # record made before a manager is attached (Codex's first --create) is kept and handed over on attach. A sink that
+    # fails raises, and the start is refused before any spawn. Names and digests only, never a value.
+    launch_sink = None
+
+    def attach_launch_sink(self, sink) -> None:
+        self.launch_sink = sink
+        pending = self.__dict__.setdefault("_unsent_launches", [])
+        while pending:
+            sink(pending[0])
+            pending.pop(0)
+
+    def _launched(self, record: dict) -> None:
+        if self.launch_sink is None:
+            self.__dict__.setdefault("_unsent_launches", []).append(record)
+        else:
+            self.launch_sink(record)
+
 
 DEFAULT_HELPER = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts", "agent_requests.py")
 
@@ -167,6 +186,8 @@ class ConnectionManager:
             if hasattr(provider, "usage_sink"):
                 provider.usage_sink = self._record_usage        # each cost the provider sees is written down the moment it arrives
                 provider.session_total_hint = self._last_cumulative     # a resumed session continues from the last total on record
+            if hasattr(provider, "attach_launch_sink"):
+                provider.attach_launch_sink(self._record_launch)        # each start's launch record, before its spawn
             self._write_json("lease.json", {"agent": agent, "instance": self.instance, "pid": os.getpid(), "session_id": session_id,
                                              "provider": provider.name, "started_at": self._now()})
         except Exception:
@@ -223,6 +244,18 @@ class ConnectionManager:
             finally:
                 os.close(self._lock_fd)
                 self._lock_fd = None
+
+    def _record_launch(self, rec: dict) -> None:
+        """Append one launch record (names and digests only) to connection/<agent>/launch.jsonl, fsynced: the root
+        record seam the census reads (spec v0.5 R6.6-c). Raises when it cannot be written, so the start is refused."""
+        line = json.dumps(rec, sort_keys=True)
+        fd = os.open(os.path.join(self.dir, "launch.jsonl"), os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            os.write(fd, (line + "\n").encode("utf-8"))
+            os.fsync(fd)
+        finally:
+            os.close(fd)
 
     # ── attempts (append-only; the INTENT is written before the provider is called) ──
     def _attempts_path(self) -> str:

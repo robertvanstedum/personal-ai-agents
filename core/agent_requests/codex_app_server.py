@@ -16,9 +16,12 @@ import queue
 import re
 import subprocess
 import threading
+from datetime import datetime, timezone
 
 from core.agent_requests.connection import Delivery, Probe, Provider
-from core.mc_delegation_runner import launch_env
+from core.mc_delegation_runner import launch, launch_env
+
+ROUTE = "codex.subscription"                                   # the ChatGPT plan sign-in; no key can reach the app-server (R6.7-e)
 
 APPROVAL_POLICIES = ("on-request", "untrusted")           # the installed protocol also has "never": not offered
 SANDBOXES = ("read-only", "workspace-write")           # "danger-full-access" is not offered
@@ -31,7 +34,7 @@ class CodexAppServerProvider(Provider):
     dedupes_by_correlation = False
 
     def __init__(self, *, codex_bin: str, cwd: str, ledger_root: str, thread_id: str | None = None, approval_policy: str = "on-request", sandbox: str = "workspace-write",
-                 writable_roots: list[str] | None = None, request_timeout: float = 30.0, popen=subprocess.Popen):
+                 writable_roots: list[str] | None = None, request_timeout: float = 30.0, popen=subprocess.Popen, binary_sha256: str | None = None):
         if not os.path.isabs(codex_bin) or not os.access(codex_bin, os.X_OK):
             raise ValueError("codex_bin must be an absolute path to an executable")
         if not os.path.isabs(cwd) or not os.path.isdir(cwd):
@@ -53,6 +56,7 @@ class CodexAppServerProvider(Provider):
                 raise ValueError("writable roots must be specific absolute folders (never / or the home folder)")
         self.writable_roots = list(dict.fromkeys(roots))                    # the ledger is always writable so the session can record its receipt and result; nothing else by default
         self.codex_bin, self.cwd, self.ledger_root = codex_bin, cwd, ledger_root
+        self.binary_sha256 = binary_sha256                 # the pin (--codex-bin-sha256); a start without one is refused binary_unpinned
         self.thread_id, self.approval_policy, self.sandbox, self.timeout, self._popen = thread_id, approval_policy, sandbox, float(request_timeout), popen
         self._proc = None
         self._ready = False
@@ -71,6 +75,17 @@ class CodexAppServerProvider(Provider):
         child's own ledger and a UTF-8 ``LANG`` for the commands it runs."""
         return launch_env.child_env({"MINIMOI_AGENT_REQUESTS_DIR": self.ledger_root, "LANG": "en_US.UTF-8"})
 
+    def verify_pin(self) -> str:
+        """The binary's digest when it matches its pin (launch contract step 1), else ``LaunchRefused('binary_unpinned')``."""
+        return launch.verify_binary(self.codex_bin, self.binary_sha256)
+
+    def launch_record(self, env: dict) -> dict:
+        """The launch contract around the environment (``launch.connection_start``): the pinned binary, the ChatGPT sign-in, and the key-setting
+        checks (names only; the app-server reads the user configuration, so it is checked), then the launch record. Raises ``launch.LaunchRefused``
+        before any spawn."""
+        return launch.connection_start(tool="codex", route_name=ROUTE, binary=self.codex_bin, pinned=self.binary_sha256, env=env, parent=os.environ,
+                                       project=self.cwd, argv=self.argv(), at=datetime.now(timezone.utc).isoformat(), session_ref=self.thread_id)
+
     # ── operator action ──
     def start(self, *, create: bool = False) -> str:
         """Start the app-server and bind it to the configured thread: ``thread/resume`` of the stored id, or (only when ``create`` and no id is configured) ``thread/start``.
@@ -79,10 +94,12 @@ class CodexAppServerProvider(Provider):
             if self._proc is not None and self._proc.poll() is None and self._ready:
                 return self.thread_id or ""
         self.close()                                                                    # a previous process that is alive but unusable (closed transport) is ended first
+        env = self.child_env()
+        self._launched(self.launch_record(env))                                         # refused (or unrecorded) means never started
         with self._lock:
             self._ready, self._busy, self._attention, self._waiting = False, False, "", {}
             self._proc = self._popen(self.argv(), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd=self.cwd, text=True, bufsize=1,
-                                     env=self.child_env())
+                                     env=env)
             proc = self._proc
         threading.Thread(target=self._read, args=(proc,), daemon=True).start()
         try:

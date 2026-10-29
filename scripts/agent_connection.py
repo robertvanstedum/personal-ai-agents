@@ -8,6 +8,12 @@
   ... run --start         also start the explicitly identified persistent session, and RESTART it if it dies (resuming the same saved session, with bounded backoff).
   ... print-launchd       print a launchd plist for ``run --start`` (for review; nothing is installed)
 
+Every start goes through the launch contract (host runtime spec v0.5 R6.7-d; core/mc_delegation_runner/launch.py and launch_policy.json): the binary must
+match its pin (``--claude-bin-sha256`` / ``--codex-bin-sha256``: the SHA-256 of the exact file named by --claude-bin / --codex-bin), the plan sign-in must be
+present, and no key setting may sit in the user or project configuration. A failed check refuses the start, names the check (never a value), and is retried
+with the restart backoff (status.json shows it). ``print-launchd`` refuses a plist whose pin is missing or does not match the binary now, so a reinstall can
+never install a connection that would refuse every start. Updating the CLI is a configuration change: a new path and its digest, then a reinstall.
+
 The ledger root, helper and interpreter are absolute and bound into every command the session is given; there is no default ledger. A first session is created only with an explicit
 --session-id (Claude) or --create (Codex); every later start RESUMES the recorded one. Zero model calls while the queue is empty. SIGTERM/Ctrl-C stop the manager and close the
 session's stdin; the saved session (its history) stays."""
@@ -22,7 +28,7 @@ import threading
 import xml.sax.saxutils as xml
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core.agent_requests.claude_stream import ClaudeStreamProvider, helper_selector  # noqa: E402
+from core.agent_requests.claude_stream import ClaudeStreamProvider, LaunchRefused, helper_selector  # noqa: E402
 from core.agent_requests.codex_app_server import CodexAppServerProvider  # noqa: E402
 from core.agent_requests.connection import DEFAULT_HELPER, ConnectionManager, IdentityMismatch, LeaseHeld, StateUnreadable, read_identity, run_forever  # noqa: E402
 
@@ -37,11 +43,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--cwd", required=True)
     p.add_argument("--session-id", help="Claude: the UUID of the persistent session (created the first time, resumed after)")
     p.add_argument("--claude-bin")
+    p.add_argument("--claude-bin-sha256", help="the pinned SHA-256 of --claude-bin (launch contract); a start without it, or with another digest, is refused")
     p.add_argument("--allowed-tools", default="Read", help="comma-separated tool names; the ledger helper is added automatically as one exact Bash selector, and no other Bash permission is accepted")
     p.add_argument("--permission-mode", default="default")
     p.add_argument("--max-budget-usd", type=float, default=5.0, help="the Claude process cap when no limits folder is given")
     p.add_argument("--limits-dir", help="the limits registry folder (absolute): the session cap and the daily ceiling are read from it (#296); a changed cap applies at the next restart")
     p.add_argument("--codex-bin")
+    p.add_argument("--codex-bin-sha256", help="the pinned SHA-256 of --codex-bin (launch contract); a start without it, or with another digest, is refused")
     p.add_argument("--thread-id", help="Codex: the stored thread id (omit on a later run to use the recorded one)")
     p.add_argument("--create", action="store_true", help="Codex: create the first thread (refused when one is already recorded)")
     p.add_argument("--approval-policy", default="on-request")
@@ -71,7 +79,8 @@ def build_provider(a, identity: dict):
         cap = (lambda: limits.value("claude.session_cap_usd")) if limits is not None else a.max_budget_usd
         return ClaudeStreamProvider(claude_bin=a.claude_bin, session_id=a.session_id, cwd=a.cwd, allowed_tools=[t for t in a.allowed_tools.split(",") if t] + [selector],
                                     helper_bash=selector,
-                                    permission_mode=a.permission_mode, max_budget_usd=cap, resume=created, display_name="claude-code (persistent)", ledger_root=root)
+                                    permission_mode=a.permission_mode, max_budget_usd=cap, resume=created, display_name="claude-code (persistent)", ledger_root=root,
+                                    binary_sha256=a.claude_bin_sha256)
     if a.agent != "codex" or not a.codex_bin:
         raise ValueError("codex-app-server needs --agent codex and --codex-bin")
     thread = a.thread_id or identity.get("session_id")
@@ -80,7 +89,16 @@ def build_provider(a, identity: dict):
     if not thread and not a.create:
         raise ValueError("no Codex thread is recorded: give --thread-id, or --create the first one explicitly")
     return CodexAppServerProvider(codex_bin=a.codex_bin, cwd=a.cwd, ledger_root=root, thread_id=thread, approval_policy=a.approval_policy, sandbox=a.sandbox,
-                                  writable_roots=a.writable_root, request_timeout=a.request_timeout)
+                                  writable_roots=a.writable_root, request_timeout=a.request_timeout, binary_sha256=a.codex_bin_sha256)
+
+
+def check_pin(a, provider) -> None:
+    """The plist's ``run --start`` must be able to start: the binary named must match the pin given now (launch contract step 1)."""
+    binary, flag = (a.claude_bin, "--claude-bin-sha256") if a.provider == "claude-stream" else (a.codex_bin, "--codex-bin-sha256")
+    try:
+        provider.verify_pin()
+    except LaunchRefused as exc:
+        raise ValueError(f"{exc}: give {flag} with the SHA-256 of {binary}; a plist without a matching pin would refuse every start") from None
 
 
 def launchd_plist(a, script: str, identity: dict) -> str:
@@ -144,7 +162,9 @@ def main(argv=None) -> int:
         return 0
     if a.cmd == "print-launchd":
         try:
-            print(launchd_plist(a, os.path.abspath(__file__), identity))
+            text = launchd_plist(a, os.path.abspath(__file__), identity)
+            check_pin(a, provider)
+            print(text)
         except ValueError as exc:
             print(f"refused: {exc}", file=sys.stderr)
             return 2
@@ -178,7 +198,7 @@ def main(argv=None) -> int:
             start_or_resume()
         run_forever(manager, stop, interval=a.interval, restart=start_or_resume if (a.cmd == "run" and a.start) else None, on_pass=after_pass)
         return 0
-    except (LeaseHeld, IdentityMismatch, StateUnreadable) as exc:
+    except (LeaseHeld, IdentityMismatch, StateUnreadable, LaunchRefused) as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 3
     finally:
