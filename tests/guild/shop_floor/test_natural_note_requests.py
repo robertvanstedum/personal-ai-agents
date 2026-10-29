@@ -253,3 +253,30 @@ def test_spoken_save_a_note_test_is_saved_and_save_a_note_later_is_not(voice):
     later = call(voice, sid, call_id="s2", name="save_note", words="save a note later").get_json()
     assert later["saved"] is False and later["spoken"] == direct.NOT_A_NOTE
     assert voice.cos.calls == ["/note test"] and not voice.turns
+
+
+
+# ── Review M-2 and S-1 on MC's paths: one stop rule (domains/cos/owner_words.py) ─────────────────────────────────────
+
+@pytest.mark.parametrize("text", ["Save a note, never mind", "Make a note, could you?", "save a note, right?", "Save a note, MC",
+                                  "save a note sure", "Save a note did you get that", "save a note your last answer",
+                                  "save a note, the summary above", "save a note everything you said"])
+def test_mc_reads_a_cancellation_a_request_a_name_or_a_pointer_as_chat(text):
+    assert oa.parse(text) is None and _is_note_command(text) is False
+
+
+def test_typed_make_a_note_could_you_reaches_the_model_and_saves_nothing(cos_portal):
+    body = _say(cos_portal, "Make a note, could you?")
+    sent = cos_portal.extra["route"].sent
+    assert len(sent) == 1 and not sent[0]["text"].startswith("/note") and body.get("operation") is None
+
+
+def test_spoken_never_mind_or_a_pointer_is_not_saved_and_save_a_note_test_still_is(voice):
+    from minimoi_portal.guild_ui import mc_voice_direct as direct
+    from test_mc_voice_direct import call, start
+    sid = start(voice)["voice_session_id"]
+    for n, words in enumerate(("Save a note, never mind", "save a note your last answer", "Save a note, MC")):
+        said = call(voice, sid, call_id=f"m{n}", name="save_note", words=words).get_json()
+        assert said["saved"] is False and said["spoken"] == direct.NOT_A_NOTE, words
+    assert call(voice, sid, call_id="m9", name="save_note", words="save a note test").get_json()["saved"] is True
+    assert voice.cos.calls == ["/note test"]

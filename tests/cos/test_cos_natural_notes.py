@@ -88,7 +88,7 @@ def test_her_voice_refuses_save_note_on_a_question_or_a_pointer(r, words):
     ("Save a note test.", "test."),
     ("save a note buy milk", "buy milk"),
     ("Okay, save a note the kiln is hot", "the kiln is hot"),
-    ("Can you save a note test?", "test?"),
+    ("Can you save a note test?", "test"),                                         # the request's own "?" (M-2)
     ("make a note, buy milk", "buy milk"),
     ("Make a note, that the kiln is hot.", "the kiln is hot."),                       # a pause before "that"
     ("save a note, call Anna", "call Anna"),
@@ -148,3 +148,50 @@ def test_a_statement_or_a_forwarded_notice_on_telegram_reaches_her_model_and_is_
     assert real._chat(text, channel="telegram_text") == "Here is what I found."     # telegram_cos_bot._chat's call
     assert [prompt for prompt, _context in real.test.sent] == [text]
     assert real.test.memory.read_text() == before
+
+
+
+# ── Review M-2 and S-1: one stop rule for the loose forms (domains/cos/owner_words.py) ─────────────────────────────────
+
+M2_CANCELS = ["Save a note, never mind", "save a note, scratch that", "save a note, forget it", "save a note, cancel that",
+              "save a note, stop", "save a note, wait", "save a note, hold on", "save a note, just kidding"]
+M2_REQUESTS = ["Make a note, could you?", "Save a note, will you?", "make a note, would you please", "save a note, right?",
+               "Make a note, can you", "save a note sure", "Save a note did you get that"]
+M2_NAMES = ["Save a note, MC", "save a note, Grok", "Save a note, Chief", "save a note, CoS", "save a note, Master Craftsman",
+            "make a note, Chief of Staff, the kiln is hot", "save a note MC the kiln is hot", "save a note, Check with MC",
+            "make a note called MC"]
+S1_POINTERS = ["save a note your last answer", "save a note the summary above", "save a note everything you said",
+               "save a note, your last answer", "make a note called your last answer", "save a note, that", "save a note, this",
+               "save a note something", "Note that down for tomorrow.", "Could you note that for the team?",
+               "Can you note that in the doc?", "Note that on the board."]
+
+
+@pytest.mark.parametrize("text", M2_CANCELS + M2_REQUESTS + M2_NAMES + S1_POINTERS)
+def test_a_cancellation_a_request_a_name_or_a_pointer_after_a_loose_note_form_is_chat_never_a_note(text):
+    assert parse_explicit_note(text) is None
+
+
+@pytest.mark.parametrize("text,note", [("save a note test", "test"), ("Save a note, the kiln is ready", "the kiln is ready"),
+                                       ("make a note called Kiln", "Kiln"), ('save a note "never mind"', '"never mind"'),
+                                       ("Could you save a note, glaze order Friday, please?", "glaze order Friday")])
+def test_his_own_words_after_a_loose_note_form_are_still_his_note(text, note):
+    assert parse_explicit_note(text) == note
+
+
+def test_the_note_and_the_board_share_one_pointer_check():
+    from domains.cos import owner_words
+    from minimoi_portal.guild_ui import board_commands
+    assert board_commands._points_only is owner_words.points_only
+    for pointer in ("your last answer", "the summary above", "everything you said", "a reminder", "something"):
+        assert owner_words.points_only(pointer) and owner_words.not_his_note(pointer)
+        assert board_commands.parse(f"make a post-it: {pointer}") == ""          # the Board asks for the words, as before
+
+
+def test_her_voice_does_not_save_could_you_and_the_dictated_note_is_not_lost_as_one(r):
+    """The review's two-breath case: "Make a note, could you?", a pause, then "The kiln is ready." The first is not a
+    note (no "Saved." for words he never meant); the second is not a note command either, so nothing is claimed."""
+    sid = rig.start(r)
+    first = rig.ask(r, sid, "call_1", "t1", words="Make a note, could you?", name="save_note").get_json()
+    assert first["saved"] is False and first["spoken"] == direct_voice.NOT_A_NOTE
+    second = rig.ask(r, sid, "call_2", "t2", words="The kiln is ready.", name="save_note").get_json()
+    assert second["saved"] is False and not r.notes.saved

@@ -74,17 +74,9 @@ _WRAPPED = re.compile(r'(["“‘’\'])(.*)(["”’\'])\s*[.!?]*', re.S)
 
 # A payload that only points at something ("this", "your last answer", "the summary above")
 # or names a generic thing ("a reminder") is not the note's text. Ask for the words instead
-# of saving the pointer. Quoted words are always literal.
-_REFERENT = re.compile(r"""(?:
-    this|that|it|these|those|same|the\s+same|above|the\s+above|below|the\s+below
-  | (?:all\s+of\s+)?(?:this|that|it)(?:\s+(?:above|below|again))?
-  | everything(?:\s+(?:above|you\s+said))?
-  | (?:(?:the|that|this|your|my|our)\s+)?(?:(?:last|previous|latest|recent|earlier|above|current|full)\s+)?
-      (?:answer|reply|response|message|summary|text|note|list|plan|points?|ideas?|suggestions?|output|results?|draft|one|thing|stuff)
-      (?:\s+(?:above|below|earlier|again|you\s+(?:just\s+)?(?:gave|wrote|sent|made)))?
-  | what\s+(?:you|i|we)\s+(?:just\s+)?(?:said|wrote|suggested|mentioned|proposed|sent|described|discussed)(?:\s+(?:above|earlier))?
-)""", re.I | re.X)
-_GENERIC = re.compile(r"(?:(?:a|an|another|some|one|new|a\s+new)\s+)?(?:reminder|note|post[- ]?it|task|to-?do|item|card|entry|message|thing)s?|something|anything", re.I)
+# of saving the pointer. Quoted words are always literal. The check is shared with the note
+# grammar (domains/cos/owner_words.py, review S-1), unchanged.
+from domains.cos.owner_words import points_only as _points_only  # noqa: E402
 
 
 def _mask_quotes(text):
@@ -136,8 +128,7 @@ def _literal(payload):
     """'' for a pointer or generic placeholder (ask for the words), else the payload unchanged."""
     if payload is None:
         return None
-    bare = payload.rstrip('.!?').strip()
-    if _REFERENT.fullmatch(bare) or _GENERIC.fullmatch(bare):
+    if _points_only(payload):
         return ''
     return payload
 

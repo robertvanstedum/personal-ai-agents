@@ -17,6 +17,7 @@ from core.realtime_voice.timing import VoiceTiming
 from domains.cos.claim_truth import enforce as enforce_claim_truth
 from domains.cos.reminders import MAX_TEXT_CHARS as MAX_REMINDER_TEXT_CHARS
 from domains.cos.reminders import ReminderRefused
+from domains.cos.owner_words import not_his_note
 
 
 ALLOWED_CHANNELS = frozenset({
@@ -44,27 +45,32 @@ _SLASH_NOTE_PREFIX = re.compile(r"^/note(?:\s+|$)", re.IGNORECASE)
 # ("Please note that the deploy failed, so fix it"), so it stays chat on every
 # channel, as "did you make a note?" and "I noted that" do.
 # A4-2's own words, "save a note test" (29 Oct): spoken, the separator is a pause
-# or nothing. So "save a note X" with no separator, and "make/save a note, X"
-# with a comma (and the "that"/"saying" a pause may sit before), are notes too.
-# His words X must start right there, with a word of their own: a word that only
-# frames, points or times the request ("save a note later", "save a note for
-# me", "make a note, please", "save a note of that", "make a note, if you can")
-# starts no note, and nothing after the comma, or nothing at all, is chat. One
-# content word is a note ("save a note test" keeps "test").
-_NOT_HIS_WORDS = (r"(?:of|for|about|on|onto|to|in|into|with|from|at|by|as|so|if|when|whether|and|or|but|then|than"
-                  r"|later|now|again|too|yet|first|soon|today|tonight|tomorrow|here|there|somewhere|instead|already"
-                  r"|please|thanks|thank|okay|ok|yes|no|maybe|perhaps|real|quick|quickly|this|that|it|these|those"
-                  r"|one|something|anything|what|which|who|how|why|where)\b")
-_HIS_WORDS_START = r"(?!" + _NOT_HIS_WORDS + r")(?=\w|[\"“'‘])"
+# or nothing. So "save a note X" with no separator, "make/save a note, X" with a
+# comma (and the "that"/"saying" a pause may sit before), and "make a note called
+# X" are notes too: the loose forms. What follows them passes one stop rule,
+# owner_words.not_his_note (review M-2, S-1), shared with the Board's referent
+# check: nothing, a question, a pointer, a refusal ("never mind"), a request
+# ("could you?"), an acknowledgement or a name he addresses ("MC") is chat, never
+# a note. One content word is a note ("save a note test" keeps "test"). A request
+# asked as a question ("Can you save a note test?") keeps its words without the
+# question's mark.
 _NATURAL_NOTE_PREFIX = re.compile(
     r"^(?:(?:okay|ok)\s*,?\s+)?"
     r"(?:please\s+|(?:can|could|would)\s+you\s+(?:please\s+)?)?"
     r"(?:"
     r"(?:make|take|save|add|jot\s+down)\s+(?:me\s+)?(?:a\s+)?"
-    r"note\s*(?::|-(?=\s|$)|[–—]|that(?=\s|$)|saying(?=\s|$)|called(?=\s|$))"
+    r"note\s*(?::|-(?=\s|$)|[–—]|that(?=\s|$)|saying(?=\s|$))"
     r"|note\s+to\s+self\s*(?::|[-–—]|,)"
-    r"|(?:make|save)\s+(?:me\s+)?a\s+note\s*,\s*(?:(?:that|saying)\s+)?" + _HIS_WORDS_START
-    + r"|save\s+a\s+note\s+" + _HIS_WORDS_START +
+    r")",
+    re.IGNORECASE,
+)
+_LOOSE_NOTE_PREFIX = re.compile(
+    r"^(?:(?:okay|ok)\s*,?\s+)?"
+    r"(?:please\s+|(?P<asked>(?:can|could|would|will)\s+you\s+(?:please\s+)?))?"
+    r"(?:"
+    r"(?:make|take|save|add|jot\s+down)\s+(?:me\s+)?(?:a\s+)?note\s+(?P<called>called)(?=\s|$)"
+    r"|(?:make|save)\s+(?:me\s+)?a\s+note\s*,\s*(?:(?:that|saying)\s+)?(?=\S)"
+    r"|save\s+a\s+note\s+(?=\S)"
     r")",
     re.IGNORECASE,
 )
@@ -165,9 +171,20 @@ def parse_explicit_note(text: str) -> str | None:
         note_text = text[slash_match.end():]
     else:
         match = _SAVE_NOTE_PREFIX.match(text) or _NATURAL_NOTE_PREFIX.match(text)
-        if match is None:
-            return None
-        note_text = text[match.end():]
+        if match is not None:
+            note_text = text[match.end():]
+        else:
+            loose = _LOOSE_NOTE_PREFIX.match(text)
+            if loose is None:
+                return None
+            note_text = text[loose.end():]
+            if loose.group("asked"):              # "Can you save a note test?": the request's own question mark
+                note_text = re.sub(r"(?:\s*,\s*please)?\s*\?+\s*$", "", note_text)
+            if not note_text.strip():
+                if not loose.group("called"):     # "make a note called" asks for the words; a bare pause is chat
+                    return None
+            elif not_his_note(note_text):
+                return None
 
     # Store a single inert text line so newlines cannot create memory markup.
     note_text = " ".join(note_text.split())
