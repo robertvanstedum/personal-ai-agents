@@ -14,6 +14,21 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # The same throwaway PostgreSQL as deploy.yml's test job, for the opt-in
+    # database tests (MC_BINDING_TEST_DSN). Without it those tests skip.
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: mc12_test_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres -d mc12_test_ci"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,6 +47,8 @@ jobs:
         run: python3 scripts/docs/publish_key_docs.py --check
 
       - name: Run the whole regression suite
+        env:
+          MC_BINDING_TEST_DSN: host=127.0.0.1 port=5432 dbname=mc12_test_ci user=postgres
         run: pytest tests/ -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke
 
       - name: Check docs/specs naming/duplicates/supersession
