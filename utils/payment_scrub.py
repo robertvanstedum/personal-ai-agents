@@ -36,8 +36,14 @@ reviews' tightening to real card, account and routing shapes):
 - masked groups that stand alone before four digits: "•••• 1234",
   "**** 1234", "xxxx-1234" (not "**42**" or "FIXXX 100").
 
-Cost. Callers cap every field before calling ``scrub`` (api.py: 2,000
-characters at most), and the patterns start only at token boundaries.
+Cost. Not every caller caps the text first: api.py caps a field at 2,000
+characters, but a GitHub issue body (up to 65,536 characters, written by
+anyone who can open an issue), a turn file and a whole MC context block are
+scrubbed as they are. So ``scrub`` takes time in proportion to the length of
+its text: every pattern starts only at a token boundary, its repeats are
+possessive or bounded, and no pattern starts again inside a run it has
+already read (see _MASKED_FOUR). The speed tests check how its time grows
+with the length of the text.
 """
 from __future__ import annotations
 
@@ -192,8 +198,20 @@ _AFTER = [
     re.compile(rf"(?<![\d\-])(?:\d{{1,6}}{_SEP}){{0,5}}{_FOUR}[\s:#\-–—]*+{_BRAND}(?![A-Za-z])", re.IGNORECASE),
     re.compile(rf"(?<![A-Za-z])ending\s++(?:in|with)\s*+[:#]?\s*+{_FOUR}", re.IGNORECASE),
     re.compile(rf"(?<![A-Za-z])last\s++(?:four|4)(?:\s++digits)?\s*+[:#]?\s*+{_FOUR}", re.IGNORECASE),
-    re.compile(rf"(?<!\S){_MASK_RUN}{_FOUR}"),
 ]
+# Masked groups that stand alone before four digits: "•••• 1234", "xxxx-1234".
+# The run of masked groups is matched whether four digits follow or not, and
+# kept as it is when they do not, so the search goes on after the whole run.
+# Required in the pattern, a failed try started again at every group inside
+# the run and read to its end: "xx xx xx ..." took time in the square of its
+# length (65,535 characters, the size of a GitHub issue body: over 4 seconds).
+_MASKED_FOUR = re.compile(rf"(?<!\S){_MASK_RUN}(?P<four>{_FOUR})?")
+
+
+def _masked_four(match: re.Match) -> str:
+    return REMOVED if match.group("four") is not None else match.group(0)
+
+
 _CARD_WORD = re.compile(rf"(?<![A-Za-z])(?:{_BRAND}|cards?|credit|debit|cc|cvv|cvc|exp(?:iry|ires)?|payment|paid|pay|billing)(?![A-Za-z])",
                         re.IGNORECASE)
 _REPEATS = re.compile(rf"{re.escape(REMOVED)}(?:[\s,;·\-]*+{re.escape(REMOVED)})++")
@@ -216,6 +234,7 @@ def scrub(text: str) -> str:
     out = _DIGIT_RUN.sub(_cards, out)
     for pattern in _AFTER:
         out = pattern.sub(REMOVED, out)
+    out = _MASKED_FOUR.sub(_masked_four, out)
     out = _BRAND_BESIDE.sub(REMOVED, out)
     out = _REPEATS.sub(REMOVED, out)
     return original if out == normalised else out
