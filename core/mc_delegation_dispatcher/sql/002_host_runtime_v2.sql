@@ -1,6 +1,7 @@
 -- MC delegations, protocol version 2: the host runtime authority's records (host runtime spec v0.5 R3.2-b, R7.6-d,
--- R8.3-a). Additive and idempotent on top of 001: new nullable or defaulted columns, two wider checks, two new
--- tables. Applying 001 and 002 again changes nothing. No data is rewritten or removed; the only constraints dropped
+-- R8.3-a). Additive and idempotent on top of 001: new nullable or defaulted columns (one of them the queue's order,
+-- numbered from a sequence), two wider checks, two new tables. Applying 001 and 002 again changes nothing. No existing
+-- value is rewritten or removed; the only constraints dropped
 -- are 001's narrower state and actor checks, each replaced in the same statement block by a wider one.
 -- An item is a version 2 item exactly when it names a route (R6.7-e); version 1 rows keep route NULL.
 --
@@ -29,6 +30,12 @@ ALTER TABLE guild.mc_delegations
   ADD COLUMN IF NOT EXISTS created_by            TEXT CHECK (created_by IN ('owner','authority')),
   ADD COLUMN IF NOT EXISTS input_artifacts       JSONB NOT NULL DEFAULT '[]'::jsonb
                            CHECK (jsonb_typeof(input_artifacts) = 'array');
+
+-- The queue's order (R3.2-a: a claim takes the oldest queued row): the order the rows were written in, numbered by a
+-- sequence. created_at can't give it: it is the database's wall clock, and a wall clock can step back (the Mac's
+-- Colima VM has its clock stepped back about 0.1 s every 10 s or so by its time sync), so a row written later can
+-- read older. A sequence only counts up. Existing rows are numbered once, when the column is added.
+ALTER TABLE guild.mc_delegations ADD COLUMN IF NOT EXISTS queue_seq BIGINT GENERATED ALWAYS AS IDENTITY;
 
 -- 001's checks, widened: five new states (§4.2) and the test worker (§9.3). The old check is dropped only while it
 -- lacks the new values, so a second run finds the wide one and does nothing.

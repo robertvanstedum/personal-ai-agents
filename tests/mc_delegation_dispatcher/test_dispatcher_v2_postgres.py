@@ -304,6 +304,17 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
         self.assertIsNone(self.claim(caps=[c for c in CAPS if c != "actor:fakework"]))
         self.assertEqual((self.row("job-3")["state"], self.row("job-3")["reservation"]), ("queued", {"requested": 0.5}))
 
+    def test_the_oldest_item_is_the_first_written_even_when_the_database_clock_steps_back(self):
+        """R3.2-a: a claim takes the oldest queued row, in the order the rows were written. A database clock stepped
+        back between two writes (the Mac's Colima VM has its clock stepped back about 0.1 s every 10 s or so) dates the
+        later row earlier. created_at is set here as such a step dates it; the queue keeps the written order."""
+        self.beat()
+        first, second = self.item(amount=0.5), self.item(amount=0.5)
+        self.sql("""UPDATE guild.mc_delegations SET created_at = (SELECT created_at FROM guild.mc_delegations
+                    WHERE job_id=%s) - interval '110 milliseconds' WHERE job_id=%s""", (first, second))
+        self.assertLess(self.row(second)["created_at"], self.row(first)["created_at"])      # the clock stepped back
+        self.assertEqual([self.claim()["envelope"]["work_id"] for _ in range(2)], [first, second])
+
     def test_a_host_with_unreconciled_items_gets_nothing(self):
         self.beat()
         self.beat("mac-b")
