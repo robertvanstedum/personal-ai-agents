@@ -142,7 +142,10 @@ def _credentials(environ, worker_digest):
 
 def attach_runner_door(app, environ, *, store_factory=None):
     """The Mac delegation runner's path to production's dispatcher (core/mc_delegation_dispatcher/door.py): on only
-    with delegation on and a runner token hash (MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256)."""
+    with delegation on and a runner token hash (MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256).
+
+    Host runtime P1-a: with production's authority file named (MINIMOI_MC_DELEGATION_AUTHORITY_FILE) the door also
+    speaks version 2 (``attach_runner_door_v2``); with it unset, this is exactly today's door."""
     from core.mc_delegation_dispatcher.door import PATH as RUNNER_PATH, BODY_MAX, Refused, handle
     digest = (environ.get("MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256") or "").strip().lower()
     principal, env_name = environ.get("MINIMOI_MC_DELEGATION_PRINCIPAL"), environ.get("MINIMOI_MC_DELEGATION_ENV")
@@ -150,6 +153,9 @@ def attach_runner_door(app, environ, *, store_factory=None):
             or env_name not in ("dev", "prod") or not os.environ.get("DATABASE_URL")
             or "delegation_runner" in app.view_functions):
         return False
+    from core.mc_delegation_dispatcher import production
+    if production.named(environ) is not None:
+        return attach_runner_door_v2(app, environ, digest, principal, env_name, store_factory=store_factory)
     if store_factory is None:
         def store_factory():
             import psycopg2
@@ -161,6 +167,106 @@ def attach_runner_door(app, environ, *, store_factory=None):
     door(app, RUNNER_PATH, "delegation_runner", digest, lambda body: handle(store_factory(), body),
          refused=(ValueError, Refused), per_minute=120, body_max=BODY_MAX)
     _log.info("delegation: runner door open (%s only)", RUNNER_PATH)
+    return True
+
+
+def attach_runner_door_v2(app, environ, legacy_digest, principal, env_name, *, store_factory=None, clock=time.monotonic,
+                          per_minute=120):
+    """P1-a: the runner door over production's version 2 authority, and the snapshot's read path.
+
+    * **Version 1 bodies** (no ``protocol``): today's runner token, today's checks and answers, word for word
+      (``door.handle``), now over the version 2 store, whose version 1 calls keep their meaning. Rate-limited per
+      address as today.
+    * **Version 2 bodies**: a host's own token from the door's credentials file (MINIMOI_MC_DELEGATION_DOOR_CREDENTIALS,
+      digests only), answered by ``server.answer``: every runner id and every facts host id bound to that credential's
+      host (Codex part 2 P2-1), the store's refusal codes kept, a lost database 503. An authenticated host is never
+      rate-limited (S1-H review SF4): its contact, renewals and census keep its work alive.
+    * **The read path** ``GET /internal/mc/v1/runtime/state``: a reader's token (observer or owner, same file) reads the
+      published state.json (MINIMOI_RUNTIME_STATE_FILE) as a view with its age (``snapshot.read_request``); an owner's
+      read is counted for C. Opened only when both are configured.
+
+    A named authority file, or credentials file, that cannot be used opens nothing: logged by its code, the runner's
+    door stays closed (never a quiet version 1 beside version 2 items)."""
+    from flask import jsonify, request
+    from core.mc_delegation_dispatcher import door as door_mod, production, server, snapshot as snap
+    try:
+        authority = production.load(production.named(environ), env_name)
+        hosts, readers = production.door_credentials(environ, env_name)
+    except production.NotConfigured as exc:
+        _log.error("delegation: the runner door stays closed: %s", exc)
+        return False
+    if store_factory is None:
+        def store_factory():
+            import psycopg2
+            dsn = os.environ["DATABASE_URL"]
+            return production.store(lambda: psycopg2.connect(dsn, connect_timeout=5), principal=principal,
+                                    environment=env_name, authority=authority)
+    seen = {}
+
+    def limited(who):
+        now = clock()
+        window = [t for t in seen.get(who, ()) if now - t < 60]
+        if len(seen) > 1000:
+            seen.clear()
+        seen[who] = window + [now]
+        return len(window) >= per_minute
+
+    def bearer():
+        header = request.headers.get("Authorization", "")
+        return header[7:] if header.startswith("Bearer ") else ""
+
+    def legacy(token):
+        return 32 <= len(token) <= 256 and secrets.compare_digest(hashlib.sha256(token.encode()).hexdigest(),
+                                                                   legacy_digest)
+
+    def runner_view():
+        who, token = request.headers.get("X-Real-IP") or request.remote_addr or "-", bearer()
+        host = server._caller(token, hosts) if hosts else None
+        if host is None and limited(who):
+            return jsonify(error="rate_limited"), 429
+        raw = request.get_data(cache=False)[:door_mod.BODY_MAX + 1]
+        try:
+            body = json.loads(raw) if request.mimetype == "application/json" else None
+        except ValueError:
+            body = None
+        if isinstance(body, dict) and "protocol" in body:              # version 2: a host speaks only for itself
+            if host is None:
+                return jsonify(error="unauthorized"), 401
+            status, doc = server.answer(store_factory(), hosts, token, raw, request.content_type)
+            return jsonify(doc), status
+        if not legacy(token):
+            return jsonify(error="unauthorized"), 401
+        if request.mimetype != "application/json" or (request.content_length or 0) > door_mod.BODY_MAX \
+                or body is None:
+            return jsonify(error="request_invalid"), 400
+        try:
+            answer = door_mod.handle(store_factory(), body)
+        except (ValueError, door_mod.Refused):
+            return jsonify(error="request_invalid"), 400
+        except Exception:
+            _log.exception("delegation_runner call failed")
+            return jsonify(error="unavailable"), 503
+        return jsonify(answer)
+
+    app.add_url_rule(door_mod.PATH, "delegation_runner", runner_view, methods=["POST"])
+    state_file = production.named(environ, production.STATE_FILE_VAR)
+    opened = "version 1 and 2"
+    if readers and state_file and "runtime_state" not in app.view_functions:
+        def state_view():
+            who = request.headers.get("X-Real-IP") or request.remote_addr or "-"
+            if server._reader(bearer(), readers) is None and limited(who):
+                return jsonify(error="rate_limited"), 429
+            status, doc = snap.read_request(dict(request.headers.items()), readers=readers,
+                                            provide=lambda: snap.read_state_file(state_file),
+                                            note_read=lambda name, role: store_factory().note_read(name, role))
+            resp = jsonify(doc)
+            resp.headers["Cache-Control"] = "no-store"
+            return resp, status
+
+        app.add_url_rule(server.STATE_PATH, "runtime_state", state_view, methods=["GET"])
+        opened += ", and the snapshot's read path"
+    _log.info("delegation: runner door open (%s only), %s; %d version 2 host(s), %d reader(s)", door_mod.PATH,
+              opened, len(hosts), len(readers))
     return True
 
 
