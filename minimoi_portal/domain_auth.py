@@ -146,8 +146,10 @@ def authenticate_password(email: str, password: str) -> dict | None:
 
 
 def has_domain_access(user_id: int, domain: str) -> bool:
+    """Check current account activity as well as its domain-specific grant."""
     rows = _query(
-        "SELECT 1 FROM auth.domain_access WHERE user_id=%s AND domain=%s",
+        "SELECT 1 FROM auth.domain_access a JOIN auth.users u ON u.id=a.user_id "
+        "WHERE a.user_id=%s AND a.domain=%s AND u.is_active=TRUE",
         [user_id, domain],
     )
     return len(rows) > 0
