@@ -7,9 +7,9 @@ import pytest
 ROOT=Path(__file__).resolve().parents[2]
 def load(name,path):
  s=importlib.util.spec_from_file_location(name,ROOT/path);m=importlib.util.module_from_spec(s);sys.modules[name]=m;s.loader.exec_module(m);return m
-W=load('core.jobs.batch_window','core/jobs/batch_window.py')
+from core.jobs import batch_window as W
 B=load('draft_backup','core/memory_backup/backup.py')
-E=load('core.memory_index.embedder','core/memory_index/embedder.py')
+from core.memory_index import embedder as E
 I=load('draft_indexer','core/memory_index/indexer.py')
 V=load('draft_watchers','core/memory_shelf/watchers.py')
 D=load('draft_daily','scripts/memory/daily_watch.py')
