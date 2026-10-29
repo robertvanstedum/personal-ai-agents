@@ -163,6 +163,38 @@ await check('new (OpenAI): a page request whose response never starts is let go 
   assert.equal(s.bound(0), null, 'a request past its bound was given an owner');
 });
 
+// ── Ordinary speech on OpenAI: every one-to-one case still acts on its own words ─────────────────────────────────────
+for (const echo of [true, false]) {
+  await check(`ordinary (OpenAI${echo ? '' : ', no tag echoed'}): three requests in a row, each acting on its own words`, async () => {
+    const s = session('openai');
+    const said = ['What is stuck on #12?', 'Make a note that the kiln is hot', 'Check the board'];
+    said.forEach((text, i) => {
+      s.utter(`item_${i}`); s.start(`R_${i}`, { echo });
+      if (i === 1) s.said(`item_${i}`, text);                          // the words before the call, or after it
+      s.done(`R_${i}`, { call: `c_${i}` });
+      if (i !== 1) s.said(`item_${i}`, text);
+    });
+    await tick();
+    for (let i = 0; i < 3; i++) { s.start(`F_${i}`, { echo }); s.done(`F_${i}`); }   // each result's follow-up
+    assert.deepEqual(s.calls.map((_, i) => words(s, i)), said);
+    assert.equal(s.creates().length, 6);                               // three replies and three follow-ups, one at a time
+  });
+}
+await check('ordinary (OpenAI): a transcript delta before the commit, then the completed words', async () => {
+  const s = session('openai');
+  s.speech(); s.ev({ type: 'conversation.item.input_audio_transcription.delta', item_id: 'item_A', delta: 'Make a note', event_id: 'd1' });
+  s.stopped(); s.commit('item_A'); s.start('R_A'); s.done('R_A', { call: 'c_A' }); await tick();
+  assert.deepEqual(s.bound(0), { state: 'pending' });
+  s.said('item_A', 'Make a note that the glaze is ready');
+  assert.equal(words(s, 0), 'Make a note that the glaze is ready');
+});
+await check('ordinary (OpenAI): a reply that only talks, then his next request: it acts on the next one\'s words', async () => {
+  const s = session('openai');
+  s.utter('item_A'); s.said('item_A', 'Good morning'); s.start('R_A'); s.done('R_A');
+  s.utter('item_B'); s.said('item_B', 'Save a note: the kiln is hot'); s.start('R_B'); s.done('R_B', { call: 'c_B' }); await tick();
+  assert.equal(words(s, 0), 'Save a note: the kiln is hot');
+});
+
 // ── I5: barge-in, cancelled and superseded responses, the earlier commit that never got its own ──────────────────────
 await check('new (OpenAI): a commit while a response is in flight: barge-in cancels it, and the newest committed item is answered', async () => {
   const s = session('openai');
