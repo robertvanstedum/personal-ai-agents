@@ -126,22 +126,13 @@ _LLM_PROVIDERS = [
     {"name": "ollama-gemma", "type": "ollama",     "model": "gemma3:1b"},
 ]
 
-# ─── German contraction expansion ────────────────────────────────────────────
-
-_DE_CONTRACTIONS = {
-    "beim": "bei dem",
-    "im":   "in dem",
-    "am":   "an dem",
-    "vom":  "von dem",
-    "zum":  "zu dem",
-    "zur":  "zu der",
-    "ans":  "an das",
-    "ins":  "in das",
-    "aufs": "auf das",
-    "ums":  "um das",
-}
-_DE_CONTRACTION_RE = re.compile(
-    r'\b(' + '|'.join(re.escape(k) for k in _DE_CONTRACTIONS) + r')\b', re.IGNORECASE
+# Answer text and drill rules have independent, import-safe module homes.
+from domains.german.answer_text import (
+    DE_CONTRACTIONS as _DE_CONTRACTIONS,
+    DE_CONTRACTION_RE as _DE_CONTRACTION_RE,
+    expand_contractions as _expand_contractions,
+    normalize_answer as _normalize_answer,
+    spell_feedback as _spell_feedback,
 )
 
 # ─── Drill constants ──────────────────────────────────────────────────────────
@@ -203,43 +194,8 @@ def _lookup_verb(pool: dict, verb_lower: str) -> dict | None:
     return next((v for v in _all_verb_entries(pool) if v["verb"].lower() == verb_lower), None)
 
 
-def _expand_contractions(text: str) -> str:
-    """Expand German preposition+article contractions to canonical long form."""
-    return _DE_CONTRACTION_RE.sub(lambda m: _DE_CONTRACTIONS[m.group(0).lower()], text)
 
 
-def _normalize_answer(text: str) -> str:
-    """Lowercase, strip punctuation, expand contractions, collapse whitespace."""
-    text = text.lower().strip()
-    text = re.sub(r'[^\w\s]', ' ', text)
-    text = _expand_contractions(text)
-    return " ".join(text.split())
-
-
-def _spell_feedback(normalized_answer: str, expected: str = "") -> str | None:
-    """Return feedback for misspelled German words. Input must already be normalized (no punctuation, lowercase).
-    If expected is given, only suggest corrections that appear in the expected answer."""
-    try:
-        from spellchecker import SpellChecker
-        from difflib import SequenceMatcher
-        checker = SpellChecker(language="de")
-        expected_words = set(expected.split()) if expected else set()
-        words = [w for w in normalized_answer.split() if len(w) >= 3]
-        unknown = checker.unknown(words)
-        if not unknown:
-            return None
-        parts = []
-        for w in unknown:
-            candidates = checker.candidates(w) or set()
-            best = max(candidates, key=lambda c: SequenceMatcher(None, w, c).ratio(), default=None)
-            if not best or SequenceMatcher(None, w, best).ratio() < 0.80:
-                continue
-            if expected_words and best not in expected_words:
-                continue
-            parts.append(f"'{w}' → '{best}'?")
-        return ("Check spelling: " + ", ".join(parts)) if parts else None
-    except Exception:
-        return None
 
 
 # ─── Domain I/O — file loaders and savers ────────────────────────────────────
