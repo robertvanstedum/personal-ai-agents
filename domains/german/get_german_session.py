@@ -558,7 +558,8 @@ def main():
         progress_file.write_text(json.dumps(progress, indent=2, ensure_ascii=False), encoding='utf-8')
 
         # Generate next lesson plan (writes {today}_lesson.json, increments lesson counter)
-        _generate_lesson_plan(_empty_reviewer_output(), skipped_session, domain, personas, progress, lessons_dir)
+        _generate_lesson_plan(_empty_reviewer_output(), skipped_session, domain, personas, progress, lessons_dir,
+                              lesson_date=date_str)
         domain_file.write_text(json.dumps(domain, indent=2, ensure_ascii=False), encoding='utf-8')
 
         # Read back what was just written to report to user

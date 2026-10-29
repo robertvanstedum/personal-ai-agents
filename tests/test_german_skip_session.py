@@ -20,9 +20,9 @@ def skip_world(tmp_path, monkeypatch):
     (state / 'progress.json').write_text('{}')
     monkeypatch.setattr(cli, 'GERMAN_DIR', code)
     calls = []
-    def generate(feedback, session, domain, personas, progress, lessons):
+    def generate(feedback, session, domain, personas, progress, lessons, *, lesson_date=None):
         calls.append(session)
-        (lessons / (session['date'] + '_lesson.json')).write_text(json.dumps({'persona': 'Next', 'scenario': 'next_step'}))
+        (lessons / ((lesson_date or session['date']) + '_lesson.json')).write_text(json.dumps({'persona': 'Next', 'scenario': 'next_step'}))
     reviewer = SimpleNamespace(_pick_next_persona=None, _pick_next_scenario=None,
                                _generate_lesson_plan=generate, _empty_reviewer_output=lambda: {})
     monkeypatch.setitem(sys.modules, 'reviewer', reviewer)
@@ -104,3 +104,31 @@ def test_rejected_date_does_not_read_a_lesson(skip_world, monkeypatch):
     ])
     with pytest.raises(ValueError, match="YYYY-MM-DD"):
         cli.main()
+
+
+def test_skip_uses_real_lesson_rules_and_the_resolved_command_date(skip_world, monkeypatch):
+    from datetime import datetime, timezone
+    from domains.german import reviewer as real_reviewer
+    root, state, calls = skip_world
+    config = root / 'code/config'
+    (config / 'domain.json').write_text(json.dumps({'active_persona': 'A', 'current_lesson_number': 4}))
+    personas = [
+        {'name': 'A', 'role': 'Synthetic A', 'scenarios': ['bakery_order']},
+        {'name': 'B', 'role': 'Synthetic B', 'scenarios': ['bakery_order', 'new_scene']},
+    ]
+    (config / 'personas.json').write_text(json.dumps(personas))
+    class NextDay(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 10, 29, tzinfo=timezone.utc)
+    monkeypatch.setattr(real_reviewer, 'datetime', NextDay)
+    monkeypatch.setitem(sys.modules, 'reviewer', real_reviewer)
+    invoke(monkeypatch, state)
+    lesson = json.loads((state / 'lessons/2026-10-28_lesson.json').read_text())
+    assert (lesson['persona'], lesson['scenario'], lesson['lesson_number']) == ('B', 'new_scene', 5)
+    assert lesson['lesson_date'] == '2026-10-28'
+    assert not (state / 'lessons/2026-10-29_lesson.json').exists()
+    assert json.loads((config / 'domain.json').read_text())['current_lesson_number'] == 5
+    progress = json.loads((state / 'progress.json').read_text())
+    assert progress['personas_practiced'] == ['A'] and progress['scenarios_covered'] == ['bakery_order']
+    assert calls == []  # The fixture's fake generator was not used.

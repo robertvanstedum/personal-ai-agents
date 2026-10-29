@@ -68,3 +68,29 @@ def test_lesson_module_imports_without_runtime_or_site_packages():
     root = Path(__file__).resolve().parents[1]
     code = f"import sys; sys.path.insert(0, {str(root)!r}); import domains.german.lesson_rules; assert 'german_domain' not in sys.modules; assert 'domains.german.reviewer' not in sys.modules"
     subprocess.run([sys.executable, '-B', '-I', '-S', '-c', code], check=True, capture_output=True)
+
+
+def test_review_generation_defaults_to_current_day_not_old_session(tmp_path, monkeypatch):
+    import json
+    from datetime import datetime, timezone
+    class Fixed(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 10, 29, tzinfo=timezone.utc)
+    monkeypatch.setattr(reviewer, 'datetime', Fixed)
+    config = {'current_lesson_number': 4}
+    personas = [{'name': 'A', 'role': 'Synthetic', 'scenarios': ['one']}]
+    reviewer._generate_lesson_plan(reviewer._empty_reviewer_output(), {'date': '2026-10-01'},
+                                  config, personas, {}, tmp_path)
+    lesson = json.loads((tmp_path / '2026-10-29_lesson.json').read_text())
+    assert lesson['lesson_date'] == '2026-10-29' and lesson['lesson_number'] == 5
+    assert config['current_lesson_number'] == 5
+
+
+@pytest.mark.parametrize('date', ['', '../escape', '2026-02-29'])
+def test_invalid_lesson_override_precedes_choices_and_writes(tmp_path, monkeypatch, date):
+    monkeypatch.setattr(reviewer, '_pick_next_persona', lambda *a: pytest.fail('choice before validation'))
+    config = {'current_lesson_number': 4}
+    with pytest.raises(ValueError, match='YYYY-MM-DD'):
+        reviewer._generate_lesson_plan({}, {}, config, [], {}, tmp_path, lesson_date=date)
+    assert config['current_lesson_number'] == 4 and list(tmp_path.iterdir()) == []

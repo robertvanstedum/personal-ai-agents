@@ -39,7 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from german_domain import GERMAN_DIR, GERMAN_STATE_DIR
-from domains.german.session_files import session_sort_key
+from domains.german.session_files import session_sort_key, validate_session_date
 
 from domains.german.review_output import (
     ERROR_TYPES,
@@ -306,9 +306,12 @@ def _generate_anki_csv(reviewer_output: dict, session: dict,
 # ── Step 3b: Generate lesson plan ────────────────────────────────────────────
 
 def _generate_lesson_plan(reviewer_output: dict, session: dict, domain_cfg: dict,
-                           personas: list, progress: dict, lessons_dir: Path):
+                           personas: list, progress: dict, lessons_dir: Path, *, lesson_date: str | None = None):
+    # Reviews plan for today; skip commands pass the date they already resolved.
+    next_date = validate_session_date(
+        lesson_date if lesson_date is not None else datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    )
     lesson_number = domain_cfg.get("current_lesson_number", 1)
-    next_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     next_persona = _pick_next_persona(personas, progress)
     next_scenario = _pick_next_scenario(next_persona, progress)
