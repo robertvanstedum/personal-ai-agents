@@ -1,11 +1,19 @@
 """Shared domain clients select explicit modules, never an ambiguous basename."""
 import importlib
+import importlib.util
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-import conftest as shared_fixtures
+# Other test directories have their own conftest module. Exercise the exact
+# shared fixture source regardless of which directory pytest collected first.
+_fixture_spec = importlib.util.spec_from_file_location(
+    "_renewal_domain_client_fixtures", Path(__file__).with_name("conftest.py")
+)
+shared_fixtures = importlib.util.module_from_spec(_fixture_spec)
+_fixture_spec.loader.exec_module(shared_fixtures)
 
 
 @pytest.mark.parametrize("fixture_name, module_name", [
