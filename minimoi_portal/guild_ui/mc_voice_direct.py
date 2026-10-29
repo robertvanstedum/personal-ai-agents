@@ -22,8 +22,9 @@ switch passes only where MC voice is admitted (production already runs with MINI
 only by MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION, which production_environ alone turns into ADMITTED (may_start). Installed,
 not admitted (S1, S3): a start is refused with the core's NOT_ON before anything is recorded or reserved, and the page's
 Voice keeps today's path (the relay, or managed where that is on); the record routes still answer: the reveal, the summary, its decision and reconciliation read the
-durable markers, so an earlier session's records reveal and its proposal is decided after a restart (End closes only a
-session this process issued). Admission is read once, at install: a per-process snapshot, as the mount's environment
+durable markers, so an earlier session's records reveal and its proposal is decided after a restart, and End closes it
+when its start marker names this owner and the conversation End names (review S-2, A4 fix item 4; capture "incomplete").
+Admission is read once, at install: a per-process snapshot, as the mount's environment
 is. A session reserves MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO against the shared daily voice budget before the provider
 is contacted; unset, voice is unavailable and says so. Sessions live in this process (the portal is one process).
 

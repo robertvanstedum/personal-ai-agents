@@ -367,8 +367,10 @@ def test_installed_but_not_admitted_refuses_every_start_before_anything_is_recor
 def test_after_admission_is_turned_off_earlier_sessions_still_reveal_reconcile_and_are_decided(monkeypatch, tmp_path):
     """S3 (Spec 165 §11.1): sessions kept while admitted (S2), then a restart with admission off. The record routes answer
     from the durable markers: the reveal withholds a session that never ended and reveals it once closed, an earlier
-    consult reconciles, its summary is asked for and a waiting proposal is decided. End answers too (not 404); it closes
-    only a session this process issued, so an earlier one is closed by asking for its summary. No new session starts."""
+    consult reconciles, its summary is asked for and a waiting proposal is decided. End answers too (not 404): an End that
+    names no conversation is refused for a session this process did not issue (it closes one whose start marker names
+    this owner and the conversation it names: test_end_after_a_restart_closes_his_session_from_its_start_marker), so
+    here the earlier one is closed by asking for its summary. No new session starts."""
     s2 = build(monkeypatch, tmp_path / "s2", {**ON, direct.ADMITTED: "1"})
     proposed = start(s2)["voice_session_id"]
     post(s2, proposed, [turn(s2, "user", "item_u1", "What is stuck on #12?")])
@@ -399,6 +401,50 @@ def test_after_admission_is_turned_off_earlier_sessions_still_reveal_reconcile_a
     assert s3.client.post(BASE + "/bootstrap", json={"persona": "master_craftsman", "provider": "openai",
                                                       "conversation_id": CID}, headers=s3.headers).status_code == 503
 
+
+
+def test_end_after_a_restart_closes_his_session_from_its_start_marker(monkeypatch, tmp_path):
+    """Review S-2 (A4 fix item 4): S2, then a restart into S3 (admission off). End on the open session, naming its
+    conversation as the page does, closes it from its durable start marker: the end marker is kept with capture
+    "incomplete" (what the page posted to the old process may be missing) and the session is revealed. A second End is
+    harmless; a consult or transcript post on it is still refused; no new session starts."""
+    s2 = build(monkeypatch, tmp_path / "s2", {**ON, direct.ADMITTED: "1"})
+    open_ = start(s2)["voice_session_id"]
+    post(s2, open_, [turn(s2, "user", "item_u2", "The kiln needs a seal.")])            # the page lives on; no End yet
+    s3 = build(monkeypatch, tmp_path / "s3", dict(NOT_ADMITTED))                          # the restart: same floor
+    s3.notes.rows.update(s2.notes.rows)
+    ended = s3.client.post(BASE + f"/session/{open_}/end", json={"conversation_id": CID, "last_item_id": "item_u2",
+                                                                  "unacknowledged": []}, headers=s3.headers)
+    assert ended.status_code == 200 and ended.get_json() == {"ok": True, "ended": True, "capture": "incomplete"}
+    marker = reveal.read_marker(s3.notes, open_, "end")
+    assert marker["capture"] == "incomplete" and marker["reason"] == "end" and "missing" not in marker
+    _rows, sessions = shown(s3)
+    assert {s["session_id"]: s for s in sessions}[open_]["state"] == "ended"
+    again = s3.client.post(BASE + f"/session/{open_}/end", json={"conversation_id": CID}, headers=s3.headers)
+    assert again.status_code == 200 and again.get_json()["capture"] == "incomplete"
+    assert call(s3, open_).status_code == 403 and not s3.turns
+    assert post(s3, open_, [turn(s3, "user", "item_u3", "More.")]).status_code == 403
+    assert s3.client.post(BASE + "/bootstrap", json={"persona": "master_craftsman", "provider": "openai",
+                                                      "conversation_id": CID}, headers=s3.headers).status_code == 503
+
+
+def test_end_after_a_restart_refuses_a_forged_id_another_owners_session_and_another_conversation(monkeypatch, tmp_path):
+    s2 = build(monkeypatch, tmp_path / "s2", dict(ON))
+    mine, theirs = start(s2)["voice_session_id"], start(s2)["voice_session_id"]
+    s3 = build(monkeypatch, tmp_path / "s3", dict(ON))
+    s3.notes.rows.update(s2.notes.rows)
+    marker = s3.notes.rows[reveal.key(theirs, "start")]
+    marker["text"] = marker["text"].replace('"robert"', '"anna"')                       # her session, same conversation
+    assert reveal.read_marker(s3.notes, theirs, "start")["principal"] == "anna"
+
+    def end(sid, **body):
+        return s3.client.post(BASE + f"/session/{sid}/end", json=body, headers=s3.headers)
+    assert end(str(uuid.uuid4()), conversation_id=CID).status_code == 403                 # forged
+    assert end(theirs, conversation_id=CID).status_code == 403                            # another owner's
+    assert end(mine, conversation_id="c-999999999999").status_code == 403                # another conversation
+    assert end(mine).status_code == 403                                                  # no conversation named
+    assert reveal.read_marker(s3.notes, theirs, "end") is None and reveal.read_marker(s3.notes, mine, "end") is None
+    assert end(mine, conversation_id=CID).get_json()["ended"] is True                     # his, named: closed
 
 def test_the_managed_sideband_and_its_channel_are_unchanged(ready):
     from minimoi_portal.guild_ui import mc_managed_realtime

@@ -287,7 +287,7 @@ for (const [status, expected, posts] of [[502, UNKNOWN_RESULT, 2], [200, UNKNOWN
   const tail = r.calls.slice(order);
   assert.deepEqual(tail.map((x) => x.url.split('/').pop()), ['transcript', 'end']);
   assert.deepEqual(tail[0].body.events.map((e) => [e.item_id, e.role, e.partial, e.interrupted]), [['t2', 'user', true, false]]);
-  assert.deepEqual(tail[1].body, { last_item_id: 't2', unacknowledged: [] });           // the close's report (§5.2)
+  assert.deepEqual(tail[1].body, { conversation_id: 'c-1', last_item_id: 't2', unacknowledged: [] });   // the close's report (§5.2); its conversation (S-2)
   assert.equal(tail[1].url, `${BASE}/session/${SID}/end`);
   assert.deepEqual(tail[1].opts.headers, HEADERS);
   assert.equal(r.reveals.length, 1);

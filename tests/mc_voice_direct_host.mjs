@@ -358,6 +358,7 @@ for (const who of ['dictation', 'companion-closed']) {
   r.windowEvents.pagehide();
   await flush();
   assert.equal(r.posts('/end')[0].opts.keepalive, true);
+  assert.equal(r.posts('/end')[0].body.conversation_id, 'c-1');                        // its conversation (S-2)
   n++;
 }
 // UI review #1: End pressed, its End still unanswered, then the page goes away: End is sent again with keepalive.

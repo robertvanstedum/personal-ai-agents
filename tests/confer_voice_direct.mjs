@@ -364,6 +364,7 @@ await scenario('End: End on her server, then the kept records revealed in the co
   assert.deepEqual(p.c.ended, ['user_ended']);
   const [end] = p.posts('/end');
   assert.equal(end.url, `${P}/session/${SID}/end`);
+  assert.equal(end.body.conversation_id, 'owner');                    // her one conversation, for a restarted server (S-2)
   assert.equal(p.gets(`/sessions/${SID}?conversation_id=owner`).length, 1);
   const block = p.chat.querySelector(`[data-voice-session="${SID}"]`);
   assert.ok(block, 'nothing was revealed');

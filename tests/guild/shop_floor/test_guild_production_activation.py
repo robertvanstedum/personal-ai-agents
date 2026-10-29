@@ -508,3 +508,61 @@ def test_not_installed_in_production_mc_voice_is_exactly_todays(load_portal, mon
     assert caps["direct_voice"] is None and caps["managed_realtime"] is None and "direct_records" not in caps
     assert boot.status_code == 404 and not minted and budget.status()["reserved_usd"] == 0
     assert "wss://api.x.ai" not in html.headers["Content-Security-Policy"]
+
+
+def test_s3_on_the_real_portal_end_closes_a_session_started_before_the_restart(load_portal, monkeypatch, tmp_path):
+    """Review S-2 (A4 fix item 4), Spec 165 §11.1 S2 -> S3 on the real portal and the production mount: admitted, a
+    session starts in a saved conversation; the portal process is rebuilt the way a restart would be (a fresh app over the
+    same queue folder and floor store) with admission off. End on the old session, naming its conversation as the page
+    does, closes it from its durable start marker; a fresh start is refused with NOT_ON."""
+    from core.realtime_voice.direct_host import NOT_ON
+    from minimoi_portal.guild_ui import mc_voice_reveal as reveal, voice_release
+    from floor_db_helpers import SqliteFloor, attach, keyed
+    from voice_budget_helpers import install as install_budget
+    monkeypatch.setattr(voice_release, "SHARED_VOICE_READY", True)
+    budget = install_budget(monkeypatch, tmp_path)
+    minted = []
+    monkeypatch.setattr("core.realtime_voice.bootstrap.openai_realtime.mint_ephemeral_credential",
+                        lambda **kw: minted.append(kw) or {"provider": "openai", "client_secret": "ek_synthetic"})
+    monkeypatch.setattr("core.realtime_voice.bootstrap._rate_limit_state", {})
+    for name, value in {"MINIMOI_GUILD_PRODUCTION": "1", "COS_BACKEND": "http://cos-scheduler:8769",
+                        "MINIMOI_GUILD_CHAT": "cos", "MINIMOI_GUILD_VOICE_PRODUCTION": "1", "MINIMOI_MC_VOICE": "1",
+                        "MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO": "2000000", DIRECT_INSTALL: "1",
+                        DIRECT_SWITCH: "1"}.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("MINIMOI_MC_MANAGED_REALTIME", raising=False)
+    floor = SqliteFloor(tmp_path / "floor")
+
+    def owner_of(portal):
+        attach(portal, floor.store())
+        client = portal.owner()
+        return client, {**write_headers(portal.csrf(client), origin=PROD, fetch_site="same-origin"),
+                        "Content-Type": "application/json"}
+
+    s2 = load_portal(next_flag="1", base_url=PROD)
+    client, headers = owner_of(s2)
+    made = client.post(API + "/conversations", json=keyed(), headers=headers)
+    assert made.status_code == 200, made.get_json()
+    cid = made.get_json()["conversation"]["id"]
+    boot = client.post(DIRECT + "/bootstrap", json={"persona": "master_craftsman", "provider": "openai",
+                                                    "conversation_id": cid}, headers=headers)
+    assert boot.status_code == 200, boot.get_json()
+    sid = boot.get_json()["voice_session_id"]
+
+    monkeypatch.delenv(DIRECT_SWITCH)                                       # S3: admission off, then the restart
+    s3 = load_portal(next_flag="1", base_url=PROD, queue=s2.queue_path)
+    client, headers = owner_of(s3)
+    assert client.post(DIRECT + f"/session/{sid}/end", json={}, headers=headers).status_code == 403   # no conversation
+    ended = client.post(DIRECT + f"/session/{sid}/end", json={"conversation_id": cid, "unacknowledged": []},
+                        headers=headers)
+    assert ended.status_code == 200 and ended.get_json() == {"ok": True, "ended": True, "capture": "incomplete"}
+    from minimoi_portal.guild_ui.conversations import conversations_of
+    services = s3.app.extensions["guild_ui_next"]["services"]
+    notes_floor = conversations_of(services).get(cid, "robert")["notes_floor"]   # where its markers are (api._conv_floor)
+    store = services.floor if notes_floor == services.floor.floor else services.floor.for_floor(notes_floor)
+    kept = reveal.read_marker(store, sid, "end")
+    assert kept["capture"] == "incomplete" and kept["reason"] == "end"
+    refused = client.post(DIRECT + "/bootstrap", json={"persona": "master_craftsman", "provider": "openai",
+                                                       "conversation_id": cid}, headers=headers)
+    assert refused.status_code == 503 and refused.get_json()["error"] == NOT_ON
+    assert len(minted) == 1 and budget.status()["reserved_usd"] == 2.0       # only the first, admitted start

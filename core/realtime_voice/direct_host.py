@@ -1453,15 +1453,24 @@ PLAYBACK = ("drained", "barged_in", "cancelled", "cleared", "no_audio", "timeout
 PLAYBACK_RECORD = "summary_playback"
 
 
-def keep_playback(adapter, sessions, sid, outcome):
+def _handle_of(adapter, sessions, sid, handle):
+    """The store handle for session ``sid``: ``handle`` when the caller read it from the durable start marker (End on a
+    session this process did not run, review S-2), else the conversation this process issued it in; None: nowhere."""
+    if handle is not None:
+        return handle
+    cid = sessions.conversation_of(sid)
+    found, refused = adapter.conversation(cid) if cid else (None, True)
+    return found if refused is None else None
+
+
+def keep_playback(adapter, sessions, sid, outcome, handle=None):
     """Keep how the spoken summary ended for session ``sid``: a Put, or None when there is nothing to keep or no store to
     keep it in. Never raises: End is never stopped by it."""
     if not isinstance(outcome, str) or outcome not in PLAYBACK:
         return None
     try:
-        cid = sessions.conversation_of(sid)
-        handle, refused = adapter.conversation(cid) if cid else (None, True)
-        if refused is not None:
+        handle = _handle_of(adapter, sessions, sid, handle)
+        if handle is None:
             return None
         return put(adapter, handle, sid, record(PLAYBACK_RECORD, PLAYBACK_RECORD, outcome=outcome, heard=outcome == "drained"))
     except Exception:
@@ -1476,7 +1485,7 @@ NOT_ACTED_MAX = 64                  # owner turns a session may name as not acte
 NOT_ACTED_WHY = ("overtaken", "cut_short", "never_started", "closed")
 
 
-def keep_not_acted(adapter, sessions, sid, items, why=None):
+def keep_not_acted(adapter, sessions, sid, items, why=None, handle=None):
     """Keep the owner turns the page names as not acted on (review B S3, N2): his words that got no reply of their own, or
     whose reply was cancelled or overtaken before its call could run, or still under way when the voice ended (n3).
     Capture ids only, each once, at most NOT_ACTED_MAX, and ``why`` ({id: one of NOT_ACTED_WHY}) for those the page gave a
@@ -1490,9 +1499,8 @@ def keep_not_acted(adapter, sessions, sid, items, why=None):
     reasons = ({i: why[i] for i in named if isinstance(why.get(i), str) and why[i] in NOT_ACTED_WHY}
                if isinstance(why, dict) else {})
     try:
-        cid = sessions.conversation_of(sid)
-        handle, refused = adapter.conversation(cid) if cid else (None, True)
-        if refused is not None:
+        handle = _handle_of(adapter, sessions, sid, handle)
+        if handle is None:
             return None
         return put(adapter, handle, sid, record(NOT_ACTED_RECORD, NOT_ACTED_RECORD, owner_item_ids=named,
                                                 **({"why": reasons} if reasons else {})))
@@ -1964,15 +1972,30 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         transcript post keeps them (the same checks and caps), before the session closes. Where nothing may be kept (MC:
         off the record) nothing is, and those turns count as not kept (review R2 N4); a refusal or failure here never
         stops End. The body's {last_item_id, unacknowledged} is the close's report: the server counts the ids it does not
-        hold. The answer says what the marker says."""
+        hold. The answer says what the marker says.
+
+        A session this process did not run (review S-2, A4 fix item 4: after a restart, the ledger here knows nothing,
+        so S3's "open sessions End" answered 403): End reads its durable start marker, as the reveal, reconciliation and
+        the summary do (owned_marker). The body names the conversation (the page sends its own); the marker must name this
+        owner AND this conversation, else 403 as before. Not yet ended, it is closed as End closes any session: the end
+        marker with its capture report, the summary's playback and the turns not acted on. Its capture is "incomplete"
+        with no count: what the page posted to the old process may be missing, and the events End carries are not kept
+        (this process holds none of the session's caps or times). Already ended: harmless, the first close's capture.
+        Nothing here gives a call, a consult or a transcript post an owner: those still need this process's ledger."""
         if not adapter.csrf_ok():
             return jsonify({"ok": False, "error": "csrf"}), 403
         who = principal()
-        if who is None or sessions.owner_of(session_id) != who:
+        if who is None:
             return jsonify({"ok": False, "error": "not your session"}), 403
         large = request.content_length is None or request.content_length > POST_MAX_BYTES
         body = None if large else request.get_json(silent=True)
         report = {"uncounted": True} if large and request.content_length else closing(body)
+        if sessions.owner_of(session_id) != who:
+            cid = body.get("conversation_id") if isinstance(body, dict) else None
+            found, _refused = owned_marker(who, session_id, cid)
+            if found is None or sessions.known(found[1]):        # not his, or a session this process ran for another
+                return jsonify({"ok": False, "error": "not your session"}), 403
+            return end_unheld(found[1], found[3], report, body)
         carried = body.get("events") if isinstance(body, dict) and isinstance(body.get("events"), list) else []
         if carried and sessions.is_open(session_id):
             ids = [e.get("item_id") for e in carried if isinstance(e, dict) and owner_item(e.get("item_id"))]
@@ -1990,6 +2013,29 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             keep_playback(adapter, sessions, session_id, body.get("summary_playback"))
         if isinstance(body, dict) and "not_acted" in body:                 # his turns not acted on (review B S3, N2)
             keep_not_acted(adapter, sessions, session_id, body.get("not_acted"), body.get("not_acted_why"))
+        return jsonify({"ok": True, "ended": True, "capture": capture["capture"],
+                        **({"missing": capture["missing"]} if "missing" in capture else {})})
+
+    def end_unheld(sid, handle, report, body):
+        """End on a session this process did not run, its start marker already checked (review S-2): closed once with
+        capture "incomplete" (no count), then what End keeps besides; a second End answers the first close's capture."""
+        capture = sessions.capture(sid, {**report, "uncounted": True})
+        try:
+            done, marker = store.close(handle, sid, reason="end", capture=capture)
+        except Exception:
+            log.exception("%s direct voice: end marker not kept", person["domain"])
+            done, marker = None, None
+        if done is None:
+            return jsonify({"ok": False, "error": "not kept"}), 503
+        if done == "closed":
+            adapter.ended(handle, sid)
+        elif isinstance(marker, dict) and marker.get("capture") in ("complete", "incomplete"):
+            capture = {k: marker[k] for k in ("capture", "missing", "boundary") if k in marker}
+        if isinstance(body, dict) and "summary_playback" in body:
+            keep_playback(adapter, sessions, sid, body.get("summary_playback"), handle=handle)
+        if isinstance(body, dict) and "not_acted" in body:
+            keep_not_acted(adapter, sessions, sid, body.get("not_acted"), body.get("not_acted_why"), handle=handle)
+        log.info("%s direct voice: End closed a session from its start marker (%s)", person["domain"], done)
         return jsonify({"ok": True, "ended": True, "capture": capture["capture"],
                         **({"missing": capture["missing"]} if "missing" in capture else {})})
 
@@ -2154,7 +2200,13 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
                 return None, refusal("too_large", "That request is too large. Nothing was changed.", 413)
             body = request.get_json(silent=True)
             cid = body.get("conversation_id") if isinstance(body, dict) else None
-        who, sid = principal(), session_id(raw_sid)
+        return owned_marker(principal(), raw_sid, cid)
+
+    def owned_marker(who, raw_sid, cid):
+        """(owner, session, conversation id, handle) when session ``raw_sid``'s durable start marker names owner ``who``
+        and conversation ``cid``, which the adapter accepts; else (None, the refusal). The one check behind the summary,
+        its decision, reconciliation and End on a session this process did not run."""
+        sid = session_id(raw_sid)
         if sid is None or who is None or not isinstance(cid, str) or not adapter.conversation_ok(cid):
             return None, refusal("not_your_session", "That is not your voice session.", 403)
         handle, refused = adapter.conversation(cid)

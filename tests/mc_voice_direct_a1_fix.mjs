@@ -219,7 +219,7 @@ await t.check('item 7: an event ends failed after two attempts under one id, and
   await r.s.end('user_ended'); await flush();
   const sent = r.posts('/transcript').filter((x) => x.body.events.length);
   assert.deepEqual(sent.map((x) => x.body.events[0].item_id), ['t0', 't0']);         // no third attempt at End
-  assert.deepEqual(r.posts('/end')[0].body, { last_item_id: 't0', unacknowledged: ['t0'] });
+  assert.deepEqual(r.posts('/end')[0].body, { conversation_id: 'c-1', last_item_id: 't0', unacknowledged: ['t0'] });   // End names its conversation (S-2)
   assert.deepEqual(r.ended.at(-1), ['Voice ended. Some of what was said was not kept (1 turn). What was kept is in the conversation.', { error: true }]);
 });
 await t.check('item 7: End\'s line takes the server\'s count (it holds a turn whose answer was lost)', async () => {

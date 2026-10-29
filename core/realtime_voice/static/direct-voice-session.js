@@ -426,6 +426,9 @@ export function directVoice(d) {
   done.then(() => { settled = true; });
 
   const at = (template) => String(template).split('{session_id}').join(encodeURIComponent(sid || ''));
+  // End names the conversation it was started in (review S-2, A4 fix item 4): a server that restarted since knows the
+  // session only by its durable start marker, which must name this owner and this conversation for End to close it.
+  const endsIn = () => (cid ? { conversation_id: cid } : {});
   const postJson = jsonPost(d.fetch, d.headers, { setTimeout: later, clearTimeout: cancel });
   const getJson = jsonGet(d.fetch, d.headers, { setTimeout: later, clearTimeout: cancel });
   const sessionId = () => { const own = c?.sessionId?.(); return sid || (typeof own === 'string' ? own : null); };
@@ -760,7 +763,7 @@ export function directVoice(d) {
     if (!id || sentFinal) return;
     sentFinal = true;
     const { events, ...closing } = capture ? capture.drain(turns || []) : { events: [] };
-    postJson(at(direct.end_url), { ...(events.length ? { events } : {}), ...closing, ...notActedBody(unacted()) },
+    postJson(at(direct.end_url), { ...endsIn(), ...(events.length ? { events } : {}), ...closing, ...notActedBody(unacted()) },
       { keepalive: true });
   }
 
@@ -787,7 +790,7 @@ export function directVoice(d) {
         const delivering = capture?.finish(result?.turns || []);     // closes at the boundary; posts what is owed unless stopped
         if (!abandoned) await within(delivering, FLUSH_WAIT_MS);
         if (sentFinal) return;                               // the page went away meanwhile: End already left with keepalive
-        const closing = { ...(capture ? capture.report() : {}), ...(playback ? { summary_playback: playback } : {}),   // §5.2, G3
+        const closing = { ...endsIn(), ...(capture ? capture.report() : {}), ...(playback ? { summary_playback: playback } : {}),   // §5.2, G3
           ...notActedBody(unacted()) };                      // his turns not acted on, and why (review B S3, N2; n2, n3)
         incomplete = Boolean(closing.unacknowledged?.length);
         missing = incomplete ? closing.unacknowledged.length : 0;
@@ -869,7 +872,7 @@ export function directVoice(d) {
         if (typeof info?.voice_session_id === 'string') sid = info.voice_session_id;
         // Ended while the server was still starting it: that session is ended on the server too, never left open. The
         // controller then connects nothing (Gate 2 Q S3: the end advanced its start, so the late answer is discarded).
-        if (finalized) { if (sid) postJson(at(direct.end_url), {}, { timeoutMs: END_WAIT_MS }); return; }
+        if (finalized) { if (sid) postJson(at(direct.end_url), endsIn(), { timeoutMs: END_WAIT_MS }); return; }
         const chosen = info?.provider || provider;
         const checkOnly = direct.model_actions && direct.model_actions[chosen] === false ? words.checkOnly : '';
         ui.notice([noticeWords(info?.voice_notices, chosen), checkOnly].filter(Boolean).join(' '));

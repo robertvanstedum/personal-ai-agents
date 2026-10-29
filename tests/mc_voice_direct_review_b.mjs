@@ -232,7 +232,7 @@ await check('B4 a turn lost to the network twice is said, and End does not claim
   r.c.hear([user('Lost words.')]); await flush();
   assert.ok(r.said.some(([w]) => w === D.NOT_KEPT), 'no warning when the turn was not kept');
   await r.s.end('user_ended'); await flush();
-  assert.deepEqual(r.posts('/end')[0].body, { last_item_id: 't0', unacknowledged: ['t0'] });
+  assert.deepEqual(r.posts('/end')[0].body, { conversation_id: 'c-1', last_item_id: 't0', unacknowledged: ['t0'] });   // End names its conversation (S-2)
   assert.deepEqual(r.ended.at(-1), [INCOMPLETE(1), { error: true }]);
 });
 await check('B4 a refused (422) turn is said and the end says some was not kept', async () => {
@@ -251,7 +251,7 @@ await check('B4 a turn lost to the network once is sent again under the same id;
   await r.s.end('user_ended'); await flush();
   const sent = r.posts('/transcript').filter((x) => x.body.events.length);
   assert.equal(sent.length, 2); assert.equal(sent[1].body.events[0].item_id, 't0');       // two attempts, one id (§5.2)
-  assert.deepEqual(r.posts('/end')[0].body, { last_item_id: 't0', unacknowledged: [] }); assert.deepEqual(r.ended.at(-1), [D.ENDED, { error: false }]);
+  assert.deepEqual(r.posts('/end')[0].body, { conversation_id: 'c-1', last_item_id: 't0', unacknowledged: [] }); assert.deepEqual(r.ended.at(-1), [D.ENDED, { error: false }]);
 });
 await check('B4 a partial write that fails again is not kept, and the end says so', async () => {
   const r = rig({ routes: { '/transcript': (body) => (body.events.length ? { status: 409, body: { error: 'not_kept', kept: 0 } } : null) } });
