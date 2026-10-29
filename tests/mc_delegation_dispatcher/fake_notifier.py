@@ -16,8 +16,12 @@ class FakeNotifier:
     def __init__(self, path):
         self.path = path
         self.next_id, self.inbox, self.next_update = 1000, [], 5000
+        self.fail_next = 0               # the next n sends fail, as a Telegram error would (nothing is written)
 
     def send(self, chat_id, text, *, reply_to=None):
+        if self.fail_next:
+            self.fail_next -= 1
+            raise RuntimeError("telegram_down")
         self.next_id += 1
         line = {"message_id": self.next_id, "chat_id": chat_id, "reply_to": reply_to, "text": text}
         with open(self.path, "a", encoding="utf-8") as fh:

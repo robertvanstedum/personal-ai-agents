@@ -97,7 +97,8 @@ _V2 = {"heartbeat": {"runner_id", "state", "capabilities", "facts"},
                   "output_text", "route", "usage"},
        "reconcile": {"runner_id", "request_id", "generation", "stage", "open_operations"},
        "effect": {"runner_id", "request_id", "generation", "effect"}}
-_V2_OPTIONAL = {"heartbeat": {"census"}}       # S1-F: the census batch rides the heartbeat (R3.2-a)
+_V2_OPTIONAL = {"heartbeat": {"census"},       # S1-F: the census batch rides the heartbeat (R3.2-a)
+                "claim": {"claim_id", "held"}}  # Codex F2: an idempotent claim request and the host's holdings
 
 
 def _checked(check, value):
@@ -109,8 +110,8 @@ def _checked(check, value):
 
 def _handle_v2(store, body):
     # The store's own value checks, so the door and a direct caller are held to the same shapes.
-    from .store import (check_capabilities, check_checkpoint, check_effect, check_facts, check_operations, check_route,
-                        check_stage, check_usage, parse_at)
+    from .store import (check_capabilities, check_checkpoint, check_effect, check_facts, check_held, check_operations,
+                        check_route, check_stage, check_usage, parse_at)
     need(type(body["protocol"]) is int and body["protocol"] == 2 and body["op"] in _V2)
     op = body["op"]
     args = {k: v for k, v in body.items() if k not in ("op", "protocol")}
@@ -120,7 +121,12 @@ def _handle_v2(store, body):
     if op in ("heartbeat", "claim"):
         caps = _checked(check_capabilities, args["capabilities"])
         if op == "claim":
-            return {"value": store.claim(args["runner_id"], caps, protocol=2)}
+            if "claim_id" not in args and "held" not in args:
+                return {"value": store.claim(args["runner_id"], caps, protocol=2)}
+            need("claim_id" in args and "held" in args and type(args["claim_id"]) is str
+                 and _UUID.match(args["claim_id"]))                              # F2: both, or neither
+            held = _checked(check_held, args["held"])
+            return {"value": store.claim(args["runner_id"], caps, protocol=2, claim_id=args["claim_id"], held=held)}
         need(type(args["state"]) is str and _WORD.match(args["state"]))
         facts = _checked(check_facts, args["facts"])
         if "census" not in args:
@@ -269,8 +275,10 @@ class HttpDispatcherV2(HttpDispatcher):
         extra = {} if census is None else {"census": census}
         return self._v2("heartbeat", runner_id=runner_id, state=state, capabilities=capabilities, facts=facts, **extra)
 
-    def claim(self, runner_id, capabilities):
-        return self._v2("claim", runner_id=runner_id, capabilities=capabilities)
+    def claim(self, runner_id, capabilities, *, claim_id=None, held=None):
+        if claim_id is None:
+            return self._v2("claim", runner_id=runner_id, capabilities=capabilities)
+        return self._v2("claim", runner_id=runner_id, capabilities=capabilities, claim_id=claim_id, held=held)
 
     def progress(self, request_id, generation, *, runner_id, event_id, at, phase, checkpoint):
         return self._v2("progress", runner_id=runner_id, request_id=request_id, generation=generation,

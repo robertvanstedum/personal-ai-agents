@@ -588,7 +588,9 @@ def _journal(words) -> int:
     p.add_argument("--again", action="store_true", help="resend every record, acknowledged or not (DUP-5: applies 0)")
     args = p.parse_args(words)
     host = _host(args.host_config)
-    paths = sorted(host.artifact_root.glob("*.pending.jsonl"))
+    paths = sorted(host.artifact_root.glob("*.pending.jsonl"), key=lambda p: (p.name == "claims.pending.jsonl", p.name))
+    if args.action == "replay":                       # claim requests are resent only by the run, under its lock
+        paths = [p for p in paths if p.name != "claims.pending.jsonl"]
     if args.action == "show":
         for path in paths:
             task = path.name[:-len(".pending.jsonl")]

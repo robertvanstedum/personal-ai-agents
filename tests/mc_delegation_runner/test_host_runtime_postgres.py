@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT / "tests" / "mc_delegation_runner"))
 from postgres_fixture_support import DSN, PostgresFixture  # noqa: E402
 
 from core.mc_delegation_dispatcher.store import (EFFECT_POLICY, Authority, DispatcherStore,  # noqa: E402
-                                                 effect_operation_id, item_subject_digest)
+                                                 effect_operation_id, item_subject_digest, parse_at)
 from core.mc_delegation_runner import cli, fakework, host as host_mod  # noqa: E402
 from core.mc_delegation_runner.dispatcher_adapter import StoreDispatcherV2  # noqa: E402
 from core.minimoi_actions.grants import GrantDefinition  # noqa: E402
@@ -493,6 +493,74 @@ class HostRuntimeOnPostgres(PostgresFixture, unittest.TestCase):
         self.assertFalse([e for e in events if e["kind"] == "effect.refused" and e["body"]["op"] == "finish"])
         self.assertEqual(self.sql("SELECT state FROM guild.mc_action_receipts WHERE operation_id=%s",
                                   (claimed["operation_id"],))[0]["state"], "failed")      # the receipt is unchanged
+
+    # ── Codex part 1, F2 ──
+    def test_f2_a_lost_claim_reply_is_found_and_reconciled_and_a_resend_returns_the_same_claim(self):
+        """Codex's probe: the real claim commits, a connection error replaces its reply, and no local claim exists. A
+        resend of the same request returns the same claim, never a second item. The lease then runs out, a fresh
+        runtime starts, and the item is found (withheld, never idle) and reconciled."""
+        rt = self.runtime()
+        job = self.item(self.program("checkpoint s1", "result ok"))
+        self.item(self.program("result ok"))                     # a second queued item a second claim could take
+        real = rt.dispatcher.claim
+
+        def lost_reply(*args, **kwargs):
+            got = real(*args, **kwargs)
+            assert got["state"] == "claimed"
+            raise ConnectionError("simulated reply loss after authority commit")
+        rt.dispatcher.claim = lost_reply
+        self.assertEqual(rt.pass_once()["state"], "offline")
+        self.assertEqual(rt.owned(), [])
+        claim_id = rt.journal("claims").pending()[0]["event_id"]
+        row = self.row(job)
+        store = self.store()
+        for _ in range(2):
+            again = store.claim(rt.runner_id, CAPS, protocol=2, claim_id=claim_id, held=[])
+            self.assertEqual((again["state"], again["replayed"], again["envelope"]["request_id"],
+                              again["envelope"]["generation"], parse_at(again["lease_until"])),
+                             ("claimed", True, str(row["request_id"]), 1, row["lease_until"]))
+        self.assertEqual(self.sql("SELECT count(*) AS n FROM guild.mc_delegations WHERE state='claimed'")[0]["n"], 1)
+        self.sql("UPDATE guild.mc_delegations SET lease_until=clock_timestamp()-interval '1 second' WHERE job_id=%s",
+                 (job,))
+        restarted = self.runtime()
+        answers = [restarted.pass_once() for _ in range(3)]
+        self.assertFalse(all(a["state"] == "idle" for a in answers), answers)
+        self.assertEqual(answers[0]["state"], "claim_superseded")
+        self.assertEqual((answers[1]["state"], answers[1]["generation"], answers[1]["request_id"]),
+                         ("completed", 2, str(row["request_id"])), answers)        # reconciled, then resumed
+        row = self.row(job)
+        self.assertEqual((row["state"], row["generation"]), ("completed", 2))
+        kinds = self.kinds(row["request_id"])
+        self.assertIn("host.claim_withheld", [r["kind"] for r in self.sql(
+            "SELECT kind FROM guild.mc_delegation_events WHERE kind='host.claim_withheld'")])
+        self.assertLess(kinds.index("item.lapsed"), kinds.index("item.resumed"))
+        self.assertEqual(kinds.count("item.claim_bound"), 1)
+        notes = [e for e in restarted.journal(f"{row['request_id']}-g1").entries() if e["type"] == "note"]
+        rec = next(n for n in notes if n["kind"] == "reconcile")
+        self.assertEqual(rec["fields"]["stage"], {"child": "stopped", "checkpoint": None})   # nothing of it ran here
+
+    def test_f2_a_crash_between_the_authoritys_commit_and_the_local_write_is_recovered(self):
+        rt = self.runtime()
+        job = self.item(self.program("checkpoint s1", "result ok"))
+
+        class Crash(BaseException):
+            pass
+
+        def die(*a, **k):
+            raise Crash()                                 # the process dies after the commit, before the local write
+        rt._record_claim = die
+        with self.assertRaises(Crash):
+            rt.pass_once()
+        self.assertEqual(rt.owned(), [])
+        self.assertEqual(self.row(job)["state"], "claimed")
+        restarted = self.runtime()                            # same request id again: the same claim, adopted
+        out = self.run_pass(restarted)
+        self.assertEqual((out["state"], out["generation"]), ("completed", 2), out)
+        rid = self.row(job)["request_id"]
+        adopted = json.loads((self.tmp / "artifacts" / f"{rid}-g1.claim.json").read_text())
+        self.assertEqual(adopted["adopted"], "claim_reply_lost")
+        self.assertEqual(self.kinds(rid).count("item.claim_bound"), 1)
+        self.assertEqual(restarted.journal("claims").pending(), [])
 
     def test_t0m_a_do_not_resume_session_is_refused_before_any_spawn(self):
         rt = self.runtime()

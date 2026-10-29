@@ -208,7 +208,10 @@ def test_decision_words_say_what_yes_and_no_do_and_bind_by_digest():
              ("reassignment", {"runner_id": "mac-9:runner"}, ("reassign", "withdraw")),
              ("unknown_resolution", {"reason": "effect_unknown"}, ("end", "leave")),
              ("unknown_resolution", {"reason": "result_reported", "reported": {"status": "completed"},
-                                     "effects": {"verified": 1}}, ("accept", "end")),
+                                     "effects": {"verified": 1}}, ("accept", "leave")),        # SF1: no never discards it
+             ("review_request", {"reason": "stalled", "since": "t", "timeout_s": 180, "owner_host_id": "mac-1"},
+              ("authorize_review", "withdraw")),
+             ("review_request", {"reason": "proposed", "proposed_by": "mc"}, ("authorize_review", "withdraw")),
              ("unknown_resolution", {"reason": "process_unverified", "item_state": "failed"}, ("acknowledge", "leave"))]
     for cls, body, actions in cases:
         d = {"decision_id": "d", "class": cls, "body": {"reason": "grant_exhausted", **body}, "generation": 1}
@@ -332,3 +335,31 @@ def test_own4_an_ended_item_and_an_ended_card_each_raise_one_notice_with_the_nex
     assert by_key[f"delegation-ended:{plain['request_id']}"]["next_authorized_step"]["step"] == "re-admit or leave it"
     assert by_key["runtime-card-ended:C-30"]["kind"] == "error" and "attempts_exhausted" in \
         by_key["runtime-card-ended:C-30"]["text"]
+
+
+def test_n2_a_solo_class_is_never_batched_whatever_its_record_says():
+    rows = [item("unknown", lease_left=None, progress=None, card=f"C-{n}") for n in range(3)]
+    events = [queued(r, "unknown_resolution", reason="effect_unknown") for r in rows]
+    for e in events:
+        e["body"]["solo"] = False                          # a record that says otherwise is not believed
+    doc = S.build(rec(rows, [runner("mac-1")], events=events))
+    assert sorted((n["rule"], len(n["decisions"])) for n in doc["notices"] if n["rule"].startswith("decision")) == \
+        [("decision", 1)] * 3
+
+
+def test_a_stalls_one_notice_is_its_review_request_once_queued():
+    stalled = item(progress=200, leased=400)
+    live = S.build(rec([stalled], [runner("mac-1")]))
+    (due,) = live["proposals"]
+    assert [n["rule"] for n in live["notices"]] == ["stalled"]          # before the sweep: the stall's own, due
+    review = queued(stalled, "review_request", reason="stalled", proposal_id=due["proposal_id"], since=due["since"],
+                    timeout_s=180, owner_host_id="mac-1")
+    published = S.build(rec([stalled], [runner("mac-1")], events=[review]))
+    assert [n["rule"] for n in published["notices"]] == ["decisions"]   # after it: one notice, the decision's
+    (d,) = published["decisions_waiting"]
+    assert (d["class"], d["yes"], d["no"], d["solo"]) == ("review_request", "authorize_review", "withdraw", False)
+    assert "has made no progress since" in d["words"] and "no leaves it as it is" in d["words"]
+    resolved = event("decision.resolved", source="owner", body={"decision_id": review["event_id"], "answer": "declined",
+                                                                "action": "withdraw"})
+    later = S.build(rec([stalled], [runner("mac-1")], events=[review, resolved]))
+    assert later["notices"] == []                                       # answered: the same stall is not told again

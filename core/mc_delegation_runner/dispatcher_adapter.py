@@ -50,8 +50,8 @@ class StoreDispatcherV2:
         extra = {} if census is None else {"census": census}
         return self.store.heartbeat(runner_id, state, capabilities, protocol=2, facts=facts, **extra)
 
-    def claim(self, runner_id, capabilities):
-        return self.store.claim(runner_id, capabilities, protocol=2)
+    def claim(self, runner_id, capabilities, *, claim_id=None, held=None):
+        return self.store.claim(runner_id, capabilities, protocol=2, claim_id=claim_id, held=held)
 
     def progress(self, request_id, generation, *, runner_id, event_id, at, phase, checkpoint):
         return self.store.progress(request_id, generation, phase, protocol=2, runner_id=runner_id, event_id=event_id,

@@ -1266,16 +1266,25 @@ class HostRuntime:
         try:
             if self.offline():
                 return {"state": "offline"}            # nothing new is admitted while disconnected (R4.5-f)
+            launch = None
             if self.reasons or self.owned():
                 launch = self.recover()
-                if launch is not None:
-                    return self._run(launch)
-                if self.owned() or self.damaged or self.blocked:
+                if launch is None and (self.owned() or self.damaged or self.blocked):
                     stuck = {**self.damaged, **self.blocked}
                     return {"state": "blocked" if stuck else "recovering",
                             **({"damaged": sorted(self.damaged)} if self.damaged else {}),
                             **({"blocked": dict(self.blocked)} if self.blocked else {})}
-            claimed = self.call("claim", self.runner_id, list(self.host.capabilities))
+            if launch is None:
+                got = self._claim_step()
+                if "recover" in got:                   # items the authority holds for this host: through §5.5 first
+                    launch = self.recover()
+                    if launch is None:
+                        return got["recover"]
+                elif "launch" in got:
+                    launch = got["launch"]
+                else:
+                    return got
+            return self._run(launch)
         except _Offline:
             return {"state": "offline"}
         except _Busy:
@@ -1284,19 +1293,79 @@ class HostRuntime:
             return {"state": "authority_error", "code": exc.code}       # logged each pass; nothing is offline
         finally:
             self.write_state()
-        if claimed is None:
-            return {"state": "idle"}
-        claim = self._record_claim(claimed)
-        return self._run(claim)
 
-    def _record_claim(self, claimed) -> dict:
+    def _claim_step(self) -> dict:
+        """A claim whose reply may be lost, made recoverable (Codex F2). The request's id is written to the host's
+        claim journal, fsynced, before it is sent; a request still unanswered (its reply lost, or this process died
+        before its claim was on file) is sent again under the same id, so the authority returns that same claim and
+        never a second item. The request also says what this host holds on file, so the authority withholds new work
+        while it holds anything for this host that the host does not name, and says which. Any item taken that way is
+        written on file and goes through §5.5 (it never runs as if nothing had happened): with nothing of it here,
+        reconcile resumes it from the authority's last checkpoint or stops it with the reason. Returns {launch}, for a
+        fresh claim; {recover: <the pass's answer if nothing launches>}; or the pass's answer."""
+        j = self.journal(CLAIMS)
+        records = j.pending()
+        if not records:
+            j.clear()                                   # every earlier request is answered: start the file again
+            records = [{**j.call("claim", str(uuid.uuid4()), "", 0, self.at(),
+                                 {"runner_id": self.runner_id, "capabilities": list(self.host.capabilities)}),
+                        "mark": None, "answer": None}]
+        for rec in records:                             # oldest first, each under its own id
+            held = sorted("{}:{}".format(c["request_id"], c["generation"]) for c in map(self._claim, self.owned()))
+            try:
+                answer = self.call("claim", rec["args"]["runner_id"], rec["args"]["capabilities"],
+                                   claim_id=rec["event_id"], held=held)
+            except _AuthorityError as exc:
+                j.mark(rec["event_id"], "final", {"state": "refused", "code": f"authority_error:{exc.code}"})
+                return {"state": "authority_error", "code": exc.code}
+            out = self._take(answer)                    # what it gives is on file before the request is marked
+            j.mark(rec["event_id"], "applied", _summary(answer))
+            if out is not None:
+                return out
+        return {"state": "idle"}
+
+    def _take(self, answer):
+        state = answer.get("state") if isinstance(answer, dict) else None
+        if state == "claimed" and not answer.get("replayed"):
+            return {"launch": self._record_claim(answer)}
+        if state == "claimed":                          # its first reply never arrived: nothing of it ran here
+            self._adopt(answer, "claim_reply_lost")
+            return {"recover": {"state": "recovering", "code": "claim_reply_lost"}}
+        if state == "withheld":
+            for item in answer.get("items") or []:
+                self._adopt(item, "authority_holds")
+            with self._lock:
+                self.reasons.add("withheld")
+            return {"recover": {"state": "withheld", "code": answer.get("code"),
+                                "items": sorted(answer.get("unreconciled") or [])
+                                + sorted("{}:{}".format(i["request_id"], i["generation"])
+                                         for i in answer.get("items") or [])}}
+        if state == "claim_superseded":
+            return {"state": "claim_superseded", "request_id": answer.get("request_id")}
+        if state == "refused":
+            return {"state": "not_admitted", "code": answer.get("code")}
+        if state == "none":
+            return None                                 # nothing to claim: idle
+        return {"state": "authority_error", "code": "claim_answer_invalid"}
+
+    def _adopt(self, entry, why):
+        """An item the authority holds for this host with nothing of it on file here: its claim record is written, and
+        §5.5 takes it from there (freeze finds nothing running; reconcile decides). Never launched as it stands."""
+        task = _task_name(entry["envelope"]["request_id"], entry["envelope"]["generation"])
+        if not _claim_path(self.cfg, task).exists():
+            self._record_claim(entry, adopted=why)
+        with self._lock:
+            self.reasons.add("adopted")
+
+    def _record_claim(self, claimed, adopted=None) -> dict:
         env = claimed["envelope"]
         task = _task_name(env["request_id"], env["generation"])
         claim = {"request_id": env["request_id"], "generation": env["generation"], "task": task,
                  "route": claimed["route"], "unit": claimed["unit"], "reserved": claimed["reserved"],
                  "lease_until": claimed["lease_until"], "card_id": claimed.get("card_id"), "step": claimed.get("step"),
                  "attempt": claimed.get("attempt"), "resume_from": claimed.get("resume_from"), "envelope": env,
-                 "claimed_at": self.at()}
+                 "claimed_at": self.at(), "claim_id": claimed.get("claim_id"),
+                 **({"adopted": adopted} if adopted else {})}
         _write_json(_claim_path(self.cfg, task), claim)           # ownership is on disk before anything starts
         return claim
 
@@ -2213,6 +2282,8 @@ def _timedelta(seconds):
     return timedelta(seconds=float(seconds))
 
 
+# The host's own claim requests' journal (Codex F2): <artifact_root>/claims.pending.jsonl.
+CLAIMS = "claims"
 # Owner writes whose outcome is known on this host: an authority error never drops them (NS1).
 KNOWN_OUTCOMES = ("result", "effect_finish")
 # An effect refusal that fences the item itself, not the effect: §5.5 runs before anything else is served.

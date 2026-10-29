@@ -17,8 +17,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import hashlib
 import json
+import logging
 import re
 
+_log = logging.getLogger("supervision")
 KEY = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 SESSION = re.compile(r"^[A-Za-z0-9._:-]{4,96}$")
 AGENTS = ("claude-code", "codex", "grok")
@@ -29,7 +31,8 @@ REQUEST_ID = re.compile(r"^r-[0-9a-f]{20,40}$")
 EVENT_ID = re.compile(r"^(ask|[0-9a-f]{8,40})$")
 MAX_EXCHANGES = 50
 RUNTIME = "runtime"                            # the requester of a decision the runtime authority queued (S1-G)
-RUNTIME_KEY = re.compile(r"^rt-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+RUNTIME_KEY = re.compile(r"^rt-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\.r[0-9]{1,3})?$")
+RUNTIME_PREFIX = "rt-"                         # reserved for runtime decisions: no agent's ask may use it (N14)
 WATCH = re.compile(r"^watch:([A-Za-z0-9._:-]{1,64})$")
 PHASES = ("report", "pull", "ack", "heartbeat")
 RUNTIME_DECISION_DAYS = 30                     # the authority holds the decision; its D-code lives as long, bounded
@@ -106,6 +109,7 @@ def clean_stop(s):
 def clean_ask(a):
     need(type(a) is dict and set(a) <= {"request_key", "agent", "session", "branch", "text"})
     need(type(a.get("request_key")) is str and KEY.match(a["request_key"]))
+    need(not a["request_key"].startswith(RUNTIME_PREFIX), "request_key_reserved")     # the runtime's D-codes (N14)
     need(a.get("agent") in AGENTS and type(a.get("session")) is str and SESSION.match(a["session"]))
     text = _text(a.get("text"), 1500, required=True)
     need(len(text) >= 10, "decision_text_too_short")
@@ -156,7 +160,7 @@ class Store:
         if credential is not None:
             need(credential == "worker" or bool(WATCH.match(credential)), "supervision_credential_invalid")
             phase = body.get("phase") if type(body) is dict and body.get("phase") in PHASES else "invalid"
-            self._run(lambda cur: self._contact(cur, credential, phase))
+            self._record_contact(credential, phase)
             if credential != "worker":
                 phases = ("heartbeat",)
         need(type(body) is dict and body.get("phase") in phases)
@@ -229,6 +233,25 @@ class Store:
             out["asks"].append({"request_key": a["request_key"], "code": code_of(row["id"]),
                                 "accepted": row["text_sha256"] == sha256(a["text"])})
         return out
+
+    _contact_failed = False          # one error recorded per process when contacts cannot be written (SF7)
+
+    def _record_contact(self, credential, phase):
+        """R4.6-b's contact, in its own transaction. It never costs the call: a database without migration 003 (or any
+        failure to write it) skips it, and the first failure is recorded once, by type (SF7)."""
+        try:
+            self._run(lambda cur: self._contact(cur, credential, phase))
+        except Exception as exc:
+            if not Store._contact_failed:
+                Store._contact_failed = True
+                _log.error("supervision contact not recorded (%s): is migration 003 applied?", type(exc).__name__)
+
+    def contacts_ready(self) -> bool:
+        """Whether migration 003's contacts table exists (the portal checks it before naming callers, SF7)."""
+        def q(cur):
+            cur.execute("SELECT to_regclass('guild.supervision_contacts') IS NOT NULL AS present")
+            return cur.fetchone()["present"]
+        return self._run(q)
 
     @staticmethod
     def _contact(cur, credential, phase):
@@ -327,8 +350,9 @@ class Store:
 
     def unannounced(self):
         def q(cur):
+            # A runtime decision's end is told by the runtime link, with what the authority did (S1-G, SF2).
             cur.execute("""SELECT * FROM guild.supervision_decisions WHERE state IN ('approved', 'declined', 'expired')
-                AND announced_at IS NULL ORDER BY id LIMIT 20""")
+                AND announced_at IS NULL AND requester->>'agent' IS DISTINCT FROM 'runtime' ORDER BY id LIMIT 20""")
             return cur.fetchall()
         return self._run(q)
 
@@ -389,6 +413,16 @@ class Store:
             return fresh
         return self._run(q)
 
+    def told_keys(self, keys):
+        """The keys among ``keys`` told before, read only (the runtime link records a key once its message went out)."""
+        if not keys:
+            return set()
+
+        def q(cur):
+            cur.execute("SELECT key FROM guild.supervision_alerts WHERE key = ANY(%s)", (list(keys),))
+            return {r["key"] for r in cur.fetchall()}
+        return self._run(q)
+
     def record_checkin(self, summary, told, telegram):
         def q(cur):
             cur.execute("""INSERT INTO guild.supervision_checkins (summary, told, telegram) VALUES (%s::jsonb, %s, %s)
@@ -435,11 +469,13 @@ class Store:
         return self._run(q)
 
     # ---- host runtime S1-G (sql/003): runtime decisions, batched notices, contacts, the staging watch -------------
-    def runtime_decision(self, decision_id, words, *, notice, position, solo, environment):
+    def runtime_decision(self, decision_id, words, *, notice, position, solo, environment, reissue=None):
         """The D-code of one authority decision, in the authority's own words: a row made once (request key
-        ``rt-<decision id>``), never pulled by the Mac sync. Returns the row; refused when the key holds another
-        requester's row or other words (the first words are the decision, as for an ask)."""
-        key = "rt-" + str(decision_id)
+        ``rt-<decision id>``, or ``rt-<decision id>.r<n>`` when an answer was refused and the decision still waits:
+        ``reissue``), never pulled by the Mac sync. Returns the row; refused when the key holds another requester's
+        row or other words (the first words are the decision, as for an ask)."""
+        need(reissue is None or (type(reissue) is int and 2 <= reissue <= 999), "runtime_decision_invalid")
+        key = "rt-" + str(decision_id) + ("" if reissue is None else f".r{reissue}")
         need(bool(RUNTIME_KEY.match(key)) and type(words) is str and 10 <= len(words) <= 1500, "runtime_decision_invalid")
         need(type(notice) is str and len(notice) <= 128 and type(position) is int and 1 <= position <= 5
              and type(solo) is bool and environment in ("dev", "prod"), "runtime_decision_invalid")
@@ -464,6 +500,10 @@ class Store:
              and len(set(decision_ids)) == len(decision_ids), "batch_invalid")
 
         def q(cur):
+            # A solo decision (an unknown, a reassignment, a cross-vendor admission) never shares a message (N2).
+            cur.execute("""SELECT count(*) AS n FROM guild.supervision_decisions WHERE id = ANY(%s)
+                AND (requester->>'agent' IS DISTINCT FROM 'runtime' OR requester->>'solo' = 'true')""", (decision_ids,))
+            need(cur.fetchone()["n"] == 0, "batch_solo_or_not_runtime")
             for pos, did in enumerate(decision_ids, 1):
                 cur.execute("""INSERT INTO guild.supervision_decision_messages (message_id, decision_id, position)
                     VALUES (%s, %s, %s)""", (message_id, did, pos))
@@ -494,6 +534,41 @@ class Store:
             cur.execute("""SELECT * FROM guild.supervision_decisions WHERE requester->>'agent' = 'runtime'
                 AND state IN ('approved', 'declined') AND delivered_at IS NULL ORDER BY id LIMIT 50""")
             return [dict(r, code=code_of(r["id"])) for r in cur.fetchall()]
+        return self._run(q)
+
+    def runtime_untold(self):
+        """Runtime decisions whose answer the runtime link applied and whose outcome Robert has not been told yet."""
+        def q(cur):
+            cur.execute("""SELECT * FROM guild.supervision_decisions WHERE requester->>'agent' = 'runtime'
+                AND state IN ('approved', 'declined') AND delivered_at IS NOT NULL AND announced_at IS NULL
+                ORDER BY id LIMIT 50""")
+            return [dict(r, code=code_of(r["id"])) for r in cur.fetchall()]
+        return self._run(q)
+
+    def runtime_open(self):
+        """Runtime decisions still answerable here (new or sent, not expired), oldest first."""
+        def q(cur):
+            cur.execute("""SELECT * FROM guild.supervision_decisions WHERE requester->>'agent' = 'runtime'
+                AND state IN ('new', 'sent') AND expires_at > clock_timestamp() ORDER BY id LIMIT 200""")
+            return [dict(r, code=code_of(r["id"])) for r in cur.fetchall()]
+        return self._run(q)
+
+    def runtime_rows(self, decision_id):
+        """Every D-code one authority decision was given, oldest first (a refused answer's re-issues after it)."""
+        def q(cur):
+            cur.execute("""SELECT * FROM guild.supervision_decisions WHERE requester->>'agent' = 'runtime'
+                AND requester->>'decision_id' = %s ORDER BY id""", (str(decision_id),))
+            return [dict(r, code=code_of(r["id"])) for r in cur.fetchall()]
+        return self._run(q)
+
+    def close_runtime(self, decision_id):
+        """The authority closed this decision itself (withdrawn, superseded, resolved another way): its D-code can no
+        longer be answered (expired now, and counted as told: the runtime link tells Robert why). True when closed."""
+        def q(cur):
+            cur.execute("""UPDATE guild.supervision_decisions SET state='expired', expires_at=clock_timestamp(),
+                announced_at=clock_timestamp() WHERE id=%s AND state IN ('new', 'sent')
+                AND requester->>'agent' = 'runtime' RETURNING id""", (decision_id,))
+            return cur.fetchone() is not None
         return self._run(q)
 
     def mark_applied(self, decision_id):

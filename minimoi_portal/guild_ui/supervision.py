@@ -106,6 +106,17 @@ def attach(app, environ, *, store_factory=store, clock=time.monotonic, per_minut
         relay = None
         handler = lambda body: store_factory().worker(body)                                 # noqa: E731
     credentials = _credentials(environ, digest)
+    if credentials is not None:
+        # SF7: naming callers needs migration 003's contacts table. Definitely missing: refused here, logged, and the
+        # path opens exactly as today. Unknown (the database is not answering now): opened, and every contact write is
+        # guarded so it never costs a call.
+        try:
+            ready = store_factory().contacts_ready()
+        except Exception:
+            ready = None
+        if ready is False:
+            _log.error("supervision: contacts and the staging watch are off: migration 003 is not applied")
+            credentials = None
     if credentials is not None:          # S1-G: the caller's name, its contact recorded on every call (R4.6-b)
         handler = lambda body, who: store_factory().worker(body, relay=relay, credential=who)   # noqa: E731
     # An agent's report relayed up is up to 16 KiB of text (the ledger's own bound), so a report may be ~200 KiB.
@@ -182,6 +193,14 @@ def owner_decision_command(found, *, environ, store_factory=store):
     decision = s.by_code(code)
     if decision is None:
         return {"reply": f"There is no decision {code}.", "operation": {"type": "owner_decision", "state": "refused"}}
+    runtime = (decision.get("requester") or {}).get("agent") == "runtime"
+    if runtime and re.match(r"^\s*hold\b", note.get("text") or "", re.I):
+        # A runtime decision acts on work: "hold" never declines it (S1-G, SF1); only "no D-n" does.
+        return {"reply": f"Nothing changed: {code} still waits. Say “no {code}” to decline it.",
+                "operation": {"type": "owner_decision", "state": "refused"}}
+    if runtime and decision["state"] not in ("new", "sent"):
+        return {"reply": f"{code} is no longer open ({decision['state']}); nothing changed.",
+                "operation": {"type": "owner_decision", "state": "refused"}}
     if decision["state"] not in ("new", "sent"):
         return {"reply": f"{code} is already {decision['state']}; nothing changed.",
                 "operation": {"type": "owner_decision", "state": "refused"}}
@@ -191,7 +210,8 @@ def owner_decision_command(found, *, environ, store_factory=store):
     if done is None:
         return {"reply": f"{code} could not be recorded (expired or changed); nothing changed.",
                 "operation": {"type": "owner_decision", "state": "refused"}}
-    return {"reply": f"Recorded: {code} {answer}, in your words. The agent that asked gets it next.\n\n“{decision['text']}”",
+    then = "The runtime applies it next, and you are told what it did." if runtime else "The agent that asked gets it next."
+    return {"reply": f"Recorded: {code} {answer}, in your words. {then}\n\n“{decision['text']}”",
             "operation": {"type": "owner_decision", "state": "verified", "decision": code, "answer": answer}}
 
 
