@@ -25,6 +25,7 @@ host runtime (runner.HostRuntime):
     mc-delegation-runner version [--host-config PATH]
     mc-delegation-runner journal --host-config PATH show | replay [--again]
     mc-delegation-runner authority --host-config PATH             the authority service: its door and its timers
+    mc-delegation-runner witness-probe --host-config PATH         one probe notice through this host's witness notifier
 
 With the ``authority`` role and the store reached by DSN (the Mac-only interim, R2.4-a), ``run`` also runs the
 authority's own timers (core/mc_delegation_dispatcher/server.py: liveness, the sweeper and its watch, each a thread of
@@ -79,7 +80,7 @@ def _fetch(mirror: Path):
                                                   "HOME": os.environ.get("HOME", ""), "GIT_TERMINAL_PROMPT": "0"})
 
 
-SUBCOMMANDS = ("run", "state", "doctor", "version", "journal", "authority")
+SUBCOMMANDS = ("run", "state", "doctor", "version", "journal", "authority", "witness-probe")
 
 
 def main(argv=None) -> int:
@@ -399,6 +400,20 @@ def _authority(words) -> int:
         lock.release()
 
 
+def _witness_probe(words) -> int:
+    """P1-a: one probe notice through this host's witness notifier (its installed configuration, by reference),
+    without an outage, so Robert sees the witness can reach him (Codex's P1 brief review, S3)."""
+    from . import witness
+    p = argparse.ArgumentParser(prog="mc-delegation-runner witness-probe")
+    p.add_argument("--host-config", required=True)
+    args = p.parse_args(words)
+    host = _host(args.host_config)
+    notifier = witness.notifier_of(host)
+    if notifier is None:
+        raise SystemExit("refused: witness_not_configured")
+    return witness.probe(host_id=host.host_id, notifier=notifier)
+
+
 def _state(words) -> int:
     p = argparse.ArgumentParser(prog="mc-delegation-runner state")
     src = p.add_mutually_exclusive_group(required=True)
@@ -634,7 +649,8 @@ def _journal(words) -> int:
         lock.release()
 
 
-_SUB = {"state": _state, "doctor": _doctor, "version": _version, "journal": _journal, "authority": _authority}
+_SUB = {"state": _state, "doctor": _doctor, "version": _version, "journal": _journal, "authority": _authority,
+        "witness-probe": _witness_probe}
 
 
 if __name__ == "__main__":

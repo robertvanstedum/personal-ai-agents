@@ -110,9 +110,10 @@ COMPOSE_SERVICE_OWNERS = {**{service: (service,) for service in ALL_SERVICES}, "
                           "supervisor": ("portal",),
                           # Host runtime P1-a: production's EC2 witness runs the portal image (its own command).
                           "runtime-witness": ("portal",)}
-# A service added or removed is a full release, except one behind a Compose profile that an owner above names: the
-# scoped deploy never names an inactive-profile service (naming it would start it), so adding or removing its block
-# starts, stops or recreates nothing until an operator starts its profile; its image is its owner's.
+# A service added is a full release, except one behind a Compose profile that an owner above names: the scoped
+# deploy never names an inactive-profile service (naming it would start it), so adding its block starts nothing until
+# an operator starts its profile; its image is its owner's. A service removed stays a full release (an active one's
+# container would be left behind, or removed as an orphan).
 
 
 
@@ -188,10 +189,10 @@ def compose_changed_services(base_text: Optional[str], head_text: Optional[str])
             continue
         if name not in COMPOSE_SERVICE_OWNERS:
             return None
-        if before is None or after is None:
-            present = after if before is None else before
-            if not (isinstance(present, tuple) and isinstance(present[0], dict) and present[0].get("profiles")):
-                return None                    # an always-on service added or removed: only a full release is safe
+        if after is None:
+            return None                        # a service removed: only a full release is safe
+        if before is None and not (isinstance(after, tuple) and isinstance(after[0], dict) and after[0].get("profiles")):
+            return None                        # an always-on service added: only a full release is safe
         owners.update(COMPOSE_SERVICE_OWNERS[name])
     return tuple(service for service in ALL_SERVICES if service in owners)
 

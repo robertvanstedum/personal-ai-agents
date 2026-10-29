@@ -538,10 +538,8 @@ def witness_delivery(run):
     run.mac_step("ec2-witness-probe", "on EC2: docker exec minimoi-runtime-witness python -m "
                                       "core.mc_delegation_runner.witness probe")
     run.check("W.ec2_witness_delivers", run.robert_received("the EC2 witness's probe"), {})
-    run.mac_step("mac-witness-probe", "on the Mac: /usr/bin/python3 -I -c \"import sys; sys.path.insert(0, "
-                                      "'$HOME/minimoi-runtime/prod/bundle'); from core.mc_delegation_runner import "
-                                      "witness; sys.exit(witness.main(['probe', '--host-config', "
-                                      "'$HOME/minimoi-runtime/prod/host.yaml']))\"")
+    run.mac_step("mac-witness-probe", "on the Mac: /usr/bin/python3 -I ~/minimoi-runtime/prod/bundle/run_runner.py "
+                                      "witness-probe --host-config ~/minimoi-runtime/prod/host.yaml")
     run.check("W.mac_witness_delivers", run.robert_received("the Mac witness's probe"), {})
 
 
