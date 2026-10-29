@@ -327,3 +327,29 @@ def test_the_production_workers_new_code_runs_on_the_macs_python_3_9(tmp_path):
         "print('ok')\n")
     out = subprocess.run([str(PY39), "-I", "-B", "-c", code], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0 and out.stdout.strip() == "ok", out.stderr
+
+
+def test_a_restarted_witness_tells_the_end_of_an_outage_it_told_before_it_restarted(tmp_path):
+    """Codex's P1-a review S2: the sweeper's and another host's outages, told and not yet told back, are taken up
+    from the witness's memory file; a first healthy read after the restart tells each end once, never a second
+    stale notice."""
+    w = _witness(tmp_path)
+    c = W.SnapshotChecks(None, gap_threshold_s=60, every_s=30)
+    silent = [{"host_id": "prod-ec2-1", "availability": "always_on", "reachability": "unreachable",
+               "contact_age_s": 120.0}]
+    c.evaluate(w, _doc(sweeper_age=75, hosts=silent), T0)
+    assert sorted(k.split(":", 1)[0] for k, _ in w.notifier.lines) == ["host-silent", "sweeper-stale"]
+    again = _witness(tmp_path)                                          # restarted: its memory is the file
+    c2 = W.SnapshotChecks(None, gap_threshold_s=60, every_s=30)
+    still = _doc(sweeper_age=100, hosts=silent, as_of=T0 + timedelta(seconds=25))
+    c2.evaluate(again, still, T0 + timedelta(seconds=25))
+    assert again.notifier.lines == []                                   # still out: nothing told twice
+    healthy = _doc(sweeper_age=3, hosts=[dict(silent[0], reachability="reachable", contact_age_s=2.0)],
+                   as_of=T0 + timedelta(seconds=60))
+    third = _witness(tmp_path)
+    c3 = W.SnapshotChecks(None, gap_threshold_s=60, every_s=30)
+    c3.evaluate(third, healthy, T0 + timedelta(seconds=60))             # first read after a restart is healthy
+    assert sorted(k for k, _ in third.notifier.lines) == ["host-back:prod-ec2-1:2026-10-29T14:58:00+00:00",
+                                                          "sweeper-back:prod-authority:2026-10-29T14:58:45+00:00"]
+    c3.evaluate(third, healthy, T0 + timedelta(seconds=90))
+    assert len(third.notifier.lines) == 2                               # and once

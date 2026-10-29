@@ -8,15 +8,18 @@ nothing actionable is silenced (Codex's P1 brief review, S2):
 
 * a **cutoff**: only notices raised up to the authority's last event when the baseline runs; anything raised after it
   (during or after the switch-on) is told as usual;
-* only **historical information** is baselined: the stall kinds (stalled, lapsed, overdue, drift) and a past
-  sweeper-stale, and only for an item that has ended;
+* only **historical information** is baselined: the stall kinds (stalled, lapsed, overdue, drift), and only for an
+  item that has ended. A sweeper-stale notice is never baselined: its key names a time, not an item, so a past outage
+  can't be told from one still going on (Codex's P1-a review S1);
 * **kept, and told**: everything that waits on Robert or is blocked (an unknown, a ready card, an escalation), every
   ended or interrupted item's notice, and any notice of an item still live;
 * **recorded**: which keys were baselined, and why, in a file the operator keeps with the release record.
 
 Decisions still waiting are not notices: they stay waiting and go out as decisions.
 
-    python -m core.supervision.switch_on check                       what the switch-on would meet; exit 1 if not ready
+    python -m core.supervision.switch_on check [--running]           what the switch-on would meet; exit 1 if not ready
+                                                                     (--running: also the authority's two timers fresh,
+                                                                     after the switch-on)
     python -m core.supervision.switch_on baseline --yes --record F   the bounded baseline above, its record written to F
     python -m core.supervision.switch_on rollback-check              before switching version 2 off: exit 1 while any
                                                                      version 2 item is not ended or any effect is open
@@ -41,7 +44,7 @@ MIGRATION_OBJECTS = {
 PAGE = 500
 
 
-HISTORICAL_RULES = ("stalled", "lapsed", "overdue", "drift", "sweeper_stale")   # information, once the item ended
+HISTORICAL_RULES = ("stalled", "lapsed", "overdue", "drift")   # information, once the item ended (never sweeper_stale)
 TERMINAL = ("completed", "failed", "refused", "timed_out", "cancelled", "output_limit", "interrupted", "expired")
 
 
@@ -147,7 +150,7 @@ def check(authority, store, connect) -> dict:
             AND table_name='mc_delegations' AND column_name='queue_seq'""")
         migrations["002"] = migrations["002"] and cur.fetchone()["n"] == 1
     out = {"migrations": migrations, "contacts_ready": None, "raised": None, "untold": None, "timers": None,
-           "authority_file": None}
+           "authority_file": None, "running": False}
     path = getattr(authority, "source_path", None)
     if path:
         from core.mc_delegation_dispatcher.production import file_digest
@@ -167,9 +170,12 @@ def check(authority, store, connect) -> dict:
         out["timers"] = server.ages(authority)
     except Exception as exc:
         out["timers"] = {"unreadable": type(exc).__name__}
-    # Ready when nothing historical waits to be told: what the baseline would keep (actionable, live) is told on
-    # purpose, so only baselinable history blocks a switch-on until the baseline has run.
+    # Ready to switch on when nothing historical waits to be told: what the baseline would keep (actionable, live) is
+    # told on purpose, so only baselinable history blocks a switch-on until the baseline has run. Running is
+    # separate (Codex's P1-a review S1): after the switch-on, the authority's liveness and sweeper are both fresh.
     out["ready"] = out["contacts_ready"] and not plan["baselined"]
+    timers = out["timers"] or {}
+    out["running"] = bool(out["ready"] and all((timers.get(t) or {}).get("fresh") for t in ("liveness", "sweeper")))
     return out
 
 
@@ -192,11 +198,11 @@ def _from_environ(environ):
 def main(argv=None, environ=None) -> int:
     words = list(sys.argv[1:] if argv is None else argv)
     environ = os.environ if environ is None else environ
-    if words[:1] == ["check"] and len(words) == 1:
+    if words in (["check"], ["check", "--running"]):
         authority, store, connect = _from_environ(environ)
         out = check(authority, store, connect)
         print(json.dumps(out, sort_keys=True, default=str))
-        return 0 if out["ready"] else 1
+        return 0 if out["running" if "--running" in words else "ready"] else 1
     if words[:2] == ["baseline", "--yes"] and len(words) == 4 and words[2] == "--record":
         authority, store, _ = _from_environ(environ)
         print(json.dumps(baseline(authority, store, record=words[3]), sort_keys=True))
@@ -206,7 +212,7 @@ def main(argv=None, environ=None) -> int:
         out = rollback_blockers(authority)
         print(json.dumps({"live": len(out["live"]), "open_effects": len(out["open_effects"]), **out}, sort_keys=True))
         return 0 if not out["live"] and not out["open_effects"] else 1
-    print("usage: python -m core.supervision.switch_on check | baseline --yes --record FILE | rollback-check",
+    print("usage: python -m core.supervision.switch_on check [--running] | baseline --yes --record FILE | rollback-check",
           file=sys.stderr)
     return 2
 

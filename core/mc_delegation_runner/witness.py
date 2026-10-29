@@ -337,6 +337,25 @@ class SnapshotChecks:
         self._due = None
         self.sweeper_out = None                 # (key, since) told stale, not yet told back
         self.silent = {}                        # host_id -> (key, since) told silent, not yet told back
+        self._restored = False
+
+    def restore(self, witness):
+        """The outages this witness told and never told back, from its memory file (Codex's P1-a review S2): a restart
+        tells their end once, as the authority's own outage does (SF2), never a second stale notice."""
+        if self._restored:
+            return
+        self._restored = True
+        endpoint, told = witness.endpoint_id, witness.memory.told
+        for key in witness.memory.order:
+            kind, _, rest = key.partition(":")
+            if kind == "sweeper-stale" and rest.startswith(endpoint + ":"):
+                since = rest[len(endpoint) + 1:]
+                if f"sweeper-back:{endpoint}:{since}" not in told:
+                    self.sweeper_out = (key, since)
+            elif kind == "host-silent":
+                host, _, since = rest.partition(":")
+                if since and f"host-back:{host}:{since}" not in told:
+                    self.silent[host] = (key, since)
 
     def look(self, witness, now_wall, *, doc=None):
         if doc is None:
@@ -353,6 +372,7 @@ class SnapshotChecks:
 
     def evaluate(self, witness, doc, now_wall):
         from datetime import datetime, timedelta
+        self.restore(witness)
         if not isinstance(doc, dict) or doc.get("schema") != "minimoi.runtime.state.v1":
             witness.failed("witness_read_failed:schema", now_wall.isoformat())
             return

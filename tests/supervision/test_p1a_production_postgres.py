@@ -129,6 +129,7 @@ class ProductionWiring(PostgresFixture, unittest.TestCase):
                          ({"002": True, "003": True}, True, 0, 0, 0, True))
         self.assertEqual(out["authority_file"], "sha256:" + hashlib.sha256(PROD.read_bytes()).hexdigest())
         self.assertTrue(out["timers"]["liveness"]["fresh"])
+        self.assertTrue(out["running"])                        # both timers fresh after a sweep and a beat
         self.assertEqual(switch_on.baseline(self.store, Store(self.connect))["baselined"], 0)
 
     def test_the_integrated_tests_prodenv_reads_and_owner_path(self):
