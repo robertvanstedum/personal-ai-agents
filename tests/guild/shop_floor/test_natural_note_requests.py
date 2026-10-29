@@ -68,7 +68,7 @@ def test_a_named_note_with_no_words_is_refused_not_saved():
     ("put a post-it note on the board saying buy milk", "buy milk"),
     ("Put a note on the board saying buy milk", "buy milk"),
     ("put a post-it on the board, say buy milk", "buy milk"),
-    ("put a post-it on the board say buy milk", "buy milk"),
+    ("put a post-it on the board say buy milk", "say buy milk"),               # a bare "say" is his word (S-3)
     ("put a post-it on the board, say: buy milk", "buy milk"),
     ("Put a post-it note on the board that says call the bank", "call the bank"),
     ("Can you put a post-it on the board saying test?", "test"),                      # the question's mark is not his words
@@ -280,3 +280,27 @@ def test_spoken_never_mind_or_a_pointer_is_not_saved_and_save_a_note_test_still_
         assert said["saved"] is False and said["spoken"] == direct.NOT_A_NOTE, words
     assert call(voice, sid, call_id="m9", name="save_note", words="save a note test").get_json()["saved"] is True
     assert voice.cos.calls == ["/note test"]
+
+
+
+# ── Review S-3: the post-it widening neither drops nor invents words ───────────────────────────────────────────────
+
+@pytest.mark.parametrize("text,payload", [
+    ("Add a post-it say thanks to Anna", "say thanks to Anna"),          # a to-do, not a greeting: "say" is his word
+    ("Make a post-it say hello", "say hello"),
+    ("Mach ein Post-it ans Board sag Danke an Anna", "sag Danke an Anna"),
+    ("Add a post-it, say thanks to Anna", "thanks to Anna"),             # after a comma, "say" introduces his words
+    ("Add a post-it say: thanks to Anna", "thanks to Anna"),             # or with a colon
+    (ROBERTS_POSTIT, "test"),                                            # after the aside, as he said it
+])
+def test_a_bare_say_is_his_word_and_say_after_a_comma_or_colon_introduces_them(text, payload):
+    assert board_commands.parse(text) == payload
+
+
+@pytest.mark.parametrize("text", ["Häng ein Post-it ans Board, nicht jetzt", "Schreib ein Post-it mit",
+                                  "put a post-it on the board, buy milk", "Mach ein Post-it ans Board, sag"])
+def test_words_starting_with_a_mark_or_a_lone_separator_word_are_asked_for_never_saved(text):
+    assert board_commands.parse(text) == ""
+    out = board_commands.execute(text, board=Board(), conversation=SimpleNamespace(floor="f", add_note=None),
+                                 principal="robert", turn_key="k")
+    assert out["operation"] == {"type": "board_postit", "saved": False, "reason": "needs_text"}

@@ -19,21 +19,24 @@ _TAIL = r"(?:\s*,?\s*(?:please|for\s+me|thanks|thank\s+you))*\s*[.!?]*"
 # natural parts of how he asks, none of which ever becomes the words saved:
 # * a one-word kind before the noun ("a test note", "a quick post-it"): a closed list, so no other word is read as framing;
 # * an aside naming the post-it after the Board (", just a post-it note");
-# * "say X" or "that says X" introducing the words, with or without a comma, beside the colon, dash, "that", "saying",
-#   "to" and "about" there were. "that says" is tried before "that", so "says" is never saved as a word.
+# * "say X" or "that says X" introducing the words, beside the colon, dash, "that", "saying", "to" and "about" there
+#   were. "that says" is tried before "that", so "says" is never saved as a word. A bare "say" introduces them only after
+#   a comma or the aside, or with a colon (review S-3): "Add a post-it say thanks to Anna" keeps "say thanks to Anna".
 _KIND = r"(?:(?:test|quick|short|little|small|new|sticky|simple)\s+)?"
 _ASIDE = r"(?:\s*,\s*(?:just\s+)?(?:a\s+)?post[- ]?it(?:\s+note)?)?"
-_SAYS = r"(?::|[-–—]|that\s+says\s+|that\s+|saying\s+|to\s+|about\s+|,?\s*(?:say|saying|that\s+says)(?:\s*:)?\s+)"
+_SAYS = (r"(?::|[-–—]|that\s+says(?:\s*:)?\s+|that\s+|saying(?:\s*:)?\s+|to\s+|about\s+|say\s*:\s*"
+         r"|,\s*(?:say|saying|that\s+says)(?:\s*:)?\s+)")
 _COMMAND = re.compile(_PREFIX + r"(?:create|make|add|save|write|put|pin)\s+(?:me\s+)?(?:a\s+|this\s+)?" + _KIND + r"(?:post[- ]?it(?:\s+note)?\b|(?:board\s+note)|note\s+(?:on|to)\s+(?:the\s+|my\s+)?board)(?:\s+(?:on|to)\s+(?:the\s+|my\s+)?board)?" + _ASIDE + r"\b\s*" + _SAYS + r"?\s*(?P<text>.*)", re.I | re.S)
 # German (A4-1, the same parts): "ein Post-it" as well as "einen"/"eine", the Board as "ans Board", "aufs Board" or "auf/an
 # dem/das/den Board", the verbs one hangs, sticks or pins a note with, and "mit (dem Text)", "sag(e)", "auf dem steht" or
-# "das/der sagt" introducing the words. A "Notiz" or "Zettel" is a Board post-it only with the Board named; "mach eine
+# "das/der sagt" introducing the words ("sag(e)" only after a comma or with a colon, as "say"). A "Notiz" or "Zettel" is a Board post-it only with the Board named; "mach eine
 # Notiz: …" alone is not one. "Kannst du …" puts the verb last: "Kannst du ein Post-it ans Board hängen, mit dem Text X?"
 _DE_ART = r"(?:(?:ein|eine|einen)\s+)?"
 _DE_BOARD = r"(?:(?:auf|an)\s+(?:dem|das|den)\s+board|ans\s+board|aufs\s+board)"
 _DE_NOUN = r"(?:post[- ]?it(?:\s+" + _DE_BOARD + r")?|(?:notiz|zettel)\s+" + _DE_BOARD + r")"
 _DE_ASIDE = r"(?:\s*,\s*(?:nur\s+)?(?:ein\s+)?post[- ]?it)?"
-_DE_SAYS = r"(?::|[-–—]|,?\s*(?:mit\s+dem\s+text|mit|sag|sage|auf\s+dem\s+steht|das\s+sagt|der\s+sagt)(?:\s*:)?\s+)"
+_DE_SAYS = (r"(?::|[-–—]|,?\s*(?:mit\s+dem\s+text|mit|auf\s+dem\s+steht|das\s+sagt|der\s+sagt)(?:\s*:)?\s+"
+            r"|sage?\s*:\s*|,\s*sage?(?:\s*:)?\s+)")
 _GERMAN = re.compile(r"(?:bitte\s+)?(?:erstelle|schreib|schreibe|mach|mache|häng|hänge|kleb|klebe|pinn|pinne)\s+(?:mir\s+)?" + _DE_ART + _DE_NOUN + _DE_ASIDE + r"\b\s*" + _DE_SAYS + r"?\s*(?P<text>.*)", re.I | re.S)
 _GERMAN_ASKED = re.compile(r"(?:kannst|könntest)\s+du\s+(?:bitte\s+)?(?:mir\s+)?" + _DE_ART + _DE_NOUN + r"\s+(?:machen|erstellen|schreiben|hängen|kleben|pinnen)" + _DE_ASIDE + r"\b\s*" + _DE_SAYS + r"?\s*(?P<text>.*)", re.I | re.S)
 # A request asked as a question ("Can you … say test?", "Kannst du …?"): its question mark closes the question, never the
@@ -44,6 +47,16 @@ _ASKED = re.compile(r"(?:(?:okay|ok)\s*,?\s+)?(?:(?:can|could|would|will)\s+you|
 def _command(text):
     """The first board-command grammar that matches the whole text: English, German, German asked with the verb last."""
     return _COMMAND.fullmatch(text) or _GERMAN.fullmatch(text) or _GERMAN_ASKED.fullmatch(text)
+
+
+# What the "no separator, take the rest" rule must not save (review S-3): words that start with a mark ("…ans Board,
+# nicht jetzt" leaves ", nicht jetzt"), or a separator word left alone ("Schreib ein Post-it mit"). Asked for instead.
+_NOT_WORDS = re.compile(r"\s*[,;.!?]|\s*(?:mit|sag|sage|say|saying|that|to|about)\s*[.!?]*\s*$", re.I)
+
+
+def _his_postit(payload):
+    """``payload``, or '' (ask for the words) when it starts with a mark or is only a separator word (_NOT_WORDS)."""
+    return '' if payload and _NOT_WORDS.match(payload) else payload
 
 
 def _unasked(request, words):
@@ -181,7 +194,7 @@ def parse(text):
         found = _payload(match)
         if found is None:
             return None
-        return found[0] if found[1] else _literal(_unasked(stripped, found[0]))
+        return found[0] if found[1] else _literal(_his_postit(_unasked(stripped, found[0])))
     pointed = _POINTED.fullmatch(stripped)
     announced = bool(pointed) and _ANNOUNCING.fullmatch(pointed.group('pointer').strip()) is not None
     if pointed and (pointed.group('text') is not None
