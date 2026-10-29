@@ -49,7 +49,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -194,7 +193,6 @@ def install(args) -> dict:
     base.mkdir(parents=True, exist_ok=True, mode=0o700)
     bundle = base / "bundle"
     commit = build_bundle(args.ref, bundle)
-    roles = template.get("roles") or []
     authority = template.get("authority") or {}
     pin = interpreter_pin(python, bundle, "dsn_file" in authority or template.get("door") is not None)
     doc = {**template, "interpreter": pin, "bundle_root": str(bundle)}
