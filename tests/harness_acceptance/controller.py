@@ -1036,8 +1036,9 @@ class Plan(Run):
         self.owner.reply(batch["message_id"], "yes", after_notice=batch["message_id"])
         reviews = self.wait(lambda: all((self.row(f"C-T15-{n}.review") or {}).get("state") == "queued"
                                         for n in (1, 2, 3)), 60)
-        decided = self.sql("""SELECT receipt, text_sha256 FROM guild.supervision_decisions
-            WHERE requester->>'agent'='runtime' AND state='approved'""")
+        decided = self.sql("""SELECT d.receipt, d.text_sha256 FROM guild.supervision_decisions d
+            JOIN guild.supervision_decision_messages m ON m.decision_id = d.id
+            WHERE m.message_id = %s AND d.state = 'approved'""", (batch["message_id"],))   # this notice's own
         bound = [d for d in decided if (d["receipt"] or {}).get("decision_sha256") == d["text_sha256"]]
         self.check("T15.OWN-6", bool(reviews) and len(decided) == 3 and len(bound) == 3
                    and len({d["text_sha256"] for d in decided}) == 3,
