@@ -287,13 +287,21 @@ def render_scan_page(dd: dict, hash_id: str) -> str:
         container.innerHTML = '<span style="color:var(--text-dim);font-size:0.85rem">No bibliography items found.</span>';
         return;
       }}
-      container.innerHTML = data.items
+      container.replaceChildren();
+      data.items
         .filter(item => item.title && item.title.trim())
-        .map((item, i) => {{
-          const safe = item.title.replace(/"/g, '&quot;').replace(/</g, '&lt;');
-          return `<label class="st-query-row"><input type="checkbox" value="${{safe}}" checked><span>${{safe}}</span></label>`;
-        }})
-        .join('');
+        .forEach(item => {{
+          const label = document.createElement('label');
+          label.className = 'st-query-row';
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.value = item.title;
+          checkbox.checked = true;
+          const title = document.createElement('span');
+          title.textContent = item.title;
+          label.append(checkbox, title);
+          container.append(label);
+        }});
     }} catch (e) {{
       container.innerHTML = '<span style="color:#8b2020;font-size:0.85rem">Could not load bibliography.</span>';
     }}
