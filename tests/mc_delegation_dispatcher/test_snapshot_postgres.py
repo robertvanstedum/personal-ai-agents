@@ -792,6 +792,106 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         self.assertEqual(self.sup_store.by_batch(5555), [])
 
 
+    # ── the closure check's follow-up (REVIEW_independent_S1-G.md, "Closure check") ──
+    def test_c_sf1_a_rule_notice_lost_to_a_failed_send_goes_out_next_tick_and_never_twice(self):
+        blocked = [{"item_id": str(uuid4()), "generation": 1, "code": "authority_error:audit_event_not_written",
+                    "since": self.db_now().isoformat()}]
+        self.beat(blocked=blocked)
+        self.publish()                                          # the sweep raises it
+        self.notify.fail_next = 1                               # Telegram fails at the first try
+        self.sup.runtime_tick()
+
+        def told():
+            return [t for t in self.runtime_texts() if t.startswith("MC: the runtime\n")]
+        self.assertEqual(told(), [])
+        self.assertEqual([r["key"].split(":")[0] for r in self.sql("SELECT key FROM guild.supervision_alerts")],
+                         ["runtime-link-error"])                 # only the failure is told; the notice is not marked
+        self.sup.runtime_tick()
+        self.assertEqual(len(told()), 1)
+        self.assertIn("blocked its task", told()[0])
+        # A restart reads the outbox from the start, whatever its age, and never tells it twice (DUP-7).
+        restarted = Supervisor(self.sup_store, self.notify, GitHub(), chat_id=OWNER, user_id=OWNER,
+                               runtime=RuntimeLink(self.store, owner="robert", view_bound_s=60))
+        restarted.runtime_tick()
+        restarted.runtime_tick()
+        self.assertEqual(len(told()), 1)
+
+    def test_c_n1_an_answer_applied_just_before_a_restart_is_told_as_applied(self):
+        self.admit(card())
+        self.sql("UPDATE guild.mc_action_grants SET consumed_operations = max_operations")
+        _, env = self.claim()
+        self.result(env, artifacts=[art("patch", "b")])         # the review step waits on Robert: one decision
+        self.publish()
+        self.sup.runtime_tick()
+        (sent,) = self.notify.lines()
+        self.notify.reply("yes", sent["message_id"])
+        self.sup.read_answers(wait=0)
+
+        def killed(decision_id):
+            raise RuntimeError("killed")
+        self.sup_store.mark_applied = killed                    # the supervisor dies after the authority applied it
+        self.sup.runtime_tick()
+        del self.sup_store.mark_applied
+        self.assertEqual(self.item("C-17.review")["state"], "queued")
+        restarted = Supervisor(self.sup_store, self.notify, GitHub(), chat_id=OWNER, user_id=OWNER,
+                               runtime=RuntimeLink(self.store, owner="robert", view_bound_s=60))
+        restarted.runtime_tick()
+        restarted.runtime_tick()
+        texts = self.runtime_texts()
+        told = [t for t in texts if t.startswith(("Applied:", "Not applied:", "Recorded:"))]
+        self.assertEqual(told, ["Applied: D-1 approved: the step is admitted under its own approval and queued."],
+                         texts)
+        self.assertIsNotNone(self.sup_store.by_code("D-1")["announced_at"])
+
+    def test_c_n2_a_no_to_a_stale_reassignment_closes_it_and_asks_nothing_again(self):
+        self.admit(card())
+        _, env = self.claim()
+        rid = env["request_id"]
+        self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second' "
+                 "WHERE request_id=%s", (rid,))
+        self.store.sweep()
+        self.store.propose_reassignment(rid, "mac-a", by="mc")
+        (r,) = self.waiting(self.publish(), "reassignment")
+        ans = self.store.reconcile("mac-a", rid, 1, {"child": "stopped", "checkpoint": None}, [])
+        self.assertEqual((ans["answer"], ans["generation"]), ("resume", 2))
+        self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second' "
+                 "WHERE request_id=%s", (rid,))
+        self.store.sweep()
+        out = self.store.resolve(r["decision_id"], "declined", by="robert", receipt=self.receipt_of(r, "no"))
+        self.assertEqual((out["state"], out["fresh_decision_id"]), ("stale", None))
+        self.assertEqual(self.waiting(self.publish(), "reassignment"), [])     # his "no" is not asked again
+        self.assertEqual((self.item("C-17.build")["generation"], self.item("C-17.build")["state"]), (2, "lapsed"))
+        self.assertEqual(self.store.decisions_status([r["decision_id"]])[r["decision_id"]]["answer"], "stale")
+        self.store.propose_reassignment(rid, "mac-a", by="mc")                # the usual proposal still raises one
+        (fresh,) = self.waiting(self.publish(), "reassignment")
+        self.assertIn("generation 3", fresh["words"])
+
+    def test_c_n3_a_stalls_review_request_is_withdrawn_and_told_once_when_its_item_ends(self):
+        self.admit(card())
+        _, env = self.claim()
+        self.progress(env, "s1")
+        self.backdate(env["request_id"], 200)                   # no progress for 200 s; build timeout 180 s
+        self.assertTrue(self.store.renew(env["request_id"], 1, protocol=2, runner_id="mac-a"))
+        (review,) = self.waiting(self.publish(), "review_request")
+        did = review["decision_id"]
+        self.sup.runtime_tick()                                 # its D-code goes out
+        (d_code,) = self.sup_store.runtime_rows(did)
+        self.assertEqual(d_code["state"], "sent")
+        self.result(env, artifacts=[art("patch", "a")])        # the item completes
+        self.publish()
+        st = self.store.decisions_status([did])[did]
+        self.assertEqual((st["open"], st["answer"], st["code"]), (False, "withdrawn", "item_ended"))
+        self.sup.runtime_tick()
+        self.sup.runtime_tick()
+        code = d_code["code"]
+        told = [t for t in self.runtime_texts() if t.startswith(f"{code} is no longer open")]
+        self.assertEqual(told, [f"{code} is no longer open: its item has ended (completed). Nothing to answer."])
+        self.assertEqual(self.sup_store.runtime_rows(did)[0]["state"], "expired")
+        self.assertNotIn(did, [d["decision_id"] for d in self.waiting(self.publish())])
+        before = len(self.events("decision.resolved"))
+        self.publish()
+        self.assertEqual(len(self.events("decision.resolved")), before)     # once
+
 if __name__ == "__main__":
     unittest.main()
 

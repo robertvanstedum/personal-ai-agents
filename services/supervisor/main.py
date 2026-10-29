@@ -77,9 +77,11 @@ class Supervisor:
         """S1-G, with a runtime link only, on every tick (its own short timer): answers already given go to the
         authority, and Robert is told what each did; decisions the authority closed itself are closed here; the
         decision notices it raised go out (a routine notice's in one message, a solo one alone); then the rule notices
-        it raised at its sweeps (the outbox), and a dead sweeper's. Nothing here stops the tick (SF3): a failure is
-        logged by its code and told once per key and day, and today's approvals and check-ins go on."""
+        it raised at its sweeps (the outbox), and a dead sweeper's. Every message is marked told only once it went
+        out, so one lost to a Telegram error goes out next tick (C-SF1, C-N4). Nothing here stops the tick (SF3): a
+        failure is logged by its code and told once per key and day, and today's approvals and check-ins go on."""
         steps = (("apply", lambda: self.runtime.apply(self.store, self.bot, self.chat_id)),
+                 ("tell", lambda: self.runtime.tell_outcomes(self.store, self.bot, self.chat_id)),
                  ("close", lambda: self.runtime.close_closed(self.store, self.bot, self.chat_id)),
                  ("deliver", lambda: self.runtime.deliver(self.store, self.bot, self.chat_id)),
                  ("drain", lambda: self.runtime.drain(self.store, self.bot, self.chat_id)))
@@ -233,8 +235,10 @@ class Supervisor:
         self.next_checkin = self.clock() + self.every
         summary, items = watch.check_in(self.store, self.github, now=now, runtime=self.runtime,
                                         sync_view_bound_s=self.sync_view_bound_s)   # the watch runs on the tick
-        fresh = set(self.store.new_alert_keys([i["key"] for i in items]))
-        new_items = [i for i in items if i["key"] in fresh]
+        # The runtime link's notices (``drained``) are told by its drain alone, recorded once they went out (C-SF1);
+        # the check-in only lists them. Without a link there are none, and this is today's check-in.
+        fresh = set(self.store.new_alert_keys([i["key"] for i in items if not i.get("drained")]))
+        new_items = [i for i in items if i["key"] in fresh and not i.get("drained")]
         status = "none"
         if new_items:
             try:

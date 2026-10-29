@@ -25,6 +25,12 @@ import os
 from core.mc_delegation_dispatcher import snapshot as snap
 from core.supervision import telegram as tg
 
+OUTBOX_PAGE = 500              # notices_since's page
+OUTBOX_PAGES = 20              # pages read per tick at most: a restart catches up within a tick or two
+NOTICES_PER_MESSAGE = 10
+MESSAGE_CHARS = 3500           # under Telegram's 4096 (the bot cuts at 4000): a notice is never cut off unseen
+MESSAGES_PER_TICK = 3          # a backlog goes out a few messages a tick, oldest first
+
 
 class RuntimeLink:
     """One environment's authority, read as a snapshot and answered as its owner path. ``authority`` is that
@@ -39,7 +45,14 @@ class RuntimeLink:
         self.authority, self.owner, self.view_bound_s = authority, owner, view_bound_s
         self.source = source or authority.snapshot
         self.errors = []
-        self._outbox_seq = 0                 # the outbox's last seq read in this process (a restart re-reads a day)
+        # Every message is marked told only after it went out (C-SF1, C-N4): a failed send is tried again next tick.
+        # What went out but could not be recorded yet is held here, so it is never sent twice while this process
+        # lives (DUP-7); a restart between a send and its record could repeat that one message, never lose it.
+        self._outbox_seq = 0                 # the outbox's cursor: every notice at or before it is told (0: re-read all)
+        self._unrecorded = set()             # notice keys sent, not yet recorded as told
+        self._outcomes = {}                  # D-code row id -> what the authority did with the answer (this process)
+        self._told_rows = set()              # D-code rows whose outcome went out, not yet recorded as announced
+        self._closed_told = set()            # D-code rows told closed, not yet closed here
 
     def take_errors(self) -> list:
         out, self.errors = self.errors, []
@@ -59,14 +72,17 @@ class RuntimeLink:
     def check_in(self):
         """(items, running, runners, errors) for the check-in's delegation part, from the snapshot alone: the notices
         the authority raised, except decisions (``deliver`` sends those), with their keys, and a dead sweeper's notice
-        whether raised or not; the items not ended; the hosts. A stale view gives one ``view-stale`` item."""
+        whether raised or not; the items not ended; the hosts. A stale view gives one ``view-stale`` item. Each item is
+        marked ``drained``: ``drain`` alone tells it (sent first, recorded after: C-SF1), so the check-in lists it in
+        its summary and never marks it told itself."""
         try:
             doc, stale = self.view()
         except Exception as exc:
             return [], [], [], [f"runtime snapshot unreadable ({type(exc).__name__})"]
         if stale:
-            return [_stale_item(doc)], [], [], []
-        items = [{"key": n["key"], "kind": n["kind"], "text": n["text"]} for n in doc.get("notices", [])
+            return [dict(_stale_item(doc), drained=True)], [], [], []
+        items = [{"key": n["key"], "kind": n["kind"], "text": n["text"], "drained": True}
+                 for n in doc.get("notices", [])
                  if (n.get("raised_at") or n.get("rule") == "sweeper_stale")
                  and n.get("rule") not in ("decision", "decisions")]
         running = []
@@ -113,11 +129,12 @@ class RuntimeLink:
 
     # ── answers in, and what the authority did with them ──
     def apply(self, store, bot, chat_id) -> list:
-        """Robert's answers to runtime decisions, taken to the authority once each (its ``resolve``, with the receipt),
-        and then told to him in the message that carried the decision, naming what happened: applied, left waiting,
-        moot, stale, already closed, or refused with the reason (SF2). A refusal that leaves the decision waiting at
-        the authority gives it a fresh D-code, sent alone. Any other failure leaves the answer for the next tick.
-        -> [(row, outcome)]"""
+        """Robert's answers to runtime decisions, taken to the authority once each (its ``resolve``, with the receipt).
+        A refusal that leaves the decision waiting at the authority gives it a fresh D-code, sent alone. When the
+        authority says the decision is already closed, its records are read again before anything is said (C-N1): an
+        answer applied just before a restart (resolved, not yet marked applied here) is reported as applied, never as
+        "Not applied". Any other failure leaves the answer for the next tick. What each did is told by
+        ``tell_outcomes``. -> [(row, outcome)]"""
         from core.mc_delegation_dispatcher.store import AuthorityRefused
         out = []
         for d in store.runtime_answered():
@@ -127,6 +144,8 @@ class RuntimeLink:
             did = d["requester"]["decision_id"]
             try:
                 outcome = self.authority.resolve(did, d["state"], by=self.owner, receipt=receipt)
+                if outcome["state"] == "already_resolved":
+                    outcome = self._recorded_outcome(store, d)
             except AuthorityRefused as exc:
                 outcome = {"state": "refused", "code": str(exc)}
             except Exception as exc:
@@ -135,9 +154,53 @@ class RuntimeLink:
             store.mark_applied(d["id"])
             if outcome["state"] == "refused":
                 outcome["reissued"] = self._reissue(store, bot, chat_id, did)
-            self._tell(store, bot, chat_id, d, outcome_text(d, outcome))
+            self._outcomes[d["id"]] = outcome
             out.append((d, outcome))
         return out
+
+    def _recorded_outcome(self, store, row) -> dict:
+        """What the authority's own records say this answer did (C-N1, C-N4), read now, never assumed: closed by this
+        very answer's turn (applied, stale or moot), closed another way, left waiting, or refused and given a fresh
+        D-code."""
+        did = row["requester"]["decision_id"]
+        st = self.authority.decisions_status([did]).get(did) or {"open": False, "answer": "unknown_decision"}
+        if not st.get("open"):
+            if st.get("turn_id") and st.get("turn_id") == _turn(row["receipt"] or {}):
+                answer = st.get("answer")
+                if answer in ("approved", "declined"):
+                    return {"state": "resolved", "action": st.get("action")}
+                if answer == "stale":
+                    return {"state": "stale", "action": st.get("action"), "generation_now": st.get("generation_now")}
+                if answer == "moot":
+                    return {"state": "moot", "action": st.get("action"), "item_state": st.get("item_state")}
+            return {"state": "already_resolved", "answer": st.get("answer"), "action": st.get("action")}
+        later = [r["code"] for r in store.runtime_rows(did) if r["id"] > row["id"] and r["state"] in ("new", "sent")]
+        if later:
+            return {"state": "refused", "code": None, "reissued": later[-1]}
+        return {"state": "waiting", "action": "leave"}
+
+    def tell_outcomes(self, store, bot, chat_id) -> list:
+        """What each applied answer did, told to Robert in reply to the message that carried the decision (SF2):
+        marked told only once it went out (C-N4), so a message lost to a Telegram error goes out at the next tick;
+        after a restart the outcome is read again from the authority's records. -> the D-codes told."""
+        told = []
+        for d in store.runtime_untold():
+            if d["id"] not in self._told_rows:
+                try:
+                    outcome = self._outcomes.get(d["id"]) or self._recorded_outcome(store, d)
+                    bot.send(chat_id, outcome_text(d, outcome), reply_to=self._reply_to(store, d))
+                except Exception as exc:
+                    self.errors.append(f"tell:{_code(exc)}")
+                    continue                                 # told next tick
+                self._told_rows.add(d["id"])
+                self._outcomes.pop(d["id"], None)
+                told.append(d["code"])
+            try:
+                store.mark_announced(d["id"])
+                self._told_rows.discard(d["id"])
+            except Exception as exc:
+                self.errors.append(f"tell_record:{_code(exc)}")   # recorded next tick, never sent again here
+        return told
 
     def _reissue(self, store, bot, chat_id, decision_id):
         """A fresh D-code for a decision still waiting at the authority after a refused answer, sent alone. -> code."""
@@ -156,8 +219,10 @@ class RuntimeLink:
 
     def close_closed(self, store, bot, chat_id) -> list:
         """Runtime D-codes whose decision the authority closed itself (a revocation withdrew it, a new question
-        superseded it, another owner act resolved it): closed here so they can no longer be answered, and Robert is
-        told once why (SF2). -> [(D-code, reason)]"""
+        superseded it, its item ended, another owner act resolved it): Robert is told once why (SF2), and then the
+        D-code is closed here so it can no longer be answered. Told first, closed after (C-N4): a message lost to a
+        Telegram error leaves the D-code open, to be told at the next tick; an answer given meanwhile is applied and
+        told as already closed. -> [(D-code, reason)]"""
         rows = store.runtime_open()
         if not rows:
             return []
@@ -167,51 +232,93 @@ class RuntimeLink:
             st = status.get(r["requester"]["decision_id"]) or {"open": False, "answer": "unknown_decision"}
             if st.get("open"):
                 continue
-            if store.close_runtime(r["id"]):
-                reason = closed_reason(st)
-                self._tell(store, bot, chat_id, r, f"{r['code']} is no longer open: {reason}. Nothing to answer.",
-                           announce=False)
-                out.append((r["code"], reason))
+            reason = closed_reason(st)
+            if r["id"] not in self._closed_told:
+                try:
+                    bot.send(chat_id, f"{r['code']} is no longer open: {reason}. Nothing to answer.",
+                             reply_to=self._reply_to(store, r))
+                except Exception as exc:
+                    self.errors.append(f"tell:{_code(exc)}")
+                    continue
+                self._closed_told.add(r["id"])
+            try:
+                store.close_runtime(r["id"])
+                self._closed_told.discard(r["id"])
+            except Exception as exc:
+                self.errors.append(f"close_record:{_code(exc)}")   # closed next tick, never told again here
+                continue
+            out.append((r["code"], reason))
         return out
 
-    def _tell(self, store, bot, chat_id, row, text, *, announce=True):
-        reply_to = row.get("telegram_message_id") or store.batch_of(row["id"])
-        try:
-            bot.send(chat_id, text, reply_to=reply_to)
-            if announce:
-                store.mark_announced(row["id"])
-        except Exception as exc:
-            self.errors.append(f"tell:{_code(exc)}")
+    @staticmethod
+    def _reply_to(store, row):
+        return row.get("telegram_message_id") or store.batch_of(row["id"])
 
     # ── rule notices, at the sweep that raised them (SF5) ──
     def drain(self, store, bot, chat_id) -> list:
-        """The authority's outbox (notice.raised, recorded at each sweep) read on the supervisor's own short timer: each
-        rule notice not told before (the check-in's once-per-key memory) goes out now, even if it has cleared since, in
-        one message; decisions go out through ``deliver``. A dead sweeper raises nothing, so its live notice is read
-        from the snapshot here too. -> the keys told."""
-        found = self.authority.notices_since(self._outbox_seq)
-        items = []
-        for e in found:
-            self._outbox_seq = max(self._outbox_seq, e["seq"])
-            n = e["notice"]
-            if n.get("rule") in ("decision", "decisions") or not n.get("key") or not n.get("text"):
-                continue
-            items.append({"key": n["key"], "kind": n.get("kind") or "error", "text": n["text"]})
+        """The authority's outbox (notice.raised, recorded at each sweep) read on the supervisor's own short timer, from
+        its cursor: each rule notice not told before (the once-per-key memory the check-in shares) goes out, even if it
+        has cleared since; decisions go out through ``deliver``. A dead sweeper raises nothing, so its live notice is
+        read from the snapshot here too. A notice is recorded as told only after the message carrying it went out
+        (C-SF1): a failed send, or a database error, leaves it for the next tick; the cursor never passes a notice not
+        yet told, and a restart reads the outbox again from the start, whatever a notice's age, skipping what was told
+        (DUP-7). At most ``MESSAGES_PER_TICK`` messages a tick, oldest first. -> the keys sent."""
+        self._record_told(store)
+        outbox, last = [], self._outbox_seq
+        for _ in range(OUTBOX_PAGES):
+            page = self.authority.notices_since(last, hours=None)
+            for e in page:
+                last = max(last, e["seq"])
+                n = e["notice"]
+                if n.get("rule") in ("decision", "decisions") or not n.get("key") or not n.get("text"):
+                    continue
+                outbox.append({"key": n["key"], "kind": n.get("kind") or "error", "text": n["text"], "seq": e["seq"]})
+            if len(page) < OUTBOX_PAGE:
+                break
+        live = []
         try:
             doc, stale = self.view()
-            items.extend({"key": n["key"], "kind": n["kind"], "text": n["text"]} for n in self.sweeper_stale(doc))
+            live.extend({"key": n["key"], "kind": n["kind"], "text": n["text"]} for n in self.sweeper_stale(doc))
             if stale:
-                items.append(_stale_item(doc))
+                live.append(_stale_item(doc))
         except Exception as exc:
             self.errors.append(f"view:{_code(exc)}")
+        items = outbox + live
         if not items:
+            self._outbox_seq = last
             return []
-        fresh = set(store.new_alert_keys([i["key"] for i in items]))
-        told = [i for i in items if i["key"] in fresh]
-        if told:
-            from core.supervision.watch import notices_message
-            bot.send(chat_id, notices_message(told))
-        return [i["key"] for i in told]
+        done = set(store.told_keys(sorted({i["key"] for i in items}))) | self._unrecorded
+        untold, seen = [], set()
+        for i in items:
+            if i["key"] not in done and i["key"] not in seen:
+                seen.add(i["key"])
+                untold.append(i)
+        sent = []
+        from core.supervision.watch import notices_message
+        for chunk in _chunks(untold)[:MESSAGES_PER_TICK]:
+            try:
+                bot.send(chat_id, notices_message(chunk))
+            except Exception as exc:
+                self.errors.append(f"drain_send:{_code(exc)}")
+                break                                        # the rest, and this, next tick
+            keys = [i["key"] for i in chunk]
+            self._unrecorded.update(keys)
+            sent.extend(keys)
+        self._record_told(store)
+        done |= set(sent)
+        waiting = [i["seq"] for i in outbox if i["key"] not in done]
+        self._outbox_seq = min(waiting) - 1 if waiting else last
+        return sent
+
+    def _record_told(self, store):
+        """The notice keys sent and not yet recorded, recorded now (the check-in's once-per-key memory)."""
+        if not self._unrecorded:
+            return
+        try:
+            store.new_alert_keys(sorted(self._unrecorded))
+            self._unrecorded.clear()
+        except Exception as exc:
+            self.errors.append(f"drain_record:{_code(exc)}")
 
     def closed_reason_for(self, row) -> str:
         """Why a runtime D-code can no longer be answered, from the authority (for a reply to it, SF2)."""
@@ -252,12 +359,15 @@ def outcome_text(row, outcome) -> str:
                 + (". A fresh decision follows." if outcome.get("fresh_decision_id") else "."))
     if state == "already_resolved":
         return f"Not applied: the runtime had already closed {code} ({outcome.get('answer')}); nothing was done."
-    return (f"Not applied: {code} was refused ({outcome.get('code')}); nothing was done"
+    why = f" ({outcome['code']})" if outcome.get("code") else ""     # after a restart the refusal's code is not kept
+    return (f"Not applied: {code} was refused{why}; nothing was done"
             + (f". It still waits, as {outcome['reissued']}." if outcome.get("reissued") else "."))
 
 
 def closed_reason(status) -> str:
     answer = status.get("answer")
+    if answer == "withdrawn" and status.get("code") == "item_ended":
+        return f"its item has ended ({status.get('item_state')})"           # C-N3: a review it no longer needs
     if answer == "withdrawn":
         return f"the runtime withdrew it ({status.get('code') or 'withdrawn'})"
     if answer == "superseded":
@@ -269,6 +379,21 @@ def closed_reason(status) -> str:
     if answer == "unknown_decision":
         return "the runtime does not know it"
     return f"the runtime closed it ({answer})"
+
+
+def _chunks(items) -> list:
+    """Notices in messages of at most NOTICES_PER_MESSAGE and MESSAGE_CHARS each, in order (C-SF1): never one message
+    the bot would cut, so every notice marked told was in a message that went out whole."""
+    from core.supervision.watch import notices_message
+    out, cur = [], []
+    for i in items:
+        if cur and (len(cur) >= NOTICES_PER_MESSAGE or len(notices_message(cur + [i])) > MESSAGE_CHARS):
+            out.append(cur)
+            cur = []
+        cur.append(i)
+    if cur:
+        out.append(cur)
+    return out
 
 
 def _stale_item(doc) -> dict:

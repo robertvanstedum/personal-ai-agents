@@ -268,7 +268,7 @@ class FailingLink:
     def _boom(self, *a, **k):
         raise RuntimeError("boom")
 
-    apply = close_closed = deliver = drain = check_in = _boom
+    apply = tell_outcomes = close_closed = deliver = drain = check_in = _boom
 
 
 class TickStore:
@@ -325,7 +325,7 @@ def test_sf3_a_failing_runtime_link_never_stops_the_tick(tmp_path, monkeypatch):
     assert (tmp_path / "alive").exists()                   # the health file is written
     assert len(store.checkins) == 2                        # today's check-ins went on
     told = [t for t, _ in bot.sent if t.startswith("MC: the runtime link failed")]
-    assert len(told) == 1 and "apply:boom, close:boom, deliver:boom, drain:boom" in told[0]   # once per key, a day
+    assert len(told) == 1 and "apply:boom, close:boom, deliver:boom, drain:boom, tell:boom" in told[0]   # once a day
     assert any("runtime link unreadable" in e for e in store.checkins[0][0]["errors"])
 
 
@@ -394,7 +394,7 @@ def test_the_check_in_reads_the_runtimes_notices_and_a_stale_view_fires_nothing(
         def runs(self):
             return []
     summary, items = watch.check_in(St(), GH(), now=NOW, runtime=Link(doc))
-    assert items == [{"key": "runtime-stalled:x:g1:t", "kind": "stalled", "text": "x stalled"}]
+    assert items == [{"key": "runtime-stalled:x:g1:t", "kind": "stalled", "text": "x stalled", "drained": True}]
     assert summary["running"] == [{"job": "C-1.build", "agent": "fakework", "state": "held", "minutes": None,
                                    "brief": "card C-1 step build"}]
     assert summary["runners"] == [{"id": "mac-1", "state": "unreachable", "seen_minutes_ago": 2}]
@@ -462,3 +462,221 @@ def test_a_solo_runtime_reply_is_answered_from_the_row_by_message_returns():
     assert [(d, a) for d, a, _ in store.decided] == [(4, "approved")]
     sup_for(store, bot).handle(update("yes", reply_to=88))
     assert bot.sent[-1][0] == "D-4 is no longer open (already approved); nothing changed."
+
+
+# ── the closure check's follow-up (REVIEW_independent_S1-G.md, "Closure check") ──
+class FlakyBot(Bot):
+    """The approvals bot whose next ``fail`` sends fail, as a Telegram error would."""
+
+    def __init__(self, fail=0):
+        super().__init__()
+        self.fail = fail
+
+    def send(self, chat_id, text, *, reply_to=None):
+        if self.fail:
+            self.fail -= 1
+            raise RuntimeError("telegram_down")
+        return super().send(chat_id, text, reply_to=reply_to)
+
+
+class Authority:
+    """The authority's side the runtime link reads: its outbox and its decisions' status (and resolve, scripted)."""
+    environment = "dev"
+
+    def __init__(self, notices=(), status=None, resolve=None):
+        self.notices, self.status, self._resolve, self.reads = list(notices), dict(status or {}), resolve, []
+
+    def notices_since(self, after_seq=0, *, hours=24):
+        self.reads.append((after_seq, hours))
+        return [n for n in self.notices if n["seq"] > after_seq][:500]
+
+    def decisions_status(self, ids):
+        return {i: self.status.get(i, {"open": False, "answer": "unknown_decision"}) for i in ids}
+
+    def resolve(self, did, answer, *, by, receipt):
+        return self._resolve(did, answer, receipt)
+
+
+def outbox(seq, key):
+    return {"seq": seq, "notice": {"key": key, "kind": "blocked", "rule": "blocked", "text": f"{key} told"}}
+
+
+def fresh_doc():
+    return {"schema": "minimoi.runtime.state.v1", "environment": "dev", "as_of": NOW.isoformat(), "view_age_s": 5,
+            "notices": []}
+
+
+class AlertStore:
+    """The once-per-key memory (guild.supervision_alerts); ``fail_record`` makes the next records fail."""
+
+    def __init__(self):
+        self.alerts, self.fail_record = set(), 0
+
+    def told_keys(self, keys):
+        return {k for k in keys if k in self.alerts}
+
+    def new_alert_keys(self, keys):
+        if self.fail_record:
+            self.fail_record -= 1
+            raise RuntimeError("database_down")
+        fresh = [k for k in keys if k not in self.alerts]
+        self.alerts.update(keys)
+        return fresh
+
+
+def link_for(authority):
+    return RuntimeLink(authority, owner="robert", view_bound_s=60, source=fresh_doc)
+
+
+def test_c_sf1_a_rule_notice_is_told_only_once_its_message_went_out():
+    auth = Authority([outbox(1, "runtime-blocked:a"), outbox(2, "runtime-overdue:b")])
+    store, bot = AlertStore(), FlakyBot(fail=1)
+    link = link_for(auth)
+    assert link.drain(store, bot, OWNER) == []                      # Telegram fails: nothing is marked told
+    assert store.alerts == set() and link.take_errors() == ["drain_send:telegram_down"]
+    assert link.drain(store, bot, OWNER) == ["runtime-blocked:a", "runtime-overdue:b"]     # next tick: it goes out
+    assert auth.reads == [(0, None), (0, None)]                     # the cursor never passed an untold notice
+    assert len(bot.sent) == 1 and "runtime-blocked:a told" in bot.sent[0][0]
+    assert store.alerts == {"runtime-blocked:a", "runtime-overdue:b"}
+    assert link.drain(store, bot, OWNER) == [] and len(bot.sent) == 1                       # never twice (DUP-7)
+    assert auth.reads[-1] == (2, None)
+    # A database error recording what went out: never sent again, recorded at the next tick.
+    auth.notices.append(outbox(3, "runtime-lapsed:c"))
+    store.fail_record = 1
+    assert link.drain(store, bot, OWNER) == ["runtime-lapsed:c"] and "runtime-lapsed:c" not in store.alerts
+    assert link.take_errors() == ["drain_record:database_down"]
+    assert link.drain(store, bot, OWNER) == [] and "runtime-lapsed:c" in store.alerts and len(bot.sent) == 2
+    # A notice whose send failed, then a restart: the new link reads the outbox from the start, whatever a notice's
+    # age, and tells only what was never told.
+    auth.notices.append(outbox(4, "runtime-held:d"))
+    bot.fail = 1
+    assert link.drain(store, bot, OWNER) == []
+    restarted = link_for(auth)
+    assert restarted.drain(store, bot, OWNER) == ["runtime-held:d"]
+    assert auth.reads[-1] == (0, None) and len(bot.sent) == 3 and "runtime-held:d told" in bot.sent[-1][0]
+    assert link_for(auth).drain(store, bot, OWNER) == [] and len(bot.sent) == 3
+
+
+def test_c_sf1_a_backlog_goes_out_whole_a_few_messages_a_tick():
+    from core.supervision import runtime as R
+    auth = Authority([outbox(i, f"runtime-blocked:{i:02d}") for i in range(1, 36)])
+    store, bot = AlertStore(), FlakyBot()
+    link = link_for(auth)
+    assert len(link.drain(store, bot, OWNER)) == R.NOTICES_PER_MESSAGE * R.MESSAGES_PER_TICK
+    assert len(bot.sent) == R.MESSAGES_PER_TICK and all(len(t) <= R.MESSAGE_CHARS for t, _ in bot.sent)
+    assert len(link.drain(store, bot, OWNER)) == 5                   # the rest at the next tick, oldest first
+    assert len(store.alerts) == 35 and link.drain(store, bot, OWNER) == []
+
+
+def test_c_sf1_the_check_in_lists_the_runtimes_notices_and_never_marks_them_told():
+    class L:
+        def check_in(self):
+            return [{"key": "runtime-blocked:a", "kind": "blocked", "text": "a blocked", "drained": True}], [], [], []
+
+    class GH:
+        def open_prs(self):
+            return []
+
+        def runs(self):
+            return []
+    store, bot = TickStore(), TickBot()
+    summary, new = M.Supervisor(store, bot, GH(), chat_id=OWNER, user_id=OWNER, runtime=L()).checkin(now=NOW)
+    assert new == [] and store.alerts == set() and bot.sent == []
+    assert {"kind": "blocked", "text": "a blocked"} in summary["open_items"]
+
+
+class RtStore:
+    """The supervision store's runtime rows, as the tables answer them."""
+
+    def __init__(self, rows):
+        self.rows = rows
+
+    def _row(self, i):
+        return next(r for r in self.rows if r["id"] == i)
+
+    def runtime_answered(self):
+        return [r for r in self.rows if r["state"] in ("approved", "declined") and not r.get("delivered")]
+
+    def mark_applied(self, i):
+        self._row(i)["delivered"] = True
+
+    def runtime_untold(self):
+        return [r for r in self.rows if r["state"] in ("approved", "declined") and r.get("delivered")
+                and not r.get("announced")]
+
+    def mark_announced(self, i):
+        self._row(i)["announced"] = True
+
+    def batch_of(self, i):
+        return 77
+
+    def runtime_rows(self, did):
+        return [r for r in self.rows if r["requester"]["decision_id"] == did]
+
+
+DID = "00000007-0000-4000-8000-000000000000"
+
+
+def answered(**over):
+    return dict(row(7, "Admit card C-7 step review: the card's approval no longer admits it. Yes admits it."),
+                state="approved", receipt={"channel": "telegram", "chat_id": OWNER, "message_id": 5001, "text": "yes"},
+                **over)
+
+
+def test_c_n4_a_lost_outcome_message_goes_out_at_the_next_tick_once():
+    store = RtStore([answered(delivered=True)])
+    link = link_for(Authority())
+    link._outcomes[7] = {"state": "resolved", "action": "admit"}
+    bot = FlakyBot(fail=1)
+    assert link.tell_outcomes(store, bot, OWNER) == [] and not store.rows[0].get("announced")
+    assert link.take_errors() == ["tell:telegram_down"]
+    assert link.tell_outcomes(store, bot, OWNER) == ["D-7"]
+    assert bot.sent == [("Applied: D-7 approved: the step is admitted under its own approval and queued.", 77)]
+    assert link.tell_outcomes(store, bot, OWNER) == [] and len(bot.sent) == 1
+
+
+def test_c_n1_an_answer_applied_before_a_restart_is_told_as_applied():
+    """The authority applied Robert's yes; the supervisor died before marking it applied. After the restart the
+    authority answers already_resolved: its records are read again, and the closing turn is his."""
+    turn = f"telegram:{OWNER}:5001"
+    for closed_by, expected in ((turn, "Applied: D-7 approved: the step is admitted under its own approval and "
+                                       "queued."),
+                                ("guild:c-1:n-9", "Not applied: the runtime had already closed D-7 (approved); "
+                                                  "nothing was done.")):
+        auth = Authority(status={DID: {"open": False, "answer": "approved", "action": "admit", "turn_id": closed_by}},
+                         resolve=lambda did, answer, receipt: {"state": "already_resolved", "answer": "approved",
+                                                                "action": "admit"})
+        store, bot, link = RtStore([answered()]), Bot(), link_for(auth)
+        assert [o["state"] for _, o in link.apply(store, bot, OWNER)] == \
+            ["resolved" if closed_by == turn else "already_resolved"]
+        link.tell_outcomes(store, bot, OWNER)
+        assert bot.sent == [(expected, 77)]
+    # A restart between applying and telling: the outcome is read again from the authority's records.
+    auth = Authority(status={DID: {"open": False, "answer": "approved", "action": "admit", "turn_id": turn}})
+    store, bot = RtStore([answered(delivered=True)]), Bot()
+    assert link_for(auth).tell_outcomes(store, bot, OWNER) == ["D-7"]
+    assert bot.sent[0][0].startswith("Applied: D-7 approved")
+
+
+def test_c_n4_a_lost_closing_message_leaves_the_d_code_open_and_goes_out_at_the_next_tick():
+    from core.supervision.runtime import closed_reason
+    rows = [row(7, "Admit card C-7 step review: the card's approval no longer admits it. Yes admits it.")]
+
+    class S(RtStore):
+        closed = []
+
+        def runtime_open(self):
+            return [r for r in self.rows if r["state"] in ("new", "sent")]
+
+        def close_runtime(self, i):
+            self._row(i)["state"] = "expired"
+            self.closed.append(i)
+            return True
+    store = S(rows)
+    st = {"open": False, "answer": "withdrawn", "code": "item_ended", "item_state": "completed"}
+    link, bot = link_for(Authority(status={DID: st})), FlakyBot(fail=1)
+    assert link.close_closed(store, bot, OWNER) == [] and store.closed == []
+    assert link.close_closed(store, bot, OWNER) == [("D-7", "its item has ended (completed)")]
+    assert bot.sent == [("D-7 is no longer open: its item has ended (completed). Nothing to answer.", 77)]
+    assert link.close_closed(store, bot, OWNER) == [] and len(bot.sent) == 1
+    assert closed_reason(st) == "its item has ended (completed)"

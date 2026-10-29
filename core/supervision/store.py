@@ -413,6 +413,16 @@ class Store:
             return fresh
         return self._run(q)
 
+    def told_keys(self, keys):
+        """The keys among ``keys`` told before, read only (the runtime link records a key once its message went out)."""
+        if not keys:
+            return set()
+
+        def q(cur):
+            cur.execute("SELECT key FROM guild.supervision_alerts WHERE key = ANY(%s)", (list(keys),))
+            return {r["key"] for r in cur.fetchall()}
+        return self._run(q)
+
     def record_checkin(self, summary, told, telegram):
         def q(cur):
             cur.execute("""INSERT INTO guild.supervision_checkins (summary, told, telegram) VALUES (%s::jsonb, %s, %s)
@@ -523,6 +533,15 @@ class Store:
         def q(cur):
             cur.execute("""SELECT * FROM guild.supervision_decisions WHERE requester->>'agent' = 'runtime'
                 AND state IN ('approved', 'declined') AND delivered_at IS NULL ORDER BY id LIMIT 50""")
+            return [dict(r, code=code_of(r["id"])) for r in cur.fetchall()]
+        return self._run(q)
+
+    def runtime_untold(self):
+        """Runtime decisions whose answer the runtime link applied and whose outcome Robert has not been told yet."""
+        def q(cur):
+            cur.execute("""SELECT * FROM guild.supervision_decisions WHERE requester->>'agent' = 'runtime'
+                AND state IN ('approved', 'declined') AND delivered_at IS NOT NULL AND announced_at IS NULL
+                ORDER BY id LIMIT 50""")
             return [dict(r, code=code_of(r["id"])) for r in cur.fetchall()]
         return self._run(q)
 

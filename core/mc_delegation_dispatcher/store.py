@@ -3062,6 +3062,8 @@ class DispatcherStore:
         written atomically. -> {doc, raised}: ``raised`` the notices first recorded now. The notice.raised events are
         the outbox the supervisor's runtime link drains on its own short timer (notices_since), so a notice reaches
         Robert at the sweep that raised it, even if it has cleared by the next check-in (OWN-4)."""
+        with self._tx() as cur:
+            self._withdraw_ended_reviews(cur)
         doc = self.snapshot(endpoint_id=endpoint_id, host_id=host_id)
         due = [p for p in doc["proposals"] if p["state"] == "due"]
         if due:
@@ -3104,6 +3106,27 @@ class DispatcherStore:
         if state_dir is not None:
             snap.write_state_file(state_dir, doc)
         return {"doc": doc, "raised": raised}
+
+    def _withdraw_ended_reviews(self, cur) -> list:
+        """C-N3: a review request whose item has ended (completed, failed, cancelled, …) asks about nothing any more:
+        withdrawn by the authority at the sweep, once (``decision_resolved``'s once-key), so the runtime link closes its
+        D-code and tells Robert why, once. -> the decision ids withdrawn."""
+        cur.execute("""SELECT q.event_id, q.item_id, d.state, d.generation FROM guild.mc_delegation_events q
+            JOIN guild.mc_delegations d ON d.request_id = q.item_id
+            WHERE q.principal_id=%s AND q.environment=%s AND q.kind='decision.queued'
+              AND q.body->>'class' = 'review_request' AND d.state = ANY(%s)
+              AND NOT EXISTS (SELECT 1 FROM guild.mc_delegation_events r WHERE r.principal_id=q.principal_id
+                  AND r.environment=q.environment AND r.once_key = 'decision_resolved:' || q.event_id::text)
+            ORDER BY q.seq""", (self.principal, self.environment, list(TERMINAL)))
+        out = []
+        for r in cur.fetchall():
+            did = str(r["event_id"])
+            if self._event(cur, "decision.resolved", item=r["item_id"], generation=r["generation"], source="authority",
+                           once=_once("decision_resolved", did),
+                           body={"decision_id": did, "answer": "withdrawn", "code": "item_ended",
+                                 "item_state": r["state"], "class": "review_request", "by": "authority"}):
+                out.append(did)
+        return out
 
     def note_read(self, reader, role) -> None:
         """A read of the snapshot through the read path (R7.6-a): the reader's last contact, as a reserved row
@@ -3168,12 +3191,14 @@ class DispatcherStore:
                     "card_id": row["card_id"], "receipt": evidence}
             if d["class"] == "reassignment" and row["generation"] != dq["generation"] and row["state"] not in TERMINAL:
                 # The words name the generation the decision was raised at (SF6): an answer to them never moves a later
-                # generation. Closed as stale; a fresh decision is raised for the generation now, if it can still move.
+                # generation. Closed as stale. A "yes" raises a fresh decision for the generation now, if it can still
+                # move; a "no" raises nothing (C-N2): the usual proposals raise one if the item still needs it.
                 self._event(cur, "decision.resolved", item=row["request_id"], generation=row["generation"],
                             source="owner", once=_once("decision_resolved", did),
                             body={**refs, "answer": "stale", "generation_now": row["generation"]})
                 fresh = None
-                if self._reassignable(row) and self._runner(cur, dq["body"].get("runner_id")) is not None:
+                if answer == "approved" and self._reassignable(row) \
+                        and self._runner(cur, dq["body"].get("runner_id")) is not None:
                     fresh = self._queue_reassignment(cur, row, dq["body"]["runner_id"],
                                                      dq["body"].get("proposed_by") or by)
                 return {"state": "stale", "action": action, "generation_now": row["generation"],
@@ -3344,7 +3369,8 @@ class DispatcherStore:
         return decision_id
 
     def decisions_status(self, decision_ids) -> dict:
-        """{decision_id: {open, class, solo, answer?, action?, by?, superseded_by?, item_state, words?, text_sha256?}}
+        """{decision_id: {open, class, solo, answer?, action?, by?, superseded_by?, code?, generation_now?, turn_id?,
+        item_state, words?, text_sha256?}}
         for the runtime link (SF2): whether each decision still waits at the authority, how it was closed if not, and
         for an open one its words now. Read only."""
         _need(self._v2, "protocol_not_enabled")
@@ -3371,8 +3397,11 @@ class DispatcherStore:
                           "item_state": None if row is None else row["state"]}
                 r = resolved.get(did)
                 if r is not None:
-                    status.update(open=False, **{k: r[k] for k in ("answer", "action", "by", "superseded_by", "code")
-                                                 if k in r})
+                    status.update(open=False, **{k: r[k] for k in ("answer", "action", "by", "superseded_by", "code",
+                                                                   "generation_now") if k in r})
+                    turn = (r.get("receipt") or {}).get("turn_id")
+                    if turn:                     # the owner turn that closed it (C-N1: was it this answer?)
+                        status["turn_id"] = turn
                 else:
                     words = None if row is None else snap.decision_words(d, row)
                     status.update(open=row is not None, words=words,
@@ -3381,14 +3410,17 @@ class DispatcherStore:
         return out
 
     def notices_since(self, after_seq=0, *, hours=24) -> list:
-        """The outbox (SF5): notice.raised events after ``after_seq``, recorded in the last ``hours``, oldest first:
-        [{seq, at, notice}]. The runtime link drains it on the supervisor's own short timer."""
+        """The outbox (SF5): notice.raised events after ``after_seq``, recorded in the last ``hours`` (None: whatever
+        their age, as the runtime link reads it, C-SF1), oldest first, a page of at most 500: [{seq, at, notice}]. The
+        runtime link drains it on the supervisor's own short timer."""
         _need(self._v2, "protocol_not_enabled")
-        _need(type(after_seq) is int and after_seq >= 0 and type(hours) is int and 1 <= hours <= 168, "outbox_invalid")
+        _need(type(after_seq) is int and after_seq >= 0
+              and (hours is None or (type(hours) is int and 1 <= hours <= 168)), "outbox_invalid")
+        recent = "" if hours is None else "AND recorded_at > clock_timestamp() - %s * interval '1 hour'"
         with self._tx() as cur:
-            cur.execute("""SELECT seq, at, body FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s
-                AND kind='notice.raised' AND seq > %s AND recorded_at > clock_timestamp() - %s * interval '1 hour'
-                ORDER BY seq LIMIT 500""", (self.principal, self.environment, after_seq, hours))
+            cur.execute(f"""SELECT seq, at, body FROM guild.mc_delegation_events WHERE principal_id=%s
+                AND environment=%s AND kind='notice.raised' AND seq > %s {recent} ORDER BY seq LIMIT 500""",
+                        (self.principal, self.environment, after_seq) + (() if hours is None else (hours,)))
             return [{"seq": r["seq"], "at": _iso(r["at"]), "notice": r["body"]} for r in cur.fetchall()]
 
     def record_owner_act(self, card_id, act, *, by, note) -> dict:
