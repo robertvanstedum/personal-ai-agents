@@ -14,7 +14,9 @@ from .payment_scrub import scrub
 # Polite framing around a request: "okay,", "please", "could you (please)", "can you kindly", and a
 # trailing ", please" / "for me" / "thanks". It changes nothing about the request itself.
 _PREFIX = r"(?:(?:okay|ok)(?:\s*,\s+|\s+))?(?:please\s+|kindly\s+|(?:can|could|would|will)\s+you\s+(?:please\s+|kindly\s+)?)?"
-_TAIL = r"(?:\s*,?\s*(?:please|for\s+me|thanks|thank\s+you))*\s*[.!?]*"
+# Each separator has one reading (review M-4): a comma with spaces around it, or spaces, or nothing, which is exactly what
+# "\s*,?\s*" read; its two "\s*" split a run of spaces every way, doubling the work with each repeated "please".
+_TAIL = r"(?:(?:\s*,\s*|\s+)?(?:please|for\s+me|thanks|thank\s+you))*\s*[.!?]*"
 # A4-1 (29 Oct, Robert on dev: "Can you put a test note on the board, just a post-it note, say test?" was refused). Three
 # natural parts of how he asks, none of which ever becomes the words saved:
 # * a one-word kind before the noun ("a test note", "a quick post-it"): a closed list, so no other word is read as framing;
@@ -80,10 +82,42 @@ def _unasked(request, words):
 
 # One explicit text-first directive may sit among conversational questions.
 # Extract only its stated literal payload, never a previous message/referent.
-_TEXT_FIRST = re.compile(_PREFIX + r"(?:write|put|pin|add)\s+(?P<text>.+?)\s+(?:on|onto|to)\s+(?:a\s+|the\s+|my\s+)?(?:post[- ]?it(?:\s+note)?|board)\b" + _TAIL, re.I | re.S)
+#
+# Review M-4: each lazy group here starts after the whitespace before it, all of it, never given back ("\s++"), and
+# starts and ends with a non-space ("\S(?:.*?\S)?" for ".+?"); so across a long run of spaces each step is one character
+# test, not a rescan of the run ("put" and 1,990 spaces took 165 ms, the old tail seconds). The first match found is the
+# same: the old "\s+" before a group was greedy, so a match whose group starts with whitespace was found only when none
+# starting at the next word existed, and a lazy group never ends in whitespace a shorter one could leave to what follows.
+# That leaves one old reading the main pattern cannot have: a group that is a single whitespace character, inside a run
+# of three or more ("put   on the board"). The _WS twin finds exactly that case, in one pass, and is tried second, as
+# the old pattern reached it last; the group's value is whitespace either way, and only its emptiness is used.
+_V = r"(?:write|put|pin|add)"
+_ON_A = r"(?:on|onto|to)\s+(?:a\s+|the\s+|my\s+)?(?:post[- ]?it(?:\s+note)?|board)\b" + _TAIL
+_TEXT_FIRST = re.compile(_PREFIX + _V + r"\s++(?P<text>\S(?:.*?\S)?)\s+" + _ON_A, re.I | re.S)
+_TEXT_FIRST_WS = re.compile(_PREFIX + _V + r"\s(?=(?P<text>\s)\s)\s++" + _ON_A, re.I | re.S)
+
+
+def _text_first(clause):
+    """The text-first directive in one clause (_TEXT_FIRST, or its single-whitespace twin), or None."""
+    return _TEXT_FIRST.fullmatch(clause) or _TEXT_FIRST_WS.fullmatch(clause)
+
+
 # "Put these three on the Board as one post-it: a; b; c" / "Put the following on the Board: a, b":
-# a pointer that announces the words, then the words after a colon or dash.
-_POINTED = re.compile(_PREFIX + r"(?:write|put|pin|add)\s+(?P<pointer>[^:\n–—]+?)\s+(?:on|onto|to)\s+(?:a\s+|the\s+|my\s+)?(?:board|post[- ]?it(?:\s+note)?)(?:\s+as\s+(?:one|a\s+single|a)\s+(?:post[- ]?it(?:\s+note)?|card|note))?(?:\s*(?::|\s[-–—])\s*(?P<text>.+?))?" + _TAIL, re.I | re.S)
+# a pointer that announces the words, then the words after a colon or dash. The pointer and the words follow M-4's rule
+# above; a pointer that is one whitespace character (a run of three or more, its last non-newline character in the old
+# reading) is _POINTED_WS's. The words never need that case: the text is stripped, so a non-space reading always exists.
+_POINTED_REST = (r"(?:on|onto|to)\s+(?:a\s+|the\s+|my\s+)?(?:board|post[- ]?it(?:\s+note)?)"
+                 r"(?:\s+as\s+(?:one|a\s+single|a)\s+(?:post[- ]?it(?:\s+note)?|card|note))?"
+                 r"(?:\s*(?::|\s[-–—])\s*+(?P<text>\S(?:.*?\S)?))?" + _TAIL)
+_POINTED = re.compile(_PREFIX + _V + r"\s++(?P<pointer>[^:\n–—\s](?:[^:\n–—]*?[^:\n–—\s])?)\s+" + _POINTED_REST, re.I | re.S)
+_POINTED_WS = re.compile(_PREFIX + _V + r"\s(?=\s*?(?P<pointer>[^\S\n])\s)\s++" + _POINTED_REST, re.I | re.S)
+
+
+def _pointed(text):
+    """The pointed form (_POINTED, or its single-whitespace pointer twin), or None."""
+    return _POINTED.fullmatch(text) or _POINTED_WS.fullmatch(text)
+
+
 _ANNOUNCING = re.compile(r"(?:all\s+)?(?:these|those|them|this|it|the\s+following|the\s+list|my\s+list|the\s+items?|the\s+points?)(?:\s+(?:\d+|two|three|four|five|six|seven|eight|nine|ten))?(?:\s+(?:items|things|points|tasks|notes|bullets|lines|ones|reminders))?", re.I)
 _OUTSIDE_REFUSAL = re.compile(r"\b(?:not|do\s+not|don['’]t|never|cancel|revoke|no\s+need|not\s+now|if|unless|whether|maybe|perhaps|example|hypothetical|suppose|imagine|yesterday|previously|said|says|asked|told|wrote|reported|quoted|document|transcript|translate|summari[sz]e|analy[sz]e)\b", re.I)
 # Code, block quotes and indented blocks are material to read, never a request.
@@ -164,11 +198,11 @@ def _text_first_request(text):
     clauses=_clauses(text)
     payloads=[];outside=[];literal=[]
     for clause in clauses:
-        match=_TEXT_FIRST.fullmatch(clause)or _command(clause)
+        match=_text_first(clause)or _command(clause)
         found=_payload(match)if match else None
         if found is None:outside.append(clause)
         else:payloads.append(found[0]);literal.append(found[1])
-    if not any(_TEXT_FIRST.fullmatch(clause)and _payload(_TEXT_FIRST.fullmatch(clause))is not None for clause in clauses):return None
+    if not any(_text_first(clause)and _payload(_text_first(clause))is not None for clause in clauses):return None
     if _OUTSIDE_REFUSAL.search(' '.join(outside)):return None
     # Two differing explicit requests cannot be collapsed to an inferred one.
     if len(set(payloads))!=1:return ''
@@ -210,7 +244,7 @@ def parse(text):
             return found[0]
         words = _unasked(stripped, found[0])
         return _literal(words if _explicit(match) else _his_postit(words))
-    pointed = _POINTED.fullmatch(stripped)
+    pointed = _pointed(stripped)
     announced = bool(pointed) and _ANNOUNCING.fullmatch(pointed.group('pointer').strip()) is not None
     if pointed and (pointed.group('text') is not None
                     or (announced and re.search(r'\bas\s+(?:one|a\s+single|a)\s', stripped, re.I))):

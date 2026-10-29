@@ -28,8 +28,8 @@ REMINDERS_FLAG = 'MINIMOI_MC_OWNER_REMINDERS'
 REMINDERS_OFF = ('Reminders are not switched on here, so nothing was scheduled. '
                  'Nothing was sent to the Chief of Staff.')
 
-# "okay, " / "okay ": a comma then spaces, or spaces; the same words "\s*,?\s+" read, without its quadratic backtracking on
-# a long run of spaces (review M-3, A4 fix round).
+# "okay, " / "okay ": a comma then spaces, or spaces. Every separator here reads "(?:\s*,\s+|\s+)", exactly the words
+# "\s*,?\s+" read, without its two quantifiers competing for one run of spaces (reviews M-3 and M-4, A4 fix round).
 _PREFIX = r'(?:(?:okay|ok|hey|hi)(?:\s*,\s+|\s+))?(?:please\s+|(?:can|could|would)\s+you\s+(?:please\s+)?)?'
 _COUNT = r'(?:\d{1,4}|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty[- ]five|half\s+an)'
 _W_IN = r'in\s+' + _COUNT + r'\s+(?:minutes?|mins?|hours?|hrs?)'
@@ -39,10 +39,10 @@ _W_DAY = (r'(?:today|tonight|this\s+(?:morning|afternoon|evening)|tomorrow(?:\s+
 _WHEN = rf'(?:{_W_IN}|(?:{_W_DAY}\s+)?at\s+{_W_CLOCK}|at\s+{_W_CLOCK}\s+{_W_DAY}|{_W_DAY})'
 _END = r'[\s.!?]*'
 # "remind me <when> to X", "remind me to X <when>", "set a reminder [for <when>] to X [<when>]".
-_REMIND_WHEN_FIRST = re.compile(rf'{_PREFIX}remind\s+me\s+(?P<when>{_WHEN})\s*,?\s+(?P<link>to|that|about)\s+(?P<text>.+?){_END}', re.I | re.S)
-_REMIND = re.compile(rf'{_PREFIX}remind\s+me\s+(?P<link>to|that|about)\s+(?P<text>.+?)(?:\s*,?\s+(?P<when>{_WHEN}))?{_END}', re.I | re.S)
-_SET = re.compile(rf'{_PREFIX}set\s+(?:me\s+)?(?:a\s+)?reminder\s+(?:(?:for\s+)?(?P<when>{_WHEN})\s*,?\s+)?'
-                  rf'(?P<link>to|that|about|:|[-–—])\s*(?P<text>.+?)(?:\s*,?\s+(?P<when2>{_WHEN}))?{_END}', re.I | re.S)
+_REMIND_WHEN_FIRST = re.compile(rf'{_PREFIX}remind\s+me\s+(?P<when>{_WHEN})(?:\s*,\s+|\s+)(?P<link>to|that|about)\s+(?P<text>.+?){_END}', re.I | re.S)
+_REMIND = re.compile(rf'{_PREFIX}remind\s+me\s+(?P<link>to|that|about)\s+(?P<text>.+?)(?:(?:\s*,\s+|\s+)(?P<when>{_WHEN}))?{_END}', re.I | re.S)
+_SET = re.compile(rf'{_PREFIX}set\s+(?:me\s+)?(?:a\s+)?reminder\s+(?:(?:for\s+)?(?P<when>{_WHEN})(?:\s*,\s+|\s+))?'
+                  rf'(?P<link>to|that|about|:|[-–—])\s*(?P<text>.+?)(?:(?:\s*,\s+|\s+)(?P<when2>{_WHEN}))?{_END}', re.I | re.S)
 _SLASH_REMIND = re.compile(r'/remind(?:\s+|$)', re.I)
 _CANONICAL_DUE = re.compile(r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z)\s+(.+)', re.S)
 
@@ -161,6 +161,20 @@ def _note(text):
     return None if payload is None else Action('note', text=payload)
 
 
+def _capped(text):
+    """``text`` with each run of three or more whitespace characters cut to its first two (review M-4). The reminder
+    grammar reads whitespace only as none, one or more than one (a clock's ``\\s?``, and ``\\s+`` and ``\\s*``
+    elsewhere), and every word it keeps is whitespace-normalised before use (_reminder, resolve, _timed), so what it
+    matches and keeps is unchanged; a long run can no longer make its lazy text, its separators and its end compete for
+    the same spaces (900 spaces took over 20 s). One pass, no regular expression."""
+    out, run = [], 0
+    for ch in text:
+        run = run + 1 if ch.isspace() else 0
+        if run <= 2:
+            out.append(ch)
+    return "".join(out)
+
+
 def parse(text, now=None):
     """Return an Action for a direct owner note or reminder command, else None. Never raises."""
     if not isinstance(text, str) or not text.strip():
@@ -172,6 +186,7 @@ def parse(text, now=None):
         return note
     if len(value) > 2000:
         return None
+    value = _capped(value)              # review M-4: what the reminder grammar matches and keeps is unchanged
     if _SLASH_REMIND.match(value):
         canonical = _CANONICAL_DUE.fullmatch(value[_SLASH_REMIND.match(value).end():].strip())
         try:
@@ -192,7 +207,7 @@ def parse(text, now=None):
         if pattern is _SET and groups.get('when') and groups.get('when2'):
             words = words + ' ' + groups['when2']    # "for 9 am to call Anna at noon": the second time is content
         if pattern is _REMIND_WHEN_FIRST and not _timed(when):
-            tail = re.search(rf'\s*,?\s+(at\s+{_W_CLOCK}){_END}$', words, re.I)
+            tail = re.search(rf'(?:\s*,\s+|\s+)(at\s+{_W_CLOCK}){_END}$', words, re.I)
             if tail:                               # "remind me tomorrow to call Anna at 5"
                 when, words = when + ' ' + tail[1], words[:tail.start()]
         if trailing and match['link'].casefold() in ('that', 'about'):
