@@ -9,13 +9,13 @@ const end = source.indexOf('  async function available() {');
 assert.ok(start > 0 && end > start, 'offerProviders block present');
 const block = source.slice(start, end);
 
-function run({ providers = [], managed = null, saved = null, storageThrows = false } = {}) {
+function run({ providers = [], managed = null, saved = null, storageThrows = false, model_actions = undefined } = {}) {
   const option = (value, text) => ({ value, textContent: text, disabled: false, dataset: {} });
   const select = { options: [option('openai', 'OpenAI'), option('xai', 'Grok (xAI) · not available yet')], value: 'openai', disabled: false };
   const store = { getItem() { if (storageThrows) throw new Error('blocked'); return saved; } };
   const sandbox = { $: (s) => (s === '[data-mc-voice-provider]' ? select : null), managed, window: { localStorage: store } };
   vm.createContext(sandbox);
-  vm.runInContext(`${block}\nofferProviders(${JSON.stringify({ providers })});`, sandbox);
+  vm.runInContext(`${block}\nofferProviders(${JSON.stringify({ providers, model_actions })});`, sandbox);
   return select;
 }
 const label = (s, v) => s.options.find((o) => o.value === v).textContent;
@@ -40,4 +40,12 @@ assert.equal(s.disabled, true); assert.ok(s.options.every((o) => o.disabled));  
 s = run({ providers: [{ provider: 'openai' }], storageThrows: true });
 assert.equal(s.value, 'openai');                                                       // blocked storage: works, just not remembered
 
-console.log('6 voice-provider choice scenarios passed; no DOM, network or microphone.');
+// The C2 binding pass (Spec 165 §7 as amended): a provider offered on which MC's voice may not act by itself says so; one
+// that may, or an answer that names none (the managed path), reads as before.
+s = run({ providers: [{ provider: 'openai' }, { provider: 'xai' }], model_actions: { openai: true, xai: false } });
+assert.equal(label(s, 'xai'), 'Grok (xAI) · acts only through Check with MC'); assert.equal(off(s, 'xai'), false);
+assert.equal(label(s, 'openai'), 'OpenAI');
+s = run({ providers: [{ provider: 'openai' }], model_actions: { openai: true, xai: false } });
+assert.equal(label(s, 'xai'), 'Grok (xAI) · not available yet');                       // not offered: unavailable first
+
+console.log('8 voice-provider choice scenarios passed; no DOM, network or microphone.');

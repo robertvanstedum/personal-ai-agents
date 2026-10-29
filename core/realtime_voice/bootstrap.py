@@ -109,7 +109,7 @@ def _memo_duration_guard() -> DurationGuard:
 
 
 def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_production, local_owner=None, consult_ledger=None,
-                               owner=None, admit=None):
+                               owner=None, admit=None, page_responses=None):
     """
     get_persona: Callable[[str], dict | None] -- domain-owned allow-list.
         Returns {"name", "prompt_txt", "scenes": {key: text}, "voices":
@@ -129,6 +129,13 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         runs first (nothing is reserved for a session that cannot be recorded) and
         consult_ledger.abandon(session_id), if it has one, runs when the mint does
         not start a session. None: as before.
+    page_responses: Callable[[provider], bool] -- only a host on the direct path passes it (Spec 165 §5.1, §7 as amended
+        28 Oct 2026: core.realtime_voice.capabilities.model_actions). For a provider it names, the page creates every
+        response that may act, one for each committed owner item: the session's turn detection lets it
+        (create_response false; the provider's barge-in still on), and the answer says page_responses: true. get_persona
+        is then called as get_persona(name, actions=...): True for such a provider, else False, and a persona that still
+        carries tools for a provider it does not name is refused (no action tool where the page cannot name the owner).
+        None: German/Portuguese as before.
     """
     bp = Blueprint(f"realtime_voice_bootstrap_{domain}", __name__)
 
@@ -233,7 +240,8 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
             _log_outcome(domain, user_id, explicit_provider, None, "invalid_provider")
             return jsonify({"ok": False, "error": str(e)}), 400
 
-        persona = get_persona(persona_name)
+        paged = page_responses is not None and page_responses(provider) is True
+        persona = get_persona(persona_name) if page_responses is None else get_persona(persona_name, actions=paged)
         if persona is None:
             _log_outcome(domain, user_id, provider, None, "unknown_persona")
             return jsonify({"ok": False, "error": "unknown persona"}), 400
@@ -247,7 +255,7 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         else:
             scene_text = ""
         tools = persona.get("tools") or None
-        if tools is not None and not _allowlisted_tools(tools):
+        if tools is not None and (not _allowlisted_tools(tools) or (page_responses is not None and not paged)):
             _log_outcome(domain, user_id, provider, None, "invalid_tools")
             return jsonify({"ok": False, "error": "invalid tools"}), 400
 
@@ -269,6 +277,8 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         )
         voice = persona.get("voices", {}).get(provider) or _DEFAULT_VOICE[provider]
         turn_detection = _default_turn_detection(provider)
+        if paged:                                          # the page creates every response; barge-in still cancels one
+            turn_detection = conversation_turn_detection(provider, create_response=False, interrupt_response=True)
         transcription_language = _TRANSCRIPTION_LANGUAGE[provider][locale]
 
         # A host that reserves an allowance (admit) records its session first (MC: the durable start marker), so an
@@ -327,6 +337,7 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
             "voice_session_id": voice_session_id,
             **credential,
             **({"voice_notices": list(persona["notices"])} if persona.get("notices") else {}),
+            **({"page_responses": True} if paged else {}),
             "warning_minutes": guard.warning_minutes,
             "max_minutes": guard.max_minutes,
         })

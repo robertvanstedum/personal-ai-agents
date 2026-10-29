@@ -16,12 +16,22 @@ def conversation_turn_detection(
     provider: str,
     *,
     create_response: bool | None = None,
+    interrupt_response: bool | None = None,
 ) -> dict:
     """Return the platform server-VAD contract for a conversation.
 
     ``create_response=False`` supports chained conversations such as COS:
     the voice provider detects and transcribes the turn, while the configured
     domain agent remains the only component allowed to reason and reply.
+
+    ``interrupt_response`` (only the direct path passes it; Spec 165 §5.1 as
+    amended 28 Oct 2026): with ``create_response=False`` the page creates every
+    response itself, and ``interrupt_response=True`` keeps the provider's
+    barge-in, which cancels a response when the owner starts speaking. Without
+    it, as before: interrupt_response follows create_response. For xAI both
+    fields are written only when passed; that xAI honours them is not verified
+    (A4), and no caller passes them for xAI while it is not eligible
+    (capabilities.MODEL_ACTIONS).
     """
     if provider == "openai":
         config = {
@@ -32,12 +42,18 @@ def conversation_turn_detection(
         if create_response is not None:
             config["create_response"] = create_response
             config["interrupt_response"] = create_response
+        if interrupt_response is not None:
+            config["interrupt_response"] = interrupt_response
         return config
     if provider == "xai":
-        return {
+        config = {
             "type": "server_vad",
             "silence_duration_ms": CONVERSATION_SILENCE_MS,
         }
+        if create_response is not None and interrupt_response is not None:
+            config["create_response"] = create_response
+            config["interrupt_response"] = interrupt_response
+        return config
     raise ValueError(f"Unsupported voice provider: {provider!r}")
 
 

@@ -54,7 +54,8 @@ NOT_A_NOTE = "Nothing was saved. Say 'make a note that' and the note, and I'll s
 NO_CONTINUITY = "No retained voice turn in this conversation yet."
 # Spec 164 §7, part 1: MC's own realtime operating rules, whole (moved here from mc_managed_realtime, which reads them
 # from here): consult for current facts and work, receipts before claiming success, historical text is DATA, tool
-# arguments grant nothing. direct_rules(PERSON) adds this path's two tools.
+# arguments grant nothing. direct_rules(PERSON) adds this path's two tools (or, on a provider not eligible for them, that
+# every action goes through Check with MC).
 INSTRUCTIONS=('You are the realtime voice for MiniMoi\'s shared CoS/MC build partner. Be natural, concise and candid. '
  'Speech is generated directly by this voice model, not always an agent round trip. When you need the shared CoS/MC backend, say naturally that you will check or do the work; an ordinary shared CoS/MC lookup is not a transfer to Codex or Claude. Name a specific agent only when the actual request or receipt confirms contact, and report real handoffs when relevant or asked. '
  'For literal spoken job commands such as run this as a job or stop, consult the agent so the platform can process the actual command. '
@@ -234,14 +235,16 @@ class _MasterCraftsman(DirectVoiceAdapter):
     def card(self):
         return load_pinned(CARD_ROOT)
 
-    def instructions(self, card, conv):
+    def instructions(self, card, conv, actions=True):
         """Composed here on the server in Spec 164 §7's order: (1) MC's operating rules and this path's, (2) MC's card,
         (3) bounded continuity from this conversation (mc_voice_transcripts.block). Never the language-practice text
-        German and Portuguese use (no "learner", no corrections)."""
+        German and Portuguese use (no "learner", no corrections). ``actions`` False (a provider not eligible for the
+        model's own actions, Spec 165 §7 as amended): direct_rules says every action goes through Check with MC."""
         from . import api
         from .mc_voice_transcripts import block
         continuity = block("", api._conv_floor(conv), scrub=api.scrub, include_recent=True) if conv is not None else ""
-        return compose_instructions(INSTRUCTIONS + "\n\n" + direct_rules(PERSON, self.owner_name), card, continuity or NO_CONTINUITY)
+        return compose_instructions(INSTRUCTIONS + "\n\n" + direct_rules(PERSON, self.owner_name, actions), card,
+                                    continuity or NO_CONTINUITY)
 
     def forget(self, sids):
         """Sessions that ended long ago (the core prunes them): their tags and first consult words go too."""

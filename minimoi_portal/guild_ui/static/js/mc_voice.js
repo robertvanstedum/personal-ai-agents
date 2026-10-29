@@ -67,7 +67,8 @@ export function initMcVoice(page) {
   const busy = () => Boolean(controller || starting || ending);
 
   // The Voice choice offers what this host can actually run (the capabilities answer) and plainly marks the rest unavailable;
-  // nothing is substituted silently, and the choice never changes an active session (owner, 18 Oct).
+  // nothing is substituted silently, and the choice never changes an active session (owner, 18 Oct). A provider on which MC's
+  // voice may not act by itself (direct_voice.model_actions false: Grok until A4, Spec 165 §7 as amended) says so.
   const PROVIDER_KEY = 'minimoi.voice.provider';
   function offerProviders(body) {
     const select = $('[data-mc-voice-provider]');
@@ -79,7 +80,8 @@ export function initMcVoice(page) {
       const name = option.dataset.name || option.textContent.split(' · ')[0];
       option.dataset.name = name;
       option.disabled = !usable.has(option.value);
-      option.textContent = option.disabled ? `${name} · not available yet` : name;
+      const checkOnly = body.model_actions && body.model_actions[option.value] === false;
+      option.textContent = option.disabled ? `${name} · not available yet` : checkOnly ? `${name} · acts only through Check with MC` : name;
     }
     let saved = null;
     try { saved = window.localStorage.getItem(PROVIDER_KEY); } catch (e) { /* the choice simply is not remembered */ }
@@ -96,7 +98,7 @@ export function initMcVoice(page) {
       if (!r.ok || !body.ok || !((body.providers || []).length || direct)) return null;
       managed=body.managed_realtime || null;
       if (managed || direct) $('[data-mc-managed-settings]').hidden=false;
-      offerProviders(direct ? { providers: direct.providers, default_provider: direct.default_provider } : body);
+      offerProviders(direct ? { providers: direct.providers, default_provider: direct.default_provider, model_actions: direct.model_actions } : body);
       if (direct) { initDirect(); const first = direct.providers[0]; return first.label || first.provider; }
       return body.providers[0].label || body.providers[0].provider || 'the speech provider';
     } catch (e) { return null; }

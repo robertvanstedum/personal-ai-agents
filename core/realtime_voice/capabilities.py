@@ -14,6 +14,21 @@ from core.realtime_voice.config import ALLOWED_PROVIDERS
 MEMO_MODE = "memo"
 AGENT_CONVERSATION_MODE = "agent_conversation"
 
+# Spec 165 §5.1 and §7, as amended for Robert's C2 decision of 28 Oct 2026 ("A: tie by construction"): the providers whose
+# direct voice may act on the model's own call (consult, save_note). Eligible means both:
+#   1. the provider names the committed item (input_audio_buffer.committed carries item_id);
+#   2. it lets the page create every response (turn detection with create_response false, barge-in still on).
+# Only then can the page create each response that may act for one committed item of the owner's, and a call act on that
+# item's words alone. OpenAI documents both (CoS's controlled voice relies on 2 today). xAI is not eligible until A4 shows
+# both: its direct voice talks, and Check with the person still works, but the model is given no action tool. Turning a
+# provider on is a reviewed change of this one value, with that evidence; nothing else decides it.
+MODEL_ACTIONS = {"openai": True, "xai": False}
+
+
+def model_actions(provider: str) -> bool:
+    """Whether a direct voice session on ``provider`` may act on the model's own call (MODEL_ACTIONS)."""
+    return MODEL_ACTIONS.get(provider) is True
+
 
 @dataclass(frozen=True)
 class ProviderCapability:

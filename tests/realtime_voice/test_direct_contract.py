@@ -158,3 +158,35 @@ def test_a_bare_confirmation_is_refused_in_writing_on_every_host_and_the_summary
     assert ask(h, sid, "call_3", "t2", words="Yes, what is stuck on #12?").get_json()["outcome"] == "done"
     assert h.turns() == 1                                                # not bare: it runs
     assert post(h, sid, [h.event("user", "t1", "Yes.", 3)]).get_json()["end_confirmed"] is True
+
+
+# A1's binding pass (Spec 165 §7 as amended 28 Oct 2026, I6): eligibility is the core's one value, the same for every host. On
+# OpenAI the page creates every response and the model has its two tools; on xAI the session has no action tool, its rules
+# send every action through Check with the person, and Check still acts on his words.
+@pytest.mark.parametrize("provider", ["openai", "xai"])
+def test_each_host_gives_the_models_tools_only_where_the_provider_is_eligible(host, monkeypatch, provider):
+    h = host
+    minted = []
+
+    def xai(**kw):
+        minted.append(kw)
+        return {"provider": "xai", "ephemeral_token": "xai_synthetic", "expires_after_seconds": 300, "model": "grok-voice-latest",
+                "session_config": {}}
+    monkeypatch.setattr("core.realtime_voice.bootstrap.xai_voice.mint_ephemeral_credential", xai)
+    persona = "test_person" if h.kind == "test adapter" else "master_craftsman"
+    answer = h.client.post(h.base + "/bootstrap", headers=h.headers,
+                           json={"persona": persona, "provider": provider, "conversation_id": h.cid})
+    assert answer.status_code == 200, answer.get_json()
+    body = answer.get_json()
+    session = minted[-1] if provider == "xai" else h.r.mints[-1]
+    short = "TP" if h.kind == "test adapter" else "MC"
+    if provider == "openai":
+        assert body["page_responses"] is True and session["turn_detection"]["create_response"] is False
+        assert [t["name"] for t in session["tools"]] == ["consult", "save_note"]
+        assert "your two tools are 'consult'" in session["instructions"]
+    else:
+        assert "page_responses" not in body and not session.get("tools")
+        assert "create_response" not in session["turn_detection"]
+        assert f"press Check with {short}" in session["instructions"] and "your two tools" not in session["instructions"]
+    check = ask(h, body["voice_session_id"], "host-1", "t0").get_json()           # Check with the person: page-initiated
+    assert check["outcome"] == "done" and h.turns() == 1

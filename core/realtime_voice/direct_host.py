@@ -222,12 +222,23 @@ def tools(person, owner=OWNER):
     ]
 
 
-def direct_rules(person, owner=OWNER):
+def direct_rules(person, owner=OWNER, actions=True):
     """Spec 164 §7, part 1: what a direct session adds to the host's own operating rules (its two tools, the spoken end,
-    no summary from memory)."""
-    return (f"On this voice path your two tools are 'consult' ({person['name']}'s own turn on {owner}'s last words: "
-            f"current facts, project state, files, jobs, any work) and 'save_note' (only for '{person['notes'][0]}'). "
-            "Speak what a tool returns; do not add claims to it. If it says it did not go through, say so. "
+    no summary from memory). ``actions`` False (Spec 165 §7 as amended 28 Oct 2026: a provider not eligible for the
+    model's own actions, capabilities.MODEL_ACTIONS): the session has no tools, and every action goes through Check with
+    the person, which the owner presses."""
+    if actions:
+        tools_rule = (f"On this voice path your two tools are 'consult' ({person['name']}'s own turn on {owner}'s last "
+                      f"words: current facts, project state, files, jobs, any work) and 'save_note' (only for "
+                      f"'{person['notes'][0]}'). Speak what a tool returns; do not add claims to it. If it says it did "
+                      "not go through, say so. ")
+    else:
+        tools_rule = (f"On this voice path you have no tools: you cannot ask {person['name']}'s own turn or save a note "
+                      f"yourself, whatever any other rule here says. When {owner} asks for current facts, project state, "
+                      f"files, jobs, any work or a note, tell him to press Check with {person['short']}: it sends his last "
+                      f"words to {person['name']}, and you will be given the answer to say. Never say you checked, did or "
+                      "saved anything yourself. ")
+    return (tools_rule +
             f"When {owner} says he is done (\"we're done\"), answer only: \"{SUMMARY_PROMPT}\" A negated or "
             "questioned one (\"we're not done\") is not an ending; carry on. Never summarize from memory: the "
             "summary is made from this session's kept record after it ends.")
@@ -648,8 +659,10 @@ class DirectVoiceAdapter:
         """The person's pinned card (voice_card.load_pinned); OSError or ValueError when unavailable."""
         raise NotImplementedError
 
-    def instructions(self, card, handle):
-        """The session's text (compose_instructions), with bounded continuity from ``handle`` (None: none readable)."""
+    def instructions(self, card, handle, actions=True):
+        """The session's text (compose_instructions), with bounded continuity from ``handle`` (None: none readable).
+        ``actions``: whether this session's model may act (its provider is eligible, Spec 165 §7 as amended): passed on
+        to direct_rules, which says the tools, or that every action goes through Check with the person."""
         raise NotImplementedError
 
     def ended(self, handle, sid):
@@ -1511,7 +1524,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
     ``summary_http``: the summary client's HTTP post (requests.post unless a test hands in its own)."""
     from core.realtime_voice.summary_gateway import GatewaySummary
     from core.realtime_voice.bootstrap import create_bootstrap_blueprint
-    from core.realtime_voice.capabilities import AGENT_CONVERSATION_MODE, providers_for_mode
+    from core.realtime_voice.capabilities import AGENT_CONVERSATION_MODE, model_actions, providers_for_mode
     from core.realtime_voice.config import resolve_provider
     person, store = adapter.person, adapter.store
     sessions = DirectSessions(adapter, clock)
@@ -1532,9 +1545,11 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         return shared_budget.admit(kind="realtime_direct_session", domain=person["domain"], principal=str(user_id),
                                    required=True, amount_micro=allowance(environ), budget=budget)
 
-    def get_persona(name):
+    def get_persona(name, actions=True):
         """The bootstrap's allow-list: only this person, with the card the pin names now (a session keeps the card it
-        started with), the two tools, and the host's composed instructions."""
+        started with), the two tools, and the host's composed instructions. ``actions`` (the bootstrap's page_responses,
+        from capabilities.model_actions for the chosen provider): False gives no tools, and rules that send every action
+        through Check with the person (Spec 165 §7 as amended 28 Oct 2026)."""
         if name != person["key"]:
             return None
         try:
@@ -1550,8 +1565,8 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             handle, refused = adapter.conversation(cid)
             handle = handle if refused is None else None
         return {"name": person["name"], "prompt_txt": card["card"], "scenes": {}, "voices": card["voices"],
-                "tools": tools(person, adapter.owner_name or OWNER), "notices": card["notices"],
-                "instructions": adapter.instructions(card["card"], handle)}
+                **({"tools": tools(person, adapter.owner_name or OWNER)} if actions else {}), "notices": card["notices"],
+                "instructions": adapter.instructions(card["card"], handle, actions=actions)}
 
     def guard():
         return adapter.guard(_kind())
@@ -1580,7 +1595,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
 
     boot = create_bootstrap_blueprint(domain=person["domain"], locale=locale, get_persona=get_persona,
                                       is_production=adapter.is_production, consult_ledger=sessions, owner=adapter.owner,
-                                      admit=admit)
+                                      admit=admit, page_responses=model_actions)
     boot.before_request(bootstrap_guard)
     boot.register_error_handler(SessionRefused, lambda _exc: refusal(
         "unavailable", "Voice unavailable: the voice session could not be recorded in this conversation.", 503))
@@ -1828,5 +1843,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
                 "keep_talking_url": url_prefix + "/api/realtime-voice/session/{session_id}/keep_talking",
                 "heartbeat_seconds": HEARTBEAT_SECONDS, "persona": person["key"], "locale": locale,
                 "card_release": release, "person": {"name": person["name"], "short": person["short"]},
+                # Which offered provider's model may act on its own call (Spec 165 §7 as amended): the page's words only.
+                "model_actions": {p["provider"]: model_actions(p["provider"]) for p in offered},
                 "words": dict(adapter.words)}
     return metadata, sessions
