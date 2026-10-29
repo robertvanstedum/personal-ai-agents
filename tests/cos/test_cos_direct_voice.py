@@ -369,7 +369,7 @@ def test_her_session_text_is_rules_then_card_then_her_briefing_and_continuity_as
     assert text.index(direct_voice.BRIEFING_HEAD.strip()) < text.index(direct_voice.CONTINUITY_HEAD.strip())
     assert "Set reminders in writing" in text and "remind me at <time>" not in text
     assert "consult_cos_agent" not in text and "save_cos_note" not in text
-    assert r.mints[-1]["transcription_language"] is None and r.mints[-1]["voice"] == "cedar"   # bilingual (D19), cedar
+    assert r.mints[-1]["transcription_language"] is None and r.mints[-1]["voice"] == "marin"   # bilingual (D19), marin
 
 
 def test_no_voice_manner_text_is_carried_beyond_the_clauses_placed_by_the_spec(r):
@@ -493,7 +493,15 @@ def test_no_store_no_voice(monkeypatch, tmp_path):
     assert r.client.get(BASE + "/capabilities", headers=READ).get_json()["direct_voice"] is False
 
 
-def test_with_her_real_card_a_grok_start_is_refused_until_the_audition(r):
+def test_her_real_card_speaks_ara_on_grok(r):
+    answer = r.client.post(BASE + "/bootstrap", headers=OWNER, json={"persona": "chief_of_staff", "provider": "xai",
+                                                                      "conversation_id": "owner"})
+    assert answer.status_code == 200 and r.mints[-1]["voice"] == "ara" and r.metadata["unvoiced"] == {}
+    assert "voice_notices" not in answer.get_json()
+
+
+def test_a_card_naming_no_grok_voice_refuses_a_grok_start(monkeypatch, tmp_path):
+    r = rig.build(monkeypatch, tmp_path, voices={"openai": "marin"})          # D2 (a): she takes no provider default
     refused = r.client.post(BASE + "/bootstrap", headers=OWNER, json={"persona": "chief_of_staff", "provider": "xai",
                                                                        "conversation_id": "owner"})
     words = "Voice unavailable: no Grok voice is chosen for Chief of Staff yet."

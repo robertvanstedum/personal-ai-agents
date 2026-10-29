@@ -100,13 +100,14 @@ def test_language_is_an_allowed_locale_and_accent_a_short_label(tmp_path):
 
 
 def test_mcs_card_is_pinned_and_verified():
-    manifest = json.loads((MC_ROOT / "releases/0.1.18/manifest.json").read_text())
+    manifest = json.loads((MC_ROOT / "releases/0.1.19/manifest.json").read_text())
     assert "voice.json" in manifest["files"]
-    assert json.loads((MC_ROOT / "pin.json").read_text()) == {"release": "0.1.18"}
+    assert json.loads((MC_ROOT / "pin.json").read_text()) == {"release": "0.1.19"}
     pinned = load_pinned(MC_ROOT)
-    assert pinned["release"] == "0.1.18" and pinned["language"] == "en-US"
-    assert pinned["card"].startswith("Master Craftsman, Robert's colleague in the work.")
-    assert pinned == load_card(MC_ROOT, "0.1.18")
+    assert pinned["release"] == "0.1.19" and pinned["language"] == "en-US"
+    assert pinned["card"].startswith("Master Craftsman, Robert's longtime collaborator and friend in the work;")
+    assert pinned["voices"] == {"openai": "verse", "xai": "leo"} and pinned["named"] == ["openai", "xai"]   # by ear, 29 Oct
+    assert pinned == load_card(MC_ROOT, "0.1.19")
 
 
 def test_a_header_release_carries_the_voice_card_and_its_hash(tmp_path):

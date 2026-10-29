@@ -215,7 +215,7 @@ def test_installed_the_capabilities_answer_has_what_confer_draws(on):
     assert caps["path"] == "direct" and caps["direct_voice"] is True and caps["direct_records"] is False
     assert caps["person"] == {"name": "Chief of Staff", "short": "CoS"} and caps["persona"] == "chief_of_staff"
     assert caps["model_actions"] == {"openai": True, "xai": False}
-    assert caps["unvoiced"] == {"xai": "Voice unavailable: no Grok voice is chosen for Chief of Staff yet."}
+    assert caps["unvoiced"] == {}                                       # her card names both voices (0.1.1)
     for key in ("bootstrap_url", "end_url", "session_url", "sessions_url", "session_transcript_url", "session_dismiss_url",
                 "summary_url", "summary_decision_url", "keep_talking_url", "consult_url", "transcript_url"):
         assert caps[key].startswith(PREFIX + "/"), key                     # her own paths: the page rebases them
