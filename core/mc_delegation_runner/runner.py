@@ -1453,7 +1453,7 @@ class HostRuntime:
             # the item is not reconciled until it is, so it never goes unknown with its outcome known (S2).
             if self._finish_waiting(self._claim(task)["request_id"]):
                 raise _Busy()
-        launch = None
+        resumed = []
         for task in readable:                                                 # steps 4 and 5
             if _closed_path(self.cfg, task).exists():
                 continue                                                      # its replayed result closed it
@@ -1465,10 +1465,25 @@ class HostRuntime:
             if answer is None:
                 continue                                                      # blocked at readback (NC1)
             nxt = self._workspace(task, answer)
-            launch = launch or nxt
+            if nxt is not None:
+                resumed.append(nxt)
         with self._lock:                  # every owned task has its answer: step 6 may follow (a damaged one blocks it)
             self.reasons.difference_update(reasons)
-        return launch
+        return self._current_resume(resumed)
+
+    def _current_resume(self, resumed):
+        """The resume to launch: only one under the generation the authority answered last for its item (sweep H1). A
+        stop between writing the next generation's claim and closing the current task leaves two open claims for one
+        item; reconciling the older one is answered with the resume it already had (X5), and reconciling the newer one
+        moves the item on again, closing it. A resume whose task has closed since, or that is not its item's newest
+        claim on file, is never launched: its generation is no longer the authority's."""
+        for claim in resumed:
+            if _closed_path(self.cfg, claim["task"]).exists():
+                continue
+            if self._item_tasks(claim["request_id"])[-1:] != [claim["task"]]:
+                continue
+            return claim
+        return None
 
     def _finish_waiting(self, request_id) -> bool:
         """An effect of the item whose outcome is on file here and not yet acknowledged by the authority."""

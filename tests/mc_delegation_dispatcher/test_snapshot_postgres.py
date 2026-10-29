@@ -409,6 +409,70 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         day = self.sql("SELECT reserved, observed FROM guild.mc_delegation_reservations WHERE route='fakejudge'")[0]
         self.assertEqual((float(day["reserved"]), float(day["observed"])), (0.0, 0.5))
 
+    # ── sweep A1: one open review request per item, and Robert's latest answer about reviewing it governs ──
+    def stalled_with_mc_request_open(self):
+        """MC asks to review an item (R1, open), and then the item stalls. -> (item id, R1, the published snapshot)."""
+        self.admit(card("C-1"))
+        _, env = self.claim()
+        rid = env["request_id"]
+        self.progress(env, "s1")
+        r1 = self.store.propose_review(rid, by="mc")["decision_id"]
+        self.backdate(rid, 200)                                   # build timeout 180 s
+        self.assertTrue(self.store.renew(rid, 1, protocol=2, runner_id="mac-a"))
+        return rid, r1, self.publish()
+
+    def test_a1_a_stall_queues_no_second_review_request_and_its_one_notice_names_the_open_one(self):
+        rid, r1, doc = self.stalled_with_mc_request_open()
+        reviews = [d["decision_id"] for d in self.waiting(doc, "review_request") if d["item_id"] == rid]
+        self.assertEqual(reviews, [r1])                           # one open handle, MC's own
+        (prop,) = self.events("proposal.review_request", item=rid)
+        self.assertEqual(prop["body"]["decision_id"], r1)         # the stall's proposal names it
+        (stall,) = [n for n in doc["notices"] if n["rule"] == "stalled"]   # OWN-4: the stall's one notice, raised
+        self.assertIsNotNone(stall["raised_at"])
+        self.assertIn(f"decision {r1[:8]}", stall["text"])
+        self.assertIn("already waiting", stall["next_authorized_step"]["step"])
+        before = len(self.events())
+        self.publish()                                            # a second stall tick: nothing new
+        self.assertEqual(len(self.events()), before)
+        self.assertEqual(self.store.propose_review(rid, by="mc")["decision_id"], r1)
+        self.assertEqual(self.answer(r1)["action"], "authorize_review")
+        got = self.store.reserve_judgment(trigger={"kind": "owner", "decision_id": r1}, items=[rid], by="mc")
+        self.assertEqual(got["state"], "reserved")
+
+    def test_a1_an_older_yes_is_never_used_after_a_newer_no_about_reviewing_the_same_item(self):
+        """The sweep's sequence with the second handle made as a stall made it before the fix (records written then):
+        Robert's yes to R1, then his no to R2, about the same item. R1's yes reserves nothing."""
+        rid, r1, _ = self.stalled_with_mc_request_open()
+        with self.store._tx() as cur:                             # the stall's own request, as the old path queued it
+            r2 = self.store._queue_review(cur, self.store._item(cur, rid), {
+                "reason": "stalled", "proposal_id": str(uuid4()), "since": "then", "owner_host_id": "mac-a",
+                "timeout_s": 180})
+        self.assertNotEqual(r1, r2)
+        self.assertEqual(self.answer(r1, "approved", "yes")["action"], "authorize_review")   # t1: yes
+        self.assertEqual(self.answer(r2, "declined", "no")["action"], "withdraw")            # t2: no (newer)
+        got = self.store.reserve_judgment(trigger={"kind": "owner", "decision_id": r1}, items=[rid], by="mc")
+        self.assertEqual(got, {"state": "refused", "code": "judgment_owner_turn_superseded"})
+        self.assertEqual(self.events("judgment.reserved"), [])
+
+    def test_a1_robert_s_latest_answer_governs_across_successive_review_requests(self):
+        self.admit(card("C-1"))
+        _, env = self.claim()
+        rid = env["request_id"]
+        r1 = self.store.propose_review(rid, by="mc")["decision_id"]
+        self.answer(r1, "approved", "yes")
+        r2 = self.store.propose_review(rid, by="mc")["decision_id"]          # R1 is closed: a new request
+        self.assertNotEqual(r1, r2)
+        self.answer(r2, "declined", "no")
+        owner = {"kind": "owner", "decision_id": r1}
+        self.assertEqual(self.store.reserve_judgment(trigger=owner, items=[rid], by="mc")["code"],
+                         "judgment_owner_turn_superseded")
+        r3 = self.store.propose_review(rid, by="mc")["decision_id"]
+        self.answer(r3, "approved", "yes")                                    # his newest answer is yes again
+        self.assertEqual(self.store.reserve_judgment(trigger=owner, items=[rid], by="mc")["code"],
+                         "judgment_owner_turn_superseded")                    # still never the older one
+        got = self.store.reserve_judgment(trigger={"kind": "owner", "decision_id": r3}, items=[rid], by="mc")
+        self.assertEqual(got["state"], "reserved")
+
     def test_sf4_a_card_slot_reviews_its_own_cards_work_once(self):
         self.admit(card("C-1"))
         _, env = self.claim()
@@ -473,6 +537,81 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         self.assertEqual(self.item("C-17.review")["state"], "queued")       # the card goes on
         work = self.owner_work(self.publish(), "C-17")
         self.assertEqual((work["A"], work["R"], work["C"]), (2, 0, 0))      # the redo's admission: one A, no relay
+
+    # ── sweep A13: a redo never sends again an effect its failed step committed ──
+    def effect_steps(self, env, eff):
+        """prepare, claim, dispatch of one effect, as far as each is ok. -> (answers, lease or None)."""
+        r, g = env["request_id"], env["generation"]
+        out = [self.store.effect("mac-a", r, g, eff)]
+        if out[-1]["state"] != "ok":
+            return out, None
+        got = self.store.effect("mac-a", r, g, {**eff, "op": "claim"})
+        out.append(got)
+        if got["state"] != "ok":
+            return out, None
+        lease = {k: got["lease"][k] for k in ("receipt_generation", "token", "mode")}
+        out.append(self.store.effect("mac-a", r, g, {**eff, "op": "dispatch", "lease": lease}))
+        return out, lease
+
+    def test_a13_a_redo_carries_an_effect_its_failed_step_committed_and_never_sends_it_again(self):
+        """The sweep's sequence: a card step commits e1 (verified), its e2 fails for good, the step ends failed and
+        Robert says yes to its redo, whose child runs the same brief. e1 is answered as already done under the
+        operation id it was committed with, never prepared, claimed or dispatched again; e2 is redone under a new one.
+        A redo of the redo carries e1 still."""
+        self.admit(card())
+        _, env = self.claim()
+        rid = env["request_id"]
+        digest = ToolRequest(SINK, 1, json.dumps({"op": "e1"}).encode()).arguments_sha256
+        gid = str(uuid4())
+        with self.connect() as conn:                  # e1's grant leaves room for a redo (two operations)
+            GRANTS.issue(conn, GrantDefinition(gid, "robert", "dev", "C-17", ("owner-turn",), ("fakework",),
+                                               EFFECT_POLICY, SINK, 1, (digest,), 2,
+                                               self.db_now() + timedelta(seconds=600), work_id="C-17"))
+        e1 = {"op": "prepare", "key": "e1", "grant_id": gid,
+              "request": {"operation": SINK, "operation_version": 1, "arguments": {"op": "e1"}}}
+        steps, lease1 = self.effect_steps(env, e1)
+        self.assertEqual([s["state"] for s in steps], ["ok", "ok", "ok"])
+        self.assertEqual(self.finish(env, e1, lease1, "verified")["state"], "ok")      # e1 committed
+        e2, lease2 = self.effect_open(env, "C-17", key="e2")
+        self.assertEqual(self.finish(env, e2, lease2, "failed")["state"], "ok")         # e2 failed for good
+        self.assertEqual(self.result(env, status="failed", detail={"exit_code": 69})["state"], "accepted")
+        (d,) = self.waiting(self.publish(), "step_redo")
+        self.assertEqual(self.store.resolve(d["decision_id"], "approved", by="robert",
+                                            receipt=self.receipt_of(d, "yes"))["action"], "admit")
+        _, env2 = self.claim()
+        redo = env2["request_id"]
+        self.assertNotEqual(redo, rid)
+        committed = effect_operation_id(rid, "e1")
+        steps2, _ = self.effect_steps(env2, e1)                # the redo's child runs the same brief: e1 again
+        self.assertEqual([(s["state"], s.get("receipt_state"), s.get("code"), s["operation_id"]) for s in steps2],
+                         [("ok", "verified", None, committed),            # already done (the runner stops here)
+                          ("refused", None, "effect_already_verified", committed)])     # and never claimed
+        for op, extra in (("claim", {}), ("dispatch", {"lease": lease1})):
+            got = self.store.effect("mac-a", redo, env2["generation"], {**e1, "op": op, **extra})
+            self.assertEqual((got["state"], got.get("code")), ("refused", "effect_already_verified"))
+        other = {**e1, "request": {**e1["request"], "arguments": {"op": "e1", "to": "elsewhere"}}}
+        self.assertEqual(self.store.effect("mac-a", redo, env2["generation"], other).get("code"),
+                         "receipt_operation_reused")           # the same key for another request: never "done"
+        self.assertEqual(self.sql("SELECT count(*) AS n FROM guild.mc_action_receipts WHERE operation_id=%s",
+                                  (effect_operation_id(redo, "e1"),))[0]["n"], 0)          # no second receipt
+        self.assertEqual(self.sql("SELECT consumed_operations AS n FROM guild.mc_action_grants WHERE grant_id=%s",
+                                  (gid,))[0]["n"], 1)          # and no grant operation used for it
+        self.assertEqual(self.sql("""SELECT count(*) AS n FROM guild.mc_action_events
+            WHERE operation_id=%s AND event_type='dispatched'""", (committed,))[0]["n"], 1)   # DUP-1, across the redo
+        self.assertEqual(len(self.events("effect.carried", item=redo)), 1)
+        self.assertIn("the 1 effect it already committed keeps its operation id and is never sent again", d["words"])
+        self.assertEqual(self.item("C-17.build.redo1")["facts"]["card"]["carried"],
+                         {"e1": {"operation_id": committed, "from": rid}})
+        # e2 is what the redo redoes, under its own new operation id; it fails again, so the step is redone again,
+        # and that redo still carries e1 from the first item.
+        e2r, lease2r = self.effect_open(env2, "C-17", key="e2")
+        self.assertNotEqual(effect_operation_id(redo, "e2"), effect_operation_id(rid, "e2"))
+        self.assertEqual(self.finish(env2, e2r, lease2r, "failed")["state"], "ok")
+        self.assertEqual(self.result(env2, status="failed", detail={"exit_code": 69})["state"], "accepted")
+        (d2,) = self.waiting(self.publish(), "step_redo")
+        self.assertEqual(self.item("C-17.build.redo2")["facts"]["card"]["carried"],
+                         {"e1": {"operation_id": committed, "from": rid}})
+        self.assertIn("the 1 effect it already committed", d2["words"])
 
     def test_a_declined_redo_ends_the_card(self):
         self.admit(card())
@@ -934,6 +1073,200 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         self.sup.read_answers(wait=0)
         self.sup.runtime_tick()
         self.assertEqual(self.item("C-17.review")["state"], "queued")
+
+    # ── the D-1/D-2 class beyond admit (sweep row S1): accept, reassign and a batched answer, each once replaced ──
+    def faulty_supervisor(self, authority=None):
+        """A supervisor whose supervision store fails its next mark_applied when told (fail_mark: the process stops
+        after a refused answer's fresh D-code went out, before the answer is marked applied), over ``authority``
+        (default: the full catalogue). -> (store, supervisor)."""
+        class Faulty(Store):
+            fail_mark = 0
+
+            def mark_applied(self, decision_id):
+                if self.fail_mark:
+                    self.fail_mark -= 1
+                    raise RuntimeError("process_stopped")
+                return super().mark_applied(decision_id)
+        store = Faulty(self.connect)
+        return store, Supervisor(store, self.notify, GitHub(), chat_id=OWNER, user_id=OWNER,
+                                 runtime=RuntimeLink(authority or self.store, owner="robert", view_bound_s=60))
+
+    def narrow_store(self):
+        return DispatcherStore(self.connect, principal="robert", environment="dev", authority=AUTH,
+                               grants=GrantStore({**C.grant_rows(), SINK: CapabilityRule(1, False, True)}))
+
+    def solo_messages(self):
+        return [m for m in self.notify.lines() if "on its own" in m["text"]]
+
+    def replaced_then_newer_no(self, store, sup, words="no"):
+        """Robert's yes was refused, its fresh D-code went out, and the process stopped before the yes was marked
+        applied; Robert answers the fresh code. -> the fresh code."""
+        store.fail_mark = 1
+        sup.runtime_tick()
+        rows = self.sql("SELECT id, state, delivered_at FROM guild.supervision_decisions ORDER BY id")
+        self.assertEqual([(r["state"], r["delivered_at"] is None) for r in rows][-2:],
+                         [("approved", True), ("sent", True)])          # the yes pending, its replacement sent
+        fresh = self.solo_messages()[-1]
+        self.notify.reply(words, fresh["message_id"])
+        sup.read_answers(wait=0)
+        return "D-{}".format(rows[-1]["id"])
+
+    def test_class_an_old_yes_to_a_reassignment_never_overrides_a_newer_no(self):
+        """Reassign is refused target_not_capable (the runner lacks the worker), a refusal that clears on its own."""
+        store, sup = self.faulty_supervisor()
+        self.admit(card())
+        _, env = self.claim()
+        rid = env["request_id"]
+        self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second' "
+                 "WHERE request_id=%s", (rid,))
+        self.store.sweep()
+        self.store.propose_reassignment(rid, "mac-a", by="mc")
+        self.publish()
+        sup.runtime_tick()
+        (first,) = self.solo_messages()
+        self.store.heartbeat("mac-a", "online", [c for c in CAPS if c != "actor:fakework"], protocol=2,
+                             facts=facts("mac-a"))                      # the target can't run it now
+        self.notify.reply("yes", first["message_id"])
+        sup.read_answers(wait=0)
+        code = self.replaced_then_newer_no(store, sup)
+        self.beat("mac-a")                                              # the refusal clears
+        self.sup.runtime_tick()                                         # a restart
+        build = self.item("C-17.build")
+        self.assertEqual((build["generation"], build["state"]), (1, "lapsed"))     # his no, never the old yes
+        self.assertEqual(self.events("item.reassigned"), [])
+        texts = self.runtime_texts()
+        self.assertTrue(any(t.startswith(f"Not applied: D-1 was refused and replaced by {code}") for t in texts),
+                        texts)
+        self.assertTrue(any(t.startswith(f"Applied: {code} declined: withdrawn") for t in texts), texts)
+
+    def test_class_an_old_yes_to_accept_a_reported_result_never_overrides_a_newer_no(self):
+        """Accept is refused item_ending. No code path today clears that mark without moving the item, so the clearing
+        is a direct edit here: the rule is pinned for accept all the same."""
+        store, sup = self.faulty_supervisor()
+        self.admit(card())
+        _, env = self.claim()
+        e, lease = self.effect_open(env, "C-17")
+        self.assertEqual(self.result(env, artifacts=[art("patch", "b")])["code"], "effects_open")
+        self.assertEqual(self.finish(env, e, lease, "verified")["state"], "ok")
+        (d,) = self.waiting(self.publish())
+        self.assertEqual((d["reason"], d["yes"], d["no"]), ("result_reported", "accept", "leave"))
+        rid = env["request_id"]
+        self.sql("""UPDATE guild.mc_delegations SET facts = facts || '{"ending": {"state": "cancelled",
+            "code": "grant_revoked"}}'::jsonb WHERE request_id=%s""", (rid,))
+        sup.runtime_tick()
+        first = next(m for m in self.solo_messages())
+        self.notify.reply("yes", first["message_id"])
+        sup.read_answers(wait=0)
+        code = self.replaced_then_newer_no(store, sup)
+        self.sql("UPDATE guild.mc_delegations SET facts = facts - 'ending' WHERE request_id=%s", (rid,))
+        self.sup.runtime_tick()                                         # a restart
+        self.assertEqual(self.item("C-17.build")["state"], "unknown")   # his no leaves it; the old yes accepts nothing
+        self.assertEqual(self.events("item.accepted"), [])
+        texts = self.runtime_texts()
+        self.assertTrue(any(t.startswith(f"Not applied: D-1 was refused and replaced by {code}") for t in texts),
+                        texts)
+        self.assertTrue(any(t.startswith(f"Recorded: {code} declined: nothing changed") for t in texts), texts)
+
+    def test_class_an_old_yes_in_a_batched_reply_never_overrides_a_newer_no_to_its_replacement(self):
+        """Two routine admissions in one message, one "yes" to both; both refused (the capability missing); the
+        process stops after the first one's fresh D-code went out. Robert says no to that code. After a restart with
+        the capability back: the first step is cancelled (his no), the second admitted (his yes, never replaced)."""
+        store, sup = self.faulty_supervisor(self.narrow_store())
+        self.admit(card("C-17"))
+        self.admit(card("C-18"))
+        self.sql("UPDATE guild.mc_action_grants SET consumed_operations = max_operations")
+        for _ in range(2):
+            _, env = self.claim()
+            self.result(env, artifacts=[art("patch", env["request_id"][:8])])
+        self.assertEqual(len(self.waiting(self.publish(), "step_admission")), 2)
+        sup.runtime_tick()
+        (batch,) = self.notify.lines()
+        self.assertEqual(len(self.sup_store.by_batch(batch["message_id"])), 2)
+        self.notify.reply("yes", batch["message_id"])
+        sup.read_answers(wait=0)
+        code = self.replaced_then_newer_no(store, sup)
+        rows = self.sql("SELECT id, requester->>'decision_id' AS d FROM guild.supervision_decisions ORDER BY id")
+        job = {r["id"]: self.sql("""SELECT d.job_id FROM guild.mc_delegation_events q JOIN guild.mc_delegations d
+            ON d.request_id = q.item_id WHERE q.event_id = %s::uuid""", (r["d"],))[0]["job_id"] for r in rows}
+        replaced, other = job[rows[0]["id"]], job[rows[1]["id"]]
+        self.sup.runtime_tick()                                         # a restart, the full catalogue
+        self.assertEqual(self.item(replaced)["state"], "cancelled")     # his newer no to its replacement
+        self.assertEqual(self.item(other)["state"], "queued")           # the same batched yes, never replaced
+        texts = self.runtime_texts()
+        self.assertTrue(any(t.startswith(f"Not applied: D-1 was refused and replaced by {code}") for t in texts),
+                        texts)
+
+    # ── sweep S7: after a stale yes, a fresh decision is named only when one is open ──
+    def stale_reassignment(self):
+        """R1 asks to reassign the item at generation 1; the item then resumes and lapses at generation 2. -> (item
+        id, R1 as waiting)."""
+        self.admit(card())
+        _, env = self.claim()
+        rid = env["request_id"]
+        self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second' "
+                 "WHERE request_id=%s", (rid,))
+        self.store.sweep()
+        self.store.propose_reassignment(rid, "mac-a", by="mc")
+        (r1,) = self.waiting(self.publish(), "reassignment")
+        self.assertEqual(self.store.reconcile("mac-a", rid, 1, {"child": "stopped", "checkpoint": None}, [])
+                         ["generation"], 2)
+        self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second' "
+                 "WHERE request_id=%s", (rid,))
+        self.store.sweep()
+        return rid, r1
+
+    def test_s7_a_stale_yes_names_no_fresh_decision_when_that_question_was_already_closed(self):
+        from core.supervision.runtime import outcome_text
+        rid, r1 = self.stale_reassignment()
+        r2 = self.store.propose_reassignment(rid, "mac-a", by="mc")["decision_id"]     # generation 2's own question
+        self.assertEqual(self.answer(r2, "declined", "no")["action"], "withdraw")       # Robert says no to it
+        out = self.store.resolve(r1["decision_id"], "approved", by="robert", receipt=self.receipt_of(r1, "yes"))
+        self.assertEqual((out["state"], out["fresh_decision_id"]), ("stale", None))      # nothing re-raised
+        self.assertEqual(self.waiting(self.publish(), "reassignment"), [])
+        text = outcome_text({"code": "D-1", "state": "approved"}, out)
+        self.assertNotIn("fresh decision", text)
+        self.assertTrue(text.endswith("so nothing was done."), text)
+
+    def test_s7_a_stale_yes_says_a_decision_already_waiting_waits_and_a_new_one_follows(self):
+        from core.supervision.runtime import outcome_text
+        rid, r1 = self.stale_reassignment()
+        r2 = self.store.propose_reassignment(rid, "mac-a", by="mc")["decision_id"]     # open, not answered
+        out = self.store.resolve(r1["decision_id"], "approved", by="robert", receipt=self.receipt_of(r1, "yes"))
+        self.assertEqual((out["state"], out["fresh_decision_id"], out["fresh"]), ("stale", r2, "waiting"))
+        self.assertIn("already waiting", outcome_text({"code": "D-1", "state": "approved"}, out))
+
+    # ── a batch whose send failed, with one of its rows answered in the Guild and refused: the rest still go out ──
+    def test_deliver_never_strands_the_unsent_rows_of_a_batch_one_of_whose_rows_was_answered_in_the_guild(self):
+        store, sup = self.faulty_supervisor(self.narrow_store())
+        self.admit(card("C-17"))
+        self.admit(card("C-18"))
+        self.sql("UPDATE guild.mc_action_grants SET consumed_operations = max_operations")
+        for _ in range(2):
+            _, env = self.claim()
+            self.result(env, artifacts=[art("patch", env["request_id"][:8])])
+        self.publish()
+        self.notify.fail_next = 1                                       # the batch's message fails
+        sup.runtime_tick()
+        self.notify.fail_next = 0
+        rows = self.sql("SELECT * FROM guild.supervision_decisions ORDER BY id")
+        self.assertEqual([r["state"] for r in rows], ["new", "new"])
+        answered, left = rows
+        guild = {"channel": "guild", "principal": "robert", "conversation_id": "c-1", "note_id": "n-1",
+                 "text": f"approve D-{answered['id']}", "date": int(time.time()),
+                 "decision_sha256": answered["text_sha256"]}
+        self.assertIsNotNone(self.sup_store.decide(answered["id"], "approved", guild,
+                                                   text_sha256=answered["text_sha256"]))   # in the Guild
+        sup.runtime_tick()                                              # refused: its fresh D-code goes out alone
+        sup.runtime_tick()
+        state = self.sql("SELECT state FROM guild.supervision_decisions WHERE id=%s", (left["id"],))[0]["state"]
+        self.assertEqual(state, "sent")                                 # never stranded
+        carrying = [m for m in self.notify.lines() if f"D-{left['id']}" in m["text"]]
+        self.assertEqual(len(carrying), 1, self.runtime_texts())
+        self.assertEqual(self.sup_store.by_batch(carrying[0]["message_id"])[0]["id"], left["id"])
+        self.notify.reply("yes", carrying[0]["message_id"])            # and Robert can answer it there
+        self.sup.read_answers(wait=0)
+        self.assertEqual(self.sql("SELECT state FROM guild.supervision_decisions WHERE id=%s",
+                                  (left["id"],))[0]["state"], "approved")
 
     def test_sf6_a_reassignment_answer_is_bound_to_the_generation_its_words_name(self):
         self.admit(card())

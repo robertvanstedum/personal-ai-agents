@@ -1471,3 +1471,51 @@ def test_f2_a_crash_between_the_authoritys_commit_and_the_local_write_is_recover
     assert rt2.journal("claims").pending() == [] and len(fake.bound) == 1
     assert run_pass(rt2) == {"state": "idle"}
     assert len(rt2.journal("claims").calls()) == 1             # answered requests are cleared; the file stays small
+
+
+def test_h1_a_stop_between_the_next_claim_and_the_close_never_launches_an_older_generation(tmp_path, mirror,
+                                                                                           monkeypatch):
+    """The sweep's H1 sequence: a lapse is answered resume (g2); the process stops after g2's claim is written and
+    before g1 is closed, so on restart both claims are open. Reconciling g1 is answered with the same resume (X5);
+    reconciling g2, whose child never ran, moves the item to g3. Only g3 is launched: never a claim the authority has
+    moved past, and the item completes at g3 with nothing left open."""
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake, gap_detection="off")
+    rid = fake.add(program("checkpoint s1 hold_s=2", "result ok"))
+
+    def lapse(request_id, generation, name):
+        if name == "s1" and generation == 1:
+            fake.renew_ok = False                     # the lease lapses: the next renew is refused, reconcile resumes
+            fake.items[rid]["lease_until"] = 0.0
+    fake.hooks["progress"] = lapse
+    real_close = rt._close
+
+    def stop_between(task, reason, answer=None):
+        if reason == "resumed":
+            raise Crash()                             # the process stops after g2's claim is written, before g1 closes
+        return real_close(task, reason, answer)
+    monkeypatch.setattr(rt, "_close", stop_between)
+    with pytest.raises(Crash):
+        run_pass_raw(rt)
+    art = tmp_path / "artifacts"
+    assert (art / f"{rid}-g2.claim.json").exists() and not (art / f"{rid}-g1.closed.json").exists()
+    assert fake.items[rid]["gen"] == 2
+    fake.renew_ok = True
+    fake.hooks.pop("progress", None)
+    rt2 = make_rt(tmp_path, mirror[0], fake, gap_detection="off")
+    launched = []
+    real_launch = rt2._launch
+
+    def recording(claim):
+        launched.append((claim["generation"], fake.items[rid]["gen"]))
+        return real_launch(claim)
+    monkeypatch.setattr(rt2, "_launch", recording)
+    out = run_pass(rt2)
+    assert launched == [(3, 3)], launched                          # one launch, under the authority's generation
+    assert (out["state"], out["generation"]) == ("completed", 3), out
+    assert [(r["generation"], r["stage"]["child"]) for r in fake.reconciles] == [(1, "frozen"), (1, "stopped"),
+                                                                                 (2, "stopped")]
+    closed = {p.name: json.loads(p.read_text())["reason"] for p in art.glob(f"{rid}-g*.closed.json")}
+    assert closed == {f"{rid}-g1.closed.json": "resumed", f"{rid}-g2.closed.json": "resumed",
+                      f"{rid}-g3.closed.json": "result"}
+    assert rt2.owned() == []

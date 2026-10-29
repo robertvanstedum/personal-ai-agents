@@ -119,10 +119,15 @@ class RuntimeLink:
                                                solo=bool(n.get("solo")), environment=doc["environment"])
                         for i, w in enumerate(n["words"], 1)]
                 if any(r["state"] != "new" for r in rows):
-                    for r in rows:                           # its own message went out already: never twice
+                    for r in rows:
                         if r["state"] in ("approved", "declined"):
                             sent.extend(self._send_reissued(store, bot, chat_id, r))
-                    continue
+                    fresh = [r for r in rows if r["state"] == "new"]
+                    if not fresh or any(r.get("sent_at") or r.get("telegram_message_id") for r in rows):
+                        continue                             # its own message went out already: never twice
+                    # Its message never went out (its send failed) and one of its rows was answered meanwhile in the
+                    # Guild: the rows still new go out now, never stranded (sweep, deliver).
+                    rows = fresh
                 if n["rule"] == "decision":
                     message_id = bot.send(chat_id, tg.runtime_message(rows[0]))
                     store.mark_sent(rows[0]["id"], message_id)
@@ -401,9 +406,14 @@ def outcome_text(row, outcome) -> str:
     if state == "moot":
         return f"Not applied: {code}'s item had already moved on ({outcome.get('item_state')}); nothing was done."
     if state == "stale":
+        # A fresh decision is named only when the authority has one open for the generation now (sweep S7): never one
+        # already closed. One it queued now follows; one asked before still waits.
+        fresh = None
+        if outcome.get("fresh_decision_id"):
+            fresh = (". A decision for that generation is already waiting." if outcome.get("fresh") == "waiting"
+                     else ". A fresh decision follows.")
         return (f"Not applied: {code} named an earlier generation; the item is now at generation "
-                f"{outcome.get('generation_now')}, so nothing was done"
-                + (". A fresh decision follows." if outcome.get("fresh_decision_id") else "."))
+                f"{outcome.get('generation_now')}, so nothing was done" + (fresh or "."))
     if state == "already_resolved":
         return f"Not applied: the runtime had already closed {code} ({outcome.get('answer')}); nothing was done."
     if state == "superseded":
