@@ -93,7 +93,7 @@ class Run:
     under ``evidence`` (which must not exist: never rerun into)."""
 
     def __init__(self, env, evidence, *, ref, seed=None, only=None, poll_s=10.0, clock=time.monotonic,
-                 sleep=time.sleep):
+                 sleep=time.sleep, continue_after_fail=False):
         self.env, self.ev, self.ref = env, Path(evidence), ref
         if self.ev.exists():
             raise Stop("evidence_folder_exists")
@@ -105,6 +105,7 @@ class Run:
         self.snaps, self.results, self.scenario = [], [], "setup"
         self.started = datetime.now(timezone.utc)
         self.audit_mark = env.audit_mark()
+        self.continue_after_fail = continue_after_fail
 
     # ── evidence ──
     def _append(self, name, doc):
@@ -203,6 +204,13 @@ class Run:
     def wait_state(self, job, states, timeout_s):
         return self.wait(lambda: self.state(job) in states and self.row(job), timeout_s, label=f"state-{job}")
 
+    def settle(self, card_id, timeout_s=1800):
+        """Wait until no step of the card is live (the serial worker then takes the next scenario's work)."""
+        got = self.wait(lambda: not [r for r in self.env.rows(card_id) if r["state"] not in END_STATES], timeout_s,
+                        label=f"settle-{card_id}")
+        self.check(f"{self.scenario}.card_settled", bool(got),
+                   {"live": [r["job_id"] for r in self.env.rows(card_id) if r["state"] not in END_STATES]})
+
     def item_id(self, job):
         r = self.row(job)
         return None if r is None else str(r["request_id"])
@@ -233,8 +241,14 @@ class Run:
         self.log("run", "start", plan=PLAN, seed=self.seed, ref=self.ref, environment=self.env.environment)
         self.preflight()
         if not [r for r in self.results if r["result"] == "fail"]:
-            for name, fn in ((s, SCENARIO_FNS[s]) for s in SCENARIOS if s in SCENARIO_FNS):
+            for name, fn in ((s, SCENARIO_FNS[s]) for s in SCENARIO_ORDER if s in SCENARIO_FNS):
                 self.scenario_run(name, fn)
+                # Abort criterion: a failed check stops the run (the rest not run), unless Robert said to go on; a
+                # later run takes the remaining scenarios (--only) into a new evidence folder, never this one.
+                if not self.continue_after_fail and [r for r in self.results
+                                                     if r["result"] == "fail" and r["scenario"] == name]:
+                    self.log("run", "aborted after a failed check", scenario=name)
+                    break
         self.scenario = "end"
         self.finish()
         return self.receipt()
@@ -274,6 +288,9 @@ class Run:
                 self._append("notices.jsonl", {"key": k})
         except Exception as exc:
             self.log("end", "supervision rows unreadable", error=type(exc).__name__)
+        leftover = self.env.live_items(self.tag)
+        self.check("end.no_leftover_items", not leftover, {"live": leftover,
+                   "next": "Robert ends each through the owner path (store.end) before the reservations settle"})
         self.named("end.DUP-3", C.dup3, events)
         self.named("end.DUP-4", C.dup4, events)
         self.named("end.DUP-6", C.dup6, events)
@@ -327,16 +344,22 @@ def i1(run):
     run.check("I-1.OWN-3_C0", bool(work) and work.get("C") == 0, {"owner_work": work})
 
 
-def _admit_item(run, job, brief, *, effects=()):
-    """One fakework item under Robert's exact approval (and, when it posts effects, his exact approval of them)."""
-    egid = None
+def _admit_card(run, card_id, build, *, effects=()):
+    """One card whose build step is the scenario's program (its review reports no findings, so it then reaches ready),
+    admitted by Robert's one exact approval through the authority's own owner path (``admit_card``: the card's
+    delegate.card grant bound to its digest), never a grant seeded beside it (Codex's P1 brief review, B3). When the
+    program posts effects, Robert first approves them exactly too (the sink's effect, fakework.sink_post). -> the build
+    step's job id."""
+    job = f"{card_id}.build"
     if effects:
-        eturn = run.approve(f"{job} effects", f"{job}: sink effects {', '.join(effects)}")
-        egid = run.env.effect_grant(job, effects, eturn)
-        brief = brief.replace("{grant}", egid)
-    turn = run.approve(job, brief)
-    run.env.admit_item(job, brief, turn)
-    return egid
+        eturn = run.approve(f"{card_id}-effects", f"{job}: the acceptance sink's effects {', '.join(effects)}")
+        build = build.replace("{grant}", run.env.effect_grant(job, effects, eturn))
+    doc = card_doc(card_id, ref=run.ref, briefs={"build": build, "review": program("result ok"),
+                                                 "fix": program("result ok")})
+    got = run.env.admit_card(doc, run.approve(card_id, json.dumps(doc, sort_keys=True)))
+    if got.get("state") != "admitted":
+        raise Stop(f"not_admitted:{got.get('state')}")
+    return job
 
 
 def i2_i7(run):
@@ -344,8 +367,7 @@ def i2_i7(run):
     minutes mid-step. Shown held, then lapsed, never running; no notice during the expected sleep; on wake freeze,
     replay, reconcile, resume; the effect once, the stale one refused or never sent. I-7: during the sleep no agent is
     shown running."""
-    job = f"I2-{run.tag}.w"
-    _admit_item(run, job, program(
+    job = _admit_card(run, f"C-I2-{run.tag}", program(
         *[f"spawn t{n} role=explore hold_s=5" for n in range(1, 6)],
         "spawn long1 role=worker hold_s=3600 beat_s=5 long",
         "checkpoint s1",
@@ -389,13 +411,14 @@ def i2_i7(run):
     run.check("I-2.no_owner_call", not run.env.decisions(item=rid), {})
     run.named("I-7.CEN-1", C.cen1, run.env.agents(rid), run.env.census_root(rid, 1), transient=5,
               long_ids={"long1"})
+    run.settle(job.rsplit(".", 1)[0])
 
 
 def i3(run):
     """The Mac's network drops for 5 minutes: it freezes and keeps pending records; on restore it replays once and
     resumes. No owner call."""
-    job = f"I3-{run.tag}.w"
-    _admit_item(run, job, program("checkpoint s1", f"checkpoint s2 hold_s={OFFLINE_MIN * 60 + 300}", "result ok"))
+    job = _admit_card(run, f"C-I3-{run.tag}", program("checkpoint s1", f"checkpoint s2 hold_s={OFFLINE_MIN * 60 + 300}",
+                                                      "result ok"))
     if not run.wait_state(job, ("running",), 600):
         raise Stop("never_running")
     rid = run.item_id(job)
@@ -413,13 +436,13 @@ def i3(run):
     run.check("I-3.each_pending_event_once", len({e["event_id"] for e in events}) == len(events),
               {"events": len(events), "replayed": len(replays)})
     run.check("I-3.no_owner_call", not run.env.decisions(item=rid), {})
+    run.settle(job.rsplit(".", 1)[0])
 
 
 def i4(run):
     """``launchctl kickstart -k`` the Mac's production worker mid-checkpoint: paused, then resume at the next
     generation."""
-    job = f"I4-{run.tag}.w"
-    _admit_item(run, job, program("checkpoint s1 hold_s=240", "checkpoint s2", "result ok"))
+    job = _admit_card(run, f"C-I4-{run.tag}", program("checkpoint s1 hold_s=240", "checkpoint s2", "result ok"))
     if not run.wait(lambda: (run.row(job) or {}).get("state") == "running"
                     and ((run.row(job) or {}).get("checkpoint") or {}).get("name") == "s1", 600, label="i4-s1"):
         raise Stop("never_at_s1")
@@ -427,17 +450,22 @@ def i4(run):
     t = run.mac_step("kickstart", f"launchctl kickstart -k gui/$(id -u)/{LABEL}")
     row = run.wait_state(job, END_STATES, 900)
     seq = run.shown(rid, since=t)
-    run.check("I-4.paused_then_resumed", "paused" in seq and bool(row) and row["state"] == "completed"
-              and row["generation"] >= 2, {"shown": seq, "generation": row and row["generation"]})
+    # kickstart -k stops the job: a graceful stop announces it (paused), a kill is a crash (held, then lapsed, then
+    # reconciled). Either way it resumes at the next generation from its checkpoint (Codex's P1 brief review, S3).
+    path = "graceful" if "paused" in seq else "crash" if ("held" in seq or "lapsed" in seq) else "unseen"
+    kinds = [e["kind"] for e in run.env.events(item=rid)]
+    run.check("I-4.resumed_at_the_next_generation", bool(row) and row["state"] == "completed"
+              and row["generation"] >= 2 and "item.resumed" in kinds and path != "unseen",
+              {"shown": seq, "path": path, "generation": row and row["generation"]})
     run.check("I-4.no_owner_call", not run.env.decisions(item=rid), {})
+    run.settle(job.rsplit(".", 1)[0])
 
 
 def i5(run):
     """A fake effect sink with lookup off and a kill at the committed effect: one ``unknown`` decision reaches Robert
     alone; his "end" (yes) ends it; generation unchanged."""
-    job = f"I5-{run.tag}.w"
-    _admit_item(run, job, program("checkpoint s1", "effect e1 grant={grant}", "checkpoint s2 hold_s=2", "result ok"),
-                effects=("e1",))
+    job = _admit_card(run, f"C-I5-{run.tag}", program("checkpoint s1", "effect e1 grant={grant}",
+                                                      "checkpoint s2 hold_s=2", "result ok"), effects=("e1",))
     if not run.wait_state(job, ("claimed", "running"), 600):
         raise Stop("never_claimed")
     rid = run.item_id(job)
@@ -461,6 +489,7 @@ def i5(run):
     detail = (row or {}).get("result_detail") or {}
     run.check("I-5.ended_by_robert", bool(row) and detail.get("code") == "owner_decision" and row["generation"] == 1,
               {"state": row and row["state"], "code": detail.get("code")})
+    run.settle(job.rsplit(".", 1)[0])
 
 
 def i6(run):
@@ -470,7 +499,7 @@ def i6(run):
     jobs = []
     for n in (1, 2, 3):
         card_id = f"C-I6-{run.tag}-{n}"
-        doc = card_doc(card_id, ref=run.ref, briefs={"build": program("checkpoint s1 hold_s=900", "result ok"),
+        doc = card_doc(card_id, ref=run.ref, briefs={"build": program("checkpoint s1 hold_s=120", "result ok"),
                                                      "review": program("result ok"), "fix": program("result ok")})
         run.env.admit_card(doc, run.approve(card_id, json.dumps(doc, sort_keys=True)))
         jobs.append(f"{card_id}.build")
@@ -497,9 +526,27 @@ def i6(run):
              and (r.get("receipt") or {}).get("decision_sha256") == r.get("text_sha256")]
     run.check("I-6.three_receipts_each_bound_to_its_words", bool(done) and len(bound) == 3
               and len({r["text_sha256"] for r in bound}) == 3, {"approved_bound": len(bound)}, n=len(rows))
+    cards = [j.rsplit(".", 1)[0] for j in jobs]
+    finished = run.wait(lambda: all(run.state(f"{c}.review") == "completed" for c in cards), 1800, label="i6-done")
+    run.check("I-6.cards_went_on_to_ready", bool(finished), {"reviews": [run.state(f"{c}.review") for c in cards]})
 
 
-SCENARIO_FNS = {"I-1": i1, "I-2": i2_i7, "I-3": i3, "I-4": i4, "I-5": i5, "I-6": i6}
+def witness_delivery(run):
+    """Production's two witnesses deliver, proved without taking production's authority down (Codex's P1 brief
+    review, S3): each sends one probe notice through its installed configuration (its own notifier, its references),
+    and Robert says whether it reached his Telegram. An outage itself is gate D's, on staging."""
+    run.mac_step("ec2-witness-probe", "on EC2: docker exec minimoi-runtime-witness python -m "
+                                      "core.mc_delegation_runner.witness probe")
+    run.check("W.ec2_witness_delivers", run.robert_received("the EC2 witness's probe"), {})
+    run.mac_step("mac-witness-probe", "on the Mac: /usr/bin/python3 -I -c \"import sys; sys.path.insert(0, "
+                                      "'$HOME/minimoi-runtime/prod/bundle'); from core.mc_delegation_runner import "
+                                      "witness; sys.exit(witness.main(['probe', '--host-config', "
+                                      "'$HOME/minimoi-runtime/prod/host.yaml']))\"")
+    run.check("W.mac_witness_delivers", run.robert_received("the Mac witness's probe"), {})
+
+
+SCENARIO_FNS = {"W": witness_delivery, "I-1": i1, "I-2": i2_i7, "I-3": i3, "I-4": i4, "I-5": i5, "I-6": i6}
+SCENARIO_ORDER = ("W",) + SCENARIOS
 # I-7 runs inside I-2 (the serial worker), so it has no driver of its own; selecting I-7 alone runs I-2.
 
 
@@ -507,7 +554,7 @@ def selected(only):
     if not only:
         return None
     names = {s.strip() for s in only.split(",") if s.strip()}
-    if not names <= set(SCENARIOS):
+    if not names <= set(SCENARIO_ORDER):
         raise SystemExit("unknown scenario")
     if "I-7" in names:
         names.add("I-2")
@@ -592,26 +639,18 @@ class ProdEnv:
         return runner.census_agent_id(f"{rid}-g{generation}")
 
     def admit_card(self, doc, turn):
+        """The owner path for P1-a's test cards only: class ``build``, every worker fakework on the fakework route,
+        this run's ref; anything else is refused before the authority sees it."""
+        workers = (doc.get("workers") or {}).values()
+        if doc.get("class") != "build" or not workers or not all(
+                w.get("actor") == "fakework" and w.get("route") == "fakework" for w in workers) \
+                or doc.get("ref") != self.ref:
+            raise Stop("card_not_a_p1a_test_card")
         now = datetime.now(timezone.utc)
         return self.store.admit_card(doc, grant_id=str(uuid.uuid4()), owner_turn_ids=(turn,),
                                      proposal_id=str(uuid.uuid4()), approved_operation_id=str(uuid.uuid4()),
                                      approval_expires_at=now + timedelta(seconds=300), by=self.principal,
                                      note="P1-a integrated test, Robert's console approval")
-
-    def admit_item(self, job, brief, turn, *, amount=0.25, route="fakework", scope="build"):
-        from core.mc_delegation_dispatcher.store import item_subject_digest
-        from core.minimoi_actions.grants import GrantDefinition
-        subject = item_subject_digest(actor="fakework", scope=scope, repository="personal-ai-agents", ref=self.ref,
-                                      brief=brief, route=route, amount=amount)
-        gid, now = str(uuid.uuid4()), datetime.now(timezone.utc)
-        with self._connect() as conn:
-            self.store._grants.issue(conn, GrantDefinition(
-                gid, self.principal, "prod", "conversation", (turn,), ("mc",), "policy", "delegate.start_build", 1,
-                (subject,), 1, now + timedelta(hours=2), proposal_id=str(uuid.uuid4()),
-                approved_operation_id=str(uuid.uuid4()), approval_expires_at=now + timedelta(seconds=600)))
-        return self.store.enqueue(job_id=job, actor="fakework", scope=scope, repository="personal-ai-agents",
-                                  ref=self.ref, brief=brief, cost_cap_usd=1.0, deadline_s=3600, route=route,
-                                  amount=amount, grant_id=gid)
 
     def effect_grant(self, job, keys, turn):
         from core.mc_delegation_dispatcher.production import SINK_OPERATION
@@ -653,6 +692,11 @@ class ProdEnv:
             rows = [r for r in rows if r["request_key"].split(".")[0][3:] in mine]
         return rows
 
+    def live_items(self, tag):
+        return [r["job_id"] for r in self._sql(
+            "SELECT job_id FROM guild.mc_delegations WHERE route IS NOT NULL AND job_id LIKE %s AND state <> ALL(%s)",
+            (f"%{tag}%", list(END_STATES) + ["expired"]))]
+
     def told(self, prefix):
         return [r["key"] for r in self._sql("SELECT key FROM guild.supervision_alerts WHERE key LIKE %s ORDER BY key",
                                             (prefix.replace("%", "") + "%",))]
@@ -669,6 +713,7 @@ def main(argv=None) -> int:
     r.add_argument("--ref", required=True, help="the release commit (40 hex): every item starts from it")
     r.add_argument("--evidence", required=True, type=Path)
     r.add_argument("--only", help="comma list of I-1..I-7")
+    r.add_argument("--continue-after-fail", action="store_true", help="go on to the next scenario after a failure")
     r.add_argument("--production-session", action="store_true",
                    help="required: says this is Robert's integrated test session in production, on his word")
     args = p.parse_args(argv)
@@ -681,7 +726,8 @@ def main(argv=None) -> int:
         return 2
     env = ProdEnv(os.environ)
     env.ref = args.ref
-    out = Run(env, args.evidence, ref=args.ref, only=selected(args.only)).run()
+    out = Run(env, args.evidence, ref=args.ref, only=selected(args.only),
+              continue_after_fail=args.continue_after_fail).run()
     print(json.dumps(out, sort_keys=True))
     return 0 if not out["failed"] else 1
 

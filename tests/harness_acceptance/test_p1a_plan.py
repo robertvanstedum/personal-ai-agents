@@ -75,7 +75,12 @@ class FakeProduction:
             self.mac = "waking"
             return "done"
         if "Mac step kickstart" in prompt:
-            self.paused.add(next(j for j in self.order if self.items[j]["state"] == "running"))
+            job = next(j for j in self.order if self.items[j]["state"] == "running")
+            if self.faults.get("kickstart_is_a_crash"):          # launchd killed it: held, lapsed, reconciled
+                self.mac, self.crash_job = "away", job
+                self.items[job]["crash_ticks"] = 2
+            else:
+                self.paused.add(job)
             return "done"
         if "Mac step kill-at-commit" in prompt:
             self.kill_armed = True
@@ -130,13 +135,20 @@ class FakeProduction:
                 if r["state"] in ("running", "lapsed"):
                     self._event("item.reconciled", r["request_id"], r["generation"], source="host", host=p1a.HOST_ID)
                     r["generation"] += 1
-                    r.update(state="running", shown="running")
+                    r.update(state="running", shown="running", faulted=True)
                     self._event("item.resumed", r["request_id"], r["generation"])
             for v in self.agents_.values():
                 for a in v:
                     if a["state"] == "running" and "long1" in a["agent_id"]:
                         a["state"] = "running"
             self.mac = "awake"
+            return
+        if self.mac == "away" and getattr(self, "crash_job", None):
+            r = self.items[self.crash_job]
+            r["crash_ticks"] -= 1
+            r["shown"] = "held" if r["crash_ticks"] == 1 else "lapsed"
+            if r["crash_ticks"] <= 0:
+                self.mac, self.crash_job = "waking", None
             return
         if self.mac == "away":
             for r in self.items.values():
@@ -173,7 +185,7 @@ class FakeProduction:
         r = self.items[job]
         if job in self.paused:
             self.paused.discard(job)
-            r.update(shown="paused")
+            r.update(shown="paused", faulted=True)
             r["generation"] += 1
             self._event("item.resumed", r["request_id"], r["generation"])
             return
@@ -186,7 +198,9 @@ class FakeProduction:
                                     "words": f"unknown {did}", "request_key": f"rt-{did}"}
             self._code(did)
             return
-        if "hold_s=900" in r["brief"] and not r.get("released") and len(self.decisions_) < 3:
+        if any(w in r["brief"] for w in ("stale_effect_on_wake", "hold_s=600", "hold_s=240")) and not r.get("faulted"):
+            return                                    # it holds until the Mac step this scenario is about
+        if "hold_s=120" in r["brief"] and not r.get("released"):
             return                                    # I-6's builds hold until the reviews are asked for
         r["ticks"] -= 1
         r["shown"] = "running"
@@ -249,10 +263,8 @@ class FakeProduction:
         self._add(f"{doc['card_id']}.build", doc["briefs"]["build"], card=doc["card_id"], step="build")
         return {"state": "admitted"}
 
-    def admit_item(self, job, brief, turn):
-        assert turn.startswith("console:")
-        self._add(job, brief)
-        return "accepted"
+    def live_items(self, tag):
+        return sorted(j for j, r in self.items.items() if tag in j and r["state"] not in p1a.END_STATES)
 
     def effect_grant(self, job, keys, turn):
         assert turn.startswith("console:")
@@ -312,7 +324,9 @@ def test_a_world_that_behaves_as_p1a_requires_passes_every_check(tmp_path):
     for name in ("I-1.OWN-1_A1", "I-1.OWN-2_R0", "I-1.OWN-3_C0", "I-1.one_ready_notice_told",
                  "I-1.next_steps_by_the_authority", "I-2.held_then_lapsed_never_running",
                  "I-2.no_notice_during_expected_sleep", "I-7.CEN-3_no_agent_running_while_asleep", "I-7.CEN-1",
-                 "I-2.reconciled_then_resumed", "I-3.never_running_while_unreachable", "I-4.paused_then_resumed",
+                 "I-2.reconciled_then_resumed", "I-3.never_running_while_unreachable", "I-4.resumed_at_the_next_generation",
+                 "W.ec2_witness_delivers", "W.mac_witness_delivers", "I-6.cards_went_on_to_ready",
+                 "end.no_leftover_items", "I-2.card_settled", "I-5.card_settled",
                  "I-5.unknown_generation_unchanged", "I-5.one_solo_decision", "I-5.ended_by_robert",
                  "I-6.one_batched_notice", "I-6.three_receipts_each_bound_to_its_words", "end.DUP-8", "end.DUP-4",
                  "end.DUP-6"):
@@ -341,6 +355,25 @@ def test_a_world_that_breaks_one_requirement_fails_that_check(tmp_path, fault, c
     checks = _checks(tmp_path)
     assert checks[check]["result"] == "fail", checks[check]
     assert check in receipt["failed"]
+
+
+def test_i4_accepts_the_crash_path_as_well_as_the_graceful_one(tmp_path):
+    _, _, receipt = _run(tmp_path, kickstart_is_a_crash=True)
+    check = _checks(tmp_path)["I-4.resumed_at_the_next_generation"]
+    assert check["result"] == "pass" and check["detail"]["path"] == "crash", check
+    assert receipt["failed"] == []
+
+
+def test_a_failed_check_aborts_the_run_unless_robert_says_go_on(tmp_path):
+    _, run, receipt = _run(tmp_path, second_ready_notice=True)             # I-1 fails
+    ran = {json.loads(x)["scenario"] for x in (tmp_path / "evidence" / "timeline.jsonl").read_text().splitlines()}
+    assert "I-1" in ran and "I-2" not in ran and "I-6" not in ran
+    env = FakeProduction(second_ready_notice=True)
+    go_on = p1a.Run(env, tmp_path / "e2", ref=REF, seed=1, poll_s=0, sleep=lambda s: None, continue_after_fail=True)
+    ticks = iter(range(10**6))
+    go_on.clock = lambda: next(ticks) * 30.0
+    out = go_on.run()
+    assert out["failed"] == ["I-1.one_ready_notice_told"]               # every other scenario ran and passed
 
 
 def test_an_approval_not_typed_exactly_admits_nothing(tmp_path):

@@ -542,8 +542,50 @@ def serve(environ=None, *, stop=None) -> int:
     return 0
 
 
+PROBE_TEXT = ("Witness probe from {host}: this witness's own Telegram path works (sent through its installed "
+              "configuration, by reference). Nothing is wrong; nothing to do.")
+
+
+def probe(argv=None, environ=None, *, notifier=None) -> int:
+    """One probe notice through a witness's installed notifier, without an outage (P1-a, Codex's P1 brief review S3):
+    ``probe`` reads the stand-alone witness's environment (EC2); ``probe --host-config PATH`` a host's host.yaml (the
+    Mac). Its memory is not touched; the probe has no key to remember. Prints {state, code?}; never a value."""
+    environ = os.environ if environ is None else environ
+    argv = list(argv or [])
+    try:
+        if argv[:1] == ["--host-config"] and len(argv) == 2:
+            from . import host as host_mod
+            h = host_mod.load(Path(argv[1]).expanduser())
+            if "witness" not in h.roles or h.notifier is None:
+                raise WitnessRefused("witness_not_configured")
+            host_id = h.host_id
+            n = notifier or (FileNotifier(h.notifier.path) if h.notifier.kind == "file"
+                             else TelegramNotifier(h.notifier.token_ref, h.notifier.chat_ref))
+        elif not argv:
+            cfg = serve_config(environ)
+            host_id = cfg["host_id"]
+            n = notifier or TelegramNotifier(cfg["token_ref"], cfg["chat_ref"])
+        else:
+            raise WitnessRefused("usage")
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        n.send(f"witness-probe:{host_id}:{now}", PROBE_TEXT.format(host=host_id), now)
+    except Exception as exc:
+        print(json.dumps({"state": "failed", "code": failure_code(exc)}), flush=True)
+        return 1
+    print(json.dumps({"state": "sent", "host_id": host_id}), flush=True)
+    return 0
+
+
+def main(argv=None) -> int:
+    words = list(sys.argv[1:] if argv is None else argv)
+    if words == ["serve"]:
+        return serve()
+    if words[:1] == ["probe"]:
+        return probe(words[1:])
+    print("usage: python -m core.mc_delegation_runner.witness serve | probe [--host-config PATH]", file=sys.stderr)
+    return 2
+
+
 if __name__ == "__main__":
-    if sys.argv[1:] != ["serve"]:
-        print("usage: python -m core.mc_delegation_runner.witness serve", file=sys.stderr)
-        raise SystemExit(2)
-    raise SystemExit(serve())
+    raise SystemExit(main())
