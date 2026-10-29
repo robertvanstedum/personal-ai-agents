@@ -49,6 +49,9 @@ function host(adapter) {
     onAssistantTurn: () => { if (typeof c.speakTracked !== 'function' && !ended.length) { ended.push('turn'); c.endSession('normal_end'); } },
   });
   c._adapter = adapter; c._state = 'active'; c._wireAdapterEvents();
+  // As startSession sets it from the bootstrap: on OpenAI the page makes every reply (page_responses); on xAI the provider
+  // makes its own, and the page's requests wait while one of them is under way (LV3).
+  c._owned = adapter instanceof OpenAIWebRTCAdapter;
   const tags = [];                                                    // what each tagged request asked the provider to echo
   adapter.sendContinuationInstruction = (_text, tag) => { tags.push(tag || null); };
   adapter.sendFunctionResult = (_id, _output, tag) => { tags.push(tag || null); };

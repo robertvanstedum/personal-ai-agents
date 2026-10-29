@@ -163,10 +163,13 @@ await check('B S1 (openai, no tag echoed): a lost request\'s late reply posts no
 // B S2 (C4, G3 on xAI), the reviewer's probe: "Yes." ends, its reply has not started; the summary is asked for; xAI's reply
 // to "Yes." starts now and drains. It is not the summary's: the summary ends at its bound, as timeout, never heard.
 const SUMMARY = { '/summary': () => ({ ok: true, state: 'proposed', spoken: 'We checked the board.' }) };
+// Since LV3 the controller holds the summary while the reply to "Yes." may still start (REQUEST_TTL_MS after his turn), so
+// here it is sent at that bound, and the late reply starts after it: the B S2 order.
 await check('B S2 (xai): another reply starting after the summary is asked for never closes it or is heard', () => run('xai', async (t) => {
   t.start(); t.said('i0', "We're done."); t.stop(); t.created('r0'); t.over('r0');
   t.start(); t.said('i1', 'Yes.'); t.stop();
   t.s.sumUp(); await flush(); await t.advance(8000);                    // the page's pause bound: his reply has not reported
+  t.pass(2000); t.c()._pump(); await flush();                          // the hold's bound passes: its timer, run now
   assert.equal(t.lines().filter((l) => l.startsWith('Say only this')).length, 1, 'the summary was not asked for');
   t.created('auto_yes'); await flush(); t.drained('auto_yes'); await flush();   // the page has heard the start before it drains
   assert.equal(t.posts('/end').length, 0, 'another reply\'s drain closed the summary');

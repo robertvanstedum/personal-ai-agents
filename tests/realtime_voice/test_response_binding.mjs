@@ -290,17 +290,35 @@ await check('B N5 (OpenAI): a started reply with no output for 20 s is let go; o
   assert.ok(s.unbound.some((u) => u.reason === 'unfinished' && u.owner === 'item_A'));
 });
 // B S2: where the provider creates its own replies (xAI), a page line's reply is known only when that is proven.
-await check('B S2 (xAI): his turn may still get the provider\'s reply: a start while the summary waits resolves no id', async () => {
+// Since LV3 the page holds its request while his turn's reply may still start, so the B S2 order cannot arise there: the
+// provider's reply to "Yes." is its own, and the summary's start after it is known. The B S2 order remains possible when
+// that reply starts only after the hold's bound; then the start is not provable either way and resolves no id.
+await check('B S2 (xAI): his turn may still get the provider\'s reply: the summary waits for it, and is not taken for it', async () => {
   const s = session('xai');
   s.speech(); s.said('i0', "We're done."); s.stopped(); s.start('r0'); s.done('r0');
   s.speech(); s.said('i1', 'Yes.'); s.stopped();                       // the provider's reply to it has not started
   let id = 'unset';
-  s.c.speakTracked('Say only this, then stop: we checked the board.').then((x) => { id = x; });
-  s.start('auto_yes'); await tick();                                   // its reply, or the summary's? not provable
-  assert.equal(id, null, 'another response was taken for the summary');
-  s.done('auto_yes');
-  s.start('r_summary'); await tick();                                  // the summary's own start: one too many now
-  assert.equal(id, null);
+  s.c.speakTracked('Say only this, then stop: we checked the board.', 60000).then((x) => { id = x; });
+  assert.equal(s.frames.filter((f) => f.type === 'response.create').length, 0, 'the summary was sent while a reply was due');
+  s.start('auto_yes'); await tick();                                   // the provider's reply to "Yes.": nothing of the page's
+  assert.equal(id, 'unset', 'another response was taken for the summary');
+  s.done('auto_yes');                                                  // it is over: the summary goes now
+  assert.equal(s.frames.filter((f) => f.type === 'response.create').length, 1);
+  s.start('r_summary'); await tick();
+  assert.equal(id, 'r_summary');
+});
+await check('B S2 (xAI), past the hold: a reply to "Yes." that starts after the summary was sent resolves no id', async () => {
+  const time = clock();
+  try {
+    const s = session('xai');
+    s.speech(); s.said('i1', 'Yes.'); s.stopped();
+    let id = 'unset';
+    s.c.speakTracked('Say only this, then stop: we checked the board.', 60000).then((x) => { id = x; });
+    time.pass(10000);                                                  // REQUEST_TTL_MS: the hold's bound
+    assert.equal(s.frames.filter((f) => f.type === 'response.create').length, 1);
+    s.start('auto_yes'); await tick();                                 // its reply, or the summary's? not provable
+    assert.equal(id, null, 'another response was taken for the summary');
+  } finally { time.restore(); }
 });
 await check('B S2 (xAI): the provider\'s reply started first: the summary line\'s own start is known', async () => {
   const s = session('xai');
@@ -413,6 +431,77 @@ await check('LV2, guard (German, no pageResponses): every completion is heard as
   c._adapter = a; c._state = 'active'; c._wireAdapterEvents();
   xaiCity(c, a);
   assert.deepEqual(heard, ['Name a large', 'Name a large city.', 'Name a large city.', 'Name a large city.']);
+});
+// LV3 (live probes, xAI): xAI never reports cancelled, sends no response.done for a reply overtaken before its audio, and
+// silently drops a response.create sent while a reply of its own is under way. So on xAI a page line goes only when no reply
+// is under way, nothing waits on a done that may never come, and a line that may have been dropped is let go at its bound.
+const lineCreates = (s) => s.frames.filter((f) => f.type === 'response.create').length;
+await check('LV3 (xAI, xa1): a page line asked for while xAI\'s own reply is under way is sent only after its done', async () => {
+  const s = session('xai');
+  s.speech(); s.said('i0', 'Please count slowly from one to ten.'); s.stopped();
+  s.start('254e3097');                                                 // xAI's own reply, at 23532 ms
+  s.c.speakLine('Say this briefly, adding nothing: Check found two items.');
+  assert.equal(lineCreates(s), 0, 'the line was sent into an active reply (xAI drops it)');
+  s.commit('i0');                                                      // the commit after the reply started (LV5's order)
+  s.done('254e3097');
+  assert.equal(lineCreates(s), 1);
+});
+await check('LV3 (xAI, xa3): a reply overtaken before its audio, which never gets a done, does not hold the page\'s line', async () => {
+  const time = clock();
+  try {
+    const s = session('xai');
+    s.speech(); s.said('a', 'Name an animal.'); s.stopped();
+    s.start('1734ac51');                                               // overtaken below: xAI never sends its done
+    s.c.speakLine('Say this briefly, adding nothing: Still checking.');
+    assert.equal(lineCreates(s), 0);
+    s.speech(); s.said('b', 'Name an animal. Trees grow tall.'); s.stopped();
+    s.start('cd738d44'); time.pass(1000); s.done('cd738d44');           // the reply to his next words, and its done
+    assert.equal(lineCreates(s), 1, 'the line waited on a done that never came');
+  } finally { time.restore(); }
+});
+await check('LV3 (xAI): with no done and no speech, a reply under way stops holding the page\'s line at RESPONSE_IDLE_MS', async () => {
+  const time = clock();
+  try {
+    const s = session('xai');
+    s.speech(); s.said('a', 'Hello.'); s.stopped(); s.start('mute');      // no output, no done, ever
+    s.c.speakLine('Say this briefly, adding nothing: The board is green.');
+    time.pass(19000); assert.equal(lineCreates(s), 0);
+    time.pass(1000); assert.equal(lineCreates(s), 1);
+  } finally { time.restore(); }
+});
+await check('LV3 (xAI): a started page line that never gets a done is let go at RESPONSE_IDLE_MS (B N5), and the next one goes', async () => {
+  const time = clock();
+  try {
+    const s = session('xai');
+    s.c.speakLine('Say this briefly, adding nothing: one.');
+    s.c.speakLine('Say this briefly, adding nothing: two.');
+    assert.equal(lineCreates(s), 1);
+    s.start('line_1');                                                 // the first line's reply: no output, no done
+    time.pass(20000);
+    assert.equal(lineCreates(s), 2, 'the next line waited on a done that never came');
+    assert.ok(s.unbound.length === 0 || s.unbound.every((u) => u.owner == null));
+  } finally { time.restore(); }
+});
+await check('LV3 (xAI): a summary line xAI silently drops is let go at its bound, never assigned, and resolves no id', async () => {
+  const time = clock();
+  try {
+    const s = session('xai');
+    let id = 'unset';
+    s.c.speakTracked('Say only this, then stop: we checked the board.', 5000).then((x) => { id = x; });
+    assert.equal(lineCreates(s), 1);                                   // sent, and dropped: it never starts
+    time.pass(5000); await tick();
+    assert.equal(id, null);                                            // the page's own bound: the summary ends as timeout
+    time.pass(5000);                                                   // REQUEST_TTL_MS: the request is let go
+    s.speech(); s.said('a', 'Hello?'); s.stopped(); s.start('auto'); await tick();
+    assert.equal(id, null, 'a later reply was assigned to the dropped line');
+    assert.equal(s.c._inflight, null);
+  } finally { time.restore(); }
+});
+await check('LV3, guard (OpenAI): where the page makes every reply, a line is never held by a reply it did not ask for', async () => {
+  const s = session('openai');
+  s.start('stray', { tag: null, echo: false });                         // untagged, unrequested: answers no one
+  s.c.speakLine('Say this briefly, adding nothing: Check found two items.');
+  assert.equal(lineCreates(s), 1);
 });
 await check('B N4 (OpenAI): a holding line still waiting its turn is withdrawn; one already sent is not', async () => {
   const s = session('openai');

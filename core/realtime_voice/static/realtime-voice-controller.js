@@ -98,6 +98,10 @@ export class RealtimeVoiceController {
     this._utterance = null;          // his utterance so far: "speaking", then "stopped" or "committed" (counted once)
     this._done = new Set();          // replies whose response.done was handled: a later one only informs playback (LV1)
     this._calls = new Set();         // function calls passed to the host, by call_id: each once (LV1)
+    this._active = new Map();        // where the provider replies itself (xAI): its replies under way, id -> {seen} (LV3)
+    this._speaking = false;          // there: his speech is under way (LV3)
+    this._due = 0;                   // there: when his last counted turn ended, until a reply starts (LV3)
+    this._holding = false;           // no page request is sent while a start is being read (LV3)
     this._echoed = false;            // the provider has echoed a page request's tag: from then on an untagged start is not ours
     this._tags = 0;
     this._expiry = null;
@@ -234,7 +238,7 @@ export class RealtimeVoiceController {
     // The page's own responses (Spec 165 §5.1), first, so a host asking inputOf() from any callback below sees them current.
     on("connected", () => this._reset());
     on("closed", () => this._reset());
-    on("speech_started", () => { this._turn += 1; this._utterance = "speaking"; });
+    on("speech_started", () => { this._turn += 1; this._utterance = "speaking"; this._overtaken(); });
     on("speech_stopped", () => this._ended("stopped"));
     on("output_transcript", () => this._alive());
     on("assistant_started", () => this._alive());
@@ -469,8 +473,43 @@ export class RealtimeVoiceController {
   // stop before it is counted too. Too many only makes a tracked wait end at its bound (never heard): it fails safe.
   _ended(how) {
     if (this._owned) return;
-    if (how === "committed" ? this._utterance !== "stopped" : !["stopped", "committed"].includes(this._utterance)) this._owed += 1;
+    if (how === "committed" ? this._utterance !== "stopped" : !["stopped", "committed"].includes(this._utterance)) {
+      this._owed += 1;
+      this._due = Date.now();
+    }
     this._utterance = how;
+    this._speaking = false;
+    this._arm();
+  }
+
+  // LV3 (live probes): where the provider replies itself (xAI), his speech overtakes every reply under way, its own and a
+  // page line's. One cut by barge-in ends "completed" with no output; one overtaken before its audio gets no response.done
+  // at all. Neither is waited on: they stop counting as under way, and a page request in flight is let go (its reply keeps
+  // the owner it started with: none). Nothing new is sent while he speaks.
+  _overtaken() {
+    if (!this._pageResponses || this._owned) return;
+    this._speaking = true;
+    this._active.clear();
+    const f = this._inflight;
+    if (f && f.started) { this._inflight = null; this._let(f, "overtaken"); }
+    this._arm();
+  }
+
+  // LV3: where the provider replies itself (xAI), it silently drops a response.create sent while a reply of its own is under
+  // way (3 of 3). So a page request is sent only when none is: not while one of its replies is under way (until its done,
+  // his next speech, or RESPONSE_IDLE_MS without a sign of it), not while he speaks, and not in the REQUEST_TTL_MS after his
+  // turn ends while its reply may still start. Each wait has its bound, so nothing waits on a done that may never come.
+  _blocked(now = Date.now()) {
+    if (!this._pageResponses || this._owned) return false;
+    return this._holding || this._speaking || this._active.size > 0 || (this._due > 0 && now - this._due < REQUEST_TTL_MS);
+  }
+
+  // When _blocked's own bounds would next lift it (ms from now), or null when only an event can (his speech ending).
+  _unblockIn(now) {
+    if (this._speaking || this._holding) return null;
+    const bounds = [...this._active.values()].map((a) => RESPONSE_IDLE_MS - (now - a.seen));
+    if (this._due > 0) bounds.push(REQUEST_TTL_MS - (now - this._due));
+    return bounds.length ? Math.max(0, Math.min(...bounds)) : null;
   }
 
   // A response this controller asks for: his committed item's (turn), a function result's follow-up (follow), or the
@@ -509,7 +548,9 @@ export class RealtimeVoiceController {
       if (!f.started) this._lost = true;
       this._let(f, f.started ? "unfinished" : "never_started");
     }
-    while (!this._inflight && this._queue.length) {
+    for (const [id, a] of this._active) if (Date.now() - a.seen >= RESPONSE_IDLE_MS) this._active.delete(id);
+    if (this._due > 0 && Date.now() - this._due >= REQUEST_TTL_MS) this._due = 0;
+    while (!this._inflight && this._queue.length && !this._blocked()) {
       const entry = this._queue.shift();
       if (entry.kind === "turn" && entry.turn !== this._turn) { this._let(entry, "superseded"); continue; }
       entry.turn = this._turn; entry.at = Date.now();
@@ -531,6 +572,7 @@ export class RealtimeVoiceController {
   // flight at a time; output of a response that is not the page's only keeps the wait going, never names an owner.
   _alive() {
     const f = this._inflight;
+    for (const a of this._active.values()) a.seen = Date.now();
     if (f && f.started) { f.seen = Date.now(); this._arm(); }
   }
 
@@ -538,9 +580,11 @@ export class RealtimeVoiceController {
     clearTimeout(this._expiry);
     this._expiry = null;
     const f = this._inflight;
-    if (!f) return;
     const now = Date.now();
-    const left = f.started ? Math.min(RESPONSE_IDLE_MS - (now - f.seen), RESPONSE_TTL_MS - (now - f.at)) : REQUEST_TTL_MS - (now - f.at);
+    const waits = !f && this._queue.length && this._blocked(now) ? this._unblockIn(now) : null;   // LV3: a page request waiting
+    if (!f && waits === null) return;
+    const left = !f ? waits : f.started ? Math.min(RESPONSE_IDLE_MS - (now - f.seen), RESPONSE_TTL_MS - (now - f.at))
+      : REQUEST_TTL_MS - (now - f.at);
     this._expiry = setTimeout(() => { this._expiry = null; this._pump(); }, Math.max(0, left));
     if (this._expiry && typeof this._expiry.unref === "function") this._expiry.unref();
   }
@@ -556,7 +600,7 @@ export class RealtimeVoiceController {
   _reset() {
     const pending = this._inflight ? [this._inflight, ...this._queue] : this._queue.slice();
     this._queue = []; this._inflight = null; this._lost = false; this._echoed = false; this._owed = 0; this._utterance = null;
-    this._done = new Set(); this._calls = new Set();
+    this._done = new Set(); this._calls = new Set(); this._active = new Map(); this._speaking = false; this._due = 0;
     for (const entry of pending) if (entry.done) { const done = entry.done; entry.done = null; done(null); }
     this._arm();
   }
@@ -576,15 +620,19 @@ export class RealtimeVoiceController {
     if (!this._pageResponses) return;
     const id = evt.response_id || null;
     if (id && this._answers.has(id)) return;                     // its start was already seen
-    this._pump();                                                // a request past its bound is let go first
+    this._holding = true;
+    try { this._pump(); } finally { this._holding = false; }     // a request past its bound is let go first; none is sent now
     const f = this._inflight;
     const theirs = !this._owned && !evt.tag && this._owed > 0;  // possibly the provider's own reply to a turn of his
+    if (!this._owned && !evt.tag) this._due = 0;                // a reply has started: his turn's is no longer to come (LV3)
     if (evt.tag) this._echoed = true;
     if (!f || f.started || (evt.tag ? evt.tag !== f.tag : this._echoed)) {
       if (id) this._answers.set(id, null);
       if (theirs) this._owed -= 1;                                // one of the provider's replies still owed has started
+      if (!this._owned && id) this._active.set(id, { seen: Date.now() });   // the provider's own reply, under way (LV3)
       if (this._owned) this._onUnbound({ reason: !f ? "unrequested" : f.started ? "one_too_many" : evt.tag ? "another_tag" : "untagged",
         response_id: id });
+      this._arm();
       return;
     }
     const unsure = !evt.tag && this._lost;
@@ -609,8 +657,10 @@ export class RealtimeVoiceController {
     if (id) this._done.add(id);
     const r = id ? this._answers.get(id) : null;
     if (r && r.acts === null) r.acts = evt.status === "completed" && r.turn === this._turn;
+    const ended = id !== null && this._active.delete(id);           // the provider's own reply is no longer under way (LV3)
     const f = this._inflight;
     if (f && f.started && f.id === id) { this._inflight = null; this._pump(); }
+    else if (ended) this._pump();
   }
 
   // Each function call is passed to the host once, by its call_id (LV1): the same call repeated in a later response.done is
