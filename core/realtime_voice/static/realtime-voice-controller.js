@@ -239,7 +239,7 @@ export class RealtimeVoiceController {
     on("output_transcript", () => this._alive());
     on("assistant_started", () => this._alive());
     on("input_item", (evt) => this._committed(evt.item_id || null));
-    on("input_transcript", (evt) => { this._fresh = this._firstCompletion(evt); });
+    on("input_transcript", (evt) => { if (this._interim(evt)) evt.completed = false; this._fresh = this._firstCompletion(evt); });
     on("response_started", (evt) => this._started(evt));
     on("response_done", (evt) => this._finished(evt));
     on("connected", () => {
@@ -435,6 +435,13 @@ export class RealtimeVoiceController {
     if (index < 0) return { state: "pending" };
     const item = order[index][1];
     return item.completed ? { state: "bound", index, text: item.text || "" } : { state: "pending" };
+  }
+
+  // An interim transcript that says it is completed (LV2: xAI's .completed with status "in_progress", while he still speaks):
+  // on the direct path it completes nothing, so the words the page posts, shows and sends with Check are his final ones,
+  // never the first fragment. German and Portuguese pass no pageResponses, and hear every completion as before.
+  _interim(evt) {
+    return this._pageResponses && evt && evt.status === "in_progress";
   }
 
   // Whether a transcript event completes its item for the first time (read before the event is recorded).

@@ -91,7 +91,7 @@ const SUPERSEDED = { ok: false, outcome: "not_done", error: "superseded",
     on("output_transcript", () => this._alive());
     on("assistant_started", () => this._alive());
     on("input_item", (evt) => this._committed(evt.item_id || null));
-    on("input_transcript", (evt) => { this._fresh = this._firstCompletion(evt); });
+    on("input_transcript", (evt) => { if (this._interim(evt)) evt.completed = false; this._fresh = this._firstCompletion(evt); });
     on("response_started", (evt) => this._started(evt));
     on("response_done", (evt) => this._finished(evt));
 `,
@@ -194,6 +194,13 @@ const SUPERSEDED = { ok: false, outcome: "not_done", error: "superseded",
     if (index < 0) return { state: "pending" };
     const item = order[index][1];
     return item.completed ? { state: "bound", index, text: item.text || "" } : { state: "pending" };
+  }
+
+  // An interim transcript that says it is completed (LV2: xAI's .completed with status "in_progress", while he still speaks):
+  // on the direct path it completes nothing, so the words the page posts, shows and sends with Check are his final ones,
+  // never the first fragment. German and Portuguese pass no pageResponses, and hear every completion as before.
+  _interim(evt) {
+    return this._pageResponses && evt && evt.status === "in_progress";
   }
 
   // Whether a transcript event completes its item for the first time (read before the event is recorded).
@@ -499,6 +506,20 @@ const ADAPTERS = {
     }
 `,
    ``],
+  [`      case "conversation.item.input_audio_transcription.completed":
+        // LV2 (live probes): xAI sends its interim transcripts as .completed with status "in_progress" (2 to 5 an utterance),
+        // then the final one with status "completed". The status is passed on; only a host on the direct path reads it.
+        this._emit("input_transcript", {
+          item_id: event.item_id, text: event.transcript, is_delta: false,
+          completed: true, provider_event_id: event.event_id, status: event.status || null,
+        });
+`,
+   `      case "conversation.item.input_audio_transcription.completed":
+        this._emit("input_transcript", {
+          item_id: event.item_id, text: event.transcript, is_delta: false,
+          completed: true, provider_event_id: event.event_id,
+        });
+`],
   ]],
   'adapters/openai-webrtc-adapter.js': ['dae118fd252add9a80755a363d64ce6b4ef377b004d177e8dc10bba5a3c274a7', [
   [`    this._audible = new Set();       // responses whose audio the provider says is playing (output_audio_buffer.started)

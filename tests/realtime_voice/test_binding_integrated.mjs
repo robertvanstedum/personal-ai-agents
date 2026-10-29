@@ -212,6 +212,18 @@ await check('LV1 (openai): the repeated call in a second response.done is not po
   assert.equal(t.outputs().filter(([id]) => id === 'call_RA').length, 1, 'the call was answered twice');
   assert.equal(t.creates(), creates, 'the repeated call was followed up again');
 }));
+// LV2 (live, xa3), through the real page: on xAI Check is the only way to act, and it sends his final words, never the
+// first interim fragment xAI marked completed.
+await check('LV2 (xai): Check sends his final words, not the first interim fragment', () => run('xai', async (t) => {
+  const done = (status, transcript, n) => t.ev({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'city',
+    status, transcript, event_id: `city_${n}` });
+  t.start('city'); done('in_progress', 'Name a large', 1); done('in_progress', 'Name a large city.', 2); t.stop();
+  done('in_progress', 'Name a large city.', 3); t.created('1deaf10b'); t.commit('city'); done('completed', 'Name a large city.', 4);
+  await t.s.check(); await flush();
+  assert.deepEqual(t.consults(), [['t0', 'Name a large city.']]);
+  assert.deepEqual(t.posts('/transcript').flatMap((b) => b.events || []).filter((e) => e.role === 'user').map((e) => e.text),
+    ['Name a large city.']);
+}));
 // B S3 + N2: a call from a barged-in reply is answered not done, with no reply asked for it; End names his turn not acted on.
 await check('B S3 + N2 (openai): a barged-in call is answered not done, and End names his turn not acted on', () => run('openai', async (t) => {
   t.start(); t.said('a', 'Save a note that A.'); t.stop(); t.commit('a'); t.asked('RA');

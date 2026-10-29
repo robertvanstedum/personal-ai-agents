@@ -294,9 +294,11 @@ export class XAIWebSocketAdapter {
         });
         break;
       case "conversation.item.input_audio_transcription.completed":
+        // LV2 (live probes): xAI sends its interim transcripts as .completed with status "in_progress" (2 to 5 an utterance),
+        // then the final one with status "completed". The status is passed on; only a host on the direct path reads it.
         this._emit("input_transcript", {
           item_id: event.item_id, text: event.transcript, is_delta: false,
-          completed: true, provider_event_id: event.event_id,
+          completed: true, provider_event_id: event.event_id, status: event.status || null,
         });
         break;
       case "response.output_audio_transcript.delta":

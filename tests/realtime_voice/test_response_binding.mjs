@@ -379,6 +379,41 @@ await check('LV1, guard: a done for a reply not yet done still settles it, and a
   s.done('R_B', { call: 'call_2', name: 'consult' }); await tick();
   assert.deepEqual(s.calls.map((c) => c.call_id), ['call_1', 'call_2']);
 });
+// LV2 (live probes, xa3 "Name a large city."): xAI sends interim transcripts as .completed with status "in_progress", then
+// the final one with status "completed" in the same millisecond as its commit. On the direct path the item completes only
+// at the final one; a controller without pageResponses (German, Portuguese) hears every completion as before.
+function xaiCity(c, a) {
+  const ev = (e) => a._handleServerEvent(e);
+  const done = (status, transcript, n) => ev({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'b30aacef',
+    status, transcript, event_id: `ev_city_${n}` });
+  ev({ type: 'input_audio_buffer.speech_started', item_id: 'b30aacef' });
+  done('in_progress', 'Name a large', 1);
+  done('in_progress', 'Name a large city.', 2);
+  ev({ type: 'input_audio_buffer.speech_stopped' });
+  done('in_progress', 'Name a large city.', 3);
+  ev({ type: 'response.created', response: { id: '1deaf10b' } });          // xAI's own reply, before the commit
+  ev({ type: 'input_audio_buffer.committed', item_id: 'b30aacef' });
+  done('completed', 'Name a large city.', 4);
+}
+await check('LV2 (xAI): an interim .completed (status in_progress) completes nothing on the direct path; the final one does', async () => {
+  const a = new XAIWebSocketAdapter(), heard = [], shown = [];
+  a._ws = { send: () => {}, readyState: 1, close() {} };
+  const c = new RealtimeVoiceController({ pageResponses: true, oncePerItem: true, onUserTurn: (text) => heard.push(text),
+    onTranscriptUpdate: (items) => shown.push(items.map((i) => [i.text, i.completed])), onUnbound: () => {} });
+  c._adapter = a; c._state = 'active'; c._wireAdapterEvents();
+  xaiCity(c, a);
+  assert.deepEqual(heard, ['Name a large city.'], 'a fragment was taken for his words');
+  assert.deepEqual(shown[0], [['Name a large', false]]);
+  assert.deepEqual(shown.at(-1), [['Name a large city.', true]]);
+});
+await check('LV2, guard (German, no pageResponses): every completion is heard as before', async () => {
+  const a = new XAIWebSocketAdapter(), heard = [];
+  a._ws = { send: () => {}, readyState: 1, close() {} };
+  const c = new RealtimeVoiceController({ onUserTurn: (text) => heard.push(text) });
+  c._adapter = a; c._state = 'active'; c._wireAdapterEvents();
+  xaiCity(c, a);
+  assert.deepEqual(heard, ['Name a large', 'Name a large city.', 'Name a large city.', 'Name a large city.']);
+});
 await check('B N4 (OpenAI): a holding line still waiting its turn is withdrawn; one already sent is not', async () => {
   const s = session('openai');
   s.utter('item_A'); s.start('R_A');
