@@ -545,3 +545,34 @@ def test_the_shared_session_module_sends_no_opening_instruction_for_any_host():
     assert "openingInstruction: null," in block[:block.index("});")]
     controller = (ROOT / "core/realtime_voice/static/realtime-voice-controller.js").read_text()
     assert "this._ask(null, (tag) => this._instruct(this._openingInstruction, tag));" in controller
+
+
+# ── Gate 2 Q N3, Q N4 ────────────────────────────────────────────────────────────────────────────────────────────────
+
+def test_with_no_continuity_the_cut_marker_names_only_what_was_cut():
+    """Q N3: with no settled session to carry and the text over its bound, memory is cut and marked; the text says there
+    was no continuity, never that continuity was cut."""
+    rules, card = "R" * 1000, "C" * 1000
+    briefing = lambda memory: "B" * 1000 + "\n--- MEMORY ---\n" + memory   # noqa: E731
+    memory = "\n".join(f"[note] 2026-10-{d:02d}: entry {d} " + "m" * 200 for d in range(1, 29))
+    tight = direct_voice.bounded(rules, card, briefing, memory, "", limit=6_000)
+    assert len(tight.encode()) <= 6_000 and "[Memory cut: the oldest" in tight
+    assert direct_voice.CONTINUITY_CUT not in tight and direct_voice.NO_CONTINUITY in tight
+    some = direct_voice.bounded(rules, card, briefing, memory, "Robert: one turn", limit=6_000)    # guard: there was some
+    assert direct_voice.CONTINUITY_CUT in some and direct_voice.NO_CONTINUITY not in some
+
+
+@pytest.mark.parametrize("role", ["Production", "prod", "PRODUCTION", "producton", "", "staging"])
+def test_an_unrecognised_role_counts_as_production_and_holds_her_start_off(role):
+    """Q N4: only the named non-production roles (standby, development) start on the install switch alone; any other
+    MINIMOI_ROLE, an empty one included, is production (fail closed)."""
+    env = {"MINIMOI_ROLE": role, "MINIMOI_COS_VOICE_DIRECT": "1"}
+    assert direct_voice.production(env) is True
+    assert not direct_voice.may_start(env)
+    assert direct_voice.may_start({**env, direct_voice.PRODUCTION_SWITCH: "1"})
+
+
+@pytest.mark.parametrize("role", ["standby", "development"])
+def test_the_named_non_production_roles_start_on_the_install_switch(role):
+    assert direct_voice.production({"MINIMOI_ROLE": role}) is False
+    assert direct_voice.may_start({"MINIMOI_ROLE": role, "MINIMOI_COS_VOICE_DIRECT": "1"})

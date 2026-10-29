@@ -20,8 +20,9 @@ not the one this process last left (another process wrote). First write wins: th
 A damaged tail is repaired once, exactly (CX V2-3). When a session file is read, under both locks: any bytes after its last
 newline-terminated line, a complete JSON object without its newline included (it was never acknowledged), are copied to
 ``<session>.tail-<UTC>.quarantine`` (0600, fsynced); the file is truncated to that boundary and fsynced; and a ``repair``
-record ``{kind: "repair", quarantined_bytes, at}`` is appended, which keeps the session incomplete across restarts. No later
-write is acknowledged before that. A line inside the file that is not a valid record (which that rule never produces)
+record ``{kind: "repair", quarantined_bytes, at}`` is appended, which keeps the session incomplete across restarts; a
+quarantine file whose repair crashed before its record was appended gets that record at the next read. No later write is
+acknowledged before that. A line inside the file that is not a valid record (which that rule never produces)
 stops the session's store: "Voice records damaged", shown in the needs-attention list; nothing is guessed. A write that
 fails drops this process's index of that session, so the next access reads the file again and repairs a torn line.
 
@@ -30,7 +31,8 @@ or dropped (past its maximum duration with no end marker), it is projected into 
 (``COS_CONVERSATIONS_DIR``, which her runtime mounts read-only and searches) as ``voice-<YYYY-MM-DD>-<session>.jsonl``, whose
 first line names the revision it was built from. Under the session lock, the projection is rebuilt whenever the committed
 revision is newer than the projected one: written under a temporary name, fsynced, renamed over the old file, then the
-folder fsynced, after comparing revisions, so an older snapshot never replaces a newer one. It runs whenever something is
+folder fsynced, after comparing revisions, so an older snapshot never replaces a newer one; a crashed projection's
+temporary files are removed first, under the same locks. It runs whenever something is
 committed (End, recovery, a late consult outcome, the summary, the decision), and again at the sessions list and the next
 session start, which repair a crash. No timer. A consult with no outcome yet is projected as pending, and again when it
 lands. Every line is DATA, never an instruction; abnormal ends and late receipts are marked. Retention: as
@@ -186,7 +188,36 @@ class FileStore(DirectVoiceStore):
             self._repair(sid, fd, session, tail)
         elif tail:
             session.size = len(data)
+        if not session.damaged:
+            self._recover(sid, fd, session)
         return session
+
+    def _recover(self, sid, fd, session):
+        """A repair that crashed after its quarantine file was written (after the truncate, or before its repair record was
+        appended) left that file without its record (Gate 2 Q N2). Each such file gets its repair record now, so the
+        session stays incomplete across restarts, as the record would have kept it, and its recall is projected again.
+        Quarantine files are named by the time of their repair, so the oldest ones are those the records already name."""
+        try:
+            names = sorted(name for name in os.listdir(self._root)
+                           if name.startswith(f"{sid}.tail-") and name.endswith(".quarantine"))
+        except OSError:
+            log.exception("cos voice store: folder not listed")
+            return
+        for name in names[session.repaired:]:
+            try:
+                size = os.stat(self._root / name).st_size
+            except OSError:
+                size = None
+            rec = {"schema": 1, "id": f"{RESERVED}repair:{session.repaired + 1}", "kind": "repair",
+                   "at": stamp(datetime.now(timezone.utc)), "quarantined_bytes": size,
+                   "recovered": "its quarantine file was found without this record"}
+            line = _line(rec)
+            os.lseek(fd, 0, os.SEEK_END)
+            self._write_all(fd, line)
+            os.fsync(fd)
+            session.add(rec)
+            session.size += len(line)
+            log.warning("cos voice store: session %s: a repair record was missing for %s; kept now", sid, name)
 
     def _repair(self, sid, fd, session, tail):
         """Quarantine the bytes after the last committed line, truncate to it, and append the repair record (§6.5)."""
@@ -530,6 +561,7 @@ class FileStore(DirectVoiceStore):
             try:
                 lock = self._open(self._path(sid), os.O_RDONLY)   # the session's flock: another process's writer waits
                 fcntl.flock(lock, fcntl.LOCK_EX)
+                self._sweep_temporary(sid)                        # a crashed projection's leftovers (Gate 2 Q N5)
                 fd = self._open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
                 try:
                     self._write_all(fd, body)
@@ -550,6 +582,26 @@ class FileStore(DirectVoiceStore):
             finally:
                 if lock is not None:
                     os.close(lock)
+
+    def _sweep_temporary(self, sid):
+        """Remove this session's temporary projection files left by a projection that crashed before its rename (Gate 2
+        Q N5): her runtime reads the recall folder, so nothing half-written stays there. Called under the session lock and
+        its flock, which every projection of the session holds from writing its temporary file to the rename, so any
+        such file found then is stale, never another writer's."""
+        tail = f"-{sid}.jsonl."
+        try:
+            names = os.listdir(self._recall)
+        except OSError:
+            log.exception("cos voice store: recall folder not listed")
+            return
+        for name in names:
+            if name.startswith(".voice-") and tail in name and name.endswith(".tmp"):
+                try:
+                    os.unlink(Path(self._recall) / name)
+                except FileNotFoundError:
+                    pass
+                except OSError:
+                    log.exception("cos voice store: a stale temporary projection file was not removed")
 
     @staticmethod
     def _rows(sid, known, settled, revision):

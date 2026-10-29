@@ -18,9 +18,9 @@ flows, admission, the routes and the needs-attention list. This file is only wha
 * ``summary_key`` voice-summary-cos (read as MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS; D22 (a)), ``person``.
 
 Switches (§6.8). MINIMOI_COS_VOICE_DIRECT=1 on cos-scheduler installs the routes; outside production it also allows starts.
-In production (MINIMOI_ROLE "production", or unset) a start also needs MINIMOI_COS_DIRECT_VOICE_PRODUCTION=1, read only here,
-through production_environ (shaped like guild_mounts.production_environ). The portal needs no CoS flag. Off: nothing is
-registered and Confer behaves as before. Not a single provider call, credential or Keychain read happens here at install.
+In production (any MINIMOI_ROLE but standby or development, unset included) a start also needs
+MINIMOI_COS_DIRECT_VOICE_PRODUCTION=1, read only here, through production_environ (shaped like
+guild_mounts.production_environ). The portal needs no CoS flag. Off: nothing is registered and Confer behaves as before. Not a single provider call, credential or Keychain read happens here at install.
 
 Inherited unchanged from the core (A1's binding, Robert's C2 decision "A: tie by construction"): on OpenAI the page makes
 every reply that may act, for one committed item of his (page_responses), and the model has consult and save_note; on xAI
@@ -124,9 +124,14 @@ def her_rules(actions):
     return _RULES + (_ACTS if actions else _CHECKS) + _WRITING
 
 
+# The roles that are not production (staging and the Mac: docker-compose.staging.yml's standby; the Mac's development).
+NOT_PRODUCTION = ("standby", "development")
+
+
 def production(environ):
-    """Whether this cos-scheduler is production: MINIMOI_ROLE "production", or unset (fail closed)."""
-    return environ.get("MINIMOI_ROLE", "production") == "production"
+    """Whether this cos-scheduler is production: any MINIMOI_ROLE but the two named non-production roles, unset included
+    (fail closed, Gate 2 Q N4): "Production", "prod" or a typo holds her start off as production does."""
+    return environ.get("MINIMOI_ROLE") not in NOT_PRODUCTION
 
 
 def production_environ(environ):
@@ -163,10 +168,12 @@ def bounded(rules, card, briefing, memory, continuity, limit=INSTRUCTIONS_MAX_BY
         if fits(candidate):
             return candidate
     lines = memory.splitlines()
+    # The marker names what was cut (Gate 2 Q N3): with no continuity to cut, the text says there was none.
+    left = CONTINUITY_CUT if continuity else NO_CONTINUITY
     for keep in range(len(lines) - 1, -1, -1):
         kept = "\n".join(lines[len(lines) - keep:]) if keep else ""
         dropped = len(memory.encode()) - len(kept.encode())
-        candidate = text(MEMORY_CUT.format(n=dropped) + ("\n" + kept if kept else ""), CONTINUITY_CUT)
+        candidate = text(MEMORY_CUT.format(n=dropped) + ("\n" + kept if kept else ""), left)
         if fits(candidate):
             return candidate
     raise VoiceUnavailable(TOO_LONG)

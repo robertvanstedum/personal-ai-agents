@@ -368,3 +368,50 @@ def test_her_records_are_revealed_with_their_role_and_capture_id_and_records_are
     assert [t["speaker"] for t in turns] == [SPEAKERS["user"], SPEAKERS["consult"], SPEAKERS["assistant"]]
     assert store.records(H, SID) == ([(t["speaker"], t["text"], t["partial"], t["interrupted"]) for t in turns], True)
     assert store.turns(H, str(uuid.uuid4())) == ([], True)          # no such session: nothing, nothing missing
+
+
+# ── Gate 2 Q N2, Q N5 ────────────────────────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("crash", ["after the truncate, before its record", "before the truncate (guard)"])
+def test_a_repair_that_crashed_before_its_record_still_keeps_the_session_incomplete(folders, crash):
+    """Q N2: a crash after the truncate, or a failed repair append, leaves the quarantine file and no repair record. At the
+    next load the session is still incomplete (its record is kept then), and its recall says so. The guard: a crash before
+    the truncate leaves the tail, which is repaired again."""
+    store = store_in(folders)
+    started(store)
+    store.keep(H, "robert", SID, "user", "t0", 0, "Kept.", False, started="2026-10-28T10:00:00.000Z",
+               ended="2026-10-28T10:00:01.000Z")
+    store.close(H, SID, reason="end", capture={"capture": "complete"})
+    torn = b'{"schema":1,"id":"consult_outcome:t0","kind":"consult_outcome","at":"x","outcome":"do'
+    path = folders[0] / f"{SID}.jsonl"
+    (folders[0] / f"{SID}.tail-20261028T100002000000Z.quarantine").write_bytes(torn)   # written and fsynced
+    if crash.startswith("before the truncate"):
+        with open(path, "ab") as fh:               # the truncate never reached the disk: the tail is repaired again
+            fh.write(torn)
+    # otherwise truncated already: the file ends at its last committed line, and no repair record follows it
+    restarted = store_in(folders)
+    assert restarted.state(H, SID)["repaired"] >= 1
+    view = core.session_view(type("A", (), {"store": restarted, "person": {"domain": "cos"}})(),
+                             type("S", (), {"live": staticmethod(lambda sid: False), "running": staticmethod(lambda s, i: False),
+                                            "clock": staticmethod(lambda: datetime.now(timezone.utc).timestamp())})(), H, SID)
+    assert view["capture"] == "incomplete" and "incomplete" in view["reasons"] and view["needs_attention"] is True
+    assert restarted.sessions("robert") == [(H, SID)]          # the list projects what the store now holds
+    assert projection(folders)[0]["capture"] == "incomplete"
+
+
+def test_a_crashed_projections_temporary_files_are_removed_before_the_next_projection(folders):
+    """Q N5: a crash during projection leaves .voice-….tmp files in the recall folder her runtime reads. The next projection
+    of that session removes them, under the session lock; another session's are not touched."""
+    store = store_in(folders)
+    started(store)
+    store.close(H, SID, reason="end", capture={"capture": "complete"})
+    (target,) = [p for p in folders[1].iterdir() if p.name.startswith("voice-")]
+    stale = folders[1] / f".{target.name}.4242.{'a' * 32}.tmp"
+    stale.write_text("half a projection")
+    other = folders[1] / f".voice-2026-10-28-{uuid.uuid4()}.jsonl.4242.{'b' * 32}.tmp"
+    other.write_text("another session's")
+    store.keep_summary(H, SID, "summary", "[Voice summary proposal] newer")   # a commit: projected again
+    assert not stale.exists()
+    assert other.exists()
+    assert projection(folders)[0]["revision"] == store.state(H, SID)["revision"]
+    assert sorted(p.name for p in folders[1].iterdir() if p.name.endswith(".tmp")) == [other.name]
