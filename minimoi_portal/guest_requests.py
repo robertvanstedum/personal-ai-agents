@@ -61,12 +61,17 @@ class Outcome:
 class PostgresStore:
     """Small adapter so the service can be tested without a database."""
 
-    def __init__(self, dsn: str | None = None):
+    def __init__(self, dsn: str | None = None, *, timeouts: bool = False):
         self.dsn = dsn or os.environ["DATABASE_URL"]
+        # A background reader (the action-waiting sweep) must never hang on the database (review S5).
+        self.timeouts = timeouts
 
     def _connect(self):
         import psycopg2
         import psycopg2.extras
+        if self.timeouts:
+            return psycopg2.connect(self.dsn, cursor_factory=psycopg2.extras.RealDictCursor, connect_timeout=5,
+                                    options="-c statement_timeout=5000")
         return psycopg2.connect(self.dsn, cursor_factory=psycopg2.extras.RealDictCursor)
 
     def query(self, sql: str, params=()) -> list[dict]:
@@ -207,6 +212,34 @@ def _collect(db, status: str) -> tuple[list[GuestRequest], tuple]:
         except StoreUnavailable as exc:
             unavailable.append(exc.store)
     return sorted(found, key=lambda r: r.requested_at or ""), tuple(unavailable)
+
+
+_SELECT_OPEN_WITH_REASON = (
+    "SELECT id, email, domain, status, requested_at, reason FROM guild.guest_requests"
+    " WHERE status='requested' ORDER BY requested_at"
+)
+
+
+def open_with_coverage(db=None) -> dict:
+    """Every open request in both stores, for the action-waiting sweep: ``{"guild": rows | None, "pending": entries |
+    None}``, None meaning that store could not be read (never "none"). Guild rows carry ``reason`` (so Robert's own MC
+    invite can be left out) and ``domain``; pending entries carry no app. Names are not selected: the sweep needs the
+    email only to key a request, and never stores it."""
+    out = {GUILD: None, PENDING_FILE: None}
+    try:
+        if db is None:
+            try:
+                db = PostgresStore(timeouts=True)
+            except Exception:
+                raise StoreUnavailable(GUILD) from None
+        out[GUILD] = [dict(r) for r in _guild_rows(db, _SELECT_OPEN_WITH_REASON)]
+    except StoreUnavailable:
+        pass
+    try:
+        out[PENDING_FILE] = [dict(e) for e in _pending_entries()]
+    except StoreUnavailable:
+        pass
+    return out
 
 
 def list_requests(db=None, status: str = "requested", allow_partial: bool = False) -> list[GuestRequest]:
