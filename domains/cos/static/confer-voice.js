@@ -228,8 +228,11 @@ export function conferSessions(d) {
     });
     return box;
   }
-  function summary(view, again) {
-    if (view.summary === 'proposed' && view.proposal) return card(view, () => refresh());
+  // `listed`: the block is opened in the needs-attention list. A decision there keeps its row and its result line in view
+  // (re-reading the list now would take the row, and the words saying what was kept, away at once); the list is read
+  // again at the next load or reveal. In the conversation, a decision re-reads the list at once.
+  function summary(view, again, listed) {
+    if (view.summary === 'proposed' && view.proposal) return card(view, listed ? null : () => refresh());
     if (view.summary === 'unavailable' && ['ended', 'dropped'].includes(view.state)) {
       const box = make('div', { class: 'voice-summary-state' });
       box.append(make('div', { class: 'voice-line' }, 'Summary unavailable.'), ask(view, again));
@@ -240,7 +243,7 @@ export function conferSessions(d) {
   }
 
   // One session's block: what the reveal adds to the conversation, and what Open shows in the list.
-  function render(view) {
+  function render(view, { listed = false } = {}) {
     const block = make('div', { class: 'voice-session', 'data-voice-session': view.session_id });
     const when = [clock(view.started_at), view.ended_at ? clock(view.ended_at).slice(11) : ''].filter(Boolean).join('–');
     block.append(make('div', { class: 'msg-label' }, `Voice with ${short}${when ? ` · ${when}` : ''}`));
@@ -252,10 +255,10 @@ export function conferSessions(d) {
     const again = async () => {
       const fresh = await detail(view.session_id);
       if (!fresh) return;
-      const next = render(fresh);
+      const next = render(fresh, { listed });
       if (typeof block.replaceWith === 'function') block.replaceWith(next); else swap(block, next);
     };
-    const s = summary(view, again);
+    const s = summary(view, again, listed);
     if (s) block.append(s);
     const link = download(view);
     if (link) { const p = make('div', { class: 'voice-actions' }); p.append(link); block.append(p); }
@@ -316,7 +319,7 @@ export function conferSessions(d) {
         const fresh = await detail(view.session_id);
         open.disabled = false;
         if (!fresh || fresh.state === 'live') { result.textContent = 'Its records could not be read now.'; result.hidden = false; return; }
-        item.append(render(fresh)); open.setAttribute('aria-expanded', 'true'); open.textContent = 'Close';
+        item.append(render(fresh, { listed: true })); open.setAttribute('aria-expanded', 'true'); open.textContent = 'Close';
       });
       dismiss.addEventListener('click', async () => {
         dismiss.disabled = true;

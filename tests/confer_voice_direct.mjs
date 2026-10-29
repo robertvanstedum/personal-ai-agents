@@ -505,6 +505,23 @@ await scenario('Summary unavailable: Ask for a summary; a proposal that comes ba
       assert.equal(box.querySelector(`[data-voice-attention="${SID}"]`), null);
     } finally { p.done(); }
   });
+  await t.check('a summary decided from the list keeps its row and says what was kept; the list is not re-read at once', async () => {
+    const proposed = { ...VIEW, reasons: ['undecided'], summary: 'proposed', proposal: PROPOSAL, needs_attention: true };
+    const p = page({ caps: { ...CAPS, direct_records: true }, sessions: [proposed],
+      routes: { '/summary/decision': () => ({ status: 200, body: { ok: true, state: 'confirmed' } }) } });
+    try {
+      await flush(30);
+      const reads = p.gets('/sessions').filter((x) => x.url.split('?')[0].endsWith('/sessions')).length;
+      const row = p.nodes('voice-sessions').querySelector(`[data-voice-attention="${SID}"]`);
+      p.server.view = proposed;
+      await p.click(row.querySelector('[data-voice-open]')); await flush();
+      await p.click(row.querySelector('[data-voice-summary-confirm]')); await flush();
+      assert.equal(p.posts('/summary/decision').length, 1);
+      assert.equal(textOf(row.querySelector('[data-voice-summary-result]')), 'Confirmed. It confirms the summary only; it authorizes nothing it mentions.');
+      assert.ok(p.nodes('voice-sessions').querySelector(`[data-voice-attention="${SID}"]`), 'the row went before its result was seen');
+      assert.equal(p.gets('/sessions').filter((x) => x.url.split('?')[0].endsWith('/sessions')).length, reads);
+    } finally { p.done(); }
+  });
   await t.check('the needs-attention list leaves out the session just revealed in the conversation', async () => {
     const p = page({});
     try {
