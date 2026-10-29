@@ -829,4 +829,37 @@ for (const late of ['answers at 20 s', 'never answers (the bound aborts it)']) {
   });
 }
 
+
+// ── Gate 2 verification V S2: a microphone granted after the start was ended, through the real controller and adapters ──
+for (const provider of ['openai', 'xai']) {
+  await t.check(`V S2 (${provider}): the microphone prompt answers after the handover: every track stops at once, nothing connects`, async () => {
+    const real = await realController({ adapters: 'real' });
+    const caps = provider === 'xai' ? { ...CAPS, unvoiced: {} } : CAPS;
+    const p = page({ controller: real.RealtimeVoiceController, caps, saved: provider });
+    try {
+      await flush();
+      const pressing = p.voice(); await flush();
+      real.state.answer({ provider, model: 'm', warning_minutes: 20, max_minutes: 30, voice_session_id: SID,
+        ...(provider === 'openai' ? { client_secret: 'ek_synthetic', page_responses: true } : { ephemeral_token: 'synthetic', session_config: {} }) });
+      await flush(20);
+      assert.equal(real.state.asked, 1, 'the adapter did not ask for the microphone');
+      let waited = null, settled = false;
+      for (const fn of p.docEvents['minimoi:companion-opening'] || []) fn({ detail: { waitUntil: (x) => { waited = x; } } });
+      waited.then(() => { settled = true; });
+      await flush();
+      assert.equal(settled, false, 'the panel opened while the start could still take the microphone');
+      await p.advance(15000); await flush();                               // past the hold: End, the handover
+      assert.equal(settled, true, 'the handover never came');
+      real.state.grant(); await pressing; await flush(30);                 // he grants the prompt only now
+      assert.ok(real.state.tracks.length > 0 && real.state.tracks.every((t) => t.stopped), 'a track granted after End is still live');
+      if (provider === 'openai') {
+        assert.deepEqual(real.state.peers.map((pc) => pc.added.length), [0], 'a track was added to the ended peer');
+        assert.equal(real.state.channels, 0); assert.equal(real.state.sdp, 0);
+      } else assert.equal(real.state.contexts, 0, 'audio capture started after End');
+      assert.ok(!/unavailable|could not|stopped/i.test(p.line()), `the ended start reported a failure: ${p.line()}`);
+      assert.equal(p.posts('/end').length, 1);                             // its server session was ended, once
+    } finally { p.done(); real.state.restore(); }
+  });
+}
+
 t.done();

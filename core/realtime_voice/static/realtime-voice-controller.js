@@ -24,10 +24,10 @@
 // Both adapters changed for the playback events and response attribution, OpenAI's again for the response tag on every
 // request, both again for how a response's playback ended, and both again for the page's own responses (each response's
 // end, and creating one for a committed item), and both for the live probes (OpenAI: a reply's end reported once, LV1; xAI:
-// an interim transcript's status, LV2): new keys so browsers fetch them (Spec 165 §4.3, §5.1, §5.3; review FR N3,
-// V R2-M1; v0.3 G3; the C2 binding pass).
+// an interim transcript's status, LV2), and xAI's for a microphone granted after the start ended (Gate 2 V S2): new keys
+// so browsers fetch them (Spec 165 §4.3, §5.1, §5.3; review FR N3, V R2-M1; v0.3 G3; the C2 binding pass).
 import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-live1";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-live1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261029-gate2";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
 // The page's own responses (Spec 165 §5.1 as amended for Robert's C2 decision, 28 Oct 2026: "tie by construction"): a page
@@ -230,6 +230,11 @@ export class RealtimeVoiceController {
     this._provider = bootstrap.provider;
     this._model = bootstrap.model;
     this._owned = this._pageResponses && bootstrap.page_responses === true;
+    // A direct start (pageResponses) ended while its adapter still waits for the microphone permission (Gate 2 V S2): once
+    // the request resolves, the adapter asks isCurrent(), stops every track it was given and connects nothing.
+    if (this._pageResponses && !this._managedBootstrap) {
+      bootstrap.isCurrent = () => generation === this._generation && !["ending", "ended"].includes(this._state);
+    }
     this._sessionId = bootstrap.voice_session_id || (this._managedBootstrap ? null : `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     this._warningMinutes = bootstrap.warning_minutes;
     this._maxMinutes = bootstrap.max_minutes;

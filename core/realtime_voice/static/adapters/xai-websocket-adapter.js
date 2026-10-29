@@ -54,6 +54,8 @@ export class XAIWebSocketAdapter {
     // bootstrap response. Browsers cannot set WebSocket headers, so the
     // token travels as a Sec-WebSocket-Protocol entry
     // ("xai-client-secret." prefix), per xAI's documented browser pattern.
+    // A host that may end a start before the microphone is granted says so (isCurrent: the direct page only; Gate 2 V S2).
+    this._isCurrent = typeof credentials.isCurrent === "function" ? credentials.isCurrent : null;
     let micError = null;
     const micPromise = this._startMicCapture().catch((err) => {
       micError = err;
@@ -116,6 +118,11 @@ export class XAIWebSocketAdapter {
       this._micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
       throw new Error(`microphone_denied: ${err}`);
+    }
+    if (this._isCurrent && !this._isCurrent()) {       // ended while the permission prompt was open: release it at once
+      for (const track of this._micStream.getTracks()) track.stop();
+      this._micStream = null;
+      throw new Error("ended_before_capture");
     }
 
     this._audioContext = new AudioContext({ sampleRate: 24000 });

@@ -426,4 +426,27 @@ for (const late of ['answers at 20 s', 'never answers (the bound aborts it)']) {
     n++;
   } finally { real.state.restore(); }
 }
+// Gate 2 verification V S2, on the Guild's page: End while the browser's microphone prompt is still open; he grants it
+// only after the handover. Through the real controller and adapters: every track stops at once, nothing connects.
+for (const provider of ['openai', 'xai']) {
+  const real = await realController({ adapters: 'real' });
+  try {
+    const r = await rig({ controller: real.RealtimeVoiceController });
+    r.node('[data-mc-voice-provider]').value = provider;
+    await r.click(); await flush();
+    real.state.answer({ provider, model: 'm', warning_minutes: 20, max_minutes: 30, voice_session_id: SID,
+      ...(provider === 'openai' ? { client_secret: 'ek_synthetic', page_responses: true } : { ephemeral_token: 'synthetic', session_config: {} }) });
+    await flush(); await flush();
+    assert.equal(real.state.asked, 1, `${provider}: the adapter did not ask for the microphone`);
+    await r.click('[data-mc-voice-end]'); await flush();
+    const hold = r.timers.filter((x) => x.ms === 15000).at(-1);
+    assert.ok(hold, `${provider}: no hold for an End while connecting`);
+    hold.fn(); await flush();
+    real.state.grant(); await flush(); await flush();
+    assert.ok(real.state.tracks.length > 0 && real.state.tracks.every((t) => t.stopped), `${provider}: a track granted after End is still live`);
+    if (provider === 'openai') assert.deepEqual(real.state.peers.map((pc) => pc.added.length), [0], 'a track was added to the ended peer');
+    else assert.equal(real.state.contexts, 0, 'audio capture started after End');
+    n++;
+  } finally { real.state.restore(); }
+}
 console.log(`${n} direct-voice host scenarios passed (path choice, provider choice, mic handover, panel close, pagehide, sum up, status line); no network or microphone.`);

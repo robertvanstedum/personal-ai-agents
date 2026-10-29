@@ -29,10 +29,10 @@ const CONTROLLER = [
   [`// Both adapters changed for the playback events and response attribution, OpenAI's again for the response tag on every
 // request, both again for how a response's playback ended, and both again for the page's own responses (each response's
 // end, and creating one for a committed item), and both for the live probes (OpenAI: a reply's end reported once, LV1; xAI:
-// an interim transcript's status, LV2): new keys so browsers fetch them (Spec 165 §4.3, §5.1, §5.3; review FR N3,
-// V R2-M1; v0.3 G3; the C2 binding pass).
+// an interim transcript's status, LV2), and xAI's for a microphone granted after the start ended (Gate 2 V S2): new keys
+// so browsers fetch them (Spec 165 §4.3, §5.1, §5.3; review FR N3, V R2-M1; v0.3 G3; the C2 binding pass).
 import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-live1";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-live1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261029-gate2";
 `,
    `import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261015-managed-end1";
 import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260725-transcript1";
@@ -121,6 +121,11 @@ const LATE_DONE = "That earlier check has finished; its answer is in the convers
    `    const bootstrap = await resp.json();
 `],
   [`    this._owned = this._pageResponses && bootstrap.page_responses === true;
+    // A direct start (pageResponses) ended while its adapter still waits for the microphone permission (Gate 2 V S2): once
+    // the request resolves, the adapter asks isCurrent(), stops every track it was given and connects nothing.
+    if (this._pageResponses && !this._managedBootstrap) {
+      bootstrap.isCurrent = () => generation === this._generation && !["ending", "ended"].includes(this._state);
+    }
 `,
    ``],
   [`    // The page's own responses (Spec 165 §5.1), first, so a host asking inputOf() from any callback below sees them current.
@@ -576,6 +581,17 @@ const source = fs.readFileSync(PATH, 'utf8');
 // The adapters: exactly the additions below, nothing else (each taken out, the file is its 93bf00c6 bytes).
 const ADAPTERS = {
   'adapters/xai-websocket-adapter.js': ['afe83aa8aae73e4b47d6eaa920f8893932cf4bf04ee225e0918db06d5db3afbf', [
+  [`    // A host that may end a start before the microphone is granted says so (isCurrent: the direct page only; Gate 2 V S2).
+    this._isCurrent = typeof credentials.isCurrent === "function" ? credentials.isCurrent : null;
+`,
+   ``],
+  [`    if (this._isCurrent && !this._isCurrent()) {       // ended while the permission prompt was open: release it at once
+      for (const track of this._micStream.getTracks()) track.stop();
+      this._micStream = null;
+      throw new Error("ended_before_capture");
+    }
+`,
+   ``],
   [`    this._responses = new Map();     // response id -> {sources, done, audio, status}: which response each chunk of audio belongs to
 `,
    ``],
