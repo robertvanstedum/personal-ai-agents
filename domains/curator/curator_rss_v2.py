@@ -11,7 +11,8 @@ CHANGES from V1:
 - Ready for AI enhancement (Haiku pre-filter → Sonnet ranking)
 
 MODES:
-- ollama: Local scoring (no per-token API charge)
+- mechanical: Deterministic keyword scoring (no model call)
+- ollama: Legacy alias for mechanical scoring
 - xai: Single-stage Grok 4.3 scoring (production default)
 - haiku: Single-stage Claude Haiku 4.5 scoring
 - sonnet: Haiku 4.5 pre-filter → Sonnet 4.5 ranking
@@ -25,7 +26,8 @@ USAGE:
   python curator_rss_v2.py [options]
 
   Options:
-    --model=ollama       Use the configured local Ollama model
+    --model=mechanical   Use deterministic keyword scoring
+    --model=ollama       Legacy alias for mechanical scoring
     --model=xai          Use xAI Grok 4.3 (production default)
     --model=grok-4.3     Explicit alias for the production xAI model
     --model=haiku        Use Anthropic Claude Haiku 4.5
@@ -34,7 +36,7 @@ USAGE:
     --dry-run            Preview without saving (output to curator_preview.html)
                          Buttons disabled, no archive/history updates
     
-    --fallback           Auto-fallback to ollama if API fails (for cron jobs)
+    --fallback           Auto-fallback to mechanical scoring if API fails (for cron jobs)
                          Without this flag, API errors stop execution
     
     --telegram           Send to Telegram after completion
@@ -84,6 +86,12 @@ from curator_config import ACTIVE_DOMAIN
 from curator_utils import get_telegram_token, send_telegram_alert
 from core.get_secret import get_secret
 from domains.curator import briefing_render as _briefing_render
+from domains.curator import scoring_rules as _scoring_rules
+from domains.curator import scoring_prompts as _scoring_prompts
+from domains.curator import scoring_responses as _scoring_responses
+from domains.curator import archive_index as _archive_index
+from domains.curator import preference_profile as _preference_profile
+from domains.curator.feed_records import normalize_feed_entries
 from domains.curator.briefing_render import format_output, format_telegram
 from utils.role import is_production as _is_production
 
@@ -224,12 +232,7 @@ X_ACCOUNT_BLACKLIST = {
 }
 
 # Keywords for scoring (legacy mechanical mode)
-KEYWORDS = [
-    "gold", "sanctions", "debt", "fiscal", "geopolitical", "trade war",
-    "central bank", "inflation", "russia", "ukraine", "china", "treasury",
-    "fed", "powell", "rates", "recession", "currency", "dollar", "euro",
-    "oil", "energy", "conflict", "policy", "tariff", "deficit", "bonds"
-]
+from domains.curator.scoring_rules import KEYWORDS
 
 # Deterministic category/boost/radar rules share one maintained module.
 # Existing names remain available to CLI callers and the scoring pipeline.
@@ -243,23 +246,7 @@ from domains.curator.selection_rules import (
 # These publish infrequently — a 90-day article may still be highly relevant.
 # Any source domain NOT in this list is treated as FAST (news, X posts, blogs),
 # where content older than 30 days is essentially dead.
-SLOW_SOURCE_DOMAINS = {
-    "crisisgroup.org",
-    "chathamhouse.org",
-    "warontherocks.com",
-    "foreignaffairs.com",
-    "cepr.org",
-    "arxiv.org",
-    "stlouisfed.org",        # Fed On The Economy
-    "federalreserve.gov",
-    "treasurydirect.gov",    # Treasury MSPD
-    "newyorkfed.org",        # NY Fed Liberty Street
-    "bis.org",
-    "adamtooze.substack.com",
-    "geopoliticalfutures.com",
-    "justsecurity.org",
-    "propublica.org",        # Investigative — long relevance window
-}
+from domains.curator.scoring_rules import SLOW_SOURCE_DOMAINS
 
 def fetch_feed(name: str, url: str) -> List[Dict]:
     """Fetch and parse a single RSS feed"""
@@ -270,32 +257,7 @@ def fetch_feed(name: str, url: str) -> List[Dict]:
         response.raise_for_status()
         
         feed = feedparser.parse(response.content)
-        entries = []
-        
-        for entry in feed.entries[:50]:
-            pub_date = None
-            if hasattr(entry, 'published_parsed') and entry.published_parsed:
-                pub_date = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
-            elif hasattr(entry, 'updated_parsed') and entry.updated_parsed:
-                pub_date = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
-            
-            # Generate stable hash ID from URL
-            url = entry.get("link", "")
-            hash_id = hashlib.md5(url.encode('utf-8')).hexdigest()[:5] if url else None
-            
-            entries.append({
-                "hash_id": hash_id,  # Stable ID for history tracking
-                "source": name,
-                "title": entry.get("title", "No title"),
-                "link": entry.get("link", ""),
-                "summary": entry.get("summary", ""),
-                "published": pub_date,
-                "raw_entry": entry
-            })
-
-        # Cap high-volume feeds to prevent flooding the candidate pool
-        if name == "arXiv q-fin":
-            entries = entries[:15]
+        entries = normalize_feed_entries(name, feed.entries)
 
         print(f"   ✅ {len(entries)} entries from {name}")
         return entries
@@ -306,93 +268,18 @@ def fetch_feed(name: str, url: str) -> List[Dict]:
 
 
 def _compute_age_multiplier(entry: Dict) -> float:
-    """
-    Two-tier age decay multiplier based on source type.
-
-    SLOW sources (think tanks, academic, institutional) decay gently —
-    a 90-day Crisis Group report is still valuable if the topic resurfaces.
-
-    FAST sources (news, X posts, blogs) decay sharply — content older
-    than 30 days is near-dead in the briefing candidate pool.
-
-    Returns a multiplier in (0, 1.0]. Returns 1.0 when published date
-    is unknown (X bookmarks with no date get no age penalty).
-    """
-    pub = entry.get('published')
-    if pub is None:
-        return 1.0  # No date — no penalty (X bookmarks, some institutional feeds)
-
-    days_old = (datetime.now(timezone.utc) - pub).total_seconds() / 86400
-    link = entry.get('link', '').lower()
-    is_slow = any(domain in link for domain in SLOW_SOURCE_DOMAINS)
-
-    if is_slow:
-        if days_old <= 30:  return 1.0
-        if days_old <= 60:  return 0.85
-        if days_old <= 90:  return 0.65
-        return 0.40          # 90+ days — significant penalty, still eligible
-    else:
-        # Fast content: news, X posts, blogs, finance commentary
-        if days_old <= 3:   return 1.0
-        if days_old <= 7:   return 0.85
-        if days_old <= 14:  return 0.65
-        if days_old <= 30:  return 0.40
-        return 0.05          # 30+ days — essentially dead for fast content
+    """Compatibility adapter supplying the runtime clock and source policy."""
+    return _scoring_rules.compute_age_multiplier(
+        entry, now=datetime.now(timezone.utc), slow_domains=SLOW_SOURCE_DOMAINS,
+    )
 
 
 def score_entry_mechanical(entry: Dict) -> Dict:
-    """
-    Score an entry using mechanical keyword matching (V2: category-aware)
-    
-    Returns:
-        {
-            'score': float (0-10),       # Normalized score
-            'category': str,              # Assigned category
-            'raw_score': float,           # Original score (for debugging)
-            'method': 'mechanical'        # Scoring method used
-        }
-    
-    KEY DECISION: Return a dict instead of just a float.
-    This consistent structure works across mechanical/ai/hybrid modes.
-    """
-    raw_score = 0.0
-    
-    # Recency score (decay over 7 days)
-    if entry["published"]:
-        age_hours = (datetime.now(timezone.utc) - entry["published"]).total_seconds() / 3600
-        recency_score = max(0, 100 - (age_hours / 24) * 10)  # 10 points per day decay
-    else:
-        recency_score = 50  # treat unknown date as ~5 days old, neutral
-    raw_score += recency_score
-    
-    # Keyword matching score
-    text = f"{entry['title']} {entry['summary']}".lower()
-    keyword_matches = sum(1 for kw in KEYWORDS if kw in text)
-    raw_score += keyword_matches * 5
-    
-    # Source priority weights
-    source_weights = {
-        "Geopolitical Futures": 1.4,
-        "The Big Picture": 1.2,
-        "ZeroHedge": 1.1,
-        "Fed On The Economy": 1.2,
-        "Treasury MSPD": 1.3,
-    }
-    weight = source_weights.get(entry["source"], 1.0)
-    raw_score *= weight
-    
-    # Normalize to 0-10
-    normalized = normalize_score(raw_score)
-    
-    # Assign category
-    category = assign_category(entry)
-    
-    return {
-        'score': normalized,
-        'category': category,
-        'raw_score': raw_score,
-        'method': 'mechanical'
-    }
+    """Compatibility adapter retaining the existing category/normalizer hooks."""
+    return _scoring_rules.score_entry_mechanical(
+        entry, now=datetime.now(timezone.utc), keywords=KEYWORDS,
+        normalizer=normalize_score, categorizer=assign_category,
+    )
 
 def get_anthropic_api_key() -> str:
     """
@@ -507,43 +394,7 @@ To test with mechanical mode instead:
     client = Anthropic(api_key=api_key)
 
     # Build prompt with all articles
-    prompt = """You are a geopolitics & finance curator. For each article below, assign:
-1. Category (ONE of: geo_major, geo_other, monetary, fiscal, technology, other)
-2. Score (0-10): relevance for a geopolitics/finance professional
-
-CATEGORIES:
-- geo_major: US, China, Russia, Europe, Japan, Korea (deployed/operational context)
-- geo_other: Middle East, Africa, Latin America, South/Southeast Asia
-- monetary: Gold, Bitcoin, currencies, commodities, exchange rates
-- fiscal: Government debt, spending, budgets, deficits
-- technology: R&D, manufacturing, dual-use DEVELOPMENT (not yet deployed)
-- other: Everything else
-
-SCORE GUIDANCE:
-9-10: Critical developments, major policy shifts, must-read analysis
-7-8: Important trends, significant geopolitical/financial analysis
-5-6: Relevant but not urgent, decent background
-3-4: Tangential interest, minor relevance
-0-2: Skip (noise, spam, off-topic, pure entertainment)
-""" + user_profile + """
-KEY DISTINCTION (technology vs geopolitics):
-- If discussing DEPLOYED systems, active operations, current conflicts → geo category
-- If discussing R&D, manufacturing capacity, future capabilities → technology
-- Example: "Drones used in Ukraine" = geo_major, "Anduril developing new drones" = technology
-
-OUTPUT FORMAT (one line per article, no explanation):
-<article_index>|<category>|<score>
-
-ARTICLES:
-"""
-    
-    for i, entry in enumerate(entries):
-        # Include title + first 200 chars of summary for context
-        summary = entry.get('summary', '')[:200].replace('\n', ' ')
-        source = entry.get('source', 'Unknown')
-        prompt += f"\n{i}. [{source}] {entry['title']}\n   {summary}...\n"
-    
-    prompt += "\nOUTPUT (one line per article):\n"
+    prompt = _scoring_prompts.haiku_prompt(entries, user_profile)
     
     print(f"📡 Calling Haiku to score {len(entries)} articles...")
     
@@ -557,23 +408,8 @@ ARTICLES:
         output = response.content[0].text.strip()
         
         # Parse output: "0|geo_major|8"
-        scores = {}
-        for line in output.split('\n'):
-            line = line.strip()
-            if not line or '|' not in line:
-                continue
-            
-            parts = line.split('|')
-            if len(parts) != 3:
-                continue
-            
-            try:
-                idx = int(parts[0])
-                category = parts[1].strip()
-                score = float(parts[2])
-                scores[idx] = {'category': category, 'score': score, 'method': 'haiku'}
-            except (ValueError, IndexError):
-                continue
+        scores = _scoring_responses.category_scores(output, len(entries))
+        scores = {index: dict(score, method="haiku") for index, score in scores.items()}
         
         print(f"   ✅ Haiku scored {len(scores)}/{len(entries)} articles")
         
@@ -703,38 +539,7 @@ def score_entries_haiku_prefilter(entries: List[Dict], top_n: int = 50, fallback
     client = Anthropic(api_key=api_key)
 
     # Build simple relevance filter prompt
-    prompt = """You are a geopolitics & finance curator doing a QUICK RELEVANCE FILTER.
-
-For each article below, give:
-1. Category (ONE of: geo_major, geo_other, monetary, fiscal, technology, other)
-2. Score (0-10): Simple relevance check
-
-CATEGORIES:
-- geo_major: US, China, Russia, Europe, Japan, Korea
-- geo_other: Middle East, Africa, Latin America, South/Southeast Asia
-- monetary: Gold, Bitcoin, currencies, commodities
-- fiscal: Government debt/spending (US, Japan, Europe)
-- technology: AI in physical world (robotics, drones, warfare, autonomous systems)
-- other: Everything else
-
-SCORING (KEEP IT SIMPLE):
-8-10: Clearly relevant geopolitics/finance
-5-7: Probably relevant, needs closer look
-3-4: Marginal relevance
-0-2: Off-topic noise (entertainment, sports, local news)
-""" + user_profile + """
-OUTPUT FORMAT (one line per article):
-<index>|<category>|<score>
-
-ARTICLES:
-"""
-    
-    for i, entry in enumerate(entries):
-        summary = entry.get('summary', '')[:200].replace('\n', ' ')
-        source = entry.get('source', 'Unknown')
-        prompt += f"\n{i}. [{source}] {entry['title']}\n   {summary}...\n"
-    
-    prompt += "\nOUTPUT:\n"
+    prompt = _scoring_prompts.prefilter_prompt(entries, user_profile)
     
     print(f"📡 Stage 1: Haiku pre-filter on {len(entries)} articles...")
     
@@ -748,23 +553,7 @@ ARTICLES:
         output = response.content[0].text.strip()
         
         # Parse output
-        scores = {}
-        for line in output.split('\n'):
-            line = line.strip()
-            if not line or '|' not in line:
-                continue
-            
-            parts = line.split('|')
-            if len(parts) != 3:
-                continue
-            
-            try:
-                idx = int(parts[0])
-                category = parts[1].strip()
-                score = float(parts[2])
-                scores[idx] = {'category': category, 'score': score}
-            except (ValueError, IndexError):
-                continue
+        scores = _scoring_responses.category_scores(output, len(entries))
         
         # Assign scores to entries
         for i, entry in enumerate(entries):
@@ -821,48 +610,7 @@ def score_entries_sonnet_ranking(entries: List[Dict], fallback_on_error: bool = 
     client = Anthropic(api_key=api_key)
     
     # Build quality assessment prompt
-    prompt = """You are an expert geopolitics & finance curator. These articles passed initial relevance filter. Now rank them by QUALITY and CHALLENGE-FACTOR.
-
-For each article, give a SINGLE score (0-10) based on:
-
-**QUALITY SIGNALS (50%):**
-- Original analysis vs. news aggregation
-- Data-driven insights
-- Expert credibility
-- Depth of understanding
-
-**CHALLENGE-FACTOR (50%):**
-- Challenges conventional wisdom
-- Offers contrarian perspective
-- Presents underappreciated risks/opportunities
-- Connects non-obvious dots
-
-**SCORING GUIDE:**
-9-10: Must-read. Deep analysis + challenges assumptions. Changes how you think.
-7-8: Strong quality. Either excellent analysis OR interesting challenge perspective.
-5-6: Solid but standard. Good information, no surprises.
-3-4: Mediocre. Superficial or consensus rehash.
-0-2: Weak. Skip.
-
-**EXAMPLES:**
-- "Fed raises rates 0.25%" (standard news) → 4
-- "Why Fed's rate policy may backfire given fiscal dominance" (challenge) → 8
-- "China economy slowing" (consensus) → 5
-- "China's regional bank crisis: hidden stress test for Xi's power" (contrarian depth) → 9
-""" + user_profile + """
-OUTPUT FORMAT (one line per article):
-<index>|<score>
-
-ARTICLES:
-"""
-    
-    for i, entry in enumerate(entries):
-        summary = entry.get('summary', '')[:300].replace('\n', ' ')
-        source = entry.get('source', 'Unknown')
-        category = entry.get('category', 'other')
-        prompt += f"\n{i}. [{source}] [{category}] {entry['title']}\n   {summary}...\n"
-    
-    prompt += "\nOUTPUT:\n"
+    prompt = _scoring_prompts.sonnet_prompt(entries, user_profile)
     
     print(f"📡 Stage 2: Sonnet ranking on {len(entries)} candidates...")
     
@@ -876,22 +624,7 @@ ARTICLES:
         output = response.content[0].text.strip()
         
         # Parse output
-        scores = {}
-        for line in output.split('\n'):
-            line = line.strip()
-            if not line or '|' not in line:
-                continue
-            
-            parts = line.split('|')
-            if len(parts) != 2:
-                continue
-            
-            try:
-                idx = int(parts[0])
-                score = float(parts[1])
-                scores[idx] = score
-            except (ValueError, IndexError):
-                continue
+        scores = _scoring_responses.ranking_scores(output, len(entries))
         
         # Update scores
         for i, entry in enumerate(entries):
@@ -965,50 +698,7 @@ To test with mechanical mode instead:
     client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
 
     # Build prompt with Grok's optimized instructions
-    override_rules = """You are a sharp, personalized intelligence analyst scoring articles for relevance to the user's interests: finance, geopolitics, risk signals, uncertainty, contrarian views, high-signal sources, commodity/supply-chain dynamics, and intersections that reveal fragility or tail risks.
-
-GROUND TRUTH RULES — PRIORITIZE THESE OVER ANY INDEPENDENT JUDGMENT:
-
-- The USER PROFILE below is absolute ground truth. Source preferences, boosts, and avoids OVERRIDE your own content evaluation.
-- If a source or content type appears in the user's boost list or has positive history, score it UP significantly — even if it seems generic, broad, aggregate, or tangential on surface.
-- The user deliberately reinforces these; treat them as trusted/high-value.
-- Do NOT downrank or dismiss based on "generic form", "aggregate style", or categorical judgment if profile signals support relevance.
-- Explicit domain rule: Commodity/supply-chain disruptions, dependencies (e.g., Brazil soy → China), environmental intersections (e.g., deforestation links), or trade rerouting = high-priority geopolitical/finance risk signals. Weight these UP when they align with profile topics.
-- Use your reasoning to uncover nuanced alignments, hidden implications, contrarian angles, or overlooked risks/opportunities WITHIN the profile's priorities — not to override the profile.
-- For borderline cases, err toward higher relevance if profile or domain rules apply.
-- Score on the usual scale, applying overrides.
-
-USER PROFILE (ground truth):
-""" + user_profile + """
-
-CATEGORIES:
-- geo_major: US, China, Russia, Europe, Japan, Korea (deployed/operational context)
-- geo_other: Middle East, Africa, Latin America, South/Southeast Asia  
-- monetary: Gold, Bitcoin, currencies, commodities, exchange rates
-- fiscal: Government debt, spending, budgets, deficits
-- technology: R&D, manufacturing, dual-use DEVELOPMENT (not yet deployed)
-- other: Everything else
-
-SCORE GUIDANCE:
-9-10: Critical developments, major policy shifts, must-read analysis
-7-8: Important trends, significant geopolitical/financial analysis
-5-6: Relevant but not urgent, decent background
-3-4: Tangential interest, minor relevance
-0-2: Skip (noise, spam, off-topic, pure entertainment)
-
-OUTPUT FORMAT (one line per article, no explanation):
-<article_index>|<category>|<score>
-
-ARTICLES:
-"""
-    
-    prompt = override_rules
-    for i, entry in enumerate(entries):
-        summary = entry.get('summary', '')[:200].replace('\n', ' ')
-        source = entry.get('source', 'Unknown')
-        prompt += f"\n{i}. [{source}] {entry['title']}\n   {summary}...\n"
-    
-    prompt += "\nOUTPUT (one line per article):\n"
+    prompt = _scoring_prompts.xai_prompt(entries, user_profile)
     
     print(f"📡 Calling xAI {model} to score {len(entries)} articles...")
     
@@ -1047,45 +737,13 @@ To use mechanical mode instead:
             raise
     
     # Parse response
-    results = []
-    lines = content.strip().split('\n')
-    
-    for line in lines:
-        line = line.strip()
-        if not line or '|' not in line:
-            continue
-            
-        try:
-            parts = line.split('|')
-            idx = int(parts[0].strip())
-            category = parts[1].strip().lower()
-            score = float(parts[2].strip())
-            
-            results.append({
-                'score': score,
-                'category': category,
-                'method': 'xai',
-                'raw_score': score
-            })
-        except (ValueError, IndexError) as e:
-            print(f"⚠️  Skipping malformed line: {line}")
-            results.append({
-                'score': 5.0,
-                'category': 'other',
-                'method': 'xai',
-                'raw_score': 5.0
-            })
-    
-    # Ensure we have results for all entries
-    while len(results) < len(entries):
-        results.append({
-            'score': 5.0,
-            'category': 'other',
-            'method': 'xai',
-            'raw_score': 5.0
-        })
-    
-    return results[:len(entries)]
+    scores = _scoring_responses.category_scores(content, len(entries), lowercase=True)
+    # Preserve xAI's existing neutral fallback, attached to the missing index.
+    return [
+        dict(scores.get(index, {"category": "other", "score": 5.0}),
+             method="xai", raw_score=scores.get(index, {"score": 5.0})["score"])
+        for index in range(len(entries))
+    ]
 
 def load_active_interests():
     """
@@ -1166,126 +824,9 @@ def load_user_profile(min_weight: int = 2) -> str:
     except Exception:
         return ""
 
-    lp = prefs.get('learned_patterns', {})
-    sample_size = lp.get('sample_size', 0)
-
-    # Decay gate: raise the signal threshold as data gets stale.
-    # Old feedback shouldn't lock in forever — weak signals fade first.
-    # Formula: > 30 days → min_weight 3, > 60 days → min_weight 4
-    last_updated_str = lp.get('last_updated', '')
-    if last_updated_str:
-        try:
-            from datetime import datetime, timezone
-            last_updated = datetime.fromisoformat(last_updated_str)
-            if last_updated.tzinfo is None:
-                last_updated = last_updated.replace(tzinfo=timezone.utc)
-            days_stale = (datetime.now(timezone.utc) - last_updated).days
-            if days_stale > 60:
-                min_weight = max(min_weight, 4)
-                print(f"   ⏳ Feedback is {days_stale}d old — decay gate active (min_weight={min_weight})")
-            elif days_stale > 30:
-                min_weight = max(min_weight, 3)
-                print(f"   ⏳ Feedback is {days_stale}d old — decay gate active (min_weight={min_weight})")
-        except Exception:
-            pass  # Bad timestamp — continue with default min_weight
-
-
-    if sample_size < 3:
-        return ""  # Not enough data yet
-
-    sections = []
-
-    # ── Themes (most reliable signal from Claude metadata extraction) ──
-    themes = {k: v for k, v in lp.get('preferred_themes', {}).items() if abs(v) >= min_weight}
-    if themes:
-        pos = sorted([(k, v) for k, v in themes.items() if v > 0], key=lambda x: -x[1])
-        neg = sorted([(k, v) for k, v in themes.items() if v < 0], key=lambda x: x[1])
-        if pos:
-            sections.append("Strong interest in themes: " + ", ".join(k for k, _ in pos[:5]))
-        if neg:
-            sections.append("Low interest in themes: " + ", ".join(k for k, _ in neg[:3]))
-
-    # ── Sources ──
-    sources = {k: v for k, v in lp.get('preferred_sources', {}).items() if abs(v) >= min_weight}
-    if sources:
-        pos = sorted([(k, v) for k, v in sources.items() if v > 0], key=lambda x: -x[1])
-        neg = sorted([(k, v) for k, v in sources.items() if v < 0], key=lambda x: x[1])
-        if pos:
-            sections.append("Preferred sources: " + ", ".join(k for k, _ in pos[:5]))
-        if neg:
-            sections.append("Penalize sources: " + ", ".join(k for k, _ in neg[:3]))
-
-    # ── Domain signals (inferred from X bookmark link ecosystems — Phase 3C) ──
-    # Reads only signals for ACTIVE_DOMAIN — keeps briefing focused on one topic cluster.
-    # domain_signals structure: { "Finance and Geopolitics": { "ft.com": 14, ... }, ... }
-    all_domain_signals = lp.get('domain_signals', {})
-    active_signals     = all_domain_signals.get(ACTIVE_DOMAIN, {})
-    top_domains = [(d, s) for d, s in sorted(active_signals.items(), key=lambda x: -x[1]) if s >= 2][:8]
-    if top_domains:
-        domains_str = ', '.join(f"{d}(+{s})" for d, s in top_domains)
-        sections.append(f"Content domains from trusted X curators [{ACTIVE_DOMAIN}]: {domains_str}")
-
-    # ── Content domains (from feedback likes/saves on briefing articles — Phase 3C) ──
-    # Format: { "ft.com": {"like": 2, "save": 3, "dislike": 0}, ... }
-    # Separate from domain_signals (which comes from X bookmark ecosystems).
-    cd = lp.get('content_domains', {})
-    if cd:
-        def cd_score(d): return d.get('like', 0) * 2 + d.get('save', 0) - d.get('dislike', 0) * 2
-        pos_cd = sorted([(k, cd_score(v)) for k, v in cd.items() if cd_score(v) > 0], key=lambda x: -x[1])[:8]
-        neg_cd = sorted([(k, cd_score(v)) for k, v in cd.items() if cd_score(v) < 0], key=lambda x: x[1])[:3]
-        if pos_cd:
-            sections.append("Preferred content domains: " + ", ".join(
-                f"{k}(+{s})" for k, s in pos_cd
-            ))
-        if neg_cd:
-            sections.append("Penalize content domains: " + ", ".join(k for k, _ in neg_cd))
-
-    # ── Source types (academic_paper, news_article, substack, etc. — Phase 3C) ──
-    st = lp.get('source_types', {})
-    if st:
-        def st_score(d): return d.get('like', 0) * 2 + d.get('save', 0) - d.get('dislike', 0) * 2
-        pos_st = sorted([(k, st_score(v)) for k, v in st.items() if st_score(v) > 0], key=lambda x: -x[1])[:5]
-        if pos_st:
-            sections.append("Preferred source types: " + ", ".join(
-                f"{k}(+{s})" for k, s in pos_st
-            ))
-
-    # ── Content topics (from Haiku text analysis of saved tweets — Phase 3C) ──
-    # Lower threshold than min_weight — topics start at save=1, build over time.
-    ct = lp.get('content_topics', {})
-    if ct:
-        def ct_score(d): return d.get('like', 0) * 2 + d.get('save', 0) - d.get('dislike', 0) * 2
-        top_ct = sorted([(k, ct_score(v)) for k, v in ct.items() if ct_score(v) >= 2], key=lambda x: -x[1])[:10]
-        if top_ct:
-            sections.append("Content topics from saved posts: " + ", ".join(
-                f"{k}(+{s})" for k, s in top_ct
-            ))
-
-    # ── Content types ('descriptive' excluded — known co-tag artifact, not a standalone signal) ──
-    CO_TAG_EXCLUDE = {'descriptive'}
-    content = {k: v for k, v in lp.get('preferred_content_types', {}).items()
-               if abs(v) >= min_weight and k not in CO_TAG_EXCLUDE}
-    if content:
-        pos = sorted([(k, v) for k, v in content.items() if v > 0], key=lambda x: -x[1])
-        neg = sorted([(k, v) for k, v in content.items() if v < 0], key=lambda x: x[1])
-        if pos:
-            sections.append("Preferred content style: " + ", ".join(k for k, _ in pos[:4]))
-        if neg:
-            sections.append("Penalize content style: " + ", ".join(k for k, _ in neg[:3]))
-
-    # ── Avoid patterns (extracted from disliked articles) ──
-    avoid = sorted(lp.get('avoid_patterns', {}).items(), key=lambda x: -x[1])
-    top_avoid = [k for k, v in avoid[:5] if v >= 1]
-    if top_avoid:
-        sections.append("Avoid signals: " + ", ".join(top_avoid))
-
-    if not sections:
-        return ""
-
-    profile = f"\nPERSONALIZATION (from {sample_size} user interactions — adjust base score by +1 to +2 for strong matches, -1 to -2 for avoids):\n"
-    profile += "\n".join(f"- {s}" for s in sections)
-    profile += "\n"
-    return profile
+    return _preference_profile.format_user_profile(
+        prefs, active_domain=ACTIVE_DOMAIN, now=datetime.now(timezone.utc), min_weight=min_weight,
+    )
 
 
 def load_priorities():
@@ -1887,316 +1428,8 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
         xai_ranking_model=XAI_RANKING_MODEL,
     )
 def generate_index_page(archive_dir: str):
-    """Generate unified archive index page with timestamp and model info"""
-    import os
-    import re
-    from datetime import datetime
-    
-    archive_files = []
-    if os.path.exists(archive_dir):
-        for filename in os.listdir(archive_dir):
-            if filename.startswith("curator_") and filename.endswith(".html"):
-                timestamp_str = filename.replace("curator_", "").replace(".html", "")
-                
-                # Try new format first: YYYY-MM-DD-HHMM
-                try:
-                    datetime_obj = datetime.strptime(timestamp_str, "%Y-%m-%d-%H%M")
-                except ValueError:
-                    # Fallback to old format: YYYY-MM-DD
-                    try:
-                        datetime_obj = datetime.strptime(timestamp_str, "%Y-%m-%d")
-                    except ValueError:
-                        continue
-                
-                # Extract metadata from HTML file
-                filepath = os.path.join(archive_dir, filename)
-                model = "unknown"
-                article_count = "?"
-                try:
-                    with open(filepath, 'r') as f:
-                        content = f.read(2000)  # Only read first 2KB for metadata
-                        model_match = re.search(r'<meta name="curator-model" content="([^"]+)"', content)
-                        articles_match = re.search(r'<meta name="curator-articles" content="([^"]+)"', content)
-                        if model_match:
-                            model = model_match.group(1)
-                        if articles_match:
-                            article_count = articles_match.group(1)
-                except Exception:
-                    pass
-                
-                archive_files.append((timestamp_str, filename, datetime_obj, model, article_count))
-    
-    archive_files.sort(key=lambda x: x[2], reverse=True)
-    
-    html = """<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-    <title>Curator Archive</title>
-    <style>
-        :root {
-            --bg: #f5f0e8;
-            --bg-texture: #ede8df;
-            --surface: #faf7f2;
-            --surface2: #f0ebe0;
-            --border: #ddd6c8;
-            --border2: #c8bfaf;
-            --text: #2a2418;
-            --text-muted: #6b5f4e;
-            --text-dim: #9e9080;
-            --accent: #8b5e2a;
-            --accent-dim: rgba(139,94,42,0.08);
-            --accent-glow: rgba(139,94,42,0.18);
-            --shadow: rgba(42,36,24,0.08);
-        }
-
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            font-family: 'Source Sans 3', sans-serif;
-            background: var(--bg);
-            background-image:
-                radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
-                radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
-            color: var(--text);
-            min-height: 100vh;
-            font-size: 14px;
-            line-height: 1.5;
-        }
-
-        /* ── Header ── */
-        header {
-            border-bottom: 1px solid var(--border);
-            padding: 0 32px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            height: 60px;
-            position: sticky;
-            top: 0;
-            background: rgba(245,240,232,0.94);
-            backdrop-filter: blur(12px);
-            z-index: 100;
-            box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
-        }
-
-        .header-left {
-            display: flex;
-            align-items: baseline;
-            gap: 16px;
-        }
-
-        .logo {
-            font-family: 'Playfair Display', serif;
-            font-size: 20px;
-            color: var(--accent);
-            letter-spacing: -0.02em;
-            text-decoration: none;
-        }
-
-        .logo-sub {
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
-            color: var(--text-dim);
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-        }
-
-        .header-nav {
-            display: flex;
-            gap: 4px;
-        }
-
-        .nav-link {
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
-            color: var(--text-muted);
-            text-decoration: none;
-            padding: 6px 14px;
-            border-radius: 6px;
-            letter-spacing: 0.05em;
-            transition: all 0.15s;
-            border: 1px solid transparent;
-        }
-
-        .nav-link:hover {
-            color: var(--text);
-            background: var(--surface2);
-        }
-
-        .nav-link.active {
-            color: var(--accent);
-            background: var(--accent-dim);
-            border-color: rgba(139,94,42,0.2);
-        }
-
-        /* ── Main ── */
-        main {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 32px;
-        }
-
-        .archive-table {
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 12px var(--shadow);
-            background: var(--surface);
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        thead {
-            background: var(--bg-texture);
-            border-bottom: 2px solid var(--border);
-        }
-
-        th {
-            padding: 11px 16px;
-            text-align: left;
-            font-family: 'DM Mono', monospace;
-            font-size: 10px;
-            font-weight: 500;
-            color: var(--text-dim);
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-        }
-
-        tbody tr {
-            border-bottom: 1px solid var(--border);
-            transition: background 0.1s;
-            background: var(--surface);
-        }
-
-        tbody tr:last-child {
-            border-bottom: none;
-        }
-
-        tbody tr:hover {
-            background: rgba(139,94,42,0.04);
-        }
-
-        td {
-            padding: 14px 16px;
-            vertical-align: middle;
-        }
-
-        .date-link {
-            font-weight: 600;
-            color: var(--accent);
-            text-decoration: none;
-            font-size: 13px;
-        }
-
-        .date-link:hover {
-            text-decoration: underline;
-        }
-
-        .nav-btn {
-            color: var(--accent);
-            text-decoration: none;
-            font-size: 13px;
-        }
-
-        .nav-btn:hover {
-            text-decoration: underline;
-        }
-    </style>
-</head>
-<body>
-<header>
-  <div class="header-left">
-    <a href="/" class="logo">📚 Curator</a>
-    <span class="logo-sub">Archive</span>
-  </div>
-  <nav class="header-nav">
-    <a href="/" class="nav-link">Daily</a>
-    <a href="curator_library.html" class="nav-link">Library</a>
-    <a href="interests/2026/deep-dives/index.html" class="nav-link">Deep Dives</a>
-  </nav>
-</header>
-
-<main>
-    <div class="archive-table">
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Time</th>
-                    <th>Model</th>
-                    <th>Articles</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-"""
-    
-    if archive_files:
-        for timestamp_str, filename, datetime_obj, model, article_count in archive_files:
-            formatted_date = datetime_obj.strftime("%b %d, %Y")
-            
-            # Check if this is a legacy entry (old date-only format, no timestamp)
-            is_legacy = '-' not in timestamp_str or timestamp_str.count('-') == 2
-            
-            if is_legacy:
-                # Legacy entry: show "-" for time and articles
-                formatted_time = "-"
-                display_article_count = "-"
-                # Map old model names or show "legacy" for unknown
-                if model == "unknown":
-                    model_display = "legacy"
-                elif model == "xai":
-                    model_display = "grok-beta"  # Old xai entries
-                elif model == "mechanical":
-                    model_display = "mechanical (keyword)"  # Deterministic keyword scoring
-                else:
-                    model_display = "legacy" if model == "?" else model
-            else:
-                # New entry: show full metadata
-                formatted_time = datetime_obj.strftime("%I:%M %p")
-                display_article_count = article_count
-                # Describe the scorer without inventing a provider/model
-                if model == "mechanical":
-                    model_display = "mechanical (keyword)"
-                elif model == "unknown":
-                    model_display = "legacy"
-                else:
-                    model_display = model  # Use as-is from metadata (already formatted)
-            
-            html += f"""                <tr>
-                    <td><a href="{archive_dir}/{filename}" class="date-link">{formatted_date}</a></td>
-                    <td style="text-align: center;">{formatted_time}</td>
-                    <td><span style="font-family: monospace; font-size: 0.9em;">{model_display}</span></td>
-                    <td style="text-align: center;">{display_article_count}</td>
-                    <td><a href="{archive_dir}/{filename}" class="nav-btn">View →</a></td>
-                </tr>
-"""
-    else:
-        html += """                <tr>
-                    <td colspan="5" style="text-align: center; color: #999; padding: 40px 0;">
-                        No archived briefings yet
-                    </td>
-                </tr>
-"""
-    
-    html += """            </tbody>
-        </table>
-    </div>
-</main>
-</body>
-</html>
-"""
-    
-    with open("curator_index.html", "w") as f:
-        f.write(html)
-    print(f"📑 Index page updated: curator_index.html")
+    """Compatibility entrypoint for archive-index filesystem generation."""
+    return _archive_index.generate_index_page(archive_dir)
 def main():
     """Run the curator and display results"""
     import sys
