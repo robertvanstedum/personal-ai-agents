@@ -208,3 +208,35 @@ def test_the_controller_refuses_a_server_that_is_not_the_throwaway_one(tmp_path)
     (tmp_path / "ev2" / "x").write_text("an earlier run")
     with pytest.raises(SystemExit, match="not empty"):
         controller.Plan(tmp_path / "ev2", server_dsn="x")
+
+
+def test_sf6_the_end_of_run_cleanup_signals_only_a_group_whose_recorded_identity_it_verifies(tmp_path):
+    """S1-H review SF6: the controller's clean-up once killed any group whose leader's command line held "fakework".
+    On the shared Mac a stage file's pid can lead someone else's process by then (another agent's pytest of
+    test_fakework.py, say). Now it verifies as the runtime does: a stage still started, its group alive, and its
+    recorded identity (group and start time) the one ps shows now. Every process here is this test's own."""
+    import signal
+    from types import SimpleNamespace
+    from harness_acceptance import controller
+    from core.mc_delegation_runner.runner import _identity
+
+    def group():                                    # a group whose leader's command line names fakework
+        return subprocess.Popen(["/bin/sh", "-c", "sleep 60; : fakework"], start_new_session=True)
+    reused, ours, ended = group(), group(), group()
+    try:
+        stages = {"reused": {"stage": "started", "pgid": reused.pid, "identity": "1 Thu Jan  1 00:00:00 1970"},
+                  "ours": {"stage": "started", "pgid": ours.pid, "identity": _identity(ours.pid)},
+                  "ended": {"stage": "stopped", "pgid": ended.pid, "identity": _identity(ended.pid)}}
+        for name, doc in stages.items():
+            (tmp_path / f"{name}-g1.stage.json").write_text(json.dumps(doc))
+        said = []
+        run = SimpleNamespace(artifacts=tmp_path, log=lambda kind, what, **f: said.append(f["pgid"]))
+        controller.Run._reap_orphans(run)
+        assert ours.wait(timeout=10) == -signal.SIGKILL           # verified: stopped
+        assert reused.poll() is None and ended.poll() is None     # never signalled
+        assert said == [ours.pid]
+    finally:
+        for p in (reused, ours, ended):
+            if p.poll() is None:
+                os.killpg(p.pid, signal.SIGKILL)
+                p.wait()

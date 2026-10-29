@@ -80,6 +80,32 @@ def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
+def reap_orphans(artifacts, said=lambda pgid: None) -> list:
+    """Any child a SIGKILLed runtime left running, stopped at the end of a run, verified as the runtime verifies one
+    (S1-H review SF6): only a stage still ``started``, whose process group is alive and whose recorded identity (group
+    and start time, ``runner._identity``) is the one ``ps`` shows now. A pid the shared Mac has reused since (another
+    agent's pytest, say), an ended stage, or a group whose identity cannot be read is never signalled. -> [pgid]."""
+    from core.mc_delegation_runner.runner import _group_alive, _identity
+    stopped = []
+    for st in sorted(Path(artifacts).glob("*.stage.json")):
+        try:
+            stage = json.loads(st.read_text())
+        except (OSError, ValueError):
+            continue
+        pgid, identity = stage.get("pgid"), stage.get("identity")
+        if stage.get("stage") != "started" or type(pgid) is not int or pgid <= 1 or not identity:
+            continue
+        if not _group_alive(pgid) or _identity(pgid) != identity:
+            continue
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+        except OSError:
+            continue
+        stopped.append(pgid)
+        said(pgid)
+    return stopped
+
+
 class Run:
     def __init__(self, evidence: Path, *, server_dsn, container=None, only=None, acceptance=None, ref="HEAD",
                  python=sys.executable, seed=None, resume=False):
@@ -542,17 +568,7 @@ class Run:
             self.named("LCH-6.end", C.lch6, records, files, values, need=1)
 
     def _reap_orphans(self):
-        """Any fakework left by a SIGKILLed runtime: verified by its command line before it is signalled."""
-        for st in self.artifacts.glob("*.stage.json"):
-            try:
-                pgid = json.loads(st.read_text()).get("pgid")
-                cmd = subprocess.run(["ps", "-o", "command=", "-p", str(pgid)], capture_output=True,
-                                     text=True).stdout
-                if pgid and ("fakework" in cmd or "fakecli" in cmd):
-                    os.killpg(int(pgid), signal.SIGKILL)
-                    self.log("cleanup", "orphan stopped", pgid=pgid)
-            except (OSError, ValueError, TypeError):
-                pass
+        reap_orphans(self.artifacts, lambda pgid: self.log("cleanup", "orphan stopped", pgid=pgid))
 
     def _pack(self):
         ev = self.ev
