@@ -135,3 +135,60 @@ def render_analysis_html(text: str) -> str:
 
     close_ul(); flush_para()
     return '\n'.join(parts)
+
+
+def parse_dive_sections(text: str) -> dict:
+    """Parse a session .md file into structured sections."""
+    findings, sources, threads, agent_notes, cost_table = [], [], [], '', ''
+
+    # Split on ## headings
+    parts = _re.split(r'\n##\s+', '\n' + text)
+    for part in parts[1:]:
+        lines = part.split('\n')
+        heading = lines[0].strip().lower()
+        body = '\n'.join(lines[1:]).strip()
+
+        if 'key finding' in heading:
+            for line in body.splitlines():
+                line = line.strip().lstrip('- •').strip()
+                if line and not line.startswith('#'):
+                    findings.append(line)
+
+        elif 'source' in heading and 'further' not in heading:
+            # Join continuation lines (URL lives on indented line after the [N] line)
+            raw_lines = body.splitlines()
+            joined: list[str] = []
+            for raw in raw_lines:
+                if raw and raw[0] in ' \t' and joined and _re.match(r'\[\d+\]', joined[-1]):
+                    joined[-1] = joined[-1].rstrip() + ' ' + raw.strip()
+                else:
+                    joined.append(raw)
+            for line in joined:
+                line = line.strip()
+                # Domain may contain dots (e.g. www.eia.gov) — use lazy (.+?) match
+                m = _re.match(r'\[(\d+)\]\s+(.+?)\.\s+"([^"]+)"\.?\s*(https?://\S*)?', line)
+                if m:
+                    sources.append({
+                        'num':    int(m.group(1)),
+                        'domain': m.group(2).strip(),
+                        'title':  m.group(3).strip(),
+                        'url':    (m.group(4) or '').strip(),
+                    })
+
+        elif 'thread' in heading or 'continue' in heading:
+            threads = [l.strip().lstrip('- ').strip() for l in body.splitlines()
+                       if l.strip() and not l.strip().startswith('#')]
+
+        elif 'agent note' in heading or 'note' in heading:
+            agent_notes = body
+
+        elif 'cost' in heading:
+            cost_table = body
+
+    return {
+        'findings':    findings,
+        'sources':     sources,
+        'threads':     threads,
+        'agent_notes': agent_notes,
+        'cost_table':  cost_table,
+    }
