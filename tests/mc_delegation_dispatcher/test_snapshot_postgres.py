@@ -1074,6 +1074,128 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         self.sup.runtime_tick()
         self.assertEqual(self.item("C-17.review")["state"], "queued")
 
+    # ── the D-1/D-2 class beyond admit (sweep row S1): accept, reassign and a batched answer, each once replaced ──
+    def faulty_supervisor(self, authority=None):
+        """A supervisor whose supervision store fails its next mark_applied when told (fail_mark: the process stops
+        after a refused answer's fresh D-code went out, before the answer is marked applied), over ``authority``
+        (default: the full catalogue). -> (store, supervisor)."""
+        class Faulty(Store):
+            fail_mark = 0
+
+            def mark_applied(self, decision_id):
+                if self.fail_mark:
+                    self.fail_mark -= 1
+                    raise RuntimeError("process_stopped")
+                return super().mark_applied(decision_id)
+        store = Faulty(self.connect)
+        return store, Supervisor(store, self.notify, GitHub(), chat_id=OWNER, user_id=OWNER,
+                                 runtime=RuntimeLink(authority or self.store, owner="robert", view_bound_s=60))
+
+    def narrow_store(self):
+        return DispatcherStore(self.connect, principal="robert", environment="dev", authority=AUTH,
+                               grants=GrantStore({**C.grant_rows(), SINK: CapabilityRule(1, False, True)}))
+
+    def solo_messages(self):
+        return [m for m in self.notify.lines() if "on its own" in m["text"]]
+
+    def replaced_then_newer_no(self, store, sup, words="no"):
+        """Robert's yes was refused, its fresh D-code went out, and the process stopped before the yes was marked
+        applied; Robert answers the fresh code. -> the fresh code."""
+        store.fail_mark = 1
+        sup.runtime_tick()
+        rows = self.sql("SELECT id, state, delivered_at FROM guild.supervision_decisions ORDER BY id")
+        self.assertEqual([(r["state"], r["delivered_at"] is None) for r in rows][-2:],
+                         [("approved", True), ("sent", True)])          # the yes pending, its replacement sent
+        fresh = self.solo_messages()[-1]
+        self.notify.reply(words, fresh["message_id"])
+        sup.read_answers(wait=0)
+        return "D-{}".format(rows[-1]["id"])
+
+    def test_class_an_old_yes_to_a_reassignment_never_overrides_a_newer_no(self):
+        """Reassign is refused target_not_capable (the runner lacks the worker), a refusal that clears on its own."""
+        store, sup = self.faulty_supervisor()
+        self.admit(card())
+        _, env = self.claim()
+        rid = env["request_id"]
+        self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second' "
+                 "WHERE request_id=%s", (rid,))
+        self.store.sweep()
+        self.store.propose_reassignment(rid, "mac-a", by="mc")
+        self.publish()
+        sup.runtime_tick()
+        (first,) = self.solo_messages()
+        self.store.heartbeat("mac-a", "online", [c for c in CAPS if c != "actor:fakework"], protocol=2,
+                             facts=facts("mac-a"))                      # the target can't run it now
+        self.notify.reply("yes", first["message_id"])
+        sup.read_answers(wait=0)
+        code = self.replaced_then_newer_no(store, sup)
+        self.beat("mac-a")                                              # the refusal clears
+        self.sup.runtime_tick()                                         # a restart
+        build = self.item("C-17.build")
+        self.assertEqual((build["generation"], build["state"]), (1, "lapsed"))     # his no, never the old yes
+        self.assertEqual(self.events("item.reassigned"), [])
+        texts = self.runtime_texts()
+        self.assertTrue(any(t.startswith(f"Not applied: D-1 was refused and replaced by {code}") for t in texts),
+                        texts)
+        self.assertTrue(any(t.startswith(f"Applied: {code} declined: withdrawn") for t in texts), texts)
+
+    def test_class_an_old_yes_to_accept_a_reported_result_never_overrides_a_newer_no(self):
+        """Accept is refused item_ending. No code path today clears that mark without moving the item, so the clearing
+        is a direct edit here: the rule is pinned for accept all the same."""
+        store, sup = self.faulty_supervisor()
+        self.admit(card())
+        _, env = self.claim()
+        e, lease = self.effect_open(env, "C-17")
+        self.assertEqual(self.result(env, artifacts=[art("patch", "b")])["code"], "effects_open")
+        self.assertEqual(self.finish(env, e, lease, "verified")["state"], "ok")
+        (d,) = self.waiting(self.publish())
+        self.assertEqual((d["reason"], d["yes"], d["no"]), ("result_reported", "accept", "leave"))
+        rid = env["request_id"]
+        self.sql("""UPDATE guild.mc_delegations SET facts = facts || '{"ending": {"state": "cancelled",
+            "code": "grant_revoked"}}'::jsonb WHERE request_id=%s""", (rid,))
+        sup.runtime_tick()
+        first = next(m for m in self.solo_messages())
+        self.notify.reply("yes", first["message_id"])
+        sup.read_answers(wait=0)
+        code = self.replaced_then_newer_no(store, sup)
+        self.sql("UPDATE guild.mc_delegations SET facts = facts - 'ending' WHERE request_id=%s", (rid,))
+        self.sup.runtime_tick()                                         # a restart
+        self.assertEqual(self.item("C-17.build")["state"], "unknown")   # his no leaves it; the old yes accepts nothing
+        self.assertEqual(self.events("item.accepted"), [])
+        texts = self.runtime_texts()
+        self.assertTrue(any(t.startswith(f"Not applied: D-1 was refused and replaced by {code}") for t in texts),
+                        texts)
+        self.assertTrue(any(t.startswith(f"Recorded: {code} declined: nothing changed") for t in texts), texts)
+
+    def test_class_an_old_yes_in_a_batched_reply_never_overrides_a_newer_no_to_its_replacement(self):
+        """Two routine admissions in one message, one "yes" to both; both refused (the capability missing); the
+        process stops after the first one's fresh D-code went out. Robert says no to that code. After a restart with
+        the capability back: the first step is cancelled (his no), the second admitted (his yes, never replaced)."""
+        store, sup = self.faulty_supervisor(self.narrow_store())
+        self.admit(card("C-17"))
+        self.admit(card("C-18"))
+        self.sql("UPDATE guild.mc_action_grants SET consumed_operations = max_operations")
+        for _ in range(2):
+            _, env = self.claim()
+            self.result(env, artifacts=[art("patch", env["request_id"][:8])])
+        self.assertEqual(len(self.waiting(self.publish(), "step_admission")), 2)
+        sup.runtime_tick()
+        (batch,) = self.notify.lines()
+        self.assertEqual(len(self.sup_store.by_batch(batch["message_id"])), 2)
+        self.notify.reply("yes", batch["message_id"])
+        sup.read_answers(wait=0)
+        code = self.replaced_then_newer_no(store, sup)
+        rows = self.sql("SELECT id, requester->>'decision_id' AS d FROM guild.supervision_decisions ORDER BY id")
+        job = {r["id"]: self.sql("""SELECT d.job_id FROM guild.mc_delegation_events q JOIN guild.mc_delegations d
+            ON d.request_id = q.item_id WHERE q.event_id = %s::uuid""", (r["d"],))[0]["job_id"] for r in rows}
+        replaced, other = job[rows[0]["id"]], job[rows[1]["id"]]
+        self.sup.runtime_tick()                                         # a restart, the full catalogue
+        self.assertEqual(self.item(replaced)["state"], "cancelled")     # his newer no to its replacement
+        self.assertEqual(self.item(other)["state"], "queued")           # the same batched yes, never replaced
+        texts = self.runtime_texts()
+        self.assertTrue(any(t.startswith(f"Not applied: D-1 was refused and replaced by {code}") for t in texts),
+                        texts)
+
     def test_sf6_a_reassignment_answer_is_bound_to_the_generation_its_words_name(self):
         self.admit(card())
         _, env = self.claim()
