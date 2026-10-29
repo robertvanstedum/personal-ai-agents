@@ -26,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import uuid
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
@@ -233,6 +234,12 @@ def step_digest(*, card_id, card_digest, class_digest, step, kind, actor, scope,
                       "repository": repository, "ref": ref, "brief": brief, "route": route,
                       "amount": _fixed(amount, 4), "cost_cap_usd": _fixed(cost_cap_usd, 2),
                       "required_capabilities": sorted(required_capabilities)})
+
+
+def step_operation_id(grant_id, template_digest) -> str:
+    """The one operation of a card grant bound to one of its steps: the authority records it with the step's template
+    digest when it uses that operation, once per grant and step (N2)."""
+    return str(uuid.uuid5(uuid.UUID(grant_id), template_digest))
 
 
 def row_step_digest(row) -> str | None:

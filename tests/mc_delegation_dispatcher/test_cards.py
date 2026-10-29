@@ -230,6 +230,15 @@ class Record(unittest.TestCase):
                 C.recompile(bad)
 
 
+class StepOperation(unittest.TestCase):
+    def test_each_step_of_a_grant_has_its_own_operation_id(self):
+        grant, c = str(uuid4()), CAT.compile(card())
+        ids = [C.step_operation_id(grant, d) for d in c.grant_digests]
+        self.assertEqual(len(set(ids)), 3)
+        self.assertEqual(ids[0], C.step_operation_id(grant, c.grant_digests[0]))
+        self.assertNotEqual(ids[0], C.step_operation_id(str(uuid4()), c.grant_digests[0]))
+
+
 class Lifetime(unittest.TestCase):
     def grant(self, compiled):
         return C.card_grant(compiled, grant_id=str(uuid4()), principal="robert", environment="dev",
@@ -266,6 +275,11 @@ class A2AMappingNote(unittest.TestCase):
             self.assertIn(f"`{state}`", text, state)
         for field in ("status", "artifacts", "detail", "output_text", "route", "usage"):
             self.assertIn(f"`{field}`", text, field)
+        # Review N7: no bare file name as a URI, artifact ids distinct per step, and where a messageId comes from.
+        self.assertNotIn("`file.uri` = its `ref`", text)
+        self.assertNotIn("`artifactId` = `sha256`", text)
+        self.assertIn("`artifactId` = `<request_id>/<ref>`", text)
+        self.assertIn("**`messageId`** is the `event_id`", text)
 
 
 if __name__ == "__main__":

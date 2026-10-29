@@ -18,13 +18,21 @@
 | the card itself (its digest is what Robert approves) | none | It stays MiniMoi's: the approval's subject. Each task carries `metadata.minimoi.card_digest`. |
 | step item (`request_id`) | `Task.id`, `kind: "task"` | One task per item. A retry after a definite failure (R4.3-d) is the same task: its attempts are in `history`. |
 | item state | `Task.status.state` | See "States". `status.timestamp` is the item's latest transition time. |
-| the step's request: `brief`, `input_artifacts` | `history[0]`: a `Message` with `role: "user"` | A `TextPart` holds the brief. Each input artifact is a `FilePart` (`file.uri` = its `ref`), with `metadata.sha256`. `referenceTaskIds` names the items its inputs came from (`facts.card.inputs_from`). |
-| result `artifacts` (`kind`, `ref`, `sha256`, `bytes`, `author`, `review_status`) | `Task.artifacts[]`: `Artifact` | `artifactId` = `sha256`; `name` = `ref`; one `FilePart` with `file.uri` = `ref`; `metadata` = `{kind, sha256, bytes, author, review_status}`. |
+| the step's request: `brief`, `input_artifacts` | `history[0]`: a `Message` with `role: "user"` | A `TextPart` holds the brief. Each input artifact is a `DataPart`: `{ref, sha256}` and the `artifactId` it had in its source task. `referenceTaskIds` names the items its inputs came from (`facts.card.inputs_from`). |
+| result `artifacts` (`kind`, `ref`, `sha256`, `bytes`, `author`, `review_status`) | `Task.artifacts[]`: `Artifact` | `artifactId` = `<request_id>/<ref>`, so identical bytes in two steps never share an id; `name` = `ref`; one `DataPart` whose `data` is `{kind, ref, sha256, bytes, author, review_status}`. |
 | result `status`, `detail`, `output_text` | `Task.status` and a final `Message` with `role: "agent"` | `output_text` is a `TextPart`, and `detail` a `DataPart`. |
 | result `route`, `usage` | `Task.metadata.minimoi` | `{route, usage: {amount, unit, children_stopped}}`. A2A has no spend object. |
 | `attempt.failed` | a `history` entry (`role: "agent"`, a `DataPart` with the exit code) | The task stays open, back to `submitted`. |
 | `decision.queued` | `status.message` while `input-required` | It names the decision id, its class and its reason. |
 | grant, reservation, lease, generation, receipts | `Task.metadata.minimoi` only | Authority records. A2A has no grant or lease. Exposing them gives a client no authority (R4.1-e). |
+
+**No `FilePart`, no `file.uri`.** A runner artifact's `ref` is a file name in the host's artifact folder, not a URI,
+and MiniMoi serves no artifact over A2A. So every artifact and input is a `DataPart` carrying its reference and
+digest. An adapter that later serves the bytes adds a `FilePart` whose `file.uri` is the URL it serves them from.
+
+**`messageId`** is the `event_id` of the audit event that recorded the message: `item.queued` or `item.proposed` for
+`history[0]`, `result.accepted` or `attempt.failed` for a host's report, and `decision.queued` for a `status.message`.
+Each is unique, and the same event always maps to the same message.
 
 ## States (item → `TaskState`)
 

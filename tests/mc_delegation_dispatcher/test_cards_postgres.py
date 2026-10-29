@@ -109,12 +109,47 @@ class Cards(PostgresFixture, unittest.TestCase):
                                    event_id=str(uuid4()), at=self.db_now().isoformat(), checkpoint=cp)
 
     def result(self, env, *, status="completed", artifacts=(), detail=None, runner="mac-a", event_id=None,
-               stopped=True, route="fakework", unit="test_units", at=None, store=None):
+               stopped=True, route="fakework", unit="test_units", at=None, store=None, amount=USED):
         return (store or self.store).result(
             env["request_id"], env["generation"], event_id=event_id or str(uuid4()), status=status,
             artifacts=list(artifacts), detail={"exit_code": 0} if detail is None else detail, output_text="done",
             protocol=2, runner_id=runner, at=(at or self.db_now()).isoformat(), route=route,
-            usage={"amount": USED, "unit": unit, "children_stopped": stopped})
+            usage={"amount": amount, "unit": unit, "children_stopped": stopped})
+
+    def day(self, route="fakework"):
+        row = self.sql("SELECT reserved, observed FROM guild.mc_delegation_reservations WHERE route=%s", (route,))[0]
+        return float(row["reserved"]), float(row["observed"])
+
+    def own_grant(self, item, actors=("mc",)):
+        """The owner's own exact approval of one proposed item (its decision names the digest to approve)."""
+        decision = self.events("decision.queued", item["request_id"])[0]
+        gid = str(uuid4())
+        with self.connect() as conn:
+            GRANTS.issue(conn, GrantDefinition(gid, "robert", "dev", item["card_id"], ("owner-turn-2",), actors,
+                                               "policy", "delegate.start_research", 1,
+                                               (decision["body"]["subject_digest"],), 1,
+                                               self.db_now() + timedelta(seconds=600), proposal_id=str(uuid4()),
+                                               approved_operation_id=str(uuid4()),
+                                               approval_expires_at=self.db_now() + timedelta(seconds=300)))
+        return gid
+
+    def open_effect(self, env, runner, actor, key="e1", work="C-17"):
+        """An effect of the item dispatched and not yet finished: its outcome is open."""
+        digest = ToolRequest(SINK, 1, json.dumps({"op": key}).encode()).arguments_sha256
+        gid = str(uuid4())
+        with self.connect() as conn:
+            GRANTS.issue(conn, GrantDefinition(gid, "robert", "dev", work, ("owner-turn",), (actor,), EFFECT_POLICY,
+                                               SINK, 1, (digest,), 1, self.db_now() + timedelta(seconds=600),
+                                               work_id=work))
+        e = {"op": "prepare", "key": key, "grant_id": gid, "request": {"operation": SINK, "operation_version": 1,
+                                                                        "arguments": {"op": key}}}
+        g = env["generation"]
+        self.assertEqual(self.store.effect(runner, env["request_id"], g, e)["state"], "ok")
+        lease = self.store.effect(runner, env["request_id"], g, {**e, "op": "claim"})["lease"]
+        lease = {k: lease[k] for k in ("receipt_generation", "token", "mode")}
+        self.assertEqual(self.store.effect(runner, env["request_id"], g, {**e, "op": "dispatch", "lease": lease})
+                         ["state"], "ok")
+        return e, lease
 
     def items(self, card_id="C-17"):
         return self.sql("""SELECT * FROM guild.mc_delegations WHERE card_id=%s
@@ -183,6 +218,8 @@ class Cards(PostgresFixture, unittest.TestCase):
         # OWN-1: one admission. OWN-2: no relay; every step after the first written by the authority from records.
         self.assertEqual(self.owner_counts("C-17"), (1, 0))
         self.assertEqual(self.grant_row(admitted["grant_id"])["consumed_operations"], 3)
+        self.assertEqual([(e["body"]["step"], e["body"]["template_digest"]) for e in self.events("grant.step_bound")],
+                         [(s["step"], s["digest"]) for s in admitted["steps"]])        # one operation per step (N2)
         self.assertEqual([e["body"]["step"] for e in self.events("card.step_written")], ["review", "fix-1"])
         self.assertEqual([e["source"] for e in self.events() if e["kind"] in ("item.queued", "item.proposed")],
                          ["owner", "authority", "authority"])
@@ -327,10 +364,10 @@ class Cards(PostgresFixture, unittest.TestCase):
         self.assertIsNone(self.claim("mac-b")[0])                 # the checkpoint is on mac-a: the retry is its own
         got, env = self.claim()
         self.assertEqual((got["envelope"]["generation"], got["attempt"], got["resume_from"]["name"]), (2, 2, "s1"))
-        self.assertEqual(got["reserved"], AMOUNT)                                 # a retry reserves anew
-        day = self.sql("SELECT reserved, observed FROM guild.mc_delegation_reservations")[0]
-        self.assertEqual((float(day["reserved"]), float(day["observed"])), (AMOUNT, USED))
+        self.assertEqual(got["reserved"], AMOUNT - USED)      # one reservation per item: the retry gets what remains
+        self.assertEqual(self.day(), (AMOUNT - USED, USED))   # never more than the item's one amount, all told
         self.assertEqual(self.result(env, artifacts=[art("patch", "b2")])["state"], "accepted")
+        self.assertEqual(self.day(), (0.0, 2 * USED))
         self.assertEqual([(i["step"], i["state"]) for i in self.items()], [("build", "completed"), ("review", "queued")])
         late = self.result({"request_id": env["request_id"], "generation": 1}, status="failed",
                            detail={"exit_code": 70}, artifacts=[art("output", "b1")], event_id=eid)
@@ -434,6 +471,172 @@ class Cards(PostgresFixture, unittest.TestCase):
         self.assertEqual([(d["body"]["class"], d["body"]["solo"]) for d in decision], [("step_admission", False)])
         self.assertEqual(decision[0]["body"]["subject_digest"], admitted["steps"][1]["digest"])
         self.assertIsNone(self.claim()[0])
+
+    # ── the review's fixes (REVIEW_independent_S1-C.md) ──
+    def test_sf1_a_next_step_this_authority_now_refuses_never_loses_the_finished_result(self):
+        """Probe P2: the authority's configuration changed mid-card. The finished step's result is recorded, and the
+        card ends with the reason; nothing aborts, nothing is lost."""
+        routes = TEST_VALUES["routes"]
+        for card_id, changed, code in (
+                ("C-17", {**routes["fakework"], "per_item": 0.1}, "item_cap_exceeded"),
+                ("C-18", {**routes["fakework"], "actors": []}, "route_actor_mismatch")):
+            self.admit(card(card_id))
+            _, env = self.claim()
+            later = self.make_store(Authority.parse({**TEST_VALUES, "routes": {**routes, "fakework": changed}}))
+            eid = str(uuid4())
+            self.assertEqual(self.result(env, artifacts=[art("patch", card_id)], event_id=eid, store=later)["state"],
+                             "accepted")
+            build = self.item(f"{card_id}.build")
+            self.assertEqual((build["state"], str(build["result_event_id"])), ("completed", eid))
+            self.assertEqual(self.result(env, artifacts=[art("patch", card_id)], event_id=eid, store=later)["state"],
+                             "already_applied")
+            self.assertEqual([i["step"] for i in self.items(card_id)], ["build"])
+            ended = [e["body"] for e in self.events("card.ended") if e["body"]["card_id"] == card_id]
+            self.assertEqual([(b["step"], b["state"], b["code"]) for b in ended], [("review", "not_written", code)])
+        self.assertEqual(len(self.events("result.accepted")), 2)
+
+    def test_sf2_revoking_a_card_grant_ends_the_card_and_every_step_of_it(self):
+        """Probe P3: a cross-vendor review admitted under its own grant is running when Robert revokes the card. The
+        card ends once (grant_revoked), the review is ended as revocation ends any item, its late result writes no
+        next step, and no routine decision appears. A card whose review is still proposed has that decision
+        withdrawn."""
+        verified = self.make_store(Authority.parse({**TEST_VALUES, "launch_closure": "verified"}))
+        cross = {"actor": "claude-code", "route": "anthropic.api", "amount": 1, "cost_cap_usd": 1}
+        claude = CAPS + ["actor:claude-code"]
+        admitted = self.admit(card(reviewer=cross), store=verified)
+        waiting = self.admit(card("C-18", reviewer=cross), store=verified)
+        for _ in range(2):
+            _, env = self.claim(store=verified)
+            self.result(env, artifacts=[art("patch", env["request_id"])], store=verified)
+        review = self.item("C-17.review")
+        verified.admit(review["request_id"], self.own_grant(review), by="robert", note="cross-vendor review, yes")
+        _, renv = self.claim("mac-c", claude, store=verified)
+        out = verified.revoke(admitted["grant_id"], by="robert", note="stop the card")
+        self.assertEqual((out["items"], out["cards"]), ([renv["request_id"]], ["C-17"]))
+        self.assertEqual(self.item("C-17.review")["result_detail"]["code"], "grant_revoked")
+        late = self.result(renv, runner="mac-c", artifacts=[art("findings", "r")], route="anthropic.api", unit="usd",
+                           store=verified)
+        self.assertEqual((late["state"], late["code"]), ("refused", "item_ended"))
+        self.assertIsNone(self.item("C-17.fix-1"))
+        # The card still waiting on its review's own approval: revoked, the review closed, its decision withdrawn.
+        proposed = self.item("C-18.review")
+        verified.revoke(waiting["grant_id"], by="robert", note="and this one")
+        self.assertEqual(self.item("C-18.review")["state"], "cancelled")
+        self.assertEqual([e["body"]["answer"] for e in self.events("decision.resolved", proposed["request_id"])],
+                         ["withdrawn"])
+        with self.assertRaisesRegex(AuthorityRefused, "item_not_proposed"):
+            verified.admit(proposed["request_id"], self.own_grant(proposed), by="robert", note="too late")
+        verified.revoke(admitted["grant_id"], by="robert", note="again")              # a replay ends nothing twice
+        self.assertEqual(sorted((e["body"]["card_id"], e["body"]["code"]) for e in self.events("card.ended")),
+                         [("C-17", "grant_revoked"), ("C-18", "grant_revoked")])
+        self.assertEqual({d["body"]["class"] for d in self.events("decision.queued")}, {"cross_vendor_admission"})
+
+    def test_sf2_a_step_of_a_revoked_card_with_an_effect_open_waits_then_ends_and_writes_nothing_after(self):
+        verified = self.make_store(Authority.parse({**TEST_VALUES, "launch_closure": "verified"}))
+        self.store = verified                     # the effect helper speaks to self.store
+        cross = {"actor": "claude-code", "route": "anthropic.api", "amount": 1, "cost_cap_usd": 1}
+        admitted = self.admit(card(reviewer=cross))
+        _, env = self.claim()
+        self.result(env, artifacts=[art("patch", "b")])
+        review = self.item("C-17.review")
+        verified.admit(review["request_id"], self.own_grant(review), by="robert", note="yes")
+        _, renv = self.claim("mac-c", CAPS + ["actor:claude-code"])
+        e, lease = self.open_effect(renv, "mac-c", "claude-code")
+        out = verified.revoke(admitted["grant_id"], by="robert", note="stop the card")
+        self.assertEqual(out["waiting"], [renv["request_id"]])
+        self.assertFalse(verified.renew(renv["request_id"], 1, protocol=2, runner_id="mac-c"))
+        refused = verified.effect("mac-c", renv["request_id"], 1, {**e, "key": "e2", "op": "prepare"})
+        self.assertEqual((refused["state"], refused["code"]), ("refused", "grant_revoked"))
+        late = self.result(renv, runner="mac-c", artifacts=[art("findings", "r")], route="anthropic.api", unit="usd")
+        self.assertEqual((late["state"], late["code"]), ("refused", "grant_revoked"))
+        self.assertEqual(verified.effect("mac-c", renv["request_id"], 1, {**e, "op": "finish", "lease": lease,
+                                                                         "state": "verified",
+                                                                         "evidence": {"kind": "sink",
+                                                                                      "outcome": "committed"}})
+                         ["state"], "ok")
+        self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second' "
+                 "WHERE job_id='C-17.review'")
+        verified.sweep()
+        self.assertEqual((self.item("C-17.review")["state"], self.item("C-17.review")["result_detail"]["code"]),
+                         ("cancelled", "grant_revoked"))
+        self.assertIsNone(self.item("C-17.fix-1"))
+        self.assertEqual([e["body"]["code"] for e in self.events("card.ended")], ["grant_revoked"])
+
+    def test_sf3_a_retry_waiting_for_its_owner_can_be_reassigned_stopped_or_ended(self):
+        """Probe P1: the retry waits for mac-a's runner, which is gone. Robert reassigns it to another runner of the
+        same host (the Mac-only rule). It keeps the item's one reservation, starts from the item's inputs (the
+        checkpoint was mac-a's), and the card carries on. Stopping a waiting retry releases what remains of it."""
+        self.admit(card(attempts=2))
+        _, env = self.claim()
+        self.progress(env, "s1")
+        self.assertEqual(self.result(env, status="failed", detail={"exit_code": 70})["code"], "retry")
+        self.store.heartbeat("mac-a2", "online", CAPS, protocol=2, facts=facts("mac-a"))
+        self.assertEqual(self.store.reassign(env["request_id"], "mac-a2", by="robert", note="mac-a's runner is gone"),
+                         {"state": "reassigned", "generation": 3, "runner_id": "mac-a2"})
+        build = self.item("C-17.build")
+        self.assertEqual(("retry" in build["facts"], build["checkpoint"], build["facts"]["card"]["attempt"]),
+                         (False, None, 2))
+        self.assertIsNone(self.store.claim("mac-a", CAPS, protocol=2))
+        got = self.store.claim("mac-a2", CAPS, protocol=2)
+        self.assertEqual((got["envelope"]["generation"], got["attempt"], got["resume_from"], got["reserved"]),
+                         (3, 2, None, AMOUNT - USED))
+        self.result({"request_id": env["request_id"], "generation": 3}, runner="mac-a2",
+                    artifacts=[art("patch", "b")])
+        self.assertEqual([(i["step"], i["state"]) for i in self.items()], [("build", "completed"), ("review", "queued")])
+        # A second card's waiting retry, stopped: nothing ran since its failure, so what remains is released.
+        self.admit(card("C-18", attempts=2))
+        while True:
+            got, env = self.claim()
+            if got["card_id"] == "C-18":
+                break
+            self.result(env, artifacts=[art("output", "r")])                             # C-17's review, done
+        self.result(env, status="failed", detail={"exit_code": 70})
+        self.assertEqual(self.store.stop("C-18.build"), "confirmed")
+        stopped = self.item("C-18.build")
+        self.assertEqual((stopped["state"], stopped["reservation"]["state"]), ("cancelled", "settled"))
+        self.assertEqual(self.day()[0], 0.0)                  # nothing is held for work that will never run
+
+    def test_sf4_one_reservation_per_item_across_its_attempts_and_resumes(self):
+        """The brief's carried rule and Robert's per-item cap: a retry, and a resume of it, get only what remains of the
+        item's one reservation; with nothing left there is no retry, and unknown usage never assumes a remainder."""
+        self.admit(card(attempts=3))
+        _, env = self.claim()
+        self.assertEqual(self.result(env, status="failed", detail={"exit_code": 70}, amount=0.1)["code"], "retry")
+        got, env = self.claim()
+        self.assertEqual(got["reserved"], 0.15)
+        self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second' "
+                 "WHERE job_id='C-17.build'")
+        answer = self.store.reconcile("mac-a", env["request_id"], env["generation"],
+                                      {"child": "stopped", "checkpoint": None}, [])
+        self.assertEqual((answer["answer"], answer["reserved"], answer["unit"]), ("resume", 0.15, "test_units"))
+        env = {"request_id": env["request_id"], "generation": answer["generation"]}
+        self.assertNotIn("code", self.result(env, status="failed", detail={"exit_code": 70}, amount=0.15))
+        self.assertEqual(self.item("C-17.build")["state"], "failed")
+        self.assertEqual(self.events("card.ended")[-1]["body"]["code"], "reservation_exhausted")
+        self.assertEqual(self.day(), (0.0, 0.25))             # the item's one amount, across all its attempts
+        self.admit(card("C-18", attempts=3))
+        _, env = self.claim()
+        self.assertNotIn("code", self.result(env, status="failed", detail={"exit_code": 70}, amount=None))
+        self.assertEqual(self.events("card.ended")[-1]["body"]["code"], "usage_unknown")
+
+    def test_n2_one_operation_of_a_card_grant_per_step(self):
+        """Probe P4 on the path the authority uses: an operation of a card grant is bound to one step, recorded with
+        its template digest, and a second admission of the same step spends nothing."""
+        admitted = self.admit(card())
+        build = admitted["steps"][0]
+        bound = self.events("grant.step_bound")
+        self.assertEqual([(b["body"]["step"], b["body"]["template_digest"], b["body"]["operation_id"]) for b in bound],
+                         [("build", build["digest"], C.step_operation_id(admitted["grant_id"], build["digest"]))])
+        compiled = C.Catalogue.load().compile(card())
+        step = compiled.steps[0]
+        item = self.store._v2_item("C-17.build-again", step.actor, step.scope, "personal-ai-agents", "a" * 40,
+                                   step.brief, step.cost_cap_usd, 3600, step.route, step.amount, admitted["grant_id"],
+                                   [], [], "C-17", "build", "authority")
+        with self.store._tx() as cur:
+            again = self.store._write(cur, item, subject=build["digest"], facts={"card": {"on_card": True}})
+        self.assertEqual((again["state"], again["code"]), ("proposed", "grant_step_used"))
+        self.assertEqual(self.grant_row(admitted["grant_id"])["consumed_operations"], 1)
+        self.assertEqual(len(self.events("grant.step_bound")), 1)
 
     # ── the carried fix from the S1-B closure check (N-C4 part 2) ──
     def test_n_c4_a_result_made_before_an_unswept_lapse_audits_the_lapse_before_the_end(self):
