@@ -308,18 +308,43 @@ def test_the_read_path_takes_a_readers_token_only(tls_server):
 
 
 def test_failed_authentication_is_limited_per_address_and_a_host_never_is(tls_server):
+    """The failure counter is never cleared here (the old test did, and so hid S1-H review SF4): a good host on the
+    same address as a caller with bad tokens, already limited, is still answered, every time, and that caller stays
+    limited."""
     srv, store, cert = tls_server
     port = srv.server_address[1]
     bad = door.HttpDispatcherV2(door.DOORS[1], "z" * 48, Path("/x"), opener=_local_opener(port, cert))
     for _ in range(server.FAILED_AUTH_PER_MINUTE):
         with pytest.raises(door.DoorRefused, match="unauthorized"):
             bad.heartbeat("mac-test-1:runner", "online", [], FACTS)
-    with pytest.raises(door.DoorUnreachable):                            # 429: the address waits, nothing is final
+    with pytest.raises(door.DoorUnreachable, match="runner_door_status_429"):   # the address waits, nothing final
         bad.heartbeat("mac-test-1:runner", "online", [], FACTS)
-    srv._failed.clear()
     good = door.HttpDispatcherV2(door.DOORS[1], HOST_TOKEN, Path("/x"), opener=_local_opener(port, cert))
     for _ in range(server.FAILED_AUTH_PER_MINUTE + 5):
         assert good.heartbeat("mac-test-1:runner", "online", [], FACTS) == {"state": "recorded"}
+    with pytest.raises(door.DoorUnreachable, match="runner_door_status_429"):   # brute force still limited
+        bad.heartbeat("mac-test-1:runner", "online", [], FACTS)
+    wrong_host = door.HttpDispatcherV2(door.DOORS[1], OTHER_TOKEN, Path("/x"), opener=_local_opener(port, cert))
+    with pytest.raises(door.DoorRefused, match="runner_not_this_credential"):   # authenticated: answered, not limited
+        wrong_host.heartbeat("mac-test-1:runner", "online", [], FACTS)
+
+
+def test_a_reader_is_never_limited_by_failures_from_its_address(tls_server):
+    import ssl
+    srv, store, cert = tls_server
+    url = f"https://127.0.0.1:{srv.server_address[1]}{server.STATE_PATH}"
+    ctx = ssl.create_default_context(cafile=str(cert))
+
+    def get(token):
+        req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token})
+        try:
+            with urllib.request.urlopen(req, context=ctx, timeout=10) as r:
+                return r.status
+        except urllib.error.HTTPError as exc:
+            return exc.code
+    assert [get("z" * 48) for _ in range(server.FAILED_AUTH_PER_MINUTE)] == [401] * server.FAILED_AUTH_PER_MINUTE
+    assert get("z" * 48) == 429
+    assert get(READER_TOKEN) == 200
 
 
 # ── the authority's own timers ──────────────────────────────────────────────────────────────────────────────────

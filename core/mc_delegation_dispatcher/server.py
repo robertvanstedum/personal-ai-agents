@@ -29,8 +29,9 @@ thin HTTPS server, plus the authority's own timers.
   unreachable among it) is 503 ``{"error": "unavailable"}``, which a host reads as a lost connection and retries. The
   host's client (``door.HttpDispatcherV2``) reads only this JSON as the authority's answer (N-D5). No answer ever
   echoes a token or a value from a body.
-* **Unauthenticated callers** are limited per address (``FAILED_AUTH_PER_MINUTE``); an authenticated host never is,
-  because its contact, renewals and census are what keep its work alive.
+* **Unauthenticated callers** are limited per address (``FAILED_AUTH_PER_MINUTE``); an authenticated host or reader
+  never is, because its contact, renewals and census are what keep its work alive. Each call is authenticated before
+  the limit is checked, so failures from an address it shares never lock it out (S1-H review SF4).
 
 Stdlib only, apart from the store's own psycopg2. Built and unit-tested in S1; it runs on staging at gate D, never on
 the Mac in this build.
@@ -169,6 +170,11 @@ def _caller(token, hosts) -> str | None:
     return found
 
 
+def _reader(token, readers) -> str | None:
+    """The reader a bearer token belongs to, compared in constant time against every reader's digest."""
+    return _caller(token, {name: r["sha256"] for name, r in readers.items()})
+
+
 # ── the door ────────────────────────────────────────────────────────────────────────────────────────────────────
 def answer(store, hosts, token, body_bytes, content_type) -> tuple:
     """One door call -> (status, JSON object). Pure of HTTP, so it is tested directly."""
@@ -261,7 +267,9 @@ class _Handler(BaseHTTPRequestHandler):
         who = self.client_address[0]
         if self.path != door.PATH:
             return self._send(404, {"error": "not_found"})
-        if self.server.limited(who):
+        # Authenticated first (S1-H review SF4): only a caller whose token matches no host is limited, so failures
+        # from an address a host shares (a NAT, a proxy, a stale runtime beside it) never lock that host out.
+        if _caller(self._token(), self.server.hosts) is None and self.server.limited(who):
             return self._send(429, {"error": "rate_limited"})
         try:
             length = int(self.headers.get("Content-Length", ""))
@@ -278,7 +286,7 @@ class _Handler(BaseHTTPRequestHandler):
         who = self.client_address[0]
         if self.path != STATE_PATH:
             return self._send(404, {"error": "not_found"})
-        if self.server.limited(who):
+        if _reader(self._token(), self.server.readers) is None and self.server.limited(who):
             return self._send(429, {"error": "rate_limited"})
         status, doc = snap.read_request(dict(self.headers.items()), readers=self.server.readers,
                                         provide=lambda: snap.read_state_file(self.server.state_file),
