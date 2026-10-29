@@ -242,3 +242,33 @@ def test_a_template_the_bundle_refuses_installs_nothing_further(tmp_path):
     proc = _render(tmp_path, _template(tmp_path, concurrency=2))
     assert proc.returncode != 0 and "host_concurrency_unsupported" in proc.stderr
     assert not (tmp_path / "base" / "host.yaml").exists() and not (tmp_path / "base" / "service").exists()
+
+
+def test_production_runner_folder_is_never_a_base(tmp_path):
+    """S1-H review N6: --base ~/minimoi-runtime/runner-prod would have rebuilt production's live version 1 bundle in
+    place. A base that is production's runner folder, holds it, or lies inside it, or that holds the bundle
+    production's LaunchAgent runs, is refused before anything is written. All under a sandbox HOME here."""
+    home = tmp_path / "home"
+    prod = home / "minimoi-runtime" / "runner-prod"
+    (prod / "bundle").mkdir(parents=True)
+    (prod / "bundle" / "run_runner.py").write_text("production's\n")
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "bundle").mkdir(parents=True)
+    (elsewhere / "bundle" / "run_runner.py").write_text("production's, moved\n")
+    agents = home / "Library" / "LaunchAgents"
+    agents.mkdir(parents=True)
+    (agents / "ai.minimoi.delegation-runner.prod.plist").write_bytes(plistlib.dumps(
+        {"Label": "ai.minimoi.delegation-runner.prod",
+         "ProgramArguments": ["/usr/bin/python3", "-I", str(elsewhere / "bundle" / "run_runner.py"), "--door", "x"]}))
+    template = _template(tmp_path)
+    for base in (prod, home / "minimoi-runtime", prod / "bundle", elsewhere):
+        proc = subprocess.run(["/bin/bash", str(SCRIPT), "--host-config", str(template), "--python", sys.executable,
+                               "--ref", "HEAD", "--base", str(base), "--home", str(tmp_path / "rt-home")],
+                              capture_output=True, text=True, timeout=180,
+                              env={**os.environ, "HOME": str(home), "MINIMOI_INSTALL_PYTHON": sys.executable})
+        assert proc.returncode != 0 and "base_holds_production" in proc.stderr, (base, proc.stdout, proc.stderr)
+    assert (prod / "bundle" / "run_runner.py").read_text() == "production's\n"           # untouched
+    assert (elsewhere / "bundle" / "run_runner.py").read_text() == "production's, moved\n"
+    assert sorted(p.name for p in prod.iterdir()) == ["bundle"] and not (home / "minimoi-runtime" / "bundle").exists()
+    proc = _render(tmp_path, template)                                  # any other base still renders
+    assert proc.returncode == 0, proc.stderr

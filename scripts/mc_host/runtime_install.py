@@ -62,6 +62,8 @@ from core.mc_delegation_runner.cli import main
 sys.exit(main(sys.argv[1:]))
 '''                                           # the same entry production's bundle has (install_delegation_runner.sh)
 RECORD_SCHEMA = "minimoi.runtime.install.v1"
+PROD_RUNNER = Path("minimoi-runtime") / "runner-prod"      # production's version 1 runner (install_delegation_runner.sh)
+PROD_LABEL = "ai.minimoi.delegation-runner.prod"
 EXIT_MARGIN_S = 10                            # the service manager waits this much longer than the runtime's own bound
 _LABEL = re.compile(r"^ai\.minimoi\.[a-z0-9.-]{1,64}$")
 _UNIT_VALUE = re.compile(r"^[A-Za-z0-9._/@:+=-]{1,1024}$")     # no space, quote, % or newline in a systemd value
@@ -175,12 +177,36 @@ def _write(path: Path, data: bytes, mode=0o600):
     os.replace(tmp, path)
 
 
+def production_folders() -> list:
+    """Every folder holding production's live version 1 runner, read only: ``~/minimoi-runtime/runner-prod`` under
+    this shell's HOME and under the login user's home, and the bundle folder production's LaunchAgent runs, when its
+    plist is on file there."""
+    out = set()
+    for home in {Path(os.environ.get("HOME") or "/").expanduser(), home_of_user()}:
+        out.add((home / PROD_RUNNER).resolve())
+        try:
+            doc = plistlib.loads((home / "Library" / "LaunchAgents" / f"{PROD_LABEL}.plist").read_bytes())
+        except Exception:
+            continue
+        for arg in (doc.get("ProgramArguments") or []) if isinstance(doc, dict) else []:
+            if isinstance(arg, str) and arg.endswith("/run_runner.py"):
+                out.add(Path(arg).parent.resolve())
+    return sorted(out)
+
+
+def _holds_or_inside(base: Path, folder: Path) -> bool:
+    return base == folder or base in folder.parents or folder in base.parents
+
+
 def install(args) -> dict:
     template = json.loads(Path(args.host_config).expanduser().read_text())
     _need(type(template) is dict and template.get("schema") == "minimoi.host.v1", "host_template_invalid")
     env = template.get("environment")
     _need(env in ("dev", "prod"), "host_environment_invalid")
     base = Path(args.base or f"~/minimoi-runtime/{env}").expanduser().resolve()
+    # The bundle is rebuilt whole under <base> (build_bundle replaces <base>/bundle): never in, around or inside
+    # production's live runner folder (S1-H review N6). Checked before anything is written.
+    _need(not any(_holds_or_inside(base, f) for f in production_folders()), "base_holds_production")
     home = Path(args.home or "~").expanduser().resolve()
     python = Path(args.python).expanduser()
     _need(python.is_absolute() and os.access(python, os.X_OK), "interpreter_invalid")
