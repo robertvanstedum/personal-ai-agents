@@ -583,6 +583,7 @@ class _Child:
         self.channel = fakework.Channel(rt.cfg.artifact_root / f"{self.task}.chan")
         self.proc = self.capture = self.pgid = self.identity = None
         self.frozen = False
+        self.binary_check = None           # (path, 'sha256:<hex>') the launch contract verified; checked again before "G"
         self.signalled = False             # this runtime stopped it while it ran: its exit is ours, never its own (B1)
         self.lost = False                  # reaped by anyone else (ECHILD): its group id is no longer pinned (N-D1)
         self.lock = threading.RLock()
@@ -1426,6 +1427,7 @@ class HostRuntime:
             return self._refuse(claim, "do_not_resume")
         try:
             child_env = self._contract_final(plan, claim, argv, child_env, task_dir)
+            child.binary_check = plan["verified"]
         except launch.LaunchRefused as exc:
             try:                                  # nothing ran in it: the fresh checkout goes, its claim stays
                 workspace.remove(task_dir, Path(cfg.workspace_root))
@@ -1478,6 +1480,7 @@ class HostRuntime:
                 digest = launch.file_digest(path)
             except OSError:
                 raise launch.LaunchRefused("binary_unpinned", reason="binary_unreadable") from None
+        plan["verified"] = (path, digest)
         names, key = list(child_env), None
         if plan["key_ref"] is not None:
             key = {"name": route["key_name"], "ref": plan["key_ref"]}
@@ -1511,6 +1514,8 @@ class HostRuntime:
             if child.identity is None:
                 raise RuntimeError("child_identity_unavailable")
             _write_json(_stage_path(cfg, task), {"stage": "started", "pgid": child.pgid, "identity": child.identity})
+            if not self._still_pinned(child):
+                return self._unpinned_before_start(child)
             child.proc.stdin.write(b"G")                          # only now may the work start
             child.proc.stdin.close()
             self._owner_write(task, "progress", child.request_id, child.generation,
@@ -1551,6 +1556,36 @@ class HostRuntime:
             artifacts.append(_artifact(cfg, task, "findings", findings.read_bytes(), env.actor))
         return self._result(child.claim, status, artifacts, {"exit_code": rc, "base_ref": env.ref},
                             workspace_dir=child.task_dir)
+
+    def _still_pinned(self, child) -> bool:
+        """The binary the launch contract verified, hashed again at the last moment before "G" (S1-E review N3): after the
+        record, the key read, the barrier's own start, the identity read and the stage write, and nothing but the "G" byte
+        and the barrier's exec after it. Without exec by file descriptor (not available on macOS) a swap in that last
+        instant cannot be excluded; this narrows the window to it. No check recorded means no start (fail closed)."""
+        from . import launch
+        if child.binary_check is None:
+            return False
+        path, digest = child.binary_check
+        try:
+            return launch.file_digest(path) == digest
+        except OSError:
+            return False
+
+    def _unpinned_before_start(self, child) -> dict:
+        """The binary changed after it was verified: "G" is never sent, so the barrier exits (97) and nothing starts.
+        Its group is stopped and reaped, the fresh checkout removed (nothing ran in it), and the item refused."""
+        cfg = self.cfg
+        child.proc.stdin.close()
+        child.end_group(term=False)
+        child.capture.finish(cfg.kill_grace_s)
+        with self._lock:
+            self.child = None
+        _write_json(_stage_path(cfg, child.task), {"stage": "stopped", "reason": "binary_changed_before_start"})
+        try:
+            workspace.remove(child.task_dir, Path(cfg.workspace_root))
+        except Exception:
+            pass
+        return self._refuse(child.claim, "binary_unpinned", {"reason": "changed_before_start"})
 
     def _watch(self, child):
         """The child's supervision ticks. Returns a terminal status for a result (None: by its exit code), or a dict

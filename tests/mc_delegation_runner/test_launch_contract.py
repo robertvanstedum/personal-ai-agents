@@ -289,7 +289,7 @@ def test_routes_come_from_the_item_and_an_unqualified_api_route_is_refused():
     assert launch.route("fakework.api", "fakecli")["key_name"] == "FAKEWORK_API_KEY"
 
 
-def test_an_api_key_is_read_by_reference_for_one_child_and_never_through_get_secret(tmp_path):
+def test_an_api_key_is_read_by_reference_for_one_child_and_never_through_get_secret(tmp_path, monkeypatch):
     key = "test-" + secrets.token_hex(16)
     stores = {"test": launch.TestCredentialStore({"fakework-api": key})}
     assert launch.api_key("fakework.api", "test:fakework-api", stores) == ("FAKEWORK_API_KEY", key)
@@ -306,7 +306,17 @@ def test_an_api_key_is_read_by_reference_for_one_child_and_never_through_get_sec
                                                                  subprocess.CompletedProcess(argv, 0, "v\n", ""))[1])
     assert kc.read("keychain:minimoi_route/fakework.api") == "v"
     assert seen[0][0] == ["security", "find-generic-password", "-s", "minimoi_route", "-a", "fakework.api", "-w"]
-    assert set(seen[0][1]) <= {"PATH", "HOME", "USER"}                           # no planted name reaches `security`
+    home = str(Path(os.environ["HOME"]))
+    assert seen[0][1] == {"PATH": "/usr/bin:/bin", "HOME": home, **({"USER": os.environ["USER"]} if "USER" in os.environ else {})}
+    # Exactly PATH, HOME and USER, whatever else this process holds; without USER, PATH and HOME.
+    monkeypatch.setenv("HOME", "/test/home")
+    monkeypatch.setenv("USER", "tester")
+    monkeypatch.setenv("GH_TOKEN", key)
+    kc.read("keychain:minimoi_route/fakework.api")
+    assert seen[1][1] == {"PATH": "/usr/bin:/bin", "HOME": "/test/home", "USER": "tester"}
+    monkeypatch.delenv("USER")
+    kc.read("keychain:minimoi_route/fakework.api")
+    assert seen[2][1] == {"PATH": "/usr/bin:/bin", "HOME": "/test/home"}
     source = Path(launch.__file__).read_text()
     assert "get_secret" not in source.replace("core/get_secret.py", "")         # named in the docstring, never used
     # The file form of the test store is private (0600) or refused.
@@ -526,6 +536,38 @@ def test_t19e_the_api_key_reaches_the_api_items_child_only_under_the_routes_name
     records = lch1(t19)
     assert len(records) == 3 and len({r["policy"]["sha256"] for r in records}) == 1       # LCH-6: one policy digest
     assert not (t19.trip / "tripwire.jsonl").exists()
+    lch6(t19)
+
+
+def test_n3_a_binary_swapped_after_the_check_is_caught_right_before_the_child_starts(t19, monkeypatch):
+    """S1-E review N3: the pinned file changes after the launch contract verified it and after the barrier's own process
+    exists (here, while its identity is read). The digest is checked again just before "G": the barrier never gets it,
+    nothing is executed, and the item is refused binary_unpinned."""
+    from core.mc_delegation_runner import runner
+    original = runner._identity
+    swapped = []
+
+    def identity_then_swap(pid):
+        got = original(pid)
+        if not swapped:
+            with open(t19.exe, "a") as fh:
+                fh.write("# swapped after the check\n")
+            swapped.append(pid)
+        return got
+    monkeypatch.setattr(runner, "_identity", identity_then_swap)
+    rid, out = _run(t19, route="fakework.plan")
+    assert swapped and out["state"] == "refused" and out["code"] == "binary_unpinned"
+    assert _result_detail(t19, rid) == {"code": "binary_unpinned", "reason": "changed_before_start"}
+    assert fakecli.starts(t19.cli_root) == []                                     # the swapped file never ran
+    assert json.loads((t19.tmp / "artifacts" / f"{rid}-g1.stage.json").read_text()) == {
+        "stage": "stopped", "reason": "binary_changed_before_start"}
+    assert not (t19.tmp / "work" / f"{rid}-g1").exists() and t19.rt.child is None
+    assert not (t19.trip / "tripwire.jsonl").exists()
+    # Unswapped, the same check passes and the child starts (T19a's path, re-run here with the file restored).
+    t19.exe, t19.sha = fakecli.install(t19.cli_root, planted=[*t19.planted.values(), t19.key])
+    assert launch.verify_binary(t19.exe, t19.rt.host.tools["fakework"].sha256)
+    rid2, out2 = _run(t19, route="fakework.plan")
+    assert out2["state"] == "completed" and len(fakecli.starts(t19.cli_root)) == 1
     lch6(t19)
 
 
