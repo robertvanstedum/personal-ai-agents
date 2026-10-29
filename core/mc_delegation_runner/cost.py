@@ -38,14 +38,18 @@ ENFORCERS = {"claude-code": ClaudeBudget(), "codex": CodexPlanLimit()}
 
 class FakeworkUnits:
     """fakework's cap (spec v0.5 §9.2): what remains of the item's one reservation, in the route's unit, passed as
-    ``--cap``; fakework stops there (exit 65). Version 2 only."""
-    UNITS = ("test_units",)
+    ``--cap``; fakework stops there (exit 65). Version 2 only. ``usd`` is the test API route's unit (``fakework.api``,
+    T19e): the per-item cap of an API route (R6.7-f, §8.2), bound here as for every other unit, while the launch
+    contract gives the route's key by reference to that one child."""
+    UNITS = ("test_units", "usd")
 
     def apply(self, argv, env, cap, unit):
-        if len(argv) < 4 or not str(argv[3]).endswith("fakework.py") or "--program" not in argv:
+        bundle = len(argv) >= 5 and str(argv[3]).endswith("fakework.py") and argv[4] == "--program"
+        pinned = len(argv) >= 2 and str(argv[0]).startswith("/") and argv[1] == "--program"      # a fakecli build
+        if not (bundle or pinned):
             raise ValueError("not_a_fakework_invocation")
         if unit not in self.UNITS:
-            raise ValueError("unit_unsupported")          # fakework.api (usd) is the launch contract's (S1-E)
+            raise ValueError("unit_unsupported")
         if isinstance(cap, bool) or not isinstance(cap, (int, float)) or not math.isfinite(cap) or cap <= 0:
             raise ValueError("cap_invalid")
         return [*argv, "--cap", f"{cap:.4f}", "--unit", unit], dict(env)
@@ -53,6 +57,6 @@ class FakeworkUnits:
 
 # Version 2 binds the remainder of an item's one reservation, in its route's unit (§8.1 record 2): actor → adapter with
 # ``apply(argv, env, cap, unit)``. Separate from ENFORCERS on purpose: the production runner advertises and binds
-# exactly ENFORCERS, so it never offers to run fakework. The real CLIs join here only with the launch contract (S1-E)
-# and their activation (R4.5-d).
+# exactly ENFORCERS, so it never offers to run fakework. The real CLIs join here only with their activation (R4.5-d): the
+# launch contract (launch.py) is built for them, and their API routes stay unqualified until the key's reach is shown.
 UNIT_ENFORCERS = {"fakework": FakeworkUnits()}

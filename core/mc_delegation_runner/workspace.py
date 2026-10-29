@@ -5,8 +5,9 @@
 * The clone has **no remote**: there is nothing to push to, and the git config also refuses
   pushes. Push/merge/deploy authority is never implied by a build scope.
 * The child process environment is rebuilt from an allowlist; tokens for GitHub, AWS, MiniMoi
-  services and model providers are not passed through. The policy is defined once, in
-  ``launch_env`` (shared with the front-door connections); this module adds only ``GIT_TERMINAL_PROMPT``.
+  services and model providers are not passed through. The policy is defined once, in the launch
+  policy file that ``launch_env`` reads (shared with the front-door connections and the probe); this
+  module adds only ``GIT_TERMINAL_PROMPT``.
 """
 from __future__ import annotations
 

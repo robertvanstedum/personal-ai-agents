@@ -17,6 +17,13 @@ per-(host, environment) lock (G6), its pinned interpreter, and its bundle digest
   which builds the authority's store in-process) needs Python 3.10 or later (``GrantStore``); a worker that reaches it
   by HTTPS does not.
 * **do_not_resume** (R6.4) always holds the two billed sessions; a host may add ids, never remove them.
+* **Pinned tools** (R6.7-d step 1): ``tools`` maps an actor to ``{path, sha256}``, the one binary the runtime starts
+  for it. ``claude-code`` and ``codex`` start only from their pin (``binary_unpinned`` otherwise; never a bare name on
+  ``PATH``). ``fakework`` runs the bundle's own ``fakework.py`` unless pinned to a ``fakecli`` build (§9.3, a test
+  instrument, refused in ``prod``). Updating a CLI is a change of this file: the new build's path and digest.
+* **API-route keys by reference** (R6.7-f): ``route_keys`` maps an API route to a credential reference,
+  ``keychain:<service>/<account>`` or, in ``dev`` only, ``test:<name>`` read from ``test_credentials`` (a private file
+  of test values made for an acceptance run). A reference, never a value.
 
 Stdlib only; Python 3.9-compatible.
 """
@@ -29,7 +36,7 @@ import json
 import os
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from core.mc_delegation_dispatcher.door import DOORS as _DOORS     # one allowlist of door URLs, the door's (N4)
@@ -49,9 +56,10 @@ _VERSION = re.compile(r"^3\.([0-9]{1,2})$")
 _KEYS = {"schema", "host_id", "environment", "roles", "expected_availability", "unreachable_grace_s", "service_manager",
          "authority", "capabilities", "concurrency", "offline_scope_default", "do_not_resume", "artifact_root",
          "workspace_root", "mirrors", "interpreter", "bundle_root", "gap_detection", "stop_timeout_s",
-         "effect_sink", "principal", "note"}
+         "effect_sink", "principal", "note", "tools", "route_keys", "test_credentials"}
 _REQUIRED = _KEYS - {"do_not_resume", "gap_detection", "stop_timeout_s", "effect_sink", "note",
-                     "service_manager", "offline_scope_default"}
+                     "service_manager", "offline_scope_default", "tools", "route_keys", "test_credentials"}
+TOOL_ACTORS = ("claude-code", "codex", "fakework")
 
 
 class HostRefused(ValueError):
@@ -87,6 +95,13 @@ class EffectSink:
 
 
 @dataclass(frozen=True)
+class ToolPin:
+    """One pinned tool binary (R6.7-d step 1): an absolute path and its 'sha256:<hex>'."""
+    path: str
+    sha256: str
+
+
+@dataclass(frozen=True)
 class HostConfig:
     host_id: str
     environment: str
@@ -108,6 +123,9 @@ class HostConfig:
     gap_detection: bool
     stop_timeout_s: int
     effect_sink: EffectSink | None
+    tools: dict = field(default_factory=dict)            # actor -> ToolPin
+    route_keys: dict = field(default_factory=dict)       # API route -> credential reference (never a value)
+    test_credentials: Path | None = None                 # dev only: the acceptance run's test credential file
     source: Path | None = None
 
     @property
@@ -206,6 +224,7 @@ def parse(doc) -> HostConfig:
     _need(sink is None or (type(sink) is dict and set(sink) == {"path", "lookup"} and type(sink["lookup"]) is bool),
           "host_effect_sink_invalid")
     _need(sink is None or doc["environment"] != "prod", "host_test_instrument_in_production")
+    tools, route_keys, test_credentials = _launch_config(doc)
     return HostConfig(
         host_id=doc["host_id"], environment=doc["environment"], principal=doc["principal"], roles=tuple(roles),
         expected_availability=doc["expected_availability"], unreachable_grace_s=grace,
@@ -217,7 +236,33 @@ def parse(doc) -> HostConfig:
         bundle_root=_path(doc["bundle_root"], "host_bundle_root_invalid"),
         gap_detection=gap == "on", stop_timeout_s=stop,
         effect_sink=None if sink is None else EffectSink(_path(sink["path"], "host_effect_sink_invalid"),
-                                                          sink["lookup"]))
+                                                          sink["lookup"]),
+        tools=tools, route_keys=route_keys, test_credentials=test_credentials)
+
+
+def _launch_config(doc) -> tuple:
+    """``tools``, ``route_keys`` and ``test_credentials`` (the launch contract's host side), checked."""
+    from . import launch, launch_env
+    prod = doc["environment"] == "prod"
+    raw = doc.get("tools", {})
+    _need(type(raw) is dict and set(raw) <= set(TOOL_ACTORS), "host_tools_invalid")
+    tools = {}
+    for actor, t in raw.items():
+        _need(type(t) is dict and set(t) == {"path", "sha256"} and launch.pin(t["sha256"]) is not None,
+              "host_tools_invalid")
+        tools[actor] = ToolPin(str(_path(t["path"], "host_tools_invalid")), launch.pin(t["sha256"]))
+    _need(not (prod and "fakework" in tools), "host_test_instrument_in_production")   # a fakecli pin is a test tool
+    keys = doc.get("route_keys", {})
+    _need(type(keys) is dict, "host_route_keys_invalid")
+    for name, ref in keys.items():
+        r = launch_env.ROUTES.get(name)
+        _need(r is not None and r["kind"] == "api" and launch.credential_ref(ref) is not None, "host_route_keys_invalid")
+        _need(not (prod and (r.get("test") or ref.startswith("test:"))), "host_test_instrument_in_production")
+    creds = doc.get("test_credentials")
+    _need(creds is None or not prod, "host_test_instrument_in_production")
+    creds = None if creds is None else _path(creds, "host_test_credentials_invalid")
+    _need(creds is not None or not any(ref.startswith("test:") for ref in keys.values()), "host_test_credentials_missing")
+    return tools, dict(keys), creds
 
 
 def _authority(a, environment) -> Authority:

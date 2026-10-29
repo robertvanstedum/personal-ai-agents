@@ -211,7 +211,20 @@ def runtime_for(host, auth, dispatcher, *, digest=None):
                               max_cost_usd=V2_MAX_COST_USD, lease_renew_s=float(auth.hosts.renew_s), tick_s=0.5)
     sink = None if host.effect_sink is None else FileSink(host.effect_sink.path, lookup=host.effect_sink.lookup)
     return runner.HostRuntime(dispatcher, cfg, host, auth.hosts, auth.sweeper.gap_threshold_s, bundle_digest=digest,
-                              sink=sink)
+                              sink=sink, stores=_stores(host))
+
+
+def _stores(host) -> dict:
+    """The credential stores an API-route launch reads its key from, by reference (R6.7-f): the login Keychain, and
+    in dev the acceptance run's test file. Nothing is read here but the test file's own (test) values."""
+    from . import launch
+    stores = {"keychain": launch.KeychainCredentialStore()}
+    if host.test_credentials is not None:
+        try:
+            stores["test"] = launch.TestCredentialStore.from_file(host.test_credentials)
+        except (OSError, ValueError) as exc:
+            raise SystemExit(f"refused: {getattr(exc, 'code', 'route_key_store_unreadable')}")
+    return stores
 
 
 def _start(host):
@@ -346,6 +359,26 @@ def _doctor(words) -> int:
     except OSError as exc:
         out["bundle"] = {"root": str(host.bundle_root), "problem": type(exc).__name__}
         problems.append("bundle_unreadable")
+    # The launch contract (R6.7-d): the policy's digest, and each pinned tool checked against its digest. A tool the
+    # host offers with no pin can never start (binary_unpinned); fakework without a pin is the bundle's own.
+    from . import launch
+    out["launch_policy"] = {"version": launch_env.POLICY_VERSION, "sha256": launch_env.POLICY_DIGEST}
+    out["tools"] = {}
+    for actor in sorted(set(host.actors()) | set(host.tools)):
+        pin = host.tools.get(actor)
+        if pin is None:
+            out["tools"][actor] = {"pinned": False, "runs": "bundle fakework.py" if actor == "fakework" else None}
+            if actor != "fakework":
+                problems.append(f"binary_unpinned:{actor}")
+            continue
+        try:
+            launch.verify_binary(pin.path, pin.sha256)
+            out["tools"][actor] = {"pinned": True, "path": pin.path, "sha256": pin.sha256, "matches": True}
+        except launch.LaunchRefused as exc:
+            out["tools"][actor] = {"pinned": True, "path": pin.path, "sha256": pin.sha256, "matches": False,
+                                   "reason": exc.detail.get("reason")}
+            problems.append(f"binary_unpinned:{actor}")
+    out["route_keys"] = {r: ref for r, ref in sorted(host.route_keys.items())}        # references, never values
     if args.do_not_resume:
         out["do_not_resume"] = list(host.do_not_resume)
     if args.env_names:                                   # names only (MC-0, LCH-6): never a value

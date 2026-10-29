@@ -97,6 +97,19 @@ _BARRIER = ("import os,sys\n"
             "fd = os.open(os.devnull, os.O_RDONLY); os.dup2(fd, 0); os.close(fd)\n"
             "os.execvp(sys.argv[1], sys.argv[1:])\n")
 
+# Version 2's barrier (launch contract, R6.7-d step 2): the same wait, then the agent starts with exactly the names the
+# runtime gave, never what the barrier's own interpreter added at its start (on macOS, Python adds LC_CTYPE by locale
+# coercion, PEP 538, and CoreFoundation adds __CF_USER_TEXT_ENCODING, both shown by test). argv[1] is the given names
+# (names only: no value on a command line); argv[2] is the pinned binary's absolute path, never looked up on PATH.
+_BARRIER_V2 = ("import os,sys\n"
+               "if os.read(0, 1) != b'G':\n"
+               "    os._exit(97)\n"
+               "fd = os.open(os.devnull, os.O_RDONLY); os.dup2(fd, 0); os.close(fd)\n"
+               "keep = set(sys.argv[1].split(',')) - {''}\n"
+               "if not os.path.isabs(sys.argv[2]):\n"
+               "    os._exit(96)\n"
+               "os.execve(sys.argv[2], sys.argv[2:], {k: v for k, v in os.environ.items() if k in keep})\n")
+
 
 def _identity(pid: int) -> str | None:
     """Process group and start time of ``pid`` (R-F2), or None if it is gone."""
@@ -705,9 +718,11 @@ class HostRuntime:
     run_once's pass. Built by the CLI from host.yaml (host.HostConfig) and the authority's values (Authority.hosts)."""
 
     def __init__(self, dispatcher, cfg: RunnerConfig, host, values, gap_threshold_s, *, bundle_digest, sink=None,
-                 now=_now, wall=time.time, mono=time.monotonic, hint=None):
+                 now=_now, wall=time.time, mono=time.monotonic, hint=None, stores=None):
         self.dispatcher, self.cfg, self.host, self.values = dispatcher, cfg, host, values
         self.bundle_digest, self.sink, self._now, self._mono = bundle_digest, sink, now, mono
+        # API-route keys by reference (R6.7-f): scheme -> launch.CredentialStore. Nothing is read until a launch needs it.
+        self.stores = dict(stores or {})
         self.detector = GapDetector(gap_threshold_s, host.gap_detection, wall=wall, mono=mono, hint=hint)
         self.runner_id = host.runner_id
         self.child = None
@@ -1279,7 +1294,8 @@ class HostRuntime:
             self._close(task, "resumed", answer)
             return nxt
         if kind == "continue":                                          # nothing left to thaw: ask again, stopped
-            return self._workspace(task, self._reconcile(task, "stopped", ["continue_without_child"]))
+            again = self._reconcile(task, "stopped", ["continue_without_child"])
+            return None if again is None else self._workspace(task, again)   # None: blocked at readback (NC1, N-F2)
         self._close(task, kind, answer)
         return None
 
@@ -1352,7 +1368,7 @@ class HostRuntime:
         return next((s for s in self.host.do_not_resume if s in blob), None)
 
     def _launch(self, claim) -> dict:
-        from . import cost, fakework
+        from . import cost, fakework, launch
         cfg, task, rid = self.cfg, claim["task"], claim["request_id"]
         try:
             env = env_mod.parse(claim["envelope"], allowed_repositories=cfg.repositories, max_cost_usd=cfg.max_cost_usd,
@@ -1373,6 +1389,10 @@ class HostRuntime:
                 return self._refuse(claim, str(exc))
             if self.sink is None and any(k in ("effect", "stale_effect_on_wake") for k, _ in steps):
                 return self._refuse(claim, "fakework_sink_missing")
+        try:
+            plan = self._contract(env, claim)        # R6.7-d/e/f before the workspace: tool, pin, route, sign-in
+        except launch.LaunchRefused as exc:
+            return self._refuse(claim, exc.code, exc.detail)
         earlier = self._unsettled(rid, claim["generation"] - 1)
         if earlier is None or claim.get("reserved") is None:
             return self._refuse(claim, "usage_unknown")         # what remains can't be known, so nothing is assumed
@@ -1391,7 +1411,7 @@ class HostRuntime:
             return self._result(claim, "failed", [], {"code": str(exc), "base_ref": env.ref})
         child = _Child(self, claim, env, task_dir)
         child.channel.open()
-        argv = commands.argv(env.actor, env.scope, env.brief, task_dir)
+        argv = commands.argv(env.actor, env.scope, env.brief, task_dir, binary=plan["binary"])
         if env.actor == "fakework":
             argv += ["--channel", str(child.channel.path)]
             if self.sink is not None:
@@ -1404,7 +1424,74 @@ class HostRuntime:
             return self._refuse(claim, "cost_limit_unenforceable")
         if self._do_not_resume(*argv):
             return self._refuse(claim, "do_not_resume")
+        try:
+            child_env = self._contract_final(plan, claim, argv, child_env, task_dir)
+        except launch.LaunchRefused as exc:
+            try:                                  # nothing ran in it: the fresh checkout goes, its claim stays
+                workspace.remove(task_dir, Path(cfg.workspace_root))
+            except Exception:
+                pass
+            return self._refuse(claim, exc.code, exc.detail)
         return self._supervise(child, argv, child_env)
+
+    # ── the launch contract (spec v0.5 R6.7-d to R6.7-f; launch.py, launch_policy.json) ──
+    def _contract(self, env, claim) -> dict:
+        """Before the workspace: which tool runs (its pin, or the bundle's own fakework), the item's route as the
+        policy knows it, the API route's key reference, and the sign-in and user and managed configuration checks.
+        Raises launch.LaunchRefused; nothing has started."""
+        from . import launch
+        pin = self.host.tools.get(env.actor)
+        if env.actor == "fakework":
+            tool = "fakecli" if pin is not None else "fakework"      # a pinned fakework is a fakecli build (§9.3)
+        elif pin is None:
+            raise launch.LaunchRefused("binary_unpinned", reason="no_pin")   # never a bare name from PATH
+        else:
+            tool = env.actor
+        route = launch.route(claim["route"], tool)
+        if route.get("test") and self.host.environment == "prod":
+            raise launch.LaunchRefused("test_route_in_production", route=claim["route"])
+        key_ref = None
+        if route["kind"] == "api":
+            key_ref = self.host.route_keys.get(claim["route"])
+            if launch.credential_ref(key_ref) is None:
+                raise launch.LaunchRefused("route_key_unbound", route=claim["route"])
+        home = workspace.child_env().get("HOME") or os.path.expanduser("~")      # the HOME the child will get
+        binary = None if pin is None else pin.path
+        argv = commands.argv(env.actor, env.scope, env.brief, Path(self.cfg.workspace_root), binary=binary)
+        launch.check_tool(tool, route_kind=route["kind"], home=home, argv=argv)
+        return {"tool": tool, "route": route, "binary": binary, "pin": None if pin is None else pin.sha256,
+                "key_ref": key_ref, "home": home}
+
+    def _contract_final(self, plan, claim, argv, child_env, task_dir) -> dict:
+        """Right before the spawn: every configuration check again, now with the project's (the fresh checkout), the
+        binary's digest against its pin (the binding check), the API route's key read by reference for this one
+        child, and the launch record written. Returns the child's environment; raises launch.LaunchRefused."""
+        from . import launch
+        tool, route = plan["tool"], plan["route"]
+        checks = launch.check_tool(tool, route_kind=route["kind"], home=plan["home"], project=str(task_dir), argv=argv)
+        if plan["binary"] is not None:
+            path, pinned_by = plan["binary"], "host_config"
+            digest = launch.verify_binary(path, plan["pin"])
+        else:
+            path, pinned_by = commands.FAKEWORK, "bundle"                  # covered by the bundle digest (G3)
+            try:
+                digest = launch.file_digest(path)
+            except OSError:
+                raise launch.LaunchRefused("binary_unpinned", reason="binary_unreadable") from None
+        names, key = list(child_env), None
+        if plan["key_ref"] is not None:
+            key = {"name": route["key_name"], "ref": plan["key_ref"]}
+            names.append(route["key_name"])
+        rec = launch.record(start_path="runtime", tool=tool, profile="unattended", route_name=claim["route"],
+                            binary_path=path, binary_digest=digest, pinned_by=pinned_by, env_names=names,
+                            parent_names=list(os.environ), checks=checks, at=self.at(), key=key,
+                            item_id=claim["request_id"], generation=claim["generation"], task=claim["task"],
+                            host_id=self.host.host_id, environment=self.host.environment)
+        if key is not None:
+            name, value = launch.api_key(claim["route"], plan["key_ref"], self.stores)
+            child_env = {**child_env, name: value}            # this child only; never this process, a file or a record
+        _write_json(self.cfg.artifact_root / f"{claim['task']}.launch.json", rec)    # S1-F's census reads it
+        return child_env
 
     def _supervise(self, child, argv, child_env) -> dict:
         cfg, env, task = self.cfg, child.env, child.task
@@ -1415,7 +1502,8 @@ class HostRuntime:
         with self._lock:
             self.child = child
         try:
-            child.proc = subprocess.Popen([sys.executable, "-c", _BARRIER, *argv], cwd=child.task_dir,
+            child.proc = subprocess.Popen([sys.executable, "-I", "-c", _BARRIER_V2, ",".join(sorted(child_env)), *argv],
+                                          cwd=child.task_dir,
                                           stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                           env=child_env, start_new_session=True)
             child.capture = _BoundedCapture(child.proc.stdout, log_path, cfg.max_output_bytes)
