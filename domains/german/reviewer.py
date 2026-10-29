@@ -41,7 +41,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from german_domain import GERMAN_DIR, GERMAN_STATE_DIR
 from domains.german.session_files import session_sort_key
 
-ERROR_TYPES = ["gender", "word_order", "missing_article", "verb_conjugation", "vocabulary", "register"]
+from domains.german.review_output import (
+    ERROR_TYPES,
+    empty_reviewer_output as _empty_reviewer_output,
+    strip_llm_fences as _strip_llm_fences,
+    parse_llm_response as _parse_llm_response,
+)
 
 SYSTEM_PROMPT = """\
 You are a German language tutor reviewing a voice practice session between a learner and an AI persona.
@@ -120,44 +125,6 @@ def _call_claude(session: dict, model: str) -> str:
 
 
 # ── Step 2: Parse & save reviewer output ─────────────────────────────────────
-
-def _empty_reviewer_output() -> dict:
-    return {
-        "overall_summary": "Review parse failed — see reviewer_raw_output in session file.",
-        "errors": [],
-        "error_type_counts": {t: 0 for t in ERROR_TYPES},
-        "vocabulary_highlights": [],
-        "strengths": [],
-        "next_focus": "",
-    }
-
-
-def _strip_llm_fences(text: str) -> str:
-    """Strip markdown code fences (```json ... ``` or ``` ... ```) from LLM output."""
-    raw = text.strip()
-    if raw.startswith("```"):
-        raw = re.sub(r'^```[a-z]*\n?', '', raw)
-        raw = re.sub(r'\n?```$', '', raw)
-    return raw.strip()
-
-
-def _parse_llm_response(text: str) -> tuple[dict, bool]:
-    """Return (parsed_dict, success). On failure returns fallback struct."""
-    try:
-        return json.loads(_strip_llm_fences(text)), True
-    except json.JSONDecodeError:
-        pass
-    # Greedy match — .*? would stop at first } and miss nested structures
-    m = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.DOTALL)
-    if m:
-        try:
-            return json.loads(m.group(1)), True
-        except json.JSONDecodeError:
-            pass
-    print(f"⚠️  LLM response parse failed. Storing raw output for debugging.", file=sys.stderr)
-    print(f"   Raw (first 300 chars): {text[:300]}", file=sys.stderr)
-    return _empty_reviewer_output(), False
-
 
 def _save_reviewer_output(session: dict, session_path: Path, reviewer_output: dict,
                            raw_text: str, parse_ok: bool):
