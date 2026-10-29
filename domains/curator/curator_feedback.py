@@ -93,16 +93,11 @@ def parse_curator_output():
     
     # Find the articles section
     lines = content.split('\n')
-    in_articles = False
     
     for line in lines:
-        # Detect start of articles list
-        if 'TOP 20 CURATED ARTICLES' in line or 'TOP 15 CURATED ARTICLES' in line:
-            in_articles = True
-            continue
-        
-        # Parse article entries
-        if in_articles and line.startswith('#'):
+        # The formatter emits TOP N for the actual count; a strict article
+        # header is sufficient even when the optional section heading is absent.
+        if line.startswith('#'):
             # Extract rank and source
             match = re.match(r'#(\d+)\s+\[([^\]]+)\].*?🏷️\s+(\w+)', line)
             if match:
@@ -1645,7 +1640,16 @@ def main():
         sys.exit(1)
     
     article = articles[rank]
-    
+    # A Telegram rank is meaningful only for the article shown in that message.
+    # Compare exact URLs without redirects/normalization and use this same
+    # parsed object for persistence, so a new briefing cannot retarget feedback.
+    if '--expected-url' in sys.argv:
+        expected_idx = sys.argv.index('--expected-url') + 1
+        expected = sys.argv[expected_idx] if expected_idx < len(sys.argv) else None
+        if not expected or article.get('url') != expected:
+            print("Article changed or identity is unavailable; request a fresh briefing")
+            sys.exit(2)
+
     # Show article details
     print(f"\n📰 Article #{rank}")
     print(f"   Title: {article['title']}")

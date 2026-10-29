@@ -85,7 +85,7 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
     
     Args:
         entries: List of article entries
-        model: Model name (ollama|xai|sonnet)
+        model: Scorer name (mechanical|xai|sonnet); ollama is a legacy mechanical alias
         run_mode: Run mode (production|dry-run)
     """
     from datetime import datetime
@@ -97,7 +97,8 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
 
     # Map model names to display names
     model_display_map = {
-        'ollama': 'ollama/phi',
+        'ollama': 'mechanical (keyword)',
+        'mechanical': 'mechanical (keyword)',
         'xai': xai_ranking_model,
         'grok-4.3': xai_ranking_model,
         'haiku': 'claude-haiku-4-5',

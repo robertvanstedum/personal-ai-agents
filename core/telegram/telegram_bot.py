@@ -76,7 +76,6 @@ from domains.german.session_files import session_sort_key
 BASE_DIR = Path(__file__).parent
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CURATOR_CRON_SCRIPT = PROJECT_ROOT / "scripts" / "operations" / "run_curator_cron.sh"
-processed_callbacks = set()
 
 # ─── Voice command patterns ───────────────────────────────────────────────────
 VOICE_COMMAND_PATTERNS = [
@@ -123,6 +122,15 @@ def get_chat_id():
     except Exception:
         pass
     return os.environ.get('TELEGRAM_CHAT_ID')
+
+from core.telegram.feedback_state import FeedbackTracker
+from core.telegram.feedback_handlers import polling_feedback, process as process_feedback, confirmation
+from core.telegram.feedback_writer import write_feedback
+
+from core.telegram.owner_policy import owner_only, admits_message, admits_callback
+
+
+processed_callbacks = FeedbackTracker()
 
 # ─── Sending ──────────────────────────────────────────────────────────────────
 
@@ -211,82 +219,9 @@ def send_briefing(token, chat_id):
     print(f"✅ Sent {len(articles[:10])} articles to Telegram")
 
 def parse_curator_output(path):
-    """
-    Parse curator_output.txt into list of article dicts.
-    Current format:
-    #N [Source] 🏷️  category (model)
-       ID: xxxxx
-       Title
-       https://...
-       Published: ...
-       Scores: X/10 (raw: X, final: X)
-       snippet...
-    """
-    import re
-
-    articles = []
-    content = path.read_text()
-
-    # Split on article markers (#1, #2, etc.)
-    sections = re.split(r'\n#(\d+) ', content)
-
-    for i in range(1, len(sections), 2):
-        num = sections[i]
-        article_text = sections[i+1]
-
-        lines = [l.strip() for l in article_text.strip().split('\n')]
-        if len(lines) < 3:
-            continue
-
-        # Parse header line: [Source] 🏷️  category (model)
-        header = lines[0]
-        source_match = re.search(r'\[(.*?)\]', header)
-        category_match = re.search(r'🏷️\s+(\w+)', header)
-
-        source = source_match.group(1) if source_match else "Unknown"
-        category = category_match.group(1) if category_match else "other"
-
-        # Find URL by pattern (robust against added/removed lines above it)
-        url = "unknown"
-        for line in lines[1:]:
-            if line.startswith('http://') or line.startswith('https://'):
-                url = line
-                break
-
-        # Find title: first non-empty line that isn't the ID, a URL, Published, or Scores
-        title = "Unknown"
-        for line in lines[1:]:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            if stripped.startswith('ID:'):
-                continue
-            if stripped.startswith('http://') or stripped.startswith('https://'):
-                continue
-            if stripped.startswith('Published:') or stripped.startswith('Scores:'):
-                continue
-            title = stripped
-            break
-
-        # Parse score
-        score = "?"
-        for line in lines:
-            if 'Scores:' in line:
-                score_match = re.search(r'Scores:\s+([\d.]+)/10', line)
-                if score_match:
-                    score = score_match.group(1)
-                break
-
-        articles.append({
-            'num': num,
-            'title': title,
-            'url': url,
-            'source': source,
-            'category': category,
-            'score': score
-        })
-
-    return articles
+    """Compatibility wrapper around the pure Curator briefing parser."""
+    from domains.curator.briefing_text import parse_briefing_text
+    return parse_briefing_text(path.read_text())
 
 # ─── Feedback ─────────────────────────────────────────────────────────────────
 
@@ -324,73 +259,22 @@ def parse_article_from_message(message_text, rank):
         'category': category
     }
 
+@owner_only(lambda: ROBERT_CHAT_ID)
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle Like/Dislike/Save button presses"""
-    query = update.callback_query
-    
-    try:
-        action, rank = query.data.split(':')
-    except ValueError:
-        await query.answer("❌ Invalid button data", show_alert=True)
-        return
-    
-    callback_id = f"{query.message.message_id}:{action}:{rank}"
-    if callback_id in processed_callbacks:
-        await query.answer("Already recorded!", show_alert=True)
-        return
-    
-    processed_callbacks.add(callback_id)
-    try:
-        await query.answer(f"⏳ Recording {action}...")
-    except Exception as e:
-        print(f"⚠️  Could not send callback ack (network issue?): {e}")
+    await polling_feedback(
+        update.callback_query, processed_callbacks,
+        lambda action, rank, url: record_feedback(action, rank, {"link": url}),
+    )
 
-    # Parse article data from message text
-    article_data = parse_article_from_message(query.message.text, rank)
-    result = record_feedback(action, rank, article_data)
-
-    if result['success']:
-        original = query.message.text
-        if "✅" in original:
-            original = original.split('\n✅')[0]
-        try:
-            await query.edit_message_text(
-                text=original + f"\n\n✅ {action.capitalize()}d!",
-                reply_markup=query.message.reply_markup
-            )
-        except Exception as e:
-            print(f"⚠️  Could not edit message after feedback (network issue?): {e}")
-    else:
-        try:
-            await query.answer(f"❌ {result['message']}", show_alert=True)
-        except Exception as e:
-            print(f"⚠️  Could not send error callback: {e}")
 
 def record_feedback(action, rank, article_data):
-    """Call repo's curator_feedback.py via venv Python to record feedback"""
-    venv_python = BASE_DIR / 'venv' / 'bin' / 'python'
-    python_bin = str(venv_python) if venv_python.exists() else 'python3'
-    feedback_script = BASE_DIR / 'domains' / 'curator' / 'curator_feedback.py'
+    """Compatibility adapter; message identity is required before invoking CLI."""
+    return write_feedback(action, int(rank), article_data.get("link"), root=PROJECT_ROOT)
 
-    if not feedback_script.exists():
-        return {'success': False, 'message': f'curator_feedback.py not found at {feedback_script}'}
-
-    try:
-        result = subprocess.run(
-            [python_bin, str(feedback_script), action, str(rank),
-             '--channel', 'telegram', '--text', f'{action}d from Telegram'],
-            capture_output=True,
-            cwd=str(BASE_DIR),
-            timeout=30
-        )
-        if result.returncode == 0:
-            return {'success': True, 'message': f'Article #{rank} {action}d'}
-        return {'success': False, 'message': result.stderr.decode()[:100]}
-    except Exception as e:
-        return {'success': False, 'message': str(e)}
 
 # ─── Commands ─────────────────────────────────────────────────────────────────
 
+@owner_only(lambda: ROBERT_CHAT_ID)
 async def cmd_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /run — trigger the curator manually"""
     if not update.message:
@@ -409,6 +293,7 @@ async def cmd_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(f"❌ Curator failed:\n{err[:300]}")
 
+@owner_only(lambda: ROBERT_CHAT_ID)
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /status — show last run info"""
     if not update.message:
@@ -421,6 +306,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("No log file found yet.")
 
+@owner_only(lambda: ROBERT_CHAT_ID)
 async def cmd_briefing(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /briefing — resend today's briefing"""
     if not update.message:
@@ -581,6 +467,8 @@ def execute_voice_command(command, args, chat_id, token):
 
 def handle_voice_message(message, token):
     """Transcribe voice, echo back, classify as command or capture, act/log."""
+    if not admits_message(message, ROBERT_CHAT_ID):
+        return
     chat_id = str(message['chat']['id'])
     voice = message['voice']
     file_id = voice['file_id']
@@ -1925,6 +1813,7 @@ async def _handle_phrase_capture_input(update: Update, text: str) -> None:
 
 
 
+@owner_only(lambda: ROBERT_CHAT_ID)
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Route plain text messages — German transcript, !german commands, fallback."""
     if not update.message or not update.message.text:
@@ -2099,6 +1988,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
 
 
+@owner_only(lambda: ROBERT_CHAT_ID)
 async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle voice messages in polling mode: transcribe → echo → route."""
     if not update.message or not update.message.voice:
@@ -2269,6 +2159,7 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
 
 MAX_UPLOAD_BYTES = 50 * 1024  # 50KB
 
+@owner_only(lambda: ROBERT_CHAT_ID)
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle .txt file uploads — read content, enforce 50KB limit, feed transcript pipeline."""
     if not update.message or not update.message.document:
@@ -2305,7 +2196,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await _handle_german_transcript(update, text)
 
 
-def register_german_handlers(app, include_text: bool = True) -> None:
+def register_german_handlers(app, include_text: bool = True, *, resolve_owner=None) -> None:
     """Register the German-domain message handlers on a python-telegram-bot Application.
 
     Shared by run_bot_mode() (legacy minimoi_cmd_bot on the Mac) and by
@@ -2318,10 +2209,13 @@ def register_german_handlers(app, include_text: bool = True) -> None:
     bot intercepts !ops first, then delegates the remainder to handle_text_message.
     Restores persisted drill state so an in-progress drill survives a restart.
     """
+    # A host bot may impose its own admission policy in addition to the
+    # retained German-domain guard. Missing host config must fail closed.
+    guard = owner_only(resolve_owner) if resolve_owner is not None else lambda handler: handler
     if include_text:
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
-    app.add_handler(MessageHandler(filters.VOICE, handle_voice_polling))
-    app.add_handler(MessageHandler(filters.Document.TXT, handle_document))
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, guard(handle_text_message)))
+    app.add_handler(MessageHandler(filters.VOICE, guard(handle_voice_polling)))
+    app.add_handler(MessageHandler(filters.Document.TXT, guard(handle_document)))
     _load_drill_state()
     _load_drill_list_state()
 
@@ -2391,105 +2285,56 @@ def get_webhook_secret():
 
 
 def run_webhook_mode():
-    """Run Flask webhook server on localhost:8444"""
-    from flask import Flask, request, jsonify
+    """Start the authenticated owner-only webhook using the legacy CLI."""
+    from core.telegram.webhook_app import create_webhook_app
 
+    secret = get_webhook_secret()
+    if not secret or not secret.strip():
+        print("Webhook mode requires TELEGRAM_WEBHOOK_SECRET or a configured keychain secret")
+        return 1
     token = get_token()
     if not token:
-        print("❌ No Telegram token found")
-        return
-
-    webhook_secret = get_webhook_secret()
-    if webhook_secret:
-        print("🔒 Webhook secret validation enabled")
-    else:
-        print("⚠️  No webhook secret found — requests will not be validated")
-
-    app = Flask(__name__)
-
-    @app.route('/webhook', methods=['POST'])
-    def webhook():
-        """Handle incoming webhook updates from Telegram"""
-        # Validate secret token if one is configured
-        if webhook_secret:
-            incoming = request.headers.get('X-Telegram-Bot-Api-Secret-Token', '')
-            if incoming != webhook_secret:
-                print(f"⚠️  Rejected webhook request with bad secret")
-                return jsonify({'error': 'Unauthorized'}), 403
-
-        try:
-            update_json = request.get_json()
-
-            # Handle callback_query (button presses)
-            if 'callback_query' in update_json:
-                handle_webhook_callback(update_json['callback_query'], token)
-                return jsonify({'ok': True})
-
-            if 'message' in update_json:
-                msg = update_json['message']
-                if 'voice' in msg:
-                    # Thread voice handling — Whisper can take 10-30s, must return 200 fast
-                    threading.Thread(
-                        target=handle_voice_message,
-                        args=(msg, token),
-                        daemon=True
-                    ).start()
-                elif 'text' in msg and msg['text'].startswith('/'):
-                    handle_webhook_command(msg, token)
-                elif 'text' in msg:
-                    handle_webhook_text_message(msg, token)
-                return jsonify({'ok': True})
-
-            return jsonify({'ok': True})
-        except Exception as e:
-            print(f"❌ Webhook error: {e}")
-            return jsonify({'error': str(e)}), 500
-    
-    @app.route('/health', methods=['GET'])
-    def health():
-        """Health check endpoint"""
-        return jsonify({'status': 'ok', 'mode': 'webhook'})
-    
-    print("🌐 Starting webhook server on http://localhost:8444")
-    print("📡 Waiting for Telegram updates...")
+        print("No Telegram token found")
+        return 1
+    app = create_webhook_app(
+        secret=secret,
+        resolve_owner=lambda: ROBERT_CHAT_ID,
+        callback=lambda query: handle_webhook_callback(query, token),
+        voice=lambda message: handle_voice_message(message, token),
+        command=lambda message: handle_webhook_command(message, token),
+        text=lambda message: handle_webhook_text_message(message, token),
+    )
+    print("Starting authenticated Telegram webhook on port 8444")
     app.run(host='0.0.0.0', port=8444, debug=False)
 
+
 def handle_webhook_callback(callback_query, token):
-    """Process button callback from webhook"""
-    query_id = callback_query['id']
-    data = callback_query['data']
-    message = callback_query['message']
-    
+    """Apply the same validated feedback contract to raw webhook callbacks."""
+    if not admits_callback(callback_query, ROBERT_CHAT_ID):
+        return
     try:
-        action, rank = data.split(':')
-    except ValueError:
-        answer_callback(token, query_id, "❌ Invalid button data", alert=True)
+        request, answer = process_feedback(
+            callback_query, processed_callbacks,
+            lambda action, rank, url: record_feedback(action, rank, {"link": url}),
+        )
+    except ValueError as exc:
+        answer_callback(token, callback_query.get('id'), str(exc), alert=True)
         return
-    
-    callback_id = f"{message['message_id']}:{action}:{rank}"
-    if callback_id in processed_callbacks:
-        answer_callback(token, query_id, "Already recorded!", alert=True)
-        return
-    
-    processed_callbacks.add(callback_id)
-    answer_callback(token, query_id, f"⏳ Recording {action}...")
-    
-    # Parse article data from message text
-    article_data = parse_article_from_message(message['text'], rank)
-    result = record_feedback(action, rank, article_data)
-    
-    if result['success']:
-        original = message['text']
-        if "✅" in original:
-            original = original.split('\n✅')[0]
-        
-        edit_message(token, message['chat']['id'], message['message_id'], 
-                    original + f"\n\n✅ {action.capitalize()}d!")
-    else:
-        answer_callback(token, query_id, f"❌ {result['message']}", alert=True)
+    answer_callback(token, callback_query.get('id'), answer['message'], alert=not answer['success'])
+    if answer['success']:
+        message = callback_query['message']
+        try:
+            edit_message(token, message['chat']['id'], message['message_id'],
+                         confirmation(message.get('text', ''), request.action),
+                         entities=message.get('entities', []), reply_markup=message.get('reply_markup'))
+        except Exception:
+            pass  # Do not discard confirmed storage because Telegram editing failed.
+
 
 def handle_webhook_text_message(message, token):
     """Route plain text — dispatch transcript or generic ack."""
+    if not admits_message(message, ROBERT_CHAT_ID):
+        return
     chat_id = str(message['chat']['id'])
     text = message.get('text', '')
     if text.startswith('---SESSION---'):
@@ -2533,6 +2378,8 @@ def _handle_webhook_german_transcript(text, chat_id, token):
 
 def handle_webhook_command(message, token):
     """Process commands from webhook"""
+    if not admits_message(message, ROBERT_CHAT_ID):
+        return
     chat_id = message['chat']['id']
     text = message['text']
     
@@ -2585,19 +2432,17 @@ def answer_callback(token, query_id, text, alert=False):
                 import time; time.sleep(2)
     print("❌ answer_callback failed after 2 attempts — feedback still recorded")
 
-def edit_message(token, chat_id, message_id, text):
+def edit_message(token, chat_id, message_id, text, *, entities=None, reply_markup=None):
     """Edit an existing message"""
-    requests.post(
-        f"https://api.telegram.org/bot{token}/editMessageText",
-        json={
-            "chat_id": chat_id,
-            "message_id": message_id,
-            "text": text,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": True
-        },
-        timeout=5
-    )
+    payload = {"chat_id": chat_id, "message_id": message_id, "text": text,
+               "disable_web_page_preview": True}
+    if entities is None:
+        payload["parse_mode"] = "HTML"
+    else:
+        payload["entities"] = entities
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
+    requests.post(f"https://api.telegram.org/bot{token}/editMessageText", json=payload, timeout=5)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -2608,6 +2453,6 @@ if __name__ == '__main__':
     if args.send:
         run_send_mode()
     elif args.webhook:
-        run_webhook_mode()
+        sys.exit(run_webhook_mode() or 0)
     else:
         run_bot_mode()

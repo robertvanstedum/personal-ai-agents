@@ -6,7 +6,7 @@
     "dry_run": "d6d048576dcf5fc3cf2c693d6f1a1987461d28db8d8a9f61964f62223e559429",
     "haiku": "2db03233b5a82dc5af92336c6efc4107b90e13433df5232830b36a429b571840",
     "sonnet": "deb1af81b476a04018d061ca84a1b4b1b8963a593cecd8ecaf5ff9775eeb818d",
-    "ollama": "b43aaf950e8bfc611a7afcef7811153e405b0356de9603c9b6320fe662671da1",
+    "ollama": "505237ecdfcb6fdfd12f1cc9526c13496fb65a848bb2daac6907ed23df9590d3",
     "custom_model": "edb43ab7eca80341e374c66a550d347ede2be9cd19eb2fd5b875735775fd3edc",
     "radar": "18c3f4bc2459a425ec95637e61d5588aeb15ec260c6b29ee7ca07af4dca2660b",
     "published_text": "f8cf1db96eb12e72d82dd80ab822e784f09d2d9b2dc21edb57e5fe2b3e66e6eb"

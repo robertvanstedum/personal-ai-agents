@@ -107,6 +107,7 @@ HAIKU_INPUT_USD_PER_MILLION = 1.00
 HAIKU_OUTPUT_USD_PER_MILLION = 5.00
 
 SCORING_MODE_MAP = {
+    'mechanical': 'mechanical',
     'ollama': 'mechanical',
     'xai': 'xai',
     XAI_RANKING_MODEL: 'xai',
@@ -2154,16 +2155,16 @@ def generate_index_page(archive_dir: str):
                 elif model == "xai":
                     model_display = "grok-beta"  # Old xai entries
                 elif model == "mechanical":
-                    model_display = "ollama/phi"  # Old mechanical entries
+                    model_display = "mechanical (keyword)"  # Deterministic keyword scoring
                 else:
                     model_display = "legacy" if model == "?" else model
             else:
                 # New entry: show full metadata
                 formatted_time = datetime_obj.strftime("%I:%M %p")
                 display_article_count = article_count
-                # Map old "mechanical" to new "ollama/phi" for consistency
+                # Describe the scorer without inventing a provider/model
                 if model == "mechanical":
-                    model_display = "ollama/phi"
+                    model_display = "mechanical (keyword)"
                 elif model == "unknown":
                     model_display = "legacy"
                 else:
@@ -2217,7 +2218,7 @@ def main():
     dry_run = "--dry-run" in sys.argv
 
     # Model selection (default: xai)
-    # --model=[ollama|xai|grok-4.3|haiku|sonnet] controls which scorer is used.
+    # --model=[mechanical|ollama|xai|grok-4.3|haiku|sonnet] controls which scorer is used.
     model = 'xai'
     for arg in sys.argv:
         if arg.startswith('--model='):
@@ -2227,6 +2228,8 @@ def main():
     # Resolve explicitly so a typo cannot silently select a different model.
     try:
         mode = resolve_scoring_mode(model)
+        if model == 'ollama':
+            print('--model=ollama is a legacy alias for mechanical keyword scoring; no Ollama model is called')
     except ValueError as error:
         print(f"\n💥 {error}")
         sys.exit(2)
@@ -2263,7 +2266,7 @@ def main():
     except (ValueError, RuntimeError) as e:
         # API error with no fallback - exit with error
         print(f"\n💥 Curation failed: {e}")
-        print("\nTip: Run with --model=ollama to test everything except API")
+        print("\nTip: Run with --model=mechanical to use keyword scoring without a model API")
         sys.exit(1)
     
     # Log scored articles to Signal Store (production only)
