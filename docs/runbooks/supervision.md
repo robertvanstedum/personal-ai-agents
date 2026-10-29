@@ -1,16 +1,21 @@
-# Runbook — build supervision: check-ins, nudges and Robert's approvals (#365)
+# Runbook — build supervision: check-ins and Robert's approvals (#365)
 
 **26 Oct 2026 · Claude Code.** Robert: "check in every 15 minutes on Claude and the build. If there is an issue or
 error, or very high stake decision, let me know", and "I don't need MC to approve. I need to know that I need to approve
 and tell me." This page covers what runs where, how to turn it on and off, and how to check it.
 
+**Updated 28 Oct 2026: the nudges are retired.** Nothing wakes an agent session any more.
+- The "continue" nudge went in #434.
+- The `ci_finished` nudge went with Robert's N2 on the host runtime spec (INIT-2026-0011).
+- What the check-in does instead is under "The check-in".
+
 ## What runs where
 
 | Piece | Where | What it does |
 |---|---|---|
-| `scripts/agents/stop.py` | the Mac, run by Claude Code / Codex | `line` prints and files the stop line. `ask` files a decision for Robert. `wait` blocks until his answer or a nudge arrives (run in the background; its exit wakes a Claude Code session). |
+| `scripts/agents/stop.py` | the Mac, run by Claude Code / Codex | `line` prints and files the stop line. `ask` files a decision for Robert. `wait` blocks until his answer arrives (run in the background; its exit wakes a Claude Code session). No nudge arrives any more. |
 | `scripts/agents/claude_stop_hook.py` | the Mac, Claude Code's Stop hook | files every turn's stop line, and asks once when it is missing. Settings: `scripts/agents/claude-stop-hook.settings.json` |
-| `scripts/mc_host/supervision_sync.py` | the Mac, launchd `ai.minimoi.supervision-sync`, every 30 s | outbound HTTPS to `minimoi.ai/internal/supervision/v1/worker`: stops and asks up; answers and nudges down into `~/.minimoi/supervision/inbox/<session>/` |
+| `scripts/mc_host/supervision_sync.py` | the Mac, launchd `ai.minimoi.supervision-sync`, every 30 s | outbound HTTPS to `minimoi.ai/internal/supervision/v1/worker`: stops and asks up; answers down into `~/.minimoi/supervision/inbox/<session>/`. The wire still carries an empty `nudges` list until this sync is reinstalled without it. |
 | `/internal/supervision/v1/worker` | portal (`minimoi_portal/guild_ui/supervision.py`) | the sync's only path. Its token's SHA-256 is all prod holds. It can report and ask, never answer. |
 | `minimoi-supervisor` | EC2, portal image, compose profile `supervisor` | sends each decision to Robert word for word on the approvals bot, records his reply, runs the check-in every 15 min (`core/supervision/watch.py`) |
 | "approve D-n" / "no D-n" | the Guild chat (`_owner_decision_command`) | Robert's own owner turn answers that decision into the same record |
@@ -32,19 +37,22 @@ Tables: `guild.supervision_*` (`core/supervision/sql/001_supervision.sql`, appli
 ## The check-in (every 15 min)
 
 The supervisor reads open PRs and their checks, release workflow runs (`deploy.yml`, `deploy-mc-agent.yml`,
-`deploy-iotconnect.yml`) and the newest stop line of each agent session. It does three things:
+`deploy-iotconnect.yml`) and the newest stop line of each agent session. It never calls a model, and it sends nothing to
+an agent session. It does two things:
 
-- **Nudges, with fixed texts, never model-written:**
-  - a session waiting on CI, once its PR's checks finish;
-  - a session whose turn ended with no stop line, after 20 min.
 - **Tells Robert once per item:**
   - errors: failed CI, a failed release, an agent in `error`;
   - `blocked` sessions;
   - questions waiting on him that were not filed as decisions;
   - green PRs waiting for his merge;
-  - reviews waiting over an hour;
-  - nudged sessions that did not resume.
+  - **stalled** sessions:
+    - a review waited on for over an hour;
+    - a session whose turn ended with no stop line, after 20 min;
+    - a session waiting on CI once that PR's CI has finished, with the result. This is told once per stop line and
+      conclusion. A re-run that gives a result this stop hasn't had is told again.
 - **Records every check-in** in `guild.supervision_checkins`. It sends Telegram only when something is new.
+
+A stalled session doesn't resume by itself. Robert, or MC on his word, hands it its next step.
 
 ## Turn on (once)
 
@@ -109,6 +117,8 @@ The tables stay; nothing else depends on them.
 
 - MC's own OpenClaw clock is not used. A scheduled OpenClaw turn has no live owner turn, so MiniMoi's tools refuse
   it (`core/mc_tools/service.py`, `_bind`). The supervisor is a plain process; MC carries the intent in the Guild chat.
-- A nudge wakes a Claude Code session only if that session left `stop.py wait` running. Otherwise the nudge waits
-  in its inbox, and after 40 min Robert is told the session stalled.
+- Nothing wakes a session that is waiting on CI or has gone quiet. Robert is told instead (see "The check-in").
+  Some text still promises a nudge: the Stop hook's prompt, `scripts/agents/STOP_LINE.md`, `stop.py` and MC's persona
+  0.1.16. That text, the unused nudge queue (`guild.supervision_nudges`) and the empty `nudges` field go in a later
+  cleanup, once the Mac's sync is reinstalled. Changing the hook or the agents' scripts makes a full release.
 - Codex has no Stop hook. It prints the line with `stop.py line --agent codex --session <thread id>`.
