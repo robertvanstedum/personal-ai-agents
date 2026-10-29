@@ -1232,7 +1232,7 @@ class Plan(Run):
         starts = len(fakecli.starts(self.cli_root))
         row = self._t19_run("T19b.signed_out")
         detail = (row or {}).get("result_detail") or {}
-        self.check("T19b.signin_missing_before_spawn", bool(row) and row["state"] == "refused"
+        self.check("T19b.LCH-2", bool(row) and row["state"] == "refused"
                    and detail.get("code") == "signin_missing" and len(fakecli.starts(self.cli_root)) == starts,
                    {"state": row and row["state"], "code": detail.get("code")})
         login = detail.get("login") or "fakecli login"
@@ -1251,13 +1251,13 @@ class Plan(Run):
         self.log("injection", "T19c: a key helper in fakecli's user configuration")
         row = self._t19_run("T19c.user")
         detail = (row or {}).get("result_detail") or {}
-        self.check("T19c.user_key_config_present", bool(row) and detail.get("code") == "key_config_present"
+        self.check("T19c.LCH-3_user", bool(row) and detail.get("code") == "key_config_present"
                    and "acceptance-user" not in json.dumps(detail), {"detail": detail})
         settings.unlink()
         self.log("injection", "T19c: the project configuration names a key helper (ref t19c)")
         row = self._t19_run("T19c.project", ref=self.ref_t19c)
         detail = (row or {}).get("result_detail") or {}
-        self.check("T19c.project_key_config_present", bool(row) and detail.get("code") == "key_config_present"
+        self.check("T19c.LCH-3_project", bool(row) and detail.get("code") == "key_config_present"
                    and "acceptance" not in json.dumps(detail.get("setting", "")), {"detail": detail})
 
     def t19d(self):
@@ -1274,7 +1274,7 @@ class Plan(Run):
         finally:
             exe.write_bytes(original)
         detail = (row or {}).get("result_detail") or {}
-        self.check("T19d.binary_unpinned_before_spawn", bool(row) and detail.get("code") == "binary_unpinned"
+        self.check("T19d.LCH-4", bool(row) and detail.get("code") == "binary_unpinned"
                    and len(fakecli.starts(self.cli_root)) == starts, {"detail": detail})
 
     def t19e(self):
