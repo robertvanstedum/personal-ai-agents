@@ -90,3 +90,29 @@ def test_the_script_itself_redeploys_nothing():
     sys.path.insert(0, str(REPO / "scripts/ci"))
     from classify_release import classify
     assert classify(["scripts/ci/release_base.sh"]) == ("documents", ())
+
+
+def test_pr_update_compares_all_branch_commits_not_only_latest_push(tmp_path):
+    _origin, clone, base, previous_head = _clone(tmp_path)
+    latest = _commit(clone, 'd')
+    code, out, _err = _base(clone, previous_head, latest, 'main')
+    assert (code, out) == (0, base)
+    assert _git(clone, 'diff', '--name-only', out, latest).splitlines() == ['c', 'd']
+
+
+def test_pr_merge_commit_compares_against_target_branch(tmp_path):
+    _origin, clone, base, previous_head = _clone(tmp_path)
+    _commit(clone, 'd')
+    _git(clone, 'checkout', '-q', 'main')
+    _git(clone, '-c', 'user.name=t', '-c', 'user.email=t@t', 'merge', '--no-ff', '-qm', 'PR test merge', 'pr')
+    code, out, _err = _base(clone, previous_head, 'HEAD', 'main')
+    assert (code, out) == (0, base)
+    assert _git(clone, 'diff', '--name-only', out, 'HEAD').splitlines() == ['c', 'd']
+
+
+def test_pr_without_its_target_ref_requires_full_classification(tmp_path):
+    _origin, clone, _base_sha, previous_head = _clone(tmp_path)
+    _commit(clone, 'd')
+    code, out, err = _base(clone, previous_head, 'HEAD', 'missing-target')
+    assert (code, out) == (3, '')
+    assert 'full release' in err

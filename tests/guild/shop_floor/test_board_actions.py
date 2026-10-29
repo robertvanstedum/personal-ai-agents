@@ -275,13 +275,28 @@ def test_scrub_is_reported_without_retaining_unscrubbed_payload(board_case):
     assert "test@example.com" not in repr(db.rows("board_operations"))
 
 
-def test_photo_insert_initializes_revision_and_purge_removes_target_without_rewriting_receipt(board_case):
-    _, store, svc, ctx = board_case
+@pytest.fixture
+def photo_asset(board_case):
+    """Keep synthetic media rows local to the test on either database backend."""
+    _, store, _, ctx = board_case
     from minimoi_portal.guild_ui.stores import utc_now
     asset = uid()
     store._run(lambda q: q("INSERT INTO media.assets (id,owner,kind,sha256,storage_key,created_at) "
                             "VALUES (%s,%s,'photo',%s,%s,%s)",
                             [asset, ctx.principal, asset.replace('-', '') * 2, 'test/' + asset, utc_now()]), write=True)
+    try:
+        yield asset
+    finally:
+        def cleanup(q):
+            q("DELETE FROM guild.floor_postits WHERE asset_id=%s AND floor=%s", [asset, store.floor])
+            q('DELETE FROM media."references" WHERE asset_id=%s', [asset])
+            q("DELETE FROM media.assets WHERE id=%s", [asset])
+        store._run(cleanup, write=True)
+
+
+def test_photo_insert_initializes_revision_and_purge_removes_target_without_rewriting_receipt(board_case, photo_asset):
+    _, store, svc, ctx = board_case
+    asset = photo_asset
     photo = store.add_photo(asset, ctx.principal, None, OWNER, idempotency_key=uid()).value
     rev = store._run(lambda q: q("SELECT semantic_revision FROM guild.floor_postits WHERE id=%s", [photo['id']]), write=False)
     assert rev[0][0] == 1

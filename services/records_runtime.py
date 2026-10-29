@@ -4,6 +4,7 @@ Manifest creation, migration, keys/grants and service installation are operator 
 from __future__ import annotations
 import argparse,hashlib,importlib.util,json,os,re,sqlite3,stat,sys
 from pathlib import Path
+from contextlib import closing
 from minimoi_portal.transport_profiles import PRODUCTION, select_records_profile
 APP_DIR=Path(__file__).resolve().parents[1]/'prototype-lab/projects/project-records-room-poc'
 MANIFEST='production-runtime.json'
@@ -42,7 +43,7 @@ def preflight(data_dir,environ,*,port=18880):
     owner=private_file(root/'owner-key.txt',4096).strip();session=private_file(root/'session-key.txt',4096).strip()
     refuse(len(owner)>=32 and len(session)>=32 and hashlib.sha256(owner).hexdigest()==marker['owner_key_sha256'] and hashlib.sha256(session).hexdigest()==marker['session_key_sha256'],'prepared_store_keys_required')
     private_file(root/'records.sqlite3',512*1024*1024,metadata_only=True)
-    with sqlite3.connect((root/'records.sqlite3').as_uri()+'?mode=ro',uri=True) as db:
+    with closing(sqlite3.connect((root/'records.sqlite3').as_uri()+'?mode=ro',uri=True)) as db:
         refuse(schema_hash(db)==marker['schema_sha256'],'prepared_schema_mismatch')
         tables={r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")};refuse(REQUIRED_TABLES<=tables,'prepared_schema_incomplete')
         refuse(db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()==('5',),'prepared_schema_version_required')

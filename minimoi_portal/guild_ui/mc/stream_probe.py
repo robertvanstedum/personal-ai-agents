@@ -35,6 +35,8 @@ import time
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
+from .probe_metrics import measurement, probe_cap, total
+
 PROMPT_A = "In 5 short bullets, what are the in-build Build Queue items and what blocks each?"
 PROMPT_B = "Write a detailed 600-word explanation of how Build Queue items move from spec to done."
 MARK = "[cost probe] "
@@ -79,7 +81,7 @@ def _turn_line(services, turn_id: str) -> dict | None:
 
 
 def _count(value):
-    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+    return measurement(value)
 
 
 def one_turn(services, conversations, *, principal: str, label: str, stop_after_first_text: bool,
@@ -162,8 +164,8 @@ def one_turn(services, conversations, *, principal: str, label: str, stop_after_
     counted.update(r.get("record_id") for r in gw)
     gw_out = [_count(r.get("output_tokens")) for r in gw]
     gw_cost = [_count(r.get("cost_usd")) for r in gw]
-    gw_out_sum = sum(gw_out) if gw and all(v is not None for v in gw_out) else None
-    cost = sum(gw_cost) if gw and all(v is not None for v in gw_cost) else None
+    gw_out_sum = total(gw_out, require_all=True)
+    cost = total(gw_cost, require_all=True)
     stream_out = _count((stream_rec or {}).get("output_tokens"))
 
     out(f"── turn {which} ({'Stop after the first text' if stop_after_first_text else 'streaming and usage'}) · "
@@ -201,7 +203,7 @@ def run(services, conversations, *, principal: str, label: str, stop_only: bool,
         wait_s: float = 30.0, out=print, sleep=time.sleep) -> dict:
     """Turn A, then Turn B (or Turn B alone), within the cap (see the module doc)."""
     from .cost_probe import HARD_CAP
-    cap = min(float(cap), HARD_CAP)
+    cap = probe_cap(cap, HARD_CAP)
     if not usage_dir or not os.path.isdir(usage_dir):
         out("Refused: no usage store to read (MINIMOI_USAGE_DIR); each turn's cost would be unknown. Nothing was sent.")
         return {"turns": [], "spent": 0.0, "stopped": "no_usage_store"}
@@ -216,14 +218,15 @@ def run(services, conversations, *, principal: str, label: str, stop_only: bool,
         turns.append(result)
         if result.get("status") in ("refused", "not_sent"):
             return {"turns": turns, "spent": spent, "stopped": "refused"}
-        if result.get("cost_usd") is None:
+        cost = measurement(result.get("cost_usd"))
+        if cost is None:
             if stop is False:
                 out(f"STOP: turn A's cost could not be read; it is unknown, so turn B is not sent. "
                     f"Spent at least ${spent:.4f}.")
             else:
                 out(f"total spent: at least ${spent:.6f} (turn B's cost is unknown) · cap ${cap:.2f}")
             return {"turns": turns, "spent": spent, "stopped": "usage_unknown"}
-        spent += result["cost_usd"]
+        spent += cost
     out(f"total spent: ${spent:.6f} (cap ${cap:.2f})")
     return {"turns": turns, "spent": spent, "stopped": None}
 

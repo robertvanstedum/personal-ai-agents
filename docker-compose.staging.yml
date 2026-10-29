@@ -71,6 +71,8 @@ services:
       # The usage store (usage-record U1): one file per month, mode 600.
       - MINIMOI_USAGE_DIR=/app/usage-data
       - MINIMOI_ENV=staging
+      # Named local regression only; no production or automatic fallback route.
+      - OLLAMA_API_BASE=${OLLAMA_API_BASE:-http://host.docker.internal:11434}
     # Permanently on mc-net (MC spec v0.9 §3), so starting or stopping Master
     # Craftsman's own project never recreates the gateway. The gateway keeps
     # `default` for CoS and provider egress.

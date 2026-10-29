@@ -459,3 +459,15 @@ def test_relocated_state_mounts_keep_canonical_host_sources_without_nested_data(
     rows = {host: old for _kind, old, host, _target in _map_rows()}
     assert rows["data/research-library"] == "/app/_NewDomains/research-intelligence/library"
     assert rows["data/research-config/config.json"] == "/app/_NewDomains/research-intelligence/agent/config.json"
+
+
+def test_empty_extra_path_list_still_publishes_known_state_snapshot(tmp_path):
+    # A snapshot containing only known state has no extra paths. This must
+    # complete on the system Bash as well as on the production shell.
+    result, root, log = _preserve(tmp_path, diff='')
+    assert result.returncode == 0, result.stderr
+    (snapshot,) = root.iterdir()
+    assert not snapshot.name.endswith('.partial')
+    assert 'copied /app/signal_store.jsonl' in (snapshot / 'PATHS').read_text()
+    assert 'stop --time 30 minimoi-curator' in log
+    assert 'start minimoi-curator' in log

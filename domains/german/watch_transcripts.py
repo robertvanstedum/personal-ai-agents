@@ -32,7 +32,8 @@ sys.path.insert(0, str(HERE.resolve()))
 # the raw keyring import.
 if str(PROJECT_ROOT.resolve()) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT.resolve()))
-from german_domain import GERMAN_DIR, GERMAN_STATE_DIR
+from german_domain import GERMAN_DIR, GERMAN_STATE_DIR, VENV_PYTHON
+from domains.german.session_files import session_sort_key
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -55,7 +56,6 @@ LOG_FILE       = LOGS / "watcher.log"
 POLL_INTERVAL  = CFG["poll_interval_seconds"]
 EXTENSIONS     = set(CFG["supported_extensions"])
 PIPELINE_BASE  = CFG["pipeline_base_dir"]  # relative to project root
-VENV_PYTHON    = PROJECT_ROOT / "venv/bin/python3"
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
 
@@ -175,7 +175,7 @@ def _process(path: Path) -> None:
 
     # Step 4 — check drill mode (read latest session JSON)
     sessions_dir = GERMAN_STATE_DIR / "sessions"
-    session_files = sorted(sessions_dir.glob("*.json"))
+    session_files = sorted(sessions_dir.glob("*.json"), key=session_sort_key)
     drill_mode = False
     drill_session = 0
     drill_total = 1
