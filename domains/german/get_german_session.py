@@ -517,6 +517,10 @@ def main():
             )
 
     if args.skip:
+        if args.dry_run:
+            print(f"Would skip {persona_name} ({scenario}) and advance lesson rotation.")
+            return
+
         # Import reviewer helpers here to avoid circular deps at module level
         import sys as _sys
         _reviewer_dir = Path(__file__).parent
