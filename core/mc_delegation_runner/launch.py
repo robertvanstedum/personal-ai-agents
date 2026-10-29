@@ -290,8 +290,10 @@ class KeychainCredentialStore(CredentialStore):
     def read(self, ref: str) -> str:
         service, _, account = ref.split(":", 1)[1].partition("/")
         try:
+            # Only what `security` needs to find the user's login keychain (unverified here: never run in S1).
+            env = {"PATH": "/usr/bin:/bin", **{k: os.environ[k] for k in ("HOME", "USER") if k in os.environ}}
             got = self._run(["security", "find-generic-password", "-s", service, "-a", account, "-w"],
-                            capture_output=True, text=True, timeout=10, env={"PATH": "/usr/bin:/bin"})
+                            capture_output=True, text=True, timeout=10, env=env)
         except (OSError, subprocess.SubprocessError):
             raise LaunchRefused("route_key_unavailable", ref=ref) from None
         value = got.stdout.rstrip("\n") if got.returncode == 0 else ""

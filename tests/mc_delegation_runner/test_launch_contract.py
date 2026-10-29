@@ -305,8 +305,8 @@ def test_an_api_key_is_read_by_reference_for_one_child_and_never_through_get_sec
     kc = launch.KeychainCredentialStore(run=lambda argv, **kw: (seen.append((argv, kw["env"])),
                                                                  subprocess.CompletedProcess(argv, 0, "v\n", ""))[1])
     assert kc.read("keychain:minimoi_route/fakework.api") == "v"
-    assert seen == [(["security", "find-generic-password", "-s", "minimoi_route", "-a", "fakework.api", "-w"],
-                     {"PATH": "/usr/bin:/bin"})]
+    assert seen[0][0] == ["security", "find-generic-password", "-s", "minimoi_route", "-a", "fakework.api", "-w"]
+    assert set(seen[0][1]) <= {"PATH", "HOME", "USER"}                           # no planted name reaches `security`
     source = Path(launch.__file__).read_text()
     assert "get_secret" not in source.replace("core/get_secret.py", "")         # named in the docstring, never used
     # The file form of the test store is private (0600) or refused.
