@@ -20,6 +20,20 @@ BILINGUAL_TRANSCRIPTION_HINT = (
     "Transcribe faithfully in the spoken language. Preserve names and MiniMoi product terms."
 )
 
+# A4-2 (29 Oct, Robert on dev: "save a note test" was transcribed as German, "selber Not test", under D19's bilingual
+# transcription): MiniMoi's own names and command words, for the transcriber of a direct-path host (MC, CoS), sent only
+# where the provider takes such a hint: OpenAI's transcription prompt (openai_realtime). xAI's session has no field for it
+# (its session.updated echoes only the transcription model and language_hint), so nothing is sent there. It names words,
+# never a language, so the session stays bilingual. German and Portuguese never send it.
+TRANSCRIPTION_VOCABULARY = ("MiniMoi", "Master Craftsman", "Chief of Staff", "Claude Code", "Codex", "Grok",
+                            "make a note that", "save a note", "post-it", "board", "Check with MC", "Check with CoS")
+
+
+def vocabulary_hint(terms) -> str:
+    """The transcriber's sentence for ``terms`` (A4-2): the words spelled as given, whichever language is spoken around
+    them. It asks for no language."""
+    return "MiniMoi's own names and command words, spelled as here: " + ", ".join(terms) + "."
+
 
 def conversation_turn_detection(
     provider: str,

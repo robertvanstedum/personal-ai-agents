@@ -200,6 +200,15 @@ def test_bootstrap_issues_an_owner_session_with_a_sceneless_english_persona_and_
     assert r.budget.status()["reserved_usd"] == 2.0
 
 
+def test_the_transcriber_is_given_minimois_command_words_and_stays_bilingual(ready):
+    """A4-2: "save a note test" was heard as German. MC's session names MiniMoi's words to the transcriber (OpenAI's prompt,
+    standards.TRANSCRIPTION_VOCABULARY); his card stays bilingual (no single language)."""
+    from core.realtime_voice.standards import BILINGUAL_TRANSCRIPTION_HINT, TRANSCRIPTION_VOCABULARY
+    start(ready)
+    minted = ready.mints[0]
+    assert minted["transcription_vocabulary"] == TRANSCRIPTION_VOCABULARY and minted["transcription_language"] is None
+    assert minted["transcription_prompt"] == BILINGUAL_TRANSCRIPTION_HINT
+
 def test_the_session_text_is_composed_here_rules_then_card_then_this_conversation(ready):
     """Spec 164 §7: the shared operating rules whole, then MC's card, then bounded continuity; no language-practice text."""
     from minimoi_portal.guild_ui.mc_managed_realtime import INSTRUCTIONS

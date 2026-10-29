@@ -287,6 +287,13 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         if bilingual:
             transcription_language = None
         transcribe = {"transcription_prompt": BILINGUAL_TRANSCRIPTION_HINT} if bilingual and provider == "openai" else {}
+        # A4-2: a host persona may name MiniMoi's command words for the transcriber ("transcription_vocabulary"; the
+        # direct host core's get_persona does). Sent only to OpenAI, whose transcription takes a prompt; xAI's session
+        # has no such field, so its mint is called exactly as before. German and Portuguese personas carry none.
+        vocabulary = persona.get("transcription_vocabulary")
+        if (provider == "openai" and isinstance(vocabulary, (list, tuple)) and vocabulary
+                and all(isinstance(term, str) and term.strip() for term in vocabulary)):
+            transcribe["transcription_vocabulary"] = tuple(vocabulary)
 
         # A host that reserves an allowance (admit) records its session first (MC: the durable start marker), so an
         # allowance is never spent on a session that could not be recorded; if the provider session then does not

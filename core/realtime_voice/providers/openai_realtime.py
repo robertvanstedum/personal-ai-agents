@@ -13,7 +13,7 @@ https://developers.openai.com/api/docs/guides/realtime-webrtc.
 import requests
 
 from core.get_secret import get_secret
-from core.realtime_voice.standards import conversation_turn_detection
+from core.realtime_voice.standards import conversation_turn_detection, vocabulary_hint
 
 _CLIENT_SECRETS_URL = "https://api.openai.com/v1/realtime/client_secrets"
 _DEFAULT_MODEL = "gpt-realtime-2.1"
@@ -160,6 +160,7 @@ def mint_ephemeral_credential(
     tools: list[dict] | None = None,
     tool_choice: str | None = None,
     transcription_prompt: str | None = None,
+    transcription_vocabulary: tuple[str, ...] | None = None,
 ) -> dict:
     """Requests a short-lived client secret from OpenAI, with the session's
     instructions and turn-detection config already attached server-side --
@@ -167,14 +168,20 @@ def mint_ephemeral_credential(
 
     ``transcription_language`` None (a bilingual card, Spec 165 D19): the
     transcription names no single language; ``transcription_prompt`` is the
-    faithful-transcription hint. German and Portuguese pass a language and
-    no prompt, and their session is as before.
+    faithful-transcription hint. ``transcription_vocabulary`` (a direct-path
+    host only, A4-2): MiniMoi's names and command words, added to that prompt
+    as one sentence (standards.vocabulary_hint), the transcription's only
+    hint field. German and Portuguese pass a language and neither, and their
+    session is as before.
 
     Returns the minimum connection material the browser adapter needs:
     {"client_secret": ..., "expires_at": ..., "model": ...}. Never returns
     the long-lived OPENAI_API_KEY.
     """
     api_key = _require_api_key()
+    prompt = " ".join(part for part in (transcription_prompt,
+                                        vocabulary_hint(transcription_vocabulary) if transcription_vocabulary else None)
+                      if part)
 
     session = {
             "type": "realtime",
@@ -187,7 +194,7 @@ def mint_ephemeral_credential(
                     "transcription": {
                         "model": "gpt-4o-transcribe",
                         **({"language": transcription_language} if transcription_language is not None else {}),
-                        **({"prompt": transcription_prompt} if transcription_prompt else {}),
+                        **({"prompt": prompt} if prompt else {}),
                     },
                 },
             },

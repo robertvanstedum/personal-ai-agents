@@ -54,6 +54,12 @@ def test_only_the_owner_reaches_her_voice_and_every_write_needs_the_portals_mark
     assert r.client.get(BASE + "/capabilities", headers=guest).status_code == 403
 
 
+def test_her_transcriber_is_given_minimois_command_words_on_openai_only(r):
+    """A4-2: her session names MiniMoi's words to the transcriber where the provider takes a hint (OpenAI's prompt)."""
+    from core.realtime_voice.standards import TRANSCRIPTION_VOCABULARY
+    rig.start(r)
+    assert r.mints[0]["transcription_vocabulary"] == TRANSCRIPTION_VOCABULARY
+
 def test_her_only_conversation_is_owner(r):
     refused = r.client.post(BASE + "/bootstrap", headers=OWNER, json={"persona": "chief_of_staff", "conversation_id": "guild-1"})
     assert refused.status_code == 422 and r.mints == []

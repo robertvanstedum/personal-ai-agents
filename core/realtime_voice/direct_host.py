@@ -1790,6 +1790,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
     from core.realtime_voice.capabilities import (AGENT_CONVERSATION_MODE, get_provider_capability, model_actions,
                                                   providers_for_mode)
     from core.realtime_voice.config import resolve_provider
+    from core.realtime_voice.standards import TRANSCRIPTION_VOCABULARY
     person, store = adapter.person, adapter.store
     sessions = DirectSessions(adapter, clock)
     summary_client = (GatewaySummary(adapter.summary_key, environ=environ, http_post=summary_http)
@@ -1874,6 +1875,8 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
                 **({"tools": tools(person, adapter.owner_name or OWNER)} if actions else {}), "notices": card["notices"],
                 # D19 (a): a bilingual card is transcribed in the language spoken (the bootstrap sends no single language)
                 **({"transcription": card["transcription"]} if card.get("transcription") else {}),
+                # A4-2: MiniMoi's names and command words for the transcriber, where the provider takes a hint (OpenAI)
+                "transcription_vocabulary": TRANSCRIPTION_VOCABULARY,
                 "instructions": adapter.instructions(card["card"], handle, actions=actions)}
 
     def guard():
