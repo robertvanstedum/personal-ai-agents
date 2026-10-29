@@ -11,6 +11,11 @@ A runtime with the ``witness`` role tells Robert once when its authority has not
   once-per-key memory in a file of its own under the host's artifact root (``witness/told.jsonl``, fsynced), never in
   the authority's database. A key is recorded after its send: a crash between the two repeats that one notice once
   at the next start, and never loses it (the same trade the supervisor's outbox makes).
+* **Its memory survives a restart honestly** (S1-H review SF2). A restarted runtime knows only its own failed calls,
+  never how long the authority was gone before it started. So the outage is read from the file: an
+  ``authority-unreachable`` key with no ``authority-back`` for the same ``since`` is the outage still open. While it
+  is open, no second unreachable notice is told, whatever the new process measures; at the first good call its end is
+  told once, under the first notice's ``since``.
 * **Silence where the spec wants it** (R2.4-b, R7.4-e). The outage is measured on the monotonic clock from the
   host's first failed call, so time the whole host spent asleep never counts. On the Mac-only gate the authority
   sleeps with the runtime: a whole-Mac sleep is no outage, and a wake whose first call succeeds says nothing.
@@ -34,25 +39,47 @@ class Memory:
 
     def __init__(self, path):
         self.path = Path(path)
-        self.told = set()
+        self.told, self.order = set(), []
         try:
             for line in self.path.read_text().splitlines():
                 try:
-                    self.told.add(json.loads(line)["key"])
+                    key = json.loads(line)["key"]
                 except (ValueError, KeyError, TypeError):
                     continue
+                if isinstance(key, str) and key not in self.told:
+                    self.told.add(key)
+                    self.order.append(key)
         except FileNotFoundError:
             pass
 
     def record(self, key, at):
-        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-        try:
-            os.write(fd, (json.dumps({"key": key, "at": at}, sort_keys=True) + "\n").encode())
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-        self.told.add(key)
+        _append(self.path, {"key": key, "at": at})
+        if key not in self.told:
+            self.told.add(key)
+            self.order.append(key)
+
+    def open_outage(self, endpoint_id):
+        """(key, since) of the outage of this endpoint told and not yet told back, or None: the earliest such
+        ``authority-unreachable`` key, as the file holds it. That is where a restarted runtime picks up (SF2)."""
+        head = f"authority-unreachable:{endpoint_id}:"
+        for key in self.order:
+            if key.startswith(head):
+                since = key[len(head):]
+                if f"authority-back:{endpoint_id}:{since}" not in self.told:
+                    return key, since
+        return None
+
+
+def _append(path, doc):
+    """One JSON line, appended and fsynced, in the witness's own folder (0700) and file (0600)."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+    try:
+        os.write(fd, (json.dumps(doc, sort_keys=True) + "\n").encode())
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 class FileNotifier:
@@ -106,7 +133,9 @@ class Witness:
     def __init__(self, host_id, endpoint_id, notifier, memory, timeout_s):
         self.host_id, self.endpoint_id, self.notifier, self.memory = host_id, endpoint_id, notifier, memory
         self.timeout_s = timeout_s
-        self.outage = None                      # (key, since) of the outage told, until the authority answers again
+        # (key, since) of the outage told, until the authority answers again: from the file at start, so a restart
+        # during an outage neither tells it twice nor loses its end (SF2).
+        self.outage = memory.open_outage(endpoint_id)
         self.errors = 0
 
     def observe(self, offline_for_s, now_wall):

@@ -32,7 +32,11 @@ def _witness(tmp_path):
                      W.Memory(tmp_path / "artifacts" / "witness" / "told.jsonl"), 45)
 
 
-def test_an_outage_is_told_once_per_key_across_a_restart_and_its_end_once(tmp_path):
+def _keys(tmp_path):
+    return [x["key"] for x in _lines(tmp_path / "notify.jsonl")]
+
+
+def test_an_outage_is_told_once_per_key_and_its_end_once(tmp_path):
     w = _witness(tmp_path)
     w.observe(30, T0)                                         # inside the contact timeout: nothing
     assert _lines(tmp_path / "notify.jsonl") == []
@@ -41,16 +45,52 @@ def test_an_outage_is_told_once_per_key_across_a_restart_and_its_end_once(tmp_pa
     (told,) = _lines(tmp_path / "notify.jsonl")
     assert told["key"] == "authority-unreachable:dev-authority:2026-10-29T12:59:10+00:00"
     assert told["source"] == "witness" and "mac-test-1" in told["text"] and "Next:" in told["text"]
-    again = _witness(tmp_path)                                # the runtime restarted: its memory is the file
-    again.observe(80, T0 + timedelta(seconds=30))             # the same outage, the same since: never twice
-    assert len(_lines(tmp_path / "notify.jsonl")) == 1
     w.observe(None, T0 + timedelta(seconds=60))               # the authority answers again: one back notice
     w.observe(None, T0 + timedelta(seconds=75))
-    keys = [x["key"] for x in _lines(tmp_path / "notify.jsonl")]
+    keys = _keys(tmp_path)
     assert keys == [told["key"], "authority-back:dev-authority:2026-10-29T12:59:10+00:00"]
     memory = [json.loads(x)["key"] for x in (tmp_path / "artifacts" / "witness" / "told.jsonl").read_text()
               .splitlines()]
     assert memory == keys                                     # recorded after each send, fsynced, in its own file
+
+
+# The S1-H review's SF2 case: the outage begins at T0-50 s, is told at T0, and the runtime restarts at T0+15 s. The
+# restarted runtime knows only its own calls: its first fails at T0+20 s, so it measures its own outage from there
+# (the earlier test fed it the old outage's 80 s, which a real restarted runtime cannot know).
+def test_a_restart_during_an_outage_never_tells_it_twice_and_tells_its_end_once(tmp_path):
+    first = _witness(tmp_path)
+    first.observe(50, T0)
+    (unreachable,) = _keys(tmp_path)
+    again = _witness(tmp_path)                                # restarted: its memory is the file
+    again.observe(0, T0 + timedelta(seconds=20))
+    again.observe(50, T0 + timedelta(seconds=70))             # past its own timeout, measured from its own failure
+    again.observe(65, T0 + timedelta(seconds=85))
+    assert _keys(tmp_path) == [unreachable]                   # the same outage: never a second notice
+    again.observe(None, T0 + timedelta(seconds=100))          # back: told once, under the first notice's since
+    again.observe(None, T0 + timedelta(seconds=115))
+    assert _keys(tmp_path) == [unreachable, "authority-back:dev-authority:2026-10-29T12:59:10+00:00"]
+    third = _witness(tmp_path)                                # a later restart finds nothing open
+    assert third.outage is None
+    third.observe(None, T0 + timedelta(seconds=130))
+    assert len(_keys(tmp_path)) == 2
+
+
+def test_a_restart_during_an_outage_that_ends_before_its_own_timeout_still_tells_the_end(tmp_path):
+    first = _witness(tmp_path)
+    first.observe(50, T0)
+    again = _witness(tmp_path)                                # restarted at T0+15 s, the authority still down
+    again.observe(5, T0 + timedelta(seconds=25))              # its own outage: inside its timeout
+    again.observe(None, T0 + timedelta(seconds=35))           # the authority is back
+    assert [k.split(":")[0] for k in _keys(tmp_path)] == ["authority-unreachable", "authority-back"]
+    assert _keys(tmp_path)[1] == "authority-back:dev-authority:2026-10-29T12:59:10+00:00"
+
+
+def test_a_restarted_witness_takes_up_only_its_own_endpoints_open_outage(tmp_path):
+    memory = W.Memory(tmp_path / "artifacts" / "witness" / "told.jsonl")
+    memory.record("authority-unreachable:other-authority:2026-10-29T12:00:00+00:00", T0.isoformat())
+    memory.record("authority-unreachable:dev-authority:2026-10-29T12:10:00+00:00", T0.isoformat())
+    memory.record("authority-back:dev-authority:2026-10-29T12:10:00+00:00", T0.isoformat())
+    assert _witness(tmp_path).outage is None                  # this endpoint's last outage was told back
 
 
 def test_a_failed_send_is_tried_again_and_never_recorded_as_told(tmp_path):
