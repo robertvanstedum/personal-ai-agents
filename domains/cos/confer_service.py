@@ -39,12 +39,10 @@ _SLASH_NOTE_PREFIX = re.compile(r"^/note(?:\s+|$)", re.IGNORECASE)
 # "Write" and "create" a note are drafting requests ("write a note saying thank
 # you to the team"), not something to keep, so they go to the model.
 # A4-1 (29 Oct, Robert on dev: "Make a note called Test." was refused): "make a
-# note called X" and "note that X" are his too. "Note that" keeps its separator
-# rule, and when all it says after "that" is a pointer ("note that down", "note
-# that one, please", "note that for later") it stays chat; "did you make a
-# note?" or "I noted that" never start a command.
-_POINTER = r"(?:down|too|one|somewhere|please|as\s+well|for\s+(?:me|later|now|the\s+record))"
-_NOTE_THAT_POINTS = _POINTER + r"(?:\s*,?\s*" + _POINTER + r")*\s*(?:[,.!?:;]|$)"
+# note called X" is his too. A bare "(please) note that X" is not a request for a
+# note (review M-1): it is how a statement, a notice or a forwarded text opens
+# ("Please note that the deploy failed, so fix it"), so it stays chat on every
+# channel, as "did you make a note?" and "I noted that" do.
 # A4-2's own words, "save a note test" (29 Oct): spoken, the separator is a pause
 # or nothing. So "save a note X" with no separator, and "make/save a note, X"
 # with a comma (and the "that"/"saying" a pause may sit before), are notes too.
@@ -65,7 +63,6 @@ _NATURAL_NOTE_PREFIX = re.compile(
     r"(?:make|take|save|add|jot\s+down)\s+(?:me\s+)?(?:a\s+)?"
     r"note\s*(?::|-(?=\s|$)|[–—]|that(?=\s|$)|saying(?=\s|$)|called(?=\s|$))"
     r"|note\s+to\s+self\s*(?::|[-–—]|,)"
-    r"|note\s+that(?=\s|$)(?!\s+" + _NOTE_THAT_POINTS + r")"
     r"|(?:make|save)\s+(?:me\s+)?a\s+note\s*,\s*(?:(?:that|saying)\s+)?" + _HIS_WORDS_START
     + r"|save\s+a\s+note\s+" + _HIS_WORDS_START +
     r")",
@@ -160,8 +157,7 @@ def parse_explicit_note(text: str) -> str | None:
 
     This is the one note grammar shared by COS, the MC portal and the voice
     tool gate: ``/note …``, ``Save a note: …`` and the natural forms such as
-    ``Make a note that …``, ``Make a note called …``, ``Note that …``,
-    ``Note to self: …`` (A4-1), ``Save a note …`` with no separator and
+    ``Make a note that …``, ``Make a note called …`` (A4-1), ``Note to self: …``, ``Save a note …`` with no separator and
     ``Make a note, …`` / ``Save a note, …`` with a comma (A4-2).
     """
     slash_match = _SLASH_NOTE_PREFIX.match(text)

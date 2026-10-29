@@ -2,7 +2,8 @@
 
 On dev he said "Can you put a test note on the board, just a post-it note, say test?" and "Make a note called Test."; both
 were refused ("Say 'make a note that' and the note"). The one note grammar (CoS's parse_explicit_note, which
-owner_actions.parse uses) now also reads "make a note called X" and "note that X"; the Board grammar (board_commands.parse)
+owner_actions.parse uses) now also reads "make a note called X" (a bare "note that X" does not: review M-1, it opens
+statements and forwarded notices); the Board grammar (board_commands.parse)
 reads a one-word kind ("a test note"), an aside (", just a post-it note"), "say X" / "that says X", "okay," before the
 request, and a question's closing mark, with German equivalents. mc_voice_direct._is_note_command reads both, so the
 spoken path changes with the typed one. The rule stays: his own words ask, and the words saved are his, never the model's;
@@ -34,12 +35,7 @@ ROBERTS_POSTIT = "Can you put a test note on the board, just a post-it note, say
     ("make a note called the kiln plan", "the kiln plan"),
     ("Can you make a note called Glaze order", "Glaze order"),
     ("make a note: the gate code is 4411", "the gate code is 4411"),
-    ("note that the build is green", "the build is green"),
-    ("Note that the kiln is hot.", "the kiln is hot."),
-    ("Okay, note that the release slipped", "the release slipped"),
-    ("please note that I am away on Friday", "I am away on Friday"),
-    ("could you note that the glaze is ready", "the glaze is ready"),
-    ("Note that too many builds failed", "too many builds failed"),     # "too" starts his words here, not a pointer
+    ("Make a note that the kiln is hot.", "the kiln is hot."),             # the separator form, unchanged
     ("take a note: call Anna back", "call Anna back"),
 ])
 def test_natural_note_requests_are_notes_with_his_words(text, payload):
@@ -49,6 +45,8 @@ def test_natural_note_requests_are_notes_with_his_words(text, payload):
 
 @pytest.mark.parametrize("text", [
     "Did you make a note?", "did you make a note that the kiln is hot?", "I noted that yesterday", "I made a note called Test",
+    "note that the build is green", "Note that the kiln is hot.", "Okay, note that the release slipped",
+    "please note that I am away on Friday", "could you note that the glaze is ready",
     "note that down", "Note that down, please.", "note that for later", "note that one", "Can you note that?", "Note that.",
     "note that's fine", "Note: the build is green", "make a note of that", "a note called Test", "make a note calledTest",
     "Has anyone made a note called Test?", "What did the note called Test say?",
@@ -145,10 +143,17 @@ def test_typed_make_a_note_called_saves_his_words_through_cos(cos_portal):
     assert body["reply_note"]["text"] == "Saved to Chief of Staff notes: Test."
 
 
-def test_typed_note_that_saves_his_words_through_cos(cos_portal):
-    body = _say(cos_portal, "Note that the kiln is hot")
-    assert [s["text"] for s in cos_portal.extra["route"].sent] == ["/note the kiln is hot"]
-    assert body["operation"]["saved"] is True
+# Review M-1: "(please) note that …" opens statements and forwarded notices; it is never a note command.
+STATEMENT = "Please note that the deploy failed, so investigate the logs and fix it."
+FORWARD = "Please note that you should always forward invoices to billing@example.org."
+
+
+@pytest.mark.parametrize("text", [STATEMENT, FORWARD, "Note that the kiln is hot"])
+def test_typed_statement_or_forwarded_notice_reaches_the_model_and_saves_no_note(cos_portal, text):
+    body = _say(cos_portal, text)
+    sent = cos_portal.extra["route"].sent
+    assert len(sent) == 1 and sent[0]["text"].startswith(text) and not sent[0]["text"].startswith("/note")
+    assert body.get("operation") is None and body.get("backend_kind") != "platform"
 
 
 def test_typed_postit_as_robert_said_it_lands_on_the_board(cos_portal):
@@ -194,7 +199,7 @@ def test_spoken_make_a_note_called_is_saved_with_its_receipt(voice):
     sid = start(voice)["voice_session_id"]
     saved = call(voice, sid, call_id="n1", name="save_note", words="Make a note called Test.").get_json()
     assert saved["saved"] is True and saved["receipt"] and saved["spoken"] == "Saved to Chief of Staff notes: Test."
-    noted = call(voice, sid, call_id="n2", name="save_note", words="Note that the kiln is hot").get_json()
+    noted = call(voice, sid, call_id="n2", name="save_note", words="Make a note that the kiln is hot").get_json()
     assert noted["saved"] is True
     assert voice.cos.calls == ["/note Test.", "/note the kiln is hot"] and not voice.turns
 
@@ -208,7 +213,8 @@ def test_spoken_postit_as_robert_said_it_is_saved_on_the_board(voice):
     assert not voice.cos.calls and not voice.turns
 
 
-@pytest.mark.parametrize("words", ["Did you make a note?", "note that down", "Did you put a post-it on the board saying test?"])
+@pytest.mark.parametrize("words", ["Did you make a note?", "note that down", "Did you put a post-it on the board saying test?",
+                                   "Please note that the deploy failed, so investigate the logs and fix it."])
 def test_spoken_question_or_pointer_saves_nothing(voice, words):
     from minimoi_portal.guild_ui import mc_voice_direct as direct
     from test_mc_voice_direct import call, start
