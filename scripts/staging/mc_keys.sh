@@ -100,5 +100,23 @@ cos_keygen_py() {
   gateway_keygen_py "$COS_KEY_MODELS" "$COS_KEY_ROUTES" "$COS_KEY_BUDGET_DURATION" "$COS_KEY_RPM" "cos-agent-" "guild.cos" COS_CAP COS_OLD_KEY
 }
 
+# The voice summary's two capped keys (Spec 165 §5.4, decision D22 (a);
+# voice.sh summary-keys): one per host, voice-summary-mc (MC, mc.env) and
+# voice-summary-cos (CoS, cos.env). The summary's alias only; chat completions
+# only (one plain completion when a voice session ends, never tools); a monthly
+# budget; rpm 10. Like MC's, /key/info is not allowed.
+VOICE_SUMMARY_KEY_MODELS='["minimoi-voice-summary"]'
+VOICE_SUMMARY_KEY_ROUTES='["/v1/chat/completions", "/chat/completions"]'
+VOICE_SUMMARY_KEY_BUDGET_DURATION="30d"
+VOICE_SUMMARY_KEY_RPM=10
+
+# voice_summary_keygen_py HOST (mc or cos): that host's summary key.
+# Env in: VOICE_CAP, VOICE_OLD_KEY.
+voice_summary_keygen_py() {
+  case "$1" in mc|cos) ;; *) echo "voice_summary_keygen_py: the host is mc or cos" >&2; return 64 ;; esac
+  gateway_keygen_py "$VOICE_SUMMARY_KEY_MODELS" "$VOICE_SUMMARY_KEY_ROUTES" "$VOICE_SUMMARY_KEY_BUDGET_DURATION" \
+    "$VOICE_SUMMARY_KEY_RPM" "voice-summary-$1-" "voice.summary.$1" VOICE_CAP VOICE_OLD_KEY
+}
+
 # valid_cap TEXT: a positive dollar amount up to 500, at most two decimals.
 valid_cap() { [[ "$1" =~ ^[0-9]{1,3}(\.[0-9]{1,2})?$ ]] && awk "BEGIN{exit !($1 > 0 && $1 <= 500)}"; }
