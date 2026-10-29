@@ -304,3 +304,14 @@ def test_words_starting_with_a_mark_or_a_lone_separator_word_are_asked_for_never
     out = board_commands.execute(text, board=Board(), conversation=SimpleNamespace(floor="f", add_note=None),
                                  principal="robert", turn_key="k")
     assert out["operation"] == {"type": "board_postit", "saved": False, "reason": "needs_text"}
+
+
+# ── Verification S-4 on MC's paths: filler or apology alone is chat ─────────────────────────────────────────────────
+
+@pytest.mark.parametrize("text", ["save a note, actually", "save a note, sorry", "save a note, hmm", "save a note, let me think"])
+def test_mc_reads_filler_or_apology_alone_as_chat(text):
+    assert oa.parse(text) is None and _is_note_command(text) is False
+
+
+def test_mc_keeps_a_note_that_opens_with_a_filler():
+    assert oa.parse("save a note, actually, the kiln is ready") == oa.Action("note", text="actually, the kiln is ready")

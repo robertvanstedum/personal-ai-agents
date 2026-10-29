@@ -195,3 +195,26 @@ def test_her_voice_does_not_save_could_you_and_the_dictated_note_is_not_lost_as_
     assert first["saved"] is False and first["spoken"] == direct_voice.NOT_A_NOTE
     second = rig.ask(r, sid, "call_2", "t2", words="The kiln is ready.", name="save_note").get_json()
     assert second["saved"] is False and not r.notes.saved
+
+
+# ── Verification S-4: filler or apology alone is chat; filler before his words is not ──────────────────────────────
+
+@pytest.mark.parametrize("text", ["save a note, actually", "save a note, sorry", "save a note, hmm", "save a note, uh",
+                                  "save a note, oh", "save a note, let me think", "save a note, I guess", "save a note uhm",
+                                  "save a note, um, let me think...", "make a note, actually, sorry", "save a note, you know",
+                                  "Make a note called hmm"])
+def test_filler_or_apology_alone_after_a_loose_note_form_is_chat(text):
+    assert parse_explicit_note(text) is None
+
+
+@pytest.mark.parametrize("text,note", [("save a note, actually, the kiln is ready", "actually, the kiln is ready"),
+                                       ("save a note, I guess the kiln is ready", "I guess the kiln is ready"),
+                                       ("save a note test", "test")])
+def test_filler_before_his_words_keeps_the_note(text, note):
+    assert parse_explicit_note(text) == note
+
+
+def test_her_voice_does_not_save_a_lone_actually(r):
+    sid = rig.start(r)
+    said = rig.ask(r, sid, "call_1", "t1", words="save a note, actually", name="save_note").get_json()
+    assert said["saved"] is False and said["spoken"] == direct_voice.NOT_A_NOTE and not r.notes.saved

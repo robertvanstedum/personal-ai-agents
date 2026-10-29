@@ -13,8 +13,10 @@ and not the portal; the portal ships both.
   is not his note when it is nothing; a question (it ends "?"); only a pointer (``points_only``); or when it opens with a
   word or phrase in ``_NOT_HIS``: a refusal ("never mind", "scratch that", "wait"), a request or its tail ("could you",
   "will you", "right"), an acknowledgement ("sure", "thanks"), a name he addresses (MC, CoS, Master Craftsman, Grok, …,
-  and "Check with"), or a word that only frames, points or times the request ("for me", "of that", "later"). That is chat,
-  never a note; one content word is a note ("save a note test" keeps "test"). Quoted words are literal.
+  and "Check with"), or a word that only frames, points or times the request ("for me", "of that", "later"); or when all
+  of it is filler or apology (``_FILLER``: "actually", "sorry", "hmm", "let me think", "I guess"; verification S-4), as a
+  whole, so "actually, the kiln is ready" is still his note. That is chat, never a note; one content word is a note ("save
+  a note test" keeps "test"). Quoted words are literal.
 """
 from __future__ import annotations
 
@@ -46,6 +48,14 @@ _NOT_HIS = re.compile(r"""(?:
 )\b""", re.I | re.X)
 
 
+# Words that, all on their own, are a pause or an apology, never a note (verification S-4). Matched as the whole remainder.
+_FILLER = re.compile(r"""(?:
+    (?:actually|sorry|pardon|oops|um+|uh+|uhm+|er+|erm+|hm+|hmm+|mm+|oh+|ah+|eh|well|like|so|anyway|okay|ok
+     |let\s+me\s+think|let\s+me\s+see|i\s+guess|i\s+mean|you\s+know|i\s+don'?t\s+know|never\s+mind|my\s+bad)
+    [\s,.!…-]*
+)+""", re.I | re.X)
+
+
 def points_only(words) -> bool:
     """Whether ``words`` (trailing sentence marks aside) only point at something or name a generic thing."""
     bare = str(words).rstrip(".!?").strip()
@@ -57,7 +67,8 @@ def not_his_note(words) -> bool:
     note. The caller has already dropped the closing question mark of a request asked as a question."""
     text = " ".join(str(words).split())
     bare = text.rstrip(".!").strip(" ,;:")
-    return not bare or bare.endswith("?") or points_only(bare) or _NOT_HIS.match(bare) is not None
+    return (not bare or bare.endswith("?") or points_only(bare) or _NOT_HIS.match(bare) is not None
+            or _FILLER.fullmatch(bare) is not None)
 
 
 __all__ = ["GENERIC", "REFERENT", "not_his_note", "points_only"]
