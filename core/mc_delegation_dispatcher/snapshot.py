@@ -41,7 +41,7 @@ from pathlib import Path
 SCHEMA = "minimoi.runtime.state.v1"
 BATCH_MAX = 5                                   # R7.4-c: decisions per notice
 SOLO = ("unknown_resolution", "reassignment", "cross_vendor_admission")     # R7.4-c: never batched
-ROUTINE = ("step_admission", "step_redo")
+ROUTINE = ("step_admission", "step_redo", "review_request")
 TERMINAL = ("completed", "failed", "refused", "timed_out", "cancelled", "output_limit", "interrupted", "expired")
 OWNED = ("claimed", "running")
 LIVE = ("proposed", "queued", "claimed", "running", "lapsed", "paused", "unknown")
@@ -128,10 +128,12 @@ def decision_actions(d, item) -> tuple:
         return "admit", "decline"
     if cls == "reassignment":
         return "reassign", "withdraw"
+    if cls == "review_request":
+        return "authorize_review", "withdraw"               # yes lets MC make one judgment call; no changes nothing
     if body.get("item_state") is not None:
         return "acknowledge", "leave"                       # a decision about an item that has already ended
     if body.get("reason") == "result_reported":
-        return "accept", "end"
+        return "accept", "leave"                            # no never discards the reported result (SF1)
     return "end", "leave"
 
 
@@ -156,6 +158,15 @@ def decision_words(d, item) -> str:
         return (f"Redo {who} as a new item? An effect of it failed for good ({nops}), so the step ended failed "
                 f"(effect_failed) and nothing retries it. Yes admits one new item for this step ({worker}, {amount}), "
                 f"with new operation ids; no ends the card.")
+    if cls == "review_request":
+        if body.get("reason") == "stalled":
+            timeout = body.get("timeout_s")
+            return (f"{who[0].upper()}{who[1:]} ({worker}, owner {body.get('owner_host_id')}) has made no progress "
+                    f"since {body.get('since')}" + (f", past its timeout of {timeout} s" if timeout else "")
+                    + "; its owner is in contact and its lease is current. Nothing is stopped. Yes lets MC review it "
+                    "once (one judgment call, within MC's daily cap); no leaves it as it is.")
+        return (f"MC asks to review {who} ({worker}) once: one judgment call, within MC's daily cap. Yes lets it; no "
+                f"leaves it as it is.")
     if cls == "reassignment":
         return (f"Reassign {who} ({worker}) to runner {body.get('runner_id')}, generation "
                 f"{(d.get('generation') or 0) + 1}? MC proposed it; nothing moves it but you. Yes reassigns it; no "
@@ -172,8 +183,8 @@ def decision_words(d, item) -> str:
         tally = body.get("effects") or {}
         return (f"{who[0].upper()}{who[1:]} reported its result ({rep}) while an effect of it was open; every "
                 f"effect of it is now decided ({', '.join(f'{k} {v}' for k, v in sorted(tally.items())) or 'none'}). "
-                f"Yes accepts the reported result ({rep}), and its card goes on; no ends it "
-                f"(interrupted: owner_decision).")
+                f"Yes accepts the reported result ({rep}), and its card goes on; no leaves it waiting, and you can "
+                f"still end it.")
     why = {"effect_unknown": f"the outcome of {nops} cannot be established",
            "process_unverified": "a process of it could not be verified",
            "effect_outcome_conflict": "an effect's reported outcome contradicts the one recorded"}.get(reason, reason)
@@ -281,7 +292,9 @@ def build(rec) -> dict:
         decision_of.setdefault(d["item_id"], d)
     items = [_item(r, rec, now, values, by_runner, caps, cards, decision_of) for r in rec["items"]]
     raised = _raised(events)
-    notices = _notices(items, rec, now, values, hosts, cards, waiting, raised, unknowns)
+    reviewed = {e["body"].get("proposal_id") for e in events
+                if e["kind"] == "decision.queued" and e["body"].get("class") == "review_request"}
+    notices = _notices(items, rec, now, values, hosts, cards, waiting, raised, unknowns, reviewed)
     proposals = _proposals(items, events, now)
     sweeper = rec["liveness"].get("sweeper")
     sweeper_age = None if sweeper is None else _age(now, sweeper["seen_at"])
@@ -579,7 +592,7 @@ def _notice(key, kind, text, next_step, raised, **refs) -> dict:
             "raised_at": None if r is None else r["raised_at"], **refs}
 
 
-def _notices(items, rec, now, values, hosts, cards, waiting, raised, unknowns) -> list:
+def _notices(items, rec, now, values, hosts, cards, waiting, raised, unknowns, reviewed=frozenset()) -> list:
     """Every notice the rules raise now (R7.4-d, R5.1-e), each with its key (one notice per key, DUP-7) and the next
     authorized step. Silent where nothing is needed (R7.4-e)."""
     out = []
@@ -593,7 +606,9 @@ def _notices(items, rec, now, values, hosts, cards, waiting, raised, unknowns) -
             continue
         rid, g, label, step = it["item_id"], it["generation"], _label(it), it["next_authorized_step"]
         refs = {"item_id": rid, "card_id": it["card_id"], "step": it["step"]}
-        if it["flags"]["stalled"]:
+        if it["flags"]["stalled"] and review_request_id(rid, g, _progress_ref(it, now)) not in reviewed:
+            # Until the sweep queues its review request (a routine decision whose notice is the stall's one notice,
+            # OWN-4), a live read shows the stall's own notice, due.
             ref = _progress_ref(it, now)
             proposal = review_request_id(rid, g, ref)
             out.append(_notice(
@@ -799,7 +814,7 @@ def owner_work(rec, cards, raised) -> list:
             if card_of != card_id:
                 continue
             if e["kind"] == "decision.resolved" and decision_class.get(e["body"].get("decision_id")) in \
-                    ("unknown_resolution", "reassignment") and e["body"].get("answer") not in ("withdrawn",):
+                    ("unknown_resolution", "reassignment") and e["body"].get("answer") in ("approved", "declined"):
                 j += 1
                 resolved_items.add((str(e["item_id"]), e["generation"]))
             if e["kind"] in OWNER_ACTS and not _prompted(e, notice_times):

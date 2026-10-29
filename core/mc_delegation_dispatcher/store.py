@@ -3029,9 +3029,16 @@ class DispatcherStore:
             codes = {}
             cur.execute("SELECT to_regclass('guild.supervision_decisions') IS NOT NULL AS present")
             if cur.fetchone()["present"] and decisions:
-                cur.execute("""SELECT id, request_key FROM guild.supervision_decisions WHERE request_key = ANY(%s)""",
-                            ([RUNTIME_REQUEST_PREFIX + d for d in decisions],))
-                codes = {r["request_key"][len(RUNTIME_REQUEST_PREFIX):]: f"D-{r['id']}" for r in cur.fetchall()}
+                # A decision's live D-code: its latest row still open, else its latest (a refused answer's re-issue
+                # follows its first row: rt-<id>.r<n>).
+                cur.execute("""SELECT id, requester->>'decision_id' AS d, state IN ('new','sent') AS open
+                    FROM guild.supervision_decisions WHERE requester->>'agent' = 'runtime'
+                      AND request_key LIKE %s AND requester->>'decision_id' = ANY(%s) ORDER BY id""",
+                            (RUNTIME_REQUEST_PREFIX + "%", decisions))
+                for r in cur.fetchall():
+                    if r["open"] or r["d"] not in codes or not codes[r["d"]][1]:
+                        codes[r["d"]] = (f"D-{r['id']}", r["open"])
+                codes = {d: c for d, (c, _) in codes.items()}
         values = {"contact_timeout_s": None if self.authority.hosts is None else self.authority.hosts.contact_timeout_s,
                   "gap_threshold_s": self.authority.sweeper.gap_threshold_s,
                   "progress_timeout_s": dict(self.authority.progress_timeout_s or {}),
@@ -3052,8 +3059,32 @@ class DispatcherStore:
         (notice.raised, under a once-key on its key: DUP-7), with the items, step, card and decisions it names (so
         OWN-3 can tell a prompted owner call from a check); each review_request due is recorded once
         (proposal.review_request: a flag yields at most one per stall, R7.5-d); then ``<state_dir>/state.json`` is
-        written atomically. -> {doc, raised}: ``raised`` the notices first recorded now, for the notifier adapter."""
+        written atomically. -> {doc, raised}: ``raised`` the notices first recorded now. The notice.raised events are
+        the outbox the supervisor's runtime link drains on its own short timer (notices_since), so a notice reaches
+        Robert at the sweep that raised it, even if it has cleared by the next check-in (OWN-4)."""
         doc = self.snapshot(endpoint_id=endpoint_id, host_id=host_id)
+        due = [p for p in doc["proposals"] if p["state"] == "due"]
+        if due:
+            # A stall's review request (R7.5-d: a flag queues at most one per stall, and starts no call) is one routine
+            # decision: Robert's yes is the only owner turn that lets MC review it (reserve_judgment's owner trigger).
+            # Its notice is the stall's one notice (OWN-4), so the snapshot is read again once it is queued.
+            items = {i["item_id"]: i for i in doc["items"]}
+            timeouts = dict(self.authority.progress_timeout_s or {})
+            with self._tx() as cur:
+                for prop in due:
+                    it = items.get(prop["item_id"])
+                    row = self._item(cur, prop["item_id"], lock=False)
+                    if it is None or row is None:
+                        continue
+                    self._event(cur, "proposal.review_request", item=prop["item_id"], generation=prop["generation"],
+                                once=_once("review_request", prop["proposal_id"]),
+                                body={"proposal_id": prop["proposal_id"], "item_id": prop["item_id"],
+                                      "generation": prop["generation"], "since": prop["since"],
+                                      "trigger": "flag:stalled", "starts_no_call": True})
+                    self._queue_review(cur, row, {"reason": "stalled", "proposal_id": prop["proposal_id"],
+                                                  "since": prop["since"], "owner_host_id": it["owner_host_id"],
+                                                  "timeout_s": timeouts.get(snap._class(row))})
+            doc = self.snapshot(endpoint_id=endpoint_id, host_id=host_id)
         raised = []
         with self._tx() as cur:
             cur.execute("SELECT clock_timestamp() AS now")
@@ -3070,14 +3101,6 @@ class DispatcherStore:
                                body=body):
                     n["raised_at"] = now
                     raised.append(n)
-            for prop in doc["proposals"]:
-                if prop["state"] == "due":
-                    self._event(cur, "proposal.review_request", item=prop["item_id"], generation=prop["generation"],
-                                once=_once("review_request", prop["proposal_id"]),
-                                body={"proposal_id": prop["proposal_id"], "item_id": prop["item_id"],
-                                      "generation": prop["generation"], "since": prop["since"],
-                                      "trigger": "flag:stalled", "starts_no_call": True})
-                    prop.update(state="queued", at=now)
         if state_dir is not None:
             snap.write_state_file(state_dir, doc)
         return {"doc": doc, "raised": raised}
@@ -3106,7 +3129,10 @@ class DispatcherStore:
         it): admit under an exact approval the owner path issues now with his turn's id, or decline (the step ends,
         and its card); end; accept an item's reported result once no effect of it is open (its card goes on:
         _card_advance); acknowledge a decision about an item that has ended; reassign; or leave it waiting. One
-        transaction. -> {state: resolved | waiting | moot | already_resolved, action, outcome?: the act's answer}"""
+        transaction. A reassignment answered after its item moved to another generation is closed as stale and a
+        fresh decision is raised for the generation now (SF6); a review request's yes authorizes one judgment call
+        (reserve_judgment's owner trigger, SF4).
+        -> {state: resolved | waiting | moot | stale | already_resolved, action, outcome?: the act's answer}"""
         _need(self._v2, "protocol_not_enabled")
         did = _uuid_text(decision_id, "decision_id_invalid")
         _need(answer in ("approved", "declined"), "answer_invalid")
@@ -3140,12 +3166,24 @@ class DispatcherStore:
             action = yes if answer == "approved" else no
             refs = {"decision_id": did, "answer": answer, "action": action, "by": by, "class": d["class"],
                     "card_id": row["card_id"], "receipt": evidence}
+            if d["class"] == "reassignment" and row["generation"] != dq["generation"] and row["state"] not in TERMINAL:
+                # The words name the generation the decision was raised at (SF6): an answer to them never moves a later
+                # generation. Closed as stale; a fresh decision is raised for the generation now, if it can still move.
+                self._event(cur, "decision.resolved", item=row["request_id"], generation=row["generation"],
+                            source="owner", once=_once("decision_resolved", did),
+                            body={**refs, "answer": "stale", "generation_now": row["generation"]})
+                fresh = None
+                if self._reassignable(row) and self._runner(cur, dq["body"].get("runner_id")) is not None:
+                    fresh = self._queue_reassignment(cur, row, dq["body"]["runner_id"],
+                                                     dq["body"].get("proposed_by") or by)
+                return {"state": "stale", "action": action, "generation_now": row["generation"],
+                        "fresh_decision_id": fresh}
             if action == "leave":
                 self._event(cur, "decision.answered", item=row["request_id"], generation=row["generation"],
                             source="owner", body=refs)
                 return {"state": "waiting", "action": action}
             if action in ("admit", "decline") and row["state"] != "proposed" or \
-                    action in ("end", "accept", "reassign") and row["state"] in TERMINAL:
+                    action in ("end", "accept", "reassign", "authorize_review") and row["state"] in TERMINAL:
                 # The item moved on since the decision was queued (revoked, ended by another act): nothing to do, and
                 # the decision is closed so it never waits for ever.
                 self._event(cur, "decision.resolved", item=row["request_id"], generation=row["generation"],
@@ -3169,6 +3207,8 @@ class DispatcherStore:
                 out = self._accept_in(cur, row, by, note)
             elif action == "reassign":
                 out = self._reassign_in(cur, row, dq["body"].get("runner_id"), by, note)
+            elif action == "authorize_review":
+                out = {"authorization": did}        # this decision.resolved is the owner turn reserve_judgment checks
             return {"state": "resolved", "action": action, "outcome": out}
 
     def _admission_grant(self, cur, row, decision_id, turn_id) -> str:
@@ -3241,21 +3281,115 @@ class DispatcherStore:
         with self._tx() as cur:
             row = self._item(cur, rid)
             _need(row is not None and row["route"] is not None, "unknown_request")
-            _need(row["state"] in ("lapsed", "paused", "unknown") or
-                  (row["state"] in ("claimed", "running") and row["lease_until"] <= row["now"]), "item_not_reassignable")
+            _need(self._reassignable(row), "item_not_reassignable")
             target = self._runner(cur, runner_id)
             _need(target is not None and target["protocol"] == 2 and target["environment"] == self.environment
                   and "worker" in (target["roles"] or []), "target_invalid")
-            once = _once("reassign_proposal", rid, row["generation"], runner_id)
-            decision_id = str(uuid.uuid4())
-            if not self._event(cur, "decision.queued", item=rid, generation=row["generation"], once=once,
-                               event_id=decision_id, body={"class": "reassignment", "solo": True, "reason": "proposed",
-                                                           "runner_id": runner_id, "proposed_by": by,
-                                                           "card_id": row["card_id"], "step": row["step"]}):
-                cur.execute("""SELECT event_id FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s
-                    AND once_key=%s""", (self.principal, self.environment, once))
-                decision_id = str(cur.fetchone()["event_id"])
-            return {"state": "proposed", "decision_id": decision_id}
+            return {"state": "proposed", "decision_id": self._queue_reassignment(cur, row, runner_id, by)}
+
+    @staticmethod
+    def _reassignable(row) -> bool:
+        return row["state"] in ("lapsed", "paused", "unknown") or \
+            (row["state"] in ("claimed", "running") and row["lease_until"] is not None and row["lease_until"] <= row["now"])
+
+    def _queue_reassignment(self, cur, row, runner_id, proposed_by) -> str:
+        """One reassignment decision for the item's generation now (once per item, generation and runner)."""
+        rid = str(row["request_id"])
+        once = _once("reassign_proposal", rid, row["generation"], runner_id)
+        decision_id = str(uuid.uuid4())
+        if not self._event(cur, "decision.queued", item=rid, generation=row["generation"], once=once,
+                           event_id=decision_id, body={"class": "reassignment", "solo": True, "reason": "proposed",
+                                                       "runner_id": runner_id, "proposed_by": proposed_by,
+                                                       "card_id": row["card_id"], "step": row["step"]}):
+            cur.execute("""SELECT event_id FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s
+                AND once_key=%s""", (self.principal, self.environment, once))
+            decision_id = str(cur.fetchone()["event_id"])
+        return decision_id
+
+    def propose_review(self, request_id, *, by) -> dict:
+        """MC asks to review an item (R7.5-d): one routine review_request decision; only Robert's yes to it lets MC
+        reserve a judgment call about it (reserve_judgment's owner trigger). While one is open for the item, asking
+        again answers that one."""
+        _need(self._v2, "protocol_not_enabled")
+        rid = _uuid_text(request_id, "request_id_invalid")
+        _need(type(by) is str and _ID.match(by), "proposer_invalid")
+        with self._tx() as cur:
+            row = self._item(cur, rid)
+            _need(row is not None and row["route"] is not None, "unknown_request")
+            _need(row["state"] not in TERMINAL, "item_ended")
+            cur.execute("""SELECT q.event_id FROM guild.mc_delegation_events q WHERE q.principal_id=%s
+                AND q.environment=%s AND q.kind='decision.queued' AND q.item_id=%s AND q.body->>'class'='review_request'
+                AND NOT EXISTS (SELECT 1 FROM guild.mc_delegation_events r WHERE r.principal_id=q.principal_id
+                    AND r.environment=q.environment AND r.once_key = 'decision_resolved:' || q.event_id::text)
+                ORDER BY q.seq LIMIT 1""", (self.principal, self.environment, rid))
+            open_one = cur.fetchone()
+            if open_one is not None:
+                return {"state": "proposed", "decision_id": str(open_one["event_id"])}
+            return {"state": "proposed", "decision_id": self._queue_review(
+                cur, row, {"reason": "proposed", "proposed_by": by}, once=None)}
+
+    def _queue_review(self, cur, row, body, *, once=False) -> str:
+        """One review_request decision (routine; R7.5-d): a stall's (once per stall episode: its proposal) or MC's
+        proposal (``once=None``: one while none is open, checked by the caller)."""
+        rid = str(row["request_id"])
+        if once is False:
+            once = _once("review_decision", body["proposal_id"])
+        decision_id = str(uuid.uuid4())
+        if not self._event(cur, "decision.queued", item=rid, generation=row["generation"], once=once,
+                           event_id=decision_id, body={"class": "review_request", "solo": False, **body,
+                                                       "card_id": row["card_id"], "step": row["step"]}):
+            cur.execute("""SELECT event_id FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s
+                AND once_key=%s""", (self.principal, self.environment, once))
+            decision_id = str(cur.fetchone()["event_id"])
+        return decision_id
+
+    def decisions_status(self, decision_ids) -> dict:
+        """{decision_id: {open, class, solo, answer?, action?, by?, superseded_by?, item_state, words?, text_sha256?}}
+        for the runtime link (SF2): whether each decision still waits at the authority, how it was closed if not, and
+        for an open one its words now. Read only."""
+        _need(self._v2, "protocol_not_enabled")
+        ids = [_uuid_text(d, "decision_id_invalid") for d in decision_ids]
+        out = {}
+        if not ids:
+            return out
+        with self._tx() as cur:
+            cur.execute("""SELECT event_id, item_id, generation, body FROM guild.mc_delegation_events
+                WHERE principal_id=%s AND environment=%s AND kind='decision.queued' AND event_id = ANY(%s::uuid[])""",
+                        (self.principal, self.environment, ids))
+            queued = {str(r["event_id"]): r for r in cur.fetchall()}
+            cur.execute("""SELECT body FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s
+                AND kind='decision.resolved' AND body->>'decision_id' = ANY(%s)""", (self.principal, self.environment, ids))
+            resolved = {r["body"]["decision_id"]: r["body"] for r in cur.fetchall()}
+            for did in ids:
+                q = queued.get(did)
+                if q is None:
+                    out[did] = {"open": False, "answer": "unknown_decision"}
+                    continue
+                row = self._item(cur, q["item_id"], lock=False)
+                d = {"decision_id": did, "class": q["body"].get("class"), "body": q["body"], "generation": q["generation"]}
+                status = {"class": d["class"], "solo": d["class"] in snap.SOLO or bool(q["body"].get("solo")),
+                          "item_state": None if row is None else row["state"]}
+                r = resolved.get(did)
+                if r is not None:
+                    status.update(open=False, **{k: r[k] for k in ("answer", "action", "by", "superseded_by", "code")
+                                                 if k in r})
+                else:
+                    words = None if row is None else snap.decision_words(d, row)
+                    status.update(open=row is not None, words=words,
+                                  text_sha256=None if words is None else snap.sha256(words))
+                out[did] = status
+        return out
+
+    def notices_since(self, after_seq=0, *, hours=24) -> list:
+        """The outbox (SF5): notice.raised events after ``after_seq``, recorded in the last ``hours``, oldest first:
+        [{seq, at, notice}]. The runtime link drains it on the supervisor's own short timer."""
+        _need(self._v2, "protocol_not_enabled")
+        _need(type(after_seq) is int and after_seq >= 0 and type(hours) is int and 1 <= hours <= 168, "outbox_invalid")
+        with self._tx() as cur:
+            cur.execute("""SELECT seq, at, body FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s
+                AND kind='notice.raised' AND seq > %s AND recorded_at > clock_timestamp() - %s * interval '1 hour'
+                ORDER BY seq LIMIT 500""", (self.principal, self.environment, after_seq, hours))
+            return [{"seq": r["seq"], "at": _iso(r["at"]), "notice": r["body"]} for r in cur.fetchall()]
 
     def record_owner_act(self, card_id, act, *, by, note) -> dict:
         """O (§7.2): a merge, push or deploy of a card's work, recorded by the owner path. Counted, not targeted."""
@@ -3338,8 +3472,13 @@ class DispatcherStore:
 
     def reserve_judgment(self, *, trigger, items, by, note=None) -> dict:
         """MC asks the authority before each judgment call (R7.5-c). Only Robert, or a review slot of a card that its
-        grant already admits, may start one (R7.5-d): ``trigger`` {kind: owner, turn_id} or {kind: card_slot,
-        item_id}; any other (a flag, a detector, a nudge, a timer) is refused judgment_trigger_not_allowed. Per item:
+        grant already admits, may start one (R7.5-d), and neither is taken on the caller's word (SF4):
+          {kind: owner, decision_id}    Robert's yes to a review_request decision about exactly these items, recorded
+                                        by the owner path (resolve: decision.resolved, source owner, authorize_review)
+          {kind: card_slot, item_id}    a review step of a card, admitted by its card's grant and live, for items of
+                                        that card only
+        Each trigger is used once (judgment.trigger_used); any other (a flag, a detector, a nudge, a timer) is refused
+        judgment_trigger_not_allowed. The reservation's source is the authority, with the caller named (by). Per item:
         once escalated, refused mc_escalated; past its per-item maximum, refused mc_judgment_item_max; reviewed within
         its window (its class progress timeout, N3), coalesced into that review (no new call). Then the day's cap:
         calls_per_day calls and less than per_day in the route's unit, else refused mc_judgment_cap. Otherwise one
@@ -3360,9 +3499,29 @@ class DispatcherStore:
             kind = _trigger_kind(trigger)
             if kind not in ("owner", "card_slot"):
                 return refused("judgment_trigger_not_allowed")       # a flag, detector, nudge or timer starts nothing
+            self._lock_route(cur, j.route)                           # every judgment reservation, one at a time
+            rows = {}
+            for rid in ids:
+                row = self._item(cur, rid, lock=False)
+                _need(row is not None and row["route"] is not None, "unknown_request")
+                rows[rid] = row
             if kind == "owner":
-                _need(set(trigger) == {"kind", "turn_id"} and type(trigger["turn_id"]) is str
-                      and _ID.match(trigger["turn_id"]), "trigger_invalid")
+                _need(set(trigger) == {"kind", "decision_id"}, "trigger_invalid")
+                did = _uuid_text(trigger["decision_id"], "trigger_invalid")
+                cur.execute("""SELECT item_id, body FROM guild.mc_delegation_events WHERE principal_id=%s
+                    AND environment=%s AND kind='decision.queued' AND event_id=%s""", (self.principal, self.environment, did))
+                asked = cur.fetchone()
+                cur.execute("""SELECT source, body FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s
+                    AND once_key=%s""", (self.principal, self.environment, _once("decision_resolved", did)))
+                answered = cur.fetchone()
+                if (asked is None or asked["body"].get("class") != "review_request" or answered is None
+                        or answered["source"] != "owner" or answered["body"].get("action") != "authorize_review"
+                        or answered["body"].get("answer") != "approved"):
+                    return refused("judgment_owner_turn_not_found")   # only Robert's own yes, through the owner path
+                if ids != [str(asked["item_id"])]:
+                    return refused("judgment_items_not_authorized")
+                used = _once("judgment_trigger", "owner", did)
+                evidence = {"kind": "owner", "decision_id": did, "receipt": answered["body"].get("receipt")}
             else:
                 _need(set(trigger) == {"kind", "item_id"}, "trigger_invalid")
                 slot = self._item(cur, _uuid_text(trigger["item_id"], "trigger_invalid"), lock=False)
@@ -3370,14 +3529,14 @@ class DispatcherStore:
                 if slot is None or card.get("kind") != "review" or not card.get("on_card") \
                         or slot["state"] not in ("queued", "claimed", "running") or self._grant_refusal(cur, slot):
                     return refused("judgment_slot_not_admitted")
-            self._lock_route(cur, j.route)
+                if any(r["card_id"] != slot["card_id"] or not (r["facts"] or {}).get("card") for r in rows.values()):
+                    return refused("judgment_items_not_of_slot")      # a slot reviews its own card's work only
+                used = _once("judgment_trigger", "card_slot", str(slot["request_id"]), slot["generation"])
+                evidence = {"kind": "card_slot", "item_id": str(slot["request_id"]), "card_id": slot["card_id"]}
+            if self._recorded(cur, used) is not None:
+                return refused("judgment_trigger_used")
             cur.execute("SELECT clock_timestamp() AS now, (clock_timestamp() AT TIME ZONE 'America/Chicago')::date AS day")
             clock = cur.fetchone()
-            rows = {}
-            for rid in ids:
-                row = self._item(cur, rid, lock=False)
-                _need(row is not None and row["route"] is not None, "unknown_request")
-                rows[rid] = row
             fresh, coalesced = [], {}
             for rid, row in rows.items():
                 if self._recorded(cur, _once("judgment_escalated", rid)) is not None:
@@ -3399,6 +3558,7 @@ class DispatcherStore:
                 self._event(cur, "judgment.coalesced", item=rid, generation=rows[rid]["generation"], source="authority",
                             body={"reservation_id": reservation, "trigger": kind, "by": by})
             if not fresh:
+                self._event(cur, "judgment.trigger_used", once=used, body={**evidence, "by": by, "coalesced": True})
                 return {"state": "coalesced", "reservation_ids": sorted(set(coalesced.values()))}
             cur.execute("""SELECT count(*) AS calls FROM guild.mc_delegation_events WHERE principal_id=%s
                 AND environment=%s AND kind='judgment.reserved' AND body->>'day' = %s""",
@@ -3417,10 +3577,10 @@ class DispatcherStore:
                 updated_at=clock_timestamp() WHERE environment=%s AND route=%s AND day=%s""",
                         (j.per_call, j.per_day, self.environment, j.route, clock["day"]))
             reservation = str(uuid.uuid4())
-            self._event(cur, "judgment.reserved", source="owner" if kind == "owner" else "authority",
-                        body={"reservation_id": reservation, "trigger": {"kind": kind, **(
-                                  {"turn_id": trigger["turn_id"]} if kind == "owner" else {"item_id": trigger["item_id"]})},
-                              "items": fresh, "route": j.route, "unit": j.unit, "amount": float(j.per_call),
+            self._event(cur, "judgment.trigger_used", once=used, body={**evidence, "by": by, "reservation_id": reservation})
+            self._event(cur, "judgment.reserved", source="authority",
+                        body={"reservation_id": reservation, "trigger": evidence, "items": fresh, "route": j.route,
+                              "unit": j.unit, "amount": float(j.per_call),
                               "day": clock["day"].isoformat(), "by": by, "note": (note or "")[:300],
                               "state_digests": {rid: self._state_digest(rows[rid]) for rid in fresh}})
             return {"state": "reserved", "reservation_id": reservation, "amount": float(j.per_call), "unit": j.unit,
