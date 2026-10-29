@@ -457,6 +457,20 @@ class ProductionBundleOnPython39(unittest.TestCase):
                 "    store.DispatcherStore(lambda: None, principal='robert', environment='dev', authority=v2)\n"
                 "except RuntimeError as exc:\n"
                 "    print(exc)\n"
+                # S1-G: the snapshot's pure rules, state.json and the read path, in the same bundle on 3.9.
+                "from core.mc_delegation_dispatcher import snapshot as snap\n"
+                "import datetime as _dt, hashlib as _h\n"
+                "now = _dt.datetime(2026, 10, 29, tzinfo=_dt.timezone.utc)\n"
+                "doc = snap.build({'now': now, 'environment': 'dev', 'values': {'contact_timeout_s': 45,\n"
+                "    'gap_threshold_s': 30, 'progress_timeout_s': {}, 'judgment': None}, 'items': [], 'card_items': [],\n"
+                "    'events': [], 'runners': [], 'blocked': {}, 'suspended': [], 'grants': {}, 'liveness': {},\n"
+                "    'judgment_day': None, 'codes': {}, 'agents': [], 'agents_unknown': None, 'authority': {}})\n"
+                "assert doc['schema'] == 'minimoi.runtime.state.v1' and doc['authority']['sweeper_age_s'] is None\n"
+                "snap.write_state_file(root / 'st', doc)\n"
+                "assert snap.read_state_file(root / 'st' / 'state.json')['as_of'] == doc['as_of']\n"
+                "rd = {'c': {'sha256': _h.sha256(b'x' * 40).hexdigest(), 'role': 'observer'}}\n"
+                "assert snap.read_request({'Authorization': 'Bearer ' + 'x' * 40}, readers=rd, provide=lambda: doc)[0] == 200\n"
+                "assert snap.legacy_items([]) == ([], [])\n"
                 "print(sys.version_info[:2], 'ok')\n")
             out = subprocess.run([PY39, "-B", "-I", "-c", probe, str(bundle)], capture_output=True, text=True,
                                  timeout=60, cwd=tmp)
