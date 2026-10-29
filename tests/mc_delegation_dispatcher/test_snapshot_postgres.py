@@ -538,6 +538,81 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         work = self.owner_work(self.publish(), "C-17")
         self.assertEqual((work["A"], work["R"], work["C"]), (2, 0, 0))      # the redo's admission: one A, no relay
 
+    # ── sweep A13: a redo never sends again an effect its failed step committed ──
+    def effect_steps(self, env, eff):
+        """prepare, claim, dispatch of one effect, as far as each is ok. -> (answers, lease or None)."""
+        r, g = env["request_id"], env["generation"]
+        out = [self.store.effect("mac-a", r, g, eff)]
+        if out[-1]["state"] != "ok":
+            return out, None
+        got = self.store.effect("mac-a", r, g, {**eff, "op": "claim"})
+        out.append(got)
+        if got["state"] != "ok":
+            return out, None
+        lease = {k: got["lease"][k] for k in ("receipt_generation", "token", "mode")}
+        out.append(self.store.effect("mac-a", r, g, {**eff, "op": "dispatch", "lease": lease}))
+        return out, lease
+
+    def test_a13_a_redo_carries_an_effect_its_failed_step_committed_and_never_sends_it_again(self):
+        """The sweep's sequence: a card step commits e1 (verified), its e2 fails for good, the step ends failed and
+        Robert says yes to its redo, whose child runs the same brief. e1 is answered as already done under the
+        operation id it was committed with, never prepared, claimed or dispatched again; e2 is redone under a new one.
+        A redo of the redo carries e1 still."""
+        self.admit(card())
+        _, env = self.claim()
+        rid = env["request_id"]
+        digest = ToolRequest(SINK, 1, json.dumps({"op": "e1"}).encode()).arguments_sha256
+        gid = str(uuid4())
+        with self.connect() as conn:                  # e1's grant leaves room for a redo (two operations)
+            GRANTS.issue(conn, GrantDefinition(gid, "robert", "dev", "C-17", ("owner-turn",), ("fakework",),
+                                               EFFECT_POLICY, SINK, 1, (digest,), 2,
+                                               self.db_now() + timedelta(seconds=600), work_id="C-17"))
+        e1 = {"op": "prepare", "key": "e1", "grant_id": gid,
+              "request": {"operation": SINK, "operation_version": 1, "arguments": {"op": "e1"}}}
+        steps, lease1 = self.effect_steps(env, e1)
+        self.assertEqual([s["state"] for s in steps], ["ok", "ok", "ok"])
+        self.assertEqual(self.finish(env, e1, lease1, "verified")["state"], "ok")      # e1 committed
+        e2, lease2 = self.effect_open(env, "C-17", key="e2")
+        self.assertEqual(self.finish(env, e2, lease2, "failed")["state"], "ok")         # e2 failed for good
+        self.assertEqual(self.result(env, status="failed", detail={"exit_code": 69})["state"], "accepted")
+        (d,) = self.waiting(self.publish(), "step_redo")
+        self.assertEqual(self.store.resolve(d["decision_id"], "approved", by="robert",
+                                            receipt=self.receipt_of(d, "yes"))["action"], "admit")
+        _, env2 = self.claim()
+        redo = env2["request_id"]
+        self.assertNotEqual(redo, rid)
+        committed = effect_operation_id(rid, "e1")
+        steps2, _ = self.effect_steps(env2, e1)                # the redo's child runs the same brief: e1 again
+        self.assertEqual([(s["state"], s.get("receipt_state"), s.get("code"), s["operation_id"]) for s in steps2],
+                         [("ok", "verified", None, committed),            # already done (the runner stops here)
+                          ("refused", None, "effect_already_verified", committed)])     # and never claimed
+        for op, extra in (("claim", {}), ("dispatch", {"lease": lease1})):
+            got = self.store.effect("mac-a", redo, env2["generation"], {**e1, "op": op, **extra})
+            self.assertEqual((got["state"], got.get("code")), ("refused", "effect_already_verified"))
+        other = {**e1, "request": {**e1["request"], "arguments": {"op": "e1", "to": "elsewhere"}}}
+        self.assertEqual(self.store.effect("mac-a", redo, env2["generation"], other).get("code"),
+                         "receipt_operation_reused")           # the same key for another request: never "done"
+        self.assertEqual(self.sql("SELECT count(*) AS n FROM guild.mc_action_receipts WHERE operation_id=%s",
+                                  (effect_operation_id(redo, "e1"),))[0]["n"], 0)          # no second receipt
+        self.assertEqual(self.sql("SELECT consumed_operations AS n FROM guild.mc_action_grants WHERE grant_id=%s",
+                                  (gid,))[0]["n"], 1)          # and no grant operation used for it
+        self.assertEqual(self.sql("""SELECT count(*) AS n FROM guild.mc_action_events
+            WHERE operation_id=%s AND event_type='dispatched'""", (committed,))[0]["n"], 1)   # DUP-1, across the redo
+        self.assertEqual(len(self.events("effect.carried", item=redo)), 1)
+        self.assertIn("the 1 effect it already committed keeps its operation id and is never sent again", d["words"])
+        self.assertEqual(self.item("C-17.build.redo1")["facts"]["card"]["carried"],
+                         {"e1": {"operation_id": committed, "from": rid}})
+        # e2 is what the redo redoes, under its own new operation id; it fails again, so the step is redone again,
+        # and that redo still carries e1 from the first item.
+        e2r, lease2r = self.effect_open(env2, "C-17", key="e2")
+        self.assertNotEqual(effect_operation_id(redo, "e2"), effect_operation_id(rid, "e2"))
+        self.assertEqual(self.finish(env2, e2r, lease2r, "failed")["state"], "ok")
+        self.assertEqual(self.result(env2, status="failed", detail={"exit_code": 69})["state"], "accepted")
+        (d2,) = self.waiting(self.publish(), "step_redo")
+        self.assertEqual(self.item("C-17.build.redo2")["facts"]["card"]["carried"],
+                         {"e1": {"operation_id": committed, "from": rid}})
+        self.assertIn("the 1 effect it already committed", d2["words"])
+
     def test_a_declined_redo_ends_the_card(self):
         self.admit(card())
         _, env = self.claim()

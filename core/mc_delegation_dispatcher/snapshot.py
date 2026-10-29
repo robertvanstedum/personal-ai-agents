@@ -155,9 +155,14 @@ def decision_words(d, item) -> str:
         return (f"Admit a cross-vendor review on {who} ({worker}, {amount}). A card's approval never covers another "
                 f"model family. Yes admits it under its own exact approval; no ends the card.")
     if cls == "step_redo":
+        done = len(body.get("carried") or {})          # effects the step committed, carried over (sweep A13)
+        kept = "" if not done else (
+            f" for what it redoes; the {done} effect{'s' if done != 1 else ''} it already committed "
+            + ("keeps its operation id and is" if done == 1 else "keep their operation ids and are")
+            + " never sent again")
         return (f"Redo {who} as a new item? An effect of it failed for good ({nops}), so the step ended failed "
                 f"(effect_failed) and nothing retries it. Yes admits one new item for this step ({worker}, {amount}), "
-                f"with new operation ids; no ends the card.")
+                f"with new operation ids{kept}; no ends the card.")
     if cls == "review_request":
         if body.get("reason") == "stalled":
             timeout = body.get("timeout_s")

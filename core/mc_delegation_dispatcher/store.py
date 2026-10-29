@@ -2052,7 +2052,8 @@ class DispatcherStore:
         grant's operations and queued, or, when the grant no longer admits it, written proposed with one routine
         decision. A step of another model family is never a card step: it is written proposed with one solo decision
         (R7.4-c) and waits for its own admission (T13). A redo of a step (``job``, ``redo_of``) is the same step under
-        a new job id, so new operation ids, written proposed with its redo decision (_write_redo)."""
+        a new job id, so new operation ids, written proposed with its redo decision (_write_redo); the effects the
+        step already committed are carried in under their own operation ids (``redo_of["carried"]``, sweep A13)."""
         arts, sources = compiled.inputs(step, earlier)
         card = compiled.card
         item = self._v2_item(job or f"{compiled.card_id}.{step.name}", step.actor, step.scope, card["repository"],
@@ -2061,7 +2062,8 @@ class DispatcherStore:
                              compiled.card_id, step.name, created_by)
         facts = {"card": {"digest": compiled.digest, "class_digest": compiled.class_digest, "kind": step.kind,
                           "index": step.index, "attempt": 1, "on_card": step.on_card, "template_digest": step.digest,
-                          "inputs_from": sources, **({"redo_of": redo_of["redo_of"]} if redo_of else {})}}
+                          "inputs_from": sources, **({"redo_of": redo_of["redo_of"]} if redo_of else {}),
+                          **({"carried": redo_of["carried"]} if redo_of and redo_of.get("carried") else {})}}
         if redo_of is not None:
             # A redo is never admitted by the card's grant (its operation for this step was used): it waits, proposed,
             # on one decision, routine for a card step, solo for another model family's (a cross-vendor admission).
@@ -2556,7 +2558,9 @@ class DispatcherStore:
         -> {state: ok, op, operation_id, receipt_state, lease?: {receipt_generation, token, mode, lease_until}}
          | {state: already_applied, op, operation_id} (a finish replayed, DUP-5) | {state: refused, op, operation_id, code}
          | {state: refused, ..., code: receipt_outcome_conflict, decision_id} (a finish contradicting its receipt's
-           recorded outcome: one decision on the item, _effect_conflict)"""
+           recorded outcome: one decision on the item, _effect_conflict)
+        A redo's effect that its failed step already committed keeps that operation id (_carried_effect): prepare
+        answers ok, receipt_state verified, and nothing else is taken for it."""
         _need(self._protocol(protocol, ()), "protocol_invalid")
         rid = _uuid_text(request_id, "request_id_invalid")
         _need(type(generation) is int and not isinstance(generation, bool) and 0 <= generation < 2**31,
@@ -2577,6 +2581,11 @@ class DispatcherStore:
             if row is None or row["route"] is None:
                 return {"state": "refused", **answer, "code": "unknown_request" if row is None else "protocol_mismatch"}
             host_id = self._host_id(cur, runner_id)
+            carried = (((row["facts"] or {}).get("card") or {}).get("carried") or {}).get(eff["key"])
+            if carried is not None:
+                # A redo's effect its failed step already committed (sweep A13): the same effect, under the operation
+                # id it was committed with, never a new one, so it is never sent again (R4.5-b, DUP-1).
+                return self._carried_effect(cur, row, runner_id, generation, eff, req, carried, host_id)
             body = {"operation_id": op_id, "key": eff["key"], "capability": req.operation}
             code, out = self._effect_refusal(cur, row, runner_id, generation, op, op_id), None
             if code is None:
@@ -2608,6 +2617,49 @@ class DispatcherStore:
             if op == "finish":
                 self._requeue_outcome(cur, row)
             return {"state": "ok", **answer, **out}
+
+    def _carried_effect(self, cur, row, runner_id, generation, eff, req, carried, host_id) -> dict:
+        """An effect of a redo item that its failed step already committed (sweep A13), carried into the redo under the
+        operation id it was committed with (``carried``: {operation_id, from}). It is answered as a resumed attempt's
+        is (its receipt verified: done, never sent again, R4.5-b), and nothing else can happen to it under the redo:
+        prepare answers ok with receipt_state verified, after the same owner, lease, Stop and grant checks as any new
+        effect, and only for the very request it was committed with (another is refused receipt_operation_reused, as
+        within one item); any other step is refused effect_already_verified. No grant operation is used."""
+        rid, op, op_id = str(row["request_id"]), eff["op"], carried["operation_id"]
+        answer = {"op": op, "operation_id": op_id}
+        body = {"operation_id": op_id, "key": eff["key"], "capability": req.operation, "carried_from": carried["from"]}
+        code = "effect_already_verified" if op != "prepare" else \
+            self._effect_refusal(cur, row, runner_id, generation, op, op_id)
+        if code is None:
+            cur.execute("""SELECT state, capability, capability_version, request_digest FROM guild.mc_action_receipts
+                WHERE principal_id=%s AND environment=%s AND operation_id=%s""",
+                        (self.principal, self.environment, op_id))
+            held = cur.fetchone()
+            if held is None or held["state"] != "verified":
+                code = "effect_carried_not_verified"
+            elif (held["capability"], held["capability_version"], held["request_digest"]) != \
+                    (req.operation, req.operation_version, req.arguments_sha256):
+                code = "receipt_operation_reused"
+        if code is not None:
+            self._event(cur, "effect.refused", item=rid, generation=row["generation"], host_id=host_id,
+                        once=_once("effect_refused", op_id, op, generation, code, rid),
+                        body={**body, "op": op, "code": code, "generation": generation})
+            return {"state": "refused", **answer, "code": code}
+        self._event(cur, "effect.carried", item=rid, generation=row["generation"], host_id=host_id,
+                    once=_once("effect_carried", rid, op_id), body=body)
+        return {"state": "ok", **answer, "receipt_state": "verified", "carried_from": carried["from"]}
+
+    def _committed_effects(self, cur, row) -> dict:
+        """{key: {operation_id, from}}: every effect a card step committed (its receipt verified), those it prepared
+        itself and those its own redo carried, so a redo of the step never sends one of them again (sweep A13)."""
+        carried = dict(((row["facts"] or {}).get("card") or {}).get("carried") or {})
+        cur.execute("""SELECT body->>'key' AS key, body->>'operation_id' AS op FROM guild.mc_delegation_events
+            WHERE principal_id=%s AND environment=%s AND item_id=%s AND kind='effect.prepared' ORDER BY seq""",
+                    (self.principal, self.environment, str(row["request_id"])))
+        for r in cur.fetchall():
+            if self._receipts.read(cur.connection, self.principal, self.environment, r["op"])["state"] == "verified":
+                carried[r["key"]] = {"operation_id": r["op"], "from": str(row["request_id"])}
+        return carried
 
     def _effect_conflict(self, cur, row, op_id, recorded, eff, host_id, body, generation, answer) -> dict:
         """A finish whose outcome contradicts the one its receipt already holds: the target's answer as the owner
@@ -3604,19 +3656,23 @@ class DispatcherStore:
 
     def _write_redo(self, cur, row, compiled, step, grant_id) -> bool:
         """A card step that ended failed on a definitively failed effect: the same step written again as a new item
-        (a new job and request id, so new operation ids), proposed, created by the authority from the card's records
-        (no relay, OWN-2), with one decision (step_redo) that only Robert's yes admits, as one A. True once written;
-        False when this authority refuses to write it now (the card then ends with the reason)."""
+        (a new job and request id, so new operation ids for what it redoes), proposed, created by the authority from
+        the card's records (no relay, OWN-2), with one decision (step_redo) that only Robert's yes admits, as one A.
+        The effects the failed step committed are carried into the redo under the operation ids they were committed
+        with (sweep A13: facts.card.carried, named in the decision's words), so the redo never sends one again. True
+        once written; False when this authority refuses to write it now (the card then ends with the reason)."""
         from core.minimoi_actions.context import ActionContractError
         rid, card_id = str(row["request_id"]), row["card_id"]
         cur.execute("""SELECT count(*) AS n FROM guild.mc_delegations WHERE principal_id=%s AND environment=%s
             AND card_id=%s AND step=%s""", (self.principal, self.environment, card_id, step.name))
         k = cur.fetchone()["n"]
+        committed = self._committed_effects(cur, row)
         cur.execute("SAVEPOINT mc_card_redo")
         try:
             out = self._write_step(cur, compiled, step, grant_id, created_by="authority",
                                    earlier=self._card_done(cur, card_id), job=f"{card_id}.{step.name}.redo{k}",
-                                   redo_of={"redo_of": rid, "operations": self._failed_operations(cur, rid)})
+                                   redo_of={"redo_of": rid, "operations": self._failed_operations(cur, rid),
+                                            **({"carried": committed} if committed else {})})
         except (card_mod.CardRefused, AuthorityRefused, ActionContractError):
             cur.execute("ROLLBACK TO SAVEPOINT mc_card_redo")
             out = None
