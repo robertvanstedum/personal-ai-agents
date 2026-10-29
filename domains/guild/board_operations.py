@@ -4,7 +4,8 @@ from copy import deepcopy
 from core.domain_operations.definitions import Operation, checked
 
 BASE = "/internal/domain-api/v1/guild/board"
-LABELS = ("decide", "blocked", "remember", "followup", "idea", "fyi")
+from domains.guild.board_contract import LABELS
+from domains.guild.board_text import LIMIT, CONVENTION
 
 
 def obj(properties, required=(), **extra):
@@ -92,7 +93,7 @@ def operations():
         "Describe the authenticated caller's effective Board capabilities; descriptions grant no authority.",
         obj({}), obj({"version": {"const": 1}, "capabilities": {"type": "array", "items": {"type": "string"}},
                       "labels": {"type": "array", "items": {"type": "string"}},
-                      "text_limit": {"const": 280}, "count_convention": {"const": "unicode_scalar_lf_v1"}},
+                      "text_limit": {"const": LIMIT}, "count_convention": {"const": CONVENTION}},
                      ("version", "capabilities", "labels", "text_limit", "count_convention")))
     # Optional continuation is conversational state, never owner/turn/grant authority.
     for row in rows:

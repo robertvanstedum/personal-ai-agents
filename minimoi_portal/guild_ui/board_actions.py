@@ -7,31 +7,16 @@ effects commit together; a connection/commit error is unknown to the caller.
 from __future__ import annotations
 
 import base64
-from dataclasses import dataclass
 import hashlib
 import hmac
 import json
 from uuid import UUID, uuid5, NAMESPACE_URL
 
 from .stores import Author, WriteResult, FloorStoreUnavailable, utc_now, _POSTIT_COLS, _postit
-from .board import LABELS
 from domains.guild.board_wire import payload as wire_payload, digest as wire_digest
-from .board_text import clean, TextRefused
+from domains.guild.board_contract import BoardContext, BoardRefused, LABELS
+from domains.guild.board_text import clean, TextRefused
 
-
-class BoardRefused(ValueError):
-    pass
-
-
-@dataclass(frozen=True, repr=False)
-class BoardContext:
-    principal: str
-    environment: str
-    board: str
-    executor: str
-    source_ref: str
-    capabilities: frozenset[str]
-    owner_session: bool = False
 
 
 def _json(value):
