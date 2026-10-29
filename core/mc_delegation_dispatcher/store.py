@@ -200,6 +200,17 @@ class Sweeper:
 
 
 @dataclass(frozen=True)
+class HostValues:
+    """§5.3's values a host's own loop runs on (R2.3-b: the environment's, so they live here, in the authority's file;
+    each host reads the same file, and a host given none refuses to start: a missing value admits nothing). The host's
+    gap threshold is the sweeper's ``gap_threshold_s``: one value, two readers (N3)."""
+    contact_interval_s: int            # a host's contact (heartbeat) runs on its own timer this often (R3.2-a)
+    contact_timeout_s: int             # older contact reads unreachable (R5.1-a; S1-G derives it)
+    renew_s: int                       # a host renews its lease this often; less than the lease
+    offline_hold_s: int                # a frozen child is stopped at its checkpoint after this long offline (R4.5-f)
+
+
+@dataclass(frozen=True)
 class Authority:
     environment: str
     protocols: frozenset
@@ -209,6 +220,7 @@ class Authority:
     sweeper: Sweeper | None = None     # version 2 needs one; version 1 only: none runs, and relay.status reaps (R3.3)
     reassign_across_hosts: bool = False   # False on a Mac-only build: no cross-host takeover at all (R2.4-c)
     clock_skew_s: int = 0              # how far a host's clock may be off when its pre-lapse records are judged (§2.5)
+    hosts: HostValues | None = None    # the host loop's values; None: no version 2 host may start on this file
 
     @property
     def speaks_v2(self) -> bool:
@@ -229,7 +241,7 @@ class Authority:
     def parse(cls, doc) -> "Authority":
         _need(type(doc) is dict and set(doc) <= {"schema", "environment", "protocols", "launch_closure", "lease_s",
                                                   "routes", "note", "sweeper", "reassign_across_hosts",
-                                                  "clock_skew_s"},
+                                                  "clock_skew_s", "hosts"},
               "authority_config_invalid")
         _need(doc.get("schema") == AUTHORITY_SCHEMA, "authority_schema_invalid")
         _need(doc.get("environment") in ("dev", "prod"), "authority_environment_invalid")
@@ -273,8 +285,16 @@ class Authority:
         _need(type(across) is bool, "authority_reassign_invalid")
         skew = doc.get("clock_skew_s", 0)                                          # missing: 0, an exact window
         _need(type(skew) is int and 0 <= skew <= 60, "authority_clock_skew_invalid")
+        hv = doc.get("hosts")
+        keys = ("contact_interval_s", "contact_timeout_s", "renew_s", "offline_hold_s")
+        _need(hv is None or (type(hv) is dict and set(hv) == set(keys) and all(type(hv[k]) is int for k in keys)
+                             and 1 <= hv["contact_interval_s"] < hv["contact_timeout_s"] <= 3600
+                             and (sw is None or hv["contact_interval_s"] < sw["gap_threshold_s"])   # a beat is no gap
+                             and 1 <= hv["renew_s"] and (lease is None or hv["renew_s"] < lease)
+                             and 1 <= hv["offline_hold_s"] <= 86400), "authority_hosts_invalid")
         return cls(doc["environment"], frozenset(protocols), closure, lease, MappingProxyType(parsed),
-                   None if sw is None else Sweeper(sw["sweep_s"], sw["gap_threshold_s"]), across, skew)
+                   None if sw is None else Sweeper(sw["sweep_s"], sw["gap_threshold_s"]), across, skew,
+                   None if hv is None else HostValues(*(hv[k] for k in keys)))
 
 
 def in_test_family(route: str) -> bool:

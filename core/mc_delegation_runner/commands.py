@@ -10,7 +10,11 @@ build     workspace-write: edits only inside the fresh checkout; no network for 
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+
+# fakework/1 (spec v0.5 §9.3), the test worker: run by this runtime's own interpreter, isolated, from the bundle.
+FAKEWORK = str(Path(__file__).resolve().with_name("fakework.py"))
 
 PREAMBLE = (
     "You are working on a delegated MiniMoi task in an isolated checkout at an exact commit. "
@@ -35,4 +39,8 @@ def argv(actor: str, scope: str, brief: str, task_dir: Path) -> list[str]:
                     "--tools", "Read,Grep,Glob", "--allowedTools", "Read", "Grep", "Glob"]
         return ["claude", "-p", prompt, "--output-format", "json", "--permission-mode", "acceptEdits",
                 "--disallowedTools", "Bash(git push:*)", "Bash(gh:*)", "WebFetch"]
+    if actor == "fakework":
+        # Its program is the brief itself (no preamble: it must start with "fakework/1"). It has no tools, no network
+        # and no provider client; the runtime adds its channel, sink and cap (runner._argv_v2, cost.UNIT_ENFORCERS).
+        return [sys.executable, "-I", "-B", FAKEWORK, "--program", brief]
     raise ValueError("actor_unsupported")

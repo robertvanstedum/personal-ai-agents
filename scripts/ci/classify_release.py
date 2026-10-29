@@ -327,7 +327,8 @@ MC_RUNNER_PORTAL_FILES = frozenset({"core/mc_delegation_runner/__init__.py", "co
                                     "core/mc_delegation_runner/dispatcher_adapter.py", "core/mc_delegation_runner/launch_env.py"})
 MC_RUNNER_LOCAL_FILES = frozenset({"core/mc_delegation_runner/cli.py", "core/mc_delegation_runner/runner.py",
                                    "core/mc_delegation_runner/commands.py", "core/mc_delegation_runner/cost.py",
-                                   "core/mc_delegation_runner/workspace.py"})
+                                   "core/mc_delegation_runner/workspace.py", "core/mc_delegation_runner/host.py",
+                                   "core/mc_delegation_runner/journal.py", "core/mc_delegation_runner/fakework.py"})
 
 
 def _is_staging_only(path: str) -> bool:

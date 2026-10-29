@@ -15,6 +15,7 @@ from datetime import datetime
 
 SCHEMA = "mc-delegation-envelope/1"
 ACTORS = ("codex", "claude-code")
+V2_ACTORS = ACTORS + ("fakework",)          # a version 2 host also runs the test worker (spec v0.5 §6.5, §9.3)
 SCOPES = ("research", "build")
 MAX_BRIEF_CHARS = 16_000
 MAX_ARTIFACTS = 16
@@ -46,9 +47,11 @@ class Envelope:
     cost_cap_usd: float
 
 
-def parse(doc: object, *, allowed_repositories: dict, max_cost_usd: float, now: datetime) -> Envelope:
+def parse(doc: object, *, allowed_repositories: dict, max_cost_usd: float, now: datetime,
+          actors: tuple = ACTORS) -> Envelope:
     """``allowed_repositories`` maps a repository name to the runner's local mirror; nothing else
-    can be checked out. ``max_cost_usd`` is the runner's own ceiling for any one task."""
+    can be checked out. ``max_cost_usd`` is the runner's own ceiling for any one task. ``actors`` is version 1's
+    two CLIs unless a version 2 host names ``V2_ACTORS``."""
     if not isinstance(doc, dict) or doc.get("schema") != SCHEMA:
         raise EnvelopeRefused("envelope_schema_invalid")
     if set(doc) != _FIELDS:
@@ -63,7 +66,7 @@ def parse(doc: object, *, allowed_repositories: dict, max_cost_usd: float, now: 
     gen = doc["generation"]
     if isinstance(gen, bool) or not isinstance(gen, int) or gen < 1:
         raise EnvelopeRefused("envelope_generation_invalid")
-    if doc["actor"] not in ACTORS:
+    if doc["actor"] not in actors:
         raise EnvelopeRefused("envelope_actor_invalid")
     if doc["environment"] not in ("dev", "prod"):
         raise EnvelopeRefused("envelope_environment_invalid")

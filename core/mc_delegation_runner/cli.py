@@ -12,6 +12,19 @@
 * Before each claim the mirror is fetched, so the dispatcher's exact commit is present.
 * Actors: only those with a real budget adapter (Claude Code today). Scopes: research by default; build with --scopes research,build.
 * Each pass is one ``run_once``; a failed pass is logged by type and the loop continues.
+
+Subcommands (host runtime spec v0.5 §3.3: one binary, two configurations). Without one, or with ``run`` and the flags
+above, it is exactly today's version 1 runner (production's configuration). With ``--host-config`` it is a version 2
+host runtime (runner.HostRuntime):
+
+    mc-delegation-runner run --host-config ~/minimoi-runtime/dev/host.yaml [--once]
+    mc-delegation-runner state --host-config PATH [--json]        the host's own view (host-state.json), with its age
+    mc-delegation-runner doctor --host-config PATH [--env-names] [--do-not-resume]
+    mc-delegation-runner version [--host-config PATH]
+    mc-delegation-runner journal --host-config PATH show | replay [--again]
+
+``doctor`` fails closed (exit 1) on an interpreter that is not the pinned one, a host configuration or authority
+values it cannot use, or a bundle it cannot digest; ``--env-names`` prints names only, never a value.
 """
 from __future__ import annotations
 
@@ -57,7 +70,22 @@ def _fetch(mirror: Path):
                                                   "HOME": os.environ.get("HOME", ""), "GIT_TERMINAL_PROMPT": "0"})
 
 
+SUBCOMMANDS = ("run", "state", "doctor", "version", "journal")
+
+
 def main(argv=None) -> int:
+    words = list(sys.argv[1:] if argv is None else argv)
+    if words and words[0] in SUBCOMMANDS[1:]:
+        return _SUB[words[0]](words[1:])
+    if words and words[0] == "run":
+        argv = words = words[1:]
+    if any(w == "--host-config" or w.startswith("--host-config=") for w in words):
+        return _run_v2(words)
+    return _run_v1(argv)
+
+
+def _run_v1(argv=None) -> int:
+    """Today's runner, unchanged: version 1 over a DSN or the production door."""
     p = argparse.ArgumentParser(prog="mc-delegation-runner")
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--dsn-file", type=Path)
@@ -112,6 +140,276 @@ def main(argv=None) -> int:
         if args.once:
             return 0
         time.sleep(args.interval)
+
+
+# ── version 2: the host runtime ───────────────────────────────────────────────────────────────────────────────────
+V2_MAX_COST_USD = 3.0      # the envelope's own USD ceiling for any one task: Robert's per-item cap (Q2, §8.2)
+
+
+def _host(path):
+    from . import host as host_mod
+    try:
+        return host_mod.load(Path(path).expanduser())
+    except host_mod.HostRefused as exc:
+        raise SystemExit(f"refused: {exc}")
+
+
+def _values(host):
+    """The environment's values for this host: the authority's own file (R2.3-b). (Authority, problem or None)."""
+    from core.mc_delegation_dispatcher.store import Authority, AuthorityRefused
+    try:
+        auth = Authority.load(host.authority.values)
+    except (OSError, AuthorityRefused) as exc:
+        return None, f"authority_values_unreadable:{type(exc).__name__}"
+    if auth.environment != host.environment:
+        return None, "authority_values_environment_mismatch"
+    if auth.hosts is None or auth.sweeper is None or not auth.speaks_v2:
+        return None, "host_values_missing"                     # a missing value admits nothing
+    return auth, None
+
+
+def _grant_store(host):
+    """The authority's GrantStore when this process builds the authority's store in-process (the Mac-only interim):
+    the delegation capabilities (one exact approval each), cards' row, and the test sink's effect where configured."""
+    from core.minimoi_actions.grants import CapabilityRule, GrantStore
+    from core.mc_delegation_dispatcher import cards
+    rows = {"delegate.start_build": CapabilityRule(1, True, True), "delegate.start_research": CapabilityRule(1, True, True),
+            **cards.grant_rows()}
+    if host.effect_sink is not None:
+        from .fakework import OPERATION
+        rows[OPERATION] = CapabilityRule(1, False, True)
+    return GrantStore(rows)
+
+
+def _dispatcher(host, auth):
+    from .dispatcher_adapter import StoreDispatcherV2
+    if host.authority.transport == "dsn":
+        import psycopg2
+        from core.mc_delegation_dispatcher.store import DispatcherStore
+        dsn = _dsn(host.authority.dsn_file)
+        store = DispatcherStore(lambda: psycopg2.connect(dsn, connect_timeout=5), principal=host.principal,
+                                environment=host.environment, authority=auth, grants=_grant_store(host))
+        return StoreDispatcherV2(store)
+    from core.mc_delegation_dispatcher.door import HttpDispatcherV2
+    service, _, account = host.authority.credential_ref.split(":", 1)[1].partition("/")
+    value = subprocess.run(["security", "find-generic-password", "-s", service, "-a", account, "-w"],
+                           capture_output=True, text=True, timeout=10).stdout.strip()
+    if not 32 <= len(value) <= 256:
+        raise SystemExit("no host credential at its reference")
+    return HttpDispatcherV2(host.authority.url, value, host.artifact_root, timeout=min(20, host.stop_timeout_s // 4 or 1))
+
+
+def runtime_for(host, auth, dispatcher, *, digest=None):
+    """A HostRuntime from a host configuration (the run and journal commands; tests build it the same way)."""
+    from . import host as host_mod
+    from .fakework import FileSink
+    if digest is None:
+        digest, _ = host_mod.tree_digest(host.bundle_root)
+    cfg = runner.RunnerConfig(runner_id=host.runner_id, actors=host.actors(), scopes=host.scopes(),
+                              repositories={k: str(v) for k, v in host.mirrors.items()},
+                              workspace_root=host.workspace_root, artifact_root=host.artifact_root,
+                              max_cost_usd=V2_MAX_COST_USD, lease_renew_s=float(auth.hosts.renew_s), tick_s=0.5)
+    sink = None if host.effect_sink is None else FileSink(host.effect_sink.path, lookup=host.effect_sink.lookup)
+    return runner.HostRuntime(dispatcher, cfg, host, auth.hosts, auth.sweeper.gap_threshold_s, bundle_digest=digest,
+                              sink=sink)
+
+
+def _start(host):
+    """Everything that must hold before a version 2 runtime may act: the pinned interpreter, the environment's
+    values, the one-instance lock. (auth, lock)."""
+    from . import host as host_mod
+    problems = host_mod.interpreter_problems(host)
+    if problems:
+        raise SystemExit("refused: " + ",".join(problems))
+    auth, problem = _values(host)
+    if problem:
+        raise SystemExit(f"refused: {problem}")
+    lock = host_mod.HostLock(host)
+    try:
+        lock.acquire(runner._now().isoformat())
+    except host_mod.HostRefused as exc:
+        raise SystemExit(f"refused: {exc}")
+    return auth, lock
+
+
+def _run_v2(words) -> int:
+    import signal
+    p = argparse.ArgumentParser(prog="mc-delegation-runner run")
+    p.add_argument("--host-config", required=True)
+    p.add_argument("--once", action="store_true")
+    args = p.parse_args(words)
+    host = _host(args.host_config)
+    auth, lock = _start(host)
+    try:
+        rt = runtime_for(host, auth, _dispatcher(host, auth))
+        signal.signal(signal.SIGTERM, rt.request_stop)        # G4: launchd and systemd stop with SIGTERM
+        signal.signal(signal.SIGINT, rt.request_stop)
+        rt.contact(announced="online")
+        rt.start_contact()
+        stopped = False
+        while True:
+            for mirror in host.mirrors.values():
+                _fetch(mirror)
+            try:
+                out = runner.run_once(rt.dispatcher, rt.cfg)
+                print(json.dumps({k: out.get(k) for k in ("state", "request_id", "delivered", "code") if k in out}),
+                      flush=True)
+                stopped = stopped or out.get("state") == "stopped" and rt.stop_requested.is_set()
+            except Exception as exc:
+                print(json.dumps({"state": "pass_failed", "error": type(exc).__name__}), flush=True)
+            if rt.stop_requested.is_set() or args.once:
+                break
+            rt.stop_requested.wait(auth.hosts.contact_interval_s)    # ≤ 2 authority calls per contact interval idle
+        if rt.stop_requested.is_set() and not stopped:
+            rt.graceful_stop()                                        # idle: announce stopping, then stopped
+        rt.stop_contact()
+        return 0
+    finally:
+        lock.release()
+
+
+def _state(words) -> int:
+    p = argparse.ArgumentParser(prog="mc-delegation-runner state")
+    p.add_argument("--host-config", required=True)
+    p.add_argument("--json", action="store_true")
+    args = p.parse_args(words)
+    host = _host(args.host_config)
+    doc = _host_state(host)
+    if args.json:
+        print(json.dumps(doc, sort_keys=True))
+    else:
+        h = (doc.get("hosts") or [{}])[0]
+        print(f"{host.host_id} ({host.environment}), host-local view, {doc.get('view_age_s')} s old: "
+              f"announced {h.get('announced')}, authority reachable {h.get('authority_reachable')}, "
+              f"{len(doc.get('items', []))} owned item(s)")
+    return 0
+
+
+def _host_state(host) -> dict:
+    path = host.artifact_root / "host-state.json"
+    try:
+        doc = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {"schema": "minimoi.runtime.state.v1", "environment": host.environment, "source": "host-local",
+                "as_of": None, "view_age_s": None, "hosts": [], "items": [], "unknowns": ["host_state_missing"]}
+    from datetime import datetime, timezone
+    try:
+        age = (datetime.now(timezone.utc) - datetime.fromisoformat(doc["as_of"])).total_seconds()
+    except (KeyError, TypeError, ValueError):
+        age = None
+    doc["view_age_s"] = None if age is None else round(age, 1)      # never rendered as zero when unknown
+    doc["source"] = "host-local"
+    return doc
+
+
+def _doctor(words) -> int:
+    from . import host as host_mod, launch_env
+    p = argparse.ArgumentParser(prog="mc-delegation-runner doctor")
+    p.add_argument("--host-config", required=True)
+    p.add_argument("--env-names", action="store_true")
+    p.add_argument("--do-not-resume", action="store_true")
+    args = p.parse_args(words)
+    host = _host(args.host_config)
+    problems = host_mod.interpreter_problems(host)
+    req = host_mod.required_python(host.roles, host.authority.transport)
+    out = {"host_id": host.host_id, "environment": host.environment, "runner_id": host.runner_id,
+           "interpreter": {"pinned": str(host.interpreter.path),
+                           "pinned_version": "%d.%d" % host.interpreter.version, "running": sys.executable,
+                           "running_version": "%d.%d" % sys.version_info[:2], "requires": "%d.%d" % req,
+                           "problems": list(problems)},
+           "lock": host_mod.HostLock(host).holder()}
+    auth, problem = _values(host)
+    out["values"] = ({"file": str(host.authority.values), "problem": problem} if problem else
+                     {"file": str(host.authority.values), "gap_threshold_s": auth.sweeper.gap_threshold_s,
+                      **auth.hosts.__dict__, "gap_detection": "on" if host.gap_detection else "off"})
+    if problem:
+        problems.append(problem)
+    state = _host_state(host)
+    h = (state.get("hosts") or [{}])[0]
+    out["contact"] = {"last_contact_at": h.get("last_contact_at"), "view_age_s": state.get("view_age_s"),
+                      "authority_reachable": h.get("authority_reachable")}
+    try:
+        digest, files = host_mod.tree_digest(host.bundle_root)
+        out["bundle"] = {"root": str(host.bundle_root), "digest": digest, "files": files}
+    except OSError as exc:
+        out["bundle"] = {"root": str(host.bundle_root), "problem": type(exc).__name__}
+        problems.append("bundle_unreadable")
+    if args.do_not_resume:
+        out["do_not_resume"] = list(host.do_not_resume)
+    if args.env_names:                                   # names only (MC-0, LCH-6): never a value
+        names = sorted(os.environ)
+        child = sorted(launch_env.child_env({"GIT_TERMINAL_PROMPT": "0"}))
+
+        def shaped(ns):                    # a deny pattern outside the reviewed base list (HOME is a base name)
+            return [n for n in ns if launch_env.denied(n) and n not in launch_env.BASE_ALLOW]
+        out["env_names"] = {"runtime": names, "runtime_credential_shaped": shaped(names), "child": child,
+                            "child_credential_shaped": shaped(child)}
+        if out["env_names"]["child_credential_shaped"]:
+            problems.append("child_environment_credential_shaped")
+    out["ok"] = not problems
+    out["problems"] = problems
+    print(json.dumps(out, sort_keys=True, indent=1))
+    return 0 if out["ok"] else 1
+
+
+def _version(words) -> int:
+    from . import host as host_mod
+    p = argparse.ArgumentParser(prog="mc-delegation-runner version")
+    p.add_argument("--host-config")
+    args = p.parse_args(words)
+    out = {"program": "mc-delegation-runner", "protocols": [1, 2], "python": "%d.%d.%d" % sys.version_info[:3]}
+    if args.host_config:
+        host = _host(args.host_config)
+        out["bundle_digest"], out["bundle_files"] = host_mod.tree_digest(host.bundle_root)
+    print(json.dumps(out, sort_keys=True))
+    return 0
+
+
+def _journal(words) -> int:
+    from .journal import Journal, JournalDamaged
+    p = argparse.ArgumentParser(prog="mc-delegation-runner journal")
+    p.add_argument("--host-config", required=True)
+    p.add_argument("action", choices=("show", "replay"))
+    p.add_argument("--again", action="store_true", help="resend every record, acknowledged or not (DUP-5: applies 0)")
+    args = p.parse_args(words)
+    host = _host(args.host_config)
+    paths = sorted(host.artifact_root.glob("*.pending.jsonl"))
+    if args.action == "show":
+        for path in paths:
+            task = path.name[:-len(".pending.jsonl")]
+            try:
+                calls = Journal(path).calls()
+                notes = Journal(path).notes()
+            except JournalDamaged as exc:
+                print(json.dumps({"task": task, "damaged": str(exc)}))
+                continue
+            print(json.dumps({"task": task, "notes": [n["kind"] for n in notes],
+                              "records": [{"event_id": c["event_id"], "kind": c["kind"], "at": c["at"],
+                                           "mark": c["mark"], "code": (c["answer"] or {}).get("code")}
+                                          for c in calls]}, sort_keys=True))
+        return 0
+    auth, lock = _start(host)                       # never beside a running runtime: one writer per journal
+    try:
+        rt = runtime_for(host, auth, _dispatcher(host, auth))
+        totals = {"sent": 0, "applied": 0, "already_applied": 0, "final": 0, "pending": 0, "damaged": 0}
+        for path in paths:
+            try:
+                counts = rt.replay(path.name[:-len(".pending.jsonl")], again=args.again)
+            except JournalDamaged:
+                totals["damaged"] += 1
+                continue
+            except runner._Offline:
+                print(json.dumps({"state": "offline", **totals}))
+                return 1
+            for k, v in counts.items():
+                totals[k] += v
+        print(json.dumps({"state": "replayed", "again": args.again, **totals}, sort_keys=True))
+        return 1 if totals["damaged"] else 0
+    finally:
+        lock.release()
+
+
+_SUB = {"state": _state, "doctor": _doctor, "version": _version, "journal": _journal}
 
 
 if __name__ == "__main__":

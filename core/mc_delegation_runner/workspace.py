@@ -72,6 +72,20 @@ def collect_diff(task_dir: Path, ref: str) -> tuple[bytes, str]:
     return patch, hashlib.sha256(patch).hexdigest()
 
 
+def apply_patch(task_dir: Path, patch_path: Path, sha256: str):
+    """Rebuild a workspace at a checkpoint (spec v0.5 §5.5 step 5): apply the patch recorded for it, after checking
+    its digest, onto the fresh checkout at the exact base commit. Anything written after the checkpoint never reaches
+    the new workspace."""
+    data = Path(patch_path).read_bytes()
+    if hashlib.sha256(data).hexdigest() != sha256:
+        raise WorkspaceError("checkpoint_patch_mismatch")
+    if data:
+        result = subprocess.run(["git", "apply", "--binary", "--whitespace=nowarn", str(patch_path)], cwd=task_dir,
+                                capture_output=True, timeout=120, env=child_env())
+        if result.returncode != 0:
+            raise WorkspaceError("checkpoint_patch_failed")
+
+
 def remove(task_dir: Path, root: Path):
     task_dir, root = Path(task_dir).resolve(), Path(root).resolve()
     if root not in task_dir.parents or not _TASK.match(task_dir.name):

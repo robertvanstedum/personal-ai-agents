@@ -203,3 +203,56 @@ class HttpDispatcher:
             detail = {**(detail or {}), "cost_usd": cost}
         return self._call("result", request_id=request_id, generation=generation, event_id=str(event_id),
                           status=status, artifacts=artifacts or [], detail=detail or {}, output_text=text)
+
+
+class HttpDispatcherV2(HttpDispatcher):
+    """Version 2 over the door (gate D): the same interface as dispatcher_adapter.StoreDispatcherV2, each body carrying
+    ``protocol: 2`` and exactly the fields ``_V2`` names. The runner's pending record supplies ``at``, the output text
+    and every body, so a replay is byte-faithful. ``timeout`` bounds each call (the graceful stop's own deadline)."""
+    protocol = 2
+
+    def __init__(self, url, token, artifact_root: Path, *, opener=None, timeout=20):
+        super().__init__(url, token, artifact_root, opener=opener)
+        self.timeout = timeout
+
+    def _v2(self, op, **args):
+        raw = json.dumps({"op": op, "protocol": 2, **args}).encode()
+        if len(raw) > BODY_MAX:
+            raise RuntimeError("runner_request_bound")
+        req = urllib.request.Request(self.url, data=raw, method="POST", headers={
+            "Content-Type": "application/json", "Authorization": "Bearer " + self._token,
+            "User-Agent": "MiniMoi-delegation-runner/2"})
+        with self._open(req, timeout=self.timeout) as r:
+            doc = json.loads(r.read(256 * 1024))
+        if type(doc) is not dict or "value" not in doc:
+            raise RuntimeError("runner_door_answer_invalid")
+        return doc["value"]
+
+    def heartbeat(self, runner_id, state, capabilities, facts):
+        return self._v2("heartbeat", runner_id=runner_id, state=state, capabilities=capabilities, facts=facts)
+
+    def claim(self, runner_id, capabilities):
+        return self._v2("claim", runner_id=runner_id, capabilities=capabilities)
+
+    def progress(self, request_id, generation, *, runner_id, event_id, at, phase, checkpoint):
+        return self._v2("progress", runner_id=runner_id, request_id=request_id, generation=generation,
+                        event_id=event_id, at=at, phase=phase, checkpoint=checkpoint)
+
+    def cancel_requested(self, request_id, generation):
+        return self._v2("cancel_requested", request_id=request_id, generation=generation)
+
+    def renew(self, request_id, generation, *, runner_id):
+        return self._v2("renew", runner_id=runner_id, request_id=request_id, generation=generation)
+
+    def result(self, request_id, generation, *, runner_id, event_id, at, status, artifacts, detail, output_text, route,
+               usage):
+        return self._v2("result", runner_id=runner_id, request_id=request_id, generation=generation,
+                        event_id=event_id, at=at, status=status, artifacts=artifacts, detail=detail,
+                        output_text=output_text, route=route, usage=usage)
+
+    def reconcile(self, runner_id, request_id, generation, stage, open_operations):
+        return self._v2("reconcile", runner_id=runner_id, request_id=request_id, generation=generation, stage=stage,
+                        open_operations=open_operations)
+
+    def effect(self, runner_id, request_id, generation, effect):
+        return self._v2("effect", runner_id=runner_id, request_id=request_id, generation=generation, effect=effect)

@@ -34,3 +34,25 @@ class CodexPlanLimit:
 
 
 ENFORCERS = {"claude-code": ClaudeBudget(), "codex": CodexPlanLimit()}
+
+
+class FakeworkUnits:
+    """fakework's cap (spec v0.5 §9.2): what remains of the item's one reservation, in the route's unit, passed as
+    ``--cap``; fakework stops there (exit 65). Version 2 only."""
+    UNITS = ("test_units",)
+
+    def apply(self, argv, env, cap, unit):
+        if len(argv) < 4 or not str(argv[3]).endswith("fakework.py") or "--program" not in argv:
+            raise ValueError("not_a_fakework_invocation")
+        if unit not in self.UNITS:
+            raise ValueError("unit_unsupported")          # fakework.api (usd) is the launch contract's (S1-E)
+        if isinstance(cap, bool) or not isinstance(cap, (int, float)) or not math.isfinite(cap) or cap <= 0:
+            raise ValueError("cap_invalid")
+        return [*argv, "--cap", f"{cap:.4f}", "--unit", unit], dict(env)
+
+
+# Version 2 binds the remainder of an item's one reservation, in its route's unit (§8.1 record 2): actor → adapter with
+# ``apply(argv, env, cap, unit)``. Separate from ENFORCERS on purpose: the production runner advertises and binds
+# exactly ENFORCERS, so it never offers to run fakework. The real CLIs join here only with the launch contract (S1-E)
+# and their activation (R4.5-d).
+UNIT_ENFORCERS = {"fakework": FakeworkUnits()}
