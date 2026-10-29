@@ -68,6 +68,8 @@ SUMMARY_PENDING = "The summary is still being written; it will appear in the con
 # allowed here (CoS in production without its production switch: S1, S3) refuses a start with these words, and every record
 # route still answers.
 NOT_ON = "Voice unavailable: live voice is not on here."
+NO_ALLOWANCE = "Voice unavailable: no realtime voice allowance is set here."
+NO_PROVIDER = "Voice unavailable: no voice provider is offered here."
 # A host that takes no provider default for an unnamed voice (CoS, Spec 165 D2 (a)): a start on that provider is refused.
 NO_VOICE = "Voice unavailable: no {label} voice is chosen for {name} yet."
 
@@ -1645,9 +1647,10 @@ DISMISSED_RECORD = "dismissed"
 def session_view(adapter, sessions, handle, sid):
     """One session as the needs-attention list shows it, from what the store holds (state()) and what runs here: None
     when there is no such session. A session needs attention while it is recovering or dropped, incomplete, damaged,
-    with an undecided or unavailable summary or an unknown consult, until it is decided or dismissed (§6.5). A live
-    session never does: it is still going. A consult admitted with no outcome that runs nowhere here is unknown
-    (§5.1); one running here is pending."""
+    with an undecided or unavailable summary or an unknown consult, until it is decided or dismissed (§6.5); also while
+    a consult runs after it ended, and once one has landed after its end (Gate 2 E S2), so a result that comes after
+    End is seen. A live session never does: it is still going. A consult admitted with no outcome that runs nowhere here
+    is unknown (§5.1); one running here is pending. ``pending`` and ``late`` name those owner turns (capture ids)."""
     try:
         facts = adapter.store.state(handle, sid)
     except Exception:
@@ -1667,14 +1670,20 @@ def session_view(adapter, sessions, handle, sid):
     asked = [i for i in facts.get("requests") or () if owner_item(i)]
     pending = [i for i in asked if i not in outcomes and sessions.running(sid, i)]
     unknown = [i for i in asked if outcomes.get(i) == "unknown" or (i not in outcomes and i not in pending)]
+    # A consult still running when the voice ended is listed until it lands; one that landed after End is listed then,
+    # so its result is seen (Gate 2 E S2; §6.5's pending consults, §5.2's late receipt). The store says which outcomes
+    # were kept after the session's end marker (``late``).
+    late = [i for i in facts.get("late") or () if owner_item(i) and i in outcomes and outcomes.get(i) != "unknown"]
     reasons = [why for why, holds in (
         ("damaged", damaged), ("recovering", st == "recovering"), ("dropped", st == "dropped"),
         ("incomplete", st == "ended" and capture != "complete"), ("undecided", summary == "proposed"),
-        ("summary_unavailable", summary == "unavailable"), ("unknown_consult", bool(unknown))) if holds]
+        ("summary_unavailable", summary == "unavailable"), ("unknown_consult", bool(unknown)),
+        ("pending_consult", st != "live" and bool(pending)), ("late_result", bool(late))) if holds]
     dismissed = facts.get("dismissed") is True
     view = {"session_id": sid, "state": st, "started_at": start.get("started_at"),
             "ended_at": end.get("ended_at") if end else None, "capture": capture, "summary": summary,
             "consults": {"asked": len(asked), "pending": len(pending), "unknown": len(unknown)},
+            "pending": pending, "late": late,
             "repaired": bool(facts.get("repaired")), "damaged": damaged, "dismissed": dismissed, "reasons": reasons,
             "needs_attention": (st != "live" and bool(reasons) and not dismissed and (damaged or summary not in DECIDED))}
     if end and type(end.get("missing")) is int:
@@ -1731,11 +1740,12 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
     ``may_start`` (Spec 165 §6.8, §11.1; D11 (a)): installing is not admission. None: every installed host may start
     sessions (MC, whose production hold-off decides whether it is installed at all). Otherwise it is called at each
     start, and anything but True refuses it before anything is recorded or reserved: its words when it gives them (a
-    str), else NOT_ON. The record routes (End, reveal, reconcile, summary, decision, and a listing store's needs-attention
+    str: admitted, but refused now, as CoS with no store), else NOT_ON (False: not admitted). The record routes (End, reveal, reconcile, summary, decision, and a listing store's needs-attention
     routes) answer either way, so open sessions end and recovering ones reveal after admission is turned off (S3).
 
     A store that lists its sessions (lists_sessions: CoS's) also gets, under the same prefix: GET …/capabilities (this
-    metadata, with direct_voice: a start is allowed now, and direct_records: the owner has sessions needing attention),
+    metadata, with direct_voice: a start is allowed now; direct_refused: admitted, but a start is refused now, with the
+    words why; and direct_records: the owner has sessions needing attention),
     GET …/sessions (those sessions), GET …/sessions/<id> (one session: while live only its existence and state, after End
     or recovery its records), GET …/sessions/<id>/transcript (the download, D7) and POST …/sessions/<id>/dismiss."""
     from core.realtime_voice.summary_gateway import GatewaySummary
@@ -1759,11 +1769,26 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         return (adapter.owner() or (None, None))[0]
 
     def start_refused():
-        """The words a start is refused with now (admission off), or None when it may start."""
+        """The words a start is refused with now (admission off, or the host's own refusal), or None when it may start."""
         allowed = True if may_start is None else may_start()
         if allowed is True:
             return None
         return allowed if isinstance(allowed, str) and allowed.strip() else NOT_ON
+
+    def admission():
+        """(admitted, the words a start is refused with now, or None). Not admitted: ``may_start`` said False (S1, S3),
+        with NOT_ON. Admitted and refused: the host's own words (CoS: no store), no allowance set here, or no provider
+        offered. Admitted and not refused: a start is allowed now."""
+        allowed = True if may_start is None else may_start()
+        if allowed is not True and not (isinstance(allowed, str) and allowed.strip()):
+            return False, NOT_ON
+        if allowed is not True:
+            return True, allowed
+        if allowance(environ) is None:
+            return True, NO_ALLOWANCE
+        if not offered:
+            return True, NO_PROVIDER
+        return True, None
 
     def unvoiced(body):
         """A host that takes no provider default (adapter.default_voices False; CoS, D2 (a)): the start's provider, resolved
@@ -1826,8 +1851,8 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         words = start_refused()
         if words is not None:                              # installed, not admitted here now (S1, S3)
             return refusal(words, words, 503)
-        if allowance(environ) is None:
-            return refusal("unavailable", "Voice unavailable: no realtime voice allowance is set here.", 503)
+        if allowance(environ) is None:                      # its words as the error, so the page says them (Q S2)
+            return refusal(NO_ALLOWANCE, NO_ALLOWANCE, 503)
         body = request.get_json(silent=True)
         cid = body.get("conversation_id") if isinstance(body, dict) else None
         if not isinstance(cid, str) or not adapter.conversation_ok(cid):
@@ -1985,12 +2010,16 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         §4.4), for a store that lists its sessions. Owner only; reads change nothing; every answer is no-store."""
         bp = Blueprint("voice_records", __name__)
 
-        def views(who):
+        def views(who, limit=SESSIONS_MAX):
+            """The owner's sessions needing attention, newest first, at most ``limit``: filtered first, then bounded
+            (Gate 2 Q S1), so clean newer sessions never push an older one that needs a look off the list."""
             listed = []
-            for handle, sid in (store.sessions(who, True) or ())[:SESSIONS_MAX]:
+            for handle, sid in store.sessions(who, True) or ():
                 view = session_view(adapter, sessions, handle, sid)
                 if view is not None and view["needs_attention"]:
                     listed.append(view)
+                    if len(listed) >= limit:
+                        break
             return listed
 
         @bp.route("/api/realtime-voice/capabilities", methods=["GET"])
@@ -1999,12 +2028,15 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             if who is None:
                 return refusal("not_allowed", "Voice unavailable: this needs the owner's sign-in.", 401)
             try:
-                attention = bool(views(who))
+                attention = bool(views(who, limit=1))
             except Exception:
                 log.exception("%s direct voice: sessions not listed", person["domain"])
                 attention = False
-            return jsonify({**metadata, "direct_voice": start_refused() is None and allowance(environ) is not None,
-                            "direct_records": attention})
+            admitted, refused = admission()
+            # Admitted and refused (Spec 165 §6.6, §11.1 S2; Gate 2 Q S2): the page says these words and offers no other
+            # mode. Not admitted (S1, S3): no words, and the page is as today.
+            return jsonify({**metadata, "direct_voice": admitted and refused is None, "direct_records": attention,
+                            **({"direct_refused": refused} if admitted and refused is not None else {})})
 
         @bp.route("/api/realtime-voice/sessions", methods=["GET"])
         def sessions_read():

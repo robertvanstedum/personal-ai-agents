@@ -33,6 +33,15 @@ export const DOWNLOAD = 'Download transcript';
 export const ATTENTION_TITLE = 'Voice sessions to look at';
 export const NO_VOICE_CHOSEN = 'no voice chosen yet';
 export const START_FAILED = 'Voice unavailable: the voice page could not load. Typing still works.';
+// A check still running when the voice ended (Gate 2 E S2; Spec 165 §6.5's pending consults): the reveal says so, and the
+// session is listed under ATTENTION_TITLE while it runs and once its result has landed, until he dismisses it.
+export const STILL_RUNNING = 'still running';
+export const PENDING_LINE = 'A check was still running when the voice ended. Its result is kept when it lands; reload to see it under Voice sessions to look at.';
+export function lateLabel(view) {             // §5.2's words when a summary was made; otherwise what is true
+  return ['proposed', 'confirmed', 'edited', 'declined', 'unavailable'].includes(view?.summary)
+    ? 'arrived after the summary' : 'arrived after the voice ended';
+}
+const LATE_MARK = '[Arrived after the summary] ';
 export function incompleteLine(n) {
   return Number.isInteger(n) && n > 0
     ? `Some of what was said in this voice session was not kept (${n} turn${n === 1 ? '' : 's'}). What was kept is shown.`
@@ -50,6 +59,11 @@ const REASONS = {
     const n = Number(v.consults?.unknown) || 1;
     return `${n === 1 ? 'A check\'s result is' : `${n} checks' results are`} not known: check in writing before asking again.`;
   },
+  pending_consult: (v) => {
+    const n = Number(v.consults?.pending) || 1;
+    return `${n === 1 ? 'A check was' : `${n} checks were`} still running when the voice ended; ${n === 1 ? 'its result is' : 'their results are'} kept when ${n === 1 ? 'it lands' : 'they land'}.`;
+  },
+  late_result: () => 'A check finished after the voice ended: open to see its result.',
 };
 const PHASES = { connecting: 'Connecting…', listening: 'Listening', working: 'Working on it…', speaking: 'Speaking…' };
 const PROVIDER_KEY = 'minimoi.cos.voice.provider';     // her own key: MC's choice (minimoi.voice.provider) is not hers
@@ -111,20 +125,25 @@ export function conferSessions(d) {
     if (view.capture === 'incomplete') return incompleteLine(view.missing);
     return view.complete_read === false ? 'Not every record could be read. What was read is shown.' : KEPT;
   }
-  function row(rec, notActed) {
+  function row(rec, notActed, view = {}) {
     const role = rec.role;
+    const owner = typeof rec.item_id === 'string' && rec.item_id.startsWith('k') ? rec.item_id.slice(1) : null;
+    const pending = role === 'consult' && owner && Array.isArray(view.pending) && view.pending.includes(owner);
+    const late = role === 'receipt' && owner && Array.isArray(view.late) && view.late.includes(owner);
     const kind = role === 'user' ? 'msg-user' : role === 'assistant' ? 'msg-cos' : 'msg-voice-note';
     const box = make('div', { class: `msg msg-voice ${kind}`, ...(rec.item_id ? { 'data-voice-item': rec.item_id } : {}) });
     const label = make('div', { class: 'msg-label' });
     const name = role === 'user' ? 'You · spoken' : role === 'assistant' ? `${short} · spoken`
       : role === 'consult' ? `Asked ${short}` : role === 'receipt' ? 'Result' : (rec.speaker || 'Voice');
-    label.append(name + (rec.interrupted ? ' · interrupted' : rec.partial ? ' · partial' : ''));
+    label.append(name + (rec.interrupted ? ' · interrupted' : rec.partial ? ' · partial' : '')
+      + (pending ? ` · ${STILL_RUNNING}` : '') + (late ? ` · ${lateLabel(view)}` : ''));
     if (role === 'user' && rec.item_id && Object.hasOwn(notActed, rec.item_id)) {
       label.append(' · ', make('span', { 'data-voice-not-acted': '' }, NOT_ACTED));
       const why = NOT_ACTED_WHY[notActed[rec.item_id]];
       if (why) label.append(' · ', make('span', { 'data-voice-not-acted-why': '' }, why));
     }
-    box.append(label, make('div', { class: 'msg-text' }, rec.text));
+    const text = late && String(rec.text || '').startsWith(LATE_MARK) ? String(rec.text).slice(LATE_MARK.length) : rec.text;
+    box.append(label, make('div', { class: 'msg-text' }, text));
     return box;
   }
   function download(view) {
@@ -250,8 +269,9 @@ export function conferSessions(d) {
     block.append(make('div', { class: 'voice-line', 'data-voice-capture': view.capture || '' }, captureLine(view)));
     const notActed = view.not_acted && typeof view.not_acted === 'object' ? view.not_acted : {};
     const records = make('div', { class: 'voice-records' });
-    for (const rec of Array.isArray(view.records) ? view.records : []) records.append(row(rec, notActed));
+    for (const rec of Array.isArray(view.records) ? view.records : []) records.append(row(rec, notActed, view));
     block.append(records);
+    if (Array.isArray(view.pending) && view.pending.length) block.append(make('div', { class: 'voice-line', 'data-voice-pending': '' }, PENDING_LINE));
     const again = async () => {
       const fresh = await detail(view.session_id);
       if (!fresh) return;

@@ -314,3 +314,52 @@ def test_german_and_portuguese_mint_with_exactly_the_arguments_they_had(monkeypa
     expected = {"instructions", "voice", "turn_detection", "transcription_language", "tools"} | (
         {"user_id_for_safety_identifier"} if provider == "openai" else set())
     assert set(mints[0]) == expected and mints[0]["transcription_language"] == language
+
+
+# ── Gate 2 Q S1, Q S2 ────────────────────────────────────────────────────────────────────────────────────────────────
+
+def test_an_older_session_that_needs_a_look_stays_listed_behind_fifty_clean_newer_ones(monkeypatch, tmp_path):
+    """Q S1: the list was cut to 50 before it was filtered, so 50 newer sessions that need nothing pushed an older one with
+    an unknown consult off it for good. Filtered first, then bounded: it stays, and the capabilities read says so."""
+    from datetime import datetime, timezone
+    store = Listing()
+    r = build(monkeypatch, tmp_path, store=store)
+    when = core.stamp(datetime.now(timezone.utc))
+
+    def session(sid):
+        store.markers[(sid, "start")] = {"principal": "robert", "conversation_id": "owner", "max_minutes": 30,
+                                         "started_at": when}
+        store.markers[(sid, "end")] = {"reason": "end", "ended_at": when, "capture": "complete"}
+    old = "00000000-0000-4000-8000-000000000000"
+    session(old)
+    store.put("owner", old, core.record(core.REQUEST, core.request_id("t0"), owner_item_id="t0", text_sha256="a" * 64))
+    for n in range(1, 51):                                   # 50 newer, each ended cleanly with no summary: nothing to look at
+        session(f"00000000-0000-4000-8000-{n:012d}")
+    views = listed(r)
+    assert list(views) == [old] and views[old]["reasons"] == ["unknown_consult"]
+    assert r.client.get(BASE + "/capabilities", headers=OWNER).get_json()["direct_records"] is True
+    for n in range(51, 101):                                 # and the bound still holds for sessions that do need a look
+        sid = f"00000000-0000-4000-8000-{n:012d}"
+        session(sid)
+        store.put("owner", sid, core.record(core.REQUEST, core.request_id("t0"), owner_item_id="t0", text_sha256="b" * 64))
+    views = listed(r)
+    assert len(views) == core.SESSIONS_MAX and old not in views
+
+
+def test_admitted_but_refused_is_told_apart_from_not_admitted_with_its_words(monkeypatch, tmp_path):
+    """Q S2: the capabilities answer says when she is admitted but a start is refused (the host's own words, no allowance
+    set here), so the page says "Voice unavailable: <reason>" and offers no other mode; not admitted says nothing."""
+    words = "Voice unavailable: there is no place to keep what is said."
+    allowed = [words]
+    r = build(monkeypatch, tmp_path, store=Listing(), may_start=lambda: allowed[0])
+    read = lambda: r.client.get(BASE + "/capabilities", headers=OWNER).get_json()      # noqa: E731
+    assert read()["direct_voice"] is False and read()["direct_refused"] == words
+    allowed[0] = False                                       # not admitted (S1, S3): today's modes, no words
+    assert read()["direct_voice"] is False and "direct_refused" not in read()
+    allowed[0] = True
+    assert read()["direct_voice"] is True and "direct_refused" not in read()
+    no_allowance = build(monkeypatch, tmp_path / "b", store=Listing(), environ={})
+    caps = no_allowance.client.get(BASE + "/capabilities", headers=OWNER).get_json()
+    assert caps["direct_voice"] is False and caps["direct_refused"] == core.NO_ALLOWANCE
+    refused = boot(no_allowance)                             # the start's own refusal carries its words, not a code
+    assert refused.status_code == 503 and refused.get_json()["error"] == core.NO_ALLOWANCE

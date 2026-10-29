@@ -576,3 +576,51 @@ def test_an_unrecognised_role_counts_as_production_and_holds_her_start_off(role)
 def test_the_named_non_production_roles_start_on_the_install_switch(role):
     assert direct_voice.production({"MINIMOI_ROLE": role}) is False
     assert direct_voice.may_start({"MINIMOI_ROLE": role, "MINIMOI_COS_VOICE_DIRECT": "1"})
+
+
+# ── Gate 2 Q S2, E S2 ────────────────────────────────────────────────────────────────────────────────────────────────
+
+def test_admitted_with_no_store_the_capabilities_say_why_voice_is_unavailable(monkeypatch, tmp_path):
+    """Q S2: admitted (her switch on, outside production) but no store: the page is told "there is no place to keep what
+    is said", never that she is not admitted."""
+    r = rig.build(monkeypatch, tmp_path, with_store=False)
+    caps = r.client.get(BASE + "/capabilities", headers=READ).get_json()
+    assert caps["direct_voice"] is False and caps["direct_refused"] == direct_voice.NO_STORE
+
+
+def test_a_consult_still_running_at_end_is_listed_until_it_lands_then_with_its_late_result(r, monkeypatch):
+    """E S2 (the tester's E4, CoS on OpenAI): End while a consult runs. The session is listed while it runs, its detail
+    names it pending; when it lands after End its outcome and receipt are kept and projected, the receipt marked late in
+    her recall, and the session is listed with that result until he dismisses it."""
+    monkeypatch.setattr(core, "CONSULT_WAIT_S", 0.2)
+    r.runtime.hold = threading.Event()
+    sid = rig.start(r)
+    assert rig.post(r, sid, [rig.event(r, "user", "t1", "What is stuck on #12?")]).status_code == 200
+    assert rig.ask(r, sid).get_json()["outcome"] == "pending"
+    end = r.client.post(BASE + f"/session/{sid}/end", headers=OWNER, json={"last_item_id": "t1", "unacknowledged": []})
+    assert end.get_json()["capture"] == "complete"
+    detail = r.client.get(BASE + f"/sessions/{sid}?conversation_id=owner", headers=READ).get_json()
+    assert detail["pending"] == ["t1"] and detail["reasons"] == ["pending_consult"] and detail["needs_attention"] is True
+    listed = r.client.get(BASE + "/sessions", headers=READ).get_json()["sessions"]
+    assert [v["session_id"] for v in listed] == [sid]
+    assert r.client.get(BASE + "/capabilities", headers=READ).get_json()["direct_records"] is True
+    r.runtime.hold.set()
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        kept = r.client.get(BASE + f"/consult/{sid}/t1?conversation_id=owner", headers=READ).get_json()
+        if kept["outcome"] == "done":
+            break
+        time.sleep(0.05)
+    time.sleep(0.1)                                          # the worker keeps the outcome, then the receipt
+    (view,) = r.client.get(BASE + "/sessions", headers=READ).get_json()["sessions"]
+    assert view["session_id"] == sid and view["reasons"] == ["late_result"] and view["late"] == ["t1"]
+    detail = r.client.get(BASE + f"/sessions/{sid}?conversation_id=owner", headers=READ).get_json()
+    assert [rec["item_id"] for rec in detail["records"] if rec["role"] == "receipt"] == ["kt1"]
+    (projection,) = [p for p in r.recall.iterdir() if p.name.startswith("voice-")]
+    rows = [json.loads(line) for line in projection.read_text().splitlines()]
+    assert [x["outcome"] for x in rows if x["kind"] == "consult"] == ["done"]
+    assert [x.get("late") for x in rows if x["kind"] == "turn" and x["speaker"] == "consult receipt"] == [True]
+    gone = r.client.post(BASE + f"/sessions/{sid}/dismiss", headers=OWNER, json={"conversation_id": "owner"})
+    assert gone.get_json()["dismissed"] is True
+    assert r.client.get(BASE + "/sessions", headers=READ).get_json()["sessions"] == []
+    assert len(r.runtime.calls) == 1

@@ -687,4 +687,73 @@ await scenario('phone width: every live control is a button in the bar, shown an
   assert.equal(p.posts('/end').length, 1);
 });
 
+
+// ── Gate 2: Q S2 (admitted and refused), Q N10 (the restart block), E S2 (a check still running at End) ────────────────
+for (const [why, caps, words] of [
+  ['no store', { ...CAPS, direct_voice: false, direct_refused: 'Voice unavailable: there is no place to keep what is said.' },
+    'Voice unavailable: there is no place to keep what is said.'],
+  ['no allowance', { ...CAPS, direct_voice: false, direct_refused: 'Voice unavailable: no realtime voice allowance is set here.' },
+    'Voice unavailable: no realtime voice allowance is set here.'],
+  ['no provider offered', { ...CAPS, providers: [] }, 'Voice unavailable here right now. Typing still works.']]) {
+  await scenario(`Q S2: admitted but refused (${why}): Voice says why, and today's modes are never offered`, { caps }, async (p) => {
+    await flush();
+    assert.equal(p.nodes('voice-mode').closest().hidden, true, 'the mode select is still offered');
+    assert.equal(p.nodes('voice-keep-transcript').closest().hidden, true);
+    assert.equal(p.nodes('voice-provider').textContent, 'Voice unavailable · typing still works');
+    await p.voice();
+    assert.equal(p.line(), words);
+    assert.equal(p.today.managed.some((m) => m.args), false, "today's realtime started");
+    assert.equal(p.today.chained.some((c) => c.started), false, "today's turn-by-turn started");
+    assert.deepEqual(p.direct.instances, []);
+    assert.equal(p.dictation.available, true);                                     // Dictate as today
+  });
+}
+{
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  await scenario('Q N10: a managed session ends with its termination uncertain before the capabilities answer: no direct start', {
+    routes: { '/capabilities': async () => { await gate; return { status: 200, body: CAPS }; } } }, async (p) => {
+    await p.voice();                                                               // today's realtime, before the answer
+    const managed = p.today.managed[0];
+    assert.equal(managed.args.provider, 'openai');
+    managed.o.onFatalError({ reason: 'termination_uncertain', detail: 'Microphone stopped locally; provider termination is unconfirmed.' });
+    managed.o.onStateChange('ended');
+    release(); await flush(30);                                                    // now the direct path is offered
+    await p.voice();
+    assert.deepEqual(p.direct.instances, [], 'a direct session started past the restart block');
+    assert.equal(p.nodes('btn-voice').disabled, true);
+  });
+}
+await scenario('E S2: End while a check runs: the reveal marks it still running and says where its result will be', {}, async (p) => {
+  p.server.view = { ...VIEW, consults: { asked: 1, pending: 1, unknown: 0 }, pending: ['t0'], reasons: ['pending_consult'], needs_attention: true,
+    records: [{ role: 'user', item_id: 't0', text: 'What is stuck on 12?', partial: false, interrupted: false },
+      { role: 'consult', item_id: 'kt0', text: 'consult: What is stuck on 12?', partial: false, interrupted: false },
+      { role: 'assistant', item_id: 't1', text: "That's taking longer; the answer will be in the conversation.", partial: false, interrupted: false }] };
+  await p.voice(); await p.click(p.bar('[data-voice-end]')); await flush();
+  const block = p.chat.querySelector(`[data-voice-session="${SID}"]`);
+  assert.equal(textOf(block.querySelector('[data-voice-item="kt0"]').elements[0]), `Asked CoS · ${PAGE.STILL_RUNNING}`);
+  assert.equal(textOf(block.querySelector('[data-voice-pending]')), PAGE.PENDING_LINE);
+});
+await t.check('E S2: the list names a check still running at End, and one that landed after it; Open shows it late', async () => {
+  const OTHER = 'a1b2c3d4-0000-4000-8000-000000000009';
+  const running = { ...VIEW, session_id: OTHER, reasons: ['pending_consult'], consults: { asked: 1, pending: 1, unknown: 0 }, pending: ['t0'], needs_attention: true };
+  const landed = { ...VIEW, reasons: ['late_result'], consults: { asked: 1, pending: 0, unknown: 0 }, late: ['t0'], needs_attention: true };
+  const p = page({ caps: { ...CAPS, direct_records: true }, sessions: [running, landed] });
+  try {
+    await flush(30);
+    const box = p.nodes('voice-sessions');
+    assert.deepEqual(all(box, '[data-voice-reason]').map((n) => textOf(n)),
+      ['A check was still running when the voice ended; its result is kept when it lands.', 'A check finished after the voice ended: open to see its result.']);
+    p.server.view = { ...landed, records: [{ role: 'user', item_id: 't0', text: 'What is stuck on 12?', partial: false, interrupted: false },
+      { role: 'consult', item_id: 'kt0', text: 'consult: What is stuck on 12?', partial: false, interrupted: false },
+      { role: 'receipt', item_id: 'kt0', text: 'Answered. Turn 9. Spoken: Two items are stuck on 12.', partial: false, interrupted: false }] };
+    const row = box.querySelector(`[data-voice-attention="${SID}"]`);
+    await p.click(row.querySelector('[data-voice-open]')); await flush();
+    const receipt = all(row, '[data-voice-item="kt0"]').at(-1);
+    assert.equal(textOf(receipt.elements[0]), 'Result · arrived after the voice ended');
+    assert.equal(textOf(receipt.elements[1]), 'Answered. Turn 9. Spoken: Two items are stuck on 12.');
+    assert.equal(PAGE.lateLabel({ summary: 'proposed' }), 'arrived after the summary');
+  } finally { p.done(); }
+});
+
 t.done();

@@ -466,8 +466,18 @@ class FileStore(DirectVoiceStore):
                 "summary": self.summary_state(handle, sid),
                 "requests": [r.get("owner_item_id") for r in recs if r.get("kind") == "consult_request"],
                 "outcomes": {r.get("owner_item_id"): r.get("outcome") for r in recs if r.get("kind") == "consult_outcome"},
+                # outcomes kept after the end marker: landed after End (Gate 2 E S2), by the file's own order, no clock
+                "late": [r.get("owner_item_id") for r in self._after_end(known) if r.get("kind") == "consult_outcome"],
                 "repaired": known.repaired, "damaged": known.damaged, "conflicts": known.conflicts,
                 "dismissed": "dismissed" in known.records, "revision": known.revision}
+
+    @staticmethod
+    def _after_end(known):
+        """The session's records committed after its end marker, in order ([] while it has none)."""
+        if END not in known.records:
+            return []
+        at = known.order.index(END)
+        return [known.records[rid] for rid in known.order[at + 1:]]
 
     def sessions(self, owner, needing_attention=True):
         """The owner's sessions in this folder, newest first, as [(HANDLE, session id)]: with ``needing_attention``, all
@@ -609,6 +619,7 @@ class FileStore(DirectVoiceStore):
         recs = [known.records[rid] for rid in known.order]
         end = known.records.get(END) or {}
         outcomes = {r.get("owner_item_id"): r for r in recs if r.get("kind") == "consult_outcome"}
+        after = {id(r) for r in FileStore._after_end(known)}            # kept after End: a late receipt (§5.2, E S2)
         capture = (end.get("capture") or "complete") if end else "unconfirmed"
         if known.repaired:
             capture = "incomplete"
@@ -630,7 +641,8 @@ class FileStore(DirectVoiceStore):
                     row["partial"] = True
                 if rec.get("interrupted"):
                     row["interrupted"] = True
-                if rec.get("role") == "receipt" and str(rec.get("text") or "").startswith("[Arrived after the summary]"):
+                if rec.get("role") == "receipt" and (id(rec) in after
+                                                     or str(rec.get("text") or "").startswith("[Arrived after the summary]")):
                     row["late"] = True
                 rows.append(row)
             elif kind == "consult_request":

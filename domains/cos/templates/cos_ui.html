@@ -500,7 +500,7 @@ const provider=document.getElementById('voice-provider');
 const transcript=document.getElementById('voice-transcript');
 let active=false; let activeController=null; let stopping=null; let voiceRestartBlocked=false;
 // Her direct voice (Spec 165 v0.3 §6.6; D8 (a)): set only once its capabilities read offers it (readDirect, below).
-let direct=null,pendingDirect=null,directRefusal=null,voiceRecords=null;
+let direct=null,pendingDirect=null,directRefusal=null,pendingRefusal=null,voiceRecords=null;
 const mode=document.getElementById('voice-mode');
 const keepTranscript=document.getElementById('voice-keep-transcript');
 const labels={requesting:'Connecting…',listening:'Listening',thinking:'Working on it…',speaking:'Speaking…',reconnecting:'Reconnecting…',interrupted:'Listening'};
@@ -575,6 +575,7 @@ function updateVoiceAvailability(){
   adoptDirect();
   const availability=conferVoiceAvailability({legacyReady,realtimeReady:Boolean(mode),mode});
   if(direct){dictation.setAvailable(availability.dictationReady);direct.paint();return;}
+  if(directRefusal){button.disabled=false;dictation.setAvailable(availability.dictationReady);provider.textContent='Voice unavailable · typing still works';return;}
   button.disabled=!availability.voiceReady||Boolean(stopping)||voiceRestartBlocked;
   if(mode)mode.disabled=active||Boolean(stopping)||voiceRestartBlocked;
   dictation.setAvailable(availability.dictationReady);
@@ -613,16 +614,21 @@ window.addEventListener('pagehide',()=>{direct?.pagehide();dictation.stop('pageh
 void refreshLegacyAvailability();
 // Her direct voice (Spec 165 v0.3 §6.6, §11.1). One capabilities read; its code is loaded only when the answer offers the
 // direct path. Admitted (direct_voice): one Voice button on the direct path, with no mode select and no "Hearing: …"; a
-// refused start says "Voice unavailable: <reason>" and nothing else is tried. Sessions needing attention (direct_records)
-// are listed below the composer, also once admission is off. Neither (her routes not installed, or nothing offered):
-// Confer is exactly as it was. Not while a voice session of today's modes runs: the path changes once it has ended.
+// refused start says "Voice unavailable: <reason>" and nothing else is tried. Admitted but refused now (direct_refused:
+// no store, no allowance; or no provider offered): the Voice button says why, and today's modes are not offered.
+// Sessions needing attention (direct_records) are listed below the composer, also once admission is off. Not admitted
+// (her routes not installed, or admission off): Confer is exactly as it was. Not while a voice session of today's modes
+// runs: the path changes once it has ended.
 const DIRECT_CAPABILITIES='../api/realtime-voice/direct/api/realtime-voice/capabilities';
-const DIRECT_KEY='20261028-a3';
+const DIRECT_KEY='20261029-gate2';   // the Gate 2 fix round changed her page, the session module and the controller
+// Not while a session of today's modes runs, nor while an earlier one's end is unconfirmed (its restart block, Gate 2 Q N10).
+// Admitted and refused (Q S2): the button says why, and no other mode is offered.
 function adoptDirect(){
-  if(direct||!pendingDirect||active||stopping)return;
-  direct=pendingDirect;pendingDirect=null;
+  if(direct||directRefusal||(!pendingDirect&&!pendingRefusal)||active||stopping||voiceRestartBlocked)return;
   for(const node of [mode,keepTranscript]){if(!node)continue;node.disabled=true;const label=node.closest?.('label');if(label)label.hidden=true;}
   transcript.textContent='';
+  if(pendingRefusal){directRefusal=pendingRefusal;pendingRefusal=pendingDirect=null;return;}
+  direct=pendingDirect;pendingDirect=null;
   direct.show();
 }
 async function readDirect(){
@@ -635,6 +641,11 @@ async function readDirect(){
   }catch(error){return;}
   if(!caps)return;
   const admitted=caps.direct_voice===true&&Array.isArray(caps.providers)&&caps.providers.length>0;
+  // Admitted and refused (Spec 165 §6.6; Gate 2 Q S2): the server's words (no store, no allowance), or, admitted with no
+  // provider offered, why. Never today's modes then.
+  const refused=admitted?null:typeof caps.direct_refused==='string'&&caps.direct_refused.trim()?caps.direct_refused.trim()
+    :caps.direct_voice===true?'Voice unavailable here right now. Typing still works.':null;
+  if(refused){pendingRefusal=refused;updateVoiceAvailability();}
   if(!admitted&&caps.direct_records!==true)return;
   try{
     const [page,session]=await Promise.all([import(`../static/confer-voice.js?v=${DIRECT_KEY}`),
@@ -657,7 +668,7 @@ async function readDirect(){
     }else voiceRecords=page.conferSessions({doc:document,direct:info,chat:chatLog,list:els.sessions,get,post});
     if(caps.direct_records===true)await voiceRecords.refresh();
   }catch(error){
-    if(admitted&&!direct&&!pendingDirect)directRefusal='Voice unavailable: the voice page could not load. Typing still works.';
+    if(admitted&&!direct&&!pendingDirect){pendingRefusal='Voice unavailable: the voice page could not load. Typing still works.';updateVoiceAvailability();}
   }
 }
 void readDirect();
