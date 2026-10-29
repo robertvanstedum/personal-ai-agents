@@ -46,9 +46,8 @@ def load_chat_costs() -> dict:
 
 
 def load_curator_costs() -> list:
-    """Returns list of cost records from curator_costs.json. Creates file if missing."""
+    """Read cost records without creating or changing the source log."""
     if not CURATOR_LOG.exists():
-        CURATOR_LOG.write_text(json.dumps({"runs": []}, indent=2))
         return []
     data = json.loads(CURATOR_LOG.read_text())
     return data.get('runs', [])
