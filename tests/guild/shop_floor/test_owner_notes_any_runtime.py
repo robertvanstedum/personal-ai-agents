@@ -191,7 +191,7 @@ def test_spoken_note_with_mc_on_openclaw_saves_through_cos_with_its_receipt(monk
     sid = start(r)["voice_session_id"]
     saved = call(r, sid, call_id="note-1", name="save_note", words="Make a note that the kiln needs a new seal").get_json()
     assert saved["saved"] is True and saved["receipt"], saved
-    assert saved["spoken"] == "Saved to Chief of Staff notes: the kiln needs a new seal"
+    assert saved["spoken"] == "Saved."                              # never his words aloud (verification S-6)
     consulted = call(r, sid, call_id="note-2", words="make a note that the glaze is ready").get_json()   # by consult too
     assert consulted["saved"] is True and consulted["receipt"] and "not saved" not in consulted["spoken"].lower()
     again = call(r, sid, call_id="note-1", name="save_note", words="Make a note that the kiln needs a new seal").get_json()

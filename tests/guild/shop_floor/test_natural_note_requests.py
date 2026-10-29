@@ -198,7 +198,7 @@ def test_spoken_make_a_note_called_is_saved_with_its_receipt(voice):
     from test_mc_voice_direct import call, start
     sid = start(voice)["voice_session_id"]
     saved = call(voice, sid, call_id="n1", name="save_note", words="Make a note called Test.").get_json()
-    assert saved["saved"] is True and saved["receipt"] and saved["spoken"] == "Saved to Chief of Staff notes: Test."
+    assert saved["saved"] is True and saved["receipt"] and saved["spoken"] == "Saved."           # S-6: not his words
     noted = call(voice, sid, call_id="n2", name="save_note", words="Make a note that the kiln is hot").get_json()
     assert noted["saved"] is True
     assert voice.cos.calls == ["/note Test.", "/note the kiln is hot"] and not voice.turns
@@ -249,7 +249,7 @@ def test_spoken_save_a_note_test_is_saved_and_save_a_note_later_is_not(voice):
     from test_mc_voice_direct import call, start
     sid = start(voice)["voice_session_id"]
     saved = call(voice, sid, call_id="s1", name="save_note", words="save a note test").get_json()
-    assert saved["saved"] is True and saved["spoken"] == "Saved to Chief of Staff notes: test"
+    assert saved["saved"] is True and saved["spoken"] == "Saved."
     later = call(voice, sid, call_id="s2", name="save_note", words="save a note later").get_json()
     assert later["saved"] is False and later["spoken"] == direct.NOT_A_NOTE
     assert voice.cos.calls == ["/note test"] and not voice.turns

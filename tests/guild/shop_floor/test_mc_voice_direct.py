@@ -291,7 +291,8 @@ def test_save_note_is_spoken_as_saved_only_with_a_receipt(ready):
     saved = call(r, sid, call_id="note-1", name="save_note", words="Make a note that the kiln needs a new seal").get_json()
     assert saved["saved"] is True, saved
     assert saved["receipt"] and "not saved" not in saved["spoken"].lower()
-    assert saved["spoken"] == "Saved to Chief of Staff notes: the kiln needs a new seal"
+    assert saved["spoken"] == "Saved."                              # never his words aloud (verification S-6)
+    assert any(row["text"] == "Saved to Chief of Staff notes: the kiln needs a new seal" for row in r.notes.rows.values())
     assert call(r, sid, call_id="note-1", name="save_note", words="Make a note that the kiln needs a new seal").get_json() == saved
     assert r.cos.calls == ["/note the kiln needs a new seal"]
     r.cos.fail = True
@@ -950,9 +951,9 @@ def test_a_platform_operation_without_a_reply_note_is_answered_with_its_operatio
     sid = start(r)["voice_session_id"]
     result = call(r, sid, words="Pin this to the board: kiln seal").get_json()
     assert result["ok"] is True and result["receipt"] == "op-9" and result["receipt_kind"] == "operation"
-    assert result["spoken"] == "Pinned to the Board."
+    assert result["spoken"] == direct.SPOKEN_POSTIT          # a fixed line, never the platform's (S-6: it can quote him)
     receipt = [row for row in voice_records(r, sid) if HEADER.match(row["text"])["speaker"] == "consult receipt"]
-    assert receipt[0]["text"].endswith("Answered. Operation op-9. Spoken: Pinned to the Board.")
+    assert receipt[0]["text"].endswith("Answered. Operation op-9. Spoken: Post-it added.")
 
 
 def test_a_refused_job_is_still_spoken_as_not_done(ready, monkeypatch):

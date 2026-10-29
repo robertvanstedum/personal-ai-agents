@@ -62,6 +62,12 @@ CARD_ROOT = Path(__file__).resolve().parents[2] / "services/mc_operations/person
 PERSON = {"key": "master_craftsman", "name": "Master Craftsman", "short": "MC", "domain": "mc",
           "notes": ("make a note that …", "save a note: …")}
 NOT_SAVED = "The note is not saved."
+# Robert, 29 Oct: "I don't want the whole world hearing what I just said"; "definitely dont want the respoken unless I ask
+# for it" (verification S-6, as CoS's "Saved."): a spoken receipt for his note, post-it or reminder never repeats his words.
+# The written receipt in the conversation (the platform's reply note) keeps them. A reminder says only its resolved time.
+SPOKEN_SAVED, SPOKEN_ALREADY = "Saved.", "Already saved."
+SPOKEN_POSTIT, SPOKEN_POSTIT_ALREADY = "Post-it added.", "That post-it is already on the Board."
+SPOKEN_REMINDER = "Reminder set for {when}. It will arrive by Telegram."
 NOT_A_NOTE = "Nothing was saved. Say 'make a note that' and the note, and I'll save it."
 NO_CONTINUITY = "No retained voice turn in this conversation yet."
 # Spec 164 §7, part 1: MC's own realtime operating rules, whole (moved here from mc_managed_realtime, which reads them
@@ -175,6 +181,26 @@ class _FloorStore(DirectVoiceStore):
 
     def get(self, conv, sid, record_id):
         return reveal.get_record(self._floor(conv), sid, record_id)
+
+
+def spoken_receipt(operation):
+    """The spoken line for a saved note, post-it or reminder (SPOKEN_*), never his words; None for anything else."""
+    if not isinstance(operation, dict) or operation.get("saved") is not True:
+        return None
+    kind, again = operation.get("type"), operation.get("repeated") is True
+    if kind == "cos_note":
+        return SPOKEN_ALREADY if again else SPOKEN_SAVED
+    if kind == "board_postit":
+        return SPOKEN_POSTIT_ALREADY if again else SPOKEN_POSTIT
+    if kind == "reminder_set":
+        from datetime import datetime
+        from .owner_actions import local_label
+        try:
+            due = datetime.fromisoformat(str(operation.get("due_utc")).replace("Z", "+00:00"))
+        except ValueError:
+            return "Reminder set. It will arrive by Telegram."
+        return SPOKEN_REMINDER.format(when=local_label(due))
+    return None
 
 
 def _is_note_command(text):
@@ -354,7 +380,7 @@ class _MasterCraftsman(DirectVoiceAdapter):
             receipt = operation.get("operation_id") or operation.get("id")
             saved = answered and operation.get("saved") is True and bool(receipt)
             result.update(saved=saved, receipt=receipt if saved else None,
-                          spoken=speakable(said or "") if saved else NOT_SAVED)
+                          spoken=(spoken_receipt(operation) or SPOKEN_SAVED) if saved else NOT_SAVED)
             if not saved:
                 result.update(ok=False, outcome="unknown" if uncertain else "not_done")
                 if uncertain:
@@ -370,8 +396,9 @@ class _MasterCraftsman(DirectVoiceAdapter):
                 kind = receipt = None
         elif acted:
             kind, receipt = "job", job.get("id") if isinstance(job.get("id"), str) and job.get("id") else None
+        receipt_line = spoken_receipt(operation) if answered else None      # his words stay in the written receipt
         result.update(receipt=receipt, receipt_kind=kind,
-                      spoken=speakable(said or "") if isinstance(said, str) and said.strip() else FAILED)
+                      spoken=receipt_line or (speakable(said or "") if isinstance(said, str) and said.strip() else FAILED))
         if (answered and operation.get("type") == "cos_note" and operation.get("saved") is True
                 and isinstance(operation.get("operation_id"), str) and operation["operation_id"]):
             result["saved"] = True             # a consult on "make a note that …" saved it: its receipt says so (R1 P2-3)
