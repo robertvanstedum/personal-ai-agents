@@ -36,7 +36,7 @@ def test_project_home_documents_do_not_mask_a_real_service_change():
     """A mixed push is classified by the service file, not by the documents."""
     release_class, services = classify([
         "prototype-lab/projects/project-mini-moi-work-poc/DECISIONS.md",
-        "domains/cos/confer_service.py",
+        "domains/cos/chief_of_staff.py",                     # a CoS-only module (confer_service is the portal's too)
     ])
     assert release_class == "domain"
     assert services == ("cos-bot", "cos-scheduler")
@@ -63,7 +63,7 @@ def test_german_change_restarts_german_and_its_bot_only():
 
 
 def test_cos_change_does_not_restart_language_domains():
-    release_class, services = classify(["domains/cos/confer_service.py"])
+    release_class, services = classify(["domains/cos/chief_of_staff.py"])    # CoS-only; see PORTAL_COS_FILES
     assert release_class == "domain"
     assert services == ("cos-bot", "cos-scheduler")
     assert "german" not in services
@@ -838,3 +838,37 @@ def test_the_voice_branch_deploys_seven_services_not_nine():
              "scripts/mc_persona/make_header_release.py", "core/mc_tools/service.py", "core/realtime_voice/direct_host.py",
              "domains/cos/direct_voice.py", "minimoi_portal/guild_ui/mc_voice_direct.py"]
     assert classify(paths) == ("domain", ("portal", "curator", "german", "portuguese", "system-bot", "cos-bot", "cos-scheduler"))
+
+
+
+# --- the CoS modules the portal runs too (A4 fix round, review N-8) ------------------------------------------------------
+
+def test_a_cos_module_the_portal_imports_redeploys_the_portal_too():
+    from scripts.ci.classify_release import PORTAL_COS_FILES
+    for path in sorted(PORTAL_COS_FILES):
+        assert classify([path]) == ("domain", ("portal", "cos-bot", "cos-scheduler")), path
+    for path in ("domains/cos/chief_of_staff.py", "domains/cos/direct_voice.py", "domains/cos/voice_store.py"):
+        assert classify([path]) == ("domain", ("cos-bot", "cos-scheduler")), path
+
+
+def _portal_cos_closure(root):
+    """The domains/cos files the portal image runs: imported by minimoi_portal/ or by core/ (all but core/telegram/, which
+    is cos-bot's own), then everything those import inside domains/cos, transitively."""
+    readers = [p for p in (root / "minimoi_portal").rglob("*.py")]
+    readers += [p for p in (root / "core").rglob("*.py") if "telegram" not in p.relative_to(root / "core").parts]
+    pending = {name for p in readers if not (set(p.parts) & SKIPPED_DIRS)
+               for name in _imported_names(p.read_text(encoding="utf-8")) if name.startswith("domains.cos.")}
+    found = set()
+    while pending:
+        name = pending.pop()
+        for rel in ("/".join(name.split(".")) + ".py", "/".join(name.split(".")[:-1]) + ".py"):
+            path = root / rel
+            if rel.startswith("domains/cos/") and path.is_file() and rel not in found:
+                found.add(rel)
+                pending.update(n for n in _imported_names(path.read_text(encoding="utf-8")) if n.startswith("domains.cos."))
+    return found
+
+
+def test_portal_cos_files_are_exactly_the_cos_modules_the_portal_imports():
+    from scripts.ci.classify_release import PORTAL_COS_FILES
+    assert _portal_cos_closure(Path(__file__).resolve().parents[1]) == set(PORTAL_COS_FILES)
