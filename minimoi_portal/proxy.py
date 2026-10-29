@@ -482,8 +482,10 @@ DEFAULT_TIMEOUT = (5, 30)
 ROUTE_TIMEOUTS = {
     ("/app/cos", "POST", "ui/send"): (5, 125),
     ("/app/cos", "POST", "chat"): (5, 125),
-    # Chief of Staff's direct voice (Spec 165 v0.3 §6.7): a consult is answered by 25 s (pending after that) and her turn
-    # ends by 35 s (domains/cos/direct_voice.py TURN_DEADLINE_S).
+    # Chief of Staff's direct voice (Spec 165 v0.3 §6.7): a consult's request is answered by 25 s (pending after that: the
+    # core's CONSULT_WAIT_S), so this bound holds. Her turn itself runs on in its worker for typed Confer's own bound plus
+    # slack (domains/cos/direct_voice.py turn_deadline(): 120 s + 10 s, A2-D1); its result is said when it lands, or kept
+    # as a late receipt after End.
     ("/app/cos", "POST", "api/realtime-voice/direct/api/realtime-voice/consult"): (5, 40),
 }
 # Routes whose path names a session: her summary waits for its one bounded gateway call, or joins one running (§6.7).
