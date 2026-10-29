@@ -357,6 +357,7 @@ def _doctor(words) -> int:
     out["census"] = state.get("census")
     if out["census"] and out["census"].get("status") not in (None, "ok"):
         problems.append(f"census_{out['census']['status']}:{out['census'].get('reason')}")
+    problems.extend(f"census_foreign_schema:{v}" for v in sorted((out["census"] or {}).get("foreign_schema") or {}))
     problems.extend(f"census_unrecorded:{a}" for a in sorted((out["census"] or {}).get("unrecorded") or {}))
     try:
         digest, files = host_mod.tree_digest(host.bundle_root)

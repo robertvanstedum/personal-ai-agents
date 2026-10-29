@@ -521,6 +521,7 @@ def test_cen5_every_span_parent_resolves_and_no_content_attribute_is_written(tmp
         f.apply({"event_id": str(uuid.uuid4()), "kind": k, "body": b, "at": at(10 - i)}, "mac-1")
     rows = f.rows(reachability={"mac-1": "reachable"}, environment="dev")
     assert {r["agent_id"]: r["reason"] for r in rows}["never-seen"] == "not_captured"
+    assert {r["agent_id"]: r["reason"] for r in rows}["x/b"] == "parent_unknown"       # never running (N-D1)
     out = otel.write(tmp_path / "otlp", rows, host_id="mac-1", environment="dev")
     doc = json.loads(Path(out["traces"]).read_text())
     spans = doc["resourceSpans"][0]["scopeSpans"][0]["spans"]
@@ -541,7 +542,7 @@ def test_cen5_every_span_parent_resolves_and_no_content_attribute_is_written(tmp
     assert {p["attributes"][-1]["value"]["stringValue"]: p["sum"] for p in tokens["histogram"]["dataPoints"]} == \
         {"input": 1200.0, "output": 300.0}
     assert {p["attributes"][0]["value"]["stringValue"]: p["asInt"] for p in agents["gauge"]["dataPoints"]} == \
-        {"running": "3", "unknown": "1"}
+        {"running": "2", "unknown": "2"}
     assert doc["resourceSpans"][0]["schemaUrl"] == otel.SCHEMA_URL
 
 
@@ -675,7 +676,8 @@ def test_s1_the_census_never_gates_work_an_unwritable_census_is_shown_not_refuse
     assert out["state"] == "completed" and fake.items[rid]["state"] == "completed"     # no item refused
     root = runner.census_agent_id(f"{rid}-g1")
     status = rt.census_status()
-    assert (status["status"], status["reason"]) == ("unwritable", "os_error_20") and status["waiting_in_memory"] >= 2
+    assert (status["status"], status["reason"]) == ("unwritable", "os_error_20") and status["waiting"] >= 2
+    assert status["memory_only"] >= 2                                  # not even a spill could keep them
     assert rt.contact()
     got = {e["body"].get("agent_id"): e for e in fake.census.values() if e["kind"] == "census.start"}
     assert root in got                                              # its row reached the authority all the same
@@ -768,3 +770,125 @@ def test_n4_a_day_file_of_any_size_is_read_whole_in_chunks(tmp_path, monkeypatch
     monkeypatch.setattr(C, "READ_CHUNK", 4096)                 # a few lines a chunk, lines across chunk edges
     h = C.CensusFile(tmp_path / "census")
     assert [e["event_id"] for e in h.unsent()] == ids and not h.damaged
+
+
+# ── second fix round: SF-D1 (no deferred event lost silently), N-D1 (parent unknown), N-D2 (versioned events) ──────
+def _orphan_task(art):
+    """A task whose stage says its child started, with a process group that is dead now (a crash took them both)."""
+    task = f"{uuid.uuid4()}-g1"
+    proc = subprocess.Popen(["true"], start_new_session=True)
+    proc.wait()
+    art.mkdir(parents=True, exist_ok=True)
+    (art / f"{task}.claim.json").write_text(json.dumps({"request_id": task[:-3], "generation": 1, "task": task}))
+    (art / f"{task}.stage.json").write_text(json.dumps({"stage": "started", "pgid": proc.pid, "identity": "x"}))
+    return task, runner.census_agent_id(task)
+
+
+def test_sf_d1_a_deferred_start_survives_a_crash_and_no_subagent_is_left_running(tmp_path, mirror):
+    """The reviewer's crash probe: the root's start is deferred (another writer holds the lock), fakework writes its
+    subagent's start and a beat, and the runtime dies before any flush or heartbeat. Restarted, nothing runs."""
+    fake = H.FakeAuthority(mirror[1])
+    rt = H.make_rt(tmp_path, mirror[0], fake)
+    art = tmp_path / "artifacts"
+    task, aid = _orphan_task(art)
+    fd = _hold_lock(rt.census.root)
+    try:
+        started = rt.census_write("census.start", root_start(aid))
+    finally:
+        os.close(fd)
+    assert rt.census.waiting() == 1 and list(rt.census.root.glob("deferred.*.jsonl"))   # spilled, durably
+    fw = C.CensusFile(rt.census.root)                                  # fakework, writing to the file itself
+    fw.append("census.start", sub_start(aid + "/long1", aid))
+    fw.append("census.update", C.update(aid + "/long1", source="fakework.spawn", state="running"))
+    H.RUNTIMES.remove(rt)                                              # the crash: no flush, no heartbeat
+    rt2 = H.make_rt(tmp_path, mirror[0], fake)
+    rt2.freeze_left_children()
+    rows = rows_of(rt.census.root)
+    assert rows[aid]["start_path"] == "runtime"                        # the start was kept (from the spill)
+    assert (rows[aid]["state"], rows[aid]["reason"]) == ("unknown", "end_unobserved")
+    assert rows[aid + "/long1"]["reason"] == "end_unobserved"
+    assert not [r for r in rows.values() if r["state"] == "running"]
+    rt2.write_state(force=True)                                        # the spill is merged, once, and removed
+    assert not list(rt.census.root.glob("deferred.*.jsonl"))
+    on_file = [json.loads(x) for p in rt.census.root.glob("*.jsonl") for x in p.read_text().splitlines()]
+    assert [x["event_id"] for x in on_file if x["type"] == "event"].count(started["event_id"]) == 1
+    assert rt2.census_status()["unrecorded"] == {}
+
+
+def test_sf_d1_an_event_not_even_spilled_is_named_after_a_crash_and_its_subtree_still_closes(tmp_path, mirror):
+    fake = H.FakeAuthority(mirror[1])
+    rt = H.make_rt(tmp_path, mirror[0], fake)
+    art = tmp_path / "artifacts"
+    task, aid = _orphan_task(art)
+    rt.census.root.mkdir(parents=True, exist_ok=True)
+    (rt.census.root / rt.census._spill_name()).mkdir()                  # the spill cannot be written either
+    fd = _hold_lock(rt.census.root)
+    try:
+        rt.census_write("census.start", root_start(aid))
+    finally:
+        os.close(fd)
+    assert rt.census_status()["memory_only"] == 1
+    assert json.loads((art / "census-status.json").read_text())["memory_only"]          # recorded before any crash
+    fw = C.CensusFile(rt.census.root)
+    fw.append("census.start", sub_start(aid + "/long1", aid))
+    fw.append("census.update", C.update(aid + "/long1", source="fakework.spawn", state="running"))
+    H.RUNTIMES.remove(rt)                                              # the crash: the start is gone
+    (rt.census.root / rt.census._spill_name()).rmdir()
+    rt2 = H.make_rt(tmp_path, mirror[0], fake)
+    rt2.freeze_left_children()
+    rows = rows_of(rt.census.root)
+    assert (rows[aid]["state"], rows[aid]["reason"]) == ("unknown", "end_unobserved")  # an end alone, its row
+    assert rows[aid + "/long1"]["reason"] == "end_unobserved" and rows[aid + "/long1"]["state"] != "running"
+    unrecorded = rt2.census_status()["unrecorded"]
+    assert unrecorded[aid]["reason"] in ("lost_in_restart", "start_not_on_file")       # the gap, named
+    rt3 = H.make_rt(tmp_path, mirror[0], fake)                         # and it survives another restart
+    rt3.freeze_left_children()
+    assert aid in rt3.census_status()["unrecorded"]
+
+
+def test_n_d1_a_subagent_whose_start_or_parent_was_never_seen_is_never_running():
+    f = C.Fold()
+    now = datetime.now(timezone.utc)
+    for k, b in (("census.update", C.update("r1/beat-only", source="fakework.spawn", state="running")),   # start lost
+                 ("census.start", sub_start("x/b", "never-recorded"))):
+        f.apply({"event_id": str(uuid.uuid4()), "kind": k, "body": b, "at": at(5, now)}, "mac-1")
+    rows = {r["agent_id"]: r for r in f.rows(reachability={"mac-1": "reachable"}, environment="dev")}
+    assert (rows["r1/beat-only"]["state"], rows["r1/beat-only"]["reason"]) == ("unknown", "parent_unknown")
+    assert (rows["x/b"]["state"], rows["x/b"]["reason"]) == ("unknown", "parent_unknown")
+    f.apply({"event_id": str(uuid.uuid4()), "kind": "census.end", "at": at(1, now),
+             "body": C.end("r1/beat-only", source="fakework.spawn", state="done", reason="stop_observed")}, "mac-1")
+    assert {r["agent_id"]: r["state"] for r in f.rows(reachability={"mac-1": "reachable"},
+                                                       environment="dev")}["r1/beat-only"] == "done"
+
+
+def test_n_d2_an_event_of_another_census_version_is_flagged_and_refused_by_name_never_misread(tmp_path, mirror):
+    class Checking(Door):
+        """Answers as the store does: each event through census.check_event."""
+        def heartbeat(self, runner_id, state, capabilities, facts, census=None):
+            if census is None:
+                return {"state": "recorded"}
+            out = []
+            for e in census:
+                try:
+                    C.check_event(e)
+                    out.append({"event_id": e["event_id"], "state": "applied"})
+                except C.CensusRefused as exc:
+                    out.append({"event_id": e["event_id"], "state": "rejected", "code": str(exc)})
+            return {"state": "recorded", "census": {"state": "applied", "events": out}}
+    rt = H.make_rt(tmp_path, mirror[0], Checking())
+    rt.census.root.mkdir(parents=True, exist_ok=True)
+    old = {"event_id": str(uuid.uuid4()), "at": at(), "kind": "census.start", "body": {"agent_id": "old-writer"}}
+    day = rt.census.root / (at()[:10] + ".jsonl")
+    with open(day, "ab") as fh:
+        fh.write(C._line({"type": "event", **old}))                    # an older writer's line (version 1)
+    new = rt.census.append("census.start", root_start("r1"))
+    assert new["schema"] == C.CENSUS_SCHEMA
+    assert "old-writer" not in rows_of(rt.census.root)                 # never read as this version
+    assert rt.contact()
+    assert rt.census_status()["foreign_schema"] == {"minimoi.census.v1": 1}
+    acks = [json.loads(x) for x in day.read_text().splitlines() if '"ack"' in x]
+    assert {a["event_id"]: a["answer"] for a in acks}[old["event_id"]] == \
+        {"state": "rejected", "code": "census_schema_unsupported:minimoi.census.v1"}
+    assert {a["event_id"]: a["answer"]["state"] for a in acks}[new["event_id"]] == "applied"
+    with pytest.raises(C.CensusRefused, match="census_schema_unsupported:minimoi.census.v3"):
+        C.check_event({**new, "schema": "minimoi.census.v3"})

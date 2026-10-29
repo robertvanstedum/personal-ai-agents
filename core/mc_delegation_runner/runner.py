@@ -732,7 +732,7 @@ class HostRuntime:
         # file's unsent events with each heartbeat and keeps the host's own view. None: no census (tests of S1-D).
         self.census = census
         self.census_errors = 0             # census events this runtime could not write (shown; work goes on)
-        self.census_unrecorded = {}        # agent id -> why its census row could not be recorded (it ran all the same)
+        self.census_unrecorded = {}        # agent id -> {reason, since}: its census row could not be recorded (it ran)
         self._census_limit = None          # a smaller batch after the authority refused one (never the contact itself)
         self._census_suspect = None        # (event id, refusals): a lone event refused twice is set aside, not once
         self._otlp_mark = (None, 0.0)      # (the rows' states, when) at the last OpenTelemetry file
@@ -866,11 +866,15 @@ class HostRuntime:
         if self.census is None:
             return None
         try:
-            return self.census.append(kind, body, at=self.at(), wait_s=wait_s, defer=True)
+            ev = self.census.append(kind, body, at=self.at(), wait_s=wait_s, defer=True)
+            if self.census.memory_only:
+                self._census_persist()                   # held in memory alone: its gap must survive a crash
+            return ev
         except Exception as exc:
             self.census_errors += 1
             code = str(exc) if isinstance(exc, census_mod.CensusRefused) else type(exc).__name__.lower()
             self.census.problem = {"status": "unwritable", "reason": code, "since": self.at()}
+            self._census_persist()
             return None
 
     def census_child(self, child, what, *, cause=None):
@@ -931,7 +935,7 @@ class HostRuntime:
                                 route=census_mod.route_label(claim["route"], launch_env.ROUTES.get(claim["route"])),
                                 launch=census_mod.launch_summary(rec or {}), transcript_ref=transcript)
         if self.census_write("census.start", body, wait_s=0.1) is None:
-            self.census_unrecorded[child.agent_id] = (self.census.problem or {}).get("reason") or "unwritable"
+            self._census_unrecorded(child.agent_id, (self.census.problem or {}).get("reason") or "unwritable")
             return
         child.census_started = True
 
@@ -1122,7 +1126,11 @@ class HostRuntime:
                 rows = self.census.rows(host_id=self.host.host_id, environment=self.host.environment)
                 doc["agents"] = rows
                 doc["census"] = self.census_status()
-                doc["unknowns"].extend(f"agents: runtime child {a} ran without its census row ({why})"
+                kept = (self.census.problem, sorted(self.census_unrecorded), sorted(self.census.memory_only))
+                if kept != getattr(self, "_census_kept", None):     # the record across restarts, when it changed
+                    self._census_kept = kept
+                    self._census_persist()
+                doc["unknowns"].extend(f"agents: {a} ran without its census row ({why['reason']})"
                                        for a, why in sorted(self.census_unrecorded.items()))
                 self._write_otlp(rows)
             except Exception:
@@ -1131,15 +1139,58 @@ class HostRuntime:
         _write_json(self.cfg.artifact_root / "host-state.json", doc)
 
     def census_status(self) -> dict:
-        """The census's own state, shown plainly: ok, deferred (events kept in memory, sent all the same, waiting for
-        the lock) or unwritable (with the reason), and what is unsent, waiting, damaged or unrecorded."""
+        """The census's own state, shown plainly: ok, deferred (events spilled, sent all the same, waiting for the
+        lock) or unwritable (with the reason); what is unsent, waiting, held in memory alone, unrecorded (its row lost
+        or never made: kept across restarts, ``census-status.json``), damaged, or of another census version."""
         problem = self.census.problem
         return {"status": "ok" if problem is None else problem["status"],
                 "reason": None if problem is None else problem["reason"],
                 "since": None if problem is None else problem["since"],
-                "unsent": len(self.census.unsent()), "waiting_in_memory": self.census.waiting(),
-                "unrecorded": dict(self.census_unrecorded), "damaged_lines": dict(self.census.damaged),
+                "unsent": len(self.census.unsent()), "waiting": self.census.waiting(),
+                "memory_only": len(self.census.memory_only), "unrecorded": dict(self.census_unrecorded),
+                "damaged_lines": dict(self.census.damaged), "foreign_schema": dict(self.census.foreign),
                 "write_errors": self.census_errors}
+
+    # The census's own record, kept across restarts (SF-D1): its last problem, the rows that could not be recorded,
+    # and the events held in memory alone, so a crash that loses them leaves the gap named. One writer: this runtime.
+    def _census_status_path(self):
+        return self.cfg.artifact_root / "census-status.json"
+
+    def _census_unrecorded(self, aid, reason):
+        self.census_unrecorded[aid] = {"reason": reason, "since": self.at()}
+        self._census_persist()
+
+    def _census_persist(self):
+        if self.census is None:
+            return
+        try:
+            _write_json(self._census_status_path(), {
+                "schema": "minimoi.census.status.v1", "at": self.at(), "problem": self.census.problem,
+                "unrecorded": self.census_unrecorded, "memory_only": dict(self.census.memory_only)})
+        except Exception:
+            self.census_errors += 1
+
+    def _census_recall(self):
+        """At a restart: the record an earlier process kept. Its unrecorded rows stand (until retention's age); every
+        event it held in memory alone that is on no file now was lost with it, and is named as unrecorded."""
+        try:
+            prev = json.loads(self._census_status_path().read_text())
+        except (OSError, ValueError):
+            return
+        if not isinstance(prev, dict):
+            return
+        cutoff = (self._now() - _timedelta(census_mod.RETENTION_DAYS * 86400)).isoformat()
+        for aid, why in (prev.get("unrecorded") or {}).items():
+            if isinstance(why, dict) and str(why.get("since") or "") >= cutoff:
+                self.census_unrecorded.setdefault(aid, why)
+        known = self.census._file_of
+        for eid, aid in (prev.get("memory_only") or {}).items():
+            if eid not in known:
+                self.census_unrecorded.setdefault(aid or "capture_gap_marker", {"reason": "lost_in_restart",
+                                                                                "since": self.at()})
+        if isinstance(prev.get("problem"), dict) and self.census.problem is None:
+            self.census.problem = prev["problem"]         # until this process writes cleanly
+        self._census_persist()
 
     def _write_otlp(self, rows):
         """The census as OTLP/JSON beside it (R6.6-d; otel.py): when a row changed, at most every ``every_s``."""
@@ -1162,9 +1213,10 @@ class HostRuntime:
             if self.census is not None:            # R6.6-b: rebuilt from the file; the restart is a capture gap
                 last = None
                 try:
-                    self.census.scan()
+                    self.census.scan()                 # day files, then any spill a dead process left (merged once)
                     seen = [r["last_activity_at"] for r in self.census.fold.agents.values() if r["last_activity_at"]]
                     last = max(seen).isoformat() if seen else None
+                    self._census_recall()
                 except Exception:
                     self.census_errors += 1
                 self._census_gap("restart", last)
@@ -1301,19 +1353,23 @@ class HostRuntime:
                     os.killpg(pgid, signal.SIGSTOP)
                     os.killpg(pgid, signal.SIGKILL)
                     _write_json(_stage_path(self.cfg, task), {"stage": "stopped", "reason": "orphan_after_restart"})
-                    if said not in (None, "ended"):              # its row, if it has one, ends with what was seen
+                    if said != "ended":                  # its row ends with what was seen, even with no start on file
                         self.census_write("census.end", census_mod.end(aid, source=src, state="done",
                                                                        reason="stopped:orphan_after_restart"))
                 else:
                     state = "unverified"
-                    if said not in (None, "ended", "process_unverified"):
+                    if said not in ("ended", "process_unverified"):
                         self.census_write("census.update", census_mod.update(aid, source=src, state="unknown",
                                                                              reason="process_unverified"))
-            elif said not in (None, "ended"):
+            elif said != "ended":
                 # It is gone and nobody saw it end: an end with no time of its own (unknown: end_unobserved), so its
                 # subagents close with it (CEN-4) and the tree can be retained.
                 self.census_write("census.end", census_mod.end(aid, source=src, state="unknown",
                                                                reason="end_unobserved"))
+            if said is None and self.census is not None and aid not in self.census_unrecorded:
+                # It ran (its stage says so) and its start row is on no file: an end alone closes any subagents
+                # (SF-D1); the lost start is named, never silently missing.
+                self._census_unrecorded(aid, "start_not_on_file")
         self.journal(task).note("freeze", self.at(), request_id=claim["request_id"], generation=claim["generation"],
                                 child=state, reason="+".join(reasons))
         return state
@@ -1762,7 +1818,7 @@ class HostRuntime:
                 self._census_start(child, child.launch_record)     # its census row, before it may run
             except Exception:                                   # never gates the start (CEN-6): shown, not refused
                 self.census_errors += 1
-                self.census_unrecorded[child.agent_id] = "census_error"
+                self._census_unrecorded(child.agent_id, "census_error")
             child.proc.stdin.write(b"G")                          # only now may the work start
             child.proc.stdin.close()
             self._owner_write(task, "progress", child.request_id, child.generation,

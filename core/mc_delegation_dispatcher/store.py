@@ -20,6 +20,8 @@ configuration (``Authority``) enables it, and only about version 2 items: those 
         holds one), behind a savepoint: a census event that cannot be applied never costs the host its contact, and
         no census event ever changes an item or refuses anything else (R6.6-e, CEN-6). Each event is answered
         applied, already_applied, rejected (with its code; never applied) or deferred (a host time too far ahead).
+        Each census event names its version (schema); another version is rejected by its name
+        (census_schema_unsupported:<schema>), never read as this one, and the schema column holds the event's own.
   claim(runner_id, capabilities, protocol=2) -> {envelope, route, unit, reserved, lease_until, card_id, step} | None
         nothing for a host with unreconciled items; the item's capabilities (actor, scope, repository and its
         required_capabilities) within the host's; its grant rechecked (GrantStore.covers_item: never used again);
@@ -176,8 +178,8 @@ EFFECT_POLICY = "minimoi.runtime.effect.v1"   # the policy version an item's eff
 RECEIPT_LEASE_S = 30                           # the receipt's own maximum (receipts.py); never past the item's lease
 SWEEP_BATCH = 200                              # items one sweep looks at; the rest wait for the next
 CENSUS_RETENTION_EVERY_S = 3600                # the sweeper's census retention runs at most this often
-_CENSUS_SQL = """SELECT host_id, event_id, at, kind, body FROM guild.mc_delegation_events
-    WHERE principal_id=%s AND environment=%s AND source='host' AND once_key IS NULL AND kind = ANY(%s)
+_CENSUS_SQL = """SELECT host_id, event_id, at, kind, schema, body FROM guild.mc_delegation_events
+    WHERE principal_id=%s AND environment=%s AND source='host' AND once_key IS NULL AND kind = ANY(%s) AND schema=%s
     ORDER BY at, seq"""
 _TOKEN = re.compile(r"^[A-Za-z0-9_-]{43}$")
 _CAPABILITY = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
@@ -1106,7 +1108,7 @@ class DispatcherStore:
                 cur.execute("""INSERT INTO guild.mc_delegation_events (event_id, schema, kind, principal_id, environment,
                     item_id, generation, host_id, source, at, body)
                     VALUES (%s,%s,%s,%s,%s,NULL,NULL,%s,'host',%s,%s::jsonb) ON CONFLICT DO NOTHING RETURNING event_id""",
-                            (eid, EVENT_SCHEMA, ev["kind"], self.principal, self.environment, host_id, at,
+                            (eid, ev["schema"], ev["kind"], self.principal, self.environment, host_id, at,
                              json.dumps(ev["body"])))
                 if cur.fetchone() is not None:
                     out.append({"event_id": eid, "state": "applied"})
@@ -1123,11 +1125,11 @@ class DispatcherStore:
 
     # ── the census, as read (R6.6-b, R7.6-b's agents) and kept (N3) ──
     def _census_fold(self, cur):
-        cur.execute(_CENSUS_SQL, (self.principal, self.environment, list(census_mod.KINDS)))
+        cur.execute(_CENSUS_SQL, (self.principal, self.environment, list(census_mod.KINDS), census_mod.CENSUS_SCHEMA))
         fold = census_mod.Fold()
         for r in cur.fetchall():
-            fold.apply({"event_id": str(r["event_id"]), "at": _iso(r["at"]), "kind": r["kind"], "body": r["body"]},
-                       r["host_id"])
+            fold.apply({"event_id": str(r["event_id"]), "at": _iso(r["at"]), "kind": r["kind"], "schema": r["schema"],
+                        "body": r["body"]}, r["host_id"])
         return fold
 
     def agents(self) -> list:

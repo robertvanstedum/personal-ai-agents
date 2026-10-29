@@ -27,7 +27,7 @@ RUNTIME = C.RUNTIME_SOURCE
 
 
 def ev(kind, body, *, at=None, event_id=None):
-    return C.check_event({"event_id": event_id or str(uuid4()), "kind": kind, "body": body,
+    return C.check_event({"event_id": event_id or str(uuid4()), "kind": kind, "schema": C.CENSUS_SCHEMA, "body": body,
                           "at": (at or datetime.now(timezone.utc)).isoformat()})
 
 
@@ -99,10 +99,15 @@ class CensusAtTheAuthority(PostgresFixture, unittest.TestCase):
         taken = ev("census.start", root("runtime:x-g1"), event_id=facts_id)        # the authority's own event's id
         content = {**ev("census.start", root("y")), "body": {**root("y"), "prompt": "x"}}
         future = ev("census.start", root("z"), at=datetime.now(timezone.utc) + timedelta(minutes=10))
-        got = self.beat([changed, taken, content, future])["census"]["events"]
+        older = {k: v for k, v in ev("census.start", root("w")).items() if k != "schema"}     # S1-F's first shape
+        newer = {**ev("census.start", root("v")), "schema": "minimoi.census.v3"}
+        got = self.beat([changed, taken, content, future, older, newer])["census"]["events"]
         self.assertEqual([(a["state"], a.get("code")) for a in got],
                          [("rejected", "event_id_conflict"), ("rejected", "event_id_conflict"),
-                          ("rejected", "census_body_invalid"), ("deferred", "event_time_invalid")])
+                          ("rejected", "census_body_invalid"), ("deferred", "event_time_invalid"),
+                          ("rejected", "census_schema_unsupported:minimoi.census.v1"),
+                          ("rejected", "census_schema_unsupported:minimoi.census.v3")])         # by name, never misread
+        self.assertEqual({r["schema"] for r in self.census_rows()}, {C.CENSUS_SCHEMA})
         self.assertEqual(len(self.census_rows()), 3)
         self.assertEqual(self.sql("SELECT kind FROM guild.mc_delegation_events WHERE event_id=%s",
                                   (facts_id,))[0]["kind"], "host.facts")            # untouched

@@ -14,9 +14,17 @@ tree (``parent_id``), with where it runs, the work item it serves, its times, it
   writer frozen while it holds it (the runtime freezes its child's whole group, and the child is a writer) stalls no
   one. Readers take no lock: a day file only grows by whole lines, and a last line still being written is read once it
   is whole. A write that cannot take the lock in time either fails (a child's: it goes on without that event, as a
-  vendor's failed hook would) or, for the runtime, is kept in memory, sent with the next heartbeat all the same, and
-  written once the lock is free (``append(defer=True)``, ``flush``). An event too large for the census is summarised by
-  field (the names it drops are counted in ``launch.names_truncated``), never refused.
+  vendor's failed hook would) or, for the runtime, is spilled to its own file (``census/deferred.<pid>.jsonl``,
+  fsynced, written by that process alone, so no lock is needed), sent with the next heartbeat all the same, and merged
+  into its day file once the lock is free (``append(defer=True)``, ``flush``), byte for byte and once: a restart merges
+  a dead process's spill the same way. Only when the spill cannot be written either is an event held in memory alone,
+  and the runtime records which (``memory_only``), so a crash leaves its gap named. An event too large for the census
+  is summarised by field (the names it drops are counted in ``launch.names_truncated``), never refused.
+* **Versioned** (R7.6-d). Every event carries ``schema`` (``CENSUS_SCHEMA``). An event of another version (an older
+  writer installed apart from the runtime: a connection, the bridge, the hook) is never read as this one: the host
+  flags it by its version (``foreign``) and sends it as written, and the authority refuses it naming its version
+  (``census_schema_unsupported:<schema>``). Version 1 was S1-F's first shape (no ``schema`` field, no
+  ``launch.names_truncated``); version 2 is this one.
 * **Sent with the heartbeat** (R3.2-a). The runtime sends unsent events in bounded batches, state changes first (a
   capture gap, an end, a state other than running: so a backlog never leaves a frozen agent looking alive at the
   authority), then the rest, oldest first, in bounded batches
@@ -34,6 +42,8 @@ tree (``parent_id``), with where it runs, the work item it serves, its times, it
                                                          ``unknown`` with ``ended_at`` null: its end was not seen)
     an ended parent (or ancestor), no end of its own     ``unknown: end_unobserved``, ``ended_at`` null
     a parent whose process could not be verified          ``unknown: parent_unverified``
+    a row with no start seen, or whose parent's row is    ``unknown: parent_unknown``, never ``running``
+    not known
     its host not reachable                               ``unknown: host_unreachable`` (``host_stopped`` when the
                                                          host announced a stop), never ``running``
     frozen (it, or the runtime child it runs inside,     ``idle: frozen``
@@ -69,7 +79,10 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-LINE_SCHEMA = 1
+LINE_SCHEMA = 1                         # the line's envelope (type, v, sum)
+CENSUS_SCHEMA = "minimoi.census.v2"     # the event's shape; v1 was S1-F's first (no schema, no names_truncated)
+_SPILL = re.compile(r"^deferred\.(\d{1,10})\.jsonl$")
+_SCHEMA = re.compile(r"^[a-z][a-z0-9_.-]{0,40}$")
 KINDS = ("census.start", "census.update", "census.end", "census.gap")
 STATES = ("running", "idle", "done", "failed", "unknown")
 START_STATES = ("running", "idle", "unknown")
@@ -234,9 +247,22 @@ def _check_body(kind, b):
     _need(b["state"] != "unknown" or b["reason"] is not None, "census_unknown_without_reason")
 
 
+def event_schema(ev) -> str | None:
+    """The version an event says it is: its ``schema``, or version 1 for S1-F's first shape (which had none)."""
+    if type(ev) is not dict:
+        return None
+    if "schema" not in ev:
+        return "minimoi.census.v1" if set(ev) == {"event_id", "at", "kind", "body"} else None
+    return ev["schema"] if type(ev["schema"]) is str and _SCHEMA.match(ev["schema"]) else None
+
+
 def check_event(ev) -> dict:
-    """One census event as written and as sent: {event_id, at, kind, body}, strictly; CensusRefused otherwise."""
-    _need(type(ev) is dict and set(ev) == {"event_id", "at", "kind", "body"}, "census_event_invalid")
+    """One census event as written and as sent: {event_id, at, kind, schema, body}, strictly; CensusRefused otherwise.
+    Another version is refused by its name (census_schema_unsupported:<schema>), never read as this one."""
+    version = event_schema(ev)
+    _need(version is not None, "census_event_invalid")
+    _need(version == CENSUS_SCHEMA, "census_schema_unsupported:" + version)
+    _need(set(ev) == {"event_id", "at", "kind", "schema", "body"}, "census_event_invalid")
     _need(_s(_UUID)(ev["event_id"]) and ev["kind"] in KINDS, "census_event_invalid")
     parse_at(ev["at"])
     _check_body(ev["kind"], ev["body"])
@@ -331,8 +357,8 @@ def fit(kind, body) -> dict:
         return body
 
     def size(b):
-        return len(json.dumps({"event_id": "0" * 36, "at": "0" * 32, "kind": kind, "body": b},
-                              separators=(",", ":")))
+        return len(json.dumps({"event_id": "0" * 36, "at": "0" * 32, "kind": kind, "schema": CENSUS_SCHEMA,
+                               "body": b}, separators=(",", ":")))
     out = dict(body)
     if isinstance(out.get("launch"), dict):                 # the name lists within their caps, the rest counted
         lr = dict(out["launch"])
@@ -415,7 +441,8 @@ def _line(doc) -> bytes:
 
 
 def _wire(doc) -> dict:
-    return {"event_id": doc["event_id"], "at": doc["at"], "kind": doc["kind"], "body": doc["body"]}
+    """The event as written, without the line's envelope: exactly the keys its writer gave (any version)."""
+    return {k: v for k, v in doc.items() if k not in ("type", "v", "sum")}
 
 
 def _day_of(at) -> str:
@@ -427,10 +454,12 @@ class CensusFile:
     read, with no lock), keeps the fold and the unsent events, and writes the authority's answers back as ack lines.
 
     The lock is only ever tried (``wait_s`` bounds the retries; 0 is one try). With ``defer=True`` (the runtime's own
-    writes) an event that cannot be written now is kept in memory: it is in the fold and in the next batch at once,
-    and ``flush`` writes it, with its answer if one came meanwhile, when the lock is free. ``problem`` says why the
-    last write could not be made (``deferred: lock_busy``, or ``unwritable`` with the error's code), until a flush
-    leaves nothing waiting."""
+    writes) an event that cannot be written now is spilled to this process's own file, ``deferred.<pid>.jsonl`` (no
+    lock: one writer), fsynced: it is in the fold and in the next batch at once, and ``flush`` merges it into its day
+    file, with its answer if one came meanwhile, when the lock is free, then removes the spill. A spill left by a
+    process that died is read and merged the same way, each event once. ``problem`` says why the last write could not
+    be made (``deferred: lock_busy``, or ``unwritable`` with the error's code), until a flush leaves nothing waiting;
+    ``memory_only`` names the events not even the spill could keep."""
 
     def __init__(self, root, *, clock=now_iso):
         self.root = Path(root)
@@ -446,6 +475,8 @@ class CensusFile:
         self._gaps_in = {}            # file name -> gap event ids in it
         self.damaged = {}             # file name -> lines that did not check (never sent)
         self.problem = None           # {status, reason, since} while a write waits or failed; None when all is written
+        self.memory_only = {}         # event_id -> agent id (None for a gap): deferred, and not even spilled
+        self.foreign = {}             # schema -> lines of another census version (flagged, sent as written, refused)
         self.fold = Fold()
 
     # the lock: tried, never waited on without a bound
@@ -493,7 +524,7 @@ class CensusFile:
         lock in ``wait_s``, or on a write error: raise (CensusBusy, OSError), or with ``defer``, keep it in memory to
         send and write later. Returns it as it will be sent. CensusRefused only for a shape no writer of ours makes."""
         ev = check_event({"event_id": event_id or str(uuid.uuid4()), "at": at or self._clock(), "kind": kind,
-                          "body": fit(kind, body)})
+                          "schema": CENSUS_SCHEMA, "body": fit(kind, body)})
         line, name = _line({"type": "event", **ev}), _day_of(ev["at"]) + ".jsonl"
         try:
             fd = self._try_lock(wait_s)
@@ -501,21 +532,50 @@ class CensusFile:
                 self._append_line(name, line)
             finally:
                 os.close(fd)
+            with self._mu:
+                if not self._deferred and not self._answers:
+                    self.problem = None                   # a clean write with nothing waiting: no problem stands
         except OSError as exc:
             if not defer:
                 raise
             with self._mu:
                 self._take_event(None, ev)
                 self._deferred[ev["event_id"]] = ev
+                try:
+                    self._spill(line)                     # durable without the lock: this process's own file
+                except OSError as spill_exc:
+                    self.memory_only[ev["event_id"]] = ev["body"].get("agent_id")
+                    exc = spill_exc
             self._note(*(("deferred", "lock_busy") if isinstance(exc, CensusBusy) else
                          ("unwritable", "os_error_%s" % (exc.errno or 0))))
         return ev
+
+    def _spill_name(self) -> str:
+        return "deferred.%d.jsonl" % os.getpid()
+
+    def _spill(self, line):
+        """Append one event line to this process's spill file, fsynced (its name too, when new). One writer, no lock."""
+        self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path = self.root / self._spill_name()
+        new = not path.exists()
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            os.write(fd, line)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        if new:
+            dfd = os.open(self.root, os.O_RDONLY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
 
     def flush(self, *, wait_s=0.0) -> bool:
         """Write what waits in memory: deferred events (each followed by its answer when one came) and answers. True
         when nothing waits any more. Never waits on the lock longer than ``wait_s``."""
         with self._mu:
-            if not self._deferred and not self._answers:
+            if not self._deferred and not self._answers and not self._spills():
                 return True
         try:
             fd = self._try_lock(wait_s)
@@ -525,12 +585,19 @@ class CensusFile:
             return False
         try:
             with self._mu:
+                spills = self._spills()
+                for name in spills:                       # a dead process's spill, read whole before it goes
+                    self._scan_file(name)
                 for eid, ev in list(self._deferred.items()):
                     name = _day_of(ev["at"]) + ".jsonl"
                     self._append_line(name, _line({"type": "event", **ev}))
                     del self._deferred[eid]
+                    self.memory_only.pop(eid, None)
                     self._file_of[eid] = name
                     self._book(name, ev)
+                for name in spills:
+                    os.unlink(self.root / name)           # every event of it is in its day file now
+                    self._offsets.pop(name, None)
                 for eid, ans in list(self._answers.items()):
                     name = self._file_of.get(eid)
                     if name is not None:
@@ -571,21 +638,28 @@ class CensusFile:
     def _files(self) -> list:
         try:
             return sorted(n for n in os.listdir(self.root) if _DAY.match(n))
-        except FileNotFoundError:
+        except (FileNotFoundError, NotADirectoryError):
+            return []
+
+    def _spills(self) -> list:
+        try:
+            return sorted(n for n in os.listdir(self.root) if _SPILL.match(n) and os.path.isfile(self.root / n))
+        except (FileNotFoundError, NotADirectoryError):
             return []
 
     def scan(self) -> int:
-        """Read what was appended since the last scan (complete lines only). Returns the number of new lines."""
-        if not self.root.exists():
+        """Read what was appended since the last scan (complete lines only): the day files, then the spill files (an
+        event already in a day file is not taken again). Returns the number of new lines."""
+        if not self.root.is_dir():
             return 0
         with self._mu:
-            return sum(self._scan_file(name) for name in self._files())
+            return sum(self._scan_file(name) for name in self._files() + self._spills())
 
     def _scan_file(self, name) -> int:
         path, n = self.root / name, 0
         try:
             fh = open(path, "rb")
-        except FileNotFoundError:
+        except OSError:                                   # gone, or not a readable file: nothing to read now
             return 0
         with fh:
             while True:
@@ -614,11 +688,14 @@ class CensusFile:
             self._gaps_in.setdefault(name, set()).add(ev["event_id"])
 
     def _take_event(self, name, ev):
-        """An event seen for the first time (in a file, or kept in memory): folded, and unsent until answered."""
+        """An event seen for the first time (in a day file, in a spill, or kept in memory): folded, and unsent until
+        answered. Seen again in a day file after its spill or memory, it is booked there, never taken twice."""
         eid = ev["event_id"]
         if eid in self._file_of:
             if name is not None and self._file_of[eid] is None:
-                self._file_of[eid] = name                  # written by another reader's flush: book it here
+                self._file_of[eid] = name                  # now in a day file: no longer deferred
+                self._deferred.pop(eid, None)
+                self.memory_only.pop(eid, None)
                 self._book(name, ev)
             return
         self._file_of[eid] = name
@@ -633,13 +710,30 @@ class CensusFile:
             ok = type(doc) is dict and doc.get("v") == LINE_SCHEMA and doc.get("sum") == _sum(doc)
         except (ValueError, UnicodeDecodeError):
             ok = False
-        if ok and doc.get("type") == "event" and set(doc) == {"v", "sum", "type", "event_id", "at", "kind", "body"}:
+        if ok and doc.get("type") == "event":
+            spill = _SPILL.match(name) is not None
+            wire = _wire(doc)
             try:
-                ev = check_event(_wire(doc))
-            except CensusRefused:
+                ev = check_event(wire)
+            except CensusRefused as exc:
+                version = event_schema(wire)
+                if str(exc).startswith("census_schema_unsupported") and _s(_UUID)(wire.get("event_id")) \
+                        and type(wire.get("kind")) is str and not spill:
+                    # Another census version: never read as this one. Flagged by its name here; sent as written, so
+                    # the authority refuses it by its name too; never folded.
+                    self.foreign[version] = self.foreign.get(version, 0) + 1
+                    if wire["event_id"] not in self._file_of:
+                        self._file_of[wire["event_id"]] = name
+                        self._unsent[wire["event_id"]] = wire
+                    return
                 ok = False
             else:
-                self._take_event(name, ev)
+                if spill:
+                    if ev["event_id"] not in self._file_of:
+                        self._take_event(None, ev)
+                        self._deferred[ev["event_id"]] = ev       # to be merged into its day file
+                else:
+                    self._take_event(name, ev)
                 return
         if ok and doc.get("type") == "ack" and set(doc) == {"v", "sum", "type", "event_id", "answer"}:
             self._unsent.pop(doc["event_id"], None)
@@ -726,9 +820,10 @@ class CensusFile:
 
 def _urgent(ev) -> bool:
     """A state change the authority must not see late: a capture gap, an end, or a state other than running."""
-    if ev["kind"] in ("census.gap", "census.end"):
+    if ev.get("kind") in ("census.gap", "census.end"):
         return True
-    return ev["kind"] == "census.update" and ev["body"].get("state") not in (None, "running")
+    body = ev.get("body") if isinstance(ev.get("body"), dict) else {}
+    return ev.get("kind") == "census.update" and body.get("state") not in (None, "running")
 
 
 # ── the fold: events to rows, and the derived state ───────────────────────────────────────────────────────────────
@@ -746,7 +841,8 @@ def _new(agent_id, host_id):
     return {"agent_id": agent_id, "parent_id": None, "vendor": None, "model": None, "role": None, "item_id": None,
             "source": None, "verified": None, "children": None, "start_path": None, "route": None, "launch": None,
             "transcript_ref": None, "usage": None, "host_id": host_id, "started_at": None, "last_activity_at": None,
-            "ended_at": None, "state": None, "reason": None, "state_at": None, "usage_at": None, "placeholder": False}
+            "ended_at": None, "state": None, "reason": None, "state_at": None, "usage_at": None, "placeholder": False,
+            "started": False}
 
 
 class Fold:
@@ -777,6 +873,7 @@ class Fold:
                 if b[k] is not None:
                     rec[k] = b[k]
             rec["started_at"] = at if rec["started_at"] is None else min(rec["started_at"], at)
+            rec["started"] = True
         elif rec["source"] is None:
             rec["source"] = b["source"]
         if kind == "census.update" and b["model"] is not None:
@@ -845,6 +942,10 @@ class Fold:
             return "unknown", "end_unobserved"
         if any(r["state"] == "unknown" and r["reason"] == "process_unverified" for r in chain[1:]):
             return "unknown", "parent_unverified"           # its process may run or not: nothing below is known
+        if not rec["started"] or any(r["placeholder"] for r in chain[1:]):
+            # Its start was never seen (so neither was its parent), or its parent's row is not known: whatever it last
+            # said, nothing closes it when its parent ends, so it is never shown running (CEN-3, CEN-4).
+            return "unknown", "parent_unknown"
         host = rec["host_id"] if host_override is None else None
         reach = reachability.get(host, "unknown")
         if reach != "reachable":
