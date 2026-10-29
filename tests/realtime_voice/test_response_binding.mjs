@@ -605,23 +605,58 @@ await check('new (OpenAI): his committed item\'s request waits while he is speak
   s.said('item_B', 'and check the board');
   assert.equal(words(s, 0), 'and check the board');
 });
-await check('new (OpenAI): a follow-up after a function result while a new commit waits: each acts for its own owner', async () => {
+// Changed for LV4: A's call has no output when B's reply is made, so the page answers it pending first, and A's result is
+// then said as a page line, which answers none of his inputs (a call from it acts on no one). Each turn still acts only for
+// its own owner.
+await check('new (OpenAI): a call still running while a new commit waits: answered pending first, its result a line; each acts for its own owner', async () => {
   let release = null;
-  const s = session('openai', { answer: (call) => (call.call_id === 'c_A' ? new Promise((r) => { release = () => r({ ok: true }); }) : { ok: true }) });
+  const s = session('openai', { answer: (call) => (call.call_id === 'c_A' ? new Promise((r) => { release = () => r({ ok: true, spoken: 'Two items.' }); }) : { ok: true }) });
   s.utter('item_A'); s.said('item_A', 'What is stuck on #12?');
   s.start('R_A'); s.done('R_A', { call: 'c_A', name: 'consult' }); await tick();
   s.utter('item_B'); s.said('item_B', 'Make a note that the kiln is hot');   // while A's consult runs
   assert.equal(s.creates().length, 2);                                  // B's response at once: nothing was in flight
   s.start('R_B');
-  release(); await tick(); await tick();                                // A's result: its follow-up waits behind R_B
-  assert.equal(s.creates().length, 2, 'the follow-up was sent while B\'s response was in flight');
+  release(); await tick(); await tick();                                // A's result: it waits behind R_B
+  assert.equal(s.creates().length, 2, 'something was sent while B\'s response was in flight');
   s.done('R_B', { call: 'c_B' }); await tick();
-  assert.equal(s.frames.filter((f) => f.type === 'conversation.item.create' && f.item.type === 'function_call_output').length, 1);
-  s.start('R_fA');                                                      // A's follow-up (sent once R_B settled)
-  s.done('R_fA', { call: 'c_fA', name: 'consult' }); await tick();      // a chained call: still A's
+  const outputs = s.frames.filter((f) => f.type === 'conversation.item.create' && f.item.type === 'function_call_output');
+  assert.deepEqual(outputs.map((f) => [f.item.call_id, JSON.parse(f.item.output).outcome]), [['c_A', 'pending']]);
+  s.start('R_lA');                                                      // A's result, said as a line
+  assert.equal(s.frames.filter((f) => f.type === 'conversation.item.create' && f.item.type === 'message').at(-1).item.content[0].text,
+    'Say this briefly, adding nothing: Two items.');
+  s.done('R_lA', { call: 'c_lA', name: 'consult' }); await tick();      // a call from the line's reply
   assert.equal(words(s, 0), 'What is stuck on #12?');
   assert.equal(words(s, 1), 'Make a note that the kiln is hot');
-  assert.equal(words(s, 2), 'What is stuck on #12?', 'the follow-up acted on his newer words');
+  assert.equal(s.bound(2), null, 'a call from the line acted on someone');
+});
+// LV4 (live probes, oa2): OpenAI spoke its tool placeholder when the page asked for a reply to his "Hm" while the consult
+// call (call_FKRZ…) had no output. The page now answers that call pending before asking, and says the result later.
+await check('LV4 (OpenAI, oa2): before any other reply, a call with no output is answered pending; its result comes later as a line', async () => {
+  let release = null;
+  const s = session('openai', { answer: (call) => (call.call_id === 'call_FKRZ' ? new Promise((r) => { release = () => r({ ok: true, outcome: 'done', spoken: 'The board is green.' }); }) : { ok: true }) });
+  s.utter('item_A'); s.said('item_A', 'Please use the consult tool to check the status of the build board.');
+  s.start('R_c1'); s.done('R_c1', { call: 'call_FKRZ', name: 'consult' }); await tick();   // dispatched: its consult runs
+  s.utter('item_hm'); s.said('item_hm', 'Hm');                          // his "Hm", committed: the page asks for its reply
+  const order = s.frames.map((f) => f.type === 'conversation.item.create' ? `${f.item.type}:${f.item.call_id || ''}` : f.type);
+  const told = order.indexOf('function_call_output:call_FKRZ');
+  assert.ok(told >= 0 && told < order.lastIndexOf('response.create'), 'a reply was asked for while the call had no output');
+  const pending = JSON.parse(s.frames.find((f) => f.item?.call_id === 'call_FKRZ').item.output);
+  assert.deepEqual(pending, { ok: false, outcome: 'pending', spoken: 'Still running; the result will be told when it lands.' });
+  assert.equal(s.creates().length, 2, 'a reply was asked for the pending output');   // c1's, and Hm's: none for the output
+  s.start('R_hm'); s.done('R_hm'); await tick();
+  release(); await tick(); await tick();
+  assert.equal(s.frames.filter((f) => f.item?.call_id === 'call_FKRZ').length, 1, 'the call was answered twice');
+  assert.equal(s.frames.filter((f) => f.type === 'conversation.item.create' && f.item.type === 'message').at(-1).item.content[0].text,
+    'Say this briefly, adding nothing: The board is green.');
+});
+await check('LV4, guard: with no other reply in between, a call\'s result is its output and follow-up, as before', async () => {
+  const s = session('openai', { answer: () => ({ ok: true, spoken: 'Done.' }) });
+  s.utter('item_A'); s.said('item_A', 'Check the board.');
+  s.start('R_A'); s.done('R_A', { call: 'c_A', name: 'consult' }); await tick();
+  const outputs = s.frames.filter((f) => f.type === 'conversation.item.create' && f.item.type === 'function_call_output');
+  assert.deepEqual(outputs.map((f) => JSON.parse(f.item.output)), [{ ok: true, spoken: 'Done.' }]);
+  s.start('F_A'); s.done('F_A', { call: 'c_F', name: 'consult' }); await tick();
+  assert.equal(words(s, 1), 'Check the board.');                         // the follow-up still acts for A
 });
 await check('new (OpenAI): a commit that names no item still gets a response, which may act on no one (logged)', async () => {
   const s = session('openai');

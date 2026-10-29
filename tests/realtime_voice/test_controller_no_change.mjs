@@ -47,6 +47,11 @@ const RESPONSE_TTL_MS = 120000;
 // says, so the model's context is true. No response is asked for it (review B S3).
 const SUPERSEDED = { ok: false, outcome: "not_done", error: "superseded",
   spoken: "Not run: superseded by what he said next. Nothing was done." };
+// A call passed to the host whose output is not sent yet, when the page must make another reply (live probes, LV4): its
+// honest answer for now. Its result is said later, as a page line.
+const PENDING = { ok: false, outcome: "pending", spoken: "Still running; the result will be told when it lands." };
+const LATE_LINE = "Say this briefly, adding nothing: ";
+const LATE_DONE = "That earlier check has finished; its answer is in the conversation.";
 `,
    ``],
   [`    onSessionInfo, onPlaybackDrained = null, pageResponses = false, oncePerItem = false, onUnbound = null,
@@ -70,6 +75,7 @@ const SUPERSEDED = { ok: false, outcome: "not_done", error: "superseded",
     this._utterance = null;          // his utterance so far: "speaking", then "stopped" or "committed" (counted once)
     this._done = new Set();          // replies whose response.done was handled: a later one only informs playback (LV1)
     this._calls = new Set();         // function calls passed to the host, by call_id: each once (LV1)
+    this._outstanding = new Map();   // call_id -> {pending}: a call passed to the host whose output is not sent yet (LV4)
     this._active = new Map();        // where the provider replies itself (xAI): its replies under way, id -> {seen} (LV3)
     this._speaking = false;          // there: his speech is under way (LV3)
     this._due = 0;                   // there: when his last counted turn ended, until a reply starts (LV3)
@@ -276,9 +282,10 @@ const SUPERSEDED = { ok: false, outcome: "not_done", error: "superseded",
   // Without pageResponses it is sent at once, untagged, as before. With it, it is tagged and waits its turn: one page
   // request is in flight at a time, from its response.create until that response is done. Throws if the transport refuses
   // it at once.
-  _ask(owner, send, done = null, kind = "line") {
+  _ask(owner, send, done = null, kind = "line", call = null) {
     if (!this._pageResponses) { send(null); return { done }; }
-    const entry = { kind, owner, turn: this._turn, tag: \`minimoi-\${++this._tags}\`, send, done, at: 0, started: false, id: null };
+    const entry = { kind, owner, turn: this._turn, tag: \`minimoi-\${++this._tags}\`, send, done, at: 0, started: false, id: null,
+      call };
     this._queue.push(entry);
     this._pump();
     if (entry.refused) throw new Error("Voice transport refused the request");
@@ -292,9 +299,30 @@ const SUPERSEDED = { ok: false, outcome: "not_done", error: "superseded",
   // A function result: its follow-up is owned by the item of the call it continues (V R2-M1, R2-S1).
   _sendResult(call, output) {
     const r = call && this._answers.get(call.response_id);
-    this._ask(r ? r.owner : null, (tag) => {
+    const entry = this._ask(r ? r.owner : null, (tag) => {
       if (tag) this._adapter.sendFunctionResult(call.call_id, output, tag); else this._adapter.sendFunctionResult(call.call_id, output);
-    }, null, "follow");
+    }, null, "follow", call ? { id: call.call_id, output } : null);
+    return entry;
+  }
+
+  // LV4 (live probes, oa2): OpenAI spoke its own placeholder ("Waiting for the tool result, please politely inform the user
+  // that this tool call is still running …") when the page made a reply for his next words while a call it had passed on had
+  // no output yet. So before the page makes any other reply, every such call is answered, honestly, with PENDING (no reply
+  // is asked for that output), and its real result, when it lands, is said as a page line, which answers none of his inputs
+  // (§5.1's pending path). A follow-up that carries a call's result sends that output itself, as before.
+  _settleCalls(entry) {
+    for (const [id, held] of this._outstanding) {
+      if (held.pending || (entry.call && id === entry.call.id)) continue;
+      held.pending = true;
+      try { this._adapter.sendFunctionOutput(id, PENDING); } catch (_) { /* the transport is closed */ }
+    }
+    if (!entry.call) return;
+    const held = this._outstanding.get(entry.call.id);
+    this._outstanding.delete(entry.call.id);
+    if (!held || !held.pending || entry.kind !== "follow") return;
+    const out = entry.call.output, said = out && typeof out.spoken === "string" ? out.spoken.trim() : "";
+    entry.kind = "line"; entry.owner = null;
+    entry.send = (tag) => this._instruct(LATE_LINE + (said || LATE_DONE), tag);
   }
 
   // The next page request goes once none is in flight. A request in flight past its bound is let go first. His committed
@@ -314,6 +342,7 @@ const SUPERSEDED = { ok: false, outcome: "not_done", error: "superseded",
       if (entry.kind === "turn" && entry.turn !== this._turn) { this._let(entry, "superseded"); continue; }
       entry.turn = this._turn; entry.at = Date.now();
       this._inflight = entry;
+      this._settleCalls(entry);                                  // LV4: no reply while a call passed on has no output
       try { entry.send(entry.tag); } catch (_) { this._inflight = null; entry.refused = true; this._let(entry, "refused"); }
     }
     this._arm();
@@ -360,6 +389,7 @@ const SUPERSEDED = { ok: false, outcome: "not_done", error: "superseded",
     const pending = this._inflight ? [this._inflight, ...this._queue] : this._queue.slice();
     this._queue = []; this._inflight = null; this._lost = false; this._echoed = false; this._owed = 0; this._utterance = null;
     this._done = new Set(); this._calls = new Set(); this._active = new Map(); this._speaking = false; this._due = 0;
+    this._outstanding = new Map();
     for (const entry of pending) if (entry.done) { const done = entry.done; entry.done = null; done(null); }
     this._arm();
   }
@@ -429,6 +459,7 @@ const SUPERSEDED = { ok: false, outcome: "not_done", error: "superseded",
     if (!this._pageResponses || !call || !call.call_id) return false;
     if (this._calls.has(call.call_id)) return true;
     this._calls.add(call.call_id);
+    this._outstanding.set(call.call_id, { pending: false });     // until its output is sent (LV4)
     return false;
   }
 
@@ -439,6 +470,7 @@ const SUPERSEDED = { ok: false, outcome: "not_done", error: "superseded",
   _refused(call) {
     const r = this._pageResponses && call && call.response_id ? this._answers.get(call.response_id) : null;
     if (!r || r.acts !== false) return false;
+    this._outstanding.delete(call.call_id);                     // answered here: not run
     try { this._adapter.sendFunctionOutput(call.call_id, SUPERSEDED); } catch (_) { /* the transport is closed */ }
     this._onUnbound({ reason: "superseded_call", response_id: call.response_id, owner: r.owner || null });
     return true;

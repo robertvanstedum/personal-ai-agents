@@ -227,6 +227,20 @@ await check('LV2 (xai): Check sends his final words, not the first interim fragm
   assert.deepEqual(t.posts('/transcript').flatMap((b) => b.events || []).filter((e) => e.role === 'user').map((e) => e.text),
     ['Name a large city.']);
 }));
+// LV4 (live, oa2), through the real page: his "Hm" while the consult runs. The page answers the call pending before asking
+// for Hm's reply, never twice, and says the consult's result as a line once it lands.
+let releaseLV4 = null;
+await check('LV4 (openai): a running consult is answered pending before his next reply; its result is said as a line', () => run('openai', async (t) => {
+  t.start(); t.said('a', 'Please use the consult tool to check the status of the build board.'); t.stop(); t.commit('a');
+  t.asked('RA'); t.call('RA'); await flush();
+  assert.equal(t.consults().length, 1);
+  t.start(); t.said('hm', 'Hm'); t.stop(); t.commit('hm'); await flush();
+  assert.deepEqual(t.outputs(), [['call_RA', { ok: false, outcome: 'pending', spoken: 'Still running; the result will be told when it lands.' }]]);
+  t.asked('RH'); t.over('RH'); await flush();
+  releaseLV4(); await flush(); await flush();
+  assert.equal(t.outputs().length, 1, 'the call was answered twice');
+  assert.ok(t.lines().includes('Say this briefly, adding nothing: The board is green.'), 'its result was not said');
+}, { routes: { '/consult': () => new Promise((r) => { releaseLV4 = () => r({ ok: true, outcome: 'done', spoken: 'The board is green.' }); }) } }));
 // B S3 + N2: a call from a barged-in reply is answered not done, with no reply asked for it; End names his turn not acted on.
 await check('B S3 + N2 (openai): a barged-in call is answered not done, and End names his turn not acted on', () => run('openai', async (t) => {
   t.start(); t.said('a', 'Save a note that A.'); t.stop(); t.commit('a'); t.asked('RA');
