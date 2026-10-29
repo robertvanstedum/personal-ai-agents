@@ -121,7 +121,12 @@ def _receipt_count(value: object) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
 
-def _period_summary(receipts: list[dict], date_prefix: str) -> dict:
+def summarize_receipts(receipts: list[dict], date_prefix: str, *, round_costs: bool = True) -> dict:
+    """Summarize gateway receipts matching a UTC date or month prefix.
+
+    Checkpoints round costs to eight decimals. Display callers that perform their
+    own rounding can retain the original sums with ``round_costs=False``.
+    """
     selected = [
         receipt
         for receipt in receipts
@@ -166,7 +171,7 @@ def _period_summary(receipts: list[dict], date_prefix: str) -> dict:
         "requests": request_count,
         "priced_requests": priced_requests,
         "unpriced_requests": request_count - priced_requests,
-        "cost_usd": round(total_cost, 8),
+        "cost_usd": round(total_cost, 8) if round_costs else total_cost,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "total_tokens": total_tokens,
@@ -181,7 +186,7 @@ def _period_summary(receipts: list[dict], date_prefix: str) -> dict:
         "by_provider": {
             provider: {
                 **totals,
-                "cost_usd": round(totals["cost_usd"], 8),
+                "cost_usd": round(totals["cost_usd"], 8) if round_costs else totals["cost_usd"],
             }
             for provider, totals in sorted(by_provider.items())
         },
@@ -201,8 +206,8 @@ def build_cost_checkpoint(
         raise ValueError("cost checkpoint now must be timezone-aware")
     today = current.astimezone(timezone.utc).strftime("%Y-%m-%d")
     month = today[:7]
-    daily = _period_summary(receipts, today)
-    monthly = _period_summary(receipts, month)
+    daily = summarize_receipts(receipts, today)
+    monthly = summarize_receipts(receipts, month)
     alerts: list[dict] = []
 
     if policy.daily_warn_usd is not None and daily["cost_usd"] >= policy.daily_warn_usd:

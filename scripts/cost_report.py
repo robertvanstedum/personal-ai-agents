@@ -25,7 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from services.model_gateway.cost_reporting import load_receipts
+from services.model_gateway.cost_reporting import load_receipts, summarize_receipts
 
 
 CHAT_LOG = Path.home() / '.openclaw' / 'workspace' / 'logs' / 'usage' / 'daily_usage.json'
@@ -68,18 +68,19 @@ def load_gateway_receipts() -> tuple[list[dict], int]:
 
 def gateway_by_date(receipts: list[dict]) -> dict:
     """Aggregate successfully served gateway requests by UTC date."""
-    result = defaultdict(lambda: {'cost': 0.0, 'requests': 0, 'fallbacks': 0})
+    grouped = defaultdict(list)
     for receipt in receipts:
         date = str(receipt.get('occurred_at', ''))[:10]
-        if not date:
-            continue
-        result[date]['requests'] += 1
-        cost = receipt.get('cost_usd')
-        if isinstance(cost, (int, float)) and not isinstance(cost, bool):
-            result[date]['cost'] += float(cost)
-        position = receipt.get('fallback_position')
-        if isinstance(position, int) and not isinstance(position, bool) and position > 0:
-            result[date]['fallbacks'] += 1
+        if date:
+            grouped[date].append(receipt)
+    result = defaultdict(lambda: {'cost': 0.0, 'requests': 0, 'fallbacks': 0})
+    for date, rows in grouped.items():
+        summary = summarize_receipts(rows, date, round_costs=False)
+        result[date] = {
+            'cost': summary['cost_usd'],
+            'requests': summary['requests'],
+            'fallbacks': summary['fallback_count'],
+        }
     return result
 
 
@@ -104,27 +105,14 @@ def report_today(chat: dict, curator_runs: list, gateway_receipts: list, invalid
         by_model[r['model']]['runs'] += 1
 
     curator_total = sum(v['cost'] for v in by_model.values())
-    gateway_today = [r for r in gateway_receipts if str(r.get('occurred_at', '')).startswith(today)]
-    gateway_cost = sum(
-        float(r['cost_usd'])
-        for r in gateway_today
-        if isinstance(r.get('cost_usd'), (int, float)) and not isinstance(r.get('cost_usd'), bool)
-    )
-    gateway_fallbacks = sum(
-        1 for r in gateway_today
-        if isinstance(r.get('fallback_position'), int) and r['fallback_position'] > 0
-    )
+    gateway_today = summarize_receipts(gateway_receipts, today, round_costs=False)
+    gateway_cost = gateway_today['cost_usd']
+    gateway_fallbacks = gateway_today['fallback_count']
     grand_total = chat_today + curator_total + gateway_cost
 
     month_chat    = sum(v for k, v in chat.items() if k.startswith(month))
     month_curator = sum(r.get('cost_usd', 0.0) for r in curator_runs if r['date'].startswith(month))
-    month_gateway = sum(
-        float(r['cost_usd'])
-        for r in gateway_receipts
-        if str(r.get('occurred_at', '')).startswith(month)
-        and isinstance(r.get('cost_usd'), (int, float))
-        and not isinstance(r.get('cost_usd'), bool)
-    )
+    month_gateway = summarize_receipts(gateway_receipts, month, round_costs=False)['cost_usd']
     month_total = month_chat + month_curator + month_gateway
 
     lines = [
@@ -143,7 +131,7 @@ def report_today(chat: dict, curator_runs: list, gateway_receipts: list, invalid
 
     lines.append(
         f"Model gateway:     {fmt(gateway_cost)}  "
-        f"({len(gateway_today)} request(s), {gateway_fallbacks} fallback(s))"
+        f"({gateway_today['requests']} request(s), {gateway_fallbacks} fallback(s))"
     )
     if invalid_lines:
         lines.append(f"Gateway warning:  {invalid_lines} malformed receipt line(s) ignored")
@@ -245,13 +233,7 @@ def report_year(chat: dict, curator_runs: list, gateway_receipts: list):
             break
         cc  = sum(v for k, v in chat.items() if k.startswith(month_str))
         cur = sum(r.get('cost_usd', 0.0) for r in curator_runs if r['date'].startswith(month_str))
-        gateway = sum(
-            float(r['cost_usd'])
-            for r in gateway_receipts
-            if str(r.get('occurred_at', '')).startswith(month_str)
-            and isinstance(r.get('cost_usd'), (int, float))
-            and not isinstance(r.get('cost_usd'), bool)
-        )
+        gateway = summarize_receipts(gateway_receipts, month_str, round_costs=False)['cost_usd']
         tot = cc + cur + gateway
         tot_chat += cc
         tot_cur  += cur
