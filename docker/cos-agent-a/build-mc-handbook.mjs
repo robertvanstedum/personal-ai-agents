@@ -4,14 +4,14 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
-export const MANIFEST_SHA256 = 'e0b0d8c95f838466a0dd22c347d2f652d6226616d2ed36dc03e96c4e0ae1b783';
-const names = ['v0.1.0/ADOPTION.md', 'v0.1.0/PROJECT.md',
-  'v0.1.0/skills/minimoi-engineering/SKILL.md',
-  'v0.1.0/skills/minimoi-engineering/references/board-and-services.md',
-  'v0.1.0/skills/minimoi-engineering/references/build-and-deploy.md',
-  'v0.1.0/skills/minimoi-engineering/references/regression.md'];
-const start = 'BEGIN_MINIMOI_MC_HANDBOOK 0.1.0';
-const end = 'END_MINIMOI_MC_HANDBOOK 0.1.0';
+export const MANIFEST_SHA256 = 'be443798026452bd75c8f5a86958c5ff73782994df564558044d61932450070f';
+const names = ['v0.1.1/ADOPTION.md', 'v0.1.1/PROJECT.md',
+  'v0.1.1/skills/minimoi-engineering/SKILL.md',
+  'v0.1.1/skills/minimoi-engineering/references/board-and-services.md',
+  'v0.1.1/skills/minimoi-engineering/references/build-and-deploy.md',
+  'v0.1.1/skills/minimoi-engineering/references/regression.md'];
+const start = 'BEGIN_MINIMOI_MC_HANDBOOK 0.1.1';
+const end = 'END_MINIMOI_MC_HANDBOOK 0.1.1';
 function boundedRead(file) {
   const stat = fs.lstatSync(file);
   if (!stat.isFile() || stat.size > 32768) throw new Error('handbook_file_invalid');
@@ -23,7 +23,7 @@ export function compile(base, root, roleReceipt) {
   const manifestBytes = boundedRead(path.join(root, 'manifest.json'));
   if (sha(manifestBytes) !== MANIFEST_SHA256) throw new Error('handbook_manifest_changed');
   const manifest = JSON.parse(manifestBytes);
-  if (manifest.format !== 'minimoi-mc-handbook/1' || manifest.candidate_version !== '0.1.0' ||
+  if (manifest.format !== 'minimoi-mc-handbook/1' || manifest.candidate_version !== '0.1.1' ||
       manifest.status !== 'review_candidate' || manifest.active_runtime_version !== null ||
       JSON.stringify(Object.keys(manifest.files)) !== JSON.stringify(names)) throw new Error('handbook_manifest_invalid');
   const files = Object.fromEntries(names.map(name => {
@@ -32,14 +32,14 @@ export function compile(base, root, roleReceipt) {
     return [name, bytes.toString('utf8')];
   }));
   const prefix = `${start}\n` +
-    `Pinned handbook: /opt/minimoi/cos-agent-a/handbook/v0.1.0/\n` +
+    `Pinned handbook: /opt/minimoi/cos-agent-a/handbook/v0.1.1/\n` +
     `Manifest SHA-256: ${MANIFEST_SHA256}\n` +
     `Source status remains review_candidate; loading is not behavior verification or owner acceptance.\n` +
     `PROJECT.md and engineering SKILL.md follow verbatim. Resolve their relative references under\n` +
-    `/opt/minimoi/cos-agent-a/handbook/v0.1.0/skills/minimoi-engineering/; read ADOPTION.md under the pinned handbook path.\n` +
+    `/opt/minimoi/cos-agent-a/handbook/v0.1.1/skills/minimoi-engineering/; read ADOPTION.md under the pinned handbook path.\n` +
     ['board-and-services.md', 'build-and-deploy.md', 'regression.md'].map(name =>
-      `/opt/minimoi/cos-agent-a/handbook/v0.1.0/skills/minimoi-engineering/references/${name}`).join('\n') + '\n\n' +
-    files['v0.1.0/PROJECT.md'] + '\n' + files['v0.1.0/skills/minimoi-engineering/SKILL.md'] + `\n${end}\n\n`;
+      `/opt/minimoi/cos-agent-a/handbook/v0.1.1/skills/minimoi-engineering/references/${name}`).join('\n') + '\n\n' +
+    files['v0.1.1/PROJECT.md'] + '\n' + files['v0.1.1/skills/minimoi-engineering/SKILL.md'] + `\n${end}\n\n`;
   // Reapplying this exact compiler does not duplicate the prefix. Foreign/stale prefixes refuse.
   const unprefixed = base.startsWith(prefix) ? base.slice(prefix.length) : base;
   if (unprefixed.includes('BEGIN_MINIMOI_MC_HANDBOOK') || unprefixed.includes('END_MINIMOI_MC_HANDBOOK')) throw new Error('handbook_prefix_conflict');
@@ -47,7 +47,7 @@ export function compile(base, root, roleReceipt) {
   const policy = prefix + unprefixed;
   if (policy.length > 32000) throw new Error('role_exceeds_bootstrap_budget');
   return {policy, receipt: {...roleReceipt, policy_sha256: sha(policy), policy_chars: policy.length,
-    handbook: {version: '0.1.0', manifest_sha256: MANIFEST_SHA256, sources: manifest.files,
+    handbook: {version: '0.1.1', manifest_sha256: MANIFEST_SHA256, sources: manifest.files,
       base_policy_sha256: sha(unprefixed), source_status: manifest.status,
       loaded_into_policy: true, behavior_verified: false, owner_accepted: false}}};
 }
