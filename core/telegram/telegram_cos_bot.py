@@ -3,7 +3,7 @@
 telegram_cos_bot.py — Chief of Staff Telegram polling handler.
 
 Polls minimoi_cos_bot token (from SSM on EC2).
-Calls _chat() from chief_of_staff directly — no separate cos-agent container needed.
+Uses the public CoS channel interface — no separate cos-agent container needed.
 Handles text and voice messages. Voice → OpenAI Whisper transcription → _chat().
 """
 import functools
@@ -48,7 +48,7 @@ def _identity() -> str:
 
 
 def _chat(text: str, *, channel: str = "telegram_text") -> str:
-    from domains.cos.chief_of_staff import _chat as cos_chat
+    from domains.cos.channel_api import chat as cos_chat
     return cos_chat(text, channel=channel)
 
 
@@ -140,13 +140,11 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @_owner_only
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from domains.cos.chief_of_staff import _state, _state_lock, _read_memory
-    with _state_lock:
-        snap = dict(_state)
-    mem = _read_memory()
+    from domains.cos.channel_api import memory_character_count
+    memory_chars = memory_character_count()
     await update.message.reply_text(
         f"<b>CoS status</b> — {_identity()}\n"
-        f"Memory: {len(mem)} chars",
+        f"Memory: {memory_chars} chars",
         parse_mode="HTML",
     )
 
