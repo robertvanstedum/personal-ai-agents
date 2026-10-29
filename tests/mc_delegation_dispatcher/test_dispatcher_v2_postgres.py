@@ -18,7 +18,8 @@ sys.path.insert(0, str(ROOT / "tests" / "minimoi_actions"))
 
 from postgres_fixture_support import DSN, PostgresFixture  # noqa: E402
 
-from core.mc_delegation_dispatcher.store import Authority, AuthorityRefused, DispatcherStore  # noqa: E402
+from core.mc_delegation_dispatcher.store import (Authority, AuthorityRefused, DispatcherStore,  # noqa: E402
+                                                 item_subject_digest, parse_at)
 from core.minimoi_actions.grants import CapabilityRule, GrantDefinition, GrantStore  # noqa: E402
 
 MIGRATIONS = ("core/mc_delegation_dispatcher/sql/001_delegations.sql",
@@ -33,6 +34,7 @@ CAPS = ["repo:personal-ai-agents", "scope:research", "scope:build", "actor:fakew
         "host:mac-local"]
 V1_CAPS = {"cost_enforced_actors": ["claude-code"], "scopes": ["research"], "repositories": ["personal-ai-agents"]}
 DIGEST = "sha256:" + "c" * 64
+BRIEF = "Run the fakework program."
 
 
 def facts(host, **over):
@@ -50,7 +52,7 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
                 guild.mc_delegation_reservations, guild.mc_action_grant_consumptions, guild.mc_action_grants,
                 guild.mc_action_events, guild.mc_action_receipts CASCADE""")
         self.store = self.make_store(AUTH)
-        self.n = 0
+        self.n, self.grant_of = 0, {}
 
     def make_store(self, authority):
         return DispatcherStore(self.connect, principal="robert", environment="dev", authority=authority, grants=GRANTS)
@@ -65,26 +67,36 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
     def db_now(self):
         return self.sql("SELECT clock_timestamp() AS now")[0]["now"]
 
-    def grant(self, *, seconds=600, work_id=None):
+    def grant(self, *digests, ops=1, seconds=600, work_id=None):
+        """An owner's grant for the work whose subject digests it names (R4.3-b's owner path, as a test identity)."""
         gid = str(uuid4())
         with self.connect() as conn:
             GRANTS.issue(conn, GrantDefinition(gid, "robert", "dev", "conversation", ("owner-turn",), ("mc",), "policy",
-                                               "delegate.start_build", 1, ("d" * 64,), 1,
+                                               "delegate.start_build", 1, tuple(digests), ops,
                                                self.db_now() + timedelta(seconds=seconds), work_id=work_id))
         return gid
+
+    @staticmethod
+    def subject(route="fakework", amount=1.5, actor="fakework", scope="build", caps=(), arts=()):
+        return item_subject_digest(actor=actor, scope=scope, repository="personal-ai-agents", ref="a" * 40,
+                                   brief=BRIEF, route=route, amount=amount, required_capabilities=list(caps),
+                                   input_artifacts=list(arts))
 
     def beat(self, runner="mac-a", host=None, **over):
         return self.store.heartbeat(runner, "online", CAPS, protocol=2, facts=facts(host or runner, **over))
 
     def item(self, route="fakework", amount=1.5, *, grant=True, actor="fakework", scope="build", caps=(), arts=(),
-             job=None):
+             job=None, seconds=600):
+        """Admit an item; by default under its own one-operation grant for exactly this work."""
         self.n += 1
         job = job or f"job-{self.n}"
+        gid = self.grant(self.subject(route, amount, actor, scope, caps, arts), seconds=seconds) if grant is True \
+            else (grant or None)
+        self.grant_of[job] = gid
         self.assertEqual(self.store.enqueue(
             job_id=job, actor=actor, scope=scope, repository="personal-ai-agents", ref="a" * 40,
-            brief="Run the fakework program.", cost_cap_usd=1.0, deadline_s=600, route=route, amount=amount,
-            grant_id=(self.grant() if grant is True else grant) or None, required_capabilities=list(caps),
-            input_artifacts=list(arts)), "accepted")
+            brief=BRIEF, cost_cap_usd=1.0, deadline_s=600, route=route, amount=amount, grant_id=gid,
+            required_capabilities=list(caps), input_artifacts=list(arts)), "accepted")
         time.sleep(0.002)                                          # distinct created_at, so "oldest" is well defined
         return job
 
@@ -176,7 +188,7 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
                                     else "dev", authority=authority, grants=GRANTS if authority is AUTH else None)
             if authority is AUTH:
                 self.beat()
-                self.item(actor="claude-code", scope="research")   # an older version 2 item a v1 runner could match
+                self.item("anthropic.api", 3.0, actor="claude-code", scope="research")   # one a v1 runner could match
             self.assertEqual(store.enqueue(job_id="v1-job", actor="claude-code", scope="research",
                                            repository="personal-ai-agents", ref="a" * 40, brief="Research.",
                                            cost_cap_usd=2.0, deadline_s=600), "accepted")
@@ -201,7 +213,7 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
     def test_a_version_1_claim_without_the_configuration_cannot_take_a_version_2_item(self):
         import psycopg2
         self.beat()
-        self.item(actor="claude-code", scope="research")
+        self.item("anthropic.api", 3.0, actor="claude-code", scope="research")
         plain = DispatcherStore(self.connect, principal="robert", environment="dev")
         with self.assertRaises(psycopg2.errors.CheckViolation):              # mc_delegations_v2_owned_reserved
             plain.claim("mac-1", V1_CAPS)
@@ -393,8 +405,8 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
                          {"fakework": ("test_units", 1.5), "fakework.api": ("usd", 3.0)})
         # The route's unit changes mid-day: the day's row keeps its unit, and nothing is added to it.
         changed = {**TEST_VALUES, "routes": {**TEST_VALUES["routes"],
-                                             "fakework": {"unit": "usd", "per_day": 10.0, "per_item": 3.0,
-                                                          "supervised_only": False}}}
+                                             "fakework": {"unit": "usd", "actors": ["fakework"], "per_day": 10.0,
+                                                          "per_item": 3.0, "supervised_only": False}}}
         self.store = self.make_store(Authority.parse(changed))
         self.item(route="fakework", amount=0.1)
         self.assertIsNone(self.claim())
@@ -425,10 +437,55 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
         self.assertEqual([e["kind"] for e in self.events(item=b["request_id"])],
                          ["item.queued", "item.claimed", "item.cancel_requested", "result.accepted", "reservation.kept"])
 
-    # ── grants: T10 ──
+    # ── grants: admission (R4.3-c) and T10 ──
+    def test_admission_uses_one_grant_operation_per_item(self):
+        self.beat()
+        gid = self.grant(self.subject(), ops=1)
+        self.item(grant=gid)
+        self.item(grant=gid)                                                    # the same work, the same grant
+        self.assertEqual([(self.row(j)["state"], (self.row(j)["result_detail"] or {}).get("code"))
+                          for j in ("job-1", "job-2")], [("queued", None), ("proposed", "grant_exhausted")])
+        three = self.grant(self.subject(amount=0.25), ops=3)
+        for _ in range(4):
+            self.item(amount=0.25, grant=three)
+        self.assertEqual([self.row(f"job-{i}")["state"] for i in range(3, 7)], ["queued"] * 3 + ["proposed"])
+        consumed = {r["grant_id"]: r["consumed_operations"]
+                    for r in self.sql("SELECT grant_id::text, consumed_operations FROM guild.mc_action_grants")}
+        self.assertEqual(consumed, {gid: 1, three: 3})
+        claimed = [self.claim() for _ in range(5)]                             # a claim rechecks, never uses again
+        self.assertEqual(sum(c is not None for c in claimed), 3)               # 1.5 + 0.25 + 0.25 fill today's 2.0
+        consumed = {r["grant_id"]: r["consumed_operations"]
+                    for r in self.sql("SELECT grant_id::text, consumed_operations FROM guild.mc_action_grants")}
+        self.assertEqual(consumed, {gid: 1, three: 3})
+        self.assertEqual(self.store.enqueue(
+            job_id="job-3", actor="fakework", scope="build", repository="personal-ai-agents", ref="a" * 40,
+            brief="Run the fakework program.", cost_cap_usd=1.0, deadline_s=600, route="fakework", amount=0.25,
+            grant_id=three), "duplicate")                                       # a retry uses nothing
+        self.assertEqual(len(self.events("item.queued")), 4)
+
+    def test_admission_writes_proposed_with_the_reason(self):
+        revoked = self.grant(self.subject())
+        with self.connect() as conn:
+            GRANTS.revoke(conn, "robert", "dev", revoked)
+        self.item(grant=revoked)
+        self.item(grant=str(uuid4()))                                            # names no grant that exists
+        self.item(grant=self.grant(self.subject(), work_id="another-card"))
+        self.item(grant=False)                                                   # no grant at all
+        self.item(grant=self.grant("d" * 64))                                    # a grant for other work
+        self.item(grant=self.grant(self.subject(), work_id="job-6"), job="job-6")
+        got = {j: (self.row(j)["state"], (self.row(j)["result_detail"] or {}).get("code"))
+               for j in ("job-1", "job-2", "job-3", "job-4", "job-5", "job-6")}
+        self.assertEqual(got, {"job-1": ("proposed", "grant_revoked"), "job-2": ("proposed", "grant_not_found"),
+                               "job-3": ("proposed", "grant_context_mismatch"), "job-4": ("proposed", "grant_missing"),
+                               "job-5": ("proposed", "grant_effect_not_covered"), "job-6": ("queued", None)})
+        self.assertEqual([e["body"]["code"] for e in self.events("item.proposed")],
+                         ["grant_revoked", "grant_not_found", "grant_context_mismatch", "grant_missing",
+                          "grant_effect_not_covered"])
+
     def test_an_expired_grant_ends_the_item_expired_never_claimed_w_exp(self):
         self.beat()
-        self.item(grant=self.grant(seconds=1))
+        self.item(seconds=1)                                                     # admitted while the grant is current
+        self.assertEqual(self.row("job-1")["state"], "queued")
         deadline = time.monotonic() + 10
         while self.sql("SELECT expires_at <= clock_timestamp() AS past FROM guild.mc_action_grants")[0]["past"] is False:
             self.assertLess(time.monotonic(), deadline)
@@ -440,38 +497,47 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
         self.assertEqual(len(self.events("item.expired")), 1)
         self.assertEqual(self.day_rows(), [])
 
-    def test_grant_checks_at_claim(self):
+    def test_a_grant_revoked_after_admission_ends_the_item_at_claim(self):
         self.beat()
-        revoked = self.grant()
+        self.item()
         with self.connect() as conn:
-            GRANTS.revoke(conn, "robert", "dev", revoked)
-        self.item(grant=revoked)
-        self.item(grant=str(uuid4()))                                            # names no grant that exists
-        self.item(grant=self.grant(work_id="another-card"))
-        self.item(grant=False)                                                   # no grant: proposed, waits on a decision
-        self.item(grant=self.grant(work_id="job-5"), job="job-5")
-        self.assertEqual(self.claim()["envelope"]["work_id"], "job-5")
-        got = {j: (self.row(j)["state"], (self.row(j)["result_detail"] or {}).get("code"))
-               for j in ("job-1", "job-2", "job-3", "job-4")}
-        self.assertEqual(got, {"job-1": ("cancelled", "grant_revoked"), "job-2": ("refused", "grant_not_found"),
-                               "job-3": ("refused", "grant_work_mismatch"), "job-4": ("proposed", None)})
+            GRANTS.revoke(conn, "robert", "dev", self.grant_of["job-1"])
+        self.assertIsNone(self.claim())
+        self.assertEqual((self.row("job-1")["state"], self.row("job-1")["result_detail"]),
+                         ("cancelled", {"code": "grant_revoked"}))
 
-    def test_a_revoked_grant_makes_renew_false(self):
+    def test_a_revoked_or_expired_grant_makes_renew_false(self):
         self.beat()
-        gid = self.grant()
-        self.item(grant=gid)
-        env = self.claim()
+        self.item()
+        self.item(amount=0.5, seconds=2)
+        env, short = self.claim(), self.claim()
         rid = env["envelope"]["request_id"]
         self.assertTrue(self.store.renew(rid, 1, protocol=2, runner_id="mac-a"))
         self.assertFalse(self.store.renew(rid, 1, protocol=2, runner_id="mac-b"))   # not the owner
         before = self.row("job-1")["lease_until"]
         with self.connect() as conn:
-            GRANTS.revoke(conn, "robert", "dev", gid)
+            GRANTS.revoke(conn, "robert", "dev", self.grant_of["job-1"])
         self.assertFalse(self.store.renew(rid, 1, protocol=2, runner_id="mac-a"))
         self.assertFalse(self.store.renew(rid, 1, protocol=2, runner_id="mac-a"))
         self.assertEqual(self.row("job-1")["lease_until"], before)
-        [refused] = self.events("lease.renew_refused")
-        self.assertEqual(refused["body"], {"code": "grant_revoked"})
+        time.sleep(2.2)
+        self.assertFalse(self.store.renew(short["envelope"]["request_id"], 1, protocol=2, runner_id="mac-a"))
+        self.assertEqual(sorted(e["body"]["code"] for e in self.events("lease.renew_refused")),
+                         ["grant_expired", "grant_revoked"])
+
+    def test_a_result_after_revocation_ends_cancelled_never_completed(self):
+        self.beat()
+        self.item()
+        claimed = self.claim()
+        env = {"request_id": claimed["envelope"]["request_id"], "generation": 1}
+        with self.connect() as conn:
+            GRANTS.revoke(conn, "robert", "dev", self.grant_of["job-1"])
+        ack = self.result(env, amount=0.5)
+        self.assertEqual((ack["state"], ack["code"]), ("accepted", "grant_revoked"))
+        row = self.row("job-1")
+        self.assertEqual((row["state"], row["result_detail"]["code"], row["result_detail"]["reported_status"]),
+                         ("cancelled", "grant_revoked", "completed"))
+        self.assertEqual(row["reservation"]["state"], "settled")                # what it used is still accounted
 
     # ── progress ──
     def test_progress_keeps_the_newest_and_never_touches_the_lease(self):
@@ -480,7 +546,7 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
         claimed = self.claim()
         env = {"request_id": claimed["envelope"]["request_id"], "generation": 1}
         before = self.row("job-1")
-        t0 = self.db_now() - timedelta(seconds=30)                              # events made earlier, inside the lease
+        t0 = self.db_now() - timedelta(seconds=30)                              # the host's own times
         cp1 = {"name": "s1", "digest": "sha256:" + "1" * 64, "paths": ["README.md"]}
         cp2 = {"name": "s2", "digest": "sha256:" + "2" * 64, "paths": ["README.md", "core/x.py"]}
         e2 = str(uuid4())
@@ -488,37 +554,69 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
         row = self.row("job-1")
         self.assertEqual((row["state"], row["progress_phase"], row["checkpoint"]["name"]), ("running", "building", "s2"))
         self.assertEqual((row["lease_until"], row["heartbeat_at"]), (before["lease_until"], before["heartbeat_at"]))
+        self.assertGreater(row["progress_at"], before["heartbeat_at"])         # the authority's clock, not the host's
         # An older event (a replayed pending record) never overwrites the newer one.
         self.assertEqual(self.progress(env, t0 - timedelta(seconds=5), phase="starting", checkpoint=cp1)["state"],
                          "superseded")
-        row = self.row("job-1")
-        self.assertEqual((row["progress_phase"], row["checkpoint"]["name"], row["progress_at"]), ("building", "s2", t0))
+        row2 = self.row("job-1")
+        self.assertEqual((row2["progress_phase"], row2["checkpoint"]["name"], row2["progress_at"]),
+                         ("building", "s2", row["progress_at"]))
         self.assertEqual(self.progress(env, t0, event_id=e2, phase="building", checkpoint=cp2)["state"], "already_applied")
+        # The same id with anything else in it is a conflict, never silently taken.
+        self.assertEqual(self.progress(env, t0, event_id=e2, phase="testing", checkpoint=cp2)["code"],
+                         "event_id_conflict")
         # A newer phase without a checkpoint keeps the stored checkpoint.
         self.assertEqual(self.progress(env, t0 + timedelta(seconds=1), phase="testing")["state"], "applied")
         row = self.row("job-1")
         self.assertEqual((row["progress_phase"], row["checkpoint"]["name"]), ("testing", "s2"))
         self.assertEqual((row["lease_until"], row["heartbeat_at"]), (before["lease_until"], before["heartbeat_at"]))
         self.assertEqual(len(self.events("item.progress")), 3)                  # the superseded one is still audited
-        # Only the owner of the current generation, with an event time inside its lease.
+        # Only the owner of the current generation, inside its lease by the database's clock.
         self.assertEqual(self.progress(env, t0, runner="mac-b")["code"], "not_owner")
         self.assertEqual(self.progress({**env, "generation": 2}, t0)["code"], "stale_generation")
-        self.assertEqual(self.progress(env, t0 + timedelta(seconds=120))["code"], "event_time_invalid")
-        lease = row["lease_until"]
-        self.assertEqual(self.progress(env, lease)["code"], "lease_lapsed")
+        self.assertEqual(self.progress(env, self.db_now() + timedelta(seconds=120))["code"], "event_time_invalid")
         self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second'")
-        late = self.row("job-1")["lease_until"]
-        self.assertEqual(self.progress(env, late - timedelta(seconds=1), phase="replayed")["state"], "applied")
-        self.assertEqual(self.progress(env, late + timedelta(seconds=1))["code"], "lease_lapsed")
-        # An event id is one event: reusing it for another item is refused.
-        self.item(amount=0.5)
-        self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() + interval '60 second' WHERE job_id='job-1'")
-        second = self.claim()
-        env2 = {"request_id": second["envelope"]["request_id"], "generation": 1}
-        self.assertEqual(self.progress(env2, self.db_now(), event_id=e2)["code"], "event_id_reused")
+        # A host time from before the lapse doesn't reopen it: lease decisions are the database's alone.
+        self.assertEqual(self.progress(env, t0 + timedelta(seconds=2))["code"], "lease_lapsed")
+        # A replay is still answered as one, whatever has happened to the item since (DUP-5).
+        self.assertEqual(self.progress(env, t0, event_id=e2, phase="building", checkpoint=cp2)["state"], "already_applied")
+
+    def test_host_event_ids_never_take_the_authoritys_audit(self):
+        self.beat()
+        self.item()
+        claimed = self.claim()
+        env = {"request_id": claimed["envelope"]["request_id"], "generation": 1}
+        [claim_event] = self.events("item.claimed")
+        taken = self.progress(env, self.db_now(), event_id=str(claim_event["event_id"]))
+        self.assertEqual((taken["state"], taken["code"]), ("refused", "event_id_conflict"))
+        self.assertEqual(self.events("item.claimed")[0]["source"], "authority")
+        # The authority's own ids are random, so a host can't take one in advance; once-only transitions use a key no
+        # host can write. Stop twice: one audited cancel request.
+        self.assertEqual(self.store.stop("job-1"), "requested")
+        self.assertEqual(self.store.stop("job-1"), "requested")
+        [cancel] = self.events("item.cancel_requested")
+        self.assertEqual((cancel["source"], cancel["once_key"]), ("owner", f"cancel_requested:{env['request_id']}:1"))
+        self.assertEqual({e["source"] for e in self.events() if e["once_key"]}, {"authority", "owner"})
+        # A result under an id already in use is refused, and the item stays as it was.
+        used = self.events("item.progress") or [claim_event]
+        refused = self.result(env, event_id=str(used[0]["event_id"]))
+        self.assertEqual((refused["state"], refused["code"]), ("refused", "event_id_conflict"))
+        self.assertEqual(self.row("job-1")["state"], "claimed")
 
     # ── DUP-3, DUP-4 at unit level ──
+    @staticmethod
+    def overlaps(spans):
+        """Pairs of lease intervals (host, start, end) on one item, held by different hosts, that overlap."""
+        spans = sorted(spans, key=lambda s: s[1])
+        return [(a, b) for i, a in enumerate(spans) for b in spans[i + 1:] if a[0] != b[0] and b[1] < a[2]]
+
     def test_dup3_one_host_holds_a_lease_at_a_time(self):
+        from datetime import datetime
+        t = datetime(2026, 10, 28, 20, 0)
+        self.assertEqual(self.overlaps([("a", t, t + timedelta(seconds=60)), ("b", t + timedelta(seconds=60),
+                                                                          t + timedelta(seconds=90))]), [])
+        self.assertEqual(len(self.overlaps([("a", t, t + timedelta(seconds=60)),
+                                            ("b", t + timedelta(seconds=30), t + timedelta(seconds=90))])), 1)
         self.beat("mac-a")
         self.beat("mac-b")
         for _ in range(4):
@@ -532,20 +630,19 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
             other = "mac-b" if owner == "mac-a" else "mac-a"
             self.assertTrue(self.store.renew(rid, 1, protocol=2, runner_id=owner))
             self.assertFalse(self.store.renew(rid, 1, protocol=2, runner_id=other))
-        # From the audit: per item, lease intervals [claimed at, last lease_until] by host never overlap.
-        intervals = {}
+        # From the audit: per item and generation, [claimed at, last lease_until] for each host; none overlap.
+        spans = {}
         for ev in self.events():
             if ev["kind"] in ("item.claimed", "lease.renewed"):
                 key = (str(ev["item_id"]), ev["generation"], ev["host_id"])
-                start, _ = intervals.get(key, (ev["at"], None))
-                intervals[key] = (start, ev["body"]["lease_until"])
+                start = spans.get(key, (ev["at"], None))[0]
+                spans[key] = (start, parse_at(ev["body"]["lease_until"]))
         by_item = {}
-        for (item, _, host), span in intervals.items():
-            by_item.setdefault(item, []).append((host, span))
+        for (item, _, host), (start, end) in spans.items():
+            by_item.setdefault(item, []).append((host, start, end))
         self.assertEqual(len(by_item), 4)
-        for item, spans in by_item.items():
-            hosts = {h for h, _ in spans}
-            self.assertEqual(len(hosts), 1, item)                              # never two hosts on one item
+        for item, item_spans in by_item.items():
+            self.assertEqual(self.overlaps(item_spans), [], item)
 
     def test_dup4_one_accepted_result_per_item(self):
         self.beat("mac-a")
@@ -562,16 +659,96 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
         self.assertEqual((late["state"], late["code"]), ("refused", "different_result_already_recorded"))
         self.assertEqual(len(self.events("result.accepted", item=env["request_id"])), 1)
         self.assertEqual(str(self.row("job-1")["result_event_id"]), eid)
-        # A result made after the lease ran out is not taken (R5.1-c); one made before it, sent late, is.
-        self.item(amount=0.5)
-        nxt = self.claim()
-        env2 = {"request_id": nxt["envelope"]["request_id"], "generation": 1}
-        made = self.db_now() - timedelta(seconds=2)
-        self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second' WHERE job_id='job-2'")
-        self.assertEqual(self.result(env2, at=self.db_now() + timedelta(seconds=1))["code"], "lease_lapsed")
-        self.assertEqual(self.result(env2, at=made, amount=0.5)["state"], "accepted")
         # Refused results are audited once per event and reason, however often they are resent.
         self.assertEqual(len([e for e in self.events("result.refused") if e["body"]["code"] == "not_owner"]), 1)
+
+    def test_a_result_after_the_lease_lapsed_records_nothing(self):
+        """As version 1 says: a stale generation, a lapsed lease or a cancelled job can never record a completion. The
+        lease is judged on the database's clock; the host's own time, however early, doesn't reopen it."""
+        self.beat()
+        self.item(amount=0.5)
+        claimed = self.claim()
+        env = {"request_id": claimed["envelope"]["request_id"], "generation": 1}
+        made = self.db_now() - timedelta(seconds=2)
+        self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second'")
+        for at in (made, made - timedelta(days=2), self.db_now()):
+            ack = self.result(env, at=at, amount=0.5)
+            self.assertEqual((ack["state"], ack["code"]), ("refused", "lease_lapsed"))
+        row = self.row("job-1")
+        self.assertEqual((row["state"], row["result_event_id"], row["reservation"]["reserved"]), ("claimed", None, 0.5))
+        self.assertEqual(float(self.day_rows()[0]["reserved"]), 0.5)           # nothing settled either
+
+    # ── the (route, actor) gate (SF1) ──
+    def test_a_route_runs_only_the_workers_it_names(self):
+        self.beat()
+        with self.assertRaisesRegex(AuthorityRefused, "route_actor_mismatch"):
+            self.item(route="fakework", actor="claude-code")                    # a real worker under a test name
+        with self.assertRaisesRegex(AuthorityRefused, "route_actor_mismatch"):
+            self.item(route="anthropic.api", amount=3.0, actor="codex")
+        self.assertEqual(self.sql("SELECT count(*) AS n FROM guild.mc_delegations")[0]["n"], 0)
+        # A route stops naming the worker after admission: the claim refuses the pair.
+        self.item(route="fakework.api", amount=1.0)
+        narrowed = {**TEST_VALUES, "routes": {**TEST_VALUES["routes"],
+                                              "fakework.api": {**TEST_VALUES["routes"]["fakework.api"], "actors": []}}}
+        self.store = self.make_store(Authority.parse(narrowed))
+        self.assertIsNone(self.claim())
+        self.assertEqual((self.row("job-3")["state"], self.row("job-3")["result_detail"]),
+                         ("refused", {"code": "route_actor_mismatch"}))
+        # The test worker on a route outside the test family meets the closure gate.
+        mixed = {**TEST_VALUES, "routes": {**TEST_VALUES["routes"], "anthropic.api": {
+            **TEST_VALUES["routes"]["anthropic.api"], "actors": ["claude-code", "fakework"]}}}
+        self.store = self.make_store(Authority.parse(mixed))
+        self.item(route="anthropic.api", amount=1.0)
+        self.assertIsNone(self.claim())
+        self.assertEqual(self.row("job-4")["result_detail"], {"code": "route_supervised_only", "reason": "closure_pending"})
+
+    # ── waiting items never starve other routes (SF5) ──
+    def test_held_items_on_one_route_never_starve_another(self):
+        self.beat()
+        self.beat("mac-b")
+        self.item(amount=1.5)
+        self.assertIsNotNone(self.claim())                                      # today's fakework budget: 1.5 of 2.0
+        for _ in range(70):
+            self.item(amount=1.0)                                               # 70 that can only wait today
+        self.item(route="fakework.api", amount=1.0)
+        connects = []
+
+        def counted():
+            connects.append(1)
+            return self.connect()
+        store = DispatcherStore(counted, principal="robert", environment="dev", authority=AUTH, grants=GRANTS)
+        got = store.claim("mac-b", CAPS, protocol=2)
+        self.assertEqual((got["route"], got["envelope"]["work_id"]), ("fakework.api", "job-72"))
+        self.assertEqual(len(connects), 1)                                      # one connection for the poll
+        held = self.sql("""SELECT reservation->>'held' AS held, count(*) AS n FROM guild.mc_delegations
+            WHERE state='queued' GROUP BY 1""")
+        self.assertEqual([(r["held"], r["n"]) for r in held], [("reservation_cap", 70)])
+        marks = len(self.events("item.held"))
+        self.assertIsNone(store.claim("mac-b", CAPS, protocol=2))
+        self.assertEqual(len(self.events("item.held")), marks)                 # written once, not every poll
+        self.assertEqual(len(connects), 2)
+        # A route closed by unknown usage: its items wait, marked, and every other route still moves.
+        first = self.row("job-1")
+        self.result({"request_id": str(first["request_id"]), "generation": 1}, amount=None)
+        self.item(route="fakework.api", amount=1.0)
+        self.assertEqual(store.claim("mac-b", CAPS, protocol=2)["envelope"]["work_id"], "job-73")
+        self.assertEqual(self.sql("""SELECT DISTINCT reservation->>'held' AS held FROM guild.mc_delegations
+            WHERE state='queued' AND route='fakework'"""), [{"held": "usage_unknown"}])
+
+    def test_the_deployment_rule_an_unconfigured_store_beside_version_2_items(self):
+        """002's header: an unconfigured version 1 store fails every claim while a version 2 item it matches is the
+        oldest queued row, so version 1 work behind it waits. That is why they never share a database."""
+        import psycopg2
+        self.beat()
+        self.item("anthropic.api", 3.0, actor="claude-code", scope="research")
+        plain = DispatcherStore(self.connect, principal="robert", environment="dev")
+        plain.enqueue(job_id="v1-job", actor="claude-code", scope="research", repository="personal-ai-agents",
+                      ref="a" * 40, brief="Research.", cost_cap_usd=2.0, deadline_s=600)
+        for _ in range(2):
+            with self.assertRaises(psycopg2.errors.CheckViolation):
+                plain.claim("mac-1", V1_CAPS)
+        self.assertEqual(self.row("v1-job")["state"], "queued")
+        self.assertEqual(self.store.claim("mac-1", V1_CAPS)["work_id"], "v1-job")   # configured: v1 work moves
 
     def test_every_transition_writes_one_audit_event(self):
         self.beat()

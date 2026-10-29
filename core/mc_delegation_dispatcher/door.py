@@ -22,8 +22,7 @@ BODY_MAX = 160 * 1024
 _ID = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _WORD = re.compile(r"^[a-z_]{1,40}$")
-_ROUTE = re.compile(r"^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*)*$")
-_CAPS ={"actors", "cost_enforced_actors", "scopes", "repositories"}      # RunnerConfig.caps()
+_CAPS = {"actors", "cost_enforced_actors", "scopes", "repositories"}      # RunnerConfig.caps()
 
 
 class Refused(ValueError):
@@ -105,7 +104,7 @@ def _checked(check, value):
 
 def _handle_v2(store, body):
     # The store's own value checks, so the door and a direct caller are held to the same shapes.
-    from .store import check_capabilities, check_checkpoint, check_facts, check_usage, parse_at
+    from .store import check_capabilities, check_checkpoint, check_facts, check_route, check_usage, parse_at
     need(type(body["protocol"]) is int and body["protocol"] == 2 and body["op"] in _V2)
     op = body["op"]
     args = {k: v for k, v in body.items() if k not in ("op", "protocol")}
@@ -136,7 +135,7 @@ def _handle_v2(store, body):
     need(type(args["artifacts"]) is list and len(args["artifacts"]) <= 20 and _small_json(args["artifacts"], 8192))
     need(type(args["detail"]) is dict and _small_json(args["detail"], 8192))
     need(args["output_text"] is None or (type(args["output_text"]) is str and len(args["output_text"]) <= 64 * 1024))
-    need(type(args["route"]) is str and len(args["route"]) <= 64 and _ROUTE.match(args["route"]))
+    _checked(check_route, args["route"])
     _checked(check_usage, args["usage"])
     return {"value": store.result(rid, gen, event_id=args["event_id"], status=args["status"],
                                   artifacts=args["artifacts"], detail=args["detail"], output_text=args["output_text"],

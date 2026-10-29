@@ -13,8 +13,8 @@ sys.path.insert(0, str(ROOT))
 
 from core.mc_delegation_dispatcher import door  # noqa: E402
 from core.mc_delegation_dispatcher.store import (Authority, AuthorityRefused, DispatcherStore, check_checkpoint,  # noqa: E402
-                                                 check_facts, check_usage, in_test_family, parse_at,
-                                                 reservation_hold, route_refusal)
+                                                 check_facts, check_usage, in_test_family, item_subject_digest,
+                                                 parse_at, reservation_hold, route_refusal)
 
 PROD = ROOT / "core" / "mc_delegation_dispatcher" / "authority.prod.json"
 TEST = Path(__file__).resolve().parent / "authority.test_values.json"
@@ -25,6 +25,10 @@ FACTS = {"host_id": "mac-test-1", "bundle_digest": DIGEST, "roles": ["authority"
          "availability": "intermittent", "grace": 900, "last_gap_s": 0, "announced": "online"}
 CAPS = ["repo:personal-ai-agents", "scope:build", "actor:fakework", "host:mac-local"]
 AT = "2026-10-28T20:00:00+00:00"
+
+
+def TEST_VALUES_ROUTES():
+    return json.loads(TEST.read_text())["routes"]
 
 
 def doc(**over):
@@ -62,14 +66,18 @@ class AuthorityConfig(unittest.TestCase):
     def test_missing_values_admit_nothing_and_closure_defaults_to_pending(self):
         d = doc()
         del d["launch_closure"]
-        d["routes"] = {"fakework": {"unit": "test_units", "per_item": 1.0, "supervised_only": False},
-                       "fakework.unsaid": {"unit": "test_units", "per_day": 2.0, "per_item": 1.0}}
+        d["routes"] = {"fakework": {"unit": "test_units", "actors": ["fakework"], "per_item": 1.0,
+                                    "supervised_only": False},
+                       "fakework.unsaid": {"unit": "test_units", "actors": ["fakework"], "per_day": 2.0, "per_item": 1.0},
+                       "fakework.nobody": {"unit": "test_units", "per_day": 2.0, "per_item": 1.0,
+                                           "supervised_only": False}}
         a = Authority.parse(d)
         self.assertEqual(a.launch_closure, "pending")
-        self.assertEqual(route_refusal(a, "fakework"), {"code": "route_cap_missing"})          # no daily cap
-        self.assertEqual(route_refusal(a, "fakework.unsaid"),                                     # not stated
+        self.assertEqual(route_refusal(a, "fakework", "fakework"), {"code": "route_cap_missing"})   # no daily cap
+        self.assertEqual(route_refusal(a, "fakework.unsaid", "fakework"),                           # not stated
                          {"code": "route_supervised_only", "reason": "route_configured"})
-        self.assertEqual(route_refusal(a, "nowhere"), {"code": "route_unknown"})
+        self.assertEqual(route_refusal(a, "fakework.nobody", "fakework"), {"code": "route_actor_mismatch"})  # no actors
+        self.assertEqual(route_refusal(a, "nowhere", "fakework"), {"code": "route_unknown"})
 
     def test_anything_malformed_is_refused(self):
         bad = [
@@ -84,6 +92,13 @@ class AuthorityConfig(unittest.TestCase):
             doc(routes={"fakework": {"unit": "test_units", "per_day": 1.00001}}),
             doc(routes={"fakework": {"unit": "test_units", "per_day": True}}),
             doc(routes={"fakework": {"unit": "test_units", "supervised_only": "no"}}),
+            doc(routes={"fakework": {"unit": "test_units", "actors": "fakework"}}),
+            doc(routes={"fakework": {"unit": "test_units", "actors": ["grok"]}}),
+            doc(routes={"fakework": {"unit": "test_units", "actors": ["fakework", "fakework"]}}),
+            # A test route escapes the closure gate only because its worker carries no key: no other worker on it.
+            doc(routes={"fakework": {"unit": "test_units", "actors": ["claude-code"]}}),
+            doc(routes={"fakework.api": {"unit": "usd", "actors": ["fakework", "codex"]}}),
+            doc(environment="prod", protocols=[1], routes={"anthropic.api": {"unit": "usd", "actors": ["fakework"]}}),
             # Test values never in production configuration.
             doc(environment="prod", protocols=[1]),
             doc(environment="prod", routes={"anthropic.api": {"unit": "test_units"}}),
@@ -109,17 +124,27 @@ def _no_db():
 
 
 class RouteGateAndReservation(unittest.TestCase):
-    def test_route_gate(self):
+    def test_route_gate_judges_the_route_and_actor_pair(self):
         t = Authority.load(TEST)
-        self.assertIsNone(route_refusal(t, "fakework"))
-        self.assertIsNone(route_refusal(t, "fakework.api"))                    # in the test family: no key, no closure
-        self.assertEqual(route_refusal(t, "fakework.subscription"),
+        self.assertIsNone(route_refusal(t, "fakework", "fakework"))
+        self.assertIsNone(route_refusal(t, "fakework.api", "fakework"))        # the test worker on a test route
+        self.assertEqual(route_refusal(t, "fakework.subscription", "fakework"),
                          {"code": "route_supervised_only", "reason": "route_configured"})
-        self.assertEqual(route_refusal(t, "anthropic.api"),
+        self.assertEqual(route_refusal(t, "anthropic.api", "claude-code"),
+                         {"code": "route_supervised_only", "reason": "closure_pending"})
+        # A real worker under a test route's name gets no exemption: the route doesn't run it at all.
+        for route, actor in (("fakework", "claude-code"), ("fakework", "codex"), ("anthropic.api", "fakework")):
+            self.assertEqual(route_refusal(t, route, actor), {"code": "route_actor_mismatch"}, (route, actor))
+        # The test worker on a route outside the test family meets the closure gate like any other.
+        routes = {**TEST_VALUES_ROUTES(), "anthropic.api": {"unit": "usd", "actors": ["claude-code", "fakework"],
+                                                            "per_day": 10.0, "per_item": 3.0, "supervised_only": False}}
+        mixed = Authority.parse(doc(routes=routes))
+        self.assertEqual(route_refusal(mixed, "anthropic.api", "fakework"),
                          {"code": "route_supervised_only", "reason": "closure_pending"})
         verified = Authority.parse(doc(launch_closure="verified"))
-        self.assertIsNone(route_refusal(verified, "anthropic.api"))
-        self.assertEqual(route_refusal(verified, "fakework.subscription")["code"], "route_supervised_only")
+        self.assertIsNone(route_refusal(verified, "anthropic.api", "claude-code"))
+        self.assertEqual(route_refusal(verified, "fakework.subscription", "fakework")["code"], "route_supervised_only")
+        self.assertEqual(route_refusal(verified, "fakework", "claude-code"), {"code": "route_actor_mismatch"})
 
     def test_the_test_family_is_named_not_configured(self):
         for r in ("fakework", "fakejudge", "fakework.api", "fakejudge.x"):
@@ -163,7 +188,12 @@ class ValueChecks(unittest.TestCase):
             with self.assertRaises(AuthorityRefused):
                 check_usage(u)
         self.assertEqual(parse_at("2026-10-28T20:00:00Z").utcoffset().total_seconds(), 0)
-        for t in ("2026-10-28T20:00:00", "yesterday", 1730145600, "x" * 41):
+        # The same answers on every Python this runs on (3.9's fromisoformat refuses two-digit fractions).
+        self.assertEqual(parse_at("2026-10-28T20:00:00.12+00:00").microsecond, 120000)
+        self.assertEqual(parse_at("2026-10-28T20:00:00.123456-05:30").utcoffset().total_seconds(), -19800)
+        self.assertEqual(parse_at("2026-10-28T20:00:00.5Z"), parse_at("2026-10-28T20:00:00.500000+00:00"))
+        for t in ("2026-10-28T20:00:00", "yesterday", 1730145600, "x" * 41, "2026-10-28 20:00:00Z",
+                  "2026-10-28T20:00:00.1234567Z", "2026-02-30T20:00:00Z", "2026-10-28T20:00Z", "2026-10-28T20:00:00+24:00"):
             with self.assertRaises(AuthorityRefused):
                 parse_at(t)
 
@@ -266,7 +296,34 @@ class DoorVersion2(unittest.TestCase):
                 door.handle(Recorder(), body)
 
 
+class SubjectDigest(unittest.TestCase):
+    def test_the_digest_names_the_work_not_the_item(self):
+        base = dict(actor="fakework", scope="build", repository="personal-ai-agents", ref="a" * 40, brief="b",
+                    route="fakework", amount=1.5, required_capabilities=["host:mac-local", "cap:x"],
+                    input_artifacts=[{"ref": "r", "sha256": "e" * 64}])
+        d = item_subject_digest(**base)
+        self.assertRegex(d, r"^[0-9a-f]{64}$")
+        self.assertEqual(d, item_subject_digest(**{**base, "amount": 1.50,
+                                                   "required_capabilities": ["cap:x", "host:mac-local"]}))
+        for k, v in (("brief", "c"), ("ref", "b" * 40), ("route", "fakework.api"), ("amount", 1.4), ("step", "fix"),
+                     ("input_artifacts", []), ("actor", "codex")):
+            self.assertNotEqual(d, item_subject_digest(**{**base, k: v}), k)
+
+
 class StoreProtocolSwitch(unittest.TestCase):
+    def test_a_version_2_authority_needs_python_3_10(self):
+        from types import SimpleNamespace
+        from unittest import mock
+        from core.mc_delegation_dispatcher import store as store_mod
+        from core.minimoi_actions.grants import GrantStore
+        with mock.patch.object(store_mod, "sys", SimpleNamespace(version_info=(3, 9, 6, "final", 0))):
+            with self.assertRaisesRegex(RuntimeError, "authority_requires_python_3_10"):
+                DispatcherStore(_no_db, principal="robert", environment="dev", authority=Authority.load(TEST),
+                                grants=GrantStore())
+            DispatcherStore(_no_db, principal="robert", environment="prod", authority=Authority.load(PROD))  # v1 only
+            DispatcherStore(_no_db, principal="robert", environment="prod")
+
+
     def test_version_1_calls_carry_no_version_2_field(self):
         store = DispatcherStore(_no_db, principal="robert", environment="dev")
         with self.assertRaisesRegex(AuthorityRefused, "protocol_fields_invalid"):
@@ -289,3 +346,59 @@ class StoreProtocolSwitch(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+PY39 = "/usr/bin/python3"
+
+
+def _python_3_9():
+    import subprocess
+    try:
+        out = subprocess.run([PY39, "-c", "import sys; print(sys.version_info[:2] == (3, 9))"], capture_output=True,
+                             text=True, timeout=20)
+    except OSError:
+        return False
+    return out.stdout.strip() == "True"
+
+
+@unittest.skipUnless(Path(PY39).exists() and _python_3_9(), "needs the Mac's Python 3.9 at /usr/bin/python3")
+class ProductionBundleOnPython39(unittest.TestCase):
+    """The production runner's bundle is what install_delegation_runner.sh archives (core/__init__.py and the two
+    delegation packages) run by /usr/bin/python3 -I. Version 1 must keep compiling, importing and working there."""
+
+    def test_the_version_1_bundle_compiles_imports_and_refuses_version_2_by_name(self):
+        import shutil
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle = Path(tmp) / "bundle"
+            (bundle / "core").mkdir(parents=True)
+            shutil.copy(ROOT / "core" / "__init__.py", bundle / "core" / "__init__.py")
+            for pkg in ("mc_delegation_runner", "mc_delegation_dispatcher"):
+                shutil.copytree(ROOT / "core" / pkg, bundle / "core" / pkg,
+                                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            probe = (
+                "import sys, py_compile, pathlib\n"
+                "root = pathlib.Path(sys.argv[1]); sys.path.insert(0, str(root))\n"
+                "for f in sorted(root.rglob('*.py')):\n"
+                "    py_compile.compile(str(f), cfile=str(f) + '.check', doraise=True)\n"
+                "from core.mc_delegation_runner import cli, runner, envelope, cost, commands, workspace, launch_env\n"
+                "from core.mc_delegation_runner import dispatcher_adapter\n"
+                "from core.mc_delegation_dispatcher import door, store, relay\n"
+                "s = store.DispatcherStore(lambda: None, principal='robert', environment='prod')\n"
+                "door.HttpDispatcher(door.DOORS[0], 't' * 40, root)\n"
+                "a = store.Authority.load(root / 'core/mc_delegation_dispatcher/authority.prod.json')\n"
+                "assert not a.speaks_v2\n"
+                "store.DispatcherStore(lambda: None, principal='robert', environment='prod', authority=a)\n"
+                "assert store.parse_at('2026-10-28T20:00:00.12+00:00').microsecond == 120000\n"
+                "v2 = store.Authority.parse({'schema': store.AUTHORITY_SCHEMA, 'environment': 'dev',\n"
+                "                            'protocols': [1, 2], 'lease_s': 60})\n"
+                "try:\n"
+                "    store.DispatcherStore(lambda: None, principal='robert', environment='dev', authority=v2)\n"
+                "except RuntimeError as exc:\n"
+                "    print(exc)\n"
+                "print(sys.version_info[:2], 'ok')\n")
+            out = subprocess.run([PY39, "-B", "-I", "-c", probe, str(bundle)], capture_output=True, text=True,
+                                 timeout=60, cwd=tmp)
+        self.assertEqual(out.returncode, 0, out.stderr[-2000:])
+        self.assertEqual(out.stdout.split("\n")[:2], ["authority_requires_python_3_10", "(3, 9) ok"])
