@@ -272,3 +272,37 @@ def test_production_runner_folder_is_never_a_base(tmp_path):
     assert sorted(p.name for p in prod.iterdir()) == ["bundle"] and not (home / "minimoi-runtime" / "bundle").exists()
     proc = _render(tmp_path, template)                                  # any other base still renders
     assert proc.returncode == 0, proc.stderr
+
+
+def test_p1a_production_mac_worker_renders_from_its_template_beside_the_version_1_runner(tmp_path):
+    """P1-a item 5: S1-H's installer, its prod invocation with the real host.mac-prod-1.json, prepared and rendered
+    only: the bundle, the pin, host.yaml checked by the bundle's own rules and the authority's v2 file, and the plist
+    ai.minimoi.runtime.prod. Nothing is loaded (--load is refused for prod), and the version 1 runner's label and
+    folder are never touched (it stays beside the new worker until Robert retires it)."""
+    template = json.loads((ROOT / "scripts" / "mc_host" / "host.mac-prod-1.json").read_text())
+    base = tmp_path / "base"
+    template["authority"]["values"] = str(base / "bundle" / "core" / "mc_delegation_dispatcher" / "authority.prod.json")
+    for key in ("artifact_root", "workspace_root"):
+        template[key] = str(tmp_path / "home" / key)
+    template["mirrors"] = {"personal-ai-agents": str(tmp_path / "mirror.git")}
+    template["effect_sink"]["path"] = str(tmp_path / "home" / "acceptance" / "effects.jsonl")
+    path = tmp_path / "host.mac-prod-1.json"
+    path.write_text(json.dumps(template))
+    proc = _render(tmp_path, path)
+    assert proc.returncode == 0, proc.stderr
+    assert "NOT loaded" in proc.stdout
+    record = json.loads((base / "install.json").read_text())
+    assert (record["environment"], record["host_id"], record["runner_id"], record["authority_transport"],
+            record["label"], record["loaded"]) == ("prod", "mac-prod-1", "mac-prod-1:runner", "door",
+                                                    "ai.minimoi.runtime.prod", False)
+    installed = host_mod.load(base / "host.yaml")
+    assert installed.test_routes_in_production and installed.notifier.kind == "telegram"
+    assert installed.witness_read.credential_ref.startswith("keychain:")
+    plist = plistlib.loads((base / "service" / "ai.minimoi.runtime.prod.plist").read_bytes())
+    assert plist["Label"] == "ai.minimoi.runtime.prod" and plist["ProgramArguments"][-2:] == ["--host-config",
+                                                                                              str(base / "host.yaml")]
+    text = (base / "host.yaml").read_text() + (base / "service" / "ai.minimoi.runtime.prod.plist").read_text()
+    assert "TOKEN" not in text.upper().replace("TOKEN_REF", "").replace("BOT_TOKEN", "")    # references only
+    refused = _render(tmp_path, path, "--load")
+    assert refused.returncode != 0 and "load_prod_not_in_this_build" in refused.stderr
+    assert not (tmp_path / "home" / "Library").exists()
