@@ -373,6 +373,8 @@ def _authority_loops(environ, link):
         return None
     if len(given) != len(RUNTIME_LOOP_KEYS) or link is None:
         raise ValueError("authority_loops_incomplete")
+    if not link.authority.sweeps:
+        raise ValueError("authority_loops_need_a_sweeper")
     ids = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
     if not (ids.match(environ["MINIMOI_RUNTIME_ENDPOINT_ID"]) and ids.match(environ["MINIMOI_RUNTIME_HOST_ID"])):
         raise ValueError("authority_loops_invalid")
@@ -382,20 +384,47 @@ def _authority_loops(environ, link):
                                  host_id=environ["MINIMOI_RUNTIME_HOST_ID"], log=log)
 
 
-def _s1g_options(environ, connect) -> dict:
-    """S1-G's parts a release turns on by configuration; {} (today's supervisor) when none is set."""
+def runtime_answers(environ) -> bool:
+    """P1-a (Robert, 29 Oct): production answers runtime decisions in MiniMoi; a Telegram reply to one counts only when
+    MINIMOI_RUNTIME_TELEGRAM_ANSWERS=1, whether or not the runtime link is on (review SF4)."""
+    return environ.get("MINIMOI_RUNTIME_TELEGRAM_ANSWERS") == "1"
+
+
+def runtime_options(environ, connect) -> tuple:
+    """P1-a: the runtime link and the authority's timers, or neither, never a crash (review SF5): a configuration
+    either refuses (a partial set, a file that is not version 2, timers without the link) is logged by its code and
+    left off, and today's approvals and check-ins go on. -> (options, refused codes)."""
     from core.supervision.runtime import from_environ
-    out = {}
-    link = from_environ(environ, connect)
+    out, refused = {}, []
+    try:
+        link = from_environ(environ, connect)
+    except (ValueError, OSError) as exc:
+        link = None
+        refused.append(f"runtime_link_refused:{_code(exc)}")
     if link is not None:
         out["runtime"] = link
         from core.mc_delegation_dispatcher.production import file_digest
         log.info("runtime link on: authority file %s", file_digest(environ["MINIMOI_RUNTIME_AUTHORITY_FILE"]))
-        # P1-a: production answers runtime decisions in MiniMoi unless the Telegram reply path is turned on.
-        out["runtime_answers"] = environ.get("MINIMOI_RUNTIME_TELEGRAM_ANSWERS") == "1"
-    loops = _authority_loops(environ, link)
+    try:
+        loops = _authority_loops(environ, link)
+    except ValueError as exc:
+        loops = None
+        refused.append(f"authority_loops_refused:{_code(exc)}")
     if loops is not None:
         out["loops"] = loops
+    for code in refused:
+        log.error("supervisor: %s; it stays off, and today's approvals and check-ins go on", code)
+    return out, refused
+
+
+def _s1g_options(environ, connect) -> dict:
+    """S1-G's parts a release turns on by configuration; {} (today's supervisor) when none is set."""
+    out, _ = runtime_options(environ, connect)
+    return {**out, **_view_and_watch_options(environ)}
+
+
+def _view_and_watch_options(environ) -> dict:
+    out = {}
     bound = environ.get("MINIMOI_SUPERVISION_SYNC_VIEW_BOUND_S")
     if bound:
         out["sync_view_bound_s"] = int(bound)
@@ -415,10 +444,14 @@ def main():
     user_id = int(os.environ.get("MINIMOI_OWNER_TELEGRAM_USER_ID") or chat_id)
     connect = lambda: psycopg2.connect(dsn, connect_timeout=5, options="-c statement_timeout=10000")  # noqa: E731
     store = Store(connect)
+    runtime, refused = runtime_options(os.environ, connect)
+    options = {**runtime, **_view_and_watch_options(os.environ)}
     sup = Supervisor(store, tg.Bot(_token()), watch.GitHub(os.environ.get("MINIMOI_GITHUB_REPO", watch.REPO)),
                      chat_id=chat_id, user_id=user_id,
                      checkin_minutes=int(os.environ.get("SUPERVISOR_CHECKIN_MINUTES", "15")),
-                     **_s1g_options(os.environ, connect))
+                     runtime_answers=runtime_answers(os.environ), **options)
+    if refused:
+        sup._runtime_failed(refused)                # told once a day through the outbox, never a crash
 
     def stop(*_):
         global _stop

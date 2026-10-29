@@ -177,7 +177,8 @@ def test_named_the_door_binds_every_version_2_caller_to_its_own_host(monkeypatch
     r = c.post("/internal/mc/v1/delegation-runner", data=b"{not json", content_type="application/json",
                headers={"Authorization": f"Bearer {HOST_TOKEN}"})
     assert (r.status_code, r.get_json()) == (400, {"error": "runner_request_invalid"})
-    assert _post(c, TOKEN, V2).status_code == 401                          # the version 1 token speaks no version 2
+    r = _post(c, TOKEN, V2)                                                # the version 1 token speaks no version 2
+    assert (r.status_code, r.get_json()) == (400, {"error": "request_invalid"})     # today's answer to that body
     assert _post(c, HOST_TOKEN, V1).status_code == 401                     # nor a host token version 1
     assert len(store.calls) == n                                           # none of those reached the store
 
@@ -225,6 +226,13 @@ def test_the_read_path_opens_only_with_readers_and_the_published_snapshot(monkey
     assert c.get(server.STATE_PATH, headers={"Authorization": f"Bearer {HOST_TOKEN}"}).status_code == 401
     assert c.get(server.STATE_PATH).status_code == 401
 
+    class Down(FakeStore):
+        def note_read(self, name, role):
+            raise ConnectionError("database down")
+    app, _ = _app(monkeypatch, env, Down())
+    r = app.test_client().get(server.STATE_PATH, headers={"Authorization": f"Bearer {READ_TOKEN}"})
+    assert (r.status_code, r.get_json()) == (503, {"error": "unavailable"})       # never a read C did not count
+
 
 # ── Guild jobs ──
 def test_guild_jobs_build_todays_store_unless_the_file_is_named(monkeypatch, tmp_path, caplog):
@@ -240,3 +248,42 @@ def test_guild_jobs_build_todays_store_unless_the_file_is_named(monkeypatch, tmp
     assert jobs_wiring._with_delegation(sentinel, {**env, production.AUTHORITY_FILE_VAR: str(tmp_path / "bad.json")}) \
         is sentinel                                                        # named and refused: delegation stays off
     assert jobs_wiring._with_delegation(sentinel, {}) is sentinel          # off: today's relay untouched
+    # A credentials file the door refuses keeps jobs off too, so MC never queues work no runner can reach (SF3).
+    named = {**env, production.AUTHORITY_FILE_VAR: str(PROD)}
+    assert jobs_wiring._with_delegation(sentinel, {**named, production.DOOR_CREDENTIALS_VAR: str(tmp_path / "no.json")}) \
+        is sentinel
+    assert jobs_wiring._with_delegation(sentinel, {**named, production.DOOR_CREDENTIALS_VAR: str(_creds(tmp_path))}) \
+        is not sentinel
+
+
+def test_a_version_1_claim_is_reaped_as_today_while_the_sweeper_is_not_fresh():
+    """Review SF5: a portal named before its timers run (or with them stopped) never leaves a version 1 claim
+    hanging; reap_lapsed never touches a version 2 item, and a fresh sweeper keeps the reaping its own."""
+    from core.mc_delegation_dispatcher.relay import DelegationRelay
+    now = datetime(2026, 10, 29, 15, tzinfo=timezone.utc)
+
+    class Store:
+        sweeps = True
+
+        def __init__(self, fresh, route=None):
+            self.fresh, self.route, self.reaped = fresh, route, []
+
+        def by_job(self, job):
+            state = "interrupted" if self.reaped else "running"
+            return {"state": state, "route": self.route, "lease_until": now - timedelta(minutes=10), "now": now,
+                    "deadline": now + timedelta(hours=1), "result_detail": {}, "finished_at": None,
+                    "started_at": now - timedelta(minutes=20), "created_at": now - timedelta(minutes=30),
+                    "heartbeat_at": now - timedelta(minutes=10), "output_text": None}
+
+        def sweeper_status(self):
+            if self.fresh is None:
+                raise ConnectionError()
+            return {"fresh": self.fresh}
+
+        def reap_lapsed(self, job):
+            self.reaped.append(job)
+            return True
+    for fresh, route, reaped in ((False, None, True), (None, None, True), (True, None, False), (False, "fakework", False)):
+        store = Store(fresh, route)
+        DelegationRelay(store, ref_for=lambda r: "a" * 40).status("job-1")
+        assert bool(store.reaped) is reaped, (fresh, route)

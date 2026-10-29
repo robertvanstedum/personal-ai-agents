@@ -40,15 +40,16 @@ def named(environ, var=AUTHORITY_FILE_VAR) -> str | None:
     return value or None
 
 
-def load(path, environment):
-    """The named authority file, which must be version 2 with a sweeper and host values, for ``environment``."""
+def load(path, environment=None):
+    """The named authority file, which must be version 2 with a sweeper and host values (and, given ``environment``,
+    for that environment). Every production loader uses it: the portal, the supervisor's runtime link (review SF5)."""
     from .store import Authority, AuthorityRefused
     try:
         auth = Authority.load(Path(path))
     except (OSError, AuthorityRefused) as exc:
         code = str(exc) if isinstance(exc, AuthorityRefused) else type(exc).__name__
         raise NotConfigured(f"authority_file_unusable:{code}") from None
-    if auth.environment != environment:
+    if environment is not None and auth.environment != environment:
         raise NotConfigured("authority_environment_mismatch")
     if not auth.speaks_v2 or auth.sweeper is None or auth.hosts is None:
         raise NotConfigured("authority_not_version_2")

@@ -204,12 +204,16 @@ def attach_runner_door_v2(app, environ, legacy_digest, principal, env_name, *, s
     seen = {}
 
     def limited(who):
+        """Today's door's rule, word for word: an address over the limit is refused, and a refused call is not
+        recorded (independent review note 3)."""
         now = clock()
         window = [t for t in seen.get(who, ()) if now - t < 60]
+        if len(window) >= per_minute:
+            return True
+        seen[who] = window + [now]
         if len(seen) > 1000:
             seen.clear()
-        seen[who] = window + [now]
-        return len(window) >= per_minute
+        return False
 
     def bearer():
         header = request.headers.get("Authorization", "")
@@ -224,6 +228,8 @@ def attach_runner_door_v2(app, environ, legacy_digest, principal, env_name, *, s
         host = server._caller(token, hosts) if hosts else None
         if host is None and limited(who):
             return jsonify(error="rate_limited"), 429
+        if host is None and not legacy(token):
+            return jsonify(error="unauthorized"), 401           # authenticated before the body is read, as today
         raw = request.get_data(cache=False)[:door_mod.BODY_MAX + 1]
         try:
             body = json.loads(raw) if request.mimetype == "application/json" else None
@@ -234,10 +240,8 @@ def attach_runner_door_v2(app, environ, legacy_digest, principal, env_name, *, s
             # the store's refusal codes); a host speaks only for itself.
             status, doc = server.answer(store_factory(), hosts, token, raw, request.content_type)
             return jsonify(doc), status
-        if isinstance(body, dict) and "protocol" in body:              # version 2 without a host's token
-            return jsonify(error="unauthorized"), 401
-        if not legacy(token):
-            return jsonify(error="unauthorized"), 401
+        if isinstance(body, dict) and "protocol" in body:
+            return jsonify(error="request_invalid"), 400           # the version 1 token speaks no version 2 (as today)
         if request.mimetype != "application/json" or (request.content_length or 0) > door_mod.BODY_MAX \
                 or body is None:
             return jsonify(error="request_invalid"), 400
@@ -258,9 +262,13 @@ def attach_runner_door_v2(app, environ, legacy_digest, principal, env_name, *, s
             who = request.headers.get("X-Real-IP") or request.remote_addr or "-"
             if server._reader(bearer(), readers) is None and limited(who):
                 return jsonify(error="rate_limited"), 429
-            status, doc = snap.read_request(dict(request.headers.items()), readers=readers,
-                                            provide=lambda: snap.read_state_file(state_file),
-                                            note_read=lambda name, role: store_factory().note_read(name, role))
+            try:
+                status, doc = snap.read_request(dict(request.headers.items()), readers=readers,
+                                                provide=lambda: snap.read_state_file(state_file),
+                                                note_read=lambda name, role: store_factory().note_read(name, role))
+            except Exception as exc:                            # the reader's contact unrecorded: no read (C stays honest)
+                _log.warning("runtime state read failed (%s)", type(exc).__name__)
+                status, doc = 503, {"error": "unavailable"}
             resp = jsonify(doc)
             resp.headers["Cache-Control"] = "no-store"
             return resp, status

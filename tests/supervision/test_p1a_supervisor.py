@@ -29,12 +29,15 @@ def _connect():
 
 
 # ── answered in MiniMoi ──
-def test_production_configuration_takes_runtime_answers_in_minimoi_unless_the_reply_path_is_on():
+def test_production_takes_runtime_answers_in_minimoi_unless_the_reply_path_is_on_link_or_no_link():
     assert M._s1g_options({}, _connect) == {}                                        # nothing set: today's
-    opts = M._s1g_options(LINK, _connect)
-    assert opts["runtime_answers"] is False and "loops" not in opts
-    assert M._s1g_options({**LINK, "MINIMOI_RUNTIME_TELEGRAM_ANSWERS": "1"}, _connect)["runtime_answers"] is True
-    assert M.Supervisor(object(), object(), object(), chat_id=OWNER, user_id=OWNER).runtime_answers is True
+    assert "loops" not in M._s1g_options(LINK, _connect)
+    # main() passes runtime_answers(environ) whether or not the link is on (review SF4): off unless "1".
+    for environ in ({}, LINK, {"MINIMOI_RUNTIME_TELEGRAM_ANSWERS": "0"}):
+        assert M.runtime_answers(environ) is False
+    assert M.runtime_answers({"MINIMOI_RUNTIME_TELEGRAM_ANSWERS": "1"}) is True
+    import inspect
+    assert "runtime_answers=runtime_answers(os.environ)" in inspect.getsource(M.main)
 
 
 def test_a_decision_message_becomes_a_notice_with_its_own_words_and_where_to_answer():
@@ -96,13 +99,21 @@ def test_the_timers_run_only_with_all_three_values_and_the_link(tmp_path):
     al = opts["loops"]
     assert (al.endpoint_id, al.host_id, al.state_dir) == ("prod-authority", "prod-ec2-1", tmp_path / "authority")
     assert al.store is opts["runtime"].authority and al.store.sweeps
-    for partial in ({"MINIMOI_RUNTIME_STATE_DIR": "/x"}, {k: v for k, v in loops.items() if k != "MINIMOI_RUNTIME_HOST_ID"}):
-        with pytest.raises(ValueError, match="authority_loops_incomplete"):
-            M._s1g_options({**LINK, **partial}, _connect)
-    with pytest.raises(ValueError, match="authority_loops_incomplete"):
-        M._s1g_options(loops, _connect)                                                 # never without the link
-    with pytest.raises(ValueError, match="authority_loops_invalid"):
-        M._s1g_options({**LINK, **loops, "MINIMOI_RUNTIME_HOST_ID": "a/b"}, _connect)
+    # Anything incomplete or unusable is refused by its code and left off, never a crash that takes today's
+    # approvals down (review SF5).
+    for environ, code in (({**LINK, "MINIMOI_RUNTIME_STATE_DIR": "/x"}, "authority_loops_refused:authority_loops_incomplete"),
+                          (loops, "authority_loops_refused:authority_loops_incomplete"),          # never without the link
+                          ({**LINK, **loops, "MINIMOI_RUNTIME_HOST_ID": "a/b"},
+                           "authority_loops_refused:authority_loops_invalid")):
+        out, refused = M.runtime_options(environ, _connect)
+        assert "loops" not in out and refused == [code], (refused, code)
+    v1 = tmp_path / "v1.json"
+    v1.write_text(json.dumps({**json.loads(PROD.read_text()), "protocols": [1]}))
+    out, refused = M.runtime_options({**LINK, **loops, "MINIMOI_RUNTIME_AUTHORITY_FILE": str(v1)}, _connect)
+    assert out == {} and refused == ["runtime_link_refused:authority_not_version_2",
+                                     "authority_loops_refused:authority_loops_incomplete"]
+    out, refused = M.runtime_options({"MINIMOI_RUNTIME_PRINCIPAL": "robert"}, _connect)     # a partial link
+    assert out == {} and refused == ["runtime_link_refused:runtime_link_incomplete"]
     # the link's store has production's grant catalogue (the sink's effect among it, as the file admits test routes)
     assert "fakework.sink_post" in set(opts["runtime"].authority._grants._catalogue)
 
@@ -153,12 +164,13 @@ def test_the_baseline_silences_only_ended_history_up_to_its_cutoff():
     notices = switch_on.raised(Authority(HISTORY))
     assert [n["key"] for n in notices][-1] == "runtime-ready:C-1"                         # decision notices left out
     plan = switch_on.plan_baseline(notices, {LIVE}, cutoff=6)
-    assert {b["key"] for b in plan["baselined"]} == {f"runtime-stalled:{ENDED}:g1:x", f"runtime-overdue:{ENDED}:g1",
-                                                     "runtime-sweeper-stale:2026-10-29T11:00:00+00:00"}
+    assert {b["key"] for b in plan["baselined"]} == {f"runtime-stalled:{ENDED}:g1:x", f"runtime-overdue:{ENDED}:g1"}
     kept = {k["key"]: k["why"] for k in plan["kept"]}
     assert kept == {f"runtime-drift:{LIVE}:over_estimate": "item_live",
                     f"runtime-unknown:{ENDED}:g1": "actionable:unknown",
                     f"delegation-ended:{ENDED}": "actionable:ended",
+                    # a sweeper outage's key names a time, not an item: never baselined (Codex's P1-a review S1)
+                    "runtime-sweeper-stale:2026-10-29T11:00:00+00:00": "actionable:sweeper_stale",
                     "runtime-ready:C-1": "after_cutoff"}
 
 
@@ -183,13 +195,12 @@ def test_a_first_switch_on_tells_no_stale_burst_and_still_tells_what_waits_and_w
     monkeypatch.setattr(switch_on, "live_items", lambda a: a.live | {LIVE})
     if True:
         out = switch_on.baseline(auth, store, record=tmp_path / "baseline.json")
-        assert (out["cutoff_seq"], out["baselined"], out["newly_marked"]) == (6, 3, 3)
+        assert (out["cutoff_seq"], out["baselined"], out["newly_marked"]) == (6, 2, 2)
         record = json.loads((tmp_path / "baseline.json").read_text())
-        assert {b["why"] for b in record["baselined"]} == {"historical:stalled", "historical:overdue",
-                                                           "historical:sweeper_stale"}
+        assert {b["why"] for b in record["baselined"]} == {"historical:stalled", "historical:overdue"}
         sent = link_for(auth).drain(store, bot, OWNER)
         assert set(sent) == {f"runtime-drift:{LIVE}:over_estimate", f"runtime-unknown:{ENDED}:g1",
-                             f"delegation-ended:{ENDED}"}
+                             f"delegation-ended:{ENDED}", "runtime-sweeper-stale:2026-10-29T11:00:00+00:00"}
         auth.notices.append(_n(9, "runtime-stalled:33333333-3333-4333-8333-333333333333:g1:y", "stalled", "stalled"))
         assert link_for(auth).drain(store, Bot(), OWNER) == [
             "runtime-stalled:33333333-3333-4333-8333-333333333333:g1:y"]               # after the cutoff: told

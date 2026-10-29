@@ -487,8 +487,10 @@ def from_environ(environ, connect):
     if len(given) != len(keys):
         raise ValueError("runtime_link_incomplete")
     from core.mc_delegation_dispatcher import production
-    from core.mc_delegation_dispatcher.store import Authority, DispatcherStore
-    auth = Authority.load(environ["MINIMOI_RUNTIME_AUTHORITY_FILE"])
+    from core.mc_delegation_dispatcher.store import DispatcherStore
+    # P1-a (review SF5): the same loader as the portal's, so a file that is not version 2 with a sweeper and host
+    # values is refused here too (production.NotConfigured, a ValueError), never half used.
+    auth = production.load(environ["MINIMOI_RUNTIME_AUTHORITY_FILE"])
     # P1-a: the same grant catalogue every production process builds over this file (production.grant_store).
     store = DispatcherStore(connect, principal=environ["MINIMOI_RUNTIME_PRINCIPAL"], environment=auth.environment,
                             authority=auth, grants=production.grant_store(auth))

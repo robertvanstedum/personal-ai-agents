@@ -69,9 +69,13 @@ def _with_delegation(relay, environ):
         try:
             store = production.store(connect, principal=principal, environment=env_name,
                                      authority=production.load(path, env_name))
+            # The runner's door refuses to open over a named credentials file it can't use; jobs refuse with it, so
+            # MC never queues work no runner can reach (review SF3).
+            production.door_credentials(environ, env_name)
         except (ValueError, RuntimeError) as exc:
-            log.error("guild jobs: the authority file is named but refused (%s); delegation stays off",
-                      str(exc) if isinstance(exc, production.NotConfigured) else type(exc).__name__)
+            log.error("guild jobs: the authority file or the door's credentials are named but refused (%s); "
+                      "delegation stays off", str(exc) if isinstance(exc, production.NotConfigured)
+                      else type(exc).__name__)
             return relay
         log.info("guild jobs: delegation over the version 2 authority (file %s)", production.file_digest(path))
     return RoutingRelay(relay, DelegationRelay(store, ref_for=_main_head))
