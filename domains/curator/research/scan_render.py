@@ -3,6 +3,8 @@ import html as _html_lib
 import re as _re
 import urllib.parse
 
+from utils.html_links import safe_web_href
+
 
 def render_scan_page(dd: dict, hash_id: str) -> str:
     """Return the existing Scan presentation for caller-authorized content."""
@@ -20,7 +22,7 @@ def render_scan_page(dd: dict, hash_id: str) -> str:
         if item['bracket_note']:
             link_html = f'<span class="bib-title">{t}</span> <span class="bib-library-tag">Library</span>'
         elif item['has_url']:
-            url_esc = _html_lib.escape(item['url'])
+            url_esc = safe_web_href(item['url'])
             link_html = f'<a class="bib-title" href="{url_esc}" target="_blank" rel="noopener">{t}</a>'
         elif item['title']:
             scholar_q = urllib.parse.quote(item['title'])
@@ -53,7 +55,7 @@ def render_scan_page(dd: dict, hash_id: str) -> str:
     # ── Metadata block ───────────────────────────────────────────────────────
     source_link = ''
     if meta.get('url') and meta.get('url') != 'N/A':
-        src_esc = _html_lib.escape(meta['url'])
+        src_esc = safe_web_href(meta['url'])
         src_label = _html_lib.escape(meta.get('source', meta['url']))
         source_link = f'<a href="{src_esc}" target="_blank" rel="noopener">{src_label}</a>'
     elif meta.get('source'):

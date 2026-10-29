@@ -7,20 +7,7 @@ resolves secrets, creates state directories or sends a message.
 from datetime import timezone
 from typing import Dict, List
 from html import escape as _escape
-from urllib.parse import urlsplit
-
-
-def _safe_href(value: str) -> str:
-    """Render only absolute web navigation; keep other references non-clickable."""
-    try:
-        parts = urlsplit(value)
-        if parts.scheme.lower() not in {"http", "https"} or not parts.hostname:
-            return "#"
-        # Accessing the port validates malformed and out-of-range port syntax.
-        parts.port
-    except (TypeError, ValueError):
-        return "#"
-    return _escape(value, quote=True)
+from utils.html_links import safe_web_href as _safe_href
 
 
 def format_output(entries: List[Dict]) -> str:
