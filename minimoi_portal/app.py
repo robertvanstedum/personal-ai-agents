@@ -409,7 +409,12 @@ def forgot_password():
                 req = _auth.create_reset_request(
                     match["username"], match.get("display_name", ""), email
                 )
-                _notify_telegram_reset_request(match.get("display_name", ""), email)
+                # Action-waiting notices (spec v0.2 §3.5): record the item first; today's direct send goes unless the
+                # service is on, healthy and recorded it. Off: exactly today's call.
+                _notices.after_create(
+                    "password_reset", _notices.record_reset(req),
+                    lambda: _notify_telegram_reset_request(match.get("display_name", ""), email),
+                    facts=_notices_reset_facts(req) if _notices.current() else None)
     return render_template("forgot_password.html", submitted=submitted)
 
 
@@ -495,8 +500,13 @@ def guest_verify_email(token):
     data = _auth.consume_verification(token)
     if not data:
         return render_template("verify_email.html", expired=True)
-    _log_guest_request(data["name"], data["email"], data.get("reason", ""), domain=data.get("domain", "portuguese"))
-    _notify_telegram_new_request(data["name"], data["email"], domain=data.get("domain", "portuguese"))
+    row = _log_guest_request(data["name"], data["email"], data.get("reason", ""), domain=data.get("domain", "portuguese"))
+    # Recorded only when this call inserted or re-opened the guild row (review B1); otherwise the direct send goes.
+    _notices.after_create(
+        "guest_access",
+        _notices.record_guest(data["email"], guild=row, app=data.get("domain", "portuguese")) if row else None,
+        lambda: _notify_telegram_new_request(data["name"], data["email"], domain=data.get("domain", "portuguese")),
+        app=data.get("domain", "portuguese"), refs=("guild:",))
     print(f"✅ Email verified and request queued: {data['email']} ({data['name']})")
     return render_template("verify_email.html", verified=True, name=data["name"])
 
@@ -554,8 +564,12 @@ def register():
         else:
             pending = _auth.create_pending(display_name, email, password)
             reason = request.form.get("reason", "").strip()
-            _log_guest_request(display_name, email, reason)
-            _notify_telegram_new_request(display_name, email)
+            row = _log_guest_request(display_name, email, reason)
+            _notices.after_create(
+                "guest_access", _notices.record_guest(email, pending=pending, guild=row),
+                lambda: _notify_telegram_new_request(display_name, email),
+                facts={"requested_at": pending.get("requested_at")},
+                refs=("pending:",) + (("guild:",) if row else ()))
             return render_template("register.html", pending=True)
 
     return render_template("register.html", error=error)
@@ -1537,15 +1551,17 @@ def _guild_db_query(sql, params=None):
     return rows
 
 
-def _guild_db_execute(sql, params=None):
-    """Run an INSERT/UPDATE/DELETE against the personal_agents DB."""
+def _guild_db_execute(sql, params=None, *, returning=False):
+    """Run an INSERT/UPDATE/DELETE against the personal_agents DB. With ``returning``, the rows its RETURNING gave."""
     import psycopg2
     db_url = os.environ["DATABASE_URL"]
     conn = psycopg2.connect(db_url)
     with conn.cursor() as cur:
         cur.execute(sql, params or [])
+        rows = cur.fetchall() if returning else None
     conn.commit()
     conn.close()
+    return rows
 
 
 def _career_deadline(career_focus: dict) -> str:
@@ -1560,19 +1576,24 @@ def _career_deadline(career_focus: dict) -> str:
         return raw
 
 
-def _log_guest_request(name: str, email: str, reason: str, domain: str = "portuguese") -> None:
-    """Log a guest access request to guild.guest_requests. Silent on failure."""
+def _log_guest_request(name: str, email: str, reason: str, domain: str = "portuguese") -> dict | None:
+    """Log a guest access request to guild.guest_requests. Silent on failure.
+
+    Returns the row this call inserted or re-opened ({"id", "requested_at"}), or None: the insert failed, or the email's
+    row is already requested or granted, so no new open request exists (review B1: the direct notice must then go)."""
     try:
-        _guild_db_execute(
+        rows = _guild_db_execute(
             "INSERT INTO guild.guest_requests (name, email, reason, domain, status) VALUES (%s, %s, %s, %s, 'requested')"
             " ON CONFLICT (email) DO UPDATE SET"
             " name=EXCLUDED.name, status='requested',"
             " reason=EXCLUDED.reason, requested_at=NOW(), actioned_at=NULL"
-            " WHERE guild.guest_requests.status = 'rejected'",
-            [name, email, reason or "", domain]
+            " WHERE guild.guest_requests.status = 'rejected'"
+            " RETURNING id, requested_at",
+            [name, email, reason or "", domain], returning=True
         )
     except Exception:
-        pass
+        return None
+    return {"id": rows[0][0], "requested_at": rows[0][1]} if rows else None
 
 
 def _get_guest_requests() -> list:
@@ -3014,6 +3035,22 @@ from minimoi_portal import vault_bridge as _vault_bridge  # noqa: E402
 _vault_bridge.install_if_dev(app, base_url=_cfg.BASE_URL, environ=os.environ)
 
 
+# Action-waiting notices (spec v0.2): off unless MINIMOI_ACTION_NOTICES is record or on. Off, install() touches nothing
+# and every create path calls today's direct Telegram send exactly as before.
+from minimoi_portal import action_waiting as _notices  # noqa: E402
+_notices.install(app, os.environ, base_url=_cfg.BASE_URL)
+
+
+def _notices_reset_facts(req: dict) -> dict:
+    """What the safe direct notice may say about a reset (no name or email): when, until when, expired account."""
+    try:
+        at = datetime.fromisoformat(req["requested_at"]).timestamp()
+    except (KeyError, TypeError, ValueError):
+        return {}
+    guest = next((g for g in _auth.list_guests() if g.get("username") == req.get("username")), None)
+    return {"requested_at": at, "expires_at": at + 48 * 3600, "account_expired": bool(guest and guest.get("expired"))}
+
+
 @app.route("/health")
 def health():
     from minimoi_portal.proving_marker import marker
@@ -3028,6 +3065,7 @@ def health():
 def main():
     port = _cfg.PORT
     debug = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
+    _notices.start()                 # the one sweep thread; nothing when the notices service is off
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
 
 

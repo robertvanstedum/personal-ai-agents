@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from .settings import MESSAGE_MAX
-from .sources import agent_name
+from .sources import agent_name, epoch
 
 CUT = "… (cut — full words in MC)"
 KIND_WORDS = {"guest_access": "Guest access request", "password_reset": "Password reset request",
@@ -26,9 +26,10 @@ except Exception:                                      # no zone database in the
 
 
 def when(t, *, day=True) -> str:
+    t = epoch(t)
     if t is None:
         return "unknown time"
-    dt = datetime.fromtimestamp(float(t), timezone.utc).astimezone(_ZONE)
+    dt = datetime.fromtimestamp(t, timezone.utc).astimezone(_ZONE)
     text = f"{dt:%H:%M} {_ZONE_LABEL}"
     return f"{text}, {dt.day} {dt:%b}" if day else text
 
