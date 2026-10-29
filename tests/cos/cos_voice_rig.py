@@ -148,16 +148,15 @@ def build(monkeypatch, tmp_path, *, environ=None, voices=None, budget=None, brie
         budget = VoiceBudget("sqlite:///" + str(tmp_path / "budget.db"), cap_usd=lambda: 20)
         budget.ensure_schema()
     gateway = Gateway()
-    bounds = []
     metadata = direct_voice.install(
         app, environ=env, process_turn=process_turn,
         briefing=briefing or (lambda memory: "--- MEMORY ---\n" + memory + "\n--- TODAY ---\nTuesday"),
-        memory=lambda: memory, files=lambda: files, bound_turn=bounds.append, recall=recall, budget=budget,
+        memory=lambda: memory, files=lambda: files, recall=recall, budget=budget,
         clock=lambda: clock[0], summary_http=gateway,
         card_root=card_root(tmp_path, voices) if voices is not None else direct_voice.CARD_ROOT)
     return SimpleNamespace(app=app, client=app.test_client(), metadata=metadata, mints=mints, clock=clock, runtime=runtime,
                            notes=notes, reminders=reminders, resets=resets, turns=turns, budget=budget, gateway=gateway,
-                           voice=voice, recall=recall, outbox=outbox, files=files, bounds=bounds, env=env, context=context)
+                           voice=voice, recall=recall, outbox=outbox, files=files, env=env, context=context)
 
 
 def start(r, provider="openai", headers=OWNER):

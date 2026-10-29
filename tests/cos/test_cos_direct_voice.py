@@ -145,8 +145,17 @@ def test_a_note_the_store_says_was_not_saved_after_the_operation_is_unknown(r):
     assert answer["outcome"] == "unknown" and answer.get("saved") is not True
 
 
-def test_her_turn_ends_within_its_deadline_unknown_after_dispatch(r, monkeypatch):
-    monkeypatch.setattr(direct_voice, "TURN_DEADLINE_S", 0.3)
+def typed_confers_bound(monkeypatch, seconds, slack=0.1):
+    """Typed Confer's own bound (openclaw_backend.turn_timeout_seconds), scaled down for a test."""
+    import contextvars
+    monkeypatch.setattr(direct_voice.openclaw_backend, "turn_timeout_seconds",
+                        contextvars.ContextVar("cos_turn_timeout_seconds_test", default=seconds))
+    monkeypatch.setattr(direct_voice, "TURN_SLACK_S", slack)
+
+
+def test_a_turn_past_typed_confers_own_bound_is_unknown_and_recorded(r, monkeypatch):
+    """A2-D1: past typed Confer's bound (scaled to 0.2 s here), a dispatched turn's outcome is unknown, recorded."""
+    typed_confers_bound(monkeypatch, 0.2)
     r.runtime.hold = threading.Event()
     sid = rig.start(r)
     began = time.monotonic()
@@ -155,11 +164,30 @@ def test_her_turn_ends_within_its_deadline_unknown_after_dispatch(r, monkeypatch
     r.runtime.hold.set()
     kept = r.client.get(BASE + f"/consult/{sid}/t1?conversation_id=owner", headers=READ).get_json()
     assert kept["outcome"] == "unknown" and kept["recorded"] is True         # recorded, not left running
-    assert r.bounds == [direct_voice.TURN_READ_S]                             # her runtime call was told to give up too
+
+
+def test_a_long_consult_answers_pending_then_lands_done(r, monkeypatch):
+    """A2-D1: a 60 s consult (scaled: the core's 25 s wait as 0.2 s, the turn as 0.6 s; typed Confer's bound as it is,
+    120 s + slack) gets pending on its request, then done when it lands, said on the next heartbeat."""
+    monkeypatch.setattr(core, "CONSULT_WAIT_S", 0.2)
+    r.runtime.hold = threading.Event()
+    sid = rig.start(r)
+    first = rig.ask(r, sid).get_json()
+    assert first["outcome"] == "pending"
+    threading.Timer(0.4, r.runtime.hold.set).start()
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        beat = rig.post(r, sid, []).get_json()
+        if beat.get("completed"):
+            break
+        time.sleep(0.05)
+    assert [(c["owner_item_id"], c["outcome"]) for c in beat["completed"]] == [("t1", "done")]
+    kept = r.client.get(BASE + f"/consult/{sid}/t1?conversation_id=owner", headers=READ).get_json()
+    assert kept["outcome"] == "done" and len(r.runtime.calls) == 1
 
 
 def test_a_turn_that_had_not_dispatched_by_its_deadline_never_does(r, monkeypatch):
-    monkeypatch.setattr(direct_voice, "TURN_DEADLINE_S", 0.3)
+    typed_confers_bound(monkeypatch, 0.2)
     r.context["hold"] = threading.Event()
     sid = rig.start(r)
     answer = rig.ask(r, sid).get_json()
@@ -169,11 +197,15 @@ def test_a_turn_that_had_not_dispatched_by_its_deadline_never_does(r, monkeypatc
     assert r.runtime.calls == []                                              # stopped at the boundary: nothing was done
 
 
-def test_the_deadline_is_stated_and_under_the_portals_consult_bound():
+def test_her_voice_turn_has_typed_confers_own_bound_and_the_request_answers_inside_the_portals():
+    """A2-D1: the turn's bound is typed Confer's own (reused from openclaw_backend, not copied), so a 60 s consult runs to
+    its end; the consult's HTTP answer still comes by the core's 25 s (pending), inside the portal's 40 s."""
+    from domains.cos.backends import openclaw_backend
     from minimoi_portal import proxy
     consult_read = proxy._route_timeout("/app/cos", BASE.lstrip("/") + "/consult", "POST")[1]
-    assert core.CONSULT_WAIT_S < direct_voice.TURN_DEADLINE_S < consult_read == 40
-    assert direct_voice.TURN_READ_S < direct_voice.TURN_DEADLINE_S
+    assert direct_voice.turn_deadline() == openclaw_backend.turn_timeout_seconds.get() + direct_voice.TURN_SLACK_S
+    assert direct_voice.turn_deadline() > 60 and openclaw_backend.turn_timeout_seconds.get() == 120
+    assert core.CONSULT_WAIT_S < consult_read == 40
 
 
 def test_a_reminder_result_maps_to_its_receipt():

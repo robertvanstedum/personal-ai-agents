@@ -847,13 +847,6 @@ def _process_confer_turn(
     ))
 
 
-def _bound_voice_turn(seconds: int) -> None:
-    """A voice consult's runtime call gives up after ``seconds`` (in this thread only), like a background turn's own
-    bound (_start_ui_turn), so the turn ends inside its deadline (domains/cos/direct_voice.py)."""
-    from domains.cos.backends import openclaw_backend
-    openclaw_backend.turn_timeout_seconds.set(seconds)
-
-
 def _chat(
     text: str,
     *,
@@ -1271,8 +1264,7 @@ _cos_managed_realtime_ready = _install_managed_realtime(app, environ=os.environ,
 # MINIMOI_COS_DIRECT_VOICE_PRODUCTION=1 (domains/cos/direct_voice.py). Off: nothing is registered and Confer is as before.
 from domains.cos.direct_voice import install as _install_direct_voice
 _cos_direct_voice = _install_direct_voice(app, environ=os.environ, process_turn=_process_confer_turn,
-    briefing=_build_system_prompt, memory=_read_memory, files=lambda: _cos_files, bound_turn=_bound_voice_turn,
-    recall=_conversations_dir)
+    briefing=_build_system_prompt, memory=_read_memory, files=lambda: _cos_files, recall=_conversations_dir)
 
 
 

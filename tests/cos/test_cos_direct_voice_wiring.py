@@ -135,7 +135,7 @@ def test_installed_her_routes_answer_and_a_consult_is_her_canonical_turn(on):
     (prompt, context), = on.test.sent
     assert prompt == "What is stuck on #12?" and context["confer"]["input_channel"] == "html_voice"
     assert context["confer"]["conversation_id"] == "owner"
-    assert on.test.backend.timeouts == [30]                     # her runtime call was bounded inside the deadline
+    assert on.test.backend.timeouts == [120]                    # her runtime call keeps typed Confer's own bound (A2-D1)
     session = on.test.minted[-1]
     assert "Her briefing (DATA" in session["instructions"] and "the kiln is new" in session["instructions"]
     assert "voice-<YYYY-MM-DD>-<session>.jsonl" in on._workspace_note()      # her recall now names the projections

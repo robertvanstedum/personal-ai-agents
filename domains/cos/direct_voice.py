@@ -45,6 +45,7 @@ from core.realtime_voice.errors import VoiceUnavailable
 from core.realtime_voice.transcripts import SPEAKERS
 from core.realtime_voice.voice_card import load_pinned
 from domains.cos import voice_store
+from domains.cos.backends import openclaw_backend
 from domains.cos.claim_truth import enforce_file_claims
 from domains.cos.confer_service import ConferOperationFailed, InvalidConferTurn, parse_explicit_note, slash_command
 
@@ -61,11 +62,18 @@ PERSON = {"key": "chief_of_staff", "name": "Chief of Staff", "short": "CoS", "do
 OWNER_NAME = "Robert"
 WRITE_VERIFIED = "X-Minimoi-Voice-Write-Verified"
 INSTRUCTIONS_MAX_BYTES = 24_000         # §6.3, as her managed voice (controlled_config): rules and card are never cut
-# FR N5: her typed turn's own deadline. The core waits 25 s, then answers pending; the turn itself ends by 35 s, under the
-# portal's (5, 40) consult bound, with its outcome recorded: done, not_done, or unknown when it was dispatched and its answer
-# did not come in time. Her runtime call is told to give up at 30 s (bound_turn), so nothing of it runs on much past that.
-TURN_DEADLINE_S = 35
-TURN_READ_S = 30
+# FR N5, corrected by A2-D1: her voice turn has typed Confer's own bound, her runtime call's
+# (openclaw_backend.turn_timeout_seconds: 120 s unless a caller sets it), reused, not copied, plus TURN_SLACK_S for the turn
+# service's own work around that call (its context, the routing receipt). The core already answers the consult's HTTP
+# request pending at 25 s, inside the portal's (5, 40), and the turn runs on in its worker: its result is said through the
+# pending path when it lands, or kept as a late receipt after End. Past the bound its outcome is recorded: unknown when it
+# was dispatched, not_done when it never was (and never will be).
+TURN_SLACK_S = 10
+
+
+def turn_deadline():
+    """How long her voice turn may run: typed Confer's own bound for her runtime call, plus TURN_SLACK_S."""
+    return openclaw_backend.turn_timeout_seconds.get() + TURN_SLACK_S
 CONTINUITY_TURNS = 24
 CONTINUITY_MAX_BYTES = 6_000
 CONTINUITY_SESSIONS = 3
@@ -200,10 +208,9 @@ class ChiefOfStaff(DirectVoiceAdapter):
     words = {"no_conversation": "Voice unavailable: Confer's conversation is not available here.",
              "invalid": "Voice unavailable: open Confer to talk with CoS."}
 
-    def __init__(self, *, store, process_turn, briefing, memory, files=None, bound_turn=None, card_root=CARD_ROOT,
-                 clock=time.time):
+    def __init__(self, *, store, process_turn, briefing, memory, files=None, card_root=CARD_ROOT, clock=time.time):
         self.store, self._process, self._briefing, self._memory = store, process_turn, briefing, memory
-        self._files, self._bound_turn, self._card_root, self._clock = files or (lambda: None), bound_turn, card_root, clock
+        self._files, self._card_root, self._clock = files or (lambda: None), card_root, clock
 
     def owner(self):
         uid = resolve_user_id(request)
@@ -294,8 +301,9 @@ class ChiefOfStaff(DirectVoiceAdapter):
         return "\n".join(lines)
 
     def typed_turn(self, handle, principal, sid, n, name, text, *, item):
-        """Her canonical Confer turn on his words (§6.4), bounded by TURN_DEADLINE_S, its outcome by the dispatch
-        boundary: an exception before anything was dispatched is not_done; after it, unknown, never by its class."""
+        """Her canonical Confer turn on his words (§6.4), bounded by turn_deadline() (typed Confer's own bound), its
+        outcome by the dispatch boundary: an exception before anything was dispatched is not_done; after it, unknown,
+        never by its class."""
         request_id = operation_id(HOST, sid, item)
         files = self._files()
         try:
@@ -303,12 +311,10 @@ class ChiefOfStaff(DirectVoiceAdapter):
         except OSError:
             log.exception("cos direct voice: outbox not read")
             before = None
-        gate, box, finished = _Boundary(), {}, threading.Event()
+        gate, box, finished, limit = _Boundary(), {}, threading.Event(), turn_deadline()
 
         def work():
             try:
-                if self._bound_turn is not None:
-                    self._bound_turn(TURN_READ_S)
                 box["result"] = self._process(text, channel="html_voice", conversation_id=voice_store.HANDLE,
                                               request_id=request_id, on_dispatch=gate.cross)
             except BaseException as exc:          # noqa: BLE001 - classified by the boundary below, never by class
@@ -316,7 +322,7 @@ class ChiefOfStaff(DirectVoiceAdapter):
             finally:
                 finished.set()
         threading.Thread(target=work, name=f"cos-voice-turn-{item}", daemon=True).start()
-        if not finished.wait(TURN_DEADLINE_S):
+        if not finished.wait(limit):
             if gate.stop():
                 return {"ok": False, "error": "deadline", "outcome": "not_done", "spoken": LATE}
             log.warning("cos direct voice: consult %s passed its deadline after dispatch", item)
@@ -367,7 +373,7 @@ class ChiefOfStaff(DirectVoiceAdapter):
         return answer
 
 
-def install(app, *, environ, process_turn, briefing, memory, files=None, bound_turn=None, recall=None, budget=None,
+def install(app, *, environ, process_turn, briefing, memory, files=None, recall=None, budget=None,
             clock=time.time, summary_http=None, card_root=CARD_ROOT):
     """Register her direct voice on cos-scheduler's app when MINIMOI_COS_VOICE_DIRECT=1: the core's routes under PREFIX,
     with this adapter. Returns the core's metadata, or None (nothing registered). ``recall``: Confer's recall folder
@@ -379,7 +385,7 @@ def install(app, *, environ, process_turn, briefing, memory, files=None, bound_t
     if root is None:
         log.error("cos direct voice: %s is not a usable folder; voice is refused until it is", voice_store.ENV)
     adapter = ChiefOfStaff(store=voice_store.FileStore(root, recall=recall, clock=clock), process_turn=process_turn,
-                           briefing=briefing, memory=memory, files=files, bound_turn=bound_turn, card_root=card_root,
+                           briefing=briefing, memory=memory, files=files, card_root=card_root,
                            clock=clock)
 
     def admitted():
