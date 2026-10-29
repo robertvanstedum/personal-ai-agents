@@ -285,6 +285,9 @@ def floor(*, embedded=False, domain=None):
     if embedded:
         ctx["urls"]["floor"] = url_for(".companion", domain=domain)
         ctx["page_json"]["urls"]["floor"] = url_for(".companion", domain=domain)
+    focus = _waiting_focus()
+    if focus:
+        ctx["page_json"]["waiting_focus"] = focus      # a notice's link: MC opens with W-n in view (notices spec §3.7)
     view = "archived" if request.args.get("view") == "archived" else "active"
     principal = (cfg()["current_user"]() or {}).get("username") or "owner"
     try:
@@ -305,6 +308,13 @@ def floor(*, embedded=False, domain=None):
         conv_list = {"state": "unavailable", "rows": [], "unreadable": 0}
     return render_template("guild_floor/floor.html", floor_cfg=ctx["layout"]["floor"], conv_list=conv_list,
                            conv_view=view, topic_link=_topic_link(ctx, principal), bare=embedded, embedded=embedded, **ctx)
+
+
+def _waiting_focus():
+    """``?waiting=W-12`` (or ``all``) from a notice's link; ignored unless valid and the notices service is on."""
+    from minimoi_portal import action_waiting as notices
+    from .action_waiting import focus_value
+    return focus_value(request.args.get("waiting")) if notices.current() is not None else None
 
 
 @owner_page

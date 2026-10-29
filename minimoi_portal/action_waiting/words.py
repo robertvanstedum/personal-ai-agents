@@ -92,9 +92,8 @@ def answer(item) -> str:
     if kind == "decision":
         code = facts.get("decision") or "D-?"
         return f"\"approve {code}\" or \"no {code}\" here, or the approvals bot reply"
-    if kind == "agent_ask":
-        where = f"session {facts['session'][:8]}" if facts.get("session") else "its own session"
-        return f"in {agent_name(facts.get('agent'))}'s own session ({where}), or \"dismiss {item['code']}\" here"
+    if kind == "agent_ask":                          # the session is named in the headline
+        return f"in {agent_name(facts.get('agent'))}'s own session, or \"dismiss {item['code']}\" here"
     return "in MiniMoi"
 
 

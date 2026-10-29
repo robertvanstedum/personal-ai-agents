@@ -789,7 +789,7 @@ def _platform_command(found):
     tools = _tools_own_actions(found[1])
     for command in (_owner_register_command, _owner_library_command, _owner_board_command, _owner_action_command,
                     *(() if tools else (_owner_guest_command,)), _owner_lesson_command, _owner_tool_proposal_command,
-                    _owner_decision_command):
+                    _owner_decision_command, _owner_waiting_command):
         result = command(found)
         if result is not None:
             return result
@@ -1333,6 +1333,30 @@ def _owner_decision_command(found):
     if result is None:
         return None
     return _platform_outcome(found[3], "owner-decision-" + found[5] + "-reply", result, area="Guild")
+
+
+def _owner_waiting_command(found):
+    """Robert closes an action-waiting notice by name: "dismiss W-12" / "done W-12" (notices spec v0.2 §3.7). Only his
+    own kept note counts; it closes agent items and items whose source record was lost, never answers anything. None
+    while the notices service is off, so the message goes to MC exactly as today."""
+    from . import action_waiting as waiting
+    if getattr(g, "topic_context", None):
+        return None
+    try:
+        result = waiting.owner_command(found)
+    except Exception:
+        _mc_log().exception("action-waiting dismiss could not be recorded")
+        result = {"reply": "I could not close that notice, and I cannot confirm it changed. Try again in a minute.",
+                  "operation": {"type": "action_waiting_dismiss", "state": "unknown"}}
+    if result is None:
+        return None
+    return _platform_outcome(found[3], "waiting-dismiss-" + found[5] + "-reply", result, area="Guild")
+
+
+def _waiting_guest_actions(principal, env) -> bool:
+    """Can MC reject a guest request by ref here (its tools own actions, or the owner guest commands are on)?"""
+    return bool(_tools_own_actions(principal) or (env.get("MINIMOI_MC_GUEST_ACTIONS") == "1"
+                                                  and env.get("MINIMOI_MC_GUEST_ACTIONS_ENV") in ("dev", "prod")))
 
 
 def _start_proposed_research(found, proposal, scope="research"):
@@ -2515,6 +2539,17 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
             extra.append(waiting)
     except Exception:
         pass
+    # Action-waiting notices (spec v0.2 §3.7): what is waiting on Robert and whether he was told. Off: nothing.
+    try:
+        from . import action_waiting, feature_environ as _waiting_env, supervision as _supervision
+        env = _waiting_env()
+        block = action_waiting.context_block(
+            principal, owner_text, environ=env, guest_actions=_waiting_guest_actions(principal, env),
+            supervision_on=_supervision.enabled(env) and principal == env.get("MINIMOI_SUPERVISION_OWNER"))
+        if block:
+            extra.append(block)
+    except Exception:
+        pass
     from . import feature_environ as _fe
     if _fe().get("MINIMOI_MC_OPERATING_RULES") == "1":
         extra.append(MC_OPERATING_RULES_TOOLS if _tools_own_actions(principal) else MC_OPERATING_RULES)
@@ -2769,8 +2804,17 @@ def workshop_view_api():
 
 from .board_api import RULES as _BOARD_RULES  # noqa: E402  (it imports helpers from this module)
 
+@owner_api
+def waiting_view():
+    """What is waiting on Robert (action-waiting notices, spec v0.2 Appendix A): the contract for MC's strip (U1).
+    ``?code=W-n`` adds that item, open or closed, as ``focus``. Off: ``mode: off`` and nothing is read."""
+    from .action_waiting import api_payload
+    return jsonify(api_payload(request.args.get("code")))
+
+
 RULES = [
     ("/session", "api_session", session_view, ["GET"]),
+    ("/waiting", "api_waiting", waiting_view, ["GET"]),
     ("/floor", "api_floor", floor_view, ["GET"]),
     ("/queue", "api_queue", queue_view, ["GET"]),
     ("/queue/items/<int:item_id>", "api_item", item_view, ["GET"]),

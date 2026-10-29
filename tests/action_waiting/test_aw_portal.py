@@ -92,7 +92,8 @@ def test_off_register_verify_and_reset_call_todays_sends_unchanged(portal, tmp_p
 
 
 def test_off_survives_the_service_submodule_being_imported(portal):
-    import minimoi_portal.action_waiting.service  # noqa: F401  (the name that once shadowed the accessor)
+    import importlib
+    importlib.import_module("minimoi_portal.action_waiting.service")    # the name that once shadowed the accessor
     assert callable(notices.current) and notices.current() is None
     assert _forgot(portal).status_code == 200 and len(portal.calls["reset"]) == 1
 
