@@ -6,6 +6,21 @@ resolves secrets, creates state directories or sends a message.
 """
 from datetime import timezone
 from typing import Dict, List
+from html import escape as _escape
+from urllib.parse import urlsplit
+
+
+def _safe_href(value: str) -> str:
+    """Render only absolute web navigation; keep other references non-clickable."""
+    try:
+        parts = urlsplit(value)
+        if parts.scheme.lower() not in {"http", "https"} or not parts.hostname:
+            return "#"
+        # Accessing the port validates malformed and out-of-range port syntax.
+        parts.port
+    except (TypeError, ValueError):
+        return "#"
+    return _escape(value, quote=True)
 
 
 def format_output(entries: List[Dict]) -> str:
@@ -101,7 +116,7 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
         'haiku': 'claude-haiku-4-5',
         'sonnet': 'claude-sonnet-4-5',
     }
-    model_display = model_display_map.get(model, model)
+    model_display = _escape(str(model_display_map.get(model, model)))
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -109,7 +124,7 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="curator-model" content="{model_display}">
-    <meta name="curator-mode" content="{run_mode}">
+    <meta name="curator-mode" content="{_escape(str(run_mode))}">
     <meta name="curator-timestamp" content="{timestamp_str}">
     <meta name="curator-articles" content="{len(entries)}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -521,7 +536,7 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
         }}
     </style>
 </head>
-<body data-run-mode="{run_mode}">
+<body data-run-mode="{_escape(str(run_mode))}">
 <div class="domain-rail">
   <a href="/" class="rail-domain active"><span class="rail-icon">📚</span><span>Curator</span></a>
   <a href="/research/dashboard" class="rail-domain"><span class="rail-icon">🔬</span><span>Research</span></a>
@@ -598,24 +613,28 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
             except:
                 pass
 
-        # Escape article data for JSON embedding
-        import html as html_module
-        title_escaped = html_module.escape(title.replace("'", "\\'"))
-        url_escaped = html_module.escape(url)
-        source_escaped = html_module.escape(source.replace("'", "\\'"))
+        # HTML attributes decode back to the original article strings. They
+        # are not JavaScript literals; JSON.stringify handles feedback later.
+        title_escaped = _escape(title)
+        url_escaped = _escape(url)
+        source_escaped = _escape(source)
+        hash_id_escaped = _escape(str(hash_id))
+        category_escaped = _escape(category)
+        category_label = _escape(category.lower())
+        href = _safe_href(url)
 
-        html += f"""                <tr data-hash-id="{hash_id}" 
+        html += f"""                <tr data-hash-id="{hash_id_escaped}" 
                         data-rank="{rank}"
                         data-title="{title_escaped}"
                         data-url="{url_escaped}"
                         data-source="{source_escaped}"
-                        data-category="{category}">
+                        data-category="{category_escaped}">
                     <td class="col-rank"><span class="rank-badge">{rank}</span></td>
-                    <td class="col-category"><span class="cat-badge cat-{category.lower()}">{category.lower()}</span></td>
-                    <td class="col-source"><span class="source-name">{source}</span></td>
+                    <td class="col-category"><span class="cat-badge cat-{category_label}">{category_label}</span></td>
+                    <td class="col-source"><span class="source-name">{source_escaped}</span></td>
                     <td class="col-title">
                         <div class="article-title">
-                            <a href="{url}" target="_blank">{title}</a>
+                            <a href="{href}" target="_blank">{title_escaped}</a>
                         </div>
                     </td>
                     <td class="col-time"><span class="time-ago">{time_ago}</span></td>
@@ -924,10 +943,10 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
     if radar_articles:
         radar_rows = ""
         for a in radar_articles:
-            title   = a.get("title", "Untitled")
-            source  = a.get("source", "")
-            link    = a.get("link", "#")
-            topics  = ", ".join(a.get("_radar_topics", []))
+            title   = _escape(str(a.get("title", "Untitled")))
+            source  = _escape(str(a.get("source", "")))
+            link    = _safe_href(a.get("link", "#"))
+            topics  = _escape(", ".join(a.get("_radar_topics", [])))
             radar_rows += f"""
             <tr class="radar-row">
                 <td class="radar-title"><a href="{link}" target="_blank" rel="noopener">{title}</a></td>
