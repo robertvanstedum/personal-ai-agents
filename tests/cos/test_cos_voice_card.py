@@ -11,11 +11,11 @@ REPO = Path(__file__).resolve().parents[2]
 ROOT = REPO / "domains/cos/voice"
 LOCK = REPO / "docker/cos-agent-a/mc-role-lock.json"
 PERSONA = REPO / "planning-studio/initiatives/INIT-2026-0007-interaction-vision/documents/MASTER_CRAFTSMAN_PERSONA.md"
-# §6.2's card after the audition (29 Oct, release 0.1.1): Robert's voices and accents, MiniMoi said the French way,
+# §6.2's card after the audition (29 Oct, release 0.1.2): Robert's voices and accents, MiniMoi said the French way,
 # and the German passage reworded (A1_FIX_FINDINGS P2).
 FINAL = ("Chief of Staff, Robert's longtime collaborator and friend in the work: a familiar, candid partner who keeps "
          "the work pointed at the right questions. Warm, sharp, direct, with dry humour when it fits; never a "
-         "receptionist, concierge, servant or language examiner. English by default, in fluent American English; never "
+         "receptionist, concierge, servant or language examiner. English by default, in fluent British English; never "
          "a caricature, never invented shared memories. German belongs naturally in his day: an occasional brief "
          "phrase. Asked how to say something, give one natural Austrian formulation and nothing more. When he speaks "
          "German, answer in fluent Austrian standard German with du; English stays the default for what follows. If he "
@@ -27,18 +27,19 @@ FINAL = ("Chief of Staff, Robert's longtime collaborator and friend in the work:
 
 
 def test_her_card_is_pinned_and_verified_with_the_fields_the_spec_gives_it():
-    assert json.loads((ROOT / "pin.json").read_text()) == {"release": "0.1.1"}
+    assert json.loads((ROOT / "pin.json").read_text()) == {"release": "0.1.2"}
     card = load_pinned(ROOT)
-    assert card == load_card(ROOT, "0.1.1")
+    assert card == load_card(ROOT, "0.1.2")
     assert card["card"] == FINAL
-    assert (card["language"], card["accent"], card["transcription"]) == ("en-US", "American English; Austrian German", "bilingual")
+    assert (card["language"], card["accent"], card["transcription"]) == ("en-US", "British English; Austrian German", "bilingual")
 
 
 def test_her_voices_are_the_ones_robert_picked_by_ear():
-    """§11.4, 29 Oct: marin on OpenAI and ara on Grok (cedar sounded like "a man… too slow"). Both named, so neither provider
+    """§11.4, 29 Oct: shimmer on OpenAI, in British English (cedar was "a man… too slow", marin "too teachery"), and ara on
+    Grok. Both named, so neither provider
     falls back to a default; a card naming no Grok voice is still refused on Grok (test_cos_direct_voice.py)."""
-    raw = json.loads((ROOT / "releases/0.1.1/voice.json").read_text())
-    assert raw["voices"] == {"openai": "marin", "xai": "ara"}
+    raw = json.loads((ROOT / "releases/0.1.2/voice.json").read_text())
+    assert raw["voices"] == {"openai": "shimmer", "xai": "ara"}
     assert load_pinned(ROOT)["named"] == ["openai", "xai"]
 
 
