@@ -34,6 +34,18 @@ _CURATOR_URL = "http://curator:8766" if _IN_DOCKER else "http://localhost:8766"
 _GERMAN_URL  = "http://german:8767"  if _IN_DOCKER else "http://localhost:8767"
 _PORTAL_URL  = "http://portal:5001"  if _IN_DOCKER else "http://localhost:5001"
 
+from core.telegram.owner_lock import owner_only
+
+
+def _owner_chat_id():
+    # The same id the German handlers this bot delegates to compare.
+    from core.telegram.telegram_bot import ROBERT_CHAT_ID
+    return ROBERT_CHAT_ID
+
+
+# Every handler answers only Robert's chat (core/telegram/owner_lock.py).
+_owner_only = owner_only(_owner_chat_id)
+
 
 def _get_token() -> str:
     from utils.telegram import get_system_token
@@ -58,12 +70,14 @@ def _check_service(name: str, url: str) -> str:
         return f"{name}: unreachable ({e})"
 
 
+@_owner_only
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"minimoi system bot — {_identity()}\n\nCommands:\n/status — service health\n!ops — ops summary"
     )
 
 
+@_owner_only
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lines = [f"<b>Status</b> — {_identity()}"]
     lines.append(_check_service("curator", _CURATOR_URL + "/"))
@@ -72,6 +86,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
+@_owner_only
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (update.message.text or "").strip()
 

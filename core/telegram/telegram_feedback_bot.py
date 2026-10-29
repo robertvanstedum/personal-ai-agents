@@ -9,12 +9,28 @@ Runs continuously, listening for button clicks in Telegram briefings.
 """
 
 import os
+import sys
 import json
 import subprocess
 from pathlib import Path
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes
 import keyring
+
+_REPO_ROOT = Path(__file__).parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+from core.telegram.owner_lock import owner_only
+
+
+def _owner_chat_id():
+    # The same id the German handlers in telegram_bot.py compare.
+    from core.telegram.telegram_bot import ROBERT_CHAT_ID
+    return ROBERT_CHAT_ID
+
+
+# Button taps count only from Robert's chat (core/telegram/owner_lock.py).
+_owner_only = owner_only(_owner_chat_id)
 
 # Track processed callbacks to prevent duplicates
 processed_callbacks = set()  # stores "message_id:action:rank"
@@ -30,6 +46,7 @@ def get_telegram_token():
     
     return os.environ.get('TELEGRAM_BOT_TOKEN')
 
+@_owner_only
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle inline button presses"""
     query = update.callback_query

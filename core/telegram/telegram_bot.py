@@ -72,6 +72,14 @@ from german_domain import (
     _resolve_verb, _resolve_phrases, _resolve_drill_verb,
 )
 
+# Appended, not inserted: domains/german must stay ahead of the repo root (see above).
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.append(str(_REPO_ROOT))
+from core.telegram.owner_lock import allows, owner_only
+
+# Every inbound handler answers only Robert's chat (core/telegram/owner_lock.py).
+_owner_only = owner_only(lambda: ROBERT_CHAT_ID)
+
 BASE_DIR = Path(__file__).parent
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CURATOR_CRON_SCRIPT = PROJECT_ROOT / "scripts" / "operations" / "run_curator_cron.sh"
@@ -323,6 +331,7 @@ def parse_article_from_message(message_text, rank):
         'category': category
     }
 
+@_owner_only
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle Like/Dislike/Save button presses"""
     query = update.callback_query
@@ -390,6 +399,7 @@ def record_feedback(action, rank, article_data):
 
 # ─── Commands ─────────────────────────────────────────────────────────────────
 
+@_owner_only
 async def cmd_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /run — trigger the curator manually"""
     if not update.message:
@@ -408,6 +418,7 @@ async def cmd_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(f"❌ Curator failed:\n{err[:300]}")
 
+@_owner_only
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /status — show last run info"""
     if not update.message:
@@ -420,6 +431,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("No log file found yet.")
 
+@_owner_only
 async def cmd_briefing(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /briefing — resend today's briefing"""
     if not update.message:
@@ -1924,11 +1936,10 @@ async def _handle_phrase_capture_input(update: Update, text: str) -> None:
 
 
 
+@_owner_only
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Route plain text messages — German transcript, !german commands, fallback."""
     if not update.message or not update.message.text:
-        return
-    if update.message.chat_id != ROBERT_CHAT_ID:
         return
 
     text = update.message.text.strip()
@@ -2098,11 +2109,10 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
 
 
+@_owner_only
 async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle voice messages in polling mode: transcribe → echo → route."""
     if not update.message or not update.message.voice:
-        return
-    if update.message.chat_id != ROBERT_CHAT_ID:
         return
 
     voice = update.message.voice
@@ -2268,11 +2278,10 @@ async def handle_voice_polling(update: Update, context: ContextTypes.DEFAULT_TYP
 
 MAX_UPLOAD_BYTES = 50 * 1024  # 50KB
 
+@_owner_only
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle .txt file uploads — read content, enforce 50KB limit, feed transcript pipeline."""
     if not update.message or not update.message.document:
-        return
-    if update.message.chat_id != ROBERT_CHAT_ID:
         return
 
     doc = update.message.document
@@ -2419,6 +2428,10 @@ def run_webhook_mode():
         try:
             update_json = request.get_json()
 
+            # Robert only: anyone else's update stops here (a button tap is only answered)
+            if _webhook_refused(update_json, token):
+                return jsonify({'ok': True})
+
             # Handle callback_query (button presses)
             if 'callback_query' in update_json:
                 handle_webhook_callback(update_json['callback_query'], token)
@@ -2452,6 +2465,27 @@ def run_webhook_mode():
     print("🌐 Starting webhook server on http://localhost:8444")
     print("📡 Waiting for Telegram updates...")
     app.run(host='0.0.0.0', port=8444, debug=False)
+
+def _webhook_refused(update_json, token):
+    """Webhook twin of _owner_only, for the two update kinds the route acts on:
+    True for anyone else's message or button tap (the tap is answered with nothing)."""
+    if not isinstance(update_json, dict):
+        return False
+    if 'callback_query' in update_json:
+        query = update_json['callback_query'] or {}
+        chat = (query.get('message') or {}).get('chat') or {}
+        sender = (query.get('from') or {}).get('id')
+    elif 'message' in update_json:
+        query = None
+        msg = update_json['message'] or {}
+        chat, sender = msg.get('chat') or {}, (msg.get('from') or {}).get('id')
+    else:
+        return False    # the route acts on no other kind of update
+    if allows(ROBERT_CHAT_ID, chat.get('id'), sender, 'webhook'):
+        return False
+    if query is not None and query.get('id'):
+        answer_callback(token, query['id'], '')
+    return True
 
 def handle_webhook_callback(callback_query, token):
     """Process button callback from webhook"""
