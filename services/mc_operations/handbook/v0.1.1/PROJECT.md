@@ -1,6 +1,6 @@
 # MiniMoi — MC project brief
 
-Version: 0.1.1 · 15 October 2026 · Author: Codex · Owner: Robert
+Version: 0.1.1 · 29 October 2026 · Author: Codex · Owner: Robert
 Status: proposed operating baseline; runtime adoption and owner acceptance pending.
 
 ## Purpose and role

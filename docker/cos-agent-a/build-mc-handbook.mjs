@@ -4,7 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
-export const MANIFEST_SHA256 = 'be443798026452bd75c8f5a86958c5ff73782994df564558044d61932450070f';
+export const MANIFEST_SHA256 = 'f6e9575ee765374418b12ed2b68e4856e7a5d6496397320e6e93d7ad410676fb';
 const names = ['v0.1.1/ADOPTION.md', 'v0.1.1/PROJECT.md',
   'v0.1.1/skills/minimoi-engineering/SKILL.md',
   'v0.1.1/skills/minimoi-engineering/references/board-and-services.md',

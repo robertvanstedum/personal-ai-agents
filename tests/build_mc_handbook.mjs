@@ -21,7 +21,10 @@ try {
   assert.deepEqual(first.receipt.acknowledgement,receipt.acknowledgement);
   assert.equal(first.receipt.handbook.owner_accepted,false);
   assert.equal(first.receipt.handbook.version,'0.1.1');assert.ok(first.policy.startsWith('BEGIN_MINIMOI_MC_HANDBOOK 0.1.1\n'));
-  assert.ok(fs.readFileSync(path.join(root,'v0.1.1/skills/minimoi-engineering/references/build-and-deploy.md'),'utf8').includes('\n## Outside reports and GitHub issues\n'));
+  // What the runtime loads (the compiled handbook block), not only the source file, carries the whole section.
+  const ref=fs.readFileSync(path.join(root,'v0.1.1/skills/minimoi-engineering/references/build-and-deploy.md'),'utf8');
+  const section=ref.slice(ref.indexOf('## Outside reports and GitHub issues\n'),ref.indexOf('\n## Verify and release\n'));
+  assert.ok(section.length>900&&first.policy.indexOf(section)>0&&first.policy.indexOf(section)<first.policy.indexOf('END_MINIMOI_MC_HANDBOOK 0.1.1'));
   assert.ok(first.policy.endsWith(base));
   for (const name of ['board-and-services.md','build-and-deploy.md','regression.md']) assert.ok(first.policy.includes('/opt/minimoi/cos-agent-a/handbook/v0.1.1/skills/minimoi-engineering/references/'+name));
   assert.throws(()=>compile('x'.repeat(32000),root,{...receipt,policy_sha256:sha('x'.repeat(32000))}),/bootstrap_budget/);

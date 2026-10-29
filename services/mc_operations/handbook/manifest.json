@@ -7,14 +7,14 @@
   "predecessor": "0.1.0",
   "predecessor_reason": "how outside issue reports are handled (Robert, 29 Oct)",
   "date": "2026-10-29",
-  "author": "Codex",
+  "author": "Claude Code (build thread); wording by the design thread",
   "decision_owner": "Robert",
   "runtime_activation_included": false,
   "source_basis": "Existing MC role and working agreement plus owner direction; not a replacement for runtime authority.",
   "files": {
-    "v0.1.1/ADOPTION.md": "712107f086fcaac87ab19916db6229ac39d2c8b74cb14d438c57e94ad2a349cb",
-    "v0.1.1/PROJECT.md": "3976f4d2b6b281a88eb68027f3af9d916700173a015c29f734fa053f9ac1b78a",
-    "v0.1.1/skills/minimoi-engineering/SKILL.md": "d0e23734464c9d7850521c02e5c06947965c4aaf31d0c579b5c09c28e1c6cdc0",
+    "v0.1.1/ADOPTION.md": "03b94fe1d75f8b1296693d3a88d9c0c60fc447696996a2dc939fa1d1759c2455",
+    "v0.1.1/PROJECT.md": "1e77fb0e720cd9db611d9810efcd07d679e5ad75b48e3535c3341c05dd82e537",
+    "v0.1.1/skills/minimoi-engineering/SKILL.md": "5cbfacae771ce242aeaf217b561978a232f65ee33cb1fa32b4e6e2a0a2ad469d",
     "v0.1.1/skills/minimoi-engineering/references/board-and-services.md": "3b8d2cec390620e3264b6c7f0b5b13b4468ea5aec3e7de7985e784f78cf6bac0",
     "v0.1.1/skills/minimoi-engineering/references/build-and-deploy.md": "7245baeb812fe842753582279e263b30ebc74b6f10894c471e8146a630cc72b7",
     "v0.1.1/skills/minimoi-engineering/references/regression.md": "1966384358150d7cefa2d55a0e17f833de3f0125ca6fc618182c979bcb8c4402"

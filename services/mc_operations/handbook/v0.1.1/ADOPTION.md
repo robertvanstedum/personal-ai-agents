@@ -1,6 +1,6 @@
 # MC handbook adoption and revision
 
-Version: 0.1.1 · 15 October 2026
+Version: 0.1.1 · 29 October 2026
 State: review candidate; not installed by this change.
 
 ## Source and versioning
