@@ -641,7 +641,7 @@ await check('LV4 (OpenAI, oa2): before any other reply, a call with no output is
   const told = order.indexOf('function_call_output:call_FKRZ');
   assert.ok(told >= 0 && told < order.lastIndexOf('response.create'), 'a reply was asked for while the call had no output');
   const pending = JSON.parse(s.frames.find((f) => f.item?.call_id === 'call_FKRZ').item.output);
-  assert.deepEqual(pending, { ok: false, outcome: 'pending', spoken: 'Still running; the result will be told when it lands.' });
+  assert.deepEqual(pending, { ok: false, outcome: 'pending', spoken: "That's still running. I'll tell you when it's back." });
   assert.equal(s.creates().length, 2, 'a reply was asked for the pending output');   // c1's, and Hm's: none for the output
   s.start('R_hm'); s.done('R_hm'); await tick();
   release(); await tick(); await tick();

@@ -52,8 +52,9 @@ const SUPERSEDED = { ok: false, outcome: "not_done", error: "superseded",
 const CUT_SHORT = { ok: false, outcome: "not_done", error: "cut_short",
   spoken: "Not run: the reply was cut short before it could run. Nothing was done." };
 // A call passed to the host whose output is not sent yet, when the page must make another reply (live probes, LV4): its
-// honest answer for now. Its result is said later, as a page line.
-const PENDING = { ok: false, outcome: "pending", spoken: "Still running; the result will be told when it lands." };
+// honest answer for now, as the sentence the voice should say, since the model reads it out word for word (Gate 2 E N2).
+// Its result is said later, as a page line.
+const PENDING = { ok: false, outcome: "pending", spoken: "That's still running. I'll tell you when it's back." };
 const LATE_LINE = "Say this briefly, adding nothing: ";
 const LATE_DONE = "That earlier check has finished; its answer is in the conversation.";
 `,

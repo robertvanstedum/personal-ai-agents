@@ -51,6 +51,10 @@ export const END_UNCONFIRMED = 'Voice ended here, but the server did not confirm
 // a consult whose answer did not come back (review B7): never "failed", which would invite asking again.
 export const UNKNOWN = "I didn't get the result back. Check it in writing before asking again.";
 export const PENDING = "That's taking longer; the answer will be in the conversation.";
+// A second call on a turn already running (two calls in one reply, or Check while the model's call runs; Gate 2 E S1): told
+// the turn is already being handled, never promised an answer of its own; the first call's outcome is said once. The
+// server's words when it gives them (core direct_host.HANDLING), else these.
+export const HANDLING = 'That turn is already being handled; its answer will be said once it is back. Ask anything else in it on its own.';
 // The summary's words, each true for what the server is doing (review R1 P3-7). The server's own call is bounded under 45 s
 // (core/realtime_voice/summary_gateway.py), so after the page's bound nothing is still being written: unavailable. An answer
 // lost on the way back (no answer, or a proxy's 502/504) may still have kept a proposal: it may still appear.
@@ -602,7 +606,9 @@ export function directVoice(d) {
         Promise.resolve().then(() => heard({ failed: code, status: r.status }));
       }
       if (retried && !(r.status === 200 && Object.keys(r.body).length)) return reconcile(item);
-      if (inFlight(r)) return { ok: false, error: 'in flight', outcome: 'pending', spoken: PENDING };   // the same turn, still running (B1)
+      // The same turn, running for another call (B1; E S1): already being handled, never this call's own pending answer.
+      if (inFlight(r)) return { ok: false, error: 'in flight', outcome: 'pending', same_turn: true,
+        spoken: typeof r.body.spoken === 'string' && r.body.spoken.trim() ? r.body.spoken.trim() : HANDLING };
       if (Object.keys(r.body).length) return r.body;
       // An unreadable answer: refused is not done; accepted but unreadable is not known (review B7).
       return r.status >= 200 && r.status < 300 ? reconcile(item)

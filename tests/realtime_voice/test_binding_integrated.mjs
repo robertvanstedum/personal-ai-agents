@@ -48,9 +48,11 @@ async function run(provider, scenario, { routes = {} } = {}) {
       const body = opts.body ? JSON.parse(opts.body) : null;
       if (opts.method === 'POST') posts.push({ url, body });
       const route = Object.keys(routes).find((k) => url.split('?')[0].endsWith(k));
-      const answer = route ? await routes[route](body) : url.endsWith('/consult') ? { ok: true, outcome: 'done', spoken: 'Done' }
+      const out = route ? await routes[route](body) : url.endsWith('/consult') ? { ok: true, outcome: 'done', spoken: 'Done' }
         : url.endsWith('/end') ? { ok: true, ended: true, capture: 'complete' } : { ok: true, kept: body?.events?.length || 0 };
-      return { ok: true, status: 200, json: async () => answer };
+      // A route may answer with a status of its own: {__status, body}.
+      const status = out && Number.isInteger(out.__status) ? out.__status : 200, answer = status === 200 && !out?.__status ? out : out.body;
+      return { ok: status >= 200 && status < 300, status, json: async () => answer };
     },
     loadController: async () => ({ RealtimeVoiceController: C }), warn: (_words, info) => unbound.push(info),
     setTimeout: (fn, ms) => { timers.set(++serial, { fn, due: now + ms }); return serial; }, clearTimeout: (id) => timers.delete(id),
@@ -235,7 +237,7 @@ await check('LV4 (openai): a running consult is answered pending before his next
   t.asked('RA'); t.call('RA'); await flush();
   assert.equal(t.consults().length, 1);
   t.start(); t.said('hm', 'Hm'); t.stop(); t.commit('hm'); await flush();
-  assert.deepEqual(t.outputs(), [['call_RA', { ok: false, outcome: 'pending', spoken: 'Still running; the result will be told when it lands.' }]]);
+  assert.deepEqual(t.outputs(), [['call_RA', { ok: false, outcome: 'pending', spoken: "That's still running. I'll tell you when it's back." }]]);
   t.asked('RH'); t.over('RH'); await flush();
   releaseLV4(); await flush(); await flush();
   assert.equal(t.outputs().length, 1, 'the call was answered twice');
@@ -319,6 +321,37 @@ await check('n3, guard (xai): on Grok nothing is named at End (no reply of the p
   await t.s.end('user_ended'); await flush();
   assert.equal('not_acted' in t.posts('/end')[0], false);
 }));
+
+// Gate 2 E S1 (the tester's E2, through the real page): two calls in one OpenAI reply. The first runs; the second hits the
+// turn already running (409 in flight, one effect per owner item) and is told it is already being handled, never "the
+// answer will be in the conversation" with nothing ever coming; the first's outcome is said once, when it lands.
+const HANDLING_SERVER = 'That turn is already being handled; its answer will be said once it is back. Ask anything else in it on its own.';
+let releaseNote = null;
+await check('E S1 (openai): a second call in one reply is told the turn is already being handled; the first is said once', () => run('openai', async (t) => {
+  t.start(); t.said('a', 'Save a note that the glaze is ready and check the kiln.'); t.stop(); t.commit('a'); t.asked('RA');
+  t.ev({ type: 'response.done', response: { id: 'RA', status: 'completed', output: [
+    { type: 'function_call', call_id: 'call_note', name: 'save_note', arguments: '{}' },
+    { type: 'function_call', call_id: 'call_kiln', name: 'consult', arguments: '{}' }] } });
+  await flush(); await flush();
+  assert.deepEqual(t.consults(), [['t0', 'Save a note that the glaze is ready and check the kiln.'],
+    ['t0', 'Save a note that the glaze is ready and check the kiln.']]);
+  const second = t.outputs().find(([id]) => id === 'call_kiln');
+  assert.ok(second, 'the second call got no output');
+  assert.equal(second[1].spoken, HANDLING_SERVER);
+  assert.notEqual(second[1].spoken, "That's taking longer; the answer will be in the conversation.");
+  assert.equal(second[1].outcome, 'pending');
+  t.asked('RF'); t.over('RF'); await flush();
+  releaseNote(); await flush(); await flush();
+  assert.equal(t.outputs().filter(([id]) => id === 'call_note').length, 1, 'the first call was answered twice');
+  assert.equal(t.lines().filter((l) => l === 'Say this briefly, adding nothing: Saved.').length, 1, "the first call's result was not said once");
+}, { routes: { '/consult': (body) => (body.name === 'save_note'
+  ? new Promise((r) => { releaseNote = () => r({ ok: true, outcome: 'done', saved: true, spoken: 'Saved.' }); })
+  : { __status: 409, body: { ok: false, error: 'in flight', outcome: 'pending', same_turn: true, spoken: HANDLING_SERVER } }) } }));
+await check('E S1 (openai): a 409 in flight with no words of its own is still told the turn is being handled', () => run('openai', async (t) => {
+  t.start(); t.said('a', 'Check the kiln.'); t.stop(); t.commit('a'); t.asked('RA'); t.call('RA'); await flush(); await flush();
+  assert.deepEqual(t.outputs()[0], ['call_RA', { ok: false, error: 'in flight', outcome: 'pending', same_turn: true,
+    spoken: 'That turn is already being handled; its answer will be said once it is back. Ask anything else in it on its own.' }]);
+}, { routes: { '/consult': () => ({ __status: 409, body: { ok: false, error: 'in flight' } }) } }));
 
 if (failures.length) {
   console.log(`${failures.length} of ${cases} integrated binding regressions FAILED:\n  ${failures.join('\n  ')}`);

@@ -361,5 +361,5 @@ def test_admitted_but_refused_is_told_apart_from_not_admitted_with_its_words(mon
     no_allowance = build(monkeypatch, tmp_path / "b", store=Listing(), environ={})
     caps = no_allowance.client.get(BASE + "/capabilities", headers=OWNER).get_json()
     assert caps["direct_voice"] is False and caps["direct_refused"] == core.NO_ALLOWANCE
-    refused = boot(no_allowance)                             # the start's own refusal carries its words, not a code
-    assert refused.status_code == 503 and refused.get_json()["error"] == core.NO_ALLOWANCE
+    refused = boot(no_allowance)                             # a start is still refused, as before (MC's words unchanged)
+    assert refused.status_code == 503 and refused.get_json() == {"error": "unavailable", "message": core.NO_ALLOWANCE}

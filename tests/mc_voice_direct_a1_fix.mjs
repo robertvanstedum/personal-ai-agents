@@ -110,8 +110,9 @@ await t.check('item 4: a turn still running is pending, an answer that never cam
   await r.s.start('openai');
   r.c.utter('Run the nightly job.');
   const first = r.c.respond(), second = r.c.follow({ response_id: first }), third = r.c.follow({ response_id: second });
+  // A turn running for another call (Gate 2 E S1): pending, and told it is already being handled, never promised its own answer.
   assert.deepEqual(await r.c.callFrom(first, { call_id: 'a', name: 'consult', arguments: {} }),
-    { ok: false, error: 'in flight', outcome: 'pending', spoken: "That's taking longer; the answer will be in the conversation." });
+    { ok: false, error: 'in flight', outcome: 'pending', same_turn: true, spoken: 'That turn is already being handled; its answer will be said once it is back. Ask anything else in it on its own.' });
   assert.deepEqual(await r.c.callFrom(second, { call_id: 'b', name: 'consult', arguments: {} }),   // chained: the same turn
     { ok: false, error: 'unknown', outcome: 'unknown', spoken: "I didn't get the result back. Check it in writing before asking again." });
   assert.deepEqual(await r.c.callFrom(third, { call_id: 'c', name: 'consult', arguments: {} }),

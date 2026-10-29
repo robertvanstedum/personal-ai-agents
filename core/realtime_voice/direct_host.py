@@ -43,6 +43,10 @@ DEFAULT_LOCALE = "en-US"
 OUTCOMES = ("done", "not_done", "pending", "unknown")
 FAILED = "That did not go through. Nothing was done."                              # not_done (or the refusal's own words)
 PENDING = "That's taking longer; the answer will be in the conversation."          # pending
+# A second call on an owner turn already running here (two calls in one reply, Check while the model's call runs; Gate 2
+# E S1, §5.1 "the second tool is told the turn was already handled"): never promised an answer of its own. The first
+# call's outcome is the one said, once.
+HANDLING = "That turn is already being handled; its answer will be said once it is back. Ask anything else in it on its own."
 UNKNOWN = "I didn't get the result back. Check it in writing before asking again."  # unknown
 HEARTBEAT_SECONDS = 20
 # The page's transcript posts (§6): bounded per request and per session. Nothing is kept from a refused post.
@@ -389,8 +393,10 @@ UNAVAILABLE_TEXT = ("[Voice summary unavailable] The session's turns are shown. 
 
 
 # Providers whose transcript of a turn overtaken before any audio is repeated at the start of the next item's (live probes,
-# LV6: xAI, "Name an animal." then "Name an animal. Trees grow tall."). The records keep both as said; the summary is told.
+# LV6: xAI, "Name an animal." then "Name an animal. Trees grow tall."). The records keep both as said; the summary is told;
+# and a consult whose words begin with a request already consulted in the session is refused (Gate 2 Q S6, folded_repeat).
 FOLDS_OVERTAKEN = ("xai",)
+FOLDED = "That repeats a request already checked, so nothing was done. Check it in writing."
 REPEATS = (" Words may repeat across turns on this provider: a request said once can appear at the start of the next"
            " turn too; count it once.")
 
@@ -1141,10 +1147,11 @@ NOT_RECORDED = "That could not be recorded, so nothing was done."
 # acted. The words follow the turn's real outcome.
 TURN_MISMATCH = {"done": "That turn was already acted on; check it in writing.",
                  "not_done": "That turn was not done; say it again if you want it.",
-                 "pending": PENDING, "unknown": UNKNOWN}
+                 "pending": HANDLING, "unknown": UNKNOWN}
 
 
-IN_FLIGHT = {"ok": False, "error": "in flight", "outcome": "pending", "spoken": PENDING}
+IN_FLIGHT = {"ok": False, "error": "in flight", "outcome": "pending", "spoken": PENDING}      # the same call, still running
+IN_HAND = {"ok": False, "error": "in flight", "outcome": "pending", "same_turn": True, "spoken": HANDLING}   # another call
 
 
 def not_done(error, spoken=FAILED):
@@ -1217,7 +1224,9 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
     One effect per owner turn: the turn is bound only when its action is about to run. A refusal that runs nothing (the
     words refused, the conversation unavailable, the host's own refusal such as MC's save_note on words that are not a
     note, or the request record not kept) binds nothing, so another tool may still act on the turn (review R1 P3-5,
-    R2 S3). Returns (the answer the provider is given, HTTP status)."""
+    R2 S3). On a provider that folds an overtaken turn into the next (FOLDS_OVERTAKEN), a new turn whose words begin with
+    a turn already consulted here is refused too, "Check it in writing" (Gate 2 Q S6). Returns (the answer the provider
+    is given, HTTP status)."""
     replayed, prior = sessions.replay_call(sid, call_id)
     if replayed == "replay":
         return prior, 200
@@ -1259,11 +1268,13 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
             return not_done("session ended"), 409
         if sessions.capped(sid):
             return not_done("cap", CAP_LINE), 429
+        if sessions.provider(sid) in FOLDS_OVERTAKEN and folded_repeat(adapter, handle, sid, text):
+            return refused_here({"error": "repeated_words", "spoken": FOLDED})     # Q S6: the provider's own fold
         own = adapter.refuse(name, text)
         if own is not None:
             return refused_here(own)
         if not sessions.hold(sid, item, call_id):
-            return IN_FLIGHT, 409
+            return IN_HAND, 409                   # another call holds this turn (E S1)
         kept = put(adapter, handle, sid, asked)   # the durable record first, then the visible one (FR N9)
         if kept.outcome == "stored":
             n = sessions.admitted(sid)
@@ -1283,6 +1294,28 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
         if existing is None:
             return not_done("not_recorded", NOT_RECORDED), 200
     return same_key(adapter, sessions, handle, sid, call_id, item, words, existing, name)
+
+
+def folded_repeat(adapter, handle, sid, text):
+    """Whether ``text`` begins with the words of an owner turn already consulted in this session (Gate 2 Q S6). On a
+    provider in FOLDS_OVERTAKEN the provider itself may fold an overtaken turn into the next one ("Save a note that the
+    kiln is hot. Name a long river."), so Check would send words already acted on under a new key and repeat the effect.
+    A deterministic prefix test on the kept consult request records (each "<tool>: <his words>", as consult() keeps
+    them), whitespace and case aside; no ownership is inferred. A store that cannot be read refuses: nothing has run."""
+    from core.realtime_voice.transcripts import SPEAKERS
+    norm = lambda words: " ".join(str(words).split()).casefold()           # noqa: E731
+    try:
+        kept, _complete = adapter.store.records(handle, sid)
+    except Exception:
+        log.exception("%s direct voice: kept consults not read; refused", adapter.person["domain"])
+        return True
+    said = norm(text)
+    for speaker, words, _partial, _interrupted in kept or ():
+        tool, sep, earlier = str(words).partition(": ")
+        if speaker == SPEAKERS["consult"] and sep and tool in ("consult", "save_note") and norm(earlier):
+            if said.startswith(norm(earlier)):
+                return True
+    return False
 
 
 def unrun(adapter, sessions, handle, sid, call_id, name, item, result):
@@ -1327,7 +1360,7 @@ def same_key(adapter, sessions, handle, sid, call_id, item, words, existing, nam
                  result.get("outcome") if isinstance(result, dict) and result.get("outcome") in TURN_MISMATCH else "unknown")
         return {"ok": False, "error": "turn_mismatch", "outcome": state, "spoken": TURN_MISMATCH[state]}, 409
     if running:
-        return IN_FLIGHT, 409
+        return IN_HAND, 409                       # another call's run of this turn (E S1)
     if not isinstance(result, dict):
         answer = {"ok": False, "error": "no result", "outcome": "unknown", "spoken": UNKNOWN}
     elif tool is not None and tool != name:
@@ -1851,8 +1884,8 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         words = start_refused()
         if words is not None:                              # installed, not admitted here now (S1, S3)
             return refusal(words, words, 503)
-        if allowance(environ) is None:                      # its words as the error, so the page says them (Q S2)
-            return refusal(NO_ALLOWANCE, NO_ALLOWANCE, 503)
+        if allowance(environ) is None:
+            return refusal("unavailable", NO_ALLOWANCE, 503)
         body = request.get_json(silent=True)
         cid = body.get("conversation_id") if isinstance(body, dict) else None
         if not isinstance(cid, str) or not adapter.conversation_ok(cid):

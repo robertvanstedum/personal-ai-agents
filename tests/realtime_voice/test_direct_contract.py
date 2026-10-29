@@ -201,3 +201,22 @@ def test_each_host_gives_the_models_tools_only_where_the_provider_is_eligible(ho
         assert f"press Check with {short}" in session["instructions"] and "your two tools" not in session["instructions"]
     check = ask(h, body["voice_session_id"], "host-1", "t0").get_json()           # Check with the person: page-initiated
     assert check["outcome"] == "done" and h.turns() == 1
+
+
+def test_on_grok_check_refuses_folded_words_already_checked_on_every_host(host, monkeypatch):
+    """Gate 2 Q S6, over every host: on xAI (FOLDS_OVERTAKEN) the provider may fold an overtaken turn into the next
+    (xa3: "Name a large city." then "Name a large city. Name a long river."), so Check on those words is refused, "Check
+    it in writing", and nothing runs; a new request still acts."""
+    from core.realtime_voice import direct_host as core
+    h = host
+    monkeypatch.setattr("core.realtime_voice.bootstrap.xai_voice.mint_ephemeral_credential", lambda **kw: {
+        "provider": "xai", "ephemeral_token": "xai_synthetic", "expires_after_seconds": 300, "model": "grok-voice-latest",
+        "session_config": {}})
+    sid = h.client.post(h.base + "/bootstrap", headers=h.headers,
+                        json={"persona": h.persona, "provider": "xai", "conversation_id": h.cid}).get_json()["voice_session_id"]
+    assert ask(h, sid, "host-1", "t0", words="Name a large city.").get_json()["outcome"] == "done"
+    effects = h.effects()
+    folded = ask(h, sid, "host-2", "t2", words="Name a large city. Name a long river.").get_json()
+    assert folded["error"] == "repeated_words" and folded["outcome"] == "not_done" and folded["spoken"] == core.FOLDED
+    assert h.effects() == effects
+    assert ask(h, sid, "host-3", "t3", words="Name a long river.").get_json()["outcome"] == "done"

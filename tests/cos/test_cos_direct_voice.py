@@ -624,3 +624,61 @@ def test_a_consult_still_running_at_end_is_listed_until_it_lands_then_with_its_l
     assert gone.get_json()["dismissed"] is True
     assert r.client.get(BASE + "/sessions", headers=READ).get_json()["sessions"] == []
     assert len(r.runtime.calls) == 1
+
+
+# ── Gate 2 E S1, Q S6 ────────────────────────────────────────────────────────────────────────────────────────────────
+
+def test_a_second_call_on_a_turn_still_running_is_told_it_is_already_being_handled(r, monkeypatch):
+    """E S1 (the tester's E2): a second call on an owner turn that is still running (two calls in one reply, or Check while
+    the model's call runs) gets 409 in flight, told the turn is already being handled, never "the answer will be in the
+    conversation" for a request that never runs. The first call's outcome is the one effect, and its answer."""
+    monkeypatch.setattr(core, "CONSULT_WAIT_S", 0.2)
+    r.runtime.hold = threading.Event()
+    sid = rig.start(r)
+    first = rig.ask(r, sid).get_json()
+    assert first["outcome"] == "pending" and first["spoken"] == core.PENDING          # the first call's own pending
+    for call_id, name in (("call_2", "consult"), ("host-3", "consult"), ("call_4", "save_note")):
+        second = rig.ask(r, sid, call_id=call_id, name=name)
+        assert second.status_code == 409, call_id
+        assert second.get_json() == core.IN_HAND and second.get_json()["spoken"] == core.HANDLING, call_id
+    assert core.HANDLING == ("That turn is already being handled; its answer will be said once it is back. Ask anything "
+                             "else in it on its own.")
+    r.runtime.hold.set()
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and rig.post(r, sid, []).get_json().get("completed") is None:
+        time.sleep(0.05)
+    assert len(r.runtime.calls) == 1                                                   # one effect
+
+
+@pytest.mark.parametrize("said,folded", [
+    ("Save a note that the kiln is hot.", "Save a note that the kiln is hot. Name a long river."),     # the reviewer's
+    ("Name a large city.", "Name a large city. Name a long river."),                                  # xa3's own words
+])
+def test_on_grok_check_refuses_words_that_begin_with_a_request_already_checked(monkeypatch, tmp_path, said, folded):
+    """Q S6 (live probe xa3: item b30aacef "Name a large city." was overtaken before its audio, and xAI folded it into the
+    next item, c651e031 "Name a large city. Name a long river."): Check on the folded words would send a request already
+    acted on under a new key, so a second note could be saved. On a provider in FOLDS_OVERTAKEN, Check refuses words that
+    begin with the kept words of an item already consulted: "Check it in writing." Nothing runs; a new request still does."""
+    r = rig.build(monkeypatch, tmp_path, voices={"openai": "cedar", "xai": "ara"})
+    sid = rig.start(r, provider="xai")
+    first = rig.ask(r, sid, call_id="host-1", item="t0", words=said).get_json()
+    assert first["outcome"] == "done"
+    before = rig.effects(r)
+    refused = rig.ask(r, sid, call_id="host-2", item="t2", words=folded)
+    assert refused.status_code == 200
+    answer = refused.get_json()
+    assert answer["outcome"] == "not_done" and answer["error"] == "repeated_words" and answer["spoken"] == core.FOLDED
+    assert "Check it in writing" in core.FOLDED
+    assert rig.effects(r) == before                                                    # no second note, no second turn
+    fresh = rig.ask(r, sid, call_id="host-3", item="t3", words="Name a long river.").get_json()
+    assert fresh["outcome"] == "done" and rig.effects(r) == before + 1                 # a new request still acts
+
+
+def test_on_openai_the_fold_rule_does_not_apply(monkeypatch, tmp_path):
+    """Q S6, guard: OpenAI does not fold an overtaken turn (FOLDS_OVERTAKEN is xAI's), so a turn of his that begins with
+    an earlier request is his own words, a new turn, and acts (§5.1: a repeat is a new effect)."""
+    r = rig.build(monkeypatch, tmp_path)
+    sid = rig.start(r)
+    assert rig.ask(r, sid, call_id="call_1", item="t0", words="Name a large city.").get_json()["outcome"] == "done"
+    again = rig.ask(r, sid, call_id="call_2", item="t2", words="Name a large city. Name a long river.").get_json()
+    assert again["outcome"] == "done" and len(r.runtime.calls) == 2
