@@ -34,6 +34,15 @@ _KEY_LINE_RE = re.compile(
 
 
 def _next_session_id(date_str: str, sessions_dir: Path) -> str:
+    # A transcript supplies this value. Validate before using it in a glob or
+    # output filename so it cannot escape the caller's sessions directory.
+    message = "Session date must be a real calendar date in YYYY-MM-DD format."
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", date_str):
+        raise ValueError(message)
+    try:
+        datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError as error:
+        raise ValueError(message) from error
     existing = sorted(sessions_dir.glob(f"{date_str}_*.json"))
     if not existing:
         return f"{date_str}_001"
