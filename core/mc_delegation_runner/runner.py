@@ -571,10 +571,11 @@ class _Child:
         self.proc = self.capture = self.pgid = self.identity = None
         self.frozen = False
         self.signalled = False             # this runtime stopped it while it ran: its exit is ours, never its own (B1)
+        self.lost = False                  # reaped by anyone else (ECHILD): its group id is no longer pinned (N-D1)
         self.lock = threading.RLock()
 
     def reaped(self) -> bool:
-        return self.proc is None or self.proc.returncode is not None
+        return self.proc is None or self.proc.returncode is not None or self.lost
 
     def exited(self) -> bool:
         """Whether the leader has exited, read without reaping it: until this runtime reaps it, its process group id
@@ -585,6 +586,7 @@ class _Child:
             try:
                 got = os.waitid(os.P_PID, self.proc.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
             except ChildProcessError:
+                self.lost = True                     # reaped elsewhere: never signalled again
                 return True
             # macOS also reports a stopped (frozen) child here, whatever the options: only an exit counts.
             return got is not None and got.si_code in (os.CLD_EXITED, os.CLD_KILLED, os.CLD_DUMPED)
@@ -596,17 +598,29 @@ class _Child:
         return not self.exited()
 
     def verified(self) -> bool:
-        """This runtime's own child, its identity recorded (by ps) before it was let start, and not yet reaped. Its
-        process group id is its leader's pid; the leader is a session leader (it can change neither), and no other
-        process can take that id while the leader is unreaped, a zombie included. So a signal to the group reaches
-        this child's group and no one else's, with no second ps call to fail (review N1). Orphans of an earlier
-        process are verified by ps (_freeze_task)."""
-        return not self.reaped() and self.identity is not None
+        """Checked right before every signal (review N-D1): this runtime's own child, its identity recorded (by ps)
+        before it was let start, and its leader still unreaped, asked of the kernel now. The leader is a session
+        leader (it can change neither its group nor its session), and no other process can take its pid as a group
+        id while it is unreaped, a zombie included, so a signal to that group reaches this child's group and no one
+        else's (review N1). If anything else reaped it (ECHILD), it is lost and never signalled. Without waitid
+        (Python 3.9) the identity is checked by ps, as for orphans of an earlier process (_freeze_task)."""
+        if self.proc is None or self.proc.returncode is not None or self.lost or self.identity is None:
+            return False
+        if hasattr(os, "waitid"):
+            try:
+                os.waitid(os.P_PID, self.proc.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+            except ChildProcessError:
+                self.lost = True
+                return False
+            return True
+        return _identity(self.pgid) == self.identity
 
     def end_group(self, *, term=True) -> str:
         """Stop the whole group and reap the leader: SIGTERM, up to kill_grace_s, then SIGKILL for whatever remains
         (descendants that outlived the leader included). Every signal is sent before the leader is reaped, after the
         identity check; an unverified group is never signalled. 'stopped' or 'unverified'."""
+        if self.lost:
+            return "unverified"
         if self.reaped():
             return "stopped"
         if not self.verified():
@@ -620,6 +634,8 @@ class _Child:
                 deadline = time.monotonic() + self.rt.cfg.kill_grace_s
                 while not self.exited() and time.monotonic() < deadline:
                     time.sleep(0.02)
+            if not self.verified():
+                return "unverified"                  # right before the SIGKILL too: never an unpinned group
             os.killpg(self.pgid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):
             pass
@@ -631,10 +647,12 @@ class _Child:
         with self.lock:
             if self.frozen:
                 state = "frozen"
-            elif self.exited():
+            elif self.proc is None or self.proc.returncode is not None:
                 state = "stopped"
             elif not self.verified():
-                state = "unverified"
+                state = "unverified"                 # reaped elsewhere, or not this child: never signalled
+            elif self.exited():
+                state = "stopped"
             else:
                 os.killpg(self.pgid, signal.SIGSTOP)
                 self.frozen, state = True, "frozen"
@@ -961,6 +979,7 @@ class HostRuntime:
                 if not isinstance(exc, JournalDamaged):
                     raise
                 self.damaged[task] = str(exc)                                 # fails closed: nothing more for it
+        readable = [t for t in readable if t not in self.blocked]
         for task in readable:
             # An effect's outcome on file but not yet acknowledged (its finish waits on a receipt lease still running):
             # the item is not reconciled until it is, so it never goes unknown with its outcome known (S2).
@@ -1047,6 +1066,10 @@ class HostRuntime:
                 counts["pending"] += 1
                 continue
             except _AuthorityError as exc:
+                if rec["kind"] in KNOWN_OUTCOMES:          # kept pending, its task blocked (NS1); the rest waits too
+                    self.blocked[task] = f"authority_error:{exc.code}"
+                    counts["pending"] += 1
+                    break
                 answer = {"state": "refused", "code": f"authority_error:{exc.code}"}
             counts["sent"] += 1
             kind = classify(rec["kind"], answer)
@@ -1092,11 +1115,11 @@ class HostRuntime:
             if got.get("code") == "receipt_terminal":
                 # An outcome is already recorded. Whether it is this one is the authority's to say: the finish
                 # replayed with its token gone (a placeholder no receipt lease can match) is answered already_applied
-                # only when the receipt holds this same outcome, and refused otherwise (review N9).
+                # when the receipt holds this same outcome. A contradicting one is refused receipt_outcome_conflict
+                # and becomes one decision on the item at the authority (review N9, N-D2); any other answer is
+                # passed on as it is.
                 eff["lease"] = {"receipt_generation": a["receipt_generation"], "token": "0" * 43, "mode": "execute"}
-                same = self.call("effect", *call, eff)
-                return same if same.get("state") == "already_applied" else \
-                    {"state": "refused", "operation_id": a["operation_id"], "code": "receipt_outcome_conflict"}
+                return self.call("effect", *call, eff)
             return got
         eff["lease"] = {k: got["lease"][k] for k in ("receipt_generation", "token", "mode")}
         return self.call("effect", *call, eff)
@@ -1233,6 +1256,12 @@ class HostRuntime:
         except (_Offline, _Busy):
             return None
         except _AuthorityError as exc:
+            if kind in KNOWN_OUTCOMES:
+                # A result or an effect's outcome is known here: never dropped and never rerun (review NS1). Its record
+                # stays pending and its task is blocked under the error's name, as a reconcile error is, until a
+                # restart replays it.
+                self.blocked[task] = f"authority_error:{exc.code}"
+                return None
             answer = {"state": "refused", "code": f"authority_error:{exc.code}"}
         mark = classify(kind, answer)
         if mark != "pending":
@@ -1373,6 +1402,9 @@ class HostRuntime:
         child.capture.finish(cfg.kill_grace_s)
         with self._lock:
             self.child = None
+        if child.lost:                                   # reaped elsewhere: its exit can't be known (N-D1)
+            return self._result(child.claim, "interrupted", [], {"code": "process_identity_unverified",
+                                                                 "base_ref": env.ref}, workspace_dir=child.task_dir)
         rc = child.proc.returncode
         if rc == 75 and status is None:                  # stopped at our request; G4 or the hold already said so
             return {"state": "stopped", "request_id": child.request_id}
@@ -1405,6 +1437,12 @@ class HostRuntime:
             if self.stop_requested.is_set():
                 return self.graceful_stop()
             self.write_state()
+            if child.task in self.blocked:                 # an authority error on a known outcome (NS1)
+                state = child.kill("blocked")
+                child.journal.note("stop", self.at(), request_id=child.request_id, generation=child.generation,
+                                   reason=self.blocked[child.task], child=state,
+                                   checkpoint=self._acked_checkpoint(child.request_id))
+                return {"state": "blocked", "request_id": child.request_id, "code": self.blocked[child.task]}
             if self.offline():
                 if self.host.offline_scope_default == "none" and child.alive() and not child.frozen:
                     child.freeze("authority_unreachable")              # offline before it started: frozen now
@@ -1656,6 +1694,8 @@ class HostRuntime:
             pass                                  # said or not, the stop goes on; the item lapses if it was not
 
 
+# Owner writes whose outcome is known on this host: an authority error never drops them (NS1).
+KNOWN_OUTCOMES = ("result", "effect_finish")
 # An effect refusal that fences the item itself, not the effect: §5.5 runs before anything else is served.
 FENCES = ("lease_lapsed", "stale_generation", "not_owner", "not_owned", "item_ended", "grace_ended", "cancel_requested",
           "grant_revoked", "grant_expired")

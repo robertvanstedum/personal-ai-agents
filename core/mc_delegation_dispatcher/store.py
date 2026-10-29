@@ -2198,7 +2198,9 @@ class DispatcherStore:
         receipt's own lease (ReceiptStore), are checked (R5.1-c). Every step is an authority transaction, so with no
         authority there is no effect (R4.5-e); an unknown receipt can never be claimed to execute again (R4.5-a).
         -> {state: ok, op, operation_id, receipt_state, lease?: {receipt_generation, token, mode, lease_until}}
-         | {state: already_applied, op, operation_id} (a finish replayed, DUP-5) | {state: refused, op, operation_id, code}"""
+         | {state: already_applied, op, operation_id} (a finish replayed, DUP-5) | {state: refused, op, operation_id, code}
+         | {state: refused, ..., code: receipt_outcome_conflict, decision_id} (a finish contradicting its receipt's
+           recorded outcome: one decision on the item, _effect_conflict)"""
         _need(self._protocol(protocol, ()), "protocol_invalid")
         rid = _uuid_text(request_id, "request_id_invalid")
         _need(type(generation) is int and not isinstance(generation, bool) and 0 <= generation < 2**31,
@@ -2229,9 +2231,14 @@ class DispatcherStore:
                 except ActionContractError as exc:
                     cur.execute("ROLLBACK TO SAVEPOINT mc_effect")
                     code = str(exc)
-                    if op == "finish" and self._receipts.read(cur.connection, self.principal, self.environment,
-                                                              op_id)["state"] == eff["state"]:
-                        return {"state": "already_applied", **answer}      # this outcome is already recorded
+                    if op == "finish":
+                        recorded = self._receipts.read(cur.connection, self.principal, self.environment,
+                                                       op_id)["state"]
+                        if recorded == eff["state"]:
+                            return {"state": "already_applied", **answer}      # this outcome is already recorded
+                        if recorded in ("verified", "failed") and eff["state"] in ("verified", "failed"):
+                            return self._effect_conflict(cur, row, op_id, recorded, eff, host_id, body, generation,
+                                                         answer)
             if code is not None:
                 self._event(cur, "effect.refused", item=rid, generation=row["generation"], host_id=host_id,
                             once=_once("effect_refused", op_id, op, generation, code),
@@ -2243,6 +2250,37 @@ class DispatcherStore:
                         body={**body, **{k: said[k] for k in ("receipt_state", "receipt_generation", "mode",
                                                               "lease_until", "recorded_as") if k in said}})
             return {"state": "ok", **answer, **out}
+
+    def _effect_conflict(self, cur, row, op_id, recorded, eff, host_id, body, generation, answer) -> dict:
+        """A finish whose outcome contradicts the one its receipt already holds: the target's answer as the owner
+        reports it says one thing, the record the other (S1-D review N-D2). It is not a lease problem and is never
+        retried. It is recorded as what it is, ``effect.conflict``, and reaches the owner as exactly one decision on
+        the item through the decision seam: a live item goes ``unknown`` naming both outcomes (_decide); one already
+        ``unknown`` keeps its one decision; one that has ended stays as it ended and gets one decision, once per
+        operation. The receipt itself is not changed."""
+        conflict = {"operation_id": op_id, "recorded": recorded, "reported": eff["state"],
+                    "evidence": eff.get("evidence")}
+        rid = row["request_id"]
+        self._event(cur, "effect.conflict", item=rid, generation=row["generation"], host_id=host_id,
+                    once=_once("effect_conflict", op_id, eff["state"]),
+                    body={**body, **conflict, "generation": generation})
+        if row["state"] == "unknown":
+            decision_id = (row["result_detail"] or {}).get("decision_id")
+        elif row["state"] in TERMINAL:
+            once = _once("decision_conflict", rid, op_id)
+            cur.execute("""SELECT event_id FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s
+                AND once_key=%s""", (self.principal, self.environment, once))
+            found = cur.fetchone()
+            decision_id = str(found["event_id"]) if found else str(uuid.uuid4())
+            if found is None:
+                self._event(cur, "decision.queued", item=rid, generation=row["generation"], once=once,
+                            event_id=decision_id, body={"class": "unknown_resolution", "solo": True,
+                                                        "reason": "effect_outcome_conflict", "operations": [op_id],
+                                                        "conflict": conflict, "item_state": row["state"]})
+        else:
+            decision_id = self._decide(cur, row, "effect_outcome_conflict", [op_id], [], reported=conflict)[
+                "decision_id"]
+        return {"state": "refused", **answer, "code": "receipt_outcome_conflict", "decision_id": decision_id}
 
     def _effect_refusal(self, cur, row, runner_id, generation, op, op_id) -> str | None:
         if op in ("prepare", "claim", "dispatch"):          # a new effect: the owner, now, under its lease and grant
