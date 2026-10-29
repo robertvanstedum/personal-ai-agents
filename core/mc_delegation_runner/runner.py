@@ -33,6 +33,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -43,7 +44,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import commands, envelope as env_mod, workspace
+from . import census as census_mod, commands, envelope as env_mod, workspace
 
 ACK_STATES = ("accepted", "already_applied")
 
@@ -584,8 +585,11 @@ class _Child:
         self.proc = self.capture = self.pgid = self.identity = None
         self.frozen = False
         self.binary_check = None           # (path, 'sha256:<hex>') the launch contract verified; checked again before "G"
+        self.launch_record = None          # its launch record (minimoi.launch.v1), for its census row
         self.signalled = False             # this runtime stopped it while it ran: its exit is ours, never its own (B1)
         self.lost = False                  # reaped by anyone else (ECHILD): its group id is no longer pinned (N-D1)
+        self.agent_id = census_agent_id(self.task)      # its census row (R6.6-a): an id the runtime assigns
+        self.census_started = self.census_ended = False
         self.lock = threading.RLock()
 
     def reaped(self) -> bool:
@@ -689,6 +693,7 @@ class _Child:
             else:
                 os.killpg(self.pgid, signal.SIGSTOP)
                 self.frozen, state = True, "frozen"
+                self.rt.census_child(self, "frozen")             # R6.6-b: idle: frozen, from the event
             self.journal.note("freeze", self.rt.at(), request_id=self.request_id, generation=self.generation,
                               child=state, reason=reason)
             return state
@@ -699,6 +704,7 @@ class _Child:
                 os.killpg(self.pgid, signal.SIGCONT)
                 self.journal.note("thaw", self.rt.at(), request_id=self.request_id, generation=self.generation)
                 self.frozen = False
+                self.rt.census_child(self, "thawed")
             elif self.reaped():
                 self.frozen = False                  # nothing left to thaw
 
@@ -719,8 +725,17 @@ class HostRuntime:
     run_once's pass. Built by the CLI from host.yaml (host.HostConfig) and the authority's values (Authority.hosts)."""
 
     def __init__(self, dispatcher, cfg: RunnerConfig, host, values, gap_threshold_s, *, bundle_digest, sink=None,
-                 now=_now, wall=time.time, mono=time.monotonic, hint=None, stores=None):
+                 now=_now, wall=time.time, mono=time.monotonic, hint=None, stores=None, census=None):
         self.dispatcher, self.cfg, self.host, self.values = dispatcher, cfg, host, values
+        # The agent census (spec v0.5 §6.6, census.CensusFile on artifact_root/census): this host's file, which every
+        # source on the host appends to; the runtime writes its own children's rows and the capture gaps, sends the
+        # file's unsent events with each heartbeat and keeps the host's own view. None: no census (tests of S1-D).
+        self.census = census
+        self.census_errors = 0             # census events this runtime could not write (shown; work goes on)
+        self._census_limit = None          # a smaller batch after the authority refused one (never the contact itself)
+        self._otlp_mark = (None, 0.0)      # (the rows' states, when) at the last OpenTelemetry file
+        self.otlp_every_s = 5.0            # the OTLP/JSON file is rewritten at most this often, and only on a change
+        self._census_retained = None       # monotonic time of the last census retention (N3), run at most hourly
         self.bundle_digest, self.sink, self._now, self._mono = bundle_digest, sink, now, mono
         # API-route keys by reference (R6.7-f): scheme -> launch.CredentialStore. Nothing is read until a launch needs it.
         self.stores = dict(stores or {})
@@ -758,22 +773,160 @@ class HostRuntime:
                 "last_gap_s": self.last_gap_s, "announced": self.announced}
 
     def contact(self, announced=None) -> bool:
-        """One heartbeat with the host's facts. S1-F's census batches ride in this body (store._heartbeat_v2's seam);
-        none is sent yet."""
+        """One heartbeat with the host's facts and, when the census holds unsent events, one bounded batch of them,
+        each exactly as written (R3.2-a, §6.6). The census never costs the contact (CEN-6): a heartbeat the authority
+        refuses while it carries a batch is sent again at once without one. Only when that one is taken is the batch
+        the cause: the next batch is halved, down to one event, which is then acknowledged as rejected by the
+        authority and never sent again. A refusal that holds without the census leaves the census untouched."""
         with self._contact_lock:
             if announced is not None:
                 self.announced = announced
             state = "busy" if self.child is not None else "online"
+            batch = self._census_batch()
             try:
-                self.dispatcher.heartbeat(self.runner_id, state, list(self.host.capabilities), self.facts())
+                answer = self._beat(state, batch)
             except Exception as exc:
-                if not _transport(exc):
+                if _transport(exc):
+                    self._failed()
+                    return False
+                if not batch:
                     self._ok()
                     raise _AuthorityError(_error_code(exc)) from None
-                self._failed()
-                return False
+                try:
+                    self._beat(state, [])
+                except Exception as again:
+                    if _transport(again):
+                        self._failed()
+                        return False
+                    self._ok()
+                    raise _AuthorityError(_error_code(again)) from None
+                self._census_refused(batch, _error_code(exc))     # taken without it: the batch was the cause
+                self._ok()
+                return True
             self._ok()
+            self._census_answered(batch, answer)
             return True
+
+    def _beat(self, state, batch):
+        args = (self.runner_id, state, list(self.host.capabilities), self.facts())
+        return self.dispatcher.heartbeat(*args, census=batch) if batch else self.dispatcher.heartbeat(*args)
+
+    # ── the census (spec v0.5 §6.6; census.py) ──
+    def _census_batch(self) -> list:
+        if self.census is None:
+            return []
+        try:
+            return self.census.batch(max_events=self._census_limit or census_mod.BATCH_MAX_EVENTS)
+        except Exception:
+            self.census_errors += 1
+            return []                                  # an unreadable census never holds up contact
+
+    def _census_answered(self, batch, answer):
+        got = answer.get("census") if isinstance(answer, dict) else None
+        if not batch or not isinstance(got, dict) or got.get("state") != "applied":
+            return                                     # deferred, or not answered: sent again, exactly, next time
+        try:
+            self.census.acknowledge(got.get("events"))
+        except Exception:
+            self.census_errors += 1
+        if self._census_limit is not None:
+            self._census_limit = min(census_mod.BATCH_MAX_EVENTS, self._census_limit * 2)
+
+    def _census_refused(self, batch, code):
+        """The authority refused a heartbeat that carried ``batch``: halve the next one; a single event refused alone
+        is the cause, acknowledged as rejected (never sent again), and the census goes on."""
+        if len(batch) > 1:
+            self._census_limit = max(1, len(batch) // 2)
+            return
+        code = code.lower() if re.match(r"^[A-Za-z0-9_]{1,40}$", code) else "error"
+        try:
+            self.census.acknowledge([{"event_id": batch[0]["event_id"], "state": "rejected",
+                                      "code": f"authority_error:{code}"}])
+        except Exception:
+            self.census_errors += 1
+
+    def census_write(self, kind, body, *, strict=False) -> bool:
+        """Append one census event. A failure is counted and shown; with ``strict`` it is raised (a start that cannot
+        be recorded does not happen)."""
+        if self.census is None:
+            return False
+        try:
+            self.census.append(kind, body, at=self.at())
+            return True
+        except Exception:
+            self.census_errors += 1
+            if strict:
+                raise
+            return False
+
+    def census_child(self, child, what, *, cause=None):
+        """The runtime child's own census row (R6.6-c: the runner records its process group and identity before it
+        starts): ``start`` before it may run, ``frozen``/``thawed`` from §5.5, ``activity`` at each checkpoint, and
+        ``ended`` once it has stopped: done (exit 0, or stopped by this runtime, the cause named), failed (its own
+        non-zero exit), or unknown when its process could not be verified (never an end then)."""
+        if self.census is None or (what != "start" and (not child.census_started or child.census_ended)):
+            return
+        src, aid = census_mod.RUNTIME_SOURCE, child.agent_id
+        cause = cause if isinstance(cause, str) and re.match(r"^[a-z][a-z0-9_]{0,40}$", cause) else "runtime"
+        if what == "frozen":
+            self.census_write("census.update", census_mod.update(aid, source=src, state="idle", reason="frozen"))
+        elif what in ("thawed", "activity"):
+            self.census_write("census.update", census_mod.update(aid, source=src, state="running"))
+        elif what == "ended":
+            child.census_ended = True
+            used = self._census_usage(child)
+            rc = None if child.proc is None else child.proc.returncode
+            if child.lost or rc is None:
+                body = ("census.update", census_mod.update(aid, source=src, state="unknown",
+                                                           reason="process_unverified", usage=used))
+            elif child.signalled or rc == 75:
+                body = ("census.end", census_mod.end(aid, source=src, state="done", reason="stopped:" + cause,
+                                                     usage=used))
+            else:
+                body = ("census.end", census_mod.end(aid, source=src, state="done" if rc == 0 else "failed",
+                                                     reason=f"exit_{rc}", usage=used))
+            self.census_write(*body)
+
+    def _census_usage(self, child):
+        """What the worker reported (fakework's report_usage), in the item's unit: unknown stays unknown."""
+        try:
+            notes = child.journal.notes("usage")
+        except Exception:
+            return None                                # a damaged journal: its usage is not known here
+        if not notes:
+            return None
+        amount = notes[-1]["fields"]["amount"]
+        return census_mod.usage(cost=amount, unit=child.claim["unit"], complete=amount is not None)
+
+    def _census_start(self, child, rec):
+        if self.census is None:
+            return
+        from . import launch_env
+        claim, env = child.claim, child.env
+        vendor, model, children, transcript = _CENSUS_ACTOR[env.actor]
+        body = census_mod.start(child.agent_id, source=census_mod.RUNTIME_SOURCE, verified=True, children=children,
+                                vendor=vendor, model=model, role=claim.get("step") or env.scope,
+                                item_id=claim["request_id"], start_path="runtime",
+                                route=census_mod.route_label(claim["route"], launch_env.ROUTES.get(claim["route"])),
+                                launch=census_mod.launch_summary(rec), transcript_ref=transcript)
+        self.census_write("census.start", body, strict=True)
+        child.census_started = True
+
+    def _census_said(self, aid):
+        """What the census last says of a runtime child's row: None (no row, or no census), 'ended', or its reason."""
+        if self.census is None:
+            return None
+        try:
+            self.census.scan()
+            rec = self.census.fold.agents.get(aid)
+        except Exception:
+            return None
+        if rec is None:
+            return None
+        return "ended" if rec["ended_at"] is not None else (rec["reason"] or rec["state"] or "running")
+
+    def _census_gap(self, cause, frm=None):
+        self.census_write("census.gap", census_mod.gap(cause, self.at(), frm))
 
     def start_contact(self):
         self._contact_thread = threading.Thread(target=self._contact_loop, name="mc-runtime-contact", daemon=True)
@@ -825,6 +978,8 @@ class HostRuntime:
             self.last_gap_s = int(round(gap["gap_s"]))
             self.reasons.add("wake")
             child = self.child
+        # R6.6-b: the whole host was suspended; an agent with no event since shows capture_gap until its next one.
+        self._census_gap("wake", (self._now() - _timedelta(gap["gap_s"])).isoformat())
         if child is not None:
             child.journal.note("wake", self.at(), **gap)
             child.freeze("wake")                      # as soon as detected; the rest of §5.5 runs in the pass
@@ -935,7 +1090,30 @@ class HostRuntime:
                           "authority_reachable": not self.offline(), "contact_failures": self.failures}],
                "items": items,
                "unknowns": ["authority_snapshot: this is the host's own view; the authority's is S1-G's"]}
+        if self.census is not None:
+            try:
+                if self._census_retained is None or time.monotonic() - self._census_retained >= 3600:
+                    self._census_retained = time.monotonic()
+                    self.census.retain()               # N3: whole ended trees past 30 days; never an unsent event
+                rows = self.census.rows(host_id=self.host.host_id, environment=self.host.environment)
+                doc["agents"] = rows
+                doc["census"] = {"unsent": len(self.census.unsent()), "damaged_lines": dict(self.census.damaged),
+                                 "write_errors": self.census_errors}
+                self._write_otlp(rows)
+            except Exception:
+                self.census_errors += 1
+                doc["unknowns"].append("agents: the census file could not be read")
         _write_json(self.cfg.artifact_root / "host-state.json", doc)
+
+    def _write_otlp(self, rows):
+        """The census as OTLP/JSON beside it (R6.6-d; otel.py): when a row changed, at most every ``every_s``."""
+        from . import otel
+        mark = tuple((r["agent_id"], r["state"], r["reason"], r["last_activity_at"], r["ended_at"]) for r in rows)
+        last, when = self._otlp_mark
+        if mark == last or (last is not None and time.monotonic() - when < self.otlp_every_s):
+            return
+        otel.write(self.census.root / "otlp", rows, host_id=self.host.host_id, environment=self.host.environment)
+        self._otlp_mark = (mark, time.monotonic())
 
     # ── the pass ──
     def freeze_left_children(self) -> dict:
@@ -945,6 +1123,15 @@ class HostRuntime:
         self.cfg.artifact_root.mkdir(mode=0o700, parents=True, exist_ok=True)
         out = {}
         if not self._left_frozen:
+            if self.census is not None:            # R6.6-b: rebuilt from the file; the restart is a capture gap
+                last = None
+                try:
+                    self.census.scan()
+                    seen = [r["last_activity_at"] for r in self.census.fold.agents.values() if r["last_activity_at"]]
+                    last = max(seen).isoformat() if seen else None
+                except Exception:
+                    self.census_errors += 1
+                self._census_gap("restart", last)
             for task in self.owned():
                 if task not in self.damaged:
                     out[task] = self._freeze_task(task, ["restart"])
@@ -1071,13 +1258,25 @@ class HostRuntime:
             # A child left by an earlier process of this runtime: it cannot be supervised again (its output pipe
             # died with that process). Verified, it is frozen at once and then stopped; otherwise never signalled.
             pgid, identity = stage.get("pgid"), stage.get("identity")
+            aid, src = census_agent_id(task), census_mod.RUNTIME_SOURCE
+            said = self._census_said(aid)
             if isinstance(pgid, int) and pgid > 1 and _group_alive(pgid):
                 if identity and _identity(pgid) == identity:
                     os.killpg(pgid, signal.SIGSTOP)
                     os.killpg(pgid, signal.SIGKILL)
                     _write_json(_stage_path(self.cfg, task), {"stage": "stopped", "reason": "orphan_after_restart"})
+                    if said not in (None, "ended"):              # its row, if it has one, ends with what was seen
+                        self.census_write("census.end", census_mod.end(aid, source=src, state="done",
+                                                                       reason="stopped:orphan_after_restart"))
                 else:
                     state = "unverified"
+                    if said not in (None, "ended", "process_unverified"):
+                        self.census_write("census.update", census_mod.update(aid, source=src, state="unknown",
+                                                                             reason="process_unverified"))
+            elif said not in (None, "ended", "end_unobserved"):
+                # It is gone and nobody saw it end: its own end is not observed, and nothing is inferred.
+                self.census_write("census.update", census_mod.update(aid, source=src, state="unknown",
+                                                                     reason="end_unobserved"))
         self.journal(task).note("freeze", self.at(), request_id=claim["request_id"], generation=claim["generation"],
                                 child=state, reason="+".join(reasons))
         return state
@@ -1390,6 +1589,8 @@ class HostRuntime:
                 return self._refuse(claim, str(exc))
             if self.sink is None and any(k in ("effect", "stale_effect_on_wake") for k, _ in steps):
                 return self._refuse(claim, "fakework_sink_missing")
+            if self.census is None and any(k == "spawn" for k, _ in steps):
+                return self._refuse(claim, "fakework_census_missing")
         try:
             plan = self._contract(env, claim)        # R6.7-d/e/f before the workspace: tool, pin, route, sign-in
         except launch.LaunchRefused as exc:
@@ -1419,6 +1620,8 @@ class HostRuntime:
                 argv += ["--sink", str(self.sink.path)] + ([] if self.sink.lookup else ["--no-lookup"])
             if resume is not None:
                 argv += ["--from", resume["name"]]
+            if self.census is not None:            # spawn's census events (§9.3), under this child's row
+                argv += ["--census", str(self.census.root), "--agent", child.agent_id]
         try:
             argv, child_env = enforcer.apply(argv, workspace.child_env(), float(cap), claim["unit"])
         except Exception:
@@ -1428,6 +1631,7 @@ class HostRuntime:
         try:
             child_env = self._contract_final(plan, claim, argv, child_env, task_dir)
             child.binary_check = plan["verified"]
+            child.launch_record = plan["record"]
         except launch.LaunchRefused as exc:
             try:                                  # nothing ran in it: the fresh checkout goes, its claim stays
                 workspace.remove(task_dir, Path(cfg.workspace_root))
@@ -1494,6 +1698,7 @@ class HostRuntime:
             name, value = launch.api_key(claim["route"], plan["key_ref"], self.stores)
             child_env = {**child_env, name: value}            # this child only; never this process, a file or a record
         _write_json(self.cfg.artifact_root / f"{claim['task']}.launch.json", rec)    # S1-F's census reads it
+        plan["record"] = rec
         return child_env
 
     def _supervise(self, child, argv, child_env) -> dict:
@@ -1516,6 +1721,10 @@ class HostRuntime:
             _write_json(_stage_path(cfg, task), {"stage": "started", "pgid": child.pgid, "identity": child.identity})
             if not self._still_pinned(child):
                 return self._unpinned_before_start(child)
+            try:
+                self._census_start(child, child.launch_record)     # its census row exists before it may run
+            except Exception:
+                return self._unrecorded_before_start(child)
             child.proc.stdin.write(b"G")                          # only now may the work start
             child.proc.stdin.close()
             self._owner_write(task, "progress", child.request_id, child.generation,
@@ -1523,15 +1732,18 @@ class HostRuntime:
             status = self._watch(child)
         except BaseException:
             child.kill("runner_fault")
+            self.census_child(child, "ended", cause="runner_fault")
             with self._lock:
                 self.child = None
             raise
         if isinstance(status, dict):                     # stopped, resumed or ended by reconcile: no result here
+            self.census_child(child, "ended", cause=str(status.get("stopped") or status.get("state") or "stopped"))
             with self._lock:
                 self.child = None
             return status
         child.end_group(term=child.alive())             # it (on Stop, deadline, bound) and descendants, then reap
         child.capture.finish(cfg.kill_grace_s)
+        self.census_child(child, "ended", cause=status or "stop_request")
         with self._lock:
             self.child = None
         if child.lost:                                   # reaped elsewhere: its exit can't be known (N-D1)
@@ -1570,6 +1782,22 @@ class HostRuntime:
             return launch.file_digest(path) == digest
         except OSError:
             return False
+
+    def _unrecorded_before_start(self, child) -> dict:
+        """Its census row could not be written: "G" is never sent, so nothing runs that the census cannot show. The
+        group is stopped and reaped, the fresh checkout removed, and the item refused (census_unwritable)."""
+        cfg = self.cfg
+        child.proc.stdin.close()
+        child.end_group(term=False)
+        child.capture.finish(cfg.kill_grace_s)
+        with self._lock:
+            self.child = None
+        _write_json(_stage_path(cfg, child.task), {"stage": "stopped", "reason": "census_unwritable"})
+        try:
+            workspace.remove(child.task_dir, Path(cfg.workspace_root))
+        except Exception:
+            pass
+        return self._refuse(child.claim, "census_unwritable")
 
     def _unpinned_before_start(self, child) -> dict:
         """The binary changed after it was verified: "G" is never sent, so the barrier exits (97) and nothing starts.
@@ -1699,6 +1927,7 @@ class HostRuntime:
                 _write_atomic(path, patch)
             child.journal.note("checkpoint", self.at(), request_id=rid, generation=g, name=doc["name"],
                                digest=digest)
+            self.census_child(child, "activity")
             answer = self._owner_write(task, "progress", rid, g, {
                 "runner_id": self.runner_id, "phase": "checkpoint",
                 "checkpoint": {"name": doc["name"], "digest": digest, "paths": list(doc["paths"])}})
@@ -1854,6 +2083,27 @@ class HostRuntime:
             self.contact(announced=state)
         except _AuthorityError:
             pass                                  # said or not, the stop goes on; the item lapses if it was not
+
+
+# The census row of a runtime child, by actor (R6.6-a, R6.6-c, R6.7-g): (vendor, model, children, transcript_ref).
+# Only fakework exposes its subagents (its spawn events); what Claude Code's headless output and Codex's exec events say
+# of subagents is unverified (N4), so they are not_exposed, never "no children". Codex runs with --ephemeral, which by
+# its name keeps no session file (N5, unverified); Claude Code's headless session id is not captured at start.
+_CENSUS_ACTOR = {
+    "fakework": ("minimoi", "fakework/1", "exposed", census_mod.not_kept("fakework_keeps_no_session")),
+    "claude-code": ("anthropic", None, "not_exposed", census_mod.not_kept("headless_session_id_not_captured")),
+    "codex": ("openai", None, "not_exposed", census_mod.not_kept("codex_exec_ephemeral_unverified")),
+}
+
+
+def census_agent_id(task) -> str:
+    """A runtime child's census id: its task (request and generation), so a restarted runtime names the same row."""
+    return f"runtime:{task}"
+
+
+def _timedelta(seconds):
+    from datetime import timedelta
+    return timedelta(seconds=float(seconds))
 
 
 # Owner writes whose outcome is known on this host: an authority error never drops them (NS1).

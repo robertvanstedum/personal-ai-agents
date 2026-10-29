@@ -18,8 +18,16 @@ brief:
     findings [<word>]                                a reviewer's output, recorded as a findings artifact
     resume_session <id>                              no-op: fakework keeps no sessions (the runtime refuses the
                                                      do-not-resume ids before any spawn, R6.4)
+    spawn <id> [role=<r>] [hold_s=<n>] [beat_s=<n>] [long]
+                                                     a subagent in the census (§9.3): it writes the start and stop
+                                                     events a Claude Code SubagentStart/SubagentStop hook payload
+                                                     would (census.hook_events), under this run's own row (--agent),
+                                                     into the host's census (--census); no real subagent runs. A
+                                                     transient one holds hold_s and stops; a long one runs beside the
+                                                     next steps, with an activity event every beat_s (default 5), and
+                                                     stops after hold_s, or never, if the run ends first (its end then
+                                                     unobserved, as a vendor's would be)
     result ok                                        exit 0
-    spawn ...                                        refused before any spawn: the census is S1-F's
 
 ``--from <checkpoint>`` restarts after that checkpoint (a resume or a retry). Exit codes: 0 done, 64 program refused,
 65 cap reached, 66 channel lost, 69 effect refused, 70 crash, 75 stopped at a checkpoint on the runtime's request.
@@ -50,7 +58,6 @@ _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 _PATH = re.compile(r"^(?!/)(?!.*(?:^|/)\.\.(?:/|$))[A-Za-z0-9._/@+-]{1,256}$")
 _WORD = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 _SESSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,99}$")
-_UNSUPPORTED = ("spawn",)                   # the census (S1-F)
 POLL_S = 0.02
 
 
@@ -85,9 +92,20 @@ def parse_program(text) -> list:
     steps, names = [], set()
     for ln in lines[1:]:
         word, *rest = ln.split()
-        if word in _UNSUPPORTED:
-            raise ProgramRefused(f"fakework_step_unsupported:{word}")
-        if word == "checkpoint":
+        if word == "spawn":
+            if not rest or not _NAME.match(rest[0]) or ("spawn", rest[0]) in names:
+                raise ProgramRefused("fakework_spawn_invalid")
+            flags = [x for x in rest[1:] if "=" not in x]
+            if flags not in ([], ["long"]):
+                raise ProgramRefused("fakework_spawn_invalid")
+            o = _opts([x for x in rest[1:] if "=" in x], ("role", "hold_s", "beat_s"), "fakework_spawn_invalid")
+            if not _WORD.match(o.get("role", "subagent")):
+                raise ProgramRefused("fakework_spawn_invalid")
+            names.add(("spawn", rest[0]))
+            steps.append(("spawn", {"id": rest[0], "role": o.get("role", "subagent"), "long": bool(flags),
+                                    "hold_s": _int(o.get("hold_s", "0"), 0, 86400, "fakework_spawn_invalid"),
+                                    "beat_s": _int(o.get("beat_s", "5"), 1, 3600, "fakework_spawn_invalid")}))
+        elif word == "checkpoint":
             if not rest or not _NAME.match(rest[0]) or rest[0] in names:
                 raise ProgramRefused("fakework_checkpoint_invalid")
             o = _opts(rest[1:], ("hold_s", "paths"), "fakework_checkpoint_invalid")
@@ -257,7 +275,59 @@ def _send(sink, ack, key) -> str:
     return sink.post(ack["operation_id"], ack["item_id"], ack["generation"], ack["lease_until"], effect_digest(key))
 
 
-def run(steps, *, channel, sink, cap, unit, start_after=None) -> int:
+class _Census:
+    """The census writer of one run (spec v0.5 §6.6): this run's own row is the runtime's (``agent``); each spawn is
+    a subagent of it, recorded through the same hook translation a Claude Code hook uses (census.hook_events), with
+    subagent events on and verified, because this instrument is the runtime's own. A write that fails is printed as a
+    fixed line and the run goes on, as a vendor's hook failure would leave its agent running."""
+
+    def __init__(self, folder, agent):
+        import importlib.util
+        here = Path(__file__).resolve().with_name("census.py")          # beside this file: -I puts no package on the path
+        spec = importlib.util.spec_from_file_location("minimoi_census", str(here))
+        self.mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.mod)
+        self.file, self.agent = self.mod.CensusFile(folder), agent
+
+    def _write(self, kind, body):
+        try:
+            self.file.append(kind, body)
+        except (OSError, ValueError):
+            print("fakework: census unwritable", flush=True)
+
+    def hook(self, payload):
+        for kind, body in self.mod.hook_events(payload, source="fakework.spawn", verified=True, subagents=True,
+                                               vendor="minimoi", subagent_verified=True):
+            self._write(kind, body)
+
+    def beat(self, sub):
+        self._write("census.update", self.mod.update(sub, source="fakework.spawn", state="running"))
+
+
+def _spawn(census, client, s):
+    sub = f"{census.agent}/{s['id']}"
+    census.hook({"hook_event_name": "SubagentStart", "session_id": census.agent, "agent_id": sub,
+                 "agent_type": s["role"]})
+    stop = {"hook_event_name": "SubagentStop", "session_id": census.agent, "agent_id": sub}
+    if not s["long"]:
+        _wait(client, s["hold_s"])
+        census.hook(stop)
+        print(f"spawn {s['id']}: done", flush=True)
+        return
+
+    def run_long():
+        end = time.monotonic() + s["hold_s"]
+        while time.monotonic() < end:
+            time.sleep(min(s["beat_s"], max(0.0, end - time.monotonic())))
+            if time.monotonic() < end:
+                census.beat(sub)
+        census.hook(stop)
+    import threading
+    threading.Thread(target=run_long, name=f"spawn-{s['id']}", daemon=True).start()
+    print(f"spawn {s['id']}: running beside the run", flush=True)
+
+
+def run(steps, *, channel, sink, cap, unit, start_after=None, census=None) -> int:
     client = _Client(channel)
     if start_after is not None:
         names = [s["name"] for k, s in steps if k == "checkpoint"]
@@ -323,6 +393,8 @@ def run(steps, *, channel, sink, cap, unit, start_after=None) -> int:
             print(f"findings: {ack.get('sha256')}", flush=True)
         elif kind == "resume_session":
             print(f"resume_session {s['id']}: fakework keeps no sessions", flush=True)
+        elif kind == "spawn":
+            _spawn(census, client, s)
         elif kind == "result":
             print("result ok", flush=True)
             return EXIT["done"]
@@ -393,6 +465,8 @@ def main(argv=None) -> int:
     p.add_argument("--cap", type=float, required=True)
     p.add_argument("--unit", required=True)
     p.add_argument("--from", dest="start_after")
+    p.add_argument("--census", help="the host's census folder (the runtime gives it, with --agent)")
+    p.add_argument("--agent", help="this run's own census id: each spawn is its subagent")
     a = p.parse_args(argv)
     try:
         steps = parse_program(a.program)
@@ -401,7 +475,12 @@ def main(argv=None) -> int:
     sink = FileSink(a.sink, lookup=not a.no_lookup) if a.sink else None
     if sink is None and any(k in ("effect", "stale_effect_on_wake") for k, _ in steps):
         _exit("refused", "fakework_sink_missing")
-    return run(steps, channel=a.channel, sink=sink, cap=a.cap, unit=a.unit, start_after=a.start_after)
+    census = None
+    if any(k == "spawn" for k, _ in steps):
+        if not a.census or not a.agent:
+            _exit("refused", "fakework_census_missing")
+        census = _Census(a.census, a.agent)
+    return run(steps, channel=a.channel, sink=sink, cap=a.cap, unit=a.unit, start_after=a.start_after, census=census)
 
 
 if __name__ == "__main__":

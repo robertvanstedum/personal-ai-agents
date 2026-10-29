@@ -13,9 +13,13 @@ Runner protocol, version 1 (what ``run_once`` calls; production speaks only this
 Version 2 (host runtime spec v0.5 §3.2; the door's body carries ``protocol: 2``) is spoken only when the authority
 configuration (``Authority``) enables it, and only about version 2 items: those that name a ``route`` (R6.7-e).
   heartbeat(runner_id, state, capabilities, protocol=2, facts={host_id, bundle_digest, roles, availability, grace,
-            last_gap_s, announced}) -> {state: recorded}
+            last_gap_s, announced}, census=[event, ...]?) -> {state: recorded, census?: {state, events}}
         seen_at is the host's last contact; a change of facts is audited; announcing ``stopped`` pauses every item the
-        host holds (owner_stopped). (Census batches ride here later.)
+        host holds (owner_stopped). An optional census batch (§6.6, census.py) is applied in the same transaction, each
+        event once under its own id (kind census.*, source host, no item or generation column, so no item's audit
+        holds one), behind a savepoint: a census event that cannot be applied never costs the host its contact, and
+        no census event ever changes an item or refuses anything else (R6.6-e, CEN-6). Each event is answered
+        applied, already_applied, rejected (with its code; never applied) or deferred (a host time too far ahead).
   claim(runner_id, capabilities, protocol=2) -> {envelope, route, unit, reserved, lease_until, card_id, step} | None
         nothing for a host with unreconciled items; the item's capabilities (actor, scope, repository and its
         required_capabilities) within the host's; its grant rechecked (GrantStore.covers_item: never used again);
@@ -82,6 +86,10 @@ open. No item ends while an effect of it is open, on any path: reconcile, the sw
 Where it runs, relay.status derives a lapse instead of reaping it (R3.3, E11), and the sweeper reaps version 1 items.
 A version 2 authority always has one.
 The owner's acts: reassign (R5.1-d), end (R5.1-c), revoke (R4.3-e, end to end), resolve_usage_hold.
+The census (§6.6): agents() is the agents field of R7.6-b, derived at read time from the census events and each host's
+contact (R6.6-b); census_retention drops census events of agent trees that ended more than census_retention_days ago
+(N3), and nothing else: its every statement names the census kinds and source host, so no authority event (a
+grant.step_bound row among them) is ever touched. The sweeper runs it at most once an hour.
 Admitting an item (enqueue with a route) uses one of its grant's operations in the same transaction that writes it
 queued (GrantStore.use_for_item, R4.3-c). With no grant, none left, or one that doesn't cover it, the item is written
 proposed with the reason instead.
@@ -121,6 +129,7 @@ import logging
 import math
 import re
 import sys
+import time
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -130,7 +139,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from core.mc_delegation_dispatcher import cards as card_mod
-from core.mc_delegation_runner import envelope as env_mod
+from core.mc_delegation_runner import census as census_mod, envelope as env_mod
 
 _log = logging.getLogger("mc_delegation")
 
@@ -166,6 +175,10 @@ EFFECT_OPS = ("prepare", "claim", "dispatch", "finish", "reconcile")
 EFFECT_POLICY = "minimoi.runtime.effect.v1"   # the policy version an item's effect grant must be issued under
 RECEIPT_LEASE_S = 30                           # the receipt's own maximum (receipts.py); never past the item's lease
 SWEEP_BATCH = 200                              # items one sweep looks at; the rest wait for the next
+CENSUS_RETENTION_EVERY_S = 3600                # the sweeper's census retention runs at most this often
+_CENSUS_SQL = """SELECT host_id, event_id, at, kind, body FROM guild.mc_delegation_events
+    WHERE principal_id=%s AND environment=%s AND source='host' AND once_key IS NULL AND kind = ANY(%s)
+    ORDER BY at, seq"""
 _TOKEN = re.compile(r"^[A-Za-z0-9_-]{43}$")
 _CAPABILITY = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
 
@@ -618,6 +631,7 @@ class DispatcherStore:
         # host can send (_ID), so no host can write either, and neither can be made to look alive.
         self._alive_id = f"authority/{environment}/{principal}"
         self._sweeper_id = f"sweeper/{environment}/{principal}"
+        self._census_retained = None            # monotonic time of this store's last census retention
 
     @property
     def sweeps(self) -> bool:
@@ -807,9 +821,9 @@ class DispatcherStore:
             return "not_running"
 
     # ── runner protocol ────────────────────────────────────────────────────
-    def heartbeat(self, runner_id, state, capabilities, *, protocol=1, facts=None):
-        if self._protocol(protocol, (facts,)):
-            return self._heartbeat_v2(runner_id, state, capabilities, facts)
+    def heartbeat(self, runner_id, state, capabilities, *, protocol=1, facts=None, census=None):
+        if self._protocol(protocol, (facts, census)):
+            return self._heartbeat_v2(runner_id, state, capabilities, facts, census)
         with self._tx() as cur:
             # With version 2 on, the row also says the runner last spoke version 1 (so it claims nothing as a host).
             cur.execute("""INSERT INTO guild.mc_delegation_runners (runner_id, state, capabilities, seen_at)
@@ -1019,7 +1033,7 @@ class DispatcherStore:
     def _lock_route(self, cur, route):
         cur.execute("SELECT pg_advisory_xact_lock(%s, hashtext(%s))", (_ROUTE_LOCK, f"{self.environment}:{route}"))
 
-    def _heartbeat_v2(self, runner_id, state, capabilities, facts) -> dict:
+    def _heartbeat_v2(self, runner_id, state, capabilities, facts, census=None) -> dict:
         _need(type(runner_id) is str and _ID.match(runner_id), "runner_id_invalid")
         _need(type(state) is str and _WORD.match(state), "state_invalid")
         caps, facts = check_capabilities(capabilities), check_facts(facts)
@@ -1063,9 +1077,99 @@ class DispatcherStore:
                             (self.principal, self.environment, runner_id))
                 for row in cur.fetchall():
                     self._lapse(cur, row, row["now"], paused=True)
-            # S1-F: the census batch this heartbeat carries is applied here, in the same transaction, as host events
-            # (kind census.*) under their own ids, each applied once (_host_event).
-        return {"state": "recorded"}
+            answer = None if census is None else self._apply_census(cur, facts["host_id"], census)
+        return {"state": "recorded"} if answer is None else {"state": "recorded", "census": answer}
+
+    def _apply_census(self, cur, host_id, batch) -> dict:
+        """The census events one heartbeat carries (§6.6, R3.2-a), each applied once under the id the host wrote it
+        with, behind a savepoint: whatever goes wrong here leaves the contact recorded and every item as it was.
+        A census event is observation only: it names no item or generation column, so no item's audit holds it,
+        and nothing here reads or writes an item, a grant or a reservation (R6.6-e, CEN-6)."""
+        if type(batch) is not list or len(batch) > census_mod.BATCH_MAX_EVENTS:
+            return {"state": "rejected", "code": "census_batch_invalid"}     # never the heartbeat itself
+        cur.execute("SAVEPOINT census")
+        try:
+            cur.execute("SELECT clock_timestamp() AS now")
+            now, out = cur.fetchone()["now"], []
+            for ev in batch:
+                eid = ev.get("event_id") if isinstance(ev, dict) else None
+                eid = eid if type(eid) is str and _UUID.match(eid) else None
+                try:
+                    census_mod.check_event(ev)
+                except census_mod.CensusRefused as exc:
+                    out.append({"event_id": eid, "state": "rejected", "code": str(exc)})
+                    continue
+                at = census_mod.parse_at(ev["at"])
+                if (at - now).total_seconds() > FUTURE_SKEW_S:
+                    out.append({"event_id": eid, "state": "deferred", "code": "event_time_invalid"})
+                    continue
+                cur.execute("""INSERT INTO guild.mc_delegation_events (event_id, schema, kind, principal_id, environment,
+                    item_id, generation, host_id, source, at, body)
+                    VALUES (%s,%s,%s,%s,%s,NULL,NULL,%s,'host',%s,%s::jsonb) ON CONFLICT DO NOTHING RETURNING event_id""",
+                            (eid, EVENT_SCHEMA, ev["kind"], self.principal, self.environment, host_id, at,
+                             json.dumps(ev["body"])))
+                if cur.fetchone() is not None:
+                    out.append({"event_id": eid, "state": "applied"})
+                    continue
+                seen = self._replay(cur, eid, ev["kind"], None, None, at, ev["body"])
+                out.append({"event_id": eid, "state": "already_applied"} if seen == "already_applied" else
+                           {"event_id": eid, "state": "rejected", "code": "event_id_conflict"})
+            cur.execute("RELEASE SAVEPOINT census")
+            return {"state": "applied", "events": out}
+        except Exception as exc:
+            cur.execute("ROLLBACK TO SAVEPOINT census")
+            _log.warning("census batch not applied (%s)", type(exc).__name__)
+            return {"state": "deferred", "code": "census_not_applied"}
+
+    # ── the census, as read (R6.6-b, R7.6-b's agents) and kept (N3) ──
+    def _census_fold(self, cur):
+        cur.execute(_CENSUS_SQL, (self.principal, self.environment, list(census_mod.KINDS)))
+        fold = census_mod.Fold()
+        for r in cur.fetchall():
+            fold.apply({"event_id": str(r["event_id"]), "at": _iso(r["at"]), "kind": r["kind"], "body": r["body"]},
+                       r["host_id"])
+        return fold
+
+    def agents(self) -> list:
+        """The census as R7.6-b's ``agents`` field, every R6.6-a field, derived now (R6.6-b): an agent of a host whose
+        contact is older than contact_timeout_s is unknown: host_unreachable, never running; an ended parent with no
+        end of its own observed is unknown: end_unobserved; frozen children idle: frozen; an agent with no event
+        since its host's capture gap unknown: capture_gap. S1-G's snapshot calls this; it writes nothing."""
+        _need(self._v2, "protocol_not_enabled")
+        with self._tx() as cur:
+            fold = self._census_fold(cur)
+            cur.execute("""SELECT DISTINCT ON (host_id) host_id, seen_at, announced FROM guild.mc_delegation_runners
+                WHERE environment=%s AND host_id IS NOT NULL ORDER BY host_id, seen_at DESC""", (self.environment,))
+            hosts = cur.fetchall()
+            cur.execute("SELECT clock_timestamp() AS now")
+            now = cur.fetchone()["now"]
+        timeout = None if self.authority.hosts is None else self.authority.hosts.contact_timeout_s
+        reach = {h["host_id"]: census_mod.host_reachability(h["seen_at"], h["announced"], now, timeout)
+                 for h in hosts}
+        return fold.rows(reachability=reach, environment=self.environment)
+
+    def census_retention(self, *, days=census_mod.RETENTION_DAYS) -> dict:
+        """N3: the census events of every agent tree whose agents have all ended (their own end, or end_unobserved)
+        more than ``days`` ago, and capture gaps that old which no host's latest gap is. Census events only: the
+        statement names the census kinds and source host, so the authority's own audit is never touched."""
+        _need(self._v2, "protocol_not_enabled")
+        _need(type(days) is int and days >= 0, "census_retention_invalid")
+        with self._tx() as cur:
+            cur.execute("SELECT clock_timestamp() AS now")
+            cutoff = cur.fetchone()["now"] - timedelta(days=days)
+            fold = self._census_fold(cur)
+            agents = sorted(fold.closed_trees(cutoff))
+            latest = set(fold.gap_events.values())
+            cur.execute("""SELECT event_id FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s
+                AND source='host' AND once_key IS NULL AND kind='census.gap' AND (body->>'to')::timestamptz < %s""",
+                        (self.principal, self.environment, cutoff))
+            gaps = [str(r["event_id"]) for r in cur.fetchall() if str(r["event_id"]) not in latest]
+            cur.execute("""DELETE FROM guild.mc_delegation_events
+                WHERE principal_id=%s AND environment=%s AND source='host' AND once_key IS NULL AND kind = ANY(%s)
+                  AND ((kind <> 'census.gap' AND body->>'agent_id' = ANY(%s))
+                       OR (kind = 'census.gap' AND event_id = ANY(%s::uuid[])))""",
+                        (self.principal, self.environment, list(census_mod.KINDS), agents, gaps))
+            return {"agents_dropped": len(agents), "events_dropped": cur.rowcount}
 
     def _unreconciled(self, cur, runner_id) -> list:
         """Items this runner owns that it must reconcile before it may take new work (§5.5 step 6): lapsed or paused
@@ -2476,6 +2580,14 @@ class DispatcherStore:
                     moved = [] if row is None else self._sweep_row(cur, row)
                 for m in moved:
                     done[m] = done.get(m, 0) + 1
+        if self._census_retained is None or time.monotonic() - self._census_retained >= CENSUS_RETENTION_EVERY_S:
+            self._census_retained = time.monotonic()
+            try:                                          # the census never holds up the sweeper's own work
+                dropped = self.census_retention()["events_dropped"]
+                if dropped:
+                    done["census_dropped"] = dropped
+            except Exception as exc:
+                _log.warning("census retention failed (%s)", type(exc).__name__)
         return {"suspended": suspended, **done}
 
     def sweeper_status(self) -> dict | None:

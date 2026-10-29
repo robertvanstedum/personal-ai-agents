@@ -62,6 +62,7 @@ class FakeAuthority:
         self.receipts, self.reconciles, self.answers, self.hooks, self.answers_log = {}, [], [], {}, []
         self.down, self.renew_ok, self.lock = False, True, threading.RLock()
         self.decisions = []
+        self.census = {}                                    # event_id -> census event, as applied (S1-F)
 
     def enter(self, name, *args):
         hook = self.hooks.get(name)
@@ -82,10 +83,19 @@ class FakeAuthority:
         self.queue.append(rid)
         return rid
 
-    def heartbeat(self, runner_id, state, capabilities, facts):
+    def heartbeat(self, runner_id, state, capabilities, facts, census=None):
         self.enter("heartbeat", runner_id, facts["announced"])
         self.facts.append(dict(facts))
-        return {"state": "recorded"}
+        if census is None:
+            return {"state": "recorded"}
+        out = []                                            # S1-F: each census event once, as the store applies it
+        for ev in census:
+            old = self.census.get(ev["event_id"])
+            self.census.setdefault(ev["event_id"], ev)
+            out.append({"event_id": ev["event_id"], "state": "applied" if old is None else
+                        "already_applied" if old == ev else "rejected", **({"code": "event_id_conflict"}
+                                                                          if old not in (None, ev) else {})})
+        return {"state": "recorded", "census": {"state": "applied", "events": out}}
 
     def claim(self, runner_id, capabilities):
         self.enter("claim", runner_id)
@@ -882,13 +892,13 @@ def test_doctor_state_version_and_journal_commands(tmp_path, mirror, capsys, mon
         lock.release()
 
 
-def test_the_fakework_program_is_strict_and_the_census_steps_are_refused():
+def test_the_fakework_program_is_strict():
     ok = fakework.parse_program(program("checkpoint s1 hold_s=2 paths=a.txt,b/c.txt", "report_usage unknown",
                                         "findings", "resume_session 01a17dde-fb26-7923-8105-c7478428d17d",
                                         "crash: self", "hang_s 1", "result ok"))
     assert [k for k, _ in ok] == ["checkpoint", "report_usage", "findings", "resume_session", "crash", "hang_s",
                                   "result"]
-    for bad, code in (("spawn {id: a}", "fakework_step_unsupported:spawn"), ("checkpoint ../x", "fakework_checkpoint_"
+    for bad, code in (("spawn {id: a}", "fakework_spawn_invalid"), ("checkpoint ../x", "fakework_checkpoint_"
                       "invalid"), ("effect e1", "fakework_effect_invalid"), ("result ok\nresult ok",
                                                                              "fakework_result_not_last"),
                       ("rm -rf /", "fakework_step_unknown")):

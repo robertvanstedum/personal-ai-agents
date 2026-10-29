@@ -503,6 +503,42 @@ class HostRuntimeOnPostgres(PostgresFixture, unittest.TestCase):
         self.assertEqual((row["state"], row["result_detail"]["code"]), ("refused", "do_not_resume"))
         self.assertFalse((self.tmp / "artifacts" / f"{row['request_id']}-g1.log").exists())
 
+    def test_cen1_the_census_reaches_the_authority_once_each_and_is_derived_there(self):
+        """S1-F: a fakework root spawns three transient subagents and one long one; the host's census rides its
+        heartbeats into the events table, each event once (CEN-2), and the authority's agents view shows the tree:
+        the root done, the three done with their ends, the long one end_unobserved (CEN-1, CEN-4). No item changed
+        beyond its own result (CEN-6)."""
+        from core.mc_delegation_runner import runner
+        rt = self.runtime()
+        job = self.item(self.program("spawn a role=explore hold_s=0", "spawn b role=explore hold_s=0",
+                                     "spawn c role=explore hold_s=0", "spawn long1 role=worker hold_s=600 beat_s=1 long",
+                                     "checkpoint s1 hold_s=2", "result ok"))
+        out = self.run_pass(rt)
+        self.assertEqual(out["state"], "completed", out)
+        for _ in range(10):
+            rt.contact()
+            if not rt.census.unsent():
+                break
+        self.assertEqual(rt.census.unsent(), [])
+        rid = self.row(job)["request_id"]
+        root = runner.census_agent_id(f"{rid}-g1")
+        agents = {r["agent_id"]: r for r in self.store().agents()}
+        kids = {a: r for a, r in agents.items() if r["parent_id"] == root}
+        self.assertEqual((agents[root]["state"], agents[root]["reason"], agents[root]["host_id"]),
+                         ("done", "exit_0", "mac-test-1"))
+        self.assertEqual(sorted((a.rsplit("/", 1)[1], r["state"]) for a, r in kids.items()),
+                         [("a", "done"), ("b", "done"), ("c", "done"), ("long1", "unknown")])
+        self.assertEqual((kids[root + "/long1"]["reason"], kids[root + "/long1"]["ended_at"]), ("end_unobserved", None))
+        self.assertTrue(all(r["item_id"] == rid and r["start_path"] == "runtime" for r in kids.values()))
+        on_file = [json.loads(x)["event_id"] for p in rt.census.root.glob("*.jsonl") for x in p.read_text().splitlines()
+                   if '"type":"event"' in x]
+        stored = [str(r["event_id"]) for r in self.sql("SELECT event_id FROM guild.mc_delegation_events "
+                                                        "WHERE kind LIKE 'census.%%'")]
+        self.assertEqual(sorted(on_file), sorted(stored))                          # each event once
+        self.assertEqual(self.sql("SELECT count(*) AS n FROM guild.mc_delegation_events WHERE kind LIKE 'census.%%' "
+                                  "AND item_id IS NOT NULL")[0]["n"], 0)
+        self.assertEqual(self.row(job)["state"], "completed")
+
 
 if __name__ == "__main__":
     unittest.main()

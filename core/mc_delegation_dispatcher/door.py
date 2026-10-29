@@ -8,6 +8,8 @@ interface as ``StoreDispatcher``, over HTTPS (core/mc_delegation_runner/cli.py -
 A body without ``protocol`` is version 1 and is checked and passed exactly as before (spec v0.5 R3.2-d). A body with
 ``protocol: 2`` must have every field of its call's version 2 shape (store.py's docstring), and nothing else; the
 store refuses it unless the authority configuration speaks version 2. Version 2 adds two calls, reconcile and effect.
+A version 2 heartbeat may also carry ``census``: a list of at most census.BATCH_MAX_EVENTS events within
+census.BATCH_MAX_BYTES (spec v0.5 R3.2-a, §6.6); the store checks and answers each event.
 """
 from __future__ import annotations
 
@@ -95,6 +97,7 @@ _V2 = {"heartbeat": {"runner_id", "state", "capabilities", "facts"},
                   "output_text", "route", "usage"},
        "reconcile": {"runner_id", "request_id", "generation", "stage", "open_operations"},
        "effect": {"runner_id", "request_id", "generation", "effect"}}
+_V2_OPTIONAL = {"heartbeat": {"census"}}       # S1-F: the census batch rides the heartbeat (R3.2-a)
 
 
 def _checked(check, value):
@@ -111,7 +114,7 @@ def _handle_v2(store, body):
     need(type(body["protocol"]) is int and body["protocol"] == 2 and body["op"] in _V2)
     op = body["op"]
     args = {k: v for k, v in body.items() if k not in ("op", "protocol")}
-    need(set(args) == _V2[op])
+    need(set(args) - _V2_OPTIONAL.get(op, set()) == _V2[op])
     if "runner_id" in args:
         need(type(args["runner_id"]) is str and _ID.match(args["runner_id"]))
     if op in ("heartbeat", "claim"):
@@ -120,7 +123,13 @@ def _handle_v2(store, body):
             return {"value": store.claim(args["runner_id"], caps, protocol=2)}
         need(type(args["state"]) is str and _WORD.match(args["state"]))
         facts = _checked(check_facts, args["facts"])
-        return {"value": store.heartbeat(args["runner_id"], args["state"], caps, protocol=2, facts=facts)}
+        if "census" not in args:
+            return {"value": store.heartbeat(args["runner_id"], args["state"], caps, protocol=2, facts=facts)}
+        from core.mc_delegation_runner.census import BATCH_MAX_BYTES, BATCH_MAX_EVENTS
+        census = args["census"]
+        need(type(census) is list and len(census) <= BATCH_MAX_EVENTS and _small_json(census, BATCH_MAX_BYTES))
+        return {"value": store.heartbeat(args["runner_id"], args["state"], caps, protocol=2, facts=facts,
+                                         census=census)}
     rid, gen = args["request_id"], args["generation"]
     need(type(rid) is str and _UUID.match(rid) and type(gen) is int and 0 <= gen < 10**6)
     if op == "cancel_requested":
@@ -228,8 +237,9 @@ class HttpDispatcherV2(HttpDispatcher):
             raise RuntimeError("runner_door_answer_invalid")
         return doc["value"]
 
-    def heartbeat(self, runner_id, state, capabilities, facts):
-        return self._v2("heartbeat", runner_id=runner_id, state=state, capabilities=capabilities, facts=facts)
+    def heartbeat(self, runner_id, state, capabilities, facts, census=None):
+        extra = {} if census is None else {"census": census}
+        return self._v2("heartbeat", runner_id=runner_id, state=state, capabilities=capabilities, facts=facts, **extra)
 
     def claim(self, runner_id, capabilities):
         return self._v2("claim", runner_id=runner_id, capabilities=capabilities)

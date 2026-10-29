@@ -201,7 +201,7 @@ def _dispatcher(host, auth):
 
 def runtime_for(host, auth, dispatcher, *, digest=None):
     """A HostRuntime from a host configuration (the run and journal commands; tests build it the same way)."""
-    from . import host as host_mod
+    from . import census, host as host_mod
     from .fakework import FileSink
     if digest is None:
         digest, _ = host_mod.tree_digest(host.bundle_root)
@@ -211,7 +211,7 @@ def runtime_for(host, auth, dispatcher, *, digest=None):
                               max_cost_usd=V2_MAX_COST_USD, lease_renew_s=float(auth.hosts.renew_s), tick_s=0.5)
     sink = None if host.effect_sink is None else FileSink(host.effect_sink.path, lookup=host.effect_sink.lookup)
     return runner.HostRuntime(dispatcher, cfg, host, auth.hosts, auth.sweeper.gap_threshold_s, bundle_digest=digest,
-                              sink=sink, stores=_stores(host))
+                              sink=sink, stores=_stores(host), census=census.CensusFile(host.artifact_root / "census"))
 
 
 def _stores(host) -> dict:

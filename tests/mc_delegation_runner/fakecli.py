@@ -2,7 +2,8 @@
 to exercise the launch contract (T19). Test instrument only; nothing here is installed outside a test's folder.
 
     <install>/bin/fakecli          the pinned executable (its SHA-256 goes in the test host.yaml's ``tools.fakework``)
-    <install>/lib/fakework.py      its own copy of fakework/1 (the bundle's, byte for byte at install time)
+    <install>/lib/fakework.py      its own copy of fakework/1 (the bundle's, byte for byte at install time), with the
+                                   census module beside it (its spawn step writes census events, §6.6)
     <install>/etc/planted.sha256   the SHA-256 of each planted test value (digests only, never a value)
     <install>/var/fakecli-env.jsonl  one line per start: the NAMES in the environment it was started with (read from
                                    the kernel's record of its exec), and for any value matching a planted digest, that
@@ -99,6 +100,7 @@ def install(root, *, planted=(), python=None) -> tuple:
     for d in ("bin", "lib", "etc", "var"):
         (root / d).mkdir(parents=True, exist_ok=True)
     shutil.copyfile(commands.FAKEWORK, root / "lib" / "fakework.py")
+    shutil.copyfile(Path(commands.FAKEWORK).with_name("census.py"), root / "lib" / "census.py")   # spawn's writer
     (root / "etc" / "planted.sha256").write_text("".join(sha256_hex(v.encode()) + "\n" for v in planted))
     exe = root / "bin" / "fakecli"
     exe.write_text(LAUNCHER.format(python=python or real_interpreter()))

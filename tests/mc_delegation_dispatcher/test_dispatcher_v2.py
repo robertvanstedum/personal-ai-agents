@@ -270,7 +270,8 @@ class DoorVersion2(unittest.TestCase):
 
     def test_anything_else_is_refused(self):
         bad = [
-            v2("heartbeat", census=[]),                                          # not before S1-F
+            v2("heartbeat", census={"events": []}),                              # S1-F: a list, bounded
+            v2("heartbeat", census=[{}] * 201),
             {k: v for k, v in v2("heartbeat").items() if k != "facts"},
             v2("heartbeat", facts={**FACTS, "grace": "8h"}),
             v2("heartbeat", capabilities=V1_CAPS),                               # version 1's shape
@@ -417,6 +418,30 @@ class ProductionBundleOnPython39(unittest.TestCase):
                 "assert r['removed'] == ['GH_TOKEN'] and r['policy']['sha256'] == launch_env.POLICY_DIGEST\n"
                 "assert launch.TestCredentialStore({'k': 'v'}).read('test:k') == 'v'\n"
                 "assert cost.FakeworkUnits().apply(['/x/fakecli', '--program', 'p'], {}, 1.0, 'usd')[0][-1] == 'usd'\n"
+                # S1-F: the census, its OTLP writer, the Claude Code hook and fakework's spawn, in the same bundle;
+                # fakework and the hook run as files (-I), loading the census beside them.
+                "from core.mc_delegation_runner import census, otel, claude_hook\n"
+                "import subprocess, json as _j\n"
+                "f = census.CensusFile(root / 'census')\n"
+                "e = f.append('census.start', census.start('r1', source='runtime.child', verified=True,\n"
+                "                                          children='exposed'))\n"
+                "assert f.batch() == [e] and f.acknowledge([{'event_id': e['event_id'], 'state': 'applied'}]) == 1\n"
+                "assert not f.unsent() and f.retain() == []\n"
+                "rows = f.rows(host_id='h', environment='dev')\n"
+                "assert rows[0]['state'] == 'running' and runner.census_agent_id('t-g1') == 'runtime:t-g1'\n"
+                "otel.write(root / 'otlp', rows, host_id='h', environment='dev')\n"
+                "assert fakework.parse_program('fakework/1\\nspawn a role=x hold_s=0\\nresult ok')[0][0] == 'spawn'\n"
+                "fw = root / 'core/mc_delegation_runner/fakework.py'\n"
+                "r = subprocess.run([sys.executable, '-I', '-B', str(fw), '--program',\n"
+                "                    'fakework/1\\nspawn a role=x hold_s=0\\nresult ok', '--channel', str(root / 'ch'),\n"
+                "                    '--cap', '1', '--unit', 'test_units', '--census', str(root / 'c2'),\n"
+                "                    '--agent', 'runtime:t-g1'], capture_output=True, text=True)\n"
+                "assert r.returncode == 0 and len(census.CensusFile(root / 'c2').unsent()) == 2, r.stdout\n"
+                "hk = root / 'core/mc_delegation_runner/claude_hook.py'\n"
+                "r = subprocess.run([sys.executable, '-I', '-B', str(hk), '--census', str(root / 'c3'), '--start-path',\n"
+                "                    'fallback', '--route', 'subscription'], capture_output=True, text=True,\n"
+                "                   input=_j.dumps({'hook_event_name': 'SessionStart', 'session_id': 's-0123456789'}))\n"
+                "assert r.returncode == 0 and r.stdout == '' and len(census.CensusFile(root / 'c3').unsent()) == 1\n"
                 "from core.mc_delegation_dispatcher import door, store, relay\n"
                 "s = store.DispatcherStore(lambda: None, principal='robert', environment='prod')\n"
                 "door.HttpDispatcher(door.DOORS[0], 't' * 40, root)\n"

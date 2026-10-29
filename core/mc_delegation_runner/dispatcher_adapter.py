@@ -46,8 +46,9 @@ class StoreDispatcherV2:
     def __init__(self, store):
         self.store = store
 
-    def heartbeat(self, runner_id, state, capabilities, facts):
-        return self.store.heartbeat(runner_id, state, capabilities, protocol=2, facts=facts)
+    def heartbeat(self, runner_id, state, capabilities, facts, census=None):
+        extra = {} if census is None else {"census": census}
+        return self.store.heartbeat(runner_id, state, capabilities, protocol=2, facts=facts, **extra)
 
     def claim(self, runner_id, capabilities):
         return self.store.claim(runner_id, capabilities, protocol=2)
