@@ -623,9 +623,11 @@ def _notices(items, rec, now, values, hosts, cards, waiting, raised, unknowns, r
     host = {h["host_id"]: h for h in hosts}
     rows = {str(r["request_id"]): r for r in rec["items"]}
     # A stall whose item already had a review request open queued none (one open per item, sweep A1): its proposal
-    # names that request, and the stall's one notice (OWN-4) points Robert at it.
+    # names that request. The stall's one notice (OWN-4) says where the item's review requests stand at this read: the
+    # one open now, else Robert's latest answer about reviewing it; never a closed one as waiting (S1-FIX3).
     asked = {e["body"]["proposal_id"]: e["body"]["decision_id"] for e in rec["events"]
              if e["kind"] == "proposal.review_request" and e["body"].get("decision_id")}
+    reviews = _reviews(rec["events"], waiting)
     legacy_rows = [_legacy_row(r, now) for r in rec["items"] if r.get("route") is None]
     for i in legacy_items(legacy_rows)[0]:
         out.append({**i, "rule": i["key"].split(":", 1)[0], "next_authorized_step": None,
@@ -640,20 +642,18 @@ def _notices(items, rec, now, values, hosts, cards, waiting, raised, unknowns, r
             # OWN-4), a live read shows the stall's own notice, due.
             ref = _progress_ref(it, now)
             proposal = review_request_id(rid, g, ref)
-            waiting_one = asked.get(proposal)
-            if waiting_one is not None:
-                code = rec["codes"].get(waiting_one) or f"decision {waiting_one[:8]}"
-                ask = f"you say yes to the review request already waiting ({code})"
-                step_words = f"answer the review request already waiting ({code}), or wait"
+            reused = asked.get(proposal)
+            if reused is not None:
+                next_words, next_step = _reused_review_next(reviews.get(rid) or {}, reused, rec["codes"], step)
             else:
-                ask, step_words = f"you say so (review request {proposal[:8]})", \
-                    f"approve review request {proposal[:8]}, or wait"
+                next_words = f"MC may review it if you say so (review request {proposal[:8]})"
+                next_step = {"actor": "robert", "step": f"approve review request {proposal[:8]}, or wait",
+                             "authority": None}
             out.append(_notice(
                 f"runtime-stalled:{rid}:g{g}:{ref}", "stalled",
                 f"{label[0].upper()}{label[1:]} ({name(it['actor'])} on {it['owner_host_id']}) has made no progress "
                 f"for {int(it['progress_age_s'])} s; its owner is in contact and its lease is current. Nothing is "
-                f"stopped. Next: MC may review it if {ask}.",
-                {"actor": "robert", "step": step_words, "authority": None}, raised, proposal=proposal, **refs))
+                f"stopped. Next: {next_words}.", next_step, raised, proposal=proposal, **refs))
         if it["shown_as"] == "lapsed" and (host.get(it["owner_host_id"]) or {}).get("availability") == "always_on":
             out.append(_notice(
                 f"runtime-lapsed:{rid}:g{g}", "lapsed",
@@ -764,6 +764,54 @@ def _step_words(step) -> str:
     if not step:
         return "nothing is needed"
     return f"{step['actor']}: {step['step']}"
+
+
+def _reviews(events, waiting) -> dict:
+    """Per item, where its review requests stand, as the authority acts on them (sweep A1): ``open``, the one still
+    waiting (the oldest, as store._open_review picks it), and ``last``, Robert's latest answer to any of them (in audit
+    order, as reserve_judgment's owner trigger reads it), ``used`` once MC has spent that yes (judgment.trigger_used)."""
+    item_of = {str(e["event_id"]): str(e["item_id"]) for e in events
+               if e["kind"] == "decision.queued" and e["body"].get("class") == "review_request"}
+    used = {e["body"].get("decision_id") for e in events
+            if e["kind"] == "judgment.trigger_used" and e["body"].get("kind") == "owner"}
+    out = {}
+    for d in waiting:
+        if d["class"] == "review_request":
+            out.setdefault(d["item_id"], {}).setdefault("open", d["decision_id"])
+    for e in events:
+        did = e["body"].get("decision_id")
+        if e["kind"] == "decision.resolved" and e.get("source") == "owner" and did in item_of:
+            out.setdefault(item_of[did], {})["last"] = {"decision_id": did, "answer": e["body"].get("answer"),
+                                                       "action": e["body"].get("action"), "used": did in used}
+    return out
+
+
+def _reused_review_next(review, reused, codes, step) -> tuple:
+    """(the "Next: …" words, the next authorized step) of the notice of a stall that reused its item's open review
+    request (sweep A1). The request open now is the one named, whoever asked it; a closed one is never named as
+    waiting (S1-FIX3). With none open, Robert's latest answer about reviewing the item says who may act: his unspent
+    yes lets MC review it once; after his no, or a yes MC has spent, the item's own next step stands (its owner
+    continues). Nothing here reopens a request or asks a new one."""
+    def ref(did):
+        return codes.get(did) or f"decision {did[:8]}"
+    if review.get("open"):
+        c = ref(review["open"])
+        return (f"MC may review it if you say yes to the review request already waiting ({c})",
+                {"actor": "robert", "step": f"answer the review request already waiting ({c}), or wait",
+                 "authority": None})
+    then = "its owner continues, and you may stop it"
+    last = review.get("last")
+    if last is None:
+        return f"its review request ({ref(reused)}) is closed, and none is waiting; {then}", step
+    c = ref(last["decision_id"])
+    if last["answer"] == "approved" and last["action"] == "authorize_review":
+        if not last["used"]:
+            return (f"MC may review it once: you said yes to its review request ({c}), and none is waiting",
+                    {"actor": "mc", "step": f"review it once (Robert's yes, {c})", "authority": c})
+        return f"MC has used your yes to its review request ({c}), and none is waiting; {then}", step
+    if last["answer"] == "declined":
+        return f"you said no to its review request ({c}), and none is waiting; {then}", step
+    return f"its review request ({c}) is closed ({last['answer']}), and none is waiting; {then}", step
 
 
 def _progress_ref(item, now=None) -> str:

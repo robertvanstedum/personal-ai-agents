@@ -3171,7 +3171,8 @@ class DispatcherStore:
     STATE_KINDS = ("decision.queued", "decision.resolved", "decision.answered", "card.admitted", "card.ready",
                    "card.ended", "item.admitted", "item.reassigned", "item.interrupted", "item.cancelled",
                    "item.accepted", "grant.revoked", "notice.raised", "proposal.review_request", "judgment.reserved",
-                   "judgment.coalesced", "judgment.recorded", "judgment.escalated", "owner.act", "owner.read")
+                   "judgment.coalesced", "judgment.recorded", "judgment.escalated", "judgment.trigger_used", "owner.act",
+                   "owner.read")
     STATE_HISTORY_DAYS = 30            # authority events read for the snapshot (and every event of a live item)
     STATE_RECENT_HOURS = 24            # ended items shown, as the check-in shows them today
 

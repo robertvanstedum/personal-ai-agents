@@ -473,6 +473,87 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         got = self.store.reserve_judgment(trigger={"kind": "owner", "decision_id": r3}, items=[rid], by="mc")
         self.assertEqual(got["state"], "reserved")
 
+    # ── S1-FIX3 (Codex's sweep-fix2 review, P2): a stall's notice names the review request open now, never a closed one
+    def stall_notice(self, doc, rid):
+        """The stall's one notice (OWN-4) about the item, in a published snapshot, with the item: (notice, item)."""
+        (n,) = [n for n in doc["notices"] if n["rule"] == "stalled" and n.get("item_id") == rid]
+        item = next(i for i in doc["items"] if i["item_id"] == rid)
+        self.assertTrue(item["flags"]["stalled"])                    # the item is still stalled at this read
+        return n, item
+
+    def stall_told_once(self, key, rid, review_requests):
+        """One notice for the stall episode (its key raised once), and no review request queued to satisfy it."""
+        self.assertEqual(len([e for e in self.events("notice.raised") if e["body"]["key"] == key]), 1)
+        self.assertEqual(len([e for e in self.events("decision.queued", item=rid)
+                              if e["body"]["class"] == "review_request"]), review_requests)
+
+    def test_a1_a_stall_notice_names_the_review_request_open_now_and_never_a_closed_one(self):
+        """Codex's sequence: MC opens R1, the item stalls and its notice reuses R1. Robert says yes to R1, MC asks again
+        (R2), Robert says no to R2. With the item still stalled, each read names the request open then (R1, then R2),
+        and once both are closed none as waiting: his no, the latest answer, is what the notice says. One notice for
+        the stall episode throughout, and the older yes still reserves nothing."""
+        rid, r1, doc = self.stalled_with_mc_request_open()
+        n, _ = self.stall_notice(doc, rid)
+        key = n["key"]
+        self.assertEqual(n["next_authorized_step"], {
+            "actor": "robert", "step": f"answer the review request already waiting (decision {r1[:8]}), or wait",
+            "authority": None})
+        self.assertEqual(self.answer(r1, "approved", "yes")["action"], "authorize_review")
+        r2 = self.store.propose_review(rid, by="mc")["decision_id"]          # R1 is closed: MC's new request
+        self.assertNotEqual(r2, r1)
+        n, _ = self.stall_notice(self.publish(), rid)
+        self.assertEqual(n["next_authorized_step"]["step"],
+                         f"answer the review request already waiting (decision {r2[:8]}), or wait")
+        self.assertNotIn(r1[:8], n["text"])
+        self.assertEqual(self.answer(r2, "declined", "no")["action"], "withdraw")
+        self.assertEqual(self.store.reserve_judgment(trigger={"kind": "owner", "decision_id": r1}, items=[rid],
+                                                     by="mc"),
+                         {"state": "refused", "code": "judgment_owner_turn_superseded"})
+        final = self.publish()
+        self.assertEqual(self.waiting(final, "review_request"), [])
+        n, item = self.stall_notice(final, rid)
+        self.assertNotIn("already waiting", n["text"] + n["next_authorized_step"]["step"])
+        self.assertNotIn(r1[:8], n["text"])
+        self.assertIn(f"you said no to its review request (decision {r2[:8]}), and none is waiting", n["text"])
+        self.assertEqual(n["next_authorized_step"], item["next_authorized_step"])     # the owner continues
+        self.assertEqual(n["key"], key)
+        self.stall_told_once(key, rid, review_requests=2)                 # R1 and MC's R2; none for the notice
+
+    def test_a1_after_robert_s_no_to_the_reused_request_the_stall_notice_says_so_and_nothing_is_reopened(self):
+        rid, r1, doc = self.stalled_with_mc_request_open()
+        key = self.stall_notice(doc, rid)[0]["key"]
+        self.assertEqual(self.answer(r1, "declined", "no")["action"], "withdraw")
+        doc = self.publish()
+        n, item = self.stall_notice(doc, rid)
+        self.assertNotIn("already waiting", n["text"] + n["next_authorized_step"]["step"])
+        self.assertIn(f"you said no to its review request (decision {r1[:8]}), and none is waiting", n["text"])
+        self.assertEqual(n["next_authorized_step"], item["next_authorized_step"])
+        self.assertEqual(self.waiting(doc, "review_request"), [])
+        self.publish()                                                    # another stall tick
+        self.stall_told_once(key, rid, review_requests=1)                 # the declined one is not reopened
+
+    def test_a1_after_robert_s_yes_to_the_reused_request_the_stall_notice_says_mc_may_review_once_until_it_has(self):
+        rid, r1, doc = self.stalled_with_mc_request_open()
+        key = self.stall_notice(doc, rid)[0]["key"]
+        self.assertEqual(self.answer(r1, "approved", "yes")["action"], "authorize_review")
+        n, _ = self.stall_notice(self.publish(), rid)
+        self.assertNotIn("already waiting", n["text"] + n["next_authorized_step"]["step"])
+        self.assertIn(f"MC may review it once: you said yes to its review request (decision {r1[:8]}), and none is "
+                      f"waiting", n["text"])
+        self.assertEqual(n["next_authorized_step"], {"actor": "mc", "step": f"review it once (Robert's yes, decision "
+                                                                            f"{r1[:8]})",
+                                                     "authority": f"decision {r1[:8]}"})
+        got = self.store.reserve_judgment(trigger={"kind": "owner", "decision_id": r1}, items=[rid], by="mc")
+        self.assertEqual(got["state"], "reserved")
+        doc = self.publish()
+        n, item = self.stall_notice(doc, rid)
+        self.assertIn(f"MC has used your yes to its review request (decision {r1[:8]}), and none is waiting",
+                      n["text"])
+        self.assertEqual(n["next_authorized_step"], item["next_authorized_step"])     # the yes is spent
+        self.assertEqual(self.store.reserve_judgment(trigger={"kind": "owner", "decision_id": r1}, items=[rid],
+                                                     by="mc")["code"], "judgment_trigger_used")
+        self.stall_told_once(key, rid, review_requests=1)
+
     def test_sf4_a_card_slot_reviews_its_own_cards_work_once(self):
         self.admit(card("C-1"))
         _, env = self.claim()
