@@ -186,13 +186,16 @@ class ClaudeOutbox(Outbox):
         finally:
             if selector:selector.close()
             if process is not None:
+                # Signal only while our child is unreaped, so its group id cannot be reused. A group
+                # that cannot be signalled is left alone: macOS answers EPERM, not ESRCH, once our
+                # child has exited but is not yet reaped. wait() then reaps it.
                 if process.poll() is None:
                     try:os.killpg(process.pid,signal.SIGTERM)
-                    except ProcessLookupError:pass
+                    except (ProcessLookupError,PermissionError):pass
                 try:process.wait(timeout=1)
                 except subprocess.TimeoutExpired:
                     try:os.killpg(process.pid,signal.SIGKILL)
-                    except ProcessLookupError:pass
+                    except (ProcessLookupError,PermissionError):pass
                     process.wait(timeout=1)
                 if process.stdout:process.stdout.close()
 
