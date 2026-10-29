@@ -414,7 +414,7 @@ await t.check('CX A1-C2: a call bound to no owner input is refused before anythi
 });
 await t.check('CX A1-C2: a duplicate completion of the same captured item is not a new turn', async () => {
   const r = rig(); await r.s.start('openai');
-  assert.equal(r.c.options.trackResponses, true);                                  // each response it asks for is tagged (V R2-M1)
+  assert.equal(r.c.options.pageResponses, true);         // its responses are the page's, one at a time and tagged (C2 by construction)
   r.c.utter('Make a note that the kiln is hot');
   const first = r.c.respond();
   await r.c.callFrom(first, { call_id: 'a', name: 'save_note', arguments: {} });

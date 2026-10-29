@@ -200,6 +200,12 @@ export class XAIWebSocketAdapter {
     this._ws?.send(JSON.stringify({ type: "response.create" }));
   }
 
+  // Spec 165 §5.1 as amended (C2 by construction): a response the page asks for itself. xAI is not eligible for the page's
+  // own responses until A4 shows it names the committed item and creates none of its own; nothing calls this until then.
+  createResponse() {
+    this._ws?.send(JSON.stringify({ type: "response.create" }));
+  }
+
   sendFunctionResult(callId, output) {
     this._ws?.send(JSON.stringify({
       type: "conversation.item.create",
@@ -244,6 +250,8 @@ export class XAIWebSocketAdapter {
         this._emit("assistant_started", {});
         break;
       case "response.done":
+        // Spec 165 §5.1 (C2 by construction): the response's end and how it ended, before its function calls are passed on.
+        this._emit("response_done", { response_id: event.response?.id || this._responseId || null, status: event.response?.status || null });
         for (const item of event.response?.output || []) {
           if (item.type === "function_call") {
             this._emit("function_call", {

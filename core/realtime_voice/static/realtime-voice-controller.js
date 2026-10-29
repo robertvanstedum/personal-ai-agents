@@ -22,16 +22,18 @@
  *   controller.endSession("user_ended");
  */
 // Both adapters changed for the playback events and response attribution, OpenAI's again for the response tag on every
-// request, and both again for how a response's playback ended: new keys so browsers fetch them (Spec 165 §4.3, §5.3;
-// review FR N3, V R2-M1; v0.3 G3).
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-outcome1";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-outcome1";
+// request, both again for how a response's playback ended, and both again for the page's own responses (each response's
+// end, and creating one for a committed item): new keys so browsers fetch them (Spec 165 §4.3, §5.1, §5.3; review FR N3,
+// V R2-M1; v0.3 G3; the C2 binding pass).
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-paged1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-paged1";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
-// Response attribution (Spec 165 §5.1; review V R2-M1, W M1): a response this controller asked for that has not started in
-// this long is taken as never coming; a speech span of his is owed its input item for this long after it ends (V note B).
+// The page's own responses (Spec 165 §5.1 as amended for Robert's C2 decision, 28 Oct 2026: "tie by construction"): a page
+// request whose response has not started in this long is let go, and so is a started one that has not finished in this
+// long. A bound only lets a request go (its response, if it starts later, answers no one); it never names an owner.
 const REQUEST_TTL_MS = 10000;
-const MARK_TTL_MS = 3000;
+const RESPONSE_TTL_MS = 120000;
 const OPENING_INSTRUCTION =
   "Begin in character with one short, natural greeting and one brief question " +
   "inviting the learner to say what they need. Do not give directions, suggest " +
@@ -49,7 +51,7 @@ export class RealtimeVoiceController {
   constructor({
     bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
     onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall, onTranscriptUpdate, onPlayback,
-    onSessionInfo, onPlaybackDrained = null, trackResponses = false, oncePerItem = false,
+    onSessionInfo, onPlaybackDrained = null, pageResponses = false, oncePerItem = false, onUnbound = null,
     openingInstruction = OPENING_INSTRUCTION,
     managedBootstrap = null, requestHeaders = null, includeTranscriptAfterEnd = true,
   }) {
@@ -74,16 +76,20 @@ export class RealtimeVoiceController {
     this._onPlayback = onPlayback || (() => {});
     this._onSessionInfo = onSessionInfo || (() => {});
     this._onPlaybackDrained = onPlaybackDrained;     // optional (Spec 165 §5.3): a host that waits for a response's audio
-    this._trackResponses = trackResponses;           // optional: tag each response this controller asks for (V R2-M1)
-    this._spans = [];                // his speech spans, in order: {end: ms or null while he speaks, named: item id, committed}
-    this._owners = new Map();        // input item id -> the spans it may belong to (one: shown to be that span's)
-    this._answered = -1;             // spans up to this place have been answered by a response of the provider's
-    this._commits = false;           // the adapter reports committed input (OpenAI's input_audio_buffer.committed)
-    this._requests = [];             // responses this controller asked for, not yet started, in order: {owner, tag, seq, at, done}
-    this._seq = 0;                   // the order in which the requests were made
-    this._echoed = false;            // the adapter has reported a request's tag back (OpenAI's response.metadata)
-    this._answers = new Map();       // response id -> null, or {span}: the speech span of his it answers (inputOf)
+    // Optional (Spec 165 §5.1 as amended 28 Oct 2026; Robert's C2 decision, "tie by construction"): a host page that asks
+    // for its responses one at a time, each tagged (pageResponses: MC's direct page). Where the bootstrap also says
+    // page_responses (a provider eligible for the model's own actions: it names the committed item and creates no response
+    // of its own), the page creates every response that may act, one for each committed owner item, and a call acts on
+    // that item's words alone. German and Portuguese pass no option: every request is sent at once, untagged, as before.
+    this._pageResponses = pageResponses;
+    this._owned = false;             // every response of this session is the page's (the bootstrap said page_responses)
+    this._queue = [];                // page requests waiting their turn, in order: {kind, owner, turn, tag, send, done}
+    this._inflight = null;           // the one page request in flight, from its response.create to its response.done
+    this._answers = new Map();       // response id -> {owner: his item id or null, turn, acts}, or null: not the page's
+    this._turn = 0;                  // his turns: each speech start and each commit begins a new one
     this._tags = 0;
+    this._expiry = null;
+    this._onUnbound = onUnbound || ((info) => console.warn?.("[realtime-voice] a response bound to nothing", info));
     // Optional (review F2): a host that hears each owner item's completion once (MC's page). A replayed provider event, or
     // a second completion of an item already completed, is not a new turn. German and Portuguese pass no option.
     this._fresh = true;              // the completion being handled is the first of its item
@@ -180,6 +186,7 @@ export class RealtimeVoiceController {
     }
     this._provider = bootstrap.provider;
     this._model = bootstrap.model;
+    this._owned = this._pageResponses && bootstrap.page_responses === true;
     this._sessionId = bootstrap.voice_session_id || (this._managedBootstrap ? null : `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     this._warningMinutes = bootstrap.warning_minutes;
     this._maxMinutes = bootstrap.max_minutes;
@@ -212,13 +219,14 @@ export class RealtimeVoiceController {
       if (this._managedBootstrap && generation !== this._generation) return;
       handler(event);
     });
-    // Response attribution (Spec 165 §5.1), first, so a host asking inputOf() from any callback below sees it current.
-    on("connected", () => { this._spans = []; this._owners = new Map(); this._answered = -1; this._drop(this._requests.slice()); this._echoed = this._commits = false; });
-    on("speech_started", (evt) => this._speechStart(evt && evt.item_id));
-    on("speech_stopped", () => this._speechEnd());
-    on("input_item", (evt) => this._committed(evt.item_id));
-    on("input_transcript", (evt) => { this._fresh = this._firstCompletion(evt); this._sawInput(evt.item_id); });
+    // The page's own responses (Spec 165 §5.1), first, so a host asking inputOf() from any callback below sees them current.
+    on("connected", () => this._reset());
+    on("closed", () => this._reset());
+    on("speech_started", () => { this._turn += 1; });
+    on("input_item", (evt) => this._committed(evt.item_id || null));
+    on("input_transcript", (evt) => { this._fresh = this._firstCompletion(evt); });
     on("response_started", (evt) => this._started(evt));
+    on("response_done", (evt) => this._finished(evt));
     on("connected", () => {
       this._setState("active");
       this._startedAt = Date.now();
@@ -258,6 +266,7 @@ export class RealtimeVoiceController {
         this._onInputState("consulting"); // server sideband owns execution
         return;
       }
+      if (this._refused(call)) return;
       if (!this._onFunctionCall) {
         this._sendResult(call, {
           error: "Function bridge unavailable",
@@ -352,54 +361,43 @@ export class RealtimeVoiceController {
   state() { return this._state; }
 
   /** A host's one-off instruction to the voice on the direct path (a holding line, "say this briefly"): true when the
-   *  session's transport took it. Its response answers none of his inputs. Never on the managed path. German and
-   *  Portuguese do not call it. */
+   *  session's transport took it (with pageResponses: when it is sent or waits its turn). Its response answers none of his
+   *  inputs. Never on the managed path. German and Portuguese do not call it. */
   speak(instruction) {
     if (this._managedBootstrap || !this._adapter) return false;
     try { this._ask(null, (tag) => this._instruct(instruction, tag)); return true; } catch (_) { return false; }
   }
 
   /** speak(), tracked (Spec 165 §5.3; review FR N3, V note D): resolves with the id of the response this instruction
-   *  starts, or null when it has not started within maxMs, or the transport refused it. The response is known as every
-   *  response this controller asks for is (see _started): by its tag when the adapter reports it back, else by the order
-   *  of the requests. A host passes onPlaybackDrained to learn when that response's audio has played out. German and
-   *  Portuguese do not call it. */
+   *  starts, or null when it has not started within maxMs, or the transport refused it. With pageResponses the response is
+   *  known as every page request's is (see _started): by its echoed tag, or as the one page request in flight. A host
+   *  passes onPlaybackDrained to learn when that response's audio has played out. German and Portuguese do not call it. */
   speakTracked(instruction, maxMs = 5000) {
     if (this._managedBootstrap || !this._adapter) return Promise.resolve(null);
     return new Promise((resolve) => {
       let timer = null, entry = null;
       try { entry = this._ask(null, (tag) => this._instruct(instruction, tag), (id) => { clearTimeout(timer); resolve(id); }); }
       catch (_) { resolve(null); return; }
-      timer = setTimeout(() => { entry.done = null; resolve(null); }, maxMs);   // it stays in order; only the wait ends
+      timer = setTimeout(() => { entry.done = null; resolve(null); }, maxMs);   // it keeps its turn; only the wait ends
     });
   }
 
-  /** The owner input item a function call answers (Spec 165 §5.1; review CX A1-C2, FR M2, V R2-M1, R3-S1, W M1). Each
-   *  response is placed when it starts, by where it came from:
-   *  - a response this controller asked for: a function result's follow-up answers what the call it continues answered
-   *    (it shares that call's claim); the page's own instruction answers none of his inputs. Neither takes his speech;
-   *  - a response the provider made from his speech: it answers his latest ended speech span not yet answered (where the
-   *    adapter reports committed input, as OpenAI does, only a committed one; never one that is noise, ended with no item
-   *    past its bound);
-   *  - anything else answers none of his inputs.
-   *  Which is which: by the tag a request carries when the adapter reports it back (OpenAI's response.metadata, once seen
-   *  in the session: then an untagged response is the provider's); else by order, the requests starting their responses
-   *  in the order they were sent. By order alone, a response that starts while one of the requests and his ended speech
-   *  both wait is ambiguous: it answers nothing, and both are let go (review R3-S1).
-   *  Attribution is one-to-one or nothing (review W M1; see _sawInput). A response of his answers its span's item once that
-   *  span has exactly one item shown to be its own, and pending while the span is still owed one; otherwise (an item that
-   *  could be another span's, two items, or none by its bound) it answers nothing, and its calls are refused as not heard.
-   *  The call is bound to its response by response_id. {state: "bound", index, text} once that item's transcript has
-   *  completed (index: its place in the transcript list the host is given), {state: "pending"} until then, or null when
-   *  the call is bound to no owner input. Never the latest input by default. German and Portuguese do not call it. */
+  /** The owner input item a function call acts on (Spec 165 §5.1 as amended 28 Oct 2026, C2 "tie by construction"). Only
+   *  where the page creates every response (pageResponses, and the bootstrap's page_responses). Then:
+   *  - each response that may act was created by the page for one committed owner item, named by the provider's commit
+   *    (input_audio_buffer.committed's item_id), or is a function result's follow-up, owned by the item of the call it
+   *    continues;
+   *  - a response is the page's by its echoed tag, or as the one page request in flight; any other response answers no one;
+   *  - its calls act only if it completed and no new turn of his began while it was in flight (I5).
+   *  No order and no timing names an owner. The call is bound to its response by response_id, and its words are that
+   *  item's transcript, joined by the provider's item id alone: {state: "bound", index, text} once it has completed
+   *  (index: its place in the transcript list the host is given), {state: "pending"} until then, or null when the call
+   *  may act on no owner input. Never the latest input by default. German and Portuguese do not call it. */
   inputOf(call) {
-    const claim = call && call.response_id ? this._answers.get(call.response_id) : undefined;
-    if (!claim) return null;
-    const span = this._spanState(claim.span);
-    if (span.kind === "owed") return { state: "pending" };
-    if (span.kind !== "one") return null;
+    const r = this._owned && call && call.response_id ? this._answers.get(call.response_id) : null;
+    if (!r || !r.owner || r.acts !== true) return null;
     const order = [...this._items.entries()].sort((a, b) => a[1].firstSeq - b[1].firstSeq);
-    const index = order.findIndex(([id]) => id === span.item);
+    const index = order.findIndex(([id]) => id === r.owner);
     if (index < 0) return { state: "pending" };
     const item = order[index][1];
     return item.completed ? { state: "bound", index, text: item.text || "" } : { state: "pending" };
@@ -412,96 +410,29 @@ export class RealtimeVoiceController {
     return !(item && item.completed);
   }
 
-  // One-to-one or nothing (Spec 165 §5.1: "could be bound to more than one turn, is refused or held, never guessed"; review
-  // W M1). Each speech span of his is owed an input item from its start until it has one, or until MARK_TTL_MS after it
-  // ends. Where the provider names a span's item (OpenAI's speech_started or committed item_id), that link stands and nothing
-  // is inferred. By order alone, an item that first appears belongs to the one span still owed an item, when there is exactly
-  // one; with several still owed, it could be any of them, so it belongs to none and taints them all; with none owed, it is
-  // an extra item for the open spans (a span with two items answers nothing either). Index access, never
-  // Array.prototype.at: these listeners run in every German, Portuguese and CoS session (Safari before 15.4; review FR S2).
-  _sawInput(id) {
-    if (!id || this._owners.has(id)) return;
-    const now = Date.now();
-    const open = this._spans.filter((span) => !span.named && (span.end === null || now - span.end < MARK_TTL_MS));
-    const owed = open.filter((span) => this._spanState(span).kind === "owed");
-    this._owners.set(id, owed.length ? owed : open);
-  }
-
-  // A span's attribution now: one (its item), owed (no item yet, still speaking or within its bound), none (no item by its
-  // bound: noise), or bad (an item that could be another span's, or more than one item).
-  _spanState(span) {
-    let item = null, items = 0;
-    for (const [id, spans] of this._owners) {
-      if (spans.indexOf(span) < 0) continue;
-      if (spans.length > 1) return { kind: "bad" };
-      items += 1; item = id;
-    }
-    if (items > 1) return { kind: "bad" };
-    if (items === 1) return { kind: "one", item };
-    return span.end === null || Date.now() - span.end < MARK_TTL_MS ? { kind: "owed" } : { kind: "none" };
-  }
-
-  _speaking() {
-    const span = this._spans.length ? this._spans[this._spans.length - 1] : null;
-    return span && span.end === null ? span : null;
-  }
-
-  _speechStart(item) {
-    let span = this._speaking();
-    if (!span) { span = { end: null, named: null, committed: false }; this._spans.push(span); }
-    if (item) this._name(span, item);
-  }
-
-  _speechEnd() {
-    const span = this._speaking();
-    if (span) span.end = Date.now();
-  }
-
-  _name(span, item) {
-    span.named = item;
-    this._owners.set(item, [span]);
-  }
-
-  // His input committed (OpenAI's input_audio_buffer.committed): the span it closes is ended and named by the committed
-  // item; where the adapter reports commits, only a committed span has a response. A commit after his speech ended belongs
-  // to his latest span while that span is uncommitted, within its bound, and holds no other item; otherwise (a commit with
-  // no speech events) it is a new span.
+  // His input committed (OpenAI's input_audio_buffer.committed): a new turn of his. Where the page creates every response,
+  // it asks now, in this same tick, for one response owned by the committed item. An earlier committed item still waiting
+  // its turn is let go: it never gets a response of its own, so nothing acts on its words (the newest is answered; he says
+  // the earlier one again if he needs it). A commit naming no item still gets a response, which may act on no one.
   _committed(item) {
-    this._commits = true;
-    let span = this._speaking();
-    if (span) span.end = Date.now();
-    else {
-      span = this._spans.length ? this._spans[this._spans.length - 1] : null;
-      const state = span ? this._spanState(span) : null;
-      if (!span || span.committed || Date.now() - span.end >= MARK_TTL_MS || (span.named && span.named !== item)
-          || (state.kind === "one" && state.item !== item)) {
-        span = { end: Date.now(), named: null, committed: false };
-        this._spans.push(span);
-      }
-    }
-    span.committed = true;
-    if (item) this._name(span, item);
+    this._turn += 1;
+    if (!this._owned) return;
+    for (const entry of this._queue.filter((e) => e.kind === "turn")) this._let(entry, "superseded");
+    if (!item) this._onUnbound({ reason: "commit_without_item" });
+    this._ask(item, (tag) => this._adapter.createResponse(tag), null, "turn");
   }
 
-  // His latest ended span not yet answered, by its place, when a response of the provider's may answer it: committed where
-  // the adapter reports commits, and not noise. Else null.
-  _his() {
-    for (let i = this._spans.length - 1; i > this._answered; i--) {
-      const span = this._spans[i];
-      if (span.end === null) continue;
-      if ((this._commits && !span.committed) || this._spanState(span).kind === "none") return null;
-      return i;
-    }
-    return null;
-  }
-
-  // A response this controller asks for (a function result's follow-up, the opening or continuation instruction, or the
-  // page's own), in order, before it is sent; tagged when the host tracks responses (trackResponses). Every response.create
-  // the controller sends goes through here. Nothing is recorded if the transport refuses it.
-  _ask(owner, send, done = null) {
-    const entry = { owner, tag: this._trackResponses ? `minimoi-${++this._tags}` : null, seq: ++this._seq, at: Date.now(), done };
-    this._requests.push(entry);
-    try { send(entry.tag); } catch (error) { this._requests.splice(this._requests.indexOf(entry), 1); throw error; }
+  // A response this controller asks for: his committed item's (turn), a function result's follow-up (follow), or the
+  // page's own line, the opening or the continuation (line). Every response.create the controller sends goes through here.
+  // Without pageResponses it is sent at once, untagged, as before. With it, it is tagged and waits its turn: one page
+  // request is in flight at a time, from its response.create until that response is done. Throws if the transport refuses
+  // it at once.
+  _ask(owner, send, done = null, kind = "line") {
+    if (!this._pageResponses) { send(null); return { done }; }
+    const entry = { kind, owner, turn: this._turn, tag: `minimoi-${++this._tags}`, send, done, at: 0, started: false, id: null };
+    this._queue.push(entry);
+    this._pump();
+    if (entry.refused) throw new Error("Voice transport refused the request");
     return entry;
   }
 
@@ -509,48 +440,99 @@ export class RealtimeVoiceController {
     if (tag) this._adapter.sendContinuationInstruction(text, tag); else this._adapter.sendContinuationInstruction(text);
   }
 
-  // A function result: its follow-up answers what the call it continues answered (V R2-M1, R2-S1).
+  // A function result: its follow-up is owned by the item of the call it continues (V R2-M1, R2-S1).
   _sendResult(call, output) {
-    const owner = call && this._answers.has(call.response_id) ? this._answers.get(call.response_id) : null;
-    this._ask(owner, (tag) => {
+    const r = call && this._answers.get(call.response_id);
+    this._ask(r ? r.owner : null, (tag) => {
       if (tag) this._adapter.sendFunctionResult(call.call_id, output, tag); else this._adapter.sendFunctionResult(call.call_id, output);
-    });
+    }, null, "follow");
   }
 
-  _drop(entries, id = null) {
-    for (const entry of entries) {
-      const i = this._requests.indexOf(entry);
-      if (i >= 0) this._requests.splice(i, 1);
-      if (entry.done) { const done = entry.done; entry.done = null; done(id); }
+  // The next page request goes once none is in flight. A request in flight past its bound is let go first. His committed
+  // item's request goes only while no newer turn of his has begun; otherwise it is let go (he is speaking again: the commit
+  // that ends it asks for its own response).
+  _pump() {
+    const f = this._inflight;
+    if (f && Date.now() - f.at >= (f.started ? RESPONSE_TTL_MS : REQUEST_TTL_MS)) {
+      this._inflight = null;
+      this._let(f, f.started ? "unfinished" : "never_started");
     }
+    while (!this._inflight && this._queue.length) {
+      const entry = this._queue.shift();
+      if (entry.kind === "turn" && entry.turn !== this._turn) { this._let(entry, "superseded"); continue; }
+      entry.turn = this._turn; entry.at = Date.now();
+      this._inflight = entry;
+      try { entry.send(entry.tag); } catch (_) { this._inflight = null; entry.refused = true; this._let(entry, "refused"); }
+    }
+    this._arm();
   }
 
+  // One timer for the request in flight, so a bound passes even when no provider event comes. Unreferenced where the
+  // runtime allows it (node's tests); cleared when the request settles and when the transport closes.
+  _arm() {
+    clearTimeout(this._expiry);
+    this._expiry = null;
+    const f = this._inflight;
+    if (!f) return;
+    const left = (f.started ? RESPONSE_TTL_MS : REQUEST_TTL_MS) - (Date.now() - f.at);
+    this._expiry = setTimeout(() => { this._expiry = null; this._pump(); }, Math.max(0, left));
+    if (this._expiry && typeof this._expiry.unref === "function") this._expiry.unref();
+  }
+
+  // A page request let go: its wait ends with no response, and it answers no one.
+  _let(entry, reason) {
+    const i = this._queue.indexOf(entry);
+    if (i >= 0) this._queue.splice(i, 1);
+    if (entry.done) { const done = entry.done; entry.done = null; done(null); }
+    if (this._owned && entry.kind !== "line") this._onUnbound({ reason, owner: entry.owner || null });
+  }
+
+  _reset() {
+    const pending = this._inflight ? [this._inflight, ...this._queue] : this._queue.slice();
+    this._queue = []; this._inflight = null;
+    for (const entry of pending) if (entry.done) { const done = entry.done; entry.done = null; done(null); }
+    this._arm();
+  }
+
+  // A response started (response.created). It is the page's when it echoes the tag of the page request in flight, or, with
+  // no tag, while that request has not started yet: it is then that request's, owned as the request is. Any other response
+  // (none in flight, one too many, another tag) answers no one; where the page creates every response it is logged.
   _started(evt) {
-    const now = Date.now(), id = evt.response_id || null;
-    this._drop(this._requests.filter((r) => now - r.at >= REQUEST_TTL_MS));
-    const his = this._his();
-    let mine = null;
-    if (evt.tag) {
-      this._echoed = true;
-      mine = this._requests.find((r) => r.tag === evt.tag) || { owner: null };   // a request of another page: not his
-    } else if (!this._echoed && this._requests.length) {
-      if (his !== null) {                           // by order alone, a request of ours and his speech both wait:
-        this._answered = his;                       // which one this is cannot be told, so it binds nothing and both are
-        this._drop([this._requests[0]]);            // let go; its calls are refused as not heard (review R3-S1)
-        if (id) this._answers.set(id, null);
-        return;
-      }
-      mine = this._requests[0];
+    if (!this._pageResponses) return;
+    const id = evt.response_id || null;
+    if (id && this._answers.has(id)) return;                     // its start was already seen
+    this._pump();                                                // a request past its bound is let go first
+    const f = this._inflight;
+    if (!f || f.started || (evt.tag && evt.tag !== f.tag)) {
+      if (id) this._answers.set(id, null);
+      if (this._owned) this._onUnbound({ reason: !f ? "unrequested" : f.started ? "one_too_many" : "another_tag", response_id: id });
+      return;
     }
-    let owner = null;
-    if (mine) {
-      owner = mine.owner;
-      this._drop([mine], id);
-    } else if (his !== null) {
-      this._answered = his;
-      owner = { span: this._spans[his] };          // its item, once shown (inputOf)
-    }
-    if (id) this._answers.set(id, owner);
+    f.started = true; f.id = id; f.at = Date.now();
+    if (id) this._answers.set(id, { owner: f.owner, turn: f.turn, acts: null });
+    this._arm();
+    if (f.done) { const done = f.done; f.done = null; done(id); }
+  }
+
+  // A response is done (response.done, before its function calls are passed on). Its calls act only if it completed and no
+  // new turn of his began while it was in flight: one cancelled at his barge-in, cut short, or overtaken by his next words
+  // is refused, never re-bound. The page request it answered is settled, and the next one goes.
+  _finished(evt) {
+    if (!this._pageResponses) return;
+    const id = evt.response_id || null;
+    const r = id ? this._answers.get(id) : null;
+    if (r && r.acts === null) r.acts = evt.status === "completed" && r.turn === this._turn;
+    const f = this._inflight;
+    if (f && f.started && f.id === id) { this._inflight = null; this._pump(); }
+  }
+
+  // A call from a page response that may not act (cancelled, cut short or overtaken by his speech): nothing is dispatched,
+  // and no result or follow-up is sent for it; the response that answers his newer words is the one that acts.
+  _refused(call) {
+    const r = this._pageResponses && call && call.response_id ? this._answers.get(call.response_id) : null;
+    if (!r || r.acts !== false) return false;
+    if (this._owned) this._onUnbound({ reason: "superseded_call", response_id: call.response_id, owner: r.owner || null });
+    return true;
   }
 
   mute() { this._adapter?.mute(); }

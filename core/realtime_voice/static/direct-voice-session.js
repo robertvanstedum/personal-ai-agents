@@ -51,10 +51,11 @@ export const PENDING = "That's taking longer; the answer will be in the conversa
 export const SUMMARY_MAY_APPEAR = 'The summary may still appear in the conversation.';
 export const SUMMARY_REFUSED = 'The summary could not be asked for.';
 export const KEEP_TALKING_FAILED = 'Voice ended: Keep talking did not reach the server, so a later yes could have ended the session.';
-// A model call that came before its own words were transcribed, and they did not come in time (review R1 P1-2): nothing is
-// sent, so nothing is done on older words.
+// A model call that came before its own words were transcribed, and they did not come in time (review R1 P1-2), or whose
+// words came empty (a cough is an item with no words): nothing is sent, so nothing is done on other words.
 export const NOT_HEARD = "I didn't catch that; say it again.";
-const HEAR_WAIT_MS = 3000;                // a model call waits this long for the transcript of the owner speech it answers
+// A model call waits this long for its own item's transcript, then is refused. A bound only refuses: it never names an owner.
+const HEAR_WAIT_MS = 3000;
 // A slow consult's holding lines (Spec 165 v0.3 §12.4): one by 8 s and a second by 17 s, and the server answers pending at
 // 25 s, so there is never more than 10 s of silence. Each says only what is true, never a result, and waits for a pause.
 const HOLDING = [[8000, 'Still checking.'], [17000, 'Still working on it.']];
@@ -99,6 +100,9 @@ export function personWords(person, host = {}) {
     start: off ? { ...start, [off]: `Voice unavailable: ${name}'s turns are off here.` } : start,
     serverEnded: off ? { ...SERVER_ENDED, [off]: `Voice stopped: ${name}'s turns are off here. What was said before is kept.` } : SERVER_ENDED,
     sayFirst: `Say something first: Check with ${short} sends your last words.`,
+    // A provider not eligible for the model's own actions (direct_voice.model_actions; Spec 165 §7 as amended): the voice
+    // talks, and only Check with the person acts.
+    checkOnly: `On this voice, ${name} acts only when you press Check with ${short}.`,
   };
 }
 export function startRefusal(info, person, host) {
@@ -571,12 +575,14 @@ export function directVoice(d) {
     return r.status === 200 && ['done', 'not_done', 'pending'].includes(r.body.outcome) ? r.body : unknown;
   }
 
-  // A model call acts on the owner turn its own response answers, never on whichever turn finished last (review CX A1-C2,
-  // R1 P1-2, R2 S4). The controller binds each response, when it starts, to the owner input item it answers, and the call
-  // to its response (controller.inputOf(call)): the item's capture id and its words. If that turn's transcript has not
-  // completed yet (transcription runs alongside the response), the call waits for it, at most HEAR_WAIT_MS. A call with no
-  // binding (no response id, a response that answered no owner input), one whose turn never completes, or whose words came
-  // empty is refused before anything is sent: "I didn't catch that; say it again." It is never rebound to newer words.
+  // A model call acts on the owner item its own response was created for, never on whichever turn finished last (review CX
+  // A1-C2; Spec 165 §5.1 as amended, C2 by construction). The page creates every response that may act for one of his
+  // committed items, named by the provider's commit, and the controller ties the call to that response
+  // (controller.inputOf(call)): the item's capture id and its words, joined by the provider's item id. If that item's
+  // transcript has not completed yet (transcription runs alongside the response), the call waits for it, at most
+  // HEAR_WAIT_MS. A call with no owner (a response the page did not create, a provider with no page responses), one whose
+  // words never come, or whose words came empty is refused before anything is sent: "I didn't catch that; say it again."
+  // It is never rebound to other words.
   function boundOwner(call) {
     const look = () => {
       const b = typeof c?.inputOf === 'function' ? c.inputOf(call) : null;
@@ -792,13 +798,18 @@ export function directVoice(d) {
       clock, onAnswer: heard, warn: d.warn || (() => {}), turnsOff: words.off });
     c = new RealtimeVoiceController({
       bootstrapUrl: direct.bootstrap_url, requestHeaders: d.headers, includeTranscriptAfterEnd: true,
-      trackResponses: true,                       // each response it asks for is tagged, so it is known (V R2-M1, note D)
+      // The page asks for its responses one at a time, each tagged; where the bootstrap says page_responses (OpenAI), it
+      // creates every response that may act, one for each of his committed items (Spec 165 §5.1 as amended, C2).
+      pageResponses: true,
+      ...(d.warn ? { onUnbound: (info) => d.warn('voice response bound to nothing', info) } : {}),
       openingInstruction: null,                   // the server composes the session's instructions; the page sends none
       onSessionInfo: (info) => {
         if (typeof info?.voice_session_id === 'string') sid = info.voice_session_id;
         // Ended while the server was still starting it: that session is ended on the server too, never left open.
         if (finalized) { if (sid) postJson(at(direct.end_url), {}, { timeoutMs: END_WAIT_MS }); return; }
-        ui.notice(noticeWords(info?.voice_notices, info?.provider || provider));
+        const chosen = info?.provider || provider;
+        const checkOnly = direct.model_actions && direct.model_actions[chosen] === false ? words.checkOnly : '';
+        ui.notice([noticeWords(info?.voice_notices, chosen), checkOnly].filter(Boolean).join(' '));
       },
       onStateChange: (state) => {
         if (state === 'active' && finalized) { c.endSession('user_ended'); return; }

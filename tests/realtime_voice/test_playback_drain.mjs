@@ -43,7 +43,7 @@ function host(adapter) {
   const ended = [], outcomes = [];
   let mine;
   const c = new RealtimeVoiceController({
-    trackResponses: true,                                             // as the direct session module does
+    pageResponses: true,                                              // as the direct session module does
     onFunctionCall: async () => ({ ok: true, outcome: 'done', spoken: 'Done.' }),
     onPlaybackDrained: (id, outcome) => { if (mine !== undefined && id === mine) { ended.push('drained'); outcomes.push(outcome); c.endSession('normal_end'); } },
     onAssistantTurn: () => { if (typeof c.speakTracked !== 'function' && !ended.length) { ended.push('turn'); c.endSession('normal_end'); } },

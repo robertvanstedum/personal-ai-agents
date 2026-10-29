@@ -58,37 +58,32 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
     constructor(options) {
       this.options = options; this._state = 'idle'; this._sid = null; this.instructions = []; this.ended = []; this.muted = 0;
       this.turns = []; this.responses = 0; this.tracked = [];
-      // Response attribution, as the real controller does it (Spec 165 §5.1, V R2-M1): owner inputs in the order they became
-      // known, his utterance that ended and awaits the provider's response, and each response's owner input. A response the
-      // provider makes (respond) answers his ended utterance; a function result's follow-up (follow) answers what the call
-      // it continues answered. Here a new owner input with no ended utterance pending stands for an utterance whose speech
-      // events the test does not spell out.
-      // A response bound before its utterance's item is known holds that utterance (review F1): the next input settles it;
-      // new speech first voids it.
-      this.inputs = []; this.heard = null; this.answers = new Map(); this.calls = 0; this.holds = [];
+      // Response construction, as the real controller does it where the page creates every response (Spec 165 §5.1 as
+      // amended for Robert's C2 decision, 28 Oct 2026): each response that may act was created by the page for one committed
+      // owner item, named by the provider's commit; a function result's follow-up is owned by the item of the call it
+      // continues; any other response answers no one. Here an owner item is committed when its words appear (utter, hear),
+      // or before them when he stops speaking (speechStopped); the words of an item committed before they were transcribed
+      // land on it (in the real controller by the provider's item id; here, the earliest committed item still without words).
+      this.commits = []; this.answered = 0; this.answers = new Map(); this.calls = 0;
       controller = this;
     }
     saw(i) {
-      if (this.inputs.includes(i)) return;
-      if (this.holds.length) { for (const hold of this.holds.splice(0)) hold.item = i; }       // a late item: no new utterance
-      else if (this.heard === null) this.heard = { index: this.inputs.length };
-      this.inputs.push(i);
+      if (this.commits.some((c) => c.index === i)) return;
+      const waiting = this.commits.find((c) => c.index === null);
+      if (waiting) waiting.index = i; else this.commits.push({ index: i });
     }
-    speechStopped() {                                      // he spoke (an utterance began and ended), its words not known yet
-      for (const hold of this.holds.splice(0)) hold.item = null;                            // new speech voids a hold
-      if (this.heard === null) this.heard = { index: this.inputs.length };
+    speechStopped() {                                      // he spoke and his item was committed; its words are not known yet
+      this.commits.push({ index: null });
       this.options.onInputState('speech_started'); this.options.onInputState('speech_stopped');
     }
-    respond() {                                            // the provider's response starts now, bound as the controller binds it
-      const id = `call_resp_${++this.calls}`, ended = this.heard;
-      this.heard = null;
-      let owner = null;
-      if (ended && this.inputs.length > ended.index) owner = this.inputs[this.inputs.length - 1];
-      else if (ended) { owner = { item: undefined }; this.holds.push(owner); }
+    respond() {                                            // the page's response for his newest committed item starts now
+      const id = `call_resp_${++this.calls}`;
+      const owner = this.commits.length > this.answered ? this.commits[this.commits.length - 1] : null;
+      this.answered = this.commits.length;
       this.answers.set(id, owner);
       return id;
     }
-    follow(call) {                                         // a function result's follow-up starts: it answers what the call did
+    follow(call) {                                         // a function result's follow-up starts: owned as the call it continues
       const id = `call_resp_${++this.calls}`;
       this.answers.set(id, call && this.answers.has(call.response_id) ? this.answers.get(call.response_id) : null);
       return id;
@@ -96,12 +91,11 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
     callFrom(responseId, call) { return this.options.onFunctionCall({ ...call, response_id: responseId }); }
     fn(call) { return this.callFrom(this.respond(), call); }             // a response that starts now and calls a function
     inputOf(call) {
-      let owner = call && call.response_id ? this.answers.get(call.response_id) : undefined;
-      if (owner === undefined || owner === null) return null;
-      if (typeof owner === 'object') owner = owner.item;
-      if (owner === null) return null;
-      if (owner === undefined || !this.turns[owner]) return { state: 'pending' };
-      return this.turns[owner].completed ? { state: 'bound', index: owner, text: this.turns[owner].text } : { state: 'pending' };
+      const owner = call && call.response_id ? this.answers.get(call.response_id) : undefined;
+      if (!owner) return null;
+      if (owner.index === null || !this.turns[owner.index]) return { state: 'pending' };
+      const turn = this.turns[owner.index];
+      return turn.completed ? { state: 'bound', index: owner.index, text: turn.text } : { state: 'pending' };
     }
     sessionId() { return this._sid; }
     state() { return this._state; }

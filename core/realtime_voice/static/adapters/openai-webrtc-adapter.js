@@ -163,6 +163,12 @@ export class OpenAIWebRTCAdapter {
     this._dc?.send(JSON.stringify(_responseCreate(tag)));
   }
 
+  // Spec 165 §5.1 as amended (C2 by construction): the page's own response for a committed item of his, tagged. Only a host
+  // that creates every response calls it (the session's turn detection has create_response false); German never does.
+  createResponse(tag) {
+    this._dc?.send(JSON.stringify(_responseCreate(tag)));
+  }
+
   sendFunctionResult(callId, output, tag) {
     this._dc?.send(JSON.stringify({
       type: "conversation.item.create",
@@ -240,6 +246,8 @@ export class OpenAIWebRTCAdapter {
         }
         break;
       case "response.done":
+        // Spec 165 §5.1 (C2 by construction): the response's end and how it ended, before its function calls are passed on.
+        this._emit("response_done", { response_id: event.response?.id || null, status: event.response?.status || null });
         for (const item of event.response?.output || []) {
           if (item.type === "function_call") {
             this._emit("function_call", {
