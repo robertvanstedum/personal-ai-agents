@@ -481,8 +481,9 @@ class FileStore(DirectVoiceStore):
 
     def sessions(self, owner, needing_attention=True):
         """The owner's sessions in this folder, newest first, as [(HANDLE, session id)]: with ``needing_attention``, all
-        but those dismissed or decided (the core decides the rest from state()). Each settled one is projected first if
-        its projection is behind (a crash between append and rename is repaired here)."""
+        but those dismissed or decided (a decided one with a consult still open or landed after End stays: V S1); the
+        core decides the rest from state(). Each settled one is projected first if its projection is behind (a crash
+        between append and rename is repaired here)."""
         if self._root is None:
             return []
         found = []
@@ -503,7 +504,11 @@ class FileStore(DirectVoiceStore):
             self._project(sid, self._index.get(sid))
             if facts["start"].get("principal") != owner:
                 continue
-            if needing_attention and (facts["dismissed"] or facts["summary"] in ("confirmed", "edited", "declined")):
+            # A decided session is settled, unless a consult of it has no outcome yet (it may still be running) or landed
+            # after End (Gate 2 V S1): the core's view decides those.
+            unsettled = any(i not in facts["outcomes"] for i in facts["requests"]) or bool(facts["late"])
+            if needing_attention and (facts["dismissed"]
+                                      or (facts["summary"] in ("confirmed", "edited", "declined") and not unsettled)):
                 continue
             found.append((facts["start"].get("started_at") or "", sid))
         found.sort(reverse=True)

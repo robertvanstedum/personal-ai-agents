@@ -1682,7 +1682,7 @@ def session_view(adapter, sessions, handle, sid):
     when there is no such session. A session needs attention while it is recovering or dropped, incomplete, damaged,
     with an undecided or unavailable summary or an unknown consult, until it is decided or dismissed (§6.5); also while
     a consult runs after it ended, and once one has landed after its end (Gate 2 E S2), so a result that comes after
-    End is seen. A live session never does: it is still going. A consult admitted with no outcome that runs nowhere here
+    End is seen: those two until dismissed, even when the summary is decided (V S1). A live session never does: it is still going. A consult admitted with no outcome that runs nowhere here
     is unknown (§5.1); one running here is pending. ``pending`` and ``late`` name those owner turns (capture ids)."""
     try:
         facts = adapter.store.state(handle, sid)
@@ -1718,7 +1718,10 @@ def session_view(adapter, sessions, handle, sid):
             "consults": {"asked": len(asked), "pending": len(pending), "unknown": len(unknown)},
             "pending": pending, "late": late,
             "repaired": bool(facts.get("repaired")), "damaged": damaged, "dismissed": dismissed, "reasons": reasons,
-            "needs_attention": (st != "live" and bool(reasons) and not dismissed and (damaged or summary not in DECIDED))}
+            # A decided summary settles a session, except one damaged, or with a check still running or landed after
+            # End (Gate 2 V S1): those stay until dismissed, whatever the summary's state, so the late result is seen.
+            "needs_attention": (st != "live" and bool(reasons) and not dismissed
+                                and (damaged or bool(pending) or bool(late) or summary not in DECIDED))}
     if end and type(end.get("missing")) is int:
         view["missing"] = end["missing"]
     if damaged:

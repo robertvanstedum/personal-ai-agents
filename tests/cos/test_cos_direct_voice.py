@@ -682,3 +682,52 @@ def test_on_openai_the_fold_rule_does_not_apply(monkeypatch, tmp_path):
     assert rig.ask(r, sid, call_id="call_1", item="t0", words="Name a large city.").get_json()["outcome"] == "done"
     again = rig.ask(r, sid, call_id="call_2", item="t2", words="Name a large city. Name a long river.").get_json()
     assert again["outcome"] == "done" and len(r.runtime.calls) == 2
+
+
+# ── Gate 2 verification V S1 ─────────────────────────────────────────────────────────────────────────────────────────
+
+def test_a_check_still_running_when_the_summary_is_decided_stays_listed_until_it_lands_and_is_seen(r, monkeypatch):
+    """V S1 (the reviewer's probe): Sum up while a check still runs, then Confirm the card. The session stayed off Confer's
+    list (a decided summary left it), so the late result was never shown and the reveal's "reload to see it under Voice
+    sessions to look at" was untrue. A session with a pending consult, or one that landed after End, is listed until he
+    dismisses it, whatever the summary's state."""
+    monkeypatch.setattr(core, "CONSULT_WAIT_S", 0.2)
+    r.runtime.hold = threading.Event()
+    sid = rig.start(r)
+    assert rig.post(r, sid, [rig.event(r, "user", "t1", "What is stuck on #12?")]).status_code == 200
+    assert rig.ask(r, sid).get_json()["outcome"] == "pending"
+    proposed = r.client.post(BASE + f"/session/{sid}/summary", headers=OWNER,
+                             json={"conversation_id": "owner", "last_item_id": "t1", "unacknowledged": []}).get_json()
+    assert proposed["state"] == "proposed"
+    decided = r.client.post(BASE + f"/session/{sid}/summary/decision", headers=OWNER,
+                            json={"conversation_id": "owner", "decision": "confirm"}).get_json()
+    assert decided["state"] == "confirmed"
+    detail = r.client.get(BASE + f"/sessions/{sid}?conversation_id=owner", headers=READ).get_json()
+    assert detail["pending"] == ["t1"] and "pending_consult" in detail["reasons"] and detail["needs_attention"] is True
+    assert [v["session_id"] for v in r.client.get(BASE + "/sessions", headers=READ).get_json()["sessions"]] == [sid]
+    assert r.client.get(BASE + "/capabilities", headers=READ).get_json()["direct_records"] is True
+    r.runtime.hold.set()
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        if r.client.get(BASE + f"/consult/{sid}/t1?conversation_id=owner", headers=READ).get_json()["outcome"] == "done":
+            break
+        time.sleep(0.05)
+    time.sleep(0.1)                                          # the worker keeps the outcome, then the receipt
+    (view,) = r.client.get(BASE + "/sessions", headers=READ).get_json()["sessions"]
+    assert view["session_id"] == sid and view["reasons"] == ["late_result"] and view["summary"] == "confirmed"
+    detail = r.client.get(BASE + f"/sessions/{sid}?conversation_id=owner", headers=READ).get_json()
+    (receipt,) = [rec for rec in detail["records"] if rec["role"] == "receipt"]
+    assert receipt["text"].startswith("[Arrived after the summary]")              # §5.2's mark
+    r.client.post(BASE + f"/sessions/{sid}/dismiss", headers=OWNER, json={"conversation_id": "owner"})
+    assert r.client.get(BASE + "/sessions", headers=READ).get_json()["sessions"] == []
+
+
+def test_a_decided_session_with_nothing_running_or_late_still_leaves_the_list(r):
+    """V S1, guard: a settled, decided session leaves the list (§6.5, "not a history product"), as before."""
+    sid = rig.start(r)
+    rig.post(r, sid, [rig.event(r, "user", "t1", "We looked at #12. We're done.")])
+    r.client.post(BASE + f"/session/{sid}/summary", headers=OWNER, json={"conversation_id": "owner", "last_item_id": "t1",
+                                                                          "unacknowledged": []})
+    assert [v["session_id"] for v in r.client.get(BASE + "/sessions", headers=READ).get_json()["sessions"]] == [sid]
+    r.client.post(BASE + f"/session/{sid}/summary/decision", headers=OWNER, json={"conversation_id": "owner", "decision": "confirm"})
+    assert r.client.get(BASE + "/sessions", headers=READ).get_json()["sessions"] == []
