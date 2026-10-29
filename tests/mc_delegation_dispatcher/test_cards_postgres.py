@@ -491,13 +491,13 @@ class Cards(PostgresFixture, unittest.TestCase):
             self.admit(card(card_id))
             _, env = self.claim()
             later = self.make_store(Authority.parse({**TEST_VALUES, "routes": {**routes, "fakework": changed}}))
-            eid = str(uuid4())
-            self.assertEqual(self.result(env, artifacts=[art("patch", card_id)], event_id=eid, store=later)["state"],
-                             "accepted")
+            eid, made = str(uuid4()), self.db_now()
+            self.assertEqual(self.result(env, artifacts=[art("patch", card_id)], event_id=eid, store=later,
+                                         at=made)["state"], "accepted")
             build = self.item(f"{card_id}.build")
             self.assertEqual((build["state"], str(build["result_event_id"])), ("completed", eid))
-            self.assertEqual(self.result(env, artifacts=[art("patch", card_id)], event_id=eid, store=later)["state"],
-                             "already_applied")
+            self.assertEqual(self.result(env, artifacts=[art("patch", card_id)], event_id=eid, store=later,
+                                         at=made)["state"], "already_applied")
             self.assertEqual([i["step"] for i in self.items(card_id)], ["build"])
             ended = [e["body"] for e in self.events("card.ended") if e["body"]["card_id"] == card_id]
             self.assertEqual([(b["step"], b["state"], b["code"]) for b in ended], [("review", "not_written", code)])

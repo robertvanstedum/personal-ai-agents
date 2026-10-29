@@ -30,7 +30,10 @@ configuration (``Authority``) enables it, and only about version 2 items: those 
   cancel_requested(request_id, generation, protocol=2) -> bool         unchanged
   renew(request_id, generation, protocol=2, runner_id) -> bool          also False when the grant is revoked or expired
   result(request_id, generation, *, ..., protocol=2, runner_id, at, route, usage={amount, unit, children_stopped})
-        settles the reservation with the observed usage; a route other than the reserved one is refused; unknown
+        settles the reservation with the observed usage; once accepted, the identical report replayed under its event
+        id is already_applied and anything else under that id is refused event_id_conflict (as every version 2 owner
+        write: status, detail, usage, artifacts, output and time are compared); a route other than the reserved one
+        is refused; unknown
         usage closes the route until a recorded resolution (resolve_usage_hold); after a revocation the item ends
         cancelled (grant_revoked), never completed (R4.3-e); a result made before a lapse is taken as progress is.
         With an effect of the item still open (a receipt dispatched or unknown), a result ends nothing: it is kept as
@@ -1426,10 +1429,15 @@ class DispatcherStore:
         retried = self._retried(cur, eid, rid, generation, when, status, route, used, detail, artifacts)
         if retried is not None:      # a definite failure already given its retry (R4.3-d), whatever came after: DUP-5
             return retried
+        report = _report_digest(status, artifacts, detail, output_text, route, used)
         if row["result_event_id"] is not None:
-            same = str(row["result_event_id"]) == eid
-            return {"state": "already_applied" if same else "refused", "event_id": eid,
-                    **({} if same else {"code": "different_result_already_recorded"})}
+            if str(row["result_event_id"]) != eid:
+                return {"state": "refused", "event_id": eid, "code": "different_result_already_recorded"}
+            # S1-A's rule for every version 2 owner write: the identical report replayed is already_applied; anything
+            # else under that event id (status, exit code, usage, artifacts, output, time, generation) is refused.
+            if self._same_result(cur, eid, rid, generation, when, report):
+                return {"state": "already_applied", "event_id": eid}
+            return {"state": "refused", "event_id": eid, "code": "event_id_conflict"}
         res = dict(row["reservation"] or {})
         code = self._owner_refusal(row, generation, runner_id)
         if code == "lease_lapsed":
@@ -1468,7 +1476,8 @@ class DispatcherStore:
             if no_retry is None:
                 return self._retry(cur, row, eid, when, host_id, route, used, detail, artifacts)
         body = {"status": status, "route": route,
-                "usage": {**used, "amount": None if used["amount"] is None else float(used["amount"])}}
+                "usage": {**used, "amount": None if used["amount"] is None else float(used["amount"])},
+                "report": report}
         written = self._host_event(cur, "result.accepted", eid, item=rid, generation=generation, host_id=host_id,
                                    at=when, body=body)
         if written is not None:
@@ -1495,6 +1504,17 @@ class DispatcherStore:
         if (row["facts"] or {}).get("card"):
             self._card_advance(cur, row, status, artifacts, no_retry)   # R7.4-b: in this same transaction
         return {"state": "accepted", "event_id": eid, **outcome}
+
+    def _same_result(self, cur, eid, rid, generation, when, report) -> bool:
+        """Whether the result accepted under ``eid`` is exactly this one: the host's own event for this item and
+        generation, made at the same time, with the same report digest (what the host reported, before any status the
+        authority recorded instead)."""
+        cur.execute("""SELECT source, kind, item_id, generation, at, body FROM guild.mc_delegation_events
+            WHERE event_id=%s AND principal_id=%s AND environment=%s""", (eid, self.principal, self.environment))
+        found = cur.fetchone()
+        return (found is not None and found["source"] == "host" and found["kind"] == "result.accepted"
+                and str(found["item_id"]) == str(rid) and found["generation"] == generation and found["at"] == when
+                and found["body"].get("report") == report)
 
     def _settle(self, cur, row, res, used, event_id, host_id) -> dict:
         """The reservation after a result. Observed usage is settled on the reserved day's row. Unknown usage keeps
@@ -2635,6 +2655,16 @@ def _remaining(row) -> dict:
     its own durable cost record says earlier generations used): {reserved, unit}."""
     res = row["reservation"] or {}
     return {"reserved": res.get("reserved"), "unit": res.get("unit")}
+
+
+def _report_digest(status, artifacts, detail, output_text, route, used) -> str:
+    """One digest of everything a host reported in a version 2 result (status, artifacts, detail with its exit code,
+    output, route, usage), as it sent them: a replay under the same event id must match it."""
+    doc = {"status": status, "artifacts": artifacts or [], "detail": detail or {},
+           "output_text": output_text if isinstance(output_text, str) else None, "route": route,
+           "usage": {**used, "amount": None if used["amount"] is None else float(used["amount"])}}
+    return hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
+                          .encode("utf-8")).hexdigest()
 
 
 def _attempt_body(status, route, used, attempt, detail, artifacts) -> dict:

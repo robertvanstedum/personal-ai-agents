@@ -201,6 +201,10 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
             eid = str(uuid4())
             self.assertEqual(store.result(env["request_id"], 1, event_id=eid, status="completed", artifacts=[],
                                           detail={}, output_text="answer"), {"state": "accepted", "event_id": eid})
+            # Version 1 is idempotent by event id, as today: another body under that id changes nothing (R3.2-d).
+            self.assertEqual(store.result(env["request_id"], 1, event_id=eid, status="failed",
+                                          artifacts=[{"kind": "output"}], detail={"exit_code": 9},
+                                          output_text="else"), {"state": "already_applied", "event_id": eid})
             row = store.by_job("v1-job")
             self.assertEqual((row["state"], row["route"], row["reservation"], row["output_text"]),
                              ("completed", None, None, "answer"))
@@ -652,15 +656,47 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
         env = {"request_id": claimed["envelope"]["request_id"], "generation": 1}
         self.assertEqual(self.result(env, runner="mac-b")["code"], "not_owner")
         self.assertEqual(self.result(env, generation=2)["code"], "stale_generation")
-        eid = str(uuid4())
-        self.assertEqual(self.result(env, event_id=eid), {"state": "accepted", "event_id": eid})
-        self.assertEqual(self.result(env, event_id=eid)["state"], "already_applied")
+        eid, made = str(uuid4()), self.db_now()
+        self.assertEqual(self.result(env, event_id=eid, at=made), {"state": "accepted", "event_id": eid})
+        self.assertEqual(self.result(env, event_id=eid, at=made)["state"], "already_applied")
         late = self.result(env, event_id=str(uuid4()), status="failed")
         self.assertEqual((late["state"], late["code"]), ("refused", "different_result_already_recorded"))
         self.assertEqual(len(self.events("result.accepted", item=env["request_id"])), 1)
         self.assertEqual(str(self.row("job-1")["result_event_id"]), eid)
         # Refused results are audited once per event and reason, however often they are resent.
         self.assertEqual(len([e for e in self.events("result.refused") if e["body"]["code"] == "not_owner"]), 1)
+
+    def test_a_version_2_result_replay_must_match_exactly(self):
+        """S1-A's rule for every version 2 owner write, on the result too: after a result is accepted, the identical
+        report replayed under its event id is already_applied; a different body under that id is refused
+        event_id_conflict and changes nothing."""
+        self.beat()
+        self.item()
+        claimed = self.claim()
+        env, eid, made = ({"request_id": claimed["envelope"]["request_id"], "generation": 1}, str(uuid4()),
+                          self.db_now())
+        arts = [{"kind": "output", "ref": "r-g1.output", "sha256": "e" * 64}]
+        sent = dict(event_id=eid, status="completed", artifacts=arts, detail={"exit_code": 0}, output_text="done",
+                    protocol=2, runner_id="mac-a", at=made.isoformat(), route="fakework",
+                    usage={"amount": 1.0, "unit": "test_units", "children_stopped": True})
+
+        def send(**over):
+            return self.store.result(env["request_id"], over.pop("generation", 1), **{**sent, **over})
+        self.assertEqual(send(), {"state": "accepted", "event_id": eid})
+        self.assertEqual(send(), {"state": "already_applied", "event_id": eid})
+        for other in (dict(status="failed"), dict(detail={"exit_code": 1}), dict(output_text="something else"),
+                      dict(artifacts=[]), dict(artifacts=[{**arts[0], "sha256": "f" * 64}]),
+                      dict(usage={**sent["usage"], "amount": 0.5}),
+                      dict(usage={**sent["usage"], "children_stopped": False}),
+                      dict(at=(made - timedelta(seconds=1)).isoformat())):
+            self.assertEqual(send(**other), {"state": "refused", "event_id": eid, "code": "event_id_conflict"}, other)
+        self.assertEqual(send(event_id=str(uuid4()))["code"], "different_result_already_recorded")
+        row = self.row("job-1")
+        self.assertEqual((row["state"], str(row["result_event_id"]), row["artifacts"], row["output_text"],
+                          row["result_detail"], row["reservation"]["observed"]),
+                         ("completed", eid, arts, "done", {"exit_code": 0}, 1.0))
+        self.assertEqual(len(self.events("result.accepted", item=env["request_id"])), 1)
+        self.assertEqual(send(), {"state": "already_applied", "event_id": eid})          # still, after all that
 
     def test_a_result_after_the_lease_lapsed_is_taken_only_if_made_while_it_ran(self):
         """R5.1-c: after a lapse, a result the host made while its lease ran is still taken (and settles); one stamped

@@ -946,10 +946,11 @@ class Recovery(PostgresFixture, unittest.TestCase):
         self.assertEqual((row["artifacts"], row["reservation"]["state"], row["reservation"]["observed"]),
                          (arts, "settled", USED))                                         # evidence kept, usage settled
         self.assertEqual(str(self.events("decision.queued", env["request_id"])[0]["event_id"]), ack["decision_id"])
+        made = self.events("result.accepted", env["request_id"])[0]["at"]           # the host resends its own record
         self.assertEqual(self.store.result(env["request_id"], 1, event_id=str(row["result_event_id"]),
                                            status="completed", artifacts=arts, detail={"exit_code": 0},
                                            output_text="done", protocol=2, runner_id="mac-a",
-                                           at=self.db_now().isoformat(), route="fakework",
+                                           at=made.isoformat(), route="fakework",
                                            usage={"amount": USED, "unit": "test_units",
                                                   "children_stopped": True})["state"], "already_applied")
         self.assertEqual(self.reconcile(env, cp=None)["decision_id"], ack["decision_id"])  # one decision (DUP-6)
