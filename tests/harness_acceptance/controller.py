@@ -121,6 +121,17 @@ class Run:
         ok, n, detail = fn(*args, **kwargs)
         return self.check(name, ok, detail, n=n)
 
+    def final(self, name, fn, *args):
+        """A whole-run check: it must find facts in the full plan; in a partial run (--only) that produced none it is
+        recorded not_run, never passed."""
+        ok, n, detail = fn(*args, need=0)
+        if not n and self.only is not None:
+            return self.check(name, False, {"why": "no scenario of this partial run produces its facts"}, n=0,
+                              result="not_run")
+        if not n:
+            return self.check(name, False, {"no_facts": "the full plan produced none"}, n=0)
+        return self.check(name, ok, detail, n=n)
+
     # ── the database ──
     def connect(self):
         import psycopg2
@@ -477,10 +488,10 @@ class Run:
         events = self.events()
         self.audit = events
         effects = self.sink_lines()
-        self.named("DUP-1", C.dup1, effects, need=1)
-        self.named("DUP-2", C.dup2, effects, events, need=1)
-        self.named("DUP-3", C.dup3, events, need=1)
-        self.named("DUP-4", C.dup4, events, need=1)
+        self.final("DUP-1", C.dup1, effects)
+        self.final("DUP-2", C.dup2, effects, events)
+        self.final("DUP-3", C.dup3, events)
+        self.final("DUP-4", C.dup4, events)
         replay = subprocess.run([self.python, "-I", str(self.base / "bundle" / "run_runner.py"), "journal",
                                  "--host-config", str(self.base / "host.yaml"), "replay", "--again"],
                                 env=dict(self.plist["EnvironmentVariables"]), capture_output=True, text=True,
@@ -491,9 +502,9 @@ class Run:
             got = {"unreadable": replay.returncode}
         self.check("DUP-5", got.get("applied") == 0 and got.get("sent", 0) > 0 and not got.get("damaged"),
                    got, n=got.get("sent"))
-        self.named("DUP-6", C.dup6, events, need=1)
-        self.named("DUP-7", C.dup7, events, self.notifier.lines(), need=1)
-        self.named("DUP-8", C.dup8, events, {HOST_ID, SCRIPTED, "mac-test-8"}, need=1)
+        self.final("DUP-6", C.dup6, events)
+        self.final("DUP-7", C.dup7, events, self.notifier.lines())
+        self.final("DUP-8", C.dup8, events, {HOST_ID, SCRIPTED, "mac-test-8"})
         values = list(self.planted.values()) + ([self.route_key] if self.route_key else [])
         if values:
             records = [json.loads(p.read_text()) for p in self.artifacts.glob("*.launch.json")]
