@@ -794,7 +794,8 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
     def test_delta_the_fresh_d_code_is_written_before_the_answer_is_applied_and_only_once(self):
         """Codex's fix1 delta check, on the real store: Robert's yes is refused; the fresh D-code's write fails, then
         (after a restart) it is written and sent but the process stops before the answer is marked applied; after
-        another restart the answer is applied. Never an answer applied without its fresh D-code; D-2 once, no D-3."""
+        another restart the answer is applied. Never an answer applied without its fresh D-code; one fresh code,
+        sent once."""
         narrow = DispatcherStore(self.connect, principal="robert", environment="dev", authority=AUTH,
                                  grants=GrantStore({**C.grant_rows(), SINK: CapabilityRule(1, False, True)}))
 
@@ -840,11 +841,13 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         last = supervisor()                                          # another restart
         last.runtime_tick()
         last.runtime_tick()
-        self.assertEqual(rows(), [("approved", True), ("sent", False)])    # applied; D-2 the only fresh code
+        self.assertEqual(rows(), [("approved", True), ("sent", False)])    # applied; one fresh code only
+        # Its number is its row id; each deliver's INSERT ... ON CONFLICT spends a sequence value, so it may skip one.
+        fresh = "D-{}".format(self.sql("SELECT max(id) AS id FROM guild.supervision_decisions")[0]["id"])
         solo = [m["text"].split("\n")[0] for m in self.notify.lines() if "on its own" in m["text"]]
-        self.assertEqual(solo, ["Decision D-2 waiting on you, on its own"])
+        self.assertEqual(solo, [f"Decision {fresh} waiting on you, on its own"])
         self.assertTrue(any(t.startswith("Not applied: D-1 was refused (grant_capability_unavailable); nothing was "
-                                         "done. It still waits, as D-2.") for t in self.runtime_texts()))
+                                         f"done. It still waits, as {fresh}.") for t in self.runtime_texts()))
 
     def test_sf6_a_reassignment_answer_is_bound_to_the_generation_its_words_name(self):
         self.admit(card())
