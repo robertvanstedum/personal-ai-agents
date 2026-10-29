@@ -104,7 +104,7 @@ def locked(store: Path):
 def open_ro(db: Path) -> sqlite3.Connection:
     if not db.exists():
         raise SystemExit(f"refused: session database not found: {db}")
-    return sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    return sqlite3.connect(f"{db.absolute().as_uri()}?mode=ro", uri=True)
 
 
 def text_of(message: dict) -> str:

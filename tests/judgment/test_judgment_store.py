@@ -148,3 +148,35 @@ def test_excluded_test_session_is_skipped_and_remembered(env, capsys):
     run(env, "collect", "--apply", "--exclude-session", "s1")
     assert json.loads(capsys.readouterr().out)["pairs_collected"] == 0
     assert "s1" in json.loads((env[1] / ".collector-state.json").read_text())["excluded_sessions"]
+
+
+@pytest.mark.parametrize("name", ["source?query.sqlite", "source#fragment.sqlite", "source%23encoded.sqlite", "space ü.sqlite"])
+@pytest.mark.parametrize("relative", [False, True])
+def test_source_path_is_literal_and_read_only(tmp_path, monkeypatch, name, relative):
+    intended = tmp_path / name
+    make_db(intended, [("assistant", GOOD)])
+    # URI-significant characters must not redirect the reader to a nearby file.
+    for other in {tmp_path / name.split("?")[0].split("#")[0], tmp_path / name.replace("%23", "#")} - {intended}:
+        make_db(other, [("user", "wrong database")])
+    before = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
+    monkeypatch.chdir(tmp_path)
+    db = Path(name) if relative else intended
+    con = J.open_ro(db)
+    try:
+        assert con.execute("SELECT event_json FROM transcript_events").fetchone()[0].find("Captured 1 correction pairs") >= 0
+        with pytest.raises(sqlite3.OperationalError, match="readonly"):
+            con.execute("DELETE FROM transcript_events")
+    finally:
+        con.close()
+    assert {p.name: p.read_bytes() for p in tmp_path.iterdir()} == before
+    store = tmp_path / "output"
+    report = J.collect(db, store, apply=False)
+    assert report["pairs_collected"] == 1
+    assert not store.exists()
+
+
+def test_missing_source_path_is_refused_without_creating_a_file(tmp_path):
+    db = tmp_path / "missing?mode=rwc.sqlite"
+    with pytest.raises(SystemExit, match="session database not found"):
+        J.open_ro(db)
+    assert list(tmp_path.iterdir()) == []
