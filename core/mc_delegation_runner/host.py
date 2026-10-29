@@ -15,7 +15,11 @@ per-(host, environment) lock (G6), its pinned interpreter, and its bundle digest
 * **The pinned interpreter**: its path and ``major.minor`` version. The runtime refuses to start when it runs under any
   other, or when a role it holds needs a newer one. Version 2 at the authority (and a worker that reaches it by DSN,
   which builds the authority's store in-process) needs Python 3.10 or later (``GrantStore``); a worker that reaches it
-  by HTTPS does not.
+  by HTTPS does not. A path is compared resolved, and a virtual environment's ``bin/python`` resolves to its base
+  interpreter, so the pin may also name the environment itself (S1-H): ``prefix`` (its ``sys.prefix``) and
+  ``packages`` (``packages_digest()``: what is installed in it, by name and version). The installer writes all four
+  (scripts/mc_host/runtime_install.py); with them, another environment over the same base, or a package added,
+  removed or changed, refuses the start (``interpreter_prefix_mismatch``, ``interpreter_packages_changed``).
 * **do_not_resume** (R6.4) always holds the two billed sessions; a host may add ids, never remove them.
 * **Pinned tools** (R6.7-d step 1): ``tools`` maps an actor to ``{path, sha256}``, the one binary the runtime starts
   for it. ``claude-code`` and ``codex`` start only from their pin (``binary_unpinned`` otherwise; never a bare name on
@@ -24,6 +28,10 @@ per-(host, environment) lock (G6), its pinned interpreter, and its bundle digest
 * **API-route keys by reference** (R6.7-f): ``route_keys`` maps an API route to a credential reference,
   ``keychain:<service>/<account>`` or, in ``dev`` only, ``test:<name>`` read from ``test_credentials`` (a private file
   of test values made for an acceptance run). A reference, never a value.
+* **The authority service** (S1-H, spec R3.4-a): an authority host that serves other hosts names its door in
+  ``door``: where the thin HTTPS server listens, its certificate and key, the store's DSN file, and the credentials
+  file (``minimoi.door_credentials.v1``: each host's and each reader's token SHA-256, never a token). Only a host
+  with the ``authority`` role may name one; ``mc-delegation-runner authority`` serves it (server.py).
 
 Stdlib only; Python 3.9-compatible.
 """
@@ -53,12 +61,13 @@ _HOST = re.compile(r"^[A-Za-z0-9._-]{1,56}$")          # no ':', so the owner id
 _CAP = re.compile(r"^[a-z][a-z0-9_-]{0,15}:[A-Za-z0-9._:-]{1,64}$")
 _SESSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,99}$")
 _VERSION = re.compile(r"^3\.([0-9]{1,2})$")
+_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _KEYS = {"schema", "host_id", "environment", "roles", "expected_availability", "unreachable_grace_s", "service_manager",
          "authority", "capabilities", "concurrency", "offline_scope_default", "do_not_resume", "artifact_root",
          "workspace_root", "mirrors", "interpreter", "bundle_root", "gap_detection", "stop_timeout_s",
-         "effect_sink", "principal", "note", "tools", "route_keys", "test_credentials"}
+         "effect_sink", "principal", "note", "tools", "route_keys", "test_credentials", "door"}
 _REQUIRED = _KEYS - {"do_not_resume", "gap_detection", "stop_timeout_s", "effect_sink", "note",
-                     "service_manager", "offline_scope_default", "tools", "route_keys", "test_credentials"}
+                     "service_manager", "offline_scope_default", "tools", "route_keys", "test_credentials", "door"}
 TOOL_ACTORS = ("claude-code", "codex", "fakework")
 
 
@@ -85,6 +94,20 @@ class Authority:
 class Interpreter:
     path: Path
     version: tuple
+    prefix: Path | None = None         # the virtual environment the pin names (its sys.prefix); None: not pinned
+    packages: str | None = None        # 'sha256:<hex>' of what is installed in it (packages_digest); None: not pinned
+
+
+@dataclass(frozen=True)
+class Door:
+    """The authority service's door (server.py): listen on ``host:port`` over TLS with ``tls_cert``/``tls_key``, reach
+    the store by ``dsn_file`` (0600), and admit the callers ``credentials`` names (digests only)."""
+    host: str
+    port: int
+    tls_cert: Path
+    tls_key: Path
+    dsn_file: Path
+    credentials: Path
 
 
 @dataclass(frozen=True)
@@ -126,6 +149,7 @@ class HostConfig:
     tools: dict = field(default_factory=dict)            # actor -> ToolPin
     route_keys: dict = field(default_factory=dict)       # API route -> credential reference (never a value)
     test_credentials: Path | None = None                 # dev only: the acceptance run's test credential file
+    door: Door | None = None                             # the authority service's door (authority hosts only)
     source: Path | None = None
 
     @property
@@ -211,8 +235,10 @@ def parse(doc) -> HostConfig:
           "host_mirrors_invalid")
     mirrors = {k: _path(v, "host_mirrors_invalid") for k, v in mirrors.items()}
     interp = doc["interpreter"]
-    _need(type(interp) is dict and set(interp) == {"path", "version"} and type(interp["version"]) is str
-          and _VERSION.match(interp["version"]), "host_interpreter_invalid")
+    _need(type(interp) is dict and {"path", "version"} <= set(interp) <= {"path", "version", "prefix", "packages"}
+          and type(interp["version"]) is str and _VERSION.match(interp["version"])
+          and ("packages" not in interp or (type(interp["packages"]) is str and _DIGEST.match(interp["packages"]))),
+          "host_interpreter_invalid")
     version = (3, int(interp["version"].split(".")[1]))
     needs = required_python(roles, authority.transport)
     _need(version >= needs, "interpreter_too_old")           # refused at load: a role this pin cannot run
@@ -232,12 +258,26 @@ def parse(doc) -> HostConfig:
         concurrency=1, offline_scope_default=scope, do_not_resume=dnr,
         artifact_root=_path(doc["artifact_root"], "host_artifact_root_invalid"),
         workspace_root=_path(doc["workspace_root"], "host_workspace_root_invalid"), mirrors=mirrors,
-        interpreter=Interpreter(_path(interp["path"], "host_interpreter_invalid"), version),
+        interpreter=Interpreter(_path(interp["path"], "host_interpreter_invalid"), version,
+                                None if "prefix" not in interp else _path(interp["prefix"], "host_interpreter_invalid"),
+                                interp.get("packages")),
         bundle_root=_path(doc["bundle_root"], "host_bundle_root_invalid"),
         gap_detection=gap == "on", stop_timeout_s=stop,
         effect_sink=None if sink is None else EffectSink(_path(sink["path"], "host_effect_sink_invalid"),
                                                           sink["lookup"]),
-        tools=tools, route_keys=route_keys, test_credentials=test_credentials)
+        tools=tools, route_keys=route_keys, test_credentials=test_credentials,
+        door=None if doc.get("door") is None else _door(doc["door"], roles))
+
+
+def _door(d, roles) -> Door:
+    """The authority service's door: only on a host with the authority role; every value present and checked."""
+    _need("authority" in roles, "host_door_not_authority")
+    _need(type(d) is dict and set(d) == {"listen", "tls_cert", "tls_key", "dsn_file", "credentials"}, "host_door_invalid")
+    m = re.match(r"^([A-Za-z0-9.:-]{1,253}|\[[0-9A-Fa-f:]{2,39}\]):([0-9]{1,5})$", d["listen"]) \
+        if type(d["listen"]) is str else None
+    _need(m is not None and 1 <= int(m.group(2)) <= 65535, "host_door_invalid")
+    return Door(m.group(1).strip("[]"), int(m.group(2)), *(_path(d[k], "host_door_invalid")
+                                                         for k in ("tls_cert", "tls_key", "dsn_file", "credentials")))
 
 
 def _launch_config(doc) -> tuple:
@@ -302,7 +342,26 @@ def interpreter_problems(cfg: HostConfig, *, executable=None, version=None) -> l
         out.append("interpreter_version_mismatch")
     if version < required_python(cfg.roles, cfg.authority.transport):
         out.append("interpreter_too_old")
+    pin = cfg.interpreter
+    if pin.prefix is not None and os.path.realpath(sys.prefix) != os.path.realpath(str(pin.prefix)):
+        out.append("interpreter_prefix_mismatch")
+    if pin.packages is not None and packages_digest() != pin.packages:
+        out.append("interpreter_packages_changed")
     return out
+
+
+def packages_digest() -> str:
+    """What the running interpreter's environment has installed, as 'sha256:<hex>' over the sorted lines
+    ``<normalized name>==<version>\\n`` of every distribution importlib.metadata finds on this process's path. The
+    runtime runs with ``-I`` (no working directory, no user site), so the installer computes it the same way: the
+    venv's own site-packages. Names are normalized as PEP 503 does; a distribution without a name is skipped."""
+    from importlib import metadata
+    lines = set()
+    for dist in metadata.distributions():
+        name = (dist.metadata.get("Name") or "").strip()
+        if name:
+            lines.add(f"{re.sub(r'[-_.]+', '-', name).lower()}=={dist.version}\n")
+    return "sha256:" + hashlib.sha256("".join(sorted(lines)).encode()).hexdigest()
 
 
 def tree_digest(root) -> tuple:
@@ -330,8 +389,11 @@ class HostLock:
     """The one-instance lock (G6). ``acquire`` raises ``HostRefused('host_lock_held')`` when another live process holds
     it; the holder's pid is written into the file for ``doctor``. The descriptor is not inherited by children."""
 
-    def __init__(self, cfg: HostConfig):
-        self.path = cfg.lock_path
+    def __init__(self, cfg: HostConfig, *, service=None):
+        """``service`` names another one-instance service of the same (host, environment) with a lock of its own:
+        ``authority`` for the authority service (server.py), which runs beside the runtime on an always-on host."""
+        self.path = cfg.lock_path if service is None else cfg.lock_path.with_name(
+            f"{cfg.host_id}.{cfg.environment}.{service}.lock")
         self._fd = None
 
     def acquire(self, now_iso: str):

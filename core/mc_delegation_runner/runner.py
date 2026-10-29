@@ -720,6 +720,11 @@ class _Child:
             return state
 
 
+def _call_counts(dispatcher):
+    counts = getattr(dispatcher, "counts", None)
+    return dict(counts) if isinstance(counts, dict) else None
+
+
 class HostRuntime:
     """One host's runtime for one environment (G6): its contact timer, its pending records and its child, around
     run_once's pass. Built by the CLI from host.yaml (host.HostConfig) and the authority's values (Authority.hosts)."""
@@ -1136,7 +1141,9 @@ class HostRuntime:
                           "availability": self.host.expected_availability, "grace_s": self.host.unreachable_grace_s,
                           "bundle_digest": self.bundle_digest, "announced": self.announced,
                           "last_gap_s": self.last_gap_s, "last_contact_at": self.last_contact_ok,
-                          "authority_reachable": not self.offline(), "contact_failures": self.failures}],
+                          "authority_reachable": not self.offline(), "contact_failures": self.failures,
+                          # calls to the authority by kind since start, where the CLI counts them (T1); else null
+                          "calls": _call_counts(self.dispatcher)}],
                "items": items,
                "unknowns": ["authority_snapshot: this is the host's own view; the authority's is S1-G's"]}
         if self.census is not None:

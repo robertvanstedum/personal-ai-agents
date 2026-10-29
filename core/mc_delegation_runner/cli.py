@@ -24,6 +24,13 @@ host runtime (runner.HostRuntime):
     mc-delegation-runner doctor --host-config PATH [--env-names] [--do-not-resume]
     mc-delegation-runner version [--host-config PATH]
     mc-delegation-runner journal --host-config PATH show | replay [--again]
+    mc-delegation-runner authority --host-config PATH             the authority service: its door and its timers
+
+With the ``authority`` role and the store reached by DSN (the Mac-only interim, R2.4-a), ``run`` also runs the
+authority's own timers (core/mc_delegation_dispatcher/server.py: liveness, the sweeper and its watch, each a thread of
+its own), because that process is the only one serving the store; SIGUSR1 stops the sweeper alone (E11). ``--once``
+is one pass and runs no timer. ``authority`` serves the door named in host.yaml's ``door`` (gate D's
+``minimoi-authority-<env>.service``) with the same timers.
 
 ``doctor`` fails closed (exit 1) on an interpreter that is not the pinned one, a host configuration or authority
 values it cannot use, or a bundle it cannot digest; ``--env-names`` prints names only, never a value.
@@ -72,7 +79,7 @@ def _fetch(mirror: Path):
                                                   "HOME": os.environ.get("HOME", ""), "GIT_TERMINAL_PROMPT": "0"})
 
 
-SUBCOMMANDS = ("run", "state", "doctor", "version", "journal")
+SUBCOMMANDS = ("run", "state", "doctor", "version", "journal", "authority")
 
 
 def main(argv=None) -> int:
@@ -247,6 +254,37 @@ def _start(host):
     return auth, lock
 
 
+class CountingDispatcher:
+    """The runtime's calls to its authority, counted by call (T1: at most 2 per contact interval idle), shown in
+    host-state.json as ``calls``. Everything else passes through unchanged."""
+
+    def __init__(self, inner):
+        import threading
+        self._inner, self.counts, self._count_lock = inner, {}, threading.Lock()
+
+    def __getattr__(self, name):
+        attr = getattr(self._inner, name)
+        if not callable(attr):
+            return attr
+
+        def counted(*args, **kwargs):
+            with self._count_lock:
+                self.counts[name] = self.counts.get(name, 0) + 1
+            return attr(*args, **kwargs)
+        return counted
+
+
+def authority_loops(host, dispatcher):
+    """The authority's own timers for a host that holds the authority role and serves the store itself by DSN (the
+    Mac-only interim, R2.4-a), or None: a host that reaches its authority through a door runs none."""
+    store = getattr(dispatcher, "store", None)
+    if "authority" not in host.roles or host.authority.transport != "dsn" or store is None:
+        return None
+    from core.mc_delegation_dispatcher import server
+    return server.AuthorityLoops(store, state_dir=server.state_dir_of(host), endpoint_id=host.authority.endpoint_id,
+                                 host_id=host.host_id)
+
+
 def _run_v2(words) -> int:
     import signal
     p = argparse.ArgumentParser(prog="mc-delegation-runner run")
@@ -255,10 +293,17 @@ def _run_v2(words) -> int:
     args = p.parse_args(words)
     host = _host(args.host_config)
     auth, lock = _start(host)
+    loops = None
     try:
-        rt = runtime_for(host, auth, _dispatcher(host, auth))
+        dispatcher = CountingDispatcher(_dispatcher(host, auth))
+        rt = runtime_for(host, auth, dispatcher)
         signal.signal(signal.SIGTERM, rt.request_stop)        # G4: launchd and systemd stop with SIGTERM
         signal.signal(signal.SIGINT, rt.request_stop)
+        if not args.once:
+            loops = authority_loops(host, dispatcher)
+        if loops is not None:
+            signal.signal(signal.SIGUSR1, lambda *_: loops.stop_sweeper())     # E11: the sweeper alone stops
+            loops.start()                     # the authority serves (its liveness beats) before the host's contact
         rt.freeze_left_children()             # §5.5 step 2 before any contact: an earlier process's children (X3)
         try:
             rt.contact(announced="online")
@@ -284,6 +329,68 @@ def _run_v2(words) -> int:
         rt.stop_contact()
         return 0
     finally:
+        if loops is not None:
+            loops.stop()
+        lock.release()
+
+
+def _authority(words) -> int:
+    """The authority service (gate D: ``minimoi-authority-<env>.service``): the door named in host.yaml's ``door``,
+    and the authority's own timers. One instance per (host, environment), under a lock of its own beside the
+    runtime's. SIGTERM or SIGINT stops it; SIGUSR1 stops the sweeper alone (E11)."""
+    import signal
+    import threading
+    p = argparse.ArgumentParser(prog="mc-delegation-runner authority")
+    p.add_argument("--host-config", required=True)
+    args = p.parse_args(words)
+    host = _host(args.host_config)
+    if host.door is None:
+        raise SystemExit("refused: host_door_missing")
+    from . import host as host_mod
+    from core.mc_delegation_dispatcher import server
+    problems = host_mod.interpreter_problems(host)
+    if problems:
+        raise SystemExit("refused: " + ",".join(problems))
+    auth, problem = _values(host)
+    if problem:
+        raise SystemExit(f"refused: {problem}")
+    try:
+        hosts, readers = server.load_credentials(host.door.credentials, host.environment)
+    except ValueError as exc:
+        raise SystemExit(f"refused: {exc}")
+    lock = host_mod.HostLock(host, service="authority")
+    try:
+        lock.acquire(runner._now().isoformat())
+    except host_mod.HostRefused as exc:
+        raise SystemExit(f"refused: {exc}")
+    loops = srv = None
+    try:
+        import psycopg2
+        from core.mc_delegation_dispatcher.store import DispatcherStore
+        dsn = _dsn(host.door.dsn_file)
+        store = DispatcherStore(lambda: psycopg2.connect(dsn, connect_timeout=5), principal=host.principal,
+                                environment=host.environment, authority=auth, grants=_grant_store(host))
+        state_dir = server.state_dir_of(host)
+        loops = server.AuthorityLoops(store, state_dir=state_dir, endpoint_id=host.authority.endpoint_id,
+                                      host_id=host.host_id).start()
+        srv = server.DoorServer((host.door.host, host.door.port), store, hosts=hosts, readers=readers,
+                                state_file=state_dir / "state.json",
+                                tls=server.tls_context(host.door.tls_cert, host.door.tls_key))
+        stop = threading.Event()
+        signal.signal(signal.SIGTERM, lambda *_: stop.set())
+        signal.signal(signal.SIGINT, lambda *_: stop.set())
+        signal.signal(signal.SIGUSR1, lambda *_: loops.stop_sweeper())
+        threading.Thread(target=srv.serve_forever, name="mc-authority-door", daemon=True).start()
+        print(json.dumps({"state": "serving", "host_id": host.host_id, "environment": host.environment,
+                          "listen": f"{host.door.host}:{host.door.port}"}), flush=True)
+        stop.wait()
+        return 0
+    finally:
+        if srv is not None:
+            srv.shutdown()
+            srv.server_close()
+        if loops is not None:
+            loops.stop()
         lock.release()
 
 
@@ -421,6 +528,25 @@ def _doctor(words) -> int:
                                    "reason": exc.detail.get("reason")}
             problems.append(f"binary_unpinned:{actor}")
     out["route_keys"] = {r: ref for r, ref in sorted(host.route_keys.items())}        # references, never values
+    # The authority's own two timers, where this host's store is served here (the authority role by DSN, or the
+    # authority service's door): each one's age from its own row. A stale one is a problem; the runtime (or the
+    # authority service) restarted brings it back (S1-B's liveness apart from the sweeper; E11). A store doctor cannot
+    # read is shown by type and left to the contact check above, which already says whether the authority answers.
+    dsn_file = host.door.dsn_file if host.door is not None else \
+        host.authority.dsn_file if "authority" in host.roles and host.authority.transport == "dsn" else None
+    if dsn_file is not None and auth is not None:
+        try:
+            import psycopg2
+            from core.mc_delegation_dispatcher import server
+            from core.mc_delegation_dispatcher.store import DispatcherStore
+            dsn = _dsn(dsn_file)
+            store = DispatcherStore(lambda: psycopg2.connect(dsn, connect_timeout=5), principal=host.principal,
+                                    environment=host.environment, authority=auth, grants=_grant_store(host))
+            out["authority_timers"] = server.ages(store)
+            problems.extend(f"authority_{name}_stale" for name, a in sorted(out["authority_timers"].items())
+                            if not a["fresh"])
+        except Exception as exc:
+            out["authority_timers"] = {"unreadable": type(exc).__name__}
     if args.do_not_resume:
         out["do_not_resume"] = list(host.do_not_resume)
     if args.env_names:                                   # names only (MC-0, LCH-6): never a value
@@ -496,7 +622,7 @@ def _journal(words) -> int:
         lock.release()
 
 
-_SUB = {"state": _state, "doctor": _doctor, "version": _version, "journal": _journal}
+_SUB = {"state": _state, "doctor": _doctor, "version": _version, "journal": _journal, "authority": _authority}
 
 
 if __name__ == "__main__":

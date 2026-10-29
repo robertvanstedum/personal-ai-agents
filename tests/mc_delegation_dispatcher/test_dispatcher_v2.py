@@ -471,6 +471,12 @@ class ProductionBundleOnPython39(unittest.TestCase):
                 "rd = {'c': {'sha256': _h.sha256(b'x' * 40).hexdigest(), 'role': 'observer'}}\n"
                 "assert snap.read_request({'Authorization': 'Bearer ' + 'x' * 40}, readers=rd, provide=lambda: doc)[0] == 200\n"
                 "assert snap.legacy_items([]) == ([], [])\n"
+                # S1-H: the authority service's module and the door client's reading of replies, in the same bundle;
+                # the venv pin's digest is computable here too.
+                "from core.mc_delegation_dispatcher import server\n"
+                "assert server.answer(None, {'h': '0' * 64}, '', b'{}', 'application/json')[0] == 401\n"
+                "assert issubclass(door.DoorUnreachable, OSError) and not issubclass(door.DoorRefused, OSError)\n"
+                "assert host.packages_digest().startswith('sha256:')\n"
                 "print(sys.version_info[:2], 'ok')\n")
             out = subprocess.run([PY39, "-B", "-I", "-c", probe, str(bundle)], capture_output=True, text=True,
                                  timeout=60, cwd=tmp)
