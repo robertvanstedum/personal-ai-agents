@@ -119,10 +119,15 @@ class RuntimeLink:
                                                solo=bool(n.get("solo")), environment=doc["environment"])
                         for i, w in enumerate(n["words"], 1)]
                 if any(r["state"] != "new" for r in rows):
-                    for r in rows:                           # its own message went out already: never twice
+                    for r in rows:
                         if r["state"] in ("approved", "declined"):
                             sent.extend(self._send_reissued(store, bot, chat_id, r))
-                    continue
+                    fresh = [r for r in rows if r["state"] == "new"]
+                    if not fresh or any(r.get("sent_at") or r.get("telegram_message_id") for r in rows):
+                        continue                             # its own message went out already: never twice
+                    # Its message never went out (its send failed) and one of its rows was answered meanwhile in the
+                    # Guild: the rows still new go out now, never stranded (sweep, deliver).
+                    rows = fresh
                 if n["rule"] == "decision":
                     message_id = bot.send(chat_id, tg.runtime_message(rows[0]))
                     store.mark_sent(rows[0]["id"], message_id)

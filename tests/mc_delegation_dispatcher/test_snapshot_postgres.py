@@ -1196,6 +1196,39 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         self.assertTrue(any(t.startswith(f"Not applied: D-1 was refused and replaced by {code}") for t in texts),
                         texts)
 
+    # ── a batch whose send failed, with one of its rows answered in the Guild and refused: the rest still go out ──
+    def test_deliver_never_strands_the_unsent_rows_of_a_batch_one_of_whose_rows_was_answered_in_the_guild(self):
+        store, sup = self.faulty_supervisor(self.narrow_store())
+        self.admit(card("C-17"))
+        self.admit(card("C-18"))
+        self.sql("UPDATE guild.mc_action_grants SET consumed_operations = max_operations")
+        for _ in range(2):
+            _, env = self.claim()
+            self.result(env, artifacts=[art("patch", env["request_id"][:8])])
+        self.publish()
+        self.notify.fail_next = 1                                       # the batch's message fails
+        sup.runtime_tick()
+        self.notify.fail_next = 0
+        rows = self.sql("SELECT * FROM guild.supervision_decisions ORDER BY id")
+        self.assertEqual([r["state"] for r in rows], ["new", "new"])
+        answered, left = rows
+        guild = {"channel": "guild", "principal": "robert", "conversation_id": "c-1", "note_id": "n-1",
+                 "text": f"approve D-{answered['id']}", "date": int(time.time()),
+                 "decision_sha256": answered["text_sha256"]}
+        self.assertIsNotNone(self.sup_store.decide(answered["id"], "approved", guild,
+                                                   text_sha256=answered["text_sha256"]))   # in the Guild
+        sup.runtime_tick()                                              # refused: its fresh D-code goes out alone
+        sup.runtime_tick()
+        state = self.sql("SELECT state FROM guild.supervision_decisions WHERE id=%s", (left["id"],))[0]["state"]
+        self.assertEqual(state, "sent")                                 # never stranded
+        carrying = [m for m in self.notify.lines() if f"D-{left['id']}" in m["text"]]
+        self.assertEqual(len(carrying), 1, self.runtime_texts())
+        self.assertEqual(self.sup_store.by_batch(carrying[0]["message_id"])[0]["id"], left["id"])
+        self.notify.reply("yes", carrying[0]["message_id"])            # and Robert can answer it there
+        self.sup.read_answers(wait=0)
+        self.assertEqual(self.sql("SELECT state FROM guild.supervision_decisions WHERE id=%s",
+                                  (left["id"],))[0]["state"], "approved")
+
     def test_sf6_a_reassignment_answer_is_bound_to_the_generation_its_words_name(self):
         self.admit(card())
         _, env = self.claim()
