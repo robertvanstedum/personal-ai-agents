@@ -1212,8 +1212,11 @@ class Plan(Run):
         self.check("T19a.planted_names_removed", bool(rec) and set(I.PLANTED) <= set(rec["removed"])
                    and rec["route"] == "fakework.plan" and rec["key"] is None, {"removed": rec and rec["removed"]})
         self._lch1("T19a.LCH-1")
-        agents = [a for a in self.store.agents() if a.get("item_id") == str(self.row("T19a.plan")["request_id"])
-                  and a["parent_id"] is None]
+        rid = str(self.row("T19a.plan")["request_id"])
+
+        def roots():                                    # the census reaches the authority with the next heartbeats
+            return [a for a in self.store.agents() if a.get("item_id") == rid and a["parent_id"] is None]
+        agents = self.wait(roots, self.auth.hosts.contact_interval_s * 3, every=2) or []
         self.check("T19a.LCH-5", bool(agents) and all(a.get("start_path") and a.get("route") and a.get("launch")
                                                       and a.get("transcript_ref") for a in agents),
                    {"roots": len(agents)}, n=len(agents))
