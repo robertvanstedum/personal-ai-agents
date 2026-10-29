@@ -32,7 +32,7 @@ sys.path.insert(0, str(HERE.resolve()))
 # the raw keyring import.
 if str(PROJECT_ROOT.resolve()) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT.resolve()))
-from german_domain import GERMAN_DIR, GERMAN_STATE_DIR
+from german_domain import GERMAN_DIR, GERMAN_STATE_DIR, VENV_PYTHON
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -55,7 +55,6 @@ LOG_FILE       = LOGS / "watcher.log"
 POLL_INTERVAL  = CFG["poll_interval_seconds"]
 EXTENSIONS     = set(CFG["supported_extensions"])
 PIPELINE_BASE  = CFG["pipeline_base_dir"]  # relative to project root
-VENV_PYTHON    = PROJECT_ROOT / "venv/bin/python3"
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
 
