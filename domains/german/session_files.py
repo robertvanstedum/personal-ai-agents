@@ -25,3 +25,15 @@ def next_session_id(date_str: str, sessions_dir: Path) -> str:
         if match:
             highest = max(highest, int(match.group(1)))
     return f"{date_str}_{highest + 1:03d}"
+
+
+def session_sort_key(path: Path) -> tuple[str, int, str]:
+    """Order date_NNN sessions numerically, with deterministic legacy-name fallback.
+
+    Does not read or rename files. Date ordering remains lexical for ISO dates;
+    nonconforming names keep their full filename as their primary sort key.
+    """
+    match = re.fullmatch(r"([0-9]{4}-[0-9]{2}-[0-9]{2}_)([0-9]+)", path.stem)
+    if match:
+        return match.group(1), int(match.group(2)), path.name
+    return path.name, -1, path.name

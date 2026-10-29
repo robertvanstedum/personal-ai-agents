@@ -78,3 +78,20 @@ def test_watcher_pipeline_preserves_arguments_and_archives_transcript(isolated_w
     archived = list(watcher.PROCESSED.glob('*_synthetic.txt'))
     assert len(archived) == 1
     assert archived[0].read_text() == 'Synthetic fixture only.'
+
+
+def test_watcher_reads_numeric_latest_drill_session(isolated_watcher, monkeypatch):
+    watcher = isolated_watcher
+    sessions = watcher.GERMAN_STATE_DIR / 'sessions'
+    sessions.mkdir(parents=True)
+    (sessions / '2026-10-28_999.json').write_text(json.dumps({'drill_mode': False}))
+    (sessions / '2026-10-28_1000.json').write_text(json.dumps({'drill_mode': True, 'drill_session': 1, 'drill_total': 2}))
+    calls, messages = [], []
+    monkeypatch.setattr(watcher, '_run', lambda argv, **kwargs: (calls.append(argv) or ('', '', 0)))
+    monkeypatch.setattr(watcher, '_tg_send', messages.append)
+    watcher.PROCESSED.mkdir(parents=True)
+    transcript = watcher.HERE / 'drill.txt'
+    transcript.write_text('Synthetic fixture only.')
+    watcher._process(transcript)
+    assert [args[1] for args in calls] == ['parse_transcript.py', 'reviewer.py', 'import_cards.py']
+    assert messages == ['✅ Drill session 1/2 processed. Keep going!']

@@ -30,7 +30,7 @@ import sys as _sys
 _sys.path.insert(0, str(_REPO_ROOT))
 from core.get_secret import get_secret as _get_secret
 from domains.german.transcript_text import parse_review_turns as _parse_transcript_turns
-from domains.german.session_files import next_session_id as _next_session_id
+from domains.german.session_files import next_session_id as _next_session_id, session_sort_key
 from domains.german.reading_rules import (
     normalize_url as _normalize_lesen_url,
     article_id as _lesen_article_id,
@@ -287,7 +287,7 @@ def _last_session_persona() -> str | None:
     sessions_dir = GERMAN_STATE_DIR / "sessions"
     if not sessions_dir.exists():
         return None
-    sessions = sorted(sessions_dir.glob("*.json"))
+    sessions = sorted(sessions_dir.glob("*.json"), key=session_sort_key)
     if not sessions:
         return None
     try:
@@ -1925,7 +1925,7 @@ def get_last_human_session_suggestion() -> str:
         return ""
 
     # Collect all session JSON files, newest first
-    session_files = sorted(sessions_dir.glob("*.json"), reverse=True)
+    session_files = sorted(sessions_dir.glob("*.json"), key=session_sort_key, reverse=True)
     for sf in session_files:
         try:
             data = safe_read_json(sf)
@@ -2140,7 +2140,7 @@ def get_gesprache_sessions(limit: int = 5, user_id=None) -> list:
     a permanent read-side bypass."""
     if not _SESSIONS_DIR.exists() or user_id is None:
         return []
-    paths = sorted(_SESSIONS_DIR.glob("*.json"), reverse=True)
+    paths = sorted(_SESSIONS_DIR.glob("*.json"), key=session_sort_key, reverse=True)
     result = []
     for path in paths:
         try:

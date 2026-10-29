@@ -16,6 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from german_domain import GERMAN_STATE_DIR
+from domains.german.session_files import session_sort_key
 
 
 def _load_json(path: Path):
@@ -38,7 +39,7 @@ def _latest_reviewed_session(sessions_dir: Path):
     if not sessions_dir.exists():
         return None
     reviewed = []
-    for p in sorted(sessions_dir.glob("*.json")):
+    for p in sorted(sessions_dir.glob("*.json"), key=session_sort_key):
         try:
             data = json.loads(p.read_text())
             if data.get("reviewer_output") is not None:

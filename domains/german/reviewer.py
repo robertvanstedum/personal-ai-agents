@@ -39,6 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from german_domain import GERMAN_DIR, GERMAN_STATE_DIR
+from domains.german.session_files import session_sort_key
 
 ERROR_TYPES = ["gender", "word_order", "missing_article", "verb_conjugation", "vocabulary", "register"]
 
@@ -245,7 +246,7 @@ def _scaffold_analysis(session: dict, session_path: Path, sessions_dir: Path,
     persona = session.get("persona", "")
     threshold = domain_cfg.get("drill", {}).get("promotion_threshold", 2)
 
-    prior = sorted(sessions_dir.glob("*.json"), reverse=True)
+    prior = sorted(sessions_dir.glob("*.json"), key=session_sort_key, reverse=True)
     streak = []
     for p in prior:
         if p == session_path:
@@ -468,7 +469,7 @@ def _update_progress(progress: dict, session: dict, reviewer_output: dict,
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def _find_latest_unreviewed(sessions_dir: Path) -> Path:
-    sessions = sorted(sessions_dir.glob("*.json"), reverse=True)
+    sessions = sorted(sessions_dir.glob("*.json"), key=session_sort_key, reverse=True)
     for p in sessions:
         data = json.loads(p.read_text())
         if data.get("reviewer_output") is None:
