@@ -461,7 +461,8 @@ def _mc_runner_importers(root):
 def test_mc_runner_files_redeploy_only_the_portal_or_nothing():
     from scripts.ci.classify_release import MC_RUNNER_LOCAL_FILES, MC_RUNNER_PORTAL_FILES
     on_disk = {p.relative_to(Path(__file__).resolve().parent.parent).as_posix()
-               for p in (Path(__file__).resolve().parent.parent / "core" / "mc_delegation_runner").glob("*.py")}
+               for pattern in ("*.py", "*.json")                                 # code, and the launch policy's data file
+               for p in (Path(__file__).resolve().parent.parent / "core" / "mc_delegation_runner").glob(pattern)}
     assert MC_RUNNER_PORTAL_FILES | MC_RUNNER_LOCAL_FILES == on_disk                  # every runner file has a decided owner
     assert not MC_RUNNER_PORTAL_FILES & MC_RUNNER_LOCAL_FILES
     for path in MC_RUNNER_PORTAL_FILES:

@@ -42,3 +42,22 @@ def given_environments(path) -> list[dict]:
         return [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
     except FileNotFoundError:
         return []
+
+
+# ── the launch contract (spec v0.5 R6.7-d): every start is pinned and checked ────────────────────────────────────────
+def pin_of(path) -> str:
+    """The SHA-256 a test pins a fake CLI with (``--claude-bin-sha256`` / ``--codex-bin-sha256``, ``binary_sha256``)."""
+    import hashlib
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def signed_in(home, agent=None) -> None:
+    """A plan sign-in under a test HOME, in the shape the launch policy checks (key names only): Claude Code's account
+    record in ~/.claude.json, Codex's ~/.codex/auth.json with auth_mode chatgpt and no stored key. No token, no value."""
+    home = Path(home)
+    if agent in (None, "claude-code"):
+        home.mkdir(parents=True, exist_ok=True)
+        (home / ".claude.json").write_text(json.dumps({"oauthAccount": {"accountUuid": "test-only"}}))
+    if agent in (None, "codex"):
+        (home / ".codex").mkdir(parents=True, exist_ok=True)
+        (home / ".codex" / "auth.json").write_text(json.dumps({"auth_mode": "chatgpt", "OPENAI_API_KEY": None}))
