@@ -168,7 +168,7 @@ await check('B S2 (xai): another reply starting after the summary is asked for n
   t.start(); t.said('i1', 'Yes.'); t.stop();
   t.s.sumUp(); await flush(); await t.advance(8000);                    // the page's pause bound: his reply has not reported
   assert.equal(t.lines().filter((l) => l.startsWith('Say only this')).length, 1, 'the summary was not asked for');
-  t.created('auto_yes'); t.drained('auto_yes'); await flush();
+  t.created('auto_yes'); await flush(); t.drained('auto_yes'); await flush();   // the page has heard the start before it drains
   assert.equal(t.posts('/end').length, 0, 'another reply\'s drain closed the summary');
   await t.advance(9000);
   assert.equal(t.posts('/end').length, 1);
