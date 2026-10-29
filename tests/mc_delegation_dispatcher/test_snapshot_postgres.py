@@ -409,6 +409,70 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         day = self.sql("SELECT reserved, observed FROM guild.mc_delegation_reservations WHERE route='fakejudge'")[0]
         self.assertEqual((float(day["reserved"]), float(day["observed"])), (0.0, 0.5))
 
+    # ── sweep A1: one open review request per item, and Robert's latest answer about reviewing it governs ──
+    def stalled_with_mc_request_open(self):
+        """MC asks to review an item (R1, open), and then the item stalls. -> (item id, R1, the published snapshot)."""
+        self.admit(card("C-1"))
+        _, env = self.claim()
+        rid = env["request_id"]
+        self.progress(env, "s1")
+        r1 = self.store.propose_review(rid, by="mc")["decision_id"]
+        self.backdate(rid, 200)                                   # build timeout 180 s
+        self.assertTrue(self.store.renew(rid, 1, protocol=2, runner_id="mac-a"))
+        return rid, r1, self.publish()
+
+    def test_a1_a_stall_queues_no_second_review_request_and_its_one_notice_names_the_open_one(self):
+        rid, r1, doc = self.stalled_with_mc_request_open()
+        reviews = [d["decision_id"] for d in self.waiting(doc, "review_request") if d["item_id"] == rid]
+        self.assertEqual(reviews, [r1])                           # one open handle, MC's own
+        (prop,) = self.events("proposal.review_request", item=rid)
+        self.assertEqual(prop["body"]["decision_id"], r1)         # the stall's proposal names it
+        (stall,) = [n for n in doc["notices"] if n["rule"] == "stalled"]   # OWN-4: the stall's one notice, raised
+        self.assertIsNotNone(stall["raised_at"])
+        self.assertIn(f"decision {r1[:8]}", stall["text"])
+        self.assertIn("already waiting", stall["next_authorized_step"]["step"])
+        before = len(self.events())
+        self.publish()                                            # a second stall tick: nothing new
+        self.assertEqual(len(self.events()), before)
+        self.assertEqual(self.store.propose_review(rid, by="mc")["decision_id"], r1)
+        self.assertEqual(self.answer(r1)["action"], "authorize_review")
+        got = self.store.reserve_judgment(trigger={"kind": "owner", "decision_id": r1}, items=[rid], by="mc")
+        self.assertEqual(got["state"], "reserved")
+
+    def test_a1_an_older_yes_is_never_used_after_a_newer_no_about_reviewing_the_same_item(self):
+        """The sweep's sequence with the second handle made as a stall made it before the fix (records written then):
+        Robert's yes to R1, then his no to R2, about the same item. R1's yes reserves nothing."""
+        rid, r1, _ = self.stalled_with_mc_request_open()
+        with self.store._tx() as cur:                             # the stall's own request, as the old path queued it
+            r2 = self.store._queue_review(cur, self.store._item(cur, rid), {
+                "reason": "stalled", "proposal_id": str(uuid4()), "since": "then", "owner_host_id": "mac-a",
+                "timeout_s": 180})
+        self.assertNotEqual(r1, r2)
+        self.assertEqual(self.answer(r1, "approved", "yes")["action"], "authorize_review")   # t1: yes
+        self.assertEqual(self.answer(r2, "declined", "no")["action"], "withdraw")            # t2: no (newer)
+        got = self.store.reserve_judgment(trigger={"kind": "owner", "decision_id": r1}, items=[rid], by="mc")
+        self.assertEqual(got, {"state": "refused", "code": "judgment_owner_turn_superseded"})
+        self.assertEqual(self.events("judgment.reserved"), [])
+
+    def test_a1_robert_s_latest_answer_governs_across_successive_review_requests(self):
+        self.admit(card("C-1"))
+        _, env = self.claim()
+        rid = env["request_id"]
+        r1 = self.store.propose_review(rid, by="mc")["decision_id"]
+        self.answer(r1, "approved", "yes")
+        r2 = self.store.propose_review(rid, by="mc")["decision_id"]          # R1 is closed: a new request
+        self.assertNotEqual(r1, r2)
+        self.answer(r2, "declined", "no")
+        owner = {"kind": "owner", "decision_id": r1}
+        self.assertEqual(self.store.reserve_judgment(trigger=owner, items=[rid], by="mc")["code"],
+                         "judgment_owner_turn_superseded")
+        r3 = self.store.propose_review(rid, by="mc")["decision_id"]
+        self.answer(r3, "approved", "yes")                                    # his newest answer is yes again
+        self.assertEqual(self.store.reserve_judgment(trigger=owner, items=[rid], by="mc")["code"],
+                         "judgment_owner_turn_superseded")                    # still never the older one
+        got = self.store.reserve_judgment(trigger={"kind": "owner", "decision_id": r3}, items=[rid], by="mc")
+        self.assertEqual(got["state"], "reserved")
+
     def test_sf4_a_card_slot_reviews_its_own_cards_work_once(self):
         self.admit(card("C-1"))
         _, env = self.claim()

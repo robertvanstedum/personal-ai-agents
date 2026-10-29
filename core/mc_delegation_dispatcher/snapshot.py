@@ -617,6 +617,10 @@ def _notices(items, rec, now, values, hosts, cards, waiting, raised, unknowns, r
     out = []
     host = {h["host_id"]: h for h in hosts}
     rows = {str(r["request_id"]): r for r in rec["items"]}
+    # A stall whose item already had a review request open queued none (one open per item, sweep A1): its proposal
+    # names that request, and the stall's one notice (OWN-4) points Robert at it.
+    asked = {e["body"]["proposal_id"]: e["body"]["decision_id"] for e in rec["events"]
+             if e["kind"] == "proposal.review_request" and e["body"].get("decision_id")}
     legacy_rows = [_legacy_row(r, now) for r in rec["items"] if r.get("route") is None]
     for i in legacy_items(legacy_rows)[0]:
         out.append({**i, "rule": i["key"].split(":", 1)[0], "next_authorized_step": None,
@@ -631,13 +635,20 @@ def _notices(items, rec, now, values, hosts, cards, waiting, raised, unknowns, r
             # OWN-4), a live read shows the stall's own notice, due.
             ref = _progress_ref(it, now)
             proposal = review_request_id(rid, g, ref)
+            waiting_one = asked.get(proposal)
+            if waiting_one is not None:
+                code = rec["codes"].get(waiting_one) or f"decision {waiting_one[:8]}"
+                ask = f"you say yes to the review request already waiting ({code})"
+                step_words = f"answer the review request already waiting ({code}), or wait"
+            else:
+                ask, step_words = f"you say so (review request {proposal[:8]})", \
+                    f"approve review request {proposal[:8]}, or wait"
             out.append(_notice(
                 f"runtime-stalled:{rid}:g{g}:{ref}", "stalled",
                 f"{label[0].upper()}{label[1:]} ({name(it['actor'])} on {it['owner_host_id']}) has made no progress "
                 f"for {int(it['progress_age_s'])} s; its owner is in contact and its lease is current. Nothing is "
-                f"stopped. Next: MC may review it if you say so (review request {proposal[:8]}).",
-                {"actor": "robert", "step": f"approve review request {proposal[:8]}, or wait",
-                 "authority": None}, raised, proposal=proposal, **refs))
+                f"stopped. Next: MC may review it if {ask}.",
+                {"actor": "robert", "step": step_words, "authority": None}, raised, proposal=proposal, **refs))
         if it["shown_as"] == "lapsed" and (host.get(it["owner_host_id"]) or {}).get("availability") == "always_on":
             out.append(_notice(
                 f"runtime-lapsed:{rid}:g{g}", "lapsed",

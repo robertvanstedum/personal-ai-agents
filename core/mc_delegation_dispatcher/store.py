@@ -3216,22 +3216,28 @@ class DispatcherStore:
             # A stall's review request (R7.5-d: a flag queues at most one per stall, and starts no call) is one routine
             # decision: Robert's yes is the only owner turn that lets MC review it (reserve_judgment's owner trigger).
             # Its notice is the stall's one notice (OWN-4), so the snapshot is read again once it is queued.
+            # One open review request per item (sweep A1): a stall whose item already has one open (MC's own request,
+            # or an earlier stall's) queues none; its proposal is recorded naming that one, and its notice says so.
+            # The item's row is locked first, as propose_review locks it, so the two can never both queue one.
             items = {i["item_id"]: i for i in doc["items"]}
             timeouts = dict(self.authority.progress_timeout_s or {})
             with self._tx() as cur:
-                for prop in due:
+                for prop in sorted(due, key=lambda p: p["item_id"]):
                     it = items.get(prop["item_id"])
-                    row = self._item(cur, prop["item_id"], lock=False)
+                    row = self._item(cur, prop["item_id"])
                     if it is None or row is None:
                         continue
+                    open_one = self._open_review(cur, prop["item_id"])
                     self._event(cur, "proposal.review_request", item=prop["item_id"], generation=prop["generation"],
                                 once=_once("review_request", prop["proposal_id"]),
                                 body={"proposal_id": prop["proposal_id"], "item_id": prop["item_id"],
                                       "generation": prop["generation"], "since": prop["since"],
-                                      "trigger": "flag:stalled", "starts_no_call": True})
-                    self._queue_review(cur, row, {"reason": "stalled", "proposal_id": prop["proposal_id"],
-                                                  "since": prop["since"], "owner_host_id": it["owner_host_id"],
-                                                  "timeout_s": timeouts.get(snap._class(row))})
+                                      "trigger": "flag:stalled", "starts_no_call": True,
+                                      **({"decision_id": open_one} if open_one is not None else {})})
+                    if open_one is None:
+                        self._queue_review(cur, row, {"reason": "stalled", "proposal_id": prop["proposal_id"],
+                                                      "since": prop["since"], "owner_host_id": it["owner_host_id"],
+                                                      "timeout_s": timeouts.get(snap._class(row))})
             doc = self.snapshot(endpoint_id=endpoint_id, host_id=host_id)
         raised = []
         with self._tx() as cur:
@@ -3494,16 +3500,22 @@ class DispatcherStore:
             row = self._item(cur, rid)
             _need(row is not None and row["route"] is not None, "unknown_request")
             _need(row["state"] not in TERMINAL, "item_ended")
-            cur.execute("""SELECT q.event_id FROM guild.mc_delegation_events q WHERE q.principal_id=%s
-                AND q.environment=%s AND q.kind='decision.queued' AND q.item_id=%s AND q.body->>'class'='review_request'
-                AND NOT EXISTS (SELECT 1 FROM guild.mc_delegation_events r WHERE r.principal_id=q.principal_id
-                    AND r.environment=q.environment AND r.once_key = 'decision_resolved:' || q.event_id::text)
-                ORDER BY q.seq LIMIT 1""", (self.principal, self.environment, rid))
-            open_one = cur.fetchone()
+            open_one = self._open_review(cur, rid)
             if open_one is not None:
-                return {"state": "proposed", "decision_id": str(open_one["event_id"])}
+                return {"state": "proposed", "decision_id": open_one}
             return {"state": "proposed", "decision_id": self._queue_review(
                 cur, row, {"reason": "proposed", "proposed_by": by}, once=None)}
+
+    def _open_review(self, cur, request_id) -> str | None:
+        """The item's review_request decision still open (queued, not resolved), the oldest if more than one: there is
+        one open per item (sweep A1), whoever asked (MC, or a stall). The caller holds the item's row lock."""
+        cur.execute("""SELECT q.event_id FROM guild.mc_delegation_events q WHERE q.principal_id=%s
+            AND q.environment=%s AND q.kind='decision.queued' AND q.item_id=%s AND q.body->>'class'='review_request'
+            AND NOT EXISTS (SELECT 1 FROM guild.mc_delegation_events r WHERE r.principal_id=q.principal_id
+                AND r.environment=q.environment AND r.once_key = 'decision_resolved:' || q.event_id::text)
+            ORDER BY q.seq LIMIT 1""", (self.principal, self.environment, str(request_id)))
+        found = cur.fetchone()
+        return None if found is None else str(found["event_id"])
 
     def _queue_review(self, cur, row, body, *, once=False) -> str:
         """One review_request decision (routine; R7.5-d): a stall's (once per stall episode: its proposal) or MC's
@@ -3658,7 +3670,9 @@ class DispatcherStore:
         """MC asks the authority before each judgment call (R7.5-c). Only Robert, or a review slot of a card that its
         grant already admits, may start one (R7.5-d), and neither is taken on the caller's word (SF4):
           {kind: owner, decision_id}    Robert's yes to a review_request decision about exactly these items, recorded
-                                        by the owner path (resolve: decision.resolved, source owner, authorize_review)
+                                        by the owner path (resolve: decision.resolved, source owner, authorize_review),
+                                        and still his latest answer to a review request for that item (else refused
+                                        judgment_owner_turn_superseded: sweep A1)
           {kind: card_slot, item_id}    a review step of a card, admitted by its card's grant and live, for items of
                                         that card only
         Each trigger is used once (judgment.trigger_used); any other (a flag, a detector, a nudge, a timer) is refused
@@ -3704,6 +3718,18 @@ class DispatcherStore:
                     return refused("judgment_owner_turn_not_found")   # only Robert's own yes, through the owner path
                 if ids != [str(asked["item_id"])]:
                     return refused("judgment_items_not_authorized")
+                # Robert's latest answer about reviewing this item governs (sweep A1): a yes is used only while no
+                # later owner answer to a review request for the same item exists, so an older yes can never be used
+                # after his newer no (or after a newer yes, whose own trigger is the one to use).
+                cur.execute("""SELECT r.body->>'decision_id' AS decision_id FROM guild.mc_delegation_events r
+                    JOIN guild.mc_delegation_events q ON q.principal_id=r.principal_id AND q.environment=r.environment
+                        AND q.kind='decision.queued' AND q.event_id::text = r.body->>'decision_id'
+                    WHERE r.principal_id=%s AND r.environment=%s AND r.kind='decision.resolved' AND r.source='owner'
+                      AND q.item_id=%s AND q.body->>'class'='review_request'
+                    ORDER BY r.seq DESC LIMIT 1""", (self.principal, self.environment, str(asked["item_id"])))
+                latest = cur.fetchone()
+                if latest is None or latest["decision_id"] != did:
+                    return refused("judgment_owner_turn_superseded")
                 used = _once("judgment_trigger", "owner", did)
                 evidence = {"kind": "owner", "decision_id": did, "receipt": answered["body"].get("receipt")}
             else:
