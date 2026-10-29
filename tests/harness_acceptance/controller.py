@@ -186,7 +186,8 @@ class Run:
         self._git("commit", "-qm", "project key setting", cwd=m)
         self.ref_t19c = self._git("rev-parse", "HEAD", cwd=m)
         self._git("checkout", "-q", "main", cwd=m)
-        self.mirror = m
+        self.mirror = self.acc / "mirror.git"                     # bare, as the installer's mirrors are
+        self._git("clone", "-q", "--bare", str(m), str(self.mirror), cwd=self.acc)
 
     def values(self) -> dict:
         """§9.2's test values: S1-A's file, which carries fakework.plan unattended for T19a–T19d (S1-E N8)."""
@@ -342,7 +343,7 @@ class Run:
         return "\n".join(("fakework/1",) + steps)
 
     # ── a scenario ──
-    def scenario(self, name, fn):
+    def run_scenario(self, name, fn):
         if self.only is not None and name not in self.only:
             return
         self.scenario = name
@@ -581,7 +582,7 @@ class Plan(Run):
                  "T19d": self.t19d, "T19e": self.t19e, "T11m": self.t11m, "X5": self.x5}
         try:
             for name in SCENARIOS:
-                self.scenario(name, order[name])
+                self.run_scenario(name, order[name])
         finally:
             self.finish()
         return self.receipt
