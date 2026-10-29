@@ -268,7 +268,7 @@ class Run:
         self.collector = I.Collector(self.store, self.ev / "snapshots", endpoint_id="dev-authority", host_id=HOST_ID)
         self.notifier = I.Notifier(self.connect, self.store, self.ev / "notify.jsonl")
         self.owner = I.Owner(self)
-        self.scripted = I.ScriptedHost(self)
+        self._scripted = {}
 
     # ── host.yaml variants (an operator's edit, then a restart) ──
     def keep_host(self, name):
@@ -391,6 +391,19 @@ class Run:
                 self.check(f"{name}.runtime_restarted", False, {"stopped": str(exc)})
         self.scenario = None
         self.collector.scenario = None
+
+    @property
+    def srepo(self):
+        """The scripted identity's repository for this scenario: its items are claimable by it in this scenario only,
+        so a leftover of one scenario never becomes another's claim."""
+        return f"scripted-{(self.scenario or 'run').lower()}"
+
+    @property
+    def sh(self):
+        """``mac-test-9`` for this scenario (its capabilities name only this scenario's repository)."""
+        if self.srepo not in self._scripted:
+            self._scripted[self.srepo] = I.ScriptedHost(self, SCRIPTED, repos=(self.srepo,))
+        return self._scripted[self.srepo]
 
     def window_events(self):
         return self.events(since=self.window["seq0"])
@@ -809,12 +822,12 @@ class Plan(Run):
     # ── T9: the sweeper alone killed; a witness stopped ──
     def t9(self):
         job = "T9.w"
-        self.owner.item(job, self.program("checkpoint s1", "result ok"), repository="scripted", ref=SCRIPTED_REF)
-        got = self.scripted.claim()
+        self.owner.item(job, self.program("checkpoint s1", "result ok"), repository=self.srepo, ref=SCRIPTED_REF)
+        got = self.sh.claim()
         if not got or got["envelope"]["work_id"] != job:
             raise Stop("scripted_claim_failed")
         env = got["envelope"]
-        self.scripted.progress(env, "s1")
+        self.sh.progress(env, "s1")
         self.runtime_signal(signal.SIGUSR1, "T9: the sweeper alone stops (E11)")
         t_kill = time.time()
         self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second' "
@@ -852,9 +865,9 @@ class Plan(Run):
     # ── T10: an expired grant before claim; a revocation mid-run ──
     def t10(self):
         exp = "T10.W-EXP"
-        self.owner.item(exp, self.program("result ok"), repository="scripted", ref=SCRIPTED_REF, ttl_s=3)
+        self.owner.item(exp, self.program("result ok"), repository=self.srepo, ref=SCRIPTED_REF, ttl_s=3)
         time.sleep(5)                                   # the grant ends before any host claims the item
-        got = self.scripted.claim()
+        got = self.sh.claim()
         row = self.row(exp)
         self.check("T10.W-EXP_expired_never_claimed", got is None and row["state"] == "expired"
                    and row["generation"] == 0, {"state": row["state"], "generation": row["generation"]})
@@ -881,15 +894,15 @@ class Plan(Run):
         # The protocol half: a late result and a pending dispatch on a revoked grant (a scripted host's item).
         rev2 = "T10.W-REV2"
         egid2 = self.owner.effect_grant(rev2, "e1")
-        igid2 = self.owner.item(rev2, self.program("result ok"), repository="scripted", ref=SCRIPTED_REF)
-        got = self.scripted.claim()
+        igid2 = self.owner.item(rev2, self.program("result ok"), repository=self.srepo, ref=SCRIPTED_REF)
+        got = self.sh.claim()
         env = got["envelope"]
-        self.scripted.effect(env, "prepare", "e1", egid2)
-        lease = self.scripted.effect(env, "claim", "e1", egid2)["lease"]
+        self.sh.effect(env, "prepare", "e1", egid2)
+        lease = self.sh.effect(env, "claim", "e1", egid2)["lease"]
         self.owner.revoke(igid2, after_notice=None)
         lease = {k: lease[k] for k in ("receipt_generation", "token", "mode")}
-        dispatch = self.scripted.effect(env, "dispatch", "e1", egid2, lease=lease)
-        late = self.scripted.result(env)
+        dispatch = self.sh.effect(env, "dispatch", "e1", egid2, lease=lease)
+        late = self.sh.result(env)
         self.check("T10.pending_dispatch_refused", dispatch.get("state") == "refused", {"answer": dispatch})
         self.check("T10.late_result_refused", late.get("state") == "refused", {"answer": late})
         self.named("T10.DUP-4", C.dup4, self.window_events(), need=0)
@@ -902,15 +915,15 @@ class Plan(Run):
         self.check("T11b.route_supervised_only", bool(row) and (row["result_detail"] or {}).get("code")
                    == "route_supervised_only", {"detail": row and row["result_detail"]})
         mis = "T11b.mismatch"
-        self.owner.item(mis, self.program("result ok"), repository="scripted", ref=SCRIPTED_REF)
-        env = self.scripted.claim()["envelope"]
-        got = self.scripted.result(env, route="fakework.api", unit="usd")
+        self.owner.item(mis, self.program("result ok"), repository=self.srepo, ref=SCRIPTED_REF)
+        env = self.sh.claim()["envelope"]
+        got = self.sh.result(env, route="fakework.api", unit="usd")
         self.check("T11b.route_mismatch_refused", got.get("state") == "refused", {"answer": got})
         self.end_leftover(mis, "the mismatched result was refused")
         api = "T11b.api"
         self.owner.item(api, self.program("result ok"), route="anthropic.api", actor="claude-code", amount=1.0,
-                        repository="scripted", ref=SCRIPTED_REF)
-        coder = I.ScriptedHost(self, "mac-test-8")
+                        repository=self.srepo, ref=SCRIPTED_REF)
+        coder = I.ScriptedHost(self, "mac-test-8", repos=(self.srepo,))
         coder.caps = coder.caps + ["actor:claude-code"]
         claimed = coder.claim()
         row = self.row(api)
@@ -1024,25 +1037,25 @@ class Plan(Run):
         briefs = {"build": self.program("result ok"), "review": self.program("result ok"),
                   "fix": self.program("result ok")}
         for n in (1, 2, 3):
-            self.owner.card(self.card_doc(f"C-T15-{n}", repository="scripted", ref=SCRIPTED_REF, briefs=briefs))
+            self.owner.card(self.card_doc(f"C-T15-{n}", repository=self.srepo, ref=SCRIPTED_REF, briefs=briefs))
         self.sql("""UPDATE guild.mc_action_grants SET consumed_operations = max_operations
             WHERE grant_id IN (SELECT grant_id FROM guild.mc_delegations WHERE card_id LIKE 'C-T15-%%')""")
         self.log("injection", "T15: the three cards' approvals used up, so their next steps need Robert")
-        self.owner.card(self.card_doc("C-T15-4", repository="scripted", ref=SCRIPTED_REF, briefs=briefs))
+        self.owner.card(self.card_doc("C-T15-4", repository=self.srepo, ref=SCRIPTED_REF, briefs=briefs))
         egid = self.owner.effect_grant("C-T15-4", "e1")
         if not self.wait(lambda: (self.store.sweeper_status() or {}).get("age_s", 99) < 2, 30, every=0.2):
             raise Stop("no_fresh_sweep")
         for n in (1, 2, 3):
-            env = self.scripted.claim()["envelope"]
+            env = self.sh.claim()["envelope"]
             art = {"kind": "patch", "ref": f"t15-{n}.patch", "sha256": hashlib.sha256(f"t15-{n}".encode()).hexdigest(),
                    "bytes": 10, "author": "fakework", "review_status": "unreviewed"}
-            self.scripted.result(env, artifacts=[art])
-        env4 = self.scripted.claim()["envelope"]
-        self.scripted.effect(env4, "prepare", "e1", egid)
-        lease = self.scripted.effect(env4, "claim", "e1", egid)["lease"]
-        self.scripted.effect(env4, "dispatch", "e1", egid, lease={k: lease[k] for k in ("receipt_generation", "token",
+            self.sh.result(env, artifacts=[art])
+        env4 = self.sh.claim()["envelope"]
+        self.sh.effect(env4, "prepare", "e1", egid)
+        lease = self.sh.effect(env4, "claim", "e1", egid)["lease"]
+        self.sh.effect(env4, "dispatch", "e1", egid, lease={k: lease[k] for k in ("receipt_generation", "token",
                                                                                        "mode")})
-        self.scripted.result(env4)
+        self.sh.result(env4)
         self.log("observe", "three routine decisions and one unknown queued inside one sweep")
         batch = self.wait(lambda: next((m for m in self.notify_since(self.window["notify0"])
                                         if m["text"].startswith("Decisions ")), None), 90)
@@ -1072,10 +1085,11 @@ class Plan(Run):
         from fakejudge import FakeJudge
         briefs = {"build": self.program("result ok"), "review": self.program("result ok"),
                   "fix": self.program("result ok")}
-        self.owner.card(self.card_doc("C-T16-1", repository="scripted", ref=SCRIPTED_REF, briefs=briefs))
-        self.owner.card(self.card_doc("C-T16-2", repository="scripted", ref=SCRIPTED_REF, briefs=briefs))
-        got = self.scripted.claim()
+        self.owner.card(self.card_doc("C-T16-1", repository=self.srepo, ref=SCRIPTED_REF, briefs=briefs))
+        self.owner.card(self.card_doc("C-T16-2", repository=self.srepo, ref=SCRIPTED_REF, briefs=briefs))
+        got = self.sh.claim()
         env, w = got["envelope"], got["envelope"]["request_id"]
+        alive = self.sh.keep_alive(env, every=self.auth.hosts.renew_s)     # its host renews while MC reviews it
         other = str(self.row("C-T16-2.build")["request_id"])
         judge = FakeJudge(self.store, self.ev / "judge.jsonl")
         unapproved = judge.review([w], {"kind": "owner", "decision_id": str(uuid.uuid4())}).get("code")
@@ -1100,7 +1114,9 @@ class Plan(Run):
                    {"second": second.get("state"), "escalated": esc, "over_cap": cap, "calls": len(judge.calls())})
         trips = I.tripwire_lines(self.trip_log)
         self.check("T16.MC-0_tripwire", not trips, {}, n=len(trips))
-        self.scripted.result(env)       # its host reports it: no owner clean-up (C-T16-2.build stays queued, unowned)
+        alive.set()
+        done = self.sh.result(env)  # its host reports it: no owner clean-up (C-T16-2.build stays queued, unowned)
+        self.check("T16.its_host_reports_within_its_lease", done.get("state") == "accepted", {"answer": done})
 
     # ── T17: drift, one notice each, work not stopped ──
     def t17(self):
@@ -1354,22 +1370,22 @@ class Plan(Run):
             self.check("X5", False, {"why": "no --authority-container"}, result="not_run")
             return
         job = "X5.w"
-        self.owner.item(job, self.program("checkpoint s1", "result ok"), repository="scripted", ref=SCRIPTED_REF)
-        env = self.scripted.claim()["envelope"]
-        got, eid, at = self.scripted.progress(env, "s1")
+        self.owner.item(job, self.program("checkpoint s1", "result ok"), repository=self.srepo, ref=SCRIPTED_REF)
+        env = self.sh.claim()["envelope"]
+        got, eid, at = self.sh.progress(env, "s1")
         self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second' WHERE job_id=%s",
                  (job,))
         self.log("injection", "time moved: X5.w's lease ended while its host was away")
-        replay1, _, _ = self.scripted.progress(env, "s1", event_id=eid, at=at)
+        replay1, _, _ = self.sh.progress(env, "s1", event_id=eid, at=at)
         cp = {"name": "s1", "digest": "sha256:" + hashlib.sha256(b"s1").hexdigest()}
-        first = self.scripted.reconcile(env, checkpoint=cp)
+        first = self.sh.reconcile(env, checkpoint=cp)
         self.log("observe", "X5: the reconcile answer is lost with the authority's restart", answer=first.get("answer"))
         self._pause("X5: the authority restarts before its answer arrives")
         time.sleep(3)
         self._unpause("X5: the authority back")
         self.wait(lambda: self.db_now(), 30)
-        replay2, _, _ = self.scripted.progress(env, "s1", event_id=eid, at=at)
-        second = self.scripted.reconcile(env, checkpoint=cp)
+        replay2, _, _ = self.sh.progress(env, "s1", event_id=eid, at=at)
+        second = self.sh.reconcile(env, checkpoint=cp)
         row = self.row(job)
         resumed = [e for e in self.events(item=row["request_id"]) if e["kind"] == "item.resumed"]
         self.check("X5.replay_applies_nothing", replay1.get("state") == "already_applied"

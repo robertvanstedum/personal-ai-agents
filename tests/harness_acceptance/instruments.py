@@ -342,6 +342,20 @@ class ScriptedHost:
                 raise Stop(f"claim_{got['state']}:{got.get('code')}")
         raise Stop("claim_superseded_twice")
 
+    def keep_alive(self, env, *, every):
+        """Renew the item's lease every ``every`` s on a thread, as a host does while it works. -> the Event that
+        stops it."""
+        stop = threading.Event()
+
+        def loop():
+            while not stop.wait(every):
+                try:
+                    self.run.store.renew(env["request_id"], env["generation"], protocol=2, runner_id=self.runner_id)
+                except Exception:
+                    pass
+        threading.Thread(target=loop, name=f"renew-{self.host_id}", daemon=True).start()
+        return stop
+
     def progress(self, env, name, *, event_id=None, at=None):
         cp = {"name": name, "digest": "sha256:" + hashlib.sha256(name.encode()).hexdigest(), "paths": [f"x/{name}"]}
         eid = event_id or str(uuid.uuid4())
