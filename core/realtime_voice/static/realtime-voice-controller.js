@@ -112,6 +112,7 @@ export class RealtimeVoiceController {
     this._done = new Set();          // replies whose response.done was handled: a later one only informs playback (LV1)
     this._calls = new Set();         // function calls passed to the host, by call_id: each once (LV1)
     this._outstanding = new Map();   // call_id -> {pending}: a call passed to the host whose output is not sent yet (LV4)
+    this._repeat = null;             // the reply whose repeated response.done is being handled: its calls are dropped (Q N15)
     this._active = new Map();        // where the provider replies itself (xAI): its replies under way, id -> {seen} (LV3)
     this._speaking = false;          // there: his speech is under way (LV3)
     this._due = 0;                   // there: when his last counted turn ended, until a reply starts (LV3)
@@ -188,6 +189,13 @@ export class RealtimeVoiceController {
     }
     const bootstrap = bound ? await bound.read(resp) : await resp.json();
     if (bound && bootstrap === null) return;          // the bound passed while the answer was read: said already
+    // A direct start ended while its bootstrap was in flight (Gate 2 Q S3: endSession advanced the generation): it never
+    // builds an adapter, connects or takes the microphone. The host is told the session it was given, so it ends it there.
+    if (this._pageResponses && generation !== this._generation) {
+      if (bootstrap && bootstrap.voice_session_id) this._onSessionInfo({ provider: bootstrap.provider, model: bootstrap.model,
+        voice_session_id: bootstrap.voice_session_id, voice_notices: [] });
+      return;
+    }
     if (generation !== this._generation) return;
     if (this._managedBootstrap) {
       bootstrap.isCurrent = () => generation === this._generation;
@@ -696,11 +704,13 @@ export class RealtimeVoiceController {
   // is refused, never re-bound. The page request it answered is settled, and the next one goes.
   // A second response.done for a reply already done (live probes, LV1: OpenAI sends one, cancelled with turn_detected and
   // the same output, its function calls included, when he speaks while the finished reply's audio still plays) changes
-  // nothing and dispatches nothing: its calls are dropped as already handled (_once). The adapter alone says what it means
-  // for playback (barged_in, v0.3 G3).
+  // nothing and dispatches nothing: every call it carries is dropped (_once), the same calls as already handled and a
+  // call first seen there as never dispatched (Gate 2 Q N15). The adapter alone says what it means for playback
+  // (barged_in, v0.3 G3).
   _finished(evt) {
     if (!this._pageResponses) return;
     const id = evt.response_id || null;
+    this._repeat = id && this._done.has(id) ? id : null;           // the calls passed on right after this done are its own
     if (id && this._done.has(id)) return;
     if (id) this._done.add(id);
     const r = id ? this._answers.get(id) : null;
@@ -723,6 +733,14 @@ export class RealtimeVoiceController {
     if (!this._pageResponses || !call || !call.call_id) return false;
     if (this._calls.has(call.call_id)) return true;
     this._calls.add(call.call_id);
+    // A call first seen in a repeated response.done (OpenAI's second, cancelled at his speech; Gate 2 Q N15): never
+    // dispatched, as LV1 says of that done. It is answered not run (his speech overtook that reply), with no reply asked.
+    if (call.response_id && call.response_id === this._repeat) {
+      const r = this._answers.get(call.response_id);
+      try { this._adapter.sendFunctionOutput(call.call_id, SUPERSEDED); } catch (_) { /* the transport is closed */ }
+      if (this._owned) this._onUnbound({ reason: "superseded_call", response_id: call.response_id, owner: (r && r.owner) || null, why: "overtaken" });
+      return true;
+    }
     this._outstanding.set(call.call_id, { pending: false });     // until its output is sent (LV4)
     return false;
   }
@@ -807,6 +825,7 @@ export class RealtimeVoiceController {
     if(this._state==="ending"||this._state==="ended")return;
     // Legacy German/PT flow remains synchronous and otherwise unchanged.
     if(!this._managedBootstrap){
+      if(this._pageResponses)++this._generation;   // a direct-path end also stops a start still in flight (Gate 2 Q S3)
       this._setState("ending");this._adapter?.end(reason);this._finalizeAndEnd(reason);return;
     }
     const adapter=this._adapter,sessionId=this._sessionId,creating=this._managedCreate;

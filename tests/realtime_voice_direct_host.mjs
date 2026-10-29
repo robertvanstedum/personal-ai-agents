@@ -70,5 +70,30 @@ try {
     await prompt.startSession({provider:'openai',persona:'chief_of_staff',scene:'',conversation_id:'owner'});
     assert.equal(armed.at(-1).fn,null);assert.deepEqual(fatal,[]);assert.equal(prompt._sessionId,'0b5c9e2e-7f1a-4b8e-9d3c-2a1f0e9d8c7b');
   } finally {globalThis.setTimeout=realTimeout.set;globalThis.clearTimeout=realTimeout.clear;}
-  console.log('7 direct-host bootstrap scenarios passed');
+  // Gate 2 Q S3: a direct start (pageResponses) ended while its bootstrap is in flight discards the late answer: no adapter,
+  // no connect (no microphone); the host is told the session it was given, so it can end it. German (no pageResponses) is
+  // as before: its late answer still goes on to build its adapter.
+  {
+    let answer=null;
+    globalThis.fetch=()=>new Promise(r=>{answer=()=>r({ok:true,json:async()=>({provider:'openai',model:'m',warning_minutes:20,max_minutes:30,
+      voice_session_id:'0b5c9e2e-7f1a-4b8e-9d3c-2a1f0e9d8c7b',page_responses:true})});});
+    const infos=[],states=[];
+    const direct=new Controller({bootstrapUrl:'/b',pageResponses:true,openingInstruction:null,onUnbound:()=>{},
+      onSessionInfo:i=>infos.push(i),onStateChange:s=>states.push(s)});
+    const starting=direct.startSession({provider:'openai',persona:'chief_of_staff',scene:'',conversation_id:'owner'});
+    await new Promise(r=>setImmediate(r));
+    direct.endSession('companion_opened');
+    assert.equal(direct.state(),'ended');
+    answer();await starting;
+    assert.equal(direct._adapter,null);assert.equal(direct.state(),'ended');
+    assert.deepEqual(infos,[{provider:'openai',model:'m',voice_session_id:'0b5c9e2e-7f1a-4b8e-9d3c-2a1f0e9d8c7b',voice_notices:[]}]);
+    assert.deepEqual(states,['requesting_mic','ending','ended']);
+    const german=new Controller({bootstrapUrl:'/api/realtime-voice/bootstrap'});
+    const lesson=german.startSession({provider:'openai',persona:'frau_berger',scene:'bakery',learner_name:'Robert'});
+    await new Promise(r=>setImmediate(r));
+    german.endSession('user_ended');
+    answer();await lesson;
+    assert.ok(german._adapter,'German\'s late bootstrap no longer builds its adapter (it must be as before)');
+  }
+  console.log('9 direct-host bootstrap scenarios passed');
 } finally { Object.assign(globalThis,saved); }

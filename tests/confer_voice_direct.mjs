@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import { fakeDocument } from './js_helpers/fake_dom.mjs';
+import { realController } from './js_helpers/real_controller.mjs';
 
 process.env.TZ = 'UTC';
 const ROOT = new URL('../', import.meta.url);
@@ -60,7 +61,7 @@ const VIEW = { ok: true, session_id: SID, state: 'ended', started_at: '2026-10-2
     { speaker: 'assistant generated; playback unverified', role: 'assistant', item_id: 't1', text: 'Two meetings.', partial: false, interrupted: false }] };
 
 // The page, run as the browser runs it, against a fake server. `caps`: the direct capabilities answer (null: 404, 'network').
-function page({ caps = CAPS, path = '/ui/confer', managed = true, routes = {}, saved = null, sessions = [] } = {}) {
+function page({ caps = CAPS, path = '/ui/confer', managed = true, routes = {}, saved = null, sessions = [], controller = null } = {}) {
   const fdoc = fakeDocument();
   const calls = [], appended = [], timers = new Map(), docEvents = {}, winEvents = {}, imports = [];
   let serial = 0, now = Date.parse('2026-10-28T10:00:00.000Z');
@@ -162,7 +163,7 @@ function page({ caps = CAPS, path = '/ui/confer', managed = true, routes = {}, s
     ConferVoiceController, RealtimeVoiceController, bindConferDictation, conferVoiceAvailability,
     importConfer: async () => { imports.push('confer-voice'); return PAGE; },
     importSession: async () => { imports.push('session'); return SESSION; },
-    importController: async () => { imports.push('controller'); return { RealtimeVoiceController: DirectController }; } };
+    importController: async () => { imports.push('controller'); return { RealtimeVoiceController: controller || DirectController }; } };
   vm.createContext(sandbox);
   vm.runInContext(SCRIPT, sandbox);
   const live = () => node('voice-live');
@@ -789,5 +790,43 @@ await scenario("Q S4: voice's late End leaves Dictate's status line alone after 
   assert.ok(p.chat.querySelector(`[data-voice-session="${SID}"]`), 'the reveal did not come');
   assert.equal(p.nodes('voice-status').textContent, 'Dictating into your draft. Stop, review, then Send.', "voice's End wiped Dictate's line");
 });
+
+
+// ── Gate 2 Q S3: a start ended while its bootstrap is slow, through the real controller ──────────────────────────────────
+for (const late of ['answers at 20 s', 'never answers (the bound aborts it)']) {
+  await t.check(`Q S3: the companion panel while the bootstrap is slow (${late}): after the handover nothing connects or speaks`, async () => {
+    const real = await realController();
+    const p = page({ controller: real.RealtimeVoiceController });
+    try {
+      await flush();
+      const pressing = p.voice(); await flush();
+      assert.equal(real.state.bootstraps.length, 1);
+      let waited = null, settled = false;
+      for (const fn of p.docEvents['minimoi:companion-opening'] || []) fn({ detail: { waitUntil: (x) => { waited = x; } } });
+      waited.then(() => { settled = true; });
+      await flush();
+      assert.equal(settled, false, 'the panel opened while the start could still take the microphone');
+      await p.advance(15000); await flush();                               // the session module's hold: End, the handover
+      assert.equal(settled, true);
+      p.dictation.opts.onStatus('Dictating into your draft. Stop, review, then Send.');
+      p.nodes('voice-transcript').textContent = '';
+      if (late === 'answers at 20 s') real.state.answer({ provider: 'openai', model: 'm', warning_minutes: 20, max_minutes: 30,
+        voice_session_id: SID, page_responses: true });
+      else real.state.fail();
+      await pressing; await flush(30);
+      assert.equal(real.state.connects, 0, 'the ended start connected (and took the microphone) after the handover');
+      assert.equal(real.state.adapters.length, 0, 'the ended start built a transport');
+      assert.equal(p.line(), '', `the ended start said something: ${p.line()}`);
+      assert.equal(p.nodes('voice-live').hidden, true);
+      if (late === 'answers at 20 s') {
+        const ends = p.posts('/end');
+        assert.equal(ends.length, 1, 'the server session it was given was not ended');
+        assert.equal(ends[0].url, `${P}/session/${SID}/end`);
+      } else assert.equal(p.posts('/end').length, 0);
+      await p.voice(); await flush();                                      // the button is ready: a new start goes
+      assert.equal(real.state.bootstraps.length, 2);
+    } finally { p.done(); real.state.restore(); }
+  });
+}
 
 t.done();

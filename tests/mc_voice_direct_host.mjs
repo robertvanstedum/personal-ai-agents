@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import { fakeDocument } from './js_helpers/fake_dom.mjs';
+import { realController } from './js_helpers/real_controller.mjs';
 const DIRECT_URL = new URL('../minimoi_portal/guild_ui/static/js/mc_voice_direct.js', import.meta.url);
 const realDirect = await import(DIRECT_URL);
 const SESSION_URL = new URL('../core/realtime_voice/static/direct-voice-session.js', import.meta.url);
@@ -28,7 +29,7 @@ const DIRECT = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenA
   person: { name: 'Master Craftsman', short: 'MC' } };
 
 async function rig({ capabilities = { ok: true, mode: 'agent_conversation', providers: [], managed_realtime: null, direct_voice: DIRECT }, summary = null,
-  notesBody = null } = {}) {
+  notesBody = null, controller = null } = {}) {
   const nodes = {}, instances = [], docEvents = {}, windowEvents = {}, dispatched = [], calls = [], timers = [];
   const confers = [], submitted = [];
   let directLoads = 0, sessionLoads = 0, conferLoads = 0;
@@ -98,7 +99,7 @@ async function rig({ capabilities = { ok: true, mode: 'agent_conversation', prov
     submitVoiceUtterance: async (text, requestId) => { submitted.push([text, requestId]); return { ok: true, note_request_id: 'mc-note-1' }; },
     importConfer: async () => { conferLoads++; return { ConferVoiceController }; },
     MutationObserver: class { observe() {} }, window: win, fetch, console,
-    importControlled: async () => ({ RealtimeVoiceController: Controller }), importDirect: async () => { directLoads++; return realDirect; },
+    importControlled: async () => ({ RealtimeVoiceController: controller || Controller }), importDirect: async () => { directLoads++; return realDirect; },
     importSession: async () => { sessionLoads++; return realSession; } };
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox);
@@ -399,5 +400,30 @@ for (const who of ['dictation', 'companion-closed']) {
   assert(at('if (managed) {await startManaged(mine,current);return;}') < at('realtime-confer-controller.js'));
   assert.equal(composer.split('realtime-confer-controller').length, 2);                 // one reference, inside start()
   n++;
+}
+// Gate 2 Q S3, on the Guild's page (the same session module): End while the bootstrap is slow. Past the session module's
+// 15 s hold the session ends; a bootstrap that answers later is discarded (its server session ended, no transport, no
+// microphone), and one that fails later says nothing.
+for (const late of ['answers at 20 s', 'never answers (the bound aborts it)']) {
+  const real = await realController();
+  try {
+    const r = await rig({ controller: real.RealtimeVoiceController });
+    await r.click(); await flush();
+    assert.equal(real.state.bootstraps.length, 1, late);
+    await r.click('[data-mc-voice-end]'); await flush();
+    const hold = r.timers.filter((x) => x.ms === 15000).at(-1);
+    assert.ok(hold, 'no hold for an End while connecting');
+    hold.fn(); await flush();
+    const said = r.status();
+    if (late === 'answers at 20 s') real.state.answer({ provider: 'openai', model: 'm', warning_minutes: 20, max_minutes: 30,
+      voice_session_id: SID, page_responses: true });
+    else real.state.fail();
+    await flush(); await flush();
+    assert.equal(real.state.connects, 0, `${late}: the ended start connected (and took the microphone)`);
+    assert.equal(real.state.adapters.length, 0, `${late}: the ended start built a transport`);
+    assert.equal(r.status(), said, `${late}: the ended start said something: ${r.status()}`);
+    assert.equal(r.posts('/end').length, late === 'answers at 20 s' ? 1 : 0, late);
+    n++;
+  } finally { real.state.restore(); }
 }
 console.log(`${n} direct-voice host scenarios passed (path choice, provider choice, mic handover, panel close, pagehide, sum up, status line); no network or microphone.`);

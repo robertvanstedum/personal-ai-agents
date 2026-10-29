@@ -962,6 +962,37 @@ await check('n3, guard (xAI): where the provider makes its own replies nothing i
   assert.deepEqual(s.unbound.filter((u) => u.reason === 'closed'), []);
 });
 
+// Gate 2 Q N15 (the reviewer's probe P1): a call that first appears in OpenAI's repeated, cancelled response.done (after his
+// new speech started) is never dispatched: LV1's rule for that done. It is answered not run, with no reply asked for it.
+await check('Q N15 (OpenAI): a new call carried only by a repeated, cancelled done is never dispatched', async () => {
+  const s = session('openai');
+  s.utter('item_A'); s.start('R_A'); s.said('item_A', 'Check the board.');
+  s.ev({ type: 'response.done', response: { id: 'R_A', status: 'completed', output: [
+    { type: 'function_call', call_id: 'c_first', name: 'consult', arguments: '{}' }] } }); await tick();
+  assert.equal(s.calls.length, 1);
+  const creates = s.creates().length;
+  s.speech('item_hm');                                                    // his new speech, while the reply still plays
+  s.ev({ type: 'response.done', response: { id: 'R_A', status: 'cancelled', status_details: { type: 'cancelled', reason: 'turn_detected' },
+    output: [{ type: 'function_call', call_id: 'c_first', name: 'consult', arguments: '{}' },
+      { type: 'function_call', call_id: 'c_new', name: 'save_note', arguments: '{}' }] } });
+  await tick();
+  assert.deepEqual(s.calls.map((c) => c.call_id), ['c_first'], 'a call from the repeated done was dispatched');
+  const outputs = s.frames.filter((f) => f.type === 'conversation.item.create' && f.item.type === 'function_call_output');
+  assert.deepEqual(outputs.filter((f) => f.item.call_id === 'c_new').map((f) => JSON.parse(f.item.output)),
+    [{ ok: false, outcome: 'not_done', error: 'superseded', spoken: 'Not run: superseded by what he said next. Nothing was done.' }]);
+  assert.equal(outputs.filter((f) => f.item.call_id === 'c_first').length, 1, 'the first call was answered twice');
+  assert.equal(s.creates().length, creates, 'a reply was asked for a call from the repeated done');
+});
+await check('Q N15, guard: a call in the first done of a later reply still goes', async () => {
+  const s = session('openai');
+  s.utter('item_A'); s.start('R_A'); s.said('item_A', 'Hello.');
+  s.done('R_A'); await tick();
+  s.ev({ type: 'response.done', response: { id: 'R_A', status: 'cancelled', output: [] } }); await tick();   // its repeat
+  s.utter('item_B'); s.start('R_B'); s.said('item_B', 'Check the board.');
+  s.done('R_B', { call: 'c_b', name: 'consult' }); await tick();
+  assert.deepEqual(s.calls.map((c) => c.call_id), ['c_b']);
+});
+
 if (failures.length) {
   console.log(`${failures.length} of ${cases} response-binding regressions FAILED:\n  ${failures.join('\n  ')}`);
   process.exit(1);

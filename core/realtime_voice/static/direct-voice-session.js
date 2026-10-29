@@ -867,7 +867,8 @@ export function directVoice(d) {
       openingInstruction: null,                   // the server composes the session's instructions; the page sends none
       onSessionInfo: (info) => {
         if (typeof info?.voice_session_id === 'string') sid = info.voice_session_id;
-        // Ended while the server was still starting it: that session is ended on the server too, never left open.
+        // Ended while the server was still starting it: that session is ended on the server too, never left open. The
+        // controller then connects nothing (Gate 2 Q S3: the end advanced its start, so the late answer is discarded).
         if (finalized) { if (sid) postJson(at(direct.end_url), {}, { timeoutMs: END_WAIT_MS }); return; }
         const chosen = info?.provider || provider;
         const checkOnly = direct.model_actions && direct.model_actions[chosen] === false ? words.checkOnly : '';
@@ -898,6 +899,7 @@ export function directVoice(d) {
       onWarning: () => { if (!finalized) ui.say('Voice will stop in about two minutes.', { loud: true }); },
       onStop: () => { endedWords = ['Voice stopped: the session reached its time limit.', false]; },
       onFatalError: (info) => {
+        if (finalized) return;                     // a start already ended (Gate 2 Q S3): its late failure says nothing
         failed = true;
         ui.say(startRefusal(info, direct.person, direct.words), { loud: true, error: true });
         if (info?.reason === 'bootstrap_rejected' || info?.reason === 'bootstrap_network_error') finalize({ turns: [] });
@@ -926,7 +928,9 @@ export function directVoice(d) {
     sessionId,
     // Ends the session for any reason (End, the microphone handed over, Private, the page going away). Resolves once End is sent.
     // While the provider is still connecting, the end waits for the connection (at most START_END_MS): the shared adapters take
-    // the microphone while they connect, and ending the transport before that could leave it open.
+    // the microphone while they connect, and ending the transport before that could leave it open. Past that bound the end
+    // stops the start itself (Gate 2 Q S3): a bootstrap that answers later is discarded (its server session is ended, no
+    // transport is built, the microphone is never taken), and one that fails later says nothing.
     end(reason) {
       keepalive = reason === 'pagehide';
       if (finalized) {
