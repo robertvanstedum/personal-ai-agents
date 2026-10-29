@@ -269,6 +269,12 @@ class Authority:
     hosts: HostValues | None = None    # the host loop's values; None: no version 2 host may start on this file
     progress_timeout_s: MappingProxyType | None = None   # §5.3 by task class; a class missing: its stall is unknown
     judgment: Judgment | None = None   # R7.5-c; None: every judgment reservation is refused (judgment_not_configured)
+    # P1-a: production's integrated test runs on the test worker inside production. Off unless the file says so; even
+    # then only the closure-exempt test routes themselves (fakework, fakejudge), in test units, run only by fakework.
+    test_routes_in_production: bool = False
+    # P1-a (§5.3): the most grace a host of each availability may claim; a host's own larger value is cut to it.
+    # None: each host's own grace, as in S1.
+    grace_max_s: MappingProxyType | None = None
 
     @property
     def speaks_v2(self) -> bool:
@@ -289,7 +295,8 @@ class Authority:
     def parse(cls, doc) -> "Authority":
         _need(type(doc) is dict and set(doc) <= {"schema", "environment", "protocols", "launch_closure", "lease_s",
                                                   "routes", "note", "sweeper", "reassign_across_hosts",
-                                                  "clock_skew_s", "hosts", "progress_timeout_s", "judgment"},
+                                                  "clock_skew_s", "hosts", "progress_timeout_s", "judgment",
+                                                  "test_routes_in_production", "grace_s"},
               "authority_config_invalid")
         _need(doc.get("schema") == AUTHORITY_SCHEMA, "authority_schema_invalid")
         _need(doc.get("environment") in ("dev", "prod"), "authority_environment_invalid")
@@ -302,6 +309,8 @@ class Authority:
         lease = doc.get("lease_s")
         _need(lease is None or (type(lease) is int and 10 <= lease <= 3600), "authority_lease_invalid")
         _need(lease is not None or 2 not in protocols, "authority_lease_missing")    # no lease, no version 2 at all
+        test_in_prod = doc.get("test_routes_in_production", False)                 # missing: refused (S1's rule)
+        _need(type(test_in_prod) is bool, "authority_test_routes_invalid")
         routes = doc.get("routes", {})
         _need(type(routes) is dict and len(routes) <= 64, "authority_routes_invalid")
         parsed = {}
@@ -319,9 +328,13 @@ class Authority:
             _need(type(r.get("note", "")) is str and len(r.get("note", "")) <= 1000, "authority_route_invalid")
             per_day, per_item = (None if r.get(k) is None else _amount(r[k], zero=True) for k in ("per_day", "per_item"))
             _need(per_day is None or per_item is None or per_item <= per_day, "authority_route_caps_invalid")
-            if doc["environment"] == "prod":           # test values never in production configuration
+            if doc["environment"] == "prod" and not (test_in_prod and name in TEST_FAMILY):
+                # Test values never in production configuration, except production's own integrated test (P1-a): only
+                # when the file admits it, and only the closure-exempt test routes themselves (checked below).
                 _need(not in_test_family(name) and r["unit"] != "test_units" and not set(actors) & set(TEST_ACTORS),
                       "authority_test_route_in_production")
+            elif doc["environment"] == "prod":
+                _need(r["unit"] == "test_units" and set(actors) <= set(TEST_ACTORS), "authority_test_route_in_production")
             parsed[name] = Route(r["unit"], tuple(actors), per_day, per_item, r.get("supervised_only"))
         sw = doc.get("sweeper")
         _need(sw is None or (type(sw) is dict and set(sw) == {"sweep_s", "gap_threshold_s"}
@@ -344,10 +357,15 @@ class Authority:
         _need(pt is None or (type(pt) is dict and 1 <= len(pt) <= 16 and all(
             type(k) is str and _WORD.match(k) and type(v) is int and 1 <= v <= 86400 for k, v in pt.items())),
               "authority_progress_timeout_invalid")
+        gm = doc.get("grace_s")
+        _need(gm is None or (type(gm) is dict and gm and set(gm) <= {"intermittent", "always_on"}
+                             and all(type(v) is int and 1 <= v <= 7 * 86400 for v in gm.values())),
+              "authority_grace_invalid")
         return cls(doc["environment"], frozenset(protocols), closure, lease, MappingProxyType(parsed),
                    None if sw is None else Sweeper(sw["sweep_s"], sw["gap_threshold_s"]), across, skew,
                    None if hv is None else HostValues(*(hv[k] for k in keys)),
-                   None if pt is None else MappingProxyType(dict(pt)), _judgment(doc))
+                   None if pt is None else MappingProxyType(dict(pt)), _judgment(doc), test_in_prod,
+                   None if gm is None else MappingProxyType(dict(gm)))
 
 
 def _judgment(doc):
@@ -2410,6 +2428,10 @@ class DispatcherStore:
         less every recorded outage of the authority's (grace_deadline)."""
         owner = self._runner(cur, row["runner_id"])
         grace_s = 0 if owner is None or owner["unreachable_grace_s"] is None else owner["unreachable_grace_s"]
+        cap = None if owner is None or self.authority.grace_max_s is None \
+            else self.authority.grace_max_s.get(owner.get("expected_availability"))
+        if cap is not None:
+            grace_s = min(grace_s, cap)              # P1-a: never more than the environment allows its availability
         cur.execute("""SELECT (body->>'from')::timestamptz AS a, (body->>'to')::timestamptz AS b
             FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s AND kind='authority.suspended'
               AND (body->>'to')::timestamptz > %s""", (self.principal, self.environment, since))

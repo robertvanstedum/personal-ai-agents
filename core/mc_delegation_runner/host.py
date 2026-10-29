@@ -37,6 +37,12 @@ per-(host, environment) lock (G6), its pinned interpreter, and its bundle digest
   file (``minimoi.door_credentials.v1``: each host's and each reader's token SHA-256, never a token). Only a host
   with the ``authority`` role may name one; ``mc-delegation-runner authority`` serves it (server.py).
 
+* **Production's integrated test** (P1-a): ``test_routes_in_production: true`` lets a ``prod`` host run the test
+  worker (``fakework`` on the ``fakework`` route only) and name the acceptance ``effect_sink``, for production's
+  integrated test I-1 to I-7; its authority's file must admit the test routes too. A fakecli pin, a test route key or
+  a test credential file stay refused in ``prod``. ``witness_read`` names the snapshot's read path and an observer
+  credential by reference, so a witness host also watches the sweeper's age and the other hosts' contact (R5.6-a).
+
 Stdlib only; Python 3.9-compatible.
 """
 from __future__ import annotations
@@ -52,6 +58,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from core.mc_delegation_dispatcher.door import DOORS as _DOORS     # one allowlist of door URLs, the door's (N4)
+from core.mc_delegation_dispatcher.door import PATH as _DOOR_PATH
 
 SCHEMA = "minimoi.host.v1"
 PRESEEDED_DO_NOT_RESUME = ("01a17dde-fb26-7923-8105-c7478428d17d", "8c4e1a20-6f3b-4d9e-a7c1-2b5d9e0f4a11")
@@ -69,10 +76,11 @@ _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _KEYS = {"schema", "host_id", "environment", "roles", "expected_availability", "unreachable_grace_s", "service_manager",
          "authority", "capabilities", "concurrency", "offline_scope_default", "do_not_resume", "artifact_root",
          "workspace_root", "mirrors", "interpreter", "bundle_root", "gap_detection", "stop_timeout_s",
-         "effect_sink", "principal", "note", "tools", "route_keys", "test_credentials", "door", "notifier"}
+         "effect_sink", "principal", "note", "tools", "route_keys", "test_credentials", "door", "notifier",
+         "test_routes_in_production", "witness_read"}
 _REQUIRED = _KEYS - {"do_not_resume", "gap_detection", "stop_timeout_s", "effect_sink", "note",
                      "service_manager", "offline_scope_default", "tools", "route_keys", "test_credentials", "door",
-                     "notifier"}
+                     "notifier", "test_routes_in_production", "witness_read"}
 TOOL_ACTORS = ("claude-code", "codex", "fakework")
 
 
@@ -110,6 +118,14 @@ class Notifier:
     path: Path | None = None
     token_ref: str | None = None
     chat_ref: str | None = None
+
+
+@dataclass(frozen=True)
+class WitnessRead:
+    """P1-a (R5.6-a's second and third checks): where a witness reads its authority's snapshot, the read path
+    (``GET .../internal/mc/v1/runtime/state``) with an observer credential held by reference, never a value."""
+    url: str
+    credential_ref: str
 
 
 @dataclass(frozen=True)
@@ -165,6 +181,11 @@ class HostConfig:
     test_credentials: Path | None = None                 # dev only: the acceptance run's test credential file
     door: Door | None = None                             # the authority service's door (authority hosts only)
     notifier: Notifier | None = None                     # the witness's notifier (witness hosts only)
+    # P1-a: a production host runs the test worker for production's integrated test only when this says so (and its
+    # authority's file admits the test routes too); then also the acceptance effect sink. Never fakecli, test keys or
+    # a test credential file.
+    test_routes_in_production: bool = False
+    witness_read: WitnessRead | None = None              # the witness's read of the snapshot (witness hosts only)
     source: Path | None = None
 
     @property
@@ -264,7 +285,9 @@ def parse(doc) -> HostConfig:
     sink = doc.get("effect_sink")
     _need(sink is None or (type(sink) is dict and set(sink) == {"path", "lookup"} and type(sink["lookup"]) is bool),
           "host_effect_sink_invalid")
-    _need(sink is None or doc["environment"] != "prod", "host_test_instrument_in_production")
+    test_in_prod = doc.get("test_routes_in_production", False)
+    _need(type(test_in_prod) is bool, "host_test_routes_invalid")
+    _need(sink is None or doc["environment"] != "prod" or test_in_prod, "host_test_instrument_in_production")
     tools, route_keys, test_credentials = _launch_config(doc)
     return HostConfig(
         host_id=doc["host_id"], environment=doc["environment"], principal=doc["principal"], roles=tuple(roles),
@@ -282,7 +305,27 @@ def parse(doc) -> HostConfig:
                                                           sink["lookup"]),
         tools=tools, route_keys=route_keys, test_credentials=test_credentials,
         door=None if doc.get("door") is None else _door(doc["door"], roles),
-        notifier=None if doc.get("notifier") is None else _notifier(doc["notifier"], roles, doc["environment"]))
+        notifier=None if doc.get("notifier") is None else _notifier(doc["notifier"], roles, doc["environment"]),
+        test_routes_in_production=test_in_prod,
+        witness_read=None if doc.get("witness_read") is None else _witness_read(doc["witness_read"], roles,
+                                                                               doc["environment"]))
+
+
+STATE_PATH = "/internal/mc/v1/runtime/state"          # the snapshot's read path (server.STATE_PATH, the portal's too)
+
+
+def _witness_read(w, roles, environment) -> WitnessRead:
+    """The witness's read of the snapshot: only on a witness host, from one of the door's own hosts (its allowlist,
+    the same environment's), with a Keychain reference to an observer credential."""
+    _need("witness" in roles, "host_witness_read_without_witness")
+    ref = re.compile(r"^keychain:[A-Za-z0-9_.-]{1,64}/[A-Za-z0-9_.-]{1,64}$")
+    _need(type(w) is dict and set(w) == {"url", "credential_ref"} and type(w["credential_ref"]) is str
+          and ref.match(w["credential_ref"]) is not None, "host_witness_read_invalid")
+    bases = {d[:-len(_DOOR_PATH)]: d for d in _DOORS}
+    url = w["url"]
+    _need(type(url) is str and url.endswith(STATE_PATH) and url[:-len(STATE_PATH)] in bases, "host_witness_read_invalid")
+    _need((bases[url[:-len(STATE_PATH)]] == _DOORS[0]) == (environment == "prod"), "host_authority_environment_mismatch")
+    return WitnessRead(url, w["credential_ref"])
 
 
 def _notifier(n, roles, environment) -> Notifier:

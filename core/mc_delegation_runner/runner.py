@@ -1892,7 +1892,10 @@ class HostRuntime:
         else:
             tool = env.actor
         route = launch.route(claim["route"], tool)
-        if route.get("test") and self.host.environment == "prod":
+        if route.get("test") and self.host.environment == "prod" and not (
+                self.host.test_routes_in_production and claim["route"] == "fakework" and tool == "fakework"):
+            # P1-a: production's integrated test runs the bundle's own fakework on the fakework route, and only on a
+            # host whose host.yaml admits it (its authority's file must too); never fakecli or another test route.
             raise launch.LaunchRefused("test_route_in_production", route=claim["route"])
         key_ref = None
         if route["kind"] == "api":
