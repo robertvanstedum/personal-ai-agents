@@ -7,6 +7,8 @@
 #   deploy_mc_container_ec2.sh collect                        move MC's capture blocks into the private judgment store
 #   deploy_mc_container_ec2.sh approve-policy "<words>"       record Robert's approval of the exact prod policy digest
 #   deploy_mc_container_ec2.sh issues on|off                  MC's GitHub issue writes (comments, tickets) on or off
+#   deploy_mc_container_ec2.sh notices prepare                host files for the notices release (run BEFORE merging it)
+#   deploy_mc_container_ec2.sh notices on [<agent hashes>]|off|status   action-waiting notices on or off
 #
 # The MC project is its own compose project (minimoi-mc). Tokens are generated on the host into /opt/minimoi/mc/mc.env
 # (root, 0600) and never printed. The portal's caller token is the same relay caller token, written into
@@ -34,6 +36,12 @@ ISSUES_TOKEN_FILE=$MC_DIR/portal/github-issues-token
 # Build supervision (#365): the approvals bot's token (Robert makes it with BotFather) and its root-only copy.
 APPROVALS_TOKEN_PARAM=/minimoi/production/telegram_approvals_bot_token
 SUPERVISOR_DIR=$ROOT/supervisor
+# Action-waiting notices (planning-studio/operations/specs/SPEC_ACTION_WAITING_NOTICES_v0.2_2026-10-29.md): the notices
+# bot's token (Robert makes the bot with BotFather), its root-only copy, the store folder (inside data/guild), and the
+# two auth files the portal now keeps on the host (pending registrations, reset requests).
+NOTICES_TOKEN_PARAM=/minimoi/production/telegram_notices_bot_token
+NOTICES_DIR=$ROOT/notices
+NOTICES_DATA=$ROOT/data/guild/notices          # inside the portal's guild mount and its daily backup
 TAG_ERE='^mc-agent-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+(\.[A-Za-z0-9]+)*)?$'
 
 log() { echo "mc-container: $*"; }
@@ -303,6 +311,98 @@ runner() {
   docker logs --since 5m minimoi-portal 2>&1 | grep -E "delegation: runner door" | tail -1 || true
 }
 
+portal_binds() {
+  # 0 when the running portal already has a mount at this container path.
+  docker inspect --format '{{range .Mounts}}{{.Destination}}{{"\n"}}{{end}}' minimoi-portal 2>/dev/null | grep -qx "$1"
+}
+
+notices_prepare() {
+  # Before the release that adds the notices binds: the two folders, and pending.json / reset_requests.json as host
+  # files copied from the running portal (they live only in its container layer until then; a release would erase
+  # them). A missing host file would refuse the new container (create_host_path: false), never mount a directory.
+  install -d -m 0700 -o root -g root "$NOTICES_DIR" "$NOTICES_DATA"
+  [[ -f "$ROOT/auth/users.json" ]] || die "$ROOT/auth/users.json missing; cannot take its owner and mode"
+  local name target host tmp
+  for name in pending.json reset_requests.json; do
+    target=/app/minimoi_portal/auth/$name
+    host=$ROOT/auth/$name
+    if portal_binds "$target"; then
+      [[ -f "$host" ]] || die "$host is bound but is not a regular file"
+      log "$name: already a host file ($host); nothing to copy"
+      continue
+    fi
+    [[ -d "$host" ]] && die "$host is a directory (a bind made it); move it aside first"
+    [[ -f "$host" ]] && cp -p "$host" "$host.bak-notices-$(date -u +%Y%m%dT%H%M%SZ)"
+    tmp=$(mktemp "$host.XXXXXX")
+    if docker cp "minimoi-portal:$target" "$tmp" >/dev/null 2>&1; then
+      python3 -c 'import json, sys; json.load(open(sys.argv[1]))' "$tmp" \
+        || die "the running portal's $name is not valid JSON; kept at $tmp for you to look at"
+      log "$name: copied from the running portal"
+    else
+      if [[ "$name" == pending.json ]]; then echo '{"pending": []}' > "$tmp"; else echo '{"requests": []}' > "$tmp"; fi
+      log "$name: the running portal has none; created empty"
+    fi
+    chown --reference="$ROOT/auth/users.json" "$tmp"
+    chmod --reference="$ROOT/auth/users.json" "$tmp"
+    mv -f "$tmp" "$host"
+  done
+  log "prepared. Merge and release next: entries made after this copy and before the release are not in it."
+}
+
+notices() {
+  # `prepare`: see notices_prepare. `on [claude-code:<sha256>,codex:<sha256>]`: project the notices bot token from
+  # Parameter Store (root 0600, read-only in the portal, never printed), set the mode (and the agents' token HASHES when
+  # given) in .env, redeploy the portal alone. `off`: mode off, token copy removed, portal redeployed. `status`.
+  local to="${1:-}" tag
+  case "$to" in
+    prepare) notices_prepare; return ;;
+    status) ;;
+    on|off)
+      tag=$(docker inspect --format '{{.Config.Image}}' minimoi-portal | sed 's/.*://')
+      [[ -n "$tag" ]] || die "cannot read the running portal tag"
+      ;;
+    *) die "notices prepare|on [<agent hashes>]|off|status";;
+  esac
+  case "$to" in
+    on)
+      local hashes="${2:-}" name
+      [[ -z "$hashes" || "$hashes" =~ ^(claude-code|codex):[0-9a-f]{64}(,(claude-code|codex):[0-9a-f]{64})?$ ]] \
+        || die "notices on [claude-code:<sha256>,codex:<sha256>] (the line waiting.py install prints)"
+      for name in pending.json reset_requests.json; do
+        [[ -f "$ROOT/auth/$name" ]] || die "$ROOT/auth/$name missing: run notices prepare first"
+      done
+      install -d -m 0700 -o root -g root "$NOTICES_DIR" "$NOTICES_DATA"
+      local tmp; tmp=$(mktemp "$NOTICES_DIR/.token.XXXXXX")
+      aws ssm get-parameter --region us-east-1 --name "$NOTICES_TOKEN_PARAM" --with-decryption \
+        --query Parameter.Value --output text > "$tmp" 2>/dev/null \
+        || { rm -f "$tmp"; die "cannot read $NOTICES_TOKEN_PARAM from Parameter Store"; }
+      grep -qE '^[0-9]{5,15}:[A-Za-z0-9_-]{30,64}$' "$tmp" \
+        || { rm -f "$tmp"; die "$NOTICES_TOKEN_PARAM is not a Telegram bot token"; }
+      chown root:root "$tmp"; chmod 0600 "$tmp"; mv -f "$tmp" "$NOTICES_DIR/bot-token"
+      log "projected the notices bot token into $NOTICES_DIR (not printed)"
+      if [[ -n "$hashes" ]]; then
+        set_env_keys MINIMOI_ACTION_NOTICES on MINIMOI_ACTION_NOTICES_AGENT_TOKENS "$hashes"
+      else
+        set_env_keys MINIMOI_ACTION_NOTICES on
+      fi
+      "$ROOT/scripts/deploy_scoped_release.sh" "$tag" portal
+      ;;
+    off)
+      set_env_keys MINIMOI_ACTION_NOTICES off
+      rm -f "$NOTICES_DIR/bot-token"
+      "$ROOT/scripts/deploy_scoped_release.sh" "$tag" portal
+      ;;
+  esac
+  echo "notices (.env): $(env_value "$MAIN_ENV" MINIMOI_ACTION_NOTICES)"
+  echo "notices (running): $(docker exec minimoi-portal printenv MINIMOI_ACTION_NOTICES 2>/dev/null || echo unknown)"
+  echo "token file: $([[ -f "$NOTICES_DIR/bot-token" ]] && echo present || echo absent)"
+  local f
+  for f in pending.json reset_requests.json; do
+    echo "$f: $(portal_binds "/app/minimoi_portal/auth/$f" && echo 'host file (bound)' || echo 'container only (not bound)')"
+  done
+  echo "service: $(docker exec minimoi-portal python3 -m minimoi_portal.action_waiting status 2>/dev/null || echo unavailable)"
+}
+
 collect() {
   test -f "$MC_DB_DIR/openclaw-agent.sqlite" || { log "no MC records yet; nothing to collect"; return 0; }
   local copy; copy=$(mktemp -d /root/mc-judgment-copy.XXXXXX)
@@ -322,5 +422,6 @@ case "${1:-}" in
   issues) issues "${2:-}";;
   supervision) supervision "${2:-}" "${3:-}";;
   runner) runner "${2:-}" "${3:-}";;
-  *) echo "usage: $0 deploy <mc-agent-vX.Y.Z> | status | switch mc|cos | collect | approve-policy \"<words>\" | issues on|off | supervision on <sha256>|off|status | runner on <sha256>|off" >&2; exit 2;;
+  notices) notices "${2:-}" "${3:-}";;
+  *) echo "usage: $0 deploy <mc-agent-vX.Y.Z> | status | switch mc|cos | collect | approve-policy \"<words>\" | issues on|off | supervision on <sha256>|off|status | runner on <sha256>|off | notices prepare|on [<hashes>]|off|status" >&2; exit 2;;
 esac
