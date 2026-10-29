@@ -22,10 +22,14 @@ import sys
 
 def _load_store():
     """The store module, loaded from the repository without importing the portal (and so without Flask): a stand-in package whose
-    folder is guild_ui lets topics.py find its sibling payment_scrub.py, which is also standard library only."""
+    folder is guild_ui lets topics.py find its siblings. The repository root makes
+    the shared utils scrubber available; neither path imports Flask."""
     import types
     here = os.path.dirname(os.path.abspath(__file__))
-    folder = os.path.normpath(os.path.join(here, "..", "..", "minimoi_portal", "guild_ui"))
+    root = os.path.normpath(os.path.join(here, "..", ".."))
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    folder = os.path.join(root, "minimoi_portal", "guild_ui")
     pkg = types.ModuleType("minimoi_topics_pkg")
     pkg.__path__ = [folder]
     sys.modules["minimoi_topics_pkg"] = pkg

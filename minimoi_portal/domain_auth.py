@@ -23,23 +23,26 @@ def _db_url() -> str:
 
 def _query(sql: str, params=None) -> list:
     conn = psycopg2.connect(_db_url(), cursor_factory=psycopg2.extras.RealDictCursor)
-    with conn.cursor() as cur:
-        cur.execute(sql, params or [])
-        rows = list(cur.fetchall())
-    conn.close()
-    return rows
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params or [])
+            return list(cur.fetchall())
+    finally:
+        conn.close()
 
 
 def _execute(sql: str, params=None):
     conn = psycopg2.connect(_db_url())
-    result = None
-    with conn.cursor() as cur:
-        cur.execute(sql, params or [])
-        if cur.description:
-            result = cur.fetchone()
-    conn.commit()
-    conn.close()
-    return result
+    try:
+        result = None
+        with conn.cursor() as cur:
+            cur.execute(sql, params or [])
+            if cur.description:
+                result = cur.fetchone()
+        conn.commit()
+        return result
+    finally:
+        conn.close()
 
 
 def create_user(email: str, name: str, role: str = "user") -> int:
@@ -143,8 +146,10 @@ def authenticate_password(email: str, password: str) -> dict | None:
 
 
 def has_domain_access(user_id: int, domain: str) -> bool:
+    """Check current account activity as well as its domain-specific grant."""
     rows = _query(
-        "SELECT 1 FROM auth.domain_access WHERE user_id=%s AND domain=%s",
+        "SELECT 1 FROM auth.domain_access a JOIN auth.users u ON u.id=a.user_id "
+        "WHERE a.user_id=%s AND a.domain=%s AND u.is_active=TRUE",
         [user_id, domain],
     )
     return len(rows) > 0

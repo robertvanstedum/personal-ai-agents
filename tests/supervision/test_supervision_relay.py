@@ -326,7 +326,7 @@ class LostAckAndPullBoundTests(_Rig):
         receipt = {"channel": "telegram", "text": "x" * 4000}
         decisions = [{"request_key": f"ask-{i:010d}", "code": f"D-{i}", "state": "approved", "session": "s-0001",
                       "agent": "codex", "text_sha256": "a" * 64, "receipt": receipt} for i in range(20)]
-        nudges = [{"id": i + 1, "agent": "codex", "session": "s-0001", "kind": "continue", "text": "n" * 300}
+        nudges = [{"id": i + 1, "agent": "codex", "session": "s-0001", "kind": "ci_finished", "text": "n" * 300}
                   for i in range(20)]
         for i in range(20):
             AskService(self.prod).ask({"id": CONV}, {"text": "😀" * 3900}, f"big-{i}", ["grok"])

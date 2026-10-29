@@ -1,0 +1,134 @@
+"""Skip CLI contracts against disposable configuration and session state."""
+import json
+import sys
+from types import SimpleNamespace
+
+import pytest
+import get_german_session as cli
+
+
+@pytest.fixture
+def skip_world(tmp_path, monkeypatch):
+    code = tmp_path / 'code'
+    config = code / 'config'
+    config.mkdir(parents=True)
+    (config / 'domain.json').write_text(json.dumps({'active_persona': 'Test Persona'}))
+    (config / 'personas.json').write_text('[]')
+    state = tmp_path / 'state'
+    (state / 'lessons').mkdir(parents=True)
+    (state / 'sessions').mkdir()
+    (state / 'progress.json').write_text('{}')
+    monkeypatch.setattr(cli, 'GERMAN_DIR', code)
+    calls = []
+    def generate(feedback, session, domain, personas, progress, lessons, *, lesson_date=None):
+        calls.append(session)
+        (lessons / ((lesson_date or session['date']) + '_lesson.json')).write_text(json.dumps({'persona': 'Next', 'scenario': 'next_step'}))
+    reviewer = SimpleNamespace(_pick_next_persona=None, _pick_next_scenario=None,
+                               _generate_lesson_plan=generate, _empty_reviewer_output=lambda: {})
+    monkeypatch.setitem(sys.modules, 'reviewer', reviewer)
+    return tmp_path, state, calls
+
+
+def invoke(monkeypatch, state, *flags):
+    monkeypatch.setattr(sys, 'argv', ['get_german_session.py', '--base-dir', str(state), '--date', '2026-10-28', '--skip', *flags])
+    try:
+        cli.main()
+    except SystemExit as exc:
+        assert exc.code == 0
+
+
+def snapshot(root):
+    return {str(p.relative_to(root)): p.read_bytes() if p.is_file() else None for p in root.rglob('*')}
+
+
+@pytest.mark.parametrize('flags', [[], ['--persona', 'Explicit Persona', '--scenario', 'test_scene']])
+def test_skip_dry_run_writes_nothing_and_does_not_generate(skip_world, monkeypatch, capsys, flags):
+    root, state, calls = skip_world
+    before = snapshot(root)
+    invoke(monkeypatch, state, '--dry-run', *flags)
+    assert calls == []
+    assert snapshot(root) == before
+    assert 'Would skip' in capsys.readouterr().out
+
+
+def test_normal_skip_still_records_session_and_advances_rotation(skip_world, monkeypatch):
+    root, state, calls = skip_world
+    invoke(monkeypatch, state)
+    saved = json.loads((state / 'sessions/2026-10-28_001.json').read_text())
+    assert saved['skipped'] and saved['mode'] == 'skipped' and saved['persona'] == 'Test Persona'
+    assert calls == [saved]
+    progress = json.loads((state / 'progress.json').read_text())
+    assert progress['personas_practiced'] == ['Test Persona']
+    assert (state / 'lessons/2026-10-28_lesson.json').exists()
+
+
+@pytest.mark.parametrize('names,expected', [
+    (['2026-10-28_999.json', '2026-10-28_1000.json'], '2026-10-28_1001.json'),
+    (['2026-10-28_9999.json', '2026-10-28_10000.json'], '2026-10-28_10001.json'),
+    (['2026-10-28_001.json', '2026-10-28_notes.json'], '2026-10-28_002.json'),
+])
+def test_skip_preserves_existing_sessions_beyond_three_digits(skip_world, monkeypatch, names, expected):
+    root, state, calls = skip_world
+    sessions = state / 'sessions'
+    for name in names:
+        (sessions / name).write_text(json.dumps({'preserve': name}))
+    before = {name: (sessions / name).read_bytes() for name in names}
+    invoke(monkeypatch, state)
+    assert all((sessions / name).read_bytes() == raw for name, raw in before.items())
+    saved = json.loads((sessions / expected).read_text())
+    assert saved['session_id'] == expected.removesuffix('.json')
+    assert calls == [saved]
+
+
+@pytest.mark.parametrize("date", ["../escaped", "2026-02-29", "2026/10/28", "2026-2-03", ""])
+@pytest.mark.parametrize("flags", [[], ["--skip"], ["--dry-run"], ["--skip", "--dry-run"]])
+def test_rejected_date_precedes_explicit_persona_lookup_or_writes(skip_world, monkeypatch, date, flags):
+    root, state, calls = skip_world
+    before = snapshot(root)
+    monkeypatch.setattr(sys, "argv", [
+        "get_german_session.py", "--base-dir", str(state), "--date", date,
+        "--persona", "Explicit Persona", *flags,
+    ])
+    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+        cli.main()
+    assert snapshot(root) == before
+    assert calls == []
+
+def test_rejected_date_does_not_read_a_lesson(skip_world, monkeypatch):
+    root, state, calls = skip_world
+    def forbidden(*args):
+        pytest.fail("invalid date reached lesson lookup")
+    monkeypatch.setattr(cli, "_load_lesson", forbidden)
+    monkeypatch.setattr(sys, "argv", [
+        "get_german_session.py", "--base-dir", str(state), "--date", "../escaped", "--dry-run",
+    ])
+    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+        cli.main()
+
+
+def test_skip_uses_real_lesson_rules_and_the_resolved_command_date(skip_world, monkeypatch):
+    from datetime import datetime, timezone
+    from domains.german import reviewer as real_reviewer
+    root, state, calls = skip_world
+    config = root / 'code/config'
+    (config / 'domain.json').write_text(json.dumps({'active_persona': 'A', 'current_lesson_number': 4}))
+    personas = [
+        {'name': 'A', 'role': 'Synthetic A', 'scenarios': ['bakery_order']},
+        {'name': 'B', 'role': 'Synthetic B', 'scenarios': ['bakery_order', 'new_scene']},
+    ]
+    (config / 'personas.json').write_text(json.dumps(personas))
+    class NextDay(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 10, 29, tzinfo=timezone.utc)
+    monkeypatch.setattr(real_reviewer, 'datetime', NextDay)
+    monkeypatch.setitem(sys.modules, 'reviewer', real_reviewer)
+    invoke(monkeypatch, state)
+    lesson = json.loads((state / 'lessons/2026-10-28_lesson.json').read_text())
+    assert (lesson['persona'], lesson['scenario'], lesson['lesson_number']) == ('B', 'new_scene', 5)
+    assert lesson['lesson_date'] == '2026-10-28'
+    assert not (state / 'lessons/2026-10-29_lesson.json').exists()
+    assert json.loads((config / 'domain.json').read_text())['current_lesson_number'] == 5
+    progress = json.loads((state / 'progress.json').read_text())
+    assert progress['personas_practiced'] == ['A'] and progress['scenarios_covered'] == ['bakery_order']
+    assert calls == []  # The fixture's fake generator was not used.

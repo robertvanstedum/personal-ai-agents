@@ -480,10 +480,9 @@ def _routes(path):
 
 def test_staging_gateway_keeps_production_names_and_settings():
     prod, staging = _load(GATEWAY_PROD), _load(GATEWAY_STAGING)
-    # Production's names, plus exactly one staging-only route: Master
-    # Craftsman's (MC stage C; tests/test_staging_mc_stage_c.py).
+    # Production's names plus MC and the explicitly requested local regression route.
     assert [m["model_name"] for m in staging["model_list"]] == \
-        [m["model_name"] for m in prod["model_list"]] + ["minimoi-mc-agent"]
+        [m["model_name"] for m in prod["model_list"]] + ["minimoi-mc-agent", "minimoi-cos-agent-local"]
     for block in ("router_settings", "general_settings"):
         assert staging[block] == prod[block], block
     # litellm_settings: production's, plus exactly the staging-only usage recorder (usage-record U1).
@@ -510,7 +509,8 @@ def test_staging_cos_agent_route_matches_production_grok_and_other_routes_stay_s
         if name == "minimoi-cos-agent" or name.startswith("minimoi-mc-"):
             continue
         route = __import__("copy").deepcopy(staging[name])
-        route["litellm_params"]["api_key"] = renamed[route["litellm_params"]["api_key"]]
+        if name != "minimoi-cos-agent-local":
+            route["litellm_params"]["api_key"] = renamed[route["litellm_params"]["api_key"]]
         assert route == dev[name], name
 
 

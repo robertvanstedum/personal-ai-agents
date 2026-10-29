@@ -15,8 +15,20 @@ from domains.curator import research_routes
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.fixture
+def feedback_writer_domain(monkeypatch):
+    # These tests exercise temporary preference stores, not the host's kernel
+    # identity service. Keep real locking/publication and only supply the
+    # machine identity, as the library-intake fixtures do.
+    from domains.curator import preferences_store
+    monkeypatch.setattr(
+        preferences_store, "writer_domain",
+        lambda: "Linux:11111111-1111-1111-1111-111111111111",
+    )
+
+
 def test_web_feedback_uses_submitted_article_without_ai_or_legacy_output(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, feedback_writer_domain
 ):
     feedback = importlib.import_module("domains.curator.curator_feedback")
     prefs_path = tmp_path / "curator_preferences.json"
@@ -70,7 +82,7 @@ def test_web_feedback_uses_submitted_article_without_ai_or_legacy_output(
     ],
 )
 def test_each_daily_feedback_action_is_persisted(
-    action, bucket, message, note, tmp_path, monkeypatch
+    action, bucket, message, note, tmp_path, monkeypatch, feedback_writer_domain
 ):
     feedback = importlib.import_module("domains.curator.curator_feedback")
     prefs_path = tmp_path / "curator_preferences.json"

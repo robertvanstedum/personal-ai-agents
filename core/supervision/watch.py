@@ -1,7 +1,7 @@
 """One build check-in: open PRs and their CI, failed releases, agents' stop lines and decisions waiting on Robert.
 
-``check_in`` is deterministic (no model): it nudges agent sessions with fixed texts on work that does not need Robert,
-and returns the items Robert must hear about. Each item has a stable key so he is told once, not every 15 minutes.
+``check_in`` is deterministic (no model) and sends nothing to an agent session: it returns the items Robert must hear
+about, a session's finished CI included. Each item has a stable key so he is told once, not every 15 minutes.
 """
 from __future__ import annotations
 
@@ -14,8 +14,7 @@ from core.supervision.store import name
 
 REPO = "robertvanstedum/personal-ai-agents"
 RELEASE_WORKFLOWS = ("deploy.yml", "deploy-mc-agent.yml", "deploy-iotconnect.yml")
-STALL_AFTER = timedelta(minutes=20)        # a turn that ended with no stop line, or open work, and nothing since
-ESCALATE_AFTER = timedelta(minutes=40)     # a nudge that changed nothing: Robert hears about it
+STALL_AFTER = timedelta(minutes=20)        # a turn that ended with no stop line, or open work, and nothing since: Robert hears
 REVIEW_WAIT = timedelta(minutes=60)
 GREEN_SETTLE = timedelta(minutes=10)
 UNCLAIMED_AFTER = timedelta(minutes=5)     # a queued delegation nobody picked up: the Mac runner is not there
@@ -70,7 +69,7 @@ def check_in(store, github, *, now=None, since=None):
     """Run one check-in. Returns (summary, items); items are {key, kind, text} for Robert, newest facts only."""
     now = now or datetime.now(timezone.utc)
     since = since or now - timedelta(hours=6)
-    items, prs, failed_runs, sessions, nudged = [], [], [], [], []
+    items, prs, failed_runs, sessions = [], [], [], []
     errors = []
 
     pr_ci = {}
@@ -121,20 +120,22 @@ def check_in(store, github, *, now=None, since=None):
                 items.append({"key": f"stop:{stop['id']}", "kind": "waiting_on_robert",
                               "text": f"{who} waits on you: {stop['needs'] or 'no question given'}"})
         elif stop["state"] == "waiting_ci" and stop["pr"] and pr_ci.get(stop["pr"]) in ("passed", "failed"):
-            if store.nudge(stop["id"], "ci_finished", {"conclusion": pr_ci[stop["pr"]]}):
-                nudged.append(stop["session"][:8])
+            # No "ci_finished" nudge any more (Robert, 28 Oct, N2): Robert hears that the CI this session waits on has
+            # finished, once per conclusion; nothing wakes the session.
+            conclusion = pr_ci[stop["pr"]]
+            items.append({"key": f"ci-finished:{stop['id']}:{conclusion}", "kind": "stalled",
+                          "text": f"{who} waits on PR #{stop['pr']}, whose CI has finished ({conclusion}); "
+                                  f"nothing wakes the session."})
         elif stop["state"] == "awaiting_review" and age >= REVIEW_WAIT:
             items.append({"key": f"review-wait:{stop['id']}", "kind": "stalled",
                           "text": f"{who} has waited {int(age.total_seconds() // 60)} min for a review: "
                                   f"{stop['needs'] or ''}".strip()})
-        elif stop["state"] == "unreported" and age >= STALL_AFTER:
-            if stop["nudged_at"] is None:
-                if store.nudge(stop["id"], "continue"):
-                    nudged.append(stop["session"][:8])
-            elif now - stop["nudged_at"] >= ESCALATE_AFTER - STALL_AFTER and stop["escalated_at"] is None:
-                store.mark_escalated(stop["id"])
-                items.append({"key": f"stalled:{stop['id']}", "kind": "stalled",
-                              "text": f"{who} stopped without saying why and did not resume after a nudge."})
+        elif stop["state"] == "unreported" and age >= STALL_AFTER and stop["escalated_at"] is None:
+            # No "continue" nudge any more (Robert, 28 Oct: not a permanent feature): a silent stop is told to Robert
+            # and MC as stalled, once; nothing wakes the session.
+            store.mark_escalated(stop["id"])
+            items.append({"key": f"stalled:{stop['id']}", "kind": "stalled",
+                          "text": f"{who} stopped {int(age.total_seconds() // 60)} min ago without saying why."})
     running = []
     try:
         work = store.delegations() if hasattr(store, "delegations") else {"jobs": [], "runners": []}
@@ -168,7 +169,7 @@ def check_in(store, github, *, now=None, since=None):
     for err in errors:
         items.append({"key": f"watch-error:{err}:{now:%Y%m%d%H}", "kind": "error", "text": f"Check-in: {err}."})
     summary = {"at": now.isoformat(), "prs": prs, "failed_releases": failed_runs, "sessions": sessions,
-               "pending_decisions": [d["code"] for d in pending], "nudged": nudged, "errors": errors,
+               "pending_decisions": [d["code"] for d in pending], "errors": errors,
                "running": running,
                "runners": [{"id": r["runner_id"], "state": r["state"],
                             "seen_minutes_ago": int((r["now"] - r["seen_at"]).total_seconds() // 60)}
@@ -192,7 +193,5 @@ def message(items, summary):
         lines.extend(f"• {name(r['agent'])}: {r['brief'][:70]} "
                      f"({r['state']}, {r['minutes']} min)" for r in summary["running"])
     tail = [f"{len(summary['prs'])} open PRs", f"{len(summary['pending_decisions'])} decisions waiting"]
-    if summary["nudged"]:
-        tail.append(f"nudged {', '.join(summary['nudged'])}")
     lines.append("\n" + " · ".join(tail))
     return "\n".join(lines)

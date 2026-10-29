@@ -192,7 +192,8 @@ fi
 # first so a failing `docker diff` stops the snapshot (set -e) instead of
 # yielding an empty list.
 docker diff "$CONTAINER" > "$WORK/docker-diff.txt"
-mapfile -t EXTRAS < <(extra_layer_paths < "$WORK/docker-diff.txt")
+# Keep paths as lines, including spaces/backslashes, without requiring Bash 4 mapfile.
+EXTRAS="$(extra_layer_paths < "$WORK/docker-diff.txt")"
 
 # The writable layer added or changed this path, or something beneath it.
 in_layer() {
@@ -244,9 +245,10 @@ for path in "${KNOWN_PATHS[@]}"; do
     copy_path "$path"
   fi
 done
-for path in "${EXTRAS[@]}"; do
-  [[ -n "$path" ]] && copy_path "$path"
-done
+while IFS= read -r path; do
+  [[ -n "$path" ]] || continue
+  copy_path "$path"
+done <<< "$EXTRAS"
 
 (
   cd "$WORK/tree"

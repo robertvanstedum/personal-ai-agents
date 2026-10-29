@@ -28,13 +28,11 @@ STATES = ("done", "blocked", "awaiting_owner", "awaiting_review", "waiting_ci", 
 CODE = re.compile(r"^D-?(\d{1,9})$", re.I)
 MAX_STOPS, MAX_ASKS = 20, 5
 
-# Fixed texts: a nudge never carries words a model wrote.
-NUDGE_TEXT = {
-    "continue": ("MC check-in: your last turn ended with work still open and nothing waiting on Robert. Continue your "
-                 "already-authorized work now, or end with a MINIMOI-STOP line saying exactly what blocks you."),
-    "ci_finished": ("MC check-in: the CI you were waiting on has finished ({conclusion}). Read the result and continue "
-                    "your already-authorized work."),
-}
+# Fixed texts: a nudge never carries words a model wrote. No kind is left: "continue" and "ci_finished" were both
+# retired on 28 Oct 2026 (Robert, N2: nothing wakes an agent session in the 1.2 design), so ``nudge`` refuses every
+# kind. The queue, the pull's "nudges" and the ack stay, unused, until the Mac's supervision sync is reinstalled
+# without them; the wire keeps its shape until then.
+NUDGE_TEXT = {}
 
 
 class Refused(ValueError):
@@ -216,8 +214,9 @@ class Store:
                       "session": r["requester"].get("session"), "agent": r["requester"].get("agent"),
                       "text_sha256": r["text_sha256"], "receipt": public_receipt(r["receipt"])}
                      for r in cur.fetchall()]
+        # Only a kind still in NUDGE_TEXT is delivered: one queued before its kind was retired never reaches a session.
         cur.execute("""SELECT id, agent, session, kind, detail FROM guild.supervision_nudges WHERE delivered_at IS NULL
-            ORDER BY id LIMIT 20""")
+            AND kind = ANY(%s::text[]) ORDER BY id LIMIT 20""", (sorted(NUDGE_TEXT),))
         nudges = [{"id": r["id"], "agent": r["agent"], "session": r["session"], "kind": r["kind"],
                    "text": NUDGE_TEXT[r["kind"]].format(**r["detail"])} for r in cur.fetchall()]
         return {"decisions": decisions, "nudges": nudges}
@@ -311,7 +310,8 @@ class Store:
         return self._run(q)
 
     def nudge(self, stop_id, kind, detail=None):
-        """One fixed nudge for this stop line (once per kind). Returns True when newly queued."""
+        """One fixed nudge for this stop line (once per kind). Returns True when newly queued. Nothing calls it since
+        28 Oct (no kind is left in NUDGE_TEXT); it goes with the rest of the nudge plumbing."""
         need(kind in NUDGE_TEXT)
 
         def q(cur):

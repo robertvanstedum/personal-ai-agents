@@ -183,6 +183,8 @@ BACKEND_IMPORT_ALLOWED = ("core/workshop_journal/", "core/vault_t1/", "core/agen
                           "tools/workshop/", "scripts/dev/", "tests/", "prototype-lab/", "planning-studio/")
 # Exact new homes and only their actual backend dependencies, not a package/domain waiver.
 BACKEND_IMPORT_EXPECTED = {
+    # Pure Board text policy moved from the portal; all classified Guild consumers ship utils.
+    "domains/guild/board_text.py": ("utils.payment_scrub",),
     "core/memory_ask/context.py": ("utils.credential_scrub", "utils.payment_scrub"),
     "core/memory_ask/querylog.py": ("core.agent_turns.writer",),
     "core/memory_backup/backup.py": ("core.vault_t1.reader", "core.vault_t1.portable", "core.jobs.batch_window"),
@@ -403,6 +405,122 @@ def test_portal_cannot_silently_start_using_documents_only_agent_tools(tmp_path)
         assert _guild_importers(tmp_path) == ["minimoi_portal/consumer.py"]
     path.write_text("from core.agent_requests import ledger\nfrom core import limits\n")
     assert _guild_importers(tmp_path) == []
+
+
+# The MC delegation runner: the portal reads four exact files (through its dispatcher and core/agent_requests); the rest
+# runs only in the Mac runner's own bundle. Keep that ownership coupled to actual imports, as for the Guild helpers.
+MC_RUNNER = "core.mc_delegation_runner"
+MC_DISPATCHER = "core.mc_delegation_dispatcher"
+# Portal-owned homes that may read the runner's portal files (and nothing else of the runner).
+MC_RUNNER_PORTAL_HOMES = ("minimoi_portal/", "core/mc_delegation_dispatcher/", "core/agent_requests/")
+# Who may import the portal's dispatcher: the portal, the dispatcher itself, and the Mac runner's client of its door.
+MC_DISPATCHER_HOMES = ("minimoi_portal/", "core/mc_delegation_dispatcher/")
+MC_DISPATCHER_FILES = {"core/mc_delegation_runner/cli.py"}
+
+
+def _runner_names(rel, source):
+    """``_imported_names`` plus the package's own relative imports, resolved, so a portal file's ``from . import x`` counts."""
+    names = _imported_names(source)
+    if rel.startswith("core/mc_delegation_runner/"):
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.ImportFrom) and node.level == 1:
+                base = MC_RUNNER + (f".{node.module}" if node.module else "")
+                names.add(base)
+                names.update(f"{base}.{alias.name}" for alias in node.names)
+    return names
+
+
+def _mc_runner_importers(root):
+    from scripts.ci.classify_release import MC_RUNNER_PORTAL_FILES
+    portal_modules = tuple(MC_RUNNER + "." + Path(f).stem for f in MC_RUNNER_PORTAL_FILES if not f.endswith("__init__.py"))
+    found = []
+    for path in sorted(root.rglob("*.py")):
+        rel = path.relative_to(root).as_posix()
+        if SKIPPED_DIRS.intersection(rel.split("/")) or rel.startswith(("tests/", "prototype-lab/", "planning-studio/")):
+            continue
+        try:
+            names = _runner_names(rel, path.read_text(errors="ignore"))
+        except SyntaxError:
+            continue
+        used = {n for n in names if n == MC_RUNNER or n.startswith(MC_RUNNER + ".")}
+        used = {n for n in used if not any(other.startswith(n + ".") for other in used)}      # judge the most specific module
+        if rel.startswith("core/mc_delegation_runner/") and rel not in MC_RUNNER_PORTAL_FILES:
+            allowed = (MC_RUNNER,)                                   # a runner-only file may use the whole package
+        elif rel in MC_RUNNER_PORTAL_FILES or rel.startswith(MC_RUNNER_PORTAL_HOMES):
+            allowed = portal_modules                                 # the portal side reaches only the portal files
+        else:
+            allowed = ()                                             # no other production code imports the runner
+        if any(not any(n == m or n.startswith(m + ".") for m in allowed) for n in used):
+            found.append(rel)
+            continue
+        if (any(n == MC_DISPATCHER or n.startswith(MC_DISPATCHER + ".") for n in names)
+                and not rel.startswith(MC_DISPATCHER_HOMES) and rel not in MC_DISPATCHER_FILES):
+            found.append(rel)                                        # the dispatcher carries the runner's portal files
+    return found
+
+
+def test_mc_runner_files_redeploy_only_the_portal_or_nothing():
+    from scripts.ci.classify_release import MC_RUNNER_LOCAL_FILES, MC_RUNNER_PORTAL_FILES
+    on_disk = {p.relative_to(Path(__file__).resolve().parent.parent).as_posix()
+               for p in (Path(__file__).resolve().parent.parent / "core" / "mc_delegation_runner").glob("*.py")}
+    assert MC_RUNNER_PORTAL_FILES | MC_RUNNER_LOCAL_FILES == on_disk                  # every runner file has a decided owner
+    assert not MC_RUNNER_PORTAL_FILES & MC_RUNNER_LOCAL_FILES
+    for path in MC_RUNNER_PORTAL_FILES:
+        assert classify([path]) == ("domain", ("portal",)), path
+    for path in MC_RUNNER_LOCAL_FILES:
+        assert classify([path]) == ("documents", ()), path
+    # Similar names, and new neighbours, keep the conservative core fallback.
+    assert classify(["core/mc_delegation_runner/new_module.py"])[1] == ALL_SERVICES[:7]
+    assert classify(["core/mc_delegation_runner/launch_env.py.bak"])[1] == ALL_SERVICES[:7]
+    assert classify(["core/mc_delegation_runner_extra/workspace.py"])[1] == ALL_SERVICES[:7]
+
+
+def test_the_agent_child_environment_change_redeploys_only_the_portal():
+    assert classify(["core/agent_requests/claude_stream.py", "core/agent_requests/codex_app_server.py",
+                     "core/mc_delegation_runner/launch_env.py", "core/mc_delegation_runner/workspace.py",
+                     "scripts/ci/classify_release.py", "tests/mc_delegation_runner/test_launch_env.py"]) == ("domain", ("portal",))
+
+
+def test_mc_runner_has_no_unclassified_production_consumer():
+    root = Path(__file__).resolve().parent.parent
+    assert _mc_runner_importers(root) == []
+    # No production entrypoint starts the runner: it runs only from the Mac's own bundle.
+    paths = [root / ".github/workflows/deploy.yml", root / "docker-compose.prod.yml",
+             root / "docker-compose.yml", root / "scripts/operations/deploy_scoped_release.sh"]
+    paths.extend(p for p in (root / "docker").rglob("*") if p.is_file())
+    assert [str(p.relative_to(root)) for p in paths if "mc_delegation_runner" in p.read_text(errors="ignore")] == []
+
+
+def test_mc_runner_guard_detects_new_consumers_and_runner_only_files_reaching_the_portal(tmp_path):
+    allowed = {"core/mc_delegation_dispatcher/store.py": "from core.mc_delegation_runner import envelope as env_mod\n",
+               "core/mc_delegation_dispatcher/door.py": "def late():\n    from core.mc_delegation_runner.dispatcher_adapter import output_of\n",
+               "core/agent_requests/claude_stream.py": "from core.mc_delegation_runner import launch_env\n",
+               "minimoi_portal/guild_ui/jobs_wiring.py": "from core.mc_delegation_dispatcher.store import DispatcherStore\n",
+               "core/mc_delegation_runner/workspace.py": "from core.mc_delegation_runner import launch_env\n",
+               "core/mc_delegation_runner/runner.py": "from . import commands, envelope as env_mod, workspace\n",
+               "core/mc_delegation_runner/cli.py": "from . import runner\nfrom core.mc_delegation_dispatcher.door import HttpDispatcher\n"}
+    for rel, source in allowed.items():
+        target = tmp_path / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(source)
+    assert _mc_runner_importers(tmp_path) == []
+    violations = {"domains/cos/consumer.py": "from core.mc_delegation_runner import launch_env\n",
+                  "domains/german/aliased.py": "import core.mc_delegation_runner.envelope as e\n",
+                  "services/usage/dynamic.py": "import importlib\nm = importlib.import_module('core.mc_delegation_runner.cli')\n",
+                  "domains/curator/dispatcher.py": "from core.mc_delegation_dispatcher import store\n",
+                  "minimoi_portal/runner_only.py": "from core.mc_delegation_runner import workspace\n",
+                  "core/agent_requests/wider.py": "from core.mc_delegation_runner.runner import run_once\n",
+                  "core/mc_delegation_runner/launch_env.py": "from . import workspace\n"}
+    for rel, source in violations.items():
+        target = tmp_path / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        original = target.read_text() if target.exists() else None
+        target.write_text(source)
+        assert _mc_runner_importers(tmp_path) == [rel], rel
+        if original is None:
+            target.unlink()
+        else:
+            target.write_text(original)
 
 
 def test_vault_release_ownership_separates_shared_context_and_portal_reports_from_local_ask():

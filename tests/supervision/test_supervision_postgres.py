@@ -110,17 +110,24 @@ class SupervisionFlow(PostgresFixture, unittest.TestCase):
                                           store_factory=lambda: self.store)
         self.assertNotIn("D-1:", block)                      # no longer waiting
 
-    def test_checkin_nudges_tells_once_and_records(self):
+    def test_checkin_tells_a_finished_ci_once_and_nudges_nobody(self):
         self.store.worker({"phase": "report", "stops": [
             {"report_key": "stop-ci000001", "agent": "claude-code", "session": "sess-ci01", "state": "waiting_ci",
              "pr": 7, "stopped_at": time.time() - 60}]})
         self.sup.github = FakeGitHub(prs=[pr(7, "e" * 40)], checks={"e" * 40: [DONE]})
         summary, told = self.sup.checkin()
-        self.assertEqual([t["key"] for t in told], [f"pr-green:7:{'e' * 12}"])
+        self.assertEqual([t["key"] for t in told], [f"pr-green:7:{'e' * 12}", "ci-finished:1:passed"])
         self.assertEqual(self.bot.sent[-1][1].splitlines()[0], "MC check-in")
-        nudges = self.store.worker({"phase": "pull"})["nudges"]
-        self.assertEqual([(n["session"], n["kind"]) for n in nudges], [("sess-ci01", "ci_finished")])
-        self.assertIn("(passed)", nudges[0]["text"])
+        self.assertIn("sess-ci0 waits on PR #7, whose CI has finished (passed)", self.bot.sent[-1][1])
+        self.assertEqual(self.store.worker({"phase": "pull"}), {"decisions": [], "nudges": []})
+        with self.guard.cursor() as cur:
+            cur.execute("SELECT count(*) FROM guild.supervision_nudges")
+            self.assertEqual(cur.fetchone()[0], 0)           # nothing queued for the session
+            # A ci_finished nudge queued before the retirement stays in the table and is never delivered.
+            cur.execute("""INSERT INTO guild.supervision_nudges (agent, session, kind, detail, stop_id)
+                VALUES ('claude-code', 'sess-ci01', 'ci_finished', '{"conclusion": "passed"}', 1)""")
+        self.guard.commit()
+        self.assertEqual(self.store.worker({"phase": "pull"})["nudges"], [])
         sent = len(self.bot.sent)
         self.sup.checkin()                                   # nothing new: no message, still recorded
         self.assertEqual(len(self.bot.sent), sent)

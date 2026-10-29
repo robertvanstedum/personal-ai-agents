@@ -14,13 +14,11 @@
 #   minimoi-cos-web-search       same as prod and the dev gateway on main
 #   minimoi-cos-agent-anthropic  same as prod and the dev gateway on main
 #
-# The dev gateway's Mac-only Ollama route (minimoi-cos-agent-local) is left
-# out, as in production: staging mirrors production's route set, plus one
-# staging-only route (MC spec v0.9 stage C):
-#
-#   minimoi-mc-agent             Master Craftsman: xai/grok-4.3, reasoning low
-#                                Uses GATEWAY_XAI_API_KEY; MC's capped virtual key
-#                                remains the admission boundary. No fallback.
+# Production routes/fallbacks remain unchanged. Two explicit staging-only
+# routes support MC and the approved local-model regression:
+#   minimoi-mc-agent: MC's bounded provider route, with no fallback.
+#   minimoi-cos-agent-local: Ollama llama3.2:3b on the host, called by name
+#   only. It is never in a fallback chain and is absent from production.
 #
 # Provider keys use gateway-only names (GATEWAY_ANTHROPIC_API_KEY,
 # GATEWAY_XAI_API_KEY), and the gateway's ANTHROPIC_API_KEY / XAI_API_KEY are
@@ -107,6 +105,18 @@ model_list:
       base_model: xai/grok-4.3
       mode: chat
       supports_function_calling: true
+
+  # Explicit local regression route; never an automatic cloud fallback.
+  - model_name: minimoi-cos-agent-local
+    litellm_params:
+      model: ollama_chat/llama3.2:3b
+      api_base: os.environ/OLLAMA_API_BASE
+      timeout: 180
+    model_info:
+      id: cos-ollama-local
+      base_model: llama3.2:3b
+      mode: chat
+
 
 router_settings:
   fallbacks:

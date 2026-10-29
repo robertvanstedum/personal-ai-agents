@@ -135,3 +135,39 @@ def test_production_role_never_falls_back_to_dev_profile():
  env=dict(ENV,BASE_URL=DEV.origin,MINIMOI_RECORDS_PROFILE='dev')
  assert select_records_profile(DEV.origin,env)is None
  with pytest.raises(CallerRefused):from_env(env,run_id='synthetic')
+
+@pytest.mark.parametrize('failure', [None, 'schema', 'query'])
+def test_preflight_closes_database_on_success_and_failure(prepared, monkeypatch, failure):
+    """The SQLite transaction context alone does not close its connection."""
+    if failure == 'schema':
+        marker = prepared.data / RT.MANIFEST
+        value = json.loads(marker.read_text())
+        value['schema_sha256'] = 'invalid'
+        marker.write_text(json.dumps(value))
+    opened = []
+    real_connect = sqlite3.connect
+
+    class Connection(sqlite3.Connection):
+        def execute(self, sql, *args, **kwargs):
+            if failure == 'query':
+                raise sqlite3.OperationalError('synthetic query failure')
+            return super().execute(sql, *args, **kwargs)
+
+    def connect(*args, **kwargs):
+        connection = real_connect(*args, factory=Connection, **kwargs)
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(RT.sqlite3, 'connect', connect)
+    try:
+        if failure:
+            with pytest.raises((ValueError, sqlite3.OperationalError)):
+                RT.preflight(prepared.data, prepared.env)
+        else:
+            assert RT.preflight(prepared.data, prepared.env)['provisioned_here'] is False
+        assert len(opened) == 1
+        with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+            sqlite3.Connection.execute(opened[0], 'SELECT 1')
+    finally:
+        for connection in opened:
+            connection.close()

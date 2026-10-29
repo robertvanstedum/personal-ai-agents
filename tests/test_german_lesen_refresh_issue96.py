@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 import german_domain
-import html_server
+from domains.german import html_server
 from domains.german import lesen_refresh_cli
 
 
@@ -495,6 +495,7 @@ def test_refresh_api_blocks_guest_and_reports_retryable_failure(monkeypatch, ger
     )
     assert owner.status_code == 503
     assert owner.get_json()["retry"] is True
+    assert calls == [True]
 
 
 def test_refresh_api_blocks_missing_tier_header(monkeypatch, german_client):

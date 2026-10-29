@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts" / "agents"))
 
 from core.supervision import telegram as tg, watch  # noqa: E402
-from core.supervision.store import clean_ask, clean_exchange, clean_stop, Refused, NUDGE_TEXT  # noqa: E402
+from core.supervision.store import clean_ask, clean_exchange, clean_stop, Refused, NUDGE_TEXT, Store  # noqa: E402
 
 OWNER = 8379221702
 BOT = 7000000001
@@ -84,9 +84,21 @@ class Cleaning(unittest.TestCase):
         with self.assertRaises(Refused):
             clean_ask({"request_key": "ask-12345678", "agent": "codex", "session": "sess-1234", "text": "short"})
 
-    def test_nudges_are_fixed_text(self):
-        self.assertIn("Continue your already-authorized work", NUDGE_TEXT["continue"])
-        self.assertIn("passed", NUDGE_TEXT["ci_finished"].format(conclusion="passed"))
+    def test_no_nudge_kind_is_left(self):
+        # "continue" and "ci_finished" both retired 28 Oct (N2): a silent stop and a finished CI are told to Robert.
+        self.assertEqual(NUDGE_TEXT, {})
+
+    def test_pull_keeps_its_shape_and_never_delivers_a_retired_nudge(self):
+        queued = {"id": 1, "agent": "codex", "session": "sess-1234", "kind": "ci_finished",      # queued before N2
+                  "detail": {"conclusion": "passed"}}
+
+        class Cursor:      # answers the nudge query as its kind filter would, so a retired row is not rendered
+            def execute(self, sql, params=()):
+                self.rows = [] if "supervision_decisions" in sql else [queued] if queued["kind"] in params[0] else []
+
+            def fetchall(self):
+                return self.rows
+        self.assertEqual(Store._pull(Cursor()), {"decisions": [], "nudges": []})
 
 
 NOW = datetime(2026, 10, 26, 20, 0, tzinfo=timezone.utc)
@@ -174,11 +186,55 @@ class CheckIn(unittest.TestCase):
         gh = FakeGitHub(prs=[pr(1, "a" * 40)], checks={"a" * 40: [DONE]})
         summary, items = watch.check_in(st, gh, now=NOW)
         keys = {i["key"] for i in items}
-        self.assertTrue({"stop:2", "stop:4", "stalled:8", "review-wait:9"} <= keys)
+        self.assertTrue({"stop:2", "stop:4", "ci-finished:5:passed", "stalled:6", "stalled:8", "review-wait:9"} <= keys)
+        self.assertNotIn("stalled:7", keys)         # under 20 min: not yet
         self.assertNotIn("stop:3", keys)            # its decision goes to Robert word for word, on its own
-        self.assertEqual([(s, k) for s, k, _ in st.nudges], [(5, "ci_finished"), (6, "continue")])
-        self.assertEqual(st.escalated, [8])
+        self.assertEqual(st.nudges, [])             # no nudge of any kind: nothing wakes a session
+        self.assertEqual(st.escalated, [6, 8])
         self.assertEqual(summary["pending_decisions"], ["D-1"])
+
+    def test_a_finished_ci_is_told_to_robert_once_and_wakes_no_session(self):
+        from services.supervisor.main import Supervisor
+
+        class Told(FakeStore):      # with the supervisor's once-per-key memory (guild.supervision_alerts)
+            def __init__(self, stops):
+                super().__init__(stops)
+                self.seen, self.checkins = set(), []
+
+            def new_alert_keys(self, keys):
+                fresh = [k for k in keys if k not in self.seen]
+                self.seen.update(keys)
+                return fresh
+
+            def record_checkin(self, summary, told, telegram):
+                self.checkins.append((list(told), telegram))
+                return {"id": len(self.checkins)}
+
+        class Bot:
+            def __init__(self):
+                self.sent = []
+
+            def send(self, chat_id, text, *, reply_to=None):
+                self.sent.append(text)
+                return len(self.sent)
+        st, bot = Told([stop(5, "waiting_ci", 5, pr=7)]), Bot()
+        gh = FakeGitHub(prs=[pr(7, "e" * 40)], checks={"e" * 40: [DONE]})
+        sup = Supervisor(st, bot, gh, chat_id=OWNER, user_id=OWNER)
+        _, first = sup.checkin(now=NOW)
+        _, second = sup.checkin(now=NOW + timedelta(minutes=15))
+        self.assertEqual([i["key"] for i in first], [f"pr-green:7:{'e' * 12}", "ci-finished:5:passed"])
+        self.assertEqual(second, [])                          # the same key again: Robert is not told twice
+        told = first[1]
+        self.assertEqual((told["kind"], told["text"]),
+                         ("stalled", "Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); "
+                                     "nothing wakes the session."))
+        self.assertEqual(len(bot.sent), 1)
+        self.assertIn("Stalled:\n• Claude Code session0 (b) waits on PR #7", bot.sent[0])
+        self.assertEqual(st.nudges, [])                       # nothing queued for the session
+        gh.check_map = {"e" * 40: [{"status": "completed", "conclusion": "failure"}]}   # CI re-run, now red
+        _, third = sup.checkin(now=NOW + timedelta(minutes=30))
+        self.assertIn("ci-finished:5:failed", [i["key"] for i in third])                # a new conclusion is new news
+        self.assertEqual(st.nudges, [])
 
     def test_github_down_is_an_error_not_a_crash(self):
         class Down(FakeGitHub):

@@ -1,14 +1,8 @@
 import importlib.util
 import json
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RESEARCH_ROOT = ROOT / "domains" / "curator" / "research"
-if str(RESEARCH_ROOT) not in sys.path:
-    sys.path.insert(0, str(RESEARCH_ROOT))
-if str(RESEARCH_ROOT / "agent") not in sys.path:
-    sys.path.insert(0, str(RESEARCH_ROOT / "agent"))
 
 from domains.curator.research.agent import research, threads
 from domains.curator import research_routes
