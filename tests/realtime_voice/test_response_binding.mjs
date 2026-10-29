@@ -227,6 +227,16 @@ for (const echo of [true, false]) {
   });
 }
 
+await check('new (OpenAI): a commit after the transport closed asks nothing and throws nothing', async () => {
+  const s = session('openai');
+  s.a._dc = { send: () => { throw new Error('closed'); } };
+  s.utter('item_A');                                                   // no exception out of the provider's event
+  s.said('item_A', 'Check the board');
+  s.a._dc = { send: (f) => s.frames.push(JSON.parse(f)) };
+  s.utter('item_B');                                                   // the next commit asks for its own
+  assert.equal(s.creates().length, 1);
+});
+
 // ── I5: barge-in, cancelled and superseded responses, the earlier commit that never got its own ──────────────────────
 await check('new (OpenAI): a commit while a response is in flight: barge-in cancels it, and the newest committed item is answered', async () => {
   const s = session('openai');

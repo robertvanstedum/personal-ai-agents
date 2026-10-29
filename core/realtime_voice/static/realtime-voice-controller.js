@@ -421,7 +421,7 @@ export class RealtimeVoiceController {
     if (!this._owned) return;
     for (const entry of this._queue.filter((e) => e.kind === "turn")) this._let(entry, "superseded");
     if (!item) this._onUnbound({ reason: "commit_without_item" });
-    this._ask(item, (tag) => this._adapter.createResponse(tag), null, "turn");
+    try { this._ask(item, (tag) => this._adapter.createResponse(tag), null, "turn"); } catch (_) { /* the transport is closed */ }
   }
 
   // A response this controller asks for: his committed item's (turn), a function result's follow-up (follow), or the
