@@ -72,6 +72,9 @@ class DelegationRelay:
             except Exception:
                 _log.warning("delegation %s: lapsed claim could not be ended", job_id)
         state = _MAP[row["state"]]
+        if (self.store.sweeps and row["state"] in ("claimed", "running") and row["lease_until"] is not None
+                and row["lease_until"] <= row["now"]):
+            state = "unknown"            # lapsed: derived here, never written, never shown as running (E11)
         error = None
         if row["state"] == "queued" and row["deadline"] <= row["now"]:
             state, error = "failed", "not_picked_up"

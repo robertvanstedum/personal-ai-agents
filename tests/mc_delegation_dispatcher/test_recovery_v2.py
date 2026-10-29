@@ -51,8 +51,10 @@ def _no_db():
 class Configuration(unittest.TestCase):
     def test_the_sweeper_and_reassignment_are_configured_and_production_has_neither(self):
         t, prod = Authority.load(TEST), Authority.load(PROD)
-        self.assertEqual((t.sweeper.sweep_s, t.sweeper.gap_threshold_s, t.reassign_across_hosts), (15, 30, False))
-        self.assertEqual((prod.sweeper, prod.reassign_across_hosts), (None, False))
+        self.assertEqual((t.sweeper.sweep_s, t.sweeper.gap_threshold_s, t.reassign_across_hosts, t.clock_skew_s),
+                         (15, 30, False, 1))
+        self.assertEqual((prod.sweeper, prod.reassign_across_hosts, prod.clock_skew_s), (None, False, 0))
+        self.assertEqual(Authority.parse({k: v for k, v in doc().items() if k != "clock_skew_s"}).clock_skew_s, 0)
         self.assertTrue(Authority.parse(doc(reassign_across_hosts=True)).reassign_across_hosts)
         # Version 1 only: a sweeper value changes nothing, and relay.status keeps today's reap.
         self.assertEqual(Authority.parse(doc(protocols=[1], lease_s=None)).sweeper.sweep_s, 15)
@@ -63,14 +65,20 @@ class Configuration(unittest.TestCase):
         from core.minimoi_actions.grants import GrantStore
         self.assertTrue(DispatcherStore(_no_db, principal="robert", environment="dev", authority=t,
                                         grants=GrantStore()).sweeps)
+        from dataclasses import replace
+        with self.assertRaisesRegex(ValueError, "authority_sweeper_missing"):     # missing admits nothing (R2.3-b)
+            DispatcherStore(_no_db, principal="robert", environment="dev", authority=replace(t, sweeper=None),
+                            grants=GrantStore())
 
     def test_malformed_values_are_refused(self):
         for d in (doc(sweeper={"sweep_s": 15}), doc(sweeper={"sweep_s": 30, "gap_threshold_s": 30}),
                   doc(sweeper={"sweep_s": 0, "gap_threshold_s": 30}), doc(sweeper={"sweep_s": 15.0, "gap_threshold_s": 30}),
                   doc(sweeper={"sweep_s": 15, "gap_threshold_s": 7200}), doc(sweeper=[15, 30]),
                   doc(sweeper={"sweep_s": 15, "gap_threshold_s": 30, "x": 1}), doc(reassign_across_hosts="yes"),
-                  doc(reassign_across_hosts=1)):
-            with self.assertRaises(AuthorityRefused, msg=str(d.get("sweeper")) + str(d.get("reassign_across_hosts"))):
+                  doc(reassign_across_hosts=1), doc(clock_skew_s=-1), doc(clock_skew_s=61), doc(clock_skew_s=1.0),
+                  # Version 2 without a sweeper would never lapse or end anything at grace: missing admits nothing.
+                  {k: v for k, v in doc().items() if k != "sweeper"}, doc(sweeper=None)):
+            with self.assertRaises(AuthorityRefused, msg=str(d.get("sweeper")) + str(d.get("clock_skew_s"))):
                 Authority.parse(d)
 
 
@@ -204,8 +212,8 @@ class StoreSwitch(unittest.TestCase):
                      lambda: store.effect("m", RID, 1, eff("prepare")),
                      lambda: store.reassign(RID, "m", by="robert", note="n"),
                      lambda: store.end(RID, by="robert", note="n"),
-                     lambda: store.revoke(GID, by="robert", note="n"),
-                     lambda: store.sweep(), lambda: store.sweeper_status()):
+                     lambda: store.revoke(GID, by="robert", note="n"), lambda: store.open_operations(RID),
+                     lambda: store.sweep(), lambda: store.sweeper_status(), lambda: store.authority_beat()):
             with self.assertRaises(AuthorityRefused):
                 call()
         with self.assertRaisesRegex(AuthorityRefused, "protocol_invalid"):
@@ -278,16 +286,20 @@ class FakeStore:
 
 
 class RelayReap(unittest.TestCase):
-    def test_relay_reaps_only_where_no_sweeper_runs(self):
+    def test_relay_reaps_only_where_no_sweeper_runs_and_never_shows_a_lapse_as_running(self):
         today = FakeStore(sweeps=False, lease_past_s=LEASE_SECONDS + 5)
         outcome, st = DelegationRelay(today, ref_for=lambda r: "a" * 40).status("j-1")
         self.assertEqual((outcome, st["state"], st["error_class"], today.reaped), ("ok", "failed", "interrupted", ["j-1"]))
-        swept = FakeStore(sweeps=True, lease_past_s=LEASE_SECONDS + 5)
-        outcome, st = DelegationRelay(swept, ref_for=lambda r: "a" * 40).status("j-1")
-        self.assertEqual((st["state"], swept.reaped), ("running", []))           # the sweeper writes it, not a read
         within = FakeStore(sweeps=False, lease_past_s=LEASE_SECONDS - 5)
-        DelegationRelay(within, ref_for=lambda r: "a" * 40).status("j-1")
-        self.assertEqual(within.reaped, [])                                      # within the extra lease: no write
+        self.assertEqual(DelegationRelay(within, ref_for=lambda r: "a" * 40).status("j-1")[1]["state"], "running")
+        self.assertEqual(within.reaped, [])                       # production: today's reap, today's display
+        # Where a sweeper runs (it may be dead), the read writes nothing and derives the lapse: never running (E11).
+        for past in (1, LEASE_SECONDS + 5, 86400):
+            swept = FakeStore(sweeps=True, lease_past_s=past)
+            outcome, st = DelegationRelay(swept, ref_for=lambda r: "a" * 40).status("j-1")
+            self.assertEqual((st["state"], st["error_class"], swept.reaped), ("unknown", None, []), past)
+        live = FakeStore(sweeps=True, lease_past_s=-30)
+        self.assertEqual(DelegationRelay(live, ref_for=lambda r: "a" * 40).status("j-1")[1]["state"], "running")
 
     def test_version_2_states_are_never_shown_as_running(self):
         for state, shown in (("lapsed", "unknown"), ("paused", "unknown"), ("unknown", "unknown"),

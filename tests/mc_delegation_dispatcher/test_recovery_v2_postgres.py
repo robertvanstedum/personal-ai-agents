@@ -2,7 +2,10 @@
 §9.4-§9.5): reconcile's answers and their idempotence (X5), effects through receipts (DUP-1, DUP-2, DUP-5), an unknown
 outcome waiting on the owner (T4c, DUP-6), readback and resume (T4b), the sweeper's lapse, grace and outage (T5c/T6b at
 the authority, X7, R5.2-a), a dead sweeper (E11), revocation end to end (T10's W-REV), reassignment across two hosts
-(DUP-3, R5.1-d), the kept reservation's release (R8.3-c) and the relay's reap moving to the sweeper (R3.3).
+(DUP-3, R5.1-d), the kept reservation's release (R8.3-c) and the relay's reap moving to the sweeper (R3.3). The fix
+round adds the review's findings as regression tests: B1 (records made before a lapse), SF1 (no end while an effect is
+open), SF2 (a reassignment starts no lease), SF3/P3 and SF4/P4 (grace and the authority's own outage), SF5 (an outcome
+is always recorded), SF6 (the relay derives a lapse) and N8 (lock order).
 Opt-in: a disposable mc12_test_* database (tests/minimoi_actions/postgres_fixture_support.py). Time is moved by setting
 lease, grace and heartbeat columns relative to the database clock, never by sleeping."""
 from concurrent.futures import ThreadPoolExecutor
@@ -10,6 +13,7 @@ from datetime import timedelta
 import json
 from pathlib import Path
 import sys
+import threading
 import time
 import unittest
 from uuid import uuid4
@@ -39,7 +43,7 @@ DIGEST = "sha256:" + "c" * 64
 BRIEF = "Run the fakework program."
 AMOUNT, USED = 0.25, 0.125       # §9.2's day is 2.0 test_units: several items fit in one test
 CP1 = {"name": "s1", "digest": "sha256:" + "1" * 64, "paths": ["README.md"]}
-TRANSITIONS = ("item.claimed", "item.resumed", "item.reassigned")
+TRANSITIONS = ("item.claimed", "item.resumed")      # a reassignment grants no lease; the new owner's claim does
 
 
 def lease_spans(events):
@@ -184,6 +188,12 @@ class Recovery(PostgresFixture, unittest.TestCase):
     def age_sweeper(self, seconds):
         self.sql("UPDATE guild.mc_delegation_runners SET seen_at = seen_at - %s * interval '1 second' "
                  "WHERE runner_id LIKE 'sweeper/%%'", (seconds,))
+
+    def age_authority(self, seconds):
+        """The whole authority was down or asleep: its own liveness and its sweeper both stopped ``seconds`` ago."""
+        self.store.authority_beat()
+        self.sql("UPDATE guild.mc_delegation_runners SET seen_at = seen_at - %s * interval '1 second' "
+                 "WHERE runner_id LIKE 'sweeper/%%' OR runner_id LIKE 'authority/%%'", (seconds,))
 
     # effects
     def effect_grant(self, job, *keys, ops=None):
@@ -509,25 +519,32 @@ class Recovery(PostgresFixture, unittest.TestCase):
 
     def test_grace_is_extended_by_the_authoritys_own_outage(self):
         job, env = self.claimed()
-        self.lapse(job, 60)
-        self.store.sweep()
-        before = self.row(job)["grace_deadline"]
         job2, env2 = self.claimed(runner="mac-b", job="job-w")
-        # The whole Mac slept 20 minutes: the sweeper's heartbeat stopped, and W's lease ran out during the sleep.
-        self.age_sweeper(1200)
-        self.sql("UPDATE guild.mc_delegation_events SET recorded_at = recorded_at - interval '1200 seconds'")
-        self.sql("UPDATE guild.mc_delegation_runners SET seen_at = seen_at - interval '1200 seconds' "
-                 "WHERE runner_id NOT LIKE 'sweeper/%%'")
-        self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '600 seconds' "
-                 "WHERE job_id='job-w'")
+        job3, env3 = self.claimed(runner="mac-c", job="job-p")
+        self.store.sweep()
+        # The whole Mac slept 20 minutes: the authority's liveness and its sweeper both stopped. job-1 had lapsed
+        # 100 s before (its grace would have ended 400 s ago); W's lease ran out during the sleep.
+        self.age_authority(1200)
+        self.sql("""UPDATE guild.mc_delegations SET state='lapsed', lapse_cause='owner_contact_lost',
+            lease_until = clock_timestamp() - interval '1300 seconds', lapsed_since = clock_timestamp() - interval '1300 seconds',
+            grace_deadline = clock_timestamp() - interval '400 seconds' WHERE job_id=%s""", (job,))
+        before = self.row(job)["grace_deadline"]
+        self.lapse("job-w", 600)
+        # mac-c announced its stop just after the wake, before the outage was recorded (N5): its fresh grace
+        # gains only the moment between its pause and the record.
+        self.beat("mac-c", announced="stopped")
+        paused = self.row("job-p")["grace_deadline"]
         out = self.store.sweep()
         self.assertIsNotNone(out["suspended"])
         self.assertAlmostEqual(out["suspended"]["outage_s"], 1200, delta=5)
         sus = self.events("authority.suspended")
         self.assertEqual(len(sus), 1)
-        self.assertEqual(set(sus[0]["body"]) >= {"from", "to"}, True)
-        after = self.row(job)["grace_deadline"]
-        self.assertAlmostEqual((after - before).total_seconds(), out["suspended"]["outage_s"], delta=0.01)
+        self.assertTrue(set(sus[0]["body"]) >= {"from", "to"})
+        after = self.row(job)
+        self.assertEqual(after["state"], "lapsed")                         # without the extension: interrupted
+        self.assertAlmostEqual((after["grace_deadline"] - before).total_seconds(), out["suspended"]["outage_s"],
+                               delta=0.01)
+        self.assertLess((self.row("job-p")["grace_deadline"] - paused).total_seconds(), 2)
         self.assertEqual(len(self.events("item.grace_extended", env["request_id"])), 1)
         # A lease that ran out inside the outage lapsed authority_down, with its grace from the restart (X2a).
         row = self.row("job-w")
@@ -535,40 +552,59 @@ class Recovery(PostgresFixture, unittest.TestCase):
         self.assertEqual(row["grace_deadline"], parse_at(sus[0]["body"]["to"]) + timedelta(seconds=900))
         self.assertIsNone(self.store.sweep()["suspended"])                       # measured once
 
-    def test_a_dead_sweeper_records_no_outage_while_the_authority_served(self):
+    def test_p4_an_idle_authority_or_a_dead_sweeper_records_no_outage(self):
+        """SF4: the outage is a gap in the authority's own liveness, which it beats on its own timer. An idle authority
+        (hosts in contact, nothing renewing, no audit events) whose sweeper restarts after 10 minutes records nothing."""
+        job, env = self.claimed()
+        self.lapse(job, 60)
         self.store.sweep()
-        self.claimed()
-        self.age_sweeper(600)
-        # Contact and renewals kept arriving every 20 s while the sweeper was dead.
-        self.sql("""INSERT INTO guild.mc_delegation_events (event_id, schema, kind, principal_id, environment, source,
-            at, recorded_at, body)
-            SELECT gen_random_uuid(), 'minimoi.runtime.event.v1', 'lease.renewed', 'robert', 'dev', 'authority',
-                   clock_timestamp() - s * interval '1 second', clock_timestamp() - s * interval '1 second', '{}'
-            FROM generate_series(20, 600, 20) AS s""")
-        self.assertIsNone(self.store.sweep()["suspended"])
+        before = self.row(job)["grace_deadline"]
+        self.age_sweeper(600)                              # the sweeper died 10 minutes ago ...
+        self.store.authority_beat()                        # ... while the authority's own timer kept beating
+        self.beat("mac-a")                                 # a heartbeat with unchanged facts writes no event
+        out = self.store.sweep()
+        self.assertIsNone(out["suspended"])
         self.assertEqual(self.events("authority.suspended"), [])
+        self.assertEqual(self.row(job)["grace_deadline"], before)
+        self.assertAlmostEqual(self.store.sweeper_status()["last_gap_s"], 600, delta=5)   # its own age, recorded
 
-    def test_x7_an_owner_reconciling_before_the_sweeper_after_a_whole_runtime_sleep_resumes(self):
+    def test_x7_a_whole_runtime_sleep_is_an_outage_even_before_the_sweeper_runs(self):
+        """T6m/X7: authority, worker and sweeper all asleep 20 minutes (test grace 900 s). The owner's reconcile comes
+        first: it records the outage itself, and the owner resumes within its extended grace."""
         job, env = self.claimed()
         self.progress(env, checkpoint=CP1)
         self.store.sweep()
-        # 20 minutes asleep (test grace 900 s): the lease ran out long ago, and the sweeper has not run since.
-        self.age_sweeper(1200)
+        self.age_authority(1200)
         self.lapse(job, 1140)
         self.assertFalse(self.store.sweeper_status()["fresh"])
         a = self.reconcile(env)
-        self.assertEqual((a["answer"], a["generation"]), ("resume", 2))       # never lost to an unmeasured outage
-        self.assertIsNotNone(self.store.sweep()["suspended"])
+        self.assertEqual((a["answer"], a["generation"]), ("resume", 2))
+        sus = self.events("authority.suspended")
+        self.assertEqual(len(sus), 1)
+        self.assertAlmostEqual(sus[0]["body"]["outage_s"], 1200, delta=5)
+        self.assertIsNone(self.store.sweep()["suspended"])                  # already recorded, once
 
-    def test_with_the_sweeper_current_a_past_grace_is_judged_at_reconcile(self):
-        job2, env2 = self.claimed(runner="mac-b", job="job-x")
+    def test_p3_with_the_sweeper_dead_and_the_authority_serving_grace_still_ends(self):
+        """SF3: reconcile judges grace on the database clock every time. The sweeper died 20 minutes ago, the
+        authority kept beating, and the lease ran out 1,000 s ago against 900 s of grace: stop, never resume."""
+        job, env = self.claimed()
         self.store.sweep()
-        self.lapse("job-x", 1000)
-        self.assertTrue(self.store.sweeper_status()["fresh"])
-        a = self.reconcile(env2, runner="mac-b", cp=None)
-        self.assertEqual((a["answer"], a["code"]), ("stop", "owner_unreachable"))
-        self.assertEqual([e["kind"] for e in self.events(item=env2["request_id"])
-                          if e["kind"] in ("item.lapsed", "item.interrupted")], ["item.lapsed", "item.interrupted"])
+        self.age_sweeper(1200)
+        self.store.authority_beat()
+        self.lapse(job, 1000)
+        a = self.reconcile(env, cp=None)
+        self.assertEqual((a["answer"], a["code"], a["state"]), ("stop", "owner_unreachable", "interrupted"))
+        self.assertEqual(self.events("authority.suspended"), [])
+        self.assertEqual(len(self.events("item.resumed")), 0)
+        # The same, for a record replayed after that lapse: past grace, it is refused.
+        job2, env2 = self.claimed(runner="mac-b", job="job-g")
+        self.sql("""UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1000 seconds',
+            facts = facts || jsonb_build_object('leased_at', clock_timestamp() - interval '1050 seconds')
+            WHERE job_id='job-g'""")
+        made = self.db_now() - timedelta(seconds=1020)
+        self.assertEqual(self.store.progress(env2["request_id"], 1, "executing", protocol=2, runner_id="mac-b",
+                                             event_id=str(uuid4()), at=made.isoformat(), checkpoint=None)["code"],
+                         "grace_ended")
 
     def test_e11_a_dead_sweeper_leaves_no_item_looking_live(self):
         job, env = self.claimed()
@@ -578,7 +614,7 @@ class Recovery(PostgresFixture, unittest.TestCase):
         self.assertEqual(row["state"], "claimed")                         # stored, but every answer reads the clock:
         self.assertLess(row["lease_until"], row["now"])
         self.assertFalse(self.store.renew(env["request_id"], 1, protocol=2, runner_id="mac-a"))
-        self.assertEqual(self.progress(env)["code"], "lease_lapsed")
+        self.assertEqual(self.progress(env)["code"], "lease_lapsed")      # made after the lease ran out
         self.assertEqual(self.result(env)["code"], "lease_lapsed")
         self.item()
         self.assertIsNone(self.store.claim("mac-a", CAPS, protocol=2))     # withheld until it reconciles
@@ -595,6 +631,187 @@ class Recovery(PostgresFixture, unittest.TestCase):
         swept = {e["kind"] for e in self.events() if e["seq"] > seq}
         self.assertEqual(swept, {"item.lapsed"})
 
+    # ── B1: records made before a lapse ──
+    def test_b1_records_made_while_the_lease_ran_are_replayed_once_after_it_lapsed(self):
+        job, env = self.claimed()
+        first = self.store.progress(env["request_id"], 1, "executing", protocol=2, runner_id="mac-a",
+                                    event_id=str(uuid4()), at=(self.db_now() - timedelta(seconds=40)).isoformat(),
+                                    checkpoint=CP1)
+        self.assertEqual(first["state"], "applied")
+        # The network dropped: the lease was granted 60 s ago and ran out 10 s ago; the host held two records.
+        self.sql("""UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '10 seconds',
+            facts = facts || jsonb_build_object('leased_at', clock_timestamp() - interval '60 seconds')""")
+        now = self.db_now()
+        cp2, eid = {"name": "s2", "digest": "sha256:" + "2" * 64, "paths": ["README.md"]}, str(uuid4())
+        replay = dict(phase="testing", protocol=2, runner_id="mac-a", event_id=eid,
+                      at=(now - timedelta(seconds=20)).isoformat(), checkpoint=cp2)
+        self.assertEqual(self.store.progress(env["request_id"], 1, **replay)["state"], "applied")
+        self.assertEqual(self.store.progress(env["request_id"], 1, **replay)["state"], "already_applied")   # DUP-5
+        row = self.row(job)
+        self.assertEqual((row["checkpoint"]["name"], row["progress_phase"]), ("s2", "testing"))
+        self.assertLessEqual(row["lease_until"], row["now"])                      # still lapsed: no lease reopened
+        late = dict(replay, event_id=str(uuid4()), at=(now - timedelta(seconds=5)).isoformat())
+        self.assertEqual(self.store.progress(env["request_id"], 1, **late)["code"], "lease_lapsed")
+        early = dict(replay, event_id=str(uuid4()), at=(now - timedelta(seconds=65)).isoformat())
+        self.assertEqual(self.store.progress(env["request_id"], 1, **early)["code"], "lease_lapsed")
+        # The sweeper writes the lapse; a finished result made before it is still taken, and its usage settles.
+        self.store.sweep()
+        self.assertEqual(self.row(job)["state"], "lapsed")
+        ack = self.store.result(env["request_id"], 1, event_id=str(uuid4()), status="completed", artifacts=[],
+                                detail={}, output_text="done", protocol=2, runner_id="mac-a",
+                                at=(now - timedelta(seconds=15)).isoformat(), route="fakework",
+                                usage={"amount": USED, "unit": "test_units", "children_stopped": True})
+        self.assertEqual(ack["state"], "accepted")
+        row = self.row(job)
+        self.assertEqual((row["state"], row["reservation"]["state"], row["reservation"]["observed"]),
+                         ("completed", "settled", USED))
+        day = self.sql("SELECT reserved, observed FROM guild.mc_delegation_reservations")[0]
+        self.assertEqual((day["reserved"], day["observed"]), (0, USED))
+        self.assertEqual(self.reconcile(env, cp=None)["code"], "completed")       # nothing is run again
+
+    def test_b1_a_graceful_restart_keeps_what_was_made_before_the_stop(self):
+        """T4a: records that failed while the host was stopping are taken after the pause; later ones are not."""
+        job, env = self.claimed()
+        self.sql("""UPDATE guild.mc_delegations SET facts = facts || jsonb_build_object('leased_at',
+            clock_timestamp() - interval '30 seconds')""")
+        made = self.db_now() - timedelta(seconds=3)
+        self.beat("mac-a", announced="stopped")
+        self.assertEqual(self.row(job)["state"], "paused")
+        ok = self.store.progress(env["request_id"], 1, "stopping", protocol=2, runner_id="mac-a",
+                                 event_id=str(uuid4()), at=made.isoformat(), checkpoint=CP1)
+        self.assertEqual(ok["state"], "applied")
+        after = self.db_now() + timedelta(seconds=2)
+        self.assertEqual(self.store.progress(env["request_id"], 1, "stopping", protocol=2, runner_id="mac-a",
+                                             event_id=str(uuid4()), at=after.isoformat(), checkpoint=None)["code"],
+                         "lease_lapsed")
+        self.beat("mac-a")
+        a = self.reconcile(env)                                                    # from the replayed checkpoint
+        self.assertEqual((a["answer"], a["generation"], a["checkpoint"]["name"]), ("resume", 2, "s1"))
+
+    # ── SF1: no item ends with an effect's outcome open ──
+    def test_sf1_stop_grace_end_and_end_wait_for_an_open_effect_then_decide(self):
+        job, env = self.claimed()
+        gid = self.effect_grant(job, "e1")
+        self.assertEqual(self.send(env, "e1", gid)[0], "committed")             # dispatched; nothing finished it
+        op = effect_operation_id(env["request_id"], "e1")
+        self.assertEqual(self.store.stop(job), "requested")
+        self.lapse(job, 30)
+        self.store.sweep()
+        self.assertEqual(self.row(job)["state"], "lapsed")                        # not cancelled: e1 is open
+        self.sql("UPDATE guild.mc_delegations SET grace_deadline = clock_timestamp() - interval '1 second'")
+        self.assertEqual(self.store.sweep()["unknown"], 1)
+        row = self.row(job)
+        self.assertEqual((row["state"], row["generation"]), ("unknown", 1))
+        self.assertEqual(row["result_detail"]["operations"], [{"operation_id": op, "state": "dispatched"}])
+        self.assertEqual(row["result_detail"]["ending"], {"state": "cancelled", "code": "owner_stop"})
+        decisions = self.events("decision.queued", env["request_id"])
+        self.assertEqual([d["body"]["operations"][0]["operation_id"] for d in decisions], [op])
+        # The owner decides "end": it ends, its open operation is kept in its detail and still open for re-admission.
+        self.store.end(env["request_id"], by="robert", note="end it")
+        row = self.row(job)
+        self.assertEqual((row["state"], row["result_detail"]["open_operations"][0]["operation_id"]),
+                         ("interrupted", op))
+        self.assertEqual(self.store.open_operations(env["request_id"]), [{"operation_id": op, "state": "dispatched"}])
+        # Past grace without a Stop, and at reconcile with a Stop: the same, never a plain end.
+        job2, env2 = self.claimed(runner="mac-b", job="job-g2")
+        gid2 = self.effect_grant(job2, "e1")
+        self.send(env2, "e1", gid2, runner="mac-b")
+        self.sql("""UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1000 seconds'
+            WHERE job_id='job-g2'""")
+        self.store.sweep()
+        row = self.row(job2)
+        self.assertEqual((row["state"], row["result_detail"]["ending"]["code"]), ("unknown", "owner_unreachable"))
+        job3, env3 = self.claimed(runner="mac-c", job="job-s3")
+        gid3 = self.effect_grant(job3, "e1")
+        self.send(env3, "e1", gid3, runner="mac-c")
+        self.store.stop(job3)
+        a = self.reconcile(env3, runner="mac-c", cp=None, child="frozen")
+        self.assertEqual((a["answer"], a["code"]), ("decide", "effect_unknown"))
+        # The owner's "end" on a lapsed item with an open effect asks first: it becomes a decision.
+        job4, env4 = self.claimed(runner="mac-d", job="job-e4")
+        gid4 = self.effect_grant(job4, "e1")
+        self.send(env4, "e1", gid4, runner="mac-d")
+        self.lapse(job4, 5)
+        out = self.store.end(env4["request_id"], by="robert", note="end")
+        self.assertEqual((out["state"], self.row(job4)["state"]), ("unknown", "unknown"))
+        self.assertEqual(len(self.events("decision.queued")), 4)
+
+    def test_sf1_a_revocation_waits_for_an_open_effect_and_refuses_new_ones_at_once(self):
+        job, env = self.claimed()
+        gid = self.effect_grant(job, "e1", "e2")
+        answer, lease = self.send(env, "e1", gid)
+        self.assertEqual(answer, "committed")
+        out = self.store.revoke(self.grant_of[job], by="robert", note="W-REV with e1 in flight")
+        self.assertEqual((out["items"], out["waiting"]), ([], [env["request_id"]]))
+        row = self.row(job)
+        self.assertEqual((row["state"], row["facts"]["ending"]["code"]), ("claimed", "grant_revoked"))
+        self.assertFalse(self.store.renew(env["request_id"], 1, protocol=2, runner_id="mac-a"))
+        self.effect(env, "prepare", "e2", gid)
+        self.assertEqual(self.effect(env, "prepare", "e2", gid)["code"], "grant_revoked")    # new effects: at once
+        # e1's outcome is recorded (SF5), and then the item ends cancelled: grant_revoked.
+        self.assertEqual(self.effect(env, "finish", "e1", gid, lease=lease, state="verified",
+                                     evidence={"kind": "send", "outcome": "committed"})["state"], "ok")
+        self.assertEqual(self.store.sweep()["cancelled"], 1)
+        row = self.row(job)
+        self.assertEqual((row["state"], row["result_detail"]["code"]), ("cancelled", "grant_revoked"))
+        self.assertEqual(self.result(env)["code"], "item_ended")
+
+    # ── SF2: a reassigned item waits for its new owner ──
+    def test_sf2_a_reassignment_starts_no_lease_until_the_new_owner_picks_it_up(self):
+        job, env = self.claimed(runner="mac-a", host="mac-test-1")
+        self.beat("mac-a2", "mac-test-1")                                # the same host, another runner id
+        self.lapse(job, 0)
+        self.store.sweep()
+        out = self.store.reassign(env["request_id"], "mac-a2", by="robert", note="restart it there")
+        self.assertEqual(out, {"state": "reassigned", "generation": 2, "runner_id": "mac-a2"})
+        row = self.row(job)
+        self.assertEqual((row["state"], row["runner_id"], row["lease_until"], row["grace_deadline"]),
+                         ("queued", "mac-a2", None, None))               # never running, no grace clock
+        self.beat("mac-b")
+        self.assertIsNone(self.store.claim("mac-b", CAPS, protocol=2))   # nobody else's
+        self.sql("UPDATE guild.mc_delegation_runners SET seen_at = seen_at - interval '3 hours' WHERE runner_id='mac-a2'")
+        self.store.sweep()
+        self.assertEqual(self.row(job)["state"], "queued")               # waiting is the owner's, not a lapse
+        self.beat("mac-a2", "mac-test-1")
+        got = self.store.claim("mac-a2", CAPS, protocol=2)
+        self.assertEqual((got["envelope"]["generation"], self.row(job)["state"]), (2, "claimed"))
+        self.assertGreater(self.row(job)["lease_until"], self.row(job)["now"])
+        # Stopped before its pickup: confirmed at once, its reservation unreported, never released as zero.
+        job2, env2 = self.claimed(runner="mac-c", host="mac-test-1", job="job-s")
+        self.lapse("job-s", 0)
+        self.store.reassign(env2["request_id"], "mac-a2", by="robert", note="restart")
+        self.assertEqual(self.store.stop("job-s"), "confirmed")
+        self.assertEqual((self.row("job-s")["state"], self.row("job-s")["reservation"]["state"]),
+                         ("cancelled", "unreported"))
+
+    # ── SF5: an outcome is recorded whatever happened since its dispatch ──
+    def test_sf5_a_finish_after_a_stop_a_revocation_or_a_resume_is_taken(self):
+        job, env = self.claimed()
+        gid = self.effect_grant(job, "e1", "e2", "e3")
+        _, lease = self.send(env, "e1", gid)
+        self.beat("mac-a", announced="stopped")                           # G4: paused, its lease ended now
+        self.assertEqual(self.effect(env, "finish", "e1", gid, lease=lease, state="verified",
+                                     evidence={"kind": "send", "outcome": "committed"})["state"], "ok")
+        self.beat("mac-a")
+        a = self.reconcile(env, cp=None)
+        self.assertEqual((a["answer"], a["generation"]), ("resume", 2))   # OWN-5: no decision for a known outcome
+        self.assertEqual(self.events("decision.queued"), [])
+        # The effect grant revoked between dispatch and finish: still recorded, as a readback is.
+        g2 = {**env, "generation": 2}
+        _, lease2 = self.send(g2, "e2", gid)
+        with self.connect() as conn:
+            GRANTS.revoke(conn, "robert", "dev", gid)
+        done = self.effect(g2, "finish", "e2", gid, lease=lease2, state="verified",
+                           evidence={"kind": "send", "outcome": "committed"})
+        self.assertEqual((done["state"], done["recorded_as"]), ("ok", "readback"))
+        self.assertEqual(self.receipt(env, "e2")["state"], "verified")
+        # A finish sent under the generation the effect was dispatched in, after a resume: the same owner, taken.
+        self.lapse(job)
+        self.assertEqual(self.reconcile(g2, cp=None)["answer"], "resume")
+        self.assertEqual(self.effect(env, "reconcile", "e2", gid)["code"], "receipt_terminal")
+        self.assertEqual(self.effect(env, "finish", "e2", gid, lease=lease2, state="verified",
+                                     evidence={"kind": "send", "outcome": "committed"})["state"], "already_applied")
+
     # ── the owner's acts ──
     def test_t10_w_rev_revocation_end_to_end(self):
         job, env = self.claimed()
@@ -605,6 +822,7 @@ class Recovery(PostgresFixture, unittest.TestCase):
         self.sql("UPDATE guild.mc_delegations SET grant_id=%s WHERE job_id='job-q'", (self.grant_of[job],))
         out = self.store.revoke(self.grant_of[job], by="robert", note="W-REV")
         self.assertEqual(sorted(out["items"]), sorted([env["request_id"], str(self.row(queued)["request_id"])]))
+        self.assertEqual(out["waiting"], [])                                  # e1 was claimed, never dispatched
         row = self.row(job)
         self.assertEqual((row["state"], row["result_detail"]["code"], row["reservation"]["state"]),
                          ("cancelled", "grant_revoked", "kept"))
@@ -655,8 +873,8 @@ class Recovery(PostgresFixture, unittest.TestCase):
         out = store.reassign(env["request_id"], "stg-b", by="robert", note="T5d: move W-M to S")
         self.assertEqual((out["generation"], out["runner_id"]), (2, "stg-b"))
         row = self.row(job)
-        self.assertEqual((row["state"], row["generation"], row["runner_id"], row["checkpoint"]),
-                         ("claimed", 2, "stg-b", None))
+        self.assertEqual((row["state"], row["generation"], row["runner_id"], row["checkpoint"], row["lease_until"]),
+                         ("queued", 2, "stg-b", None, None))
         # The old owner: reconcile answers stop; its stale writes and effects are refused.
         self.assertEqual(self.reconcile(env, store=store)["code"], "reassigned")
         self.assertEqual(self.progress(env)["code"], "stale_generation")
@@ -695,27 +913,61 @@ class Recovery(PostgresFixture, unittest.TestCase):
         self.assertEqual(self.sql("SELECT observed FROM guild.mc_delegation_reservations")[0]["observed"], USED)
 
     def test_the_relay_reap_moves_to_the_sweeper(self):
+        """Where a sweeper runs, relay.status writes nothing and derives the lapse (never running, E11); the sweeper
+        reaps. A store built as production builds it (no configuration) reaps on read exactly as today."""
         from core.mc_delegation_dispatcher.relay import DelegationRelay
-        no_sweeper = {k: v for k, v in TEST_VALUES.items() if k != "sweeper"}
-        for authority, reaps in ((AUTH, False), (Authority.parse(no_sweeper), True)):
+        caps = {"cost_enforced_actors": ["claude-code"], "scopes": ["research"], "repositories": ["personal-ai-agents"]}
+        for store, reaps in ((self.store, False),
+                             (DispatcherStore(self.connect, principal="robert", environment="dev"), True)):
             self.setUp()
-            store = self.make_store(authority)
             relay = DelegationRelay(store, ref_for=lambda r: "a" * 40)
             self.assertEqual(relay.start({"agent": "claude-code", "job_id": "j-v1", "task": "t"})[0], "accepted")
-            store.heartbeat("mac-prod", "online", {"cost_enforced_actors": ["claude-code"], "scopes": ["research"],
-                                                   "repositories": ["personal-ai-agents"]})
-            self.assertIsNotNone(store.claim("mac-prod", {"cost_enforced_actors": ["claude-code"],
-                                                          "scopes": ["research"],
-                                                          "repositories": ["personal-ai-agents"]}))
+            store.heartbeat("mac-prod", "online", caps)
+            self.assertIsNotNone(store.claim("mac-prod", caps))
             self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '300 seconds'")
             state = relay.status("j-v1")[1]
             self.assertEqual((state["state"], state["error_class"]),
-                             ("failed", "interrupted") if reaps else ("running", None), authority.sweeper)
+                             ("failed", "interrupted") if reaps else ("unknown", None), reaps)
             if not reaps:
+                self.assertEqual(self.row("j-v1")["state"], "claimed")             # derived, not written
                 self.assertEqual(store.sweep()["runner_lost"], 1)                # the sweeper reaps it instead
                 self.assertEqual(relay.status("j-v1")[1]["error_class"], "interrupted")
             self.assertEqual(self.row("j-v1")["result_detail"]["code"], "runner_lost")
 
+    def test_n8_revocation_and_an_outage_extension_never_deadlock(self):
+        """N8: an outage's grace extension locks lapsed items in request_id order, as revoke does. Three rounds of a
+        revocation racing an outage being recorded over the same lapsed items."""
+        rounds = []
+        for r in range(3):
+            gid = self.grant("delegate.start_build", (item_subject_digest(
+                actor="fakework", scope="build", repository="personal-ai-agents", ref="a" * 40, brief=BRIEF,
+                route="fakework", amount=AMOUNT),), ops=2)
+            for k in range(2):
+                self.store.enqueue(job_id=f"job-n8-{r}-{k}", actor="fakework", scope="build",
+                                   repository="personal-ai-agents", ref="a" * 40, brief=BRIEF, cost_cap_usd=1.0,
+                                   deadline_s=600, route="fakework", amount=AMOUNT, grant_id=gid)
+                self.beat(f"mac-n8-{r}-{k}")
+                self.assertIsNotNone(self.store.claim(f"mac-n8-{r}-{k}", CAPS, protocol=2))
+            rounds.append(gid)
+        self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '5 seconds'")
+        self.store.sweep()
+        self.assertEqual(len(self.sql("SELECT 1 FROM guild.mc_delegations WHERE state='lapsed'")), 6)
+        for gid in rounds:
+            self.age_authority(120)
+            barrier = threading.Barrier(2)
+
+            def revoke():
+                barrier.wait()
+                return self.make_store(AUTH).revoke(gid, by="robert", note="N8")
+
+            def outage():
+                barrier.wait()
+                return self.make_store(AUTH).authority_beat()
+            with ThreadPoolExecutor(2) as pool:
+                got = [f.result() for f in (pool.submit(revoke), pool.submit(outage))]
+            self.assertEqual(len(got[0]["items"]), 2)
+            self.assertIsNotNone(got[1])
+        self.assertEqual(len(self.events("authority.suspended")), 3)
 
 if __name__ == "__main__":
     unittest.main()

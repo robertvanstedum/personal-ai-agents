@@ -576,7 +576,7 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
         self.assertEqual(self.progress({**env, "generation": 2}, t0)["code"], "stale_generation")
         self.assertEqual(self.progress(env, self.db_now() + timedelta(seconds=120))["code"], "event_time_invalid")
         self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second'")
-        # A host time from before the lapse doesn't reopen it: lease decisions are the database's alone.
+        # After the lapse, a host time from before its lease began is refused: the window is the database's lease.
         self.assertEqual(self.progress(env, t0 + timedelta(seconds=2))["code"], "lease_lapsed")
         # A replay is still answered as one, whatever has happened to the item since (DUP-5).
         self.assertEqual(self.progress(env, t0, event_id=e2, phase="building", checkpoint=cp2)["state"], "already_applied")
@@ -662,21 +662,30 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
         # Refused results are audited once per event and reason, however often they are resent.
         self.assertEqual(len([e for e in self.events("result.refused") if e["body"]["code"] == "not_owner"]), 1)
 
-    def test_a_result_after_the_lease_lapsed_records_nothing(self):
-        """As version 1 says: a stale generation, a lapsed lease or a cancelled job can never record a completion. The
-        lease is judged on the database's clock; the host's own time, however early, doesn't reopen it."""
+    def test_a_result_after_the_lease_lapsed_is_taken_only_if_made_while_it_ran(self):
+        """R5.1-c: after a lapse, a result the host made while its lease ran is still taken (and settles); one stamped
+        after the lease ended, or before the authority granted it, is refused. Both bounds are the database's (the
+        claim and the stored lease_until), widened by clock_skew_s (1 s in the test values)."""
         self.beat()
         self.item(amount=0.5)
         claimed = self.claim()
         env = {"request_id": claimed["envelope"]["request_id"], "generation": 1}
-        made = self.db_now() - timedelta(seconds=2)
-        self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second'")
-        for at in (made, made - timedelta(days=2), self.db_now()):
-            ack = self.result(env, at=at, amount=0.5)
-            self.assertEqual((ack["state"], ack["code"]), ("refused", "lease_lapsed"))
+        # The lease was granted 60 s ago and ran out 10 s ago (database clock).
+        self.sql("""UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '10 seconds',
+            facts = facts || jsonb_build_object('leased_at', clock_timestamp() - interval '60 seconds')""")
+        now = self.db_now()
+        for at in (now - timedelta(seconds=8), now, now - timedelta(seconds=62), now - timedelta(days=2)):
+            ack = self.result(env, at=at, amount=0.5)                       # after the lapse, or before the claim
+            self.assertEqual((ack["state"], ack["code"]), ("refused", "lease_lapsed"), at)
         row = self.row("job-1")
         self.assertEqual((row["state"], row["result_event_id"], row["reservation"]["reserved"]), ("claimed", None, 0.5))
-        self.assertEqual(float(self.day_rows()[0]["reserved"]), 0.5)           # nothing settled either
+        self.assertEqual(float(self.day_rows()[0]["reserved"]), 0.5)           # nothing settled by a refusal
+        ack = self.result(env, at=now - timedelta(seconds=30), amount=0.25)       # made while the lease ran
+        self.assertEqual(ack["state"], "accepted")
+        row = self.row("job-1")
+        self.assertEqual((row["state"], row["reservation"]["state"], row["reservation"]["observed"]),
+                         ("completed", "settled", 0.25))
+        self.assertEqual((float(self.day_rows()[0]["reserved"]), float(self.day_rows()[0]["observed"])), (0, 0.25))
 
     # ── the (route, actor) gate (SF1) ──
     def test_a_route_runs_only_the_workers_it_names(self):
