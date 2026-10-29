@@ -496,7 +496,10 @@ def _drift(r, rec, now, cards, card, cp, total, unknowns) -> list:
     if not card:
         return []
     c = cards.get(r.get("card_id")) or {}
-    approved = (c.get("record") or {}).get("card") or {}
+    if not c.get("record"):
+        unknowns.append("card_record: its admission is not among the records read")
+        return []
+    approved = c["record"].get("card") or {}
     out = []
     allowed = approved.get("paths_allowed") or []
     if not allowed:
