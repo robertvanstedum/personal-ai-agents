@@ -45,6 +45,7 @@ from core.realtime_voice.direct_host import (FAILED, DirectVoiceAdapter, DirectV
                                              direct_rules, install_direct_voice, speakable)
 from core.realtime_voice.voice_card import load_pinned
 
+from ..guild_mounts import DIRECT_VOICE_ADMITTED
 from . import _api_error, cfg, mc_voice_reveal as reveal, owner_api
 from .security import check_stop, check_write, json_error
 from .stores import NOTE_MAX
@@ -52,7 +53,7 @@ from .stores import NOTE_MAX
 log = logging.getLogger(__name__)
 ENV = "MINIMOI_MC_VOICE_DIRECT"
 # Spec 165 §11.1: written only by guild_mounts.production_environ ("1" admitted, "0" not); absent off the production mount.
-ADMITTED = "MINIMOI_MC_VOICE_DIRECT_ADMITTED"
+ADMITTED = DIRECT_VOICE_ADMITTED
 PREFIX = "/api/v1/mc/voice/direct"
 # MC's card: <CARD_ROOT>/pin.json names the adopted release; read at each bootstrap, so a session keeps the card it started with.
 CARD_ROOT = Path(__file__).resolve().parents[2] / "services/mc_operations/personas/mc-chat"

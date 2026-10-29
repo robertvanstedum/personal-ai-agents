@@ -357,6 +357,19 @@ def test_a_raw_admission_without_the_switch_is_overwritten_and_the_switch_alone_
     assert production_environ({})[ADMITTED] == "0"                                  # always written on this mount
 
 
+def test_reading_production_environ_never_imports_the_voice_host(monkeypatch):
+    """mount_all reads production's environment before the mount's own try: a voice host that fails to import must leave
+    the mount's 503 to answer, never stop the portal (DIRECT_VOICE_ADMITTED is named in guild_mounts for this)."""
+    import sys
+    from minimoi_portal.guild_mounts import DIRECT_VOICE_ADMITTED, production_environ
+    from minimoi_portal.guild_ui.mc_voice_direct import ADMITTED
+    assert ADMITTED == DIRECT_VOICE_ADMITTED
+    monkeypatch.setitem(sys.modules, "minimoi_portal.guild_ui.mc_voice_direct", None)      # any import of it now fails
+    env = production_environ({"MINIMOI_GUILD_CHAT": "cos", "MINIMOI_GUILD_VOICE_PRODUCTION": "1", "MINIMOI_MC_VOICE": "1",
+                              DIRECT_INSTALL: "1", DIRECT_SWITCH: "1"})
+    assert env[DIRECT_INSTALL] == "1" and env[DIRECT_VOICE_ADMITTED] == "1"
+
+
 @pytest.mark.parametrize("chat", ["cos", "mc"])
 def test_mc_direct_voice_leaves_managed_voice_and_the_cos_files_exactly_as_they_were(chat):
     """test_production_managed_controls.py's gates and the CoS shared files: the same with the direct switches as without."""

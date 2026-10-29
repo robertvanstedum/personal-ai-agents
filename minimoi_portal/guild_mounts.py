@@ -41,7 +41,7 @@ included) where MC voice is admitted (``MINIMOI_GUILD_VOICE_PRODUCTION`` and a
 chat partner); starting sessions also needs
 ``MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION``, decided only by
 ``production_environ`` through the derived key
-``mc_voice_direct.ADMITTED``. Both default off. Staging and the Mac never
+``DIRECT_VOICE_ADMITTED``. Both default off. Staging and the Mac never
 reach ``production_environ``: there installing allows starts, as before.
 
 Both mounts use the portal's real owner guard. A mount that is switched on but
@@ -233,6 +233,10 @@ PRODUCTION_HELD_OFF = ("MINIMOI_GUILD_MC", "MINIMOI_GUILD_MC_TURNS", "MINIMOI_GU
                        "MINIMOI_MC_MANAGED_REALTIME", "MINIMOI_MC_VOICE_DIRECT")
 # Spec 165 §11.1: starts on MC's installed direct path in production (S2); off, it is S1 or S3.
 DIRECT_VOICE_PRODUCTION_FLAG = "MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION"
+# The derived key production_environ always writes from it ("1" admitted, "0" not); mc_voice_direct.may_start reads it.
+# Named here, not there, so reading production's environment never imports the voice host: a voice import that fails
+# leaves the mount's own 503 to answer, never the portal unable to start.
+DIRECT_VOICE_ADMITTED = "MINIMOI_MC_VOICE_DIRECT_ADMITTED"
 
 
 def origin_host(base_url) -> str:
@@ -292,12 +296,11 @@ def production_environ(environ) -> dict:
     PRODUCTION_MC_RELAY_URL with a caller token. The four shared-agent attachment settings are admitted only for that selection and valid paths/UID/GID. Anything else leaves the chat honestly "off".
 
     MC's direct voice (Spec 165 §11.1): MINIMOI_MC_VOICE_DIRECT passes where MC voice does, which installs its routes
-    (record routes included); whether it may start sessions is decided here alone. The derived key mc_voice_direct.ADMITTED
+    (record routes included); whether it may start sessions is decided here alone. The derived key DIRECT_VOICE_ADMITTED
     is always written: "1" only where MC voice is admitted and DIRECT_VOICE_PRODUCTION_FLAG is on, else "0". The raw
     environment's copy of that key is overwritten, never trusted (the portal decides production by BASE_URL, and staging
     runs the production compose, so this mount is the only place that knows). Like everything here, a per-process
     snapshot: a change takes a restart."""
-    from .guild_ui.mc_voice_direct import ADMITTED
     held_off = set(PRODUCTION_HELD_OFF) | set(PRODUCTION_COS_FILES)
     chat = _production_chat(environ)
     # The existing explicit CoS selection is the authority; file paths and runtime
@@ -313,10 +316,10 @@ def production_environ(environ) -> dict:
         # enable controlled sessions. Schema/runtime checks remain in install().
         if flag_on(environ, "MINIMOI_GUILD_MANAGED_VOICE_PRODUCTION"):
             held_off.discard("MINIMOI_MC_MANAGED_REALTIME")
-        # Installing MC's direct path is allowed where MC voice is (S1); its starts are ADMITTED's, below.
+        # Installing MC's direct path is allowed where MC voice is (S1); its starts are DIRECT_VOICE_ADMITTED's, below.
         held_off.discard("MINIMOI_MC_VOICE_DIRECT")
     env = {k: v for k, v in dict(environ).items() if k not in held_off}
-    env[ADMITTED] = "1" if voice and flag_on(environ, DIRECT_VOICE_PRODUCTION_FLAG) else "0"
+    env[DIRECT_VOICE_ADMITTED] = "1" if voice and flag_on(environ, DIRECT_VOICE_PRODUCTION_FLAG) else "0"
     if chat == "cos":
         env["MINIMOI_GUILD_MC"] = "cos"
         env["MINIMOI_GUILD_MC_TURNS"] = "1"
