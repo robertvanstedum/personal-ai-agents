@@ -3,15 +3,28 @@
 | | |
 |---|---|
 | **Spec** | 165 |
-| **Date** | 28 October 2026 (v0.1, v0.2 and v0.3); 29 October 2026 (v0.4) |
+| **Date** | 28 October 2026 (v0.1, v0.2 and v0.3); 29 October 2026 (v0.4, v0.4.1 and v0.4.2) |
 | **Author** | Claude Code, for Robert |
-| **Status** | **Draft v0.4.1 for review; D1–D23 answered (§16).** Robert authorized the build on 28 Oct (§1). This spec authorizes no deploy, flag, merge, credential or provider call. |
+| **Status** | **Draft v0.4.2 for review; D1–D23 answered (§16), and the three points left open answered on 29 Oct.** Robert authorized the build on 28 Oct (§1). This spec authorizes no deploy, flag, merge, credential or provider call. |
 | **Decision owner** | Robert |
 | **Review record** | v0.1 (`64b1896f`): independent review (`docs/specs/reviews/REVIEW_independent_spec_165_v0.1.md`, `5f2ebdce`); Codex (`docs/specs/reviews/REVIEW_codex_spec_165_v0.1.md`, `89edb852`); Codex's Chunk B code review (`planning-studio/…/trial-01-mc-voice-2026-10-27/REVIEW_codex_chunk_B.md`), carried in §5. v0.2 (`729d29c9`): Codex's delta review (`docs/specs/reviews/REVIEW_codex_spec_165_v0.2_delta.md`, `49dae6de`), V2-1 to V2-5, all answered in v0.3. v0.3 (`a772980d`): the build thread's amendment request (`planning-studio/operations/threads/HANDOFF_BUILD_TO_DESIGN_SPEC_165_C2_BINDING_2026-10-28.md`, items 1–11), Gate 2's code review and the post-Gate-2 review (`…/minimoi-1-2-voice/REVIEW_gate2_code.md`, `REVIEW_post_gate2.md`), all recorded in v0.4. Codex's CC_24 was withdrawn by Robert (§1, item 8). **Pending on v0.4:** Grok, then Claude Chat (the order agreed for v0.3; no review of v0.3 is recorded) |
 | **Builds on** | Spec 164 v0.3, approved 27 Oct (`437b7f8c`, PR #421); its phase order (§9–§11) is replaced here, the rest stands unless this spec says otherwise |
 | **Code base** | `grok/mc-voice-conversation` `93bf00c6` (PR #426, open; never merged alone). The build is on `claude/voice-1-2`, stacked on `93bf00c6`: A1 from `99b3d0f0`; its fix round to `96601e7e`; the binding pass (Robert's C2 decision) `8eb30a10`, Gate 1 at `b0c3518c`; A2 and A3; Gate 2 at `c5edaf86`, clean at `89d115b6`; MC's production switch `5c44feb8`, `ecbd3741`; the cards Robert picked, to `c06adcdd`. §5.7 says where the build does not yet meet this contract |
 | **Initiative** | INIT-2026-0010. Part B: issue #433 (queued) |
 | **References** | `file:line` is `93bf00c6` unless marked `main` (`4954ad9f`), `A1` (`99b3d0f0`), `A1F` (`005c9e81`) or `V` (`c06adcdd`). Findings marked P1–P6, LV, Q, B are in `…/minimoi-1-2-voice/A1_FIX_FINDINGS.md`; S-1 to S-4 and N1–N7 in `REVIEW_post_gate2.md`. **Unverified** items are in §20 |
+
+## Changes from v0.4.1 (29 October 2026)
+
+Robert answered the three points v0.4.1 left open, by button: "CoS first (Recommended)", "Accent lives in the card
+(Recommended)", "Fix in a follow-up (Recommended)". Then, once the build thread showed that S-2 is in the shared core
+and so affects both hosts: "Fix before go-live (Recommended)".
+
+| Change | Addressed in |
+|---|---|
+| S-2 is in the shared core: after any restart, End on an earlier session answers 403, on both hosts. It is fixed in the core before either admission | §11.1; §11.5; §16; §20 |
+| Production admission order: after the S-2 fix, CoS first, then MC on Robert's word | §11.5 |
+| The persona record (PG S-4): the English accent belongs to each voice card. Persona v1.1 stays, so there is no re-lock or rebuild | §6.2; D1 |
+| D5's caveat (forged headers): fixed by a follow-up spec, in which the portal proves to `cos-scheduler` that a request came through it. Not a blocker for 1.2's first release | §6.5; §8; D5; §16 |
 
 ## Changes from v0.3 (29 October 2026)
 
@@ -544,7 +557,7 @@ hosts".
 | Store `close`, `records`, `state`, `sessions` (§4.4) | A2 adds what CoS needs | built in A2; `close` returns `(closed\|already, fields)`, its boundary inside `capture` (`A2_RESULT.md`) | closed |
 | CoS projection by revision; tail repair (§6.5) | as §6.5 | built in A2; Gate 2 Q N2, Q N5 fixed | closed |
 | A repeated sentence is a new effect (§5.1) | a new effect | refused on xAI by the folding exception (§5.1) | recorded exception; A4 counts it |
-| S3: open sessions End (§11.1) | End answers in S3 | End answers 403 after the admission restart (PG S-2) | open, before §11.5 step 3 |
+| S3: open sessions End (§11.1) | End answers in S3 | End answers 403 after any restart, on both hosts (PG S-2; shared core) | fixed in the core before either admission (§11.5 step 3; Robert, 29 Oct) |
 | MC's manifest names its persona (§4.5) | `persona: {source, version, sha256}` | MC's manifest has `"persona": "mc-chat"`, its package name (PG N7) | open; a new MC release adds it (build thread) |
 
 ## 6. Chief of Staff standardization (core goal)
@@ -624,7 +637,10 @@ adds only her name and voice-surface wording; MC's card does the same. Each part
 says "fluent, natural English with a light Austrian accent where the voice provider supports it". Both cards now ask
 for British English, Robert's pick by ear (§1, item 13). MC and CoS still share an accent and most of a manner; it is
 the persona record and the cards that differ. Her typed and Telegram replies are still compiled from v1.1. How the
-record follows Robert's choice is D1: open.
+record follows Robert's choice is D1. **Settled 29 Oct (Robert): the English accent belongs to each voice card.**
+Persona v1.1 stays as locked. Typed and Telegram replies have no accent, so neither a re-lock nor a rebuild of
+`cos-agent-a` is needed. So §6.2's rule reads: a card may set its own English variety, and everything else in the
+manner comes from the persona.
 
 ### 6.3 Her session instructions
 
@@ -678,7 +694,7 @@ consult whose owner text is only a confirmation or stop word, both hosts: "Confi
 - **Caveat (Gate 2 Q N7; D5).** The folder is out of her runtime's reach, but the routes are not. `cos-agent-a` can
   still call `cos-scheduler`'s voice routes with forged `X-Minimoi-*` headers, as it can reach Confer's routes today,
   and read a recovering session. D5 (b) is enforced at the folder only. Closing it needs portal-to-scheduler
-  authentication: a follow-up spec, or an accepted limit. Open; Robert decides.
+  authentication. **Robert, 29 Oct: fix it in a follow-up spec;** it does not block 1.2's first release.
 - **Files:** `<session>.jsonl`; the id validated before any path is built; folder 0700, files 0600, `O_NOFOLLOW |
   O_APPEND`, fsync before `put` returns. A per-session lock plus `flock`; the id index rebuilt from the file after a
   restart. First write wins: from two devices, the first decision stands and the second hears "Already decided".
@@ -825,7 +841,7 @@ untagged and show before End (Chunk B, "not covered"). A note saved by CoS voice
 at once (D21). Consults run in the live runtime session (MC's conversation; CoS's `owner`), so the runtime knows what
 was said before End and a typed or Telegram reply could refer to it. On Grok, instructions pass through his browser.
 On Grok, words folded from an overtaken turn may show twice in the reveal and the summary (LV6). Her runtime can reach
-`cos-scheduler`'s voice routes with forged headers (§6.5; D5, open).
+`cos-scheduler`'s voice routes with forged headers (§6.5; D5): a follow-up spec closes it.
 
 ## 9. Retirement: what is removed, when, what stays
 
@@ -899,8 +915,11 @@ After it, End on a session started before the restart answers 403 "not your sess
 provider audio, browser to provider, carries on; its consults and transcript posts are refused too; what was said
 reveals only when the summary is asked for or the session's maximum passes. S3 has been exercised on a synthetic
 mount only, not the real portal. Either End closes a session from its durable start marker, owner and conversation
-checked (the build thread), or Robert accepts the 403 as S3's contract and this section is amended. Robert decides,
-before §11.5 step 3; then a real-portal S3 test. It does not block a merge with every switch unset. The check is in
+checked (the build thread), or Robert accepts the 403 as S3's contract and this section is amended. **Robert, 29
+Oct: "Fix before go-live".** The defect is in the shared core (`direct_host.py:1967-1969`): End checks the session
+against the process's own ledger. So it hits both hosts, after any restart, an ordinary redeploy as much as a
+rollback. The fix: End closes a session from its durable start marker, with the owner and conversation checked. It
+lands before either admission (§11.5), followed by a real-portal S3 test on each host. It does not block a merge with every switch unset. The check is in
 the core; whether CoS's S3 has the same gap is unverified (§20).
 
 ### 11.2 Staging first
@@ -985,9 +1004,11 @@ One bundle (PR #426 and the A chunks), on Robert's word, from a clean `origin/ma
 2. Health of every service deployed; the no-change assertions; Robert on Gespräche (one provider) and Conversas (the
    other), two minutes each, the panel handover once; a typed Confer turn, CoS Dictate, MC Dictate, one MC relay
    turn. Any regression: roll the bundle back.
-3. MC admission on, once S-2 is settled (§11.1); Robert's short MC script on the phone.
-4. CoS admission on; her short script. If CoS fails: her admission off (S3); MC's stays only on Robert's word.
-5. Daily use and D9's evidence; then A6.
+3. **Before either admission:** the S-2 fix in the core, then a real-portal S3 test on each host (§11.1).
+4. **CoS admission on first** (Robert, 29 Oct); her short script on the phone. If CoS fails, her admission goes off
+   (S3).
+5. **MC admission on, on Robert's word;** his short script on the phone.
+6. Daily use and D9's evidence; then A6.
 
 ### 11.6 Rollback
 
@@ -1114,7 +1135,7 @@ D1–D23, including D4, D12 and D18 explicitly; on D10 one host may use up the o
 - **D10:** one host may use up the other's day.
 - **D15:** superseded on 28 Oct by "claude tests only without Codex", two Claude-only gates.
 - **D2 and D3:** settled by ear (§1).
-- **Still open:** the D5 caveat (forged headers, §6.9) and S-2 (§11.1).
+- **Answered 29 Oct:** the D5 caveat, by a follow-up spec. S-2 (§11.1), by a core fix before either admission (§11.5).
 - **Not yet built:** D17 (the shared rules into the core) and D23 (§14.1). They follow on their own branch after the
   switched-off predeploy.
 
@@ -1122,10 +1143,9 @@ D1–D23, including D4, D12 and D18 explicitly; on D10 one host may use up the o
 CoS-only manner: split the persona, re-lock, rebuild `cos-agent-a`; (c) a new shared manner, same route. *CC: (a);
 (b)/(c) only as a persona adoption after the audition. IR: (a), reframed so. CX: (a); Robert adopts the final card.*
 **Robert's words** (29 Oct; §1, item 13) settle what both cards say: "MC british and Austrian", CoS "British";
-longtime collaborators; colleague-style corrections; MiniMoi "Go french". The two still share one manner. **Open**
-(PG S-4): persona v1.1, which her manifest names and her runtime is compiled from, says "a light Austrian accent".
-Either §6.2 is amended so the English variety belongs to the card, or a persona v1.2 is adopted (re-lock, rebuild
-`cos-agent-a`). Robert decides.
+longtime collaborators; colleague-style corrections; MiniMoi "Go french". The two still share one manner. **Settled
+29 Oct** (PG S-4): persona v1.1, which her manifest names and her runtime is compiled from, says "a light Austrian
+accent". §6.2 is amended so the English variety belongs to the card, and persona v1.1 stays.
 
 **D2. CoS voice ids.** (a) OpenAI `cedar`, Grok by ear; (b) unset; (c) both by ear. Grok receives her briefing.
 *CC: (a). IR: name the Grok data flow (done). CX: (a); no silent fallback to unset defaults.*
@@ -1143,7 +1163,8 @@ outside her runtime's mounts; (c) Postgres. *CC: (b): (a) is in the folder her r
 its delta review; verify the mounts and backups before activation. All three agree.*
 **Caveat for Robert** (Gate 2 Q N7; §6.5): (b) keeps the folder from her runtime, not the routes; it can call
 `cos-scheduler`'s voice routes with forged `X-Minimoi-*` headers, as it can Confer's today. Spec portal-to-scheduler
-authentication as a follow-up, or accept it as a recorded limit. **Open**, Robert decides.
+authentication as a follow-up, or accept it as a recorded limit. **Answered 29 Oct: a follow-up spec,** not a
+blocker for 1.2's first release.
 
 **D6. CoS recall.** (a) Project settled sessions as DATA (§6.5); (b) voice store only. *CC: (a). IR: (a), settled
 sessions only. CX: (a), revision-aware and recoverable (§6.5).*
@@ -1281,8 +1302,8 @@ merge, flag or deploy without Robert's word.
   3 s after its call only refuses. xAI meets neither condition (§7), so no model action on xAI rests on its event
   order; its spoken summary is likely never read as heard, and never falsely (LV5).
 - How often the folding exception (§5.1) refuses a deliberate repeat on xAI.
-- S3 on the real portal: End after the admission restart answers 403 for MC (§11.1, PG S-2); whether CoS's S3 has the
-  same gap.
+- S3 on the real portal, after the S-2 core fix, on both hosts (§11.1). Before the fix, End after any restart
+  answers 403 on both.
 - Whether OpenClaw's built-ins ask for confirmation in ways its configuration does not show.
 - The cloud staging host: its name, keys, login, folders, allowance.
 - The summary keys (not yet created); the gateway's reachability from portal and `cos-scheduler` (both share its
