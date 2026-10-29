@@ -25,6 +25,7 @@ import threading
 from dataclasses import dataclass
 
 from core.minimoi_actions.context import ActionContractError
+from core.minimoi_actions.grants import CARD_CAPABILITY
 
 from . import catalogue
 
@@ -111,6 +112,9 @@ HANDLERS["action_clarify_v1"] = Handler("minimoi_clarify_action", "guild.board.c
 
 # Belt and braces: whatever HANDLERS says, these capability families never go below tier 3.
 FLOOR_3 = ("guest.reject", "guest.approve", "access.", "issue.", "delegate.", "deploy.", "repair.", "policy.")
+# delegate.card (host runtime spec v0.5 R4.3-c, N1) is the one capability whose single exact approval covers several
+# operations, a card's enumerated steps. Its floor is named on its own, so no narrowing of the families above lowers it.
+FLOOR_3_CARD = CARD_CAPABILITY
 
 
 class PolicyInvalid(ActionContractError):
@@ -185,7 +189,7 @@ def _rule(row) -> Rule:
             or row["source_requirement"] != "current_owner_turn"):
         raise PolicyInvalid("policy_rule_mismatch")
     if type(tier) is not int or tier not in handler.tiers or row["approval"] != _APPROVAL_FOR_TIER.get(tier) \
-            or (tier < 3 and handler.capability.startswith(FLOOR_3)):
+            or (tier < 3 and (handler.capability.startswith(FLOOR_3) or handler.capability == FLOOR_3_CARD)):
         raise PolicyInvalid("policy_below_floor")
     if row["verify"] != handler.verify or (tier >= 2 and not handler.verify):
         raise PolicyInvalid("policy_verifier_mismatch")

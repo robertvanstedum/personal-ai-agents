@@ -5,7 +5,11 @@ not an intent inference component. No tool or HTTP handler exposes issue().
 The issuer must authenticate retained owner turns, resolve authorized resources,
 and compile the exact canonical domain request under a reviewed template.
 Quoted/pasted content and lessons cannot mint these objects. Natural-language
-compilation and broader field-constrained templates are separate work.
+compilation and broader field-constrained templates are separate work, except
+one narrow template: delegate.card (host runtime spec v0.5 R4.3-c, N1). One exact
+owner approval of a card covers that card's enumerated steps, one operation each,
+each named by its step template digest; a step's request is exactly that digest
+plus input artifact digests, the only free field (card_step_template).
 
 Borrow the binding transaction: binding/session -> grant -> receipt lock order.
 prepare_effect consumes cardinality and prepares its receipt atomically. At the
@@ -23,6 +27,7 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import re
+import uuid
 from types import MappingProxyType
 
 from .context import ActionContext, ActionContractError, _aware, _identifier
@@ -30,6 +35,34 @@ from .receipts import EffectIntent, ReceiptStore, _cursor, _uuid
 
 _DIGEST = re.compile('[0-9a-f]{64}')
 _CAPABILITY = re.compile(r'[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+')
+# R4.3-c (N1): the one capability whose single exact approval covers several operations, a card's enumerated steps.
+CARD_CAPABILITY = 'delegate.card'
+_CARD_STEP = {'step_template', 'input_artifacts'}
+_ARTIFACT_REF = re.compile(r'[A-Za-z0-9._:-]{1,64}')
+
+
+def card_step_template(request):
+    """The step template digest a delegate.card request names, or None unless the request is exactly a compiled card
+    step: {step_template: <digest>, input_artifacts: [{ref, sha256}, ...]} with at most 16 artifacts. The artifact
+    digests are its only free field; which digests may fill it is the authority's to check (its own records)."""
+    try:
+        args = request.arguments
+    except (AttributeError, ValueError):
+        return None
+    if type(args) is not dict or set(args) != _CARD_STEP:
+        return None
+    template, arts = args['step_template'], args['input_artifacts']
+    if (type(template) is not str or not _DIGEST.fullmatch(template) or type(arts) is not list or len(arts) > 16
+            or not all(type(a) is dict and set(a) == {'ref', 'sha256'} and type(a['ref']) is str
+                       and _ARTIFACT_REF.fullmatch(a['ref']) and type(a['sha256']) is str
+                       and _DIGEST.fullmatch(a['sha256']) for a in arts)):
+        return None
+    return template
+
+
+def card_step_operation_id(approved_operation_id, step_template):
+    """Each enumerated step of an approved card has one operation id, derived from the approval: covered once."""
+    return str(uuid.uuid5(uuid.UUID(approved_operation_id), step_template))
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,10 +119,16 @@ class GrantDefinition:
         if any(x is not None and not _identifier(x) for x in (self.work_id, self.expected_target_version)):
             raise ActionContractError('grant_scope_invalid')
         exact = (self.proposal_id, self.approved_operation_id, self.approval_expires_at)
+        card = self.capability == CARD_CAPABILITY
+        if card and (self.work_id is None or any(x is None for x in exact)):
+            raise ActionContractError('grant_approval_invalid')   # one exact approval of one card (R4.3-c, R4.3-f)
         if any(x is not None for x in exact):
+            # The exact-approval rule: one operation on one exact request. A card's approval covers its enumerated
+            # steps instead: one operation per step template digest, at most 100 (R4.3-c).
             if (not _uuid(self.proposal_id) or not _uuid(self.approved_operation_id)
-                    or not _aware(self.approval_expires_at) or self.max_operations != 1
-                    or len(self.argument_digests) != 1):
+                    or not _aware(self.approval_expires_at)
+                    or (self.max_operations != len(self.argument_digests) if card
+                        else self.max_operations != 1 or len(self.argument_digests) != 1)):
                 raise ActionContractError('grant_approval_invalid')
 
     @property
@@ -217,17 +256,23 @@ class GrantStore:
         if (context.actor_id not in grant.actor_ids or intent.grant_id not in context.grant_ids
                 or context.conversation_id != grant.conversation_id or context.work_id != grant.work_id):
             raise ActionContractError('grant_context_mismatch')
+        card = grant.capability == CARD_CAPABILITY      # a card step is covered by its template digest (R4.3-c)
+        covered = card_step_template(intent.request) if card else intent.request.arguments_sha256
         if (intent.request.operation != grant.capability or intent.request.operation_version != grant.capability_version
-                or intent.request.arguments_sha256 not in grant.argument_digests
+                or covered not in grant.argument_digests
                 or intent.expected_target_version != grant.expected_target_version
                 or intent.proposal_id != grant.proposal_id):
             raise ActionContractError('grant_effect_not_covered')
         if intent.reservation_ids:
             raise ActionContractError('grant_spend_not_supported')
         if grant.proposal_id is not None:
-            if intent.operation_id != grant.approved_operation_id:
+            approved = card_step_operation_id(grant.approved_operation_id, covered) if card \
+                else grant.approved_operation_id
+            if intent.operation_id != approved:
                 raise ActionContractError('grant_approval_operation_mismatch')
-            if grant.approval_expires_at <= now:
+            # A card's approval window bounds its admission, the first of its operations; later steps are that
+            # admitted card's own.
+            if grant.approval_expires_at <= now and not (card and row['consumed_operations'] > 0):
                 raise ActionContractError('grant_approval_expired')
 
     @staticmethod
@@ -295,8 +340,9 @@ class GrantStore:
                                                        capability_prefix, work_ids)
             if code is not None:
                 return code
-            if grant.approval_expires_at is not None and grant.approval_expires_at <= now:
-                return 'grant_approval_expired'
+            if (grant.approval_expires_at is not None and grant.approval_expires_at <= now
+                    and not (grant.capability == CARD_CAPABILITY and row['consumed_operations'] > 0)):
+                return 'grant_approval_expired'       # a card's window bounds its first step's admission (R4.3-c)
             if row['consumed_operations'] >= grant.max_operations:
                 return 'grant_exhausted'
             cur.execute('''UPDATE guild.mc_action_grants SET consumed_operations=consumed_operations+1
