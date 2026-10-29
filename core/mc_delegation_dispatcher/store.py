@@ -28,6 +28,9 @@ configuration (``Authority``) enables it, and only about version 2 items: those 
         the (route, actor) gate; its spend reserved in the route's unit in the same transaction as the lease. A
         refusal is written to the item. Items that must wait (their route closed by unknown usage, or today's budget
         too small) are marked and left out in SQL, so they never hold up other routes. One connection per poll.
+        An item waiting for this runner alone (reassigned to it, or its own retry) is handed over first, under the
+        same admission judged again (this claim's capabilities, the route gate, an unknown-usage hold), keeping its
+        one reservation; one that can't be taken now waits, marked with why (_pickup_wait).
   progress(request_id, generation, phase, protocol=2, runner_id, event_id, at, checkpoint)
         -> {state: applied|superseded|already_applied|refused}
         stores phase, progress_at and checkpoint; an older event never overwrites a newer one; never touches the
@@ -1301,7 +1304,7 @@ class DispatcherStore:
             with self._txn(conn) as cur:
                 if self._withheld(cur, runner_id, host["host_id"]):
                     return None
-                handed = self._hand_over(cur, runner_id, host["host_id"])
+                handed = self._hand_over(cur, runner_id, host["host_id"], caps)
             if handed is not None:
                 return handed
             seen = []
@@ -1423,30 +1426,28 @@ class DispatcherStore:
                 "route": row["route"], "unit": route.unit, "reserved": float(amount), "lease_until": _iso(lease_until),
                 "card_id": row["card_id"], "step": row["step"], "attempt": _attempt(row), "resume_from": None}
 
-    def _hand_over(self, cur, runner_id, host_id):
+    def _hand_over(self, cur, runner_id, host_id, caps):
         """An item waiting, queued, for this runner alone: one the owner reassigned to it (R5.1-d), or a card step it
         failed definitely and the authority gave a retry from its last checkpoint (R4.3-d). Its claim takes it at the
         generation already set, and only now does its lease start. Either keeps the item's one reservation and gets
-        what remains of it (a retry waits, marked, while its route is held by unknown usage). None if none can be
-        taken now."""
+        what remains of it. The claim's own admission is judged again at pickup, with this claim's capabilities
+        (_pickup_wait); an item that can't be taken now waits, marked with why. None if none can be taken now."""
         cur.execute("""SELECT d.*, clock_timestamp() AS now FROM guild.mc_delegations d
             WHERE d.principal_id=%s AND d.environment=%s AND d.runner_id=%s AND d.route IS NOT NULL
               AND d.state = 'queued' AND (d.facts ? 'reassigned' OR d.facts ? 'retry')
             ORDER BY d.request_id LIMIT %s FOR UPDATE SKIP LOCKED""",
                     (self.principal, self.environment, runner_id, CLAIM_SCAN))
         for row in cur.fetchall():
-            taken = self._hand_over_one(cur, row, runner_id, host_id)
+            taken = self._hand_over_one(cur, row, runner_id, host_id, caps)
             if taken is not None:
                 return taken
         return None
 
-    def _hand_over_one(self, cur, row, runner_id, host_id):
+    def _hand_over_one(self, cur, row, runner_id, host_id, caps):
         code = self._grant_refusal(cur, row) or self._card_refusal(cur, row)
         if code is None and row["deadline"] <= row["now"]:
             code = "deadline_passed"
         retry, res = (row["facts"] or {}).get("retry"), row["reservation"] or {}
-        if code is None and retry is not None:   # a retry is a fresh launch: the route gate is judged again
-            code = (route_refusal(self.authority, row["route"], row["actor"]) or {}).get("code")
         if code is None and ("reserved" not in res or res.get("state") is not None):
             code = "reservation_missing"
         if code is not None:                  # revoked, expired or overdue since: it ends here, never started here
@@ -1454,12 +1455,10 @@ class DispatcherStore:
                                    "deadline_passed": "timed_out", "card_ended": "cancelled"}.get(code, "interrupted"),
                         {"code": code}, children_stopped=True, host_id=host_id)
             return None
-        if retry is not None:
-            cur.execute("""SELECT 1 FROM guild.mc_delegation_reservations WHERE environment=%s AND route=%s
-                AND usage_hold IS NOT NULL LIMIT 1""", (self.environment, row["route"]))
-            if cur.fetchone() is not None:
-                self._hold(cur, row, "usage_unknown", host_id)
-                return None
+        wait = self._pickup_wait(cur, row, res, caps)
+        if wait is not None:                  # neither dropped nor granted: it waits for this runner, marked
+            self._hold(cur, row, wait, host_id)
+            return None
         res = {**{k: v for k, v in res.items() if k not in ("held", "accounted")}, "generation": row["generation"]}
         cur.execute("""UPDATE guild.mc_delegations SET state='claimed', lease_until=clock_timestamp() + %s * interval '1 second',
             heartbeat_at=clock_timestamp(), reservation=%s::jsonb,
@@ -1475,6 +1474,31 @@ class DispatcherStore:
                 "route": row["route"], "unit": res["unit"], "reserved": res["reserved"], "lease_until": _iso(lease_until),
                 "card_id": row["card_id"], "step": row["step"], "attempt": _attempt(row),
                 "resume_from": None if retry is None else retry["checkpoint"]}
+
+    def _pickup_wait(self, cur, row, res, caps) -> str | None:
+        """Why an item waiting for this runner can't be picked up now, or None. A reassignment or a retry is no
+        decision to reopen a route or to settle another item's unknown usage, and a host's configuration may change
+        before it picks the item up: so the ordinary claim's admission is judged again here, the same way. This claim's
+        capabilities must cover the item's actor, scope, repository and required_capabilities (R3.2-a); its (route,
+        actor) pair must be open, in the unit and under the per-item cap its reservation was taken in (route_refusal,
+        R6.7-l); and no unknown-usage hold may close the route, read under the route's lock as a claim reserves
+        (R8.3-c). Its one reservation is kept as it is, never charged again."""
+        needs = {f"actor:{row['actor']}", f"scope:{row['scope']}", f"repo:{row['repository']}",
+                 *(row["required_capabilities"] or [])}
+        if not needs <= set(caps):
+            return "capability_missing"
+        gate = route_refusal(self.authority, row["route"], row["actor"])
+        if gate is not None:
+            return gate["code"]
+        route = self.authority.routes[row["route"]]
+        if res.get("unit") != route.unit:
+            return "route_unit_changed"
+        if Decimal(str(res.get("requested", res["reserved"]))) > route.per_item:
+            return "item_cap_exceeded"
+        self._lock_route(cur, row["route"])
+        cur.execute("""SELECT 1 FROM guild.mc_delegation_reservations WHERE environment=%s AND route=%s
+            AND usage_hold IS NOT NULL LIMIT 1""", (self.environment, row["route"]))
+        return "usage_unknown" if cur.fetchone() is not None else None
 
     def _reserve(self, cur, route_name, route, amount):
         """(hold code, None) or (None, day): ``amount`` reserved on today's row, under the route's lock, so two hosts

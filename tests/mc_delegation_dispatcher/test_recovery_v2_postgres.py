@@ -131,23 +131,24 @@ class Recovery(PostgresFixture, unittest.TestCase):
     def beat(self, runner="mac-a", host=None, **over):
         return self.store.heartbeat(runner, "online", CAPS, protocol=2, facts=facts(host or runner, **over))
 
-    def item(self, job=None, amount=AMOUNT):
+    def item(self, job=None, amount=AMOUNT, caps=()):
         self.n += 1
         job = job or f"job-{self.n}"
         subject = item_subject_digest(actor="fakework", scope="build", repository="personal-ai-agents", ref="a" * 40,
-                                      brief=BRIEF, route="fakework", amount=amount)
+                                      brief=BRIEF, route="fakework", amount=amount, required_capabilities=list(caps))
         gid = self.grant("delegate.start_build", (subject,))
         self.grant_of[job] = gid
         self.assertEqual(self.store.enqueue(
             job_id=job, actor="fakework", scope="build", repository="personal-ai-agents", ref="a" * 40, brief=BRIEF,
-            cost_cap_usd=1.0, deadline_s=600, route="fakework", amount=amount, grant_id=gid), "accepted")
+            cost_cap_usd=1.0, deadline_s=600, route="fakework", amount=amount, grant_id=gid,
+            required_capabilities=list(caps)), "accepted")
         time.sleep(0.002)
         return job
 
-    def claimed(self, runner="mac-a", host=None, job=None):
+    def claimed(self, runner="mac-a", host=None, job=None, caps=()):
         """A host checks in and claims one item: (job, envelope)."""
         self.beat(runner, host)
-        job = self.item(job)
+        job = self.item(job, caps=caps)
         got = self.store.claim(runner, CAPS, protocol=2)
         self.assertIsNotNone(got)
         return job, got["envelope"]
@@ -1016,6 +1017,68 @@ class Recovery(PostgresFixture, unittest.TestCase):
         self.assertEqual([str(d["event_id"]) for d in self.events("decision.queued")], [a["decision_id"]])
         self.assertEqual(self.reconcile(env, cp=None)["code"], "grant_revoked")        # a stopped child: released
         self.assertEqual(self.row(job)["reservation"]["state"], "unreported")
+
+    # ── Codex part 1, F1 and F3: a handover is admitted as an ordinary claim is ──
+    def reassigned(self, caps=()):
+        """Codex's probe set-up: claimed by mac-a, its lease run out, reassigned by the owner (to the same runner)."""
+        job, env = self.claimed(caps=caps)
+        self.lapse(job, 0)
+        self.store.reassign(env["request_id"], "mac-a", by="robert", note="Move this item; retain route restrictions")
+        return job, env
+
+    def day_reserved(self):
+        return float(self.sql("SELECT reserved FROM guild.mc_delegation_reservations WHERE route='fakework'")[0]
+                     ["reserved"])
+
+    def test_f1_a_a_reassigned_item_waits_while_its_route_is_supervised_only(self):
+        job, env = self.reassigned()
+        before = self.day_reserved()
+        values = json.loads(json.dumps(TEST_VALUES))
+        values["routes"]["fakework"]["supervised_only"] = True
+        gated = self.make_store(Authority.parse(values))
+        self.assertIsNone(gated.claim("mac-a", CAPS, protocol=2))            # Codex's probe (a)
+        row = self.row(job)
+        self.assertEqual((row["state"], row["runner_id"], row["generation"], row["lease_until"]),
+                         ("queued", "mac-a", 2, None))                        # neither dropped nor granted
+        self.assertEqual(row["reservation"]["held"], "route_supervised_only")
+        self.assertEqual([e["body"]["code"] for e in self.events("item.held", env["request_id"])],
+                         ["route_supervised_only"])
+        self.assertIsNone(gated.claim("mac-a", CAPS, protocol=2))            # marked once, not on every poll
+        self.assertEqual(len(self.events("item.held", env["request_id"])), 1)
+        self.assertEqual(self.day_reserved(), before)                         # its one reservation, never charged again
+        # The route reopened: the same runner picks it up, at the generation the reassignment set.
+        got = self.store.claim("mac-a", CAPS, protocol=2)
+        self.assertEqual((got["envelope"]["generation"], got["reserved"]), (2, AMOUNT))
+        self.assertNotIn("held", self.row(job)["reservation"])
+        self.assertEqual(self.day_reserved(), before)
+
+    def test_f1_b_a_reassigned_item_waits_while_its_route_is_held_by_unknown_usage(self):
+        job, env = self.reassigned()
+        before = self.day_reserved()
+        self.sql("UPDATE guild.mc_delegation_reservations SET usage_hold=%s::jsonb WHERE route='fakework'",
+                 (json.dumps({"since": self.db_now().isoformat(), "items": [{"item_id": "other-unknown-item"}]}),))
+        self.assertIsNone(self.store.claim("mac-a", CAPS, protocol=2))       # Codex's probe (b)
+        row = self.row(job)
+        self.assertEqual((row["state"], row["lease_until"], row["reservation"]["held"]), ("queued", None, "usage_unknown"))
+        # A reassignment is no decision about another item's unknown usage: only its recorded resolution reopens it.
+        self.assertTrue(self.store.resolve_usage_hold("fakework", note="the other item's usage, reconciled", by="robert"))
+        got = self.store.claim("mac-a", CAPS, protocol=2)
+        self.assertEqual((got["envelope"]["generation"], got["reserved"], self.day_reserved()), (2, AMOUNT, before))
+
+    def test_f3_a_reassigned_item_needs_the_claims_current_capabilities(self):
+        job, env = self.reassigned(caps=("host:mac-local",))
+        # Codex's probe: actor:fakework removed from the heartbeat and from the claim between assignment and pickup.
+        reduced = [c for c in CAPS if c != "actor:fakework"]
+        self.store.heartbeat("mac-a", "online", reduced, protocol=2, facts=facts("mac-a"))
+        self.assertIsNone(self.store.claim("mac-a", reduced, protocol=2))
+        row = self.row(job)
+        self.assertEqual((row["state"], row["lease_until"], row["reservation"]["held"]),
+                         ("queued", None, "capability_missing"))
+        # A capability the item itself requires, likewise.
+        self.assertIsNone(self.store.claim("mac-a", [c for c in CAPS if c != "host:mac-local"], protocol=2))
+        self.assertEqual(self.row(job)["state"], "queued")
+        got = self.store.claim("mac-a", CAPS, protocol=2)
+        self.assertEqual((got["envelope"]["generation"], self.row(job)["state"]), (2, "claimed"))
 
     def test_the_relay_reap_moves_to_the_sweeper(self):
         """Where a sweeper runs, relay.status writes nothing and derives the lapse (never running, E11); the sweeper

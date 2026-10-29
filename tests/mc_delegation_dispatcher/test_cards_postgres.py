@@ -391,6 +391,32 @@ class Cards(PostgresFixture, unittest.TestCase):
         self.assertEqual(self.grant_row(admitted["grant_id"])["consumed_operations"], 2)    # build and review only
         self.assertEqual(self.owner_counts("C-17"), (1, 0))
 
+    def test_codex_f1_f3_a_retry_is_admitted_at_pickup_as_a_claim_is(self):
+        """Codex part 1, F3 and F1 for a card step's retry: between the failed attempt and the retry's pickup, the host
+        lost a capability the step needs, then the route was made supervised-only. The retry waits, marked each time,
+        and is picked up, with what remains of its one reservation, once both are back."""
+        self.admit(card(attempts=2))
+        got, env = self.claim()
+        self.progress(env, "s1")
+        self.assertEqual(self.result(env, status="failed", detail={"exit_code": 70})["code"], "retry")
+        after_failure = self.day()
+        reduced = [c for c in CAPS if c != "actor:fakework"]
+        self.assertIsNone(self.claim("mac-a", reduced)[0])
+        build = self.item("C-17.build")
+        self.assertEqual((build["state"], build["generation"], build["lease_until"], build["reservation"]["held"]),
+                         ("queued", 2, None, "capability_missing"))
+        values = json.loads(json.dumps(TEST_VALUES))
+        values["routes"]["fakework"]["supervised_only"] = True
+        self.assertIsNone(self.claim("mac-a", store=self.make_store(Authority.parse(values)))[0])
+        build = self.item("C-17.build")
+        self.assertEqual((build["state"], build["reservation"]["held"]), ("queued", "route_supervised_only"))
+        self.assertEqual(self.day(), after_failure)                          # never charged again while it waits
+        got, env = self.claim()
+        self.assertEqual((got["envelope"]["generation"], got["attempt"], got["resume_from"]["name"], got["reserved"]),
+                         (2, 2, "s1", AMOUNT - USED))
+        self.assertNotIn("held", self.item("C-17.build")["reservation"])
+        self.assertEqual(self.day(), after_failure)
+
     def test_t4d_a_second_card_past_its_allowance_ends_failed_with_no_retry(self):
         self.admit(card("C-18", attempts=1))
         _, env = self.claim()
