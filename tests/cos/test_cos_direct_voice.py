@@ -369,7 +369,7 @@ def test_her_session_text_is_rules_then_card_then_her_briefing_and_continuity_as
     assert text.index(direct_voice.BRIEFING_HEAD.strip()) < text.index(direct_voice.CONTINUITY_HEAD.strip())
     assert "Set reminders in writing" in text and "remind me at <time>" not in text
     assert "consult_cos_agent" not in text and "save_cos_note" not in text
-    assert r.mints[-1]["transcription_language"] is None and r.mints[-1]["voice"] == "shimmer"   # bilingual (D19), shimmer
+    assert r.mints[-1]["transcription_language"] is None and r.mints[-1]["voice"] == "ballad"   # bilingual (D19), ballad
 
 
 def test_no_voice_manner_text_is_carried_beyond_the_clauses_placed_by_the_spec(r):
