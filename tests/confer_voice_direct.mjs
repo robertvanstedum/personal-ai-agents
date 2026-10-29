@@ -47,7 +47,8 @@ const CAPS = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenAI'
   summary_decision_url: `${P}/session/{session_id}/summary/decision`, reconcile_url: `${P}/consult/{session_id}/{owner_item_id}`,
   keep_talking_url: `${P}/session/{session_id}/keep_talking`, heartbeat_seconds: 20, persona: 'chief_of_staff', locale: 'en-US',
   card_release: '0.1.0', person: { name: 'Chief of Staff', short: 'CoS' }, model_actions: { openai: true, xai: false },
-  words: { no_conversation: "Voice unavailable: Confer's conversation is not available here.", invalid: 'Voice unavailable: open Confer to talk with CoS.' },
+  words: { no_conversation: "Voice unavailable: Confer's conversation is not available here.", invalid: 'Voice unavailable: open Confer to talk with CoS.',
+    kept_in: "in Chief of Staff's voice records, which she can recall" },
   unvoiced: { xai: 'Voice unavailable: no Grok voice is chosen for Chief of Staff yet.' },
   capabilities_url: `${P}/capabilities`, sessions_url: `${P}/sessions`, session_url: `${P}/sessions/{session_id}`,
   session_transcript_url: `${P}/sessions/{session_id}/transcript`, session_dismiss_url: `${P}/sessions/{session_id}/dismiss`,
@@ -149,7 +150,7 @@ function page({ caps = CAPS, path = '/ui/confer', managed = true, routes = {}, s
       else if (bare.endsWith(`/sessions/${SID}`)) out = { status: 200, body: server.view };
       else if (bare.endsWith('/transcript')) out = { status: 200, body: { ok: true, kept: body.events.length } };
       else if (bare.endsWith('/consult')) out = { status: 200, body: { ok: true, outcome: 'done', spoken: 'Two meetings today.' } };
-      else if (bare.endsWith('/end')) out = { status: 200, body: { ok: true, ended: true, capture: 'complete' } };
+      else if (bare.endsWith('/end')) { if (server.holdEnd) await server.holdEnd; out = { status: 200, body: { ok: true, ended: true, capture: 'complete' } }; }
       else if (bare.endsWith('/keep_talking')) out = { status: 200, body: { ok: true } };
       else out = { status: 404, body: {} };
     }
@@ -373,7 +374,7 @@ await scenario('End: End on her server, then the kept records revealed in the co
   const link = block.querySelector('[data-voice-download]');
   assert.equal(link.getAttribute('href'), `${P}/sessions/${SID}/transcript?conversation_id=owner`);
   assert.equal(textOf(link), 'Download transcript');
-  assert.equal(p.line(), 'Voice ended. What was said is in the conversation.');
+  assert.equal(p.line(), "Voice ended. What was said is kept in Chief of Staff's voice records, which she can recall.");   // E N4
   assert.equal(p.nodes('voice-live').hidden, true);
   assert.equal(p.nodes('btn-voice').textContent, '🎤');
   assert.equal(p.gets('/sessions').filter((x) => x.url.split('?')[0].endsWith('/sessions')).length, 1);   // the list, read after End
@@ -393,7 +394,7 @@ await scenario('the reveal marks his turns not acted on, and says why for each',
   assert.equal(label('t0'), `You · spoken · ${PAGE.NOT_ACTED} · its reply was cut short`);
   assert.equal(label('t1'), 'CoS · spoken · interrupted');
   assert.equal(label('t2'), `You · spoken · ${PAGE.NOT_ACTED} · overtaken by what you said next`);
-  assert.equal(label('t3'), `You · spoken · ${PAGE.NOT_ACTED} · the voice ended before it was answered`);
+  assert.equal(label('t3'), `You · spoken · ${PAGE.CUT_OFF}`);                     // Q N12: End cut its reply off
   assert.equal(label('t4'), `You · spoken · partial · ${PAGE.NOT_ACTED}`);          // named with no reason kept: no reason said
   const notes = all(block, '[data-voice-item="kt3"]').map((r) => textOf(r.elements[0]));
   assert.deepEqual(notes, ['Asked CoS', 'Result']);
@@ -754,6 +755,39 @@ await t.check('E S2: the list names a check still running at End, and one that l
     assert.equal(textOf(receipt.elements[1]), 'Answered. Turn 9. Spoken: Two items are stuck on 12.');
     assert.equal(PAGE.lateLabel({ summary: 'proposed' }), 'arrived after the summary');
   } finally { p.done(); }
+});
+
+
+// ── Gate 2: E N4 (where the record lives), Q N9 (an End not confirmed), Q N12 (cut off at End), Q S4 (Dictate's line) ──
+await scenario('E N4: the ended line says where what was said is kept, which stays true after a reload; incomplete too', {
+  routes: { '/end': () => ({ status: 200, body: { ok: true, ended: true, capture: 'incomplete', missing: 2 } }) } }, async (p) => {
+  await p.voice();
+  p.c.utter('Hello.'); await flush();
+  await p.click(p.bar('[data-voice-end]')); await flush();
+  assert.equal(p.line(), "Voice ended. Some of what was said was not kept (2 turns). What was kept is in Chief of Staff's voice records, which she can recall.");
+  assert.ok(!p.line().includes('in the conversation'));
+});
+await scenario('Q N9: End not confirmed says to reload later, never that it appears by itself', {
+  routes: { '/end': () => ({ status: 503, body: {} }) } }, async (p) => {
+  await p.voice(); await p.click(p.bar('[data-voice-end]')); await flush();
+  assert.equal(p.line(), SESSION.END_UNCONFIRMED);
+  assert.equal(SESSION.END_UNCONFIRMED, 'Voice ended here, but the server did not confirm it. Reload the page later to see what was kept.');
+});
+await scenario("Q S4: voice's late End leaves Dictate's status line alone after the handover", {}, async (p) => {
+  let answer;
+  const ended = new Promise((r) => { answer = r; });
+  await p.voice();
+  p.c.utter('Note the kiln.'); await flush();
+  assert.equal(p.nodes('voice-status').textContent, 'Listening');
+  p.server.holdEnd = ended;                                                // End's answer is held until Dictate is on
+  const pressing = (async () => { await p.dictation.opts.beforeStart(); p.dictation.opts.onStatus('Dictating into your draft. Stop, review, then Send.'); p.dictation.on = true; })();
+  await flush();
+  await pressing;
+  assert.equal(p.nodes('voice-status').textContent, 'Dictating into your draft. Stop, review, then Send.');
+  answer(); await flush(30);
+  assert.equal(p.posts('/end').length, 1);
+  assert.ok(p.chat.querySelector(`[data-voice-session="${SID}"]`), 'the reveal did not come');
+  assert.equal(p.nodes('voice-status').textContent, 'Dictating into your draft. Stop, review, then Send.', "voice's End wiped Dictate's line");
 });
 
 t.done();

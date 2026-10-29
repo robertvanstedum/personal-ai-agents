@@ -135,3 +135,34 @@ def test_b_s3_a_turn_not_acted_on_is_marked_so_in_the_server_rendered_thread_and
     marks = {n["text"].split("]\n")[-1]: n["voice"].get("not_acted", False) for n in notes
              if n.get("voice", {}).get("kind") == "owner_turn"}
     assert marks == {"Save a note that the kiln is hot.": True, "And check the board.": False}
+
+
+def test_q_n12_a_turn_whose_reply_end_cut_off_reads_cut_off_at_end_not_not_acted_on(released):
+    """Gate 2 Q N12: End names a turn whose reply it cut off (why "closed", Gate 1 n3). It reads "Cut off at End" in the
+    server-rendered thread and the notes, and "Not acted on" stays for a request overtaken or refused."""
+    _portal, _runtime, _minted, client, token = released
+    cid = conversation(client, token)
+    sid = client.post(DIRECT + "/bootstrap", headers=headers(token),
+                      json={"persona": "master_craftsman", "provider": "openai", "conversation_id": cid}).get_json()[
+        "voice_session_id"]
+    now = datetime.now(timezone.utc)
+    stamp = lambda s: (now + timedelta(seconds=s)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"     # noqa: E731
+    kept = client.post(DIRECT + f"/session/{sid}/transcript", headers=headers(token), json={"events": [
+        {"role": "user", "item_id": "t0", "index": 0, "text": "Save a note that the kiln is hot.", "partial": False,
+         "interrupted": False, "started_at": stamp(0), "ended_at": stamp(1)},
+        {"role": "user", "item_id": "t1", "index": 0, "text": "Thanks, that is all.", "partial": False,
+         "interrupted": False, "started_at": stamp(2), "ended_at": stamp(3)}]})
+    assert kept.status_code == 200, kept.get_json()
+    ended = client.post(DIRECT + f"/session/{sid}/end", headers=headers(token),
+                        json={"not_acted": ["t0", "t1"], "not_acted_why": {"t0": "overtaken", "t1": "closed"}})
+    assert ended.get_json()["ended"] is True
+    html = page(client, cid)
+    rows = re.findall(r'<li class="msg msg-voice msg-note"[^>]*data-voice-kind="owner_turn".*?</li>', html, re.S)
+    overtaken = next(row for row in rows if "the kiln is hot" in row)
+    farewell = next(row for row in rows if "that is all" in row)
+    assert "Not acted on: say it again if you still want it" in overtaken and "Cut off at End" not in overtaken
+    assert "Cut off at End" in farewell and "Not acted on" not in farewell
+    notes = client.get(API + f"/notes?conversation={cid}").get_json()["notes"]
+    marks = {n["text"].split("]\n")[-1]: (n["voice"].get("not_acted", False), n["voice"].get("cut_off", False)) for n in notes
+             if n.get("voice", {}).get("kind") == "owner_turn"}
+    assert marks == {"Save a note that the kiln is hot.": (True, False), "Thanks, that is all.": (False, True)}

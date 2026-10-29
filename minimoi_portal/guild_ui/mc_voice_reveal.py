@@ -298,13 +298,18 @@ def _playback(floor, sid):
 
 def _not_acted(floor, sid):
     """The note ids of this session's owner turns the page named as not acted on (review B S3, N2), from its durable
-    record: the first part of each such turn, which carries its label. Empty when none was kept or it cannot be read."""
+    record: the first part of each such turn, which carries its label. Two sets: those not acted on (refused or
+    overtaken), and those whose reply End cut off (why "closed", Gate 2 Q N12: he ended it, so they read "Cut off at End").
+    Empty when none was kept or it cannot be read."""
     try:
         rec = get_record(floor, sid, NOT_ACTED_RECORD)
     except Exception:
-        return set()
+        return set(), set()
     items = rec.get("owner_item_ids") if isinstance(rec, dict) else None
-    return {transcript_id(sid, "user", item) for item in items if isinstance(item, str)} if isinstance(items, list) else set()
+    why = rec.get("why") if isinstance(rec, dict) and isinstance(rec.get("why"), dict) else {}
+    items = [item for item in items if isinstance(item, str)] if isinstance(items, list) else []
+    return ({transcript_id(sid, "user", item) for item in items if why.get(item) != "closed"},
+            {transcript_id(sid, "user", item) for item in items if why.get(item) == "closed"})
 
 
 def process_view(config):
@@ -384,14 +389,16 @@ def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda reques
         sid = str(uuid.UUID(match.group(1))) if match else None
         if sid in direct:
             replies[reply_id(row["request_id"])] = sid
-    unresolved, not_acted = {}, set()
+    unresolved, not_acted, cut_off = {}, set(), set()
     for sid in direct:
         if not hider.hidden(sid):
             try:
                 unresolved.update(_unresolved(floor, rows, sid, running))
             except Exception:                           # a floor that cannot be read: the request stays as it is
                 pass
-            not_acted |= _not_acted(floor, sid)
+            named, ended = _not_acted(floor, sid)
+            not_acted |= named
+            cut_off |= ended
     shown = []
     for row in rows:
         sid = owner(row) or replies.get(row.get("request_id"))
@@ -406,6 +413,8 @@ def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda reques
                      "spoken": "", "ref": None, "ref_kind": None}
         if voice.get("kind") == "owner_turn" and row.get("request_id") in not_acted:
             voice = {**voice, "not_acted": True}           # his words that were not acted on: say it again if needed
+        elif voice.get("kind") == "owner_turn" and row.get("request_id") in cut_off:
+            voice = {**voice, "cut_off": True}             # his words whose reply End cut off (Q N12)
         shown.append({**row, "voice": voice})
     sessions = []
     for sid in direct:

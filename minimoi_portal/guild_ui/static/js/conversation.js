@@ -226,6 +226,7 @@ export function setBriefing(briefing) {
 // The server-rendered thread does the same (_mc_conversation.html, voice_row).
 const VOICE_HIDDEN = ['consult_note', 'consult_request'];
 const NOT_ACTED = 'Not acted on: say it again if you still want it';
+const CUT_OFF = 'Cut off at End';                  // a turn whose reply his End cut off: not "not acted on" (Gate 2 Q N12)
 function voiceLine(note) {
   const v = note.voice;
   const hidden = VOICE_HIDDEN.includes(v.kind) || (v.kind === 'consult_reply' && v.full_differs === false);
@@ -255,6 +256,7 @@ function voiceLine(note) {
   else if (v.partial) meta.append(document.createTextNode(' · partial'));
   // His words that were not acted on (review B S3, N2: a reply cancelled or overtaken, or a commit let go): say so.
   if (v.not_acted) meta.append(document.createTextNode(' · '), el('span', { 'data-voice-not-acted': '' }, NOT_ACTED));
+  else if (v.cut_off) meta.append(document.createTextNode(' · '), el('span', { 'data-voice-cut-off': '' }, CUT_OFF));
   li.append(meta);
   if (turn) { li.append(el('p', { class: 'msg-text' }, v.text)); return li; }
   const body = el('div', { class: 'msg-text msg-md' });

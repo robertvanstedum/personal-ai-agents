@@ -40,6 +40,13 @@ let n = 0;
   n++;
 }
 {
+  // Gate 2 Q N12: a turn whose reply his End cut off reads "Cut off at End", never "Not acted on".
+  const li = sandbox.voiceLine(note(10, { kind: 'owner_turn', text: 'Thanks, that is all.', started_at: '2026-10-28T10:00:01.000Z', part: 1, parts: 1, cut_off: true }));
+  assert.match(li.textContent, /^You · spoken · local\(2026-10-28T10:00:01\.000Z\) · Cut off at EndThanks, that is all\.$/);
+  assert(!li.textContent.includes('Not acted on'));
+  n++;
+}
+{
   const li = sandbox.voiceLine(note(2, { kind: 'assistant_turn', text: 'Let me check', interrupted: true, partial: true, part: 1 }));
   assert.match(li.textContent, /^Master Craftsman · spoken · .* · interrupted/);
   assert.equal(li.getAttribute('data-author-kind'), 'agent');

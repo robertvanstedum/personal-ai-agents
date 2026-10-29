@@ -17,6 +17,8 @@
 
 export const CONFIRM_SCOPE = 'Confirming confirms the summary only. Anything it mentions still needs its own request.';
 export const NOT_ACTED = 'Not acted on: say it again if you still want it';
+// A turn whose reply the End cut off (Gate 1 n3's closed; Gate 2 Q N12): he ended it, so it is not "not acted on".
+export const CUT_OFF = 'Cut off at End';
 // Why a turn of his was not acted on, as End kept it (Gate 1 n2, n3): said beside NOT_ACTED, so the reveal says which.
 export const NOT_ACTED_WHY = {
   overtaken: 'overtaken by what you said next',
@@ -137,7 +139,9 @@ export function conferSessions(d) {
       : role === 'consult' ? `Asked ${short}` : role === 'receipt' ? 'Result' : (rec.speaker || 'Voice');
     label.append(name + (rec.interrupted ? ' · interrupted' : rec.partial ? ' · partial' : '')
       + (pending ? ` · ${STILL_RUNNING}` : '') + (late ? ` · ${lateLabel(view)}` : ''));
-    if (role === 'user' && rec.item_id && Object.hasOwn(notActed, rec.item_id)) {
+    if (role === 'user' && rec.item_id && Object.hasOwn(notActed, rec.item_id) && notActed[rec.item_id] === 'closed') {
+      label.append(' · ', make('span', { 'data-voice-cut-off': '' }, CUT_OFF));
+    } else if (role === 'user' && rec.item_id && Object.hasOwn(notActed, rec.item_id)) {
       label.append(' · ', make('span', { 'data-voice-not-acted': '' }, NOT_ACTED));
       const why = NOT_ACTED_WHY[notActed[rec.item_id]];
       if (why) label.append(' · ', make('span', { 'data-voice-not-acted-why': '' }, why));
@@ -369,6 +373,11 @@ export function conferVoice(d) {
   const records = conferSessions({ doc, direct, chat: els.chat, list: els.sessions, get: d.get, post: d.post });
   let s = null, starting = false, live = false, ending = false, released = Promise.resolve(), release = () => {};
   let clearing = null, withdrawn = false;           // withdrawn: stopped while Dictate was still yielding, before a session
+  // The status line under the composer is shared with Dictate (Gate 2 Q S4): voice clears only what it wrote itself, so
+  // its late End never wipes Dictate's line after the handover.
+  let wrote = null;
+  const status = (text) => { els.status.textContent = text; wrote = text; };
+  const unstatus = () => { if (wrote !== null && els.status.textContent === wrote) els.status.textContent = ''; wrote = null; };
 
   // ── the provider choice, in the meta row: remembered under her own key ──
   const unvoiced = direct.unvoiced && typeof direct.unvoiced === 'object' ? direct.unvoiced : {};
@@ -428,7 +437,7 @@ export function conferVoice(d) {
   }
   const ui = {
     say: (text, o) => say(text, o),
-    phase: (state) => { els.status.textContent = PHASES[state] || ''; },
+    phase: (state) => { status(PHASES[state] || ''); },
     live: (yes) => {
       live = Boolean(yes);
       bar.hidden = !live;
@@ -452,7 +461,7 @@ export function conferVoice(d) {
     ended: (words, { error = false } = {}) => {
       s = null; live = false; ending = false; starting = false;
       bar.hidden = true; propose.hidden = true; checked.hidden = true; checked.textContent = '';
-      els.status.textContent = '';
+      unstatus();
       release();
       paint();
       if (words) say(words, { error, transient: !error });
@@ -493,7 +502,7 @@ export function conferVoice(d) {
       if (starting) withdrawn = true;                      // not yet a session: it never starts
       return released;
     }
-    if (reason !== 'pagehide') { ending = true; els.status.textContent = 'Ending…'; paint(); }
+    if (reason !== 'pagehide') { ending = true; status('Ending…'); paint(); }
     return Promise.race([released, mine.end(reason)]);
   }
 
@@ -517,7 +526,7 @@ export function conferVoice(d) {
       const mine = s;
       if (!mine) return;
       mine.end('pagehide');
-      if (s === mine) { s = null; live = false; ending = false; starting = false; bar.hidden = true; els.status.textContent = ''; release(); paint(); }
+      if (s === mine) { s = null; live = false; ending = false; starting = false; bar.hidden = true; unstatus(); release(); paint(); }
     },
     busy: () => Boolean(s || starting || ending),
     show, paint, records,

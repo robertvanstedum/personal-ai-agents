@@ -36,11 +36,17 @@ export const CHECK_FULL = 'The conversation is full; check in writing.';
 // Some of what was said is not known to be kept (review B4): said instead of ENDED, never a claim that all of it was.
 // Spec 165 §5.2's words, with the count when it is known (the server's, from End's answer, else the page's own).
 export const INCOMPLETE = 'Voice ended. Some of what was said was not kept. What was kept is in the conversation.';
-export function incompleteWords(n) {
+// `keptIn`: where the host keeps what was said, when it is not the conversation the page shows after a reload (Gate 2 E N4:
+// Confer reveals a session at its End, but after a reload only sessions needing a look are listed, Spec 165 §6.5 "not a
+// history product"; so CoS says where the record lives instead: direct_voice.words.kept_in).
+export function incompleteWords(n, keptIn = null) {
+  const where = keptIn ? `What was kept is ${keptIn}.` : 'What was kept is in the conversation.';
   return Number.isInteger(n) && n > 0
-    ? `Voice ended. Some of what was said was not kept (${n} turn${n === 1 ? '' : 's'}). What was kept is in the conversation.`
-    : INCOMPLETE;
+    ? `Voice ended. Some of what was said was not kept (${n} turn${n === 1 ? '' : 's'}). ${where}`
+    : keptIn ? `Voice ended. Some of what was said was not kept. ${where}` : INCOMPLETE;
 }
+// End's answer did not confirm the close (Gate 2 Q N9): nothing on the page re-reads it on a timer, so a reload shows it.
+export const END_UNCONFIRMED = 'Voice ended here, but the server did not confirm it. Reload the page later to see what was kept.';
 // A consult's four outcomes (Spec 165 §5.1): done (its reply), not_done (NOT_DONE or the refusal), pending, unknown. Unknown is
 // a consult whose answer did not come back (review B7): never "failed", which would invite asking again.
 export const UNKNOWN = "I didn't get the result back. Check it in writing before asking again.";
@@ -98,8 +104,11 @@ export function personWords(person, host = {}) {
   const off = typeof person?.short === 'string' && person.short ? `${person.short.toLowerCase()}_turns_off` : null;
   const own = (key) => (typeof host?.[key] === 'string' && host[key].trim() ? { [key]: host[key].trim() } : {});
   const start = { ...START_WORDS, ...own('not_listening'), ...own('invalid') };
+  const keptIn = own('kept_in').kept_in || null;
   return {
     off,
+    ended: keptIn ? `Voice ended. What was said is kept ${keptIn}.` : ENDED,
+    incomplete: (n) => incompleteWords(n, keptIn),
     noConversation: own('no_conversation').no_conversation || NO_CONVERSATION,
     start: off ? { ...start, [off]: `Voice unavailable: ${name}'s turns are off here.` } : start,
     serverEnded: off ? { ...SERVER_ENDED, [off]: `Voice stopped: ${name}'s turns are off here. What was said before is kept.` } : SERVER_ENDED,
@@ -782,10 +791,10 @@ export function directVoice(d) {
           incomplete = r.body.capture === 'incomplete';      // the server's count: what it holds, not what this page heard back
           missing = Number.isInteger(r.body.missing) ? r.body.missing : null;
         }
-        if (!(r.status === 200 && r.body.ok) && !failed) endedWords = ['Voice ended here, but the server did not confirm it. What was said appears when the session\'s time runs out.', true];
+        if (!(r.status === 200 && r.body.ok) && !failed) endedWords = [END_UNCONFIRMED, true];
         await within(Promise.resolve().then(() => d.reveal?.()), REVEAL_WAIT_MS);
       }
-      const fallback = failed || !id ? null : incomplete ? incompleteWords(missing) : ENDED;
+      const fallback = failed || !id ? null : incomplete ? words.incomplete(missing) : words.ended;
       const [line, error] = endedWords || [fallback, incomplete && fallback !== null];
       ui.ended(line, { error });
     })();

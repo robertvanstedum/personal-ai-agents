@@ -212,8 +212,11 @@ class ChiefOfStaff(DirectVoiceAdapter):
     note_max = 4000
     default_voices = False                  # D2 (a): no fallback to a provider default for a voice her card does not name
     receipts = Receipts(("turn", "operation", "reminder"))
+    # kept_in (Gate 2 E N4): Confer reveals a session at its End, and after a reload lists only those needing a look (§6.5,
+    # "not a history product"), so the ended line says where what was said lives, which stays true after a reload.
     words = {"no_conversation": "Voice unavailable: Confer's conversation is not available here.",
-             "invalid": "Voice unavailable: open Confer to talk with CoS."}
+             "invalid": "Voice unavailable: open Confer to talk with CoS.",
+             "kept_in": "in Chief of Staff's voice records, which she can recall"}
 
     def __init__(self, *, store, process_turn, briefing, memory, files=None, card_root=CARD_ROOT, clock=time.time):
         self.store, self._process, self._briefing, self._memory = store, process_turn, briefing, memory
