@@ -239,7 +239,8 @@ def test_the_launchd_plist_is_valid_keeps_the_manager_alive_with_throttling_and_
     before = os.path.exists(real_path)
     before_mtime = os.stat(real_path).st_mtime_ns if before else 0
     out = subprocess.run([sys.executable, CLI, "--root", root, "--agent", "claude-code", "--provider", "claude-stream", "--session-id", SID, "--claude-bin", fake,
-                          "--claude-bin-sha256", pin_of(fake), "--cwd", str(tmp_path), "--allowed-tools", "Read", "print-launchd"], capture_output=True, text=True, timeout=30)
+                          "--claude-bin-sha256", pin_of(fake), "--cwd", str(tmp_path), "--allowed-tools", "Read", "print-launchd"], capture_output=True, text=True, timeout=30,
+                         env=_env(tmp_path))                                                       # the full pre-start check reads the test's own HOME, never the Mac's
     assert out.returncode == 0, out.stderr
     plist = plistlib.loads(out.stdout.encode())
     assert plist["Label"] == "ai.minimoi.connection.claude-code" and plist["KeepAlive"] is True and plist["RunAtLoad"] is True and plist["ThrottleInterval"] == 10
@@ -327,12 +328,13 @@ def test_the_codex_plist_is_resume_only_it_never_keeps_create_and_needs_a_record
     root = str(tmp_path / "ledger")
     fake = _wrapper(tmp_path, "codex", FAKE_SERVER)
     base = ["--root", root, "--agent", "codex", "--provider", "codex-app-server", "--codex-bin", fake, "--codex-bin-sha256", pin_of(fake), "--cwd", str(tmp_path)]
-    no = subprocess.run([sys.executable, CLI, *base, "--thread-id", THREAD, "print-launchd"], capture_output=True, text=True, timeout=30)
+    env = _env(tmp_path)                                                                                   # the full pre-start check reads the test's own HOME
+    no = subprocess.run([sys.executable, CLI, *base, "--thread-id", THREAD, "print-launchd"], capture_output=True, text=True, timeout=30, env=env)
     assert no.returncode == 2 and "create it once" in no.stderr                                            # no thread recorded in the ledger yet: no resume-only plist
     seed = ConnectionManager(root, "codex", Dead(), session_id=THREAD)
     seed.mark_created()
     seed.close()
-    out = subprocess.run([sys.executable, CLI, *base, "print-launchd"], capture_output=True, text=True, timeout=30)
+    out = subprocess.run([sys.executable, CLI, *base, "print-launchd"], capture_output=True, text=True, timeout=30, env=env)
     assert out.returncode == 0, out.stderr
     args = plistlib.loads(out.stdout.encode())["ProgramArguments"]
     assert "--create" not in args and args[-2:] == ["run", "--start"]

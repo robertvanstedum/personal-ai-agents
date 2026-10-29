@@ -113,10 +113,6 @@ class ClaudeStreamProvider(Provider):
         child's own ledger (never the global default), ``DISABLE_AUTOUPDATER`` so the pinned CLI never replaces itself, and a UTF-8 ``LANG``."""
         return launch_env.child_env({"MINIMOI_AGENT_REQUESTS_DIR": self.ledger_root, "DISABLE_AUTOUPDATER": "1", "LANG": "en_US.UTF-8"})
 
-    def verify_pin(self) -> str:
-        """The binary's digest when it matches its pin (launch contract step 1), else ``LaunchRefused('binary_unpinned')``."""
-        return launch.verify_binary(self.claude_bin, self.binary_sha256)
-
     def launch_record(self, env: dict) -> dict:
         """The launch contract around the environment (``launch.connection_start``): the pinned binary, the sign-in and the key-setting checks
         (names only), and the launch record. Raises ``launch.LaunchRefused`` before any spawn."""

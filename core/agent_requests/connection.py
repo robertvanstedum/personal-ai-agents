@@ -708,14 +708,20 @@ RESTART_BACKOFF_S = (1, 2, 5, 10, 30, 60, 120, 300)
 STABLE_UP_S = 30.0          # a restarted provider must stay reachable this long before its failure count is cleared (a spawn that dies at once is a failure, not a recovery)
 
 
-def run_forever(manager: "ConnectionManager", stop, *, interval: float = 1.0, max_backoff: float = 30.0, sleep=time.sleep, on_pass=None, restart=None) -> None:
+def run_forever(manager: "ConnectionManager", stop, *, interval: float = 1.0, max_backoff: float = 30.0, sleep=time.sleep, on_pass=None, restart=None,
+                initial_failures: int = 0) -> None:
     """The manager's loop. It never exits on an error: a failed pass is reported (status.json carries the error) and retried with a bounded backoff; it ends only when ``stop``
     (an Event) is set. Closing a browser, sleeping the host or losing the provider does not stop it.
 
     ``restart`` (an operator-supplied callable that RESUMES the same saved session, never creates a first one) is called when a pass finds the provider offline: a dead child is
     restarted on a bounded backoff (1, 2, 5, 10, 30, 60, 120, then every 300 s). The failure count is cleared only after the provider has stayed reachable for ``STABLE_UP_S``; a
-    child that is spawned and dies at once counts as another failure, so a crash loop backs off instead of retrying every second. status.json says how many tries have failed and why."""
-    delay, failures, next_restart, started_at = interval, 0, 0.0, None
+    child that is spawned and dies at once counts as another failure, so a crash loop backs off instead of retrying every second. status.json says how many tries have failed and why.
+
+    ``initial_failures`` counts starts that already failed before the loop (the operator CLI's first start, refused by the launch contract): the loop continues that count
+    and its backoff, so a refused first start is retried exactly as a refused restart is."""
+    failures = max(0, int(initial_failures))
+    next_restart = manager.clock() + RESTART_BACKOFF_S[min(failures - 1, len(RESTART_BACKOFF_S) - 1)] if failures else 0.0
+    delay, started_at = interval, None
     while not stop.is_set():
         out = manager.step()
         now = manager.clock()

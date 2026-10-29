@@ -8,8 +8,11 @@ from __future__ import annotations
 import json
 import os
 import plistlib
+import signal
 import subprocess
 import sys
+import time
+from pathlib import Path
 
 import pytest
 
@@ -162,19 +165,76 @@ def test_a_launch_record_that_cannot_be_written_refuses_the_start(tmp_path, laun
     assert seen == {}
 
 
-def test_print_launchd_refuses_a_plist_whose_pin_is_missing_or_wrong_so_a_reinstall_cannot_break_the_connection(tmp_path):
+def _cli_env(tmp_path):
+    """The operator CLI's own environment: PATH, and a HOME of the test's own with the plan sign-ins (never the Mac's)."""
+    home = tmp_path / "home"
+    signed_in(home)
+    return {"PATH": os.environ["PATH"], "HOME": str(home)}
+
+
+def test_print_launchd_runs_the_whole_pre_start_check_and_refuses_a_plist_whose_every_start_would_be_refused(tmp_path):
     root = str(tmp_path / "ledger")
     fake = _fake(tmp_path, "claude")
+    env = _cli_env(tmp_path)
     base = [sys.executable, CLI, "--root", root, "--agent", "claude-code", "--provider", "claude-stream", "--session-id", SID,
             "--claude-bin", fake, "--cwd", str(tmp_path), "--allowed-tools", "Read"]
     for extra in ([], ["--claude-bin-sha256", "0" * 64]):
-        out = subprocess.run(base + extra + ["print-launchd"], capture_output=True, text=True, timeout=30)
+        out = subprocess.run(base + extra + ["print-launchd"], capture_output=True, text=True, timeout=30, env=env)
         assert out.returncode == 2 and "binary_unpinned" in out.stderr and "--claude-bin-sha256" in out.stderr
         assert out.stdout == ""                                                        # no plist is printed
-    out = subprocess.run(base + ["--claude-bin-sha256", pin_of(fake), "print-launchd"], capture_output=True, text=True, timeout=30)
+    pinned = base + ["--claude-bin-sha256", pin_of(fake), "print-launchd"]
+    out = subprocess.run(pinned, capture_output=True, text=True, timeout=30, env=env)
     assert out.returncode == 0, out.stderr
     args = plistlib.loads(out.stdout.encode())["ProgramArguments"]
     assert args[args.index("--claude-bin-sha256") + 1] == pin_of(fake) and args[-2:] == ["run", "--start"]
+    # Not only the pin: a key setting, or a missing sign-in, refuses the plist too, by name.
+    home = tmp_path / "home"
+    (home / ".claude").mkdir()
+    (home / ".claude" / "settings.json").write_text(json.dumps({"apiKeyHelper": "/bin/echo " + VALUE}))
+    out = subprocess.run(pinned, capture_output=True, text=True, timeout=30, env=env)
+    assert out.returncode == 2 and out.stdout == "" and "key_config_present" in out.stderr and "apiKeyHelper" in out.stderr
+    assert VALUE not in out.stderr
+    (home / ".claude" / "settings.json").unlink()
+    (home / ".claude.json").unlink()
+    out = subprocess.run(pinned, capture_output=True, text=True, timeout=30, env=env)
+    assert out.returncode == 2 and out.stdout == "" and "signin_missing" in out.stderr and "claude /login" in out.stderr
+
+
+@pytest.mark.parametrize("case", ["no_pin", "wrong_pin", "signed_out"])
+def test_a_refused_first_start_through_main_is_named_in_status_and_retried_on_the_backoff_never_a_crash_loop(tmp_path, case):
+    """SF1: the operator CLI as launchd runs it (``run --start``). Its first start is refused; the manager keeps running,
+    status.json names the refusal (never a value), the retries follow the restart backoff, and nothing is spawned."""
+    root = str(tmp_path / "ledger")
+    marker = tmp_path / "spawned"
+    fake = _fake(tmp_path, "claude")
+    Path(fake).write_text(f"#!/bin/sh\ntouch '{marker}'\nexit 0\n")
+    env = {**_cli_env(tmp_path), **{n: VALUE for n in PLANTED}}
+    pin = {"no_pin": [], "wrong_pin": ["--claude-bin-sha256", "0" * 64],
+           "signed_out": ["--claude-bin-sha256", pin_of(fake)]}[case]
+    if case == "signed_out":
+        (tmp_path / "home" / ".claude.json").unlink()
+    args = [sys.executable, CLI, "--root", root, "--agent", "claude-code", "--provider", "claude-stream", "--session-id", SID,
+            "--claude-bin", fake, *pin, "--cwd", str(tmp_path), "--allowed-tools", "Read", "--interval", "0.2", "run", "--start"]
+    proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+    status_path = Path(root) / "connection" / "claude-code" / "status.json"
+    try:
+        deadline = time.time() + 15
+        while time.time() < deadline and not (status_path.exists() and "LaunchRefused" in status_path.read_text()):
+            time.sleep(0.1)
+        time.sleep(3.5)                                                                 # long enough for a tight loop to show
+        assert proc.poll() is None                                                      # still running: no exit, no launchd loop
+        status = json.loads(status_path.read_text())
+    finally:
+        proc.send_signal(signal.SIGTERM)
+        out, err = proc.communicate(timeout=20)
+    assert proc.returncode == 0, err
+    want = {"no_pin": "binary_unpinned: reason=no_pin", "wrong_pin": "binary_unpinned: reason=digest_mismatch",
+            "signed_out": "signin_missing: login=claude /login, tool=claude-code"}[case]
+    assert status["last_restart_error"] == f"LaunchRefused: {want}" and status["state"] == "offline"
+    assert 2 <= status["restart_attempts"] <= 4                                         # 1, then the backoff's 1 s, 2 s, 5 s ...
+    assert status["next_restart_in_s"] >= 1
+    assert not marker.exists()                                                          # nothing was spawned, ever
+    assert VALUE not in status_path.read_text() and VALUE not in err and VALUE not in out
 
 
 def test_the_fixed_send_probe_builds_its_environment_from_the_policy_and_publishes_a_launch_record(tmp_path, monkeypatch):

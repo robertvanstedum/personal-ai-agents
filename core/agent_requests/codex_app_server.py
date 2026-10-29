@@ -75,10 +75,6 @@ class CodexAppServerProvider(Provider):
         child's own ledger and a UTF-8 ``LANG`` for the commands it runs."""
         return launch_env.child_env({"MINIMOI_AGENT_REQUESTS_DIR": self.ledger_root, "LANG": "en_US.UTF-8"})
 
-    def verify_pin(self) -> str:
-        """The binary's digest when it matches its pin (launch contract step 1), else ``LaunchRefused('binary_unpinned')``."""
-        return launch.verify_binary(self.codex_bin, self.binary_sha256)
-
     def launch_record(self, env: dict) -> dict:
         """The launch contract around the environment (``launch.connection_start``): the pinned binary, the ChatGPT sign-in, and the key-setting
         checks (names only; the app-server reads the user configuration, so it is checked), then the launch record. Raises ``launch.LaunchRefused``

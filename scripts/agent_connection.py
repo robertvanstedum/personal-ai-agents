@@ -10,9 +10,12 @@
 
 Every start goes through the launch contract (host runtime spec v0.5 R6.7-d; core/mc_delegation_runner/launch.py and launch_policy.json): the binary must
 match its pin (``--claude-bin-sha256`` / ``--codex-bin-sha256``: the SHA-256 of the exact file named by --claude-bin / --codex-bin), the plan sign-in must be
-present, and no key setting may sit in the user or project configuration. A failed check refuses the start, names the check (never a value), and is retried
-with the restart backoff (status.json shows it). ``print-launchd`` refuses a plist whose pin is missing or does not match the binary now, so a reinstall can
-never install a connection that would refuse every start. Updating the CLI is a configuration change: a new path and its digest, then a reinstall.
+present, and no key setting may sit in the user or project configuration. A failed check refuses the start before any spawn and names the check (never a
+value). The first start and every restart are treated alike: the refusal is written to status.json (``last_restart_error``, ``restart_attempts``) and the start
+is retried on the restart backoff (1, 2, 5 ... 300 s); the manager keeps running, so launchd never restarts it in a loop. ``print-launchd`` runs the same full
+check now (pin, sign-in, key settings) and refuses, naming why, to print a plist whose every start would be refused. A check that passes at print time can
+still fail later (an updated binary, a sign-out): that is what status.json is for. Updating the CLI is a configuration change: a new path and its digest, then
+a reinstall.
 
 The ledger root, helper and interpreter are absolute and bound into every command the session is given; there is no default ledger. A first session is created only with an explicit
 --session-id (Claude) or --create (Codex); every later start RESUMES the recorded one. Zero model calls while the queue is empty. SIGTERM/Ctrl-C stop the manager and close the
@@ -30,7 +33,8 @@ import xml.sax.saxutils as xml
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.agent_requests.claude_stream import ClaudeStreamProvider, LaunchRefused, helper_selector  # noqa: E402
 from core.agent_requests.codex_app_server import CodexAppServerProvider  # noqa: E402
-from core.agent_requests.connection import DEFAULT_HELPER, ConnectionManager, IdentityMismatch, LeaseHeld, StateUnreadable, read_identity, run_forever  # noqa: E402
+from core.agent_requests.connection import (DEFAULT_HELPER, RESTART_BACKOFF_S, ConnectionManager, IdentityMismatch, LeaseHeld, StateUnreadable,  # noqa: E402
+                                            read_identity, run_forever)
 
 LAUNCH_LABEL = {"claude-code": "ai.minimoi.connection.claude-code", "codex": "ai.minimoi.connection.codex"}
 
@@ -92,13 +96,15 @@ def build_provider(a, identity: dict):
                                   writable_roots=a.writable_root, request_timeout=a.request_timeout, binary_sha256=a.codex_bin_sha256)
 
 
-def check_pin(a, provider) -> None:
-    """The plist's ``run --start`` must be able to start: the binary named must match the pin given now (launch contract step 1)."""
+def check_start(a, provider) -> None:
+    """The plist's ``run --start`` must be able to start: the whole pre-start check of the launch contract, now (the pin, the plan sign-in and the key settings,
+    from the same environment the start builds). A refusal names the check, never a value."""
     binary, flag = (a.claude_bin, "--claude-bin-sha256") if a.provider == "claude-stream" else (a.codex_bin, "--codex-bin-sha256")
     try:
-        provider.verify_pin()
-    except LaunchRefused as exc:
-        raise ValueError(f"{exc}: give {flag} with the SHA-256 of {binary}; a plist without a matching pin would refuse every start") from None
+        provider.launch_record(provider.child_env())
+    except ValueError as exc:                                  # launch.LaunchRefused, or the policy refusing an environment name
+        hint = f"; give {flag} with the SHA-256 of {binary}" if getattr(exc, "code", None) == "binary_unpinned" else ""
+        raise ValueError(f"{exc}{hint}; a plist whose every start would be refused is not printed") from None
 
 
 def launchd_plist(a, script: str, identity: dict) -> str:
@@ -163,7 +169,7 @@ def main(argv=None) -> int:
     if a.cmd == "print-launchd":
         try:
             text = launchd_plist(a, os.path.abspath(__file__), identity)
-            check_pin(a, provider)
+            check_start(a, provider)
             print(text)
         except ValueError as exc:
             print(f"refused: {exc}", file=sys.stderr)
@@ -194,9 +200,19 @@ def main(argv=None) -> int:
                 print(json.dumps(d), flush=True)
                 if d.get("status") == "accepted" and not manager.identity().get("created"):
                     manager.mark_created()                                       # a real turn was accepted: the session now exists and is resumed from here on
+        first_failures = 0
         if a.cmd == "run" and a.start:
-            start_or_resume()
-        run_forever(manager, stop, interval=a.interval, restart=start_or_resume if (a.cmd == "run" and a.start) else None, on_pass=after_pass)
+            try:
+                start_or_resume()
+            except LaunchRefused as exc:
+                # A refused first start (no or a wrong pin, a changed binary, the sign-in missing, a key setting) is treated as a refused restart: named in
+                # status.json (never a value) and retried on the restart backoff by the loop below. Exiting instead would make launchd restart the manager
+                # every ThrottleInterval, with the reason only in its log (S1-E review SF1).
+                first_failures = 1
+                manager.note_restart(first_failures, f"{type(exc).__name__}: {exc}", RESTART_BACKOFF_S[0])
+                print(f"refused: {exc}; retrying on the restart backoff", file=sys.stderr, flush=True)
+        run_forever(manager, stop, interval=a.interval, restart=start_or_resume if (a.cmd == "run" and a.start) else None, on_pass=after_pass,
+                    initial_failures=first_failures)
         return 0
     except (LeaseHeld, IdentityMismatch, StateUnreadable, LaunchRefused) as exc:
         print(f"refused: {exc}", file=sys.stderr)
