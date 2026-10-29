@@ -28,8 +28,11 @@ CID = "c-123456abcdef"
 BASE = "/guild-next/api/v1/mc/voice/direct/api/realtime-voice"
 ON = {"MINIMOI_MC_VOICE": "1", "MINIMOI_MC_VOICE_DIRECT": "1", "MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO": "2000000",
       "MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_MC": "test-only-summary-key"}       # MC's capped summary key (Spec 165 §5.4)
-# mc_managed_realtime.install as of 670d3e09; MANAGED_VOICE_CHANNEL's one definition.
-INSTALL_SHA = "b2938e465868316669a21f3db35d8713e7ae9019ffa560453ef99ce2f611bef1"
+# mc_managed_realtime.install as of 670d3e09; MANAGED_VOICE_CHANNEL's one definition. Re-pinned in the A4 fix round
+# (verification S-7, Robert's rule of 29 Oct): the sideband's two platform-receipt returns now pass through
+# content_free(), so the voice model is handed "Saved." / "Post-it added." and never his words; nothing else in install
+# changed (the diff is those two return lines).
+INSTALL_SHA = "b7704c88ee242549389e501fca707850b32c4acf6c9d37eb13c01b3116f2156a"
 
 
 class Notes:

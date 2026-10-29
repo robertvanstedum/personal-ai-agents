@@ -16,6 +16,19 @@ from .mc_voice_direct import INSTRUCTIONS  # MC's operating rules, kept by the d
 ENV='MINIMOI_MC_MANAGED_REALTIME'
 
 
+def content_free(result):
+    """What the voice model is handed for a platform receipt (verification S-7, under Robert's rule of 29 Oct: "I don't
+    want the whole world hearing what I just said"). A saved note, post-it or reminder is its fixed line
+    (mc_voice_direct.spoken_receipt: "Saved.", "Post-it added.", "Reminder set for <time>. …"), never the platform's
+    reply, which quotes him; anything else keeps the platform's own words, which never do. Only the operation's ids and
+    states go with it: no reply note, whose text is his. The written receipt in the conversation keeps his words."""
+    from .mc_voice_direct import spoken_receipt
+    operation = result.get('operation') if isinstance(result.get('operation'), dict) else {}
+    line = spoken_receipt(operation)
+    return {'reply': line if line is not None else result.get('reply'), 'operation': operation,
+            'history_saved': result.get('history_saved', False)}
+
+
 def install(app,mount,*,environ,budget=None,provider_factory=None):
     from .mc_voice import enabled
     config=app.extensions[mount]
@@ -107,13 +120,13 @@ def install(app,mount,*,environ,budget=None,provider_factory=None):
             board_result=board_command(text,board=bound['board'],conversation=bound['floor'],principal=bound['principal'],turn_key=operation_id,author=bound['author'])
             if board_result is not None:
                 if turn is not None:turn.finish_platform(board_result)
-                return board_result
+                return content_free(board_result)
             # The trusted journal supplies one id per utterance/effect, including tool replays.
             from .owner_actions import execute as owner_action
             action=owner_action(text,cos=bound['services'].mc,conversation=bound['floor'],principal=bound['principal'],turn_key=operation_id)
             if action is not None:
                 if turn is not None:turn.finish_platform(action)
-                return action
+                return content_free(action)
             phase[0]='before'                     # neither command matched: nothing was done
             if name=='save_cos_note':
                 if turn is not None:turn.finish_not_sent({'error':'not_a_command'})

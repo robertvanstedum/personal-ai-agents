@@ -118,7 +118,10 @@ def test_actual_captured_worker_no_request_and_exact_idempotent_note(ready):
     # A spoken note is a real Chief of Staff note with its receipt, not only a kept conversation turn.
     assert [c[0] for c in cos.calls]==['/note exact owner note']*2 and len({c[2] for c in cos.calls})==1
     assert repeated['operation']=={'type':'cos_note','saved':True,'operation_id':cos.calls[0][2],'repeated':True}
-    assert repeated['reply']=='Saved to Chief of Staff notes: exact owner note' and len(r.notes.rows)==2
+    # Verification S-7 (Robert's rule): the voice model is handed a fixed line, never his words; the written receipt in
+    # the conversation keeps them.
+    assert repeated['reply']=='Already saved.' and 'exact owner note' not in str(repeated) and len(r.notes.rows)==2
+    assert any(row['text']=='Saved to Chief of Staff notes: exact owner note' for row in r.notes.rows.values())
 
 def test_nonliteral_note_refused_before_write(ready):
     r=ready;s,_=start(r)
@@ -268,3 +271,40 @@ def test_moved_voice_conversation_cannot_save_action(ready, monkeypatch):
     with pytest.raises(SessionRefused):
         session.dispatch('consult_cos_agent','remind me in 20 minutes to stretch','c-123456abcdef','utterance-a')
     assert not cos.calls
+
+
+# ── Verification S-7 (Robert's rule of 29 Oct): the sideband hands the voice model no words of his ─────────────────────
+
+WORDS = 'the spare key is under the blue pot'
+
+
+@pytest.mark.parametrize('name,text,line', [
+    ('save_cos_note', f'Save a note: {WORDS}', 'Saved.'),
+    ('consult_cos_agent', f'make a note that {WORDS}', 'Saved.'),
+    ('consult_cos_agent', f'put a post-it on the board saying {WORDS}', 'Post-it added.'),
+])
+def test_a_platform_receipt_reaches_the_voice_model_as_a_fixed_line(ready, monkeypatch, name, text, line):
+    r = ready; s, _ = start(r)
+    cos = CosOperations(); r.config['services'].mc.operation = cos.operation
+    with ThreadPoolExecutor(max_workers=1) as worker:
+        got = worker.submit(s.dispatch, name, text, 'c-123456abcdef', 'op-s7').result()
+    assert got['reply'] == line and WORDS not in str(got) and set(got) == {'reply', 'operation', 'history_saved'}
+    written = [row['text'] for row in r.notes.rows.values()] + [row['text'] for row in r.notes.postits.values()]
+    assert any(WORDS in t for t in written)                                     # the written receipt keeps them
+
+
+def test_a_reminder_reaches_the_voice_model_with_its_time_not_its_words(ready, monkeypatch):
+    from minimoi_portal.guild_ui import owner_actions
+    monkeypatch.setattr(owner_actions, 'reminders_enabled', lambda: True)
+    r = ready; s, _ = start(r)
+    cos = CosOperations(); r.config['services'].mc.operation = cos.operation
+    with ThreadPoolExecutor(max_workers=1) as worker:
+        got = worker.submit(s.dispatch, 'consult_cos_agent', f'Remind me in 20 minutes to check that {WORDS}',
+                            'c-123456abcdef', 'op-s7r').result()
+    assert got['reply'].startswith('Reminder set for ') and WORDS not in str(got)
+
+
+def test_content_free_keeps_a_refusal_as_the_platform_says_it():
+    refusal = {'reply': 'Which words should go on the Board? Nothing was added to the Board.',
+               'operation': {'type': 'board_postit', 'saved': False, 'reason': 'needs_text'}}
+    assert host.content_free(refusal) == {**refusal, 'history_saved': False}
