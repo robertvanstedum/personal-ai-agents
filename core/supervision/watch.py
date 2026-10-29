@@ -176,8 +176,8 @@ def check_in(store, github, *, now=None, since=None, runtime=None, sync_view_bou
     except Exception as exc:
         errors.append(f"agent exchanges unreadable ({type(exc).__name__})")
     if watch is not None:
-        try:
-            items.extend(staging_watch(store, timeout_s=watch["timeout_s"]))
+        try:      # queued in the supervisor's outbox and told by its delivery: listed here, never told twice (P2-3)
+            items.extend(dict(i, drained=True) for i in staging_watch(store, timeout_s=watch["timeout_s"]))
         except Exception as exc:
             errors.append(f"staging watch unreadable ({type(exc).__name__})")
     for err in errors:
@@ -205,7 +205,12 @@ def staging_watch(store, *, timeout_s, hosts=None):
     its last heartbeat is older than ``timeout_s`` (90 s in production, N3), back once when it beats again. A host
     with no row has never beaten: the watch is not armed for it. ``hosts`` names the hosts whose credential is still
     configured: a row of any other host is ignored, so removing the credential alone disarms the watch. Staging's own
-    account of itself (its view) is quoted with its age, never acted on: production has no say over dev work."""
+    account of itself (its view) is quoted with its age, never acted on: production has no say over dev work.
+
+    Each transition and its notice are written together (``store.watch_transition``: the row's silent_since and the
+    notice queued in the supervisor's outbox, in one transaction), so neither is ever lost alone; the notice is told by
+    the outbox's delivery, marked sent only once a message carrying it went out (Codex part 2 P2-3). -> the notices
+    queued now."""
     out = []
     for row in store.watch_rows():
         if hosts is not None and row["host_id"] not in hosts:
@@ -213,23 +218,37 @@ def staging_watch(store, *, timeout_s, hosts=None):
         host, age = row["host_id"], (row["now"] - row["last_at"]).total_seconds()
         view = row["view"] or {}
         if age > timeout_s and row["silent_since"] is None:
-            store.mark_silent(host, row["last_at"])
             taken = view.get("as_of")
             told = "of unknown age" if type(taken) not in (int, float) else \
                 f"{int(row['now'].timestamp() - taken)} s old"                 # a view carries its age (R4.6)
-            out.append({"key": f"staging-silent:{host}:{row['last_at'].isoformat()}", "kind": "error",
-                        "text": f"Staging {host} has been silent for {int(age)} s (last heartbeat "
-                                f"{row['last_at']:%H:%M:%S %Z}). Production only watches: nothing in dev is touched. "
-                                f"Its last account ({told}): authority answering {view.get('authority_answering')}, "
-                                f"sweeper {view.get('sweeper_age_s')} s old, {view.get('lapsed_always_on')} lapsed "
-                                f"always-on items."})
+            item = {"key": f"staging-silent:{host}:{row['last_at'].isoformat()}", "kind": "error",
+                    "text": f"Staging {host} has been silent for {int(age)} s (last heartbeat "
+                            f"{row['last_at']:%H:%M:%S %Z}). Production only watches: nothing in dev is touched. "
+                            f"Its last account ({told}): authority answering {view.get('authority_answering')}, "
+                            f"sweeper {view.get('sweeper_age_s')} s old, {view.get('lapsed_always_on')} lapsed "
+                            f"always-on items."}
+            if store.watch_transition(host, "silent", row["last_at"], item):
+                out.append(item)
         elif age <= timeout_s and row["silent_since"] is not None:
             since = row["silent_since"]
-            store.mark_back(host)
-            out.append({"key": f"staging-back:{host}:{since.isoformat()}", "kind": "error",
-                        "text": f"Staging {host} is back: heartbeat {int(age)} s ago, after silence since "
-                                f"{since:%H:%M:%S %Z}."})
+            item = {"key": f"staging-back:{host}:{since.isoformat()}", "kind": "error",
+                    "text": f"Staging {host} is back: heartbeat {int(age)} s ago, after silence since "
+                            f"{since:%H:%M:%S %Z}."}
+            if store.watch_transition(host, "back", since, item):
+                out.append(item)
     return out
+
+
+WATCH_TITLE = "MC: staging, watched by production"
+
+
+def outbox_message(channel, rows) -> str:
+    """One message for notices the supervisor's outbox holds on one channel (Codex part 2 P2-3), in the words each
+    channel used before it had an outbox: the staging watch's grouped notices, or the runtime link's one line."""
+    if channel == "runtime_link":
+        return (f"MC: the runtime link failed ({', '.join(r['text'] for r in rows)}). Today's approvals and check-ins "
+                "go on; the runtime's decisions and notices wait until it works again.")
+    return notices_message(rows, WATCH_TITLE)
 
 
 LABEL = {"waiting_on_robert": "Waiting on you", "error": "Error", "blocked": "Blocked", "stalled": "Stalled"}

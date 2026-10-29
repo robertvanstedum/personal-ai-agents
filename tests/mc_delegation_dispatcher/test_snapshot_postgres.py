@@ -93,7 +93,7 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
                 guild.mc_action_events, guild.mc_action_receipts, guild.supervision_decision_messages,
                 guild.supervision_contacts, guild.supervision_watch, guild.supervision_nudges, guild.supervision_stops,
                 guild.supervision_decisions, guild.supervision_checkins, guild.supervision_alerts,
-                guild.supervision_exchanges RESTART IDENTITY CASCADE""")
+                guild.supervision_exchanges, guild.supervision_outbox RESTART IDENTITY CASCADE""")
             cur.execute("UPDATE guild.supervision_telegram SET offset_=0")
         self.dir = Path(tempfile.mkdtemp())
         self.store = DispatcherStore(self.connect, principal="robert", environment="dev", authority=AUTH, grants=GRANTS)
@@ -556,6 +556,44 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         self.beat()                                                   # an operator restart: no task blocked
         self.assertEqual(self.publish()["hosts"][0]["blocked"], [])
         self.assertEqual(self.events("host.facts")[-1]["body"]["changed"], ["blocked"])
+
+    # ── Codex part 2 P2-3: the supervisor's outbox, on the real store ──
+    def test_p2_3_a_watch_notice_whose_send_failed_is_kept_across_a_restart_and_told_once(self):
+        """Telegram is down while staging goes silent and comes back: both transitions are written with their notices
+        (one transaction each), nothing is consumed, each failed send is counted; after a restart of the supervisor
+        and Telegram's return, both are told once, in order, in one message, and marked sent. A runtime link error
+        goes through the same outbox."""
+        prod, bot = Store(self.connect), FakeNotifier(self.dir / "notify-prod.jsonl")
+        armed = {"timeout_s": 45, "hosts": ["staging-1"]}
+        sup = Supervisor(prod, bot, GitHub(), chat_id=OWNER, user_id=OWNER, watch=armed)
+        beat = {"phase": "heartbeat", "host_id": "staging-1",
+                "view": {"as_of": time.time(), "authority_answering": True, "sweeper_age_s": 4, "lapsed_always_on": 0}}
+        prod.worker(beat, credential="watch:staging-1")
+        self.sql("UPDATE guild.supervision_watch SET last_at = last_at - interval '60 seconds'")
+        bot.fail_next = 3
+        sup.watch_tick()
+        sup.watch_tick()
+        self.assertEqual(bot.lines(), [])
+        (row,) = self.sql("SELECT key, attempts, last_error, sent_at FROM guild.supervision_outbox")
+        self.assertEqual((row["key"].split(":")[0], row["attempts"], row["last_error"], row["sent_at"]),
+                         ("staging-silent", 2, "telegram_down", None))
+        self.assertIsNotNone(self.sql("SELECT silent_since FROM guild.supervision_watch")[0]["silent_since"])
+        prod.worker(beat, credential="watch:staging-1")               # back, while Telegram is still down
+        sup.watch_tick()
+        self.assertEqual(bot.lines(), [])
+        again = Supervisor(Store(self.connect), bot, GitHub(), chat_id=OWNER, user_id=OWNER, watch=armed)  # restart
+        again.watch_tick()
+        again.watch_tick()
+        (told,) = [m["text"] for m in bot.lines()]
+        self.assertLess(told.index("has been silent"), told.index("is back"))
+        rows = self.sql("SELECT key, sent_at FROM guild.supervision_outbox ORDER BY queued_at")
+        self.assertEqual([(r["key"].split(":")[0], r["sent_at"] is not None) for r in rows],
+                         [("staging-silent", True), ("staging-back", True)])
+        bot.fail_next = 1
+        again._runtime_failed(["apply:boom"])
+        again._runtime_failed(["apply:boom"])
+        again._runtime_failed(["apply:boom"])
+        self.assertEqual([m["text"].split(" (")[1].split(")")[0] for m in bot.lines()[1:]], ["apply:boom"])
 
     # ── DUP-8, R4.6-b, T-PW1: production's identities write nothing in dev; the watch only beats ──
     def test_t_pw1_prod_watch_test_silent_once_back_once_and_the_watch_credential_reaches_nothing_else(self):

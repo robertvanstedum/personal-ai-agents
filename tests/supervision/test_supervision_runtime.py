@@ -271,7 +271,43 @@ class FailingLink:
     apply = tell_outcomes = close_closed = deliver = drain = check_in = _boom
 
 
-class TickStore:
+class OutboxFake:
+    """The supervisor's outbox as Store keeps it (sql/003 supervision_outbox, P2-3): queued once per key, oldest first,
+    sent only when marked so. ``fail_record`` makes the next n records of a send fail, as a database error would."""
+    fail_record = 0
+
+    @property
+    def outbox(self):
+        if "_outbox" not in self.__dict__:
+            self._outbox = {}
+        return self._outbox
+
+    def queue_notices(self, channel, items):
+        fresh = []
+        for i in items:
+            if i["key"] not in self.outbox:
+                self.outbox[i["key"]] = {"key": i["key"], "channel": channel, "kind": i["kind"], "text": i["text"],
+                                         "sent": False, "attempts": 0, "last_error": None, "n": len(self.outbox)}
+                fresh.append(i["key"])
+        return fresh
+
+    def outbox_unsent(self, limit=50):
+        return sorted((dict(r) for r in self.outbox.values() if not r["sent"]), key=lambda r: r["n"])[:limit]
+
+    def outbox_sent(self, keys):
+        if self.fail_record:
+            self.fail_record -= 1
+            raise ConnectionError("database_down")
+        for k in keys:
+            self.outbox[k]["sent"] = True
+
+    def outbox_failed(self, keys, code):
+        for k in keys:
+            self.outbox[k]["attempts"] += 1
+            self.outbox[k]["last_error"] = code
+
+
+class TickStore(OutboxFake):
     def __init__(self):
         self.alerts, self.checkins = set(), []
 
@@ -407,18 +443,21 @@ def test_the_check_in_reads_the_runtimes_notices_and_a_stale_view_fires_nothing(
         ["view-stale"]
 
 
-class WatchStore:
+class WatchStore(OutboxFake):
     def __init__(self, rows):
         self.rows = rows
 
     def watch_rows(self):
         return self.rows
 
-    def mark_silent(self, host, since):
-        next(r for r in self.rows if r["host_id"] == host)["silent_since"] = since
-
-    def mark_back(self, host):
-        next(r for r in self.rows if r["host_id"] == host)["silent_since"] = None
+    def watch_transition(self, host, to, since, notice):
+        """As Store's: the row's change and the notice queued together, or neither when the row moved already."""
+        r = next(r for r in self.rows if r["host_id"] == host)
+        if (to == "silent" and r["silent_since"] is not None) or (to == "back" and r["silent_since"] != since):
+            return False
+        r["silent_since"] = since if to == "silent" else None
+        self.queue_notices("staging_watch", [notice])
+        return True
 
 
 def test_the_staging_watch_tells_silence_once_and_the_return_once_and_is_unarmed_before_a_heartbeat():
@@ -439,6 +478,102 @@ def test_the_staging_watch_tells_silence_once_and_the_return_once_and_is_unarmed
     (back,) = watch.staging_watch(store, timeout_s=90)
     assert back["key"] == f"staging-back:staging-1:{(NOW - timedelta(seconds=30)).isoformat()}"
     assert watch.staging_watch(store, timeout_s=90) == []
+
+
+# ── Codex part 2 P2-3: a notice whose send fails is never consumed; it waits in the outbox until it goes out ─────
+class Flaky(Bot):
+    """A bot whose sends fail while ``down`` (or for the next ``fail`` sends), as Telegram does now and then."""
+
+    def __init__(self, fail=0):
+        super().__init__()
+        self.fail, self.down, self.attempts = fail, False, 0
+
+    def send(self, chat_id, text, *, reply_to=None):
+        self.attempts += 1
+        if self.down or self.fail:
+            self.fail = max(0, self.fail - 1)
+            raise ConnectionError("telegram_unreachable")
+        return super().send(chat_id, text, reply_to=reply_to)
+
+
+class WatchTickStore(WatchStore, TickStore):
+    def __init__(self, rows):
+        WatchStore.__init__(self, rows)
+        TickStore.__init__(self)
+
+
+def watched(row, bot):
+    store = WatchTickStore([row])
+    return store, M.Supervisor(store, bot, None, chat_id=OWNER, user_id=OWNER,
+                               watch={"timeout_s": 90, "hosts": ["staging-1"]})
+
+
+def staging_row():
+    return {"host_id": "staging-1", "last_at": NOW - timedelta(seconds=30), "now": NOW, "silent_since": None,
+            "view": {"authority_answering": True, "sweeper_age_s": 4, "lapsed_always_on": 0}}
+
+
+def test_p2_3_an_outage_and_a_return_whose_sends_fail_are_each_told_later_once():
+    row, bot = staging_row(), Flaky(fail=1)
+    store, sup = watched(row, bot)
+    row["now"] = NOW + timedelta(seconds=120)                 # silent past the timeout
+    sup.watch_tick()                                          # the send fails: nothing consumed
+    assert bot.sent == [] and store.outbox_unsent()[0]["attempts"] == 1
+    assert store.outbox_unsent()[0]["last_error"] == "telegram_unreachable"
+    sup.watch_tick()
+    sup.watch_tick()
+    assert [t.split("\n")[3].split(" has been")[0] for t, _ in bot.sent] == ["• Staging staging-1"]   # once
+    row["last_at"] = row["now"] - timedelta(seconds=5)        # it beats again
+    bot.fail = 1
+    sup.watch_tick()                                          # the return's send fails
+    assert len(bot.sent) == 1
+    sup.watch_tick()
+    sup.watch_tick()
+    assert len(bot.sent) == 2 and "Staging staging-1 is back" in bot.sent[1][0]
+    assert store.outbox_unsent() == [] and len(store.outbox) == 2
+
+
+def test_p2_3_an_outage_that_ends_while_telegram_is_down_is_still_told_then_its_return():
+    row, bot = staging_row(), Flaky()
+    store, sup = watched(row, bot)
+    bot.down = True
+    row["now"] = NOW + timedelta(seconds=120)
+    sup.watch_tick()
+    row["last_at"] = row["now"] - timedelta(seconds=5)
+    sup.watch_tick()
+    assert bot.sent == [] and [r["key"].split(":")[0] for r in store.outbox_unsent()] == \
+        ["staging-silent", "staging-back"]
+    bot.down = False
+    sup.watch_tick()
+    (text, _), = bot.sent                                     # both, in order, in one message
+    assert text.index("has been silent") < text.index("is back")
+    sup.watch_tick()
+    assert len(bot.sent) == 1
+
+
+def test_p2_3_a_restart_after_a_failed_send_tells_it_and_a_failed_record_never_repeats_it():
+    row, bot = staging_row(), Flaky(fail=1)
+    store, sup = watched(row, bot)
+    row["now"] = NOW + timedelta(seconds=120)
+    sup.watch_tick()                                          # failed; then the supervisor restarts
+    again = M.Supervisor(store, bot, None, chat_id=OWNER, user_id=OWNER,
+                         watch={"timeout_s": 90, "hosts": ["staging-1"]})
+    store.fail_record = 1                                     # its send succeeds, its record fails once
+    again.watch_tick()
+    again.watch_tick()                                        # held in memory: never sent twice by this process
+    assert len(bot.sent) == 1 and store.outbox_unsent() == []  # and recorded at the next tick
+
+
+def test_p2_3_a_runtime_link_error_whose_send_fails_is_told_later_once_a_day():
+    store, bot = TickStore(), Flaky(fail=1)
+    sup = M.Supervisor(store, bot, None, chat_id=OWNER, user_id=OWNER)
+    sup._runtime_failed(["apply:synthetic_failure"])          # its send fails
+    assert bot.sent == []
+    sup._runtime_failed([])                                   # the next tick, no new error: told now
+    sup._runtime_failed(["apply:synthetic_failure"])          # the same error again today: not again
+    assert [t for t, _ in bot.sent] == ["MC: the runtime link failed (apply:synthetic_failure). Today's approvals "
+                                        "and check-ins go on; the runtime's decisions and notices wait until it works "
+                                        "again."]
 
 
 def test_the_sync_view_is_read_with_its_age():

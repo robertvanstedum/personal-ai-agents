@@ -37,6 +37,7 @@ from core.supervision import telegram as tg, watch  # noqa: E402
 from core.supervision.store import Store, public_receipt  # noqa: E402
 
 log = logging.getLogger("supervisor")
+OUTBOX_PER_MESSAGE = 10                 # notices per message from the supervisor's outbox (P2-3)
 HEALTH = Path(os.environ.get("SUPERVISOR_HEALTH_FILE", "/tmp/supervisor.alive"))
 _stop = False
 
@@ -71,6 +72,7 @@ class Supervisor:
         self.clock = clock
         self.next_checkin = clock()
         self.runtime, self.sync_view_bound_s, self.watch = runtime, sync_view_bound_s, watch
+        self._outbox_unrecorded = set()     # outbox keys sent, not yet recorded as sent (never sent twice meanwhile)
 
     # -- decisions out -------------------------------------------------------------------------------------------
     def runtime_tick(self):
@@ -93,32 +95,67 @@ class Supervisor:
         self._runtime_failed(self.runtime.take_errors())
 
     def _runtime_failed(self, codes):
-        """The runtime link's failures this tick, each told once per key and day, in one message (SF3)."""
-        if not codes:
-            return
-        for code in codes:
-            log.warning("runtime link: %s", code)
-        day = f"{datetime.now(timezone.utc):%Y%m%d}"
-        try:
-            fresh = self.store.new_alert_keys(sorted({f"runtime-link-error:{c}:{day}" for c in codes}))
-            if fresh:
-                told = ", ".join(k.split(":", 1)[1].rsplit(":", 1)[0] for k in fresh)
-                self.bot.send(self.chat_id, f"MC: the runtime link failed ({told}). Today's approvals and check-ins go "
-                                            "on; the runtime's decisions and notices wait until it works again.")
-        except Exception:
-            log.exception("runtime link failure not told")
+        """The runtime link's failures this tick, each told once per key and day, in one message (SF3). Queued in the
+        supervisor's outbox first and told by its delivery, so a failed send is tried again (Codex part 2 P2-3)."""
+        if codes:
+            for code in codes:
+                log.warning("runtime link: %s", code)
+            day = f"{datetime.now(timezone.utc):%Y%m%d}"
+            try:
+                self.store.queue_notices("runtime_link", [{"key": f"runtime-link-error:{c}:{day}", "kind": "error",
+                                                           "text": c} for c in sorted(set(codes))])
+            except Exception:
+                log.exception("runtime link failure not queued")
+        self.tell_outbox()
 
     def watch_tick(self):
         """Production's notify-only watch of staging (R5.6-b), on every tick: silent once past the timeout, back once,
-        told at once rather than at the next check-in. Never stops the tick."""
+        told at once rather than at the next check-in. Each transition is queued with its notice (one transaction),
+        and told by the outbox's delivery (Codex part 2 P2-3). Never stops the tick."""
         try:
-            items = watch.staging_watch(self.store, timeout_s=self.watch["timeout_s"], hosts=self.watch.get("hosts"))
-            fresh = set(self.store.new_alert_keys([i["key"] for i in items])) if items else set()
-            told = [i for i in items if i["key"] in fresh]
-            if told:
-                self.bot.send(self.chat_id, watch.notices_message(told, "MC: staging, watched by production"))
+            watch.staging_watch(self.store, timeout_s=self.watch["timeout_s"], hosts=self.watch.get("hosts"))
         except Exception:
             log.exception("staging watch failed")
+        self.tell_outbox()
+
+    def tell_outbox(self):
+        """Every notice the outbox holds unsent (the staging watch's, the runtime link's errors), oldest first, one
+        message per channel and at most OUTBOX_PER_MESSAGE notices, each marked sent only after its message went out
+        (Codex part 2 P2-3). A failed send is counted on its notices and leaves them, and everything after, for the
+        next tick. A message sent whose record fails is held here, so this process never sends it twice; a restart in
+        between could repeat that one message, never lose it. Never stops the tick."""
+        self._record_outbox()
+        try:
+            rows = [r for r in self.store.outbox_unsent() if r["key"] not in self._outbox_unrecorded]
+        except Exception:
+            log.exception("supervisor outbox unreadable")
+            return
+        for channel in ("staging_watch", "runtime_link"):
+            group = [r for r in rows if r["channel"] == channel]
+            for at in range(0, len(group), OUTBOX_PER_MESSAGE):
+                chunk = group[at:at + OUTBOX_PER_MESSAGE]
+                keys = [r["key"] for r in chunk]
+                try:
+                    self.bot.send(self.chat_id, watch.outbox_message(channel, chunk))
+                except Exception as exc:
+                    log.warning("supervisor outbox: %s not sent (%s)", ", ".join(keys), _code(exc))
+                    try:
+                        self.store.outbox_failed(keys, _code(exc))
+                    except Exception:
+                        log.exception("supervisor outbox failure not recorded")
+                    self._record_outbox()
+                    return                                        # the rest next tick, oldest first
+                self._outbox_unrecorded.update(keys)
+        self._record_outbox()
+
+    def _record_outbox(self):
+        if not self._outbox_unrecorded:
+            return
+        try:
+            self.store.outbox_sent(sorted(self._outbox_unrecorded))
+            self._outbox_unrecorded.clear()
+        except Exception:
+            log.exception("supervisor outbox not recorded; held until it is")
 
     def send_new(self):
         for d in self.store.pending():

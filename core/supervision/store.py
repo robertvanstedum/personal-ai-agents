@@ -593,13 +593,70 @@ class Store:
             return cur.fetchall()
         return self._run(q)
 
-    def mark_silent(self, host_id, since):
-        self._run(lambda cur: cur.execute("""UPDATE guild.supervision_watch SET silent_since=%s
-            WHERE host_id=%s AND silent_since IS NULL""", (since, host_id)))
+    def watch_transition(self, host_id, to, since, notice) -> bool:
+        """One staging transition and its notice, in one transaction (Codex part 2 P2-3): ``silent`` sets the row's
+        silent_since to ``since`` (from none), ``back`` clears it (from ``since``), and the notice is queued in the
+        outbox. False, with nothing queued, when the row had moved already. Robert is told by the outbox's delivery."""
+        need(to in ("silent", "back"), "watch_transition_invalid")
+        item = _outbox_item(notice)
 
-    def mark_back(self, host_id):
-        self._run(lambda cur: cur.execute("UPDATE guild.supervision_watch SET silent_since=NULL WHERE host_id=%s",
-                                          (host_id,)))
+        def q(cur):
+            if to == "silent":
+                cur.execute("""UPDATE guild.supervision_watch SET silent_since=%s
+                    WHERE host_id=%s AND silent_since IS NULL RETURNING host_id""", (since, host_id))
+            else:
+                cur.execute("""UPDATE guild.supervision_watch SET silent_since=NULL
+                    WHERE host_id=%s AND silent_since=%s RETURNING host_id""", (host_id, since))
+            if cur.fetchone() is None:
+                return False
+            self._queue(cur, "staging_watch", item)
+            return True
+        return self._run(q)
+
+    # ---- the supervisor's outbox (sql/003 supervision_outbox; Codex part 2 P2-3) --------------------------------
+    @staticmethod
+    def _queue(cur, channel, item) -> bool:
+        cur.execute("""INSERT INTO guild.supervision_outbox (key, channel, kind, text) VALUES (%s, %s, %s, %s)
+            ON CONFLICT (key) DO NOTHING RETURNING key""", (item["key"], channel, item["kind"], item["text"]))
+        return cur.fetchone() is not None
+
+    def queue_notices(self, channel, items) -> list:
+        """Each notice queued once per key: a key queued before, sent or not, is never queued again. -> keys queued."""
+        need(channel in OUTBOX_CHANNELS, "outbox_channel_invalid")
+        clean = [_outbox_item(i) for i in items]
+
+        def q(cur):
+            return [i["key"] for i in clean if self._queue(cur, channel, i)]
+        return self._run(q)
+
+    def outbox_unsent(self, limit=50) -> list:
+        """Notices queued and not yet sent, oldest first."""
+        def q(cur):
+            cur.execute("""SELECT key, channel, kind, text, attempts, last_error FROM guild.supervision_outbox
+                WHERE sent_at IS NULL ORDER BY queued_at, key LIMIT %s""", (limit,))
+            return cur.fetchall()
+        return self._run(q)
+
+    def outbox_sent(self, keys):
+        """These notices went out in a message: marked sent, once."""
+        self._run(lambda cur: cur.execute("""UPDATE guild.supervision_outbox SET sent_at=clock_timestamp()
+            WHERE key = ANY(%s) AND sent_at IS NULL""", (list(keys),)))
+
+    def outbox_failed(self, keys, code):
+        """A send of these notices failed: counted, with its fixed code; they stay unsent, tried again next tick."""
+        self._run(lambda cur: cur.execute("""UPDATE guild.supervision_outbox SET attempts=attempts + 1,
+            last_error=%s WHERE key = ANY(%s) AND sent_at IS NULL""", (str(code)[:64], list(keys))))
+
+
+OUTBOX_CHANNELS = ("staging_watch", "runtime_link")
+OUTBOX_KINDS = ("waiting_on_robert", "error", "blocked", "stalled")
+
+
+def _outbox_item(item) -> dict:
+    need(type(item) is dict and type(item.get("key")) is str and 1 <= len(item["key"]) <= 200
+         and item.get("kind") in OUTBOX_KINDS and type(item.get("text")) is str and 1 <= len(item["text"]) <= 2000,
+         "outbox_item_invalid")
+    return {"key": item["key"], "kind": item["kind"], "text": item["text"]}
 
 
 def public_receipt(receipt):
