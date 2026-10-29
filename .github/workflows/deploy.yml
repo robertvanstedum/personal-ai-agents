@@ -46,10 +46,9 @@ jobs:
             exit 0
           fi
 
-          # github.event.before can name a commit a rebase and force-push
-          # removed ("fatal: bad object"); release_base.sh then falls back to
-          # the merge-base with the PR's base branch (or main), else HEAD^.
-          # Exit 3: main's history was rewritten, so deploy everything.
+          # PRs compare cumulative changes against their target merge-base;
+          # pushes use before when available, with conservative fallbacks.
+          # Exit 3: no trusted PR base or rewritten main history; classify all.
           rc=0
           BEFORE=$(bash scripts/ci/release_base.sh "${{ github.event.before }}" "${{ github.sha }}" "${{ github.base_ref }}") || rc=$?
           if [ "$rc" = 3 ]; then

@@ -308,7 +308,9 @@ def select(paths: list[str], release_class: str, event: str = "push", repo: Repo
     covered = sum(1 for test in repo.tests if test in files or any(test.startswith(d) for d in dirs))
     if repo.tests and covered > FULL_SHARE * len(repo.tests):
         return _full(f"focused set is {covered} of {len(repo.tests)} test files")
-    return {"test_scope": "focused", "test_targets": dirs + sorted(files),
+    # Keep each directory's targets together: revisiting it after a parent-level
+    # file can lose node-scoped conftest fixtures in pytest 9.1.
+    return {"test_scope": "focused", "test_targets": sorted([*dirs, *files]),
             "reason": f"{covered} of {len(repo.tests)} test files for {len(paths)} changed paths"}
 
 

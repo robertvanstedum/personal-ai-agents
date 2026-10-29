@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import math
 import os
 from pathlib import Path
 import threading
@@ -51,14 +52,23 @@ def validate_receipt(payload: object) -> dict:
     )
     for name in ("latency_ms", "input_tokens", "output_tokens", "total_tokens", "cost_usd"):
         value = payload.get(name)
-        if value is not None and (not isinstance(value, (int, float)) or isinstance(value, bool)):
-            raise ValueError(f"routing receipt {name} must be numeric")
+        if value is not None:
+            count = name in {"input_tokens", "output_tokens", "total_tokens"}
+            valid = isinstance(value, int if count else (int, float)) and not isinstance(value, bool)
+            if valid:
+                try:
+                    valid = value >= 0 and (count or math.isfinite(float(value)))
+                except OverflowError:
+                    valid = False
+            if not valid:
+                kind = "a non-negative integer" if count else "a finite non-negative number"
+                raise ValueError(f"routing receipt {name} must be {kind}")
         normalized[name] = value
     fallback_position = payload.get("fallback_position")
     if fallback_position is not None and (
-        not isinstance(fallback_position, int) or isinstance(fallback_position, bool)
+        not isinstance(fallback_position, int) or isinstance(fallback_position, bool) or fallback_position < 0
     ):
-        raise ValueError("routing receipt fallback_position must be an integer")
+        raise ValueError("routing receipt fallback_position must be a non-negative integer")
     normalized["fallback_position"] = fallback_position
     fallback_reason = payload.get("fallback_reason")
     if fallback_reason is not None and not isinstance(fallback_reason, str):

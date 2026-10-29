@@ -11,6 +11,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
+import math
 from pathlib import Path
 
 
@@ -28,9 +29,16 @@ class CostPolicy:
 def _optional_nonnegative_number(value: object, name: str) -> float | None:
     if value is None:
         return None
+    message = f"{name} must be a finite non-negative number or null"
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
-        raise ValueError(f"{name} must be a non-negative number or null")
-    return float(value)
+        raise ValueError(message)
+    try:
+        number = float(value)
+    except OverflowError as error:
+        raise ValueError(message) from error
+    if not math.isfinite(number):
+        raise ValueError(message)
+    return number
 
 
 def load_cost_policy(path: Path) -> CostPolicy:
@@ -59,10 +67,12 @@ def load_cost_policy(path: Path) -> CostPolicy:
         (minimum_requests, "minimum_requests_for_fallback_rate"),
         (unpriced_warn, "unpriced_request_warn"),
     ):
-        if value is not None and (
-            isinstance(value, bool) or not isinstance(value, int) or value < 0
-        ):
-            raise ValueError(f"{name} must be a non-negative integer or null")
+        optional = name == "unpriced_request_warn"
+        if optional and value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            suffix = " or null" if optional else ""
+            raise ValueError(f"{name} must be a non-negative integer{suffix}")
 
     return CostPolicy(
         daily_warn_usd=_optional_nonnegative_number(
@@ -99,7 +109,24 @@ def load_receipts(path: Path) -> tuple[list[dict], int]:
     return receipts, invalid_lines
 
 
-def _period_summary(receipts: list[dict], date_prefix: str) -> dict:
+def _receipt_measurement(value: object) -> float | None:
+    """Keep malformed historical measurements out of report arithmetic."""
+    try:
+        return _optional_nonnegative_number(value, "receipt measurement")
+    except ValueError:
+        return None
+
+
+def _receipt_count(value: object) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
+
+
+def summarize_receipts(receipts: list[dict], date_prefix: str, *, round_costs: bool = True) -> dict:
+    """Summarize gateway receipts matching a UTC date or month prefix.
+
+    Checkpoints round costs to eight decimals. Display callers that perform their
+    own rounding can retain the original sums with ``round_costs=False``.
+    """
     selected = [
         receipt
         for receipt in receipts
@@ -119,37 +146,32 @@ def _period_summary(receipts: list[dict], date_prefix: str) -> dict:
         provider_totals = by_provider[provider]
         provider_totals["requests"] += 1
 
-        cost = receipt.get("cost_usd")
-        if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+        cost = _receipt_measurement(receipt.get("cost_usd"))
+        if cost is not None:
             priced_requests += 1
-            total_cost += float(cost)
-            provider_totals["cost_usd"] += float(cost)
+            total_cost += cost
+            provider_totals["cost_usd"] += cost
         for field in ("input_tokens", "output_tokens"):
-            value = receipt.get(field)
-            if isinstance(value, int) and not isinstance(value, bool):
-                provider_totals[field] += value
-        input_value = receipt.get("input_tokens")
-        output_value = receipt.get("output_tokens")
-        total_value = receipt.get("total_tokens")
-        input_tokens += input_value if isinstance(input_value, int) and not isinstance(input_value, bool) else 0
-        output_tokens += output_value if isinstance(output_value, int) and not isinstance(output_value, bool) else 0
-        total_tokens += total_value if isinstance(total_value, int) and not isinstance(total_value, bool) else 0
+            provider_totals[field] += _receipt_count(receipt.get(field))
+        input_tokens += _receipt_count(receipt.get("input_tokens"))
+        output_tokens += _receipt_count(receipt.get("output_tokens"))
+        total_tokens += _receipt_count(receipt.get("total_tokens"))
 
         position = receipt.get("fallback_position")
         if isinstance(position, int) and not isinstance(position, bool) and position > 0:
             fallback_count += 1
         if provider.casefold() in {"ollama", "ollama_chat"}:
             local_requests += 1
-        latency = receipt.get("latency_ms")
-        if isinstance(latency, (int, float)) and not isinstance(latency, bool):
-            latency_values.append(float(latency))
+        latency = _receipt_measurement(receipt.get("latency_ms"))
+        if latency is not None:
+            latency_values.append(latency)
 
     request_count = len(selected)
     return {
         "requests": request_count,
         "priced_requests": priced_requests,
         "unpriced_requests": request_count - priced_requests,
-        "cost_usd": round(total_cost, 8),
+        "cost_usd": round(total_cost, 8) if round_costs else total_cost,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "total_tokens": total_tokens,
@@ -164,7 +186,7 @@ def _period_summary(receipts: list[dict], date_prefix: str) -> dict:
         "by_provider": {
             provider: {
                 **totals,
-                "cost_usd": round(totals["cost_usd"], 8),
+                "cost_usd": round(totals["cost_usd"], 8) if round_costs else totals["cost_usd"],
             }
             for provider, totals in sorted(by_provider.items())
         },
@@ -184,8 +206,8 @@ def build_cost_checkpoint(
         raise ValueError("cost checkpoint now must be timezone-aware")
     today = current.astimezone(timezone.utc).strftime("%Y-%m-%d")
     month = today[:7]
-    daily = _period_summary(receipts, today)
-    monthly = _period_summary(receipts, month)
+    daily = summarize_receipts(receipts, today)
+    monthly = summarize_receipts(receipts, month)
     alerts: list[dict] = []
 
     if policy.daily_warn_usd is not None and daily["cost_usd"] >= policy.daily_warn_usd:

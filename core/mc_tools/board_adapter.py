@@ -10,8 +10,9 @@ from uuid import uuid4, UUID
 from core.minimoi_actions.context import ActionContractError
 from domains.guild.board_operations import operations
 from domains.guild.board_wire import payload as canonical_payload, digest
-from minimoi_portal.guild_ui.board_actions import BoardActions, BoardContext, BoardRefused
-from minimoi_portal.guild_ui.board_text import TextRefused
+from domains.guild.board_contract import BoardContext, BoardRefused
+from minimoi_portal.guild_ui.board_actions import BoardActions
+from domains.guild.board_text import TextRefused
 from minimoi_portal.guild_ui.stores import FloorStores, FloorStoreUnavailable
 from . import binding, effects, fence
 

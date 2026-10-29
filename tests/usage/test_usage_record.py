@@ -353,3 +353,22 @@ def test_read_all_finds_the_gateway_and_every_writers_records(tmp_path):
     assert ur.read(str(tmp_path)) and [r["emitter"] for r in ur.read(str(tmp_path))] == ["gateway"]  # unchanged
     found = sorted(r["emitter"] for r in ur.read_all(str(tmp_path)))
     assert len(found) == 4 and "gateway" in found and "helper:grok" in found and "helper:tavily" in found
+
+@pytest.mark.parametrize('field', ['cost_usd', 'latency_ms', 'units'])
+@pytest.mark.parametrize('value', [float('nan'), float('inf'), -float('inf'), 10 ** 400])
+def test_nonfinite_measurements_are_refused(field, value):
+    supplied = {'seconds': value} if field == 'units' else value
+    with pytest.raises(ValueError, match=field):
+        ur.validate(_rec(**{field: supplied}))
+
+
+def test_bad_measurement_append_leaves_no_file(tmp_path):
+    with pytest.raises(ValueError, match='cost_usd'):
+        ur.append(_rec(cost_usd=float('nan')), str(tmp_path))
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_finite_measurements_keep_zero_null_and_rounding():
+    rec = ur.validate(_rec(cost_usd=0, latency_ms=None, units={'seconds': 0, 'calls': 2}))
+    assert rec['cost_usd'] == 0 and rec['latency_ms'] is None and rec['units'] == {'seconds': 0, 'calls': 2}
+    assert ur.validate(_rec(cost_usd=0.123456789123))['cost_usd'] == 0.123456789

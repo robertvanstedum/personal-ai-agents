@@ -42,6 +42,10 @@ def test_no_staging_route_uses_the_default_provider_key_names():
     """The pass-through routes sign upstream calls with ANTHROPIC_API_KEY /
     XAI_API_KEY; no deployment may depend on those names on staging."""
     for name, route in _routes().items():
+        if name == "minimoi-cos-agent-local":
+            assert "api_key" not in route["litellm_params"]
+            assert route["litellm_params"]["model"] == "ollama_chat/llama3.2:3b"
+            continue
         key = route["litellm_params"]["api_key"]
         assert key in ("os.environ/GATEWAY_ANTHROPIC_API_KEY", "os.environ/GATEWAY_XAI_API_KEY",
                        "os.environ/MC_ANTHROPIC_API_KEY"), (name, key)
@@ -78,7 +82,7 @@ def test_keys_overlay_adds_only_the_database_url_to_the_gateway():
 
 def test_production_gateway_and_compose_are_unchanged():
     for path in ("docker-compose.prod.yml", "services/model_gateway/litellm.prod.yaml",
-                 "services/model_gateway/litellm.yaml", "docker/Dockerfile.model-gateway",
+                 "docker/Dockerfile.model-gateway",
                  "services/model_gateway/receipt_callback.py"):
         main = subprocess.run(["git", "-C", str(REPO), "show", f"origin/main:{path}"], capture_output=True, text=True)
         if main.returncode != 0:

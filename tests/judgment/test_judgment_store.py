@@ -148,3 +148,69 @@ def test_excluded_test_session_is_skipped_and_remembered(env, capsys):
     run(env, "collect", "--apply", "--exclude-session", "s1")
     assert json.loads(capsys.readouterr().out)["pairs_collected"] == 0
     assert "s1" in json.loads((env[1] / ".collector-state.json").read_text())["excluded_sessions"]
+
+
+@pytest.mark.parametrize("name", ["source?query.sqlite", "source#fragment.sqlite", "source%23encoded.sqlite", "space ü.sqlite"])
+@pytest.mark.parametrize("relative", [False, True])
+def test_source_path_is_literal_and_read_only(tmp_path, monkeypatch, name, relative):
+    intended = tmp_path / name
+    make_db(intended, [("assistant", GOOD)])
+    # URI-significant characters must not redirect the reader to a nearby file.
+    for other in {tmp_path / name.split("?")[0].split("#")[0], tmp_path / name.replace("%23", "#")} - {intended}:
+        make_db(other, [("user", "wrong database")])
+    before = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
+    monkeypatch.chdir(tmp_path)
+    db = Path(name) if relative else intended
+    con = J.open_ro(db)
+    try:
+        assert con.execute("SELECT event_json FROM transcript_events").fetchone()[0].find("Captured 1 correction pairs") >= 0
+        with pytest.raises(sqlite3.OperationalError, match="readonly"):
+            con.execute("DELETE FROM transcript_events")
+    finally:
+        con.close()
+    assert {p.name: p.read_bytes() for p in tmp_path.iterdir()} == before
+    store = tmp_path / "output"
+    report = J.collect(db, store, apply=False)
+    assert report["pairs_collected"] == 1
+    assert not store.exists()
+
+
+def test_missing_source_path_is_refused_without_creating_a_file(tmp_path):
+    db = tmp_path / "missing?mode=rwc.sqlite"
+    with pytest.raises(SystemExit, match="session database not found"):
+        J.open_ro(db)
+    assert list(tmp_path.iterdir()) == []
+
+@pytest.mark.parametrize('operation,failure', [('collect', None), ('collect', 'query'),
+    ('freeze', None), ('freeze', 'query'), ('freeze', 'conversation'), ('freeze', 'events')])
+def test_readonly_source_closes_on_success_and_refusal(env, monkeypatch, operation, failure):
+    db, store = env
+    make_db(db, [] if failure == 'events' else [('assistant', GOOD)])
+    before = db.read_bytes()
+
+    class Connection(sqlite3.Connection):
+        def execute(self, *args, **kwargs):
+            if failure == 'query':
+                raise sqlite3.OperationalError('synthetic query failure')
+            return super().execute(*args, **kwargs)
+
+    con = sqlite3.connect(db.absolute().as_uri() + '?mode=ro', uri=True, factory=Connection)
+    monkeypatch.setattr(J, 'open_ro', lambda path: con)
+    def run_operation():
+        if operation == 'collect':
+            return J.collect(db, store, False)
+        return J.freeze(db, store, 'missing' if failure == 'conversation' else 'c-test', None, 'synthetic', False)
+    try:
+        if failure == 'query':
+            with pytest.raises(sqlite3.OperationalError):
+                run_operation()
+        elif failure in {'conversation', 'events'}:
+            with pytest.raises(SystemExit, match='refused'):
+                run_operation()
+        else:
+            assert run_operation()
+        with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+            sqlite3.Connection.execute(con, 'SELECT 1')
+        assert db.read_bytes() == before and not store.exists()
+    finally:
+        con.close()

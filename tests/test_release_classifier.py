@@ -183,6 +183,8 @@ BACKEND_IMPORT_ALLOWED = ("core/workshop_journal/", "core/vault_t1/", "core/agen
                           "tools/workshop/", "scripts/dev/", "tests/", "prototype-lab/", "planning-studio/")
 # Exact new homes and only their actual backend dependencies, not a package/domain waiver.
 BACKEND_IMPORT_EXPECTED = {
+    # Pure Board text policy moved from the portal; all classified Guild consumers ship utils.
+    "domains/guild/board_text.py": ("utils.payment_scrub",),
     "core/memory_ask/context.py": ("utils.credential_scrub", "utils.payment_scrub"),
     "core/memory_ask/querylog.py": ("core.agent_turns.writer",),
     "core/memory_backup/backup.py": ("core.vault_t1.reader", "core.vault_t1.portable", "core.jobs.batch_window"),
