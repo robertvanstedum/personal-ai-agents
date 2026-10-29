@@ -157,3 +157,40 @@ def test_a_malformed_card_does_not_stop_the_host_from_starting(tmp_path):
             return load_pinned(tmp_path)
     metadata, _sessions = install_direct_voice(Flask("malformed"), Host(), url_prefix="/p", environ={})
     assert metadata["card_release"] is None
+
+
+# Spec 165 v0.3 §4.5, §7 (A2): the card's transcription ("bilingual", D19), the voices it names itself, and the persona its
+# release manifest says the card restates.
+def test_transcription_is_absent_or_bilingual(tmp_path):
+    assert load_card(tmp_path, release_with(tmp_path, "0.7.0", {"schema": 1, "card": "x.", "voices": {}}).name)[
+        "transcription"] is None
+    loaded = load_card(tmp_path, release_with(tmp_path, "0.7.1", {"schema": 1, "card": "x.", "transcription": "bilingual"}).name)
+    assert loaded["transcription"] == "bilingual"
+    for n, value in enumerate(("english", "", ["bilingual"], True, "Bilingual")):
+        release_with(tmp_path, f"0.6.{n}", {"schema": 1, "card": "x.", "transcription": value})
+        with pytest.raises(ValueError, match="transcription"):
+            load_card(tmp_path, f"0.6.{n}")
+
+
+def test_named_lists_only_the_voices_the_card_names_itself(tmp_path):
+    loaded = load_card(tmp_path, release_with(tmp_path, "0.5.0", {"schema": 1, "card": "x.", "voices": {"openai": "cedar"}}).name)
+    assert loaded["named"] == ["openai"] and loaded["voices"]["xai"] == "eve"          # the default is still reported
+    assert load_card(tmp_path, release_with(tmp_path, "0.5.1", {"schema": 1, "card": "x.", "voices": {
+        "openai": "cedar", "xai": "not-a-voice"}}).name)["named"] == ["openai"]
+    assert load_card(MC_ROOT, "0.1.18")["named"] == []                                   # MC's card names none (D3)
+
+
+def test_a_manifest_names_the_persona_the_card_restates_or_nothing(tmp_path):
+    folder = release_with(tmp_path, "0.4.0", {"schema": 1, "card": "x."})
+    manifest = json.loads((folder / "manifest.json").read_text())
+    persona = {"source": "MASTER_CRAFTSMAN_PERSONA.md", "version": "1.1", "sha256": "a" * 64}
+    (folder / "manifest.json").write_text(json.dumps({**manifest, "persona": persona}))
+    assert load_card(tmp_path, "0.4.0")["persona"] == persona
+    (folder / "manifest.json").write_text(json.dumps({**manifest, "persona": "mc-chat"}))   # MC's package name: none
+    assert load_card(tmp_path, "0.4.0")["persona"] is None
+    assert load_card(MC_ROOT, "0.1.18")["persona"] is None
+    for bad in ({**persona, "sha256": "short"}, {"source": "x", "version": "1"}, {**persona, "extra": "x"}, ["x"],
+                {**persona, "version": ""}):
+        (folder / "manifest.json").write_text(json.dumps({**manifest, "persona": bad}))
+        with pytest.raises(ValueError, match="persona"):
+            load_card(tmp_path, "0.4.0")

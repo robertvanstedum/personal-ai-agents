@@ -32,7 +32,7 @@ from flask import Blueprint, copy_current_request_context, g, has_request_contex
 from core.realtime_voice import budget as shared_budget
 from core.realtime_voice.consult import CAP, CAP_LINE, HOLD_AFTER_SECONDS, HOLDING_LINE, ConsultLedger, valid_token
 from core.realtime_voice.duration_guard import DurationGuard
-from core.realtime_voice.errors import SessionRefused
+from core.realtime_voice.errors import SessionRefused, VoiceUnavailable
 from core.realtime_voice.transcripts import MAX_BYTES as TURN_MAX_BYTES, STAMP, stamp_time
 
 log = logging.getLogger(__name__)
@@ -64,6 +64,12 @@ SUMMARY_JOIN_S = 40                  # a second ask joins a summary attempt runn
 ATTEMPT_STALE_S = 60                 # an attempt with no outcome this old ran in a process that died: a new one may start
 REFUSAL_CAP = 12                     # refusals that ran nothing but kept a receipt, per session: apart from the consults' CAP
 SUMMARY_PENDING = "The summary is still being written; it will appear in the conversation."
+# Admission apart from install (Spec 165 §6.8, §11.1, D11 (a)): a host whose routes are installed but whose starts are not
+# allowed here (CoS in production without its production switch: S1, S3) refuses a start with these words, and every record
+# route still answers.
+NOT_ON = "Voice unavailable: live voice is not on here."
+# A host that takes no provider default for an unnamed voice (CoS, Spec 165 D2 (a)): a start on that provider is refused.
+NO_VOICE = "Voice unavailable: no {label} voice is chosen for {name} yet."
 
 
 # ── times and ids ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -583,6 +589,44 @@ class DirectVoiceStore:
         """The record kept under ``record_id`` for this session, as put, or None."""
         raise NotImplementedError
 
+    # Spec 165 v0.3 §4.4: what the CoS store needs (A2). Each has a default built from the hooks above, so a store that
+    # needs no more (MC's floor) keeps working unchanged.
+
+    def close(self, handle, sid, *, reason, capture=None):
+        """Close the session at its capture boundary (§5.2), once: ("closed", the end marker's fields) for the first close,
+        ("already", the first close's fields) for any later one (a duplicate End, a second device), or (None, None) when
+        nothing could be kept. v0.3 names it close(handle, session, boundary); the boundary rides in ``capture`` (its
+        "boundary", the close's last_item_id), as mark_end keeps it. The default is read_marker, then mark_end: a store
+        that can do both at once (CoS's, under its session lock) does so."""
+        before = self.read_marker(handle, sid, "end")
+        if before is not None:
+            return "already", before
+        kept = self.mark_end(handle, sid, reason=reason, capture=capture)
+        return ("closed", kept) if kept is not None else (None, None)
+
+    def state(self, handle, sid):
+        """What the store holds of one session, for the needs-attention list and its detail (§6.5): {"start": the start
+        marker's fields, "end": the end marker's or None, "summary": summary_state}, and where the store keeps them,
+        "requests" (owner items with a consult_request), "outcomes" ({owner item: outcome}), "repaired" (a damaged tail
+        was repaired: the session stays incomplete), "damaged" (an invalid record inside: "Voice records damaged") and
+        "dismissed". None: no such session."""
+        start = self.read_marker(handle, sid, "start")
+        if start is None:
+            return None
+        return {"start": start, "end": self.read_marker(handle, sid, "end"), "summary": self.summary_state(handle, sid)}
+
+    def sessions(self, owner, needing_attention=True):
+        """The owner's sessions this store lists, as [(handle, session id)], newest first; with ``needing_attention``,
+        only those that may need it (the core decides each from state()). None: this store keeps no list (MC: each
+        conversation's own thread shows its sessions), and the core installs no record routes for it."""
+        return None
+
+
+def lists_sessions(store):
+    """Whether a host's store keeps a list of its sessions (it defines sessions()): only then are the needs-attention,
+    detail, download and dismiss routes and the capabilities read installed (Spec 165 §6.5; CoS)."""
+    return isinstance(store, DirectVoiceStore) and type(store).sessions is not DirectVoiceStore.sessions
+
 
 class DirectVoiceAdapter:
     """What one host supplies; the core owns everything between (bootstrap, consult, transcript, End with events,
@@ -602,6 +646,9 @@ class DirectVoiceAdapter:
     note_max = 2000
     receipts = Receipts(("reply", "operation"))
     store = None
+    # Whether a provider the card names no voice for speaks in that provider's default, said in voice_notices (MC's card
+    # names none yet, D3), or is refused before anything is recorded, with NO_VOICE (CoS, D2 (a): no silent fallback).
+    default_voices = True
 
     def owner(self):
         """(owner id, display name) of the signed-in owner of this request, or None."""
@@ -1036,14 +1083,19 @@ class DirectSessions(ConsultLedger):
         return out
 
     def close_session(self, sid, reason="end", report=None):
-        """End: closed here, and the end marker kept (the reveal) with what it says of capture, then the adapter's
-        ``ended``. A failed write leaves the reveal to the clock. Returns the capture the marker says (or would)."""
+        """End: closed here, and the end marker kept once (the reveal) with what it says of capture (the store's close),
+        then the adapter's ``ended``. A failed write leaves the reveal to the clock. Returns the capture the marker says
+        (or would): for a later End (a duplicate, another device), what the first close kept (Spec 165 §6.5)."""
         super().close_session(sid)
         cid, capture = self.conversation_of(sid), self.capture(sid, report)
         try:
             handle, refused = self._adapter.conversation(cid) if cid else (None, True)
-            if refused is None and self._adapter.store.mark_end(handle, sid, reason=reason, capture=capture) is not None:
-                self._adapter.ended(handle, sid)
+            if refused is None:
+                done, marker = self._adapter.store.close(handle, sid, reason=reason, capture=capture)
+                if done == "closed":
+                    self._adapter.ended(handle, sid)
+                elif done == "already" and isinstance(marker, dict) and marker.get("capture") in ("complete", "incomplete"):
+                    capture = {k: marker[k] for k in ("capture", "missing", "boundary") if k in marker}
         except Exception:
             log.exception("%s direct voice: end marker not kept", self._adapter.person["domain"])
         return capture
@@ -1540,25 +1592,113 @@ def session_id_of(value):
     return session_id(value)
 
 
+# ── the needs-attention list, one session's detail and its download (Spec 165 §6.5; a store that lists its sessions) ──
+SESSIONS_MAX = 50                       # the list shows at most this many sessions, newest first
+DAMAGED = "Voice records damaged"
+DECIDED = ("confirmed", "edited", "declined")
+DISMISSED_RECORD = "dismissed"
+
+
+def session_view(adapter, sessions, handle, sid):
+    """One session as the needs-attention list shows it, from what the store holds (state()) and what runs here: None
+    when there is no such session. A session needs attention while it is recovering or dropped, incomplete, damaged,
+    with an undecided or unavailable summary or an unknown consult, until it is decided or dismissed (§6.5). A live
+    session never does: it is still going. A consult admitted with no outcome that runs nowhere here is unknown
+    (§5.1); one running here is pending."""
+    try:
+        facts = adapter.store.state(handle, sid)
+    except Exception:
+        log.exception("%s direct voice: session state not read", adapter.person["domain"])
+        facts = None
+    if not isinstance(facts, dict) or not isinstance(facts.get("start"), dict):
+        return None
+    start, end = facts["start"], facts.get("end") if isinstance(facts.get("end"), dict) else None
+    damaged = facts.get("damaged") is True
+    st = state(start, end, sid, live=sessions.live, when=datetime.fromtimestamp(sessions.clock(), timezone.utc))
+    capture = (end.get("capture") if end and end.get("capture") in ("complete", "incomplete") else
+               "complete" if end else "unconfirmed")
+    if facts.get("repaired"):
+        capture = "incomplete"                     # a repaired tail keeps the session incomplete, across restarts
+    summary = facts.get("summary") if isinstance(facts.get("summary"), str) else "unknown"
+    outcomes = facts.get("outcomes") if isinstance(facts.get("outcomes"), dict) else {}
+    asked = [i for i in facts.get("requests") or () if owner_item(i)]
+    pending = [i for i in asked if i not in outcomes and sessions.running(sid, i)]
+    unknown = [i for i in asked if outcomes.get(i) == "unknown" or (i not in outcomes and i not in pending)]
+    reasons = [why for why, holds in (
+        ("damaged", damaged), ("recovering", st == "recovering"), ("dropped", st == "dropped"),
+        ("incomplete", st == "ended" and capture != "complete"), ("undecided", summary == "proposed"),
+        ("summary_unavailable", summary == "unavailable"), ("unknown_consult", bool(unknown))) if holds]
+    dismissed = facts.get("dismissed") is True
+    view = {"session_id": sid, "state": st, "started_at": start.get("started_at"),
+            "ended_at": end.get("ended_at") if end else None, "capture": capture, "summary": summary,
+            "consults": {"asked": len(asked), "pending": len(pending), "unknown": len(unknown)},
+            "repaired": bool(facts.get("repaired")), "damaged": damaged, "dismissed": dismissed, "reasons": reasons,
+            "needs_attention": (st != "live" and bool(reasons) and not dismissed and (damaged or summary not in DECIDED))}
+    if end and type(end.get("missing")) is int:
+        view["missing"] = end["missing"]
+    if damaged:
+        view["line"] = DAMAGED
+    return view
+
+
+def transcript_text(adapter, handle, sid, view):
+    """The download (D7): the session's kept records as plain text, oldest first, its capture said at the top and each
+    partial or interrupted turn labelled. Only what was kept; nothing is made up for what was not."""
+    turns, complete = adapter.store.records(handle, sid)
+    owner = adapter.owner_name or OWNER
+    from core.realtime_voice.transcripts import SPEAKERS
+    names = {SPEAKERS["user"]: f"{owner} (speech recognition)", SPEAKERS["assistant"]: adapter.person["name"],
+             SPEAKERS["consult"]: "Consult request", SPEAKERS["receipt"]: "Consult receipt"}
+    capture = view["capture"]
+    if capture == "incomplete":
+        missing = view.get("missing")
+        said = (f"incomplete: {missing} turn{'' if missing == 1 else 's'} not kept" if isinstance(missing, int)
+                else "incomplete: some of what was said was not kept")
+    elif capture == "unconfirmed":
+        said = "unconfirmed: the session's end was never recorded"
+    else:
+        said = "complete"
+    head = [f"Voice session with {adapter.person['name']}, {view['session_id']}",
+            f"Started {view.get('started_at') or 'unknown'}; ended {view.get('ended_at') or 'not recorded'}.",
+            f"Capture: {said}." + ("" if complete else " Not every record could be read."),
+            f"Summary: {view.get('summary')}.", ""]
+    lines = [f"{names.get(speaker, speaker)}{' (interrupted)' if interrupted else ' (partial)' if partial else ''}: {text}"
+             for speaker, text, partial, interrupted in turns]
+    return "\n".join(head + lines) + "\n"
+
+
 # ── the routes ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 def _kind():
     if request.method == "GET":
         return "read"                                   # reconciliation: owner-only, no-store, runs nothing
     for kind, tail in (("end", "/end"), ("decision", "/decision"), ("summary", "/summary"), ("keep_talking", "/keep_talking"),
-                       ("transcript", "/transcript"), ("consult", "/consult")):
+                       ("transcript", "/transcript"), ("consult", "/consult"), ("dismiss", "/dismiss")):
         if request.path.endswith(tail):
             return kind
     return "bootstrap"
 
 
-def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, clock=time.time, summary_http=None):
+def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, clock=time.time, summary_http=None,
+                         may_start=None):
     """Register the bootstrap, consult, transcript, End, summary and decision routes under ``url_prefix`` for one host.
     Returns (the capabilities metadata, the session ledger). The host decides whether to call it (its switches).
-    ``summary_http``: the summary client's HTTP post (requests.post unless a test hands in its own)."""
+    ``summary_http``: the summary client's HTTP post (requests.post unless a test hands in its own).
+
+    ``may_start`` (Spec 165 §6.8, §11.1; D11 (a)): installing is not admission. None: every installed host may start
+    sessions (MC, whose production hold-off decides whether it is installed at all). Otherwise it is called at each
+    start, and anything but True refuses it before anything is recorded or reserved: its words when it gives them (a
+    str), else NOT_ON. The record routes (End, reveal, reconcile, summary, decision, and a listing store's needs-attention
+    routes) answer either way, so open sessions end and recovering ones reveal after admission is turned off (S3).
+
+    A store that lists its sessions (lists_sessions: CoS's) also gets, under the same prefix: GET …/capabilities (this
+    metadata, with direct_voice: a start is allowed now, and direct_records: the owner has sessions needing attention),
+    GET …/sessions (those sessions), GET …/sessions/<id> (one session: while live only its existence and state, after End
+    or recovery its records), GET …/sessions/<id>/transcript (the download, D7) and POST …/sessions/<id>/dismiss."""
     from core.realtime_voice.summary_gateway import GatewaySummary
     from core.realtime_voice.bootstrap import create_bootstrap_blueprint
-    from core.realtime_voice.capabilities import AGENT_CONVERSATION_MODE, model_actions, providers_for_mode
+    from core.realtime_voice.capabilities import (AGENT_CONVERSATION_MODE, get_provider_capability, model_actions,
+                                                  providers_for_mode)
     from core.realtime_voice.config import resolve_provider
     person, store = adapter.person, adapter.store
     sessions = DirectSessions(adapter, clock)
@@ -1574,6 +1714,32 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
 
     def principal():
         return (adapter.owner() or (None, None))[0]
+
+    def start_refused():
+        """The words a start is refused with now (admission off), or None when it may start."""
+        allowed = True if may_start is None else may_start()
+        if allowed is True:
+            return None
+        return allowed if isinstance(allowed, str) and allowed.strip() else NOT_ON
+
+    def unvoiced(body):
+        """A host that takes no provider default (adapter.default_voices False; CoS, D2 (a)): the start's provider, resolved
+        exactly as the bootstrap resolves it, refused when the card names no voice for it. None: not refused here (an
+        unknown provider or an unreadable card is refused by the bootstrap itself)."""
+        if adapter.default_voices:
+            return None
+        production = adapter.is_production()
+        explicit = body.get("provider") if isinstance(body, dict) else None
+        try:
+            provider = resolve_provider(explicit=explicit, saved_preference=None, is_production=production,
+                                        dev_query_override=None if production else request.args.get("provider"))
+            card = adapter.card()
+        except (ValueError, OSError):
+            return None
+        if provider in (card.get("named") or ()):
+            return None
+        words = NO_VOICE.format(label=get_provider_capability(provider).label, name=person["name"])
+        return refusal(words, words, 503)
 
     def admit(user_id):
         return shared_budget.admit(kind="realtime_direct_session", domain=person["domain"], principal=str(user_id),
@@ -1601,6 +1767,8 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             handle = handle if refused is None else None
         return {"name": person["name"], "prompt_txt": card["card"], "scenes": {}, "voices": card["voices"],
                 **({"tools": tools(person, adapter.owner_name or OWNER)} if actions else {}), "notices": card["notices"],
+                # D19 (a): a bilingual card is transcribed in the language spoken (the bootstrap sends no single language)
+                **({"transcription": card["transcription"]} if card.get("transcription") else {}),
                 "instructions": adapter.instructions(card["card"], handle, actions=actions)}
 
     def guard():
@@ -1612,6 +1780,9 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         refused = adapter.guard("bootstrap")
         if refused is not None:
             return refused
+        words = start_refused()
+        if words is not None:                              # installed, not admitted here now (S1, S3)
+            return refusal(words, words, 503)
         if allowance(environ) is None:
             return refusal("unavailable", "Voice unavailable: no realtime voice allowance is set here.", 503)
         body = request.get_json(silent=True)
@@ -1619,6 +1790,9 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         if not isinstance(cid, str) or not adapter.conversation_ok(cid):
             return refusal("invalid", "Voice unavailable: name the conversation to talk in.", 422)
         _handle, refused = adapter.conversation(cid)
+        if refused is not None:
+            return refused
+        refused = unvoiced(body)
         if refused is not None:
             return refused
         g.direct_voice_conversation = cid
@@ -1634,6 +1808,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
     boot.before_request(bootstrap_guard)
     boot.register_error_handler(SessionRefused, lambda _exc: refusal(
         "unavailable", "Voice unavailable: the voice session could not be recorded in this conversation.", 503))
+    boot.register_error_handler(VoiceUnavailable, lambda exc: refusal(str(exc), str(exc), 503))
     consulting = Blueprint("voice_consult", __name__)
 
     @consulting.route("/api/realtime-voice/consult", methods=["POST"])
@@ -1756,6 +1931,93 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             answer["end_confirmed"] = True                              # the page asks for the summary (it ends)
         return jsonify(answer)
 
+    def records_blueprint():
+        """The needs-attention list, one session's detail and download, dismissing one, and the capabilities read (§6.5,
+        §4.4), for a store that lists its sessions. Owner only; reads change nothing; every answer is no-store."""
+        bp = Blueprint("voice_records", __name__)
+
+        def views(who):
+            listed = []
+            for handle, sid in (store.sessions(who, True) or ())[:SESSIONS_MAX]:
+                view = session_view(adapter, sessions, handle, sid)
+                if view is not None and view["needs_attention"]:
+                    listed.append(view)
+            return listed
+
+        @bp.route("/api/realtime-voice/capabilities", methods=["GET"])
+        def capabilities_read():
+            who = principal()
+            if who is None:
+                return refusal("not_allowed", "Voice unavailable: this needs the owner's sign-in.", 401)
+            try:
+                attention = bool(views(who))
+            except Exception:
+                log.exception("%s direct voice: sessions not listed", person["domain"])
+                attention = False
+            return jsonify({**metadata, "direct_voice": start_refused() is None and allowance(environ) is not None,
+                            "direct_records": attention})
+
+        @bp.route("/api/realtime-voice/sessions", methods=["GET"])
+        def sessions_read():
+            who = principal()
+            if who is None:
+                return refusal("not_allowed", "That needs the owner's sign-in.", 401)
+            return jsonify({"ok": True, "sessions": views(who)})
+
+        def found(raw_sid, cid):
+            got, refused = owned_session(raw_sid, cid)
+            if refused is not None:
+                return None, None, refused
+            _who, sid, _cid, handle = got
+            view = session_view(adapter, sessions, handle, sid)
+            if view is None:
+                return None, None, refusal("not_your_session", "That is not your voice session.", 403)
+            return (sid, handle), view, None
+
+        @bp.route("/api/realtime-voice/sessions/<session_id>", methods=["GET"])
+        def session_read(session_id):
+            key, view, refused = found(session_id, request.args.get("conversation_id"))
+            if refused is not None:
+                return refused
+            if view["state"] == "live":                        # while live: only its existence and state
+                return jsonify({"ok": True, "session_id": view["session_id"], "state": "live"})
+            if view["damaged"]:
+                return jsonify({"ok": True, **view, "records": []})
+            turns, complete = store.records(key[1], key[0])
+            return jsonify({"ok": True, **view, "complete_read": bool(complete),
+                            "records": [{"speaker": s, "text": x, "partial": bool(p), "interrupted": bool(i)}
+                                        for s, x, p, i in turns]})
+
+        @bp.route("/api/realtime-voice/sessions/<session_id>/transcript", methods=["GET"])
+        def session_download(session_id):
+            key, view, refused = found(session_id, request.args.get("conversation_id"))
+            if refused is not None:
+                return refused
+            if view["state"] == "live":
+                return refusal("live", "That voice session is still going. Its transcript is kept at End.", 409)
+            if view["damaged"]:
+                return refusal("damaged", DAMAGED + ". Nothing was downloaded.", 409)
+            body = transcript_text(adapter, key[1], key[0], view)
+            response = app.response_class(body, mimetype="text/plain")
+            response.headers["Content-Disposition"] = (f'attachment; filename="voice-{person["domain"]}-'
+                                                       f'{(view.get("started_at") or "")[:10]}-{view["session_id"]}.txt"')
+            return response
+
+        @bp.route("/api/realtime-voice/sessions/<session_id>/dismiss", methods=["POST"])
+        def session_dismiss(session_id):
+            key, view, refused = found(session_id, None)
+            if refused is not None:
+                return refused
+            if view["state"] == "live":
+                return refusal("live", "That voice session is still going. End it first.", 409)
+            done = put(adapter, key[1], key[0], record(DISMISSED_RECORD, DISMISSED_RECORD))
+            if done.outcome not in ("stored", "duplicate"):
+                return refusal("not_kept", "That could not be kept. Nothing was changed.", 503)
+            return jsonify({"ok": True, "dismissed": True, "repeated": done.outcome == "duplicate"})
+
+        bp.before_request(guard)
+        return bp
+
     def owned_session(raw_sid, cid=None):
         """(owner, session, conversation id, handle) from the session's durable start marker, so a summary can be asked
         for and decided, and a consult reconciled, long after the session, from another device or after a restart. A
@@ -1830,8 +2092,8 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         elif store.read_marker(handle, sid, "end") is None:
             # Not held here (after a restart), or never ended: the page's report counts every id it did not hear back
             # (review R1 P3-6, R2 N5); with none, how much was kept is not known (a dropped session, R2 N6).
-            store.mark_end(handle, sid, reason="summary",
-                           capture=sessions.capture(sid, report if report else {"uncounted": not sessions.known(sid)}))
+            store.close(handle, sid, reason="summary",
+                        capture=sessions.capture(sid, report if report else {"uncounted": not sessions.known(sid)}))
         answer, status = summary_attempt(adapter, sessions, who, handle, sid, running=running, client=summary_client,
                                          clock=sessions.clock)
         return jsonify(answer), status
@@ -1868,11 +2130,18 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
                        authorizes="nothing beyond the summary")
 
     transcript.before_request(guard)
-    for bp, name in ((boot, names["bootstrap"]), (consulting, names["consult"]), (transcript, names["transcript"])):
+    blueprints = [(boot, names["bootstrap"]), (consulting, names["consult"]), (transcript, names["transcript"])]
+    listing = lists_sessions(store)
+    if listing:
+        blueprints.append((records_blueprint(), f"{adapter.name}_records"))
+    for bp, name in blueprints:
         bp.after_request(no_store)
         adapter.mount(bp, name)
         app.register_blueprint(bp, url_prefix=url_prefix, name=name)
     offered = [p.public_dict() for p in providers_for_mode(AGENT_CONVERSATION_MODE, locale)]   # a static table, not a key
+    if not adapter.default_voices:                     # what a start on each offered provider would be refused with (D2)
+        unvoiced_now = {p["provider"]: NO_VOICE.format(label=p["label"], name=person["name"])
+                        for p in offered if p["provider"] not in (pinned.get("named") or ())}
     metadata = {"path": "direct", "providers": offered,
                 "default_provider": resolve_provider(explicit=None, saved_preference=None, is_production=True),
                 "bootstrap_url": url_prefix + "/api/realtime-voice/bootstrap",
@@ -1888,4 +2157,12 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
                 # Which offered provider's model may act on its own call (Spec 165 §7 as amended): the page's words only.
                 "model_actions": {p["provider"]: model_actions(p["provider"]) for p in offered},
                 "words": dict(adapter.words)}
+    if not adapter.default_voices:
+        metadata["unvoiced"] = unvoiced_now
+    if listing:
+        metadata.update(capabilities_url=url_prefix + "/api/realtime-voice/capabilities",
+                        sessions_url=url_prefix + "/api/realtime-voice/sessions",
+                        session_url=url_prefix + "/api/realtime-voice/sessions/{session_id}",
+                        session_transcript_url=url_prefix + "/api/realtime-voice/sessions/{session_id}/transcript",
+                        session_dismiss_url=url_prefix + "/api/realtime-voice/sessions/{session_id}/dismiss")
     return metadata, sessions

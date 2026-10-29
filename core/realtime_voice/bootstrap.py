@@ -33,7 +33,7 @@ from core.realtime_voice import config as rv_config
 from core.realtime_voice.duration_guard import DurationGuard
 from core.realtime_voice.prompt_builder import build_realtime_instructions
 from core.realtime_voice.providers import openai_realtime, xai_voice
-from core.realtime_voice.standards import conversation_turn_detection
+from core.realtime_voice.standards import BILINGUAL_TRANSCRIPTION_HINT, conversation_turn_detection
 
 _RATE_LIMIT_MAX_PER_WINDOW = 10
 _RATE_LIMIT_WINDOW_SECONDS = 60
@@ -280,6 +280,13 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         if paged:                                          # the page creates every response; barge-in still cancels one
             turn_detection = conversation_turn_detection(provider, create_response=False, interrupt_response=True)
         transcription_language = _TRANSCRIPTION_LANGUAGE[provider][locale]
+        # A host persona whose card says "bilingual" (Spec 165 §7, D19 (a)) is transcribed in the language spoken: no
+        # single language, and on OpenAI the faithful-transcription hint. German and Portuguese personas carry no
+        # "transcription", so their mint is called with exactly the arguments it had before.
+        bilingual = persona.get("transcription") == "bilingual"
+        if bilingual:
+            transcription_language = None
+        transcribe = {"transcription_prompt": BILINGUAL_TRANSCRIPTION_HINT} if bilingual and provider == "openai" else {}
 
         # A host that reserves an allowance (admit) records its session first (MC: the durable start marker), so an
         # allowance is never spent on a session that could not be recorded; if the provider session then does not
@@ -307,6 +314,7 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
                         transcription_language=transcription_language,
                         user_id_for_safety_identifier=str(user_id),
                         tools=tools,
+                        **transcribe,
                     )
                 else:
                     credential = xai_voice.mint_ephemeral_credential(

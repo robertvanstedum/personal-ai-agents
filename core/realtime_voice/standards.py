@@ -12,6 +12,15 @@ CONVERSATION_SILENCE_MS = 1200
 CONVERSATION_PREFIX_PADDING_MS = 300
 
 
+# Spec 165 §7, D19 (a): a host whose card says "transcription": "bilingual" (MC and CoS may; German and Portuguese never)
+# is transcribed in the language spoken, with no single language: on OpenAI with this faithful-transcription hint, on xAI
+# with no language hint. The words are the ones the managed CoS/MC voice already sends (controlled_config reads them here).
+BILINGUAL_TRANSCRIPTION_HINT = (
+    "The owner may speak English or Austrian German and switch between them. "
+    "Transcribe faithfully in the spoken language. Preserve names and MiniMoi product terms."
+)
+
+
 def conversation_turn_detection(
     provider: str,
     *,

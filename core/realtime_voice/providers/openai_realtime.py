@@ -155,14 +155,20 @@ def mint_ephemeral_credential(
     instructions: str,
     voice: str,
     turn_detection: dict,
-    transcription_language: str,
+    transcription_language: str | None,
     user_id_for_safety_identifier: str,
     tools: list[dict] | None = None,
     tool_choice: str | None = None,
+    transcription_prompt: str | None = None,
 ) -> dict:
     """Requests a short-lived client secret from OpenAI, with the session's
     instructions and turn-detection config already attached server-side --
     the browser never sends or sees raw instructions.
+
+    ``transcription_language`` None (a bilingual card, Spec 165 D19): the
+    transcription names no single language; ``transcription_prompt`` is the
+    faithful-transcription hint. German and Portuguese pass a language and
+    no prompt, and their session is as before.
 
     Returns the minimum connection material the browser adapter needs:
     {"client_secret": ..., "expires_at": ..., "model": ...}. Never returns
@@ -180,7 +186,8 @@ def mint_ephemeral_credential(
                     "turn_detection": turn_detection,
                     "transcription": {
                         "model": "gpt-4o-transcribe",
-                        "language": transcription_language,
+                        **({"language": transcription_language} if transcription_language is not None else {}),
+                        **({"prompt": transcription_prompt} if transcription_prompt else {}),
                     },
                 },
             },

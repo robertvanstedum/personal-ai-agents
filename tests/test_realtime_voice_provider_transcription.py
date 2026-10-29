@@ -111,3 +111,35 @@ def test_xai_session_config_requests_input_transcription():
 
     transcription = result["session_config"]["audio"]["input"]["transcription"]
     assert transcription == {"model": "grok-transcribe", "language_hint": "pt-BR"}
+
+
+# Spec 165 §7, D19 (a): a bilingual card's session names no single language. German and Portuguese pass one, and their
+# session is as before (the two tests above).
+def test_openai_bilingual_session_names_no_language_and_carries_the_faithful_hint():
+    from core.realtime_voice.standards import BILINGUAL_TRANSCRIPTION_HINT
+    with (
+        patch("core.realtime_voice.providers.openai_realtime.get_secret", return_value="secret"),
+        patch("core.realtime_voice.providers.openai_realtime.requests.post",
+              return_value=_response({"value": "ephemeral", "expires_at": 123})) as post,
+    ):
+        openai_realtime.mint_ephemeral_credential(instructions="i", voice="cedar", turn_detection={"type": "server_vad"},
+                                                  transcription_language=None, user_id_for_safety_identifier="3",
+                                                  transcription_prompt=BILINGUAL_TRANSCRIPTION_HINT)
+    transcription = post.call_args.kwargs["json"]["session"]["audio"]["input"]["transcription"]
+    assert transcription == {"model": "gpt-4o-transcribe", "prompt": BILINGUAL_TRANSCRIPTION_HINT}
+
+
+def test_xai_bilingual_session_sends_no_language_hint():
+    with (
+        patch("core.realtime_voice.providers.xai_voice.get_secret", return_value="secret"),
+        patch("core.realtime_voice.providers.xai_voice.requests.post", return_value=_response({"token": "t"})),
+    ):
+        got = xai_voice.mint_ephemeral_credential(instructions="i", voice="eve", turn_detection={"type": "server_vad"},
+                                                  transcription_language=None)
+    assert got["session_config"]["audio"]["input"]["transcription"] == {"model": "grok-transcribe"}
+
+
+def test_the_managed_voice_and_the_direct_path_share_one_hint():
+    from core.realtime_voice import controlled_config
+    from core.realtime_voice.standards import BILINGUAL_TRANSCRIPTION_HINT
+    assert controlled_config.TRANSCRIPTION_HINT is BILINGUAL_TRANSCRIPTION_HINT
