@@ -565,11 +565,19 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
         cp1 = {"name": "s1", "digest": "sha256:" + "1" * 64, "paths": ["README.md"]}
         cp2 = {"name": "s2", "digest": "sha256:" + "2" * 64, "paths": ["README.md", "core/x.py"]}
         e2 = str(uuid4())
+        sent = self.db_now()
         self.assertEqual(self.progress(env, t0, event_id=e2, phase="building", checkpoint=cp2)["state"], "applied")
+        answered = self.db_now()
         row = self.row("job-1")
         self.assertEqual((row["state"], row["progress_phase"], row["checkpoint"]["name"]), ("running", "building", "s2"))
         self.assertEqual((row["lease_until"], row["heartbeat_at"]), (before["lease_until"], before["heartbeat_at"]))
-        self.assertGreater(row["progress_at"], before["heartbeat_at"])         # the authority's clock, not the host's
+        # progress_at is the authority's clock when the progress arrived, not the host's (t0, 30 s earlier). That
+        # clock is a wall clock and can step back between two readings (the Mac's Colima VM has it stepped back about
+        # 0.1 s every 10 s or so), so it is bounded by the readings taken around the call, each widened by the clock
+        # skew the authority allows (§2.5: under 1 s), never compared to the microsecond with an earlier reading.
+        skew = timedelta(seconds=AUTH.clock_skew_s)
+        self.assertTrue(sent - skew <= row["progress_at"] <= answered + skew, (sent, row["progress_at"], answered))
+        self.assertGreater(row["progress_at"] - t0, timedelta(seconds=30) - skew)
         # An older event (a replayed pending record) never overwrites the newer one.
         self.assertEqual(self.progress(env, t0 - timedelta(seconds=5), phase="starting", checkpoint=cp1)["state"],
                          "superseded")
