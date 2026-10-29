@@ -841,10 +841,8 @@ class Plan(Run):
     # ── T10: an expired grant before claim; a revocation mid-run ──
     def t10(self):
         exp = "T10.W-EXP"
-        gid = self.owner.item(exp, self.program("result ok"), repository="scripted", ref=SCRIPTED_REF)
-        self.sql("UPDATE guild.mc_action_grants SET expires_at = clock_timestamp() - interval '1 second' "
-                 "WHERE grant_id=%s", (gid,))
-        self.log("injection", "time moved: W-EXP's grant ended before any claim", grant_id=gid)
+        self.owner.item(exp, self.program("result ok"), repository="scripted", ref=SCRIPTED_REF, ttl_s=3)
+        time.sleep(5)                                   # the grant ends before any host claims the item
         got = self.scripted.claim()
         row = self.row(exp)
         self.check("T10.W-EXP_expired_never_claimed", got is None and row["state"] == "expired"
@@ -857,11 +855,17 @@ class Plan(Run):
         rid = str(self.row(rev)["request_id"])
         self.owner.revoke(igid, after_notice=None)
         row = self.wait_state(rev, ("cancelled",), 60)
-        evs = self.events(item=rid)
+        pending = self.artifacts / f"{rid}-g1.pending.jsonl"
+
+        def host_saw_it():                              # the host's next renew is false: it stops the child (R4.3-e)
+            notes = [json.loads(x) for x in pending.read_text().splitlines()] if pending.exists() else []
+            return [n for n in notes if n.get("type") == "note" and n.get("kind") in ("freeze", "reconcile", "stop")
+                    and "graceful" not in json.dumps(n.get("fields"))]
+        seen = self.wait(host_saw_it, self.auth.hosts.renew_s + 30, every=1)
         self.check("T10.W-REV_renew_false_cancelled", bool(row) and (row["result_detail"] or {}).get("code")
-                   == "grant_revoked" and any(e["kind"] == "lease.renew_refused" for e in evs),
-                   {"state": row and row["state"], "renew_refused": sum(e["kind"] == "lease.renew_refused"
-                                                                        for e in evs)})
+                   == "grant_revoked" and bool(seen),
+                   {"state": row and row["state"], "host_notes": [(n["kind"], n["fields"].get("reason"))
+                                                                  for n in (seen or [])][:4]})
         self.check("T10.W-REV_effect_never_sent", not [x for x in self.sink_lines() if x["item_id"] == rid], {})
         # The protocol half: a late result and a pending dispatch on a revoked grant (a scripted host's item).
         rev2 = "T10.W-REV2"
