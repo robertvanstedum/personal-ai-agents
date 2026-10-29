@@ -2,7 +2,8 @@
 
 def parse_briefing_text(content: str):
     """
-    Parse curator_output.txt into list of article dicts.
+    Parse supplied briefing text into a list of article dicts.
+    File selection and reading belong to the calling adapter.
     Current format:
     #N [Source] 🏷️  category (model)
        ID: xxxxx
