@@ -151,7 +151,9 @@ class Notifier:
         from core.supervision.runtime import RuntimeLink
         from core.supervision.store import Store
         from fake_notifier import OWNER, FakeNotifier
+        from services.supervisor import main as supervisor_main
         from services.supervisor.main import Supervisor
+        supervisor_main.HEALTH = Path(path).with_name("supervisor.alive")   # its liveness file, in the evidence
         self.bot = FakeNotifier(path)
         self.link = RuntimeLink(authority_store, owner=OWNER_ID, view_bound_s=60)
         self.sup = Supervisor(Store(connect), self.bot, _GitHub(), chat_id=OWNER, user_id=OWNER,
@@ -159,14 +161,12 @@ class Notifier:
         self.every_s, self._stop, self._lock, self.errors = every_s, threading.Event(), threading.Lock(), []
 
     def tick(self):
+        """The supervisor's own tick, unchanged (decisions out, answers in, the check-in when due)."""
         with self._lock:
-            for step in (self.sup.runtime_tick, self.sup.send_new, self.sup.announce,
-                         lambda: self.sup.checkin() if self.sup.checkin_due() else None,
-                         lambda: self.sup.read_answers(wait=0)):
-                try:
-                    step()
-                except Exception as exc:
-                    self.errors.append((time.time(), type(exc).__name__))
+            try:
+                self.sup.tick()
+            except Exception as exc:
+                self.errors.append((time.time(), type(exc).__name__))
 
     def start(self):
         def loop():

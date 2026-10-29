@@ -930,10 +930,13 @@ class Plan(Run):
                                                            "progress_age_s", "lease_left_s", "who_may_act"))
         self.check("T12.snapshot_answers", answers and it["progress_age_s"] is not None,
                    {"fields": sorted(it or {})[:40]})
-        state = self.artifacts / "authority" / "state.json"
-        rendered = _render_stub(state)
-        self.check("T12.stub_renderer_reads_state_json", rid[:8] in rendered and "stalled" in rendered,
-                   {"lines": rendered.count("\n")})
+        state = self.artifacts / "authority" / "state.json"           # published each sweep: it may be a sweep behind
+
+        def stub_answers():
+            line = next((x for x in _render_stub(state).splitlines() if x.startswith(rid[:8])), "")
+            return line if " stalled " in line else None
+        line = self.wait(stub_answers, self.auth.sweeper.sweep_s * 3, every=2)
+        self.check("T12.stub_renderer_reads_state_json", bool(line), {"line": line})
         time.sleep(self.auth.sweeper.sweep_s * 2 + 5)
         props = [e for e in self.events(item=rid) if e["kind"] == "proposal.review_request"]
         self.check("T12.one_review_request_after_a_second_tick", len(props) == 1, {"proposals": len(props)},
@@ -975,8 +978,8 @@ class Plan(Run):
                                               "review": self.program("findings needs_fix", "result ok"),
                                               "fix": self.program("checkpoint f1", "result ok")})
         self.owner.card(card)
-        fix = self.wait(lambda: self.row("C-T14.fix") and self.row("C-T14.fix")["state"] == "completed"
-                        and self.row("C-T14.fix"), 300, every=2)
+        fix = self.wait(lambda: (self.row("C-T14.fix-1") or {}).get("state") == "completed"
+                        and self.row("C-T14.fix-1"), 300, every=2)          # a fix round's step is fix-<round>
         self.check("T14.three_steps_ran", bool(fix), {"fix": fix and fix["state"]})
         rows = self.sql("""SELECT step, created_by, input_artifacts, result_detail, state FROM guild.mc_delegations
             WHERE card_id='C-T14' ORDER BY created_at""")
@@ -1228,8 +1231,11 @@ class Plan(Run):
         self.check("T19b.signin_missing_before_spawn", bool(row) and row["state"] == "refused"
                    and detail.get("code") == "signin_missing" and len(fakecli.starts(self.cli_root)) == starts,
                    {"state": row and row["state"], "code": detail.get("code")})
-        note = self.wait(lambda: self.delivered("signin_missing") or self.delivered("login"), 60)
-        self.check("T19b.one_notice_names_login", bool(note) and len(note) == 1, {"notices": len(note or [])})
+        login = detail.get("login") or "fakecli login"
+        note = self.wait(lambda: self.delivered("signin_missing"), 60)
+        self.check("T19b.one_notice_names_login", bool(note) and len(note) == 1 and login in note[0]["text"],
+                   {"notices": len(note or []), "names_the_code": bool(note), "login_step": login,
+                    "names_the_login_step": bool(note) and login in note[0]["text"]})
         fakecli.sign_in(self.home)
         self.mc0(env_names_planted=True)
 
