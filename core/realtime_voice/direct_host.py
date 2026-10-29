@@ -386,11 +386,19 @@ UNAVAILABLE_TEXT = ("[Voice summary unavailable] The session's turns are shown. 
                     "writing later.")
 
 
-def summary_prompt(turns, complete, *, kept_all=True, running=0, missing=None, owner=OWNER):
+# Providers whose transcript of a turn overtaken before any audio is repeated at the start of the next item's (live probes,
+# LV6: xAI, "Name an animal." then "Name an animal. Trees grow tall."). The records keep both as said; the summary is told.
+FOLDS_OVERTAKEN = ("xai",)
+REPEATS = (" Words may repeat across turns on this provider: a request said once can appear at the start of the next"
+           " turn too; count it once.")
+
+
+def summary_prompt(turns, complete, *, kept_all=True, running=0, missing=None, owner=OWNER, repeats=False):
     """The person's model is asked for this session's summary from its retained records only, as bounded DATA.
     ``turns``: [(speaker, text, partial, interrupted)], oldest first, as the host store keeps them. ``kept_all`` False:
     the page could not deliver some of what was said (review B4). ``running``: consults still running when capture
-    closed; their outcome is outside this summary's cutoff, which says so (review B2)."""
+    closed; their outcome is outside this summary's cutoff, which says so (review B2). ``repeats``: the session's
+    provider folds an overtaken turn into the next one (LV6, FOLDS_OVERTAKEN), which the prompt says."""
     lines, used = [], 0
     for speaker, text, partial, interrupted in reversed(turns):
         line = f"{speaker}{' (interrupted)' if interrupted else ' (partial)' if partial else ''}: {text}"
@@ -410,6 +418,8 @@ def summary_prompt(turns, complete, *, kept_all=True, running=0, missing=None, o
     if running:
         bound += (" A consult was still running when the session ended; its outcome is not in these records: say so in "
                   "the written summary.")
+    if repeats:
+        bound += REPEATS
     prompt = (f"{owner[:1].upper() + owner[1:]} ended a voice conversation with you and asked for a summary of THAT SESSION ONLY. Your response "
               "is machine-consumed JSON. Return only {\"spoken\": \"...\", \"written\": \"...\"}. spoken: two or three "
               "plain sentences, the way a colleague sums up at the door; no lists, no markdown. written: the fuller "
@@ -565,6 +575,14 @@ class DirectVoiceStore:
     def records(self, handle, sid):
         """([(speaker, text, partial, interrupted)] oldest first, whether the whole session was read)."""
         raise NotImplementedError
+
+    def turns(self, handle, sid):
+        """The same records for the reveal (Spec 165 §6.6), each as {"role" (user, assistant, consult or receipt), "item_id"
+        (the capture id it was kept under), "speaker", "text", "partial", "interrupted"}: (that list, whether the whole
+        session was read). The default is records() with role and item_id None: the reveal then marks no turn."""
+        turns, complete = self.records(handle, sid)
+        return ([{"role": None, "item_id": None, "speaker": speaker, "text": text, "partial": bool(partial),
+                  "interrupted": bool(interrupted)} for speaker, text, partial, interrupted in turns], complete)
 
     def summary(self, handle, sid):
         """The kept summary proposal's text, or None."""
@@ -812,9 +830,11 @@ class DirectSessions(ConsultLedger):
         if marker is None:                                 # no durable start: no session, nothing could be revealed
             raise SessionRefused("Voice session not recorded")
         actions = getattr(g, "direct_voice_actions", False) is True     # the provider's eligibility, from the bootstrap
+        provider = getattr(g, "direct_voice_provider", None)              # the session's provider (LV6), from the bootstrap
         with self._meta_lock:
             self._meta[sid] = {"conversation": cid, "started": started, "max_s": max_minutes * 60,
-                               "seen": started, "items": set(), "bytes": 0, "actions": actions}
+                               "seen": started, "items": set(), "bytes": 0, "actions": actions,
+                               "provider": provider if isinstance(provider, str) else None}
         self.open_session(sid, owner)
         return sid
 
@@ -827,6 +847,12 @@ class DirectSessions(ConsultLedger):
         with self._meta_lock:
             meta = self._meta.get(sid)
             return meta["conversation"] if meta else None
+
+    def provider(self, sid):
+        """The provider this process started session ``sid`` on, or None (not known here: another process, a restart)."""
+        with self._meta_lock:
+            meta = self._meta.get(sid)
+            return meta.get("provider") if meta else None
 
     def model_actions(self, sid):
         """Whether this session's model may act on its own call (its provider was eligible at bootstrap, Spec 165 §7 as
@@ -1410,27 +1436,43 @@ def keep_playback(adapter, sessions, sid, outcome):
 
 NOT_ACTED_RECORD = "not_acted"
 NOT_ACTED_MAX = 64                  # owner turns a session may name as not acted on
+# Why a turn was not acted on, as the page says it (Gate 1 n2, n3): his speech overtook its reply; its reply was cut short
+# with no speech of his; no reply ever started for it; the voice ended before its reply finished.
+NOT_ACTED_WHY = ("overtaken", "cut_short", "never_started", "closed")
 
 
-def keep_not_acted(adapter, sessions, sid, items):
+def keep_not_acted(adapter, sessions, sid, items, why=None):
     """Keep the owner turns the page names as not acted on (review B S3, N2): his words that got no reply of their own, or
-    whose reply was cancelled or overtaken before its call could run. Capture ids only, each once, at most NOT_ACTED_MAX.
-    The reveal marks those turns "not acted on". A Put, or None when there is nothing to keep or nowhere to keep it. Never
-    raises: End is never stopped by it."""
+    whose reply was cancelled or overtaken before its call could run, or still under way when the voice ended (n3).
+    Capture ids only, each once, at most NOT_ACTED_MAX, and ``why`` ({id: one of NOT_ACTED_WHY}) for those the page gave a
+    known reason (n2); anything else in it is dropped. The reveal marks those turns "not acted on", and says why. A Put,
+    or None when there is nothing to keep or nowhere to keep it. Never raises: End is never stopped by it."""
     if not isinstance(items, list) or not items:
         return None
     named = list(dict.fromkeys(i for i in items if owner_item(i)))[:NOT_ACTED_MAX]
     if not named:
         return None
+    reasons = ({i: why[i] for i in named if isinstance(why.get(i), str) and why[i] in NOT_ACTED_WHY}
+               if isinstance(why, dict) else {})
     try:
         cid = sessions.conversation_of(sid)
         handle, refused = adapter.conversation(cid) if cid else (None, True)
         if refused is not None:
             return None
-        return put(adapter, handle, sid, record(NOT_ACTED_RECORD, NOT_ACTED_RECORD, owner_item_ids=named))
+        return put(adapter, handle, sid, record(NOT_ACTED_RECORD, NOT_ACTED_RECORD, owner_item_ids=named,
+                                                **({"why": reasons} if reasons else {})))
     except Exception:
         log.exception("%s direct voice: turns not acted on not kept", adapter.person["domain"])
         return None
+
+
+def not_acted_of(adapter, handle, sid):
+    """The turns this session names as not acted on, for the reveal: {capture id: why, or None when no reason was kept}."""
+    rec = get(adapter, handle, sid, NOT_ACTED_RECORD)
+    ids = rec.get("owner_item_ids") if rec else None
+    why = rec.get("why") if rec and isinstance(rec.get("why"), dict) else {}
+    return {i: (why.get(i) if why.get(i) in NOT_ACTED_WHY else None)
+            for i in (ids if isinstance(ids, list) else []) if owner_item(i)}
 
 
 def after_summary(adapter, handle, sid):
@@ -1480,7 +1522,8 @@ def summary_attempt(adapter, sessions, principal, handle, sid, *, running=0, cli
         return (answer if answer is not None else ({"ok": False, "state": "pending", "line": SUMMARY_PENDING}, 200))
     answer = ({"ok": False, "state": "pending", "line": SUMMARY_PENDING}, 200)
     try:
-        answer = _attempt(adapter, sessions, principal, handle, sid, running=running, client=client, clock=clock)
+        answer = _attempt(adapter, sessions, principal, handle, sid, running=running, client=client, clock=clock,
+                          repeats=sessions.provider(sid) in FOLDS_OVERTAKEN)
         return answer
     except Exception:                                   # before any attempt was recorded: nothing runs, nothing pending
         log.exception("%s direct voice: summary attempt failed", adapter.person["domain"])
@@ -1500,7 +1543,7 @@ def summary_failed(adapter, handle, sid, error):
     return {"ok": False, "error": error, "state": "unavailable", "line": SUMMARY_UNAVAILABLE}, 200
 
 
-def _attempt(adapter, sessions, principal, handle, sid, *, running, client, clock):
+def _attempt(adapter, sessions, principal, handle, sid, *, running, client, clock, repeats=False):
     store = adapter.store
     if store.summary(handle, sid) is not None:
         return summarize(adapter, principal, handle, sid, running=running, client=client)        # repeated
@@ -1522,7 +1565,7 @@ def _attempt(adapter, sessions, principal, handle, sid, *, running, client, cloc
     if started.outcome != "stored":                                   # another process began attempt n first
         return {"ok": False, "state": "pending", "line": SUMMARY_PENDING}, 200
     try:
-        answer, status = summarize(adapter, principal, handle, sid, running=running, client=client)
+        answer, status = summarize(adapter, principal, handle, sid, running=running, client=client, repeats=repeats)
     except Exception:
         log.exception("%s direct voice: summary attempt %d failed", adapter.person["domain"], n)
         answer, status = summary_failed(adapter, handle, sid, "exception")
@@ -1535,7 +1578,7 @@ def _attempt(adapter, sessions, principal, handle, sid, *, running, client, cloc
     return answer, status
 
 
-def summarize(adapter, principal, handle, sid, *, running=0, client=None):
+def summarize(adapter, principal, handle, sid, *, running=0, client=None, repeats=False):
     """Generate and keep this session's summary proposal once, from the records kept when capture closed (its cutoff:
     a consult still ``running`` then, or a receipt kept later, is not in it, and it says so). The summary is a plain
     completion through the model gateway (``client``, summary_gateway.GatewaySummary: no tools, no agent, a capped key,
@@ -1561,7 +1604,7 @@ def summarize(adapter, principal, handle, sid, *, running=0, client=None):
     kept_all = end.get("capture") != "incomplete"
     missing = end.get("missing") if type(end.get("missing")) is int else None
     prompt, partial, covered, total = summary_prompt(turns, complete, kept_all=kept_all, running=running, missing=missing,
-                                                     owner=adapter.owner_name or OWNER)
+                                                     owner=adapter.owner_name or OWNER, repeats=repeats)
     try:
         card = adapter.card()["card"]
     except Exception:                                    # the card is tone only; the summary needs the records
@@ -1802,9 +1845,15 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         response.headers["Cache-Control"] = "no-store"
         return response
 
+    def page_responses(provider):
+        """capabilities.model_actions, as the bootstrap reads it for the chosen provider; the provider is kept for the
+        session ledger to record at issue (LV6: the summary's words)."""
+        g.direct_voice_provider = provider
+        return model_actions(provider)
+
     boot = create_bootstrap_blueprint(domain=person["domain"], locale=locale, get_persona=get_persona,
                                       is_production=adapter.is_production, consult_ledger=sessions, owner=adapter.owner,
-                                      admit=admit, page_responses=model_actions)
+                                      admit=admit, page_responses=page_responses)
     boot.before_request(bootstrap_guard)
     boot.register_error_handler(SessionRefused, lambda _exc: refusal(
         "unavailable", "Voice unavailable: the voice session could not be recorded in this conversation.", 503))
@@ -1875,7 +1924,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         if isinstance(body, dict) and "summary_playback" in body:          # how the spoken summary ended (v0.3 §5.3, G3)
             keep_playback(adapter, sessions, session_id, body.get("summary_playback"))
         if isinstance(body, dict) and "not_acted" in body:                 # his turns not acted on (review B S3, N2)
-            keep_not_acted(adapter, sessions, session_id, body.get("not_acted"))
+            keep_not_acted(adapter, sessions, session_id, body.get("not_acted"), body.get("not_acted_why"))
         return jsonify({"ok": True, "ended": True, "capture": capture["capture"],
                         **({"missing": capture["missing"]} if "missing" in capture else {})})
 
@@ -1983,10 +2032,16 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
                 return jsonify({"ok": True, "session_id": view["session_id"], "state": "live"})
             if view["damaged"]:
                 return jsonify({"ok": True, **view, "records": []})
-            turns, complete = store.records(key[1], key[0])
+            turns, complete = store.turns(key[1], key[0])
+            # For the reveal (Spec 165 §6.6, A3): each record's role and the capture id it was kept under, the turns
+            # named not acted on and why, and the summary proposal's words (the card's text and Edit's start).
+            proposal = store.summary(key[1], key[0])
             return jsonify({"ok": True, **view, "complete_read": bool(complete),
-                            "records": [{"speaker": s, "text": x, "partial": bool(p), "interrupted": bool(i)}
-                                        for s, x, p, i in turns]})
+                            "records": [{"speaker": t["speaker"], "text": t["text"], "partial": bool(t["partial"]),
+                                         "interrupted": bool(t["interrupted"]), "role": t.get("role"),
+                                         "item_id": t.get("item_id")} for t in turns],
+                            "not_acted": not_acted_of(adapter, key[1], key[0]),
+                            **({"proposal": proposal} if isinstance(proposal, str) else {})})
 
         @bp.route("/api/realtime-voice/sessions/<session_id>/transcript", methods=["GET"])
         def session_download(session_id):

@@ -355,6 +355,10 @@ class FileStore(DirectVoiceStore):
         # a duplicate or a conflict: the first write stands (the same turn posted again)
 
     def records(self, handle, sid):
+        turns, complete = self.turns(handle, sid)
+        return [(t["speaker"], t["text"], t["partial"], t["interrupted"]) for t in turns], complete
+
+    def turns(self, handle, sid):
         try:
             known = self._read(sid)
         except (OSError, ValueError, SessionRefused):
@@ -362,8 +366,9 @@ class FileStore(DirectVoiceStore):
         if known is None:
             return [], True
         turns = [known.records[rid] for rid in known.order if known.records[rid].get("kind") == "turn"]
-        return ([(SPEAKERS[t["role"]], t["text"], t["partial"], t["interrupted"]) for t in turns
-                 if t.get("role") in SPEAKERS], not known.damaged)
+        return ([{"role": t["role"], "item_id": t.get("item_id"), "speaker": SPEAKERS[t["role"]], "text": t["text"],
+                  "partial": t["partial"], "interrupted": t["interrupted"]} for t in turns if t.get("role") in SPEAKERS],
+                not known.damaged)
 
     def summary(self, handle, sid):
         found = self._record(sid, _text_id("summary"))

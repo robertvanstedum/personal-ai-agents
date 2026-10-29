@@ -349,3 +349,22 @@ def test_the_list_is_the_owners_newest_first_without_the_dismissed_or_decided(fo
     store.keep_summary(H, c, "summary", "[Voice summary proposal] x")
     store.keep_summary(H, c, "summary-decision", core.decision_head("decline", "Robert"))
     assert store.sessions("robert") == [(H, a)] and len(store.sessions("robert", needing_attention=False)) == 3
+
+
+# ── A3: the reveal reads each record's role and capture id (Spec 165 §6.6) ───────────────────────────────────────────
+
+def test_her_records_are_revealed_with_their_role_and_capture_id_and_records_are_unchanged(folders):
+    store = store_in(folders)
+    started(store)
+    store.keep(H, "robert", SID, "user", "t0", 0, "Check the board.", False, started=None, ended=None)
+    store.keep(H, "robert", SID, "consult", "kt0", 0, "consult: Check the board.", False, started=None, ended=None)
+    store.keep(H, "robert", SID, "assistant", "t1", 0, "Two items", True, started=None, ended=None, interrupted=True)
+    turns, complete = store.turns(H, SID)
+    assert complete is True
+    assert [(t["role"], t["item_id"], t["text"], t["partial"], t["interrupted"]) for t in turns] == [
+        ("user", "t0", "Check the board.", False, False), ("consult", "kt0", "consult: Check the board.", False, False),
+        ("assistant", "t1", "Two items", True, True)]
+    from core.realtime_voice.transcripts import SPEAKERS
+    assert [t["speaker"] for t in turns] == [SPEAKERS["user"], SPEAKERS["consult"], SPEAKERS["assistant"]]
+    assert store.records(H, SID) == ([(t["speaker"], t["text"], t["partial"], t["interrupted"]) for t in turns], True)
+    assert store.turns(H, str(uuid.uuid4())) == ([], True)          # no such session: nothing, nothing missing
