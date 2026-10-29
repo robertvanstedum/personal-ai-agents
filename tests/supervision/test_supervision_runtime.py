@@ -653,6 +653,78 @@ def test_p2_4_after_a_restart_the_unsent_d_code_goes_out_once():
     assert len(store.rows) == 2
 
 
+# ── Codex's fix1 delta check: the fresh D-code is written before the answer is consumed, and only once ───────────
+class KeyedReissueStore(ReissueStore):
+    """ReissueStore with the real Store's key rule (``rt-<decision>.r<n>``, ON CONFLICT DO NOTHING: writing the same n
+    again returns the same row) and two faults: the next ``fail_write`` replacement writes fail, and the next
+    ``fail_mark`` marks fail (as a process stopping between the two writes would leave them)."""
+    fail_write = fail_mark = 0
+
+    def runtime_decision(self, did, words, **kwargs):
+        n = kwargs.get("reissue")
+        if not n:
+            return self.original
+        if self.fail_write:
+            self.fail_write -= 1
+            raise ConnectionError("database_down")
+        for r in self.rows:
+            if r.get("n") == n:
+                return r
+        r = row(len(self.rows) + 1, words, solo=True, state="new")
+        r["requester"]["decision_id"], r["n"] = did, n
+        self.rows.append(r)
+        return r
+
+    def mark_applied(self, i):
+        if self.fail_mark:
+            self.fail_mark -= 1
+            raise ConnectionError("process_stopped")
+        super().mark_applied(i)
+
+
+def tick(link, store, bot):
+    for step in (link.apply, link.deliver):
+        try:
+            step(store, bot, OWNER)
+        except ConnectionError:
+            pass                                              # the process stops here; a new link is its restart
+
+
+def test_delta_a_failed_replacement_write_leaves_the_answer_unapplied_until_its_d_code_exists():
+    store, bot = KeyedReissueStore(), Bot()
+    store.fail_write = 1
+    tick(reissue_link(store), store, bot)                    # refused; the replacement's write fails
+    assert store.applied == set() and len(store.rows) == 1 and bot.sent == []
+    restarted = reissue_link(store)
+    tick(restarted, store, bot)
+    tick(restarted, store, bot)
+    assert [t.split("\n")[0] for t, _ in bot.sent] == ["Decision D-2 waiting on you, on its own"]
+    assert store.applied == {1} and [r["state"] for r in store.rows] == ["approved", "sent"]
+
+
+def test_delta_a_stop_after_the_d_code_was_written_and_sent_finds_it_again_and_never_makes_another():
+    store, bot = KeyedReissueStore(), Bot()
+    store.fail_mark = 1                                       # D-2 written and sent; the process stops before the mark
+    tick(reissue_link(store), store, bot)
+    assert store.applied == set() and [r["state"] for r in store.rows] == ["approved", "sent"]
+    restarted = reissue_link(store)
+    tick(restarted, store, bot)                               # refused again: the same D-2, not sent again
+    tick(restarted, store, bot)
+    assert len(bot.sent) == 1 and len(store.rows) == 2 and store.applied == {1}
+
+
+def test_delta_a_stop_after_the_d_code_was_written_but_not_sent_sends_that_same_code_once():
+    store, bot = KeyedReissueStore(), Flaky()
+    bot.down, store.fail_mark = True, 1                       # D-2 written, its send fails, the process stops
+    tick(reissue_link(store), store, bot)
+    bot.down = False
+    restarted = reissue_link(store)
+    tick(restarted, store, bot)
+    tick(restarted, store, bot)
+    assert [t.split("\n")[0] for t, _ in bot.sent] == ["Decision D-2 waiting on you, on its own"]
+    assert len(store.rows) == 2 and store.applied == {1}
+
+
 def test_the_sync_view_is_read_with_its_age():
     class St:
         def __init__(self, contact):

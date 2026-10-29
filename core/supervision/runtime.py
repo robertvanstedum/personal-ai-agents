@@ -25,6 +25,7 @@ import os
 from core.mc_delegation_dispatcher import snapshot as snap
 from core.supervision import telegram as tg
 
+_NOT_WRITTEN = object()        # _reissue: the fresh D-code could not be written (the answer stays unapplied)
 OUTBOX_PAGE = 500              # notices_since's page
 OUTBOX_PAGES = 20              # pages read per tick at most: a restart catches up within a tick or two
 NOTICES_PER_MESSAGE = 10
@@ -157,9 +158,15 @@ class RuntimeLink:
             except Exception as exc:
                 self.errors.append(f"apply:{_code(exc)}")
                 continue                                     # not taken: tried again next tick
-            store.mark_applied(d["id"])
             if outcome["state"] == "refused":
-                outcome["reissued"] = self._reissue(store, bot, chat_id, did)
+                # The fresh D-code is written before the answer is marked applied (Codex's fix1 delta check): if its
+                # write fails, or the process stops before the mark, the answer stays unapplied and is taken again,
+                # and the same fresh D-code (its key is fixed by the answered row) is found, never a second one.
+                made = self._reissue(store, bot, chat_id, d)
+                if made is _NOT_WRITTEN:
+                    continue                                 # the answer waits; refused again next tick, then written
+                outcome["reissued"] = made
+            store.mark_applied(d["id"])
             self._outcomes[d["id"]] = outcome
             out.append((d, outcome))
         return out
@@ -208,24 +215,30 @@ class RuntimeLink:
                 self.errors.append(f"tell_record:{_code(exc)}")   # recorded next tick, never sent again here
         return told
 
-    def _reissue(self, store, bot, chat_id, decision_id):
-        """A fresh D-code for a decision still waiting at the authority after a refused answer, sent alone. Its row is
-        kept first (its words and digest), so a send that fails here is tried again by ``deliver`` with the same
-        D-code, after a restart too (Codex part 2 P2-4). -> its code, sent yet or not; None when none was made."""
+    def _reissue(self, store, bot, chat_id, answered):
+        """The fresh D-code for a decision still waiting at the authority after ``answered`` was refused, sent alone.
+        Its row is written first (its words and digest) under a key fixed by the answered row: the n-th D-code of a
+        decision is replaced by the (n+1)-th, so writing it again finds the same row and never makes another (Codex's
+        fix1 delta check). A send that fails is tried again by ``deliver``, after a restart too (P2-4); a row already
+        sent is never sent again. -> its code, sent yet or not; None when the decision no longer waits (nothing to
+        make); _NOT_WRITTEN when it could not be written (the caller leaves the answer unapplied)."""
+        decision_id = answered["requester"]["decision_id"]
         try:
             status = self.authority.decisions_status([decision_id]).get(decision_id) or {}
             if not status.get("open") or not status.get("words"):
                 return None
-            rows = store.runtime_rows(decision_id)
+            ids = [r["id"] for r in store.runtime_rows(decision_id)]
+            n = (ids.index(answered["id"]) + 1 if answered["id"] in ids else len(ids)) + 1
             row = store.runtime_decision(decision_id, status["words"], notice=f"reissue:{decision_id}", position=1,
-                                         solo=True, environment=self.authority.environment, reissue=len(rows) + 1)
+                                         solo=True, environment=self.authority.environment, reissue=n)
         except Exception as exc:
             self.errors.append(f"reissue:{_code(exc)}")
-            return None
-        try:
-            store.mark_sent(row["id"], bot.send(chat_id, tg.runtime_message(row)))
-        except Exception as exc:
-            self.errors.append(f"reissue_send:{_code(exc)}")         # kept: deliver sends it at the next tick
+            return _NOT_WRITTEN
+        if row["state"] == "new":
+            try:
+                store.mark_sent(row["id"], bot.send(chat_id, tg.runtime_message(row)))
+            except Exception as exc:
+                self.errors.append(f"reissue_send:{_code(exc)}")     # kept: deliver sends it at the next tick
         return row["code"]
 
     def _send_reissued(self, store, bot, chat_id, answered) -> list:

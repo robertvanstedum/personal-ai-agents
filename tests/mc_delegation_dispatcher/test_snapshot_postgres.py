@@ -791,6 +791,61 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         self.sup.runtime_tick()
         self.assertEqual(self.item("C-17.review")["state"], "queued")
 
+    def test_delta_the_fresh_d_code_is_written_before_the_answer_is_applied_and_only_once(self):
+        """Codex's fix1 delta check, on the real store: Robert's yes is refused; the fresh D-code's write fails, then
+        (after a restart) it is written and sent but the process stops before the answer is marked applied; after
+        another restart the answer is applied. Never an answer applied without its fresh D-code; D-2 once, no D-3."""
+        narrow = DispatcherStore(self.connect, principal="robert", environment="dev", authority=AUTH,
+                                 grants=GrantStore({**C.grant_rows(), SINK: CapabilityRule(1, False, True)}))
+
+        class Faulty(Store):
+            fail_write = fail_mark = 0
+
+            def runtime_decision(self, *args, **kwargs):
+                if kwargs.get("reissue") and self.fail_write:
+                    self.fail_write -= 1
+                    raise RuntimeError("database_down")
+                return super().runtime_decision(*args, **kwargs)
+
+            def mark_applied(self, decision_id):
+                if self.fail_mark:
+                    self.fail_mark -= 1
+                    raise RuntimeError("process_stopped")
+                return super().mark_applied(decision_id)
+        store = Faulty(self.connect)
+
+        def supervisor():
+            return Supervisor(store, self.notify, GitHub(), chat_id=OWNER, user_id=OWNER,
+                              runtime=RuntimeLink(narrow, owner="robert", view_bound_s=60))
+
+        def rows():
+            return [(r["state"], r["delivered_at"] is not None)
+                    for r in self.sql("SELECT state, delivered_at FROM guild.supervision_decisions ORDER BY id")]
+        sup = supervisor()
+        self.admit(card())
+        self.sql("UPDATE guild.mc_action_grants SET consumed_operations = max_operations")
+        _, env = self.claim()
+        self.result(env, artifacts=[art("patch", "b")])
+        self.publish()
+        sup.runtime_tick()
+        (first,) = self.notify.lines()
+        self.notify.reply("yes", first["message_id"])
+        sup.read_answers(wait=0)
+        store.fail_write = 1
+        sup.runtime_tick()                                           # refused; the fresh D-code's write fails
+        self.assertEqual(rows(), [("approved", False)])              # the answer is not consumed
+        store.fail_mark = 1
+        supervisor().runtime_tick()                                  # a restart: refused again; D-2 written and sent,
+        self.assertEqual(rows(), [("approved", False), ("sent", False)])   # then a stop before the mark
+        last = supervisor()                                          # another restart
+        last.runtime_tick()
+        last.runtime_tick()
+        self.assertEqual(rows(), [("approved", True), ("sent", False)])    # applied; D-2 the only fresh code
+        solo = [m["text"].split("\n")[0] for m in self.notify.lines() if "on its own" in m["text"]]
+        self.assertEqual(solo, ["Decision D-2 waiting on you, on its own"])
+        self.assertTrue(any(t.startswith("Not applied: D-1 was refused (grant_capability_unavailable); nothing was "
+                                         "done. It still waits, as D-2.") for t in self.runtime_texts()))
+
     def test_sf6_a_reassignment_answer_is_bound_to_the_generation_its_words_name(self):
         self.admit(card())
         _, env = self.claim()
