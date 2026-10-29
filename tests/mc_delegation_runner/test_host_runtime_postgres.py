@@ -570,6 +570,7 @@ class HostRuntimeOnPostgres(PostgresFixture, unittest.TestCase):
         the authority answers stop and releases what it kept, and the next claim takes new work."""
         rt = self.runtime()
         job = self.item(self.program("checkpoint s1", "result ok"))
+        rt.cfg.artifact_root.mkdir(parents=True, exist_ok=True)  # a pass makes it; this test claims without one
         claim = rt._claim_step()["launch"]                       # claimed and on file; nothing launched
         task, rid = claim["task"], claim["request_id"]
         store = self.store()
