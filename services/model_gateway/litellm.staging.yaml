@@ -82,6 +82,20 @@ model_list:
       supports_function_calling: true
       fallback_position: 2
 
+  # The voice summary (Spec 165 §5.4, D22 (a)): one plain completion, no tools, after a voice session ends. Reached only
+  # with the capped keys voice-summary-mc and voice-summary-cos (core/realtime_voice/summary_gateway.py). The server bounds
+  # each attempt at 35 s.
+  - model_name: minimoi-voice-summary
+    litellm_params:
+      model: xai/grok-4.3
+      api_key: os.environ/GATEWAY_XAI_API_KEY
+      timeout: 30
+      reasoning_effort: none
+    model_info:
+      id: voice-summary-xai
+      base_model: xai/grok-4.3
+      mode: chat
+
   - model_name: minimoi-mc-agent
     litellm_params:
       model: xai/grok-4.3

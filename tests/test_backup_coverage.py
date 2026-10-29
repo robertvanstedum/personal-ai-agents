@@ -108,3 +108,13 @@ def test_cos_platform_notes_and_reminders_outside_data_are_backed_up():
     assert "cos_reminders" not in agent and "cos_memory.md" not in agent
     bot = " ".join(str(v) for v in services["cos-bot"].get("volumes") or [])
     assert "/cos_reminders:/app/data/cos_reminders" in bot          # Telegram /remind, same store
+
+
+def test_cos_voice_records_outside_data_are_backed_up_and_never_mounted_into_her_runtime():
+    """Spec 165 §6.5: her voice records live beside data/ (cos-scheduler's ${MINIMOI_ROOT}/cos_voice), so the daily
+    backup names them, and cos-agent-a, which mounts data/ read-write, never sees them."""
+    assert re.search(r'^rsync_path "/opt/minimoi/cos_voice/"', LOCAL, re.M)
+    services = yaml.safe_load(COMPOSE.read_text())["services"]
+    scheduler = " ".join(str(v) for v in services["cos-scheduler"].get("volumes") or [])
+    agent = " ".join(str(v) for v in services["cos-agent-a"].get("volumes") or [])
+    assert "/cos_voice:/app/data/cos-voice" in scheduler and "cos_voice" not in agent

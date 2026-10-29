@@ -73,6 +73,8 @@ EXPECTED_PROD_MOUNTS = [
     ("cos-bot", "/opt/minimoi/data/model_gateway_receipts.jsonl", "/app/data/model_gateway_receipts.jsonl"),
     ("cos-bot", "/opt/minimoi/data/guild/cos_context.json", "/app/domains/guild/config/cos_context.json"),
     ("cos-scheduler", "/opt/minimoi/data/guild/limits", "/app/runtime/guild/limits"),
+    # Chief of Staff's voice records (Spec 165 §6.5): cos-scheduler only, never cos-agent-a; in the daily backup.
+    ("cos-scheduler", "/opt/minimoi/cos_voice", "/app/data/cos-voice"),
     ("cos-scheduler", "/opt/minimoi/cos_memory.md", "/app/data/cos_memory.md"),
     ("cos-scheduler", "/opt/minimoi/cos_reminders", "/app/data/cos_reminders"),
     ("cos-scheduler", "/opt/minimoi/data/model_gateway_receipts.jsonl", "/app/data/model_gateway_receipts.jsonl"),
