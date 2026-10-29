@@ -1367,8 +1367,18 @@ class HostRuntime:
         """An item the authority holds for this host with nothing of it on file here: its claim record is written, and
         §5.5 takes it from there (freeze finds nothing running; reconcile decides). Never launched as it stands."""
         task = _task_name(entry["envelope"]["request_id"], entry["envelope"]["generation"])
+        closed = _closed_path(self.cfg, task)
         if not _claim_path(self.cfg, task).exists():
             self._record_claim(entry, adopted=why)
+        elif closed.exists():
+            # Closed here, still held there (found by the gate M run, S1-H): an ended item whose reservation waits on
+            # this host's word that its children stopped, its task closed at a decide. Reopened, the closing record kept
+            # beside it, so §5.5 reconciles it once more: nothing runs (freeze finds no child, so it reads stopped), and
+            # the authority answers stop and releases what it kept. Without this the host would be withheld forever.
+            n = 1
+            while closed.with_name(f"{task}.closed-{n}.json").exists():
+                n += 1
+            closed.rename(closed.with_name(f"{task}.closed-{n}.json"))
         with self._lock:
             self.reasons.add("adopted")
 
