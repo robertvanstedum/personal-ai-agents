@@ -14,8 +14,8 @@ and not the portal; the portal ships both.
   word or phrase in ``_NOT_HIS``: a refusal ("never mind", "scratch that", "wait"), a request or its tail ("could you",
   "will you", "right"), an acknowledgement ("sure", "thanks"), a name he addresses (MC, CoS, Master Craftsman, Grok, …,
   and "Check with"), or a word that only frames, points or times the request ("for me", "of that", "later"); or when all
-  of it is filler or apology (``_FILLER``: "actually", "sorry", "hmm", "let me think", "I guess"; verification S-4), as a
-  whole, so "actually, the kiln is ready" is still his note. That is chat, never a note; one content word is a note ("save
+  of it is filler or apology (``only_filler``: "actually", "sorry", "hmm", "let me think", "I guess"; verification S-4,
+  told apart word by word with no regular expression, review M-3), as a whole, so "actually, the kiln is ready" is still his note. That is chat, never a note; one content word is a note ("save
   a note test" keeps "test"). Quoted words are literal.
 """
 from __future__ import annotations
@@ -48,12 +48,67 @@ _NOT_HIS = re.compile(r"""(?:
 )\b""", re.I | re.X)
 
 
-# Words that, all on their own, are a pause or an apology, never a note (verification S-4). Matched as the whole remainder.
-_FILLER = re.compile(r"""(?:
-    (?:actually|sorry|pardon|oops|um+|uh+|uhm+|er+|erm+|hm+|hmm+|mm+|oh+|ah+|eh|well|like|so|anyway|okay|ok
-     |let\s+me\s+think|let\s+me\s+see|i\s+guess|i\s+mean|you\s+know|i\s+don'?t\s+know|never\s+mind|my\s+bad)
-    [\s,.!…-]*
-)+""", re.I | re.X)
+# Words that, all on their own, are a pause or an apology, never a note (verification S-4), told apart without a regular
+# expression (review M-3: a repeated group of overlapping fillers, "um+|hm+|mm+", backtracked exponentially on "m…mx",
+# 13.9 s at 38 characters). The remainder is cut into words in one pass and compared with fixed sets; a hum ("um", "uhm",
+# "hmm", "mmm", "er", "oh", "ah") is any word whose letters, run-collapsed, are one of HUMS. Only a short remainder is
+# looked at (FILLER_MAX characters): a filler-only one is never long, and the work stays linear and small.
+FILLER_MAX = 60
+FILLER_WORDS = frozenset({"actually", "sorry", "pardon", "oops", "well", "like", "so", "anyway", "okay", "ok"})
+FILLER_PHRASES = (("i", "dont", "know"), ("let", "me", "think"), ("let", "me", "see"), ("i", "guess"), ("i", "mean"),
+                  ("you", "know"), ("never", "mind"), ("my", "bad"))
+HUMS = frozenset({"um", "uh", "uhm", "hm", "m", "mh", "er", "erm", "eh", "oh", "ah"})
+_FILLER_MARKS = frozenset(" \t\n,.!…-")
+
+
+def _collapsed(word):
+    """``word`` with each run of one letter kept once ("hmmm" -> "hm", "ummm" -> "um")."""
+    return "".join(ch for i, ch in enumerate(word) if i == 0 or ch != word[i - 1])
+
+
+def only_filler(text) -> bool:
+    """Whether ``text`` is nothing but fillers and apologies (with spaces, commas, dots, dashes between): linear, no regex."""
+    text = str(text)
+    if not text or len(text) > FILLER_MAX:
+        return False
+    words, word = [], []
+    for ch in text.casefold().replace("’", "'"):
+        if ch.isalpha():
+            word.append(ch)
+        elif ch == "'":
+            continue                                   # "don't" is "dont"
+        elif ch in _FILLER_MARKS:
+            if word:
+                words.append("".join(word))
+                word = []
+        else:
+            return False                               # a digit, "?", a quote: not a filler
+    if word:
+        words.append("".join(word))
+    i = 0
+    while i < len(words):
+        phrase = next((p for p in FILLER_PHRASES if tuple(words[i:i + len(p)]) == p), None)
+        if phrase is not None:
+            i += len(phrase)
+        elif words[i] in FILLER_WORDS or _collapsed(words[i]) in HUMS:
+            i += 1
+        else:
+            return False
+    return bool(words)
+
+
+def without_question_mark(words, polite=("please",)):
+    """``words`` without a closing question mark (and a ", please" just before it), for a request asked as a question
+    ("Can you save a note test?"). String work only, no regular expression (review M-3: a ``\\s*…\\?+\\s*$`` search was
+    quadratic on a long run of spaces)."""
+    text = str(words).rstrip()
+    if not text.endswith("?"):
+        return words
+    text = text.rstrip("?").rstrip()
+    head, comma, tail = text.rpartition(",")
+    if comma and tail.strip().casefold() in polite:
+        text = head.rstrip()
+    return text
 
 
 def points_only(words) -> bool:
@@ -68,7 +123,7 @@ def not_his_note(words) -> bool:
     text = " ".join(str(words).split())
     bare = text.rstrip(".!").strip(" ,;:")
     return (not bare or bare.endswith("?") or points_only(bare) or _NOT_HIS.match(bare) is not None
-            or _FILLER.fullmatch(bare) is not None)
+            or only_filler(bare))
 
 
-__all__ = ["GENERIC", "REFERENT", "not_his_note", "points_only"]
+__all__ = ["GENERIC", "REFERENT", "not_his_note", "only_filler", "points_only"]

@@ -13,7 +13,7 @@ from .payment_scrub import scrub
 
 # Polite framing around a request: "okay,", "please", "could you (please)", "can you kindly", and a
 # trailing ", please" / "for me" / "thanks". It changes nothing about the request itself.
-_PREFIX = r"(?:(?:okay|ok)\s*,?\s+)?(?:please\s+|kindly\s+|(?:can|could|would|will)\s+you\s+(?:please\s+|kindly\s+)?)?"
+_PREFIX = r"(?:(?:okay|ok)(?:\s*,\s+|\s+))?(?:please\s+|kindly\s+|(?:can|could|would|will)\s+you\s+(?:please\s+|kindly\s+)?)?"
 _TAIL = r"(?:\s*,?\s*(?:please|for\s+me|thanks|thank\s+you))*\s*[.!?]*"
 # A4-1 (29 Oct, Robert on dev: "Can you put a test note on the board, just a post-it note, say test?" was refused). Three
 # natural parts of how he asks, none of which ever becomes the words saved:
@@ -41,7 +41,7 @@ _GERMAN = re.compile(r"(?:bitte\s+)?(?:erstelle|schreib|schreibe|mach|mache|hän
 _GERMAN_ASKED = re.compile(r"(?:kannst|könntest)\s+du\s+(?:bitte\s+)?(?:mir\s+)?" + _DE_ART + _DE_NOUN + r"\s+(?:machen|erstellen|schreiben|hängen|kleben|pinnen)" + _DE_ASIDE + r"\b\s*(?P<says>" + _DE_SAYS + r")?\s*(?P<text>.*)", re.I | re.S)
 # A request asked as a question ("Can you … say test?", "Kannst du …?"): its question mark closes the question, never the
 # words, and is not saved (A4-1). A quoted payload is literal and keeps it.
-_ASKED = re.compile(r"(?:(?:okay|ok)\s*,?\s+)?(?:(?:can|could|would|will)\s+you|kannst\s+du|könntest\s+du)\b", re.I)
+_ASKED = re.compile(r"(?:(?:okay|ok)(?:\s*,\s+|\s+))?(?:(?:can|could|would|will)\s+you|kannst\s+du|könntest\s+du)\b", re.I)
 
 
 def _command(text):
@@ -53,12 +53,16 @@ def _command(text):
 # nicht jetzt" leaves ", nicht jetzt"), or a separator word left alone ("Schreib ein Post-it mit"). Asked for instead.
 # Only without an explicit separator (verification S-5): after a colon or a dash ("Add a post-it: .env needs rotating")
 # the words are his as typed, a leading mark included.
-_NOT_WORDS = re.compile(r"\s*[,;.!?]|\s*(?:mit|sag|sage|say|saying|that|to|about)\s*[.!?]*\s*$", re.I)
+_NOT_WORDS = frozenset({"mit", "sag", "sage", "say", "saying", "that", "to", "about"})
 
 
 def _his_postit(payload):
-    """``payload``, or '' (ask for the words) when it starts with a mark or is only a separator word (_NOT_WORDS)."""
-    return '' if payload and _NOT_WORDS.match(payload) else payload
+    """``payload``, or '' (ask for the words) when it starts with a mark or is only a separator word (_NOT_WORDS). String
+    work only (review M-3: its regular expression was quadratic on a long run of spaces)."""
+    words = (payload or "").lstrip()
+    if words[:1] in (",", ";", ".", "!", "?") or words.rstrip(" \t\n.!?").casefold() in _NOT_WORDS:
+        return ''
+    return payload
 
 
 def _explicit(match):
@@ -71,7 +75,7 @@ def _unasked(request, words):
     """``words`` without the closing question mark when the request itself is a question (_ASKED)."""
     if not words or not _ASKED.match(request):
         return words
-    return re.sub(r'(?:\s*,\s*(?:please|bitte))?\s*\?+\s*$', '', words)
+    return without_question_mark(words, polite=("please", "bitte"))
 
 
 # One explicit text-first directive may sit among conversational questions.
@@ -97,7 +101,7 @@ _WRAPPED = re.compile(r'(["“‘’\'])(.*)(["”’\'])\s*[.!?]*', re.S)
 # or names a generic thing ("a reminder") is not the note's text. Ask for the words instead
 # of saving the pointer. Quoted words are always literal. The check is shared with the note
 # grammar (domains/cos/owner_words.py, review S-1), unchanged.
-from domains.cos.owner_words import points_only as _points_only  # noqa: E402
+from domains.cos.owner_words import points_only as _points_only, without_question_mark  # noqa: E402
 
 
 def _mask_quotes(text):

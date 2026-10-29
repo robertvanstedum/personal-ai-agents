@@ -28,7 +28,9 @@ REMINDERS_FLAG = 'MINIMOI_MC_OWNER_REMINDERS'
 REMINDERS_OFF = ('Reminders are not switched on here, so nothing was scheduled. '
                  'Nothing was sent to the Chief of Staff.')
 
-_PREFIX = r'(?:(?:okay|ok|hey|hi)\s*,?\s+)?(?:please\s+|(?:can|could|would)\s+you\s+(?:please\s+)?)?'
+# "okay, " / "okay ": a comma then spaces, or spaces; the same words "\s*,?\s+" read, without its quadratic backtracking on
+# a long run of spaces (review M-3, A4 fix round).
+_PREFIX = r'(?:(?:okay|ok|hey|hi)(?:\s*,\s+|\s+))?(?:please\s+|(?:can|could|would)\s+you\s+(?:please\s+)?)?'
 _COUNT = r'(?:\d{1,4}|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty[- ]five|half\s+an)'
 _W_IN = r'in\s+' + _COUNT + r'\s+(?:minutes?|mins?|hours?|hrs?)'
 _W_CLOCK = r'(?:noon|midnight|\d{1,2}(?:[:.]\d{2})?\s*(?:a\.?\s?m\.?|p\.?\s?m\.?)?)'

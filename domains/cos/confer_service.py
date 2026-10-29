@@ -17,7 +17,7 @@ from core.realtime_voice.timing import VoiceTiming
 from domains.cos.claim_truth import enforce as enforce_claim_truth
 from domains.cos.reminders import MAX_TEXT_CHARS as MAX_REMINDER_TEXT_CHARS
 from domains.cos.reminders import ReminderRefused
-from domains.cos.owner_words import not_his_note
+from domains.cos.owner_words import not_his_note, without_question_mark
 
 
 ALLOWED_CHANNELS = frozenset({
@@ -29,7 +29,7 @@ ALLOWED_CHANNELS = frozenset({
 })
 MAX_EXPLICIT_NOTE_CHARS = 1_000
 _SAVE_NOTE_PREFIX = re.compile(
-    r"^(?:(?:okay|ok)\s*,?\s+)?(?:please\s+)?"
+    r"^(?:(?:okay|ok)(?:\s*,\s+|\s+))?(?:please\s+)?"
     r"save\s+(?:a|this)\s+note\s*:",
     re.IGNORECASE,
 )
@@ -55,7 +55,7 @@ _SLASH_NOTE_PREFIX = re.compile(r"^/note(?:\s+|$)", re.IGNORECASE)
 # asked as a question ("Can you save a note test?") keeps its words without the
 # question's mark.
 _NATURAL_NOTE_PREFIX = re.compile(
-    r"^(?:(?:okay|ok)\s*,?\s+)?"
+    r"^(?:(?:okay|ok)(?:\s*,\s+|\s+))?"
     r"(?:please\s+|(?:can|could|would)\s+you\s+(?:please\s+)?)?"
     r"(?:"
     r"(?:make|take|save|add|jot\s+down)\s+(?:me\s+)?(?:a\s+)?"
@@ -65,7 +65,7 @@ _NATURAL_NOTE_PREFIX = re.compile(
     re.IGNORECASE,
 )
 _LOOSE_NOTE_PREFIX = re.compile(
-    r"^(?:(?:okay|ok)\s*,?\s+)?"
+    r"^(?:(?:okay|ok)(?:\s*,\s+|\s+))?"
     r"(?:please\s+|(?P<asked>(?:can|could|would|will)\s+you\s+(?:please\s+)?))?"
     r"(?:"
     r"(?:make|take|save|add|jot\s+down)\s+(?:me\s+)?(?:a\s+)?note\s+(?P<called>called)(?=\s|$)"
@@ -179,7 +179,7 @@ def parse_explicit_note(text: str) -> str | None:
                 return None
             note_text = text[loose.end():]
             if loose.group("asked"):              # "Can you save a note test?": the request's own question mark
-                note_text = re.sub(r"(?:\s*,\s*please)?\s*\?+\s*$", "", note_text)
+                note_text = without_question_mark(note_text)
             if not note_text.strip():
                 if not loose.group("called"):     # "make a note called" asks for the words; a bare pause is chat
                     return None
