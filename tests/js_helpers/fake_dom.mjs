@@ -1,5 +1,6 @@
 // A very small DOM for the MC voice node tests: elements with attributes, children, text, events, and querySelector for compound
-// attribute selectors only ([a], [a="v"], chained). Enough for mc_voice_direct.js's thread code; not a browser.
+// attribute selectors only ([a], [a="v"], chained). Enough for mc_voice_direct.js's thread code and Confer's voice page
+// (domains/cos/static/confer-voice.js); not a browser.
 class Node {
   constructor(tag) { this.tagName = String(tag).toUpperCase(); this.attrs = new Map(); this.children = []; this.parent = null;
     this.ownText = ''; this.hidden = false; this.disabled = false; this.value = ''; this.listeners = {}; }
@@ -37,6 +38,14 @@ class Node {
   }
   querySelector(selector) { for (const n of this.walk()) if (n.matches(selector)) return n; return null; }
   querySelectorAll(selector) { return Array.from(this.walk()).filter((n) => n.matches(selector)); }
+  appendChild(node) { return this.insertBefore(node, null); }
+  get classList() {                                   // the class attribute as a token list (Confer's voice page uses it)
+    const tokens = () => this.className.split(/\s+/).filter(Boolean);
+    const set = (list) => this.setAttribute('class', list.join(' '));
+    return { contains: (t) => tokens().includes(t), add: (t) => { if (!tokens().includes(t)) set([...tokens(), t]); },
+      remove: (t) => set(tokens().filter((x) => x !== t)),
+      toggle: (t, on) => { const has = tokens().includes(t); const want = on === undefined ? !has : Boolean(on); if (want !== has) (want ? set([...tokens(), t]) : set(tokens().filter((x) => x !== t))); return want; } };
+  }
   addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
   dispatch(type, event = {}) { for (const fn of this.listeners[type] || []) fn({ target: this, preventDefault() {}, ...event }); }
   click() { if (!this.disabled) this.dispatch('click'); }

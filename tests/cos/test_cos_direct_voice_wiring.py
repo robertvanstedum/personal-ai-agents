@@ -197,3 +197,41 @@ def test_in_production_her_routes_are_installed_but_no_session_starts_without_he
         assert cos.app.test_client().get(PREFIX + "/sessions", headers=OWNER).status_code == 200
     finally:
         sys.modules.pop("domains.cos.chief_of_staff", None)
+
+
+# ── A3: what Confer's page reads and loads (Spec 165 v0.3 §6.6) ──────────────────────────────────────────────────────
+
+def test_with_todays_flags_the_page_reads_one_capabilities_answer_that_offers_nothing(off):
+    client = off.app.test_client()
+    assert client.get(PREFIX + "/capabilities", headers=OWNER).status_code == 404      # not installed: Confer as before
+    page = client.get("/ui/confer").get_data(True)
+    assert '<div id="voice-live" class="voice-live" role="group" aria-label="Voice conversation" hidden></div>' in page
+    assert '<div id="voice-sessions" class="voice-sessions" aria-label="Voice sessions to look at" hidden></div>' in page
+    assert "const DIRECT_CAPABILITIES='../api/realtime-voice/direct/api/realtime-voice/capabilities';" in page
+
+
+def test_installed_the_capabilities_answer_has_what_confer_draws(on):
+    caps = on.app.test_client().get(PREFIX + "/capabilities", headers=OWNER).get_json()
+    assert caps["path"] == "direct" and caps["direct_voice"] is True and caps["direct_records"] is False
+    assert caps["person"] == {"name": "Chief of Staff", "short": "CoS"} and caps["persona"] == "chief_of_staff"
+    assert caps["model_actions"] == {"openai": True, "xai": False}
+    assert caps["unvoiced"] == {"xai": "Voice unavailable: no Grok voice is chosen for Chief of Staff yet."}
+    for key in ("bootstrap_url", "end_url", "session_url", "sessions_url", "session_transcript_url", "session_dismiss_url",
+                "summary_url", "summary_decision_url", "keep_talking_url", "consult_url", "transcript_url"):
+        assert caps[key].startswith(PREFIX + "/"), key                     # her own paths: the page rebases them
+
+
+def test_her_static_files_are_served_and_the_portal_rewrites_none_of_them(off):
+    client = off.app.test_client()
+    page = client.get("/static/confer-voice.js")
+    assert page.status_code == 200 and "javascript" in page.mimetype and b"export function conferVoice" in page.data
+    session = client.get("/static/realtime-voice/direct-voice-session.js")
+    assert session.status_code == 200 and b"export function directVoice" in session.data
+    from pathlib import Path
+    from minimoi_portal.proxy import _rewrite_js
+    root = Path(__file__).resolve().parents[2]
+    template = (root / "domains/cos/templates/cos_ui.html").read_text()
+    script = template.split('<script type="module">')[1].split("</script>")[0]
+    for text in (page.get_data(True), session.get_data(True), script,
+                 (root / "core/realtime_voice/static/realtime-voice-controller.js").read_text()):
+        assert _rewrite_js(text, "/app/cos") == text        # the page's own rebase is the only prefixing: never doubled
