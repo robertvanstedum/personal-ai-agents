@@ -45,12 +45,11 @@ def test_csv_output_and_entrypoint_overrides(importer, monkeypatch, capsys):
     assert importer.parse_csv(path)[0]["fields"]["Back"] == "overridden"
 
 
-def test_header_only_and_empty_file_keep_existing_behavior(importer):
+def test_header_only_and_empty_file_have_no_notes(importer):
     path = csv_file(importer, rows="")
     assert importer.parse_csv(path) == []
     path.write_text("")
-    with pytest.raises(StopIteration):
-        importer.parse_csv(path)
+    assert importer.parse_csv(path) == []
 
 
 def test_tracker_and_no_pending_have_no_network_effect(importer, capsys):
@@ -93,11 +92,27 @@ def test_duplicates_are_still_marked_as_imported(importer, monkeypatch):
     assert importer.load_tracker() == {"new.csv"}
 
 
-def test_parse_failure_does_not_mark_imported(importer):
+def test_empty_file_does_not_mark_imported(importer):
     csv_file(importer).write_text("")
-    with pytest.raises(StopIteration):
-        importer.main()
+    importer.main()
     assert not importer.TRACKER.exists()
+
+
+def test_empty_file_does_not_block_later_valid_file(importer, monkeypatch, capsys):
+    csv_file(importer, "a-empty.csv").write_text("")
+    csv_file(importer, "b-valid.csv")
+    calls = []
+    monkeypatch.setattr(importer, "ankiconnect", lambda action, **kwargs:
+                        calls.append((action, kwargs)) or {"result": [101], "error": None})
+    importer.main()
+    assert len(calls) == 1
+    assert calls[0][0] == "addNotes"
+    assert calls[0][1]["notes"][0]["fields"] == {"Front": "Hallo", "Back": "Hello"}
+    assert importer.load_tracker() == {"b-valid.csv"}
+    assert "a-empty.csv: no valid rows" in capsys.readouterr().out
+    importer.main()
+    assert len(calls) == 1
+    assert importer.load_tracker() == {"b-valid.csv"}
 
 
 def test_transport_payload_timeout_and_error(monkeypatch, capsys):

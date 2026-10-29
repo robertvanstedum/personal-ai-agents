@@ -29,7 +29,7 @@ def parse_csv(path: Path, *, deck_name: str, model_name: str, clean_back=clean_b
     notes = []
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.reader(f)
-        next(reader)  # skip header
+        next(reader, None)  # skip header; an empty file contains no notes
         for i, row in enumerate(reader, start=2):
             if len(row) != 3:
                 print(f"  ⚠️  {path.name} row {i}: expected 3 columns, got {len(row)} — skipped")
