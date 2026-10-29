@@ -720,17 +720,25 @@ class _Child:
             return state
 
 
+def _call_counts(dispatcher):
+    counts = getattr(dispatcher, "counts", None)
+    return dict(counts) if isinstance(counts, dict) else None
+
+
 class HostRuntime:
     """One host's runtime for one environment (G6): its contact timer, its pending records and its child, around
     run_once's pass. Built by the CLI from host.yaml (host.HostConfig) and the authority's values (Authority.hosts)."""
 
     def __init__(self, dispatcher, cfg: RunnerConfig, host, values, gap_threshold_s, *, bundle_digest, sink=None,
-                 now=_now, wall=time.time, mono=time.monotonic, hint=None, stores=None, census=None):
+                 now=_now, wall=time.time, mono=time.monotonic, hint=None, stores=None, census=None, witness=None):
         self.dispatcher, self.cfg, self.host, self.values = dispatcher, cfg, host, values
         # The agent census (spec v0.5 §6.6, census.CensusFile on artifact_root/census): this host's file, which every
         # source on the host appends to; the runtime writes its own children's rows and the capture gaps, sends the
         # file's unsent events with each heartbeat and keeps the host's own view. None: no census (tests of S1-D).
         self.census = census
+        # The witness (R5.6-a, witness.py): told after every contact attempt how long the authority has not answered,
+        # by the monotonic clock (so the host's own sleep never counts); None: this host tells nobody.
+        self.witness = witness
         self.census_errors = 0             # census events this runtime could not write (shown; work goes on)
         self.census_unrecorded = {}        # agent id -> {reason, since}: its census row could not be recorded (it ran)
         self._census_limit = None          # a smaller batch after the authority refused one (never the contact itself)
@@ -999,8 +1007,20 @@ class HostRuntime:
                     self.contact()
                 except Exception:
                     pass                       # a malformed answer is logged by the pass, never kills the timer
+                self.observe_authority()
                 due = self._mono() + interval
             self._contact_stop.wait(step)
+
+    def observe_authority(self):
+        """The witness's look at its authority after a contact attempt; it never costs the contact timer."""
+        if self.witness is None:
+            return
+        with self._lock:
+            since = self.offline_since
+        try:
+            self.witness.observe(None if since is None else self._mono() - since, self._now())
+        except Exception:
+            self.witness.errors += 1
 
     def _ok(self):
         with self._lock:
@@ -1136,7 +1156,9 @@ class HostRuntime:
                           "availability": self.host.expected_availability, "grace_s": self.host.unreachable_grace_s,
                           "bundle_digest": self.bundle_digest, "announced": self.announced,
                           "last_gap_s": self.last_gap_s, "last_contact_at": self.last_contact_ok,
-                          "authority_reachable": not self.offline(), "contact_failures": self.failures}],
+                          "authority_reachable": not self.offline(), "contact_failures": self.failures,
+                          # calls to the authority by kind since start, where the CLI counts them (T1); else null
+                          "calls": _call_counts(self.dispatcher)}],
                "items": items,
                "unknowns": ["authority_snapshot: this is the host's own view; the authority's is S1-G's"]}
         if self.census is not None:
@@ -1345,8 +1367,18 @@ class HostRuntime:
         """An item the authority holds for this host with nothing of it on file here: its claim record is written, and
         §5.5 takes it from there (freeze finds nothing running; reconcile decides). Never launched as it stands."""
         task = _task_name(entry["envelope"]["request_id"], entry["envelope"]["generation"])
+        closed = _closed_path(self.cfg, task)
         if not _claim_path(self.cfg, task).exists():
             self._record_claim(entry, adopted=why)
+        elif closed.exists():
+            # Closed here, still held there (found by the gate M run, S1-H): an ended item whose reservation waits on
+            # this host's word that its children stopped, its task closed at a decide. Reopened, the closing record kept
+            # beside it, so §5.5 reconciles it once more: nothing runs (freeze finds no child, so it reads stopped), and
+            # the authority answers stop and releases what it kept. Without this the host would be withheld forever.
+            n = 1
+            while closed.with_name(f"{task}.closed-{n}.json").exists():
+                n += 1
+            closed.rename(closed.with_name(f"{task}.closed-{n}.json"))
         with self._lock:
             self.reasons.add("adopted")
 

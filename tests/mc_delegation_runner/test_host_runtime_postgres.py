@@ -562,6 +562,35 @@ class HostRuntimeOnPostgres(PostgresFixture, unittest.TestCase):
         self.assertEqual(self.kinds(rid).count("item.claim_bound"), 1)
         self.assertEqual(restarted.journal("claims").pending(), [])
 
+    def test_f2_an_item_the_host_closed_at_a_decide_and_robert_ended_is_reconciled_not_withheld_forever(self):
+        """Found by S1-H's gate M run: T4c's item went unknown, the host closed its task at the decide, Robert's yes
+        ended it (interrupted: owner_decision) with its reservation kept until the host says its children stopped. F2's
+        claim then withheld every pass (owned_items_unknown), because the host's held list no longer named it and the
+        claim file already existed, so nothing reconciled it. Now the closed task is reopened and reconciled once:
+        the authority answers stop and releases what it kept, and the next claim takes new work."""
+        rt = self.runtime()
+        job = self.item(self.program("checkpoint s1", "result ok"))
+        rt.cfg.artifact_root.mkdir(parents=True, exist_ok=True)  # a pass makes it; this test claims without one
+        claim = rt._claim_step()["launch"]                       # claimed and on file; nothing launched
+        task, rid = claim["task"], claim["request_id"]
+        store = self.store()
+        answer = store.reconcile(rt.runner_id, rid, 1, {"child": "unverified", "checkpoint": None}, [], protocol=2)
+        self.assertEqual(answer["answer"], "decide")
+        rt._close(task, "decide", answer)                          # as the host's recover closes a decided task
+        self.sql("UPDATE guild.mc_delegations SET lease_until=clock_timestamp()-interval '1 second' WHERE job_id=%s",
+                 (job,))
+        ended = store.end(rid, by="robert", note="Robert's yes to the unknown")
+        self.assertEqual(ended["state"], "interrupted")
+        self.assertEqual(self.row(job)["reservation"]["state"], "kept")
+        nxt = self.item(self.program("result ok"))
+        answers = [rt.pass_once() for _ in range(3)]
+        self.assertEqual(answers[0]["state"], "withheld", answers)
+        self.assertIn("completed", [a["state"] for a in answers], answers)   # never withheld for ever
+        self.assertEqual(self.row(nxt)["state"], "completed")
+        self.assertNotEqual(self.row(job)["reservation"]["state"], "kept")
+        self.assertTrue((self.tmp / "artifacts" / f"{task}.closed-1.json").exists())   # the first closing kept
+        self.assertTrue((self.tmp / "artifacts" / f"{task}.closed.json").exists())     # closed again after it
+
     def test_t0m_a_do_not_resume_session_is_refused_before_any_spawn(self):
         rt = self.runtime()
         job = self.item(self.program("resume_session 01a17dde-fb26-7923-8105-c7478428d17d", "result ok"))

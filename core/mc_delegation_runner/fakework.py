@@ -11,6 +11,8 @@ brief:
                                                      sink, report the outcome (an effect already done is never sent)
     hang_s <n>                                       stall n s (no progress, no channel)
     crash: self                                      exit 70
+    crash: once                                      exit 70 on a run from the beginning only: a definite failure that
+                                                     the retry from its checkpoint (--from) passes (T4d, S1-H)
     report_usage <amount>|unknown                    report usage in the route's unit (capped at --cap)
     stale_effect_on_wake <key> grant=<uuid> [wait_s=<n>] [gap_s=<n>]
                                                      hold a receipt lease; on noticing its own wake gap (a pause of
@@ -133,9 +135,9 @@ def parse_program(text) -> list:
                 raise ProgramRefused("fakework_hang_invalid")
             steps.append(("hang_s", {"seconds": _int(rest[0], 0, 86400, "fakework_hang_invalid")}))
         elif word == "crash:":
-            if rest != ["self"]:
+            if rest not in (["self"], ["once"]):
                 raise ProgramRefused("fakework_crash_invalid")
-            steps.append(("crash", {}))
+            steps.append(("crash", {"once": rest == ["once"]}))
         elif word == "report_usage":
             if len(rest) != 1 or not (rest[0] == "unknown" or re.match(r"^[0-9]{1,6}(\.[0-9]{1,4})?$", rest[0])):
                 raise ProgramRefused("fakework_usage_invalid")
@@ -385,6 +387,9 @@ def run(steps, *, channel, sink, cap, unit, start_after=None, census=None) -> in
         elif kind == "hang_s":
             time.sleep(s["seconds"])
         elif kind == "crash":
+            if s.get("once") and start_after is not None:
+                print("crash: once: not on a run restarted from a checkpoint", flush=True)
+                continue
             _exit("crash", "crash: self")
         elif kind == "report_usage":
             amount = s["amount"]

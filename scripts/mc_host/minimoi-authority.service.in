@@ -1,0 +1,26 @@
+# The MiniMoi authority service (spec v0.5 §3.3, R3.4-a): door.handle over the dispatcher store behind the thin HTTPS
+# server, with the authority's own liveness, its sweeper and the sweeper watch (core/mc_delegation_dispatcher/
+# server.py). Rendered by scripts/mc_host/runtime_install.py for a host whose host.yaml names a door. Upgrade order:
+# this unit before any runtime that reaches it. SIGUSR1 stops the sweeper alone (E11); a restart brings it back.
+[Unit]
+Description=MiniMoi authority @HOST_ID@ (@ENVIRONMENT@)
+Wants=network-online.target
+After=network-online.target postgresql.service
+
+[Service]
+Type=simple
+User=@USER@
+Environment=HOME=@HOME@
+Environment=PATH=@PATH@
+ExecStart=@PYTHON@ -I @BUNDLE@/run_runner.py authority --host-config @HOST_CONFIG@
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStopSec=@STOP_TIMEOUT@
+Restart=always
+RestartSec=5
+StandardOutput=append:@BASE@/authority.log
+StandardError=append:@BASE@/authority.log
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

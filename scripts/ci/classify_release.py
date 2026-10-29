@@ -67,6 +67,7 @@ def _is_release_only(path: str) -> bool:
         or path.startswith("services/agent_installer/")
         or path.startswith(OPS_ONLY_PREFIXES)
         or path in OPS_ONLY_FILES
+        or path in MC_HOST_INSTALL_FILES
         or path.startswith(MC_IMAGE_PREFIXES)
     )
 
@@ -82,6 +83,13 @@ def _is_release_only(path: str) -> bool:
 OPS_ONLY_PREFIXES = ("scripts/credentials/",)
 OPS_ONLY_FILES = frozenset({"scripts/operations/deploy_mc_container_ec2.sh",
                             "scripts/operations/mc_prod_db_migrate.sh"})
+# The host runtime's installer (host runtime spec v0.5 R3.4-a; S1-H): run by an operator on the Mac (launchd) or on
+# the staging host (the systemd templates), on Robert's word, from a checkout; it installs a bundle outside any
+# checkout and is in no service image's command, compose file, Dockerfile or workflow (the test guards this). Without
+# this line any edit to the installer is an unknown path, a full nine-service release, for a file no service runs.
+MC_HOST_INSTALL_FILES = frozenset({"scripts/mc_host/install_delegation_runner.sh", "scripts/mc_host/runtime_install.py",
+                                   "scripts/mc_host/minimoi-runtime.service.in",
+                                   "scripts/mc_host/minimoi-authority.service.in"})
 
 
 # MC's own container: built and deployed only by deploy-mc-agent.yml on an mc-agent-v* tag. The portal image copies the
@@ -335,7 +343,9 @@ MC_RUNNER_LOCAL_FILES = frozenset({"core/mc_delegation_runner/cli.py", "core/mc_
                                    "core/mc_delegation_runner/journal.py", "core/mc_delegation_runner/fakework.py",
                                    # The census's OTLP/JSON writer and the Claude Code hook (built, never installed):
                                    # the runtime's bundle only.
-                                   "core/mc_delegation_runner/otel.py", "core/mc_delegation_runner/claude_hook.py"})
+                                   "core/mc_delegation_runner/otel.py", "core/mc_delegation_runner/claude_hook.py",
+                                   # The host's witness and its notifier adapters (S1-H, R5.6-a): the runtime only.
+                                   "core/mc_delegation_runner/witness.py"})
 
 
 def _is_staging_only(path: str) -> bool:

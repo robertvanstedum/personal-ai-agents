@@ -220,10 +220,33 @@ class HttpDispatcher:
                           status=status, artifacts=artifacts or [], detail=detail or {}, output_text=text)
 
 
+ANSWER_MAX = 256 * 1024
+# What a version 2 host may read as the authority's refusal of its call: the door's own JSON error on one of these
+# statuses (the thin server's, server.py). A 408 or 429 refuses nothing about the call itself; 5xx is the authority
+# unavailable. Each of those, and anything that is not the door's JSON, is a lost connection (N-D5).
+REFUSAL_STATUSES = (400, 401, 403, 404, 409, 413, 422)
+_CODE = re.compile(r"^[a-z][a-z0-9_:]{0,63}$")
+
+
+class DoorUnreachable(ConnectionError):
+    """No answer from the authority: the reply was not the door's JSON (a proxy's or a captive portal's page, a body
+    cut short, an empty one), or a status that is not a refusal of the call. An OSError, so the host reads it as a
+    lost connection and retries, exactly as a timeout; never as the authority's answer (N-D5)."""
+
+
+class DoorRefused(RuntimeError):
+    """The door refused the call with its own JSON error, ``{"error": <code>}``: an authority answer with a fixed
+    code (runner._error_code reads it as one)."""
+
+
 class HttpDispatcherV2(HttpDispatcher):
     """Version 2 over the door (gate D): the same interface as dispatcher_adapter.StoreDispatcherV2, each body carrying
     ``protocol: 2`` and exactly the fields ``_V2`` names. The runner's pending record supplies ``at``, the output text
-    and every body, so a replay is byte-faithful. ``timeout`` bounds each call (the graceful stop's own deadline)."""
+    and every body, so a replay is byte-faithful. ``timeout`` bounds each call (the graceful stop's own deadline).
+
+    Only the door's own JSON is an authority answer: a 2xx ``{"value": ...}``, or a refusal status from
+    REFUSAL_STATUSES carrying ``{"error": <code>}`` (DoorRefused). Anything else, whatever its status, raises
+    DoorUnreachable, a lost connection (N-D5). Version 1's client (HttpDispatcher) is unchanged."""
     protocol = 2
 
     def __init__(self, url, token, artifact_root: Path, *, opener=None, timeout=20):
@@ -231,16 +254,21 @@ class HttpDispatcherV2(HttpDispatcher):
         self.timeout = timeout
 
     def _v2(self, op, **args):
+        import urllib.error
         raw = json.dumps({"op": op, "protocol": 2, **args}).encode()
         if len(raw) > BODY_MAX:
             raise RuntimeError("runner_request_bound")
         req = urllib.request.Request(self.url, data=raw, method="POST", headers={
             "Content-Type": "application/json", "Authorization": "Bearer " + self._token,
             "User-Agent": "MiniMoi-delegation-runner/2"})
-        with self._open(req, timeout=self.timeout) as r:
-            doc = json.loads(r.read(256 * 1024))
-        if type(doc) is not dict or "value" not in doc:
-            raise RuntimeError("runner_door_answer_invalid")
+        try:
+            with self._open(req, timeout=self.timeout) as r:
+                body = r.read(ANSWER_MAX + 1)
+        except urllib.error.HTTPError as exc:
+            raise _http_refusal(exc) from None
+        doc = _door_json(body)
+        if doc is None or "value" not in doc:
+            raise DoorUnreachable("runner_door_answer_not_authority")
         return doc["value"]
 
     def heartbeat(self, runner_id, state, capabilities, facts, census=None):
@@ -274,3 +302,29 @@ class HttpDispatcherV2(HttpDispatcher):
 
     def effect(self, runner_id, request_id, generation, effect):
         return self._v2("effect", runner_id=runner_id, request_id=request_id, generation=generation, effect=effect)
+
+
+def _door_json(body):
+    """The door's JSON object, or None: a body over ANSWER_MAX (cut short), not UTF-8 JSON, or not an object."""
+    if body is None or len(body) > ANSWER_MAX:
+        return None
+    try:
+        doc = json.loads(body.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return doc if type(doc) is dict else None
+
+
+def _http_refusal(exc):
+    """An HTTP error status read as the authority's refusal (DoorRefused with the door's code) only when it is one of
+    REFUSAL_STATUSES and carries the door's JSON error; otherwise a lost connection (DoorUnreachable)."""
+    body = None
+    try:
+        body = exc.read(ANSWER_MAX + 1)
+    except Exception:
+        pass
+    doc = _door_json(body) if exc.code in REFUSAL_STATUSES else None
+    code = None if doc is None else doc.get("error")
+    if type(code) is str and _CODE.match(code):
+        return DoorRefused(code)
+    return DoorUnreachable(f"runner_door_status_{int(exc.code)}" if type(exc.code) is int else "runner_door_status")

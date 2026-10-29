@@ -363,3 +363,20 @@ def test_a_stalls_one_notice_is_its_review_request_once_queued():
                                                                 "action": "withdraw"})
     later = S.build(rec([stalled], [runner("mac-1")], events=[review, resolved]))
     assert later["notices"] == []                                       # answered: the same stall is not told again
+
+
+def test_t19b_a_refusal_that_names_its_login_says_run_it_first():
+    """The launch contract's signin_missing carries the login command (S1-E); the ended notice quotes it (T19b's "one
+    notice names the login step"). A refusal without one, or with anything but a short plain command, says nothing
+    more."""
+    signed_out = item("refused", card=None, lease_left=None,
+                      result_detail={"code": "signin_missing", "tool": "fakecli", "login": "fakecli login"})
+    plain = item("refused", card=None, lease_left=None, result_detail={"code": "route_supervised_only"})
+    odd = item("refused", card=None, lease_left=None,
+               result_detail={"code": "signin_missing", "login": "run this; then\nsomething else entirely"})
+    failed = item("failed", card=None, lease_left=None, result_detail={"code": "exit_70", "login": "fakecli login"})
+    doc = S.build(rec([signed_out, plain, odd, failed], [runner("mac-1")]))
+    text = {n["item_id"]: n["text"] for n in doc["notices"] if n["rule"] == "ended"}
+    assert "(signin_missing). Run `fakecli login` first. Next:" in text[signed_out["request_id"]]
+    assert "Run" not in text[plain["request_id"]] and "Run" not in text[odd["request_id"]]
+    assert "Run" not in text[failed["request_id"]]                     # only a refusal names its login step

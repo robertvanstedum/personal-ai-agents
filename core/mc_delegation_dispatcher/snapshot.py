@@ -592,11 +592,22 @@ def _notice(key, kind, text, next_step, raised, **refs) -> dict:
             "raised_at": None if r is None else r["raised_at"], **refs}
 
 
+_LOGIN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ./_:-]{0,63}$")
+
+
+def _login_step(row):
+    """The login command a refusal's detail names (the launch contract's ``signin_missing``: the policy file's
+    ``login_command``, T19b), or None. Only a short plain command is quoted to Robert; anything else is left out."""
+    login = ((row or {}).get("result_detail") or {}).get("login")
+    return login if isinstance(login, str) and _LOGIN.match(login) else None
+
+
 def _notices(items, rec, now, values, hosts, cards, waiting, raised, unknowns, reviewed=frozenset()) -> list:
     """Every notice the rules raise now (R7.4-d, R5.1-e), each with its key (one notice per key, DUP-7) and the next
     authorized step. Silent where nothing is needed (R7.4-e)."""
     out = []
     host = {h["host_id"]: h for h in hosts}
+    rows = {str(r["request_id"]): r for r in rec["items"]}
     legacy_rows = [_legacy_row(r, now) for r in rec["items"] if r.get("route") is None]
     for i in legacy_items(legacy_rows)[0]:
         out.append({**i, "rule": i["key"].split(":", 1)[0], "next_authorized_step": None,
@@ -654,11 +665,13 @@ def _notices(items, rec, now, values, hosts, cards, waiting, raised, unknowns, r
                     f"Next: {_step_words(nxt)}.", nxt, raised, **refs))
         if it["stored_state"] in ("failed", "refused", "timed_out", "output_limit", "interrupted", "expired") \
                 and not it["card_id"]:
+            login = _login_step(rows.get(rid)) if it["stored_state"] == "refused" else None
             out.append(_notice(
                 f"delegation-ended:{rid}", "ended",
                 f"{label[0].upper()}{label[1:]} ended {it['stored_state'].replace('_', ' ')}"
-                + (f" ({it['code']})" if it["code"] else "") + ". Next: you may re-admit it as a new item, or leave "
-                "it.", step, raised, **refs))
+                + (f" ({it['code']})" if it["code"] else "") + "."
+                + (f" Run `{login}` first." if login else "")
+                + " Next: you may re-admit it as a new item, or leave it.", step, raised, **refs))
     for card_id, c in sorted(cards.items(), key=lambda kv: kv[0] or ""):
         if c.get("ready") is not None and _recent(now, c.get("ready_at")):
             out.append(_notice(
