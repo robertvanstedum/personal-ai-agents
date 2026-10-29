@@ -6,10 +6,10 @@ The issuer must authenticate retained owner turns, resolve authorized resources,
 and compile the exact canonical domain request under a reviewed template.
 Quoted/pasted content and lessons cannot mint these objects. Natural-language
 compilation and broader field-constrained templates are separate work, except
-one narrow template: delegate.card (host runtime spec v0.5 R4.3-c, N1). One exact
-owner approval of a card covers that card's enumerated steps, one operation each,
-each named by its step template digest; a step's request is exactly that digest
-plus input artifact digests, the only free field (card_step_template).
+one narrow rule: delegate.card (host runtime spec v0.5 R4.3-c, N1). One exact
+owner approval of a card covers that card's enumerated steps: one operation per
+step template digest, used and rechecked on the work-item path (use_for_item,
+covers_item). Its approval window bounds the card's first operation only.
 
 Borrow the binding transaction: binding/session -> grant -> receipt lock order.
 prepare_effect consumes cardinality and prepares its receipt atomically. At the
@@ -27,7 +27,6 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import re
-import uuid
 from types import MappingProxyType
 
 from .context import ActionContext, ActionContractError, _aware, _identifier
@@ -37,32 +36,6 @@ _DIGEST = re.compile('[0-9a-f]{64}')
 _CAPABILITY = re.compile(r'[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+')
 # R4.3-c (N1): the one capability whose single exact approval covers several operations, a card's enumerated steps.
 CARD_CAPABILITY = 'delegate.card'
-_CARD_STEP = {'step_template', 'input_artifacts'}
-_ARTIFACT_REF = re.compile(r'[A-Za-z0-9._:-]{1,64}')
-
-
-def card_step_template(request):
-    """The step template digest a delegate.card request names, or None unless the request is exactly a compiled card
-    step: {step_template: <digest>, input_artifacts: [{ref, sha256}, ...]} with at most 16 artifacts. The artifact
-    digests are its only free field; which digests may fill it is the authority's to check (its own records)."""
-    try:
-        args = request.arguments
-    except (AttributeError, ValueError):
-        return None
-    if type(args) is not dict or set(args) != _CARD_STEP:
-        return None
-    template, arts = args['step_template'], args['input_artifacts']
-    if (type(template) is not str or not _DIGEST.fullmatch(template) or type(arts) is not list or len(arts) > 16
-            or not all(type(a) is dict and set(a) == {'ref', 'sha256'} and type(a['ref']) is str
-                       and _ARTIFACT_REF.fullmatch(a['ref']) and type(a['sha256']) is str
-                       and _DIGEST.fullmatch(a['sha256']) for a in arts)):
-        return None
-    return template
-
-
-def card_step_operation_id(approved_operation_id, step_template):
-    """Each enumerated step of an approved card has one operation id, derived from the approval: covered once."""
-    return str(uuid.uuid5(uuid.UUID(approved_operation_id), step_template))
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,23 +229,17 @@ class GrantStore:
         if (context.actor_id not in grant.actor_ids or intent.grant_id not in context.grant_ids
                 or context.conversation_id != grant.conversation_id or context.work_id != grant.work_id):
             raise ActionContractError('grant_context_mismatch')
-        card = grant.capability == CARD_CAPABILITY      # a card step is covered by its template digest (R4.3-c)
-        covered = card_step_template(intent.request) if card else intent.request.arguments_sha256
         if (intent.request.operation != grant.capability or intent.request.operation_version != grant.capability_version
-                or covered not in grant.argument_digests
+                or intent.request.arguments_sha256 not in grant.argument_digests
                 or intent.expected_target_version != grant.expected_target_version
                 or intent.proposal_id != grant.proposal_id):
             raise ActionContractError('grant_effect_not_covered')
         if intent.reservation_ids:
             raise ActionContractError('grant_spend_not_supported')
         if grant.proposal_id is not None:
-            approved = card_step_operation_id(grant.approved_operation_id, covered) if card \
-                else grant.approved_operation_id
-            if intent.operation_id != approved:
+            if intent.operation_id != grant.approved_operation_id:
                 raise ActionContractError('grant_approval_operation_mismatch')
-            # A card's approval window bounds its admission, the first of its operations; later steps are that
-            # admitted card's own.
-            if grant.approval_expires_at <= now and not (card and row['consumed_operations'] > 0):
+            if grant.approval_expires_at <= now:
                 raise ActionContractError('grant_approval_expired')
 
     @staticmethod

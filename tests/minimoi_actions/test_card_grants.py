@@ -1,17 +1,15 @@
 """GrantStore's card rule (host runtime spec v0.5 R4.3-c, Robert's N1), without a database: one exact approval of a card
 covers its enumerated steps, one operation each, and nothing else changes. Every existing capability keeps the exact
-approval rule as it was (one operation on one exact request). The PostgreSQL half (prepare_effect, recheck_execution,
-use_for_item) is test_card_grants_postgres.py."""
+approval rule as it was (one operation on one exact request). The PostgreSQL half (use_for_item and covers_item, the
+item path's admission and recheck) is test_card_grants_postgres.py."""
 from datetime import datetime, timedelta, timezone
-import json
 import unittest
 from uuid import uuid4
 
 from core.mc_tools import effects
+from core.minimoi_actions import grants as G
 from core.minimoi_actions.context import ActionContractError
-from core.minimoi_actions.grants import (CARD_CAPABILITY, GrantDefinition, card_step_operation_id,
-                                         card_step_template)
-from core.minimoi_actions.requests import ToolRequest
+from core.minimoi_actions.grants import CARD_CAPABILITY, GrantDefinition
 
 NOW = datetime(2026, 10, 28, 20, 0, tzinfo=timezone.utc)
 D = ["a" * 64, "b" * 64, "c" * 64]
@@ -23,11 +21,6 @@ def grant(capability, digests, ops, *, exact=True, work_id=None, **over):
     extra.update(over)
     return GrantDefinition(str(uuid4()), "robert", "dev", "conversation", ("owner-turn",), ("mc",), "policy",
                            capability, 1, tuple(digests), ops, NOW + timedelta(hours=1), work_id=work_id, **extra)
-
-
-def step_request(template, arts=(), **extra):
-    return ToolRequest(CARD_CAPABILITY, 1, json.dumps({"step_template": template, "input_artifacts": list(arts),
-                                                       **extra}).encode())
 
 
 class ExactApprovalUnchanged(unittest.TestCase):
@@ -66,26 +59,12 @@ class CardRule(unittest.TestCase):
         with self.assertRaisesRegex(ActionContractError, "grant_approval_invalid"):
             grant(CARD_CAPABILITY, D, 3, work_id="C-17", approval_expires_at=None)
 
-    def test_a_step_request_is_its_template_digest_and_artifact_digests_only(self):
-        arts = [{"ref": "r1-g1.patch", "sha256": "e" * 64}]
-        self.assertEqual(card_step_template(step_request(D[0])), D[0])
-        self.assertEqual(card_step_template(step_request(D[0], arts)), D[0])
-        self.assertEqual(card_step_template(step_request(D[0], arts * 16)), D[0])
-        for bad in (step_request(D[0], arts, brief="do something else"),                  # a second free field
-                    step_request(D[0], [{"ref": "r1", "sha256": "not-a-digest"}]),
-                    step_request(D[0], [{"ref": "r1", "sha256": "e" * 64, "kind": "patch"}]),
-                    step_request(D[0], [{"ref": "../x", "sha256": "e" * 64}]),
-                    step_request(D[0], arts * 17),
-                    step_request("A" * 64), step_request("a" * 63),
-                    ToolRequest(CARD_CAPABILITY, 1, json.dumps({"step_template": D[0]}).encode())):
-            self.assertIsNone(card_step_template(bad))
-
-    def test_each_step_has_one_operation_id_derived_from_the_approval(self):
-        approval = str(uuid4())
-        ids = {card_step_operation_id(approval, d) for d in D}
-        self.assertEqual(len(ids), 3)
-        self.assertEqual(card_step_operation_id(approval, D[0]), card_step_operation_id(approval, D[0]))
-        self.assertNotEqual(card_step_operation_id(approval, D[0]), card_step_operation_id(str(uuid4()), D[0]))
+    def test_the_effect_path_has_no_card_branch(self):
+        """R4.3-c's per-step checks run on the item path (use_for_item at admission, covers_item at claim and renew),
+        the one the authority uses; prepare_effect and recheck_execution are as they were (review SF5)."""
+        import inspect
+        self.assertNotIn("CARD_CAPABILITY", inspect.getsource(G.GrantStore._check))
+        self.assertFalse(hasattr(G, "card_step_template") or hasattr(G, "card_step_operation_id"))
 
 
 if __name__ == "__main__":
