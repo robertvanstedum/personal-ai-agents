@@ -471,14 +471,12 @@ def from_environ(environ, connect):
         return None
     if len(given) != len(keys):
         raise ValueError("runtime_link_incomplete")
-    from core.mc_delegation_dispatcher import cards
+    from core.mc_delegation_dispatcher import production
     from core.mc_delegation_dispatcher.store import Authority, DispatcherStore
-    from core.minimoi_actions.grants import CapabilityRule, GrantStore
     auth = Authority.load(environ["MINIMOI_RUNTIME_AUTHORITY_FILE"])
-    grants = GrantStore({"delegate.start_build": CapabilityRule(1, True, True),
-                         "delegate.start_research": CapabilityRule(1, True, True), **cards.grant_rows()})
+    # P1-a: the same grant catalogue every production process builds over this file (production.grant_store).
     store = DispatcherStore(connect, principal=environ["MINIMOI_RUNTIME_PRINCIPAL"], environment=auth.environment,
-                            authority=auth, grants=grants)
+                            authority=auth, grants=production.grant_store(auth))
     bound = environ["MINIMOI_RUNTIME_VIEW_BOUND_S"]
     if not bound.isdigit():
         raise ValueError("runtime_link_invalid")

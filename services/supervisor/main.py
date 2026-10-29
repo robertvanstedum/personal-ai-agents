@@ -19,6 +19,14 @@ Host runtime S1-G, each off unless a release sets it (then see core/supervision/
   * MINIMOI_SUPERVISION_WATCH_TOKEN_SHA256 with MINIMOI_SUPERVISION_WATCH_HOST (the same credential the portal
     takes; MINIMOI_SUPERVISION_WATCH_TIMEOUT_S, default 90): production's notify-only watch of staging (R5.6-b),
     armed by the credential alone, so removing it disarms the watch.
+Host runtime P1-a, each off unless a release sets it:
+  * with the runtime link configured, its decisions are notices: Robert answers them in MiniMoi (his Guild turn,
+    "approve D-n" / "no D-n"), and a Telegram reply to one is not counted (Robert, 29 Oct). S1-G's reply-to-approve
+    path stays built: MINIMOI_RUNTIME_TELEGRAM_ANSWERS=1 turns it on;
+  * MINIMOI_RUNTIME_STATE_DIR with MINIMOI_RUNTIME_ENDPOINT_ID and MINIMOI_RUNTIME_HOST_ID (with the runtime link):
+    this process also runs the authority's own timers over the link's store (core/mc_delegation_dispatcher/server.py
+    AuthorityLoops: liveness, the sweeper publishing state.json there, and the sweeper watch), each a thread of its
+    own; SIGUSR1 stops the sweeper alone (E11).
 With none set it is exactly today's supervisor.
 """
 from __future__ import annotations
@@ -38,6 +46,7 @@ from core.supervision.store import Store, public_receipt  # noqa: E402
 
 log = logging.getLogger("supervisor")
 OUTBOX_PER_MESSAGE = 10                 # notices per message from the supervisor's outbox (P2-3)
+OUTBOX_MESSAGE_CHARS = 3500             # and at most this long: the bot cuts at 4,000 (independent review N-B)
 HEALTH = Path(os.environ.get("SUPERVISOR_HEALTH_FILE", "/tmp/supervisor.alive"))
 _stop = False
 
@@ -65,8 +74,13 @@ def _runtime_row(decision) -> bool:
 
 class Supervisor:
     def __init__(self, store, bot, github, *, chat_id, user_id, checkin_minutes=15, clock=time.monotonic,
-                 runtime=None, sync_view_bound_s=None, watch=None):
+                 runtime=None, sync_view_bound_s=None, watch=None, runtime_answers=True, loops=None):
+        """``runtime_answers``: Robert may answer a runtime decision by replying on Telegram (S1-G's path; built
+        directly, as the tests and gate M do). Production's configuration (``_s1g_options``) sets it False unless
+        MINIMOI_RUNTIME_TELEGRAM_ANSWERS=1: decisions are then notices, answered in MiniMoi. ``loops``: the authority's
+        own timers (P1-a), started by ``main``."""
         self.store, self.bot, self.github = store, bot, github
+        self.runtime_answers, self.loops = runtime_answers, loops
         self.chat_id, self.user_id = chat_id, user_id
         self.every = checkin_minutes * 60
         self.clock = clock
@@ -82,11 +96,12 @@ class Supervisor:
         it raised at its sweeps (the outbox), and a dead sweeper's. Every message is marked told only once it went
         out, so one lost to a Telegram error goes out next tick (C-SF1, C-N4). Nothing here stops the tick (SF3): a
         failure is logged by its code and told once per key and day, and today's approvals and check-ins go on."""
-        steps = (("apply", lambda: self.runtime.apply(self.store, self.bot, self.chat_id)),
-                 ("tell", lambda: self.runtime.tell_outcomes(self.store, self.bot, self.chat_id)),
-                 ("close", lambda: self.runtime.close_closed(self.store, self.bot, self.chat_id)),
-                 ("deliver", lambda: self.runtime.deliver(self.store, self.bot, self.chat_id)),
-                 ("drain", lambda: self.runtime.drain(self.store, self.bot, self.chat_id)))
+        bot = self.bot if self.runtime_answers else NoticeBot(self.bot)    # P1-a: answered in MiniMoi
+        steps = (("apply", lambda: self.runtime.apply(self.store, bot, self.chat_id)),
+                 ("tell", lambda: self.runtime.tell_outcomes(self.store, bot, self.chat_id)),
+                 ("close", lambda: self.runtime.close_closed(self.store, bot, self.chat_id)),
+                 ("deliver", lambda: self.runtime.deliver(self.store, bot, self.chat_id)),
+                 ("drain", lambda: self.runtime.drain(self.store, bot, self.chat_id)))
         for name, step in steps:
             try:
                 step()
@@ -132,8 +147,7 @@ class Supervisor:
             return
         for channel in ("staging_watch", "runtime_link"):
             group = [r for r in rows if r["channel"] == channel]
-            for at in range(0, len(group), OUTBOX_PER_MESSAGE):
-                chunk = group[at:at + OUTBOX_PER_MESSAGE]
+            for chunk in _outbox_chunks(channel, group):
                 keys = [r["key"] for r in chunk]
                 try:
                     self.bot.send(self.chat_id, watch.outbox_message(channel, chunk))
@@ -195,10 +209,14 @@ class Supervisor:
             return
         decision = self.store.by_message(reply_to)
         if decision is not None and _runtime_row(decision):
+            if not self.runtime_answers:
+                return self._answer_in_minimoi(msg, [decision])
             return self.handle_runtime(update, msg, [decision], batch=False)
         if decision is None and self.runtime is not None:
             batch = self.store.by_batch(reply_to)
             if batch:
+                if not self.runtime_answers:
+                    return self._answer_in_minimoi(msg, batch)
                 return self.handle_runtime(update, msg, batch, batch=True)
         if decision is None:
             self.bot.send(self.chat_id, "Not counted: that message is not a decision.", reply_to=msg["message_id"])
@@ -219,6 +237,13 @@ class Supervisor:
             self.bot.send(self.chat_id, f"{code} could not be recorded (expired or changed); nothing changed.",
                           reply_to=msg["message_id"])
         log.info("decision %s %s by Telegram reply", code, answer if done else "not recorded")
+
+    def _answer_in_minimoi(self, msg, rows):
+        """P1-a: a reply to a runtime decision's notice while answers are taken only in MiniMoi: not counted, and
+        Robert is told where to answer it. Nothing is recorded."""
+        codes = [d.get("code") or f"D-{d['id']}" for d in rows]
+        self.bot.send(self.chat_id, tg.not_counted_here(codes), reply_to=msg["message_id"])
+        log.info("runtime decisions %s: a Telegram reply not counted (answered in MiniMoi)", ",".join(codes))
 
     def handle_runtime(self, update, msg, rows, *, batch):
         """Robert's reply to a runtime decision's message, alone or batched (R7.4-c, OWN-6, SF1). A runtime decision
@@ -305,6 +330,58 @@ class Supervisor:
         HEALTH.write_text(datetime.now(timezone.utc).isoformat())
 
 
+class NoticeBot:
+    """The approvals bot as the runtime link sees it while Robert answers in MiniMoi (P1-a): every decision message
+    becomes a notice (``telegram.answer_in_minimoi``: the decision's words kept, S1-G's reply instruction replaced);
+    everything else passes unchanged."""
+
+    def __init__(self, bot):
+        self._bot = bot
+
+    def __getattr__(self, name):
+        return getattr(self._bot, name)
+
+    def send(self, chat_id, text, reply_to=None):
+        if reply_to is None:
+            return self._bot.send(chat_id, tg.answer_in_minimoi(text))
+        return self._bot.send(chat_id, tg.answer_in_minimoi(text), reply_to=reply_to)
+
+
+def _outbox_chunks(channel, group):
+    """The outbox's notices for one channel, oldest first, in messages of at most OUTBOX_PER_MESSAGE notices and
+    OUTBOX_MESSAGE_CHARS characters, so no message is cut by Telegram after its notices were marked sent (N-B). A
+    single notice longer than that goes alone; watch.outbox_message's words carry it, bounded at send."""
+    chunk = []
+    for row in group:
+        trial = chunk + [row]
+        if chunk and (len(trial) > OUTBOX_PER_MESSAGE or len(watch.outbox_message(channel, trial)) > OUTBOX_MESSAGE_CHARS):
+            yield chunk
+            trial = [row]
+        chunk = trial
+    if chunk:
+        yield chunk
+
+
+RUNTIME_LOOP_KEYS = ("MINIMOI_RUNTIME_STATE_DIR", "MINIMOI_RUNTIME_ENDPOINT_ID", "MINIMOI_RUNTIME_HOST_ID")
+
+
+def _authority_loops(environ, link):
+    """P1-a: the authority's own timers in this process, over the runtime link's store, or None (none of
+    RUNTIME_LOOP_KEYS set). All three or none, and only with the link: a missing value admits nothing."""
+    given = [k for k in RUNTIME_LOOP_KEYS if environ.get(k)]
+    if not given:
+        return None
+    if len(given) != len(RUNTIME_LOOP_KEYS) or link is None:
+        raise ValueError("authority_loops_incomplete")
+    ids = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
+    if not (ids.match(environ["MINIMOI_RUNTIME_ENDPOINT_ID"]) and ids.match(environ["MINIMOI_RUNTIME_HOST_ID"])):
+        raise ValueError("authority_loops_invalid")
+    from core.mc_delegation_dispatcher import server
+    return server.AuthorityLoops(link.authority, state_dir=Path(environ["MINIMOI_RUNTIME_STATE_DIR"]),
+                                 endpoint_id=environ["MINIMOI_RUNTIME_ENDPOINT_ID"],
+                                 host_id=environ["MINIMOI_RUNTIME_HOST_ID"], log=log)
+
+
 def _s1g_options(environ, connect) -> dict:
     """S1-G's parts a release turns on by configuration; {} (today's supervisor) when none is set."""
     from core.supervision.runtime import from_environ
@@ -312,6 +389,11 @@ def _s1g_options(environ, connect) -> dict:
     link = from_environ(environ, connect)
     if link is not None:
         out["runtime"] = link
+        # P1-a: production answers runtime decisions in MiniMoi unless the Telegram reply path is turned on.
+        out["runtime_answers"] = environ.get("MINIMOI_RUNTIME_TELEGRAM_ANSWERS") == "1"
+    loops = _authority_loops(environ, link)
+    if loops is not None:
+        out["loops"] = loops
     bound = environ.get("MINIMOI_SUPERVISION_SYNC_VIEW_BOUND_S")
     if bound:
         out["sync_view_bound_s"] = int(bound)
@@ -341,16 +423,24 @@ def main():
         _stop = True
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
+    if sup.loops is not None:                       # P1-a: the authority's timers, before the first tick
+        signal.signal(signal.SIGUSR1, lambda *_: sup.loops.stop_sweeper())        # E11: the sweeper alone stops
+        sup.loops.start()
+        log.info("authority timers up: liveness, sweeper and its watch")
     log.info("supervisor up: check-in every %s min", sup.every // 60)
     backoff = 5
-    while not _stop:
-        try:
-            sup.tick()
-            backoff = 5
-        except Exception:
-            log.exception("supervisor tick failed; retrying in %ss", backoff)
-            time.sleep(backoff)
-            backoff = min(backoff * 2, 300)
+    try:
+        while not _stop:
+            try:
+                sup.tick()
+                backoff = 5
+            except Exception:
+                log.exception("supervisor tick failed; retrying in %ss", backoff)
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 300)
+    finally:
+        if sup.loops is not None:
+            sup.loops.stop()
 
 
 if __name__ == "__main__":

@@ -109,6 +109,34 @@ def decision_message(decision):
             f"Or in the Guild chat: approve {decision['code']}.")
 
 
+REPLY_HERE = "\n\nReply to THIS message:"      # where S1-G's decision messages say how to answer by reply
+_RT_CODES = re.compile(r"\bD-\d{1,9}\b")
+
+
+def answer_in_minimoi(text):
+    """A runtime decision's message made a notice that Robert answers in MiniMoi, not by replying here (P1-a; Robert,
+    29 Oct: "telegram notification that I have an urgent action. Then I go into minimoi myself and reply to mc"). The
+    decision's own words are kept; only S1-G's reply instruction is replaced. Any other text passes unchanged."""
+    if not isinstance(text, str):
+        return text
+    head, sep, _ = text.partition(REPLY_HERE)
+    if not sep:
+        return text
+    codes = _RT_CODES.findall(head.split("\n", 1)[0])
+    if not codes:
+        return text
+    one = (f"“approve {codes[0]}” or “no {codes[0]}”" if len(codes) == 1 else
+           f"one code at a time (“approve {codes[0]}”, “no {codes[-1]}”)")
+    return (head + f"\n\nAnswer in MiniMoi: tell MC {one} in the Guild chat. A reply here is not counted; the "
+                   f"decision waits until you answer it there.")
+
+
+def not_counted_here(codes):
+    """The reply to an answer sent on Telegram while answers are taken only in MiniMoi (P1-a)."""
+    return (f"Not counted: {', '.join(codes)} is answered in MiniMoi. Tell MC “approve {codes[0]}” or “no {codes[0]}” "
+            f"in the Guild chat. Nothing changed.")
+
+
 def runtime_message(decision):
     """A runtime decision that arrives alone (a solo class, R7.4-c: an unknown resolution, a reassignment, a
     cross-vendor review admission), in the authority's own words, which say what yes and no do."""
