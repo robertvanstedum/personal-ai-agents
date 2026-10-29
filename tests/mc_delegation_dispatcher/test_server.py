@@ -69,6 +69,23 @@ def test_a_host_speaks_only_with_its_own_token_and_only_for_itself():
     assert s.calls == [("heartbeat", "mac-test-1:runner")]
 
 
+def test_a_host_never_records_facts_for_another_host():
+    """S1-H review SF5: mac-test-1's token, its own runner id, and facts naming staging-1. Recorded, the runner row
+    would attribute its work, events and census to staging-1. Refused before the store, whatever the call."""
+    s = FakeStore()
+    for other in ("staging-1", "mac-test-2"):
+        body = {**beat(), "facts": {**FACTS, "host_id": other}}
+        assert server.answer(s, HOSTS, HOST_TOKEN, raw(body), "application/json") == \
+            (403, {"error": "host_not_this_credential"})
+        census = {**body, "census": []}
+        assert server.answer(s, HOSTS, HOST_TOKEN, raw(census), "application/json")[0] == 403
+    assert s.calls == []
+    assert server.answer(s, HOSTS, HOST_TOKEN, raw(beat()), "application/json")[0] == 200
+    staging = {**beat("staging-1:runner"), "facts": {**FACTS, "host_id": "staging-1"}}
+    assert server.answer(s, HOSTS, OTHER_TOKEN, raw(staging), "application/json")[0] == 200
+    assert s.calls == [("heartbeat", "mac-test-1:runner"), ("heartbeat", "staging-1:runner")]
+
+
 def test_every_shape_the_door_refuses_is_a_fixed_code_and_the_store_never_sees_it():
     s = FakeStore()
     assert server.answer(s, HOSTS, HOST_TOKEN, raw(beat()), "text/html")[0] == 400

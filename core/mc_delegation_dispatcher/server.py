@@ -20,12 +20,13 @@ thin HTTPS server, plus the authority's own timers.
 * **The door** (``DoorServer``), version 2 only (production's version 1 runner keeps the portal's door): ``POST
   door.PATH`` with a host's bearer token, checked in constant time against each host credential's SHA-256 (only
   digests are configured: ``minimoi.door_credentials.v1``), a JSON body within ``door.BODY_MAX``, and every
-  ``runner_id`` bound to the credential that sent it (``<host_id>:runner``): a host can speak only for itself (R4.4,
-  S1-A N5, on every call that names one, reconcile and effect included). ``GET STATE_PATH`` with a reader's token is
+  ``runner_id`` bound to the credential that sent it (``<host_id>:runner``), and a heartbeat's ``facts.host_id`` to
+  that same host: a host can speak only for itself (R4.4, S1-A N5, on every call that names one, reconcile and effect
+  included; S1-H review SF5). ``GET STATE_PATH`` with a reader's token is
   the snapshot's read path (``snapshot.read_request``: observer or owner; the owner's read is counted for C).
 * **Answers.** 200 ``{"value": ...}`` for every answer the store gives, refusals in the value included. A body the door
   refuses, or a call the store refuses outright, is 400 ``{"error": <fixed code>}``; a token that matches nothing 401;
-  a runner id that is not the credential's 403; a body over the bound 413. Anything else (the store's database
+  a runner id or a facts host id that is not the credential's 403; a body over the bound 413. Anything else (the store's database
   unreachable among it) is 503 ``{"error": "unavailable"}``, which a host reads as a lost connection and retries. The
   host's client (``door.HttpDispatcherV2``) reads only this JSON as the authority's answer (N-D5). No answer ever
   echoes a token or a value from a body.
@@ -193,6 +194,11 @@ def answer(store, hosts, token, body_bytes, content_type) -> tuple:
         return 400, {"error": "runner_protocol_2_required"}      # version 1 keeps the portal's door
     if "runner_id" in body and body["runner_id"] != f"{host_id}:runner":
         return 403, {"error": "runner_not_this_credential"}
+    facts = body.get("facts")
+    if type(facts) is dict and "host_id" in facts and facts["host_id"] != host_id:
+        # The facts name the host its work, events and census are recorded under: only the credential's own host
+        # (S1-H review SF5). A body whose facts lack a host id is refused by the door's own shape check.
+        return 403, {"error": "host_not_this_credential"}
     from core.mc_delegation_dispatcher.store import AuthorityRefused
     try:
         return 200, door.handle(store, body)
