@@ -23,12 +23,15 @@ sys.path.insert(0, str(ROOT))
 from tests.harness_acceptance import p1a, p1a_mac  # noqa: E402
 
 REF = "a" * 40
+BUNDLE = "sha256:" + "b" * 64
 
 
 class FakeProduction:
     """Enough of production for the controller: each ``snapshot()`` is one tick of the simulated authority."""
     environment = "prod"
     gap_threshold_s = 60
+    contact_timeout_s = 90
+    view_bound_s = 120
     answer_channel = "in MiniMoi: say it to MC in the Guild chat"
 
     def __init__(self, **faults):
@@ -39,6 +42,9 @@ class FakeProduction:
         self.kill_armed, self.paused, self.seq, self.code_seq = False, set(), 0, 0
         self.asked = []
         self.notices_ = []
+        self.resolutions = {}
+        self.view_age = faults.get("view_age", 0)
+        self.bundle = "sha256:" + "b" * 64
 
     # ── the records ──
     def _event(self, kind, item=None, generation=None, source="authority", body=None, host=None):
@@ -85,6 +91,8 @@ class FakeProduction:
         if "Mac step kill-at-commit" in prompt:
             self.kill_armed = True
             return "done"
+        if "Ops step" in prompt:
+            return "done"
         if prompt.endswith("(yes/no)"):
             return "yes"
         m = re.search(r"Answer (D-\d+)", prompt)
@@ -96,6 +104,9 @@ class FakeProduction:
     def _answer(self, code):
         did = next(d for d, c in self.codes.items() if c == code)
         d = self.decisions_[did]
+        if d["state"] != "new" and not self.faults.get("double_apply"):
+            return                                    # a duplicate or a stale handle: answered already, nothing again
+        self.resolutions[did] = self.resolutions.get(did, 0) + 1
         words = d["words"]
         sha = hashlib.sha256(words.encode()).hexdigest()
         bound = sha if not self.faults.get("unbound_receipt") else "0" * 64
@@ -123,8 +134,10 @@ class FakeProduction:
                    if d["state"] == "new"]
         work = [{"card_id": c, "A": 1, "R": 0, "C": 0} for c in {r["card_id"] for r in self.items.values() if r["card_id"]}]
         return {"schema": "minimoi.runtime.state.v1", "environment": "prod", "authority": {"sweeper_age_s": 5},
+                "view_age_s": self.view_age,
                 "hosts": [{"host_id": p1a.HOST_ID, "roles": ["worker", "witness"], "availability": "intermittent",
-                           "reachability": reach, "grace_s": 28800}],
+                           "reachability": reach, "grace_s": 28800, "contact_age_s": 5.0,
+                           "bundle_digest": self.bundle}],
                 "items": items, "agents": agents, "notices": list(self.notices_), "decisions_waiting": waiting,
                 "owner_work": work}
 
@@ -292,6 +305,9 @@ class FakeProduction:
     def decision_status(self, did):
         return self.status.get(did)
 
+    def resolved_count(self, did):
+        return self.resolutions.get(did, 0)
+
     def decisions(self, ids=None, item=None):
         rows = [{"request_key": d["request_key"], "state": d["state"], "receipt": d.get("receipt"),
                  "text_sha256": d.get("text_sha256"), "did": did} for did, d in self.decisions_.items()]
@@ -304,7 +320,8 @@ class FakeProduction:
 
 def _run(tmp_path, **faults):
     env = FakeProduction(**faults)
-    run = p1a.Run(env, tmp_path / "evidence", ref=REF, seed=12345, poll_s=0, sleep=lambda s: None)
+    run = p1a.Run(env, tmp_path / "evidence", ref=REF, seed=12345, poll_s=0, sleep=lambda s: None,
+                  expect_bundle=BUNDLE)
     # the fake's time: each wait polls a bounded number of times, and each watch takes a few snapshots
     ticks = iter(range(10**6))
     run.clock = lambda: next(ticks) * 30.0
@@ -329,6 +346,8 @@ def test_a_world_that_behaves_as_p1a_requires_passes_every_check(tmp_path):
                  "end.no_leftover_items", "I-2.card_settled", "I-5.card_settled",
                  "I-5.unknown_generation_unchanged", "I-5.one_solo_decision", "I-5.ended_by_robert",
                  "I-6.one_batched_notice", "I-6.three_receipts_each_bound_to_its_words", "end.DUP-8", "end.DUP-4",
+                 "I-6.each_applied_exactly_once", "I-6.no_fresh_code_and_nothing_resurrected",
+                 "preflight.snapshot_fresh", "preflight.worker_bundle_is_the_release",
                  "end.DUP-6"):
         assert checks[name]["result"] == "pass", (name, checks[name])
     assert checks["end.DUP-1"]["result"] == "not_run"                  # the Mac's effects.jsonl not packed yet
@@ -349,6 +368,7 @@ def test_a_world_that_behaves_as_p1a_requires_passes_every_check(tmp_path):
     ("notice_during_sleep", "I-2.no_notice_during_expected_sleep"),
     ("second_ready_notice", "I-1.one_ready_notice_told"),
     ("unbound_receipt", "I-6.three_receipts_each_bound_to_its_words"),
+    ("double_apply", "I-6.each_applied_exactly_once"),
 ])
 def test_a_world_that_breaks_one_requirement_fails_that_check(tmp_path, fault, check):
     _, _, receipt = _run(tmp_path, **{fault: True})
@@ -369,7 +389,8 @@ def test_a_failed_check_aborts_the_run_unless_robert_says_go_on(tmp_path):
     ran = {json.loads(x)["scenario"] for x in (tmp_path / "evidence" / "timeline.jsonl").read_text().splitlines()}
     assert "I-1" in ran and "I-2" not in ran and "I-6" not in ran
     env = FakeProduction(second_ready_notice=True)
-    go_on = p1a.Run(env, tmp_path / "e2", ref=REF, seed=1, poll_s=0, sleep=lambda s: None, continue_after_fail=True)
+    go_on = p1a.Run(env, tmp_path / "e2", ref=REF, seed=1, poll_s=0, sleep=lambda s: None, continue_after_fail=True,
+                    expect_bundle=BUNDLE)
     ticks = iter(range(10**6))
     go_on.clock = lambda: next(ticks) * 30.0
     out = go_on.run()
@@ -390,16 +411,34 @@ def test_a_preflight_failure_admits_nothing(tmp_path):
             doc["hosts"][0]["reachability"] = "unreachable"
             return doc
     env = Asleep()
-    run = p1a.Run(env, tmp_path / "evidence", ref=REF, seed=1, poll_s=0, sleep=lambda s: None)
+    run = p1a.Run(env, tmp_path / "evidence", ref=REF, seed=1, poll_s=0, sleep=lambda s: None, expect_bundle=BUNDLE)
     receipt = run.run()
     assert "preflight.mac_in_contact" in receipt["failed"] and env.items == {} and not env.asked
+
+
+@pytest.mark.parametrize("fault,check", [({"view_age": 3600}, "preflight.snapshot_fresh"),
+                                         ({"view_age": None}, "preflight.snapshot_fresh"),
+                                         ({"view_age": 3600}, "preflight.mac_in_contact")])
+def test_an_old_published_snapshot_vouches_for_nothing_and_admits_nothing(tmp_path, fault, check):
+    env = FakeProduction(**fault)
+    receipt = p1a.Run(env, tmp_path / "evidence", ref=REF, seed=1, poll_s=0, sleep=lambda s: None,
+                      expect_bundle=BUNDLE).run()
+    assert check in receipt["failed"] and env.items == {} and not env.asked          # Codex's P1-a review S3
+
+
+def test_a_worker_not_on_the_releases_bundle_admits_nothing(tmp_path):
+    env = FakeProduction()
+    receipt = p1a.Run(env, tmp_path / "evidence", ref=REF, seed=1, poll_s=0, sleep=lambda s: None,
+                      expect_bundle="sha256:" + "c" * 64).run()
+    assert "preflight.worker_bundle_is_the_release" in receipt["failed"] and env.items == {}
 
 
 def test_the_run_never_reruns_into_an_evidence_folder_and_needs_roberts_session(tmp_path, capsys):
     (tmp_path / "evidence").mkdir()
     with pytest.raises(p1a.Stop, match="evidence_folder_exists"):
         p1a.Run(FakeProduction(), tmp_path / "evidence", ref=REF)
-    assert p1a.main(["run", "--ref", REF, "--evidence", str(tmp_path / "e2")]) == 2      # no --production-session
+    assert p1a.main(["run", "--ref", REF, "--evidence", str(tmp_path / "e2"),
+                     "--expect-bundle-digest", BUNDLE]) == 2                           # no --production-session
     assert "production session" in capsys.readouterr().err
     assert p1a.selected("I-7") == {"I-7", "I-2"}                    # I-7 runs inside I-2
     with pytest.raises(SystemExit):
@@ -416,27 +455,56 @@ def test_dup8_is_per_environment():
 
 
 # ── the Mac's helpers ──
-def test_kill_at_commit_kills_the_lock_holder_only_once_the_operation_is_committed(tmp_path):
+def test_kill_at_commit_kills_only_the_held_lock_s_worker_once_its_own_item_s_effect_is_committed(tmp_path):
     effects, lock = tmp_path / "effects.jsonl", tmp_path / "mac-prod-1.prod.lock"
-    lock.write_text(json.dumps({"pid": 4242, "since": "x"}))
-    effects.write_text(json.dumps({"operation_id": "op-other", "answer": "committed"}) + "\n")
+    effects.write_text(json.dumps({"operation_id": "op-e1", "item_id": "other-item", "answer": "committed"}) + "\n")
     killed, polls = [], []
+    worker = "Thu Oct 29 15:00:00 2026 /usr/bin/python3 -I /b/run_runner.py run --host-config /h/host.yaml"
 
     def sleep(_):
         polls.append(1)
         if len(polls) == 3:
             with open(effects, "a") as fh:
-                fh.write(json.dumps({"operation_id": "op-e1", "answer": "committed"}) + "\n")
+                fh.write(json.dumps({"operation_id": "op-e1", "item_id": "rid-1", "answer": "committed"}) + "\n")
     ticks = iter(range(10**6))
-    out = p1a_mac.kill_at_commit("op-e1", effects=effects, lock=lock, kill=lambda pid, sig: killed.append((pid, sig)),
+    out = p1a_mac.kill_at_commit("op-e1", "rid-1", effects=effects, lock=lock, held=lambda _: 4242,
+                                 ident=lambda pid: worker, kill=lambda pid, sig: killed.append((pid, sig)),
                                  clock=lambda: next(ticks) * 0.05, sleep=sleep)
     assert out["state"] == "killed" and killed == [(4242, p1a_mac.signal.SIGKILL)] and len(polls) == 3
-    lock.write_text("{}")
-    out = p1a_mac.kill_at_commit("op-e1", effects=effects, lock=lock, kill=lambda *a: killed.append(a))
-    assert out == {"state": "no_worker_pid"} and len(killed) == 1        # no pid: nothing signalled
-    out = p1a_mac.kill_at_commit("op-never", effects=effects, lock=lock, kill=lambda *a: killed.append(a),
-                                 timeout_s=0.2, every_s=0.01)
-    assert out == {"state": "timed_out"} and len(killed) == 1
+    # Any doubt signals nothing (Codex's P1-a review S4): no lock held, another process, or a change at the recheck.
+    pids = iter([4242, 5151])                                              # a new worker took the lock meanwhile
+    for held, ident, state in ((lambda _: None, lambda pid: worker, "no_worker_pid"),
+                               (lambda _: 4242, lambda pid: None, "not_the_worker"),
+                               (lambda _: next(pids), lambda pid: worker, "worker_changed")):
+        out = p1a_mac.kill_at_commit("op-e1", "rid-1", effects=effects, lock=lock, held=held, ident=ident,
+                                     kill=lambda *a: killed.append(a))
+        assert out["state"] == state and len(killed) == 1
+    out = p1a_mac.kill_at_commit("op-e1", "rid-never", effects=effects, lock=lock, held=lambda _: 4242,
+                                 ident=lambda pid: worker, kill=lambda *a: killed.append(a), timeout_s=0.2, every_s=0.01)
+    assert out == {"state": "timed_out"} and len(killed) == 1                # another item's commit is not this one's
+
+
+def test_the_lock_must_be_held_and_the_process_must_be_the_production_worker(tmp_path):
+    import fcntl
+    import os as _os
+    lock = tmp_path / "mac-prod-1.prod.lock"
+    lock.write_text(json.dumps({"pid": 4242, "since": "x"}))
+    assert p1a_mac.holder(lock) is None                                    # a stale file nobody holds names nobody
+    fd = _os.open(lock, _os.O_RDWR)
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        assert p1a_mac.holder(lock) == 4242
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        _os.close(fd)
+
+    class Ps:
+        def __init__(self, line, code=0):
+            self.stdout, self.returncode = line, code
+    good = "Thu Oct 29 15:00:00 2026 /usr/bin/python3 -I /b/run_runner.py run --host-config /h/host.yaml"
+    assert p1a_mac.identity(1, host_config="/h/host.yaml", run=lambda *a, **k: Ps(good)) == good
+    for line in ("Thu /usr/bin/python3 /other/script.py", good.replace("/h/host.yaml", "/x/host.yaml"), ""):
+        assert p1a_mac.identity(1, host_config="/h/host.yaml", run=lambda *a, **k: Ps(line)) is None
 
 
 def test_pack_copies_only_the_workers_own_files(tmp_path):

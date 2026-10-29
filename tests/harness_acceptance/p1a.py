@@ -93,7 +93,7 @@ class Run:
     under ``evidence`` (which must not exist: never rerun into)."""
 
     def __init__(self, env, evidence, *, ref, seed=None, only=None, poll_s=10.0, clock=time.monotonic,
-                 sleep=time.sleep, continue_after_fail=False):
+                 sleep=time.sleep, continue_after_fail=False, expect_bundle=None):
         self.env, self.ev, self.ref = env, Path(evidence), ref
         if self.ev.exists():
             raise Stop("evidence_folder_exists")
@@ -106,6 +106,7 @@ class Run:
         self.started = datetime.now(timezone.utc)
         self.audit_mark = env.audit_mark()
         self.continue_after_fail = continue_after_fail
+        self.expect_bundle = expect_bundle            # the release's worker bundle digest (install.json), or None
 
     # ── evidence ──
     def _append(self, name, doc):
@@ -181,6 +182,15 @@ class Run:
         if not isinstance(said, str) or said.strip().lower() != "done":
             raise Stop(f"mac_step_skipped:{step}")
         self.log("mac", f"{step} done")
+        return time.time()
+
+    def ops_step(self, step, instruction):
+        """A step an operator takes on EC2 (with Robert present); the controller waits for "done"."""
+        self.log("ops", step, instruction=instruction)
+        said = self.env.ask(f"[{self.scenario}] Ops step {step}: {instruction}\nType done when it is done (or skip).")
+        if not isinstance(said, str) or said.strip().lower() != "done":
+            raise Stop(f"ops_step_skipped:{step}")
+        self.log("ops", f"{step} done")
         return time.time()
 
     def robert_received(self, what) -> bool:
@@ -263,14 +273,28 @@ class Run:
                    {"schema": doc.get("schema"), "unknowns": doc.get("unknowns")})
         self.check("preflight.environment_prod", doc.get("environment") == self.env.environment,
                    {"environment": doc.get("environment")})
+        # The snapshot is a published file: its own age first, so an old file can't vouch for anything (Codex's P1-a
+        # review S3); every age below is as of now (the file's age added).
+        view = doc.get("view_age_s")
+        fresh = isinstance(view, (int, float)) and -60 <= view <= self.env.view_bound_s
+        self.check("preflight.snapshot_fresh", fresh, {"view_age_s": view, "bound_s": self.env.view_bound_s})
         age = auth.get("sweeper_age_s")
-        self.check("preflight.sweeper_fresh", isinstance(age, (int, float)) and age <= self.env.gap_threshold_s,
-                   {"sweeper_age_s": age})
+        now_age = age + view if fresh and isinstance(age, (int, float)) else None
+        self.check("preflight.sweeper_fresh", now_age is not None and now_age <= self.env.gap_threshold_s,
+                   {"sweeper_age_s": age, "as_of_now_s": now_age})
         host = next((h for h in doc.get("hosts") or [] if h.get("host_id") == HOST_ID), None)
-        self.check("preflight.mac_in_contact", bool(host) and host.get("reachability") == "reachable",
-                   {"host": host and {k: host.get(k) for k in ("reachability", "roles", "availability", "grace_s")}})
+        contact = None if not (fresh and host and isinstance(host.get("contact_age_s"), (int, float))) \
+            else host["contact_age_s"] + view
+        self.check("preflight.mac_in_contact", bool(host) and host.get("reachability") == "reachable"
+                   and contact is not None and contact <= self.env.contact_timeout_s,
+                   {"host": host and {k: host.get(k) for k in ("reachability", "roles", "availability", "grace_s")},
+                    "contact_age_now_s": contact})
         self.check("preflight.mac_roles", bool(host) and set(host.get("roles") or []) == {"worker", "witness"}
                    and host.get("availability") == "intermittent", {})
+        # The worker runs the release's bundle (a version 2 host: the snapshot lists only those), in this environment.
+        self.check("preflight.worker_bundle_is_the_release", self.expect_bundle is not None and bool(host)
+                   and host.get("bundle_digest") == self.expect_bundle,
+                   {"running": host and host.get("bundle_digest"), "expected": self.expect_bundle})
 
     def finish(self):
         try:
@@ -472,7 +496,7 @@ def i5(run):
     rid = run.item_id(job)
     op = run.env.effect_operation_id(rid, "e1")
     run.mac_step("kill-at-commit", "start this now, on the Mac (the item holds 3 minutes at s1 before its effect): "
-                                   f"python3 tests/harness_acceptance/p1a_mac.py kill-at-commit --op {op} "
+                                   f"python3 tests/harness_acceptance/p1a_mac.py kill-at-commit --op {op} --item {rid} "
                                    "(it kills the worker the moment the sink commits e1; launchd restarts it)")
     row = run.wait_state(job, ("unknown",), 900)
     run.check("I-5.unknown_generation_unchanged", bool(row) and row["generation"] == 1,
@@ -518,15 +542,31 @@ def i6(run):
         f"one message listing {', '.join(codes or [])}"), {"codes": codes})
     if not codes:
         raise Stop("no_codes")
-    for code in codes:
+    # Codex's P1 brief review B4 (independent review SF7): the answers go in with a partial application and a restart
+    # between them, then a duplicate answer and an answer on a stale handle; each decision is applied exactly once, and
+    # none is resurrected or given a fresh code.
+    for code in codes[:2]:
         run.answer(code, f"approve {code}", run.env.answer_channel)
+    run.wait(lambda: all((run.env.decision_status(i) or {}).get("action") == "authorize_review" for i in ids[:2]),
+             600, label="i6-partial")
+    run.ops_step("restart-supervisor", "on EC2: docker restart minimoi-supervisor (a restart after a partial "
+                                       "application)")
+    run.answer(codes[2], f"approve {codes[2]}", run.env.answer_channel)
     done = run.wait(lambda: all((run.env.decision_status(i) or {}).get("action") == "authorize_review" for i in ids),
                     600, label="i6-applied")
+    run.answer(codes[0], f"approve {codes[0]}", "again, the same answer, as a duplicate delivery would")
+    run.answer(codes[1], f"no {codes[1]}", "on the old batched Telegram message, a stale handle: reply “no” to it")
+    run.watch(60, label="i6-after-duplicates")
     rows = run.env.decisions(ids=ids)
     bound = [r for r in rows if r.get("state") == "approved"
              and (r.get("receipt") or {}).get("decision_sha256") == r.get("text_sha256")]
     run.check("I-6.three_receipts_each_bound_to_its_words", bool(done) and len(bound) == 3
               and len({r["text_sha256"] for r in bound}) == 3, {"approved_bound": len(bound)}, n=len(rows))
+    resolved = {i: run.env.resolved_count(i) for i in ids}
+    run.check("I-6.each_applied_exactly_once", set(resolved.values()) == {1}, {"resolutions": resolved})
+    run.check("I-6.no_fresh_code_and_nothing_resurrected", not [r for r in rows if ".r" in r.get("request_key", "")]
+              and all((run.env.decision_status(i) or {}).get("action") == "authorize_review" for i in ids),
+              {"rows": [(r.get("request_key"), r.get("state")) for r in rows]})
     cards = [j.rsplit(".", 1)[0] for j in jobs]
     finished = run.wait(lambda: all(run.state(f"{c}.review") == "completed" for c in cards), 1800, label="i6-done")
     run.check("I-6.cards_went_on_to_ready", bool(finished), {"reviews": [run.state(f"{c}.review") for c in cards]})
@@ -536,7 +576,7 @@ def witness_delivery(run):
     """Production's two witnesses deliver, proved without taking production's authority down (Codex's P1 brief
     review, S3): each sends one probe notice through its installed configuration (its own notifier, its references),
     and Robert says whether it reached his Telegram. An outage itself is gate D's, on staging."""
-    run.mac_step("ec2-witness-probe", "on EC2: docker exec minimoi-runtime-witness python -m "
+    run.ops_step("ec2-witness-probe", "on EC2: docker exec minimoi-runtime-witness python -m "
                                       "core.mc_delegation_runner.witness probe")
     run.check("W.ec2_witness_delivers", run.robert_received("the EC2 witness's probe"), {})
     run.mac_step("mac-witness-probe", "on the Mac: /usr/bin/python3 -I ~/minimoi-runtime/prod/bundle/run_runner.py "
@@ -584,6 +624,8 @@ class ProdEnv:
         self.sup = Store(self._connect)
         self.state_file = state
         self.gap_threshold_s = self.authority.sweeper.gap_threshold_s
+        self.contact_timeout_s = self.authority.hosts.contact_timeout_s
+        self.view_bound_s = 120                 # MINIMOI_RUNTIME_VIEW_BOUND_S in the runtime layer
         self.answer_channel = ("in MiniMoi: say it to MC in the Guild chat" if
                                environ.get("MINIMOI_RUNTIME_TELEGRAM_ANSWERS") != "1"
                                else "a reply to its Telegram message")
@@ -674,6 +716,9 @@ class ProdEnv:
     def decision_status(self, did):
         return self.store.decisions_status([did]).get(did)
 
+    def resolved_count(self, did):
+        return len([e for e in self.events(kind="decision.resolved") if (e["body"] or {}).get("decision_id") == did])
+
     def decision_code(self, did):
         rows = self._sql("SELECT id FROM guild.supervision_decisions WHERE request_key=%s ORDER BY id DESC LIMIT 1",
                          ("rt-" + did,))
@@ -713,10 +758,12 @@ def main(argv=None) -> int:
     r.add_argument("--evidence", required=True, type=Path)
     r.add_argument("--only", help="comma list of I-1..I-7")
     r.add_argument("--continue-after-fail", action="store_true", help="go on to the next scenario after a failure")
+    r.add_argument("--expect-bundle-digest", required=True,
+                   help="the Mac worker's bundle digest from its install.json (sha256:...): checked before any admission")
     r.add_argument("--production-session", action="store_true",
                    help="required: says this is Robert's integrated test session in production, on his word")
     args = p.parse_args(argv)
-    if not args.production_session:
+    if not args.production_session or not args.expect_bundle_digest.startswith("sha256:"):
         print("refused: the integrated test runs only in Robert's production session (--production-session)",
               file=sys.stderr)
         return 2
@@ -726,7 +773,7 @@ def main(argv=None) -> int:
     env = ProdEnv(os.environ)
     env.ref = args.ref
     out = Run(env, args.evidence, ref=args.ref, only=selected(args.only),
-              continue_after_fail=args.continue_after_fail).run()
+              continue_after_fail=args.continue_after_fail, expect_bundle=args.expect_bundle_digest).run()
     print(json.dumps(out, sort_keys=True))
     return 0 if not out["failed"] else 1
 
