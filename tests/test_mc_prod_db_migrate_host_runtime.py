@@ -87,6 +87,8 @@ def test_a_plain_run_never_applies_002_or_003(sandbox):
     assert "core/mc_delegation_dispatcher/sql/001_delegations.sql" in applied
     assert not [c for c in calls if any("queue_seq" in a for a in c)]                   # no host runtime check either
     assert "host runtime" not in proc.stdout
+    (call,) = [c for c in calls if "--single-transaction" in c]
+    assert not [a for a in call if "lock_timeout" in a]                                 # a plain run's transaction as before
 
 
 def test_the_opt_in_adds_002_then_003_last_and_checks_their_objects(sandbox):
@@ -99,6 +101,17 @@ def test_the_opt_in_adds_002_then_003_last_and_checks_their_objects(sandbox):
     assert [c for c in calls if any("queue_seq" in a for a in c)]                      # the objects are checked
     assert "host runtime opt-in" in proc.stdout and "002 and 003 objects present" in proc.stdout
     assert "the one transaction took" in proc.stdout
+    (call,) = [c for c in calls if "--single-transaction" in c]
+    role = call.index("SET ROLE minimoi")
+    assert call[role + 1:role + 3] == ["-c", "SET LOCAL lock_timeout = '5s'"]          # every file's wait bounded (SF1)
+    assert call.index("SET LOCAL lock_timeout = '5s'") < call.index("-f")
+
+
+def test_the_version_names_a_copy_that_knows_the_opt_in(sandbox):
+    proc, calls = _run(sandbox, "version")
+    assert (proc.returncode, proc.stdout.strip(), calls) == (0, "mc-migrate host-runtime-1", [])
+    proc, _ = _run(sandbox, "version", "--host-runtime")
+    assert proc.returncode == 2
 
 
 @pytest.mark.parametrize("args", [("rehearse", "--host"), ("rehearse", "--host-runtime", "x"), ("nope",)])

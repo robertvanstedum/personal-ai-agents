@@ -11,15 +11,19 @@
 #                                    dispatcher 002 (protocol version 2), then supervision 003 (runtime decisions, contacts,
 #                                    watch, outbox). Only by this explicit opt-in (host runtime P1-a, on Robert's word):
 #                                    a plain run, which operations makes for other teams' migrations, never applies them.
-#                                    Lock waits: 002 and 003 each say SET LOCAL lock_timeout = '5s'. With their BEGIN/COMMIT
-#                                    stripped below, the first SET LOCAL (002's) holds from there to the end of the ONE
-#                                    transaction, so it bounds the waits of 002 and 003 only (they are last; nothing after
-#                                    them). It does not bound the earlier files' waits, and every lock those took is held
-#                                    while 002 waits. On LockNotAvailable the whole transaction rolls back: nothing changed,
-#                                    run it again (a fresh backup is taken each time). A timeout bounds the wait, not
+#                                    Lock waits: with --host-runtime the one transaction opens with SET LOCAL
+#                                    lock_timeout = '5s' (right after SET ROLE), so every file's lock wait is bounded, the
+#                                    38 earlier ones' too (they re-run ALTER TABLE ... IF NOT EXISTS, which takes its lock
+#                                    even with nothing to do); 002 and 003 also say it themselves. On LockNotAvailable the
+#                                    whole transaction rolls back: nothing changed, run it again (a fresh backup is taken
+#                                    each time). A plain run's transaction is unchanged. A timeout bounds the wait, not
 #                                    002's rewrite of guild.mc_delegations (queue_seq): the rehearsal prints how long the
 #                                    whole apply took on the production-shaped copy. After an --host-runtime run the
 #                                    script checks that every 002 and 003 object exists.
+#   mc_prod_db_migrate.sh version     prints this script's version; a copy older than P1-a has no `version` and prints
+#                                    its usage instead (it would ignore --host-runtime: never run that copy with it). The
+#                                    script and the SQL reach /opt/minimoi only through an MC image release (mc-agent-v*,
+#                                    deploy-mc-agent.yml installs /opt/minimoi/scripts/ and /opt/minimoi/mc-migrations).
 #
 # The migration files are shipped beside this script in $DIR (MIGRATIONS lists them in dependency order; each is written
 # to be safe to re-run). They run as the role that owns the existing Guild tables, so new tables have the same owner.
@@ -74,6 +78,8 @@ HOST_RUNTIME_MIGRATIONS=(
   core/mc_delegation_dispatcher/sql/002_host_runtime_v2.sql
   core/supervision/sql/003_runtime_decisions_and_watch.sql
 )
+VERSION="mc-migrate host-runtime-1"
+if [[ "${1:-}" == version && $# -eq 1 ]]; then echo "$VERSION"; exit 0; fi
 HOST_RUNTIME=0
 case "${2:-}" in
   "") ;;
@@ -95,6 +101,8 @@ apply_all() {  # container $1: every migration, one transaction, as the Guild ow
   local c="$1" role; role=$(owner_of "$c")
   [[ "$role" =~ ^[a-z_][a-z0-9_]{0,62}$ ]] || die "cannot read the Guild owner role"
   local args=(-U postgres -d "$DB" -v ON_ERROR_STOP=1 --single-transaction -q -c "SET ROLE $role")
+  # --host-runtime: every lock wait in the one transaction is bounded, not only 002's and 003's (P1-a review SF1).
+  if [[ "$HOST_RUNTIME" == "1" ]]; then args+=(-c "SET LOCAL lock_timeout = '5s'"); fi
   for f in "${MIGRATIONS[@]}"; do args+=(-f "/mc-migrations/$f"); done
   docker exec "$c" rm -rf /mc-migrations
   docker cp "$DIR" "$c:/mc-migrations"
@@ -174,5 +182,5 @@ case "${1:-}" in
     timed_apply "$PG"
     log "prod now has $(tables "$PG") guild tables"
     ;;
-  *) echo "usage: $0 rehearse|apply [--host-runtime]" >&2; exit 2;;
+  *) echo "usage: $0 rehearse|apply [--host-runtime] | version" >&2; exit 2;;
 esac
