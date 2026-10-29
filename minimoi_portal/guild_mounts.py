@@ -135,17 +135,22 @@ def mount_guild_next(app, *, environ, owner_guard, current_user, queue_path, ope
     try:
         from minimoi_portal.guild_ui import register_guild_ui
         from minimoi_portal.guild_ui.mc import backend_from_env, stream_enabled, turns_enabled
+        from minimoi_portal.guild_ui.mc.cos import operations_from_env
         from minimoi_portal.guild_ui.services import build_services
         # MINIMOI_GUILD_MC (off | stub | openclaw | grok); never raises, and an
         # MC problem never fails this mount (it shows "unavailable").
         mc = backend_from_env(environ)
+        # Owner notes and reminders are the Chief of Staff's whichever runtime MC chats through (A4-3): her operation
+        # client from this mount's COS_BACKEND, None without it. On the production mount that is production_environ's
+        # environment, so the "mc" chat gets it only where CoS is configured.
+        cos_operations = operations_from_env(environ)
         mc_turns = turns_enabled(environ)
         mc_stream = stream_enabled(environ)
         log.info("guild mount: Master Craftsman backend %s, turns %s, streaming %s", mc.kind,
                  "on" if mc_turns else "off", "on" if mc_stream and mc.supports_streaming else "off")
         services = build_services(queue_path=queue_path, operations_status_url=operations_status_url,
                                   records_db=records_db, database_url=database_url, audit=audit, mc=mc,
-                                  mc_turns=mc_turns, mc_stream=mc_stream)
+                                  mc_turns=mc_turns, mc_stream=mc_stream, cos_operations=cos_operations)
         register_guild_ui(app, owner_guard=owner_guard, current_user=current_user, url_prefix=NEXT_PREFIX,
                           blueprint_name=NEXT_NAME, services=services, base_url=base_url, feature_environ=environ)
         log.info("guild mount: /guild-next registered")

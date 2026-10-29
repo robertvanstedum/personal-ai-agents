@@ -10,7 +10,8 @@ under his capped key, voice-summary-mc (Spec 165 §5.4), never his agent runtime
 A consult is MC's typed turn (api._ledger_turn + api._answer_turn, what POST /mc/turns runs after its prelude) on the
 owner's own latest transcript item, kept first as his note labelled voice, exactly as POST /notes keeps a typed one. The
 model's arguments are never the turn text. No authority a typed note lacks: same owner, CSRF, on-the-record,
-conversation, turn ledger and receipts. A note is spoken as saved only on its platform receipt. Not the managed sideband:
+conversation, turn ledger and receipts. A note is spoken as saved only on its platform receipt: the Chief of Staff's, whichever
+runtime MC chats through (owner_actions.cos_for, A4-3). Not the managed sideband:
 mc_managed_realtime.install and MANAGED_VOICE_CHANNEL are not used here. MC's realtime operating rules (INSTRUCTIONS)
 live here, and the managed host reads them from here, so the managed code can be retired without touching this path.
 

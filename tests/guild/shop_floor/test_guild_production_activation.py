@@ -286,6 +286,37 @@ def test_production_chat_mc_uses_the_mc_container_relay_only(load_portal, monkey
     assert services.mc.kind == "openclaw" and services.mc_turns is True and services.mc_stream is True
 
 
+@pytest.mark.parametrize("cos_backend", ["http://minimoi-cos-scheduler:8769", None])
+def test_production_chat_mc_gets_the_cos_note_client_only_where_cos_is_configured(load_portal, monkeypatch, cos_backend):
+    """A4-3: with MC in his own container, owner notes and reminders still go to the Chief of Staff, through her own
+    operation client from production_environ's COS_BACKEND. No COS_BACKEND: none, so notes stay UNAVAILABLE as today."""
+    from minimoi_portal.guild_ui.owner_actions import cos_for
+    monkeypatch.setenv("MINIMOI_GUILD_PRODUCTION", "1")
+    monkeypatch.setenv("MINIMOI_GUILD_CHAT", "mc")
+    monkeypatch.setenv("MC_RUNTIME_URL", MC_RELAY)
+    monkeypatch.setenv("MC_RUNTIME_TOKEN", "synthetic-caller-token")
+    if cos_backend is None:
+        monkeypatch.delenv("COS_BACKEND", raising=False)
+    else:
+        monkeypatch.setenv("COS_BACKEND", cos_backend)
+    services = load_portal(next_flag="1", base_url=PROD).app.extensions["guild_ui_next"]["services"]
+    assert services.mc.kind == "openclaw"
+    if cos_backend is None:
+        assert services.cos_operations is None and cos_for(services) is None
+    else:
+        assert cos_for(services) is services.cos_operations and services.cos_operations.base_url == cos_backend
+        assert services.cos_operations is not services.mc and services.cos_operations.kind == "cos"
+
+
+def test_production_chat_cos_keeps_its_own_backend_for_notes(load_portal, monkeypatch):
+    from minimoi_portal.guild_ui.owner_actions import cos_for
+    monkeypatch.setenv("MINIMOI_GUILD_PRODUCTION", "1")
+    monkeypatch.setenv("COS_BACKEND", "http://cos-scheduler:8769")
+    monkeypatch.setenv("MINIMOI_GUILD_CHAT", "cos")
+    services = load_portal(next_flag="1", base_url=PROD).app.extensions["guild_ui_next"]["services"]
+    assert services.mc.kind == "cos" and cos_for(services) is services.mc
+
+
 @pytest.mark.parametrize("url,token", [
     ("http://host.lima.internal:18796/v1", "t"),          # the dev native relay
     ("http://mc-relay:8790/v1/../x", "t"),

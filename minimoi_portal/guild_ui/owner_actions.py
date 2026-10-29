@@ -256,6 +256,17 @@ def reminders_enabled() -> bool:
         return False
 
 
+def cos_for(services):
+    """The Chief of Staff's operation client for ``execute`` (A4-3): notes and reminders are hers whichever runtime Master
+    Craftsman chats through. MC on CoS: that backend, exactly as before. MC on another runtime (OpenClaw, on Dev and in
+    his own production container): the services' own CoS client, built from COS_BACKEND (mc/cos.py
+    operations_from_env), or None without one. execute then answers UNAVAILABLE as it always has; nothing else changes.
+    Typed and spoken notes both come here (api._owner_action_command), so the same /note operation, receipt and
+    idempotency apply on either runtime."""
+    mc = getattr(services, 'mc', None)
+    return mc if getattr(mc, 'kind', None) == 'cos' else getattr(services, 'cos_operations', None)
+
+
 def execute(text, *, cos, conversation, principal, turn_key, now=None):
     """Only the caller's authenticated, kept owner turn may enter. Returns None for ordinary chat.
 

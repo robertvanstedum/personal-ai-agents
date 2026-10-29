@@ -1063,7 +1063,9 @@ def _owner_action_command(found):
     """Owner notes and reminders from the kept owner text, before any model (owner_actions).
 
     Never falls through to the model with attached files or topic context: that
-    text would reach CoS with context appended, so it is refused instead."""
+    text would reach CoS with context appended, so it is refused instead. The
+    operation is the Chief of Staff's whichever runtime MC chats through
+    (owner_actions.cos_for, A4-3), typed and spoken alike."""
     from datetime import datetime
     from . import owner_actions
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
@@ -1079,7 +1081,7 @@ def _owner_action_command(found):
     if attachment_ids or getattr(g, "topic_context", None):
         return jsonify(status='answered', backend_kind='platform', reply_note=None, message=owner_actions.WITH_CONTEXT,
                        operation={'type': op_type, 'saved': False}, history_saved=False), 200
-    result = owner_actions.execute(text, cos=services.mc, conversation=floor, principal=principal,
+    result = owner_actions.execute(text, cos=owner_actions.cos_for(services), conversation=floor, principal=principal,
                                    turn_key=note_id, now=kept_at)
     return jsonify(status='answered', backend_kind='platform', reply_note=result.get('reply_note'),
                    message=result['reply'], operation=result['operation'],
