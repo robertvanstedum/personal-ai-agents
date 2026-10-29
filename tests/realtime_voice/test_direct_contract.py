@@ -1,8 +1,10 @@
 """The direct-voice contract (Spec 165 v0.2 §5, as the A1 fix round built it), run over every adapter: the test adapter of
 test_direct_host.py (an in-memory store, not the Guild) and MC's real adapter on the synthetic Guild mount of
-test_mc_voice_direct.py. Spec 165 §12.1's no-copy by architecture, with tests/realtime_voice/test_no_copy.py: whatever a host
-supplies, the core's behaviour is the same (review R1 P3-9, R2 S5). A2 adds the CoS adapter to HOSTS. No provider, no
-Keychain, no microphone, no network."""
+test_mc_voice_direct.py, and (A2) Chief of Staff's real adapter and file store (tests/cos/cos_voice_rig.py, a card copy
+that also names a Grok voice, so the eligibility case runs on xAI too; her real card refuses xAI until the audition, which
+tests/cos/test_cos_direct_voice.py checks). Spec 165 §12.1's no-copy by architecture, with tests/realtime_voice/test_no_copy.py:
+whatever a host supplies, the core's behaviour is the same (review R1 P3-9, R2 S5). No provider, no Keychain, no microphone,
+no network."""
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,12 +12,14 @@ from types import SimpleNamespace
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "guild" / "shop_floor"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "cos"))
 
+import cos_voice_rig as cos  # noqa: E402
 import test_direct_host as fake  # noqa: E402
 import test_mc_voice_direct as mc  # noqa: E402
 from test_direct_host import rig  # noqa: E402,F401  (the fake host's fixture, for getfixturevalue)
 
-HOSTS = ("test adapter", "MC")
+HOSTS = ("test adapter", "MC", "CoS")
 
 
 def driver(kind, request, monkeypatch, tmp_path):
@@ -23,14 +27,22 @@ def driver(kind, request, monkeypatch, tmp_path):
     if kind == "test adapter":
         r = request.getfixturevalue("rig")
         return SimpleNamespace(
-            kind=kind, base=fake.BASE, headers=fake.OWNER, cid="owner",
+            kind=kind, base=fake.BASE, headers=fake.OWNER, cid="owner", persona="test_person", short="TP",
             start=lambda: fake.start(r), turns=lambda: len(r.host.turns), effects=lambda: len(r.host.turns),
             summaries=lambda: [q["json"] for q in r.gateway.requests],
             event=lambda role, item, text, offset=1: fake.turn(r, role, item, text, offset),
             client=r.client, r=r)
+    if kind == "CoS":
+        r = cos.build(monkeypatch, tmp_path, voices={"openai": "cedar", "xai": "ara"})
+        return SimpleNamespace(
+            kind=kind, base=cos.BASE, headers=cos.OWNER, cid="owner", persona="chief_of_staff", short="CoS",
+            start=lambda: cos.start(r), turns=lambda: len(r.turns), effects=lambda: cos.effects(r),
+            summaries=lambda: [q["json"] for q in r.gateway.requests],
+            event=lambda role, item, text, offset=1: cos.event(r, role, item, text, offset),
+            client=r.client, r=r)
     r = mc.build(monkeypatch, tmp_path, dict(mc.ON))
     return SimpleNamespace(
-        kind=kind, base=mc.BASE, headers=r.headers, cid=mc.CID,
+        kind=kind, base=mc.BASE, headers=r.headers, cid=mc.CID, persona="master_craftsman", short="MC",
         start=lambda: mc.start(r)["voice_session_id"], turns=lambda: len(r.turns),
         effects=lambda: len(r.turns) + len(r.cos.calls),                  # MC's turns and the notes his platform saved
         summaries=lambda: [p.request for p in r.cos.prompts],
@@ -173,13 +185,12 @@ def test_each_host_gives_the_models_tools_only_where_the_provider_is_eligible(ho
         return {"provider": "xai", "ephemeral_token": "xai_synthetic", "expires_after_seconds": 300, "model": "grok-voice-latest",
                 "session_config": {}}
     monkeypatch.setattr("core.realtime_voice.bootstrap.xai_voice.mint_ephemeral_credential", xai)
-    persona = "test_person" if h.kind == "test adapter" else "master_craftsman"
     answer = h.client.post(h.base + "/bootstrap", headers=h.headers,
-                           json={"persona": persona, "provider": provider, "conversation_id": h.cid})
+                           json={"persona": h.persona, "provider": provider, "conversation_id": h.cid})
     assert answer.status_code == 200, answer.get_json()
     body = answer.get_json()
     session = minted[-1] if provider == "xai" else h.r.mints[-1]
-    short = "TP" if h.kind == "test adapter" else "MC"
+    short = h.short
     if provider == "openai":
         assert body["page_responses"] is True and session["turn_detection"]["create_response"] is False
         assert [t["name"] for t in session["tools"]] == ["consult", "save_note"]

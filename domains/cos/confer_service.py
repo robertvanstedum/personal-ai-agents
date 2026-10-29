@@ -79,6 +79,11 @@ class ConferTurnRequest:
     channel: str
     conversation_id: str = "owner"
     request_id: str | None = None
+    # Optional (Spec 165 v0.3 §6.4: outcomes follow the dispatch boundary): called with "reset", "note", "reminder" or
+    # "runtime" just before the turn hands its work to that operation, so a caller knows whether anything was
+    # dispatched when the turn raises. It may raise to stop the turn there, before anything is dispatched. None (every
+    # caller but CoS's voice): nothing changes.
+    on_dispatch: Callable[[str], None] | None = None
 
 
 @dataclass(frozen=True)
@@ -185,6 +190,21 @@ def parse_explicit_reminder(text: str) -> tuple[datetime, str] | None:
     return due, reminder_text
 
 
+def slash_command(text: str) -> str | None:
+    """The command ``text`` is to this service, read as handle() reads it (stripped): "new" (it resets the agent runtime's
+    session), "note" (/note), "remind" (/remind), or "slash" for any other text beginning with "/"; None for ordinary words
+    (including the spoken note forms, "save a note that …"). CoS's voice refuses every one of them before dispatch: "Do that
+    in writing." (Spec 165 v0.3 §6.4)."""
+    stripped = text.strip() if isinstance(text, str) else ""
+    if stripped.casefold() == "/new":
+        return "new"
+    if _SLASH_NOTE_PREFIX.match(stripped) is not None:
+        return "note"
+    if _SLASH_REMIND_PREFIX.match(stripped) is not None:
+        return "remind"
+    return "slash" if stripped.startswith("/") else None
+
+
 def normalize_request_id(request_id: str | None) -> str:
     """Return a canonical operation UUID, generating one when absent."""
     if request_id is None or not str(request_id).strip():
@@ -231,9 +251,11 @@ class ConferTurnService:
             raise InvalidConferTurn(f"Unknown Confer channel: {request.channel!r}")
 
         conversation_id = request.conversation_id.strip() or "owner"
+        crossing = request.on_dispatch or (lambda _operation: None)
         if text.casefold() == "/new":
             if self._reset_conversation is None:
                 raise ConferOperationFailed("COS session reset is unavailable.")
+            crossing("reset")
             if not self._reset_conversation(conversation_id):
                 raise ConferOperationFailed("COS session was not reset.")
             self._increment_chat()
@@ -259,6 +281,7 @@ class ConferTurnService:
             if self._save_note is None:
                 raise ConferOperationFailed("COS note saving is unavailable.")
             operation_id = normalize_request_id(request.request_id)
+            crossing("note")
             outcome = self._save_note(note_text, operation_id)
             if not outcome.get("saved"):
                 raise ConferOperationFailed("COS note was not saved.")
@@ -288,6 +311,7 @@ class ConferTurnService:
                 raise ConferOperationFailed("COS reminders are unavailable.")
             due, reminder_text = reminder
             operation_id = normalize_request_id(request.request_id)
+            crossing("reminder")
             try:
                 outcome = self._save_reminder(due, reminder_text, operation_id)
             except ReminderRefused as exc:
@@ -366,6 +390,7 @@ class ConferTurnService:
             ).strip()
         tool_policy = {"observation": True, "mutation": False}
         timing.emit("native_start")
+        crossing("runtime")
         try:
             reply = self._call_backend(text, context, tool_policy)
         except Exception:

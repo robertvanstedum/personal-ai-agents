@@ -9,7 +9,8 @@
    summary prompt's delimiters stay the core's alone.
 2. The field-literal rule is gone: a store that writes records with the page's event fields (A2's CoS JSONL store) is a
    store, not a copy.
-3. tests/realtime_voice/test_direct_contract.py runs the shared contract over both adapters (the test adapter and MC's).
+3. tests/realtime_voice/test_direct_contract.py runs the shared contract over every adapter (the test adapter, MC's and,
+   since A2, Chief of Staff's).
 4. The scan covers every directory a host could live in, prototype-lab, _NewDomains and static included.
 
 The browser side: a host page or script may not wire the model's function calls or post an owner transcript item itself
@@ -146,6 +147,17 @@ def test_mcs_adapter_and_store_are_hosts_that_import_the_core_and_define_only_it
     names = aliases(ast.parse(source))
     assert names["DirectVoiceAdapter"] == f"{DIRECT}.DirectVoiceAdapter" and names["install_direct_voice"].startswith(DIRECT)
     assert python_copies(source) == []
+
+
+def test_cos_adapter_and_store_are_hosts_that_import_the_core_and_define_only_its_hooks():
+    """A2: Chief of Staff's adapter and file store are read the same way as MC's."""
+    for module in ("domains/cos/direct_voice.py", "domains/cos/voice_store.py"):
+        source = (ROOT / module).read_text()
+        names = aliases(ast.parse(source))
+        assert any(path.startswith(DIRECT) for path in names.values()), module
+        assert python_copies(source) == [], module
+    names = aliases(ast.parse((ROOT / "domains/cos/direct_voice.py").read_text()))
+    assert names["DirectVoiceAdapter"] == f"{DIRECT}.DirectVoiceAdapter" and names["install_direct_voice"].startswith(DIRECT)
 
 
 def private_reads(text):
