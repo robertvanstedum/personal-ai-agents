@@ -283,9 +283,12 @@ def _state(words) -> int:
         print(json.dumps(doc, sort_keys=True))
     else:
         h = (doc.get("hosts") or [{}])[0]
+        blocked = [i for i in doc.get("items", []) if i.get("blocked")]
         print(f"{host.host_id} ({host.environment}), host-local view, {doc.get('view_age_s')} s old: "
               f"announced {h.get('announced')}, authority reachable {h.get('authority_reachable')}, "
-              f"{len(doc.get('items', []))} owned item(s)")
+              f"{len(doc.get('items', []))} owned item(s)"
+              + "".join(f"; {i['task']} blocked ({i['blocked']['code']}) since {i['blocked']['since']}, "
+                        "cleared by an operator restart" for i in blocked))
     return 0
 
 
@@ -332,6 +335,11 @@ def _doctor(words) -> int:
     h = (state.get("hosts") or [{}])[0]
     out["contact"] = {"last_contact_at": h.get("last_contact_at"), "view_age_s": state.get("view_age_s"),
                       "authority_reachable": h.get("authority_reachable")}
+    # A blocked task (an authority error on a known outcome, or on reconcile): the host claims nothing until an
+    # operator restarts the runtime, which replays its pending records (N-E3).
+    out["blocked"] = [{"task": i.get("task"), "item_id": i.get("item_id"), **i["blocked"]}
+                      for i in state.get("items", []) if i.get("blocked")]
+    problems.extend(f"task_blocked:{b['task']}" for b in out["blocked"])
     try:
         digest, files = host_mod.tree_digest(host.bundle_root)
         out["bundle"] = {"root": str(host.bundle_root), "digest": digest, "files": files}

@@ -590,9 +590,21 @@ class _Child:
                 return True
             # macOS also reports a stopped (frozen) child here, whatever the options: only an exit counts.
             return got is not None and got.si_code in (os.CLD_EXITED, os.CLD_KILLED, os.CLD_DUMPED)
-        out = subprocess.run(["ps", "-o", "stat=", "-p", str(self.proc.pid)], capture_output=True, text=True,
-                             timeout=5, env={"PATH": "/bin:/usr/bin", "LC_ALL": "C"}).stdout.strip()
-        return not out or out.startswith("Z")
+        # Python 3.9 has no waitid: ps tells a zombie (exited, unreaped) from a live child. If ps itself fails, the
+        # answer is "not yet" and the next tick asks again; this runtime's own unreaped child never needs ps to be
+        # signalled or reaped (verified, N-E2).
+        try:
+            got = subprocess.run(["ps", "-o", "stat=", "-p", str(self.proc.pid)], capture_output=True, text=True,
+                                 timeout=5, env={"PATH": "/bin:/usr/bin", "LC_ALL": "C"})
+        except (OSError, subprocess.SubprocessError):
+            return False
+        out = got.stdout.strip()
+        if got.returncode == 0 and out:
+            return out.startswith("Z")
+        if got.returncode == 1 and not out:          # no such pid: this unreaped child was reaped elsewhere
+            self.lost = True
+            return True
+        return False
 
     def alive(self) -> bool:
         return not self.exited()
@@ -603,7 +615,8 @@ class _Child:
         leader (it can change neither its group nor its session), and no other process can take its pid as a group
         id while it is unreaped, a zombie included, so a signal to that group reaches this child's group and no one
         else's (review N1). If anything else reaped it (ECHILD), it is lost and never signalled. Without waitid
-        (Python 3.9) the identity is checked by ps, as for orphans of an earlier process (_freeze_task)."""
+        (Python 3.9) the same rule holds without ps, so a failed ps never leaves this child unreaped (N-E2); orphans
+        of an earlier process are still verified by ps (_freeze_task)."""
         if self.proc is None or self.proc.returncode is not None or self.lost or self.identity is None:
             return False
         if hasattr(os, "waitid"):
@@ -612,13 +625,19 @@ class _Child:
             except ChildProcessError:
                 self.lost = True
                 return False
-            return True
-        return _identity(self.pgid) == self.identity
+        # Python 3.9 (no waitid): the same rule without the ECHILD check. Nothing in this process reaps children but
+        # Popen, so the unreaped leader is still pinned; no ps call can fail here (N-E2).
+        return True
 
     def end_group(self, *, term=True) -> str:
         """Stop the whole group and reap the leader: SIGTERM, up to kill_grace_s, then SIGKILL for whatever remains
         (descendants that outlived the leader included). Every signal is sent before the leader is reaped, after the
-        identity check; an unverified group is never signalled. 'stopped' or 'unverified'."""
+        identity check; an unverified group is never signalled. 'stopped' or 'unverified'. Under the child's lock, so a
+        freeze from the contact thread can never signal its group after this reaps the leader (N-E1)."""
+        with self.lock:
+            return self._end_group(term)
+
+    def _end_group(self, term) -> str:
         if self.lost:
             return "unverified"
         if self.reaped():
@@ -699,7 +718,8 @@ class HostRuntime:
         self.last_contact_ok = None
         self.reasons = {"restart"}         # §5.5 runs before the first claim: a restart has no state in memory
         self._left_frozen = False          # §5.5 step 2 for children of an earlier process, done before any contact
-        self.blocked = {}                  # task -> authority_error:<code>: reconcile answered with an error (N2)
+        self.blocked = {}                  # task -> authority_error:<code>: an error on a known outcome or a reconcile
+        self.blocked_since = {}            # task -> when it was blocked (shown in host-state.json and doctor, N-E3)
         self.damaged = {}                  # task -> code: pending records that cannot be read (fail closed)
         self.held = {}                     # operation id -> receipt lease, in memory only (its token never on disk)
         self.stop_requested = threading.Event()
@@ -859,6 +879,15 @@ class HostRuntime:
             total += used
         return total
 
+    def _block(self, task, code):
+        """Block a task under a named reason (NS1, N2): nothing more is sent or reconciled for it, and the host claims
+        nothing, until an operator restarts the runtime, which replays its pending records. Shown in the host-local
+        view and by doctor (N-E3)."""
+        with self._lock:
+            self.blocked[task] = code
+            self.blocked_since.setdefault(task, self.at())
+        self.write_state(force=True)
+
     # ── host-local state (R7.6-a: host-state.json, source host-local, with its age) ──
     def write_state(self, force=False):
         if not force and time.monotonic() - self._state_written < 1.0:
@@ -877,7 +906,10 @@ class HostRuntime:
                           "child": None if self.child is None or self.child.task != task else
                           ("frozen" if self.child.frozen else "running" if self.child.alive() else "stopped"),
                           "checkpoint": self._acked_checkpoint(claim["request_id"]), "pending_records": pending,
-                          "journal": self.damaged.get(task, "readable" if pending is not None else "damaged")})
+                          "journal": self.damaged.get(task, "readable" if pending is not None else "damaged"),
+                          "blocked": None if task not in self.blocked else
+                          {"code": self.blocked[task], "since": self.blocked_since.get(task),
+                           "cleared_by": "operator_restart"}})
         doc = {"schema": "minimoi.runtime.state.v1", "environment": self.host.environment, "as_of": self.at(),
                "source": "host-local",
                "hosts": [{"host_id": self.host.host_id, "runner_id": self.runner_id, "roles": list(self.host.roles),
@@ -992,8 +1024,10 @@ class HostRuntime:
             try:
                 answer = self._reconcile(task, stages[task], reasons)
             except _AuthorityError as exc:
-                self.blocked[task] = f"authority_error:{exc.code}"            # a named reason, not retried forever
+                self._block(task, f"authority_error:{exc.code}")              # a named reason, not retried forever
                 continue
+            if answer is None:
+                continue                                                      # blocked at readback (NC1)
             nxt = self._workspace(task, answer)
             launch = launch or nxt
         with self._lock:                  # every owned task has its answer: step 6 may follow (a damaged one blocks it)
@@ -1067,7 +1101,7 @@ class HostRuntime:
                 continue
             except _AuthorityError as exc:
                 if rec["kind"] in KNOWN_OUTCOMES:          # kept pending, its task blocked (NS1); the rest waits too
-                    self.blocked[task] = f"authority_error:{exc.code}"
+                    self._block(task, f"authority_error:{exc.code}")
                     counts["pending"] += 1
                     break
                 answer = {"state": "refused", "code": f"authority_error:{exc.code}"}
@@ -1208,9 +1242,14 @@ class HostRuntime:
                 still.append(op["operation_id"])
         return still
 
-    def _reconcile(self, task, child_state, reasons) -> dict:
+    def _reconcile(self, task, child_state, reasons):
+        """Read back, then ask; None when readback blocked the task (NC1): an effect's outcome is on file and the
+        authority errored on it, so the authority is not asked, and a known outcome never reaches Robert as a
+        decision. The pass reports the task blocked."""
         claim = self._claim(task)
         still = self._readback(task, claim)
+        if task in self.blocked:
+            return None
         stage = {"child": child_state, "checkpoint": self._acked_checkpoint(claim["request_id"])}
         answer = self.call("reconcile", self.runner_id, claim["request_id"], claim["generation"], stage, still)
         self.journal(task).note("reconcile", self.at(), request_id=claim["request_id"],
@@ -1260,7 +1299,7 @@ class HostRuntime:
                 # A result or an effect's outcome is known here: never dropped and never rerun (review NS1). Its record
                 # stays pending and its task is blocked under the error's name, as a reconcile error is, until a
                 # restart replays it.
-                self.blocked[task] = f"authority_error:{exc.code}"
+                self._block(task, f"authority_error:{exc.code}")
                 return None
             answer = {"state": "refused", "code": f"authority_error:{exc.code}"}
         mark = classify(kind, answer)
