@@ -416,7 +416,10 @@ MC_RUNNER_PORTAL_HOMES = ("minimoi_portal/", "core/mc_delegation_dispatcher/", "
 # snapshot and shares its delegation rules, and its runtime link is the owner path (host runtime S1-G).
 MC_DISPATCHER_HOMES = ("minimoi_portal/", "core/mc_delegation_dispatcher/", "core/supervision/")
 MC_DISPATCHER_FILES = {"core/mc_delegation_runner/cli.py",
-                       "core/mc_delegation_runner/host.py"}     # the door's one URL allowlist (S1-D review N4)
+                       "core/mc_delegation_runner/host.py",     # the door's one URL allowlist (S1-D review N4)
+                       # P1-a: the witness reads the snapshot through the door's read path (its client's refusal of a
+                       # redirect) and the authority file's host values; the supervisor runs the authority's timers.
+                       "core/mc_delegation_runner/witness.py", "services/supervisor/main.py"}
 
 
 def _runner_names(rel, source):
@@ -486,11 +489,16 @@ def test_the_agent_child_environment_change_redeploys_only_the_portal():
 def test_mc_runner_has_no_unclassified_production_consumer():
     root = Path(__file__).resolve().parent.parent
     assert _mc_runner_importers(root) == []
-    # No production entrypoint starts the runner: it runs only from the Mac's own bundle.
+    # No production entrypoint starts the runner: it runs only from the Mac's own bundle. One exception, P1-a's:
+    # production's EC2 witness (runtime-witness, the portal image) runs the witness, a portal-side runner file.
+    witness_cmd = "command: [python, -m, core.mc_delegation_runner.witness, serve]"
+    compose = (root / "docker-compose.prod.yml").read_text()
+    assert compose.count(witness_cmd) == 1
     paths = [root / ".github/workflows/deploy.yml", root / "docker-compose.prod.yml",
              root / "docker-compose.yml", root / "scripts/operations/deploy_scoped_release.sh"]
     paths.extend(p for p in (root / "docker").rglob("*") if p.is_file())
-    assert [str(p.relative_to(root)) for p in paths if "mc_delegation_runner" in p.read_text(errors="ignore")] == []
+    assert [str(p.relative_to(root)) for p in paths
+            if "mc_delegation_runner" in p.read_text(errors="ignore").replace(witness_cmd, "")] == []
 
 
 def test_mc_runner_guard_detects_new_consumers_and_runner_only_files_reaching_the_portal(tmp_path):
@@ -940,3 +948,38 @@ def test_the_build_supervisor_redeploys_only_the_portal_image_it_runs():
     assert classify(["services/supervisor/main.py", "core/supervision/watch.py"])[0] == "domain"
     deploy = (Path(__file__).resolve().parent.parent / "scripts/operations/deploy_scoped_release.sh").read_text()
     assert "--profile supervisor up -d --no-deps supervisor" in deploy
+
+
+# --- host runtime P1-a ---------------------------------------------------------------------------------------------------
+def test_p1a_files_classify_by_the_image_that_runs_them():
+    assert classify(["core/mc_delegation_runner/witness.py"]) == ("domain", ("portal",))   # the EC2 witness's image
+    assert classify(["scripts/mc_host/host.mac-prod-1.json"]) == ("documents", ())         # the installer's template
+    assert classify(["tests/harness_acceptance/p1a.py", "tests/harness_acceptance/p1a_mac.py"]) == ("documents", ())
+    assert classify(["scripts/operations/mc_prod_db_migrate.sh"]) == ("documents", ())     # operations-only, as before
+    # New modules in the dispatcher and supervision packages keep the conservative core fallback (seven services).
+    assert classify(["core/mc_delegation_dispatcher/production.py"])[1] == ALL_SERVICES[:7]
+    assert classify(["core/supervision/switch_on.py"])[1] == ALL_SERVICES[:7]
+
+
+def test_a_profile_gated_service_owned_by_the_portal_may_be_added_but_never_removed_quietly():
+    witness = COMPOSE.replace("networks:\n", "  runtime-witness:\n    profiles: [runtime-witness]\n"
+                                              "    image: portal:${MINIMOI_IMAGE_TAG:-latest}\nnetworks:\n")
+    assert compose_changed_services(COMPOSE, witness) == ("portal",)
+    assert compose_changed_services(witness, COMPOSE) is None                        # removed: full
+    always_on = COMPOSE.replace("networks:\n", "  runtime-witness:\n    image: portal:x\nnetworks:\n")
+    assert compose_changed_services(COMPOSE, always_on) is None                      # not behind a profile: full
+    unowned = COMPOSE.replace("networks:\n", "  other:\n    profiles: [x]\n    image: portal:x\nnetworks:\n")
+    assert compose_changed_services(COMPOSE, unowned) is None                        # no owner: full
+
+
+def test_p1as_production_compose_change_is_the_portals_release():
+    """The portal's and the supervisor's P1-a settings and the added runtime-witness service: a portal release only.
+    Compared with this branch's base (S1's fix tip), every P1-a compose change is owned by the portal."""
+    root = Path(__file__).resolve().parent.parent
+    import subprocess
+    base = subprocess.run(["git", "show", "1a234c2e:docker-compose.prod.yml"], cwd=root, capture_output=True, text=True)
+    if base.returncode != 0:
+        import pytest
+        pytest.skip("the base commit is not in this checkout")
+    head = (root / "docker-compose.prod.yml").read_text()
+    assert compose_changed_services(base.stdout, head) == ("portal",)

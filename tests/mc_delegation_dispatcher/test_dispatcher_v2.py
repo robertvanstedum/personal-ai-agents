@@ -38,21 +38,64 @@ def doc(**over):
 
 
 class AuthorityConfig(unittest.TestCase):
-    def test_the_production_profile_is_todays_behaviour(self):
+    def test_the_production_profile_is_robert_values_and_production_builds_none_unless_named(self):
+        # P1-a: authority.prod.json is production's version 2 profile (spec v0.5 §5.3, §8.2). Nothing reads it
+        # unless production's configuration names it; unnamed, production builds today's store (no authority).
         prod = Authority.load(PROD)
         self.assertEqual((prod.environment, prod.protocols, prod.speaks_v2, prod.launch_closure, prod.lease_s),
-                         ("prod", frozenset({1}), False, "pending", 120))
-        self.assertEqual(set(prod.routes), {"claude-code.subscription", "codex.subscription"})
+                         ("prod", frozenset({1, 2}), True, "pending", 120))
+        self.assertEqual((prod.hosts.contact_interval_s, prod.hosts.contact_timeout_s, prod.hosts.renew_s,
+                          prod.hosts.offline_hold_s), (30, 90, 40, 600))
+        self.assertEqual((prod.sweeper.sweep_s, prod.sweeper.gap_threshold_s), (30, 60))
+        self.assertEqual(dict(prod.grace_max_s), {"intermittent": 28800, "always_on": 1800})
+        self.assertEqual(dict(prod.progress_timeout_s), {"build": 1800, "review": 600})
+        for api in ("anthropic.api", "openai.api", "xai.api"):
+            r = prod.routes[api]
+            self.assertEqual((r.unit, r.per_day, r.per_item, r.supervised_only),
+                             ("usd", Decimal("10.0"), Decimal("3.0"), True))
+        self.assertEqual(prod.routes["xai.api"].actors, ())                      # Grok stopped: no worker
         claude = prod.routes["claude-code.subscription"]
         self.assertEqual((claude.unit, claude.per_item, claude.per_day, claude.supervised_only),
                          ("usd_notional", Decimal("2.0"), None, True))
-        self.assertEqual(prod.routes["codex.subscription"].unit, "minutes")
-        self.assertFalse(any(in_test_family(r) for r in prod.routes))
-        self.assertFalse(any(r.unit == "test_units" for r in prod.routes.values()))
-        # Version 1 only: a production store needs no grant reader and refuses version 2 before touching a database.
-        store = DispatcherStore(_no_db, principal="robert", environment="prod", authority=prod)
+        j = prod.judgment
+        self.assertEqual((j.route, j.unit, j.calls_per_day, j.per_day), ("mc.judgment", "usd", 20, Decimal("1.0")))
+        self.assertLess(j.per_call * j.calls_per_day, j.per_day)                # 20 calls fit strictly under 1 USD
+        self.assertTrue(prod.test_routes_in_production)
+        self.assertEqual({n for n in prod.routes if in_test_family(n)}, {"fakework", "fakejudge"})
+        for name, r in prod.routes.items():                                     # every real route supervised-only
+            self.assertEqual(r.supervised_only, in_test_family(name) is False, name)
+        self.assertEqual(route_refusal(prod, "fakework", "fakework"), None)     # R6.7-l: the test route runs
+        self.assertEqual(route_refusal(prod, "anthropic.api", "claude-code"),
+                         {"code": "route_supervised_only", "reason": "route_configured"})
+        self.assertEqual(route_refusal(prod, "fakejudge", "fakework"), {"code": "route_actor_mismatch"})
+        # Unnamed (production today): version 1 only, every version 2 call refused before touching a database.
+        store = DispatcherStore(_no_db, principal="robert", environment="prod")
         with self.assertRaisesRegex(AuthorityRefused, "protocol_not_enabled"):
             store.claim("mac-prod-1", CAPS, protocol=2)
+
+    def test_test_routes_in_production_need_the_files_own_word_and_stay_test_routes(self):
+        base = json.loads(PROD.read_text())
+        without = {k: v for k, v in base.items() if k != "test_routes_in_production"}
+        with self.assertRaisesRegex(AuthorityRefused, "authority_test_route_in_production"):
+            Authority.parse(without)                                               # S1's rule, unchanged by default
+        for name, route in (("fakework.api", {"unit": "usd", "actors": ["fakework"], "per_day": 1.0, "per_item": 1.0,
+                                              "supervised_only": False}),
+                            ("fakework", {"unit": "usd", "actors": ["fakework"], "per_day": 1.0, "per_item": 1.0,
+                                          "supervised_only": False}),
+                            ("anthropic.api", {"unit": "test_units", "actors": ["claude-code"], "per_day": 1.0,
+                                               "per_item": 1.0, "supervised_only": True}),
+                            ("openai.api", {"unit": "usd", "actors": ["fakework"], "per_day": 1.0, "per_item": 1.0,
+                                            "supervised_only": True})):
+            with self.assertRaisesRegex(AuthorityRefused, "authority_test_route_in_production", msg=name):
+                Authority.parse({**base, "routes": {**base["routes"], name: route}})
+        bad_judge = {**base, "judgment": {**base["judgment"], "route": "fakejudge.x", "unit": "test_units"}}
+        with self.assertRaisesRegex(AuthorityRefused, "authority_test_route_in_production"):
+            Authority.parse({**bad_judge, "routes": {k: v for k, v in base["routes"].items() if k != "fakejudge"}})
+        with self.assertRaisesRegex(AuthorityRefused, "authority_test_routes_invalid"):
+            Authority.parse({**base, "test_routes_in_production": "yes"})
+        for grace in ({"intermittent": 0}, {"laptop": 10}, {}, {"always_on": True}):
+            with self.assertRaisesRegex(AuthorityRefused, "authority_grace_invalid"):
+                Authority.parse({**base, "grace_s": grace})
 
     def test_the_test_values_are_section_9_2s(self):
         t = Authority.load(TEST)
@@ -321,7 +364,9 @@ class StoreProtocolSwitch(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "authority_requires_python_3_10"):
                 DispatcherStore(_no_db, principal="robert", environment="dev", authority=Authority.load(TEST),
                                 grants=GrantStore())
-            DispatcherStore(_no_db, principal="robert", environment="prod", authority=Authority.load(PROD))  # v1 only
+            with self.assertRaisesRegex(RuntimeError, "authority_requires_python_3_10"):     # P1-a: the v2 profile
+                DispatcherStore(_no_db, principal="robert", environment="prod", authority=Authority.load(PROD),
+                                grants=GrantStore())
             DispatcherStore(_no_db, principal="robert", environment="prod")
 
 
@@ -447,8 +492,14 @@ class ProductionBundleOnPython39(unittest.TestCase):
                 "door.HttpDispatcher(door.DOORS[0], 't' * 40, root)\n"
                 "door.HttpDispatcherV2(door.DOORS[1], 't' * 40, root)\n"
                 "a = store.Authority.load(root / 'core/mc_delegation_dispatcher/authority.prod.json')\n"
-                "assert not a.speaks_v2\n"
-                "store.DispatcherStore(lambda: None, principal='robert', environment='prod', authority=a)\n"
+                # P1-a: the Mac's production worker reads its host values from this file on 3.9; only the authority
+                # (EC2, 3.12) builds a store over it.
+                "assert a.speaks_v2 and a.hosts.contact_interval_s == 30 and a.sweeper.gap_threshold_s == 60\n"
+                "try:\n"
+                "    store.DispatcherStore(lambda: None, principal='robert', environment='prod', authority=a)\n"
+                "    raise SystemExit('a version 2 store was built on 3.9')\n"
+                "except RuntimeError:\n"
+                "    pass\n"
                 "assert store.parse_at('2026-10-28T20:00:00.12+00:00').microsecond == 120000\n"
                 "v2 = store.Authority.parse({'schema': store.AUTHORITY_SCHEMA, 'environment': 'dev',\n"
                 "                            'protocols': [1, 2], 'lease_s': 60,\n"

@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT / "tests" / "minimoi_actions"))
 
 from postgres_fixture_support import DSN, PostgresFixture  # noqa: E402
 
+from core.mc_delegation_dispatcher import production  # noqa: E402
 from core.mc_delegation_dispatcher.store import (Authority, AuthorityRefused, DispatcherStore,  # noqa: E402
                                                  item_subject_digest, parse_at)
 from core.minimoi_actions.grants import CapabilityRule, GrantDefinition, GrantStore  # noqa: E402
@@ -228,7 +229,9 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
             self.setUp()
             store = DispatcherStore(self.connect, principal="robert",
                                     environment="prod" if authority is not None and authority.environment == "prod"
-                                    else "dev", authority=authority, grants=GRANTS if authority is AUTH else None)
+                                    else "dev", authority=authority,
+                                    grants=GRANTS if authority is AUTH else None if authority is None
+                                    else production.grant_store(authority))       # P1-a: the prod file is v2
             if authority is AUTH:
                 self.beat()
                 self.item("anthropic.api", 3.0, actor="claude-code", scope="research")   # one a v1 runner could match

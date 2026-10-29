@@ -49,16 +49,17 @@ def _no_db():
 
 
 class Configuration(unittest.TestCase):
-    def test_the_sweeper_and_reassignment_are_configured_and_production_has_neither(self):
+    def test_the_sweeper_and_reassignment_are_configured_and_production_unnamed_has_neither(self):
         t, prod = Authority.load(TEST), Authority.load(PROD)
         self.assertEqual((t.sweeper.sweep_s, t.sweeper.gap_threshold_s, t.reassign_across_hosts, t.clock_skew_s),
                          (15, 30, False, 1))
-        self.assertEqual((prod.sweeper, prod.reassign_across_hosts, prod.clock_skew_s), (None, False, 0))
+        # P1-a: production's profile has a sweeper and no cross-host takeover; unnamed, production builds none.
+        self.assertEqual((prod.sweeper.sweep_s, prod.sweeper.gap_threshold_s, prod.reassign_across_hosts,
+                          prod.clock_skew_s), (30, 60, False, 1))
         self.assertEqual(Authority.parse({k: v for k, v in doc().items() if k != "clock_skew_s"}).clock_skew_s, 0)
         self.assertTrue(Authority.parse(doc(reassign_across_hosts=True)).reassign_across_hosts)
         # Version 1 only: a sweeper value changes nothing, and relay.status keeps today's reap.
         self.assertEqual(Authority.parse(doc(protocols=[1], lease_s=None)).sweeper.sweep_s, 15)
-        self.assertFalse(DispatcherStore(_no_db, principal="robert", environment="prod", authority=prod).sweeps)
         self.assertFalse(DispatcherStore(_no_db, principal="robert", environment="prod").sweeps)
         self.assertFalse(DispatcherStore(_no_db, principal="robert", environment="dev",
                                          authority=Authority.parse(doc(protocols=[1], lease_s=None))).sweeps)
@@ -207,7 +208,7 @@ class Door(unittest.TestCase):
 
 class StoreSwitch(unittest.TestCase):
     def test_the_new_calls_and_acts_are_version_2_only(self):
-        store = DispatcherStore(_no_db, principal="robert", environment="prod", authority=Authority.load(PROD))
+        store = DispatcherStore(_no_db, principal="robert", environment="prod")      # production unnamed (P1-a)
         for call in (lambda: store.reconcile("m", RID, 1, STAGE, []),
                      lambda: store.effect("m", RID, 1, eff("prepare")),
                      lambda: store.reassign(RID, "m", by="robert", note="n"),
