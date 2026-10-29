@@ -413,7 +413,8 @@ MC_DISPATCHER = "core.mc_delegation_dispatcher"
 MC_RUNNER_PORTAL_HOMES = ("minimoi_portal/", "core/mc_delegation_dispatcher/", "core/agent_requests/")
 # Who may import the portal's dispatcher: the portal, the dispatcher itself, and the Mac runner's client of its door.
 MC_DISPATCHER_HOMES = ("minimoi_portal/", "core/mc_delegation_dispatcher/")
-MC_DISPATCHER_FILES = {"core/mc_delegation_runner/cli.py"}
+MC_DISPATCHER_FILES = {"core/mc_delegation_runner/cli.py",
+                       "core/mc_delegation_runner/host.py"}     # the door's one URL allowlist (S1-D review N4)
 
 
 def _runner_names(rel, source):

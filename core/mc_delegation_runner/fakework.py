@@ -213,15 +213,17 @@ class _Client:
 
     def ask(self, doc: dict) -> dict:
         self.seq += 1
+        last = time.time()
         _write_atomic(self.path / f"req-{self.seq:06d}.json", doc)
         ack = self.path / f"ack-{self.seq:06d}.json"
-        self.gap = 0.0                        # the longest pause of this process while it waited for the answer
+        self.gap = 0.0                # the longest pause of this process, anywhere, while it waited for the answer
         while not ack.exists():
             if self.stopped():
                 _exit("stopped", "stopped at the runtime's request")
-            before = time.time()
             time.sleep(POLL_S)
-            self.gap = max(self.gap, time.time() - before)
+            now = time.time()
+            self.gap, last = max(self.gap, now - last), now
+        self.gap = max(self.gap, time.time() - last)
         try:
             return json.loads(ack.read_text())
         except (OSError, ValueError):
@@ -235,21 +237,20 @@ def _exit(kind, line):
 
 def _wait(client, seconds, *, gap_s=None) -> float:
     """Sleep ``seconds`` in small steps, stopping early on the runtime's stop request. With ``gap_s``, return as soon
-    as one step took longer than that by the wall clock (this process was paused: a sleep or a freeze), with the gap;
-    0 otherwise."""
+    as this process notices its own wake: more than ``gap_s`` of wall-clock time between two consecutive looks at the
+    clock, wherever in the loop the pause fell (a sleep, or a stop by anyone); 0 otherwise."""
     end = time.monotonic() + seconds
+    last = time.time()
     while True:
         if client.stopped():
             _exit("stopped", "stopped at the runtime's request")
-        before = time.time()
-        if gap_s is None and time.monotonic() >= end:
+        now = time.time()
+        if gap_s is not None and now - last > gap_s:
+            return now - last
+        last = now
+        if time.monotonic() >= end:
             return 0.0
         time.sleep(POLL_S)
-        gap = time.time() - before
-        if gap_s is not None and gap > gap_s:
-            return gap
-        if gap_s is not None and time.monotonic() >= end:
-            return 0.0
 
 
 def _send(sink, ack, key) -> str:
@@ -287,6 +288,8 @@ def run(steps, *, channel, sink, cap, unit, start_after=None) -> int:
             answer = _send(sink, ack, s["key"])
             end = client.ask({"kind": "effect_end", "key": s["key"], "answer": answer})
             print(f"effect {s['key']}: {answer} ({end.get('state')})", flush=True)
+            if answer not in ("committed", "duplicate"):
+                _exit("effect", f"effect {s['key']} not done: {answer}")    # a definite failure, never a success
         elif kind == "stale_effect_on_wake":
             ack = client.ask({"kind": "effect_hold", "key": s["key"], "grant": s["grant"]})
             if ack.get("state") != "held":

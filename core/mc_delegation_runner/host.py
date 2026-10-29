@@ -8,9 +8,10 @@ per-(host, environment) lock (G6), its pinned interpreter, and its bundle digest
 * **Values that apply to the whole environment** (§5.3: contact interval and timeout, renew interval, offline hold,
   the gap threshold) are not here (R2.3-b): they live in the authority's file (``Authority.hosts``), which
   ``authority.values`` names. A host given none refuses to start: a missing value admits nothing.
-* **One instance per (host, environment)** (G6): an exclusive ``flock`` on ``<lock_dir>/<host_id>.<environment>.lock``,
-  held for the runtime's life and released by the kernel when it dies. The production runner (version 1, no
-  ``host.yaml``) takes no lock and is unchanged.
+* **One instance per (host, environment)** (G6): an exclusive ``flock`` on ``~/minimoi-runtime/locks/<host_id>.
+  <environment>.lock``, held for the runtime's life and released by the kernel when it dies. The folder is fixed, never
+  set per file, so two configurations of the same host and environment always meet at the same lock (review N8). The
+  production runner (version 1, no ``host.yaml``) takes no lock and is unchanged.
 * **The pinned interpreter**: its path and ``major.minor`` version. The runtime refuses to start when it runs under any
   other, or when a role it holds needs a newer one. Version 2 at the authority (and a worker that reaches it by DSN,
   which builds the authority's store in-process) needs Python 3.10 or later (``GrantStore``); a worker that reaches it
@@ -31,22 +32,25 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.mc_delegation_dispatcher.door import DOORS as _DOORS     # one allowlist of door URLs, the door's (N4)
+
 SCHEMA = "minimoi.host.v1"
 PRESEEDED_DO_NOT_RESUME = ("01a17dde-fb26-7923-8105-c7478428d17d", "8c4e1a20-6f3b-4d9e-a7c1-2b5d9e0f4a11")
 ROLES = ("authority", "worker", "witness", "watch:staging")
 OFFLINE_SCOPES = ("none", "workspace_only")
 V2_MIN_PYTHON = (3, 10)            # core.minimoi_actions (GrantStore) uses slotted dataclasses and X | None at runtime
+LOCK_ROOT = "~/minimoi-runtime/locks"        # G6's one fixed folder (per user, as the runtime runs as its user)
 MAX_BYTES = 64 * 1024
 _ID = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")          # the authority's id rule (no '/': reserved for its own rows)
+_HOST = re.compile(r"^[A-Za-z0-9._-]{1,56}$")          # no ':', so the owner identity host_id:runner splits one way
 _CAP = re.compile(r"^[a-z][a-z0-9_-]{0,15}:[A-Za-z0-9._:-]{1,64}$")
 _SESSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,99}$")
 _VERSION = re.compile(r"^3\.([0-9]{1,2})$")
-_DOORS = ("https://minimoi.ai/internal/mc/v1/delegation-runner", "https://dev.minimoi.ai/internal/mc/v1/delegation-runner")
 _KEYS = {"schema", "host_id", "environment", "roles", "expected_availability", "unreachable_grace_s", "service_manager",
          "authority", "capabilities", "concurrency", "offline_scope_default", "do_not_resume", "artifact_root",
-         "workspace_root", "mirrors", "interpreter", "bundle_root", "lock_dir", "gap_detection", "stop_timeout_s",
+         "workspace_root", "mirrors", "interpreter", "bundle_root", "gap_detection", "stop_timeout_s",
          "effect_sink", "principal", "note"}
-_REQUIRED = _KEYS - {"do_not_resume", "lock_dir", "gap_detection", "stop_timeout_s", "effect_sink", "note",
+_REQUIRED = _KEYS - {"do_not_resume", "gap_detection", "stop_timeout_s", "effect_sink", "note",
                      "service_manager", "offline_scope_default"}
 
 
@@ -101,7 +105,6 @@ class HostConfig:
     mirrors: dict
     interpreter: Interpreter
     bundle_root: Path
-    lock_dir: Path
     gap_detection: bool
     stop_timeout_s: int
     effect_sink: EffectSink | None
@@ -112,6 +115,11 @@ class HostConfig:
         """The owner identity (R2.3-a: ``host_id/runner``). The authority's id rule has no '/' (it marks its own rows),
         so the same shape is written with ':'."""
         return f"{self.host_id}:runner"
+
+    @property
+    def lock_path(self) -> Path:
+        """G6's lock, derived from (host_id, environment) in the one fixed folder (review N8)."""
+        return Path(os.path.expanduser(LOCK_ROOT)) / f"{self.host_id}.{self.environment}.lock"
 
     def actors(self) -> tuple:
         return tuple(c.split(":", 1)[1] for c in self.capabilities if c.startswith("actor:"))
@@ -158,7 +166,7 @@ def parse(doc) -> HostConfig:
     _need(_REQUIRED <= set(doc), "host_config_value_missing")       # a missing value admits nothing (R2.3-b)
     _need(doc["schema"] == SCHEMA, "host_schema_invalid")
     _need(type(doc.get("note", "")) is str and len(doc.get("note", "")) <= 2000, "host_note_invalid")
-    _need(type(doc["host_id"]) is str and _ID.match(doc["host_id"]) and len(doc["host_id"]) <= 56, "host_id_invalid")
+    _need(type(doc["host_id"]) is str and _HOST.match(doc["host_id"]), "host_id_invalid")
     _need(doc["environment"] in ("dev", "prod"), "host_environment_invalid")
     _need(type(doc["principal"]) is str and _ID.match(doc["principal"]), "host_principal_invalid")
     roles = doc["roles"]
@@ -207,7 +215,6 @@ def parse(doc) -> HostConfig:
         workspace_root=_path(doc["workspace_root"], "host_workspace_root_invalid"), mirrors=mirrors,
         interpreter=Interpreter(_path(interp["path"], "host_interpreter_invalid"), version),
         bundle_root=_path(doc["bundle_root"], "host_bundle_root_invalid"),
-        lock_dir=_path(doc.get("lock_dir", "~/minimoi-runtime/locks"), "host_lock_dir_invalid"),
         gap_detection=gap == "on", stop_timeout_s=stop,
         effect_sink=None if sink is None else EffectSink(_path(sink["path"], "host_effect_sink_invalid"),
                                                           sink["lookup"]))
@@ -279,7 +286,7 @@ class HostLock:
     it; the holder's pid is written into the file for ``doctor``. The descriptor is not inherited by children."""
 
     def __init__(self, cfg: HostConfig):
-        self.path = cfg.lock_dir / f"{cfg.host_id}.{cfg.environment}.lock"
+        self.path = cfg.lock_path
         self._fd = None
 
     def acquire(self, now_iso: str):

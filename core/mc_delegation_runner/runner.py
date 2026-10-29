@@ -485,12 +485,37 @@ class _Busy(Exception):
     """A step that cannot finish yet (a receipt's own lease still runs): recovery tries again on a later pass."""
 
 
-def _definite(exc) -> bool:
-    """A refusal that is an answer (a malformed call), not a lost connection: never read as offline."""
+class _AuthorityError(Exception):
+    """A call the authority answered with a deterministic error: a refused shape, an integrity or audit failure at the
+    authority, a body over the door's bound. It is an answer, never "offline", so it is never retried as a lost
+    connection: an owner write is marked final with ``authority_error:<code>`` and its item reconciled, a reconcile
+    blocks its task with that name until an operator restarts the runtime (review N2)."""
+
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
+def _transport(exc) -> bool:
+    """True only for a lost connection (sockets, timeouts, an HTTP 5xx or a reset mid-answer, the database
+    unreachable): the host is offline until a call gets through. Everything else is an answer."""
+    import http.client
     if isinstance(exc, ValueError):
-        return True
+        return False
     code = getattr(exc, "code", None)
-    return type(code) is int and 400 <= code < 500
+    if type(code) is int and 400 <= code < 500:              # the door answered with a refusal
+        return False
+    if isinstance(exc, (OSError, http.client.HTTPException)):
+        return True
+    return any(c.__module__.startswith("psycopg2") and c.__name__ in ("OperationalError", "InterfaceError")
+               for c in type(exc).__mro__)
+
+
+def _error_code(exc) -> str:
+    """A fixed code for an error: its message when that is already one (the store's and the door's), else its type."""
+    text = str(exc)
+    return text if 0 < len(text) <= 64 and text.replace("_", "").isalnum() and text == text.lower() \
+        else type(exc).__name__
 
 
 class GapDetector:
@@ -545,6 +570,7 @@ class _Child:
         self.channel = fakework.Channel(rt.cfg.artifact_root / f"{self.task}.chan")
         self.proc = self.capture = self.pgid = self.identity = None
         self.frozen = False
+        self.signalled = False             # this runtime stopped it while it ran: its exit is ours, never its own (B1)
         self.lock = threading.RLock()
 
     def reaped(self) -> bool:
@@ -570,8 +596,12 @@ class _Child:
         return not self.exited()
 
     def verified(self) -> bool:
-        """The recorded identity (process group and start time) still matches, and the leader is not yet reaped."""
-        return not self.reaped() and self.identity is not None and _identity(self.pgid) == self.identity
+        """This runtime's own child, its identity recorded (by ps) before it was let start, and not yet reaped. Its
+        process group id is its leader's pid; the leader is a session leader (it can change neither), and no other
+        process can take that id while the leader is unreaped, a zombie included. So a signal to the group reaches
+        this child's group and no one else's, with no second ps call to fail (review N1). Orphans of an earlier
+        process are verified by ps (_freeze_task)."""
+        return not self.reaped() and self.identity is not None
 
     def end_group(self, *, term=True) -> str:
         """Stop the whole group and reap the leader: SIGTERM, up to kill_grace_s, then SIGKILL for whatever remains
@@ -581,8 +611,11 @@ class _Child:
             return "stopped"
         if not self.verified():
             return "unverified"
+        live = not self.exited()
+        if live:
+            self.signalled = True
         try:
-            if term and not self.exited():
+            if term and live:
                 os.killpg(self.pgid, signal.SIGTERM)
                 deadline = time.monotonic() + self.rt.cfg.kill_grace_s
                 while not self.exited() and time.monotonic() < deadline:
@@ -614,7 +647,9 @@ class _Child:
             if self.frozen and self.verified():
                 os.killpg(self.pgid, signal.SIGCONT)
                 self.journal.note("thaw", self.rt.at(), request_id=self.request_id, generation=self.generation)
-            self.frozen = False
+                self.frozen = False
+            elif self.reaped():
+                self.frozen = False                  # nothing left to thaw
 
     def kill(self, reason) -> str:
         """Stop the group for good: 'stopped', or 'unverified' when its identity no longer matches (never signalled)."""
@@ -645,6 +680,8 @@ class HostRuntime:
         self.failures = 0
         self.last_contact_ok = None
         self.reasons = {"restart"}         # §5.5 runs before the first claim: a restart has no state in memory
+        self._left_frozen = False          # §5.5 step 2 for children of an earlier process, done before any contact
+        self.blocked = {}                  # task -> authority_error:<code>: reconcile answered with an error (N2)
         self.damaged = {}                  # task -> code: pending records that cannot be read (fail closed)
         self.held = {}                     # operation id -> receipt lease, in memory only (its token never on disk)
         self.stop_requested = threading.Event()
@@ -676,8 +713,9 @@ class HostRuntime:
             try:
                 self.dispatcher.heartbeat(self.runner_id, state, list(self.host.capabilities), self.facts())
             except Exception as exc:
-                if _definite(exc):
-                    raise
+                if not _transport(exc):
+                    self._ok()
+                    raise _AuthorityError(_error_code(exc)) from None
                 self._failed()
                 return False
             self._ok()
@@ -741,8 +779,9 @@ class HostRuntime:
         try:
             out = getattr(self.dispatcher, name)(*args, **kwargs)
         except Exception as exc:
-            if _definite(exc):
-                raise
+            if not _transport(exc):
+                self._ok()                              # it answered: in contact, whatever it said
+                raise _AuthorityError(_error_code(exc)) from None
             self._failed()
             raise _Offline(type(exc).__name__) from None
         self._ok()
@@ -833,10 +872,24 @@ class HostRuntime:
         _write_json(self.cfg.artifact_root / "host-state.json", doc)
 
     # ── the pass ──
+    def freeze_left_children(self) -> dict:
+        """§5.5 step 2 after a restart, before the authority is contacted (X3): every child an earlier process of this
+        runtime left running is frozen, verified by its stage file's identity, and stopped; an unverified group is
+        never signalled. Its pending records stay on disk. Nothing here needs the authority. {task: child state}."""
+        self.cfg.artifact_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        out = {}
+        if not self._left_frozen:
+            for task in self.owned():
+                if task not in self.damaged:
+                    out[task] = self._freeze_task(task, ["restart"])
+            self._left_frozen = True
+        return out
+
     def pass_once(self) -> dict:
         self.cfg.artifact_root.mkdir(mode=0o700, parents=True, exist_ok=True)
         if self.stop_requested.is_set():
             return {"state": "stopping"}
+        self.freeze_left_children()
         gap = self.detector.tick()
         if gap:
             self.on_wake(gap)
@@ -847,14 +900,18 @@ class HostRuntime:
                 launch = self.recover()
                 if launch is not None:
                     return self._run(launch)
-                if self.owned() or self.damaged:
-                    return {"state": "blocked" if self.damaged else "recovering",
-                            **({"damaged": sorted(self.damaged)} if self.damaged else {})}
+                if self.owned() or self.damaged or self.blocked:
+                    stuck = {**self.damaged, **self.blocked}
+                    return {"state": "blocked" if stuck else "recovering",
+                            **({"damaged": sorted(self.damaged)} if self.damaged else {}),
+                            **({"blocked": dict(self.blocked)} if self.blocked else {})}
             claimed = self.call("claim", self.runner_id, list(self.host.capabilities))
         except _Offline:
             return {"state": "offline"}
         except _Busy:
             return {"state": "recovering"}
+        except _AuthorityError as exc:
+            return {"state": "authority_error", "code": exc.code}       # logged each pass; nothing is offline
         finally:
             self.write_state()
         if claimed is None:
@@ -887,7 +944,7 @@ class HostRuntime:
         the host claims nothing until every owned task has been through it (step 6)."""
         with self._lock:
             reasons = sorted(self.reasons)
-        tasks = [t for t in self.owned() if t not in self.damaged]
+        tasks = [t for t in self.owned() if t not in self.damaged and t not in self.blocked]
         stages = {}
         for task in tasks:                                                    # step 2: freeze
             stages[task] = self._freeze_task(task, reasons)
@@ -904,16 +961,36 @@ class HostRuntime:
                 if not isinstance(exc, JournalDamaged):
                     raise
                 self.damaged[task] = str(exc)                                 # fails closed: nothing more for it
+        for task in readable:
+            # An effect's outcome on file but not yet acknowledged (its finish waits on a receipt lease still running):
+            # the item is not reconciled until it is, so it never goes unknown with its outcome known (S2).
+            if self._finish_waiting(self._claim(task)["request_id"]):
+                raise _Busy()
         launch = None
         for task in readable:                                                 # steps 4 and 5
             if _closed_path(self.cfg, task).exists():
                 continue                                                      # its replayed result closed it
-            answer = self._reconcile(task, stages[task], reasons)
+            try:
+                answer = self._reconcile(task, stages[task], reasons)
+            except _AuthorityError as exc:
+                self.blocked[task] = f"authority_error:{exc.code}"            # a named reason, not retried forever
+                continue
             nxt = self._workspace(task, answer)
             launch = launch or nxt
         with self._lock:                  # every owned task has its answer: step 6 may follow (a damaged one blocks it)
             self.reasons.difference_update(reasons)
         return launch
+
+    def _finish_waiting(self, request_id) -> bool:
+        """An effect of the item whose outcome is on file here and not yet acknowledged by the authority."""
+        from .journal import JournalDamaged
+        for t in self._item_tasks(request_id):
+            try:
+                if any(c["kind"] == "effect_finish" and c["mark"] is None for c in self.journal(t).calls()):
+                    return True
+            except JournalDamaged:
+                continue                    # its own task is blocked as damaged; this one need not wait on it
+        return False
 
     def _freeze_task(self, task, reasons) -> str:
         child = self.child
@@ -969,6 +1046,8 @@ class HostRuntime:
             except _Busy:
                 counts["pending"] += 1
                 continue
+            except _AuthorityError as exc:
+                answer = {"state": "refused", "code": f"authority_error:{exc.code}"}
             counts["sent"] += 1
             kind = classify(rec["kind"], answer)
             if kind == "applied":
@@ -992,23 +1071,35 @@ class HostRuntime:
         return self._send_finish(rec)
 
     def _send_finish(self, rec):
-        """An effect's finish: under the receipt lease it was made under while this process still holds it (the token
-        lives in memory only); otherwise the same outcome is recorded under a reconcile lease, as a readback."""
+        """An effect's finish, whose outcome is on file here (S1-B: a finish and a readback are always taken). Under
+        the receipt lease it was made under while this process holds that lease and it still runs (the token lives
+        in memory only). Otherwise, whether the token died with an earlier process or the lease ran out while the
+        finish could not reach the authority (S2), the same outcome is recorded under a reconcile lease, as a
+        readback; a lease refusal is never this record's final answer."""
         a, eff = rec["args"], dict(rec["args"]["effect"])
+        call = (a["runner_id"], rec["request_id"], rec["generation"])
         lease = self.held.get(a["operation_id"])
         if lease is not None and lease["receipt_generation"] == a["receipt_generation"]:
             eff["lease"] = {k: lease[k] for k in ("receipt_generation", "token", "mode")}
-            return self.call("effect", a["runner_id"], rec["request_id"], rec["generation"], eff)
+            got = self.call("effect", *call, eff)
+            if not (got.get("state") == "refused" and got.get("code") == "receipt_lease_stale"):
+                return got
         base = {k: eff[k] for k in ("key", "grant_id", "request")}
-        got = self.call("effect", a["runner_id"], rec["request_id"], rec["generation"], {"op": "reconcile", **base})
+        got = self.call("effect", *call, {"op": "reconcile", **base})
         if got.get("state") != "ok":
             if got.get("code") == "receipt_busy":
                 raise _Busy()                       # the old lease still runs; its token died with that process
             if got.get("code") == "receipt_terminal":
-                return {"state": "already_applied", "operation_id": a["operation_id"]}
+                # An outcome is already recorded. Whether it is this one is the authority's to say: the finish
+                # replayed with its token gone (a placeholder no receipt lease can match) is answered already_applied
+                # only when the receipt holds this same outcome, and refused otherwise (review N9).
+                eff["lease"] = {"receipt_generation": a["receipt_generation"], "token": "0" * 43, "mode": "execute"}
+                same = self.call("effect", *call, eff)
+                return same if same.get("state") == "already_applied" else \
+                    {"state": "refused", "operation_id": a["operation_id"], "code": "receipt_outcome_conflict"}
             return got
         eff["lease"] = {k: got["lease"][k] for k in ("receipt_generation", "token", "mode")}
-        return self.call("effect", a["runner_id"], rec["request_id"], rec["generation"], eff)
+        return self.call("effect", *call, eff)
 
     def _after_answer(self, task, rec, answer, kind):
         """What a replayed or first-sent answer means for the task. A result acknowledged closes it; a final refusal
@@ -1051,7 +1142,7 @@ class HostRuntime:
             for n in j.notes("effect_closed"):
                 closed.add(n["fields"]["operation_id"])
             for c in j.calls():
-                if c["kind"] == "effect_finish" and c["mark"] is not None:
+                if c["kind"] == "effect_finish" and c["mark"] == "applied":     # acknowledged, not merely sent (S2)
                     closed.add(c["args"]["operation_id"])
         return [v for k, v in opened.items() if k not in closed]
 
@@ -1082,7 +1173,7 @@ class HostRuntime:
                 still.append(op["operation_id"])
                 continue
             lease = {"receipt_generation": got["lease"]["receipt_generation"], "token": got["lease"]["token"],
-                     "mode": got["lease"]["mode"]}
+                     "mode": got["lease"]["mode"], "request_id": claim["request_id"], "generation": gen}
             self.held[op["operation_id"]] = lease
             eff = {"op": "finish", **base, "state": "verified" if seen == "committed" else "failed",
                    "evidence": {"kind": "readback", "outcome": seen}}
@@ -1141,6 +1232,8 @@ class HostRuntime:
             answer = self._send_record(rec)
         except (_Offline, _Busy):
             return None
+        except _AuthorityError as exc:
+            answer = {"state": "refused", "code": f"authority_error:{exc.code}"}
         mark = classify(kind, answer)
         if mark != "pending":
             j.mark(rec["event_id"], mark, _summary(answer))
@@ -1316,7 +1409,12 @@ class HostRuntime:
                 if self.host.offline_scope_default == "none" and child.alive() and not child.frozen:
                     child.freeze("authority_unreachable")              # offline before it started: frozen now
                 if child.alive() and self.host.offline_scope_default == "workspace_only" and not child.frozen:
-                    self._serve(child, offline=True)                     # it edits; nothing reaches a target
+                    # It keeps editing, and nothing reaches a target; its deadline and output bound still hold (S6).
+                    if child.capture.exceeded.is_set():
+                        return "output_limit"
+                    if self._now() >= env.deadline:
+                        return "timed_out"
+                    self._serve(child, offline=True)
                 elif self._mono() - self.offline_since >= self.values.offline_hold_s and child.alive():
                     state = child.kill("offline_hold")                    # stopped at its last checkpoint
                     child.journal.note("stop", self.at(), request_id=child.request_id, generation=child.generation,
@@ -1364,11 +1462,18 @@ class HostRuntime:
                     last_renew = self._mono()
             except _Offline:
                 continue
+            except _AuthorityError as exc:                 # an answer, not a lost connection (N2): reconcile
+                with self._lock:
+                    self.reasons.add("refusal")
+                child.freeze(f"authority_error:{exc.code}")
+                continue
             time.sleep(cfg.tick_s)
 
     # ── the local channel (fakework's requests) ──
     def _serve(self, child, offline=False):
         for seq, doc in child.channel.requests():
+            if self.reasons - {"restart"}:
+                return                      # §5.5 first: the rest waits for its answer (or the child is stopped)
             kind = doc.get("kind") if isinstance(doc, dict) else None
             if kind in ("effect_begin", "effect_hold", "effect_dispatch_held", "effect_end") and offline:
                 continue                    # R4.5-e: no effect while the authority is unreachable; it waits, unanswered
@@ -1376,6 +1481,11 @@ class HostRuntime:
                 answer = self._request(child, kind, doc)
             except (_Offline, _Busy):
                 return                      # answered after the next successful call (or the child is stopped)
+            except _AuthorityError as exc:
+                answer = {"state": "refused", "code": f"authority_error:{exc.code}"}
+            if (kind or "").startswith("effect") and answer.get("state") == "refused" and answer.get("code") in FENCES:
+                with self._lock:
+                    self.reasons.add("refusal")     # the authority fenced the item itself: reconcile before anything
             child.channel.answer(seq, answer)
 
     def _request(self, child, kind, doc) -> dict:
@@ -1427,26 +1537,40 @@ class HostRuntime:
         if prep.get("state") != "ok":
             return {"state": "refused", "code": prep.get("code")}
         op_id, rstate = prep["operation_id"], prep.get("receipt_state")
-        if rstate in ("verified", "failed"):
+        if rstate == "verified":
             return {"state": "done", "receipt_state": rstate, "operation_id": op_id}
+        if rstate == "failed":
+            # A definite "not done" (a send the target refused, or a readback that found nothing): never reported as
+            # success, and never sent again under the same operation (S1).
+            return {"state": "refused", "code": "effect_failed", "operation_id": op_id}
         if rstate != "prepared":
             return {"state": "refused", "code": f"receipt_{rstate}"}
-        lease = self.held.get(op_id)
+        lease = self._lease(child, op_id=op_id)
         if lease is None or lease.get("lease_until") is None or _parse_iso(lease["lease_until"]) <= self._now():
             got = self._effect(child, "claim", key, grant)
             if got.get("state") != "ok":
                 if got.get("code") == "receipt_busy":
                     raise _Busy()
                 return {"state": "refused", "code": got.get("code")}
-            lease = {**got["lease"], "key": key, "grant": grant}
+            lease = {**got["lease"], "key": key, "grant": grant, "request_id": child.request_id,
+                     "generation": child.generation}
             self.held[op_id] = lease
         if not dispatch:
             return {"state": "held", "operation_id": op_id}
         return self._effect_dispatch(child, key, op_id=op_id)
 
+    def _lease(self, child, *, op_id=None, key=None):
+        """The receipt lease this child's own generation claimed (S3(a): a new generation never holds or uses an
+        earlier one's; it claims afresh), by operation or by the child's key; None otherwise."""
+        for k, v in self.held.items():
+            if ((op_id is not None and k == op_id) or (op_id is None and v.get("key") == key)) \
+                    and v.get("request_id") == child.request_id and v.get("generation") == child.generation:
+                return v
+        return None
+
     def _effect_dispatch(self, child, key, op_id=None) -> dict:
         from . import fakework
-        lease = self.held.get(op_id) if op_id else next((v for v in self.held.values() if v.get("key") == key), None)
+        lease = self._lease(child, op_id=op_id, key=key)
         if lease is None:
             return {"state": "refused", "code": "receipt_lease_missing"}
         op_id = op_id or next(k for k, v in self.held.items() if v is lease)
@@ -1461,10 +1585,10 @@ class HostRuntime:
                 "lease_until": sent["lease_until"]}
 
     def _effect_end(self, child, key, sink_answer) -> dict:
-        op_id = next((k for k, v in self.held.items() if v.get("key") == key), None)
-        if op_id is None or sink_answer not in ("committed", "duplicate", "lease_expired", "operation_reused"):
+        lease = self._lease(child, key=key)
+        if lease is None or sink_answer not in ("committed", "duplicate", "lease_expired", "operation_reused"):
             return {"state": "refused", "code": "channel_request_invalid"}
-        lease = self.held[op_id]
+        op_id = next(k for k, v in self.held.items() if v is lease)
         from . import fakework
         eff = {"op": "finish", "key": key, "grant_id": lease["grant"], "request": fakework.effect_request(key),
                "state": "verified" if sink_answer in ("committed", "duplicate") else "failed",
@@ -1485,22 +1609,25 @@ class HostRuntime:
         start = self._mono()
         budget = self.host.stop_timeout_s
         self.stop_contact()
-        self.contact(announced="stopping")
+        self._announce("stopping")
         child = self.child
         out = {"state": "stopped"}
         if child is not None:
             with child.lock:
                 if child.frozen:
-                    child.kill("graceful")
-            child.channel.request_stop()
+                    child.kill("graceful")            # frozen: stopped at its last checkpoint, by this runtime
+            if child.alive():
+                child.channel.request_stop()
             while child.alive() and self._mono() - start < budget / 2:
                 time.sleep(0.05)
-            finished = not child.alive()
-            state = child.kill("graceful") if not finished else child.end_group(term=False)
+            state = child.kill("graceful") if child.alive() else child.end_group(term=False)
             if child.capture is not None:
                 child.capture.finish(self.cfg.kill_grace_s)
             rc = None if child.proc is None else child.proc.returncode
-            if finished and rc is not None and rc != 75 and child.capture is not None and child.capture.ok:
+            # Its own exit only if this runtime never stopped it while it ran (B1): a frozen child killed here, or one
+            # stopped by signal, is paused at its checkpoint and resumed at the next start, never reported failed.
+            if (not child.signalled and rc is not None and rc != 75 and child.capture is not None
+                    and child.capture.ok):
                 # It finished before it saw the request: its real exit is kept for the next start to report.
                 _write_json(_stage_path(self.cfg, child.task),
                             {"stage": "exited", "status": "completed" if rc == 0 else "failed", "exit_code": rc})
@@ -1518,9 +1645,20 @@ class HostRuntime:
                 self.replay(task)
             except Exception:
                 break
-        self.contact(announced="stopped")
+        self._announce("stopped")
         self.write_state(force=True)
         return out
+
+    def _announce(self, state):
+        try:
+            self.contact(announced=state)
+        except _AuthorityError:
+            pass                                  # said or not, the stop goes on; the item lapses if it was not
+
+
+# An effect refusal that fences the item itself, not the effect: §5.5 runs before anything else is served.
+FENCES = ("lease_lapsed", "stale_generation", "not_owner", "not_owned", "item_ended", "grace_ended", "cancel_requested",
+          "grant_revoked", "grant_expired")
 
 
 def _parse_iso(value):

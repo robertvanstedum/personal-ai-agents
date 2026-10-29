@@ -244,7 +244,11 @@ def _run_v2(words) -> int:
         rt = runtime_for(host, auth, _dispatcher(host, auth))
         signal.signal(signal.SIGTERM, rt.request_stop)        # G4: launchd and systemd stop with SIGTERM
         signal.signal(signal.SIGINT, rt.request_stop)
-        rt.contact(announced="online")
+        rt.freeze_left_children()             # §5.5 step 2 before any contact: an earlier process's children (X3)
+        try:
+            rt.contact(announced="online")
+        except runner._AuthorityError as exc:
+            raise SystemExit(f"refused: {exc.code}")
         rt.start_contact()
         stopped = False
         while True:

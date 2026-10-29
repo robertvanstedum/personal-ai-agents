@@ -37,6 +37,9 @@ MAX_BYTES = 16 * 1024 * 1024
 # Refusals a resend cannot change: the same bytes get the same answer. Anything else (a transport failure, or a host
 # time the authority judged to be in its future) stays pending.
 RETRYABLE = ("event_time_invalid",)
+# A finish answers its receipt lease's state, not its bytes: a lease refusal is never its final answer. The runtime sends
+# the same outcome under a reconcile lease instead (runner._send_finish), so these never stop it (review S2).
+RETRYABLE_BY_KIND = {"effect_finish": ("receipt_lease_stale", "receipt_busy")}
 
 
 class JournalDamaged(RuntimeError):
@@ -161,5 +164,6 @@ def classify(kind, answer) -> str:
     if state in ("applied", "superseded", "accepted", "ok", "already_applied"):
         return "applied"
     if state == "refused":
-        return "pending" if answer.get("code") in RETRYABLE else "final"
+        code = answer.get("code")
+        return "pending" if code in RETRYABLE or code in RETRYABLE_BY_KIND.get(kind, ()) else "final"
     return "pending"
