@@ -141,7 +141,10 @@ def batch_rows():
 
 
 def solo_row():
-    return row(4, "Card C-4 step build is unknown: yes ends it; no leaves it waiting.", solo=True)
+    """As Store.by_message returns it: the table's row, with no ``code`` (the batched rows' by_batch adds one)."""
+    out = row(4, "Card C-4 step build is unknown: yes ends it; no leaves it waiting.", solo=True)
+    del out["code"]
+    return out
 
 
 def sup_for(store, bot, runtime=object()):
@@ -450,3 +453,12 @@ def test_the_sync_view_is_read_with_its_age():
     old = watch._sync_view_stale(St({"now": NOW, "last_at": NOW - timedelta(seconds=300)}), 120)
     assert old["key"] == f"view-stale:mac-sync:{(NOW - timedelta(seconds=300)).isoformat()}"
     assert watch._sync_view_stale(St(None), 120)["key"] == "view-stale:mac-sync:None"
+
+
+def test_a_solo_runtime_reply_is_answered_from_the_row_by_message_returns():
+    """Found by the fix round's PostgreSQL run: by_message's row has no ``code``; the reply is still answered."""
+    store, bot = BatchStore(batch_rows(), solo_row()), Bot()
+    sup_for(store, bot).handle(update("yes", reply_to=88))
+    assert [(d, a) for d, a, _ in store.decided] == [(4, "approved")]
+    sup_for(store, bot).handle(update("yes", reply_to=88))
+    assert bot.sent[-1][0] == "D-4 is no longer open (already approved); nothing changed."

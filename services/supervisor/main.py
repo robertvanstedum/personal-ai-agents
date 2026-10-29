@@ -190,6 +190,7 @@ class Supervisor:
         answer is recorded once, with its own receipt: the same words, bound to that decision's own digest. What it
         did is told once the authority has applied it."""
         reply = msg["message_id"]
+        rows = [dict(d, code=d.get("code") or f"D-{d['id']}") for d in rows]     # by_message's rows carry no code
         codes = ", ".join(d["code"] for d in rows)
         per_code = tg.parse_code_command(msg["text"])
         if per_code is not None:
