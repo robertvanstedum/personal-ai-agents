@@ -315,3 +315,23 @@ def test_mc_reads_filler_or_apology_alone_as_chat(text):
 
 def test_mc_keeps_a_note_that_opens_with_a_filler():
     assert oa.parse("save a note, actually, the kiln is ready") == oa.Action("note", text="actually, the kiln is ready")
+
+
+# ── Verification S-5: after an explicit colon or dash, words that start with a mark are his ───────────────────────────
+
+@pytest.mark.parametrize("text,payload", [
+    ("Add a post-it: .env needs rotating", ".env needs rotating"),
+    ("Pin a post-it to the board: .gitignore is wrong", ".gitignore is wrong"),
+    ("Add a post-it: !important deploy", "!important deploy"),
+    ("Put a post-it on the board: ...and breathe", "...and breathe"),
+    ("Add a post-it - .env needs rotating", ".env needs rotating"),
+    ("Mach ein Post-it ans Board: .env prüfen", ".env prüfen"),
+])
+def test_an_explicit_colon_or_dash_keeps_words_that_start_with_a_mark(text, payload):
+    assert board_commands.parse(text) == payload
+
+
+@pytest.mark.parametrize("text", ["Häng ein Post-it ans Board, nicht jetzt", "Schreib ein Post-it mit",
+                                  "put a post-it on the board, buy milk", "Add a post-it:"])
+def test_s3_cases_without_an_explicit_separator_still_ask_for_the_words(text):
+    assert board_commands.parse(text) == ""
