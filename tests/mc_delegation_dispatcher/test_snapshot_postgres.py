@@ -782,12 +782,11 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         again = supervisor()                                         # a restart
         again.runtime_tick()
         again.runtime_tick()
-        solo = [m for m in self.notify.lines() if "on its own" in m["text"]]
-        self.assertEqual([m["text"].split("\n")[0] for m in solo],
-                         ["Decision D-1 waiting on you, on its own", "Decision D-2 waiting on you, on its own"])
+        solo = [m for m in self.notify.lines() if "on its own" in m["text"]]     # D-1 went out batched; D-2 alone
+        self.assertEqual([m["text"].split("\n")[0] for m in solo], ["Decision D-2 waiting on you, on its own"])
         self.assertEqual([r["state"] for r in self.sql("SELECT state FROM guild.supervision_decisions ORDER BY id")],
                          ["approved", "sent"])                       # no third code
-        self.notify.reply("yes", solo[1]["message_id"])
+        self.notify.reply("yes", solo[0]["message_id"])
         again.read_answers(wait=0)
         self.sup.runtime_tick()
         self.assertEqual(self.item("C-17.review")["state"], "queued")
@@ -881,8 +880,10 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         def told():
             return [t for t in self.runtime_texts() if t.startswith("MC: the runtime\n")]
         self.assertEqual(told(), [])
-        self.assertEqual([r["key"].split(":")[0] for r in self.sql("SELECT key FROM guild.supervision_alerts")],
-                         ["runtime-link-error"])                 # only the failure is told; the notice is not marked
+        self.assertEqual(self.sql("SELECT key FROM guild.supervision_alerts"), [])   # the notice is not marked
+        self.assertEqual([(r["key"].split(":")[0], r["sent_at"] is not None)          # only the failure is told
+                          for r in self.sql("SELECT key, sent_at FROM guild.supervision_outbox")],
+                         [("runtime-link-error", True)])          # (through the supervisor's outbox, P2-3)
         self.sup.runtime_tick()
         self.assertEqual(len(told()), 1)
         self.assertIn("blocked its task", told()[0])
