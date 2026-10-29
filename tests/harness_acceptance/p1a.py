@@ -290,7 +290,8 @@ class Run:
             self.log("end", "supervision rows unreadable", error=type(exc).__name__)
         leftover = self.env.live_items(self.tag)
         self.check("end.no_leftover_items", not leftover, {"live": leftover,
-                   "next": "Robert ends each through the owner path (store.end) before the reservations settle"})
+                   "next": "Robert stops each queued or running one (Stop), and ends a lapsed, paused or unknown one "
+                                            "(end), through the owner path, before the reservations settle"})
         self.named("end.DUP-3", C.dup3, events)
         self.named("end.DUP-4", C.dup4, events)
         self.named("end.DUP-6", C.dup6, events)
