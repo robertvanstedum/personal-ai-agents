@@ -730,12 +730,15 @@ class HostRuntime:
     run_once's pass. Built by the CLI from host.yaml (host.HostConfig) and the authority's values (Authority.hosts)."""
 
     def __init__(self, dispatcher, cfg: RunnerConfig, host, values, gap_threshold_s, *, bundle_digest, sink=None,
-                 now=_now, wall=time.time, mono=time.monotonic, hint=None, stores=None, census=None):
+                 now=_now, wall=time.time, mono=time.monotonic, hint=None, stores=None, census=None, witness=None):
         self.dispatcher, self.cfg, self.host, self.values = dispatcher, cfg, host, values
         # The agent census (spec v0.5 §6.6, census.CensusFile on artifact_root/census): this host's file, which every
         # source on the host appends to; the runtime writes its own children's rows and the capture gaps, sends the
         # file's unsent events with each heartbeat and keeps the host's own view. None: no census (tests of S1-D).
         self.census = census
+        # The witness (R5.6-a, witness.py): told after every contact attempt how long the authority has not answered,
+        # by the monotonic clock (so the host's own sleep never counts); None: this host tells nobody.
+        self.witness = witness
         self.census_errors = 0             # census events this runtime could not write (shown; work goes on)
         self.census_unrecorded = {}        # agent id -> {reason, since}: its census row could not be recorded (it ran)
         self._census_limit = None          # a smaller batch after the authority refused one (never the contact itself)
@@ -1004,8 +1007,20 @@ class HostRuntime:
                     self.contact()
                 except Exception:
                     pass                       # a malformed answer is logged by the pass, never kills the timer
+                self.observe_authority()
                 due = self._mono() + interval
             self._contact_stop.wait(step)
+
+    def observe_authority(self):
+        """The witness's look at its authority after a contact attempt; it never costs the contact timer."""
+        if self.witness is None:
+            return
+        with self._lock:
+            since = self.offline_since
+        try:
+            self.witness.observe(None if since is None else self._mono() - since, self._now())
+        except Exception:
+            self.witness.errors += 1
 
     def _ok(self):
         with self._lock:

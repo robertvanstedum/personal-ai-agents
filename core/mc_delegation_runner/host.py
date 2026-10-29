@@ -28,6 +28,10 @@ per-(host, environment) lock (G6), its pinned interpreter, and its bundle digest
 * **API-route keys by reference** (R6.7-f): ``route_keys`` maps an API route to a credential reference,
   ``keychain:<service>/<account>`` or, in ``dev`` only, ``test:<name>`` read from ``test_credentials`` (a private file
   of test values made for an acceptance run). A reference, never a value.
+* **The witness's notifier** (S1-H, R5.6-a): a host with the ``witness`` role may name ``notifier``, the adapter its
+  witness tells Robert through when the authority stops answering (witness.py): ``{"kind": "file", "path"}`` (dev
+  only: acceptance's notify file) or ``{"kind": "telegram", "token_ref", "chat_ref"}`` (Keychain references, read at
+  each send). Never the authority's store, whose outage it reports.
 * **The authority service** (S1-H, spec R3.4-a): an authority host that serves other hosts names its door in
   ``door``: where the thin HTTPS server listens, its certificate and key, the store's DSN file, and the credentials
   file (``minimoi.door_credentials.v1``: each host's and each reader's token SHA-256, never a token). Only a host
@@ -65,9 +69,10 @@ _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _KEYS = {"schema", "host_id", "environment", "roles", "expected_availability", "unreachable_grace_s", "service_manager",
          "authority", "capabilities", "concurrency", "offline_scope_default", "do_not_resume", "artifact_root",
          "workspace_root", "mirrors", "interpreter", "bundle_root", "gap_detection", "stop_timeout_s",
-         "effect_sink", "principal", "note", "tools", "route_keys", "test_credentials", "door"}
+         "effect_sink", "principal", "note", "tools", "route_keys", "test_credentials", "door", "notifier"}
 _REQUIRED = _KEYS - {"do_not_resume", "gap_detection", "stop_timeout_s", "effect_sink", "note",
-                     "service_manager", "offline_scope_default", "tools", "route_keys", "test_credentials", "door"}
+                     "service_manager", "offline_scope_default", "tools", "route_keys", "test_credentials", "door",
+                     "notifier"}
 TOOL_ACTORS = ("claude-code", "codex", "fakework")
 
 
@@ -96,6 +101,15 @@ class Interpreter:
     version: tuple
     prefix: Path | None = None         # the virtual environment the pin names (its sys.prefix); None: not pinned
     packages: str | None = None        # 'sha256:<hex>' of what is installed in it (packages_digest); None: not pinned
+
+
+@dataclass(frozen=True)
+class Notifier:
+    """The witness's notifier adapter (witness.py): a file (dev) or Telegram by Keychain reference."""
+    kind: str
+    path: Path | None = None
+    token_ref: str | None = None
+    chat_ref: str | None = None
 
 
 @dataclass(frozen=True)
@@ -150,6 +164,7 @@ class HostConfig:
     route_keys: dict = field(default_factory=dict)       # API route -> credential reference (never a value)
     test_credentials: Path | None = None                 # dev only: the acceptance run's test credential file
     door: Door | None = None                             # the authority service's door (authority hosts only)
+    notifier: Notifier | None = None                     # the witness's notifier (witness hosts only)
     source: Path | None = None
 
     @property
@@ -266,7 +281,21 @@ def parse(doc) -> HostConfig:
         effect_sink=None if sink is None else EffectSink(_path(sink["path"], "host_effect_sink_invalid"),
                                                           sink["lookup"]),
         tools=tools, route_keys=route_keys, test_credentials=test_credentials,
-        door=None if doc.get("door") is None else _door(doc["door"], roles))
+        door=None if doc.get("door") is None else _door(doc["door"], roles),
+        notifier=None if doc.get("notifier") is None else _notifier(doc["notifier"], roles, doc["environment"]))
+
+
+def _notifier(n, roles, environment) -> Notifier:
+    """The witness's notifier: only on a witness host; a file only in dev; Telegram by two Keychain references."""
+    _need("witness" in roles, "host_notifier_without_witness")
+    ref = re.compile(r"^keychain:[A-Za-z0-9_.-]{1,64}/[A-Za-z0-9_.-]{1,64}$")
+    if type(n) is dict and n.get("kind") == "file":
+        _need(set(n) == {"kind", "path"}, "host_notifier_invalid")
+        _need(environment == "dev", "host_test_instrument_in_production")
+        return Notifier("file", path=_path(n["path"], "host_notifier_invalid"))
+    _need(type(n) is dict and n.get("kind") == "telegram" and set(n) == {"kind", "token_ref", "chat_ref"}
+          and all(type(n[k]) is str and ref.match(n[k]) for k in ("token_ref", "chat_ref")), "host_notifier_invalid")
+    return Notifier("telegram", token_ref=n["token_ref"], chat_ref=n["chat_ref"])
 
 
 def _door(d, roles) -> Door:

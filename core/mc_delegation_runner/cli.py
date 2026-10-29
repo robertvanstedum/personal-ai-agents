@@ -219,8 +219,10 @@ def runtime_for(host, auth, dispatcher, *, digest=None):
                               workspace_root=host.workspace_root, artifact_root=host.artifact_root,
                               max_cost_usd=V2_MAX_COST_USD, lease_renew_s=float(auth.hosts.renew_s), tick_s=0.5)
     sink = None if host.effect_sink is None else FileSink(host.effect_sink.path, lookup=host.effect_sink.lookup)
+    from . import witness
     return runner.HostRuntime(dispatcher, cfg, host, auth.hosts, auth.sweeper.gap_threshold_s, bundle_digest=digest,
-                              sink=sink, stores=_stores(host), census=census.CensusFile(host.artifact_root / "census"))
+                              sink=sink, stores=_stores(host), census=census.CensusFile(host.artifact_root / "census"),
+                              witness=witness.build(host, auth.hosts.contact_timeout_s, host.artifact_root))
 
 
 def _stores(host) -> dict:

@@ -343,7 +343,9 @@ MC_RUNNER_LOCAL_FILES = frozenset({"core/mc_delegation_runner/cli.py", "core/mc_
                                    "core/mc_delegation_runner/journal.py", "core/mc_delegation_runner/fakework.py",
                                    # The census's OTLP/JSON writer and the Claude Code hook (built, never installed):
                                    # the runtime's bundle only.
-                                   "core/mc_delegation_runner/otel.py", "core/mc_delegation_runner/claude_hook.py"})
+                                   "core/mc_delegation_runner/otel.py", "core/mc_delegation_runner/claude_hook.py",
+                                   # The host's witness and its notifier adapters (S1-H, R5.6-a): the runtime only.
+                                   "core/mc_delegation_runner/witness.py"})
 
 
 def _is_staging_only(path: str) -> bool:
