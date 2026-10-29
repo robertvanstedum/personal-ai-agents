@@ -208,12 +208,15 @@ def staging_watch(store, *, timeout_s):
         view = row["view"] or {}
         if age > timeout_s and row["silent_since"] is None:
             store.mark_silent(host, row["last_at"])
+            taken = view.get("as_of")
+            told = "of unknown age" if type(taken) not in (int, float) else \
+                f"{int(row['now'].timestamp() - taken)} s old"                 # a view carries its age (R4.6)
             out.append({"key": f"staging-silent:{host}:{row['last_at'].isoformat()}", "kind": "error",
                         "text": f"Staging {host} has been silent for {int(age)} s (last heartbeat "
                                 f"{row['last_at']:%H:%M:%S %Z}). Production only watches: nothing in dev is touched. "
-                                f"Its last account: authority answering {view.get('authority_answering')}, sweeper "
-                                f"{view.get('sweeper_age_s')} s old, {view.get('lapsed_always_on')} lapsed always-on "
-                                f"items."})
+                                f"Its last account ({told}): authority answering {view.get('authority_answering')}, "
+                                f"sweeper {view.get('sweeper_age_s')} s old, {view.get('lapsed_always_on')} lapsed "
+                                f"always-on items."})
         elif age <= timeout_s and row["silent_since"] is not None:
             since = row["silent_since"]
             store.mark_back(host)

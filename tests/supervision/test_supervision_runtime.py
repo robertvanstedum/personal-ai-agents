@@ -243,7 +243,7 @@ def test_the_staging_watch_tells_silence_once_and_the_return_once_and_is_unarmed
     row["now"] = NOW + timedelta(seconds=120)
     (silent,) = watch.staging_watch(store, timeout_s=90)
     assert silent["key"] == f"staging-silent:staging-1:{row['last_at'].isoformat()}"
-    assert "nothing in dev is touched" in silent["text"]
+    assert "nothing in dev is touched" in silent["text"] and "account (of unknown age)" in silent["text"]
     assert watch.staging_watch(store, timeout_s=90) == []
     row["last_at"] = NOW + timedelta(seconds=115)
     (back,) = watch.staging_watch(store, timeout_s=90)
