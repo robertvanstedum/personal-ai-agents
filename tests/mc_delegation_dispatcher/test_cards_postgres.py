@@ -22,7 +22,7 @@ from postgres_fixture_support import DSN, PostgresFixture  # noqa: E402
 
 from core.mc_delegation_dispatcher import cards as C  # noqa: E402
 from core.mc_delegation_dispatcher.store import (EFFECT_POLICY, Authority, AuthorityRefused,  # noqa: E402
-                                                 DispatcherStore, effect_operation_id)
+                                                 DispatcherStore, effect_operation_id, item_subject_digest)
 from core.minimoi_actions.grants import CapabilityRule, GrantDefinition, GrantStore  # noqa: E402
 from core.minimoi_actions.requests import ToolRequest  # noqa: E402
 
@@ -109,10 +109,10 @@ class Cards(PostgresFixture, unittest.TestCase):
                                    event_id=str(uuid4()), at=self.db_now().isoformat(), checkpoint=cp)
 
     def result(self, env, *, status="completed", artifacts=(), detail=None, runner="mac-a", event_id=None,
-               stopped=True, route="fakework", unit="test_units", at=None, store=None, amount=USED):
+               stopped=True, route="fakework", unit="test_units", at=None, store=None, amount=USED, output="done"):
         return (store or self.store).result(
             env["request_id"], env["generation"], event_id=event_id or str(uuid4()), status=status,
-            artifacts=list(artifacts), detail={"exit_code": 0} if detail is None else detail, output_text="done",
+            artifacts=list(artifacts), detail={"exit_code": 0} if detail is None else detail, output_text=output,
             protocol=2, runner_id=runner, at=(at or self.db_now()).isoformat(), route=route,
             usage={"amount": amount, "unit": unit, "children_stopped": stopped})
 
@@ -361,7 +361,9 @@ class Cards(PostgresFixture, unittest.TestCase):
         # Probe P1b (review N5): anything else under that event id is refused, as for every owner write (S1-A).
         for other in (dict(status="completed", artifacts=[art("patch", "x")], detail={"exit_code": 0}),
                       dict(detail={"exit_code": 71}), dict(amount=0.2), dict(artifacts=[]),
-                      dict(at=made - timedelta(seconds=1))):
+                      dict(at=made - timedelta(seconds=1)),
+                      dict(output="other output"), dict(detail={"exit_code": 70, "code": "other"}),     # NSF2
+                      dict(artifacts=[{**art("output", "b1"), "bytes": 11}])):
             conflict = self.result(env, **{**crashed, **other})
             self.assertEqual((conflict["state"], conflict["code"]), ("refused", "event_id_conflict"), other)
         build = self.item("C-17.build")
@@ -645,6 +647,61 @@ class Cards(PostgresFixture, unittest.TestCase):
         self.assertEqual((again["state"], again["code"]), ("proposed", "grant_step_used"))
         self.assertEqual(self.grant_row(admitted["grant_id"])["consumed_operations"], 1)
         self.assertEqual(len(self.events("grant.step_bound")), 1)
+
+    def test_nsf1_no_owner_act_revives_a_step_of_an_ended_card(self):
+        """Closure check NSF1, probe P7: a cross-vendor review running under its own grant is unknown when Robert
+        revokes its card, so it is marked ending. Reassigning it is refused (it would clear that mark and hand the work
+        out again); it can only be ended. A step of an ended card that reaches a hand-out by any path is refused there.
+        An item a revocation is ending, card or not, is never reassigned."""
+        verified = self.make_store(Authority.parse({**TEST_VALUES, "launch_closure": "verified"}))
+        self.store = verified
+        cross = {"actor": "claude-code", "route": "anthropic.api", "amount": 1, "cost_cap_usd": 1}
+        claude = CAPS + ["actor:claude-code"]
+        verified.heartbeat("mac-c2", "online", claude, protocol=2, facts=facts("mac-c"))
+        reviews = {}
+        for card_id in ("C-17", "C-18"):
+            admitted = self.admit(card(card_id, reviewer=cross))
+            _, env = self.claim()
+            self.result(env, artifacts=[art("patch", card_id)])
+            review = self.item(f"{card_id}.review")
+            verified.admit(review["request_id"], self.own_grant(review), by="robert", note="yes")
+            _, renv = self.claim("mac-c", claude)
+            decided = verified.reconcile("mac-c", renv["request_id"], 1, {"child": "unverified", "checkpoint": None},
+                                         [])
+            self.assertEqual((decided["answer"], decided["code"]), ("decide", "process_unverified"))
+            self.assertEqual(verified.revoke(admitted["grant_id"], by="robert", note="stop")["waiting"],
+                             [renv["request_id"]])
+            with self.assertRaisesRegex(AuthorityRefused, "card_ended"):
+                verified.reassign(renv["request_id"], "mac-c2", by="robert", note="move it")
+            reviews[card_id] = renv["request_id"]
+        self.assertIsNone(verified.claim("mac-c2", claude, protocol=2))
+        # C-17's review can only be ended; its decision is answered so.
+        self.assertEqual(verified.end(reviews["C-17"], by="robert", note="end it")["state"], "interrupted")
+        # C-18's review is forced back into a queue by hand, as some other path might: the hand-out refuses it.
+        self.sql("""UPDATE guild.mc_delegations SET state='queued', runner_id='mac-c2', result_detail=NULL,
+            facts=(facts - 'ending') || '{"reassigned": {"by": "test"}}'::jsonb WHERE job_id='C-18.review'""")
+        self.assertIsNone(verified.claim("mac-c2", claude, protocol=2))
+        forced = self.item("C-18.review")
+        self.assertEqual((forced["state"], forced["result_detail"]["code"]), ("cancelled", "card_ended"))
+        self.assertEqual([e for e in self.events("item.claimed") if str(e["item_id"]) in reviews.values()
+                          and e["generation"] > 1], [])
+        # Not a card: an item a revocation is ending is never reassigned either.
+        subject = item_subject_digest(actor="fakework", scope="build", repository="personal-ai-agents",
+                                      ref="a" * 40, brief="plain", route="fakework", amount=AMOUNT)
+        gid = str(uuid4())
+        with self.connect() as conn:
+            GRANTS.issue(conn, GrantDefinition(gid, "robert", "dev", "conversation", ("owner-turn",), ("mc",),
+                                               "policy", "delegate.start_build", 1, (subject,), 1,
+                                               self.db_now() + timedelta(seconds=600)))
+        verified.enqueue(job_id="plain", actor="fakework", scope="build", repository="personal-ai-agents",
+                         ref="a" * 40, brief="plain", cost_cap_usd=1.0, deadline_s=600, route="fakework",
+                         amount=AMOUNT, grant_id=gid)
+        _, penv = self.claim()
+        verified.reconcile("mac-a", penv["request_id"], 1, {"child": "unverified", "checkpoint": None}, [])
+        verified.revoke(gid, by="robert", note="stop it")
+        verified.heartbeat("mac-a2", "online", CAPS, protocol=2, facts=facts("mac-a"))
+        with self.assertRaisesRegex(AuthorityRefused, "item_ending"):
+            verified.reassign(penv["request_id"], "mac-a2", by="robert", note="move it")
 
     # ── the carried fix from the S1-B closure check (N-C4 part 2) ──
     def test_n_c4_a_result_made_before_an_unswept_lapse_audits_the_lapse_before_the_end(self):

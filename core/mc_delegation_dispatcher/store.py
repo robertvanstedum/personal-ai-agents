@@ -1180,7 +1180,8 @@ class DispatcherStore:
     def _admit(self, cur, row, runner_id, host_id):
         code = self._grant_refusal(cur, row) or self._card_refusal(cur, row)
         if code is not None:                 # W-EXP: expired before the claim, so never claimed
-            state = {"grant_expired": "expired", "grant_revoked": "cancelled"}.get(code, "refused")
+            state = {"grant_expired": "expired", "grant_revoked": "cancelled", "card_ended": "cancelled"}.get(
+                code, "refused")
             self._end(cur, row, state, {"code": code}, host_id)
             return None
         refusal = route_refusal(self.authority, row["route"], row["actor"])
@@ -1245,7 +1246,7 @@ class DispatcherStore:
             code = "reservation_missing"
         if code is not None:                  # revoked, expired or overdue since: it ends here, never started here
             self._close(cur, row, {"grant_expired": "expired", "grant_revoked": "cancelled",
-                                   "deadline_passed": "timed_out"}.get(code, "interrupted"),
+                                   "deadline_passed": "timed_out", "card_ended": "cancelled"}.get(code, "interrupted"),
                         {"code": code}, children_stopped=True, host_id=host_id)
             return None
         if retry is not None:
@@ -1426,7 +1427,7 @@ class DispatcherStore:
         if row is None or row["route"] is None:
             return {"state": "refused", "event_id": eid,
                     "code": "unknown_request" if row is None else "protocol_mismatch"}
-        retried = self._retried(cur, eid, rid, generation, when, status, route, used, detail, artifacts)
+        retried = self._retried(cur, eid, rid, generation, when, status, route, used, detail, artifacts, output_text)
         if retried is not None:      # a definite failure already given its retry (R4.3-d), whatever came after: DUP-5
             return retried
         report = _report_digest(status, artifacts, detail, output_text, route, used)
@@ -1474,7 +1475,7 @@ class DispatcherStore:
         if status == "failed" and not open_ops and _attempt(row) is not None:
             no_retry = self._retry_refusal(cur, row, detail, used)
             if no_retry is None:
-                return self._retry(cur, row, eid, when, host_id, route, used, detail, artifacts)
+                return self._retry(cur, row, eid, when, host_id, route, used, detail, artifacts, output_text)
         body = {"status": status, "route": route,
                 "usage": {**used, "amount": None if used["amount"] is None else float(used["amount"])},
                 "report": report}
@@ -1616,8 +1617,7 @@ class DispatcherStore:
             row = self._item(cur, rid)
             _need(row is not None and row["route"] is not None, "unknown_request")
             _need(row["state"] == "proposed", "item_not_proposed")
-            _need(not ((row["facts"] or {}).get("card") and self._recorded(cur, _once("card_done", row["card_id"]))),
-                  "card_ended")
+            _need(not self._card_finished(cur, row), "card_ended")
             subject = _row_subject(row)
             _need(subject is not None, "item_invalid")
             on_card = ((row["facts"] or {}).get("card") or {}).get("on_card")
@@ -1636,6 +1636,12 @@ class DispatcherStore:
                             once=_once("decision_resolved", decision),
                             body={"decision_id": decision, "answer": "admitted", "by": by})
             return {"state": "queued", "grant_id": gid}
+
+    def _card_finished(self, cur, row) -> bool:
+        """Whether ``row`` is a step of a card that has ended (card.ready or card.ended): nothing hands it out,
+        admits it or moves it again; it can only be ended (NSF1)."""
+        return bool((row["facts"] or {}).get("card")) and \
+            self._recorded(cur, _once("card_done", row["card_id"])) is not None
 
     def _card_record(self, cur, card_id):
         """(the card's admission record, the card recompiled from it), or (None, None): the authority's own record is
@@ -1659,9 +1665,12 @@ class DispatcherStore:
         """For a step of a card, at its hand-out: None while it is still the step its card compiles now, from the
         authority's own records: the same template digest, input artifacts that are the outputs recorded for the
         card's earlier steps as its template selects them (its only free field), and an attempt within the card's
-        allowance. Otherwise the code; the item is not handed out."""
+        allowance, of a card that has not ended (a step of an ended card is never handed out, NSF1). Otherwise the code;
+        the item is not handed out."""
         if not (row["facts"] or {}).get("card"):
             return None
+        if self._card_finished(cur, row):
+            return "card_ended"
         _, compiled = self._card_record(cur, row["card_id"])
         step = None if compiled is None else compiled.step(row["step"])
         if step is None:
@@ -1756,7 +1765,8 @@ class DispatcherStore:
                               "attempt": _attempt(row)})
 
     # ── attempts (R4.3-d) ──
-    def _retried(self, cur, event_id, request_id, generation, when, status, route, used, detail, artifacts):
+    def _retried(self, cur, event_id, request_id, generation, when, status, route, used, detail, artifacts,
+                 output_text):
         """None unless ``event_id`` already recorded a failed attempt of this item that was given its retry. Then S1-A's
         rule for every owner write: the identical report replayed answers already_applied, with the retry it was given
         (DUP-5); anything else under that id is refused event_id_conflict (review N5)."""
@@ -1767,7 +1777,7 @@ class DispatcherStore:
         if found is None:
             return None
         n = found["body"]["attempt"]
-        body = _attempt_body(status, route, used, n, detail, artifacts)
+        body = _attempt_body(status, route, used, n, detail, artifacts, output_text)
         if self._replay(cur, event_id, "attempt.failed", request_id, generation, when, body) != "already_applied":
             return {"state": "refused", "event_id": event_id, "code": "event_id_conflict"}
         return {"state": "already_applied", "event_id": event_id, "code": "retry", "attempt": n + 1,
@@ -1788,6 +1798,8 @@ class DispatcherStore:
             return "children_unconfirmed"
         if row["cancel_requested"]:
             return "owner_stop"
+        if self._card_finished(cur, row):
+            return "card_ended"
         _, compiled = self._card_record(cur, row["card_id"])
         if compiled is None:
             return "card_record_invalid"
@@ -1805,7 +1817,7 @@ class DispatcherStore:
             return "reservation_exhausted"     # the item's cap is spent: no attempt gets a fresh one
         return None
 
-    def _retry(self, cur, row, eid, when, host_id, route, used, detail, artifacts) -> dict:
+    def _retry(self, cur, row, eid, when, host_id, route, used, detail, artifacts, output_text) -> dict:
         """The retry (R4.3-d), in the failed attempt's result transaction: the attempt's report is recorded (its own
         host event, attempt.failed; it is not the item's result, so an item keeps at most one accepted result,
         DUP-4). Its known usage moves from the item's reservation to the day's observed spend, and the rest of that
@@ -1816,7 +1828,7 @@ class DispatcherStore:
         rid, g, n = row["request_id"], row["generation"], _attempt(row)
         _, compiled = self._card_record(cur, row["card_id"])
         written = self._host_event(cur, "attempt.failed", eid, item=rid, generation=g, host_id=host_id, at=when,
-                                   body=_attempt_body("failed", route, used, n, detail, artifacts))
+                                   body=_attempt_body("failed", route, used, n, detail, artifacts, output_text))
         if written is not None:
             return {"state": "refused", "event_id": eid, "code": "event_id_conflict"}
         res, amount = dict(row["reservation"]), used["amount"]
@@ -2513,6 +2525,10 @@ class DispatcherStore:
             _need(row["state"] in ("claimed", "running", "lapsed", "paused", "unknown") or _awaiting(row),
                   "item_not_reassignable")
             _need(row["state"] not in ("claimed", "running") or row["lease_until"] <= row["now"], "lease_current")
+            # A revocation that is ending the item, or the end of its card, leaves the owner one act: end (NSF1). A
+            # reassignment would clear that mark and hand the work out again.
+            _need(not self._card_finished(cur, row), "card_ended")
+            _need(not (row["facts"] or {}).get("ending"), "item_ending")
             row = self._lapse_written(cur, row)
             res = dict(row["reservation"] or {})
             _need("reserved" in res and res.get("state") is None, "reservation_missing")
@@ -2667,13 +2683,16 @@ def _report_digest(status, artifacts, detail, output_text, route, used) -> str:
                           .encode("utf-8")).hexdigest()
 
 
-def _attempt_body(status, route, used, attempt, detail, artifacts) -> dict:
-    """A failed attempt's report as attempt.failed records it: what a replay of it must match exactly."""
+def _attempt_body(status, route, used, attempt, detail, artifacts, output_text) -> dict:
+    """A failed attempt's report as attempt.failed records it: what a replay of it must match exactly. ``report`` is
+    the same whole-report digest result.accepted records (status, detail, usage, artifacts, output), so one
+    exact-match rule holds on both paths (NSF2); the rest is kept readable for the audit."""
     return {"status": status, "route": route,
             "usage": {**used, "amount": None if used["amount"] is None else float(used["amount"])},
             "attempt": attempt, "exit_code": (detail or {}).get("exit_code"),
             "artifacts": [{"kind": a["kind"], "ref": a["ref"], "sha256": a["sha256"]}
-                          for a in card_mod.recorded_outputs(artifacts)]}
+                          for a in card_mod.recorded_outputs(artifacts)],
+            "report": _report_digest(status, artifacts, detail, output_text, route, used)}
 
 
 def _attempt(row):
