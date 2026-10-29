@@ -35,7 +35,11 @@ configuration (``Authority``) enables it, and only about version 2 items: those 
         cancelled (grant_revoked), never completed (R4.3-e); a result made before a lapse is taken as progress is.
         With an effect of the item still open (a receipt dispatched or unknown), a result ends nothing: it is kept as
         evidence (artifacts, usage settled) and the item goes unknown with one decision (code effects_open); while a
-        revocation waits on such an effect, a late result is refused (grant_revoked)
+        revocation waits on such an effect, a late result is refused (grant_revoked). A record made before a lapse
+        the sweeper hasn't written yet has the lapse audited first. On a card step: a completed result writes the
+        card's next step in the same transaction (R7.4-b); a definite failure (failed, with a known exit) within the
+        card's attempt allowance answers {code: retry, attempt, generation}: the step goes back, queued, to the same
+        owner under generation + 1, from its last checkpoint (R4.3-d)
   reconcile(runner_id, request_id, generation, stage={child, checkpoint}, open_operations, protocol=2)
         -> continue | resume(generation + 1, lease_until, checkpoint) | stop(condition, code) | decide(code, decision_id)
         the owner's question for each item it holds after a restart, wake or reconnect (§5.5 step 4). In order:
@@ -76,6 +80,13 @@ The owner's acts: reassign (R5.1-d), end (R5.1-c), revoke (R4.3-e, end to end), 
 Admitting an item (enqueue with a route) uses one of its grant's operations in the same transaction that writes it
 queued (GrantStore.use_for_item, R4.3-c). With no grant, none left, or one that doesn't cover it, the item is written
 proposed with the reason instead.
+Cards (cards.py, R4.3-c with N1, R7.4-a/b): admit_card, on the owner's one exact approval of a card's digest, issues
+its delegate.card grant, records the card and admits its first step. Every later step is written by the authority
+itself, in the transaction that accepted the step before it: compiled from the card's class template, its inputs the
+outputs the authority recorded for earlier steps (the only free field), queued under the card grant, or proposed with
+one decision (a step of another model family, or one the grant no longer admits); admit is the owner's act for such
+an item. A card step's grant check is its template digest, recomputed from its columns; its hand-out also checks its
+inputs against the records and its attempt against the card's allowance.
 Only the owner host of the current generation, inside its lease, may progress, renew or report (R4.4), apart from
 replaying what it made before a lapse. Every lease, expiry and grace decision uses the database clock; a host's own
 time (``at``) orders that host's progress and places a replayed record inside or outside its lease (clock_skew_s).
@@ -109,6 +120,7 @@ from decimal import Decimal
 from pathlib import Path
 from types import MappingProxyType
 
+from core.mc_delegation_dispatcher import cards as card_mod
 from core.mc_delegation_runner import envelope as env_mod
 
 _log = logging.getLogger("mc_delegation")
@@ -474,6 +486,10 @@ def item_subject_digest(*, actor, scope, repository, ref, brief, route, amount, 
 
 
 def _row_subject(row) -> str | None:
+    """The digest the item's grant must name: a card step's template digest (recomputed from its columns, R4.3-c),
+    otherwise the work's subject digest, input artifacts included."""
+    if ((row.get("facts") or {}).get("card") or {}).get("on_card"):
+        return card_mod.row_step_digest(row)
     try:
         return item_subject_digest(actor=row["actor"], scope=row["scope"], repository=row["repository"], ref=row["ref"],
                                    brief=row["brief"], route=row["route"],
@@ -544,9 +560,12 @@ ORDER BY d.created_at LIMIT 1 FOR UPDATE OF d SKIP LOCKED"""
 
 
 class DispatcherStore:
-    def __init__(self, connect, *, principal: str, environment: str, authority: Authority | None = None, grants=None):
+    def __init__(self, connect, *, principal: str, environment: str, authority: Authority | None = None, grants=None,
+                 cards=None):
         """``authority`` (Authority.load) enables version 2 when its protocols say so; a version 2 claim then reads
-        each item's grant through ``grants`` (core.minimoi_actions.grants.GrantStore with the delegation catalogue)."""
+        each item's grant through ``grants`` (core.minimoi_actions.grants.GrantStore with the delegation catalogue,
+        delegate.card's row among it: cards.grant_rows()). ``cards`` is the card class catalogue (cards.Catalogue);
+        a version 2 store without one reads the one shipped beside this file (card_classes.json)."""
         self._connect, self.principal, self.environment = connect, principal, environment
         self._v2 = authority is not None and authority.speaks_v2
         if authority is not None and authority.environment != environment:
@@ -561,7 +580,11 @@ class DispatcherStore:
             if authority.sweeper is None:
                 raise ValueError("authority_sweeper_missing")         # nothing would ever lapse or end at grace
             self._receipts = ReceiptStore()
-        self.authority, self._grants = authority, grants
+            if cards is None:
+                cards = card_mod.Catalogue.load()
+            if type(cards) is not card_mod.Catalogue:
+                raise ValueError("authority_card_catalogue_invalid")
+        self.authority, self._grants, self._cards = authority, grants, cards
         # The authority's liveness and the sweeper's heartbeat are rows among the contacts. A '/' is outside every id a
         # host can send (_ID), so no host can write either, and neither can be made to look alive.
         self._alive_id = f"authority/{environment}/{principal}"
@@ -625,6 +648,15 @@ class DispatcherStore:
     def _enqueue_v2(self, job_id, actor, scope, repository, ref, brief, cost_cap_usd, deadline_s, route, amount,
                     grant_id, required_capabilities, input_artifacts, card_id, step, created_by) -> str:
         _need(self._v2, "protocol_not_enabled")
+        item = self._v2_item(job_id, actor, scope, repository, ref, brief, cost_cap_usd, deadline_s, route, amount,
+                             grant_id, required_capabilities, input_artifacts, card_id, step, created_by)
+        with self._tx() as cur:
+            return "duplicate" if self._write(cur, item, subject=item["subject"]) is None else "accepted"
+
+    def _v2_item(self, job_id, actor, scope, repository, ref, brief, cost_cap_usd, deadline_s, route, amount, grant_id,
+                 required_capabilities, input_artifacts, card_id, step, created_by) -> dict:
+        """A version 2 item's values, checked, with the work's subject digest: what enqueue writes, and what a card
+        step compiled by the authority writes the same way."""
         cfg = self.authority.routes.get(route) if type(route) is str else None
         _need(cfg is not None, "route_unknown")
         _need(actor in V2_ACTORS and scope in env_mod.SCOPES, "item_invalid")
@@ -642,33 +674,59 @@ class DispatcherStore:
         subject = item_subject_digest(actor=actor, scope=scope, repository=repository, ref=ref, brief=brief,
                                       route=route, amount=amount, required_capabilities=caps, input_artifacts=arts,
                                       card_id=card_id, step=step)
-        with self._tx() as cur:
-            cur.execute("""INSERT INTO guild.mc_delegations (request_id, job_id, principal_id, environment, actor, scope,
-                repository, ref, brief, cost_cap_usd, deadline, state, route, reservation, grant_id,
-                required_capabilities, input_artifacts, card_id, step, created_by)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, clock_timestamp() + %s * interval '1 second', 'proposed',%s,
-                        %s::jsonb,%s,%s::jsonb,%s::jsonb,%s,%s,%s)
-                ON CONFLICT (job_id) DO NOTHING RETURNING request_id""",
-                (request_id_for(job_id), job_id, self.principal, self.environment, actor, scope, repository, ref, brief,
-                 cost_cap_usd, int(deadline_s), route, json.dumps({"requested": float(amount)}), grant_id,
-                 json.dumps(caps), json.dumps(arts), card_id, step, created_by))
-            inserted = cur.fetchone()
-            if inserted is None:
-                return "duplicate"                          # a retry of the same item uses no grant operation
-            # §4.2, R4.3-c: queued means admitted under a grant, so admission uses one of its operations, in this same
-            # transaction. Without a grant, with none left, or with one that doesn't cover this work: proposed.
-            code = "grant_missing" if grant_id is None else self._grants.use_for_item(
-                cur.connection, self.principal, self.environment, grant_id, subject_digest=subject,
-                capability_prefix=GRANT_FAMILY, work_ids=tuple(w for w in (card_id, job_id) if w))
-            state = "proposed" if code else "queued"
-            cur.execute("UPDATE guild.mc_delegations SET state=%s, result_detail=%s::jsonb WHERE request_id=%s",
-                        (state, json.dumps({"code": code}) if code else None, inserted["request_id"]))
-            self._event(cur, f"item.{state}", item=inserted["request_id"], generation=0,
-                        source="owner" if created_by == "owner" else "authority",
-                        body={"route": route, "requested": float(amount), "grant_id": grant_id, "card_id": card_id,
-                              "step": step, "required_capabilities": caps, "input_artifacts": arts,
-                              "created_by": created_by, "subject_digest": subject, **({"code": code} if code else {})})
-            return "accepted"
+        return {"job_id": job_id, "actor": actor, "scope": scope, "repository": repository, "ref": ref, "brief": brief,
+                "cost_cap_usd": cost_cap_usd, "deadline_s": int(deadline_s), "route": route, "amount": amount,
+                "grant_id": grant_id, "caps": caps, "arts": arts, "card_id": card_id, "step": step,
+                "created_by": created_by, "subject": subject}
+
+    def _write(self, cur, item, *, subject, facts=None, admit=True, decision=None) -> dict | None:
+        """Insert one version 2 item (``_v2_item``) and admit it in this same transaction. §4.2, R4.3-c: queued means
+        admitted under a grant, so admission uses one of its operations (GrantStore.use_for_item for ``subject``).
+        Without a grant, with none left, with one that doesn't cover it, or not to be admitted here (``admit``
+        false, with the decision's code), it is written proposed with the reason, and, given ``decision`` (its class
+        and whether it arrives solo, R7.4-c), one decision is queued for it. None when the job id is already known:
+        a retry of the same item uses nothing. ``facts`` is the authority's record of a card step."""
+        cur.execute("""INSERT INTO guild.mc_delegations (request_id, job_id, principal_id, environment, actor, scope,
+            repository, ref, brief, cost_cap_usd, deadline, state, route, reservation, grant_id,
+            required_capabilities, input_artifacts, card_id, step, created_by, facts)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, clock_timestamp() + %s * interval '1 second', 'proposed',%s,
+                    %s::jsonb,%s,%s::jsonb,%s::jsonb,%s,%s,%s,%s::jsonb)
+            ON CONFLICT (job_id) DO NOTHING RETURNING request_id""",
+            (request_id_for(item["job_id"]), item["job_id"], self.principal, self.environment, item["actor"],
+             item["scope"], item["repository"], item["ref"], item["brief"], item["cost_cap_usd"], item["deadline_s"],
+             item["route"], json.dumps({"requested": float(item["amount"])}), item["grant_id"],
+             json.dumps(item["caps"]), json.dumps(item["arts"]), item["card_id"], item["step"], item["created_by"],
+             None if facts is None else json.dumps(facts)))
+        inserted = cur.fetchone()
+        if inserted is None:
+            return None                                     # a retry of the same item uses no grant operation
+        rid, gid = inserted["request_id"], item["grant_id"]
+        if not admit:
+            code = decision["code"]
+        else:
+            code = "grant_missing" if gid is None else self._grants.use_for_item(
+                cur.connection, self.principal, self.environment, gid, subject_digest=subject,
+                capability_prefix=GRANT_FAMILY, work_ids=tuple(w for w in (item["card_id"], item["job_id"]) if w))
+        state = "proposed" if code else "queued"
+        decision_id = str(uuid.uuid4()) if code and decision is not None else None
+        detail = None if not code else {"code": code, **({"decision_id": decision_id, "class": decision["class"]}
+                                                         if decision_id else {})}
+        cur.execute("UPDATE guild.mc_delegations SET state=%s, result_detail=%s::jsonb WHERE request_id=%s",
+                    (state, None if detail is None else json.dumps(detail), rid))
+        self._event(cur, f"item.{state}", item=rid, generation=0,
+                    source="owner" if item["created_by"] == "owner" else "authority",
+                    body={"route": item["route"], "requested": float(item["amount"]), "grant_id": gid,
+                          "card_id": item["card_id"], "step": item["step"], "required_capabilities": item["caps"],
+                          "input_artifacts": item["arts"], "created_by": item["created_by"], "subject_digest": subject,
+                          **({"code": code} if code else {}), **({"card": facts["card"]} if facts else {})})
+        if decision_id is not None:
+            # One decision, waiting on the owner's admission (R7.4-b; S1-G gives it its D-code and notice).
+            self._event(cur, "decision.queued", item=rid, generation=0, once=_once("admission", rid),
+                        event_id=decision_id, body={"class": decision["class"], "solo": decision["solo"],
+                                                    "reason": code, "card_id": item["card_id"], "step": item["step"],
+                                                    "subject_digest": subject})
+        return {"request_id": str(rid), "job_id": item["job_id"], "state": state, "code": code,
+                "decision_id": decision_id}
 
     def by_job(self, job_id) -> dict | None:
         with self._tx() as cur:
@@ -706,6 +764,7 @@ class DispatcherStore:
                 if audited:      # never claimed, so nothing was reserved
                     self._event(cur, "item.cancelled", item=row["request_id"], generation=row["generation"],
                                 source="owner", body={"code": "owner_stop"})
+                    self._card_ended(cur, row, "cancelled", "owner_stop")
                 return "confirmed"
             if row["state"] in ("claimed", "running"):
                 cur.execute("UPDATE guild.mc_delegations SET cancel_requested=TRUE WHERE job_id=%s", (job_id,))
@@ -1051,7 +1110,8 @@ class DispatcherStore:
 
     def _grant_refusal(self, cur, row) -> str | None:
         """None while the item's grant is still current and covers it (GrantStore.covers_item, read only: admission
-        already used its operation). S1-C's card steps bring their template digest here."""
+        already used its operation). A card step is covered by its template digest, recomputed from its columns, so a
+        step whose fixed fields differ from what was compiled is not covered (R4.3-c)."""
         if row["grant_id"] is None:
             return "grant_missing"
         subject = _row_subject(row)
@@ -1067,6 +1127,7 @@ class DispatcherStore:
             lease_until=NULL WHERE request_id=%s""", (state, json.dumps(detail), str(row["request_id"])))
         self._event(cur, f"item.{state}", item=row["request_id"], generation=row["generation"], host_id=host_id,
                     once=_once(state, row["request_id"], row["generation"]), body=detail)
+        self._card_ended(cur, row, state, detail.get("code"))
 
     def _hold(self, cur, row, code, host_id):
         """A claimable item waits (it stays queued): the reason is written to its reservation once, when it changes."""
@@ -1080,7 +1141,7 @@ class DispatcherStore:
                     body={"code": code, "route": row["route"]})
 
     def _admit(self, cur, row, runner_id, host_id):
-        code = self._grant_refusal(cur, row)
+        code = self._grant_refusal(cur, row) or self._card_refusal(cur, row)
         if code is not None:                 # W-EXP: expired before the claim, so never claimed
             state = {"grant_expired": "expired", "grant_revoked": "cancelled"}.get(code, "refused")
             self._end(cur, row, state, {"code": code}, host_id)
@@ -1117,41 +1178,60 @@ class DispatcherStore:
                     body={"runner_id": runner_id, "lease_until": _iso(lease_until), "route": row["route"], **res})
         return {"envelope": self._envelope(row, generation, list(row["input_artifacts"] or [])),
                 "route": row["route"], "unit": route.unit, "reserved": float(amount), "lease_until": _iso(lease_until),
-                "card_id": row["card_id"], "step": row["step"]}
+                "card_id": row["card_id"], "step": row["step"], "attempt": _attempt(row), "resume_from": None}
 
     def _hand_over(self, cur, runner_id, host_id):
-        """An item the owner reassigned to this runner (R5.1-d), waiting queued for it alone: its claim takes it at the
-        generation the reassignment set, and only now does its lease start; the reservation it holds stays. None if
-        none."""
+        """An item waiting, queued, for this runner alone: one the owner reassigned to it (R5.1-d), or a card step it
+        failed definitely and the authority gave a retry from its last checkpoint (R4.3-d). Its claim takes it at the
+        generation already set, and only now does its lease start. A reassigned item keeps the reservation it holds; a
+        retry reserves anew, and waits (marked) while its route can't take it. None if none can be taken now."""
         cur.execute("""SELECT d.*, clock_timestamp() AS now FROM guild.mc_delegations d
             WHERE d.principal_id=%s AND d.environment=%s AND d.runner_id=%s AND d.route IS NOT NULL
-              AND d.state = 'queued' AND d.facts ? 'reassigned'
-            ORDER BY d.request_id LIMIT 1 FOR UPDATE SKIP LOCKED""", (self.principal, self.environment, runner_id))
-        row = cur.fetchone()
-        if row is None:
-            return None
-        code = self._grant_refusal(cur, row)
+              AND d.state = 'queued' AND (d.facts ? 'reassigned' OR d.facts ? 'retry')
+            ORDER BY d.request_id LIMIT %s FOR UPDATE SKIP LOCKED""",
+                    (self.principal, self.environment, runner_id, CLAIM_SCAN))
+        for row in cur.fetchall():
+            taken = self._hand_over_one(cur, row, runner_id, host_id)
+            if taken is not None:
+                return taken
+        return None
+
+    def _hand_over_one(self, cur, row, runner_id, host_id):
+        code = self._grant_refusal(cur, row) or self._card_refusal(cur, row)
         if code is None and row["deadline"] <= row["now"]:
             code = "deadline_passed"
+        retry = (row["facts"] or {}).get("retry")
+        route = self.authority.routes.get(row["route"])
+        if code is None and retry is not None:   # a retry is claimed afresh: the route gate, then its own reservation
+            code = (route_refusal(self.authority, row["route"], row["actor"]) or {}).get("code")
         if code is not None:                  # revoked, expired or overdue since: it ends here, never started here
             self._close(cur, row, {"grant_expired": "expired", "grant_revoked": "cancelled",
                                    "deadline_passed": "timed_out"}.get(code, "interrupted"),
                         {"code": code}, children_stopped=True, host_id=host_id)
             return None
-        cur.execute("""UPDATE guild.mc_delegations SET state='claimed', lease_until=clock_timestamp() + %s * interval '1 second',
-            heartbeat_at=clock_timestamp(),
-            facts=facts || jsonb_build_object('picked_up_at', clock_timestamp(), 'leased_at', clock_timestamp())
-            WHERE request_id=%s RETURNING lease_until""",
-            (self.authority.lease_s, str(row["request_id"])))
-        lease_until = cur.fetchone()["lease_until"]
         res = row["reservation"]
+        if retry is not None:
+            amount = _amount(res["requested"])
+            hold, day = self._reserve(cur, row["route"], route, amount)
+            if hold is not None:
+                self._hold(cur, row, hold, host_id)
+                return None
+            res = {**{k: v for k, v in res.items() if k != "held"}, "reserved": float(amount), "unit": route.unit,
+                   "day": day.isoformat(), "generation": row["generation"]}
+        cur.execute("""UPDATE guild.mc_delegations SET state='claimed', lease_until=clock_timestamp() + %s * interval '1 second',
+            heartbeat_at=clock_timestamp(), reservation=%s::jsonb,
+            facts=(facts - 'retry') || jsonb_build_object('picked_up_at', clock_timestamp(), 'leased_at', clock_timestamp())
+            WHERE request_id=%s RETURNING lease_until""",
+            (self.authority.lease_s, json.dumps(res), str(row["request_id"])))
+        lease_until = cur.fetchone()["lease_until"]
         self._event(cur, "item.claimed", item=row["request_id"], generation=row["generation"], host_id=host_id,
                     once=_once("claimed", row["request_id"], row["generation"]),
                     body={"runner_id": runner_id, "lease_until": _iso(lease_until), "route": row["route"],
-                          "handover": True, **res})
+                          "handover": True, **({"retry": retry} if retry else {}), **res})
         return {"envelope": self._envelope(row, row["generation"], list(row["input_artifacts"] or [])),
                 "route": row["route"], "unit": res["unit"], "reserved": res["reserved"], "lease_until": _iso(lease_until),
-                "card_id": row["card_id"], "step": row["step"]}
+                "card_id": row["card_id"], "step": row["step"], "attempt": _attempt(row),
+                "resume_from": None if retry is None else retry["checkpoint"]}
 
     def _reserve(self, cur, route_name, route, amount):
         """(hold code, None) or (None, day): ``amount`` reserved on today's row, under the route's lock, so two hosts
@@ -1309,6 +1389,9 @@ class DispatcherStore:
         if row is None or row["route"] is None:
             return {"state": "refused", "event_id": eid,
                     "code": "unknown_request" if row is None else "protocol_mismatch"}
+        retried = self._retried(cur, eid, rid)
+        if retried is not None:      # a definite failure already given its retry (R4.3-d), whatever came after: DUP-5
+            return {"state": "already_applied", "event_id": eid, "code": "retry", **retried}
         if row["result_event_id"] is not None:
             same = str(row["result_event_id"]) == eid
             return {"state": "already_applied" if same else "refused", "event_id": eid,
@@ -1334,6 +1417,9 @@ class DispatcherStore:
                         once=_once("result_refused", eid, code),
                         body={"code": code, "status": status, "route": route, "generation": generation})
             return {"state": "refused", "event_id": eid, "code": code}
+        # A record made before a lapse the sweeper hasn't written yet: the lapse goes into the audit first, with its
+        # cause, so the audit never shows an item ending after its lease ran out without the lapse (N-C4).
+        row = self._lapse_written(cur, row)
         outcome = {}
         if self._grant_refusal(cur, row) == "grant_revoked":
             # R4.3-e: a revoked item ends cancelled; a late result never turns it into completed. What the host
@@ -1342,6 +1428,11 @@ class DispatcherStore:
             outcome = {"code": "grant_revoked"}
         elif row["cancel_requested"] and status == "completed":
             status = "cancelled"                       # Stop was pressed: the result is kept, not claimed as done
+        no_retry = None
+        if status == "failed" and not open_ops and _attempt(row) is not None:
+            no_retry = self._retry_refusal(cur, row, detail, used)
+            if no_retry is None:
+                return self._retry(cur, row, eid, when, host_id, route, used, detail, artifacts)
         body = {"status": status, "route": route,
                 "usage": {**used, "amount": None if used["amount"] is None else float(used["amount"])}}
         written = self._host_event(cur, "result.accepted", eid, item=rid, generation=generation, host_id=host_id,
@@ -1367,7 +1458,8 @@ class DispatcherStore:
             artifacts=%s::jsonb, output_text=%s, finished_at=clock_timestamp(), lease_until=NULL,
             reservation=%s::jsonb, facts=COALESCE(facts, '{}'::jsonb) || """ + fact + " WHERE request_id=%s",
             (status, eid, json.dumps(detail or {}), json.dumps(artifacts or []), text, json.dumps(res), rid))
-        # S1-C: on an accepted card step, the card's next step is written here, in this same transaction.
+        if (row["facts"] or {}).get("card"):
+            self._card_advance(cur, row, status, artifacts, no_retry)   # R7.4-b: in this same transaction
         return {"state": "accepted", "event_id": eid, **outcome}
 
     def _settle(self, cur, row, res, used, event_id, host_id) -> dict:
@@ -1398,6 +1490,272 @@ class DispatcherStore:
                     host_id=host_id, body={"route": row["route"], "day": res["day"], "unit": res["unit"],
                                            "reserved": res["reserved"], "observed": res["observed"]})
         return res
+
+    # ── version 2: cards (spec v0.5 R4.3-c, R4.3-d, R4.3-f, R7.4-a/b; cards.py) ──
+    def admit_card(self, card, *, grant_id, owner_turn_ids, proposal_id, approved_operation_id, approval_expires_at,
+                   by, note=None) -> dict:
+        """The owner's admission of a card (R4.3-b, R4.3-c, R7.4-a), on his one exact approval of its digest. One
+        transaction: the card's delegate.card grant is issued (its card steps' template digests, one operation each;
+        its work id the card; its lifetime the card's own owner-approved one, else a day, R4.3-f; the approval's window
+        at most 15 minutes, GrantStore); the card is recorded (card.admitted, source owner: the card's one admission,
+        OWN-1's A), pinning its class row; and its first step is written and admitted by one of the grant's operations
+        (use_for_item), queued, created_by owner. Every step's worker and route must run on this authority. The owner
+        path calls it (S1-G: Robert's yes to the card's D-code, or an exact Confirm in MC; the owner test identity in
+        acceptance), with that turn's id. The same card again answers duplicate; another card under its id is refused
+        card_id_reused.
+        -> {state: admitted | duplicate, card_id, card_digest, grant_id, steps: [{step, kind, digest, on_card}],
+            first: {job_id, request_id, state}}"""
+        _need(self._v2, "protocol_not_enabled")
+        _need(type(by) is str and _ID.match(by), "owner_invalid")
+        _need(note is None or type(note) is str, "say_why")
+        from core.minimoi_actions.context import ActionContractError
+        try:
+            compiled = self._cards.compile(card)
+        except card_mod.CardRefused as exc:
+            raise AuthorityRefused(str(exc)) from None
+        for step in compiled.steps:                      # every step can run here, before anything is written
+            self._v2_item(f"{compiled.card_id}.{step.name}", step.actor, step.scope, compiled.card["repository"],
+                          compiled.card["ref"], step.brief, step.cost_cap_usd, compiled.card["step_deadline_s"],
+                          step.route, step.amount, None, list(step.required_capabilities), [], compiled.card_id,
+                          step.name, "authority")
+        steps = [{"step": s.name, "kind": s.kind, "index": s.index, "digest": s.digest, "on_card": s.on_card}
+                 for s in compiled.steps]
+        answer = {"card_id": compiled.card_id, "card_digest": compiled.digest, "steps": steps,
+                  "first": {"job_id": f"{compiled.card_id}.{compiled.steps[0].name}"}}
+        with self._tx() as cur:
+            found = self._recorded(cur, _once("card", compiled.card_id))
+            if found is not None:
+                _need(found.get("card_digest") == compiled.digest, "card_id_reused")
+                return {"state": "duplicate", **answer, "grant_id": found["grant_id"]}
+            cur.execute("SELECT clock_timestamp() AS now")
+            now = cur.fetchone()["now"]
+            try:
+                self._grants.issue(cur.connection, card_mod.card_grant(
+                    compiled, grant_id=grant_id, principal=self.principal, environment=self.environment,
+                    owner_turn_ids=owner_turn_ids, proposal_id=proposal_id,
+                    approved_operation_id=approved_operation_id, approval_expires_at=approval_expires_at, now=now))
+            except ActionContractError as exc:
+                raise AuthorityRefused(str(exc)) from None
+            self._event(cur, "card.admitted", source="owner", once=_once("card", compiled.card_id),
+                        body={"card_id": compiled.card_id, "card_digest": compiled.digest, "card": compiled.card,
+                              "class": compiled.class_name, "class_version": compiled.card["class_version"],
+                              "class_row": compiled.class_row, "families": compiled.families,
+                              "class_digest": compiled.class_digest, "grant_id": grant_id, "steps": steps,
+                              "proposal_id": proposal_id, "owner_turn_ids": list(owner_turn_ids), "by": by,
+                              "note": (note or "").strip()[:300]})
+            first = self._write_step(cur, compiled, compiled.steps[0], grant_id, created_by="owner", earlier=[])
+            _need(first is not None, "card_step_exists")
+            _need(first["state"] == "queued", first["code"] or "card_not_admitted")      # rolls the whole card back
+            return {"state": "admitted", **answer, "grant_id": grant_id,
+                    "first": {"job_id": first["job_id"], "request_id": first["request_id"], "state": first["state"]}}
+
+    def admit(self, request_id, grant_id, *, by, note) -> dict:
+        """The owner admits a proposed item under a grant he issued for it (R4.3-b): a step of another model family
+        than its card (a cross-vendor review: its own exact approval, T13), or a card step its card's grant no longer
+        admitted. One of that grant's operations is used for the digest the item's grant must name (a card step's
+        template digest, otherwise its work's), the item becomes queued, and its queued decision is resolved. The
+        grant's refusal code otherwise; the item stays proposed. -> {state: queued, grant_id}"""
+        _need(self._v2, "protocol_not_enabled")
+        rid, gid = _uuid_text(request_id, "request_id_invalid"), _uuid_text(grant_id, "grant_id_invalid")
+        by, note = _owner_act(by, note)
+        with self._tx() as cur:
+            row = self._item(cur, rid)
+            _need(row is not None and row["route"] is not None, "unknown_request")
+            _need(row["state"] == "proposed", "item_not_proposed")
+            subject = _row_subject(row)
+            _need(subject is not None, "item_invalid")
+            code = self._grants.use_for_item(cur.connection, self.principal, self.environment, gid,
+                                             subject_digest=subject, capability_prefix=GRANT_FAMILY,
+                                             work_ids=tuple(w for w in (row["card_id"], row["job_id"]) if w))
+            _need(code is None, code or "")
+            cur.execute("""UPDATE guild.mc_delegations SET state='queued', grant_id=%s, result_detail=NULL
+                WHERE request_id=%s""", (gid, rid))
+            decision = (row["result_detail"] or {}).get("decision_id")
+            self._event(cur, "item.admitted", item=rid, generation=row["generation"], source="owner",
+                        body={"grant_id": gid, "card_id": row["card_id"], "step": row["step"], "by": by, "note": note,
+                              "subject_digest": subject, "decision_id": decision,
+                              "prior": (row["result_detail"] or {}).get("code")})
+            if decision is not None:
+                self._event(cur, "decision.resolved", item=rid, generation=row["generation"], source="owner",
+                            once=_once("decision_resolved", decision),
+                            body={"decision_id": decision, "answer": "admitted", "by": by})
+            return {"state": "queued", "grant_id": gid}
+
+    def _card_record(self, cur, card_id):
+        """(the card's admission record, the card recompiled from it), or (None, None): the authority's own record is
+        the only source a step is compiled from."""
+        record = self._recorded(cur, _once("card", card_id)) if card_id else None
+        if record is None:
+            return None, None
+        try:
+            return record, card_mod.recompile(record)
+        except card_mod.CardRefused:
+            return record, None
+
+    def _card_done(self, cur, card_id) -> list:
+        """The card's completed steps as recorded: [{step, item_id, artifacts}] (their accepted results' outputs)."""
+        cur.execute("""SELECT step, request_id, artifacts FROM guild.mc_delegations
+            WHERE principal_id=%s AND environment=%s AND card_id=%s AND state='completed' AND facts ? 'card'
+            ORDER BY (facts->'card'->>'index')::int""", (self.principal, self.environment, card_id))
+        return [{"step": r["step"], "item_id": r["request_id"], "artifacts": r["artifacts"]} for r in cur.fetchall()]
+
+    def _card_refusal(self, cur, row) -> str | None:
+        """For a step of a card, at its hand-out: None while it is still the step its card compiles now, from the
+        authority's own records: the same template digest, input artifacts that are the outputs recorded for the
+        card's earlier steps as its template selects them (its only free field), and an attempt within the card's
+        allowance. Otherwise the code; the item is not handed out."""
+        if not (row["facts"] or {}).get("card"):
+            return None
+        _, compiled = self._card_record(cur, row["card_id"])
+        step = None if compiled is None else compiled.step(row["step"])
+        if step is None:
+            return "card_record_invalid"
+        if card_mod.row_step_digest(row) != step.digest:
+            return "card_step_mismatch"
+        try:
+            arts, _ = compiled.inputs(step, self._card_done(cur, row["card_id"]))
+        except card_mod.CardRefused as exc:
+            return str(exc)
+        if list(row["input_artifacts"] or []) != arts:
+            return "card_input_not_recorded"
+        if (_attempt(row) or 0) > compiled.card["attempts"]:
+            return "card_attempts_exhausted"
+        return None
+
+    def _write_step(self, cur, compiled, step, grant_id, *, created_by, earlier) -> dict | None:
+        """Write one enumerated step of a card as its template compiles it: its brief, worker, route and caps fixed;
+        its input artifacts, the only free field, filled from the authority's records of the card's earlier steps;
+        created_by authority for every step after the first (OWN-2). A card step is admitted by one of the card
+        grant's operations and queued, or, when the grant no longer admits it, written proposed with one routine
+        decision. A step of another model family is never a card step: it is written proposed with one solo decision
+        (R7.4-c) and waits for its own admission (T13)."""
+        arts, sources = compiled.inputs(step, earlier)
+        card = compiled.card
+        item = self._v2_item(f"{compiled.card_id}.{step.name}", step.actor, step.scope, card["repository"], card["ref"],
+                             step.brief, step.cost_cap_usd, card["step_deadline_s"], step.route, step.amount,
+                             grant_id if step.on_card else None, list(step.required_capabilities), arts,
+                             compiled.card_id, step.name, created_by)
+        facts = {"card": {"digest": compiled.digest, "class_digest": compiled.class_digest, "kind": step.kind,
+                          "index": step.index, "attempt": 1, "on_card": step.on_card, "template_digest": step.digest,
+                          "inputs_from": sources}}
+        if step.on_card:
+            return self._write(cur, item, subject=step.digest, facts=facts,
+                               decision={"class": "step_admission", "solo": False})
+        return self._write(cur, item, subject=item["subject"], facts=facts, admit=False,
+                           decision={"class": "cross_vendor_admission", "solo": True, "code": "cross_vendor"})
+
+    def _card_advance(self, cur, row, status, artifacts, no_retry=None):
+        """R7.4-b, in the transaction of the result that ended a card's step: a completed step is followed by the next
+        step its card enumerates, written by the authority (card.ready when there is none: every step done, ready for
+        the owner's merge); a step that ended otherwise ends the card (card.ended, with why no retry was given). A step
+        whose result turned the item unknown never reaches here: nothing follows it until its decision is resolved."""
+        rid, g, card_id = row["request_id"], row["generation"], row["card_id"]
+        record, compiled = self._card_record(cur, card_id)
+        step = None if compiled is None else compiled.step(row["step"])
+        once = _once("card_done", card_id)
+        if step is None:
+            self._event(cur, "card.ended", item=rid, generation=g, once=once,
+                        body={"card_id": card_id, "step": row["step"], "state": status, "code": "card_record_invalid"})
+            return
+        if status != "completed":
+            self._event(cur, "card.ended", item=rid, generation=g, once=once,
+                        body={"card_id": card_id, "step": step.name, "state": status, "attempt": _attempt(row),
+                              "code": no_retry or status})
+            return
+        nxt = compiled.following(step, artifacts)
+        if nxt is None:
+            self._event(cur, "card.ready", item=rid, generation=g, once=once, body={"card_id": card_id,
+                                                                                   "step": step.name})
+            return
+        try:
+            out = self._write_step(cur, compiled, nxt, record["grant_id"], created_by="authority",
+                                   earlier=self._card_done(cur, card_id))
+        except card_mod.CardRefused as exc:
+            out = {"code": str(exc)}
+        if out is None or out.get("request_id") is None:
+            self._event(cur, "card.ended", item=rid, generation=g, once=once,
+                        body={"card_id": card_id, "step": nxt.name, "state": "not_written",
+                              "code": "card_step_exists" if out is None else out["code"]})
+            return
+        self._event(cur, "card.step_written", item=out["request_id"], generation=0,
+                    body={"card_id": card_id, "step": nxt.name, "after": step.name, "after_item": str(rid),
+                          "state": out["state"], **({"code": out["code"]} if out["code"] else {})})
+
+    def _card_ended(self, cur, row, state, code):
+        """A card's step ended other than by its result (a refusal at hand-out, Stop, end, revocation, the grace end):
+        the card ends with it, recorded once (card.ended). Nothing follows it."""
+        if (row["facts"] or {}).get("card"):
+            self._event(cur, "card.ended", item=row["request_id"], generation=row["generation"],
+                        once=_once("card_done", row["card_id"]),
+                        body={"card_id": row["card_id"], "step": row["step"], "state": state, "code": code,
+                              "attempt": _attempt(row)})
+
+    # ── attempts (R4.3-d) ──
+    def _retried(self, cur, event_id, request_id) -> dict | None:
+        """The retry already given for this result event (its replay), or None."""
+        cur.execute("""SELECT generation, body FROM guild.mc_delegation_events WHERE event_id=%s AND kind='attempt.failed'
+            AND item_id=%s AND principal_id=%s AND environment=%s""",
+                    (event_id, str(request_id), self.principal, self.environment))
+        found = cur.fetchone()
+        return None if found is None else {"attempt": found["body"]["attempt"] + 1,
+                                           "generation": found["generation"] + 1}
+
+    def _retry_refusal(self, cur, row, detail, used) -> str | None:
+        """None when a card step's definite failure may be retried from its last checkpoint without asking the owner
+        (R4.3-d, E4): a step of the card grant itself, a known exit, its children confirmed stopped, its Stop not
+        pressed, its grant still covering it, and an attempt left in the card's allowance. Otherwise why not."""
+        if not row["facts"]["card"].get("on_card"):
+            return "not_a_card_step"           # admitted by its own approval, which covers one attempt
+        code = (detail or {}).get("exit_code")
+        if type(code) is not int:
+            return "exit_unknown"              # an unknown outcome is never retried by code (R4.1-c)
+        if not used["children_stopped"]:
+            return "children_unconfirmed"
+        if row["cancel_requested"]:
+            return "owner_stop"
+        _, compiled = self._card_record(cur, row["card_id"])
+        if compiled is None:
+            return "card_record_invalid"
+        if _attempt(row) >= compiled.card["attempts"]:
+            return "attempts_exhausted"
+        return self._grant_refusal(cur, row)
+
+    def _retry(self, cur, row, eid, when, host_id, route, used, detail, artifacts) -> dict:
+        """The retry (R4.3-d), in the failed attempt's result transaction: the attempt's report is recorded (its own
+        host event, attempt.failed; it is not the item's result, so an item keeps at most one accepted result,
+        DUP-4) and its usage settled; the item goes back, queued, to the same owner (its last checkpoint is there)
+        under generation + 1 with a fresh step deadline, and reserves anew when that owner's claim picks it up. Its
+        effects keep their operation ids, so one already done is never sent again (as at a resume)."""
+        rid, g, n = row["request_id"], row["generation"], _attempt(row)
+        _, compiled = self._card_record(cur, row["card_id"])
+        usage = {**used, "amount": None if used["amount"] is None else float(used["amount"])}
+        written = self._host_event(cur, "attempt.failed", eid, item=rid, generation=g, host_id=host_id, at=when,
+                                   body={"status": "failed", "route": route, "usage": usage, "attempt": n,
+                                         "exit_code": detail["exit_code"],
+                                         "artifacts": [{"kind": a["kind"], "ref": a["ref"], "sha256": a["sha256"]}
+                                                       for a in card_mod.recorded_outputs(artifacts)]})
+        if written is not None:
+            return {"state": "refused", "event_id": eid, "code": "event_id_conflict"}
+        res = dict(row["reservation"])
+        prior = res.pop("prior", [])
+        res = self._settle(cur, row, res, used, eid, host_id)
+        cp = row["checkpoint"]
+        retry = {"attempt": n + 1, "from_generation": g, "event_id": eid,
+                 "checkpoint": None if cp is None else {"name": cp["name"], "digest": cp["digest"]}}
+        cur.execute("""UPDATE guild.mc_delegations SET state='queued', generation=%s, lease_until=NULL,
+            lapsed_since=NULL, lapse_cause=NULL, grace_deadline=NULL,
+            deadline=clock_timestamp() + %s * interval '1 second', reservation=%s::jsonb,
+            facts=(COALESCE(facts, '{}'::jsonb) - 'picked_up_at' - 'leased_at')
+                  || jsonb_build_object('retry', %s::jsonb,
+                                        'card', (facts->'card') || jsonb_build_object('attempt', %s::int))
+            WHERE request_id=%s""",
+            (g + 1, compiled.card["step_deadline_s"],
+             json.dumps({"requested": res["requested"], "prior": [*prior, res]}), json.dumps(retry), n + 1, rid))
+        self._event(cur, "item.retried", item=rid, generation=g + 1, host_id=host_id, once=_once("retried", rid, g),
+                    body={"runner_id": row["runner_id"], "from_generation": g, "generation": g + 1, "attempt": n + 1,
+                          "attempts": compiled.card["attempts"], "exit_code": detail["exit_code"],
+                          "checkpoint": retry["checkpoint"], "prior_lease_until": _iso(row["lease_until"])})
+        return {"state": "accepted", "event_id": eid, "code": "retry", "attempt": n + 1, "generation": g + 1}
 
     # ── version 2: recovery (spec v0.5 §5): reconcile, effect, the authority's liveness, the sweeper, the owner's acts ──
     def reconcile(self, runner_id, request_id, generation, stage, open_operations, *, protocol=2) -> dict:
@@ -1648,6 +2006,7 @@ class DispatcherStore:
         self._event(cur, f"item.{state}", item=row["request_id"], generation=row["generation"], host_id=host_id,
                     source=source, once=_once(state, row["request_id"], row["generation"]),
                     body={**detail, "reservation": res.get("state")})
+        self._card_ended(cur, row, state, detail.get("code"))
 
     def _release(self, cur, row, children_stopped) -> dict:
         """The reservation of an item that ends without a settled result. While its children are not confirmed stopped
@@ -2138,6 +2497,7 @@ class DispatcherStore:
                                 body={"state": "cancelled", "code": "grant_revoked", "open_operations": open_ops})
                     waiting.append(str(row["request_id"]))
                     continue
+                row = self._lapse_written(cur, row)       # a lease already past ends after its lapse (N-C4)
                 self._close(cur, row, "cancelled", {"code": "grant_revoked", "by": by},
                             children_stopped=row["state"] in ("proposed", "queued"), source="owner")
                 ended.append(str(row["request_id"]))
@@ -2159,8 +2519,14 @@ _EFFECT_EVENT = {"prepare": "prepared", "claim": "claimed", "dispatch": "dispatc
 
 
 def _awaiting(row) -> bool:
-    """A reassigned item waiting, queued, for its named runner's pickup (R5.1-d)."""
-    return row["state"] == "queued" and row["runner_id"] is not None and "reassigned" in (row["facts"] or {})
+    """An item waiting, queued, for its named runner's pickup: reassigned (R5.1-d), or a card step's retry (R4.3-d)."""
+    facts = row["facts"] or {}
+    return row["state"] == "queued" and row["runner_id"] is not None and ("reassigned" in facts or "retry" in facts)
+
+
+def _attempt(row):
+    """A card step's attempt (1, then one more per retry after a definite failure, R4.3-d); None for other items."""
+    return ((row["facts"] or {}).get("card") or {}).get("attempt")
 
 
 def _stop(condition, code, state=None) -> dict:
