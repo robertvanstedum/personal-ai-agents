@@ -107,6 +107,8 @@ def test_events_hold_no_free_text_and_unknown_stays_unknown(tmp_path):
     with pytest.raises(C.CensusRefused):
         C.check_event({"event_id": "e-1", "at": at(), "kind": "census.start", "body": good})
     assert len(C.CensusFile(tmp_path / "census").unsent()) == 1                          # nothing else was written
+    assert C.CensusFile(tmp_path / "census").acknowledge([{"event_id": ev["event_id"], "state": "applied"}]) == 1
+    assert C.CensusFile(tmp_path / "census").unsent() == []                             # a fresh reader: answered
 
 
 # ── CEN-1 / T18a, CEN-4, CEN-5 with a real fakework root ────────────────────────────────────────────────────────────

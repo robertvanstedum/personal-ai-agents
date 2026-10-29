@@ -416,6 +416,7 @@ class CensusFile:
         fd = self._locked()
         try:
             with self._mu:
+                self._scan_locked()                          # an answer is kept even when nothing was read first
                 for a in answers or []:
                     if not isinstance(a, dict) or a.get("state") not in ("applied", "already_applied", "rejected"):
                         continue
