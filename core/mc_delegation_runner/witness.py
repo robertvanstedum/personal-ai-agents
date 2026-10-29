@@ -204,8 +204,8 @@ class Witness:
             self.failed(failure_code(exc), at, key)
             return False
         self.memory.record(key, at)
-        if self.undelivered == key:
-            self.undelivered = None
+        if (self.undelivered or "").split(":", 1)[0] == key.split(":", 1)[0]:
+            self.undelivered = None             # this kind of notice is told now (its since may have moved)
         return True
 
     def failed(self, code, at, key=None):

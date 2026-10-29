@@ -148,7 +148,7 @@ def test_n1_a_send_that_keeps_failing_is_shown_written_and_logged_never_dropped(
     assert "witness_send_failing:route_key_unavailable" in json.loads(capsys.readouterr().out)["problems"]
     assert _lines(tmp_path / "notify.jsonl") == []
     rt.witness.notifier = W.FileNotifier(tmp_path / "notify.jsonl")      # it works again: told, once
-    clock["mono"] += step
+    clock["mono"] += step                     # monotonic only (as across a short sleep): the told key's since moves
     rt.observe_authority()
     assert [x["key"].split(":")[0] for x in _lines(tmp_path / "notify.jsonl")] == ["authority-unreachable"]
     assert rt.witness.status()["undelivered"] is None
