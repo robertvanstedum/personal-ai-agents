@@ -14,7 +14,8 @@ Version 2 (host runtime spec v0.5 §3.2; the door's body carries ``protocol: 2``
 configuration (``Authority``) enables it, and only about version 2 items: those that name a ``route`` (R6.7-e).
   heartbeat(runner_id, state, capabilities, protocol=2, facts={host_id, bundle_digest, roles, availability, grace,
             last_gap_s, announced}) -> {state: recorded}
-        seen_at is the host's last contact; a change of facts is audited. (Census batches ride here later.)
+        seen_at is the host's last contact; a change of facts is audited; announcing ``stopped`` pauses every item the
+        host holds (owner_stopped). (Census batches ride here later.)
   claim(runner_id, capabilities, protocol=2) -> {envelope, route, unit, reserved, lease_until, card_id, step} | None
         nothing for a host with unreconciled items; the item's capabilities (actor, scope, repository and its
         required_capabilities) within the host's; its grant rechecked (GrantStore.covers_item: never used again);
@@ -31,6 +32,36 @@ configuration (``Authority``) enables it, and only about version 2 items: those 
         settles the reservation with the observed usage; a route other than the reserved one is refused; unknown
         usage closes the route until a recorded resolution (resolve_usage_hold); after a revocation the item ends
         cancelled (grant_revoked), never completed (R4.3-e)
+  reconcile(runner_id, request_id, generation, stage={child, checkpoint}, open_operations, protocol=2)
+        -> continue | resume(generation + 1, lease_until, checkpoint) | stop(condition, code) | decide(code, decision_id)
+        the owner's question for each item it holds after a restart, wake or reconnect (§5.5 step 4). In order:
+          not this owner's item at this generation          stop (identity): unknown_request, not_owner, reassigned,
+                                                            superseded; a resume already decided for it is answered
+                                                            again, so the generation rises once per decision (X5)
+          ended                                             stop with its code; a stopped child releases a kept
+                                                            reservation
+          unknown                                           decide again: the same queued decision
+          the owner's Stop; its grant revoked or expired    stop, and the item ends cancelled or expired
+          a receipt dispatched or unknown, or a child the   decide: the item becomes unknown, generation unchanged,
+          host cannot verify                                workspace kept, one decision queued (decision.queued)
+          its grant no longer covers it                     stop (authority), interrupted
+          lease never lapsed and the child frozen           continue
+          otherwise (lapsed, or the child no longer runs):  the other conditions, each named when it fails:
+            deadline passed                                 stop (authority), timed_out
+            reservation gone, route gate shut, or the       stop (budget), interrupted
+            route held by unknown usage
+            the host's checkpoint is not the authority's    stop (checkpoint), interrupted
+            all hold                                        resume: generation + 1, same owner, fresh lease
+        a lapse or a grace end is judged here exactly as the sweeper would, but only while the sweeper is current, so
+        an outage it has not measured yet never costs an owner its item
+  effect(runner_id, request_id, generation, effect={op, key, grant_id, request, lease?, state?, evidence?}, protocol=2)
+        op prepare | claim | dispatch | finish | reconcile, each one call of GrantStore.prepare_effect or ReceiptStore's
+        claim, dispatch, finish, claim(reconcile), inside the authority (§4.5); the operation id is the authority's,
+        from the item and the key; owner only, at the current generation (R4.4)
+The sweeper (sweep, run_sweeper) writes lapse transitions; it never writes running (§5.1, R5.2-a): lapsed with its
+cause and a grace deadline from the owner host's grace, interrupted: owner_unreachable at grace end, and its own
+heartbeat, from whose gaps it records authority.suspended {from, to} and extends every open grace by the outage.
+Where it runs, relay.status no longer reaps (R3.3); it reaps version 1 items itself. The owner's acts: reassign (R5.1-d), end (R5.1-c), revoke (R4.3-e, end to end), resolve_usage_hold.
 Admitting an item (enqueue with a route) uses one of its grant's operations in the same transaction that writes it
 queued (GrantStore.use_for_item, R4.3-c). With no grant, none left, or one that doesn't cover it, the item is written
 proposed with the reason instead.
@@ -42,7 +73,7 @@ it decides. A host's event keeps the id it sent: an identical replay is already_
 is refused (event_id_conflict). The authority's own events take random ids; one it must record only once carries a
 once_key, which no host can write. An audit row that cannot be written stops the transaction; it is never dropped.
 Without a version 2 configuration the store runs exactly today's statements; with one, version 1 calls keep their
-meaning and touch only version 1 items. Version 2's two new calls, reconcile and effect, are not here yet.
+meaning and touch only version 1 items.
 
 Version 2 needs Python 3.10 or later (core.minimoi_actions uses slotted dataclasses), so a version 2 store refuses to
 be built below it. This module, version 1 and the production runner's bundle still run on the Mac's Python 3.9.
@@ -54,6 +85,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 import re
 import sys
@@ -66,6 +98,8 @@ from pathlib import Path
 from types import MappingProxyType
 
 from core.mc_delegation_runner import envelope as env_mod
+
+_log = logging.getLogger("mc_delegation")
 
 LEASE_SECONDS = 120
 RESULT_STATES = ("completed", "failed", "refused", "timed_out", "cancelled", "output_limit", "interrupted")
@@ -93,6 +127,14 @@ _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 _WORD = re.compile(r"^[a-z_]{1,40}$")
 _PATH = re.compile(r"^(?!/)(?!.*(?:^|/)\.\.(?:/|$))[A-Za-z0-9._/@+-]{1,256}$")
 _AT = re.compile(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})$")
+TERMINAL = RESULT_STATES + ("expired",)
+CHILD_STAGES = ("frozen", "stopped", "unverified")   # the host's account of its child for reconcile (§5.5 steps 2, 4)
+EFFECT_OPS = ("prepare", "claim", "dispatch", "finish", "reconcile")
+EFFECT_POLICY = "minimoi.runtime.effect.v1"   # the policy version an item's effect grant must be issued under
+RECEIPT_LEASE_S = 30                           # the receipt's own maximum (receipts.py); never past the item's lease
+SWEEP_BATCH = 200                              # items one sweep looks at; the rest wait for the next
+_TOKEN = re.compile(r"^[A-Za-z0-9_-]{43}$")
+_CAPABILITY = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
 
 
 def request_id_for(job_id: str) -> str:
@@ -119,12 +161,20 @@ class Route:
 
 
 @dataclass(frozen=True)
+class Sweeper:
+    sweep_s: int                       # how often the sweeper runs
+    gap_threshold_s: int               # a longer gap in its heartbeat is the authority's own outage (R5.2-a, N3)
+
+
+@dataclass(frozen=True)
 class Authority:
     environment: str
     protocols: frozenset
     launch_closure: str                # 'pending' until the owner records both gating N5 items (R6.7-l)
     lease_s: int | None
     routes: MappingProxyType
+    sweeper: Sweeper | None = None     # None (or version 1 only): no sweeper runs, and relay.status reaps (R3.3)
+    reassign_across_hosts: bool = False   # False on a Mac-only build: no cross-host takeover at all (R2.4-c)
 
     @property
     def speaks_v2(self) -> bool:
@@ -144,7 +194,8 @@ class Authority:
     @classmethod
     def parse(cls, doc) -> "Authority":
         _need(type(doc) is dict and set(doc) <= {"schema", "environment", "protocols", "launch_closure", "lease_s",
-                                                  "routes", "note"}, "authority_config_invalid")
+                                                  "routes", "note", "sweeper", "reassign_across_hosts"},
+              "authority_config_invalid")
         _need(doc.get("schema") == AUTHORITY_SCHEMA, "authority_schema_invalid")
         _need(doc.get("environment") in ("dev", "prod"), "authority_environment_invalid")
         _need(type(doc.get("note", "")) is str and len(doc.get("note", "")) <= 2000, "authority_note_invalid")
@@ -177,7 +228,14 @@ class Authority:
                 _need(not in_test_family(name) and r["unit"] != "test_units" and not set(actors) & set(TEST_ACTORS),
                       "authority_test_route_in_production")
             parsed[name] = Route(r["unit"], tuple(actors), per_day, per_item, r.get("supervised_only"))
-        return cls(doc["environment"], frozenset(protocols), closure, lease, MappingProxyType(parsed))
+        sw = doc.get("sweeper")
+        _need(sw is None or (type(sw) is dict and set(sw) == {"sweep_s", "gap_threshold_s"}
+                             and all(type(sw[k]) is int for k in sw) and 1 <= sw["sweep_s"] < sw["gap_threshold_s"] <= 3600),
+              "authority_sweeper_invalid")
+        across = doc.get("reassign_across_hosts", False)                           # missing: refused (Mac-only)
+        _need(type(across) is bool, "authority_reassign_invalid")
+        return cls(doc["environment"], frozenset(protocols), closure, lease, MappingProxyType(parsed),
+                   None if sw is None else Sweeper(sw["sweep_s"], sw["gap_threshold_s"]), across)
 
 
 def in_test_family(route: str) -> bool:
@@ -275,6 +333,98 @@ def check_artifacts(arts) -> list:
         type(a) is dict and set(a) == {"ref", "sha256"} and type(a["ref"]) is str and _ID.match(a["ref"])
         and type(a["sha256"]) is str and _SHA.match(a["sha256"]) for a in arts), "input_artifacts_invalid")
     return [{"ref": a["ref"], "sha256": a["sha256"]} for a in arts]
+
+
+def check_stage(stage) -> dict:
+    """The host's account at reconcile: its child for this generation (``frozen``: verified and stopped with SIGSTOP,
+    so it can be thawed; ``stopped``: none runs; ``unverified``: a process group it cannot verify), and the newest
+    checkpoint the authority acknowledged that the host can rebuild (stage file and patch digest verified), or None."""
+    _need(type(stage) is dict and set(stage) == {"child", "checkpoint"} and stage["child"] in CHILD_STAGES,
+          "stage_invalid")
+    cp = stage["checkpoint"]
+    _need(cp is None or (type(cp) is dict and set(cp) == {"name", "digest"} and type(cp["name"]) is str
+                         and _ID.match(cp["name"]) and type(cp["digest"]) is str and _DIGEST.match(cp["digest"])),
+          "stage_invalid")
+    return {"child": stage["child"], "checkpoint": None if cp is None else {"name": cp["name"], "digest": cp["digest"]}}
+
+
+def check_operations(ops) -> list:
+    _need(type(ops) is list and len(ops) <= 32 and all(type(o) is str and _UUID.match(o) for o in ops)
+          and len(set(ops)) == len(ops), "open_operations_invalid")
+    return list(ops)
+
+
+def _small(value, limit) -> bool:
+    try:
+        return len(json.dumps(value)) <= limit
+    except (TypeError, ValueError):
+        return False
+
+
+def check_effect(eff) -> dict:
+    """One effect step (R4.5-a), as the owner host sends it: the step, the item's own key for the effect (the authority
+    derives the operation id from it), the effect's grant, the exact request, and per step its receipt lease (dispatch,
+    finish) and outcome (finish: verified or failed with the target's answer as evidence, or unknown)."""
+    _need(type(eff) is dict and eff.get("op") in EFFECT_OPS, "effect_invalid")
+    extra = {"dispatch": {"lease"}, "finish": {"lease", "state", "evidence"}}.get(eff["op"], set())
+    _need(set(eff) == {"op", "key", "grant_id", "request"} | extra, "effect_invalid")
+    _need(type(eff["key"]) is str and _ID.match(eff["key"]), "effect_invalid")
+    _need(type(eff["grant_id"]) is str and _UUID.match(eff["grant_id"]), "effect_invalid")
+    req = eff["request"]
+    _need(type(req) is dict and set(req) == {"operation", "operation_version", "arguments"}
+          and type(req["operation"]) is str and len(req["operation"]) <= 128 and _CAPABILITY.match(req["operation"])
+          and not req["operation"].startswith(GRANT_FAMILY)               # an effect never admits work
+          and type(req["operation_version"]) is int and 1 <= req["operation_version"] < 2**31
+          and type(req["arguments"]) is dict and _small(req["arguments"], 8192), "effect_invalid")
+    out = {"op": eff["op"], "key": eff["key"], "grant_id": eff["grant_id"],
+           "request": {"operation": req["operation"], "operation_version": req["operation_version"],
+                       "arguments": req["arguments"]}}
+    if "lease" in extra:
+        lease = eff["lease"]
+        _need(type(lease) is dict and set(lease) == {"receipt_generation", "token", "mode"}
+              and type(lease["receipt_generation"]) is int and 1 <= lease["receipt_generation"] < 2**62
+              and type(lease["token"]) is str and _TOKEN.match(lease["token"])
+              and lease["mode"] in (("execute",) if eff["op"] == "dispatch" else ("execute", "reconcile")),
+              "effect_invalid")
+        out["lease"] = dict(lease)
+    if eff["op"] == "finish":
+        ev = eff["evidence"]
+        _need(eff["state"] in ("verified", "failed", "unknown"), "effect_invalid")
+        _need((ev is None and eff["state"] == "unknown") or (type(ev) is dict and set(ev) == {"kind", "outcome"}
+              and all(type(ev[k]) is str and _WORD.match(ev[k]) for k in ev)), "effect_invalid")
+        out.update(state=eff["state"], evidence=None if ev is None else dict(ev))
+    return out
+
+
+def effect_operation_id(request_id, key) -> str:
+    """The receipt's operation id, assigned by the authority from the item and the effect's key: never the host's
+    choice, never another item's, and the same for every generation, so a resumed attempt that reaches the same effect
+    finds its receipt (verified, never sent again; unknown, never retried) instead of making a second one."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"mc-delegation-effect:{request_id}:{key}"))
+
+
+def grace_deadline(since, grace_s, outages) -> tuple:
+    """(deadline, lapsed inside an outage) for a lease that ran out at ``since``. Time while the authority itself was
+    down or suspended does not count (R5.2-a): a lease that ran out inside an outage gets its grace from the restart
+    (X2a), and any later outage that begins before the deadline moves it on by its length."""
+    grace = timedelta(seconds=grace_s)
+    deadline, down = since + grace, False
+    for a, b in sorted(outages):
+        if a < since <= b:
+            deadline, down = b + grace, True
+        elif since < a < deadline:
+            deadline += b - a
+    return deadline, down
+
+
+def lapse_cause(authority_down, owner_seen_at, lease_until) -> str:
+    """Why a lease ran out without a result: the authority was down (E8); the owner went silent before it did (E3, E6,
+    E7); or the owner stayed in contact but stopped renewing it."""
+    if authority_down:
+        return "authority_down"
+    if owner_seen_at is None or owner_seen_at <= lease_until:
+        return "owner_contact_lost"
+    return "lease_not_renewed"
 
 
 def parse_at(value) -> datetime:
@@ -386,9 +536,19 @@ class DispatcherStore:
             if tuple(sys.version_info[:2]) < MIN_PYTHON_V2:
                 raise RuntimeError("authority_requires_python_3_10")   # before importing what cannot load below it
             from core.minimoi_actions.grants import GrantStore
+            from core.minimoi_actions.receipts import ReceiptStore
             if type(grants) is not GrantStore:
                 raise ValueError("authority_grant_store_missing")     # a version 2 claim always reads the grant
+            self._receipts = ReceiptStore()
         self.authority, self._grants = authority, grants
+        # The sweeper's heartbeat is its row among the contacts. A '/' is outside every id a host can send (_ID), so
+        # no host can write it, and a dead sweeper can never look alive.
+        self._sweeper_id = f"sweeper/{environment}/{principal}"
+
+    @property
+    def sweeps(self) -> bool:
+        """A sweeper runs for this authority: it, not relay.status, writes lapse transitions (R3.3)."""
+        return self._v2 and self.authority.sweeper is not None
 
     @contextmanager
     def _session(self):
@@ -682,16 +842,16 @@ class DispatcherStore:
 
     # ── version 2: the calls ───────────────────────────────────────────────
     def _event(self, cur, kind, *, item=None, generation=None, host_id=None, source="authority", body=None,
-               once=None) -> bool:
-        """One audit event the authority writes (R7.6-d), under a random id, so no host can predict or take it.
-        ``once`` names a transition recorded only once: False when it already is. Anything else that keeps the row
-        out raises, so no transition commits without its audit."""
+               once=None, event_id=None) -> bool:
+        """One audit event the authority writes (R7.6-d), under a random id, so no host can predict or take it (the
+        caller may make that id itself, to cite it). ``once`` names a transition recorded only once: False when it
+        already is. Anything else that keeps the row out raises, so no transition commits without its audit."""
         _need(once is None or source != "host", "event_once_invalid")
         cur.execute("""INSERT INTO guild.mc_delegation_events (event_id, schema, kind, principal_id, environment,
             item_id, generation, host_id, source, at, body, once_key)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s, clock_timestamp(), %s::jsonb, %s)
             ON CONFLICT DO NOTHING RETURNING event_id""",
-            (str(uuid.uuid4()), EVENT_SCHEMA, kind, self.principal, self.environment,
+            (event_id or str(uuid.uuid4()), EVENT_SCHEMA, kind, self.principal, self.environment,
              None if item is None else str(item), generation, host_id, source, json.dumps(body or {}), once))
         if cur.fetchone() is not None:
             return True
@@ -727,9 +887,10 @@ class DispatcherStore:
                 and found["generation"] == generation and found["at"] == at and found["body"] == body)
         return "already_applied" if same else "event_id_conflict"
 
-    def _item(self, cur, request_id, *, lock=True):
+    def _item(self, cur, request_id, *, lock=True, skip=False):
         cur.execute("""SELECT *, clock_timestamp() AS now FROM guild.mc_delegations
-            WHERE request_id=%s AND principal_id=%s AND environment=%s""" + (" FOR UPDATE" if lock else ""),
+            WHERE request_id=%s AND principal_id=%s AND environment=%s"""
+                    + (" FOR UPDATE" + (" SKIP LOCKED" if skip else "") if lock else ""),
                     (str(request_id), self.principal, self.environment))
         return cur.fetchone()
 
@@ -776,6 +937,18 @@ class DispatcherStore:
             if changed or old is None or old["protocol"] != 2:
                 self._event(cur, "host.facts", host_id=facts["host_id"], source="host",
                             body={"runner_id": runner_id, "changed": changed, **facts})
+            if facts["announced"] == "stopped":
+                # The owner stopped its children at a checkpoint and said so (G4; E2, E9, E14): each item it holds is
+                # paused, owner unchanged, its lease ended now, and it reconciles on its return. Said here, not at a
+                # sweep, so a restart quicker than a sweep still shows it.
+                cur.execute("""SELECT *, clock_timestamp() AS now FROM guild.mc_delegations
+                    WHERE principal_id=%s AND environment=%s AND runner_id=%s AND route IS NOT NULL
+                      AND state IN ('claimed','running') ORDER BY request_id FOR UPDATE""",
+                            (self.principal, self.environment, runner_id))
+                held = cur.fetchall()
+                owner = self._runner(cur, runner_id)
+                for row in held:
+                    self._lapse(cur, row, owner, row["now"], paused=True)
             # S1-F: the census batch this heartbeat carries is applied here, in the same transaction, as host events
             # (kind census.*) under their own ids, each applied once (_host_event).
         return {"state": "recorded"}
@@ -783,11 +956,13 @@ class DispatcherStore:
     def _unreconciled(self, cur, runner_id) -> list:
         """Items this runner owns that it must reconcile before it may take new work (§5.5 step 6): lapsed or paused
         by record, or claimed/running with the lease already past by the clock. An item it reconciled to ``unknown``
-        waits on the owner, not on the host, and does not count."""
+        waits on the owner, not on the host, and does not count. Nor does an item reassigned to it that it has not
+        picked up yet: it never ran here, so there is nothing to reconcile, and its claim hands it over."""
         cur.execute("""SELECT request_id, generation FROM guild.mc_delegations
             WHERE principal_id=%s AND environment=%s AND runner_id=%s
               AND (state IN ('lapsed','paused')
                    OR (state IN ('claimed','running') AND lease_until <= clock_timestamp()))
+              AND NOT (COALESCE(facts, '{}'::jsonb) ? 'reassigned' AND NOT COALESCE(facts, '{}'::jsonb) ? 'picked_up_at')
             ORDER BY request_id""", (self.principal, self.environment, runner_id))
         return [f"{r['request_id']}:{r['generation']}" for r in cur.fetchall()]
 
@@ -826,6 +1001,12 @@ class DispatcherStore:
                         or "worker" not in (host["roles"] or []) or host["announced"] != "online"):
                     return None
                 self._mark_waiting(cur, open_pairs)
+            with self._txn(conn) as cur:
+                if self._withheld(cur, runner_id, host["host_id"]):
+                    return None
+                handed = self._hand_over(cur, runner_id, host["host_id"])
+            if handed is not None:
+                return handed
             seen = []
             for _ in range(CLAIM_SCAN):
                 # One candidate per transaction: a competing host locks (and judges) the next one, not the same one; a
@@ -915,6 +1096,36 @@ class DispatcherStore:
                 "route": row["route"], "unit": route.unit, "reserved": float(amount), "lease_until": _iso(lease_until),
                 "card_id": row["card_id"], "step": row["step"]}
 
+    def _hand_over(self, cur, runner_id, host_id):
+        """An item the owner reassigned to this runner (R5.1-d) and that it has not picked up: its claim takes it at
+        the generation the reassignment set, with a fresh lease; the reservation it already holds stays. None if none."""
+        cur.execute("""SELECT d.*, clock_timestamp() AS now FROM guild.mc_delegations d
+            WHERE d.principal_id=%s AND d.environment=%s AND d.runner_id=%s AND d.route IS NOT NULL
+              AND d.state IN ('claimed','lapsed','paused')
+              AND d.facts ? 'reassigned' AND NOT d.facts ? 'picked_up_at'
+            ORDER BY d.request_id LIMIT 1 FOR UPDATE SKIP LOCKED""", (self.principal, self.environment, runner_id))
+        row = cur.fetchone()
+        if row is None:
+            return None
+        code = self._grant_refusal(cur, row)
+        if code is not None:                  # revoked or expired since: it ends here, never started on this host
+            self._close(cur, row, {"grant_expired": "expired", "grant_revoked": "cancelled"}.get(code, "interrupted"),
+                        {"code": code}, children_stopped=True, host_id=host_id)
+            return None
+        cur.execute("""UPDATE guild.mc_delegations SET state='claimed', lease_until=clock_timestamp() + %s * interval '1 second',
+            heartbeat_at=clock_timestamp(), lapsed_since=NULL, lapse_cause=NULL, grace_deadline=NULL,
+            facts=facts || jsonb_build_object('picked_up_at', clock_timestamp()) WHERE request_id=%s RETURNING lease_until""",
+            (self.authority.lease_s, str(row["request_id"])))
+        lease_until = cur.fetchone()["lease_until"]
+        res = row["reservation"]
+        self._event(cur, "item.claimed", item=row["request_id"], generation=row["generation"], host_id=host_id,
+                    once=_once("claimed", row["request_id"], row["generation"]),
+                    body={"runner_id": runner_id, "lease_until": _iso(lease_until), "route": row["route"],
+                          "handover": True, **res})
+        return {"envelope": self._envelope(row, row["generation"], list(row["input_artifacts"] or [])),
+                "route": row["route"], "unit": res["unit"], "reserved": res["reserved"], "lease_until": _iso(lease_until),
+                "card_id": row["card_id"], "step": row["step"]}
+
     def _reserve(self, cur, route_name, route, amount):
         """(hold code, None) or (None, day): ``amount`` reserved on today's row, under the route's lock, so two hosts
         competing for the last amount get one claim between them (R8.3-b)."""
@@ -946,6 +1157,8 @@ class DispatcherStore:
             return "stale_generation"
         if row["runner_id"] != runner_id:
             return "not_owner"
+        if row["state"] in ("lapsed", "paused"):
+            return "lease_lapsed"                  # the owner reconciles it; nothing else is taken (R5.1-c)
         if row["state"] not in ("claimed", "running"):
             return "item_ended" if row["finished_at"] is not None else "not_owned"
         if row["lease_until"] is None or row["lease_until"] <= row["now"]:
@@ -1109,3 +1322,634 @@ class DispatcherStore:
                     host_id=host_id, body={"route": row["route"], "day": res["day"], "unit": res["unit"],
                                            "reserved": res["reserved"], "observed": res["observed"]})
         return res
+
+    # ── version 2: recovery (spec v0.5 §5): reconcile, effect, the sweeper, and the owner's acts ────────────────────
+    def reconcile(self, runner_id, request_id, generation, stage, open_operations, *, protocol=2) -> dict:
+        """The owner host's question for one item it holds, after a restart, a wake or a reconnect (§5.5 step 4), once
+        it has frozen its child and replayed its pending records. One answer, decided in one transaction:
+          {answer: continue, generation, lease_until}                 the lease never lapsed; thaw the child
+          {answer: resume, generation: g+1, lease_until, checkpoint}  rebuild at that checkpoint and restart from it
+          {answer: stop, condition, code, state}                      a known outcome is recorded; workspace kept
+          {answer: decide, code, decision_id, operations}             the item is unknown; one decision is queued
+        ``condition`` names the one of R6.3's four conditions (checkpoint, identity, authority, budget) that failed,
+        or None for an item that had already ended, was stopped by its owner, or ran past its grace. The table, in
+        order, is in the module docstring. Idempotent per (request_id, generation): a decision that raised the
+        generation is answered again, never made twice (X5); no other answer raises it."""
+        _need(self._protocol(protocol, ()), "protocol_invalid")
+        rid = _uuid_text(request_id, "request_id_invalid")
+        _need(type(generation) is int and not isinstance(generation, bool) and 0 <= generation < 2**31,
+              "generation_invalid")
+        _need(type(runner_id) is str and _ID.match(runner_id), "runner_id_invalid")
+        stage, told = check_stage(stage), check_operations(open_operations)
+        with self._tx() as cur:
+            row = self._item(cur, rid)
+            if row is None or row["route"] is None:
+                return _stop("identity", "unknown_request" if row is None else "protocol_mismatch")
+            answer = self._reconcile(cur, row, runner_id, generation, stage, told)
+            self._event(cur, "item.reconciled", item=rid, generation=generation, host_id=self._host_id(cur, runner_id),
+                        body={"runner_id": runner_id, "stage": stage, "open_operations": told, **answer})
+            return answer
+
+    def _reconcile(self, cur, row, runner_id, g, stage, told) -> dict:
+        rid = row["request_id"]
+        # With the sweeper current, no outage of the authority's is unrecorded, so its own transition (lapse, grace
+        # end) is written now rather than at its next pass. With it stale, an outage may not be measured yet, so
+        # grace is judged only as stored: the owner keeps its own item rather than lose it to an unmeasured outage.
+        if (row["generation"] == g and row["runner_id"] == runner_id
+                and row["state"] in ("claimed", "running", "lapsed", "paused") and self._sweeper_fresh(cur)
+                and self._sweep_row(cur, row)):
+            row = self._item(cur, rid)
+        if row["generation"] > g:
+            # This very decision, asked again (X5): answered as made, even if that generation has lapsed since (the
+            # host then renews, is refused, and asks about it in turn).
+            done = self._recorded(cur, _once("resumed", rid, g))
+            if (done is not None and done.get("runner_id") == runner_id and row["generation"] == g + 1
+                    and row["runner_id"] == runner_id and row["state"] in ("claimed", "running", "lapsed", "paused")):
+                return {"answer": "resume", "generation": row["generation"], "lease_until": _iso(row["lease_until"]),
+                        "checkpoint": done.get("checkpoint")}
+            return _stop("identity", "reassigned" if row["runner_id"] != runner_id else "superseded")
+        if row["generation"] < g:
+            return _stop("identity", "generation_unknown")
+        if row["runner_id"] != runner_id:
+            return _stop("identity", "not_owner")
+        state, stopped = row["state"], stage["child"] == "stopped"
+        if state in TERMINAL:
+            if stopped:
+                self._confirm_stopped(cur, row)
+            return _stop(None, (row["result_detail"] or {}).get("code") or state, state)
+        if state not in ("claimed", "running", "lapsed", "paused", "unknown"):
+            return _stop("identity", "not_owned")
+        if state == "unknown":                                         # waits on the owner: the same decision
+            d = row["result_detail"] or {}
+            return {"answer": "decide", "code": d.get("reason"), "decision_id": d.get("decision_id"),
+                    "operations": d.get("operations", [])}
+        if row["cancel_requested"]:
+            return self._stop_item(cur, row, "cancelled", None, "owner_stop", stopped)
+        code = self._grant_refusal(cur, row)
+        if code in ("grant_revoked", "grant_expired"):
+            return self._stop_item(cur, row, "cancelled" if code == "grant_revoked" else "expired", "authority", code,
+                                   stopped)
+        open_ops = self._open_receipts(cur, rid)
+        if open_ops or stage["child"] == "unverified":
+            return self._decide(cur, row, "effect_unknown" if open_ops else "process_unverified", open_ops, told)
+        if code is not None:
+            return self._stop_item(cur, row, "interrupted", "authority", code, stopped)
+        lapsed = state in ("lapsed", "paused") or row["lease_until"] <= row["now"]
+        if not lapsed and stage["child"] == "frozen":
+            return {"answer": "continue", "generation": g, "lease_until": _iso(row["lease_until"])}
+        # Resume: a lapsed lease, or a child no longer running. The other three conditions must hold.
+        if row["deadline"] <= row["now"]:
+            return self._stop_item(cur, row, "timed_out", "authority", "deadline_passed", stopped)
+        code = self._budget_refusal(cur, row)
+        if code is not None:
+            return self._stop_item(cur, row, "interrupted", "budget", code, stopped)
+        held = row["checkpoint"]
+        if (None if held is None else {"name": held["name"], "digest": held["digest"]}) != stage["checkpoint"]:
+            return self._stop_item(cur, row, "interrupted", "checkpoint", "checkpoint_mismatch", stopped)
+        return self._resume(cur, row, runner_id)
+
+    def _resume(self, cur, row, runner_id) -> dict:
+        """reconcile's ``resume``: generation + 1, a fresh lease, the same owner, from the last checkpoint the
+        authority holds. The once-key makes a second rise for the same decision impossible."""
+        g, cp = row["generation"], row["checkpoint"]
+        checkpoint = None if cp is None else {"name": cp["name"], "digest": cp["digest"]}
+        cur.execute("""UPDATE guild.mc_delegations SET state='claimed', generation=%s,
+            lease_until=clock_timestamp() + %s * interval '1 second', heartbeat_at=clock_timestamp(), lapsed_since=NULL,
+            lapse_cause=NULL, grace_deadline=NULL, reservation=%s::jsonb,
+            facts=COALESCE(facts, '{}'::jsonb) || jsonb_build_object('resumed_at', clock_timestamp())
+            WHERE request_id=%s RETURNING lease_until""",
+            (g + 1, self.authority.lease_s, json.dumps({**row["reservation"], "generation": g + 1}),
+             str(row["request_id"])))
+        lease_until = cur.fetchone()["lease_until"]
+        if not self._event(cur, "item.resumed", item=row["request_id"], generation=g + 1,
+                           host_id=self._host_id(cur, runner_id), once=_once("resumed", row["request_id"], g),
+                           body={"runner_id": runner_id, "from_generation": g, "generation": g + 1,
+                                 "lease_until": _iso(lease_until), "checkpoint": checkpoint, "prior_state": row["state"],
+                                 "lapse_cause": row["lapse_cause"], "prior_lease_until": _iso(row["lease_until"])}):
+            raise RuntimeError("generation_raised_twice")      # cannot happen under the item's lock; never commit it
+        return {"answer": "resume", "generation": g + 1, "lease_until": _iso(lease_until), "checkpoint": checkpoint}
+
+    def _decide(self, cur, row, reason, open_ops, told) -> dict:
+        """reconcile's ``decide`` (§5.5 step 4, R4.1-c): the item becomes ``unknown``, its generation unchanged and its
+        workspace kept, and exactly one decision is queued: an unknown resolution, which never shares a batched
+        approval (R7.4-c). Today the decision is the ``decision.queued`` audit event, whose id is the decision's id;
+        S1-G gives it its D-code and notice. Nothing is retried."""
+        decision_id = str(uuid.uuid4())
+        detail = {"code": "decide", "reason": reason, "operations": open_ops, "workspace": "kept",
+                  "decision_id": decision_id, **({"host_open_operations": told} if told else {})}
+        cur.execute("""UPDATE guild.mc_delegations SET state='unknown', result_detail=%s::jsonb, lease_until=NULL
+            WHERE request_id=%s""", (json.dumps(detail), str(row["request_id"])))
+        rid, g = row["request_id"], row["generation"]
+        self._event(cur, "item.unknown", item=rid, generation=g, once=_once("unknown", rid, g), body=detail)
+        self._event(cur, "decision.queued", item=rid, generation=g, once=_once("decision", rid, g), event_id=decision_id,
+                    body={"class": "unknown_resolution", "solo": True, "reason": reason, "operations": open_ops})
+        return {"answer": "decide", "code": reason, "decision_id": decision_id, "operations": open_ops}
+
+    def _stop_item(self, cur, row, state, condition, code, stopped) -> dict:
+        """reconcile's ``stop``: the known outcome is recorded and the workspace kept."""
+        self._close(cur, row, state, {"code": code, **({"condition": condition} if condition else {}),
+                                      "workspace": "kept"}, children_stopped=stopped)
+        return _stop(condition, code, state)
+
+    def _budget_refusal(self, cur, row) -> str | None:
+        """R6.3's budget condition: the item's reservation still held, its (route, actor) pair still open, and no
+        unknown-usage hold on its route."""
+        res = row["reservation"] or {}
+        if "reserved" not in res or res.get("state") is not None:
+            return "reservation_missing"
+        gate = route_refusal(self.authority, row["route"], row["actor"])
+        if gate is not None:
+            return gate["code"]
+        cur.execute("""SELECT 1 FROM guild.mc_delegation_reservations WHERE environment=%s AND route=%s
+            AND usage_hold IS NOT NULL LIMIT 1""", (self.environment, row["route"]))
+        return "usage_unknown" if cur.fetchone() is not None else None
+
+    def _operations(self, cur, request_id) -> list:
+        """The receipts this item prepared through ``effect``: the audit records each, in the same transaction."""
+        cur.execute("""SELECT DISTINCT body->>'operation_id' AS op FROM guild.mc_delegation_events
+            WHERE principal_id=%s AND environment=%s AND item_id=%s AND kind='effect.prepared' ORDER BY 1""",
+                    (self.principal, self.environment, str(request_id)))
+        return [r["op"] for r in cur.fetchall()]
+
+    def _open_receipts(self, cur, request_id) -> list:
+        """The item's effects whose outcome is not established: a receipt dispatched or unknown (ReceiptStore.read)."""
+        out = []
+        for op in self._operations(cur, request_id):
+            state = self._receipts.read(cur.connection, self.principal, self.environment, op)["state"]
+            if state in ("dispatched", "unknown"):
+                out.append({"operation_id": op, "state": state})
+        return out
+
+    def _recorded(self, cur, once) -> dict | None:
+        cur.execute("""SELECT body FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s
+            AND once_key=%s""", (self.principal, self.environment, once))
+        found = cur.fetchone()
+        return None if found is None else found["body"]
+
+    @staticmethod
+    def _runner(cur, runner_id):
+        cur.execute("SELECT * FROM guild.mc_delegation_runners WHERE runner_id=%s", (runner_id,))
+        return cur.fetchone()
+
+    # ── ending an item, and its reservation (R8.3-c) ──
+    def _close(self, cur, row, state, detail, *, children_stopped, source="authority", host_id=None):
+        """End a version 2 item. A reservation it holds stays reserved until its children are confirmed stopped."""
+        res = self._release(cur, row, children_stopped)
+        released = res.get("state") == "settled" and (row["reservation"] or {}).get("state") != "settled"
+        cur.execute("""UPDATE guild.mc_delegations SET state=%s, result_detail=%s::jsonb, finished_at=clock_timestamp(),
+            lease_until=NULL, reservation=%s::jsonb, facts=COALESCE(facts, '{}'::jsonb)
+              || CASE WHEN %s THEN jsonb_build_object('released_at', clock_timestamp()) ELSE '{}'::jsonb END
+            WHERE request_id=%s""", (state, json.dumps(detail), json.dumps(res), released, str(row["request_id"])))
+        self._event(cur, f"item.{state}", item=row["request_id"], generation=row["generation"], host_id=host_id,
+                    source=source, once=_once(state, row["request_id"], row["generation"]),
+                    body={**detail, "reservation": res.get("state")})
+
+    def _release(self, cur, row, children_stopped) -> dict:
+        """The reservation of an item that ends without a settled result. While its children are not confirmed stopped
+        it is ``kept``. Once they are, usage a result already reported is settled; with no report, the amount stays
+        counted on its day as ``unreported``, never released as zero (§8.1). Every route that can be claimed bounds a
+        launch by the item's cap, which the claim reserved in full, so the route stays open."""
+        res = dict(row["reservation"] or {})
+        if "reserved" not in res or res.get("state") in ("settled", "usage_unknown", "unreported"):
+            return res
+        if not children_stopped:
+            if res.get("state") != "kept":
+                res.update(state="kept", kept="children_unconfirmed")
+                self._event(cur, "reservation.kept", item=row["request_id"], generation=row["generation"],
+                            body={"route": row["route"], "day": res.get("day"), "reserved": res["reserved"]})
+            return res
+        if res.pop("kept", None) is not None and res.get("observed") is not None:
+            self._lock_route(cur, row["route"])
+            cur.execute("""UPDATE guild.mc_delegation_reservations SET reserved=reserved - %s, observed=observed + %s,
+                updated_at=clock_timestamp() WHERE environment=%s AND route=%s AND day=%s""",
+                (Decimal(str(res["reserved"])), Decimal(str(res["observed"])), self.environment, row["route"],
+                 date.fromisoformat(res["day"])))
+            res["state"] = "settled"
+        else:
+            res["state"] = "unreported"
+        self._event(cur, f"reservation.{res['state']}", item=row["request_id"], generation=row["generation"],
+                    body={"route": row["route"], "day": res.get("day"), "unit": res.get("unit"),
+                          "reserved": res["reserved"], "observed": res.get("observed")})
+        return res
+
+    def _confirm_stopped(self, cur, row):
+        """The owner confirms an ended item's children stopped (reconcile, child ``stopped``): a kept reservation is
+        released by _release's rule. The release path for every ``kept`` reservation, the result's included."""
+        if (row["reservation"] or {}).get("state") != "kept":
+            return
+        res = self._release(cur, row, True)
+        cur.execute("""UPDATE guild.mc_delegations SET reservation=%s::jsonb, facts=COALESCE(facts, '{}'::jsonb)
+              || CASE WHEN %s THEN jsonb_build_object('released_at', clock_timestamp()) ELSE '{}'::jsonb END
+            WHERE request_id=%s""", (json.dumps(res), res["state"] == "settled", str(row["request_id"])))
+
+    # ── effects (R3.2-a, §4.5) ──
+    def effect(self, runner_id, request_id, generation, effect, *, protocol=2) -> dict:
+        """One step of an effect, run inside the authority and mapped one to one onto the existing receipts and grants:
+          prepare    GrantStore.prepare_effect: one of the effect grant's operations used, and the receipt prepared
+          claim      ReceiptStore.claim (execute): a receipt lease of at most 30 s, never past the item's own lease
+          dispatch   ReceiptStore.dispatch: committed before anything is sent; refused on an expired receipt lease
+          finish     ReceiptStore.finish: verified or failed with the target's answer as evidence, or unknown
+          reconcile  ReceiptStore.claim (reconcile): dispatched becomes unknown, with a lease to finish it from readback
+        Only the owner host at the item's current generation. prepare, claim and dispatch also need the item's lease
+        running, its Stop unpressed and its own grant still valid, so a revocation refuses a dispatch at once (R4.3-e).
+        finish and reconcile only record what became of an effect already dispatched, so they are taken in any state
+        (R5.1-c: records from before a lapse). Every step is an authority transaction, so with no authority there is
+        no effect (R4.5-e); an unknown receipt can never be claimed to execute again (R4.5-a).
+        -> {state: ok, op, operation_id, receipt_state, lease?: {receipt_generation, token, mode, lease_until}}
+         | {state: already_applied, op, operation_id} (a finish replayed, DUP-5) | {state: refused, op, operation_id, code}"""
+        _need(self._protocol(protocol, ()), "protocol_invalid")
+        rid = _uuid_text(request_id, "request_id_invalid")
+        _need(type(generation) is int and not isinstance(generation, bool) and 0 <= generation < 2**31,
+              "generation_invalid")
+        _need(type(runner_id) is str and _ID.match(runner_id), "runner_id_invalid")
+        eff = check_effect(effect)
+        from core.minimoi_actions.context import ActionContractError
+        from core.minimoi_actions.requests import ToolRequest
+        try:
+            req = ToolRequest(eff["request"]["operation"], eff["request"]["operation_version"],
+                              json.dumps(eff["request"]["arguments"]).encode("utf-8"))
+        except ActionContractError:
+            raise AuthorityRefused("effect_invalid") from None
+        op, op_id = eff["op"], effect_operation_id(rid, eff["key"])
+        answer = {"op": op, "operation_id": op_id}
+        with self._tx() as cur:
+            row = self._item(cur, rid)
+            if row is None or row["route"] is None:
+                return {"state": "refused", **answer, "code": "unknown_request" if row is None else "protocol_mismatch"}
+            host_id = self._host_id(cur, runner_id)
+            body = {"operation_id": op_id, "key": eff["key"], "capability": req.operation}
+            code, out = self._effect_refusal(cur, row, runner_id, generation, op, op_id), None
+            if code is None:
+                cur.execute("SAVEPOINT mc_effect")
+                try:
+                    out = self._effect_step(cur, row, runner_id, eff, req, op_id)
+                    cur.execute("RELEASE SAVEPOINT mc_effect")
+                except ActionContractError as exc:
+                    cur.execute("ROLLBACK TO SAVEPOINT mc_effect")
+                    code = str(exc)
+                    if op == "finish" and self._receipts.read(cur.connection, self.principal, self.environment,
+                                                              op_id)["state"] == eff["state"]:
+                        return {"state": "already_applied", **answer}      # this outcome is already recorded
+            if code is not None:
+                self._event(cur, "effect.refused", item=rid, generation=row["generation"], host_id=host_id,
+                            once=_once("effect_refused", op_id, op, generation, code),
+                            body={**body, "op": op, "code": code, "generation": generation})
+                return {"state": "refused", **answer, "code": code}
+            said = {**(out.get("lease") or {}), **out}                    # never the lease's token
+            self._event(cur, "effect." + _EFFECT_EVENT[op], item=rid, generation=row["generation"], host_id=host_id,
+                        once=_once("effect_prepared", op_id) if op == "prepare" else None,
+                        body={**body, **{k: said[k] for k in ("receipt_state", "receipt_generation", "mode",
+                                                              "lease_until") if k in said}})
+            return {"state": "ok", **answer, **out}
+
+    def _effect_refusal(self, cur, row, runner_id, generation, op, op_id) -> str | None:
+        if row["generation"] != generation:
+            return "stale_generation"
+        if row["runner_id"] != runner_id:
+            return "not_owner"
+        if op in ("prepare", "claim", "dispatch"):
+            code = self._owner_refusal(row, generation, runner_id)
+            if code is None and row["cancel_requested"]:
+                code = "cancel_requested"
+            if code is None:
+                code = self._grant_refusal(cur, row)          # the item's own grant: a revocation refuses at once
+            if code is not None:
+                return code
+        if op != "prepare" and op_id not in self._operations(cur, row["request_id"]):
+            return "operation_not_of_item"
+        return None
+
+    def _effect_step(self, cur, row, runner_id, eff, req, op_id) -> dict:
+        """The ReceiptStore/GrantStore call itself. The effect's context is built here from the authority's own record
+        of the item, never from the host: the item's work (its card, or its job) is the context's conversation and
+        work id, the item's request id its turn, its route the budget account, and its lease the context's expiry. So
+        an effect grant names that work, the item's worker and EFFECT_POLICY."""
+        from core.minimoi_actions.context import ActionContext
+        from core.minimoi_actions.grants import GrantExecution
+        from core.minimoi_actions.receipts import EffectIntent, EffectLease
+        conn, p, e, op = cur.connection, self.principal, self.environment, eff["op"]
+        work = row["card_id"] or row["job_id"]
+        context = ActionContext(p, row["actor"], e, work, str(row["request_id"]),
+                                f"{row['request_id']}/{row['generation']}", row["generation"],
+                                row["lease_until"] or row["now"], EFFECT_POLICY, "host-runtime", "recorded",
+                                row["route"], (eff["grant_id"],), work_id=work)
+        intent = EffectIntent(op_id, req, grant_id=eff["grant_id"])
+        execute = GrantExecution(self._grants, context, intent, EFFECT_POLICY)
+        if op == "prepare":
+            return {"receipt_state": self._grants.prepare_effect(conn, context, intent,
+                                                                 current_policy_version=EFFECT_POLICY)["state"]}
+        if op in ("claim", "reconcile"):
+            if op == "claim":                  # the receipt's lease never outlives the item's
+                left = int((row["lease_until"] - row["now"]).total_seconds())
+                lease = self._receipts.claim(conn, p, e, op_id, runner_id, mode="execute",
+                                             seconds=max(1, min(RECEIPT_LEASE_S, left)), authority=execute)
+            else:
+                lease = self._receipts.claim(conn, p, e, op_id, runner_id, mode="reconcile", seconds=RECEIPT_LEASE_S)
+            return {"receipt_state": self._receipts.read(conn, p, e, op_id)["state"],
+                    "lease": {"receipt_generation": lease.generation, "token": lease.token, "mode": lease.mode,
+                              "lease_until": _iso(self._receipts.lease_until(conn, p, e, op_id))}}
+        lease = EffectLease(p, e, op_id, eff["lease"]["receipt_generation"], runner_id, eff["lease"]["token"],
+                            eff["lease"]["mode"])
+        if op == "dispatch":
+            self._receipts.dispatch(conn, lease, authority=execute)
+            return {"receipt_state": "dispatched",
+                    "lease_until": _iso(self._receipts.lease_until(conn, p, e, op_id))}   # the target refuses after it
+        refs = ()
+        if eff["evidence"] is not None:        # the target's answer, recorded in the audit and cited by its id
+            refs = (str(uuid.uuid4()),)
+            self._event(cur, "effect.evidence", item=row["request_id"], generation=row["generation"], event_id=refs[0],
+                        body={"operation_id": op_id, "reported_by": runner_id, **eff["evidence"]})
+        self._receipts.finish(conn, lease, eff["state"], evidence_refs=refs,
+                              authority=execute if lease.mode == "execute" else None)
+        return {"receipt_state": eff["state"]}
+
+    # ── the sweeper (§5.1, §5.2, R2.4-b) ──
+    def sweep(self) -> dict:
+        """One pass of the sweeper. run_sweeper repeats it every sweep_s; S1-H runs that beside door.handle.
+        1. Its own heartbeat (its row among the contacts). A gap past gap_threshold_s is the authority's own outage:
+           the longest stretch inside the gap in which the authority recorded nothing at all, no event and no host
+           contact, so a sweeper that died while the authority kept serving records no outage. It is written as
+           authority.suspended {from, to}, and every open grace deadline moves on by its length (R5.2-a).
+        2. Version 1 items: the write-on-read reap moves here unchanged (interrupted: runner_lost), since relay.status
+           no longer reaps where a sweeper runs (R3.3).
+        3. Version 2 items, one short transaction each, skipping any a caller holds right now (_sweep_item).
+        It never writes running: liveness stays derived at read time, so a dead sweeper leaves no item looking live
+        (E11): every call judges a lease by the database clock, whatever the sweeper has written."""
+        _need(self.sweeps, "sweeper_not_configured")
+        done = {}
+        with self._session() as conn:
+            with self._txn(conn) as cur:
+                suspended = self._sweeper_beat(cur)
+            with self._txn(conn) as cur:
+                cur.execute("""UPDATE guild.mc_delegations SET state='interrupted', finished_at=clock_timestamp(),
+                    result_detail='{"code": "runner_lost"}'::jsonb, lease_until=NULL
+                    WHERE principal_id=%s AND environment=%s AND route IS NULL AND state IN ('claimed','running')
+                      AND result_event_id IS NULL AND lease_until < clock_timestamp() - %s * interval '1 second'""",
+                            (self.principal, self.environment, LEASE_SECONDS))
+                done["runner_lost"] = cur.rowcount
+            with self._txn(conn) as cur:
+                cur.execute("""SELECT request_id FROM guild.mc_delegations
+                    WHERE principal_id=%s AND environment=%s AND route IS NOT NULL
+                      AND ((state IN ('claimed','running') AND lease_until <= clock_timestamp())
+                        OR (state IN ('lapsed','paused') AND grace_deadline <= clock_timestamp()))
+                    ORDER BY request_id LIMIT %s""", (self.principal, self.environment, SWEEP_BATCH))
+                due = [r["request_id"] for r in cur.fetchall()]
+            for rid in due:
+                with self._txn(conn) as cur:
+                    row = self._item(cur, rid, skip=True)
+                    moved = [] if row is None else self._sweep_row(cur, row)
+                for m in moved:
+                    done[m] = done.get(m, 0) + 1
+        return {"suspended": suspended, **done}
+
+    def run_sweeper(self, stop, *, log=None) -> None:
+        """The sweeper's loop: a pass every sweep_s until ``stop`` (a threading.Event) is set. A failed pass is logged by
+        its type only and the loop goes on; a pass that cannot run leaves the heartbeat old, which witnesses read."""
+        _need(self.sweeps, "sweeper_not_configured")
+        while not stop.is_set():
+            try:
+                self.sweep()
+            except Exception as exc:
+                (log or _log).warning("sweeper pass failed (%s)", type(exc).__name__)
+            stop.wait(self.authority.sweeper.sweep_s)
+
+    def sweeper_status(self) -> dict | None:
+        """The sweeper's heartbeat as read (S1-G's sweeper_age_s; a witness's check, R5.6-a). None before its first pass."""
+        _need(self.sweeps, "sweeper_not_configured")
+        with self._tx() as cur:
+            cur.execute("""SELECT seen_at, last_gap_s, clock_timestamp() AS now FROM guild.mc_delegation_runners
+                WHERE runner_id=%s""", (self._sweeper_id,))
+            r = cur.fetchone()
+        if r is None:
+            return None
+        age = (r["now"] - r["seen_at"]).total_seconds()
+        return {"seen_at": _iso(r["seen_at"]), "age_s": age, "last_gap_s": r["last_gap_s"],
+                "fresh": age <= self.authority.sweeper.gap_threshold_s}
+
+    def _sweeper_fresh(self, cur) -> bool:
+        if not self.sweeps:
+            return False
+        cur.execute("""SELECT seen_at >= clock_timestamp() - %s * interval '1 second' AS fresh
+            FROM guild.mc_delegation_runners WHERE runner_id=%s""",
+                    (self.authority.sweeper.gap_threshold_s, self._sweeper_id))
+        found = cur.fetchone()
+        return bool(found and found["fresh"])
+
+    def _sweeper_beat(self, cur) -> dict | None:
+        me, threshold = self._sweeper_id, self.authority.sweeper.gap_threshold_s
+        cur.execute("""INSERT INTO guild.mc_delegation_runners (runner_id, state, capabilities, seen_at, environment,
+            roles, announced, announced_at, last_gap_s, protocol)
+            VALUES (%s, 'sweeping', '[]'::jsonb, clock_timestamp(), %s, '["authority"]'::jsonb, 'online',
+                    clock_timestamp(), 0, 2) ON CONFLICT (runner_id) DO NOTHING""", (me, self.environment))
+        cur.execute("SELECT *, clock_timestamp() AS now FROM guild.mc_delegation_runners WHERE runner_id=%s FOR UPDATE",
+                    (me,))
+        beat = cur.fetchone()
+        _need(beat["environment"] == self.environment, "sweeper_environment_mismatch")
+        now, last = beat["now"], beat["seen_at"]
+        gap = max(0.0, (now - last).total_seconds())
+        suspended = None
+        if gap > threshold:
+            cur.execute(_QUIET_SQL, {"last": last, "now": now, "p": self.principal, "e": self.environment, "me": me})
+            quiet = cur.fetchone()
+            if quiet is not None and (quiet["b"] - quiet["a"]).total_seconds() > threshold:
+                a, b = quiet["a"], quiet["b"]
+                suspended = {"from": _iso(a), "to": _iso(b), "outage_s": (b - a).total_seconds()}
+                self._event(cur, "authority.suspended", body={**suspended, "sweeper_gap_s": gap})
+                cur.execute("""UPDATE guild.mc_delegations SET grace_deadline = grace_deadline + %s * interval '1 second'
+                    WHERE principal_id=%s AND environment=%s AND route IS NOT NULL AND state IN ('lapsed','paused')
+                      AND grace_deadline > %s RETURNING request_id, generation, grace_deadline""",
+                            ((b - a).total_seconds(), self.principal, self.environment, a))
+                for r in cur.fetchall():
+                    self._event(cur, "item.grace_extended", item=r["request_id"], generation=r["generation"],
+                                body={"by_s": suspended["outage_s"], "grace_deadline": _iso(r["grace_deadline"]),
+                                      "outage": {"from": suspended["from"], "to": suspended["to"]}})
+        cur.execute("""UPDATE guild.mc_delegation_runners SET seen_at=%s, last_gap_s=%s, state='sweeping'
+            WHERE runner_id=%s""", (now, gap, me))
+        return suspended
+
+    def _sweep_row(self, cur, row) -> list:
+        """_sweep_item until the item rests, so a lease long past whose grace is past too ends in one pass."""
+        moved = []
+        while True:
+            step = self._sweep_item(cur, row)
+            if step is None:
+                return moved
+            moved.append(step)
+            row = self._item(cur, row["request_id"])
+
+    def _sweep_item(self, cur, row) -> str | None:
+        """The sweeper's transition for one version 2 item under its lock, or None:
+        - claimed/running, lease still running: nothing (held: nobody may act before it runs out, R5.1-c);
+        - claimed/running, lease past without a result: a revoked or expired grant ends it (cancelled: grant_revoked,
+          expired), as does the owner's Stop (cancelled: owner_stop); otherwise lapsed with its cause, owner unchanged,
+          grace from the owner host's unreachable_grace_s;
+        - lapsed/paused past its grace deadline: interrupted: owner_unreachable, checkpoint kept.
+        A reservation is kept while children are not confirmed stopped."""
+        if row["route"] is None:
+            return None
+        owner, now, state = self._runner(cur, row["runner_id"]), row["now"], row["state"]
+        if state in ("claimed", "running"):
+            if row["lease_until"] > now:
+                return None
+            code = self._grant_refusal(cur, row)
+            if code in ("grant_revoked", "grant_expired") or row["cancel_requested"]:
+                ended = "expired" if code == "grant_expired" else "cancelled"
+                self._close(cur, row, ended, {"code": code if code in ("grant_revoked", "grant_expired") else "owner_stop"},
+                            children_stopped=False)
+                return ended
+            return self._lapse(cur, row, owner, row["lease_until"])
+        if state in ("lapsed", "paused") and row["grace_deadline"] is not None and row["grace_deadline"] <= now:
+            self._close(cur, row, "interrupted", {"code": "owner_unreachable"}, children_stopped=False)
+            return "interrupted"
+        return None
+
+    def _lapse(self, cur, row, owner, since, *, paused=False) -> str:
+        """lapsed (the lease ran out at ``since``) or paused (its owner announced a stop at ``since``): owner unchanged,
+        the lease ended, a grace deadline from the owner's grace (none stated: none given) less any outage."""
+        grace_s = 0 if owner is None or owner["unreachable_grace_s"] is None else owner["unreachable_grace_s"]
+        cur.execute("""SELECT (body->>'from')::timestamptz AS a, (body->>'to')::timestamptz AS b
+            FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s AND kind='authority.suspended'
+              AND (body->>'to')::timestamptz > %s""", (self.principal, self.environment, since))
+        deadline, down = grace_deadline(since, grace_s, [(r["a"], r["b"]) for r in cur.fetchall()])
+        state = "paused" if paused else "lapsed"
+        cause = "owner_stopped" if paused else lapse_cause(down, None if owner is None else owner["seen_at"], since)
+        cur.execute("""UPDATE guild.mc_delegations SET state=%s, lapsed_since=%s, lapse_cause=%s, grace_deadline=%s,
+            lease_until=LEAST(lease_until, %s) WHERE request_id=%s""",
+                    (state, since, cause, deadline, since, str(row["request_id"])))
+        self._event(cur, f"item.{state}", item=row["request_id"], generation=row["generation"],
+                    host_id=None if owner is None else owner["host_id"],
+                    once=_once(state, row["request_id"], row["generation"]),
+                    body={"cause": cause, "runner_id": row["runner_id"], "lapsed_since": _iso(since),
+                          "grace_s": grace_s, "grace_deadline": _iso(deadline),
+                          "lease_until": _iso(min(row["lease_until"], since))})
+        return state
+
+    # ── the owner's acts on a held-up item (R5.1-c, R5.1-d, R4.3-e); the owner path that calls them is S1-G's ──
+    def reassign(self, request_id, runner_id, *, by, note) -> dict:
+        """Reassign an item whose lease has run out (R5.1-d). One transaction sets the new owner and generation + 1,
+        with a fresh lease that the new owner's next claim picks up (_hand_over). Its checkpoint lives on the old host,
+        so the new owner starts from the item's inputs; an effect already verified is found again by its operation id
+        and never sent again. Refused while the lease still runs (held: nobody may act), while any of its receipts is
+        dispatched or unknown (decide those first), and to another host unless the authority allows it: a Mac-only
+        build refuses cross-host takeover outright (R2.4-c). Nothing else ever moves an item (R4.1-c)."""
+        _need(self._v2, "protocol_not_enabled")
+        rid = _uuid_text(request_id, "request_id_invalid")
+        _need(type(runner_id) is str and _ID.match(runner_id), "runner_id_invalid")
+        by, note = _owner_act(by, note)
+        with self._tx() as cur:
+            row = self._item(cur, rid)
+            _need(row is not None and row["route"] is not None, "unknown_request")
+            _need(row["state"] in ("claimed", "running", "lapsed", "paused", "unknown"), "item_not_reassignable")
+            _need(row["state"] not in ("claimed", "running") or row["lease_until"] <= row["now"], "lease_current")
+            res = dict(row["reservation"] or {})
+            _need("reserved" in res and res.get("state") is None, "reservation_missing")
+            _need(not self._open_receipts(cur, rid), "receipts_open")
+            target = self._runner(cur, runner_id)
+            _need(target is not None and target["protocol"] == 2 and target["environment"] == self.environment
+                  and "worker" in (target["roles"] or []), "target_invalid")
+            needs = {f"actor:{row['actor']}", f"scope:{row['scope']}", f"repo:{row['repository']}",
+                     *(row["required_capabilities"] or [])}
+            _need(needs <= set(target["capabilities"] or []), "target_not_capable")
+            old_host = self._host_id(cur, row["runner_id"])
+            _need(target["host_id"] == old_host or self.authority.reassign_across_hosts, "cross_host_refused")
+            g = row["generation"]
+            cur.execute("""UPDATE guild.mc_delegations SET state='claimed', generation=%s, runner_id=%s,
+                lease_until=clock_timestamp() + %s * interval '1 second', heartbeat_at=clock_timestamp(),
+                lapsed_since=NULL, lapse_cause=NULL, grace_deadline=NULL, checkpoint=NULL, result_detail=NULL,
+                reservation=%s::jsonb,
+                facts=(COALESCE(facts, '{}'::jsonb) - 'picked_up_at') || jsonb_build_object('reassigned', %s::jsonb)
+                WHERE request_id=%s RETURNING lease_until""",
+                (g + 1, runner_id, self.authority.lease_s, json.dumps({**res, "generation": g + 1}),
+                 json.dumps({"from_runner_id": row["runner_id"], "from_generation": g, "by": by}), rid))
+            lease_until = cur.fetchone()["lease_until"]
+            self._event(cur, "item.reassigned", item=rid, generation=g + 1, host_id=target["host_id"], source="owner",
+                        once=_once("reassigned", rid, g),
+                        body={"from_runner_id": row["runner_id"], "from_host_id": old_host, "runner_id": runner_id,
+                              "host_id": target["host_id"], "from_generation": g, "generation": g + 1,
+                              "lease_until": _iso(lease_until), "prior_state": row["state"],
+                              "prior_checkpoint": row["checkpoint"], "by": by, "note": note})
+            self._resolve_decision(cur, row, "reassigned", by)
+            return {"state": "reassigned", "generation": g + 1, "runner_id": runner_id, "lease_until": _iso(lease_until)}
+
+    def end(self, request_id, *, by, note) -> dict:
+        """The owner's "end" for an item no host may continue on its own: lapsed, paused or unknown, or claimed with
+        its lease already past (R5.1-c). It ends interrupted: owner_decision, workspace and checkpoint kept, its
+        reservation kept until its children are confirmed stopped. Refused while its lease runs (Stop is for that).
+        For an unknown item it is the recorded owner decision DUP-6 waits for."""
+        _need(self._v2, "protocol_not_enabled")
+        rid = _uuid_text(request_id, "request_id_invalid")
+        by, note = _owner_act(by, note)
+        with self._tx() as cur:
+            row = self._item(cur, rid)
+            _need(row is not None and row["route"] is not None, "unknown_request")
+            _need(row["state"] in ("claimed", "running", "lapsed", "paused", "unknown"), "item_not_endable")
+            _need(row["state"] not in ("claimed", "running") or row["lease_until"] <= row["now"], "lease_current")
+            open_ops = self._open_receipts(cur, rid)
+            self._close(cur, row, "interrupted", {"code": "owner_decision", "by": by, "note": note, "workspace": "kept",
+                                                  **({"open_operations": open_ops} if open_ops else {})},
+                        children_stopped=False, source="owner")
+            self._resolve_decision(cur, row, "end", by)
+            return {"state": "interrupted", "code": "owner_decision"}
+
+    def revoke(self, grant_id, *, by, note) -> dict:
+        """Revocation end to end (R4.3-e, E13). One transaction: every open item under the grant is locked first (items
+        before grants, as every path takes them), then GrantStore.revoke, then each item ends cancelled: grant_revoked.
+        From then on renew is false, any dispatch is refused and a late result is refused, because the item has ended.
+        A claimed item keeps its reservation until its children are confirmed stopped (R8.3-c)."""
+        _need(self._v2, "protocol_not_enabled")
+        gid = _uuid_text(grant_id, "grant_id_invalid")
+        by, note = _owner_act(by, note)
+        from core.minimoi_actions.context import ActionContractError
+        with self._tx() as cur:
+            cur.execute("""SELECT *, clock_timestamp() AS now FROM guild.mc_delegations
+                WHERE principal_id=%s AND environment=%s AND grant_id=%s AND route IS NOT NULL
+                  AND state IN ('proposed','queued','claimed','running','lapsed','paused','unknown')
+                ORDER BY request_id FOR UPDATE""", (self.principal, self.environment, gid))
+            rows = cur.fetchall()
+            try:
+                self._grants.revoke(cur.connection, self.principal, self.environment, gid)
+            except ActionContractError as exc:
+                raise AuthorityRefused(str(exc)) from None
+            for row in rows:
+                self._close(cur, row, "cancelled", {"code": "grant_revoked", "by": by},
+                            children_stopped=row["state"] in ("proposed", "queued"), source="owner")
+                self._resolve_decision(cur, row, "revoked", by)
+            ended = [str(r["request_id"]) for r in rows]
+            self._event(cur, "grant.revoked", source="owner", body={"grant_id": gid, "by": by, "note": note,
+                                                                     "items": ended})
+            return {"state": "revoked", "grant_id": gid, "items": ended}
+
+    def _resolve_decision(self, cur, row, answer, by):
+        """An owner act that settles an unknown item's queued decision records that it did."""
+        decision = (row["result_detail"] or {}).get("decision_id") if row["state"] == "unknown" else None
+        if decision is not None:
+            self._event(cur, "decision.resolved", item=row["request_id"], generation=row["generation"], source="owner",
+                        once=_once("decision_resolved", decision), body={"decision_id": decision, "answer": answer,
+                                                                        "by": by})
+
+
+_EFFECT_EVENT = {"prepare": "prepared", "claim": "claimed", "dispatch": "dispatched", "finish": "finished",
+                 "reconcile": "reconciling"}
+# The longest stretch between the sweeper's last beat and now in which the authority recorded nothing: no audit event
+# and no host contact. Its own outage, as opposed to a sweeper that died while the authority kept serving.
+_QUIET_SQL = """WITH pts AS (
+    SELECT %(last)s::timestamptz AS t
+    UNION ALL SELECT recorded_at FROM guild.mc_delegation_events
+              WHERE principal_id=%(p)s AND environment=%(e)s AND recorded_at > %(last)s AND recorded_at < %(now)s
+    UNION ALL SELECT seen_at FROM guild.mc_delegation_runners
+              WHERE runner_id <> %(me)s AND (environment = %(e)s OR environment IS NULL)
+                AND seen_at > %(last)s AND seen_at < %(now)s
+    UNION ALL SELECT %(now)s::timestamptz),
+  g AS (SELECT lag(t) OVER (ORDER BY t) AS a, t AS b FROM pts)
+SELECT a, b FROM g WHERE a IS NOT NULL ORDER BY b - a DESC LIMIT 1"""
+
+
+def _stop(condition, code, state=None) -> dict:
+    return {"answer": "stop", "condition": condition, "code": code, "state": state}
+
+
+def _owner_act(by, note) -> tuple:
+    _need(type(by) is str and _ID.match(by), "owner_invalid")
+    if not isinstance(note, str) or not note.strip():
+        raise AuthorityRefused("say_why")
+    return by, note.strip()[:300]

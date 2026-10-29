@@ -1,10 +1,11 @@
 {
   "schema": "minimoi.authority.v1",
   "environment": "dev",
-  "note": "Test values only (spec v0.5 §9.2), never production's: lease 60 s; fakework 2.0 test_units a day and 1.5 per item. fakework.subscription is configured supervised-only and anthropic.api is an API route outside the test family, both for T11b. fakework.api is T19e's test API route. Each route names the workers it may run; a test route runs only fakework. launch_closure is pending, as it is everywhere until the owner records both gating N5 items. The other §9.2 values (contact, grace, offline hold, gap, progress timeouts, sweep, fakejudge) belong to the chunks that read them.",
+  "note": "Test values only (spec v0.5 §9.2), never production's: lease 60 s; fakework 2.0 test_units a day and 1.5 per item. fakework.subscription is configured supervised-only and anthropic.api is an API route outside the test family, both for T11b. fakework.api is T19e's test API route. Each route names the workers it may run; a test route runs only fakework. launch_closure is pending, as it is everywhere until the owner records both gating N5 items. A sweeper runs every 15 s, and a gap in its heartbeat over 30 s (the gap threshold) is the authority's own outage. reassign_across_hosts is left out, so it is false, as on the Mac-only gate M. The other §9.2 values (contact, grace, offline hold, progress timeouts, fakejudge) belong to the chunks that read them; grace is each host's own fact.",
   "protocols": [1, 2],
   "launch_closure": "pending",
   "lease_s": 60,
+  "sweeper": {"sweep_s": 15, "gap_threshold_s": 30},
   "routes": {
     "fakework": {"unit": "test_units", "actors": ["fakework"], "per_day": 2.0, "per_item": 1.5, "supervised_only": false},
     "fakework.subscription": {"unit": "test_units", "actors": ["fakework"], "per_day": 2.0, "per_item": 1.5, "supervised_only": true},

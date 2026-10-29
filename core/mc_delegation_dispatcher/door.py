@@ -7,7 +7,7 @@ interface as ``StoreDispatcher``, over HTTPS (core/mc_delegation_runner/cli.py -
 
 A body without ``protocol`` is version 1 and is checked and passed exactly as before (spec v0.5 R3.2-d). A body with
 ``protocol: 2`` must have every field of its call's version 2 shape (store.py's docstring), and nothing else; the
-store refuses it unless the authority configuration speaks version 2.
+store refuses it unless the authority configuration speaks version 2. Version 2 adds two calls, reconcile and effect.
 """
 from __future__ import annotations
 
@@ -92,7 +92,9 @@ _V2 = {"heartbeat": {"runner_id", "state", "capabilities", "facts"},
        "cancel_requested": {"request_id", "generation"},
        "renew": {"runner_id", "request_id", "generation"},
        "result": {"runner_id", "request_id", "generation", "event_id", "at", "status", "artifacts", "detail",
-                  "output_text", "route", "usage"}}
+                  "output_text", "route", "usage"},
+       "reconcile": {"runner_id", "request_id", "generation", "stage", "open_operations"},
+       "effect": {"runner_id", "request_id", "generation", "effect"}}
 
 
 def _checked(check, value):
@@ -104,7 +106,8 @@ def _checked(check, value):
 
 def _handle_v2(store, body):
     # The store's own value checks, so the door and a direct caller are held to the same shapes.
-    from .store import check_capabilities, check_checkpoint, check_facts, check_route, check_usage, parse_at
+    from .store import (check_capabilities, check_checkpoint, check_effect, check_facts, check_operations, check_route,
+                        check_stage, check_usage, parse_at)
     need(type(body["protocol"]) is int and body["protocol"] == 2 and body["op"] in _V2)
     op = body["op"]
     args = {k: v for k, v in body.items() if k not in ("op", "protocol")}
@@ -124,6 +127,11 @@ def _handle_v2(store, body):
         return {"value": store.cancel_requested(rid, gen, protocol=2)}
     if op == "renew":
         return {"value": store.renew(rid, gen, protocol=2, runner_id=args["runner_id"])}
+    if op == "reconcile":
+        stage, ops = _checked(check_stage, args["stage"]), _checked(check_operations, args["open_operations"])
+        return {"value": store.reconcile(args["runner_id"], rid, gen, stage, ops, protocol=2)}
+    if op == "effect":
+        return {"value": store.effect(args["runner_id"], rid, gen, _checked(check_effect, args["effect"]), protocol=2)}
     need(type(args["event_id"]) is str and _UUID.match(args["event_id"]))
     _checked(parse_at, args["at"])
     if op == "progress":
