@@ -270,15 +270,12 @@ def copy_index(index_path: Path, out: Path, *, lock_wait: float = 120.0) -> None
         raise BackupError("index_missing")
     try:
         with index_lock(index_path, wait=lock_wait):
-            src = _ro_live(index_path)
-            dst = sqlite3.connect(str(out))
-            try:
-                src.backup(dst)
-            except sqlite3.DatabaseError:
-                raise BackupError("index_copy_failed") from None
-            finally:
-                dst.close()
-                src.close()
+            with contextlib.closing(_ro_live(index_path)) as src:
+                with contextlib.closing(sqlite3.connect(str(out))) as dst:
+                    try:
+                        src.backup(dst)
+                    except sqlite3.DatabaseError:
+                        raise BackupError("index_copy_failed") from None
     except IndexBusy:
         raise BackupError("index_busy") from None
     os.chmod(out, 0o600)

@@ -68,3 +68,44 @@ def test_missing_source_is_not_created(tmp_path, reader):
     with pytest.raises(sqlite3.OperationalError):
         reader(path)
     assert list(tmp_path.iterdir()) == []
+
+@pytest.mark.parametrize('failure', [None, 'destination_open', 'backup'])
+def test_online_backup_closes_acquired_connections(tmp_path, monkeypatch, failure):
+    source = tmp_path / 'source.sqlite3'
+    database(source, 'synthetic')
+    before = source.read_bytes()
+    destination = tmp_path / 'copy.sqlite3'
+    if failure == 'destination_open':
+        destination = tmp_path / 'missing' / 'copy.sqlite3'
+    opened = []
+    real_connect = sqlite3.connect
+
+    class Connection(sqlite3.Connection):
+        def backup(self, *args, **kwargs):
+            if failure == 'backup':
+                raise sqlite3.OperationalError('synthetic backup failure')
+            return super().backup(*args, **kwargs)
+
+    def connect(*args, **kwargs):
+        connection = real_connect(*args, factory=Connection, **kwargs)
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(production.sqlite3, 'connect', connect)
+    try:
+        if failure == 'destination_open':
+            with pytest.raises(sqlite3.OperationalError):
+                production.copy_index(source, destination)
+        elif failure == 'backup':
+            with pytest.raises(production.BackupError, match='index_copy_failed'):
+                production.copy_index(source, destination)
+        else:
+            production.copy_index(source, destination)
+        assert len(opened) == (1 if failure == 'destination_open' else 2)
+        for connection in opened:
+            with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+                connection.execute('SELECT 1')
+        assert source.read_bytes() == before
+    finally:
+        for connection in opened:
+            connection.close()
