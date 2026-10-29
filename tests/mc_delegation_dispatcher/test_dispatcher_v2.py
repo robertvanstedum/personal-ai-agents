@@ -384,9 +384,20 @@ class ProductionBundleOnPython39(unittest.TestCase):
                 "    py_compile.compile(str(f), cfile=str(f) + '.check', doraise=True)\n"
                 "from core.mc_delegation_runner import cli, runner, envelope, cost, commands, workspace, launch_env\n"
                 "from core.mc_delegation_runner import dispatcher_adapter\n"
+                # S1-D's modules in the same bundle: host.yaml, pending records, fakework, the version 2 adapters.
+                "from core.mc_delegation_runner import host, journal, fakework\n"
+                "assert fakework.parse_program('fakework/1\\ncheckpoint s1\\nresult ok')[0][0] == 'checkpoint'\n"
+                "assert host.PRESEEDED_DO_NOT_RESUME[0].startswith('01a17dde')\n"
+                "assert host.required_python(['worker'], 'door') == (3, 9)\n"
+                "j = journal.Journal(root / 'probe.pending.jsonl'); j.note('wake', 'now', gap_s=1)\n"
+                "assert j.entries()[0]['kind'] == 'wake' and runner.GapDetector(30).tick() is None\n"
+                "assert runner.HostRuntime and dispatcher_adapter.StoreDispatcherV2 and 'fakework' in cost.UNIT_ENFORCERS\n"
+                "assert 'fakework' not in cost.ENFORCERS and 'fakework' not in envelope.ACTORS\n"
+                "assert cli.main(['version']) == 0\n"
                 "from core.mc_delegation_dispatcher import door, store, relay\n"
                 "s = store.DispatcherStore(lambda: None, principal='robert', environment='prod')\n"
                 "door.HttpDispatcher(door.DOORS[0], 't' * 40, root)\n"
+                "door.HttpDispatcherV2(door.DOORS[1], 't' * 40, root)\n"
                 "a = store.Authority.load(root / 'core/mc_delegation_dispatcher/authority.prod.json')\n"
                 "assert not a.speaks_v2\n"
                 "store.DispatcherStore(lambda: None, principal='robert', environment='prod', authority=a)\n"
@@ -402,4 +413,5 @@ class ProductionBundleOnPython39(unittest.TestCase):
             out = subprocess.run([PY39, "-B", "-I", "-c", probe, str(bundle)], capture_output=True, text=True,
                                  timeout=60, cwd=tmp)
         self.assertEqual(out.returncode, 0, out.stderr[-2000:])
-        self.assertEqual(out.stdout.split("\n")[:2], ["authority_requires_python_3_10", "(3, 9) ok"])
+        lines = [x for x in out.stdout.split("\n") if not x.startswith('{"program"')]   # the version command's line
+        self.assertEqual(lines[:2], ["authority_requires_python_3_10", "(3, 9) ok"])
