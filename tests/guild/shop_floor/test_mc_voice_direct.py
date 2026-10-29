@@ -192,7 +192,7 @@ def test_bootstrap_issues_an_owner_session_with_a_sceneless_english_persona_and_
     assert str(uuid.UUID(body["voice_session_id"])) == body["voice_session_id"] and body["client_secret"] == "ek_synthetic"
     assert "voice_notices" not in body                  # his card names both voices (0.1.19): no provider default
     minted = r.mints[0]
-    assert minted["transcription_language"] is None and minted["voice"] == "verse"      # bilingual (D19, review S-3)
+    assert minted["transcription_language"] is None and minted["voice"] == "ballad"      # bilingual (D19, review S-3)
     assert "Master Craftsman, Robert's longtime collaborator and friend in the work" in minted["instructions"]
     assert "SCENARIO FOR THIS SESSION" not in minted["instructions"]
     assert [t["name"] for t in minted["tools"]] == ["consult", "save_note"]
@@ -211,7 +211,7 @@ def test_the_session_text_is_composed_here_rules_then_card_then_this_conversatio
     start(r)
     first, second = r.mints[0]["instructions"], r.mints[1]["instructions"]
     pinned = load_pinned(direct.CARD_ROOT)                     # MC's card is pinned by data (Spec 165 §4.5)
-    assert pinned["release"] == "0.1.20" and r.config["mc_direct_voice"]["card_release"] == "0.1.20"
+    assert pinned["release"] == "0.1.21" and r.config["mc_direct_voice"]["card_release"] == "0.1.21"
     card = pinned["card"]
     rules, who, now = second.index(INSTRUCTIONS), second.index(card), second.index("THIS CONVERSATION SO FAR (DATA)")
     assert second.startswith("=== OPERATING RULES ===") and rules < who < now

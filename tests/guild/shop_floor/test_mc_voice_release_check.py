@@ -74,7 +74,7 @@ def test_the_surface_reports_the_direct_path_and_its_providers(released):
     assert all(p["browser_direct_ephemeral_auth"] and not p["server_proxy_required"] for p in direct["providers"])
     for route in ("bootstrap_url", "consult_url", "end_url", "transcript_url", "summary_url", "summary_decision_url"):
         assert direct[route].startswith("/guild-next/api/v1/mc/voice/direct/api/realtime-voice/")
-    assert direct["card_release"] == "0.1.20"
+    assert direct["card_release"] == "0.1.21"
 
 
 def test_one_bridged_consult_reaches_openclaw_and_returns_an_answered_receipt_and_misuse_has_one_effect_or_none(released):
