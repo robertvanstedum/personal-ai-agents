@@ -678,14 +678,16 @@ UPDATE guild.mc_delegations d SET reservation = CASE WHEN chg.wait IS NULL THEN 
                                                 ELSE d.reservation || jsonb_build_object('held', chg.wait) END
 FROM chg WHERE d.request_id = chg.request_id
 RETURNING d.request_id, d.generation, d.route, chg.wait"""
-# The oldest item this host can run that doesn't wait. state is checked again here, on the row as locked.
+# The oldest item this host can run that doesn't wait. state is checked again here, on the row as locked. Oldest is
+# the order the rows were written in (queue_seq, migration 002), never created_at: the database's wall clock can step
+# back, and a row written after that step would read older than one written before it.
 _CANDIDATE_SQL = """
 SELECT d.*, clock_timestamp() AS now FROM guild.mc_delegations d JOIN w ON w.request_id = d.request_id
 WHERE w.wait IS NULL AND d.state = 'queued' AND d.route IS NOT NULL AND NOT d.cancel_requested
   AND d.deadline > clock_timestamp() AND NOT (d.request_id = ANY(%(seen)s::uuid[]))
   AND (d.required_capabilities || jsonb_build_array('actor:' || d.actor, 'scope:' || d.scope,
                                                     'repo:' || d.repository)) <@ %(caps)s::jsonb
-ORDER BY d.created_at LIMIT 1 FOR UPDATE OF d SKIP LOCKED"""
+ORDER BY d.queue_seq LIMIT 1 FOR UPDATE OF d SKIP LOCKED"""
 
 
 class DispatcherStore:

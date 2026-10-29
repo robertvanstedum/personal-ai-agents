@@ -226,7 +226,7 @@ class Channel:
 
 class _Client:
     def __init__(self, path):
-        self.path, self.seq, self.gap = Path(path), 0, 0.0
+        self.path, self.seq, self.gap, self.last = Path(path), 0, 0.0, None
 
     def stopped(self) -> bool:
         return (self.path / "stop").exists()
@@ -243,7 +243,8 @@ class _Client:
             time.sleep(POLL_S)
             now = time.time()
             self.gap, last = max(self.gap, now - last), now
-        self.gap = max(self.gap, time.time() - last)
+        self.last = time.time()       # its last look at the clock: a wait for a wake goes on measuring from here
+        self.gap = max(self.gap, self.last - last)
         try:
             return json.loads(ack.read_text())
         except (OSError, ValueError):
@@ -255,12 +256,14 @@ def _exit(kind, line):
     sys.exit(EXIT[kind])
 
 
-def _wait(client, seconds, *, gap_s=None) -> float:
+def _wait(client, seconds, *, gap_s=None, since=None) -> float:
     """Sleep ``seconds`` in small steps, stopping early on the runtime's stop request. With ``gap_s``, return as soon
     as this process notices its own wake: more than ``gap_s`` of wall-clock time between two consecutive looks at the
-    clock, wherever in the loop the pause fell (a sleep, or a stop by anyone); 0 otherwise."""
+    clock, wherever in the loop the pause fell (a sleep, or a stop by anyone); 0 otherwise. ``since`` is the caller's
+    own last look (``_Client.last``): the first gap is measured from it, so a pause that falls after the caller read
+    the clock and before this wait's first look (reading and parsing an answer) is seen too (review N-D3)."""
     end = time.monotonic() + seconds
-    last = time.time()
+    last = time.time() if since is None else since
     while True:
         if client.stopped():
             _exit("stopped", "stopped at the runtime's request")
@@ -367,8 +370,10 @@ def run(steps, *, channel, sink, cap, unit, start_after=None, census=None) -> in
             if ack.get("state") != "held":
                 print(f"stale {s['key']}: not held ({ack.get('state')} {ack.get('code')})", flush=True)
                 continue
-            # The lease is held from the moment the runtime claimed it: a pause while the answer was on its way counts.
-            gap = client.gap if client.gap > s["gap_s"] else _wait(client, s["wait_s"], gap_s=s["gap_s"])
+            # The lease is held from the moment the runtime claimed it: a pause while the answer was on its way counts,
+            # and so does one after the answer was read: one unbroken chain of clock readings, from the request on.
+            gap = client.gap if client.gap > s["gap_s"] else _wait(client, s["wait_s"], gap_s=s["gap_s"],
+                                                                   since=client.last)
             if not gap:
                 print(f"stale {s['key']}: no wake observed", flush=True)
                 continue

@@ -854,6 +854,45 @@ def test_a_stale_effect_after_a_wake_is_refused_and_the_next_effect_happens_once
     assert order.index("freeze") < order.index("reconcile") < order.index("thaw")
 
 
+def test_fakework_sees_a_wake_that_falls_after_it_read_the_hold_and_before_it_waits(tmp_path, monkeypatch, capsys):
+    """The PostgreSQL flake, made exact (review N-D3): the freeze lands after the worker's last look at the clock in
+    its request (reading and parsing the hold's answer) and before its wait's first look. On a controlled clock, the
+    wait still measures that pause, so the stale dispatch is sent, and refused; never 'no wake observed'."""
+    clock = {"t": 1000.0}
+    channel = tmp_path / "chan"
+    channel.mkdir()
+    asked = []
+
+    def answer_pending():                                 # the runtime's side of the channel, on every sleep
+        for seq, doc in fakework.Channel(channel).requests():
+            asked.append(doc["kind"])
+            fakework.Channel(channel).answer(seq, {"effect_hold": {"state": "held", "operation_id": "op-e2b"},
+                                                   "effect_dispatch_held": {"state": "refused",
+                                                                            "code": "receipt_lease_stale"}}[doc["kind"]])
+
+    def sleep(s):
+        clock["t"] += s
+        answer_pending()
+    monkeypatch.setattr(fakework, "time", type("Clock", (), {"time": staticmethod(lambda: clock["t"]),
+                                                              "monotonic": staticmethod(lambda: clock["t"]),
+                                                              "sleep": staticmethod(sleep)}))
+    real_ask = fakework._Client.ask
+
+    def ask_then_frozen(self, doc):
+        out = real_ask(self, doc)
+        if doc["kind"] == "effect_hold":
+            clock["t"] += 2.5                             # frozen here: the answer read, the wait not yet begun
+        return out
+    monkeypatch.setattr(fakework._Client, "ask", ask_then_frozen)
+    steps = fakework.parse_program(f"fakework/1\nstale_effect_on_wake e2b grant={uuid.uuid4()} wait_s=20 gap_s=1\n"
+                                   "result ok")
+    assert fakework.run(steps, channel=channel, sink=fakework.FileSink(tmp_path / "sink"), cap=1.0,
+                        unit="test_units") == fakework.EXIT["done"]
+    assert asked == ["effect_hold", "effect_dispatch_held"]
+    assert "stale e2b: refused receipt_lease_stale after a 2 s gap" in capsys.readouterr().out
+    assert clock["t"] < 1010                              # it noticed at once, never waited out its 20 s
+
+
 def test_production_configuration_is_version_1(tmp_path, monkeypatch):
     """No --host-config: today's runner, its flags and its adapters; fakework is never offered or parsed there."""
     seen = []
