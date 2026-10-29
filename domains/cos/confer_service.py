@@ -34,17 +34,25 @@ _SAVE_NOTE_PREFIX = re.compile(
 )
 _SLASH_NOTE_PREFIX = re.compile(r"^/note(?:\s+|$)", re.IGNORECASE)
 # Natural spoken and typed forms. Each is start-anchored and needs an explicit
-# separator ("that ", "saying ", a colon or a dash) before the note text, so
-# "make a note of that" or "can you make a note?" stay ordinary chat. "Write"
-# and "create" a note are drafting requests ("write a note saying thank you to
-# the team"), not something to keep, so they go to the model.
+# separator ("that ", "saying ", "called ", a colon or a dash) before the note
+# text, so "make a note of that" or "can you make a note?" stay ordinary chat.
+# "Write" and "create" a note are drafting requests ("write a note saying thank
+# you to the team"), not something to keep, so they go to the model.
+# A4-1 (29 Oct, Robert on dev: "Make a note called Test." was refused): "make a
+# note called X" and "note that X" are his too. "Note that" keeps its separator
+# rule, and when all it says after "that" is a pointer ("note that down", "note
+# that one, please", "note that for later") it stays chat; "did you make a
+# note?" or "I noted that" never start a command.
+_POINTER = r"(?:down|too|one|somewhere|please|as\s+well|for\s+(?:me|later|now|the\s+record))"
+_NOTE_THAT_POINTS = _POINTER + r"(?:\s*,?\s*" + _POINTER + r")*\s*(?:[,.!?:;]|$)"
 _NATURAL_NOTE_PREFIX = re.compile(
     r"^(?:(?:okay|ok)\s*,?\s+)?"
     r"(?:please\s+|(?:can|could|would)\s+you\s+(?:please\s+)?)?"
     r"(?:"
     r"(?:make|take|save|add|jot\s+down)\s+(?:me\s+)?(?:a\s+)?"
-    r"note\s*(?::|-(?=\s|$)|[–—]|that(?=\s|$)|saying(?=\s|$))"
+    r"note\s*(?::|-(?=\s|$)|[–—]|that(?=\s|$)|saying(?=\s|$)|called(?=\s|$))"
     r"|note\s+to\s+self\s*(?::|[-–—]|,)"
+    r"|note\s+that(?=\s|$)(?!\s+" + _NOTE_THAT_POINTS + r")"
     r")",
     re.IGNORECASE,
 )
@@ -137,7 +145,8 @@ def parse_explicit_note(text: str) -> str | None:
 
     This is the one note grammar shared by COS, the MC portal and the voice
     tool gate: ``/note …``, ``Save a note: …`` and the natural forms such as
-    ``Make a note that …`` or ``Note to self: …``.
+    ``Make a note that …``, ``Make a note called …``, ``Note that …`` or
+    ``Note to self: …`` (A4-1).
     """
     slash_match = _SLASH_NOTE_PREFIX.match(text)
     if slash_match is not None:
