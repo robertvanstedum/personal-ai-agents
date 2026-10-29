@@ -853,7 +853,7 @@ def test_n_d1_a_subagent_whose_start_or_parent_was_never_seen_is_never_running()
                  ("census.start", sub_start("x/b", "never-recorded"))):
         f.apply({"event_id": str(uuid.uuid4()), "kind": k, "body": b, "at": at(5, now)}, "mac-1")
     rows = {r["agent_id"]: r for r in f.rows(reachability={"mac-1": "reachable"}, environment="dev")}
-    assert (rows["r1/beat-only"]["state"], rows["r1/beat-only"]["reason"]) == ("unknown", "parent_unknown")
+    assert (rows["r1/beat-only"]["state"], rows["r1/beat-only"]["reason"]) == ("unknown", "start_unseen")   # N-F2
     assert (rows["x/b"]["state"], rows["x/b"]["reason"]) == ("unknown", "parent_unknown")
     f.apply({"event_id": str(uuid.uuid4()), "kind": "census.end", "at": at(1, now),
              "body": C.end("r1/beat-only", source="fakework.spawn", state="done", reason="stop_observed")}, "mac-1")
@@ -892,3 +892,18 @@ def test_n_d2_an_event_of_another_census_version_is_flagged_and_refused_by_name_
     assert {a["event_id"]: a["answer"]["state"] for a in acks}[new["event_id"]] == "applied"
     with pytest.raises(C.CensusRefused, match="census_schema_unsupported:minimoi.census.v3"):
         C.check_event({**new, "schema": "minimoi.census.v3"})
+
+
+def test_n_f2_a_root_whose_start_was_missed_reads_start_unseen_and_a_lost_parent_reads_parent_unknown():
+    """S1-F review N-F2 (carried into S1-G): a Claude Code session whose SessionStart was missed is named for what is
+    missing, its start (start_unseen), never parent_unknown; a row whose start names a parent never recorded keeps
+    parent_unknown. Neither is ever running."""
+    f = C.Fold()
+    now = datetime.now(timezone.utc)
+    for k, b in (("census.update", C.update("claude:sess-1", source="claude.hook", state="running")),   # no SessionStart
+                 ("census.start", sub_start("y/c", "never-recorded"))):
+        f.apply({"event_id": str(uuid.uuid4()), "kind": k, "body": b, "at": at(3, now)}, "mac-1")
+    rows = {r["agent_id"]: r for r in f.rows(reachability={"mac-1": "reachable"}, environment="dev")}
+    assert (rows["claude:sess-1"]["parent_id"], rows["claude:sess-1"]["state"], rows["claude:sess-1"]["reason"]) == \
+        (None, "unknown", "start_unseen")
+    assert (rows["y/c"]["state"], rows["y/c"]["reason"]) == ("unknown", "parent_unknown")

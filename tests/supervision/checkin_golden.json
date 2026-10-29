@@ -1,0 +1,3388 @@
+{
+ "delegations_down": {
+  "escalated": [],
+  "items": [
+   {
+    "key": "watch-error:delegations unreadable (OSError):2026102620",
+    "kind": "error",
+    "text": "Check-in: delegations unreadable (OSError)."
+   }
+  ],
+  "message": "MC check-in\n\nError:\n• Check-in: delegations unreadable (OSError).\n\n0 open PRs · 0 decisions waiting",
+  "summary": {
+   "at": "2026-10-26T20:00:00+00:00",
+   "errors": [
+    "delegations unreadable (OSError)"
+   ],
+   "failed_releases": [],
+   "pending_decisions": [],
+   "prs": [],
+   "runners": [],
+   "running": [],
+   "sessions": []
+  }
+ },
+ "everything": {
+  "escalated": [
+   6,
+   8
+  ],
+  "items": [
+   {
+    "key": "pr-green:1:aaaaaaaaaaaa",
+    "kind": "waiting_on_robert",
+    "text": "PR #1 is green at aaaaaaaa and waits for your merge: PR 1"
+   },
+   {
+    "key": "pr-failed:2:bbbbbbbbbbbb",
+    "kind": "error",
+    "text": "PR #2 CI failed at bbbbbbbb: PR 2"
+   },
+   {
+    "key": "pr-green:7:eeeeeeeeeeee",
+    "kind": "waiting_on_robert",
+    "text": "PR #7 is green at eeeeeeee and waits for your merge: PR 7"
+   },
+   {
+    "key": "release-failed:9",
+    "kind": "error",
+    "text": "Release Deploy failed on main (https://example.invalid/run/9)"
+   },
+   {
+    "key": "stop:2",
+    "kind": "blocked",
+    "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+   },
+   {
+    "key": "stop:4",
+    "kind": "waiting_on_robert",
+    "text": "Claude Code session0 (b) waits on you: which port?"
+   },
+   {
+    "key": "ci-finished:5:passed",
+    "kind": "stalled",
+    "text": "Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); nothing wakes the session."
+   },
+   {
+    "key": "stalled:6",
+    "kind": "stalled",
+    "text": "Claude Code session0 (b) stopped 25 min ago without saying why."
+   },
+   {
+    "key": "stalled:8",
+    "kind": "stalled",
+    "text": "Claude Code session0 (b) stopped 60 min ago without saying why."
+   },
+   {
+    "key": "review-wait:9",
+    "kind": "stalled",
+    "text": "Claude Code session0 (b) has waited 61 min for a review:"
+   },
+   {
+    "key": "stop:10",
+    "kind": "error",
+    "text": "Grok session0 (b) error: boom"
+   },
+   {
+    "key": "ci-finished:11:failed",
+    "kind": "stalled",
+    "text": "Claude Code session0 (b) waits on PR #2, whose CI has finished (failed); nothing wakes the session."
+   },
+   {
+    "key": "delegation-unclaimed:00000000-0000-4000-8000-000000000001",
+    "kind": "stalled",
+    "text": "Claude Code research “Brief number 1: read the code and say what it does Brief num” has waited 6 min and no runner on the Mac picked it up."
+   },
+   {
+    "key": "delegation-silent:00000000-0000-4000-8000-000000000003",
+    "kind": "stalled",
+    "text": "Claude Code research “Brief number 3: read the code and say what it does Brief num” has not reported for 7 min."
+   },
+   {
+    "key": "delegation-ended:00000000-0000-4000-8000-000000000006",
+    "kind": "error",
+    "text": "Claude Code research “Brief number 6: read the code and say what it does Brief num” ended failed (exit_1)."
+   },
+   {
+    "key": "delegation-ended:00000000-0000-4000-8000-000000000007",
+    "kind": "error",
+    "text": "Claude Code research “Brief number 7: read the code and say what it does Brief num” ended interrupted (runner_lost)."
+   },
+   {
+    "key": "delegation-ended:00000000-0000-4000-8000-000000000009",
+    "kind": "error",
+    "text": "Claude Code research “Brief number 9: read the code and say what it does Brief num” ended timed out."
+   },
+   {
+    "key": "delegation-ended:00000000-0000-4000-8000-000000000010",
+    "kind": "error",
+    "text": "Codex build “Brief number 10: read the code and say what it does Brief nu” ended refused (cost_limit_unenforceable)."
+   },
+   {
+    "key": "delegation-ended:00000000-0000-4000-8000-000000000011",
+    "kind": "error",
+    "text": "Claude Code research “Brief number 11: read the code and say what it does Brief nu” ended output limit."
+   },
+   {
+    "key": "exchange-needs:r-x:0123abcd",
+    "kind": "waiting_on_robert",
+    "text": "Grok asks you: Which phone path?"
+   }
+  ],
+  "message": "MC check-in\n\nWaiting on you:\n• PR #1 is green at aaaaaaaa and waits for your merge: PR 1\n• PR #7 is green at eeeeeeee and waits for your merge: PR 7\n• Claude Code session0 (b) waits on you: which port?\n• Grok asks you: Which phone path?\n\nError:\n• PR #2 CI failed at bbbbbbbb: PR 2\n• Release Deploy failed on main (https://example.invalid/run/9)\n• Grok session0 (b) error: boom\n• Claude Code research “Brief number 6: read the code and say what it does Brief num” ended failed (exit_1).\n• Claude Code research “Brief number 7: read the code and say what it does Brief num” ended interrupted (runner_lost).\n• Claude Code research “Brief number 9: read the code and say what it does Brief num” ended timed out.\n• Codex build “Brief number 10: read the code and say what it does Brief nu” ended refused (cost_limit_unenforceable).\n• Claude Code research “Brief number 11: read the code and say what it does Brief nu” ended output limit.\n\nBlocked:\n• Claude Code session0 (b) blocked: the gateway key is missing\n\nStalled:\n• Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); nothing wakes the session.\n• Claude Code session0 (b) stopped 25 min ago without saying why.\n• Claude Code session0 (b) stopped 60 min ago without saying why.\n• Claude Code session0 (b) has waited 61 min for a review:\n• Claude Code session0 (b) waits on PR #2, whose CI has finished (failed); nothing wakes the session.\n• Claude Code research “Brief number 1: read the code and say what it does Brief num” has waited 6 min and no runner on the Mac picked it up.\n• Claude Code research “Brief number 3: read the code and say what it does Brief num” has not reported for 7 min.\n\nRunning:\n• Claude Code: Brief number 1: read the code and say what it does Brief number 1: rea (queued, 6 min)\n• Claude Code: Brief number 2: read the code and say what it does Brief number 2: rea (queued, 2 min)\n• Claude Code: Brief number 3: read the code and say what it does Brief number 3: rea (running, 20 min)\n• Claude Code: Brief number 4: read the code and say what it does Brief number 4: rea (running, 20 min)\n• Claude Code: Brief number 5: read the code and say what it does Brief number 5: rea (claimed, 9 min)\n\n5 open PRs · 1 decisions waiting",
+  "summary": {
+   "at": "2026-10-26T20:00:00+00:00",
+   "errors": [],
+   "failed_releases": [
+    {
+     "branch": "main",
+     "id": 9,
+     "workflow": "deploy.yml"
+    }
+   ],
+   "pending_decisions": [
+    "D-1"
+   ],
+   "prs": [
+    {
+     "branch": "br1",
+     "ci": "passed",
+     "number": 1,
+     "sha": "aaaaaaaa",
+     "title": "PR 1"
+    },
+    {
+     "branch": "br2",
+     "ci": "failed",
+     "number": 2,
+     "sha": "bbbbbbbb",
+     "title": "PR 2"
+    },
+    {
+     "branch": "br3",
+     "ci": "passed",
+     "number": 3,
+     "sha": "cccccccc",
+     "title": "PR 3"
+    },
+    {
+     "branch": "br4",
+     "ci": "draft",
+     "number": 4,
+     "sha": "dddddddd",
+     "title": "PR 4"
+    },
+    {
+     "branch": "br7",
+     "ci": "passed",
+     "number": 7,
+     "sha": "eeeeeeee",
+     "title": "PR 7"
+    }
+   ],
+   "runners": [
+    {
+     "id": "mac-runner-1",
+     "seen_minutes_ago": 3,
+     "state": "idle"
+    }
+   ],
+   "running": [
+    {
+     "agent": "claude-code",
+     "brief": "Brief number 1: read the code and say what it does Brief number 1: read the code",
+     "job": "job-1",
+     "minutes": 6,
+     "state": "queued"
+    },
+    {
+     "agent": "claude-code",
+     "brief": "Brief number 2: read the code and say what it does Brief number 2: read the code",
+     "job": "job-2",
+     "minutes": 2,
+     "state": "queued"
+    },
+    {
+     "agent": "claude-code",
+     "brief": "Brief number 3: read the code and say what it does Brief number 3: read the code",
+     "job": "job-3",
+     "minutes": 20,
+     "state": "running"
+    },
+    {
+     "agent": "claude-code",
+     "brief": "Brief number 4: read the code and say what it does Brief number 4: read the code",
+     "job": "job-4",
+     "minutes": 20,
+     "state": "running"
+    },
+    {
+     "agent": "claude-code",
+     "brief": "Brief number 5: read the code and say what it does Brief number 5: read the code",
+     "job": "job-5",
+     "minutes": 9,
+     "state": "claimed"
+    }
+   ],
+   "sessions": [
+    {
+     "agent": "claude-code",
+     "minutes": 90,
+     "needs": "",
+     "pr": null,
+     "session": "session0",
+     "state": "done"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 5,
+     "needs": "the gateway key is missing",
+     "pr": null,
+     "session": "session0",
+     "state": "blocked"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 5,
+     "needs": "",
+     "pr": null,
+     "session": "session0",
+     "state": "awaiting_owner"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 5,
+     "needs": "which port?",
+     "pr": null,
+     "session": "session0",
+     "state": "awaiting_owner"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 5,
+     "needs": "",
+     "pr": 7,
+     "session": "session0",
+     "state": "waiting_ci"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 25,
+     "needs": "",
+     "pr": null,
+     "session": "session0",
+     "state": "unreported"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 10,
+     "needs": "",
+     "pr": null,
+     "session": "session0",
+     "state": "unreported"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 60,
+     "needs": "",
+     "pr": null,
+     "session": "session0",
+     "state": "unreported"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 61,
+     "needs": "",
+     "pr": null,
+     "session": "session0",
+     "state": "awaiting_review"
+    },
+    {
+     "agent": "grok",
+     "minutes": 3,
+     "needs": "boom",
+     "pr": null,
+     "session": "session0",
+     "state": "error"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 4,
+     "needs": "",
+     "pr": 2,
+     "session": "session0",
+     "state": "waiting_ci"
+    }
+   ]
+  }
+ },
+ "github_down": {
+  "escalated": [],
+  "items": [
+   {
+    "key": "stop:2",
+    "kind": "blocked",
+    "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+   },
+   {
+    "key": "stop:3",
+    "kind": "waiting_on_robert",
+    "text": "Claude Code session0 (b) waits on you: no question given"
+   },
+   {
+    "key": "watch-error:pull requests unreadable (OSError):2026102620",
+    "kind": "error",
+    "text": "Check-in: pull requests unreadable (OSError)."
+   }
+  ],
+  "message": "MC check-in\n\nWaiting on you:\n• Claude Code session0 (b) waits on you: no question given\n\nError:\n• Check-in: pull requests unreadable (OSError).\n\nBlocked:\n• Claude Code session0 (b) blocked: the gateway key is missing\n\n0 open PRs · 0 decisions waiting",
+  "summary": {
+   "at": "2026-10-26T20:00:00+00:00",
+   "errors": [
+    "pull requests unreadable (OSError)"
+   ],
+   "failed_releases": [],
+   "pending_decisions": [],
+   "prs": [],
+   "runners": [],
+   "running": [],
+   "sessions": [
+    {
+     "agent": "claude-code",
+     "minutes": 90,
+     "needs": "",
+     "pr": null,
+     "session": "session0",
+     "state": "done"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 5,
+     "needs": "the gateway key is missing",
+     "pr": null,
+     "session": "session0",
+     "state": "blocked"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 5,
+     "needs": "",
+     "pr": null,
+     "session": "session0",
+     "state": "awaiting_owner"
+    }
+   ]
+  }
+ },
+ "only_delegations": {
+  "escalated": [],
+  "items": [
+   {
+    "key": "delegation-unclaimed:00000000-0000-4000-8000-000000000001",
+    "kind": "stalled",
+    "text": "Claude Code research “Brief number 1: read the code and say what it does Brief num” has waited 6 min and no runner on the Mac picked it up."
+   },
+   {
+    "key": "delegation-silent:00000000-0000-4000-8000-000000000003",
+    "kind": "stalled",
+    "text": "Claude Code research “Brief number 3: read the code and say what it does Brief num” has not reported for 7 min."
+   },
+   {
+    "key": "delegation-ended:00000000-0000-4000-8000-000000000006",
+    "kind": "error",
+    "text": "Claude Code research “Brief number 6: read the code and say what it does Brief num” ended failed (exit_1)."
+   },
+   {
+    "key": "delegation-ended:00000000-0000-4000-8000-000000000007",
+    "kind": "error",
+    "text": "Claude Code research “Brief number 7: read the code and say what it does Brief num” ended interrupted (runner_lost)."
+   },
+   {
+    "key": "delegation-ended:00000000-0000-4000-8000-000000000009",
+    "kind": "error",
+    "text": "Claude Code research “Brief number 9: read the code and say what it does Brief num” ended timed out."
+   },
+   {
+    "key": "delegation-ended:00000000-0000-4000-8000-000000000010",
+    "kind": "error",
+    "text": "Codex build “Brief number 10: read the code and say what it does Brief nu” ended refused (cost_limit_unenforceable)."
+   },
+   {
+    "key": "delegation-ended:00000000-0000-4000-8000-000000000011",
+    "kind": "error",
+    "text": "Claude Code research “Brief number 11: read the code and say what it does Brief nu” ended output limit."
+   }
+  ],
+  "message": "MC check-in\n\nError:\n• Claude Code research “Brief number 6: read the code and say what it does Brief num” ended failed (exit_1).\n• Claude Code research “Brief number 7: read the code and say what it does Brief num” ended interrupted (runner_lost).\n• Claude Code research “Brief number 9: read the code and say what it does Brief num” ended timed out.\n• Codex build “Brief number 10: read the code and say what it does Brief nu” ended refused (cost_limit_unenforceable).\n• Claude Code research “Brief number 11: read the code and say what it does Brief nu” ended output limit.\n\nStalled:\n• Claude Code research “Brief number 1: read the code and say what it does Brief num” has waited 6 min and no runner on the Mac picked it up.\n• Claude Code research “Brief number 3: read the code and say what it does Brief num” has not reported for 7 min.\n\nRunning:\n• Claude Code: Brief number 1: read the code and say what it does Brief number 1: rea (queued, 6 min)\n• Claude Code: Brief number 2: read the code and say what it does Brief number 2: rea (queued, 2 min)\n• Claude Code: Brief number 3: read the code and say what it does Brief number 3: rea (running, 20 min)\n• Claude Code: Brief number 4: read the code and say what it does Brief number 4: rea (running, 20 min)\n• Claude Code: Brief number 5: read the code and say what it does Brief number 5: rea (claimed, 9 min)\n\n0 open PRs · 0 decisions waiting",
+  "summary": {
+   "at": "2026-10-26T20:00:00+00:00",
+   "errors": [],
+   "failed_releases": [],
+   "pending_decisions": [],
+   "prs": [],
+   "runners": [
+    {
+     "id": "mac-runner-1",
+     "seen_minutes_ago": 3,
+     "state": "idle"
+    }
+   ],
+   "running": [
+    {
+     "agent": "claude-code",
+     "brief": "Brief number 1: read the code and say what it does Brief number 1: read the code",
+     "job": "job-1",
+     "minutes": 6,
+     "state": "queued"
+    },
+    {
+     "agent": "claude-code",
+     "brief": "Brief number 2: read the code and say what it does Brief number 2: read the code",
+     "job": "job-2",
+     "minutes": 2,
+     "state": "queued"
+    },
+    {
+     "agent": "claude-code",
+     "brief": "Brief number 3: read the code and say what it does Brief number 3: read the code",
+     "job": "job-3",
+     "minutes": 20,
+     "state": "running"
+    },
+    {
+     "agent": "claude-code",
+     "brief": "Brief number 4: read the code and say what it does Brief number 4: read the code",
+     "job": "job-4",
+     "minutes": 20,
+     "state": "running"
+    },
+    {
+     "agent": "claude-code",
+     "brief": "Brief number 5: read the code and say what it does Brief number 5: read the code",
+     "job": "job-5",
+     "minutes": 9,
+     "state": "claimed"
+    }
+   ],
+   "sessions": []
+  }
+ },
+ "only_stops": {
+  "escalated": [
+   6,
+   8
+  ],
+  "items": [
+   {
+    "key": "pr-green:7:eeeeeeeeeeee",
+    "kind": "waiting_on_robert",
+    "text": "PR #7 is green at eeeeeeee and waits for your merge: PR 7"
+   },
+   {
+    "key": "stop:2",
+    "kind": "blocked",
+    "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+   },
+   {
+    "key": "stop:3",
+    "kind": "waiting_on_robert",
+    "text": "Claude Code session0 (b) waits on you: no question given"
+   },
+   {
+    "key": "stop:4",
+    "kind": "waiting_on_robert",
+    "text": "Claude Code session0 (b) waits on you: which port?"
+   },
+   {
+    "key": "ci-finished:5:passed",
+    "kind": "stalled",
+    "text": "Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); nothing wakes the session."
+   },
+   {
+    "key": "stalled:6",
+    "kind": "stalled",
+    "text": "Claude Code session0 (b) stopped 25 min ago without saying why."
+   },
+   {
+    "key": "stalled:8",
+    "kind": "stalled",
+    "text": "Claude Code session0 (b) stopped 60 min ago without saying why."
+   },
+   {
+    "key": "review-wait:9",
+    "kind": "stalled",
+    "text": "Claude Code session0 (b) has waited 61 min for a review:"
+   },
+   {
+    "key": "stop:10",
+    "kind": "error",
+    "text": "Grok session0 (b) error: boom"
+   }
+  ],
+  "message": "MC check-in\n\nWaiting on you:\n• PR #7 is green at eeeeeeee and waits for your merge: PR 7\n• Claude Code session0 (b) waits on you: no question given\n• Claude Code session0 (b) waits on you: which port?\n\nError:\n• Grok session0 (b) error: boom\n\nBlocked:\n• Claude Code session0 (b) blocked: the gateway key is missing\n\nStalled:\n• Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); nothing wakes the session.\n• Claude Code session0 (b) stopped 25 min ago without saying why.\n• Claude Code session0 (b) stopped 60 min ago without saying why.\n• Claude Code session0 (b) has waited 61 min for a review:\n\n1 open PRs · 0 decisions waiting",
+  "summary": {
+   "at": "2026-10-26T20:00:00+00:00",
+   "errors": [],
+   "failed_releases": [],
+   "pending_decisions": [],
+   "prs": [
+    {
+     "branch": "br7",
+     "ci": "passed",
+     "number": 7,
+     "sha": "eeeeeeee",
+     "title": "PR 7"
+    }
+   ],
+   "runners": [],
+   "running": [],
+   "sessions": [
+    {
+     "agent": "claude-code",
+     "minutes": 90,
+     "needs": "",
+     "pr": null,
+     "session": "session0",
+     "state": "done"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 5,
+     "needs": "the gateway key is missing",
+     "pr": null,
+     "session": "session0",
+     "state": "blocked"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 5,
+     "needs": "",
+     "pr": null,
+     "session": "session0",
+     "state": "awaiting_owner"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 5,
+     "needs": "which port?",
+     "pr": null,
+     "session": "session0",
+     "state": "awaiting_owner"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 5,
+     "needs": "",
+     "pr": 7,
+     "session": "session0",
+     "state": "waiting_ci"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 25,
+     "needs": "",
+     "pr": null,
+     "session": "session0",
+     "state": "unreported"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 10,
+     "needs": "",
+     "pr": null,
+     "session": "session0",
+     "state": "unreported"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 60,
+     "needs": "",
+     "pr": null,
+     "session": "session0",
+     "state": "unreported"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 61,
+     "needs": "",
+     "pr": null,
+     "session": "session0",
+     "state": "awaiting_review"
+    },
+    {
+     "agent": "grok",
+     "minutes": 3,
+     "needs": "boom",
+     "pr": null,
+     "session": "session0",
+     "state": "error"
+    },
+    {
+     "agent": "claude-code",
+     "minutes": 4,
+     "needs": "",
+     "pr": 2,
+     "session": "session0",
+     "state": "waiting_ci"
+    }
+   ]
+  }
+ },
+ "quiet": {
+  "escalated": [],
+  "items": [],
+  "message": null,
+  "summary": {
+   "at": "2026-10-26T20:00:00+00:00",
+   "errors": [],
+   "failed_releases": [],
+   "pending_decisions": [],
+   "prs": [],
+   "runners": [],
+   "running": [],
+   "sessions": []
+  }
+ },
+ "supervisor:delegations_down": {
+  "checkins": [
+   {
+    "summary": {
+     "at": "2026-10-26T20:00:00+00:00",
+     "errors": [
+      "delegations unreadable (OSError)"
+     ],
+     "failed_releases": [],
+     "open_items": [
+      {
+       "kind": "error",
+       "text": "Check-in: delegations unreadable (OSError)."
+      }
+     ],
+     "pending_decisions": [],
+     "prs": [],
+     "runners": [],
+     "running": [],
+     "sessions": []
+    },
+    "telegram": "sent",
+    "told": [
+     "watch-error:delegations unreadable (OSError):2026102620"
+    ]
+   },
+   {
+    "summary": {
+     "at": "2026-10-26T20:15:00+00:00",
+     "errors": [
+      "delegations unreadable (OSError)"
+     ],
+     "failed_releases": [],
+     "open_items": [
+      {
+       "kind": "error",
+       "text": "Check-in: delegations unreadable (OSError)."
+      }
+     ],
+     "pending_decisions": [],
+     "prs": [],
+     "runners": [],
+     "running": [],
+     "sessions": []
+    },
+    "telegram": "none",
+    "told": []
+   }
+  ],
+  "rounds": [
+   {
+    "new": [
+     {
+      "key": "watch-error:delegations unreadable (OSError):2026102620",
+      "kind": "error",
+      "text": "Check-in: delegations unreadable (OSError)."
+     }
+    ],
+    "summary": {
+     "at": "2026-10-26T20:00:00+00:00",
+     "errors": [
+      "delegations unreadable (OSError)"
+     ],
+     "failed_releases": [],
+     "open_items": [
+      {
+       "kind": "error",
+       "text": "Check-in: delegations unreadable (OSError)."
+      }
+     ],
+     "pending_decisions": [],
+     "prs": [],
+     "runners": [],
+     "running": [],
+     "sessions": []
+    }
+   },
+   {
+    "new": [],
+    "summary": {
+     "at": "2026-10-26T20:15:00+00:00",
+     "errors": [
+      "delegations unreadable (OSError)"
+     ],
+     "failed_releases": [],
+     "open_items": [
+      {
+       "kind": "error",
+       "text": "Check-in: delegations unreadable (OSError)."
+      }
+     ],
+     "pending_decisions": [],
+     "prs": [],
+     "runners": [],
+     "running": [],
+     "sessions": []
+    }
+   }
+  ],
+  "sent": [
+   [
+    8379221702,
+    "MC check-in\n\nError:\n• Check-in: delegations unreadable (OSError).\n\n0 open PRs · 0 decisions waiting",
+    null
+   ]
+  ]
+ },
+ "supervisor:everything": {
+  "checkins": [
+   {
+    "summary": {
+     "at": "2026-10-26T20:00:00+00:00",
+     "errors": [],
+     "failed_releases": [
+      {
+       "branch": "main",
+       "id": 9,
+       "workflow": "deploy.yml"
+      }
+     ],
+     "open_items": [
+      {
+       "kind": "waiting_on_robert",
+       "text": "PR #1 is green at aaaaaaaa and waits for your merge: PR 1"
+      },
+      {
+       "kind": "error",
+       "text": "PR #2 CI failed at bbbbbbbb: PR 2"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "PR #7 is green at eeeeeeee and waits for your merge: PR 7"
+      },
+      {
+       "kind": "error",
+       "text": "Release Deploy failed on main (https://example.invalid/run/9)"
+      },
+      {
+       "kind": "blocked",
+       "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Claude Code session0 (b) waits on you: which port?"
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); nothing wakes the session."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 25 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 60 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) has waited 61 min for a review:"
+      },
+      {
+       "kind": "error",
+       "text": "Grok session0 (b) error: boom"
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) waits on PR #2, whose CI has finished (failed); nothing wakes the session."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code research “Brief number 1: read the code and say what it does Brief num” has waited 6 min and no runner on the Mac picked it up."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code research “Brief number 3: read the code and say what it does Brief num” has not reported for 7 min."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 6: read the code and say what it does Brief num” ended failed (exit_1)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 7: read the code and say what it does Brief num” ended interrupted (runner_lost)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 9: read the code and say what it does Brief num” ended timed out."
+      },
+      {
+       "kind": "error",
+       "text": "Codex build “Brief number 10: read the code and say what it does Brief nu” ended refused (cost_limit_unenforceable)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 11: read the code and say what it does Brief nu” ended output limit."
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Grok asks you: Which phone path?"
+      }
+     ],
+     "pending_decisions": [
+      "D-1"
+     ],
+     "prs": [
+      {
+       "branch": "br1",
+       "ci": "passed",
+       "number": 1,
+       "sha": "aaaaaaaa",
+       "title": "PR 1"
+      },
+      {
+       "branch": "br2",
+       "ci": "failed",
+       "number": 2,
+       "sha": "bbbbbbbb",
+       "title": "PR 2"
+      },
+      {
+       "branch": "br3",
+       "ci": "passed",
+       "number": 3,
+       "sha": "cccccccc",
+       "title": "PR 3"
+      },
+      {
+       "branch": "br4",
+       "ci": "draft",
+       "number": 4,
+       "sha": "dddddddd",
+       "title": "PR 4"
+      },
+      {
+       "branch": "br7",
+       "ci": "passed",
+       "number": 7,
+       "sha": "eeeeeeee",
+       "title": "PR 7"
+      }
+     ],
+     "runners": [
+      {
+       "id": "mac-runner-1",
+       "seen_minutes_ago": 3,
+       "state": "idle"
+      }
+     ],
+     "running": [
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 1: read the code and say what it does Brief number 1: read the code",
+       "job": "job-1",
+       "minutes": 6,
+       "state": "queued"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 2: read the code and say what it does Brief number 2: read the code",
+       "job": "job-2",
+       "minutes": 2,
+       "state": "queued"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 3: read the code and say what it does Brief number 3: read the code",
+       "job": "job-3",
+       "minutes": 20,
+       "state": "running"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 4: read the code and say what it does Brief number 4: read the code",
+       "job": "job-4",
+       "minutes": 20,
+       "state": "running"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 5: read the code and say what it does Brief number 5: read the code",
+       "job": "job-5",
+       "minutes": 9,
+       "state": "claimed"
+      }
+     ],
+     "sessions": [
+      {
+       "agent": "claude-code",
+       "minutes": 90,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "done"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "the gateway key is missing",
+       "pr": null,
+       "session": "session0",
+       "state": "blocked"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "which port?",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "",
+       "pr": 7,
+       "session": "session0",
+       "state": "waiting_ci"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 25,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 10,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 60,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 61,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_review"
+      },
+      {
+       "agent": "grok",
+       "minutes": 3,
+       "needs": "boom",
+       "pr": null,
+       "session": "session0",
+       "state": "error"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 4,
+       "needs": "",
+       "pr": 2,
+       "session": "session0",
+       "state": "waiting_ci"
+      }
+     ]
+    },
+    "telegram": "sent",
+    "told": [
+     "pr-green:1:aaaaaaaaaaaa",
+     "pr-failed:2:bbbbbbbbbbbb",
+     "pr-green:7:eeeeeeeeeeee",
+     "release-failed:9",
+     "stop:2",
+     "stop:4",
+     "ci-finished:5:passed",
+     "stalled:6",
+     "stalled:8",
+     "review-wait:9",
+     "stop:10",
+     "ci-finished:11:failed",
+     "delegation-unclaimed:00000000-0000-4000-8000-000000000001",
+     "delegation-silent:00000000-0000-4000-8000-000000000003",
+     "delegation-ended:00000000-0000-4000-8000-000000000006",
+     "delegation-ended:00000000-0000-4000-8000-000000000007",
+     "delegation-ended:00000000-0000-4000-8000-000000000009",
+     "delegation-ended:00000000-0000-4000-8000-000000000010",
+     "delegation-ended:00000000-0000-4000-8000-000000000011",
+     "exchange-needs:r-x:0123abcd"
+    ]
+   },
+   {
+    "summary": {
+     "at": "2026-10-26T20:15:00+00:00",
+     "errors": [],
+     "failed_releases": [
+      {
+       "branch": "main",
+       "id": 9,
+       "workflow": "deploy.yml"
+      }
+     ],
+     "open_items": [
+      {
+       "kind": "waiting_on_robert",
+       "text": "PR #1 is green at aaaaaaaa and waits for your merge: PR 1"
+      },
+      {
+       "kind": "error",
+       "text": "PR #2 CI failed at bbbbbbbb: PR 2"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "PR #3 is green at cccccccc and waits for your merge: PR 3"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "PR #7 is green at eeeeeeee and waits for your merge: PR 7"
+      },
+      {
+       "kind": "error",
+       "text": "Release Deploy failed on main (https://example.invalid/run/9)"
+      },
+      {
+       "kind": "blocked",
+       "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Claude Code session0 (b) waits on you: which port?"
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); nothing wakes the session."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 40 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 25 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 75 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) has waited 76 min for a review:"
+      },
+      {
+       "kind": "error",
+       "text": "Grok session0 (b) error: boom"
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) waits on PR #2, whose CI has finished (failed); nothing wakes the session."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code research “Brief number 1: read the code and say what it does Brief num” has waited 6 min and no runner on the Mac picked it up."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code research “Brief number 3: read the code and say what it does Brief num” has not reported for 7 min."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 6: read the code and say what it does Brief num” ended failed (exit_1)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 7: read the code and say what it does Brief num” ended interrupted (runner_lost)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 9: read the code and say what it does Brief num” ended timed out."
+      },
+      {
+       "kind": "error",
+       "text": "Codex build “Brief number 10: read the code and say what it does Brief nu” ended refused (cost_limit_unenforceable)."
+      }
+     ],
+     "pending_decisions": [
+      "D-1"
+     ],
+     "prs": [
+      {
+       "branch": "br1",
+       "ci": "passed",
+       "number": 1,
+       "sha": "aaaaaaaa",
+       "title": "PR 1"
+      },
+      {
+       "branch": "br2",
+       "ci": "failed",
+       "number": 2,
+       "sha": "bbbbbbbb",
+       "title": "PR 2"
+      },
+      {
+       "branch": "br3",
+       "ci": "passed",
+       "number": 3,
+       "sha": "cccccccc",
+       "title": "PR 3"
+      },
+      {
+       "branch": "br4",
+       "ci": "draft",
+       "number": 4,
+       "sha": "dddddddd",
+       "title": "PR 4"
+      },
+      {
+       "branch": "br7",
+       "ci": "passed",
+       "number": 7,
+       "sha": "eeeeeeee",
+       "title": "PR 7"
+      }
+     ],
+     "runners": [
+      {
+       "id": "mac-runner-1",
+       "seen_minutes_ago": 3,
+       "state": "idle"
+      }
+     ],
+     "running": [
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 1: read the code and say what it does Brief number 1: read the code",
+       "job": "job-1",
+       "minutes": 6,
+       "state": "queued"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 2: read the code and say what it does Brief number 2: read the code",
+       "job": "job-2",
+       "minutes": 2,
+       "state": "queued"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 3: read the code and say what it does Brief number 3: read the code",
+       "job": "job-3",
+       "minutes": 20,
+       "state": "running"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 4: read the code and say what it does Brief number 4: read the code",
+       "job": "job-4",
+       "minutes": 20,
+       "state": "running"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 5: read the code and say what it does Brief number 5: read the code",
+       "job": "job-5",
+       "minutes": 9,
+       "state": "claimed"
+      }
+     ],
+     "sessions": [
+      {
+       "agent": "claude-code",
+       "minutes": 105,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "done"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "the gateway key is missing",
+       "pr": null,
+       "session": "session0",
+       "state": "blocked"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "which port?",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "",
+       "pr": 7,
+       "session": "session0",
+       "state": "waiting_ci"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 40,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 25,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 75,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 76,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_review"
+      },
+      {
+       "agent": "grok",
+       "minutes": 18,
+       "needs": "boom",
+       "pr": null,
+       "session": "session0",
+       "state": "error"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 19,
+       "needs": "",
+       "pr": 2,
+       "session": "session0",
+       "state": "waiting_ci"
+      }
+     ]
+    },
+    "telegram": "sent",
+    "told": [
+     "pr-green:3:cccccccccccc",
+     "stalled:7"
+    ]
+   }
+  ],
+  "rounds": [
+   {
+    "new": [
+     {
+      "key": "pr-green:1:aaaaaaaaaaaa",
+      "kind": "waiting_on_robert",
+      "text": "PR #1 is green at aaaaaaaa and waits for your merge: PR 1"
+     },
+     {
+      "key": "pr-failed:2:bbbbbbbbbbbb",
+      "kind": "error",
+      "text": "PR #2 CI failed at bbbbbbbb: PR 2"
+     },
+     {
+      "key": "pr-green:7:eeeeeeeeeeee",
+      "kind": "waiting_on_robert",
+      "text": "PR #7 is green at eeeeeeee and waits for your merge: PR 7"
+     },
+     {
+      "key": "release-failed:9",
+      "kind": "error",
+      "text": "Release Deploy failed on main (https://example.invalid/run/9)"
+     },
+     {
+      "key": "stop:2",
+      "kind": "blocked",
+      "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+     },
+     {
+      "key": "stop:4",
+      "kind": "waiting_on_robert",
+      "text": "Claude Code session0 (b) waits on you: which port?"
+     },
+     {
+      "key": "ci-finished:5:passed",
+      "kind": "stalled",
+      "text": "Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); nothing wakes the session."
+     },
+     {
+      "key": "stalled:6",
+      "kind": "stalled",
+      "text": "Claude Code session0 (b) stopped 25 min ago without saying why."
+     },
+     {
+      "key": "stalled:8",
+      "kind": "stalled",
+      "text": "Claude Code session0 (b) stopped 60 min ago without saying why."
+     },
+     {
+      "key": "review-wait:9",
+      "kind": "stalled",
+      "text": "Claude Code session0 (b) has waited 61 min for a review:"
+     },
+     {
+      "key": "stop:10",
+      "kind": "error",
+      "text": "Grok session0 (b) error: boom"
+     },
+     {
+      "key": "ci-finished:11:failed",
+      "kind": "stalled",
+      "text": "Claude Code session0 (b) waits on PR #2, whose CI has finished (failed); nothing wakes the session."
+     },
+     {
+      "key": "delegation-unclaimed:00000000-0000-4000-8000-000000000001",
+      "kind": "stalled",
+      "text": "Claude Code research “Brief number 1: read the code and say what it does Brief num” has waited 6 min and no runner on the Mac picked it up."
+     },
+     {
+      "key": "delegation-silent:00000000-0000-4000-8000-000000000003",
+      "kind": "stalled",
+      "text": "Claude Code research “Brief number 3: read the code and say what it does Brief num” has not reported for 7 min."
+     },
+     {
+      "key": "delegation-ended:00000000-0000-4000-8000-000000000006",
+      "kind": "error",
+      "text": "Claude Code research “Brief number 6: read the code and say what it does Brief num” ended failed (exit_1)."
+     },
+     {
+      "key": "delegation-ended:00000000-0000-4000-8000-000000000007",
+      "kind": "error",
+      "text": "Claude Code research “Brief number 7: read the code and say what it does Brief num” ended interrupted (runner_lost)."
+     },
+     {
+      "key": "delegation-ended:00000000-0000-4000-8000-000000000009",
+      "kind": "error",
+      "text": "Claude Code research “Brief number 9: read the code and say what it does Brief num” ended timed out."
+     },
+     {
+      "key": "delegation-ended:00000000-0000-4000-8000-000000000010",
+      "kind": "error",
+      "text": "Codex build “Brief number 10: read the code and say what it does Brief nu” ended refused (cost_limit_unenforceable)."
+     },
+     {
+      "key": "delegation-ended:00000000-0000-4000-8000-000000000011",
+      "kind": "error",
+      "text": "Claude Code research “Brief number 11: read the code and say what it does Brief nu” ended output limit."
+     },
+     {
+      "key": "exchange-needs:r-x:0123abcd",
+      "kind": "waiting_on_robert",
+      "text": "Grok asks you: Which phone path?"
+     }
+    ],
+    "summary": {
+     "at": "2026-10-26T20:00:00+00:00",
+     "errors": [],
+     "failed_releases": [
+      {
+       "branch": "main",
+       "id": 9,
+       "workflow": "deploy.yml"
+      }
+     ],
+     "open_items": [
+      {
+       "kind": "waiting_on_robert",
+       "text": "PR #1 is green at aaaaaaaa and waits for your merge: PR 1"
+      },
+      {
+       "kind": "error",
+       "text": "PR #2 CI failed at bbbbbbbb: PR 2"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "PR #7 is green at eeeeeeee and waits for your merge: PR 7"
+      },
+      {
+       "kind": "error",
+       "text": "Release Deploy failed on main (https://example.invalid/run/9)"
+      },
+      {
+       "kind": "blocked",
+       "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Claude Code session0 (b) waits on you: which port?"
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); nothing wakes the session."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 25 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 60 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) has waited 61 min for a review:"
+      },
+      {
+       "kind": "error",
+       "text": "Grok session0 (b) error: boom"
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) waits on PR #2, whose CI has finished (failed); nothing wakes the session."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code research “Brief number 1: read the code and say what it does Brief num” has waited 6 min and no runner on the Mac picked it up."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code research “Brief number 3: read the code and say what it does Brief num” has not reported for 7 min."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 6: read the code and say what it does Brief num” ended failed (exit_1)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 7: read the code and say what it does Brief num” ended interrupted (runner_lost)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 9: read the code and say what it does Brief num” ended timed out."
+      },
+      {
+       "kind": "error",
+       "text": "Codex build “Brief number 10: read the code and say what it does Brief nu” ended refused (cost_limit_unenforceable)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 11: read the code and say what it does Brief nu” ended output limit."
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Grok asks you: Which phone path?"
+      }
+     ],
+     "pending_decisions": [
+      "D-1"
+     ],
+     "prs": [
+      {
+       "branch": "br1",
+       "ci": "passed",
+       "number": 1,
+       "sha": "aaaaaaaa",
+       "title": "PR 1"
+      },
+      {
+       "branch": "br2",
+       "ci": "failed",
+       "number": 2,
+       "sha": "bbbbbbbb",
+       "title": "PR 2"
+      },
+      {
+       "branch": "br3",
+       "ci": "passed",
+       "number": 3,
+       "sha": "cccccccc",
+       "title": "PR 3"
+      },
+      {
+       "branch": "br4",
+       "ci": "draft",
+       "number": 4,
+       "sha": "dddddddd",
+       "title": "PR 4"
+      },
+      {
+       "branch": "br7",
+       "ci": "passed",
+       "number": 7,
+       "sha": "eeeeeeee",
+       "title": "PR 7"
+      }
+     ],
+     "runners": [
+      {
+       "id": "mac-runner-1",
+       "seen_minutes_ago": 3,
+       "state": "idle"
+      }
+     ],
+     "running": [
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 1: read the code and say what it does Brief number 1: read the code",
+       "job": "job-1",
+       "minutes": 6,
+       "state": "queued"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 2: read the code and say what it does Brief number 2: read the code",
+       "job": "job-2",
+       "minutes": 2,
+       "state": "queued"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 3: read the code and say what it does Brief number 3: read the code",
+       "job": "job-3",
+       "minutes": 20,
+       "state": "running"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 4: read the code and say what it does Brief number 4: read the code",
+       "job": "job-4",
+       "minutes": 20,
+       "state": "running"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 5: read the code and say what it does Brief number 5: read the code",
+       "job": "job-5",
+       "minutes": 9,
+       "state": "claimed"
+      }
+     ],
+     "sessions": [
+      {
+       "agent": "claude-code",
+       "minutes": 90,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "done"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "the gateway key is missing",
+       "pr": null,
+       "session": "session0",
+       "state": "blocked"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "which port?",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "",
+       "pr": 7,
+       "session": "session0",
+       "state": "waiting_ci"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 25,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 10,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 60,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 61,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_review"
+      },
+      {
+       "agent": "grok",
+       "minutes": 3,
+       "needs": "boom",
+       "pr": null,
+       "session": "session0",
+       "state": "error"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 4,
+       "needs": "",
+       "pr": 2,
+       "session": "session0",
+       "state": "waiting_ci"
+      }
+     ]
+    }
+   },
+   {
+    "new": [
+     {
+      "key": "pr-green:3:cccccccccccc",
+      "kind": "waiting_on_robert",
+      "text": "PR #3 is green at cccccccc and waits for your merge: PR 3"
+     },
+     {
+      "key": "stalled:7",
+      "kind": "stalled",
+      "text": "Claude Code session0 (b) stopped 25 min ago without saying why."
+     }
+    ],
+    "summary": {
+     "at": "2026-10-26T20:15:00+00:00",
+     "errors": [],
+     "failed_releases": [
+      {
+       "branch": "main",
+       "id": 9,
+       "workflow": "deploy.yml"
+      }
+     ],
+     "open_items": [
+      {
+       "kind": "waiting_on_robert",
+       "text": "PR #1 is green at aaaaaaaa and waits for your merge: PR 1"
+      },
+      {
+       "kind": "error",
+       "text": "PR #2 CI failed at bbbbbbbb: PR 2"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "PR #3 is green at cccccccc and waits for your merge: PR 3"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "PR #7 is green at eeeeeeee and waits for your merge: PR 7"
+      },
+      {
+       "kind": "error",
+       "text": "Release Deploy failed on main (https://example.invalid/run/9)"
+      },
+      {
+       "kind": "blocked",
+       "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Claude Code session0 (b) waits on you: which port?"
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); nothing wakes the session."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 40 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 25 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 75 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) has waited 76 min for a review:"
+      },
+      {
+       "kind": "error",
+       "text": "Grok session0 (b) error: boom"
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) waits on PR #2, whose CI has finished (failed); nothing wakes the session."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code research “Brief number 1: read the code and say what it does Brief num” has waited 6 min and no runner on the Mac picked it up."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code research “Brief number 3: read the code and say what it does Brief num” has not reported for 7 min."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 6: read the code and say what it does Brief num” ended failed (exit_1)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 7: read the code and say what it does Brief num” ended interrupted (runner_lost)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 9: read the code and say what it does Brief num” ended timed out."
+      },
+      {
+       "kind": "error",
+       "text": "Codex build “Brief number 10: read the code and say what it does Brief nu” ended refused (cost_limit_unenforceable)."
+      }
+     ],
+     "pending_decisions": [
+      "D-1"
+     ],
+     "prs": [
+      {
+       "branch": "br1",
+       "ci": "passed",
+       "number": 1,
+       "sha": "aaaaaaaa",
+       "title": "PR 1"
+      },
+      {
+       "branch": "br2",
+       "ci": "failed",
+       "number": 2,
+       "sha": "bbbbbbbb",
+       "title": "PR 2"
+      },
+      {
+       "branch": "br3",
+       "ci": "passed",
+       "number": 3,
+       "sha": "cccccccc",
+       "title": "PR 3"
+      },
+      {
+       "branch": "br4",
+       "ci": "draft",
+       "number": 4,
+       "sha": "dddddddd",
+       "title": "PR 4"
+      },
+      {
+       "branch": "br7",
+       "ci": "passed",
+       "number": 7,
+       "sha": "eeeeeeee",
+       "title": "PR 7"
+      }
+     ],
+     "runners": [
+      {
+       "id": "mac-runner-1",
+       "seen_minutes_ago": 3,
+       "state": "idle"
+      }
+     ],
+     "running": [
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 1: read the code and say what it does Brief number 1: read the code",
+       "job": "job-1",
+       "minutes": 6,
+       "state": "queued"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 2: read the code and say what it does Brief number 2: read the code",
+       "job": "job-2",
+       "minutes": 2,
+       "state": "queued"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 3: read the code and say what it does Brief number 3: read the code",
+       "job": "job-3",
+       "minutes": 20,
+       "state": "running"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 4: read the code and say what it does Brief number 4: read the code",
+       "job": "job-4",
+       "minutes": 20,
+       "state": "running"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 5: read the code and say what it does Brief number 5: read the code",
+       "job": "job-5",
+       "minutes": 9,
+       "state": "claimed"
+      }
+     ],
+     "sessions": [
+      {
+       "agent": "claude-code",
+       "minutes": 105,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "done"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "the gateway key is missing",
+       "pr": null,
+       "session": "session0",
+       "state": "blocked"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "which port?",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "",
+       "pr": 7,
+       "session": "session0",
+       "state": "waiting_ci"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 40,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 25,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 75,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 76,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_review"
+      },
+      {
+       "agent": "grok",
+       "minutes": 18,
+       "needs": "boom",
+       "pr": null,
+       "session": "session0",
+       "state": "error"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 19,
+       "needs": "",
+       "pr": 2,
+       "session": "session0",
+       "state": "waiting_ci"
+      }
+     ]
+    }
+   }
+  ],
+  "sent": [
+   [
+    8379221702,
+    "MC check-in\n\nWaiting on you:\n• PR #1 is green at aaaaaaaa and waits for your merge: PR 1\n• PR #7 is green at eeeeeeee and waits for your merge: PR 7\n• Claude Code session0 (b) waits on you: which port?\n• Grok asks you: Which phone path?\n\nError:\n• PR #2 CI failed at bbbbbbbb: PR 2\n• Release Deploy failed on main (https://example.invalid/run/9)\n• Grok session0 (b) error: boom\n• Claude Code research “Brief number 6: read the code and say what it does Brief num” ended failed (exit_1).\n• Claude Code research “Brief number 7: read the code and say what it does Brief num” ended interrupted (runner_lost).\n• Claude Code research “Brief number 9: read the code and say what it does Brief num” ended timed out.\n• Codex build “Brief number 10: read the code and say what it does Brief nu” ended refused (cost_limit_unenforceable).\n• Claude Code research “Brief number 11: read the code and say what it does Brief nu” ended output limit.\n\nBlocked:\n• Claude Code session0 (b) blocked: the gateway key is missing\n\nStalled:\n• Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); nothing wakes the session.\n• Claude Code session0 (b) stopped 25 min ago without saying why.\n• Claude Code session0 (b) stopped 60 min ago without saying why.\n• Claude Code session0 (b) has waited 61 min for a review:\n• Claude Code session0 (b) waits on PR #2, whose CI has finished (failed); nothing wakes the session.\n• Claude Code research “Brief number 1: read the code and say what it does Brief num” has waited 6 min and no runner on the Mac picked it up.\n• Claude Code research “Brief number 3: read the code and say what it does Brief num” has not reported for 7 min.\n\nRunning:\n• Claude Code: Brief number 1: read the code and say what it does Brief number 1: rea (queued, 6 min)\n• Claude Code: Brief number 2: read the code and say what it does Brief number 2: rea (queued, 2 min)\n• Claude Code: Brief number 3: read the code and say what it does Brief number 3: rea (running, 20 min)\n• Claude Code: Brief number 4: read the code and say what it does Brief number 4: rea (running, 20 min)\n• Claude Code: Brief number 5: read the code and say what it does Brief number 5: rea (claimed, 9 min)\n\n5 open PRs · 1 decisions waiting",
+    null
+   ],
+   [
+    8379221702,
+    "MC check-in\n\nWaiting on you:\n• PR #3 is green at cccccccc and waits for your merge: PR 3\n\nStalled:\n• Claude Code session0 (b) stopped 25 min ago without saying why.\n\nRunning:\n• Claude Code: Brief number 1: read the code and say what it does Brief number 1: rea (queued, 6 min)\n• Claude Code: Brief number 2: read the code and say what it does Brief number 2: rea (queued, 2 min)\n• Claude Code: Brief number 3: read the code and say what it does Brief number 3: rea (running, 20 min)\n• Claude Code: Brief number 4: read the code and say what it does Brief number 4: rea (running, 20 min)\n• Claude Code: Brief number 5: read the code and say what it does Brief number 5: rea (claimed, 9 min)\n\n5 open PRs · 1 decisions waiting",
+    null
+   ]
+  ]
+ },
+ "supervisor:github_down": {
+  "checkins": [
+   {
+    "summary": {
+     "at": "2026-10-26T20:00:00+00:00",
+     "errors": [
+      "pull requests unreadable (OSError)"
+     ],
+     "failed_releases": [],
+     "open_items": [
+      {
+       "kind": "blocked",
+       "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Claude Code session0 (b) waits on you: no question given"
+      },
+      {
+       "kind": "error",
+       "text": "Check-in: pull requests unreadable (OSError)."
+      }
+     ],
+     "pending_decisions": [],
+     "prs": [],
+     "runners": [],
+     "running": [],
+     "sessions": [
+      {
+       "agent": "claude-code",
+       "minutes": 90,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "done"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "the gateway key is missing",
+       "pr": null,
+       "session": "session0",
+       "state": "blocked"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      }
+     ]
+    },
+    "telegram": "sent",
+    "told": [
+     "stop:2",
+     "stop:3",
+     "watch-error:pull requests unreadable (OSError):2026102620"
+    ]
+   },
+   {
+    "summary": {
+     "at": "2026-10-26T20:15:00+00:00",
+     "errors": [
+      "pull requests unreadable (OSError)"
+     ],
+     "failed_releases": [],
+     "open_items": [
+      {
+       "kind": "blocked",
+       "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Claude Code session0 (b) waits on you: no question given"
+      },
+      {
+       "kind": "error",
+       "text": "Check-in: pull requests unreadable (OSError)."
+      }
+     ],
+     "pending_decisions": [],
+     "prs": [],
+     "runners": [],
+     "running": [],
+     "sessions": [
+      {
+       "agent": "claude-code",
+       "minutes": 105,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "done"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "the gateway key is missing",
+       "pr": null,
+       "session": "session0",
+       "state": "blocked"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      }
+     ]
+    },
+    "telegram": "none",
+    "told": []
+   }
+  ],
+  "rounds": [
+   {
+    "new": [
+     {
+      "key": "stop:2",
+      "kind": "blocked",
+      "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+     },
+     {
+      "key": "stop:3",
+      "kind": "waiting_on_robert",
+      "text": "Claude Code session0 (b) waits on you: no question given"
+     },
+     {
+      "key": "watch-error:pull requests unreadable (OSError):2026102620",
+      "kind": "error",
+      "text": "Check-in: pull requests unreadable (OSError)."
+     }
+    ],
+    "summary": {
+     "at": "2026-10-26T20:00:00+00:00",
+     "errors": [
+      "pull requests unreadable (OSError)"
+     ],
+     "failed_releases": [],
+     "open_items": [
+      {
+       "kind": "blocked",
+       "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Claude Code session0 (b) waits on you: no question given"
+      },
+      {
+       "kind": "error",
+       "text": "Check-in: pull requests unreadable (OSError)."
+      }
+     ],
+     "pending_decisions": [],
+     "prs": [],
+     "runners": [],
+     "running": [],
+     "sessions": [
+      {
+       "agent": "claude-code",
+       "minutes": 90,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "done"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "the gateway key is missing",
+       "pr": null,
+       "session": "session0",
+       "state": "blocked"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      }
+     ]
+    }
+   },
+   {
+    "new": [],
+    "summary": {
+     "at": "2026-10-26T20:15:00+00:00",
+     "errors": [
+      "pull requests unreadable (OSError)"
+     ],
+     "failed_releases": [],
+     "open_items": [
+      {
+       "kind": "blocked",
+       "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Claude Code session0 (b) waits on you: no question given"
+      },
+      {
+       "kind": "error",
+       "text": "Check-in: pull requests unreadable (OSError)."
+      }
+     ],
+     "pending_decisions": [],
+     "prs": [],
+     "runners": [],
+     "running": [],
+     "sessions": [
+      {
+       "agent": "claude-code",
+       "minutes": 105,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "done"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "the gateway key is missing",
+       "pr": null,
+       "session": "session0",
+       "state": "blocked"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      }
+     ]
+    }
+   }
+  ],
+  "sent": [
+   [
+    8379221702,
+    "MC check-in\n\nWaiting on you:\n• Claude Code session0 (b) waits on you: no question given\n\nError:\n• Check-in: pull requests unreadable (OSError).\n\nBlocked:\n• Claude Code session0 (b) blocked: the gateway key is missing\n\n0 open PRs · 0 decisions waiting",
+    null
+   ]
+  ]
+ },
+ "supervisor:only_delegations": {
+  "checkins": [
+   {
+    "summary": {
+     "at": "2026-10-26T20:00:00+00:00",
+     "errors": [],
+     "failed_releases": [],
+     "open_items": [
+      {
+       "kind": "stalled",
+       "text": "Claude Code research “Brief number 1: read the code and say what it does Brief num” has waited 6 min and no runner on the Mac picked it up."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code research “Brief number 3: read the code and say what it does Brief num” has not reported for 7 min."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 6: read the code and say what it does Brief num” ended failed (exit_1)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 7: read the code and say what it does Brief num” ended interrupted (runner_lost)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 9: read the code and say what it does Brief num” ended timed out."
+      },
+      {
+       "kind": "error",
+       "text": "Codex build “Brief number 10: read the code and say what it does Brief nu” ended refused (cost_limit_unenforceable)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 11: read the code and say what it does Brief nu” ended output limit."
+      }
+     ],
+     "pending_decisions": [],
+     "prs": [],
+     "runners": [
+      {
+       "id": "mac-runner-1",
+       "seen_minutes_ago": 3,
+       "state": "idle"
+      }
+     ],
+     "running": [
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 1: read the code and say what it does Brief number 1: read the code",
+       "job": "job-1",
+       "minutes": 6,
+       "state": "queued"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 2: read the code and say what it does Brief number 2: read the code",
+       "job": "job-2",
+       "minutes": 2,
+       "state": "queued"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 3: read the code and say what it does Brief number 3: read the code",
+       "job": "job-3",
+       "minutes": 20,
+       "state": "running"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 4: read the code and say what it does Brief number 4: read the code",
+       "job": "job-4",
+       "minutes": 20,
+       "state": "running"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 5: read the code and say what it does Brief number 5: read the code",
+       "job": "job-5",
+       "minutes": 9,
+       "state": "claimed"
+      }
+     ],
+     "sessions": []
+    },
+    "telegram": "sent",
+    "told": [
+     "delegation-unclaimed:00000000-0000-4000-8000-000000000001",
+     "delegation-silent:00000000-0000-4000-8000-000000000003",
+     "delegation-ended:00000000-0000-4000-8000-000000000006",
+     "delegation-ended:00000000-0000-4000-8000-000000000007",
+     "delegation-ended:00000000-0000-4000-8000-000000000009",
+     "delegation-ended:00000000-0000-4000-8000-000000000010",
+     "delegation-ended:00000000-0000-4000-8000-000000000011"
+    ]
+   },
+   {
+    "summary": {
+     "at": "2026-10-26T20:15:00+00:00",
+     "errors": [],
+     "failed_releases": [],
+     "open_items": [
+      {
+       "kind": "stalled",
+       "text": "Claude Code research “Brief number 1: read the code and say what it does Brief num” has waited 6 min and no runner on the Mac picked it up."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code research “Brief number 3: read the code and say what it does Brief num” has not reported for 7 min."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 6: read the code and say what it does Brief num” ended failed (exit_1)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 7: read the code and say what it does Brief num” ended interrupted (runner_lost)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 9: read the code and say what it does Brief num” ended timed out."
+      },
+      {
+       "kind": "error",
+       "text": "Codex build “Brief number 10: read the code and say what it does Brief nu” ended refused (cost_limit_unenforceable)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 11: read the code and say what it does Brief nu” ended output limit."
+      }
+     ],
+     "pending_decisions": [],
+     "prs": [],
+     "runners": [
+      {
+       "id": "mac-runner-1",
+       "seen_minutes_ago": 3,
+       "state": "idle"
+      }
+     ],
+     "running": [
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 1: read the code and say what it does Brief number 1: read the code",
+       "job": "job-1",
+       "minutes": 6,
+       "state": "queued"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 2: read the code and say what it does Brief number 2: read the code",
+       "job": "job-2",
+       "minutes": 2,
+       "state": "queued"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 3: read the code and say what it does Brief number 3: read the code",
+       "job": "job-3",
+       "minutes": 20,
+       "state": "running"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 4: read the code and say what it does Brief number 4: read the code",
+       "job": "job-4",
+       "minutes": 20,
+       "state": "running"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 5: read the code and say what it does Brief number 5: read the code",
+       "job": "job-5",
+       "minutes": 9,
+       "state": "claimed"
+      }
+     ],
+     "sessions": []
+    },
+    "telegram": "none",
+    "told": []
+   }
+  ],
+  "rounds": [
+   {
+    "new": [
+     {
+      "key": "delegation-unclaimed:00000000-0000-4000-8000-000000000001",
+      "kind": "stalled",
+      "text": "Claude Code research “Brief number 1: read the code and say what it does Brief num” has waited 6 min and no runner on the Mac picked it up."
+     },
+     {
+      "key": "delegation-silent:00000000-0000-4000-8000-000000000003",
+      "kind": "stalled",
+      "text": "Claude Code research “Brief number 3: read the code and say what it does Brief num” has not reported for 7 min."
+     },
+     {
+      "key": "delegation-ended:00000000-0000-4000-8000-000000000006",
+      "kind": "error",
+      "text": "Claude Code research “Brief number 6: read the code and say what it does Brief num” ended failed (exit_1)."
+     },
+     {
+      "key": "delegation-ended:00000000-0000-4000-8000-000000000007",
+      "kind": "error",
+      "text": "Claude Code research “Brief number 7: read the code and say what it does Brief num” ended interrupted (runner_lost)."
+     },
+     {
+      "key": "delegation-ended:00000000-0000-4000-8000-000000000009",
+      "kind": "error",
+      "text": "Claude Code research “Brief number 9: read the code and say what it does Brief num” ended timed out."
+     },
+     {
+      "key": "delegation-ended:00000000-0000-4000-8000-000000000010",
+      "kind": "error",
+      "text": "Codex build “Brief number 10: read the code and say what it does Brief nu” ended refused (cost_limit_unenforceable)."
+     },
+     {
+      "key": "delegation-ended:00000000-0000-4000-8000-000000000011",
+      "kind": "error",
+      "text": "Claude Code research “Brief number 11: read the code and say what it does Brief nu” ended output limit."
+     }
+    ],
+    "summary": {
+     "at": "2026-10-26T20:00:00+00:00",
+     "errors": [],
+     "failed_releases": [],
+     "open_items": [
+      {
+       "kind": "stalled",
+       "text": "Claude Code research “Brief number 1: read the code and say what it does Brief num” has waited 6 min and no runner on the Mac picked it up."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code research “Brief number 3: read the code and say what it does Brief num” has not reported for 7 min."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 6: read the code and say what it does Brief num” ended failed (exit_1)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 7: read the code and say what it does Brief num” ended interrupted (runner_lost)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 9: read the code and say what it does Brief num” ended timed out."
+      },
+      {
+       "kind": "error",
+       "text": "Codex build “Brief number 10: read the code and say what it does Brief nu” ended refused (cost_limit_unenforceable)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 11: read the code and say what it does Brief nu” ended output limit."
+      }
+     ],
+     "pending_decisions": [],
+     "prs": [],
+     "runners": [
+      {
+       "id": "mac-runner-1",
+       "seen_minutes_ago": 3,
+       "state": "idle"
+      }
+     ],
+     "running": [
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 1: read the code and say what it does Brief number 1: read the code",
+       "job": "job-1",
+       "minutes": 6,
+       "state": "queued"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 2: read the code and say what it does Brief number 2: read the code",
+       "job": "job-2",
+       "minutes": 2,
+       "state": "queued"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 3: read the code and say what it does Brief number 3: read the code",
+       "job": "job-3",
+       "minutes": 20,
+       "state": "running"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 4: read the code and say what it does Brief number 4: read the code",
+       "job": "job-4",
+       "minutes": 20,
+       "state": "running"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 5: read the code and say what it does Brief number 5: read the code",
+       "job": "job-5",
+       "minutes": 9,
+       "state": "claimed"
+      }
+     ],
+     "sessions": []
+    }
+   },
+   {
+    "new": [],
+    "summary": {
+     "at": "2026-10-26T20:15:00+00:00",
+     "errors": [],
+     "failed_releases": [],
+     "open_items": [
+      {
+       "kind": "stalled",
+       "text": "Claude Code research “Brief number 1: read the code and say what it does Brief num” has waited 6 min and no runner on the Mac picked it up."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code research “Brief number 3: read the code and say what it does Brief num” has not reported for 7 min."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 6: read the code and say what it does Brief num” ended failed (exit_1)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 7: read the code and say what it does Brief num” ended interrupted (runner_lost)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 9: read the code and say what it does Brief num” ended timed out."
+      },
+      {
+       "kind": "error",
+       "text": "Codex build “Brief number 10: read the code and say what it does Brief nu” ended refused (cost_limit_unenforceable)."
+      },
+      {
+       "kind": "error",
+       "text": "Claude Code research “Brief number 11: read the code and say what it does Brief nu” ended output limit."
+      }
+     ],
+     "pending_decisions": [],
+     "prs": [],
+     "runners": [
+      {
+       "id": "mac-runner-1",
+       "seen_minutes_ago": 3,
+       "state": "idle"
+      }
+     ],
+     "running": [
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 1: read the code and say what it does Brief number 1: read the code",
+       "job": "job-1",
+       "minutes": 6,
+       "state": "queued"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 2: read the code and say what it does Brief number 2: read the code",
+       "job": "job-2",
+       "minutes": 2,
+       "state": "queued"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 3: read the code and say what it does Brief number 3: read the code",
+       "job": "job-3",
+       "minutes": 20,
+       "state": "running"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 4: read the code and say what it does Brief number 4: read the code",
+       "job": "job-4",
+       "minutes": 20,
+       "state": "running"
+      },
+      {
+       "agent": "claude-code",
+       "brief": "Brief number 5: read the code and say what it does Brief number 5: read the code",
+       "job": "job-5",
+       "minutes": 9,
+       "state": "claimed"
+      }
+     ],
+     "sessions": []
+    }
+   }
+  ],
+  "sent": [
+   [
+    8379221702,
+    "MC check-in\n\nError:\n• Claude Code research “Brief number 6: read the code and say what it does Brief num” ended failed (exit_1).\n• Claude Code research “Brief number 7: read the code and say what it does Brief num” ended interrupted (runner_lost).\n• Claude Code research “Brief number 9: read the code and say what it does Brief num” ended timed out.\n• Codex build “Brief number 10: read the code and say what it does Brief nu” ended refused (cost_limit_unenforceable).\n• Claude Code research “Brief number 11: read the code and say what it does Brief nu” ended output limit.\n\nStalled:\n• Claude Code research “Brief number 1: read the code and say what it does Brief num” has waited 6 min and no runner on the Mac picked it up.\n• Claude Code research “Brief number 3: read the code and say what it does Brief num” has not reported for 7 min.\n\nRunning:\n• Claude Code: Brief number 1: read the code and say what it does Brief number 1: rea (queued, 6 min)\n• Claude Code: Brief number 2: read the code and say what it does Brief number 2: rea (queued, 2 min)\n• Claude Code: Brief number 3: read the code and say what it does Brief number 3: rea (running, 20 min)\n• Claude Code: Brief number 4: read the code and say what it does Brief number 4: rea (running, 20 min)\n• Claude Code: Brief number 5: read the code and say what it does Brief number 5: rea (claimed, 9 min)\n\n0 open PRs · 0 decisions waiting",
+    null
+   ]
+  ]
+ },
+ "supervisor:only_stops": {
+  "checkins": [
+   {
+    "summary": {
+     "at": "2026-10-26T20:00:00+00:00",
+     "errors": [],
+     "failed_releases": [],
+     "open_items": [
+      {
+       "kind": "waiting_on_robert",
+       "text": "PR #7 is green at eeeeeeee and waits for your merge: PR 7"
+      },
+      {
+       "kind": "blocked",
+       "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Claude Code session0 (b) waits on you: no question given"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Claude Code session0 (b) waits on you: which port?"
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); nothing wakes the session."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 25 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 60 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) has waited 61 min for a review:"
+      },
+      {
+       "kind": "error",
+       "text": "Grok session0 (b) error: boom"
+      }
+     ],
+     "pending_decisions": [],
+     "prs": [
+      {
+       "branch": "br7",
+       "ci": "passed",
+       "number": 7,
+       "sha": "eeeeeeee",
+       "title": "PR 7"
+      }
+     ],
+     "runners": [],
+     "running": [],
+     "sessions": [
+      {
+       "agent": "claude-code",
+       "minutes": 90,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "done"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "the gateway key is missing",
+       "pr": null,
+       "session": "session0",
+       "state": "blocked"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "which port?",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "",
+       "pr": 7,
+       "session": "session0",
+       "state": "waiting_ci"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 25,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 10,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 60,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 61,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_review"
+      },
+      {
+       "agent": "grok",
+       "minutes": 3,
+       "needs": "boom",
+       "pr": null,
+       "session": "session0",
+       "state": "error"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 4,
+       "needs": "",
+       "pr": 2,
+       "session": "session0",
+       "state": "waiting_ci"
+      }
+     ]
+    },
+    "telegram": "sent",
+    "told": [
+     "pr-green:7:eeeeeeeeeeee",
+     "stop:2",
+     "stop:3",
+     "stop:4",
+     "ci-finished:5:passed",
+     "stalled:6",
+     "stalled:8",
+     "review-wait:9",
+     "stop:10"
+    ]
+   },
+   {
+    "summary": {
+     "at": "2026-10-26T20:15:00+00:00",
+     "errors": [],
+     "failed_releases": [],
+     "open_items": [
+      {
+       "kind": "waiting_on_robert",
+       "text": "PR #7 is green at eeeeeeee and waits for your merge: PR 7"
+      },
+      {
+       "kind": "blocked",
+       "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Claude Code session0 (b) waits on you: no question given"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Claude Code session0 (b) waits on you: which port?"
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); nothing wakes the session."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 40 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 25 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 75 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) has waited 76 min for a review:"
+      },
+      {
+       "kind": "error",
+       "text": "Grok session0 (b) error: boom"
+      }
+     ],
+     "pending_decisions": [],
+     "prs": [
+      {
+       "branch": "br7",
+       "ci": "passed",
+       "number": 7,
+       "sha": "eeeeeeee",
+       "title": "PR 7"
+      }
+     ],
+     "runners": [],
+     "running": [],
+     "sessions": [
+      {
+       "agent": "claude-code",
+       "minutes": 105,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "done"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "the gateway key is missing",
+       "pr": null,
+       "session": "session0",
+       "state": "blocked"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "which port?",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "",
+       "pr": 7,
+       "session": "session0",
+       "state": "waiting_ci"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 40,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 25,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 75,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 76,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_review"
+      },
+      {
+       "agent": "grok",
+       "minutes": 18,
+       "needs": "boom",
+       "pr": null,
+       "session": "session0",
+       "state": "error"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 19,
+       "needs": "",
+       "pr": 2,
+       "session": "session0",
+       "state": "waiting_ci"
+      }
+     ]
+    },
+    "telegram": "sent",
+    "told": [
+     "stalled:7"
+    ]
+   }
+  ],
+  "rounds": [
+   {
+    "new": [
+     {
+      "key": "pr-green:7:eeeeeeeeeeee",
+      "kind": "waiting_on_robert",
+      "text": "PR #7 is green at eeeeeeee and waits for your merge: PR 7"
+     },
+     {
+      "key": "stop:2",
+      "kind": "blocked",
+      "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+     },
+     {
+      "key": "stop:3",
+      "kind": "waiting_on_robert",
+      "text": "Claude Code session0 (b) waits on you: no question given"
+     },
+     {
+      "key": "stop:4",
+      "kind": "waiting_on_robert",
+      "text": "Claude Code session0 (b) waits on you: which port?"
+     },
+     {
+      "key": "ci-finished:5:passed",
+      "kind": "stalled",
+      "text": "Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); nothing wakes the session."
+     },
+     {
+      "key": "stalled:6",
+      "kind": "stalled",
+      "text": "Claude Code session0 (b) stopped 25 min ago without saying why."
+     },
+     {
+      "key": "stalled:8",
+      "kind": "stalled",
+      "text": "Claude Code session0 (b) stopped 60 min ago without saying why."
+     },
+     {
+      "key": "review-wait:9",
+      "kind": "stalled",
+      "text": "Claude Code session0 (b) has waited 61 min for a review:"
+     },
+     {
+      "key": "stop:10",
+      "kind": "error",
+      "text": "Grok session0 (b) error: boom"
+     }
+    ],
+    "summary": {
+     "at": "2026-10-26T20:00:00+00:00",
+     "errors": [],
+     "failed_releases": [],
+     "open_items": [
+      {
+       "kind": "waiting_on_robert",
+       "text": "PR #7 is green at eeeeeeee and waits for your merge: PR 7"
+      },
+      {
+       "kind": "blocked",
+       "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Claude Code session0 (b) waits on you: no question given"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Claude Code session0 (b) waits on you: which port?"
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); nothing wakes the session."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 25 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 60 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) has waited 61 min for a review:"
+      },
+      {
+       "kind": "error",
+       "text": "Grok session0 (b) error: boom"
+      }
+     ],
+     "pending_decisions": [],
+     "prs": [
+      {
+       "branch": "br7",
+       "ci": "passed",
+       "number": 7,
+       "sha": "eeeeeeee",
+       "title": "PR 7"
+      }
+     ],
+     "runners": [],
+     "running": [],
+     "sessions": [
+      {
+       "agent": "claude-code",
+       "minutes": 90,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "done"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "the gateway key is missing",
+       "pr": null,
+       "session": "session0",
+       "state": "blocked"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "which port?",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 5,
+       "needs": "",
+       "pr": 7,
+       "session": "session0",
+       "state": "waiting_ci"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 25,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 10,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 60,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 61,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_review"
+      },
+      {
+       "agent": "grok",
+       "minutes": 3,
+       "needs": "boom",
+       "pr": null,
+       "session": "session0",
+       "state": "error"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 4,
+       "needs": "",
+       "pr": 2,
+       "session": "session0",
+       "state": "waiting_ci"
+      }
+     ]
+    }
+   },
+   {
+    "new": [
+     {
+      "key": "stalled:7",
+      "kind": "stalled",
+      "text": "Claude Code session0 (b) stopped 25 min ago without saying why."
+     }
+    ],
+    "summary": {
+     "at": "2026-10-26T20:15:00+00:00",
+     "errors": [],
+     "failed_releases": [],
+     "open_items": [
+      {
+       "kind": "waiting_on_robert",
+       "text": "PR #7 is green at eeeeeeee and waits for your merge: PR 7"
+      },
+      {
+       "kind": "blocked",
+       "text": "Claude Code session0 (b) blocked: the gateway key is missing"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Claude Code session0 (b) waits on you: no question given"
+      },
+      {
+       "kind": "waiting_on_robert",
+       "text": "Claude Code session0 (b) waits on you: which port?"
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); nothing wakes the session."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 40 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 25 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) stopped 75 min ago without saying why."
+      },
+      {
+       "kind": "stalled",
+       "text": "Claude Code session0 (b) has waited 76 min for a review:"
+      },
+      {
+       "kind": "error",
+       "text": "Grok session0 (b) error: boom"
+      }
+     ],
+     "pending_decisions": [],
+     "prs": [
+      {
+       "branch": "br7",
+       "ci": "passed",
+       "number": 7,
+       "sha": "eeeeeeee",
+       "title": "PR 7"
+      }
+     ],
+     "runners": [],
+     "running": [],
+     "sessions": [
+      {
+       "agent": "claude-code",
+       "minutes": 105,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "done"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "the gateway key is missing",
+       "pr": null,
+       "session": "session0",
+       "state": "blocked"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "which port?",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_owner"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 20,
+       "needs": "",
+       "pr": 7,
+       "session": "session0",
+       "state": "waiting_ci"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 40,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 25,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 75,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "unreported"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 76,
+       "needs": "",
+       "pr": null,
+       "session": "session0",
+       "state": "awaiting_review"
+      },
+      {
+       "agent": "grok",
+       "minutes": 18,
+       "needs": "boom",
+       "pr": null,
+       "session": "session0",
+       "state": "error"
+      },
+      {
+       "agent": "claude-code",
+       "minutes": 19,
+       "needs": "",
+       "pr": 2,
+       "session": "session0",
+       "state": "waiting_ci"
+      }
+     ]
+    }
+   }
+  ],
+  "sent": [
+   [
+    8379221702,
+    "MC check-in\n\nWaiting on you:\n• PR #7 is green at eeeeeeee and waits for your merge: PR 7\n• Claude Code session0 (b) waits on you: no question given\n• Claude Code session0 (b) waits on you: which port?\n\nError:\n• Grok session0 (b) error: boom\n\nBlocked:\n• Claude Code session0 (b) blocked: the gateway key is missing\n\nStalled:\n• Claude Code session0 (b) waits on PR #7, whose CI has finished (passed); nothing wakes the session.\n• Claude Code session0 (b) stopped 25 min ago without saying why.\n• Claude Code session0 (b) stopped 60 min ago without saying why.\n• Claude Code session0 (b) has waited 61 min for a review:\n\n1 open PRs · 0 decisions waiting",
+    null
+   ],
+   [
+    8379221702,
+    "MC check-in\n\nStalled:\n• Claude Code session0 (b) stopped 25 min ago without saying why.\n\n1 open PRs · 0 decisions waiting",
+    null
+   ]
+  ]
+ },
+ "supervisor:quiet": {
+  "checkins": [
+   {
+    "summary": {
+     "at": "2026-10-26T20:00:00+00:00",
+     "errors": [],
+     "failed_releases": [],
+     "open_items": [],
+     "pending_decisions": [],
+     "prs": [],
+     "runners": [],
+     "running": [],
+     "sessions": []
+    },
+    "telegram": "none",
+    "told": []
+   },
+   {
+    "summary": {
+     "at": "2026-10-26T20:15:00+00:00",
+     "errors": [],
+     "failed_releases": [],
+     "open_items": [],
+     "pending_decisions": [],
+     "prs": [],
+     "runners": [],
+     "running": [],
+     "sessions": []
+    },
+    "telegram": "none",
+    "told": []
+   }
+  ],
+  "rounds": [
+   {
+    "new": [],
+    "summary": {
+     "at": "2026-10-26T20:00:00+00:00",
+     "errors": [],
+     "failed_releases": [],
+     "open_items": [],
+     "pending_decisions": [],
+     "prs": [],
+     "runners": [],
+     "running": [],
+     "sessions": []
+    }
+   },
+   {
+    "new": [],
+    "summary": {
+     "at": "2026-10-26T20:15:00+00:00",
+     "errors": [],
+     "failed_releases": [],
+     "open_items": [],
+     "pending_decisions": [],
+     "prs": [],
+     "runners": [],
+     "running": [],
+     "sessions": []
+    }
+   }
+  ],
+  "sent": []
+ }
+}

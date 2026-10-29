@@ -380,6 +380,10 @@ def classify(paths: list[str],
             services.update(("portal", "cos-bot", "cos-scheduler"))
         elif path.startswith("minimoi_portal/"):
             services.add("portal")
+        elif path.startswith("services/supervisor/"):
+            # The build supervisor runs the portal image (docker-compose.prod.yml's supervisor, its own command), and
+            # deploy_scoped_release.sh recreates it with every portal release once supervisor_ec2.sh activated it.
+            services.add("portal")
         elif path.startswith("services/usage/"):
             # The usage record (usage-record U1/U2): the CoS images copy it
             # (Dockerfile.cos*). The production gateway image does not; the

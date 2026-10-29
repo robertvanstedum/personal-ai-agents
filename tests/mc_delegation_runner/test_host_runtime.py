@@ -61,7 +61,7 @@ class FakeAuthority:
         self.log, self.items, self.queue, self.events, self.facts = [], {}, [], {}, []
         self.receipts, self.reconciles, self.answers, self.hooks, self.answers_log = {}, [], [], {}, []
         self.down, self.renew_ok, self.lock = False, True, threading.RLock()
-        self.decisions = []
+        self.decisions, self.bound = [], {}
         self.census = {}                                    # event_id -> census event, as applied (S1-F)
 
     def enter(self, name, *args):
@@ -97,16 +97,38 @@ class FakeAuthority:
                                                                           if old not in (None, ev) else {})})
         return {"state": "recorded", "census": {"state": "applied", "events": out}}
 
-    def claim(self, runner_id, capabilities):
-        self.enter("claim", runner_id)
-        if not self.queue:
-            return None
-        rid = self.queue.pop(0)
+    def _entry(self, rid):
         it = self.items[rid]
-        it.update(gen=it["gen"] + 1, state="claimed", lease_until=time.time() + self.lease_s)
         return {"envelope": {**it["env"], "generation": it["gen"]}, "route": it["route"], "unit": it["unit"],
                 "reserved": it["reserved"], "lease_until": iso(it["lease_until"]), "card_id": None, "step": None,
                 "attempt": None, "resume_from": None}
+
+    def claim(self, runner_id, capabilities, claim_id=None, held=None):
+        """The store's F2 rules: one claim per request id (a resend returns it), and nothing new while it holds an
+        item for this host that ``held`` does not name."""
+        self.enter("claim", runner_id)
+        if claim_id is not None and claim_id in self.bound:
+            rid, gen = self.bound[claim_id]
+            it = self.items[rid]
+            if it["gen"] == gen and it["state"] in ("claimed", "running") and it["lease_until"] > time.time():
+                return {"state": "claimed", "claim_id": claim_id, "replayed": True, **self._entry(rid)}
+            return {"state": "claim_superseded", "claim_id": claim_id, "replayed": True, "request_id": rid,
+                    "generation": gen}
+        if held is not None:
+            unknown = [{"request_id": rid, "generation": it["gen"], **self._entry(rid)}
+                       for rid, it in self.items.items() if it["gen"] > 0 and it["state"] in ("claimed", "running")
+                       and f"{rid}:{it['gen']}" not in held]
+            if unknown:
+                return {"state": "withheld", "code": "owned_items_unknown", "unreconciled": [], "items": unknown}
+        if not self.queue:
+            return None if claim_id is None else {"state": "none"}
+        rid = self.queue.pop(0)
+        it = self.items[rid]
+        it.update(gen=it["gen"] + 1, state="claimed", lease_until=time.time() + self.lease_s)
+        if claim_id is None:
+            return self._entry(rid)
+        self.bound[claim_id] = (rid, it["gen"])
+        return {"state": "claimed", "claim_id": claim_id, "replayed": False, **self._entry(rid)}
 
     def _replay(self, eid, record):
         old = self.events.get(eid)
@@ -832,6 +854,45 @@ def test_a_stale_effect_after_a_wake_is_refused_and_the_next_effect_happens_once
     assert order.index("freeze") < order.index("reconcile") < order.index("thaw")
 
 
+def test_fakework_sees_a_wake_that_falls_after_it_read_the_hold_and_before_it_waits(tmp_path, monkeypatch, capsys):
+    """The PostgreSQL flake, made exact (review N-D3): the freeze lands after the worker's last look at the clock in
+    its request (reading and parsing the hold's answer) and before its wait's first look. On a controlled clock, the
+    wait still measures that pause, so the stale dispatch is sent, and refused; never 'no wake observed'."""
+    clock = {"t": 1000.0}
+    channel = tmp_path / "chan"
+    channel.mkdir()
+    asked = []
+
+    def answer_pending():                                 # the runtime's side of the channel, on every sleep
+        for seq, doc in fakework.Channel(channel).requests():
+            asked.append(doc["kind"])
+            fakework.Channel(channel).answer(seq, {"effect_hold": {"state": "held", "operation_id": "op-e2b"},
+                                                   "effect_dispatch_held": {"state": "refused",
+                                                                            "code": "receipt_lease_stale"}}[doc["kind"]])
+
+    def sleep(s):
+        clock["t"] += s
+        answer_pending()
+    monkeypatch.setattr(fakework, "time", type("Clock", (), {"time": staticmethod(lambda: clock["t"]),
+                                                              "monotonic": staticmethod(lambda: clock["t"]),
+                                                              "sleep": staticmethod(sleep)}))
+    real_ask = fakework._Client.ask
+
+    def ask_then_frozen(self, doc):
+        out = real_ask(self, doc)
+        if doc["kind"] == "effect_hold":
+            clock["t"] += 2.5                             # frozen here: the answer read, the wait not yet begun
+        return out
+    monkeypatch.setattr(fakework._Client, "ask", ask_then_frozen)
+    steps = fakework.parse_program(f"fakework/1\nstale_effect_on_wake e2b grant={uuid.uuid4()} wait_s=20 gap_s=1\n"
+                                   "result ok")
+    assert fakework.run(steps, channel=channel, sink=fakework.FileSink(tmp_path / "sink"), cap=1.0,
+                        unit="test_units") == fakework.EXIT["done"]
+    assert asked == ["effect_hold", "effect_dispatch_held"]
+    assert "stale e2b: refused receipt_lease_stale after a 2 s gap" in capsys.readouterr().out
+    assert clock["t"] < 1010                              # it noticed at once, never waited out its 20 s
+
+
 def test_production_configuration_is_version_1(tmp_path, monkeypatch):
     """No --host-config: today's runner, its flags and its adapters; fakework is never offered or parsed there."""
     seen = []
@@ -1358,3 +1419,55 @@ def test_n_e2_on_the_python_3_9_path_a_failing_ps_never_leaves_the_runtimes_own_
                         lambda *a, **k: subprocess.CompletedProcess(a[0], 1, stdout="", stderr=""))
     c = _bare_child(gone, rt)
     assert c.exited() and c.lost and c.end_group() == "unverified" and len(sent) == 2
+
+
+# ── Codex part 1, F2: a claim whose reply is lost ──────────────────────────────────────────────────────────────────
+def test_f2_a_lost_claim_reply_is_withheld_found_and_reconciled_never_idle(tmp_path, mirror):
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake)
+    rid = fake.add(program("checkpoint s1", "result ok"))
+    real = fake.claim
+
+    def lost_reply(*a, **k):
+        got = real(*a, **k)
+        assert got["state"] == "claimed"
+        raise ConnectionError("reply lost after the authority committed")
+    fake.claim = lost_reply
+    assert run_pass(rt) == {"state": "offline"} and rt.owned() == []
+    pending = rt.journal("claims").pending()
+    assert len(pending) == 1                                  # the request id was on file before it was sent
+    fake.claim = real
+    claim_id = pending[0]["event_id"]
+    again = fake.claim(rt.runner_id, CAPS, claim_id=claim_id, held=[])
+    assert (again["state"], again["replayed"], again["envelope"]["request_id"], again["envelope"]["generation"]) == (
+        "claimed", True, rid, 1)                               # the same claim, never a second item
+    fake.items[rid]["lease_until"] = 0.0                       # the lease ran out meanwhile
+    rt2 = make_rt(tmp_path, mirror[0], fake)
+    answers = [run_pass(rt2) for _ in range(2)]
+    assert answers[0]["state"] == "claim_superseded"           # that id's claim moved on: no new item under it
+    assert (answers[1]["state"], answers[1]["generation"]) == ("completed", 2), answers
+    assert fake.reconciles[0]["stage"] == {"child": "stopped", "checkpoint": None}       # nothing of it ran here
+    adopted = json.loads((tmp_path / "artifacts" / f"{rid}-g1.claim.json").read_text())
+    assert adopted["adopted"] == "authority_holds"
+    assert fake.queue == [] and len(fake.items) == 1
+
+
+def test_f2_a_crash_between_the_authoritys_commit_and_the_local_write_is_recovered(tmp_path, mirror, monkeypatch):
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake)
+    rid = fake.add(program("checkpoint s1", "result ok"))
+
+    def die(*a, **k):
+        raise Crash()                                          # the process dies before its claim is on file
+    monkeypatch.setattr(rt, "_record_claim", die)
+    with pytest.raises(Crash):
+        run_pass_raw(rt)
+    assert rt.owned() == [] and len(rt.journal("claims").pending()) == 1
+    rt2 = make_rt(tmp_path, mirror[0], fake)
+    out = run_pass(rt2)                                        # the same request again: the same claim, adopted
+    assert (out["state"], out["generation"]) == ("completed", 2), out
+    adopted = json.loads((tmp_path / "artifacts" / f"{rid}-g1.claim.json").read_text())
+    assert adopted["adopted"] == "claim_reply_lost" and fake.reconciles[0]["stage"]["child"] == "stopped"
+    assert rt2.journal("claims").pending() == [] and len(fake.bound) == 1
+    assert run_pass(rt2) == {"state": "idle"}
+    assert len(rt2.journal("claims").calls()) == 1             # answered requests are cleared; the file stays small

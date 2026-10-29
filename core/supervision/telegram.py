@@ -16,6 +16,14 @@ import urllib.request
 _YES = re.compile(r"^(?:yes|yep|yeah|approve|approved|ok|okay|go\s+ahead|do\s+it|ship\s+it)"
                   r"(?:[,.!]?\s*(?:please|thanks|thank\s+you|go\s+ahead|approved))?\s*[.!👍]*$", re.I)
 _NO = re.compile(r"^(?:no|nope|decline|declined|hold|stop|wait|not\s+now|don['’]t)\b", re.I)
+# A runtime decision (S1-G) acts on work, so on its path "no" is as strict as "yes" (SF1): a decline is the whole
+# short reply too, a holding reply ("wait", "hold", "not now", "stop", …) changes nothing, and anything else is not
+# counted. One code at a time answers a batched message differently per decision (R7.4-c). Today's agent asks keep
+# parse_answer above, unchanged.
+_RT_NO = re.compile(r"^(?:no|nope|decline|declined)(?:[,.!]?\s*(?:thanks|thank\s+you))?\s*[.!]*$", re.I)
+_RT_HOLD = re.compile(r"^(?:wait|hold|hold\s+on|not\s+now|not\s+yet|stop|later|pause|don['’]t)\b", re.I)
+_CODE_COMMAND = re.compile(r"^(?P<word>approve|approved|yes|ok|no|decline|declined|hold|wait)[,:]?\s+"
+                           r"(?:decision\s+)?(?P<code>D-?\d{1,9})\s*[.!]?$", re.I)
 
 
 def parse_answer(text):
@@ -28,6 +36,35 @@ def parse_answer(text):
     if _YES.match(t):
         return "approved"
     return None
+
+
+def parse_runtime_reply(text):
+    """A reply to a runtime decision's message (alone or batched): 'approved' (the whole short "yes", as today),
+    'declined' (the whole short "no": nothing else declines), 'held' (wait, hold, not now, stop…: nothing changes), or
+    None (not counted: a partial or mixed answer must name codes)."""
+    if not isinstance(text, str) or not text.strip() or len(text) > 600:
+        return None
+    t = text.strip()
+    if _YES.match(t):
+        return "approved"
+    if _RT_NO.match(t):
+        return "declined"
+    if _RT_HOLD.match(t):
+        return "held"
+    return None
+
+
+def parse_code_command(text):
+    """('approved' | 'declined' | 'held', 'D-12') for the whole short reply naming one code ("approve D-12", "no
+    D-12", "hold D-12"), else None. Used only on the runtime path: "hold" and "wait" change nothing."""
+    if not isinstance(text, str) or len(text) > 60:
+        return None
+    m = _CODE_COMMAND.match(text.strip())
+    if not m:
+        return None
+    word = m.group("word").lower()
+    answer = "declined" if word in ("no", "decline", "declined") else "held" if word in ("hold", "wait") else "approved"
+    return answer, "D-" + m.group("code").upper().lstrip("D-")
 
 
 def verify(update, *, owner_chat_id: int, owner_user_id: int, bot_id: int | None = None):
@@ -70,6 +107,27 @@ def decision_message(decision):
     return (f"Decision {decision['code']} waiting on you\nAsked by {by}{' (' + where + ')' if where else ''}\n\n"
             f"{decision['text']}\n\nReply to THIS message: yes to approve, no to decline. "
             f"Or in the Guild chat: approve {decision['code']}.")
+
+
+def runtime_message(decision):
+    """A runtime decision that arrives alone (a solo class, R7.4-c: an unknown resolution, a reassignment, a
+    cross-vendor review admission), in the authority's own words, which say what yes and no do."""
+    return (f"Decision {decision['code']} waiting on you, on its own\n\n{decision['text']}\n\n"
+            f"Reply to THIS message: just “yes” or just “no” (as its words say); “wait” changes nothing. Or in the "
+            f"Guild chat: approve {decision['code']} / no {decision['code']}.")
+
+
+def batch_message(decisions):
+    """Routine runtime decisions waiting at the same sweep, in one message (R7.4-c, at most five), each in full words.
+    One "yes" (the whole short reply) approves every decision listed; "no" declines them all; one code at a time
+    ("approve D-12", "no D-13") answers them differently."""
+    codes = [d["code"] for d in decisions]
+    n = len(decisions)
+    body = "\n\n".join(f"{d['code']}: {d['text']}" for d in decisions)
+    return (f"Decisions {', '.join(codes)} waiting on you, together\n\n{body}\n\n"
+            f"Reply to THIS message: just “yes” approves all {n} listed, just “no” declines all {n} (each as its "
+            f"words say); “wait” changes nothing. To answer them differently, reply with one code at a time "
+            f"(approve {codes[0]}, no {codes[-1]}), or in the Guild chat.")
 
 
 class Bot:

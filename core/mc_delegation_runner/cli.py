@@ -19,6 +19,8 @@ host runtime (runner.HostRuntime):
 
     mc-delegation-runner run --host-config ~/minimoi-runtime/dev/host.yaml [--once]
     mc-delegation-runner state --host-config PATH [--json]        the host's own view (host-state.json), with its age
+    mc-delegation-runner state --host-config PATH --authority [--json]   the authority's snapshot, built live (R7.6-a)
+    mc-delegation-runner state --file STATE_JSON [--json]         a published state.json, read as a view with its age
     mc-delegation-runner doctor --host-config PATH [--env-names] [--do-not-resume]
     mc-delegation-runner version [--host-config PATH]
     mc-delegation-runner journal --host-config PATH show | replay [--again]
@@ -287,9 +289,27 @@ def _run_v2(words) -> int:
 
 def _state(words) -> int:
     p = argparse.ArgumentParser(prog="mc-delegation-runner state")
-    p.add_argument("--host-config", required=True)
+    src = p.add_mutually_exclusive_group(required=True)
+    src.add_argument("--host-config")
+    src.add_argument("--file", help="a published <authority_state_dir>/state.json, read as a view with its age")
+    p.add_argument("--authority", action="store_true",
+                   help="with --host-config: the authority's snapshot (minimoi.runtime.state.v1), built live")
     p.add_argument("--json", action="store_true")
     args = p.parse_args(words)
+    if args.file or args.authority:
+        if args.file:
+            from core.mc_delegation_dispatcher.snapshot import read_state_file
+            doc = read_state_file(Path(args.file).expanduser())
+        else:
+            doc = _authority_state(_host(args.host_config))
+        if args.json:
+            print(json.dumps(doc, sort_keys=True, default=str))
+        else:
+            print(f"{doc.get('environment')} runtime state as of {doc.get('as_of')} ({doc.get('view_age_s')} s old): "
+                  f"{len(doc.get('items', []))} item(s), {len(doc.get('notices', []))} notice(s), "
+                  f"{len(doc.get('decisions_waiting', []))} decision(s) waiting; unknown: "
+                  f"{', '.join(doc.get('unknowns') or []) or 'nothing'}")
+        return 0
     host = _host(args.host_config)
     doc = _host_state(host)
     if args.json:
@@ -303,6 +323,22 @@ def _state(words) -> int:
               + "".join(f"; {i['task']} blocked ({i['blocked']['code']}) since {i['blocked']['since']}, "
                         "cleared by an operator restart" for i in blocked))
     return 0
+
+
+def _authority_state(host) -> dict:
+    """The authority's snapshot (R7.6-a's ``state --json``), where this host holds the authority role and reaches its
+    store by DSN (the Mac-only interim). Read only: no lock, no write; the snapshot itself writes nothing."""
+    if "authority" not in host.roles or host.authority.transport != "dsn":
+        raise SystemExit("refused: state_authority_not_here")
+    auth, problem = _values(host)
+    if problem:
+        raise SystemExit(f"refused: {problem}")
+    import psycopg2
+    from core.mc_delegation_dispatcher.store import DispatcherStore
+    dsn = _dsn(host.authority.dsn_file)
+    store = DispatcherStore(lambda: psycopg2.connect(dsn, connect_timeout=5), principal=host.principal,
+                            environment=host.environment, authority=auth, grants=_grant_store(host))
+    return store.snapshot(endpoint_id=host.authority.endpoint_id, host_id=host.host_id)
 
 
 def _host_state(host) -> dict:
@@ -424,7 +460,9 @@ def _journal(words) -> int:
     p.add_argument("--again", action="store_true", help="resend every record, acknowledged or not (DUP-5: applies 0)")
     args = p.parse_args(words)
     host = _host(args.host_config)
-    paths = sorted(host.artifact_root.glob("*.pending.jsonl"))
+    paths = sorted(host.artifact_root.glob("*.pending.jsonl"), key=lambda p: (p.name == "claims.pending.jsonl", p.name))
+    if args.action == "replay":                       # claim requests are resent only by the run, under its lock
+        paths = [p for p in paths if p.name != "claims.pending.jsonl"]
     if args.action == "show":
         for path in paths:
             task = path.name[:-len(".pending.jsonl")]
