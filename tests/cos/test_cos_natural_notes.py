@@ -77,3 +77,40 @@ def test_her_voice_refuses_save_note_on_a_question_or_a_pointer(r, words):
     said = rig.ask(r, sid, "call_1", "t1", words=words, name="save_note").get_json()
     assert said["saved"] is False and said["spoken"] == direct_voice.NOT_A_NOTE
     assert not r.notes.saved and not r.turns
+
+
+# ── A4-2's own words: "save a note test" (no separator), and a comma where he paused ─────────────────────────────────
+
+@pytest.mark.parametrize("command,note", [
+    ("save a note test", "test"),                                                    # as he said it
+    ("Save a note test.", "test."),
+    ("save a note buy milk", "buy milk"),
+    ("Okay, save a note the kiln is hot", "the kiln is hot"),
+    ("Can you save a note test?", "test?"),
+    ("make a note, buy milk", "buy milk"),
+    ("Make a note, that the kiln is hot.", "the kiln is hot."),                       # a pause before "that"
+    ("save a note, call Anna", "call Anna"),
+    ("Could you make me a note, glaze order Friday", "glaze order Friday"),
+])
+def test_save_a_note_with_no_separator_or_a_comma_is_his_note(command, note):
+    assert parse_explicit_note(command) == note
+
+
+@pytest.mark.parametrize("text", [
+    "did you save a note?", "Did you make a note, though?", "I want to save a note test", "save a note", "save a note?",
+    "Can you save a note?", "make a note,", "save a note later", "save a note now", "save a note tomorrow",
+    "save a note thanks", "save a note this", "save a note that's it", "make a note, please.", "save a note, please",
+    "make a note, if you can", "make a note, that", "save a note for me", "save a note of that",
+    "save a note about the meeting", "save a note to the board: buy milk", "save this note test", "save a note-taking app",
+    "take a note, buy milk", "make a note buy milk", "save a note, what do you think?",
+])
+def test_with_no_separator_or_a_comma_a_question_a_framing_word_or_nothing_stays_chat(text):
+    assert parse_explicit_note(text) is None
+
+
+def test_her_voice_saves_save_a_note_test_as_he_said_it(r):
+    sid = rig.start(r)
+    saved = rig.ask(r, sid, "call_1", "t1", words="save a note test", name="save_note").get_json()
+    assert saved["outcome"] == "done" and saved["saved"] is True and list(r.notes.saved.values()) == ["test"]
+    refused = rig.ask(r, sid, "call_2", "t2", words="save a note later", name="save_note").get_json()
+    assert refused["saved"] is False and refused["spoken"] == direct_voice.NOT_A_NOTE and len(r.notes.saved) == 1

@@ -45,6 +45,19 @@ _SLASH_NOTE_PREFIX = re.compile(r"^/note(?:\s+|$)", re.IGNORECASE)
 # note?" or "I noted that" never start a command.
 _POINTER = r"(?:down|too|one|somewhere|please|as\s+well|for\s+(?:me|later|now|the\s+record))"
 _NOTE_THAT_POINTS = _POINTER + r"(?:\s*,?\s*" + _POINTER + r")*\s*(?:[,.!?:;]|$)"
+# A4-2's own words, "save a note test" (29 Oct): spoken, the separator is a pause
+# or nothing. So "save a note X" with no separator, and "make/save a note, X"
+# with a comma (and the "that"/"saying" a pause may sit before), are notes too.
+# His words X must start right there, with a word of their own: a word that only
+# frames, points or times the request ("save a note later", "save a note for
+# me", "make a note, please", "save a note of that", "make a note, if you can")
+# starts no note, and nothing after the comma, or nothing at all, is chat. One
+# content word is a note ("save a note test" keeps "test").
+_NOT_HIS_WORDS = (r"(?:of|for|about|on|onto|to|in|into|with|from|at|by|as|so|if|when|whether|and|or|but|then|than"
+                  r"|later|now|again|too|yet|first|soon|today|tonight|tomorrow|here|there|somewhere|instead|already"
+                  r"|please|thanks|thank|okay|ok|yes|no|maybe|perhaps|real|quick|quickly|this|that|it|these|those"
+                  r"|one|something|anything|what|which|who|how|why|where)\b")
+_HIS_WORDS_START = r"(?!" + _NOT_HIS_WORDS + r")(?=\w|[\"“'‘])"
 _NATURAL_NOTE_PREFIX = re.compile(
     r"^(?:(?:okay|ok)\s*,?\s+)?"
     r"(?:please\s+|(?:can|could|would)\s+you\s+(?:please\s+)?)?"
@@ -53,6 +66,8 @@ _NATURAL_NOTE_PREFIX = re.compile(
     r"note\s*(?::|-(?=\s|$)|[–—]|that(?=\s|$)|saying(?=\s|$)|called(?=\s|$))"
     r"|note\s+to\s+self\s*(?::|[-–—]|,)"
     r"|note\s+that(?=\s|$)(?!\s+" + _NOTE_THAT_POINTS + r")"
+    r"|(?:make|save)\s+(?:me\s+)?a\s+note\s*,\s*(?:(?:that|saying)\s+)?" + _HIS_WORDS_START
+    + r"|save\s+a\s+note\s+" + _HIS_WORDS_START +
     r")",
     re.IGNORECASE,
 )
@@ -145,8 +160,9 @@ def parse_explicit_note(text: str) -> str | None:
 
     This is the one note grammar shared by COS, the MC portal and the voice
     tool gate: ``/note …``, ``Save a note: …`` and the natural forms such as
-    ``Make a note that …``, ``Make a note called …``, ``Note that …`` or
-    ``Note to self: …`` (A4-1).
+    ``Make a note that …``, ``Make a note called …``, ``Note that …``,
+    ``Note to self: …`` (A4-1), ``Save a note …`` with no separator and
+    ``Make a note, …`` / ``Save a note, …`` with a comma (A4-2).
     """
     slash_match = _SLASH_NOTE_PREFIX.match(text)
     if slash_match is not None:

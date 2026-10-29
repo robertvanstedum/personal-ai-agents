@@ -216,3 +216,34 @@ def test_spoken_question_or_pointer_saves_nothing(voice, words):
     said = call(voice, sid, call_id="q1", name="save_note", words=words).get_json()
     assert said["saved"] is False and said["spoken"] == direct.NOT_A_NOTE
     assert not voice.cos.calls and not voice.board.rows and not voice.turns
+
+
+
+# ── A4-2's own words: "save a note test", and a comma where he paused (one grammar, both hosts) ──────────────────────
+
+@pytest.mark.parametrize("text,payload", [("save a note test", "test"), ("make a note, buy milk", "buy milk"),
+                                          ("Save a note, call Anna back.", "call Anna back.")])
+def test_save_a_note_with_no_separator_or_a_comma_is_a_note(text, payload):
+    assert oa.parse(text) == oa.Action("note", text=payload) and _is_note_command(text) is True
+
+
+@pytest.mark.parametrize("text", ["did you save a note?", "save a note later", "save a note", "make a note, please"])
+def test_save_a_note_questions_and_framing_words_are_not_notes(text):
+    assert oa.parse(text) is None and _is_note_command(text) is False
+
+
+def test_typed_save_a_note_test_saves_test_through_cos(cos_portal):
+    body = _say(cos_portal, "save a note test")
+    assert [s["text"] for s in cos_portal.extra["route"].sent] == ["/note test"]
+    assert body["operation"]["saved"] is True and body["reply_note"]["text"] == "Saved to Chief of Staff notes: test"
+
+
+def test_spoken_save_a_note_test_is_saved_and_save_a_note_later_is_not(voice):
+    from minimoi_portal.guild_ui import mc_voice_direct as direct
+    from test_mc_voice_direct import call, start
+    sid = start(voice)["voice_session_id"]
+    saved = call(voice, sid, call_id="s1", name="save_note", words="save a note test").get_json()
+    assert saved["saved"] is True and saved["spoken"] == "Saved to Chief of Staff notes: test"
+    later = call(voice, sid, call_id="s2", name="save_note", words="save a note later").get_json()
+    assert later["saved"] is False and later["spoken"] == direct.NOT_A_NOTE
+    assert voice.cos.calls == ["/note test"] and not voice.turns
