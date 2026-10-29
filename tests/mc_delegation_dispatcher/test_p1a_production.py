@@ -254,37 +254,3 @@ def test_guild_jobs_build_todays_store_unless_the_file_is_named(monkeypatch, tmp
         is sentinel
     assert jobs_wiring._with_delegation(sentinel, {**named, production.DOOR_CREDENTIALS_VAR: str(_creds(tmp_path))}) \
         is not sentinel
-
-
-def test_a_version_1_claim_is_reaped_as_today_while_the_sweeper_is_not_fresh():
-    """Review SF5: a portal named before its timers run (or with them stopped) never leaves a version 1 claim
-    hanging; reap_lapsed never touches a version 2 item, and a fresh sweeper keeps the reaping its own."""
-    from core.mc_delegation_dispatcher.relay import DelegationRelay
-    now = datetime(2026, 10, 29, 15, tzinfo=timezone.utc)
-
-    class Store:
-        sweeps = True
-
-        def __init__(self, fresh, route=None):
-            self.fresh, self.route, self.reaped = fresh, route, []
-
-        def by_job(self, job):
-            state = "interrupted" if self.reaped else "running"
-            return {"state": state, "route": self.route, "actor": "claude-code",
-                    "lease_until": now - timedelta(minutes=10), "now": now,
-                    "deadline": now + timedelta(hours=1), "result_detail": {}, "finished_at": None,
-                    "started_at": now - timedelta(minutes=20), "created_at": now - timedelta(minutes=30),
-                    "heartbeat_at": now - timedelta(minutes=10), "output_text": None}
-
-        def sweeper_status(self):
-            if self.fresh is None:
-                raise ConnectionError()
-            return {"fresh": self.fresh}
-
-        def reap_lapsed(self, job):
-            self.reaped.append(job)
-            return True
-    for fresh, route, reaped in ((False, None, True), (None, None, True), (True, None, False), (False, "fakework", False)):
-        store = Store(fresh, route)
-        DelegationRelay(store, ref_for=lambda r: "a" * 40).status("job-1")
-        assert bool(store.reaped) is reaped, (fresh, route)

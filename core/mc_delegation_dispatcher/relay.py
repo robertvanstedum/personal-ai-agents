@@ -65,11 +65,7 @@ class DelegationRelay:
             return "not_found", None
         lapsed = row["lease_until"] is not None and (row["now"] - row["lease_until"]).total_seconds() > LEASE_SECONDS
         # Only then, and only where no sweeper runs: where one does, it writes lapse transitions instead (spec R3.3).
-        # A version 1 item whose sweeper is not fresh is reaped here as today (P1-a review SF5: a portal named before
-        # its timers run, or with them stopped, never leaves a version 1 claim hanging; reap_lapsed never touches a
-        # version 2 item).
-        if row["state"] in ("claimed", "running") and lapsed and (
-                not self.store.sweeps or (row.get("route") is None and not self._sweeper_fresh())):
+        if row["state"] in ("claimed", "running") and lapsed and not self.store.sweeps:
             try:
                 if self.store.reap_lapsed(job_id):     # the runner died mid-job: say so instead of "running" forever
                     row = self.store.by_job(job_id)
@@ -93,12 +89,6 @@ class DelegationRelay:
         return "ok", clean_status({"state": state, "elapsed_s": max(0, elapsed), "heartbeat_age_s": hb,
                                    "result": {"text": text} if text is not None else None,
                                    "audit": {"available": False}, "writes": [], "error_class": error})
-
-    def _sweeper_fresh(self) -> bool:
-        try:
-            return bool((self.store.sweeper_status() or {}).get("fresh"))
-        except Exception:
-            return False
 
     def stop(self, job_id: str) -> str:
         try:
