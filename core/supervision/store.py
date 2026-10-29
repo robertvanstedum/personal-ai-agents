@@ -529,11 +529,18 @@ class Store:
         return self._run(q)
 
     def runtime_answered(self):
-        """Runtime decisions Robert answered that the runtime link has not applied at the authority yet."""
+        """Runtime decisions Robert answered that the runtime link has not applied at the authority yet. Each carries
+        ``superseded_by``: the newest later D-code of the same decision, or None. A row that has one was refused at
+        the authority and replaced (the replacement's own insert is what consumes it, Codex's fix2 re-check): it must
+        never be taken to the authority again, only completed here, so an older answer can't override a newer one."""
         def q(cur):
-            cur.execute("""SELECT * FROM guild.supervision_decisions WHERE requester->>'agent' = 'runtime'
-                AND state IN ('approved', 'declined') AND delivered_at IS NULL ORDER BY id LIMIT 50""")
-            return [dict(r, code=code_of(r["id"])) for r in cur.fetchall()]
+            cur.execute("""SELECT d.*, (SELECT max(l.id) FROM guild.supervision_decisions l
+                    WHERE l.requester->>'agent' = 'runtime' AND l.requester->>'decision_id' = d.requester->>'decision_id'
+                      AND l.id > d.id) AS superseded_by_id
+                FROM guild.supervision_decisions d WHERE d.requester->>'agent' = 'runtime'
+                AND d.state IN ('approved', 'declined') AND d.delivered_at IS NULL ORDER BY d.id LIMIT 50""")
+            return [dict(r, code=code_of(r["id"]), superseded_by=None if r["superseded_by_id"] is None
+                         else code_of(r["superseded_by_id"])) for r in cur.fetchall()]
         return self._run(q)
 
     def runtime_untold(self):

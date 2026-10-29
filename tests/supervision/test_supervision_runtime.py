@@ -681,13 +681,20 @@ class KeyedReissueStore(ReissueStore):
             raise ConnectionError("process_stopped")
         super().mark_applied(i)
 
+    def runtime_answered(self):
+        """As Store's: every answer not yet applied, yes or no, oldest first, each with ``superseded_by``."""
+        return [dict(r, superseded_by=next((x["code"] for x in reversed(self.rows) if x["id"] > r["id"]), None))
+                for r in self.rows if r["state"] in ("approved", "declined") and r["id"] not in self.applied]
+
 
 def tick(link, store, bot):
     for step in (link.apply, link.deliver):
         try:
             step(store, bot, OWNER)
         except ConnectionError:
-            pass                                              # the process stops here; a new link is its restart
+            pass                                              # a failed step, as runtime_tick records it
+        except SystemExit:
+            return                                            # the process stops here; a new link is its restart
 
 
 def test_delta_a_failed_replacement_write_leaves_the_answer_unapplied_until_its_d_code_exists():
@@ -723,6 +730,69 @@ def test_delta_a_stop_after_the_d_code_was_written_but_not_sent_sends_that_same_
     tick(restarted, store, bot)
     assert [t.split("\n")[0] for t, _ in bot.sent] == ["Decision D-2 waiting on you, on its own"]
     assert len(store.rows) == 2 and store.applied == {1}
+
+
+# ── Codex's fix2 re-check: once a fresh D-code exists, the answer it replaced never reaches the authority again ───
+class RecordingAuthority(RefusingAuthority):
+    """Refuses the first ``refuse`` answers (the capability missing), then takes each; records every answer it saw."""
+
+    def __init__(self, store, refuse=1):
+        super().__init__(store)
+        self.refuse, self.seen = refuse, []
+
+    def resolve(self, did, answer, *, by, receipt):
+        from core.mc_delegation_dispatcher.store import AuthorityRefused
+        self.seen.append((answer, receipt["words"]))
+        if self.refuse:
+            self.refuse -= 1
+            raise AuthorityRefused("grant_capability_unavailable")
+        return {"state": "resolved", "action": "admit" if answer == "approved" else "decline"}
+
+
+def linked(store, authority):
+    d = store.original
+    doc = {"view_age_s": 0, "environment": "dev", "notices": [
+        {"rule": "decision", "raised_at": NOW.isoformat(), "key": "decision:test", "solo": True,
+         "words": [{"decision_id": d["requester"]["decision_id"], "words": d["text"]}]}]}
+    return RuntimeLink(authority, owner="robert", view_bound_s=60, source=lambda: doc)
+
+
+def answer_no(store, code_id):
+    r = next(x for x in store.rows if x["id"] == code_id)
+    r["state"], r["receipt"] = "declined", {"channel": "telegram", "chat_id": OWNER, "message_id": 88, "text": "no"}
+
+
+def test_recheck_an_old_yes_never_overrides_a_newer_no_after_a_stop_before_its_mark():
+    store, bot = KeyedReissueStore(), Bot()
+    authority = RecordingAuthority(store)
+    store.fail_mark = 1                                       # yes refused; D-2 written and sent; stop before the mark
+    tick(linked(store, authority), store, bot)
+    answer_no(store, 2)                                       # Robert says no to D-2
+    restarted = linked(store, authority)                      # the capability is back: the authority would take yes
+    tick(restarted, store, bot)
+    assert authority.seen == [("approved", "yes"), ("declined", "no")]    # the old yes never went again
+    assert store.applied == {1, 2}
+
+
+def test_recheck_a_stop_after_the_d_code_is_written_before_it_is_sent_asks_robert_again():
+    class StopAfterWrite(KeyedReissueStore):
+        stop = True
+
+        def runtime_decision(self, did, words, **kwargs):
+            out = super().runtime_decision(did, words, **kwargs)
+            if kwargs.get("reissue") and self.stop:
+                self.stop = False
+                raise SystemExit("process_stopped")           # D-2 committed; nothing sent, nothing marked
+            return out
+    store, bot = StopAfterWrite(), Bot()
+    authority = RecordingAuthority(store)
+    tick(linked(store, authority), store, bot)
+    assert bot.sent == [] and [r["state"] for r in store.rows] == ["approved", "new"] and store.applied == set()
+    restarted = linked(store, authority)
+    tick(restarted, store, bot)                               # D-1 completed, never resolved again; D-2 sent once
+    tick(restarted, store, bot)
+    assert authority.seen == [("approved", "yes")] and store.applied == {1}
+    assert [t.split("\n")[0] for t, _ in bot.sent if "on its own" in t] == ["Decision D-2 waiting on you, on its own"]
 
 
 def test_the_sync_view_is_read_with_its_age():
