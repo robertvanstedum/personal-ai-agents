@@ -464,13 +464,13 @@ def i4(run):
 def i5(run):
     """A fake effect sink with lookup off and a kill at the committed effect: one ``unknown`` decision reaches Robert
     alone; his "end" (yes) ends it; generation unchanged."""
-    job = _admit_card(run, f"C-I5-{run.tag}", program("checkpoint s1", "effect e1 grant={grant}",
+    job = _admit_card(run, f"C-I5-{run.tag}", program("checkpoint s1 hold_s=180", "effect e1 grant={grant}",
                                                       "checkpoint s2 hold_s=2", "result ok"), effects=("e1",))
     if not run.wait_state(job, ("claimed", "running"), 600):
         raise Stop("never_claimed")
     rid = run.item_id(job)
     op = run.env.effect_operation_id(rid, "e1")
-    run.mac_step("kill-at-commit", "already running since before this item was admitted: "
+    run.mac_step("kill-at-commit", "start this now, on the Mac (the item holds 3 minutes at s1 before its effect): "
                                    f"python3 tests/harness_acceptance/p1a_mac.py kill-at-commit --op {op} "
                                    "(it kills the worker the moment the sink commits e1; launchd restarts it)")
     row = run.wait_state(job, ("unknown",), 900)

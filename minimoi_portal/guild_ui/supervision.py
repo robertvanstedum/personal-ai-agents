@@ -229,11 +229,13 @@ def attach_runner_door_v2(app, environ, legacy_digest, principal, env_name, *, s
             body = json.loads(raw) if request.mimetype == "application/json" else None
         except ValueError:
             body = None
-        if isinstance(body, dict) and "protocol" in body:              # version 2: a host speaks only for itself
-            if host is None:
-                return jsonify(error="unauthorized"), 401
+        if host is not None and not (isinstance(body, dict) and "protocol" not in body):
+            # A host's own token: version 2 only, answered by server.answer (its shape, size and binding checks, and
+            # the store's refusal codes); a host speaks only for itself.
             status, doc = server.answer(store_factory(), hosts, token, raw, request.content_type)
             return jsonify(doc), status
+        if isinstance(body, dict) and "protocol" in body:              # version 2 without a host's token
+            return jsonify(error="unauthorized"), 401
         if not legacy(token):
             return jsonify(error="unauthorized"), 401
         if request.mimetype != "application/json" or (request.content_length or 0) > door_mod.BODY_MAX \

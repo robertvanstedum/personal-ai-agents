@@ -171,6 +171,12 @@ def test_named_the_door_binds_every_version_2_caller_to_its_own_host(monkeypatch
     assert (r.status_code, r.get_json()) == (403, {"error": "runner_not_this_credential"})
     r = _post(c, HOST_TOKEN, {**V2, "facts": {**FACTS, "host_id": "mac-b"}})
     assert (r.status_code, r.get_json()) == (403, {"error": "host_not_this_credential"})      # Codex part 2 P2-1
+    big = {**V2, "facts": {**FACTS, "pad": "x" * (170 * 1024)}}
+    r = _post(c, HOST_TOKEN, big)
+    assert (r.status_code, r.get_json()) == (413, {"error": "runner_request_bound"})     # the door's own size rule
+    r = c.post("/internal/mc/v1/delegation-runner", data=b"{not json", content_type="application/json",
+               headers={"Authorization": f"Bearer {HOST_TOKEN}"})
+    assert (r.status_code, r.get_json()) == (400, {"error": "runner_request_invalid"})
     assert _post(c, TOKEN, V2).status_code == 401                          # the version 1 token speaks no version 2
     assert _post(c, HOST_TOKEN, V1).status_code == 401                     # nor a host token version 1
     assert len(store.calls) == n                                           # none of those reached the store
