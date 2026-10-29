@@ -48,6 +48,14 @@ from domains.german.review_output import (
     parse_llm_response as _parse_llm_response,
 )
 
+from domains.german.lesson_rules import (
+    ANCHOR_PERSONA,
+    pick_next_persona as _pick_next_persona,
+    pick_next_scenario as _pick_next_scenario,
+    top_error_type as _top_error_type,
+    carry_forward_errors as _carry_forward_errors,
+)
+
 SYSTEM_PROMPT = """\
 You are a German language tutor reviewing a voice practice session between a learner and an AI persona.
 Analyze the transcript and return a single JSON object — no markdown, no explanation, just the JSON.
@@ -296,46 +304,6 @@ def _generate_anki_csv(reviewer_output: dict, session: dict,
 
 
 # ── Step 3b: Generate lesson plan ────────────────────────────────────────────
-
-ANCHOR_PERSONA = "Frau Berger"
-
-
-def _pick_next_persona(personas: list, progress: dict) -> dict:
-    anchor = next((p for p in personas if p["name"] == ANCHOR_PERSONA), None)
-    recent = progress.get("personas_practiced", [])[-2:]
-    # Non-anchor candidates: avoid last 2 used
-    non_anchor = [p for p in personas if p["name"] != ANCHOR_PERSONA and p["name"] not in recent]
-    if not non_anchor:
-        non_anchor = [p for p in personas if p["name"] != ANCHOR_PERSONA]
-    # Prefer non-anchor personas not yet practiced at all
-    not_yet = [p for p in non_anchor if p["name"] not in progress.get("personas_practiced", [])]
-    pool = not_yet if not_yet else non_anchor
-    # Anchor is always eligible — return it if it's the only option or pool is empty
-    return pool[0] if pool else anchor
-
-
-def _pick_next_scenario(persona: dict, progress: dict) -> str:
-    covered = set(progress.get("scenarios_covered", []))
-    for s in persona["scenarios"]:
-        if s not in covered:
-            return s
-    return persona["scenarios"][0]  # all covered — cycle from start
-
-
-def _top_error_type(progress: dict) -> str:
-    counts = progress.get("cumulative_error_counts", {})
-    if not any(counts.values()):
-        return "gender"  # default for first session
-    return max(counts, key=lambda k: counts[k])
-
-
-def _carry_forward_errors(reviewer_output: dict, top_type: str, date_str: str) -> list:
-    errors = [e for e in reviewer_output.get("errors", []) if e.get("type") == top_type]
-    result = []
-    for e in errors[:2]:
-        result.append(f"{e['correction']} (was: {e['original']}) — session {date_str}")
-    return result
-
 
 def _generate_lesson_plan(reviewer_output: dict, session: dict, domain_cfg: dict,
                            personas: list, progress: dict, lessons_dir: Path):
