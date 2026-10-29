@@ -173,8 +173,11 @@ def decision_words(d, item) -> str:
                 f"leaves it where it is.")
     reason = body.get("reason")
     if body.get("item_state") is not None:
-        why = {"process_unverified": "a process of it could not be verified",
-               "effect_outcome_conflict": "an effect's reported outcome contradicts the one recorded"}.get(
+        if reason == "process_unverified":         # its reservation waits on this answer (store._decide_ended)
+            return (f"{who[0].upper()}{who[1:]} has ended ({body['item_state']}), but a process of it could not be "
+                    f"verified, so its reservation is kept. Nothing is retried. Yes acknowledges it and releases the "
+                    f"reservation (what it used stays counted); no leaves it listed and the reservation kept.")
+        why = {"effect_outcome_conflict": "an effect's reported outcome contradicts the one recorded"}.get(
             reason, reason)
         return (f"{who[0].upper()}{who[1:]} has ended ({body['item_state']}), but {why}. Nothing is retried and "
                 f"nothing changes. Yes acknowledges it; no leaves it listed.")

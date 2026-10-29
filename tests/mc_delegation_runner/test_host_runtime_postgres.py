@@ -591,6 +591,81 @@ class HostRuntimeOnPostgres(PostgresFixture, unittest.TestCase):
         self.assertTrue((self.tmp / "artifacts" / f"{task}.closed-1.json").exists())   # the first closing kept
         self.assertTrue((self.tmp / "artifacts" / f"{task}.closed.json").exists())     # closed again after it
 
+    def test_sf1_a_reopened_task_whose_process_cannot_be_verified_reconciles_once_and_robert_ends_it(self):
+        """The S1-H review's SF1 probe, kept as a test. As above, but the task's stage still names a live process
+        group whose identity does not match (pid reuse by another process, or a ps that cannot read it). Before the
+        fix, every pass reopened the task, reconciled it to the same decision, closed it and was withheld again
+        (closed-1 … closed-5, one item.reconciled each, the next item never claimed). Now it is reconciled once: the
+        kept reservation waits on Robert's decision, not on the host, so the host takes new work; the foreign group is
+        never signalled; one decision is queued; and Robert's yes releases the reservation. A host whose authority
+        still holds it to the same answer never reopens it a second time."""
+        from core.mc_delegation_dispatcher import snapshot as snap
+        from core.mc_delegation_runner import runner as runner_mod
+        rt = self.runtime()
+        rt.cfg.artifact_root.mkdir(parents=True, exist_ok=True)
+        job = self.item(self.program("checkpoint s1", "result ok"))
+        claim = rt._claim_step()["launch"]
+        task, rid = claim["task"], claim["request_id"]
+        other = subprocess.Popen(["sleep", "120"], start_new_session=True)     # not this runtime's child
+        try:
+            runner_mod._write_json(runner_mod._stage_path(rt.cfg, task),
+                                   {"stage": "started", "pgid": other.pid, "identity": "not-this-process"})
+            store = self.store()
+            answer = store.reconcile(rt.runner_id, rid, 1, {"child": "unverified", "checkpoint": None}, [], protocol=2)
+            self.assertEqual(answer["answer"], "decide")
+            rt._close(task, "decide", answer)
+            self.sql("UPDATE guild.mc_delegations SET lease_until=clock_timestamp()-interval '1 second' "
+                     "WHERE job_id=%s", (job,))
+            store.end(rid, by="robert", note="Robert's yes to the unknown")
+            self.assertEqual(self.row(job)["reservation"]["state"], "kept")
+            nxt = self.item(self.program("result ok"))
+            answers = [self.run_pass(rt) for _ in range(5)]
+
+            def closed():
+                return sorted(p.name for p in (self.tmp / "artifacts").glob(f"{task}.closed*.json"))
+            self.assertEqual(closed(), [f"{task}.closed-1.json", f"{task}.closed.json"], answers)
+            self.assertEqual(self.kinds(rid).count("item.reconciled"), 2)      # the first decide, then the reopen's
+            self.assertEqual(self.row(nxt)["state"], "completed", answers)       # the host took new work
+            self.assertIsNone(other.poll())                                     # the foreign group never signalled
+            queued = [r for r in self.sql("""SELECT event_id, body FROM guild.mc_delegation_events
+                WHERE item_id=%s AND kind='decision.queued'""", (rid,)) if r["body"].get("item_state")]
+            self.assertEqual(len(queued), 1)                                    # one decision: told once
+            did = str(queued[0]["event_id"])
+            res = self.row(job)["reservation"]
+            self.assertEqual((res["state"], res["kept"]), ("kept", "owner_decision"))   # Robert's, not the host's
+            # The host's own bound, whatever its authority answers: with the marker taken off by hand (an authority
+            # that still holds the host to the item), the task is reopened once on the answer it was last closed on,
+            # and never again on that same answer: withheld, never looping.
+            def unmark():
+                self.sql("UPDATE guild.mc_delegations SET reservation = reservation - 'kept' WHERE job_id=%s", (job,))
+            unmark()
+            self.assertEqual(self.run_pass(rt)["state"], "withheld")
+            self.assertEqual(closed(), [f"{task}.closed-1.json", f"{task}.closed-2.json", f"{task}.closed.json"])
+            unmark()
+            again = [self.run_pass(rt) for _ in range(3)]
+            self.assertEqual([a["state"] for a in again], ["withheld"] * 3, again)
+            self.assertEqual(closed(), [f"{task}.closed-1.json", f"{task}.closed-2.json", f"{task}.closed.json"])
+            self.assertEqual(self.kinds(rid).count("item.reconciled"), 3)
+            self.assertIsNone(other.poll())
+            # Robert's yes ends it: the reservation is released by the rule (nothing reported: unreported), and the
+            # host is held to nothing any more.
+            st = store.decisions_status([did])[did]
+            self.assertTrue(st["open"])
+            self.assertIn("releases the reservation", st["words"])
+            self.assertEqual(snap.sha256(st["words"]), st["text_sha256"])
+            out = store.resolve(did, "approved", by="robert", receipt={
+                "channel": "test_owner", "turn_id": f"owner-test:{uuid.uuid4()}", "words": "yes",
+                "decision_sha256": st["text_sha256"]})
+            self.assertEqual((out["state"], out["action"], out["outcome"]["reservation"]),
+                             ("resolved", "acknowledge", "unreported"))
+            self.assertEqual(self.row(job)["reservation"]["state"], "unreported")
+            self.assertEqual(self.run_pass(rt)["state"], "idle")
+            self.assertEqual(self.kinds(rid).count("item.reconciled"), 3)
+            self.assertIsNone(other.poll())
+        finally:
+            os.killpg(other.pid, signal.SIGKILL)
+            other.wait()
+
     def test_t0m_a_do_not_resume_session_is_refused_before_any_spawn(self):
         rt = self.runtime()
         job = self.item(self.program("resume_session 01a17dde-fb26-7923-8105-c7478428d17d", "result ok"))

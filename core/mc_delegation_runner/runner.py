@@ -563,6 +563,16 @@ def _closed_path(cfg, task):
     return cfg.artifact_root / f"{task}.closed.json"
 
 
+def _closing(path) -> tuple:
+    """What closed a task, as its closing record says: (reason, the authority's answer, its code, its decision)."""
+    try:
+        doc = json.loads(Path(path).read_text())
+        answer = doc.get("answer") or {}
+        return (doc.get("reason"), answer.get("answer"), answer.get("code"), answer.get("decision_id"))
+    except (OSError, ValueError, AttributeError):
+        return ("unreadable",)
+
+
 def _cp_path(cfg, request_id, digest):
     return cfg.artifact_root / f"{request_id}.cp.{digest.split(':', 1)[1]}.patch"
 
@@ -1375,10 +1385,15 @@ class HostRuntime:
             # this host's word that its children stopped, its task closed at a decide. Reopened, the closing record kept
             # beside it, so §5.5 reconciles it once more: nothing runs (freeze finds no child, so it reads stopped), and
             # the authority answers stop and releases what it kept. Without this the host would be withheld forever.
-            n = 1
+            # Once per closing answer (S1-H review SF1): a task already reopened and closed again on the same answer
+            # (a process it still cannot verify: the same decision) is never reopened again, so no answer the
+            # authority repeats can make the host loop. That decision is Robert's; his yes releases the item.
+            n, earlier = 1, set()
             while closed.with_name(f"{task}.closed-{n}.json").exists():
+                earlier.add(_closing(closed.with_name(f"{task}.closed-{n}.json")))
                 n += 1
-            closed.rename(closed.with_name(f"{task}.closed-{n}.json"))
+            if _closing(closed) not in earlier:
+                closed.rename(closed.with_name(f"{task}.closed-{n}.json"))
         with self._lock:
             self.reasons.add("adopted")
 

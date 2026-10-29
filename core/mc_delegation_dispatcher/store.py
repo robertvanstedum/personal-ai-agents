@@ -1373,10 +1373,12 @@ class DispatcherStore:
         return nothing
 
     # ── F2: a claim whose reply may be lost, made recoverable ──
+    # An ended item whose kept reservation waits on the owner's decision (_decide_ended) is the owner's, not the host's.
     _OWNED_SQL = """SELECT *, clock_timestamp() AS now FROM guild.mc_delegations
         WHERE principal_id=%s AND environment=%s AND runner_id=%s AND route IS NOT NULL
           AND (state IN ('claimed','running','lapsed','paused')
-               OR (finished_at IS NOT NULL AND reservation->>'state' = 'kept'))
+               OR (finished_at IS NOT NULL AND reservation->>'state' = 'kept'
+                   AND reservation->>'kept' IS DISTINCT FROM 'owner_decision'))
         ORDER BY request_id LIMIT 16"""
 
     def _bind(self, cur, claimed, runner_id, host_id, claim_id) -> dict:
@@ -2357,7 +2359,10 @@ class DispatcherStore:
 
     def _decide_ended(self, cur, row, state) -> dict:
         """An item that has already ended, whose child the host cannot verify: it stays as it ended, and one decision
-        (process_unverified) is queued for it, once per generation; its reservation stays kept."""
+        (process_unverified) is queued for it, once per generation; its reservation stays kept. A kept reservation
+        then waits on the owner's word, not the host's (``kept: owner_decision``), so the claim no longer holds the
+        host to it (_OWNED_SQL): the host has reconciled it once, and asking it again would only loop (S1-H review
+        SF1). Robert's yes to the decision releases it (resolve's ``acknowledge``)."""
         once = _once("decision_unverified", row["request_id"], row["generation"])
         cur.execute("""SELECT event_id FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s
             AND once_key=%s""", (self.principal, self.environment, once))
@@ -2368,6 +2373,11 @@ class DispatcherStore:
                         event_id=decision_id, body={"class": "unknown_resolution", "solo": True,
                                                     "reason": "process_unverified", "operations": [],
                                                     "item_state": state})
+        res = row["reservation"] or {}
+        if res.get("state") == "kept" and res.get("kept") != "owner_decision":
+            cur.execute("""UPDATE guild.mc_delegations SET reservation=%s::jsonb WHERE request_id=%s""",
+                        (json.dumps({**res, "kept": "owner_decision", "decision_id": decision_id}),
+                         str(row["request_id"])))
         return {"answer": "decide", "code": "process_unverified", "decision_id": decision_id, "operations": [],
                 "state": state}
 
@@ -3370,6 +3380,12 @@ class DispatcherStore:
                 out = self._reassign_in(cur, row, dq["body"].get("runner_id"), by, note)
             elif action == "authorize_review":
                 out = {"authorization": did}        # this decision.resolved is the owner turn reserve_judgment checks
+            elif action == "acknowledge" and d["body"].get("reason") == "process_unverified":
+                # An ended item whose process its host could not verify (_decide_ended): Robert's yes is the word the
+                # host could not give, so a reservation kept for it is released by _release's rule (what it used
+                # stays counted, as settled or unreported), and nothing waits on that host any more (S1-H SF1).
+                self._confirm_stopped(cur, row)
+                out = {"reservation": (self._item(cur, row["request_id"])["reservation"] or {}).get("state")}
             return {"state": "resolved", "action": action, "outcome": out}
 
     def _admission_grant(self, cur, row, decision_id, turn_id) -> str:
