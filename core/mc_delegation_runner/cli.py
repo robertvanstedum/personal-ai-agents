@@ -363,7 +363,7 @@ def _authority(words) -> int:
         lock.acquire(runner._now().isoformat())
     except host_mod.HostRefused as exc:
         raise SystemExit(f"refused: {exc}")
-    loops = srv = None
+    loops = srv = serving = None
     try:
         import psycopg2
         from core.mc_delegation_dispatcher.store import DispatcherStore
@@ -380,14 +380,16 @@ def _authority(words) -> int:
         signal.signal(signal.SIGTERM, lambda *_: stop.set())
         signal.signal(signal.SIGINT, lambda *_: stop.set())
         signal.signal(signal.SIGUSR1, lambda *_: loops.stop_sweeper())
-        threading.Thread(target=srv.serve_forever, name="mc-authority-door", daemon=True).start()
+        serving = threading.Thread(target=srv.serve_forever, name="mc-authority-door", daemon=True)
+        serving.start()
         print(json.dumps({"state": "serving", "host_id": host.host_id, "environment": host.environment,
                           "listen": f"{host.door.host}:{host.door.port}"}), flush=True)
         stop.wait()
         return 0
     finally:
         if srv is not None:
-            srv.shutdown()
+            if serving is not None:
+                srv.shutdown()                       # waits for serve_forever, so only once it was started
             srv.server_close()
         if loops is not None:
             loops.stop()
