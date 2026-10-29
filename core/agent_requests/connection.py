@@ -16,8 +16,8 @@ Rules (design 2026-10-08 sections 7 and 12; Codex's acceptance criteria of 11 Oc
 * The notice carries validated tokens only (request id, sender, recipient, how to read, receipt and report); never the request's own words.
 * **The census** (host runtime spec v0.5 §6.6; ``core/mc_delegation_runner/census.py``): given the host runtime's census folder, the manager writes the session's
   root row at each start, beside its launch record and before the spawn (``start_path: connection``, its route, the launch record's names and digests, and where
-  the vendor keeps the transcript), and a state change each time a pass sees one (running, idle, offline, unknown). It never writes content. A census row that
-  cannot be written refuses the start, as an unwritten launch record does.
+  the vendor keeps the transcript), and a state change each time a pass sees one (running, idle, offline, unknown). It never writes content. The census never
+  gates the session (CEN-6, R6.6-e): a row that cannot be written now is tried again each pass, and the gap is named in status.json (``census``) meanwhile.
 Standard library only. Nothing here starts a session: a provider's ``start`` is called only by an operator action (scripts/agent_connection.py --start)."""
 from __future__ import annotations
 
@@ -174,6 +174,8 @@ class ConnectionManager:
         from core.mc_delegation_runner.census import CensusFile
         self.census = None if census_dir is None else CensusFile(census_dir)   # the host runtime's census folder, or None: no row (today's behaviour)
         self._census_state = None                               # the state last written to the census for this session
+        self._census_pending = None                             # the root row's event while it waits to be written (tried again each pass)
+        self._census_gap = None                                 # {status, reason, since} while the census cannot be written: shown in status.json
         self.instance = secrets.token_hex(6)
         self._last_pass, self._last_error, self._anchors, self._restart_info = None, "", {}, {}
         self.dir = os.path.join(root, "connection", agent)
@@ -266,8 +268,27 @@ class ConnectionManager:
         finally:
             os.close(fd)
         if self.census is not None:
-            self.census.append("census.start", self._census_root(rec))
+            from core.mc_delegation_runner import census as C
+            try:
+                self._census_pending = {"event_id": str(uuid.uuid4()), "at": C.now_iso(), "body": self._census_root(rec)}
+            except Exception as exc:                            # a row that cannot even be made: shown, the start goes on
+                self._census_gap = {"status": "unwritable", "reason": str(exc)[:64] or type(exc).__name__, "since": self._now()}
+                return
             self._census_state = ("running", None)
+            self._census_try()
+
+    def _census_try(self) -> None:
+        """Write the root row that waits, the same event each try; the start never waits on it (it never gates the session)."""
+        if self.census is None or self._census_pending is None:
+            return
+        ev = self._census_pending
+        try:
+            self.census.append("census.start", ev["body"], at=ev["at"], event_id=ev["event_id"], wait_s=0.2)
+        except Exception as exc:
+            reason = "lock_busy" if type(exc).__name__ == "CensusBusy" else (str(exc)[:64] if isinstance(exc, ValueError) else f"os_error_{getattr(exc, 'errno', 0) or 0}")
+            self._census_gap = {"status": "deferred" if reason == "lock_busy" else "unwritable", "reason": reason, "since": (self._census_gap or {}).get("since") or self._now()}
+            return
+        self._census_pending, self._census_gap = None, None
 
     # The vendor and where its own transcript is kept, per agent: the memory shelf reads these folders (core/memory_shelf/config.py, sessions.py).
     _CENSUS_VENDOR = {"claude-code": ("anthropic", "~/.claude/projects/*/{session}.jsonl"), "codex": ("openai", "~/.codex/sessions/**/rollout-*.jsonl")}
@@ -284,6 +305,9 @@ class ConnectionManager:
         session until it is resumed), anything else unknown. A census that cannot be written never costs the pass."""
         if self.census is None or self._census_state is None:
             return
+        self._census_try()
+        if self._census_pending is not None:
+            return                                              # its root row first; a state without it would be a row with no start
         now = {"busy": ("running", None), "idle": ("idle", None), "offline": ("idle", "offline")}.get(state, ("unknown", "probe_unknown"))
         if now == self._census_state:
             return
@@ -673,7 +697,8 @@ class ConnectionManager:
             attention = hold                                    # shown to the owner; requests wait and are not lost
         self._write_json("status.json", {"agent": self.agent, "session_id": self.session_id, "provider": self.provider.name, "state": state,
                                           "session_ref": ref, "attention": attention, "error": "", "updated_at": self._now(), "instance": self.instance,
-                                          "usage": usage, **self._restart_info})
+                                          "usage": usage, **self._restart_info,
+                                          **({} if self.census is None else {"census": self._census_gap or {"status": "ok"}})})
         attempts = self._attempts()                            # read and VALIDATE the history first: a damaged one raises here, before anything advertises availability
         if state in ("idle", "busy"):
             L.arm(self.root, self.agent)                       # listening means a live session, nothing else, and only the CONFIGURED one

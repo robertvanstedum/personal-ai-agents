@@ -13,7 +13,13 @@ itself runs inside the Codex desktop app, in that app's environment, which no
 launch contract shapes: its launch record holds the names the ``codex queue``
 child gets and is profile ``desktop_app``, governed false, never claimed as
 governed. The turn's progress and end are not observed here, so the row says
-``unknown: turn_not_observed``. A row that cannot be written sends nothing.
+``unknown: turn_not_observed``. The census never gates the turn (CEN-6, R6.6-e):
+a row that cannot be written leaves the turn sent as it would be, and the gap
+recorded (``census_gaps``, and one fixed line on stderr, the bridge's log).
+The writer is built and tested here; the live bridge passes ``census_dir`` only
+from its reinstall (scripts/mc_host/agent_worker.py), and only the dev bridge,
+with the dev runtime's folder: a row takes the environment of the runtime that
+sends it.
 """
 from __future__ import annotations
 
@@ -104,8 +110,9 @@ def census_row(target, native_home, child_env):
     given = sorted(child_env) if child_env is not None else sorted(os.environ)   # None: the child inherits them all
     launch = {'launch_id': str(uuid.uuid4()), 'tool': 'codex', 'profile': 'desktop_app', 'route': 'codex.subscription',
               'binary': {'path': BUNDLED_BINARY, 'sha256': None, 'pinned_by': 'metadata_identity'},
-              'policy_sha256': None, 'env_names': C._names(given),
-              'removed': C._names(set(os.environ) - set(given)), 'governed': False}
+              'policy_sha256': None, 'env_names': C.names(given)[0],
+              'removed': C.names(set(os.environ) - set(given))[0], 'governed': False,
+              'names_truncated': C.names(given)[1] + C.names(set(os.environ) - set(given))[1]}
     store = (native_home or '~/.codex') + '/sessions'
     return C.start(target.session_id, source='codex.desktop_queue', verified=True, children='not_exposed',
                    vendor='openai', role='session', state='unknown', reason='turn_not_observed',
@@ -122,8 +129,9 @@ class CodexDesktopQueue:
         _need(census_dir is None or (type(census_dir) is str and census_dir.startswith('/')
                                      and '..' not in Path(census_dir).parts), 'invalid_census_dir')
         from core.mc_delegation_runner.census import CensusFile
-        # The host runtime's census folder, or None: no row (today's behaviour, until the bridge's configuration names it).
+        # The host runtime's census folder, or None: no row (today's behaviour, until the bridge's reinstall names it).
         self.census = None if census_dir is None else CensusFile(census_dir)
+        self.census_gaps = []         # {session_id, reason} for each queued turn whose row could not be written
         if native_home is not None:
             _need(type(native_home) is str and native_home.startswith('/') and '..' not in Path(native_home).parts,
                   'invalid_native_home')
@@ -168,9 +176,13 @@ class CodexDesktopQueue:
             'PATH':'/usr/bin:/bin','LANG':'en_US.UTF-8'}}
         if self.census is not None:
             try:
-                self.census.append('census.start', census_row(target, self.native_home, environment.get('env')))
-            except Exception:
-                raise Refused('census_unwritable') from None
+                self.census.append('census.start', census_row(target, self.native_home, environment.get('env')),
+                                   wait_s=0.5)
+            except Exception as exc:   # never gates the turn: the gap is recorded, the turn goes as it would
+                reason = 'lock_busy' if type(exc).__name__ == 'CensusBusy' else type(exc).__name__.lower()
+                self.census_gaps.append({'session_id': target.session_id, 'reason': reason})
+                import sys
+                sys.stderr.write(f'census: unwritable ({reason}) for a queued turn; sent all the same\n')
         try:
             result = self._run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                stderr=subprocess.DEVNULL, timeout=timeout, check=False,

@@ -4,6 +4,7 @@ launch-contract tests run unchanged beside these). Fake CLIs and fake queue runs
 starts, no Keychain read, and each test's HOME is its own folder."""
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import replace
 from pathlib import Path
@@ -73,15 +74,38 @@ def test_the_codex_connection_writes_its_root_row_when_its_manager_takes_the_fir
     m.close()
 
 
-def test_a_connection_whose_root_row_cannot_be_written_never_starts(tmp_path, launchd):
-    root, seen = str(tmp_path / "ledger"), {}
-    (tmp_path / "a-file").write_text("")
+def test_a_connection_whose_root_row_cannot_be_written_starts_all_the_same_and_shows_the_gap(tmp_path, launchd):
+    """CEN-6, R6.6-e: the census never gates the session. The gap is in status.json until the row is written."""
+    import fcntl
+    root, seen, census = str(tmp_path / "ledger"), {}, tmp_path / "census"
+    census.mkdir()
+    fd = os.open(census / ".lock", os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX)                     # another writer holds the lock (frozen, perhaps)
     p = _claude(tmp_path, root, seen)
-    m = ConnectionManager(root, "claude-code", p, session_id=SID, census_dir=str(tmp_path / "a-file" / "census"))
-    with pytest.raises(OSError):
+    m = ConnectionManager(root, "claude-code", p, session_id=SID, census_dir=str(census))
+    try:
         p.start()
-    assert seen == {}                                                                 # nothing was spawned
+        assert set(seen["env"]) == P0_CLAUDE                                          # it started
+        m.step()
+        status = json.loads(open(os.path.join(root, "connection", "claude-code", "status.json")).read())
+        assert (status["census"]["status"], status["census"]["reason"]) == ("deferred", "lock_busy")
+        assert rows(str(census)) == {}
+    finally:
+        os.close(fd)
+    m.step()                                                                          # the next pass writes it
+    status = json.loads(open(os.path.join(root, "connection", "claude-code", "status.json")).read())
+    assert status["census"] == {"status": "ok"} and lch5(rows(str(census))[SID])
+    p.close()
     m.close()
+    (tmp_path / "a-file").write_text("")
+    p2 = _claude(tmp_path, root, {})
+    m2 = ConnectionManager(root, "claude-code", p2, session_id=SID, census_dir=str(tmp_path / "a-file" / "census"))
+    p2.start()                                                                         # unwritable: starts too
+    m2.step()
+    status = json.loads(open(os.path.join(root, "connection", "claude-code", "status.json")).read())
+    assert status["census"]["status"] == "unwritable"
+    p2.close()
+    m2.close()
     with pytest.raises(Exception):
         ConnectionManager(root, "claude-code", p, session_id=SID, census_dir="relative/census")
 
@@ -111,7 +135,10 @@ def queue(tmp_path, monkeypatch, census_dir, native_home=None):
 
 
 def test_f1_each_queued_turn_writes_the_threads_root_row_never_claimed_as_governed(tmp_path, monkeypatch):
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", VALUE)
+    for name in list(os.environ):
+        monkeypatch.delenv(name)                          # the bridge's own environment under launchd: a few names
+    for name, value in (("PATH", "/usr/bin:/bin"), ("HOME", str(tmp_path)), ("TELEGRAM_BOT_TOKEN", VALUE)):
+        monkeypatch.setenv(name, value)
     census = str(tmp_path / "census")
     box, calls = queue(tmp_path, monkeypatch, census, native_home="/Users/someone/.codex")
     second = replace(SOURCE, note_id="note-2", authorization_ref="kept-note:note-2")
@@ -133,11 +160,14 @@ def test_f1_each_queued_turn_writes_the_threads_root_row_never_claimed_as_govern
     assert b"Synthetic exact-session" not in raw and b"request_not_new_owner_approval" not in raw and no_value(census)
 
 
-def test_f1_a_row_that_cannot_be_written_queues_nothing(tmp_path, monkeypatch):
+def test_f1_a_row_that_cannot_be_written_never_stops_the_turn_and_the_gap_is_recorded(tmp_path, monkeypatch, capsys):
     (tmp_path / "a-file").write_text("")
     box, calls = queue(tmp_path, monkeypatch, str(tmp_path / "a-file" / "census"))
     rid = box.enqueue(TARGET.alias, SOURCE, "Synthetic exact-session review request.")
-    assert box.dispatch(rid)["state"] == "unknown" and calls == []                  # never sent, never retried
+    got = box.dispatch(rid)
+    assert got["state"] == "dispatched" and got["reason"] != "transport_uncertain" and len(calls) == 1
+    assert box.dispatcher.census_gaps == [{"session_id": TARGET.session_id, "reason": "notadirectoryerror"}]
+    assert "census: unwritable (notadirectoryerror)" in capsys.readouterr().err
 
 
 def test_f1_without_a_census_folder_the_queue_is_todays(tmp_path, monkeypatch):
