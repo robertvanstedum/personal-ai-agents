@@ -61,6 +61,7 @@ class FakeAuthority:
         self.log, self.items, self.queue, self.events, self.facts = [], {}, [], {}, []
         self.receipts, self.reconciles, self.answers, self.hooks, self.answers_log = {}, [], [], {}, []
         self.down, self.renew_ok, self.lock = False, True, threading.RLock()
+        self.decisions = []
 
     def enter(self, name, *args):
         hook = self.hooks.get(name)
@@ -152,6 +153,9 @@ class FakeAuthority:
         self.reconciles.append({"generation": generation, "stage": stage, "open": list(open_operations)})
         if generation in it["resumed"]:                                # X5: the same decision, asked again
             return it["resumed"][generation]
+        if it["state"] == "unknown" and it.get("decision_id"):          # waits on the owner: the same decision
+            return {"answer": "decide", "code": "effect_outcome_conflict", "decision_id": it["decision_id"],
+                    "operations": []}
         if self.answers:
             answer = self.answers.pop(0)
             answer = answer(it, generation, stage, open_operations) if callable(answer) else answer
@@ -218,6 +222,8 @@ class FakeAuthority:
         if not live or lease["token"] != r["token"] or lease["receipt_generation"] != r["gen"]:
             if op == "finish" and r["state"] == effect["state"]:
                 return {"state": "already_applied", **out}
+            if op == "finish" and r["state"] in ("verified", "failed") and effect["state"] in ("verified", "failed"):
+                return self._conflict(request_id, op_id, r, effect, out)
             return {"state": "refused", **out, "code": "receipt_lease_stale"}
         if op == "dispatch":
             if r["state"] != "prepared":
@@ -225,10 +231,20 @@ class FakeAuthority:
             r["state"] = "dispatched"
             return {"state": "ok", **out, "receipt_state": "dispatched", "lease_until": iso(r["until"])}
         if r["state"] not in ("dispatched", "unknown"):
-            return {"state": "already_applied", **out} if r["state"] == effect["state"] else \
-                {"state": "refused", **out, "code": "receipt_result_transition_invalid"}
+            if r["state"] == effect["state"]:
+                return {"state": "already_applied", **out}
+            return self._conflict(request_id, op_id, r, effect, out)
         r.update(state=effect["state"], until=0.0, token=None)
         return {"state": "ok", **out, "receipt_state": effect["state"]}
+
+    def _conflict(self, request_id, op_id, r, effect, out):
+        """The store's rule (N-D2): a finish contradicting its receipt's recorded outcome is one decision on the item."""
+        it = self.items[request_id]
+        if it["state"] != "unknown":
+            it.update(state="unknown", decision_id=str(uuid.uuid4()))
+            self.decisions.append({"item": request_id, "decision_id": it["decision_id"], "operation_id": op_id,
+                                   "recorded": r["state"], "reported": effect["state"]})
+        return {"state": "refused", **out, "code": "receipt_outcome_conflict", "decision_id": it["decision_id"]}
 
     def calls(self, name):
         return [c for c in self.log if c[0] == name]
@@ -1157,8 +1173,11 @@ def test_n9_a_receipt_holding_another_outcome_is_a_conflict_never_already_applie
                          "effect": {"op": "finish", "key": "e1", "grant_id": grant,
                                     "request": fakework.effect_request("e1"), "state": state,
                                     "evidence": {"kind": "sink", "outcome": outcome}}}}
-    assert rt._send_finish(rec("verified", "committed"))["code"] == "receipt_outcome_conflict"
     assert rt._send_finish(rec("failed", "lease_expired"))["state"] == "already_applied"
+    first = rt._send_finish(rec("verified", "committed"))
+    again = rt._send_finish(rec("verified", "committed"))
+    assert first["code"] == again["code"] == "receipt_outcome_conflict" and first["decision_id"] == again["decision_id"]
+    assert len(fake.decisions) == 1 and fake.items[rid]["state"] == "unknown"           # exactly one decision (N-D2)
 
 
 def test_n3_n4_n8_one_owner_identity_one_door_list_one_lock_folder(tmp_path, mirror):
@@ -1171,3 +1190,56 @@ def test_n3_n4_n8_one_owner_identity_one_door_list_one_lock_folder(tmp_path, mir
     h = make_host(tmp_path, mirror[0])
     assert h.lock_path == tmp_path / "home" / "minimoi-runtime" / "locks" / "mac-test-1.dev.lock"
     assert h.runner_id.rsplit(":", 1) == ["mac-test-1", "runner"] and ":" not in h.host_id
+
+
+# ── second fix round (delta re-review) ─────────────────────────────────────────────────────────────────────────────
+def test_ns1_an_authority_error_on_a_known_result_blocks_the_task_and_never_reruns_the_work(tmp_path, mirror):
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake)
+    rid = fake.add(program("checkpoint s1", "result ok"))
+    once = []
+
+    def store_fault(request_id, generation, status):
+        if not once:
+            once.append(1)
+            raise RuntimeError("audit_event_not_written")       # the store raises once on the result
+    fake.hooks["result"] = store_fault
+    out = run_pass(rt)
+    assert out["state"] == "completed" and not out["delivered"], out
+    task = f"{rid}-g1"
+    assert rt.blocked == {task: "authority_error:audit_event_not_written"}
+    result = [c for c in rt.journal(task).calls() if c["kind"] == "result"]
+    assert len(result) == 1 and result[0]["mark"] is None                    # kept pending, never marked final
+    assert run_pass(rt)["state"] == "blocked" and not fake.reconciles          # no reconcile, no claim, no rerun
+    rt2 = make_rt(tmp_path, mirror[0], fake)                                   # a restart replays it
+    assert run_pass(rt2) == {"state": "idle"}
+    assert fake.items[rid]["result"]["status"] == "completed" and fake.items[rid]["gen"] == 1
+    assert not fake.reconciles and len(list((tmp_path / "artifacts").glob(f"{rid}-g*.log"))) == 1
+
+
+def test_n_d1_a_group_is_verified_right_before_every_signal_and_a_child_reaped_elsewhere_is_never_signalled(
+        tmp_path, monkeypatch):
+    sent = []
+    monkeypatch.setattr(runner.os, "killpg", lambda pgid, sig: sent.append((pgid, sig)))
+    rt = type("RT", (), {"cfg": type("Cfg", (), {"kill_grace_s": 2.0})(), "at": lambda self: "now"})()
+
+    class Notes:
+        def note(self, *a, **k):
+            pass
+
+    def child_of(proc):
+        c = runner._Child.__new__(runner._Child)
+        c.rt, c.proc, c.pgid, c.identity, c.frozen, c.signalled, c.lost = rt, proc, proc.pid, "recorded", False, \
+            False, False
+        c.lock, c.capture, c.journal, c.request_id, c.generation, c.task = threading.RLock(), None, Notes(), "r", 1, "t"
+        return c
+    # Reaped by someone else: its pgid could be anyone's now. Never signalled, recorded as unverified.
+    gone = subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True)
+    os.waitpid(gone.pid, 0)
+    c = child_of(gone)
+    assert (c.end_group(), c.freeze("wake"), c.lost, sent) == ("unverified", "unverified", True, [])
+    # Its own child: verified before SIGTERM and again before SIGKILL, then reaped.
+    live = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.3)"], start_new_session=True)
+    c = child_of(live)
+    assert c.end_group() == "stopped" and live.returncode == 0
+    assert [sig for _, sig in sent] == [runner.signal.SIGTERM, runner.signal.SIGKILL]

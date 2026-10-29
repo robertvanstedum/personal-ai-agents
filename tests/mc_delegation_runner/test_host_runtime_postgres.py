@@ -454,6 +454,46 @@ class HostRuntimeOnPostgres(PostgresFixture, unittest.TestCase):
         sink = fakework.FileSink(self.tmp / "sink")
         self.assertEqual([x["answer"] for x in sink.lines()], ["committed"])
 
+    def test_n_d2_a_finish_contradicting_its_receipt_is_one_decision_never_a_refused_finish(self):
+        """The receipt holds failed (read back absent); a late finish reports committed. The authority records it as
+        effect.conflict and queues exactly one decision on the item, which goes unknown naming both outcomes; no
+        effect.refused row describes the finish as a lease problem, and a replay finds the same decision."""
+        job = f"job-{self.n + 1}"
+        gid = self.effect_grant(job, "e1")
+        self.assertEqual(self.item(self.program("result ok")), job)
+        rt = self.runtime()
+        store, runner_id = self.store(), rt.runner_id
+        env = store.claim(runner_id, CAPS, protocol=2)["envelope"]
+        rid, g, req = env["request_id"], env["generation"], fakework.effect_request("e1")
+
+        def eff(op, **extra):
+            return store.effect(runner_id, rid, g, {"op": op, "key": "e1", "grant_id": gid, "request": req, **extra})
+        self.assertEqual(eff("prepare")["state"], "ok")
+        claimed = eff("claim")
+        lease = {k: claimed["lease"][k] for k in ("receipt_generation", "token", "mode")}
+        self.assertEqual(eff("dispatch", lease=lease)["state"], "ok")
+        self.assertEqual(eff("finish", lease=lease, state="failed",
+                             evidence={"kind": "readback", "outcome": "absent"})["state"], "ok")
+        rec = {"kind": "effect_finish", "request_id": rid, "generation": g, "event_id": str(uuid.uuid4()),
+               "args": {"runner_id": runner_id, "operation_id": claimed["operation_id"],
+                        "receipt_generation": lease["receipt_generation"],
+                        "effect": {"op": "finish", "key": "e1", "grant_id": gid, "request": req, "state": "verified",
+                                   "evidence": {"kind": "sink", "outcome": "committed"}}}}
+        first, again = rt._send_finish(rec), rt._send_finish(rec)
+        self.assertEqual((first["state"], first["code"]), ("refused", "receipt_outcome_conflict"), first)
+        self.assertEqual(again["decision_id"], first["decision_id"])
+        row = self.row(job)
+        self.assertEqual((row["state"], row["result_detail"]["reason"]), ("unknown", "effect_outcome_conflict"))
+        self.assertEqual({k: row["result_detail"]["reported"][k] for k in ("recorded", "reported")},
+                         {"recorded": "failed", "reported": "verified"})
+        events = self.sql("SELECT kind, body FROM guild.mc_delegation_events WHERE item_id=%s ORDER BY seq", (rid,))
+        self.assertEqual([e["body"].get("reason") for e in events if e["kind"] == "decision.queued"],
+                         ["effect_outcome_conflict"])                                   # exactly one decision
+        self.assertEqual(len([e for e in events if e["kind"] == "effect.conflict"]), 1)
+        self.assertFalse([e for e in events if e["kind"] == "effect.refused" and e["body"]["op"] == "finish"])
+        self.assertEqual(self.sql("SELECT state FROM guild.mc_action_receipts WHERE operation_id=%s",
+                                  (claimed["operation_id"],))[0]["state"], "failed")      # the receipt is unchanged
+
     def test_t0m_a_do_not_resume_session_is_refused_before_any_spawn(self):
         rt = self.runtime()
         job = self.item(self.program("resume_session 01a17dde-fb26-7923-8105-c7478428d17d", "result ok"))
