@@ -30,7 +30,7 @@ import threading
 from pathlib import Path
 
 SCHEMA = 1
-CALL_KINDS = ("progress", "result", "effect_finish")
+CALL_KINDS = ("progress", "result", "effect_finish", "claim")   # claim: the host's own claim requests (Codex F2)
 NOTE_KINDS = ("freeze", "thaw", "reconcile", "usage", "effect_open", "effect_closed", "stop", "wake", "checkpoint")
 MARKS = ("applied", "final")
 MAX_BYTES = 16 * 1024 * 1024
@@ -126,6 +126,20 @@ class Journal:
                 finally:
                     os.close(dfd)
         return doc
+
+    def clear(self):
+        """Start the file again, empty: only when every record in it is answered (the claim requests' journal, which
+        would otherwise grow by one record each pass)."""
+        with self._lock:
+            try:
+                os.unlink(self.path)
+            except FileNotFoundError:
+                return
+            dfd = os.open(self.path.parent, os.O_RDONLY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
 
     def call(self, kind, event_id, request_id, generation, at, args) -> dict:
         assert kind in CALL_KINDS

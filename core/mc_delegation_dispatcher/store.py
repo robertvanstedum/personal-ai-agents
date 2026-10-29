@@ -497,6 +497,16 @@ def check_stage(stage) -> dict:
     return {"child": stage["child"], "checkpoint": None if cp is None else {"name": cp["name"], "digest": cp["digest"]}}
 
 
+_HELD = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9]{1,9}$")
+
+
+def check_held(held) -> list:
+    """The items a host holds on file, as ``<request_id>:<generation>``: its side of the claim's inventory (F2)."""
+    _need(type(held) is list and len(held) <= 64 and all(type(h) is str and _HELD.match(h) for h in held)
+          and len(set(held)) == len(held), "held_invalid")
+    return list(held)
+
+
 def check_operations(ops) -> list:
     _need(type(ops) is list and len(ops) <= 32 and all(type(o) is str and _UUID.match(o) for o in ops)
           and len(set(ops)) == len(ops), "open_operations_invalid")
@@ -908,9 +918,9 @@ class DispatcherStore:
                 SET state=EXCLUDED.state, capabilities=EXCLUDED.capabilities, seen_at=EXCLUDED.seen_at"""
                         + (", protocol=1" if self._v2 else ""), (runner_id, state, json.dumps(capabilities)))
 
-    def claim(self, runner_id, capabilities, *, protocol=1):
-        if self._protocol(protocol, ()):
-            return self._claim_v2(runner_id, capabilities)
+    def claim(self, runner_id, capabilities, *, protocol=1, claim_id=None, held=None):
+        if self._protocol(protocol, (claim_id, held)):
+            return self._claim_v2(runner_id, capabilities, claim_id, held)
         actors = list(capabilities.get("cost_enforced_actors") or [])
         scopes = list(capabilities.get("scopes") or [])
         repos = list(capabilities.get("repositories") or [])
@@ -1288,9 +1298,26 @@ class DispatcherStore:
             self._event(cur, "item.held", item=r["request_id"], generation=r["generation"],
                         body={"code": r["wait"], "route": r["route"]})
 
-    def _claim_v2(self, runner_id, capabilities):
+    def _claim_v2(self, runner_id, capabilities, claim_id=None, held=None):
+        """A claim. With ``claim_id`` (Codex F2), the host's request is idempotent and every answer says what it is:
+          {state: claimed, claim_id, replayed, <the claim>}   a claim bound to this request id, in the same transaction
+                                                              that grants it; the same id again returns the same claim
+                                                              (item, generation, lease), never a second item
+          {state: claim_superseded, ...}                      that id's claim has moved on (lapsed, ended, reassigned):
+                                                              no new item is claimed under it
+          {state: withheld, code, unreconciled, items}        nothing new until the host has reconciled: items it must
+                                                              reconcile, and every item the authority holds for it that
+                                                              its ``held`` list (what it has on file) does not name, each
+                                                              with what the host needs to take it into §5.5
+          {state: none} | {state: refused, code}              nothing to claim | this host can take nothing yet
+        Without ``claim_id``, the answers are the claim or None, as before F2."""
         _need(type(runner_id) is str and _ID.match(runner_id), "runner_id_invalid")
         caps = check_capabilities(capabilities)
+        exact = claim_id is not None
+        _need(not exact or (type(claim_id) is str and _UUID.match(claim_id)), "claim_id_invalid")
+        _need((held is None) == (not exact), "held_invalid")
+        held = check_held(held) if exact else None
+        nothing = {"state": "none"} if exact else None
         open_pairs = self._open_pairs()
         with self._session() as conn:                   # one connection for the whole poll
             with self._txn(conn) as cur:
@@ -1299,12 +1326,22 @@ class DispatcherStore:
                 # Work goes only to a host whose facts the authority holds: a worker, speaking version 2, online.
                 if (host is None or host["protocol"] != 2 or host["environment"] != self.environment
                         or "worker" not in (host["roles"] or []) or host["announced"] != "online"):
-                    return None
+                    return {"state": "refused", "code": "host_not_ready"} if exact else None
+                if exact:
+                    again = self._claim_replay(cur, runner_id, claim_id)
+                    if again is not None:
+                        return again
                 self._mark_waiting(cur, open_pairs)
             with self._txn(conn) as cur:
-                if self._withheld(cur, runner_id, host["host_id"]):
+                if exact:
+                    owed = self._owed(cur, runner_id, host["host_id"], held)
+                    if owed is not None:
+                        return owed
+                elif self._withheld(cur, runner_id, host["host_id"]):
                     return None
                 handed = self._hand_over(cur, runner_id, host["host_id"], caps)
+                if handed is not None and exact:
+                    handed = self._bind(cur, handed, runner_id, host["host_id"], claim_id)
             if handed is not None:
                 return handed
             seen = []
@@ -1313,19 +1350,92 @@ class DispatcherStore:
                 # refusal commits on its own; and no transaction ever holds two items' grants, so two claims never wait
                 # on each other. Waiting items are left out in SQL, so each candidate is claimed or ended.
                 with self._txn(conn) as cur:
-                    if self._withheld(cur, runner_id, host["host_id"]):
+                    if exact:
+                        owed = self._owed(cur, runner_id, host["host_id"], held)
+                        if owed is not None:
+                            return owed
+                    elif self._withheld(cur, runner_id, host["host_id"]):
                         return None
                     cur.execute(_WAITING_SQL + _CANDIDATE_SQL, {
                         "pairs": open_pairs, "env": self.environment, "principal": self.principal, "seen": seen,
                         "caps": json.dumps(caps)})
                     row = cur.fetchone()
                     if row is None:
-                        return None
+                        return nothing
                     seen.append(str(row["request_id"]))
                     claimed = self._admit(cur, row, runner_id, host["host_id"])
+                    if claimed is not None and exact:
+                        claimed = self._bind(cur, claimed, runner_id, host["host_id"], claim_id)
                 if claimed is not None:
                     return claimed
-        return None
+        return nothing
+
+    # ── F2: a claim whose reply may be lost, made recoverable ──
+    _OWNED_SQL = """SELECT *, clock_timestamp() AS now FROM guild.mc_delegations
+        WHERE principal_id=%s AND environment=%s AND runner_id=%s AND route IS NOT NULL
+          AND (state IN ('claimed','running','lapsed','paused')
+               OR (finished_at IS NOT NULL AND reservation->>'state' = 'kept'))
+        ORDER BY request_id LIMIT 16"""
+
+    def _bind(self, cur, claimed, runner_id, host_id, claim_id) -> dict:
+        """Bind a claim to the host's request id, in the transaction that grants it: the once-key makes the id name one
+        claim only (a second binding aborts the claim), and the event keeps the answer's fields for a replay."""
+        env = claimed["envelope"]
+        keep = {k: claimed[k] for k in ("route", "unit", "reserved", "card_id", "step", "attempt", "resume_from")}
+        if not self._event(cur, "item.claim_bound", item=env["request_id"], generation=env["generation"],
+                           host_id=host_id, once=_once("claim_bound", runner_id, claim_id),
+                           body={"runner_id": runner_id, "claim_id": claim_id, **keep}):
+            raise RuntimeError("claim_id_reused")                   # never a second item under one request id
+        return {"state": "claimed", "claim_id": claim_id, "replayed": False, **claimed}
+
+    def _claim_replay(self, cur, runner_id, claim_id) -> dict | None:
+        """The claim this request id already named, or None if it names none. Still this host's at that generation and
+        under its lease: the same claim (item, generation, current lease). Otherwise claim_superseded."""
+        cur.execute("""SELECT item_id, generation, body FROM guild.mc_delegation_events WHERE principal_id=%s
+            AND environment=%s AND once_key=%s""", (self.principal, self.environment,
+                                                   _once("claim_bound", runner_id, claim_id)))
+        bound = cur.fetchone()
+        if bound is None:
+            return None
+        row = self._item(cur, bound["item_id"])
+        if (row is not None and row["runner_id"] == runner_id and row["generation"] == bound["generation"]
+                and row["state"] in ("claimed", "running") and row["lease_until"] is not None
+                and row["lease_until"] > row["now"]):
+            keep = {k: bound["body"].get(k) for k in ("route", "unit", "reserved", "card_id", "step", "attempt",
+                                                      "resume_from")}
+            return {"state": "claimed", "claim_id": claim_id, "replayed": True,
+                    "envelope": self._envelope(row, row["generation"], list(row["input_artifacts"] or [])),
+                    "lease_until": _iso(row["lease_until"]), **keep}
+        return {"state": "claim_superseded", "claim_id": claim_id, "replayed": True,
+                "request_id": str(bound["item_id"]), "generation": bound["generation"],
+                "item_state": None if row is None else row["state"]}
+
+    def _owed(self, cur, runner_id, host_id, held) -> dict | None:
+        """§5.5 step 6 for a host that says what it holds: nothing new while it has items to reconcile, or while the
+        authority holds for it any item its ``held`` list does not name (a claim whose reply never arrived, or one
+        it lost in a crash), each returned with what the host needs to reconcile it (Codex F2). Ended items whose
+        reservation waits on this host's word that their children stopped count too. None: it may claim."""
+        stuck = self._unreconciled(cur, runner_id)
+        cur.execute(self._OWNED_SQL, (self.principal, self.environment, runner_id))
+        known, unknown = set(held), []
+        for row in cur.fetchall():
+            if f"{row['request_id']}:{row['generation']}" in known:
+                continue
+            res = row["reservation"] or {}
+            unknown.append({"request_id": str(row["request_id"]), "generation": row["generation"],
+                            "item_state": row["state"],
+                            "envelope": self._envelope(row, row["generation"], list(row["input_artifacts"] or [])),
+                            "route": row["route"], "unit": res.get("unit"), "reserved": res.get("reserved"),
+                            "lease_until": _iso(row["lease_until"]), "card_id": row["card_id"], "step": row["step"],
+                            "attempt": _attempt(row)})
+        if not stuck and not unknown:
+            return None
+        code = "owned_items_unknown" if unknown else "unreconciled_items"
+        names = sorted(stuck + [f"{u['request_id']}:{u['generation']}" for u in unknown])
+        self._event(cur, "host.claim_withheld", host_id=host_id,
+                    once=_once("withheld", runner_id, code, hashlib.sha256(" ".join(names).encode()).hexdigest()),
+                    body={"runner_id": runner_id, "code": code, "items": names})
+        return {"state": "withheld", "code": code, "unreconciled": stuck, "items": unknown}
 
     def _use(self, cur, grant_id, subject, work_ids, *, step=None) -> str | None:
         """One of the grant's operations, used for ``subject`` in this transaction (GrantStore.use_for_item, R4.3-c:
