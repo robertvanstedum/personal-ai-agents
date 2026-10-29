@@ -88,6 +88,7 @@ export class RealtimeVoiceController {
     this._answers = new Map();       // response id -> {owner: his item id or null, turn, acts}, or null: not the page's
     this._turn = 0;                  // his turns: each speech start and each commit begins a new one
     this._lost = 0;                  // page requests let go before they started: a late start of one is not told by order
+    this._echoed = false;            // the provider has echoed a page request's tag: from then on an untagged start is not ours
     this._tags = 0;
     this._expiry = null;
     this._onUnbound = onUnbound || ((info) => console.warn?.("[realtime-voice] a response bound to nothing", info));
@@ -491,14 +492,15 @@ export class RealtimeVoiceController {
 
   _reset() {
     const pending = this._inflight ? [this._inflight, ...this._queue] : this._queue.slice();
-    this._queue = []; this._inflight = null; this._lost = 0;
+    this._queue = []; this._inflight = null; this._lost = 0; this._echoed = false;
     for (const entry of pending) if (entry.done) { const done = entry.done; entry.done = null; done(null); }
     this._arm();
   }
 
   // A response started (response.created). It is the page's when it echoes the tag of the page request in flight, or, with
-  // no tag, while that request has not started yet: it is then that request's, owned as the request is. Any other response
-  // (none in flight, one too many, another tag) answers no one; where the page creates every response it is logged. After
+  // no tag, while that request has not started yet and no tag has been echoed in this session: it is then that request's,
+  // owned as the request is. Any other response (none in flight, one too many, another tag, or no tag once the provider has
+  // shown it echoes them) answers no one; where the page creates every response it is logged. After
   // a request was let go before it started, an untagged start cannot be told from that request's late one: it settles the
   // request in flight, but answers no one ("say it again"), once for each request let go.
   _started(evt) {
@@ -507,9 +509,11 @@ export class RealtimeVoiceController {
     if (id && this._answers.has(id)) return;                     // its start was already seen
     this._pump();                                                // a request past its bound is let go first
     const f = this._inflight;
-    if (!f || f.started || (evt.tag && evt.tag !== f.tag)) {
+    if (evt.tag) this._echoed = true;
+    if (!f || f.started || (evt.tag ? evt.tag !== f.tag : this._echoed)) {
       if (id) this._answers.set(id, null);
-      if (this._owned) this._onUnbound({ reason: !f ? "unrequested" : f.started ? "one_too_many" : "another_tag", response_id: id });
+      if (this._owned) this._onUnbound({ reason: !f ? "unrequested" : f.started ? "one_too_many" : evt.tag ? "another_tag" : "untagged",
+        response_id: id });
       return;
     }
     const unsure = !evt.tag && this._lost > 0;

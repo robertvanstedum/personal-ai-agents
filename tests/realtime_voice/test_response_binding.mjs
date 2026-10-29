@@ -113,7 +113,7 @@ for (const echo of [true, false]) {
     s.done('R_stray', { call: 'c_stray' }); await tick();
     assert.equal(s.bound(0), null);
     assert.deepEqual(s.unbound.map((u) => u.reason), ['unrequested']);
-    s.start('F_stray'); s.done('F_stray');                              // its refusal's follow-up ("say it again")
+    s.start('F_stray', { echo }); s.done('F_stray');                    // its refusal's follow-up ("say it again")
     s.utter('item_A'); s.start('R_A', { echo });                        // his own, as the one request in flight
     s.start('R_extra', { echo: false });                                // one too many
     s.done('R_extra', { call: 'c_extra' }); s.done('R_A', { call: 'c_A' }); await tick();
@@ -131,6 +131,18 @@ await check('I2 (OpenAI): a response carrying another request\'s tag is not the 
   s.start('R_A'); s.done('R_A', { call: 'c_A' }); await tick();
   s.said('item_A', 'Check the board');
   assert.equal(s.bound(0), null); assert.equal(words(s, 1), 'Check the board');
+});
+await check('I2 (OpenAI): once the provider has echoed a tag, an untagged start is not the request in flight', async () => {
+  const s = session('openai');
+  s.utter('item_A'); s.start('R_A'); s.done('R_A');                   // the tag echoed: the provider shows it echoes them
+  s.utter('item_B');
+  s.start('R_untagged', { echo: false });                             // a response the page did not ask for, while B's is in flight
+  s.start('R_B');                                                     // B's own, its tag echoed
+  s.done('R_untagged', { call: 'c_u' }); s.done('R_B', { call: 'c_B' }); await tick();
+  s.said('item_B', 'Check the board');
+  assert.equal(s.bound(0), null, 'an untagged response took the request in flight');
+  assert.equal(words(s, 1), 'Check the board');
+  assert.ok(s.unbound.some((u) => u.reason === 'untagged' && u.response_id === 'R_untagged'));
 });
 await check('new: a holding line and a summary wait their turn behind an owner response, each then known as its own', async () => {
   const s = session('openai');
