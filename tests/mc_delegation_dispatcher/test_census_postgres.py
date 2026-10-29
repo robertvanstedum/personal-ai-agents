@@ -79,6 +79,43 @@ class CensusAtTheAuthority(PostgresFixture, unittest.TestCase):
     def agents(self):
         return {r["agent_id"]: r for r in self.store.agents()}
 
+    # ── S1-H review SF5 = Codex part 2 P2-1: through the door, a host's facts and census are its own only ──
+    def door(self, credential_host, body):
+        """One call through the real door (server.answer) to this real store, with a synthetic credential."""
+        import hashlib
+        import json
+        from core.mc_delegation_dispatcher import server
+        token = "synthetic-door-token-for-tests-only-0123456789"
+        return server.answer(self.store, {credential_host: hashlib.sha256(token.encode()).hexdigest()}, token,
+                             json.dumps(body).encode(), "application/json")
+
+    @staticmethod
+    def evil_beat(facts_host, **extra):
+        return {"op": "heartbeat", "protocol": 2, "runner_id": "mac-evil:runner", "state": "online",
+                "capabilities": CAPS, "facts": CP.facts(facts_host), **extra}
+
+    def test_p2_1_a_first_contact_naming_another_host_is_refused_and_records_nothing(self):
+        """Codex's reproduction: mac-evil's credential, its own runner id, facts naming mac-b. Before the fix the store
+        took it (200) and bound mac-evil's runner to host mac-b on its first heartbeat."""
+        self.assertEqual(self.door("mac-evil", self.evil_beat("mac-b")), (403, {"error": "host_not_this_credential"}))
+        self.assertEqual(self.sql("SELECT runner_id FROM guild.mc_delegation_runners"), [])
+        self.assertEqual(self.sql("SELECT kind FROM guild.mc_delegation_events"), [])
+        self.assertEqual(self.door("mac-evil", self.evil_beat("mac-evil"))[0], 200)       # its own: recorded as its own
+        (row,) = self.sql("SELECT runner_id, host_id FROM guild.mc_delegation_runners")
+        self.assertEqual((row["runner_id"], row["host_id"]), ("mac-evil:runner", "mac-evil"))
+        self.assertEqual(self.door("mac-evil", self.evil_beat("mac-b"))[0], 403)          # never re-bound later
+        self.assertEqual(self.sql("SELECT host_id FROM guild.mc_delegation_runners")[0]["host_id"], "mac-evil")
+
+    def test_p2_1_census_is_never_attributed_to_another_host(self):
+        census = [ev("census.start", root("runtime:t-g1"))]
+        self.assertEqual(self.door("mac-evil", self.evil_beat("mac-b", census=census))[0], 403)
+        self.assertEqual(self.census_rows(), [])
+        self.assertEqual({a["host_id"] for a in self.store.agents()}, set())
+        status, doc = self.door("mac-evil", self.evil_beat("mac-evil", census=census))
+        self.assertEqual((status, [e["state"] for e in doc["value"]["census"]["events"]]), (200, ["applied"]))
+        self.assertEqual([r["host_id"] for r in self.census_rows()], ["mac-evil"])
+        self.assertEqual({a["host_id"] for a in self.store.agents()}, {"mac-evil"})
+
     # ── CEN-2: each event applied once, under the id the host wrote it with ──
     def test_cen2_each_census_event_is_applied_once_and_a_replay_answers_already_applied(self):
         self.beat()
