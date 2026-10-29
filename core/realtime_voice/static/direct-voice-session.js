@@ -71,6 +71,10 @@ const START_END_MS = 15000;               // End pressed while still connecting 
 const CAPTURE_POST_MS = 15000;            // a transcript post or heartbeat: past it, that attempt has no answer (one of its two)
 const CONSULT_POST_MS = 35000;            // above the server's 25 s wait (it answers pending then): past it, unknown
 const CONTROL_POST_MS = 10000;            // one Keep talking request
+// The bootstrap POST and the reading of its answer (review W N3; the controller's opt-in bootstrapTimeoutMs): above the
+// portal's generic bound (5 s to connect, 30 s to read), so the server's own answer or refusal always comes first. Past it
+// the start fails as "the server did not answer"; End pressed while connecting still ends it sooner (START_END_MS).
+const BOOTSTRAP_POST_MS = 36000;
 const KEEP_TALKING_WAIT_MS = 25000;       // the whole withdrawal: the posts before it, its request and its one retry
 const RECONCILE_WAIT_MS = 10000;          // the reconciliation read after an unknown
 const POST_EVENTS = 20, POST_BYTES = 60000;   // the server takes 20 events and 64 KB a post; JSON overhead stays inside
@@ -399,8 +403,11 @@ export function directVoice(d) {
   let consultedItem = null, checking = false;                     // the owner item last consulted (by the model or Check)
   // His items not acted on (review B S3, N2): a commit let go before its reply, or a reply cancelled or overtaken before its
   // call could run. Named at End by capture id (the controller's placeOf), less any turn consulted after all, so the reveal
-  // marks them "Not acted on: say it again if you still want it".
-  const notActed = new Set(), consulted = new Set();
+  // marks them "Not acted on: say it again if you still want it". Each with why (Gate 1 n2, n3): overtaken (by his speech),
+  // cut_short (the reply ended incomplete or failed, with no speech of his), never_started (no reply came for it) or closed
+  // (the voice ended before its reply finished). The first reason the controller gives for an item stands.
+  const notActed = new Map(), consulted = new Set();
+  const WHY = { superseded: 'overtaken', never_started: 'never_started', closed: 'closed' };
   const binding = [];                                              // model calls waiting for their owner turn's transcript
   const done = new Promise((resolve) => { closed = resolve; });     // settles once End is sent and the thread is reloaded
   done.then(() => { settled = true; });
@@ -419,16 +426,18 @@ export function directVoice(d) {
       return Boolean(line.handle);
     } catch (e) { return false; }
   };
-  // What End names as not acted on: the capture ids of those items whose words were kept, and never consulted.
+  // What End names as not acted on: the capture ids of those items whose words were kept, and never consulted, and why
+  // ({id: why}).
   function unacted() {
-    const out = [];
-    for (const item of notActed) {
+    const out = [], why = {};
+    for (const [item, reason] of notActed) {
       const at = typeof c?.placeOf === 'function' ? c.placeOf(item) : null;
       const id = Number.isInteger(at) ? `t${at}` : null;
-      if (id && !consulted.has(id) && capture?.said(at) && !out.includes(id)) out.push(id);
+      if (id && !consulted.has(id) && capture?.said(at) && !out.includes(id)) { out.push(id); if (reason) why[id] = reason; }
     }
-    return out;
+    return { ids: out, why };
   }
+  const notActedBody = ({ ids, why }) => (ids.length ? { not_acted: ids, ...(Object.keys(why).length ? { not_acted_why: why } : {}) } : {});
   function stopTimers() {
     if (ticker) stopEvery(ticker);
     if (beat) stopEvery(beat);
@@ -654,7 +663,9 @@ export function directVoice(d) {
     const owner = capture?.owner();
     if (!owner) { ui.say(words.sayFirst, { transient: true }); return; }
     if (consultedItem && consultedItem === owner.item) { ui.say(ALREADY_CHECKED, { transient: true }); return; }
-    checking = true; ui.checking?.(true);
+    // Check shows the words it sends (review B N8): on a provider where only Check acts, whatever he said last is what it
+    // sends ("okay" included, which the server refuses as a bare confirmation), so the page shows them, then the answer.
+    checking = true; ui.checking?.(true, owner.text);
     try {
       ui.phase('working');
       const body = await consult(`host-${clock()}`, 'consult', {}, owner);
@@ -662,7 +673,7 @@ export function directVoice(d) {
       const spoken = body && typeof body.spoken === 'string' && body.spoken.trim() ? body.spoken.trim() : NOT_DONE;
       sayAtPause(`Say this briefly, adding nothing: ${spoken}`);
       ui.phase('listening');
-    } finally { checking = false; ui.checking?.(false); }
+    } finally { checking = false; ui.checking?.(false, owner.text); }
   }
 
   // §7: the summary, behind a barrier (review B2, B3). No new spoken input is admitted (the microphone is muted; the voice
@@ -734,8 +745,7 @@ export function directVoice(d) {
     if (!id || sentFinal) return;
     sentFinal = true;
     const { events, ...closing } = capture ? capture.drain(turns || []) : { events: [] };
-    const skipped = unacted();
-    postJson(at(direct.end_url), { ...(events.length ? { events } : {}), ...closing, ...(skipped.length ? { not_acted: skipped } : {}) },
+    postJson(at(direct.end_url), { ...(events.length ? { events } : {}), ...closing, ...notActedBody(unacted()) },
       { keepalive: true });
   }
 
@@ -762,9 +772,8 @@ export function directVoice(d) {
         const delivering = capture?.finish(result?.turns || []);     // closes at the boundary; posts what is owed unless stopped
         if (!abandoned) await within(delivering, FLUSH_WAIT_MS);
         if (sentFinal) return;                               // the page went away meanwhile: End already left with keepalive
-        const skipped = unacted();                           // his turns not acted on (review B S3, N2)
         const closing = { ...(capture ? capture.report() : {}), ...(playback ? { summary_playback: playback } : {}),   // §5.2, G3
-          ...(skipped.length ? { not_acted: skipped } : {}) };
+          ...notActedBody(unacted()) };                      // his turns not acted on, and why (review B S3, N2; n2, n3)
         incomplete = Boolean(closing.unacknowledged?.length);
         missing = incomplete ? closing.unacknowledged.length : 0;
         const r = await postJson(at(direct.end_url), closing, { timeoutMs: END_WAIT_MS });
@@ -828,13 +837,16 @@ export function directVoice(d) {
       clock, onAnswer: heard, warn: d.warn || (() => {}), turnsOff: words.off });
     c = new RealtimeVoiceController({
       bootstrapUrl: direct.bootstrap_url, requestHeaders: d.headers, includeTranscriptAfterEnd: true,
+      bootstrapTimeoutMs: BOOTSTRAP_POST_MS,      // review W N3: the bootstrap is bounded on the direct path only
       // The page asks for its responses one at a time, each tagged; where the bootstrap says page_responses (OpenAI), it
       // creates every response that may act, one for each of his committed items (Spec 165 §5.1 as amended, C2).
       pageResponses: true,
       // A reply that answers no one, a call refused, a commit let go: logged, and his items not acted on are kept for End.
       onUnbound: (info) => {
         const ownItem = info && typeof info.owner === 'string' ? info.owner : null;
-        if (ownItem && (info.reason === 'superseded_call' || (info.kind === 'turn' && ['superseded', 'never_started'].includes(info.reason)))) notActed.add(ownItem);
+        const why = !ownItem ? null : info.reason === 'superseded_call' ? (info.why === 'cut_short' ? 'cut_short' : 'overtaken')
+          : info.kind === 'turn' ? WHY[info.reason] || null : null;
+        if (why && !notActed.has(ownItem)) notActed.set(ownItem, why);
         if (d.warn) d.warn('voice response bound to nothing', info);
       },
       openingInstruction: null,                   // the server composes the session's instructions; the page sends none

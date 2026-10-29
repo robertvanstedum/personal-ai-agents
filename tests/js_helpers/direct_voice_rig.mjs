@@ -23,7 +23,7 @@ export const assistant = (text, completed = true) => ({ speaker: 'assistant', te
 
 // routes: {'/suffix': (body, url, opts) => {status, body} | 'network' | null (the default answer) | a promise of one}.
 export function rig({ routes = {}, direct = DIRECT } = {}) {
-  const calls = [], said = [], ended = [], reveals = [], lifecycle = [];
+  const calls = [], said = [], ended = [], reveals = [], lifecycle = [], checks = [], notices = [];
   const timers = new Map(); let nextTimer = 1, now = Date.parse('2026-10-28T10:00:00.000Z');
   const later = (fn, ms, repeat = false) => { const id = nextTimer++; timers.set(id, { fn, ms, repeat, due: now + ms }); return id; };
   const advance = (ms) => {
@@ -125,14 +125,15 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
     }
     drained(id, outcome = 'drained') { this.options.onPlaybackDrained?.(id, outcome); }   // how it ended (v0.3 G3)
   }
-  const ui = { say: (text, o = {}) => said.push([text, o]), phase() {}, live() {}, elapsed() {}, notice() {}, propose() {},
-    ended: (words, o) => ended.push([words, o]), checking() {}, lifecycle: (s) => lifecycle.push(s) };
+  const ui = { say: (text, o = {}) => said.push([text, o]), phase() {}, live() {}, elapsed() {}, notice: (text) => notices.push(text),
+    propose() {}, ended: (words, o) => ended.push([words, o]), checking: (...args) => checks.push(args),
+    lifecycle: (s) => lifecycle.push(s) };
   const page = { conversation: { id: 'c-1' } };
   const s = D.directVoice({ page, direct, ui, headers: () => ({ 'Content-Type': 'application/json' }), fetch,
     reveal: async () => { reveals.push(true); }, loadController: async () => ({ RealtimeVoiceController: Controller }), clock: () => now,
     setTimeout: (fn, ms) => later(fn, ms), clearTimeout: (id) => timers.delete(id),
     setInterval: (fn, ms) => later(fn, ms, true), clearInterval: (id) => timers.delete(id) });
-  return { s, calls, said, ended, reveals, lifecycle, timers, advance, get c() { return controller; }, now: () => now,
+  return { s, calls, said, ended, reveals, lifecycle, checks, notices, timers, advance, get c() { return controller; }, now: () => now,
     posts: (end) => calls.filter((x) => x.url.split('?')[0].endsWith(end) && x.method === 'POST'),
     gets: (part) => calls.filter((x) => x.method === 'GET' && x.url.includes(part)) };
 }

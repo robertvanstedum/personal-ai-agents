@@ -905,8 +905,65 @@ await check('I7: a controller without pageResponses sends each request at once, 
   assert.deepEqual(unbound, []);
 });
 
+// ── A3 (Gate 1 n2, n3): the words for a call not run say which, and a request dropped at close is named ──────────────
+const outputs = (s) => s.frames.filter((f) => f.type === 'conversation.item.create' && f.item.type === 'function_call_output')
+  .map((f) => [f.item.call_id, JSON.parse(f.item.output)]);
+for (const status of ['incomplete', 'failed']) {
+  await check(`n2 (OpenAI): a call from a reply cut short (${status}) with no speech of his is answered "cut short", not "superseded"`, async () => {
+    const s = session('openai');
+    s.utter('item_A'); s.start('R_A'); s.done('R_A', { status, call: 'c_A' }); await tick();
+    assert.equal(s.calls.length, 0);
+    assert.deepEqual(outputs(s), [['c_A', { ok: false, outcome: 'not_done', error: 'cut_short',
+      spoken: 'Not run: the reply was cut short before it could run. Nothing was done.' }]]);
+    assert.deepEqual(s.unbound.filter((u) => u.reason === 'superseded_call').map((u) => [u.owner, u.why]), [['item_A', 'cut_short']]);
+  });
+}
+await check('n2 (OpenAI): a reply cut short after his next words began is overtaken: his speech is the reason given', async () => {
+  const s = session('openai');
+  s.utter('item_A'); s.start('R_A');
+  s.speech(); s.stopped(); s.commit('item_B');
+  s.done('R_A', { status: 'incomplete', call: 'c_A' }); await tick();
+  assert.deepEqual(outputs(s).map(([id, o]) => [id, o.error]), [['c_A', 'superseded']]);
+  assert.deepEqual(s.unbound.filter((u) => u.reason === 'superseded_call').map((u) => u.why), ['overtaken']);
+});
+await check('n2 (OpenAI): a reply cancelled at his barge-in is overtaken', async () => {
+  const s = session('openai');
+  s.utter('item_A'); s.start('R_A'); s.speech();
+  s.done('R_A', { status: 'cancelled', call: 'c_A' }); await tick();
+  assert.deepEqual(outputs(s).map(([id, o]) => [id, o.error]), [['c_A', 'superseded']]);
+  assert.deepEqual(s.unbound.filter((u) => u.reason === 'superseded_call').map((u) => u.why), ['overtaken']);
+});
+await check('n3 (OpenAI): at close, his request still in flight and the one waiting behind it are named; a line is not', async () => {
+  const s = session('openai');
+  s.utter('item_A'); s.start('R_A');                                     // his reply under way
+  s.c.speak('Say this briefly, adding nothing: one moment.');             // a line waits behind it
+  s.a._dc.close = () => {};
+  s.a.end('user_ended');                                                  // End: the transport closes
+  assert.deepEqual(s.unbound.filter((u) => u.reason === 'closed').map((u) => [u.owner, u.kind]), [['item_A', 'turn']]);
+  const t = session('openai');
+  t.c.speak('Say this briefly, adding nothing: one moment.');             // a line in flight: his commit waits its turn
+  t.utter('item_B');
+  t.a._dc.close = () => {};
+  t.a.end('pagehide');
+  assert.deepEqual(t.unbound.filter((u) => u.reason === 'closed').map((u) => [u.owner, u.kind]), [['item_B', 'turn']]);
+});
+await check('n3, guard (OpenAI): a request already answered, or the transport opening, names nothing', async () => {
+  const s = session('openai');
+  s.utter('item_A'); s.start('R_A'); s.done('R_A');                      // answered and settled
+  s.a._emit('connected', {});
+  s.a._dc.close = () => {};
+  s.a.end('user_ended');
+  assert.deepEqual(s.unbound.filter((u) => u.reason === 'closed'), []);
+});
+await check('n3, guard (xAI): where the provider makes its own replies nothing is named at close', async () => {
+  const s = session('xai');
+  s.utter('item_A'); s.c.speak('Say this briefly, adding nothing: one moment.');
+  s.a.end('user_ended');
+  assert.deepEqual(s.unbound.filter((u) => u.reason === 'closed'), []);
+});
+
 if (failures.length) {
   console.log(`${failures.length} of ${cases} response-binding regressions FAILED:\n  ${failures.join('\n  ')}`);
   process.exit(1);
 }
-console.log(`${cases} response-binding regressions passed (C2 by construction, I1–I7; M1, V-M1, LP1, LP2, F1, R3-S1 F/G/H, W N4, F2; B S1–N6; G-S1; LV1–LV4); real controller and adapters, synthetic provider events.`);
+console.log(`${cases} response-binding regressions passed (C2 by construction, I1–I7; M1, V-M1, LP1, LP2, F1, R3-S1 F/G/H, W N4, F2; B S1–N6; G-S1; LV1–LV4; n2, n3); real controller and adapters, synthetic provider events.`);

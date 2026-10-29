@@ -37,10 +37,13 @@ const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
 const REQUEST_TTL_MS = 10000;
 const RESPONSE_IDLE_MS = 20000;
 const RESPONSE_TTL_MS = 120000;
-// A call from a page response that may not act (cancelled, cut short, overtaken by his speech): what its function output
-// says, so the model's context is true. No response is asked for it (review B S3).
+// A call from a page response that may not act: what its function output says, so the model's context is true. No response
+// is asked for it (review B S3). It says which (Gate 1 n2): overtaken (cancelled at his speech, or his next words began
+// while it was in flight), or cut short (ended incomplete or failed, with no speech of his).
 const SUPERSEDED = { ok: false, outcome: "not_done", error: "superseded",
   spoken: "Not run: superseded by what he said next. Nothing was done." };
+const CUT_SHORT = { ok: false, outcome: "not_done", error: "cut_short",
+  spoken: "Not run: the reply was cut short before it could run. Nothing was done." };
 // A call passed to the host whose output is not sent yet, when the page must make another reply (live probes, LV4): its
 // honest answer for now. Its result is said later, as a page line.
 const PENDING = { ok: false, outcome: "pending", spoken: "Still running; the result will be told when it lands." };
@@ -63,7 +66,7 @@ export class RealtimeVoiceController {
   constructor({
     bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
     onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall, onTranscriptUpdate, onPlayback,
-    onSessionInfo, onPlaybackDrained = null, pageResponses = false, oncePerItem = false, onUnbound = null,
+    onSessionInfo, onPlaybackDrained = null, pageResponses = false, oncePerItem = false, onUnbound = null, bootstrapTimeoutMs = 0,
     openingInstruction = OPENING_INSTRUCTION,
     managedBootstrap = null, requestHeaders = null, includeTranscriptAfterEnd = true,
   }) {
@@ -88,6 +91,9 @@ export class RealtimeVoiceController {
     this._onPlayback = onPlayback || (() => {});
     this._onSessionInfo = onSessionInfo || (() => {});
     this._onPlaybackDrained = onPlaybackDrained;     // optional (Spec 165 §5.3): a host that waits for a response's audio
+    // Optional (review W N3): the direct-mode bootstrap POST, and the reading of its answer, aborted after this long (the
+    // direct page passes it). At the bound it is the bootstrap's network failure. German and Portuguese pass none: unbounded.
+    this._bootstrapTimeoutMs = Number(bootstrapTimeoutMs) > 0 ? Number(bootstrapTimeoutMs) : 0;
     // Optional (Spec 165 §5.1 as amended 28 Oct 2026; Robert's C2 decision, "tie by construction"): a host page that asks
     // for its responses one at a time, each tagged (pageResponses: MC's direct page). Where the bootstrap also says
     // page_responses (a provider eligible for the model's own actions: it names the committed item and creates no response
@@ -153,6 +159,7 @@ export class RealtimeVoiceController {
       this._lastUsage = null; this._sessionId = null; this._startedAt = null;
     }
     this._setState("requesting_mic");
+    const bound = this._bootstrapBound();
     let resp;
     try {
       resp = this._managedBootstrap ? {
@@ -163,8 +170,10 @@ export class RealtimeVoiceController {
         // its conversation; German and Portuguese pass neither, so their request is unchanged.
         headers: { "Content-Type": "application/json", ...this._requestHeaders() },
         body: JSON.stringify({ provider, persona, scene, learner_name, ...(conversation_id ? { conversation_id } : {}) }),
+        ...(bound ? { signal: bound.signal } : {}),
       });
     } catch (err) {
+      bound?.clear();
       this._setState("idle");
       this._onFatalError({ reason: "bootstrap_network_error", detail: String(err) });
       return;
@@ -172,10 +181,12 @@ export class RealtimeVoiceController {
     if (!resp.ok) {
       this._setState("idle");
       const body = await resp.json().catch(() => ({}));
+      bound?.clear();
       this._onFatalError({ reason: "bootstrap_rejected", status: resp.status, detail: body.error });
       return;
     }
-    const bootstrap = await resp.json();
+    const bootstrap = bound ? await bound.read(resp) : await resp.json();
+    if (bound && bootstrap === null) return;          // the bound passed while the answer was read: said already
     if (generation !== this._generation) return;
     if (this._managedBootstrap) {
       bootstrap.isCurrent = () => generation === this._generation;
@@ -244,7 +255,7 @@ export class RealtimeVoiceController {
     });
     // The page's own responses (Spec 165 §5.1), first, so a host asking inputOf() from any callback below sees them current.
     on("connected", () => this._reset());
-    on("closed", () => this._reset());
+    on("closed", () => this._reset(true));
     on("speech_started", () => { this._turn += 1; this._utterance = "speaking"; this._overtaken(); });
     on("speech_stopped", () => this._ended("stopped"));
     on("output_transcript", () => this._alive());
@@ -627,12 +638,17 @@ export class RealtimeVoiceController {
     if (this._owned && entry.kind !== "line") this._onUnbound({ reason, owner: entry.owner || null, kind: entry.kind });
   }
 
-  _reset() {
+  // The transport opened or closed: every page request is dropped. At close (End, the page leaving, the provider closing)
+  // each one owned by his item is named (Gate 1 n3), as a request let go is, so the reveal can say it was not acted on.
+  _reset(closing = false) {
     const pending = this._inflight ? [this._inflight, ...this._queue] : this._queue.slice();
     this._queue = []; this._inflight = null; this._lost = false; this._echoed = false; this._owed = 0; this._utterance = null;
     this._done = new Set(); this._calls = new Set(); this._active = new Map(); this._speaking = false; this._due = 0;
     this._outstanding = new Map();
     for (const entry of pending) if (entry.done) { const done = entry.done; entry.done = null; done(null); }
+    if (closing && this._owned) for (const entry of pending) {
+      if (entry.kind !== "line") this._onUnbound({ reason: "closed", owner: entry.owner || null, kind: entry.kind });
+    }
     this._arm();
   }
 
@@ -687,7 +703,12 @@ export class RealtimeVoiceController {
     if (id && this._done.has(id)) return;
     if (id) this._done.add(id);
     const r = id ? this._answers.get(id) : null;
-    if (r && r.acts === null) r.acts = evt.status === "completed" && r.turn === this._turn;
+    if (r && r.acts === null) {
+      r.acts = evt.status === "completed" && r.turn === this._turn;
+      // Why it may not act (Gate 1 n2): his speech overtook it (a new turn of his, or cancelled at his barge-in), or it was cut
+      // short (incomplete or failed) with no speech of his.
+      if (!r.acts) r.why = r.turn !== this._turn || evt.status === "cancelled" ? "overtaken" : "cut_short";
+    }
     const ended = id !== null && this._active.delete(id);           // the provider's own reply is no longer under way (LV3)
     const f = this._inflight;
     if (f && f.started && f.id === id) { this._inflight = null; this._pump(); }
@@ -713,9 +734,33 @@ export class RealtimeVoiceController {
     const r = this._pageResponses && call && call.response_id ? this._answers.get(call.response_id) : null;
     if (!r || r.acts !== false) return false;
     this._outstanding.delete(call.call_id);                     // answered here: not run
-    try { this._adapter.sendFunctionOutput(call.call_id, SUPERSEDED); } catch (_) { /* the transport is closed */ }
-    this._onUnbound({ reason: "superseded_call", response_id: call.response_id, owner: r.owner || null });
+    const why = r.why === "cut_short" ? "cut_short" : "overtaken";
+    try { this._adapter.sendFunctionOutput(call.call_id, why === "cut_short" ? CUT_SHORT : SUPERSEDED); } catch (_) { /* the transport is closed */ }
+    this._onUnbound({ reason: "superseded_call", response_id: call.response_id, owner: r.owner || null, why });
     return true;
+  }
+
+  // The opt-in bootstrap bound (review W N3): {signal, clear, read(resp)}, or null when none was asked for (German and
+  // Portuguese) or on the managed path. Past the bound the request, or the reading of its answer, is aborted and the start
+  // fails as the bootstrap's network failure; read() then answers null (the failure already said).
+  _bootstrapBound() {
+    if (!this._bootstrapTimeoutMs || this._managedBootstrap || typeof AbortController !== "function") return null;
+    const abort = new AbortController();
+    let timer = setTimeout(() => { timer = null; abort.abort(); }, this._bootstrapTimeoutMs);
+    if (timer && typeof timer.unref === "function") timer.unref();
+    const clear = () => { if (timer) clearTimeout(timer); timer = null; };
+    return {
+      signal: abort.signal, clear,
+      read: async (resp) => {
+        try { return await resp.json(); }
+        catch (err) {
+          if (!abort.signal.aborted) throw err;
+          this._setState("idle");
+          this._onFatalError({ reason: "bootstrap_network_error", detail: "the server did not answer in time" });
+          return null;
+        } finally { clear(); }
+      },
+    };
   }
 
   mute() { this._adapter?.mute(); }

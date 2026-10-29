@@ -39,5 +39,36 @@ try {
   assert.deepEqual(infos,[{provider:'openai',model:'m',voice_session_id:'0b5c9e2e-7f1a-4b8e-9d3c-2a1f0e9d8c7b',voice_notices:['openai voice is unset, using marin']}]);
   assert(!JSON.stringify(infos).includes('ek_secret'));
   await new Controller({bootstrapUrl:'/b'}).startSession({provider:'openai',persona:'frau_berger',scene:'bakery'});   // German: no hook, no change
-  console.log('3 direct-host bootstrap scenarios passed');
+  // Review W N3: the direct-mode bootstrap is bounded only when the host asks (bootstrapTimeoutMs); German and Portuguese
+  // ask nothing, so their request carries no signal and no timer is set.
+  const realTimeout={set:globalThis.setTimeout,clear:globalThis.clearTimeout};
+  const armed=[];
+  globalThis.setTimeout=(fn,ms)=>{armed.push({fn,ms});return armed.length;};globalThis.clearTimeout=id=>{if(armed[id-1])armed[id-1].fn=null;};
+  try {
+    let seen=null;
+    globalThis.fetch=async(url,options)=>{seen=options;return {ok:true,json:async()=>({provider:'openai',model:'m',warning_minutes:20,max_minutes:30})};};
+    await new Controller({bootstrapUrl:'/api/realtime-voice/bootstrap'}).startSession({provider:'openai',persona:'frau_berger',scene:'bakery',learner_name:'Robert'});
+    assert.equal('signal' in seen,false);assert.deepEqual(armed,[]);
+    // Never answered: at the bound the request is aborted and the start fails as the bootstrap's network failure, once.
+    const fatal=[],states=[];
+    globalThis.fetch=(url,options)=>new Promise((_,reject)=>options.signal.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError'))));
+    const hung=new Controller({bootstrapUrl:'/b',bootstrapTimeoutMs:36000,onFatalError:e=>fatal.push(e.reason),onStateChange:s=>states.push(s)});
+    const starting=hung.startSession({provider:'openai',persona:'chief_of_staff',scene:'',conversation_id:'owner'});
+    assert.equal(armed.at(-1).ms,36000);armed.at(-1).fn();await starting;
+    assert.deepEqual(fatal,['bootstrap_network_error']);assert.equal(hung._state,'idle');assert.equal(hung._adapter,null);
+    // Its headers came, its body never did: the reading of the answer is bounded too.
+    fatal.length=0;
+    globalThis.fetch=async(url,options)=>({ok:true,json:()=>new Promise((_,reject)=>options.signal.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError'))))});
+    const slow=new Controller({bootstrapUrl:'/b',bootstrapTimeoutMs:36000,onFatalError:e=>fatal.push(e.reason)});
+    const reading=slow.startSession({provider:'openai',persona:'chief_of_staff',scene:'',conversation_id:'owner'});
+    await new Promise(r=>setImmediate(r));armed.at(-1).fn();await reading;
+    assert.deepEqual(fatal,['bootstrap_network_error']);assert.equal(slow._adapter,null);
+    // Answered in time: the bound is cleared and the session goes on.
+    fatal.length=0;
+    globalThis.fetch=async()=>({ok:true,json:async()=>({provider:'openai',model:'m',warning_minutes:20,max_minutes:30,voice_session_id:'0b5c9e2e-7f1a-4b8e-9d3c-2a1f0e9d8c7b'})});
+    const prompt=new Controller({bootstrapUrl:'/b',bootstrapTimeoutMs:36000,onFatalError:e=>fatal.push(e.reason)});
+    await prompt.startSession({provider:'openai',persona:'chief_of_staff',scene:'',conversation_id:'owner'});
+    assert.equal(armed.at(-1).fn,null);assert.deepEqual(fatal,[]);assert.equal(prompt._sessionId,'0b5c9e2e-7f1a-4b8e-9d3c-2a1f0e9d8c7b');
+  } finally {globalThis.setTimeout=realTimeout.set;globalThis.clearTimeout=realTimeout.clear;}
+  console.log('7 direct-host bootstrap scenarios passed');
 } finally { Object.assign(globalThis,saved); }

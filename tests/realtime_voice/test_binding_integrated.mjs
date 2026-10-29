@@ -279,6 +279,47 @@ await check('B N4 (openai): a queued holding line is withdrawn when its result a
   }, { routes: { '/consult': () => new Promise((r) => { release = () => r({ ok: true, outcome: 'done', spoken: 'Started.' }); }) } });
 });
 
+// A3 (Gate 1 n2, n3): End says why each of his turns was not acted on, so the reveal can say which; a request still in
+// flight when End is pressed is one of them.
+await check('n2 (openai): a call cut short is answered so; End names both turns not acted on, each with why', () => run('openai', async (t) => {
+  t.start(); t.said('a', 'Save a note that A.'); t.stop(); t.commit('a'); t.asked('RA');
+  t.ev({ type: 'response.done', response: { id: 'RA', status: 'incomplete', output: [{ type: 'function_call', call_id: 'call_RA', name: 'save_note', arguments: '{}' }] } });
+  await flush();
+  assert.deepEqual(t.outputs()[0], ['call_RA', { ok: false, outcome: 'not_done', error: 'cut_short',
+    spoken: 'Not run: the reply was cut short before it could run. Nothing was done.' }]);
+  t.start(); t.said('b', 'Save a note that B.'); t.stop(); t.commit('b'); t.asked('RB');
+  t.start();                                                              // he goes on: the provider's barge-in
+  t.ev({ type: 'response.done', response: { id: 'RB', status: 'cancelled', output: [{ type: 'function_call', call_id: 'call_RB', name: 'save_note', arguments: '{}' }] } });
+  await flush();
+  t.said('c', 'Thanks.'); t.stop(); t.commit('c'); t.asked('RC'); t.over('RC'); await flush();
+  await t.s.end('user_ended'); await flush();
+  const end = t.posts('/end')[0];
+  assert.deepEqual(end.not_acted, ['t0', 't1']);
+  assert.deepEqual(end.not_acted_why, { t0: 'cut_short', t1: 'overtaken' });
+  assert.deepEqual(t.consults(), []);
+}));
+await check('n3 (openai): his request whose reply is still under way when End is pressed is named: the voice ended first', () => run('openai', async (t) => {
+  t.start(); t.said('a', 'What is stuck on twelve?'); t.stop(); t.commit('a'); t.asked('RA');   // its reply still speaking
+  await t.s.end('user_ended'); await flush();
+  const end = t.posts('/end')[0];
+  assert.deepEqual(end.not_acted, ['t0']);
+  assert.deepEqual(end.not_acted_why, { t0: 'closed' });
+}));
+await check('n3, guard (openai): a turn already answered is not named at End; nor is one Check consulted', () => run('openai', async (t) => {
+  t.start(); t.said('a', 'Hello.'); t.stop(); t.commit('a'); t.asked('RA'); t.over('RA'); await flush();
+  t.start(); t.said('b', 'Check the board.'); t.stop(); t.commit('b'); t.asked('RB');          // under way at End
+  await t.s.check(); await flush();                                                            // Check sent b
+  await t.s.end('user_ended'); await flush();
+  const end = t.posts('/end')[0];
+  assert.equal('not_acted' in end, false);
+  assert.equal('not_acted_why' in end, false);
+}));
+await check('n3, guard (xai): on Grok nothing is named at End (no reply of the page\'s can act there)', () => run('xai', async (t) => {
+  t.start(); t.said('a', 'What is stuck on twelve?'); t.stop(); t.created('RA');
+  await t.s.end('user_ended'); await flush();
+  assert.equal('not_acted' in t.posts('/end')[0], false);
+}));
+
 if (failures.length) {
   console.log(`${failures.length} of ${cases} integrated binding regressions FAILED:\n  ${failures.join('\n  ')}`);
   process.exit(1);
