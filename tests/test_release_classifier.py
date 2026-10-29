@@ -890,6 +890,35 @@ def test_no_service_image_runs_the_ops_only_scripts():
     assert deploy_job.index("COS_SECRET_SYNC=") < deploy_job.index("/opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/.env")
 
 
+def test_the_host_runtime_installer_redeploys_nothing_and_no_service_runs_it():
+    """S1-H: the installer and its systemd templates are operator files (MC_HOST_INSTALL_FILES). The day a service
+    image copies, imports or starts one, this fails and it must be classified as that service."""
+    from scripts.ci.classify_release import MC_HOST_INSTALL_FILES
+    for path in sorted(MC_HOST_INSTALL_FILES):
+        assert classify([path]) == ("documents", ()), path
+    for path in ("scripts/mc_host/agent_worker.py", "scripts/mc_host/other.sh", "scripts/mc_host/runtime_install2.py"):
+        assert classify([path]) == ("full", ALL_SERVICES), path               # neighbours keep the full fallback
+    root = Path(__file__).resolve().parent.parent
+    markers = ("install_delegation_runner", "runtime_install", "minimoi-runtime.service", "minimoi-authority.service")
+    production = [root / "docker-compose.prod.yml", root / "scripts/operations/deploy_scoped_release.sh"]
+    production.extend(p for p in (root / "docker").rglob("*") if p.is_file())
+    production.extend((root / ".github" / "workflows").glob("*.yml"))
+    assert [(str(p.relative_to(root)), m) for p in production for m in markers
+            if m in p.read_text(errors="ignore")] == []
+    importers = []
+    for path in sorted(root.rglob("*.py")):
+        rel = path.relative_to(root).as_posix()
+        if SKIPPED_DIRS.intersection(rel.split("/")) or rel.startswith("tests/"):
+            continue
+        try:
+            names = _imported_names(path.read_text(errors="ignore"))
+        except SyntaxError:
+            continue
+        if any(n == "scripts.mc_host.runtime_install" or n.startswith("scripts.mc_host.runtime_install.") for n in names):
+            importers.append(rel)
+    assert importers == []
+
+
 def test_the_test_selector_and_nightly_workflow_redeploy_nothing():
     assert classify(["scripts/ci/select_tests.py", ".github/workflows/nightly-tests.yml"]) == ("documents", ())
     assert classify([".github/workflows/deploy-mc-agent.yml"]) == ("full", ALL_SERVICES)          # other workflows keep the fallback
