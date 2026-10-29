@@ -1,0 +1,16 @@
+{
+  "source_commit": "055a51c5",
+  "html": {
+    "empty": "6c63cba03aa401ce6309fcc57ff3a0422ba17feb05953a0f89d28006fccaf8bf",
+    "default": "29209cae7e84ce75b88fd12b6287f0fb7ef5de845ec7e852942b69acfeada070",
+    "dry_run": "990f2ce7cdbfaa09b0f9391a7107a27fcf2f92ad2b26b1fbde841c557627e18e",
+    "haiku": "f6433aee07f4fbd0a94c686fe273ab4d1332758d396fa85cb36f4472c6b8b58f",
+    "sonnet": "101ccf924299098bce3abec9271d1aa3cd19470d33f70816e6eaa0e80aaa04cd",
+    "ollama": "ad15a294a0ce497a1dbc86ce56253f6cdca7d4a7225a9003deca55289f407894",
+    "custom_model": "14a4799607b72ebdb403cf2575e468ed6a27ab2837eccbd53fb4b58dc93500cf",
+    "radar": "d04c936d1cb78434cfd25eece98b2e40d59dd7de08c1f8cf7b8d8f73676c5ec2",
+    "published_text": "f5843ff72dc42487c2da573060960d2d612ccc23fd2359f5f68696885d3f67a2"
+  },
+  "format_output": "cd8b24fd5818f339e67b03b873d26a4e41c130425185ba178f61e63ba8ad5b60",
+  "format_telegram": "10babd0c3212009988f0352b6cb0d75955c477859a1c263f1681f89737e9b15a"
+}
