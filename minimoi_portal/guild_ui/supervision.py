@@ -242,6 +242,8 @@ def attach_runner_door_v2(app, environ, legacy_digest, principal, env_name, *, s
             return jsonify(doc), status
         if isinstance(body, dict) and "protocol" in body:
             return jsonify(error="request_invalid"), 400           # the version 1 token speaks no version 2 (as today)
+        if not legacy(token):
+            return jsonify(error="unauthorized"), 401           # a host's token speaks no version 1
         if request.mimetype != "application/json" or (request.content_length or 0) > door_mod.BODY_MAX \
                 or body is None:
             return jsonify(error="request_invalid"), 400

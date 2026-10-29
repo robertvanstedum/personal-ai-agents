@@ -270,7 +270,8 @@ def test_a_version_1_claim_is_reaped_as_today_while_the_sweeper_is_not_fresh():
 
         def by_job(self, job):
             state = "interrupted" if self.reaped else "running"
-            return {"state": state, "route": self.route, "lease_until": now - timedelta(minutes=10), "now": now,
+            return {"state": state, "route": self.route, "actor": "claude-code",
+                    "lease_until": now - timedelta(minutes=10), "now": now,
                     "deadline": now + timedelta(hours=1), "result_detail": {}, "finished_at": None,
                     "started_at": now - timedelta(minutes=20), "created_at": now - timedelta(minutes=30),
                     "heartbeat_at": now - timedelta(minutes=10), "output_text": None}
