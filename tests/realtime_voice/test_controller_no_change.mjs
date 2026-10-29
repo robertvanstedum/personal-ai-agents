@@ -28,10 +28,11 @@ const BEFORE = '682906489b0b3f9f02cd3df951da6fbaaef74c2aa49927d5905827ea3b8c7f05
 const CONTROLLER = [
   [`// Both adapters changed for the playback events and response attribution, OpenAI's again for the response tag on every
 // request, both again for how a response's playback ended, and both again for the page's own responses (each response's
-// end, and creating one for a committed item): new keys so browsers fetch them (Spec 165 §4.3, §5.1, §5.3; review FR N3,
+// end, and creating one for a committed item), and both for the live probes (OpenAI: a reply's end reported once, LV1; xAI:
+// an interim transcript's status, LV2): new keys so browsers fetch them (Spec 165 §4.3, §5.1, §5.3; review FR N3,
 // V R2-M1; v0.3 G3; the C2 binding pass).
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-paged1";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-paged1";
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-live1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-live1";
 `,
    `import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261015-managed-end1";
 import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260725-transcript1";
