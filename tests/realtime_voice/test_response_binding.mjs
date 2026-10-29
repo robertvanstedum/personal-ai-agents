@@ -53,7 +53,7 @@ async function check(name, fn) {
 
 // One session on a real adapter, the controller wired as the direct page wires it (pageResponses). `owned`: the bootstrap
 // said page_responses (OpenAI; never xAI until A4). The provider's frames are captured where the adapter writes them.
-function session(provider, { owned = provider === 'openai', answer = null } = {}) {
+function session(provider, { owned = provider === 'openai', answer = null, drained = null } = {}) {
   const a = provider === 'openai' ? new OpenAIWebRTCAdapter() : new XAIWebSocketAdapter();
   const frames = [], calls = [], unbound = [];
   if (provider === 'openai') a._dc = { send: (f) => frames.push(JSON.parse(f)) };
@@ -61,6 +61,7 @@ function session(provider, { owned = provider === 'openai', answer = null } = {}
   const c = new RealtimeVoiceController({
     pageResponses: true, onUnbound: (info) => unbound.push(info),
     onFunctionCall: async (call) => { calls.push(call); return answer ? answer(call) : { ok: true }; },
+    ...(drained ? { onPlaybackDrained: drained } : {}),
   });
   c._adapter = a; c._state = 'active'; c._wireAdapterEvents(); c._owned = owned;   // as startSession sets it from the bootstrap
   const ev = (e) => a._handleServerEvent(e);
@@ -339,6 +340,44 @@ await check('G-S1 (xAI), guard: once every reply owed has started, a page reques
   s.c.speakTracked('Say only this, then stop: two.').then((x) => { second = x; });
   s.start('r2'); await tick();
   assert.equal(second, 'r2', 'a stop and its commit were counted as two turns, or the reply did not count down');
+});
+// LV1 (live probes at b0c3518c, oa2): OpenAI sends a second response.done for a reply already done when he speaks while
+// its audio still plays: cancelled, reason turn_detected, the same output with the same function call. The logged order:
+// response.done completed (call_FKRZ… consult) at 6113 ms; his "Hm" speech_started at 6325; response.done cancelled with
+// the same call at 6326. The call is dispatched once, answered once and followed up once; the later done only says the
+// reply's playback was cut (barged_in).
+await check('LV1 (OpenAI): a second response.done for a finished reply dispatches nothing and only reports barged_in', async () => {
+  const drains = [];
+  const s = session('openai', { drained: (id, outcome) => drains.push([id, outcome]) });
+  s.utter('item_A'); s.start('R_A');
+  s.said('item_A', 'Please use the consult tool to check the status of the build board.');
+  const output = [{ type: 'message', status: 'completed', content: [{ type: 'output_audio', transcript: 'Checking the build board status now.' }] },
+    { type: 'function_call', call_id: 'call_FKRZMesVjxZNC5Gg', name: 'consult', arguments: '{}' }];
+  s.ev({ type: 'response.done', response: { id: 'R_A', status: 'completed', output } }); await tick();
+  assert.equal(s.calls.length, 1);
+  assert.deepEqual(drains, [], 'a reply with audio is not over at its done');
+  const outputs = () => s.frames.filter((f) => f.type === 'conversation.item.create' && f.item.type === 'function_call_output');
+  assert.equal(outputs().length, 1);
+  const creates = s.creates().length;                                   // his turn's reply and the call's follow-up
+  s.speech('item_hm');                                                  // "Hm", while the reply still plays
+  s.ev({ type: 'response.done', response: { id: 'R_A', status: 'cancelled', status_details: { type: 'cancelled', reason: 'turn_detected' },
+    output } });
+  await tick();
+  assert.equal(s.calls.length, 1, 'the repeated call was dispatched again');
+  assert.equal(outputs().length, 1, 'the call was answered twice');
+  assert.equal(s.creates().length, creates, 'the repeated call was followed up again');
+  assert.deepEqual(drains, [['R_A', 'barged_in']]);
+  s.ev({ type: 'response.done', response: { id: 'R_A', status: 'cancelled', output } }); await tick();
+  assert.deepEqual(drains, [['R_A', 'barged_in']], 'its end was reported twice');
+});
+await check('LV1, guard: a done for a reply not yet done still settles it, and a new call in a new reply still goes', async () => {
+  const s = session('openai');
+  s.utter('item_A'); s.start('R_A'); s.said('item_A', 'Check the board.');
+  s.done('R_A', { call: 'call_1', name: 'consult' }); await tick();
+  s.start('F_A'); s.done('F_A'); await tick();                          // the follow-up's own done
+  s.utter('item_B'); s.start('R_B'); s.said('item_B', 'And the kiln.');
+  s.done('R_B', { call: 'call_2', name: 'consult' }); await tick();
+  assert.deepEqual(s.calls.map((c) => c.call_id), ['call_1', 'call_2']);
 });
 await check('B N4 (OpenAI): a holding line still waiting its turn is withdrawn; one already sent is not', async () => {
   const s = session('openai');
@@ -711,4 +750,4 @@ if (failures.length) {
   console.log(`${failures.length} of ${cases} response-binding regressions FAILED:\n  ${failures.join('\n  ')}`);
   process.exit(1);
 }
-console.log(`${cases} response-binding regressions passed (C2 by construction, I1–I7; M1, V-M1, LP1, LP2, F1, R3-S1 F/G/H, W N4, F2; B S1–N6; G-S1); real controller and adapters, synthetic provider events.`);
+console.log(`${cases} response-binding regressions passed (C2 by construction, I1–I7; M1, V-M1, LP1, LP2, F1, R3-S1 F/G/H, W N4, F2; B S1–N6; G-S1; LV1–LV4); real controller and adapters, synthetic provider events.`);

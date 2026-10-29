@@ -26,6 +26,8 @@ export class OpenAIWebRTCAdapter {
     this._remoteAudioEl = null;
     this._muted = false;
     this._audible = new Set();       // responses whose audio the provider says is playing (output_audio_buffer.started)
+    this._ended = new Set();         // responses whose response.done was seen (LV1: OpenAI may send a second one)
+    this._played = new Set();        // responses whose playback end was reported: each once (LV1)
   }
 
   on(eventName, handler) {
@@ -248,6 +250,8 @@ export class OpenAIWebRTCAdapter {
       case "output_audio_buffer.cleared":
         for (const id of event.response_id ? [event.response_id] : [...this._audible]) {
           this._audible.delete(id);
+          if (this._played.has(id)) continue;
+          this._played.add(id);
           this._emit("playback_drained", { response_id: id, outcome: event.type === "output_audio_buffer.cleared" ? "cleared" : "drained" });
         }
         break;
@@ -264,8 +268,18 @@ export class OpenAIWebRTCAdapter {
             });
           }
         }
-        if (!this._audible.has(event.response?.id || null) && !_hasAudio(event.response)) {
-          this._emit("playback_drained", { response_id: event.response?.id || null, outcome: event.response?.status === "cancelled" ? "cancelled" : "no_audio" });
+        // LV1 (live probes): a second response.done for a reply already done, cancelled (turn_detected), comes when he speaks
+        // while its audio still plays: its playback was cut there (barged_in), unless its end was already reported.
+        {
+          const id = event.response?.id || null;
+          if (!this._played.has(id) && this._ended.has(id) && event.response?.status === "cancelled") {
+            this._played.add(id);
+            this._emit("playback_drained", { response_id: id, outcome: "barged_in" });
+          } else if (!this._played.has(id) && !this._ended.has(id) && !this._audible.has(id) && !_hasAudio(event.response)) {
+            this._played.add(id);
+            this._emit("playback_drained", { response_id: id, outcome: event.response?.status === "cancelled" ? "cancelled" : "no_audio" });
+          }
+          this._ended.add(id);
         }
         this._emit("assistant_stopped", { usage: event.response?.usage });
         if (event.response?.usage) this._emit("usage", event.response.usage);

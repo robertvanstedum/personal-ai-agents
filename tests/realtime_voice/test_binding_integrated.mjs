@@ -197,6 +197,21 @@ await check('G-S1 (xai): a Check answer\'s own start never uses up the reply owe
   assert.equal(t.posts('/end').length, 1);
   assert.equal(t.posts('/end')[0].summary_playback, 'timeout');
 }, { routes: SUMMARY }));
+// LV1 (live, oa2), through the real page: the finished reply's second response.done (cancelled, turn_detected) repeats its
+// consult call when he says "Hm" during its playback. One consult is posted, one output sent, one follow-up asked for.
+await check('LV1 (openai): the repeated call in a second response.done is not posted, answered or followed up again', () => run('openai', async (t) => {
+  t.start(); t.said('a', 'Please use the consult tool to check the status of the build board.'); t.stop(); t.commit('a');
+  t.asked('RA'); t.call('RA'); await flush();
+  assert.equal(t.consults().length, 1);
+  const creates = t.creates();
+  t.start();                                                              // "Hm", while RA still plays
+  t.ev({ type: 'response.done', response: { id: 'RA', status: 'cancelled', status_details: { type: 'cancelled', reason: 'turn_detected' },
+    output: [{ type: 'function_call', call_id: 'call_RA', name: 'consult', arguments: '{}' }] } });
+  await flush();
+  assert.equal(t.consults().length, 1, 'the repeated call was posted again');
+  assert.equal(t.outputs().filter(([id]) => id === 'call_RA').length, 1, 'the call was answered twice');
+  assert.equal(t.creates(), creates, 'the repeated call was followed up again');
+}));
 // B S3 + N2: a call from a barged-in reply is answered not done, with no reply asked for it; End names his turn not acted on.
 await check('B S3 + N2 (openai): a barged-in call is answered not done, and End names his turn not acted on', () => run('openai', async (t) => {
   t.start(); t.said('a', 'Save a note that A.'); t.stop(); t.commit('a'); t.asked('RA');

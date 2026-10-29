@@ -96,6 +96,8 @@ export class RealtimeVoiceController {
     this._lost = false;              // a page request was let go before it started: from then on no untagged start is ours
     this._owed = 0;                  // where the provider replies itself: its replies to his turns not yet started (G-S1)
     this._utterance = null;          // his utterance so far: "speaking", then "stopped" or "committed" (counted once)
+    this._done = new Set();          // replies whose response.done was handled: a later one only informs playback (LV1)
+    this._calls = new Set();         // function calls passed to the host, by call_id: each once (LV1)
     this._echoed = false;            // the provider has echoed a page request's tag: from then on an untagged start is not ours
     this._tags = 0;
     this._expiry = null;
@@ -279,7 +281,7 @@ export class RealtimeVoiceController {
         this._onInputState("consulting"); // server sideband owns execution
         return;
       }
-      if (this._refused(call)) return;
+      if (this._once(call) || this._refused(call)) return;
       if (!this._onFunctionCall) {
         this._sendResult(call, {
           error: "Function bridge unavailable",
@@ -547,6 +549,7 @@ export class RealtimeVoiceController {
   _reset() {
     const pending = this._inflight ? [this._inflight, ...this._queue] : this._queue.slice();
     this._queue = []; this._inflight = null; this._lost = false; this._echoed = false; this._owed = 0; this._utterance = null;
+    this._done = new Set(); this._calls = new Set();
     for (const entry of pending) if (entry.done) { const done = entry.done; entry.done = null; done(null); }
     this._arm();
   }
@@ -588,13 +591,29 @@ export class RealtimeVoiceController {
   // A response is done (response.done, before its function calls are passed on). Its calls act only if it completed and no
   // new turn of his began while it was in flight: one cancelled at his barge-in, cut short, or overtaken by his next words
   // is refused, never re-bound. The page request it answered is settled, and the next one goes.
+  // A second response.done for a reply already done (live probes, LV1: OpenAI sends one, cancelled with turn_detected and
+  // the same output, its function calls included, when he speaks while the finished reply's audio still plays) changes
+  // nothing and dispatches nothing: its calls are dropped as already handled (_once). The adapter alone says what it means
+  // for playback (barged_in, v0.3 G3).
   _finished(evt) {
     if (!this._pageResponses) return;
     const id = evt.response_id || null;
+    if (id && this._done.has(id)) return;
+    if (id) this._done.add(id);
     const r = id ? this._answers.get(id) : null;
     if (r && r.acts === null) r.acts = evt.status === "completed" && r.turn === this._turn;
     const f = this._inflight;
     if (f && f.started && f.id === id) { this._inflight = null; this._pump(); }
+  }
+
+  // Each function call is passed to the host once, by its call_id (LV1): the same call repeated in a later response.done is
+  // dropped, so it is never dispatched twice, nor answered twice, nor followed up twice. Only where the page asks for its
+  // own responses; German never gets here with a call.
+  _once(call) {
+    if (!this._pageResponses || !call || !call.call_id) return false;
+    if (this._calls.has(call.call_id)) return true;
+    this._calls.add(call.call_id);
+    return false;
   }
 
   // A call from a page response that may not act (cancelled, cut short or overtaken by his speech): nothing is dispatched,
