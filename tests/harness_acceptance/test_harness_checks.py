@@ -222,6 +222,8 @@ def test_sf6_the_end_of_run_cleanup_signals_only_a_group_whose_recorded_identity
 
     def group():                                    # a group whose leader's command line names fakework
         return subprocess.Popen(["/bin/sh", "-c", "sleep 60; : fakework"], start_new_session=True)
+    import time
+    started = time.time() - 1                         # this run started just before its own children
     reused, ours, ended = group(), group(), group()
     try:
         stages = {"reused": {"stage": "started", "pgid": reused.pid, "identity": "1 Thu Jan  1 00:00:00 1970"},
@@ -230,7 +232,8 @@ def test_sf6_the_end_of_run_cleanup_signals_only_a_group_whose_recorded_identity
         for name, doc in stages.items():
             (tmp_path / f"{name}-g1.stage.json").write_text(json.dumps(doc))
         said = []
-        run = SimpleNamespace(artifacts=tmp_path, log=lambda kind, what, **f: said.append(f["pgid"]))
+        run = SimpleNamespace(artifacts=tmp_path, log=lambda kind, what, **f: said.append(f["pgid"]),
+                              started_wall=started)
         controller.Run._reap_orphans(run)
         assert ours.wait(timeout=10) == -signal.SIGKILL           # verified: stopped
         assert reused.poll() is None and ended.poll() is None     # never signalled
@@ -240,3 +243,39 @@ def test_sf6_the_end_of_run_cleanup_signals_only_a_group_whose_recorded_identity
             if p.poll() is None:
                 os.killpg(p.pid, signal.SIGKILL)
                 p.wait()
+
+
+def test_p2_2_the_clean_up_is_bound_to_this_run_and_refuses_a_missing_or_foreign_identity(tmp_path, monkeypatch):
+    """Codex part 2 P2-2. (1) Codex's own case: a stage record with no stage and an identity that is not ps's,
+    while ps would show a fakework command line: never signalled (no signal is sent at all here). (2) A group whose
+    recorded identity is exactly what ps shows, but which started before this run (an earlier run's fakework, or a
+    pid reused by one): never signalled. (3) A run with no start on record signals nothing."""
+    import signal
+    import time
+    from types import SimpleNamespace
+    from harness_acceptance import controller
+    from core.mc_delegation_runner.runner import _identity
+    killed = []
+    real_killpg = os.killpg
+
+    def recording(pgid, sig):
+        if sig == 0:
+            return real_killpg(pgid, 0)                            # the liveness probe, as the runtime makes it
+        killed.append(pgid)
+    monkeypatch.setattr(controller.os, "killpg", recording)
+    (tmp_path / "old.stage.json").write_text(json.dumps({"pgid": 43210, "identity": {"start": "old"}}))
+    (tmp_path / "none-g1.stage.json").write_text(json.dumps({"stage": "started", "pgid": 43211}))
+    earlier = subprocess.Popen(["/bin/sh", "-c", "sleep 60; : fakework"], start_new_session=True)
+    try:
+        time.sleep(1.1)                                            # lstart is whole seconds
+        (tmp_path / "earlier-g1.stage.json").write_text(json.dumps(
+            {"stage": "started", "pgid": earlier.pid, "identity": _identity(earlier.pid)}))
+        run = SimpleNamespace(artifacts=tmp_path, log=lambda *a, **k: None, started_wall=time.time())
+        controller.Run._reap_orphans(run)
+        controller.Run._reap_orphans(SimpleNamespace(artifacts=tmp_path, log=lambda *a, **k: None))   # no start
+        assert killed == [] and earlier.poll() is None
+        assert controller._started_at(_identity(earlier.pid), earlier.pid) is not None
+        assert controller._started_at(_identity(earlier.pid), earlier.pid + 1) is None   # another group's
+    finally:
+        real_killpg(earlier.pid, signal.SIGKILL)
+        earlier.wait()

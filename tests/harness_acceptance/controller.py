@@ -80,20 +80,41 @@ def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
-def reap_orphans(artifacts, said=lambda pgid: None) -> list:
+def _started_at(identity, pgid):
+    """When a recorded identity's process started (epoch seconds), or None: ``runner._identity`` is ``ps``'s group
+    then its ``lstart`` in the C locale ("<pgid> Thu Oct 29 12:18:23 2026"), and it must name this very group."""
+    if type(identity) is not str:
+        return None
+    parts = identity.split()
+    if len(parts) != 6 or parts[0] != str(pgid):
+        return None
+    try:
+        return time.mktime(time.strptime(" ".join(parts[1:]), "%a %b %d %H:%M:%S %Y"))
+    except (ValueError, OverflowError):
+        return None
+
+
+def reap_orphans(artifacts, said=lambda pgid: None, *, since=None) -> list:
     """Any child a SIGKILLed runtime left running, stopped at the end of a run, verified as the runtime verifies one
-    (S1-H review SF6): only a stage still ``started``, whose process group is alive and whose recorded identity (group
-    and start time, ``runner._identity``) is the one ``ps`` shows now. A pid the shared Mac has reused since (another
-    agent's pytest, say), an ended stage, or a group whose identity cannot be read is never signalled. -> [pgid]."""
+    (S1-H review SF6, Codex part 2 P2-2): only a stage still ``started`` in this run's own artifacts folder, whose
+    recorded identity (group and start time, ``runner._identity``) names that group, started no earlier than this
+    run (``since``, epoch seconds), and is the one ``ps`` shows now. A pid the shared Mac has reused since (another
+    agent's pytest, another run's fakework), an ended stage, a missing or unreadable identity, or a run with no start
+    on record is never signalled. -> [pgid]."""
     from core.mc_delegation_runner.runner import _group_alive, _identity
     stopped = []
+    if since is None:
+        return stopped
     for st in sorted(Path(artifacts).glob("*.stage.json")):
         try:
             stage = json.loads(st.read_text())
         except (OSError, ValueError):
             continue
         pgid, identity = stage.get("pgid"), stage.get("identity")
-        if stage.get("stage") != "started" or type(pgid) is not int or pgid <= 1 or not identity:
+        if stage.get("stage") != "started" or type(pgid) is not int or pgid <= 1:
+            continue
+        started = _started_at(identity, pgid)
+        if started is None or started < since - 1:          # lstart is whole seconds
             continue
         if not _group_alive(pgid) or _identity(pgid) != identity:
             continue
@@ -127,6 +148,7 @@ class Run:
         self.results, self.host_variants, self.planted, self.route_key = {}, {}, {}, None
         self.held = {}                 # runner id -> "<request_id>:<generation>" the scripted identities hold (F2)
         self.check_lines = []
+        self.started_wall = time.time()        # this run's start: its clean-up signals only processes started since
 
     # ── records ──
     def log(self, kind, what, **fields):
@@ -568,7 +590,8 @@ class Run:
             self.named("LCH-6.end", C.lch6, records, files, values, need=1)
 
     def _reap_orphans(self):
-        reap_orphans(self.artifacts, lambda pgid: self.log("cleanup", "orphan stopped", pgid=pgid))
+        reap_orphans(self.artifacts, lambda pgid: self.log("cleanup", "orphan stopped", pgid=pgid),
+                     since=getattr(self, "started_wall", None))
 
     def _pack(self):
         ev = self.ev
