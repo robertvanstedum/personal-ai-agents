@@ -1,0 +1,81 @@
+# Host runtime P1-a's production layer: everything P1-a changes in production's Compose configuration, and nothing in
+# docker-compose.prod.yml. With this file absent, production's services are exactly today's (no new environment value,
+# mount, limit or service: tests/test_p1a_compose.py proves it against the base).
+#
+# Switching on is an operator act on Robert's word (build-p1/P1-A_RESULT.md, runbook): copy this reviewed file to
+# /opt/minimoi/docker-compose.runtime.prod.yml. deploy_scoped_release.sh layers it, when present, on every later release,
+# so a portal release never drops it; removing it (after `switch_on rollback-check` passes) switches the layer off.
+#
+# One authority file and one principal for the portal and the supervisor, fixed here, never two .env values that could
+# differ (review SF5): the image's own authority.prod.json, principal robert (the portal's MINIMOI_MC_DELEGATION_PRINCIPAL).
+# Nothing here is a secret: the door's credentials are digests, the witness's credentials references.
+services:
+  portal:
+    environment:
+      - MINIMOI_MC_DELEGATION_AUTHORITY_FILE=/app/core/mc_delegation_dispatcher/authority.prod.json
+      - MINIMOI_MC_DELEGATION_DOOR_CREDENTIALS=/run/minimoi/runtime/door-credentials.json
+      - MINIMOI_RUNTIME_STATE_FILE=/run/minimoi/runtime/authority/state.json
+    volumes:
+      # The door's credentials (digests) and the authority's published snapshot, read only.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/runtime:/run/minimoi/runtime:ro
+
+  supervisor:
+    environment:
+      # The runtime link (services/supervisor/main.py, core/supervision/runtime.py): all four, the same file and
+      # principal as the portal's.
+      - MINIMOI_RUNTIME_AUTHORITY_FILE=/app/core/mc_delegation_dispatcher/authority.prod.json
+      - MINIMOI_RUNTIME_PRINCIPAL=robert
+      - MINIMOI_RUNTIME_OWNER=robert
+      - MINIMOI_RUNTIME_VIEW_BOUND_S=120
+      - MINIMOI_RUNTIME_STATE_FILE=/run/minimoi/runtime/authority/state.json
+      # The authority's own timers in this process (liveness, the sweeper publishing state.json, its watch).
+      - MINIMOI_RUNTIME_STATE_DIR=/run/minimoi/runtime/authority
+      - MINIMOI_RUNTIME_ENDPOINT_ID=prod-authority
+      - MINIMOI_RUNTIME_HOST_ID=prod-ec2-1
+      # Off (empty): Robert answers runtime decisions in MiniMoi; "1" turns S1-G's Telegram reply path on.
+      - MINIMOI_RUNTIME_TELEGRAM_ANSWERS=${MINIMOI_RUNTIME_TELEGRAM_ANSWERS:-}
+    volumes:
+      - ${MINIMOI_ROOT:-/opt/minimoi}/runtime/authority:/run/minimoi/runtime/authority
+    # With its timers on, the authority's sweeper builds the snapshot each pass in this process.
+    mem_limit: 256m
+    cpus: 0.5
+
+  # Production's witness on EC2 (spec v0.5 R5.6-a), a process of its own, never the authority's (the portal's door and
+  # the supervisor's timers). It reads the snapshot through the portal's read path with an observer credential, and
+  # tells Robert on Telegram directly (never through the supervisor, which may be what is down), its bot token and chat
+  # id read from Parameter Store by reference at each send. Its once-per-key memory is a file of its own, never the
+  # database it watches. Started only with its profile, on Robert's word; its references come from .env.
+  runtime-witness:
+    profiles: [runtime-witness]
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-runtime-witness
+    restart: unless-stopped
+    command: [python, -m, core.mc_delegation_runner.witness, serve]
+    environment:
+      - MINIMOI_ROLE=production
+      - PYTHONDONTWRITEBYTECODE=1
+      - MINIMOI_WITNESS_HOST_ID=prod-ec2-1
+      - MINIMOI_WITNESS_ENDPOINT_ID=prod-authority
+      - MINIMOI_WITNESS_READ_URL=http://portal:5001/internal/mc/v1/runtime/state
+      - MINIMOI_WITNESS_READ_TOKEN_REF=${MINIMOI_WITNESS_READ_TOKEN_REF:-}
+      - MINIMOI_WITNESS_TELEGRAM_TOKEN_REF=${MINIMOI_WITNESS_TELEGRAM_TOKEN_REF:-}
+      - MINIMOI_WITNESS_TELEGRAM_CHAT_REF=${MINIMOI_WITNESS_TELEGRAM_CHAT_REF:-}
+      - MINIMOI_WITNESS_AUTHORITY_FILE=/app/core/mc_delegation_dispatcher/authority.prod.json
+      - MINIMOI_WITNESS_MEMORY_DIR=/run/minimoi/witness
+      - MINIMOI_WITNESS_HEALTH_FILE=/tmp/witness.alive
+      - TZ=America/Chicago
+    volumes:
+      - ${MINIMOI_ROOT:-/opt/minimoi}/runtime/witness:/run/minimoi/witness
+    read_only: true
+    tmpfs:
+      - /tmp:size=4m,mode=1777
+    mem_limit: 128m
+    cpus: 0.1
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      # Alive when a pass finished in the last 3 minutes (a pass every 30 s).
+      test: [CMD, python, -c, "import os,time,sys; sys.exit(0 if time.time()-os.path.getmtime('/tmp/witness.alive')<180 else 1)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3

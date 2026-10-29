@@ -489,16 +489,12 @@ def test_the_agent_child_environment_change_redeploys_only_the_portal():
 def test_mc_runner_has_no_unclassified_production_consumer():
     root = Path(__file__).resolve().parent.parent
     assert _mc_runner_importers(root) == []
-    # No production entrypoint starts the runner: it runs only from the Mac's own bundle. One exception, P1-a's:
-    # production's EC2 witness (runtime-witness, the portal image) runs the witness, a portal-side runner file.
-    witness_cmd = "command: [python, -m, core.mc_delegation_runner.witness, serve]"
-    compose = (root / "docker-compose.prod.yml").read_text()
-    assert compose.count(witness_cmd) == 1
+    # No production entrypoint starts the runner: it runs only from the Mac's own bundle. (P1-a's EC2 witness runs
+    # the witness, a portal-side runner file, only from the runtime layer, docker-compose.runtime.prod.yml.)
     paths = [root / ".github/workflows/deploy.yml", root / "docker-compose.prod.yml",
              root / "docker-compose.yml", root / "scripts/operations/deploy_scoped_release.sh"]
     paths.extend(p for p in (root / "docker").rglob("*") if p.is_file())
-    assert [str(p.relative_to(root)) for p in paths
-            if "mc_delegation_runner" in p.read_text(errors="ignore").replace(witness_cmd, "")] == []
+    assert [str(p.relative_to(root)) for p in paths if "mc_delegation_runner" in p.read_text(errors="ignore")] == []
 
 
 def test_mc_runner_guard_detects_new_consumers_and_runner_only_files_reaching_the_portal(tmp_path):
@@ -956,30 +952,23 @@ def test_p1a_files_classify_by_the_image_that_runs_them():
     assert classify(["scripts/mc_host/host.mac-prod-1.json"]) == ("documents", ())         # the installer's template
     assert classify(["tests/harness_acceptance/p1a.py", "tests/harness_acceptance/p1a_mac.py"]) == ("documents", ())
     assert classify(["scripts/operations/mc_prod_db_migrate.sh"]) == ("documents", ())     # operations-only, as before
+    # The deploy scripts layer the runtime file when present: they keep their own full-release fallback.
+    assert classify(["scripts/operations/deploy_scoped_release.sh"]) == ("full", ALL_SERVICES)
     # New modules in the dispatcher and supervision packages keep the conservative core fallback (seven services).
     assert classify(["core/mc_delegation_dispatcher/production.py"])[1] == ALL_SERVICES[:7]
     assert classify(["core/supervision/switch_on.py"])[1] == ALL_SERVICES[:7]
 
 
-def test_a_profile_gated_service_owned_by_the_portal_may_be_added_but_never_removed_quietly():
-    witness = COMPOSE.replace("networks:\n", "  runtime-witness:\n    profiles: [runtime-witness]\n"
-                                              "    image: portal:${MINIMOI_IMAGE_TAG:-latest}\nnetworks:\n")
-    assert compose_changed_services(COMPOSE, witness) == ("portal",)
-    assert compose_changed_services(witness, COMPOSE) is None                        # removed: full
-    always_on = COMPOSE.replace("networks:\n", "  runtime-witness:\n    image: portal:x\nnetworks:\n")
-    assert compose_changed_services(COMPOSE, always_on) is None                      # not behind a profile: full
-    unowned = COMPOSE.replace("networks:\n", "  other:\n    profiles: [x]\n    image: portal:x\nnetworks:\n")
-    assert compose_changed_services(COMPOSE, unowned) is None                        # no owner: full
-
-
-def test_p1as_production_compose_change_is_the_portals_release():
-    """The portal's and the supervisor's P1-a settings and the added runtime-witness service: a portal release only.
-    Compared with this branch's base (S1's fix tip), every P1-a compose change is owned by the portal."""
+def test_p1as_production_compose_layer_is_an_operator_file_and_production_compose_is_untouched():
+    """P1-a's Compose changes live in docker-compose.runtime.prod.yml, which no workflow ships (the operator copies it
+    at switch-on); production's own compose file is the base's, so P1-a restarts nothing through it."""
     root = Path(__file__).resolve().parent.parent
+    assert classify(["docker-compose.runtime.prod.yml"]) == ("documents", ())
+    workflows = [p for p in (root / ".github" / "workflows").glob("*.yml")]
+    assert [p.name for p in workflows if "docker-compose.runtime.prod.yml" in p.read_text()] == []
     import subprocess
-    base = subprocess.run(["git", "show", "1a234c2e:docker-compose.prod.yml"], cwd=root, capture_output=True, text=True)
+    base = subprocess.run(["git", "show", "e9445541:docker-compose.prod.yml"], cwd=root, capture_output=True, text=True)
     if base.returncode != 0:
         import pytest
         pytest.skip("the base commit is not in this checkout")
-    head = (root / "docker-compose.prod.yml").read_text()
-    assert compose_changed_services(base.stdout, head) == ("portal",)
+    assert (root / "docker-compose.prod.yml").read_text() == base.stdout

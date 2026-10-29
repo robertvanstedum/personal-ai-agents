@@ -82,7 +82,11 @@ def _is_release_only(path: str) -> bool:
 # through this pipeline.
 OPS_ONLY_PREFIXES = ("scripts/credentials/",)
 OPS_ONLY_FILES = frozenset({"scripts/operations/deploy_mc_container_ec2.sh",
-                            "scripts/operations/mc_prod_db_migrate.sh"})
+                            "scripts/operations/mc_prod_db_migrate.sh",
+                            # Host runtime P1-a's production Compose layer: no workflow ships it; an operator copies the
+                            # reviewed file to the host at switch-on, on Robert's word, and the deploy scripts layer it
+                            # only when it is there (tests/test_p1a_compose.py guards both).
+                            "docker-compose.runtime.prod.yml"})
 # The host runtime's installer (host runtime spec v0.5 R3.4-a; S1-H): run by an operator on the Mac (launchd) or on
 # the staging host (the systemd templates), on Robert's word, from a checkout; it installs a bundle outside any
 # checkout and is in no service image's command, compose file, Dockerfile or workflow (the test guards this). Without
@@ -107,14 +111,7 @@ MC_IMAGE_PREFIXES = ("docker/mc-agent-container/",)
 # fallback, as does any other service or top-level key (networks, volumes).
 PROD_COMPOSE = "docker-compose.prod.yml"
 COMPOSE_SERVICE_OWNERS = {**{service: (service,) for service in ALL_SERVICES}, "vault-ask": ("portal",),
-                          "supervisor": ("portal",),
-                          # Host runtime P1-a: production's EC2 witness runs the portal image (its own command).
-                          "runtime-witness": ("portal",)}
-# A service added is a full release, except one behind a Compose profile that an owner above names: the scoped
-# deploy never names an inactive-profile service (naming it would start it), so adding its block starts nothing until
-# an operator starts its profile; its image is its owner's. A service removed stays a full release (an active one's
-# container would be left behind, or removed as an orphan).
-
+                          "supervisor": ("portal",)}
 
 
 # Top-level definitions a service uses by name: they are part of its rendered config.
@@ -187,12 +184,8 @@ def compose_changed_services(base_text: Optional[str], head_text: Optional[str])
         before, after = _compose_view(base, name), _compose_view(head, name)
         if before == after:
             continue
-        if name not in COMPOSE_SERVICE_OWNERS:
+        if before is None or after is None or name not in COMPOSE_SERVICE_OWNERS:
             return None
-        if after is None:
-            return None                        # a service removed: only a full release is safe
-        if before is None and not (isinstance(after, tuple) and isinstance(after[0], dict) and after[0].get("profiles")):
-            return None                        # an always-on service added: only a full release is safe
         owners.update(COMPOSE_SERVICE_OWNERS[name])
     return tuple(service for service in ALL_SERVICES if service in owners)
 
@@ -351,7 +344,7 @@ MC_RUNNER_PORTAL_FILES = frozenset({"core/mc_delegation_runner/__init__.py", "co
                                     "core/mc_delegation_runner/launch.py", "core/mc_delegation_runner/launch_policy.json",
                                     "core/mc_delegation_runner/census.py",
                                     # The host's witness (S1-H, R5.6-a): the runtime's bundle, and since P1-a also
-                                    # production's EC2 witness (docker-compose.prod.yml runtime-witness, the portal image).
+                                    # production's EC2 witness (the runtime layer's runtime-witness, the portal image).
                                     "core/mc_delegation_runner/witness.py"})
 MC_RUNNER_LOCAL_FILES = frozenset({"core/mc_delegation_runner/cli.py", "core/mc_delegation_runner/runner.py",
                                    "core/mc_delegation_runner/commands.py", "core/mc_delegation_runner/cost.py",
@@ -359,8 +352,7 @@ MC_RUNNER_LOCAL_FILES = frozenset({"core/mc_delegation_runner/cli.py", "core/mc_
                                    "core/mc_delegation_runner/journal.py", "core/mc_delegation_runner/fakework.py",
                                    # The census's OTLP/JSON writer and the Claude Code hook (built, never installed):
                                    # the runtime's bundle only.
-                                   "core/mc_delegation_runner/otel.py", "core/mc_delegation_runner/claude_hook.py",
-                                   })
+                                   "core/mc_delegation_runner/otel.py", "core/mc_delegation_runner/claude_hook.py"})
 
 
 def _is_staging_only(path: str) -> bool:

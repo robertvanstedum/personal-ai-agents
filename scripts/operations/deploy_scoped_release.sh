@@ -33,6 +33,13 @@ if [[ -n "$RECORDS_ENV" ]]; then
   COMPOSE+=(-f /opt/minimoi/docker-compose.records-production-portal.yml)
 fi
 
+# Host runtime P1-a's production layer: present on the host only once switched on (an operator act on Robert's word),
+# then layered on every release so none drops it; absent, nothing changes. Never sourced or evaluated.
+RUNTIME_LAYER=/opt/minimoi/docker-compose.runtime.prod.yml
+if [[ -f "$RUNTIME_LAYER" ]]; then
+  COMPOSE+=(-f "$RUNTIME_LAYER")
+fi
+
 python3 /opt/minimoi/scripts/release_status.py begin "$IMAGE_TAG" "${SERVICES[@]}"
 
 cd /opt/minimoi
@@ -214,6 +221,13 @@ if [[ " ${SERVICES[*]} " == *" portal "* ]] && docker container inspect minimoi-
   "${COMPOSE[@]}" --profile supervisor up -d --no-deps supervisor
   SUPERVISOR_RECREATED=1
 fi
+# Host runtime P1-a's EC2 witness (profile `runtime-witness`, the portal image, in the runtime layer): once switched on,
+# a portal release recreates it on the same tag, as the supervisor's rule (review SF6).
+WITNESS_RECREATED=0
+if [[ " ${SERVICES[*]} " == *" portal "* && -f "$RUNTIME_LAYER" ]] && docker container inspect minimoi-runtime-witness >/dev/null 2>&1; then
+  "${COMPOSE[@]}" --profile runtime-witness up -d --no-deps runtime-witness
+  WITNESS_RECREATED=1
+fi
 # Agent A and Curator have been recreated (or were never stopped); nothing to restart now.
 AGENT_A_STOPPED=0
 CURATOR_STOPPED=0
@@ -305,6 +319,13 @@ if [[ "$SUPERVISOR_RECREATED" == "1" ]]; then
   [[ "$actual" == "$(expected_image portal)" ]] || { echo "minimoi-supervisor uses $actual; expected $(expected_image portal)"; exit 1; }
   wait_for_container_health minimoi-supervisor 24
   echo "supervisor: recreated on $actual and healthy"
+fi
+
+if [[ "$WITNESS_RECREATED" == "1" ]]; then
+  actual=$(docker inspect --format='{{.Config.Image}}' minimoi-runtime-witness)
+  [[ "$actual" == "$(expected_image portal)" ]] || { echo "minimoi-runtime-witness uses $actual; expected $(expected_image portal)"; exit 1; }
+  wait_for_container_health minimoi-runtime-witness 24
+  echo "runtime-witness: recreated on $actual and healthy"
 fi
 
 /opt/minimoi/scripts/install_lesen_refresh_cron.sh
