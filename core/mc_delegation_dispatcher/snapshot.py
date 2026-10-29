@@ -595,14 +595,20 @@ def _notice(key, kind, text, next_step, raised, **refs) -> dict:
             "raised_at": None if r is None else r["raised_at"], **refs}
 
 
-_LOGIN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ./_:-]{0,63}$")
+# The login command Robert is told to run, per tool (T19b): a fixed list, the launch policy's ``login_command`` for
+# each tool that has one (core/mc_delegation_runner/launch_policy.json; a test keeps the two equal). The text a host
+# sends is never quoted to Robert as a command (S1-H review N3): the refusal's tool only picks from this list.
+LOGIN_COMMANDS = {"claude-code": "claude /login", "codex": "codex login", "fakecli": "fakecli login"}
 
 
 def _login_step(row):
-    """The login command a refusal's detail names (the launch contract's ``signin_missing``: the policy file's
-    ``login_command``, T19b), or None. Only a short plain command is quoted to Robert; anything else is left out."""
-    login = ((row or {}).get("result_detail") or {}).get("login")
-    return login if isinstance(login, str) and _LOGIN.match(login) else None
+    """The login command for a ``signin_missing`` refusal's tool, from LOGIN_COMMANDS, or None (a tool with no such
+    command, or none named). Never the refusal's own ``login`` text."""
+    detail = (row or {}).get("result_detail") or {}
+    tool = detail.get("tool")
+    if detail.get("code") != "signin_missing" or not isinstance(tool, str):
+        return None
+    return LOGIN_COMMANDS.get(tool)
 
 
 def _notices(items, rec, now, values, hosts, cards, waiting, raised, unknowns, reviewed=frozenset()) -> list:

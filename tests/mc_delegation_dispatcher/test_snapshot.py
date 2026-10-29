@@ -380,3 +380,29 @@ def test_t19b_a_refusal_that_names_its_login_says_run_it_first():
     assert "(signin_missing). Run `fakecli login` first. Next:" in text[signed_out["request_id"]]
     assert "Run" not in text[plain["request_id"]] and "Run" not in text[odd["request_id"]]
     assert "Run" not in text[failed["request_id"]]                     # only a refusal names its login step
+
+
+def test_n3_the_login_step_comes_from_a_fixed_list_never_from_the_hosts_text():
+    """S1-H review N3: the notice quoted the refusal's ``login`` text, which a host supplies, to Robert as a command
+    (``rm -rf /`` passed the old pattern). Now the refusal's tool only picks a command from LOGIN_COMMANDS: a known
+    tool gets its own command whatever text came with it, and an unknown tool gets none."""
+    planted = item("refused", card=None, lease_left=None,
+                   result_detail={"code": "signin_missing", "tool": "fakecli", "login": "rm -rf /"})
+    unknown = item("refused", card=None, lease_left=None,
+                   result_detail={"code": "signin_missing", "tool": "mytool", "login": "rm -rf /"})
+    codex = item("refused", card=None, lease_left=None, result_detail={"code": "signin_missing", "tool": "codex"})
+    other = item("refused", card=None, lease_left=None,
+                 result_detail={"code": "route_supervised_only", "tool": "codex", "login": "codex login"})
+    doc = S.build(rec([planted, unknown, codex, other], [runner("mac-1")]))
+    text = {n["item_id"]: n["text"] for n in doc["notices"] if n["rule"] == "ended"}
+    assert "rm -rf" not in " ".join(text.values())
+    assert "Run `fakecli login` first." in text[planted["request_id"]]
+    assert "Run" not in text[unknown["request_id"]] and "Run" not in text[other["request_id"]]
+    assert "Run `codex login` first." in text[codex["request_id"]]
+
+
+def test_n3_the_fixed_login_list_is_the_launch_policys_own():
+    policy = json.loads((ROOT / "core" / "mc_delegation_runner" / "launch_policy.json").read_text())["tools"]
+    assert {t: policy[t]["login_command"] for t in S.LOGIN_COMMANDS} == S.LOGIN_COMMANDS
+    # The rest name no command Robert could run as written: Grok's browser sign-in, fakework's none.
+    assert set(policy) - set(S.LOGIN_COMMANDS) == {"grok", "fakework"}
