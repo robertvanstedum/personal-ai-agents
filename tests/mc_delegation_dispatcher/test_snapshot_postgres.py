@@ -753,6 +753,45 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         (waiting,) = [d for d in self.waiting(self.publish()) if d["class"] == "step_admission"] or [None]
         self.assertIsNone(waiting)
 
+    def test_p2_4_a_fresh_d_code_whose_send_failed_goes_out_after_a_restart_the_same_code(self):
+        """Codex part 2 P2-4 on the real store: Robert's yes is refused, and every send of that tick fails (the fresh
+        D-code's among them). After a restart of the supervisor, the same D-2 goes out alone, once; no D-3 is made;
+        and it is answered through the full owner path."""
+        narrow = DispatcherStore(self.connect, principal="robert", environment="dev", authority=AUTH,
+                                 grants=GrantStore({**C.grant_rows(), SINK: CapabilityRule(1, False, True)}))
+
+        def supervisor():
+            return Supervisor(Store(self.connect), self.notify, GitHub(), chat_id=OWNER, user_id=OWNER,
+                              runtime=RuntimeLink(narrow, owner="robert", view_bound_s=60))
+        sup = supervisor()
+        self.admit(card())
+        self.sql("UPDATE guild.mc_action_grants SET consumed_operations = max_operations")
+        _, env = self.claim()
+        self.result(env, artifacts=[art("patch", "b")])
+        self.publish()
+        sup.runtime_tick()
+        (first,) = self.notify.lines()
+        self.notify.reply("yes", first["message_id"])
+        sup.read_answers(wait=0)
+        self.notify.fail_next = 50                                   # Telegram fails for the whole tick
+        sup.runtime_tick()
+        self.notify.fail_next = 0
+        self.assertEqual(len(self.notify.lines()), 1)
+        rows = self.sql("SELECT id, state FROM guild.supervision_decisions ORDER BY id")
+        self.assertEqual([r["state"] for r in rows], ["approved", "new"])       # D-2 kept, unsent
+        again = supervisor()                                         # a restart
+        again.runtime_tick()
+        again.runtime_tick()
+        solo = [m for m in self.notify.lines() if "on its own" in m["text"]]
+        self.assertEqual([m["text"].split("\n")[0] for m in solo],
+                         ["Decision D-1 waiting on you, on its own", "Decision D-2 waiting on you, on its own"])
+        self.assertEqual([r["state"] for r in self.sql("SELECT state FROM guild.supervision_decisions ORDER BY id")],
+                         ["approved", "sent"])                       # no third code
+        self.notify.reply("yes", solo[1]["message_id"])
+        again.read_answers(wait=0)
+        self.sup.runtime_tick()
+        self.assertEqual(self.item("C-17.review")["state"], "queued")
+
     def test_sf6_a_reassignment_answer_is_bound_to_the_generation_its_words_name(self):
         self.admit(card())
         _, env = self.claim()

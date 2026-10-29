@@ -101,8 +101,11 @@ class RuntimeLink:
     def deliver(self, store, bot, chat_id) -> list:
         """Each decision notice the authority raised, not yet sent, as one message (R7.4-c): its decisions become
         D-codes (supervision rows, the authority's words), a routine notice's together under one message
-        (``add_batch``, which refuses a solo row: N2), a solo one's alone (``mark_sent``). Nothing goes out from a
-        stale view; one notice's failure never holds up another's. -> message ids."""
+        (``add_batch``, which refuses a solo row: N2), a solo one's alone (``mark_sent``). A decision still waiting
+        whose answer was refused has a fresh D-code (``_reissue``): that row, kept with its words and digest until it
+        went out, is sent here, alone, whatever became of the answered row before it, until its send succeeds; the
+        same D-code each time, never a new one per try (Codex part 2 P2-4). Nothing goes out from a stale view; one
+        notice's failure never holds up another's. -> message ids."""
         doc, stale = self.view()
         if stale:
             return []
@@ -115,7 +118,10 @@ class RuntimeLink:
                                                solo=bool(n.get("solo")), environment=doc["environment"])
                         for i, w in enumerate(n["words"], 1)]
                 if any(r["state"] != "new" for r in rows):
-                    continue                                 # sent (or answered) already: never twice
+                    for r in rows:                           # its own message went out already: never twice
+                        if r["state"] in ("approved", "declined"):
+                            sent.extend(self._send_reissued(store, bot, chat_id, r))
+                    continue
                 if n["rule"] == "decision":
                     message_id = bot.send(chat_id, tg.runtime_message(rows[0]))
                     store.mark_sent(rows[0]["id"], message_id)
@@ -203,7 +209,9 @@ class RuntimeLink:
         return told
 
     def _reissue(self, store, bot, chat_id, decision_id):
-        """A fresh D-code for a decision still waiting at the authority after a refused answer, sent alone. -> code."""
+        """A fresh D-code for a decision still waiting at the authority after a refused answer, sent alone. Its row is
+        kept first (its words and digest), so a send that fails here is tried again by ``deliver`` with the same
+        D-code, after a restart too (Codex part 2 P2-4). -> its code, sent yet or not; None when none was made."""
         try:
             status = self.authority.decisions_status([decision_id]).get(decision_id) or {}
             if not status.get("open") or not status.get("words"):
@@ -211,11 +219,25 @@ class RuntimeLink:
             rows = store.runtime_rows(decision_id)
             row = store.runtime_decision(decision_id, status["words"], notice=f"reissue:{decision_id}", position=1,
                                          solo=True, environment=self.authority.environment, reissue=len(rows) + 1)
-            store.mark_sent(row["id"], bot.send(chat_id, tg.runtime_message(row)))
-            return row["code"]
         except Exception as exc:
             self.errors.append(f"reissue:{_code(exc)}")
             return None
+        try:
+            store.mark_sent(row["id"], bot.send(chat_id, tg.runtime_message(row)))
+        except Exception as exc:
+            self.errors.append(f"reissue_send:{_code(exc)}")         # kept: deliver sends it at the next tick
+        return row["code"]
+
+    def _send_reissued(self, store, bot, chat_id, answered) -> list:
+        """Every D-code made for the same decision after ``answered`` and never sent (a refused answer's fresh code
+        whose send failed, or a process that stopped before it), each sent alone and marked sent. -> message ids."""
+        out = []
+        for r in store.runtime_rows(answered["requester"]["decision_id"]):
+            if r["id"] > answered["id"] and r["state"] == "new":
+                message_id = bot.send(chat_id, tg.runtime_message(r))
+                store.mark_sent(r["id"], message_id)
+                out.append(message_id)
+        return out
 
     def close_closed(self, store, bot, chat_id) -> list:
         """Runtime D-codes whose decision the authority closed itself (a revocation withdrew it, a new question

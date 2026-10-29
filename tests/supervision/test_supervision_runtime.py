@@ -576,6 +576,83 @@ def test_p2_3_a_runtime_link_error_whose_send_fails_is_told_later_once_a_day():
                                         "again."]
 
 
+# ── Codex part 2 P2-4: a refused answer's fresh D-code whose send failed is sent later, the same code ────────────
+class ReissueStore:
+    """Codex's fake of the supervision rows a refused answer leaves (the real Store's selection rules)."""
+
+    def __init__(self):
+        self.original = row(1, "Admit the synthetic item under this exact approval.", solo=True, state="approved")
+        self.original["receipt"] = {"channel": "telegram", "chat_id": OWNER, "message_id": 77, "text": "yes"}
+        self.rows, self.applied = [self.original], set()
+
+    def runtime_answered(self):
+        return [r for r in self.rows if r["state"] == "approved" and r["id"] not in self.applied]
+
+    def mark_applied(self, i):
+        self.applied.add(i)
+
+    def runtime_rows(self, did):
+        return self.rows
+
+    def runtime_decision(self, did, words, **kwargs):
+        if not kwargs.get("reissue"):
+            return self.original
+        r = row(len(self.rows) + 1, words, solo=True, state="new")
+        r["requester"]["decision_id"] = did
+        self.rows.append(r)
+        return r
+
+    def mark_sent(self, i, message):
+        next(r for r in self.rows if r["id"] == i)["state"] = "sent"
+
+
+class RefusingAuthority:
+    environment = "dev"
+
+    def __init__(self, store):
+        self.s = store
+
+    def resolve(self, *args, **kwargs):
+        from core.mc_delegation_dispatcher.store import AuthorityRefused
+        raise AuthorityRefused("synthetic_refusal")
+
+    def decisions_status(self, ids):
+        return {i: {"open": True, "words": self.s.original["text"]} for i in ids}
+
+
+def reissue_link(store):
+    d = store.original
+    doc = {"view_age_s": 0, "environment": "dev", "notices": [
+        {"rule": "decision", "raised_at": NOW.isoformat(), "key": "decision:test", "solo": True,
+         "words": [{"decision_id": d["requester"]["decision_id"], "words": d["text"]}]}]}
+    return RuntimeLink(RefusingAuthority(store), owner="robert", view_bound_s=60, source=lambda: doc)
+
+
+def test_p2_4_a_reissued_d_code_whose_send_failed_is_sent_later_and_never_given_another_code():
+    store, bot = ReissueStore(), Flaky(fail=1)
+    link = reissue_link(store)
+    ((_, outcome),) = link.apply(store, bot, OWNER)            # refused: D-2 made, its send fails
+    assert outcome["reissued"] == "D-2" and bot.sent == [] and link.take_errors() == ["reissue_send:telegram_unreachable"]
+    assert link.apply(store, bot, OWNER) == []
+    link.deliver(store, bot, OWNER)                           # the next tick: D-2 goes out, alone
+    link.deliver(store, bot, OWNER)
+    ((text, _),) = bot.sent
+    assert text.startswith("Decision D-2 waiting on you, on its own") and [r["state"] for r in store.rows] == \
+        ["approved", "sent"]                                  # the same code, never a third
+
+
+def test_p2_4_after_a_restart_the_unsent_d_code_goes_out_once():
+    store, bot = ReissueStore(), Flaky()
+    bot.down = True
+    reissue_link(store).apply(store, bot, OWNER)              # D-2 made, not sent; then the supervisor restarts
+    bot.down = False
+    restarted = reissue_link(store)
+    restarted.deliver(store, bot, OWNER)
+    restarted.deliver(store, bot, OWNER)
+    assert [t.split("\n")[0] for t, _ in bot.sent] == ["Decision D-2 waiting on you, on its own"]
+    assert len(store.rows) == 2
+
+
 def test_the_sync_view_is_read_with_its_age():
     class St:
         def __init__(self, contact):
