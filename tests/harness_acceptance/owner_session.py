@@ -237,9 +237,10 @@ class Session(K.Plan):
         suspended = [e for e in self.window_events() if e["kind"] == "authority.suspended"]
         self.check(f"{name}.suspended_recorded", bool(suspended), {"outages": [e["body"] for e in suspended]})
         notices = [m for m in self.notify_since(self.window["notify0"]) if rid[:8] in m["text"]]
+        witness = [m["key"] for m in self.witness_lines() if m["at"] >= self.window["at0"]]
         calls = self.owner_calls_in_window()
-        self.check(f"{name}.no_notice_no_owner_call", not notices and not calls,
-                   {"notices": len(notices), "owner_calls": len(calls)})
+        self.check(f"{name}.no_notice_no_owner_call", not notices and not witness and not calls,
+                   {"notices": len(notices), "witness": witness, "owner_calls": len(calls)})
         self.named(f"{name}.DUP-1", C.dup1, sink, need=1)
         self.named(f"{name}.DUP-2", C.dup2, sink, self.events(item=rid), need=1)
         self.mc0()

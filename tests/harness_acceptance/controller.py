@@ -73,8 +73,7 @@ SCRIPTED_REF = "a" * 40
 T1_INTERVALS = 6                       # T1, shortened: six contact intervals idle (90 s), not 30 minutes
 
 
-class Stop(Exception):
-    """A scenario cannot go on (a precondition failed); recorded, never retried."""
+Stop = I.Stop                     # a scenario cannot go on; I.ReconcileFirst (a withheld claim) is one
 
 
 def now_iso():
@@ -100,6 +99,7 @@ class Run:
         self.proc, self.seq, self.scenario = None, 0, None
         self.timeline, self.checks_path = self.ev / "timeline.jsonl", self.ev / "checks.jsonl"
         self.results, self.host_variants, self.planted, self.route_key = {}, {}, {}, None
+        self.held = {}                 # runner id -> "<request_id>:<generation>" the scripted identities hold (F2)
         self.check_lines = []
 
     # ── records ──
@@ -214,6 +214,7 @@ class Run:
                 "artifact_root": str(self.artifacts), "workspace_root": str(self.base / "work"),
                 "mirrors": {"personal-ai-agents": str(self.mirror)}, "gap_detection": "on", "stop_timeout_s": 20,
                 "effect_sink": {"path": str(self.sink_dir), "lookup": True},
+                "notifier": {"kind": "file", "path": str(self.ev / "notify.jsonl")},       # the witness's (R5.6-a)
                 "note": "gate M acceptance (S1-H): mac-test-1, §9.2's test values"}
 
     def setup(self):
@@ -355,6 +356,10 @@ class Run:
     def notify_since(self, n):
         return self.notifier.lines()[n:]
 
+    def witness_lines(self):
+        """The host witness's notices (R5.6-a), in the same notify file, marked ``source: witness``."""
+        return [m for m in self.notifier.lines() if m.get("source") == "witness"]
+
     def program(self, *steps):
         return "\n".join(("fakework/1",) + steps)
 
@@ -365,7 +370,8 @@ class Run:
         self.scenario = name
         self.collector.scenario = name
         t0, seq0, notify0 = time.time(), self.max_seq(), len(self.notifier.lines())
-        self.window = {"t0": t0, "seq0": seq0, "notify0": notify0, "trip0": len(I.tripwire_lines(self.trip_log))}
+        self.window = {"t0": t0, "seq0": seq0, "notify0": notify0, "trip0": len(I.tripwire_lines(self.trip_log)),
+                       "at0": now_iso()}
         self.log("scenario", "start")
         try:
             fn()
@@ -510,6 +516,11 @@ class Run:
         self.final("DUP-6", C.dup6, events)
         self.final("DUP-7", C.dup7, events, self.notifier.lines())
         self.final("DUP-8", C.dup8, events, {HOST_ID, SCRIPTED, "mac-test-8"})
+        told = [m["key"] for m in self.witness_lines()]
+        expected = 2 if (self.only is None or "T8" in self.only) and self.container else 0
+        self.check("WITNESS.only_for_the_outage", len(told) == expected and len(set(told)) == len(told)
+                   and all(k.startswith(("authority-unreachable:", "authority-back:")) for k in told),
+                   {"told": told, "expected": expected}, n=len(told))
         values = list(self.planted.values()) + ([self.route_key] if self.route_key else [])
         if values:
             records = [json.loads(p.read_text()) for p in self.artifacts.glob("*.launch.json")]
@@ -789,10 +800,10 @@ class Plan(Run):
         mine = [x for x in self.sink_lines() if x["item_id"] == rid]
         self.named("T8.DUP-1", C.dup1, mine, need=1)
         self.named("T8.DUP-3", C.dup3, evs, need=1)
-        witness = [m for m in self.notify_since(self.window["notify0"]) if "authority" in m["text"].lower()
-                   and ("unreachable" in m["text"].lower() or "down" in m["text"].lower())]
-        self.check("T8.one_notice", len(witness) == 1, {"notices": len(witness),
-                   "why_if_none": "the host-side witness notifier (R5.6-a) is not built in S1"}, n=len(witness))
+        told = self.wait(lambda: [m.get("key", "").split(":")[0] for m in self.witness_lines()
+                                  if m["at"] >= self.window["at0"]] or None, 60) or []
+        self.check("T8.one_notice", told == ["authority-unreachable", "authority-back"],
+                   {"witness": told}, n=len(told))
         self.mc0()
 
     # ── T9: the sweeper alone killed; a witness stopped ──
@@ -941,10 +952,19 @@ class Plan(Run):
         props = [e for e in self.events(item=rid) if e["kind"] == "proposal.review_request"]
         self.check("T12.one_review_request_after_a_second_tick", len(props) == 1, {"proposals": len(props)},
                    n=len(props))
-        raised = self.notices_raised(prefix=f"runtime-stalled:{rid}")
-        delivered = self.delivered("has made no progress")
-        self.check("T12.OWN-4", len(raised) == 1 and len(delivered) == 1 and "Next" in raised[0]["body"]["text"],
-                   {"raised": len(raised), "delivered": len(delivered)}, n=len(raised))
+        # OWN-4: the stall's one notice is its review request, one routine decision raised once with its words and
+        # what yes does (S1-G SF4/SF5); no separate stall notice; only Robert's yes would let MC make a call.
+        review = self.wait(lambda: next((d for d in self.collector.take("t12-review")["doc"]["decisions_waiting"]
+                                         if d["class"] == "review_request" and d["item_id"] == rid), None), 60, every=5)
+        raised = [e for e in self.window_events() if e["kind"] == "notice.raised"
+                  and review and review["decision_id"] in (e["body"].get("decisions") or [])]
+        stall = self.notices_raised(prefix=f"runtime-stalled:{rid}")
+        delivered = self.wait(lambda: review and [m for m in self.notify_since(self.window["notify0"])
+                                                  if review["words"] in m["text"]], 60) or []
+        self.check("T12.OWN-4", bool(review) and len(raised) == 1 and not stall and len(delivered) == 1
+                   and review["yes"] == "authorize_review",
+                   {"review_request": bool(review), "raised": len(raised), "stall_notices": len(stall),
+                    "delivered": len(delivered)}, n=len(raised))
         self.mc0()
         self.owner.stop(job, after_notice=raised[0]["body"]["key"] if raised else None)
         self.wait_state(job, ("cancelled", "interrupted"), 90)
@@ -967,7 +987,7 @@ class Plan(Run):
         self.check("T13.no_claim_without_grant", not [e for e in self.events(item=review["request_id"])
                                                       if e["kind"] == "item.claimed"], {})
         solo = self.wait(lambda: next((m for m in self.notify_since(self.window["notify0"])
-                                       if "C-T13" in m["text"] and not m["text"].startswith("Decisions ")), None), 60)
+                                       if "C-T13" in m["text"] and "on its own" in m["text"]), None), 60)
         self.check("T13.arrives_alone", bool(solo), {})
         self.named("T13.DUP-8", C.dup8, self.window_events(), {HOST_ID, SCRIPTED, "mac-test-8"}, need=1)
         self.end_leftover("C-T13.review", "the cross-vendor review is never admitted in acceptance")
@@ -1045,8 +1065,7 @@ class Plan(Run):
                    {"approved": len(decided), "bound_to_own_digest": len(bound)}, n=len(decided))
         self.check("T15.unknown_still_waiting", (self.row("C-T15-4.build") or {}).get("state") == "unknown", {})
         self.named("T15.DUP-7", C.dup7, self.window_events(), self.notify_since(self.window["notify0"]), need=2)
-        for n in (1, 2, 3):
-            self.end_leftover(f"C-T15-{n}.review", "nobody runs the scripted cards' reviews")
+        # the three reviews stay queued for the scripted repository nobody runs: unowned, they hold nothing up
 
     # ── T16: MC's judgment, capped and coalesced (fakejudge) ──
     def t16(self):
@@ -1055,30 +1074,33 @@ class Plan(Run):
                   "fix": self.program("result ok")}
         self.owner.card(self.card_doc("C-T16-1", repository="scripted", ref=SCRIPTED_REF, briefs=briefs))
         self.owner.card(self.card_doc("C-T16-2", repository="scripted", ref=SCRIPTED_REF, briefs=briefs))
-        env = self.scripted.claim()["envelope"]
+        got = self.scripted.claim()
+        env, w = got["envelope"], got["envelope"]["request_id"]
         other = str(self.row("C-T16-2.build")["request_id"])
         judge = FakeJudge(self.store, self.ev / "judge.jsonl")
-        owner = {"kind": "owner", "turn_id": "owner-turn-t16"}
-        self.log("owner", "asks MC for a review (judgment)", item=env["request_id"])
-        first = judge.review([env["request_id"]], owner)
-        flags = [judge.review([env["request_id"]], {"kind": "flag", "flag": "stalled"}).get("code") for _ in range(3)]
-        coalesced = [judge.review([env["request_id"]], owner).get("state") for _ in range(3)]
-        self.check("T16.one_call_per_window", first.get("state") == "reserved" and len(judge.calls()) == 1
-                   and flags == ["judgment_trigger_not_allowed"] * 3 and coalesced == ["coalesced"] * 3,
-                   {"first": first.get("state"), "flags": flags, "coalesced": coalesced})
+        unapproved = judge.review([w], {"kind": "owner", "decision_id": str(uuid.uuid4())}).get("code")
+        owner = self.owner.authorize_review(w)                  # MC asks; Robert's own yes to its notice
+        first = judge.review([w], owner)
+        used = judge.review([w], owner).get("code")
+        flags = [judge.review([w], {"kind": "flag", "flag": "stalled"}).get("code") for _ in range(3)]
+        coalesced = judge.review([w], self.owner.authorize_review(w)).get("state")
+        self.check("T16.one_call_per_window", unapproved == "judgment_owner_turn_not_found"
+                   and first.get("state") == "reserved" and used == "judgment_trigger_used" and len(judge.calls()) == 1
+                   and flags == ["judgment_trigger_not_allowed"] * 3 and coalesced == "coalesced",
+                   {"unapproved": unapproved, "first": first.get("state"), "trigger_again": used, "flags": flags,
+                    "coalesced": coalesced})
         self.sql("UPDATE guild.mc_delegation_events SET at = at - interval '200 seconds' WHERE kind='judgment.reserved'")
         self.log("injection", "time moved: T16's review window (build, 180 s) has passed")
-        second = judge.review([env["request_id"]], owner)
-        esc = judge.review([env["request_id"]], owner).get("code")
-        cap = judge.review([other], owner).get("code")
+        second = judge.review([w], self.owner.authorize_review(w))
+        esc = judge.review([w], self.owner.authorize_review(w)).get("code")
+        cap = judge.review([other], self.owner.authorize_review(other)).get("code")
         self.check("T16.escalation_then_cap", second.get("state") == "reserved"
-                   and (second.get("recorded") or {}).get("escalated") == [env["request_id"]]
+                   and (second.get("recorded") or {}).get("escalated") == [w]
                    and esc == "mc_escalated" and cap == "mc_judgment_cap" and len(judge.calls()) == 2,
                    {"second": second.get("state"), "escalated": esc, "over_cap": cap, "calls": len(judge.calls())})
         trips = I.tripwire_lines(self.trip_log)
         self.check("T16.MC-0_tripwire", not trips, {}, n=len(trips))
-        self.end_leftover("C-T16-1.build", "the scripted host's T16 item")
-        self.end_leftover("C-T16-2.build", "the scripted host's T16 item")
+        self.scripted.result(env)       # its host reports it: no owner clean-up (C-T16-2.build stays queued, unowned)
 
     # ── T17: drift, one notice each, work not stopped ──
     def t17(self):

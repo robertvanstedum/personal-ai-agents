@@ -34,6 +34,14 @@ for extra in (ROOT, ROOT / "tests" / "mc_delegation_dispatcher", ROOT / "tests" 
     if str(extra) not in sys.path:
         sys.path.insert(0, str(extra))
 
+class Stop(Exception):
+    """A scenario cannot go on (a precondition failed); recorded, never retried."""
+
+
+class ReconcileFirst(Stop):
+    """A claim answered ``withheld`` (Codex F2): the identity has items to reconcile first. Never read as idle."""
+
+
 TRIPWIRE = ("claude", "codex", "grok", "openclaw", "litellm")
 PLANTED = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY", "GH_TOKEN", "AWS_SECRET_ACCESS_KEY",
            "TELEGRAM_BOT_TOKEN", "SSH_AUTH_SOCK")
@@ -267,6 +275,28 @@ class Owner:
         self._log("merge", card_id=card_id, answer=got.get("state"), after_notice=after_notice)
         return got
 
+    def authorize_review(self, request_id, *, timeout=90):
+        """MC asks to review an item (``propose_review``); Robert's "yes" to that decision's notice, through the real
+        Telegram path, authorizes it. -> the owner trigger reserve_judgment verifies: {"kind": "owner",
+        "decision_id"} (S1-G SF4). Each trigger is used once."""
+        did = self.run.store.propose_review(request_id, by="mc")["decision_id"]
+        self.run.log("mc", "asks to review an item (propose_review)", item=request_id, decision_id=did)
+
+        def message():
+            rows = self.run.sql("""SELECT d.telegram_message_id, m.message_id FROM guild.supervision_decisions d
+                LEFT JOIN guild.supervision_decision_messages m ON m.decision_id = d.id
+                WHERE d.request_key = %s""", ("rt-" + did,))
+            return rows and (rows[0]["message_id"] or rows[0]["telegram_message_id"])
+        mid = self.run.wait(message, timeout, every=1)
+        if not mid:
+            raise Stop("review_request_never_delivered")
+        self.reply(mid, "yes", after_notice=mid)
+        done = self.run.wait(lambda: (self.run.store.decisions_status([did])[did] or {}).get("action")
+                             == "authorize_review", timeout, every=1)
+        if not done:
+            raise Stop("review_request_never_authorized")
+        return {"kind": "owner", "decision_id": did}
+
     def reply(self, message_id, text, *, after_notice):
         """Robert's own short reply to one notice message, through the real Telegram receipt path."""
         self.run.notifier.bot.reply(text, message_id)
@@ -292,8 +322,25 @@ class ScriptedHost:
         return self.run.store.heartbeat(self.runner_id, "online", self.caps, protocol=2, facts=self.facts(**over))
 
     def claim(self):
+        """One claim as a host makes it after Codex F2: a fresh request id and the inventory of what this identity
+        holds. -> the claim (``claimed``), or None (``none``). ``withheld`` raises ReconcileFirst (never read as
+        idle); ``refused`` raises Stop; ``claim_superseded`` asks once more under a new id."""
         self.beat()
-        return self.run.store.claim(self.runner_id, self.caps, protocol=2)
+        held = self.run.held.setdefault(self.runner_id, [])
+        for _ in range(2):
+            got = self.run.store.claim(self.runner_id, self.caps, protocol=2, claim_id=str(uuid.uuid4()),
+                                       held=list(held[-64:]))
+            if got["state"] == "claimed":
+                env = got["envelope"]
+                held.append(f"{env['request_id']}:{env['generation']}")
+                return got
+            if got["state"] == "none":
+                return None
+            if got["state"] == "withheld":
+                raise ReconcileFirst(f"withheld:{got.get('code')}:{len(got.get('items') or [])}")
+            if got["state"] != "claim_superseded":
+                raise Stop(f"claim_{got['state']}:{got.get('code')}")
+        raise Stop("claim_superseded_twice")
 
     def progress(self, env, name, *, event_id=None, at=None):
         cp = {"name": name, "digest": "sha256:" + hashlib.sha256(name.encode()).hexdigest(), "paths": [f"x/{name}"]}
