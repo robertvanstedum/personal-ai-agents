@@ -5,7 +5,7 @@
 | **Spec** | 165 |
 | **Date** | 28 October 2026 (v0.1, v0.2 and v0.3); 29 October 2026 (v0.4) |
 | **Author** | Claude Code, for Robert |
-| **Status** | **Draft v0.4 for review.** Robert authorized the build on 28 Oct (§1). This spec authorizes no deploy, flag, merge, credential or provider call. |
+| **Status** | **Draft v0.4.1 for review; D1–D23 answered (§16).** Robert authorized the build on 28 Oct (§1). This spec authorizes no deploy, flag, merge, credential or provider call. |
 | **Decision owner** | Robert |
 | **Review record** | v0.1 (`64b1896f`): independent review (`docs/specs/reviews/REVIEW_independent_spec_165_v0.1.md`, `5f2ebdce`); Codex (`docs/specs/reviews/REVIEW_codex_spec_165_v0.1.md`, `89edb852`); Codex's Chunk B code review (`planning-studio/…/trial-01-mc-voice-2026-10-27/REVIEW_codex_chunk_B.md`), carried in §5. v0.2 (`729d29c9`): Codex's delta review (`docs/specs/reviews/REVIEW_codex_spec_165_v0.2_delta.md`, `49dae6de`), V2-1 to V2-5, all answered in v0.3. v0.3 (`a772980d`): the build thread's amendment request (`planning-studio/operations/threads/HANDOFF_BUILD_TO_DESIGN_SPEC_165_C2_BINDING_2026-10-28.md`, items 1–11), Gate 2's code review and the post-Gate-2 review (`…/minimoi-1-2-voice/REVIEW_gate2_code.md`, `REVIEW_post_gate2.md`), all recorded in v0.4. Codex's CC_24 was withdrawn by Robert (§1, item 8). **Pending on v0.4:** Grok, then Claude Chat (the order agreed for v0.3; no review of v0.3 is recorded) |
 | **Builds on** | Spec 164 v0.3, approved 27 Oct (`437b7f8c`, PR #421); its phase order (§9–§11) is replaced here, the rest stands unless this spec says otherwise |
@@ -1106,6 +1106,17 @@ D1–D17 are Robert's as in v0.1, some reframed; D18–D23 are new; D24 is new i
 independent reviewer's (IR) and Codex's (CX) recommendation. In v0.3, Codex's recommendations are those of its v0.2 delta review. None is settled until Robert says so.
 In v0.4, **Robert's words** follow a decision where something he said since 28 Oct settles it, or part of it, quoted
 from §1. Every other decision stays open, Robert's.
+
+**Answered, 29 Oct (v0.4.1).** Robert's answer was "Accept all", by button: "Accept all the recommended answers for
+D1–D23, including D4, D12 and D18 explicitly; on D10 one host may use up the other's day."
+- **Settled as recommended, each (a):** D1, D4 (explicitly replacing the 27 Oct standalone gate), D5 to D14, D16 to D23.
+  D12 and D18 he adopted explicitly.
+- **D10:** one host may use up the other's day.
+- **D15:** superseded on 28 Oct by "claude tests only without Codex", two Claude-only gates.
+- **D2 and D3:** settled by ear (§1).
+- **Still open:** the D5 caveat (forged headers, §6.9) and S-2 (§11.1).
+- **Not yet built:** D17 (the shared rules into the core) and D23 (§14.1). They follow on their own branch after the
+  switched-off predeploy.
 
 **D1. CoS manner — a persona decision.** (a) Keep the shared persona; her card restates it for voice; (b) a
 CoS-only manner: split the persona, re-lock, rebuild `cos-agent-a`; (c) a new shared manner, same route. *CC: (a);
