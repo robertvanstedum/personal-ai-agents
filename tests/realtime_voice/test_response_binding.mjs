@@ -195,6 +195,26 @@ await check('ordinary (OpenAI): a reply that only talks, then his next request: 
   assert.equal(words(s, 0), 'Save a note: the kiln is hot');
 });
 
+for (const echo of [true, false]) {
+  await check(`new (OpenAI${echo ? ', tag echoed' : ', no tag echoed'}): a request let go before it started, then a start: never the wrong owner`, async (time) => {
+    const s = session('openai');
+    s.utter('item_A'); s.said('item_A', 'Save a note: first request');   // A's response never starts in time
+    time.pass(10000);
+    s.utter('item_B'); s.said('item_B', 'Check the board');
+    assert.equal(s.creates().length, 2);
+    // The next start could be A's late one or B's own: with the tag echoed it is told; without, it answers no one.
+    s.start('R_next', { echo, tag: echo ? s.creates()[1].response.metadata.minimoi_tag : null });
+    s.done('R_next', { call: 'c_next' }); await tick();
+    if (echo) assert.equal(words(s, 0), 'Check the board'); else assert.equal(s.bound(0), null);
+    assert.notEqual(words(s, 0), 'Save a note: first request');
+    if (!echo) assert.ok(s.unbound.some((u) => u.reason === 'after_lost_request'));
+    s.start('F_next', { echo }); s.done('F_next');                       // its result's follow-up
+    s.utter('item_C'); s.start('R_C', { echo }); s.done('R_C', { call: 'c_C' }); await tick();   // the next one is his own
+    s.said('item_C', 'Check the kiln');
+    assert.equal(words(s, 1), 'Check the kiln');
+  });
+}
+
 // ── I5: barge-in, cancelled and superseded responses, the earlier commit that never got its own ──────────────────────
 await check('new (OpenAI): a commit while a response is in flight: barge-in cancels it, and the newest committed item is answered', async () => {
   const s = session('openai');

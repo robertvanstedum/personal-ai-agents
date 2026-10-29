@@ -58,6 +58,7 @@ const RESPONSE_TTL_MS = 120000;
     this._inflight = null;           // the one page request in flight, from its response.create to its response.done
     this._answers = new Map();       // response id -> {owner: his item id or null, turn, acts}, or null: not the page's
     this._turn = 0;                  // his turns: each speech start and each commit begins a new one
+    this._lost = 0;                  // page requests let go before they started: a late start of one is not told by order
     this._tags = 0;
     this._expiry = null;
     this._onUnbound = onUnbound || ((info) => console.warn?.("[realtime-voice] a response bound to nothing", info));
@@ -213,6 +214,7 @@ const RESPONSE_TTL_MS = 120000;
     const f = this._inflight;
     if (f && Date.now() - f.at >= (f.started ? RESPONSE_TTL_MS : REQUEST_TTL_MS)) {
       this._inflight = null;
+      if (!f.started) this._lost += 1;
       this._let(f, f.started ? "unfinished" : "never_started");
     }
     while (!this._inflight && this._queue.length) {
@@ -247,14 +249,16 @@ const RESPONSE_TTL_MS = 120000;
 
   _reset() {
     const pending = this._inflight ? [this._inflight, ...this._queue] : this._queue.slice();
-    this._queue = []; this._inflight = null;
+    this._queue = []; this._inflight = null; this._lost = 0;
     for (const entry of pending) if (entry.done) { const done = entry.done; entry.done = null; done(null); }
     this._arm();
   }
 
   // A response started (response.created). It is the page's when it echoes the tag of the page request in flight, or, with
   // no tag, while that request has not started yet: it is then that request's, owned as the request is. Any other response
-  // (none in flight, one too many, another tag) answers no one; where the page creates every response it is logged.
+  // (none in flight, one too many, another tag) answers no one; where the page creates every response it is logged. After
+  // a request was let go before it started, an untagged start cannot be told from that request's late one: it settles the
+  // request in flight, but answers no one ("say it again"), once for each request let go.
   _started(evt) {
     if (!this._pageResponses) return;
     const id = evt.response_id || null;
@@ -266,8 +270,13 @@ const RESPONSE_TTL_MS = 120000;
       if (this._owned) this._onUnbound({ reason: !f ? "unrequested" : f.started ? "one_too_many" : "another_tag", response_id: id });
       return;
     }
+    const unsure = !evt.tag && this._lost > 0;
+    if (unsure) {
+      this._lost -= 1;
+      if (this._owned) this._onUnbound({ reason: "after_lost_request", response_id: id });
+    }
     f.started = true; f.id = id; f.at = Date.now();
-    if (id) this._answers.set(id, { owner: f.owner, turn: f.turn, acts: null });
+    if (id) this._answers.set(id, { owner: unsure ? null : f.owner, turn: f.turn, acts: null });
     this._arm();
     if (f.done) { const done = f.done; f.done = null; done(id); }
   }
