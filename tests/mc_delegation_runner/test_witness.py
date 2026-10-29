@@ -110,6 +110,52 @@ def test_a_failed_send_is_tried_again_and_never_recorded_as_told(tmp_path):
     assert len(_lines(tmp_path / "notify.jsonl")) == 1 and len(w.memory.told) == 1
 
 
+def test_n1_a_send_that_keeps_failing_is_shown_written_and_logged_never_dropped(tmp_path, mirror, capsys):
+    """S1-H review N1: a notifier that always fails (a locked Keychain, a wrong chat id) was counted in memory only, so
+    nobody saw it. Now each failure is in host-state.json (and an unknowns line while a notice waits), in doctor's
+    problems, written once per key and code to the witness's own failures.jsonl and logged once to stderr; never the
+    error's message (here, a Keychain reference). Sent once the notifier works again."""
+    from core.mc_delegation_runner import cli, launch
+
+    class Locked(W.FileNotifier):
+        def send(self, key, text, at):
+            raise launch.LaunchRefused("route_key_unavailable", ref="keychain:telegram/bot_token")
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake, notifier={"kind": "file", "path": str(tmp_path / "notify.jsonl")})
+    rt.witness.notifier = Locked(tmp_path / "notify.jsonl")
+    clock = _clocked(rt)
+    assert rt.contact() is True
+    rt.observe_authority()
+    fake.down = True
+    step = rt.values.contact_interval_s
+    for _ in range(int(rt.values.contact_timeout_s / step) + 4):
+        assert rt.contact() is False
+        clock["mono"] += step
+        clock["wall"] += timedelta(seconds=step)
+        rt.observe_authority()
+    rt.write_state(force=True)
+    state = json.loads((tmp_path / "artifacts" / "host-state.json").read_text())
+    shown = state["hosts"][0]["witness"]
+    assert shown["undelivered"].startswith("authority-unreachable:dev-authority:") and shown["failures"] >= 2
+    assert shown["last_failure"]["code"] == "route_key_unavailable"
+    assert [u for u in state["unknowns"] if u.startswith("witness: notice authority-unreachable:")]
+    written = _lines(tmp_path / "artifacts" / "witness" / "failures.jsonl")
+    assert [(x["witness"], x["code"], x["key"]) for x in written] == \
+        [("send_failed", "route_key_unavailable", shown["undelivered"])]          # once per key and code
+    err = capsys.readouterr().err
+    assert err.count('"send_failed"') == 1 and "keychain:" not in err
+    assert cli.main(["doctor", "--host-config", str(tmp_path / "host.yaml")]) == 1
+    assert "witness_send_failing:route_key_unavailable" in json.loads(capsys.readouterr().out)["problems"]
+    assert _lines(tmp_path / "notify.jsonl") == []
+    rt.witness.notifier = W.FileNotifier(tmp_path / "notify.jsonl")      # it works again: told, once
+    clock["mono"] += step
+    rt.observe_authority()
+    assert [x["key"].split(":")[0] for x in _lines(tmp_path / "notify.jsonl")] == ["authority-unreachable"]
+    assert rt.witness.status()["undelivered"] is None
+    assert W.failure_code(OSError("a message that could hold a value")) == "witness_send_failed:OSError"
+    assert W.failure_code(RuntimeError("witness_send_refused")) == "witness_send_refused"
+
+
 def _clocked(rt, start=1000.0):
     """The runtime on a clock the test moves: monotonic time (which does not run while a Mac sleeps) and wall time."""
     clock = {"mono": start, "wall": T0}

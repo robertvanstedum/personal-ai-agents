@@ -505,6 +505,11 @@ def _doctor(words) -> int:
     if out["census"] and out["census"].get("status") not in (None, "ok"):
         problems.append(f"census_{out['census']['status']}:{out['census'].get('reason')}")
     problems.extend(f"census_foreign_schema:{v}" for v in sorted((out["census"] or {}).get("foreign_schema") or {}))
+    # The witness (R5.6-a): a notice it could not send is shown, never dropped (S1-H review N1).
+    out["witness"] = h.get("witness")
+    if (out["witness"] or {}).get("undelivered"):
+        problems.append("witness_send_failing:{}".format(((out["witness"] or {}).get("last_failure") or {})
+                                                          .get("code")))
     problems.extend(f"census_unrecorded:{a}" for a in sorted((out["census"] or {}).get("unrecorded") or {}))
     try:
         digest, files = host_mod.tree_digest(host.bundle_root)

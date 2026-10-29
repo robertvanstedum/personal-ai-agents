@@ -16,6 +16,10 @@ A runtime with the ``witness`` role tells Robert once when its authority has not
   ``authority-unreachable`` key with no ``authority-back`` for the same ``since`` is the outage still open. While it
   is open, no second unreachable notice is told, whatever the new process measures; at the first good call its end is
   told once, under the first notice's ``since``.
+* **A send that fails is never silently dropped** (review N1). It is tried again at the next contact; meanwhile the
+  failure is written once per key and code to ``witness/failures.jsonl`` beside the memory and to stderr (the
+  runtime's log), and shown in ``host-state.json`` (``hosts[0].witness``, and an ``unknowns`` line while a notice is
+  undelivered) and by ``doctor``. Only fixed codes and exception type names are written, never a value or a URL.
 * **Silence where the spec wants it** (R2.4-b, R7.4-e). The outage is measured on the monotonic clock from the
   host's first failed call, so time the whole host spent asleep never counts. On the Mac-only gate the authority
   sleeps with the runtime: a whole-Mac sleep is no outage, and a wake whose first call succeeds says nothing.
@@ -27,10 +31,25 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import urllib.request
 from pathlib import Path
 
 _KEY = re.compile(r"^authority-(unreachable|back):[A-Za-z0-9._:-]{1,64}:[0-9T:.+-]{10,40}$")
+_CODE = re.compile(r"^[a-z][a-z0-9_:]{0,63}$")
+
+
+def failure_code(exc) -> str:
+    """A fixed code for a failed send: the error's own fixed code when it carries one (the credential store's
+    ``code``, or this module's own ``witness_…`` messages), else its type's name. Never any other message, which
+    could hold a URL or a value."""
+    code = getattr(exc, "code", None)
+    if isinstance(code, str) and _CODE.match(code):
+        return code
+    text = str(exc)
+    if text.startswith("witness_") and _CODE.match(text):
+        return text
+    return f"witness_send_failed:{type(exc).__name__}"
 
 
 class Memory:
@@ -137,6 +156,19 @@ class Witness:
         # during an outage neither tells it twice nor loses its end (SF2).
         self.outage = memory.open_outage(endpoint_id)
         self.errors = 0
+        self.last_failure = None                # {code, key, at} of the last failed send or look (N1)
+        self.undelivered = None                 # the key whose send failed last and is not yet told
+        self._failures_path = memory.path.with_name("failures.jsonl")
+        self._failed = set()                    # (key, code) already written to failures.jsonl and the log
+        try:
+            for line in self._failures_path.read_text().splitlines():
+                try:
+                    doc = json.loads(line)
+                    self._failed.add((doc["key"], doc["code"]))
+                except (ValueError, KeyError, TypeError):
+                    continue
+        except OSError:
+            pass
 
     def observe(self, offline_for_s, now_wall):
         from datetime import timedelta
@@ -156,6 +188,8 @@ class Witness:
                           f"Host {self.host_id} reaches its authority {self.endpoint_id} again (unreachable since "
                           f"{since}). Next: nothing to do; the host reconciles its work.", now_wall):
                 self.outage = None              # until told, tried again at the next contact
+        elif offline_for_s is None and (self.undelivered or "").startswith("authority-unreachable:"):
+            self.undelivered = None             # its outage ended untold: the failure stays counted and written
 
     def _tell(self, key, text, now_wall) -> bool:
         """True once the key is told (now, or before); False when its send failed."""
@@ -166,11 +200,40 @@ class Witness:
         at = now_wall.isoformat()
         try:
             self.notifier.send(key, text, at)
-        except Exception:
-            self.errors += 1
+        except Exception as exc:
+            self.failed(failure_code(exc), at, key)
             return False
         self.memory.record(key, at)
+        if self.undelivered == key:
+            self.undelivered = None
         return True
+
+    def failed(self, code, at, key=None):
+        """A failed send (or look) is counted, kept as the last failure, and written once per key and code to
+        ``failures.jsonl`` and to stderr (the runtime's log), so it is never silently dropped (N1). A write that
+        itself fails leaves the count and the host-state line."""
+        self.errors += 1
+        self.last_failure = {"code": code, "key": key, "at": at}
+        if key is not None:
+            self.undelivered = key
+        if (key, code) in self._failed:
+            return
+        self._failed.add((key, code))
+        line = {"witness": "send_failed" if key else "failed", "code": code, "key": key, "at": at}
+        try:
+            _append(self._failures_path, line)
+        except OSError:
+            pass
+        try:
+            print(json.dumps(line, sort_keys=True), file=sys.stderr, flush=True)
+        except Exception:
+            pass
+
+    def status(self) -> dict:
+        """What host-state.json and doctor show of the witness: the open outage, failures, the undelivered key."""
+        return {"notifier": type(self.notifier).__name__, "outage_since": None if self.outage is None
+                else self.outage[1], "failures": self.errors, "last_failure": self.last_failure,
+                "undelivered": self.undelivered}
 
 
 def build(host, contact_timeout_s, artifact_root):

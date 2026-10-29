@@ -1029,8 +1029,8 @@ class HostRuntime:
             since = self.offline_since
         try:
             self.witness.observe(None if since is None else self._mono() - since, self._now())
-        except Exception:
-            self.witness.errors += 1
+        except Exception as exc:                   # counted, written and shown (review N1), never raised
+            self.witness.failed(f"witness_observe_failed:{type(exc).__name__}", self.at())
 
     def _ok(self):
         with self._lock:
@@ -1171,6 +1171,13 @@ class HostRuntime:
                           "calls": _call_counts(self.dispatcher)}],
                "items": items,
                "unknowns": ["authority_snapshot: this is the host's own view; the authority's is S1-G's"]}
+        if self.witness is not None:              # its failures shown here and by doctor, never dropped (review N1)
+            w = self.witness.status()
+            doc["hosts"][0]["witness"] = w
+            if w["undelivered"]:
+                failure = w["last_failure"] or {}
+                doc["unknowns"].append(f"witness: notice {w['undelivered']} not delivered ({failure.get('code')}, "
+                                       f"since {failure.get('at')}); tried again at each contact")
         if self.census is not None:
             try:
                 if self._census_retained is None or time.monotonic() - self._census_retained >= 3600:
