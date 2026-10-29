@@ -14,8 +14,11 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import test_host_runtime as H  # noqa: E402
 from core.mc_delegation_runner import host as host_mod, witness as W  # noqa: E402
-from test_host_runtime import FakeAuthority, _reap, make_rt, mirror  # noqa: E402,F401
+
+FakeAuthority, make_rt = H.FakeAuthority, H.make_rt
+mirror, _reap = H.mirror, H._reap                          # the host runtime tests' fixtures, shared
 
 T0 = datetime(2026, 10, 29, 13, 0, tzinfo=timezone.utc)
 
