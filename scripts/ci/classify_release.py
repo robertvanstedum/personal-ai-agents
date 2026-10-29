@@ -96,8 +96,9 @@ MC_IMAGE_PREFIXES = ("docker/mc-agent-container/",)
 # through this pipeline. tests/test_release_classifier.py fails if another production file starts reading them.
 MC_PERSONA_PREFIXES = ("services/mc_operations/personas/",)
 # The persona release tools: make_header_release.py writes a new release folder and project_agents.py projects one into
-# the native mc-chat workspace, both run by the operator on the laptop. No service imports, copies or starts them (guarded
-# by the same test).
+# the native mc-chat workspace, both run by the operator on the laptop. The portal image copies them with the rest of the
+# repository (docker/Dockerfile.portal), but no service imports, names or starts them (the same test checks that no
+# service file names them), so a change to them deploys nothing.
 MC_PERSONA_TOOL_PREFIXES = ("scripts/mc_persona/",)
 
 
