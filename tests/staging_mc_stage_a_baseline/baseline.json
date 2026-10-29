@@ -1,0 +1,16 @@
+{
+ "copies": [
+  "docker-compose.prod.yml",
+  "docker-compose.staging.yml"
+ ],
+ "deploy_scoped_release_base_sha256": "c708e8fe65ca826dcfd4db22f4c521790a59fd5bdca3b441f12fef762688d69a",
+ "digests": {
+  "docker-compose.prod.yml": "1246f19f554cb3ce1e686471e8a2145c10bc79cc23c67d6a224722fc697777e3",
+  "docker-compose.yml": "4ff0cec83ff31e2b2598db24e8e5827aa1a5a44ca0cc72f47ff918244b9c94b1",
+  "docker/Dockerfile.cos-agent-a": "20d9fdaa25e52ee2606f57e2009a085323c0e5c52cf9368c1a104d8aa4a77724",
+  "docker/cos-agent-a/apply-config.sh": "3e6698100176eff37cedb5a4bf04fd96d833cb53e7d9c0305a7c66ee1f8d3b6b",
+  "docker/cos-agent-a/openclaw.json": "2d660b308bba4c0a859a666e4536ab4814d2eca2d06dc0659ca72186e9b304de",
+  "services/model_gateway/litellm.prod.yaml": "53c947729fba97c6d0452446509f232bc60defa1d9782661dc1d9a66c9a4a4b0"
+ },
+ "note": "The reviewed baseline stage A compares production and CoS files with (MC spec v0.8 stage A: production and CoS left as they are), committed so CI's one-commit checkout compares deterministically instead of skipping (Codex's P1-a re-check). Taken at e9445541, equal to origin/main 4f531c6f for every file. A deliberate change to one of these files updates this fixture in the same reviewed commit."
+}

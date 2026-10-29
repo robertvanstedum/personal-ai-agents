@@ -1,0 +1,563 @@
+# Production docker-compose — EC2 deployment
+# Uses one immutable ECR commit tag per release. CI exports MINIMOI_IMAGE_TAG;
+# manual use defaults to latest unless scripts/deploy.sh receives a tag.
+# Data files must exist under /opt/minimoi/data/ on the host.
+# Every host path is ${MINIMOI_ROOT:-/opt/minimoi}/...: EC2 never sets
+# MINIMOI_ROOT, so production renders exactly as /opt/minimoi. The Mac staging
+# stack (dev.minimoi.ai) sets it to its own root through scripts/staging/ and
+# docker-compose.staging.yml; see scripts/staging/README.md.
+# Run: docker-compose -f docker-compose.prod.yml up -d
+# Update images: scripts/deploy.sh
+
+services:
+  postgres:
+    image: postgres:latest
+    container_name: postgres-ai-agents
+    restart: unless-stopped
+    env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
+    environment:
+      - POSTGRES_DB=personal_agents
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  model-gateway:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:model-gateway-${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-model-gateway
+    restart: unless-stopped
+    # mc-portal: MC's tools door reaches the gateway's search route here (MC's own capped key; MC itself is not on it).
+    networks: [default, mc-portal]
+    command:
+      - --config
+      - /app/config.yaml
+      - --port
+      - "4000"
+      - --num_workers
+      - "1"
+    environment:
+      - LITELLM_MASTER_KEY=${MINIMOI_MODEL_GATEWAY_KEY:?set MINIMOI_MODEL_GATEWAY_KEY in /opt/minimoi/.env}
+      - XAI_API_KEY=${XAI_API_KEY:?set XAI_API_KEY in /opt/minimoi/.env}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in /opt/minimoi/.env}
+      - MINIMOI_RECEIPT_ENDPOINT=http://cos-scheduler:8769/internal/model-gateway/receipt
+      - MINIMOI_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}
+    # The gateway's own key database (litellm_keys, its own role, in the existing Postgres) holds the per-agent capped
+    # virtual keys (MC's search key); CoS keeps the master key. This root 0600 file holds only its DATABASE_URL, written
+    # from Parameter Store by sync_cos_runtime_secrets_from_ssm.sh, so no other service sees it. Absent (staging, or
+    # before the parameter exists) it is skipped. With it on, the gateway does not start while Postgres is down.
+    env_file:
+      - path: ${MINIMOI_ROOT:-/opt/minimoi}/gateway-keys.env
+        required: false
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # Prisma migrations run at start (about 20 s on staging).
+      start_period: 120s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  cos-agent-a:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:agent-a-${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-cos-agent-a
+    restart: unless-stopped
+    environment:
+      - OPENCLAW_GATEWAY_TOKEN=${COS_AGENT_A_GATEWAY_TOKEN:?set COS_AGENT_A_GATEWAY_TOKEN in /opt/minimoi/.env}
+      # The master key, unless CoS has its own capped key: `cos_prod.sh key` sets COS_AGENT_MASTER_KEY= (empty, not a
+      # secret) in /opt/minimoi/.env so the master key never enters this container; apply-config.sh then reads CoS's
+      # key from /run/cos-key. `cos_prod.sh key off` removes that line and the master key comes back.
+      - MINIMOI_MODEL_GATEWAY_KEY=${COS_AGENT_MASTER_KEY-${MINIMOI_MODEL_GATEWAY_KEY:?set MINIMOI_MODEL_GATEWAY_KEY in /opt/minimoi/.env}}
+      - OPENCLAW_STATE_DIR=/home/node/.openclaw
+      - OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json
+      - OPENCLAW_DISABLE_BONJOUR=1
+      - OPENCLAW_NO_AUTO_UPDATE=1
+      # Fewer glibc malloc arenas: about -60 MB idle, the only measured lever.
+      - MALLOC_ARENA_MAX=2
+      - TZ=${COS_AGENT_TIMEZONE:-America/Chicago}
+    volumes:
+      - cos-agent-a-state:/home/node/.openclaw
+      - cos-agent-a-auth:/home/node/.config/openclaw
+      # Robert-approved shared CoS/MC full-access experiment (13 October).
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data:/minimoi/data
+      # Native image tools admit this exact owner-selected evidence workspace.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/mc-evidence:/home/node/.openclaw/workspace-cos-agent-a/mc-evidence:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/docs:/minimoi/docs
+      # Read-only: root runs these scripts on every release, so a writable copy here would let an agent run code as
+      # root on the host (26 Oct 2026).
+      - ${MINIMOI_ROOT:-/opt/minimoi}/scripts:/minimoi/scripts:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/agent_logs:/minimoi/agent_logs
+      # CoS gets Master Craftsman's working skills (Robert, 26 Oct 2026; #215, #335). Test phase: wide read, writes in
+      # its own folders and Planning Studio; narrowing per subdomain comes later. Folders are prepared by
+      # scripts/operations/cos_prod.sh prepare (every main release). No credential is reachable: never /opt/minimoi
+      # itself, .env, mc.env, mc/portal, auth, private, backups, ~/.ssh or the Docker socket.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/inbox:/minimoi/cos/inbox:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/outbox:/minimoi/cos/outbox
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/conversations:/minimoi/cos/conversations:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/planning-studio:/minimoi/planning-studio
+      - ${MINIMOI_ROOT:-/opt/minimoi}/mc/repo:/minimoi/repo:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/mc/work:/minimoi/mc/work:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/mc/workshops:/minimoi/mc/workshops:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/mc/artifacts:/minimoi/mc/artifacts:ro
+      # CoS's own capped gateway key (cos_prod.sh key), read by apply-config.sh at start instead of the master key.
+      # Empty folder: the master key stays (the rollback is `cos_prod.sh key off`).
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/agent-key:/run/cos-key:ro
+    # Real turns on staging peaked at about 1,031 MB (a 900m probe OOMed in 11
+    # of 17 starts); cap it so it can never starve the rest of the host. The
+    # staging override inherits this limit. NODE_OPTIONS stays unset: a heap
+    # cap measured no idle gain and risks fatal heap exhaustion mid-turn.
+    mem_limit: 1400m
+    # The image's own check runs only every 180 s; the deploy waits 360 s.
+    # Probe the unauthenticated liveness endpoint with the image's node.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:18789/healthz').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      model-gateway:
+        condition: service_healthy
+
+  curator:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/curator:${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-curator
+    restart: unless-stopped
+    env_file:
+      - ${MINIMOI_ROOT:-/opt/minimoi}/.env
+      # Default reuses the existing env file, so inactive installs need no new file.
+      # Activation selects a Curator-only root0600 file containing only the derived key.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/${MINIMOI_CURATOR_INTAKE_ENV_FILE:-.env}
+    environment:
+      - FLASK_ENV=production
+      - PORT=8766
+      # Library intake receiver (MC "save this to library:"). Off unless MINIMOI_LIBRARY_INTAKE_PRODUCTION=1 on the host.
+      # Curator holds only the purpose-derived key, from its own root-only file; the shared portal secret is blanked here.
+      - MINIMOI_LIBRARY_INTAKE=${MINIMOI_LIBRARY_INTAKE_PRODUCTION:-0}
+      - MINIMOI_LIBRARY_INTAKE_ENV=production
+      - MINIMOI_LIBRARY_INTAKE_OWNER=robert
+      - PORTAL_SECRET_KEY=
+      # Event log and X pull cursor live in the mounted data/curator folder
+      # (#305). The cursor is saved by rename, so it needs a folder mount.
+      - CURATOR_SIGNAL_STORE_PATH=/app/data/curator/signal_store.jsonl
+      - CURATOR_X_PULL_STATE_PATH=/app/data/curator/x_pull_state.json
+      # The day's briefing text, read by feedback, flagging and Telegram (#305).
+      - CURATOR_OUTPUT_PATH=/app/data/curator/curator_output.txt
+      # Private state remains on the existing production host binds.
+      - CURATOR_RESEARCH_STATE_DIR=/app/research-state
+    volumes:
+      # Every bind source here is listed in scripts/operations/curator_state.map,
+      # seeded from the deploy-time production snapshot and checked before and
+      # after the container is created (#305). Keep the two in step.
+      #
+      # curator_signals.json, curator_latest.json, curator_radar.json now live
+      # inside this same mounted directory (data/curator/curator_*.json) rather
+      # than as separate top-level mounts -- see Phase 2 Slice 5. REQUIRES the
+      # EC2 host files to be moved from /opt/minimoi/data/curator_*.json into
+      # /opt/minimoi/data/curator/curator_*.json before this deploys, or the
+      # container will find no data at startup.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator:/app/data/curator
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator_archive:/app/curator_archive
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator_history.json:/app/curator_history.json
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator_costs.json:/app/curator_costs.json
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/interests:/app/interests
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/research-intelligence:/app/data/research-intelligence
+      # Formerly container-only (#305): general comments, research library,
+      # runtime-edited research config and source trust list. The two config
+      # files are production copies: repo edits to them no longer reach
+      # production without a reviewed merge into the host file.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/annotations:/app/data/annotations
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/research-library:/app/research-state/library
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/research-config/config.json:/app/research-state/agent/config.json
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator-config/curator_sources.json:/app/domains/curator/curator_sources.json
+      # Full article files (<hash>.json) that curator_history.json points to;
+      # feedback and Library enrichment load them by hash (#305).
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator_cache:/app/curator_cache
+      # Not mounted on purpose: /app/research-state/topics. If that folder
+      # exists, research sessions are written there instead of data/threads.
+    ports:
+      - "127.0.0.1:8766:8766"
+    depends_on:
+      - postgres
+
+  german:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/mein-deutsch:${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-german
+    restart: unless-stopped
+    env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
+    environment:
+      - FLASK_ENV=production
+      - MINIMOI_ROLE=production
+      - PORT=8767
+      # Realtime voice is the released default. Set to 0 in /opt/minimoi/.env
+      # only for an explicit rollback to the older session UI.
+      - VOICE_REALTIME_UI_ENABLED=${VOICE_REALTIME_UI_ENABLED:-1}
+    volumes:
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/german:/app/domains/german/data
+    ports:
+      - "127.0.0.1:8767:8767"
+
+  portuguese:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portuguese:${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-portuguese
+    restart: unless-stopped
+    env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
+    environment:
+      - FLASK_ENV=production
+      - MINIMOI_ROLE=production
+      - PORT=8770
+      # Keep Portuguese on the same shared voice layer and release state.
+      - VOICE_REALTIME_UI_ENABLED=${VOICE_REALTIME_UI_ENABLED:-1}
+    volumes:
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/portuguese:/app/domains/portuguese/data
+    ports:
+      - "127.0.0.1:8770:8770"
+    depends_on:
+      - postgres
+
+  portal:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-portal
+    restart: unless-stopped
+    env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
+    environment:
+      - FLASK_ENV=production
+      - PORT=5001
+      - COS_BACKEND=http://cos-scheduler:8769
+      # Shared voice beta: on-record MC speech and insertion-only dictation.
+      - MINIMOI_GUILD_VOICE_PRODUCTION=1
+      - MINIMOI_MC_VOICE=1
+      - MINIMOI_DICTATION=1
+      # Explicit controls; activation follows reviewed production schema/runtime checks.
+      - MINIMOI_ROLE=production
+      - MINIMOI_MC_BOARD_OUTCOMES=${MINIMOI_MC_BOARD_OUTCOMES:-0}
+      - MINIMOI_GUILD_MANAGED_VOICE_PRODUCTION=${MINIMOI_GUILD_MANAGED_VOICE_PRODUCTION:-0}
+      - MINIMOI_MC_MANAGED_REALTIME=${MINIMOI_MC_MANAGED_REALTIME:-0}
+      - MINIMOI_COS_MANAGED_REALTIME=${MINIMOI_COS_MANAGED_REALTIME:-0}
+      - MINIMOI_COS_WRITE_GUARD=${MINIMOI_COS_WRITE_GUARD:-}
+      - MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO=${MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO:-}
+      # Dev liveness stays off; production requires its separate explicit opt-in.
+      - MINIMOI_MC_DOMAIN_HEALTH=0
+      - MINIMOI_MC_DOMAIN_HEALTH_PRODUCTION=${MINIMOI_MC_DOMAIN_HEALTH_PRODUCTION:-0}
+      # Library intake sender (MC "save this to library:"); signs with a key derived from its own PORTAL_SECRET_KEY.
+      - MINIMOI_LIBRARY_INTAKE=${MINIMOI_LIBRARY_INTAKE_PRODUCTION:-0}
+      - MINIMOI_LIBRARY_INTAKE_ENV=production
+      - MINIMOI_LIBRARY_INTAKE_OWNER=robert
+      # IoT Connect reference demo runs as its own Compose project
+      # (docker-compose.iotconnect.prod.yml, project "iotconnect"); the portal
+      # reaches it over the shared edge network created below.
+      - IOTCONNECT_BACKEND=http://minimoi-iotconnect:8095
+      # Name must match what minimoi_portal/config.py actually reads — the
+      # variable this replaced was never read by the portal at all.
+      - IOTCONNECT_RELEASE_LABEL=${IOTCONNECT_RELEASE_LABEL:-iotconnect-v0.9.0-beta.1}
+      # The live Build Queue. domains/guild/queue_store.py refuses to Save
+      # unless this is set and its folder is a mount (never the image's copy).
+      - GUILD_QUEUE_PATH=/app/runtime/guild/build_queue.json
+      # Master Craftsman's own container (docs/runbooks/mc_container_prod.md). Every switch defaults OFF; they are
+      # turned on together, in /opt/minimoi/.env, only by `deploy_mc_container_ec2.sh switch mc` (and off by
+      # `switch cos`). Paths and environments are fixed here; tokens are hashes only.
+      - MINIMOI_MC_TOOLS=${MINIMOI_MC_TOOLS:-0}
+      - MINIMOI_MC_TOOLS_ENV=prod
+      - MINIMOI_MC_TOOLS_PRINCIPAL=robert
+      - MINIMOI_MC_TOOLS_PORT=5011
+      - MINIMOI_MC_TOOLS_TOKEN_SHA256=${MINIMOI_MC_TOOLS_TOKEN_SHA256:-}
+      # MC's GitHub issue writes (comments, tickets): on only by `deploy_mc_container_ec2.sh issues on`, which projects
+      # the issues-only token from Parameter Store into this root 0600 file.
+      - MINIMOI_MC_TOOLS_TICKETS=${MINIMOI_MC_TOOLS_TICKETS:-0}
+      - MINIMOI_MC_TOOLS_COMMENTS=${MINIMOI_MC_TOOLS_COMMENTS:-0}
+      - MINIMOI_MC_ISSUES_TOKEN_FILE=/run/secrets/mc/github-issues-token
+      - MINIMOI_MC_TURN_LEDGER=${MINIMOI_MC_TOOLS:-0}
+      - MINIMOI_MC_POLICY_FILE=/run/secrets/mc/mc-policy.prod.json
+      - MINIMOI_MC_POLICY_AUTHORITY_FILE=/run/secrets/mc/mc-policy.prod.authority.json
+      - MINIMOI_MC_STATUS_PROTOCOL_VERSION=2
+      - MINIMOI_MC_ARTIFACT_ROOT=/opt/minimoi/mc/artifacts
+      - MINIMOI_BOARD_ACTIONS=${MINIMOI_MC_TOOLS:-0}
+      - MINIMOI_BOARD_ENV=prod
+      - MINIMOI_MC_RECALL=${MINIMOI_MC_TOOLS:-0}
+      - MINIMOI_MC_DELIVERIES=${MINIMOI_MC_TOOLS:-0}
+      - MINIMOI_MC_OPERATING_RULES=${MINIMOI_MC_TOOLS:-0}
+      - MINIMOI_MC_MEETINGS=${MINIMOI_MC_TOOLS:-0}
+      - MINIMOI_MC_LESSONS=${MINIMOI_MC_TOOLS:-0}
+      - MINIMOI_MC_LESSONS_ENV=prod
+      - MINIMOI_MC_LESSONS_DIR=/app/data/mc-lessons
+      - MINIMOI_MC_DELEGATION=${MINIMOI_MC_DELEGATION:-0}
+      - MINIMOI_MC_DELEGATION_ENV=prod
+      - MINIMOI_MC_DELEGATION_PRINCIPAL=robert
+      # Guild jobs carry delegated work (jobs_wiring.py): without them no delegation can start. Off unless .env sets 1.
+      - MINIMOI_GUILD_JOBS=${MINIMOI_GUILD_JOBS:-0}
+      # MC's front door to the agents (agent_ask.py, minimoi_agent_ask): Robert's own message into the request ledger. Off unless .env sets 1.
+      - MINIMOI_GUILD_AGENT_REQUESTS=${MINIMOI_GUILD_AGENT_REQUESTS:-0}
+      # The Mac delegation runner's HTTPS door (no database port): on with its token hash, set by
+      # `deploy_mc_container_ec2.sh runner on <sha256>`.
+      - MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256=${MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256:-}
+      - MINIMOI_MC_AGENT_ENROLLMENT=/run/secrets/mc/enrollment.json
+      # Build supervision (#365; docs/runbooks/supervision.md): the Mac sync's path, Robert's "approve D-n" in the
+      # Guild chat and MC's "waiting on you" context. Off until `supervisor_ec2.sh on` sets both keys in .env.
+      - MINIMOI_SUPERVISION=${MINIMOI_SUPERVISION:-0}
+      - MINIMOI_SUPERVISION_OWNER=robert
+      - MINIMOI_SUPERVISION_WORKER_TOKEN_SHA256=${MINIMOI_SUPERVISION_WORKER_TOKEN_SHA256:-}
+      - MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256=${MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256:-}
+      - MINIMOI_MC_APPROVED_HANDOFF_REGISTRY=/run/secrets/mc/approved-handoff-registry.json
+      - MINIMOI_MC_TASK_WATCH_REGISTRY=/run/secrets/mc/task-watch-registry.json
+    volumes:
+      # Mount the queue FOLDER, not the file: an atomic replace (the verified
+      # Save, the deploy seed, --publish-queue) changes the file's inode, which
+      # would detach a single-file mount. The folder also holds the sidecar
+      # lock and the journal. It is mounted at /app/runtime/guild, not
+      # /app/data/guild, so the image's data/guild/experiment_projection.json
+      # stays visible (C17). cos-bot and cos-scheduler never read the queue.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild:/app/runtime/guild
+      # Regenerable public observations; operator provisions this private parent.
+      - mc-observations:/app/runtime/mc-observations
+      - ${MINIMOI_ROOT:-/opt/minimoi}/docs/design:/app/docs/design
+      - ${MINIMOI_ROOT:-/opt/minimoi}/docs/specs:/app/docs/specs
+      - ${MINIMOI_ROOT:-/opt/minimoi}/auth/users.json:/app/minimoi_portal/auth/users.json
+      - ${MINIMOI_ROOT:-/opt/minimoi}/auth/guests.json:/app/minimoi_portal/auth/guests.json
+      - ${MINIMOI_ROOT:-/opt/minimoi}/agent_logs:/app/agent_logs
+      # Master Craftsman: its operator-installed policy, authority record and registries (read-only), and the
+      # portal-owned lesson store (in the daily backup). Created by deploy_mc_container_ec2.sh; empty until then.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/mc/portal:/run/secrets/mc:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/mc-lessons:/app/data/mc-lessons
+      # Nonsecret root-generated deployment observations; MC has read-only access.
+      - type: bind
+        source: ${MINIMOI_ROOT:-/opt/minimoi}/release-status
+        target: /app/runtime/release
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - "127.0.0.1:5001:5001"
+    networks:
+      - default
+      - iotconnect-edge
+      - mc-portal
+    depends_on:
+      - curator
+      - german
+      - portuguese
+      - postgres
+      - cos-scheduler
+
+  system-bot:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/system-bot:${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-system-bot
+    restart: unless-stopped
+    env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
+    environment:
+      - MINIMOI_ROLE=production
+      - TELEGRAM_CHAT_ID=8379221702
+    # Shares the German data volume with the web container so drills, phrasebook,
+    # progress and session files are the same store the Gespräche UI reads/writes.
+    volumes:
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/german:/app/domains/german/data
+    depends_on:
+      - curator
+      - portal
+      - german
+
+  cos-bot:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-bot:${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-cos-bot
+    restart: unless-stopped
+    env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
+    environment:
+      - MINIMOI_ROLE=production
+      - COS_BACKEND_TYPE=${COS_BACKEND_TYPE:-openclaw}
+      - COS_AGENT_RUNTIME_URL=http://cos-agent-a:18789/v1
+      - COS_AGENT_RUNTIME_TOKEN=${COS_AGENT_A_GATEWAY_TOKEN:?set COS_AGENT_A_GATEWAY_TOKEN in /opt/minimoi/.env}
+      - COS_AGENT_RUNTIME_AGENT_ID=${COS_AGENT_RUNTIME_AGENT_ID:-cos-agent-a}
+      - COS_AGENT_TIMEZONE=${COS_AGENT_TIMEZONE:-America/Chicago}
+      - COS_MODEL_GATEWAY_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}
+      - COS_REMINDERS_DIR=/app/data/cos_reminders
+    volumes:
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos_memory.md:/app/data/cos_memory.md
+      # Telegram /remind writes the same reminder store as cos-scheduler; delivery claims each
+      # reminder under the store lock, so two delivery loops never send one twice.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos_reminders:/app/data/cos_reminders
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/model_gateway_receipts.jsonl:/app/data/model_gateway_receipts.jsonl
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json
+    depends_on:
+      - postgres
+      - cos-scheduler
+      - cos-agent-a
+
+  cos-scheduler:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-cos-scheduler
+    restart: unless-stopped
+    env_file:
+      - ${MINIMOI_ROOT:-/opt/minimoi}/.env
+      - ${MINIMOI_ROOT:-/opt/minimoi}/${MINIMOI_VAULT_READER_ENV_FILE:-.env}
+    environment:
+      - MINIMOI_ROLE=production
+      - MINIMOI_VOICE_BUDGET=1
+      - MINIMOI_COS_MANAGED_REALTIME=${MINIMOI_COS_MANAGED_REALTIME:-0}
+      - MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO=${MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO:-}
+      - MINIMOI_LIMITS_DIR=/app/runtime/guild/limits
+      - TELEGRAM_CHAT_ID=8379221702
+      - PORT=8769
+      - DISABLE_TELEGRAM_POLL=1
+      - COS_BACKEND_TYPE=${COS_BACKEND_TYPE:-openclaw}
+      - COS_AGENT_RUNTIME_URL=http://cos-agent-a:18789/v1
+      - COS_AGENT_RUNTIME_TOKEN=${COS_AGENT_A_GATEWAY_TOKEN:?set COS_AGENT_A_GATEWAY_TOKEN in /opt/minimoi/.env}
+      - COS_AGENT_RUNTIME_AGENT_ID=${COS_AGENT_RUNTIME_AGENT_ID:-cos-agent-a}
+      - COS_AGENT_TIMEZONE=${COS_AGENT_TIMEZONE:-America/Chicago}
+      - COS_MODEL_GATEWAY_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}
+      - MINIMOI_VAULT_ASK_URL=${MINIMOI_VAULT_ASK_URL:-}
+      - MINIMOI_VAULT_ASK_INTERNAL_HOSTS=vault-ask
+      - MINIMOI_VAULT_ASK_INCLUDE_RAW=${MINIMOI_VAULT_ASK_INCLUDE_RAW:-0}
+      # Only the Guild's MC conversations ask the Vault: never Telegram or other CoS channels (17 Oct). Robert's Confer
+      # conversation ("owner") is added only by setting MINIMOI_COS_VAULT_CONVERSATIONS=guild-,owner in /opt/minimoi/.env.
+      - MINIMOI_VAULT_ASK_CONVERSATIONS=${MINIMOI_COS_VAULT_CONVERSATIONS:-guild-}
+      - COS_REMINDERS_DIR=/app/data/cos_reminders
+      # Confer files and recall (domains/cos/files.py, conversation_log.py): the scheduler's paths, then the same
+      # folders as CoS's runtime sees them.
+      - COS_FILES_INBOX=/app/data/cos-files/inbox
+      - COS_FILES_OUTBOX=/app/data/cos-files/outbox
+      - COS_CONVERSATIONS_DIR=/app/data/cos-conversations
+      - COS_AGENT_INBOX=/minimoi/cos/inbox
+      - COS_AGENT_OUTBOX=/minimoi/cos/outbox
+      - COS_AGENT_CONVERSATIONS=/minimoi/cos/conversations
+    volumes:
+      # Same owner limit registry as the portal, including next-day limits.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/limits:/app/runtime/guild/limits:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos_memory.md:/app/data/cos_memory.md
+      # Explicit reminders (reminders.json + reminders.lock): a directory, so atomic replace works.
+      # Beside cos_memory.md, outside data/: cos-agent-a mounts data/ read-write and must not edit receipts.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos_reminders:/app/data/cos_reminders
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/model_gateway_receipts.jsonl:/app/data/model_gateway_receipts.jsonl
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Confer files: the scheduler writes the inbox and the conversation record, and only reads CoS's outbox.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/inbox:/app/data/cos-files/inbox
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/outbox:/app/data/cos-files/outbox:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/conversations:/app/data/cos-conversations
+    ports:
+      - "127.0.0.1:8769:8769"
+    # Vault retrieval for MC/CoS turns (owner decisions 17 Oct 2026). Off until the Vault
+    # is activated: empty URL/token = the hook is disabled. INCLUDE_RAW asks for the full
+    # Vault on on-record turns; the Ask service grant still decides.
+    networks:
+      - default
+      - vault-internal
+    depends_on:
+      - postgres
+      - cos-agent-a
+
+  # Production Vault: keyword search over the Mac-published snapshot (scripts/vault/
+  # production_refresh.py installs /opt/minimoi/vault/current). Behind the `vault` profile,
+  # so ordinary releases never create it until activation sets COMPOSE_PROFILES=vault.
+  # Same portal image (the repository copy); no sqlite-vec, so meaning search reports
+  # vector_unavailable. Reachable only on the internal network, never published.
+  # The build supervisor (#365): check-ins every 15 min, decisions to Robert on the approvals bot, his replies back
+  # with receipts. The portal image, its own command (like vault-ask); started only by `supervisor_ec2.sh on`, then
+  # recreated with each portal release. Reads the database and the public GitHub API; holds only the approvals bot
+  # token (a root 0600 file projected from Parameter Store, never in .env).
+  supervisor:
+    profiles: [supervisor]
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-supervisor
+    restart: unless-stopped
+    command: [python, -m, services.supervisor.main]
+    environment:
+      - MINIMOI_ROLE=production
+      - PYTHONDONTWRITEBYTECODE=1
+      - DATABASE_URL=${DATABASE_URL:-}           # the portal's own, from /opt/minimoi/.env (start refuses an empty one)
+      - TELEGRAM_CHAT_ID=8379221702
+      - TELEGRAM_APPROVALS_BOT_TOKEN_FILE=/run/secrets/supervisor/approvals-bot-token
+      - SUPERVISOR_CHECKIN_MINUTES=15
+      - TZ=America/Chicago
+    volumes:
+      - ${MINIMOI_ROOT:-/opt/minimoi}/supervisor:/run/secrets/supervisor:ro
+    depends_on:
+      - postgres
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    mem_limit: 192m
+    cpus: 0.25
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      # Alive when a tick finished in the last 3 minutes (a Telegram long poll is 25 s).
+      test: [CMD, python, -c, "import os,time,sys; sys.exit(0 if time.time()-os.path.getmtime('/tmp/supervisor.alive')<180 else 1)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+
+  vault-ask:
+    profiles: [vault]
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-vault-ask
+    restart: unless-stopped
+    command: [python, -m, core.memory_ask.service, --host, 0.0.0.0, --port, "8771",
+              --shelf-root, /vault/current/shelf, --index, /vault/current/index/memory.sqlite,
+              --registry, /vault/memory-ask/agents.json, --log, /vault-log/ask-log.jsonl]
+    environment:
+      - MINIMOI_ROLE=production
+      - PYTHONDONTWRITEBYTECODE=1
+      - MOI_OLLAMA_URL=http://127.0.0.1:9         # no embedder in production: refuse fast, never reach out
+    volumes:
+      - type: bind
+        source: ${MINIMOI_ROOT:-/opt/minimoi}/vault
+        target: /vault
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind                                  # outside the read-only /vault tree
+        source: ${MINIMOI_ROOT:-/opt/minimoi}/vault-log
+        target: /vault-log
+        bind:
+          create_host_path: false
+    networks:
+      - vault-internal
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    mem_limit: 512m
+    cpus: 0.5
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      # Healthy only when the service answers AND a release, its index and the grant registry are in place
+      # (an Ask without them would 503 every request).
+      test: [CMD, python, -c, "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:8771/v1/health', timeout=3); assert all(os.path.isfile(p) for p in ('/vault/current/index/memory.sqlite','/vault/current/shelf/_ledger/source_index.json','/vault/memory-ask/agents.json'))"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  mc-observations:
+  postgres-data:
+  cos-agent-a-state:
+  cos-agent-a-auth:
+
+networks:
+  default:
+  # Fixed-name network the IoT Connect project joins as `external`. Created by
+  # the ordinary mini-moi deploy, so it exists before the IoT Connect workflow
+  # first runs (first-release sequencing: mini-moi main deploy → IoT Connect tag).
+  iotconnect-edge:
+    name: iotconnect-edge
+  # Fixed-name network Master Craftsman's own project (docker-compose.mc.prod.yml) joins as `external`: only the portal
+  # and mc-relay are on it, with no route out. Created by the ordinary deploy so it exists before MC first starts.
+  mc-portal:
+    name: minimoi-mc-portal
+    internal: true
+  # Only cos-scheduler and vault-ask: no route out, no other service.
+  vault-internal:
+    internal: true
