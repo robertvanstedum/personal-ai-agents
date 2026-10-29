@@ -195,6 +195,8 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
             conn = self.connect()
             try:
                 with conn.cursor() as cur:
+                    # The fixture's own sessions carry lock_timeout 3 s: off here, so only 002's own bound applies.
+                    cur.execute("SET lock_timeout = 0")
                     cur.execute("SET statement_timeout = '20s'")
                     started = time.monotonic()
                     with self.assertRaises(psycopg2.Error) as got:
