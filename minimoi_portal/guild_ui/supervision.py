@@ -8,6 +8,13 @@
   owner note counts (never MC's text); the receipt names the conversation and note and quotes him.
 * ``context_block``: what MC is told on each of Robert's Guild turns: decisions waiting on him and the last check-in,
   so MC raises them first.
+
+Host runtime S1-G (spec v0.5 R4.6-b, R5.6-b), each off unless configured; with neither, ``attach`` is exactly today's:
+* MINIMOI_SUPERVISION_CONTACTS=1: every call on the Mac sync's path records that credential's last contact, pull
+  included, so the check-in can read the mirror's age.
+* MINIMOI_SUPERVISION_WATCH_TOKEN_SHA256 with MINIMOI_SUPERVISION_WATCH_HOST: staging's heartbeat credential for
+  production's notify-only watch. It is a second credential on the same path that can send only its heartbeat (its own
+  row): no pull, no report, no ack (contacts are then recorded too).
 """
 from __future__ import annotations
 
@@ -40,7 +47,9 @@ def door(app, path, endpoint, digest, handler, *, refused=(ValueError,), clock=t
          body_max=65536):
     """One machine path on the public port: a per-address rate limit, a constant-time check of the caller's bearer
     token against its configured SHA-256, a bounded JSON body, and ``handler(body) -> dict``. Malformed or refused
-    bodies answer 400; anything else 503, with no detail."""
+    bodies answer 400; anything else 503, with no detail. ``digest`` may instead name several credentials
+    ({name: SHA-256}, S1-G): each is checked in constant time, and ``handler(body, name)`` learns which one called."""
+    named = digest if isinstance(digest, dict) else None
     from flask import jsonify, request
     seen = {}
 
@@ -54,13 +63,24 @@ def door(app, path, endpoint, digest, handler, *, refused=(ValueError,), clock=t
             seen.clear()
         header = request.headers.get("Authorization", "")
         presented = header[7:] if header.startswith("Bearer ") else ""
-        if not (32 <= len(presented) <= 256 and secrets.compare_digest(
-                hashlib.sha256(presented.encode()).hexdigest(), digest)):
-            return jsonify(error="unauthorized"), 401
+        caller = None
+        if named is None:
+            if not (32 <= len(presented) <= 256 and secrets.compare_digest(
+                    hashlib.sha256(presented.encode()).hexdigest(), digest)):
+                return jsonify(error="unauthorized"), 401
+        else:
+            if 32 <= len(presented) <= 256:
+                given = hashlib.sha256(presented.encode()).hexdigest()
+                for who, want in sorted(named.items()):
+                    if secrets.compare_digest(given, want):
+                        caller = who
+            if caller is None:
+                return jsonify(error="unauthorized"), 401
         if request.mimetype != "application/json" or (request.content_length or 0) > body_max:
             return jsonify(error="request_invalid"), 400
         try:
-            answer = handler(json.loads(request.get_data(cache=False)[:body_max + 1]))
+            body = json.loads(request.get_data(cache=False)[:body_max + 1])
+            answer = handler(body) if named is None else handler(body, caller)
         except refused:
             return jsonify(error="request_invalid"), 400
         except Exception:
@@ -83,12 +103,30 @@ def attach(app, environ, *, store_factory=store, clock=time.monotonic, per_minut
         relay = Relay(ledger_root)
         handler = lambda body: store_factory().worker(body, relay=relay)                    # noqa: E731
     else:
+        relay = None
         handler = lambda body: store_factory().worker(body)                                 # noqa: E731
+    credentials = _credentials(environ, digest)
+    if credentials is not None:          # S1-G: the caller's name, its contact recorded on every call (R4.6-b)
+        handler = lambda body, who: store_factory().worker(body, relay=relay, credential=who)   # noqa: E731
     # An agent's report relayed up is up to 16 KiB of text (the ledger's own bound), so a report may be ~200 KiB.
-    door(app, PATH, "supervision_worker", digest, handler, refused=(ValueError, Refused), clock=clock,
+    door(app, PATH, "supervision_worker", credentials or digest, handler, refused=(ValueError, Refused), clock=clock,
          per_minute=per_minute, body_max=262144)
     _log.info("supervision: Mac sync path open (%s only)%s", PATH, ", relaying the front door's requests" if ledger_root else "")
     return True
+
+
+def _credentials(environ, worker_digest):
+    """S1-G's credentials on the Mac sync's path, by name, or None (today's single credential). Contacts alone:
+    {"worker"}; with staging's watch: {"worker", "watch:<host>"}. A watch credential that is set incompletely, or
+    equal to the worker's, opens nothing more."""
+    watch = (environ.get("MINIMOI_SUPERVISION_WATCH_TOKEN_SHA256") or "").strip().lower()
+    host = environ.get("MINIMOI_SUPERVISION_WATCH_HOST") or ""
+    out = None
+    if environ.get("MINIMOI_SUPERVISION_CONTACTS") == "1":
+        out = {"worker": worker_digest}
+    if re.fullmatch(r"[0-9a-f]{64}", watch) and re.fullmatch(r"[A-Za-z0-9._:-]{1,64}", host) and watch != worker_digest:
+        out = {"worker": worker_digest, f"watch:{host}": watch}
+    return out
 
 
 def attach_runner_door(app, environ, *, store_factory=None):

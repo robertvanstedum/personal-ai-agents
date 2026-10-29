@@ -2,6 +2,17 @@
 
 ``check_in`` is deterministic (no model) and sends nothing to an agent session: it returns the items Robert must hear
 about, a session's finished CI included. Each item has a stable key so he is told once, not every 15 minutes.
+
+Host runtime S1-G (spec v0.5 §3.3, R4.6-b, R5.6-b), each part only when a release configures it; with none, the
+check-in is exactly today's (tests/supervision/test_checkin_unchanged.py compares it byte for byte):
+* ``runtime`` (core/supervision/runtime.RuntimeLink): the delegation items come from the runtime's snapshot, one rule
+  set with today's keys (core/mc_delegation_dispatcher/snapshot.py; without a link the same rules read
+  store.delegations(), as today).
+* ``sync_view_bound_s``: the Mac sync's mirror (stop lines, the agents' exchanges) is a view; its age is the worker
+  credential's last contact. Unknown or past the bound, no rule fires from it, and one ``view-stale`` item says so.
+* ``watch`` ({"timeout_s": s}): production's notify-only watch of staging (R5.6-b): ``staging-silent:<host>:<since>``
+  once when a watched host's heartbeat is older than the timeout, ``staging-back:<host>:<since>`` once on its return.
+  Armed by the first heartbeat (a row), disarmed only by removing the credential and this configuration.
 """
 from __future__ import annotations
 
@@ -10,6 +21,7 @@ import json
 import urllib.parse
 import urllib.request
 
+from core.mc_delegation_dispatcher.snapshot import legacy_items
 from core.supervision.store import name
 
 REPO = "robertvanstedum/personal-ai-agents"
@@ -17,8 +29,6 @@ RELEASE_WORKFLOWS = ("deploy.yml", "deploy-mc-agent.yml", "deploy-iotconnect.yml
 STALL_AFTER = timedelta(minutes=20)        # a turn that ended with no stop line, or open work, and nothing since: Robert hears
 REVIEW_WAIT = timedelta(minutes=60)
 GREEN_SETTLE = timedelta(minutes=10)
-UNCLAIMED_AFTER = timedelta(minutes=5)     # a queued delegation nobody picked up: the Mac runner is not there
-SILENT_AFTER = timedelta(minutes=5)        # a running delegation whose runner stopped renewing it
 
 
 class GitHub:
@@ -65,12 +75,13 @@ def _who(stop):
         (f" ({stop['branch']})" if stop.get("branch") else "")
 
 
-def check_in(store, github, *, now=None, since=None):
+def check_in(store, github, *, now=None, since=None, runtime=None, sync_view_bound_s=None, watch=None):
     """Run one check-in. Returns (summary, items); items are {key, kind, text} for Robert, newest facts only."""
     now = now or datetime.now(timezone.utc)
     since = since or now - timedelta(hours=6)
     items, prs, failed_runs, sessions = [], [], [], []
     errors = []
+    view_stale = None if sync_view_bound_s is None else _sync_view_stale(store, sync_view_bound_s)
 
     pr_ci = {}
     try:
@@ -105,12 +116,14 @@ def check_in(store, github, *, now=None, since=None):
 
     pending = store.pending()
     asked = {d["request_key"] for d in pending}
+    if view_stale:          # R4.6-b: the mirror is too old to read absence from; nothing fires from it
+        items.append(view_stale)
     for stop in store.latest_stops():
         age = now - stop["stopped_at"]
         sessions.append({"agent": stop["agent"], "session": stop["session"][:8], "state": stop["state"],
                          "minutes": int(age.total_seconds() // 60), "pr": stop["pr"], "needs": stop["needs"][:200]})
         who = _who(stop)
-        if stop["state"] == "done":
+        if stop["state"] == "done" or view_stale:
             continue
         if stop["state"] in ("blocked", "error"):
             items.append({"key": f"stop:{stop['id']}", "kind": "error" if stop["state"] == "error" else "blocked",
@@ -136,45 +149,78 @@ def check_in(store, github, *, now=None, since=None):
             store.mark_escalated(stop["id"])
             items.append({"key": f"stalled:{stop['id']}", "kind": "stalled",
                           "text": f"{who} stopped {int(age.total_seconds() // 60)} min ago without saying why."})
-    running = []
-    try:
-        work = store.delegations() if hasattr(store, "delegations") else {"jobs": [], "runners": []}
-    except Exception as exc:
-        work = {"jobs": [], "runners": []}
-        errors.append(f"delegations unreadable ({type(exc).__name__})")
-    for job in work["jobs"]:
-        who = name(job["actor"])
-        what = f"{who} {job['scope']} “{job['brief'][:60]}”"
-        if job["state"] in ("queued", "claimed", "running"):
-            minutes = int((job["now"] - (job["started_at"] or job["created_at"])).total_seconds() // 60)
-            running.append({"job": job["job_id"], "agent": job["actor"], "state": job["state"], "minutes": minutes,
-                            "brief": job["brief"][:80]})
-            if job["state"] == "queued" and job["now"] - job["created_at"] >= UNCLAIMED_AFTER:
-                items.append({"key": f"delegation-unclaimed:{job['request_id']}", "kind": "stalled",
-                              "text": f"{what} has waited {minutes} min and no runner on the Mac picked it up."})
-            elif job["state"] == "running" and job["heartbeat_at"] and job["now"] - job["heartbeat_at"] >= SILENT_AFTER:
-                items.append({"key": f"delegation-silent:{job['request_id']}", "kind": "stalled",
-                              "text": f"{what} has not reported for "
-                                      f"{int((job['now'] - job['heartbeat_at']).total_seconds() // 60)} min."})
-        elif job["state"] in ("failed", "refused", "timed_out", "output_limit", "interrupted"):
-            items.append({"key": f"delegation-ended:{job['request_id']}", "kind": "error",
-                          "text": f"{what} ended {job['state'].replace('_', ' ')}"
-                                  + (f" ({job['code']})" if job.get("code") else "") + "."})
+    if runtime is not None:
+        # The runtime's snapshot is the one rule set (§3.3): its notices, today's delegation keys among them.
+        found, running, runners, failed = runtime.check_in()
+        items.extend(found)
+        errors.extend(failed)
+    else:
+        try:
+            work = store.delegations() if hasattr(store, "delegations") else {"jobs": [], "runners": []}
+        except Exception as exc:
+            work = {"jobs": [], "runners": []}
+            errors.append(f"delegations unreadable ({type(exc).__name__})")
+        found, running = legacy_items(work["jobs"])
+        items.extend(found)
+        runners = [{"id": r["runner_id"], "state": r["state"],
+                    "seen_minutes_ago": int((r["now"] - r["seen_at"]).total_seconds() // 60)}
+                   for r in work["runners"]]
     try:     # an agent asking Robert through the ledger (needs-you) reaches him once, word for word
-        for e in (store.recent_exchanges(kinds=["needs_you"], limit=10) if hasattr(store, "recent_exchanges") else []):
+        for e in (store.recent_exchanges(kinds=["needs_you"], limit=10)
+                  if hasattr(store, "recent_exchanges") and not view_stale else []):
             items.append({"key": f"exchange-needs:{e['event_key']}", "kind": "waiting_on_robert",
                           "text": f"{name(e['actor'])} asks you: {e['text'][:300]}"})
     except Exception as exc:
         errors.append(f"agent exchanges unreadable ({type(exc).__name__})")
+    if watch is not None:
+        try:
+            items.extend(staging_watch(store, timeout_s=watch["timeout_s"]))
+        except Exception as exc:
+            errors.append(f"staging watch unreadable ({type(exc).__name__})")
     for err in errors:
         items.append({"key": f"watch-error:{err}:{now:%Y%m%d%H}", "kind": "error", "text": f"Check-in: {err}."})
     summary = {"at": now.isoformat(), "prs": prs, "failed_releases": failed_runs, "sessions": sessions,
                "pending_decisions": [d["code"] for d in pending], "errors": errors,
-               "running": running,
-               "runners": [{"id": r["runner_id"], "state": r["state"],
-                            "seen_minutes_ago": int((r["now"] - r["seen_at"]).total_seconds() // 60)}
-                           for r in work["runners"]]}
+               "running": running, "runners": runners}
     return summary, items
+
+
+def _sync_view_stale(store, bound_s):
+    """R4.6-b: the Mac sync's mirror read as a view, its age the worker credential's last contact (pull included).
+    None when fresh; else the one item that says no rule fires from it, keyed by that contact."""
+    c = (store.contacts() or {}).get("worker")
+    if c is not None and (c["now"] - c["last_at"]).total_seconds() <= bound_s:
+        return None
+    since = None if c is None else c["last_at"].isoformat()
+    return {"key": f"view-stale:mac-sync:{since}", "kind": "error",
+            "text": "The Mac sync " + ("has never reported" if c is None else f"last reported at {since}")
+                    + "; no rule fires from its stop lines or exchanges until it reports again."}
+
+
+def staging_watch(store, *, timeout_s):
+    """R5.6-b over the watch rows (one per watched host, written only by its heartbeat credential): silent once when
+    its last heartbeat is older than ``timeout_s`` (90 s in production, N3), back once when it beats again. A host
+    with no row has never beaten: the watch is not armed for it. Staging's own account of itself (its view) is quoted
+    with its age, never acted on: production has no say over dev work."""
+    out = []
+    for row in store.watch_rows():
+        host, age = row["host_id"], (row["now"] - row["last_at"]).total_seconds()
+        view = row["view"] or {}
+        if age > timeout_s and row["silent_since"] is None:
+            store.mark_silent(host, row["last_at"])
+            out.append({"key": f"staging-silent:{host}:{row['last_at'].isoformat()}", "kind": "error",
+                        "text": f"Staging {host} has been silent for {int(age)} s (last heartbeat "
+                                f"{row['last_at']:%H:%M:%S %Z}). Production only watches: nothing in dev is touched. "
+                                f"Its last account: authority answering {view.get('authority_answering')}, sweeper "
+                                f"{view.get('sweeper_age_s')} s old, {view.get('lapsed_always_on')} lapsed always-on "
+                                f"items."})
+        elif age <= timeout_s and row["silent_since"] is not None:
+            since = row["silent_since"]
+            store.mark_back(host)
+            out.append({"key": f"staging-back:{host}:{since.isoformat()}", "kind": "error",
+                        "text": f"Staging {host} is back: heartbeat {int(age)} s ago, after silence since "
+                                f"{since:%H:%M:%S %Z}."})
+    return out
 
 
 LABEL = {"waiting_on_robert": "Waiting on you", "error": "Error", "blocked": "Blocked", "stalled": "Stalled"}
@@ -191,7 +237,8 @@ def message(items, summary):
     if summary.get("running"):
         lines.append("\nRunning:")
         lines.extend(f"• {name(r['agent'])}: {r['brief'][:70]} "
-                     f"({r['state']}, {r['minutes']} min)" for r in summary["running"])
+                     + (f"({r['state']}, {r['minutes']} min)" if r["minutes"] is not None else f"({r['state']})")
+                     for r in summary["running"])
     tail = [f"{len(summary['prs'])} open PRs", f"{len(summary['pending_decisions'])} decisions waiting"]
     lines.append("\n" + " · ".join(tail))
     return "\n".join(lines)

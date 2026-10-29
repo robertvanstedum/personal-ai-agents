@@ -411,8 +411,10 @@ MC_RUNNER = "core.mc_delegation_runner"
 MC_DISPATCHER = "core.mc_delegation_dispatcher"
 # Portal-owned homes that may read the runner's portal files (and nothing else of the runner).
 MC_RUNNER_PORTAL_HOMES = ("minimoi_portal/", "core/mc_delegation_dispatcher/", "core/agent_requests/")
-# Who may import the portal's dispatcher: the portal, the dispatcher itself, and the Mac runner's client of its door.
-MC_DISPATCHER_HOMES = ("minimoi_portal/", "core/mc_delegation_dispatcher/")
+# Who may import the portal's dispatcher: the portal, the dispatcher itself, the Mac runner's client of its door, and
+# build supervision (core/supervision/, in the portal image with the supervisor): its check-in reads the runtime's
+# snapshot and shares its delegation rules, and its runtime link is the owner path (host runtime S1-G).
+MC_DISPATCHER_HOMES = ("minimoi_portal/", "core/mc_delegation_dispatcher/", "core/supervision/")
 MC_DISPATCHER_FILES = {"core/mc_delegation_runner/cli.py",
                        "core/mc_delegation_runner/host.py"}     # the door's one URL allowlist (S1-D review N4)
 
@@ -900,3 +902,12 @@ def test_mc_container_files_redeploy_nothing_and_no_service_reads_them():
                for p in (root / top).rglob("*") if p.is_file() and p.suffix in (".py", ".sh", ".js", ".mjs", ".json", ".yml", ".yaml")
                and "mc-agent-container" in p.read_text(errors="ignore")]
     assert readers == []
+
+
+def test_the_build_supervisor_redeploys_only_the_portal_image_it_runs():
+    """services/supervisor/ runs from the portal image, recreated with each portal release (deploy_scoped_release.sh);
+    a change to it is the portal's, as its Compose block already is (COMPOSE_SERVICE_OWNERS)."""
+    assert classify(["services/supervisor/main.py"]) == ("domain", ("portal",))
+    assert classify(["services/supervisor/main.py", "core/supervision/watch.py"])[0] == "domain"
+    deploy = (Path(__file__).resolve().parent.parent / "scripts/operations/deploy_scoped_release.sh").read_text()
+    assert "--profile supervisor up -d --no-deps supervisor" in deploy
