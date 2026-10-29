@@ -78,3 +78,29 @@ def test_skip_preserves_existing_sessions_beyond_three_digits(skip_world, monkey
     saved = json.loads((sessions / expected).read_text())
     assert saved['session_id'] == expected.removesuffix('.json')
     assert calls == [saved]
+
+
+@pytest.mark.parametrize("date", ["../escaped", "2026-02-29", "2026/10/28", "2026-2-03", ""])
+@pytest.mark.parametrize("flags", [[], ["--skip"], ["--dry-run"], ["--skip", "--dry-run"]])
+def test_rejected_date_precedes_explicit_persona_lookup_or_writes(skip_world, monkeypatch, date, flags):
+    root, state, calls = skip_world
+    before = snapshot(root)
+    monkeypatch.setattr(sys, "argv", [
+        "get_german_session.py", "--base-dir", str(state), "--date", date,
+        "--persona", "Explicit Persona", *flags,
+    ])
+    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+        cli.main()
+    assert snapshot(root) == before
+    assert calls == []
+
+def test_rejected_date_does_not_read_a_lesson(skip_world, monkeypatch):
+    root, state, calls = skip_world
+    def forbidden(*args):
+        pytest.fail("invalid date reached lesson lookup")
+    monkeypatch.setattr(cli, "_load_lesson", forbidden)
+    monkeypatch.setattr(sys, "argv", [
+        "get_german_session.py", "--base-dir", str(state), "--date", "../escaped", "--dry-run",
+    ])
+    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+        cli.main()

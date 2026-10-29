@@ -24,7 +24,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from german_domain import GERMAN_DIR, GERMAN_STATE_DIR
-from domains.german.session_files import next_session_id
+from domains.german.session_files import next_session_id, validate_session_date
 
 try:
     import keyring
@@ -459,7 +459,9 @@ def main():
     prompts_dir = config_dir / 'prompts'
     lessons_dir = base / 'lessons'
 
-    date_str = args.date or datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    date_str = validate_session_date(
+        args.date if args.date is not None else datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    )
 
     domain = {}
     domain_file = config_dir / 'domain.json'

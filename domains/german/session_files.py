@@ -8,8 +8,8 @@ from pathlib import Path
 import re
 
 
-def next_session_id(date_str: str, sessions_dir: Path) -> str:
-    """Return date_NNN using the highest numeric suffix, with three digits minimum."""
+def validate_session_date(date_str: str) -> str:
+    """Validate a calendar date before it is used in any session or lesson path."""
     message = "Session date must be a real calendar date in YYYY-MM-DD format."
     if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", date_str):
         raise ValueError(message)
@@ -18,6 +18,12 @@ def next_session_id(date_str: str, sessions_dir: Path) -> str:
     except ValueError as error:
         raise ValueError(message) from error
 
+    return date_str
+
+
+def next_session_id(date_str: str, sessions_dir: Path) -> str:
+    """Return date_NNN using the highest numeric suffix, with three digits minimum."""
+    validate_session_date(date_str)
     pattern = re.compile(re.escape(date_str) + r"_([0-9]+)")
     highest = 0
     for path in sessions_dir.glob(f"{date_str}_*.json"):
