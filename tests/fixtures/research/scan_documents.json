@@ -24,7 +24,8 @@
         "What mechanisms explain the central outcome discussed in Untitled scan?",
         "What historical or empirical comparisons best test the argument in Untitled scan?"
       ]
-    ]
+    ],
+    "page_sha256": "a4818d6486322413078c263e16f9205abcce8cd8d3c6932474868f13ce2f9a6f"
   },
   {
     "name": "plain",
@@ -51,7 +52,8 @@
         "What mechanisms explain the central outcome discussed in Plain scan?",
         "What historical or empirical comparisons best test the argument in Plain scan?"
       ]
-    ]
+    ],
+    "page_sha256": "b52d29b2dc75e16db645ae4906f395b6c350a1b43b69f641f6b1c405f7d47299"
   },
   {
     "name": "structured",
@@ -102,7 +104,8 @@
         "Which claim can be independently checked?",
         "What evidence is missing?"
       ]
-    ]
+    ],
+    "page_sha256": "1440671365bb6274cb903bcd9e014bfc8ef721c71cabde2a5b1c1cb5831a70de"
   },
   {
     "name": "inline_interest",
@@ -144,6 +147,7 @@
         "What mechanisms explain the central outcome discussed in Metadata?",
         "What historical or empirical comparisons best test the argument in Metadata?"
       ]
-    ]
+    ],
+    "page_sha256": "f9cd816517eae999fb9a5fc686b1d2d847eba49a967663d0d488c7099d4230df"
   }
 ]
