@@ -180,3 +180,37 @@ def test_missing_source_path_is_refused_without_creating_a_file(tmp_path):
     with pytest.raises(SystemExit, match="session database not found"):
         J.open_ro(db)
     assert list(tmp_path.iterdir()) == []
+
+@pytest.mark.parametrize('operation,failure', [('collect', None), ('collect', 'query'),
+    ('freeze', None), ('freeze', 'query'), ('freeze', 'conversation'), ('freeze', 'events')])
+def test_readonly_source_closes_on_success_and_refusal(env, monkeypatch, operation, failure):
+    db, store = env
+    make_db(db, [] if failure == 'events' else [('assistant', GOOD)])
+    before = db.read_bytes()
+
+    class Connection(sqlite3.Connection):
+        def execute(self, *args, **kwargs):
+            if failure == 'query':
+                raise sqlite3.OperationalError('synthetic query failure')
+            return super().execute(*args, **kwargs)
+
+    con = sqlite3.connect(db.absolute().as_uri() + '?mode=ro', uri=True, factory=Connection)
+    monkeypatch.setattr(J, 'open_ro', lambda path: con)
+    def run_operation():
+        if operation == 'collect':
+            return J.collect(db, store, False)
+        return J.freeze(db, store, 'missing' if failure == 'conversation' else 'c-test', None, 'synthetic', False)
+    try:
+        if failure == 'query':
+            with pytest.raises(sqlite3.OperationalError):
+                run_operation()
+        elif failure in {'conversation', 'events'}:
+            with pytest.raises(SystemExit, match='refused'):
+                run_operation()
+        else:
+            assert run_operation()
+        with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+            sqlite3.Connection.execute(con, 'SELECT 1')
+        assert db.read_bytes() == before and not store.exists()
+    finally:
+        con.close()
