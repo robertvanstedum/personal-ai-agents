@@ -353,6 +353,11 @@ def _doctor(words) -> int:
     out["blocked"] = [{"task": i.get("task"), "item_id": i.get("item_id"), **i["blocked"]}
                       for i in state.get("items", []) if i.get("blocked")]
     problems.extend(f"task_blocked:{b['task']}" for b in out["blocked"])
+    # The census (spec v0.5 §6.6): it never gates work, so a gap in it is shown here plainly instead (CEN-6, R6.6-e).
+    out["census"] = state.get("census")
+    if out["census"] and out["census"].get("status") not in (None, "ok"):
+        problems.append(f"census_{out['census']['status']}:{out['census'].get('reason')}")
+    problems.extend(f"census_unrecorded:{a}" for a in sorted((out["census"] or {}).get("unrecorded") or {}))
     try:
         digest, files = host_mod.tree_digest(host.bundle_root)
         out["bundle"] = {"root": str(host.bundle_root), "digest": digest, "files": files}

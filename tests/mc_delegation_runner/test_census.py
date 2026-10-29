@@ -6,6 +6,7 @@ spawned subagents write hook-shaped census events, no real subagent runs. The au
 applied once into the events table, CEN-6 against its audit, retention never touching authority events) is
 tests/mc_delegation_dispatcher/test_census_postgres.py. No provider, no network, no Keychain."""
 import io
+import os
 import json
 import subprocess
 import sys
@@ -42,7 +43,7 @@ def root_start(aid, *, source=C.RUNTIME_SOURCE, children="exposed", item=None):
                            "route": "fakework", "binary": {"path": "/b/fakework.py", "sha256": "sha256:" + "a" * 64,
                                                            "pinned_by": "bundle"},
                            "policy_sha256": "sha256:" + "b" * 64, "env_names": ["HOME", "PATH"],
-                           "removed": ["GH_TOKEN"], "governed": True},
+                           "removed": ["GH_TOKEN"], "governed": True, "names_truncated": 0},
                    transcript_ref=C.not_kept("fakework_keeps_no_session"))
 
 
@@ -94,21 +95,35 @@ def test_events_hold_no_free_text_and_unknown_stays_unknown(tmp_path):
            ({**good, "usage": C.usage(input_tokens=True)}, "census_usage_invalid"),
            ({**good, "usage": C.usage(output_tokens=-1)}, "census_usage_invalid"),
            ({**good, "launch": {**good["launch"], "profile": "desktop_app"}}, "census_launch_desktop_governed"),
-           ({**good, "launch": {**good["launch"], "env_names": ["A=" + VALUE]}}, "census_launch_invalid"),
            ({**good, "transcript_ref": {"kept": False}}, "census_transcript_invalid"),
-           ({**good, "parent_id": "a1"}, "census_body_invalid"),
-           ({**good, "launch": {**good["launch"], "removed": ["N%d" % i for i in range(129)]}}, "census_launch_invalid")]
+           ({**good, "parent_id": "a1"}, "census_body_invalid")]
     for body, code in bad:
         with pytest.raises(C.CensusRefused, match=code):
             f.append("census.start", body)
-    with pytest.raises(C.CensusRefused, match="census_event_too_large"):
-        f.append("census.start", {**good, "launch": {**good["launch"],
-                                                     "removed": ["N" + "x" * 100 + str(i) for i in range(70)]}})
+    # The 8 KiB limit never stops work (S1): names are kept within NAMES_BYTES_MAX and the rest counted, and an event
+    # still too large is summarised by field, never refused.
+    many = {"launch_id": None, "tool": "fakework", "profile": "unattended", "route": "fakework",
+            "binary": {"path": "/b/" + "p" * 900, "sha256": None, "pinned_by": "bundle"},
+            "env_names": ["PATH"], "removed": ["N" + "x" * 60 + "%03d" % i for i in range(128)]}
+    summary = C.launch_summary(many)
+    assert summary["names_truncated"] > 100 and len(json.dumps(summary["removed"])) <= C.NAMES_BYTES_MAX
+    fits = f.append("census.start", {**good, "launch": summary})
+    assert fits["body"]["launch"]["names_truncated"] == summary["names_truncated"]
+    huge = {**good, "launch": {**summary, "binary": {**summary["binary"], "path": "/b/" + "\u00e9" * 1000}},
+            "transcript_ref": C.kept("s-0123456789", "/t/" + "\u00e9" * 1000)}
+    got = f.append("census.start", huge)["body"]
+    assert got["launch"]["binary"]["path"] is None and got["launch"]["binary"]["pinned_by"] == "bundle"
+    assert len(json.dumps(got)) <= C.EVENT_MAX_BYTES                     # summarised as far as needed, never refused
+    assert got["launch"]["names_truncated"] >= summary["names_truncated"] + 2
+    odd = f.append("census.start", {**good, "launch": {**good["launch"], "env_names": ["A=" + VALUE],
+                                                       "removed": ["N%d" % i for i in range(129)]}})["body"]["launch"]
+    assert odd["env_names"] == [] and len(odd["removed"]) == 128 and odd["names_truncated"] == 2   # a value never kept
+    assert VALUE not in json.dumps(odd)
     with pytest.raises(C.CensusRefused):
         C.check_event({"event_id": "e-1", "at": at(), "kind": "census.start", "body": good})
-    assert len(C.CensusFile(tmp_path / "census").unsent()) == 1                          # nothing else was written
+    assert len(C.CensusFile(tmp_path / "census").unsent()) == 4                          # nothing else was written
     assert C.CensusFile(tmp_path / "census").acknowledge([{"event_id": ev["event_id"], "state": "applied"}]) == 1
-    assert C.CensusFile(tmp_path / "census").unsent() == []                             # a fresh reader: answered
+    assert len(C.CensusFile(tmp_path / "census").unsent()) == 3                         # a fresh reader: answered
 
 
 # ── CEN-1 / T18a, CEN-4, CEN-5 with a real fakework root ────────────────────────────────────────────────────────────
@@ -357,7 +372,7 @@ def test_a_heartbeat_refused_for_its_census_is_sent_again_without_it_and_the_cau
     rt = H.make_rt(tmp_path, mirror[0], Door())
     ids = [rt.census.append("census.start", root_start(f"r{i}"))["event_id"] for i in range(8)]
     rt.dispatcher.refuse = ids[5]
-    for _ in range(12):
+    for _ in range(14):
         assert rt.contact()                                           # the contact always counts (CEN-6)
     sent = [s for s in rt.dispatcher.sent if s is not None]
     assert rt.dispatcher.sent.count(None) >= 1 and not rt.census.unsent()
@@ -579,3 +594,177 @@ def test_the_exporter_is_off_by_default_and_reaches_no_network_in_tests(tmp_path
                                     "https://collector.example.test/v1/metrics"]
     with pytest.raises(ValueError):
         otel.OtlpHttpExporter("http://collector.example.test")
+
+
+# ── fix round: B1 (a frozen writer never stalls the host), S1 (the census never gates work), S2, S3, N5 ─────────────
+def _hold_lock(folder):
+    """The census lock held from a second descriptor, as a writer frozen inside its write would hold it."""
+    import fcntl
+    folder.mkdir(parents=True, exist_ok=True)
+    fd = os.open(folder / ".lock", os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    return fd
+
+
+def _timed(fn, bound):
+    began = time.monotonic()
+    out = fn()
+    took = time.monotonic() - began
+    assert took < bound, f"took {took:.2f} s"
+    return out
+
+
+def test_b1_a_writer_frozen_holding_the_census_lock_never_stalls_contact_freeze_thaw_or_stop(tmp_path, mirror):
+    fake = H.FakeAuthority(mirror[1])
+    rt = H.make_rt(tmp_path, mirror[0], fake)
+    flag = {"on": False}
+    fake.cancel_requested = lambda request_id, generation: flag["on"]
+    rid = fake.add(H.program("spawn long1 role=worker hold_s=600 beat_s=1 long", "checkpoint s1 hold_s=30",
+                             "result ok"))
+    root = runner.census_agent_id(f"{rid}-g1")
+    t, box = pass_in_thread(rt)
+    wait_for(lambda: rows_of(rt.census.root).get(f"{root}/long1", {}).get("state") == "running")
+    fd = _hold_lock(rt.census.root)
+    try:
+        time.sleep(1.5)                                   # the child's beat is now inside its write, waiting
+        with rt._lock:
+            child = rt.child
+        assert _timed(lambda: child.freeze("authority_unreachable"), 1.0) == "frozen"   # the frozen writer
+        assert child.lock.acquire(timeout=1)
+        child.lock.release()
+        assert _timed(rt.contact, 1.0) is True                                       # the heartbeat leaves
+        frozen = [e for e in fake.census.values() if e["kind"] == "census.update"
+                  and e["body"]["agent_id"] == root and e["body"]["reason"] == "frozen"]
+        assert len(frozen) == 1                           # sent from memory: the authority sees it frozen at once
+        assert rt.census_status()["status"] == "deferred" and rt.census.waiting() >= 1
+        _timed(lambda: rt.write_state(force=True), 1.0)
+        assert json.loads((tmp_path / "artifacts" / "host-state.json").read_text())["census"]["reason"] == "lock_busy"
+        _timed(child.thaw, 1.0)
+        assert not child.frozen
+    finally:
+        os.close(fd)                                      # the writer goes on
+    assert rt.census.flush() and rt.census.waiting() == 0 and rt.census_status()["status"] == "ok"
+    on_file = [json.loads(x) for p in rt.census.root.glob("*.jsonl") for x in p.read_text().splitlines()]
+    assert [x for x in on_file if x.get("event_id") == frozen[0]["event_id"] and x["type"] == "event"]
+    assert [x for x in on_file if x.get("event_id") == frozen[0]["event_id"] and x["type"] == "ack"]
+    flag["on"] = True
+    t.join(30)
+    assert not t.is_alive() and box["out"]["state"] == "cancelled"
+
+
+def test_b1_a_restart_never_waits_on_a_lock_its_frozen_child_held(tmp_path, mirror):
+    fake = H.FakeAuthority(mirror[1])
+    rt = H.make_rt(tmp_path, mirror[0], fake)
+    rt.census.append("census.start", root_start("runtime:t-g1"))
+    fd = _hold_lock(rt.census.root)
+    try:
+        _timed(rt.freeze_left_children, 1.0)
+        assert _timed(rt.contact, 1.0) is True
+        assert [e for e in fake.census.values() if e["kind"] == "census.gap"]       # the restart gap, from memory
+    finally:
+        os.close(fd)
+
+
+def test_s1_the_census_never_gates_work_an_unwritable_census_is_shown_not_refused(tmp_path, mirror, capsys):
+    fake = H.FakeAuthority(mirror[1])
+    rt = H.make_rt(tmp_path, mirror[0], fake)
+    (tmp_path / "a-file").write_text("")
+    rt.census = C.CensusFile(tmp_path / "a-file" / "census")          # cannot be written: not a folder
+    rid = fake.add(H.program("spawn s1 role=explore hold_s=0", "checkpoint s1", "result ok"))
+    out = H.run_pass(rt)
+    assert out["state"] == "completed" and fake.items[rid]["state"] == "completed"     # no item refused
+    root = runner.census_agent_id(f"{rid}-g1")
+    status = rt.census_status()
+    assert (status["status"], status["reason"]) == ("unwritable", "os_error_20") and status["waiting_in_memory"] >= 2
+    assert rt.contact()
+    got = {e["body"].get("agent_id"): e for e in fake.census.values() if e["kind"] == "census.start"}
+    assert root in got                                              # its row reached the authority all the same
+    rt.write_state(force=True)
+    doc = json.loads((tmp_path / "artifacts" / "host-state.json").read_text())
+    assert doc["census"]["status"] == "unwritable"
+    capsys.readouterr()
+    cli_rc = H.cli.main(["state", "--host-config", str(tmp_path / "host.yaml"), "--json"])
+    assert cli_rc == 0 and json.loads(capsys.readouterr().out)["census"]["status"] == "unwritable"
+    H.cli.main(["doctor", "--host-config", str(tmp_path / "host.yaml")])
+    doctor = json.loads(capsys.readouterr().out)
+    assert doctor["census"]["status"] == "unwritable" and "census_unwritable:os_error_20" in doctor["problems"]
+
+
+def test_s2_a_backlog_never_hides_a_freeze_the_first_heartbeat_carries_gaps_and_ends_first(tmp_path, mirror):
+    fake = H.FakeAuthority(mirror[1])
+    rt = H.make_rt(tmp_path, mirror[0], fake)
+    rt.census.append("census.start", root_start("r1"))
+    for i in range(250):
+        rt.census.append("census.start", sub_start(f"r1/s{i}", "r1"))
+    rt.census.append("census.gap", C.gap("wake", at(), at(120)))
+    rt.census.append("census.update", C.update("r1", source=C.RUNTIME_SOURCE, state="idle", reason="frozen"))
+    assert rows_of(rt.census.root)["r1"]["state"] == "idle"
+    assert rt.contact()
+    assert len(fake.census) == C.BATCH_MAX_EVENTS                      # one batch: more is waiting
+    f = C.Fold()
+    for e in sorted(fake.census.values(), key=lambda e: e["at"]):
+        f.apply(e, "mac-test-1")
+    seen = {r["agent_id"]: r for r in f.rows(reachability={"mac-test-1": "reachable"}, environment="dev")}
+    assert (seen["r1"]["state"], seen["r1"]["reason"]) == ("idle", "frozen")
+    assert not [r for r in seen.values() if r["state"] == "running"]   # CEN-3 at the authority, from the first beat
+
+
+def test_s3_an_unseen_or_unverified_end_closes_the_subtree(tmp_path, mirror):
+    from types import SimpleNamespace
+    fake = H.FakeAuthority(mirror[1])
+    rt = H.make_rt(tmp_path, mirror[0], fake)
+    journal = SimpleNamespace(notes=lambda kind=None: [])
+
+    def child(aid, **over):
+        rt.census.append("census.start", root_start(aid))
+        rt.census.append("census.start", sub_start(aid + "/long1", aid))
+        return SimpleNamespace(**{"agent_id": aid, "census_started": True, "census_ended": False, "lost": False,
+                                  "signalled": False, "proc": SimpleNamespace(returncode=None),
+                                  "claim": {"unit": "test_units"}, "journal": journal, **over})
+    rt.census_child(child("runtime:lost-g1", lost=True), "ended")                   # reaped elsewhere (N-D1)
+    rt.census_child(child("runtime:unver-g1"), "ended")                             # may still run
+    rows = rows_of(rt.census.root)
+    assert (rows["runtime:lost-g1"]["state"], rows["runtime:lost-g1"]["reason"], rows["runtime:lost-g1"]["ended_at"]) \
+        == ("unknown", "process_identity_unverified", None)
+    assert rows["runtime:lost-g1/long1"]["reason"] == "end_unobserved"                # CEN-4: closed with it
+    assert rows["runtime:unver-g1/long1"]["reason"] == "parent_unverified"            # never its last "running"
+    rt.census.scan()
+    closed = rt.census.fold.closed_trees(datetime.now(timezone.utc) + timedelta(days=1))
+    assert {"runtime:lost-g1", "runtime:lost-g1/long1"} <= closed and "runtime:unver-g1" not in closed
+    # An orphan found dead after a restart: an end, unseen, so its subtree closes too.
+    task = f"{uuid.uuid4()}-g1"
+    proc = subprocess.Popen(["true"], start_new_session=True)
+    proc.wait()
+    art = tmp_path / "artifacts"
+    (art / f"{task}.claim.json").write_text(json.dumps({"request_id": task[:-3], "generation": 1, "task": task}))
+    (art / f"{task}.stage.json").write_text(json.dumps({"stage": "started", "pgid": proc.pid, "identity": "x"}))
+    rid = runner.census_agent_id(task)
+    rt.census.append("census.start", root_start(rid))
+    rt.census.append("census.start", sub_start(rid + "/long1", rid))
+    H.RUNTIMES.remove(rt)
+    rt2 = H.make_rt(tmp_path, mirror[0], fake)
+    rt2.freeze_left_children()
+    rows = rows_of(art / "census")
+    assert (rows[rid]["state"], rows[rid]["reason"], rows[rid]["ended_at"]) == ("unknown", "end_unobserved", None)
+    assert rows[rid + "/long1"]["reason"] == "end_unobserved"
+
+
+def test_n5_a_lone_event_refused_once_is_not_set_aside_it_is_sent_again(tmp_path, mirror):
+    class Once(Door):
+        def heartbeat(self, runner_id, state, capabilities, facts, census=None):
+            if census and not getattr(self, "refused", False):
+                self.refused = True
+                raise ValueError("runner_request_invalid")      # a passing refusal
+            return super().heartbeat(runner_id, state, capabilities, facts, census)
+    rt = H.make_rt(tmp_path, mirror[0], Once())
+    eid = rt.census.append("census.start", root_start("r1"))["event_id"]
+    assert rt.contact() and rt.census.unsent()                 # set aside? no: still unsent
+    assert rt.contact() and not rt.census.unsent() and rt.dispatcher.applied == {eid: 1}
+
+
+def test_n4_a_day_file_of_any_size_is_read_whole_in_chunks(tmp_path, monkeypatch):
+    f = C.CensusFile(tmp_path / "census")
+    ids = [f.append("census.start", root_start(f"r{i}"))["event_id"] for i in range(20)]
+    monkeypatch.setattr(C, "READ_CHUNK", 4096)                 # a few lines a chunk, lines across chunk edges
+    h = C.CensusFile(tmp_path / "census")
+    assert [e["event_id"] for e in h.unsent()] == ids and not h.damaged
