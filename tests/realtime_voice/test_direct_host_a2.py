@@ -294,3 +294,23 @@ def test_the_capabilities_read_says_whether_a_start_is_allowed_and_whether_anyth
     assert r.client.get(BASE + "/capabilities", headers={"Content-Type": "application/json"}).status_code == 401
     no_allowance = build(monkeypatch, tmp_path / "b", store=Listing(), environ={})
     assert no_allowance.client.get(BASE + "/capabilities", headers=OWNER).get_json()["direct_voice"] is False
+
+
+@pytest.mark.parametrize("provider,locale,language", [("openai", "de-AT", "de"), ("xai", "de-AT", "de"),
+                                                      ("openai", "pt-BR", "pt"), ("xai", "pt-BR", "pt-BR")])
+def test_german_and_portuguese_mint_with_exactly_the_arguments_they_had(monkeypatch, provider, locale, language):
+    """German and Portuguese personas carry no "transcription": their mint is called with the same keyword arguments as
+    at b0c3518c (no transcription_prompt; their locale's one language)."""
+    from core.realtime_voice.bootstrap import create_bootstrap_blueprint
+    mints = []
+    monkeypatch.setattr(f"core.realtime_voice.bootstrap.{'openai_realtime' if provider == 'openai' else 'xai_voice'}"
+                        ".mint_ephemeral_credential", lambda **kw: mints.append(kw) or {"provider": provider, "model": "m"})
+    monkeypatch.setattr("core.realtime_voice.bootstrap._rate_limit_state", {})
+    app = Flask("lang")
+    app.register_blueprint(create_bootstrap_blueprint(
+        domain="german", locale=locale, is_production=lambda: True, owner=lambda: ("robert", "Robert"),
+        get_persona=lambda name: {"name": "Frau Berger", "prompt_txt": "x.", "scenes": {}, "voices": {}}))
+    assert app.test_client().post("/api/realtime-voice/bootstrap", json={"persona": "f", "provider": provider}).status_code == 200
+    expected = {"instructions", "voice", "turn_detection", "transcription_language", "tools"} | (
+        {"user_id_for_safety_identifier"} if provider == "openai" else set())
+    assert set(mints[0]) == expected and mints[0]["transcription_language"] == language
