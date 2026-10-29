@@ -59,7 +59,7 @@ class FakeAuthority:
     def __init__(self, ref, lease_s=60):
         self.ref, self.lease_s = ref, lease_s
         self.log, self.items, self.queue, self.events, self.facts = [], {}, [], {}, []
-        self.receipts, self.reconciles, self.answers, self.hooks = {}, [], [], {}
+        self.receipts, self.reconciles, self.answers, self.hooks, self.answers_log = {}, [], [], {}, []
         self.down, self.renew_ok, self.lock = False, True, threading.RLock()
 
     def enter(self, name, *args):
@@ -70,12 +70,12 @@ class FakeAuthority:
             raise Down(name)
         self.log.append((name,) + tuple(args[:3]))
 
-    def add(self, brief, *, reserved=1.5, route="fakework", unit="test_units"):
+    def add(self, brief, *, reserved=1.5, route="fakework", unit="test_units", deadline_s=1800):
         rid = str(uuid.uuid4())
         env = {"schema": envelope.SCHEMA, "request_id": rid, "work_id": f"job-{len(self.items) + 1}", "generation": 1,
                "actor": "fakework", "principal_id": "robert", "environment": "dev", "scope": "build",
                "repository": "personal-ai-agents", "ref": self.ref, "brief": brief, "input_artifacts": [],
-               "deadline": iso(time.time() + 1800), "cost_cap_usd": 1.0}
+               "deadline": iso(time.time() + deadline_s), "cost_cap_usd": 1.0}
         self.items[rid] = {"env": env, "gen": 0, "state": "queued", "reserved": reserved, "unit": unit, "route": route,
                            "checkpoint": None, "result": None, "lease_until": 0.0, "resumed": {}}
         self.queue.append(rid)
@@ -155,9 +155,11 @@ class FakeAuthority:
         if self.answers:
             answer = self.answers.pop(0)
             answer = answer(it, generation, stage, open_operations) if callable(answer) else answer
-        elif open_operations and stage["child"] != "frozen":
+        elif [o for o, r in self.receipts.items() if r.get("rid") == request_id
+              and r["state"] in ("dispatched", "unknown")]:      # the authority's own open receipts (store order)
             answer = {"answer": "decide", "code": "effect_unknown", "decision_id": str(uuid.uuid4()),
-                      "operations": list(open_operations)}
+                      "operations": sorted(o for o, r in self.receipts.items() if r.get("rid") == request_id
+                                           and r["state"] in ("dispatched", "unknown"))}
             it["state"] = "unknown"
         elif stage["child"] == "frozen" and it["lease_until"] > time.time():
             answer = {"answer": "continue", "generation": generation, "lease_until": iso(it["lease_until"])}
@@ -173,11 +175,27 @@ class FakeAuthority:
         return answer
 
     def effect(self, runner_id, request_id, generation, effect):
+        what = f"{effect['op']}:{effect['key']}"
+        self.enter("effect", request_id, generation, what)
+        answer = self._effect(request_id, generation, effect)
+        self.answers_log.append((what, generation, answer.get("state"), answer.get("code")))
+        after = self.hooks.get("effect_after")
+        if after is not None:
+            after(request_id, generation, what)          # may raise Down: applied here, its answer lost
+        return answer
+
+    def _effect(self, request_id, generation, effect):
         op = effect["op"]
-        self.enter("effect", request_id, generation, f"{op}:{effect['key']}")
         op_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{request_id}:{effect['key']}"))
         out = {"op": op, "operation_id": op_id}
-        r = self.receipts.setdefault(op_id, {"state": None, "gen": 0, "token": None, "until": 0.0, "mode": None})
+        it = self.items[request_id]
+        if op in ("prepare", "claim", "dispatch"):        # a new effect: the owner, now, under its lease (store order)
+            if generation != it["gen"]:
+                return {"state": "refused", **out, "code": "stale_generation"}
+            if it["lease_until"] <= time.time():
+                return {"state": "refused", **out, "code": "lease_lapsed"}
+        r = self.receipts.setdefault(op_id, {"state": None, "gen": 0, "token": None, "until": 0.0, "mode": None,
+                                             "rid": request_id})
         live = r["until"] > time.time()
         if op == "prepare":
             r["state"] = r["state"] or "prepared"
@@ -217,11 +235,13 @@ class FakeAuthority:
 
 
 # ── building a host ────────────────────────────────────────────────────────────────────────────────────────────────
-def host_doc(tmp_path, mirror_path, **over):
+HOSTS = {"contact_interval_s": 1, "contact_timeout_s": 3, "renew_s": 1, "offline_hold_s": 1}
+
+
+def host_doc(tmp_path, mirror_path, hosts=None, **over):
     values = tmp_path / "authority.json"
-    if not values.exists():
-        values.write_text(json.dumps({**VALUES, "hosts": {"contact_interval_s": 1, "contact_timeout_s": 3,
-                                                           "renew_s": 1, "offline_hold_s": 1}}))
+    if hosts is not None or not values.exists():
+        values.write_text(json.dumps({**VALUES, "hosts": hosts or HOSTS}))
     bundle = tmp_path / "bundle"
     (bundle / "core").mkdir(parents=True, exist_ok=True)
     (bundle / "core" / "__init__.py").write_text("")
@@ -233,15 +253,15 @@ def host_doc(tmp_path, mirror_path, **over):
            "artifact_root": str(tmp_path / "artifacts"), "workspace_root": str(tmp_path / "work"),
            "mirrors": {"personal-ai-agents": str(mirror_path)},
            "interpreter": {"path": sys.executable, "version": "%d.%d" % sys.version_info[:2]},
-           "bundle_root": str(bundle), "lock_dir": str(tmp_path / "locks"), "gap_detection": "on",
+           "bundle_root": str(bundle), "gap_detection": "on",
            "stop_timeout_s": 6, "effect_sink": {"path": str(tmp_path / "sink"), "lookup": True}}
     doc.update(over)
     return doc
 
 
-def make_host(tmp_path, mirror_path, **over):
+def make_host(tmp_path, mirror_path, hosts=None, **over):
     path = tmp_path / "host.yaml"
-    path.write_text(json.dumps(host_doc(tmp_path, mirror_path, **over)))
+    path.write_text(json.dumps(host_doc(tmp_path, mirror_path, hosts, **over)))
     return host_mod.load(path)
 
 
@@ -249,7 +269,8 @@ RUNTIMES = []
 
 
 @pytest.fixture(autouse=True)
-def _reap():
+def _reap(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))       # G6's fixed lock folder lives under it, never the Mac's
     yield
     while RUNTIMES:
         rt = RUNTIMES.pop()
@@ -258,8 +279,8 @@ def _reap():
             rt.child.end_group()
 
 
-def make_rt(tmp_path, mirror_path, fake, **over):
-    h = make_host(tmp_path, mirror_path, **over)
+def make_rt(tmp_path, mirror_path, fake, hosts=None, **over):
+    h = make_host(tmp_path, mirror_path, hosts, **over)
     auth = Authority.load(h.authority.values)
     rt = cli.runtime_for(h, auth, fake, digest="sha256:" + "0" * 64)
     rt.cfg.tick_s, rt.cfg.kill_grace_s = 0.05, 1.0
@@ -870,3 +891,283 @@ def test_the_fakework_program_is_strict_and_the_census_steps_are_refused():
         assert fakework.FileSink(sink.path, lookup=False).get("op1") == "unsupported"
     finally:
         shutil.rmtree(sink.path, ignore_errors=True)
+
+
+# ── fix round (REVIEW_independent_S1-D.md) ─────────────────────────────────────────────────────────────────────────
+def wait_for(path, timeout=20):
+    end = time.monotonic() + timeout
+    while not Path(path).exists():
+        assert time.monotonic() < end, f"never appeared: {Path(path).name}"
+        time.sleep(0.02)
+
+
+def test_b1_a_graceful_stop_while_frozen_pauses_the_item_and_never_records_a_failure(tmp_path, mirror):
+    """SIGTERM (a logout, a restart) while the child is frozen at the authority's outage: the runtime's own kill is
+    never the child's exit. The stage says stopped, nothing is reported, and the next start resumes it (G4, E14)."""
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake)
+    rid = fake.add(program("checkpoint s1", "checkpoint s2", "result ok"))
+    once = []
+
+    def drop(request_id, generation, name):
+        if name == "s2" and not once:
+            once.append(1)
+            fake.down = True                                   # frozen at this first failed call (scope none)
+            threading.Timer(0.3, rt.request_stop).start()      # then SIGTERM arrives
+    fake.hooks["progress"] = drop
+    out = run_pass(rt)
+    assert (out["state"], out["child"]) == ("stopped", "stopped")
+    task = f"{rid}-g1"
+    assert json.loads((tmp_path / "artifacts" / f"{task}.stage.json").read_text()) == {"stage": "stopped",
+                                                                                       "reason": "graceful"}
+    ns = [e for e in rt.journal(task).entries() if e["type"] == "note"]
+    assert [n["fields"].get("reason") for n in ns if n["kind"] in ("freeze", "stop")][:2] == [
+        "authority_unreachable", "graceful"]
+    assert not [c for c in rt.journal(task).calls() if c["kind"] == "result"]
+    fake.down = False
+    rt2 = make_rt(tmp_path, mirror[0], fake)
+    out = run_pass(rt2)
+    assert (out["state"], out["generation"]) == ("completed", 2), out
+    assert fake.reconciles[0]["stage"]["child"] == "stopped"
+    assert [c for c in fake.calls("result")] == [("result", rid, 2, "completed")]   # never failed at generation 1
+
+
+def test_s1_t8_a_lost_dispatch_answer_read_back_absent_fails_the_step_and_never_reads_as_done(tmp_path, mirror):
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake)
+    grant = str(uuid.uuid4())
+    rid = fake.add(program("checkpoint s1", f"effect e1 grant={grant}", "result ok"))
+    once = []
+
+    def lose(request_id, generation, what):
+        if what == "dispatch:e1" and not once:
+            once.append(1)
+            for r in fake.receipts.values():
+                r["until"] = 0.0                               # the outage outlasts the receipt lease
+            fake.down = True                                   # committed at the authority; its answer is lost
+            threading.Timer(0.3, lambda: setattr(fake, "down", False)).start()
+            raise Down("dispatch")
+    fake.hooks["effect_after"] = lose
+    rt.start_contact()
+    out = run_pass(rt)
+    assert out["state"] == "failed" and fake.items[rid]["result"]["status"] == "failed", out
+    assert fakework.FileSink(tmp_path / "sink").lines() == []                 # e1 never happened
+    assert {r["state"] for r in fake.receipts.values()} == {"failed"}           # read back absent: definite
+    log = (tmp_path / "artifacts" / f"{rid}-g1.log").read_text()
+    assert "effect e1 refused: effect_failed" in log and "already" not in log
+    assert ("effect", rid, 1, "reconcile:e1") in fake.log                       # readback before the question
+
+
+def test_s2_a_finish_that_outlived_its_receipt_lease_is_recorded_by_readback_and_never_decided(tmp_path, mirror):
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake)
+    grant = str(uuid.uuid4())
+    rid = fake.add(program("checkpoint s1", f"effect e1 grant={grant}", "checkpoint s2", "result ok"))
+    once = []
+
+    def outage(request_id, generation, what):
+        if what == "finish:e1" and not once:
+            once.append(1)
+            for r in fake.receipts.values():
+                r["until"] = 0.0                               # the finish can't arrive for longer than its lease
+            fake.down = True
+            threading.Timer(0.3, lambda: setattr(fake, "down", False)).start()
+    fake.hooks["effect"] = outage
+    rt.start_contact()
+    out = run_pass(rt)
+    assert (out["state"], out["generation"]) == ("completed", 1), out
+    assert {r["state"] for r in fake.receipts.values()} == {"verified"}
+    assert [x["answer"] for x in fakework.FileSink(tmp_path / "sink").lines()] == ["committed"]
+    finish = [c for c in rt.journal(f"{rid}-g1").calls() if c["kind"] == "effect_finish"]
+    assert len(finish) == 1 and finish[0]["mark"] == "applied" and finish[0]["answer"]["state"] == "ok"
+    assert ("finish:e1", 1, "refused", "receipt_lease_stale") in fake.answers_log   # its own lease, then readback
+    assert ("reconcile:e1", 1, "ok", None) in fake.answers_log
+    assert fake.reconciles and all(r["open"] == [] for r in fake.reconciles)
+    assert fake.items[rid]["state"] != "unknown"
+
+
+@pytest.mark.parametrize("sleep", ["outlasting_the_item_lease", "within_the_item_lease"])
+def test_s3_t6a_the_woken_child_sends_its_stale_effect_first_and_the_authority_refuses_it(tmp_path, mirror, sleep):
+    """T6a/T6m: the child, noticing its own wake gap, sends e2b with the receipt lease it held before sleeping, before
+    the runtime freezes it. The authority refuses it; then the runtime's own wake runs §5.5. A sleep past the item's
+    lease resumes at generation 2, which claims its own lease afresh (never generation 1's); a shorter one continues.
+    Either way e2 is committed once and e2b never reaches the sink."""
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake, hosts={**HOSTS, "renew_s": 50})       # no renewal inside the window
+    grant = str(uuid.uuid4())
+    rid = fake.add(program("checkpoint s1", f"stale_effect_on_wake e2b grant={grant} wait_s=3 gap_s=1",
+                           "checkpoint s2 hold_s=2", f"effect e2 grant={grant}", "result ok"))
+    chan = tmp_path / "artifacts" / f"{rid}-g1.chan"
+    box = {}
+
+    def sleeper():
+        try:
+            wait_for(chan / "ack-000002.json")                 # e2b's receipt lease is held
+            time.sleep(0.3)
+            child = rt.child
+            os.killpg(child.pgid, signal.SIGSTOP)              # the Mac sleeps (here, the child alone pauses)
+            for r in fake.receipts.values():
+                r["until"] = 0.0                               # its receipt lease ran out meanwhile
+            if sleep == "outlasting_the_item_lease":
+                fake.items[rid]["lease_until"] = 0.0
+            time.sleep(1.5)
+            os.killpg(child.pgid, signal.SIGCONT)              # it wakes first and sends e2b on its old lease
+            wait_for(chan / "ack-000003.json")
+            if sleep == "within_the_item_lease":
+                wait_for(chan / "ack-000004.json")             # s2 recorded; it holds there
+            rt.on_wake({"gap_s": 600.0, "wall_minus_mono_s": 600.0, "hint": None})   # the runtime notices
+            box["fired"] = True
+        except BaseException as exc:                           # never silent: the test fails on it
+            box["error"] = exc
+    import signal
+    t = threading.Thread(target=sleeper, daemon=True)
+    t.start()
+    out = run_pass(rt)
+    t.join(5)
+    assert "error" not in box and box.get("fired"), box
+    code = "lease_lapsed" if sleep == "outlasting_the_item_lease" else "receipt_lease_stale"
+    assert ("dispatch:e2b", 1, "refused", code) in fake.answers_log
+    closed = [e["fields"] for e in rt.journal(f"{rid}-g1").entries() if e["type"] == "note"
+              and e["kind"] == "effect_closed"]
+    assert [c["code"] for c in closed] == [code]                  # the host's own record of the refusal
+    if sleep == "within_the_item_lease":                          # it lives on to say so; on resume it is stopped
+        log1 = (tmp_path / "artifacts" / f"{rid}-g1.log").read_text()
+        assert f"stale e2b: refused {code}" in log1, log1
+    lines = fakework.FileSink(tmp_path / "sink").lines()
+    assert [x["answer"] for x in lines] == ["committed"] and lines[0]["digest"] == fakework.effect_digest("e2")
+    order = [e["kind"] for e in rt.journal(f"{rid}-g1").entries() if e["type"] == "note"]
+    assert order.index("freeze") < order.index("reconcile")
+    if sleep == "outlasting_the_item_lease":
+        assert (out["state"], out["generation"]) == ("completed", 2), out
+        assert ("claim:e2b", 2, "ok", None) in fake.answers_log           # its own lease, claimed afresh (S3a)
+        assert not [a for a in fake.answers_log if a[0] == "dispatch:e2b" and a[1] == 2]
+        assert "stale e2b: no wake observed" in (tmp_path / "artifacts" / f"{rid}-g2.log").read_text()
+    else:
+        assert (out["state"], out["generation"]) == ("completed", 1), out
+        assert any(r["generation"] == 1 for r in fake.reconciles)
+        rec = [e for e in rt.journal(f"{rid}-g1").entries() if e["type"] == "note" and e["kind"] == "reconcile"]
+        assert rec[-1]["fields"]["answer"]["answer"] == "continue"
+
+
+def test_s5_x3_a_restart_while_the_authority_is_unreachable_freezes_the_left_child_first(tmp_path, mirror,
+                                                                                         monkeypatch):
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake)
+    rid = fake.add(program("checkpoint s1", "checkpoint s2", "result ok"))
+    left = {}
+
+    def die(request_id, generation, name):
+        if name == "s1":
+            left["child"] = rt.child
+            raise Crash()                                      # the runtime process dies; nothing is cleaned up
+    fake.hooks["progress"] = die
+    with monkeypatch.context() as m:
+        m.setattr(runner._Child, "kill", lambda self, reason: "stopped")
+        with pytest.raises(Crash):
+            run_pass_raw(rt)
+    orphan = left["child"]
+    try:
+        assert orphan.alive()                                   # it waits for an answer nobody will send
+        fake.hooks.pop("progress")
+        fake.down = True                                        # the network is still down at the restart
+        rt2 = make_rt(tmp_path, mirror[0], fake)
+        before = len(fake.log)
+        out = run_pass(rt2)
+        assert out == {"state": "offline"}
+        assert orphan.exited()                                  # frozen, verified, stopped: before any answer
+        task = f"{rid}-g1"
+        ns = [e for e in rt2.journal(task).entries() if e["type"] == "note" and e["kind"] == "freeze"]
+        assert (ns[-1]["fields"]["reason"], ns[-1]["fields"]["child"]) == ("restart", "stopped")
+        assert len(fake.log) == before and not fake.calls("claim")[1:]       # no claim, no effect while unreachable
+        assert [c["kind"] for c in rt2.journal(task).pending()] == ["progress"]   # its record survives
+        fake.down = False
+        rt2.contact()
+        out = run_pass(rt2)
+        assert (out["state"], out["generation"]) == ("completed", 2), out
+    finally:
+        if orphan.proc.returncode is None:
+            orphan.proc.wait()
+
+
+def test_s6_workspace_only_offline_still_enforces_the_deadline(tmp_path, mirror):
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake, offline_scope_default="workspace_only")
+    rid = fake.add(program("checkpoint s1", "hang_s 60", "result ok"), deadline_s=4)
+    once = []
+    fake.hooks["progress"] = lambda r, g, n: n == "s1" and not once and (once.append(1) or setattr(fake, "down", True))
+    t0 = time.monotonic()
+    out = run_pass(rt)
+    assert out["state"] == "timed_out" and not out["delivered"], out
+    assert time.monotonic() - t0 < 15
+    result = [c for c in rt.journal(f"{rid}-g1").pending() if c["kind"] == "result"]
+    assert result and result[0]["args"]["status"] == "timed_out"
+
+
+def test_n1_a_failing_ps_never_leaves_the_runtimes_own_child_unreaped(tmp_path, mirror, monkeypatch):
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake)
+    rid = fake.add(program("checkpoint s1", "result ok"))
+    real, seen = runner._identity, []
+
+    def flaky(pid):
+        seen.append(pid)
+        return real(pid) if len(seen) == 1 else None            # ps answers at spawn, then fails
+    monkeypatch.setattr(runner, "_identity", flaky)
+    fake.hooks["progress"] = lambda r, g, n: n == "s1" and rt.on_wake({"gap_s": 600.0, "wall_minus_mono_s": 600.0,
+                                                                       "hint": None})
+    out = run_pass(rt)
+    assert out["state"] == "completed" and fake.items[rid]["result"]["status"] == "completed", out
+    kinds = [e["kind"] for e in rt.journal(f"{rid}-g1").entries() if e["type"] == "note"]
+    assert kinds.index("freeze") < kinds.index("reconcile") < kinds.index("thaw")
+    assert len(seen) == 1                                        # the runtime's own child needed ps only once
+
+
+def test_n2_a_deterministic_authority_error_is_final_and_never_offline(tmp_path, mirror):
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake)
+    rid = fake.add(program("checkpoint s1", "checkpoint s2", "result ok"))
+    once = []
+
+    def audit(request_id, generation, name):
+        if name == "s1" and not once:
+            once.append(1)
+            raise RuntimeError("audit_event_not_written")
+    fake.hooks["progress"] = audit
+    out = run_pass(rt)
+    assert out["state"] == "completed" and not rt.offline(), out
+    s1 = next(c for c in rt.journal(f"{rid}-g1").calls() if (c["args"].get("checkpoint") or {}).get("name") == "s1")
+    assert (s1["mark"], s1["answer"]["code"]) == ("final", "authority_error:audit_event_not_written")
+    reasons = [e["fields"]["reason"] for e in rt.journal(f"{rid}-g1").entries()
+               if e["type"] == "note" and e["kind"] == "freeze"]
+    assert "authority_unreachable" not in reasons and fake.reconciles
+
+
+def test_n9_a_receipt_holding_another_outcome_is_a_conflict_never_already_applied(tmp_path, mirror):
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake)
+    rid = fake.add(program("result ok"))
+    fake.items[rid]["gen"] = 1
+    grant = str(uuid.uuid4())
+    op = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{rid}:e1"))
+    fake.receipts[op] = {"state": "failed", "gen": 1, "token": None, "until": 0.0, "mode": None, "rid": rid}
+
+    def rec(state, outcome):
+        return {"kind": "effect_finish", "request_id": rid, "generation": 1, "event_id": str(uuid.uuid4()),
+                "args": {"runner_id": rt.runner_id, "operation_id": op, "receipt_generation": 1,
+                         "effect": {"op": "finish", "key": "e1", "grant_id": grant,
+                                    "request": fakework.effect_request("e1"), "state": state,
+                                    "evidence": {"kind": "sink", "outcome": outcome}}}}
+    assert rt._send_finish(rec("verified", "committed"))["code"] == "receipt_outcome_conflict"
+    assert rt._send_finish(rec("failed", "lease_expired"))["state"] == "already_applied"
+
+
+def test_n3_n4_n8_one_owner_identity_one_door_list_one_lock_folder(tmp_path, mirror):
+    from core.mc_delegation_dispatcher import door
+    with pytest.raises(host_mod.HostRefused, match="host_id_invalid"):
+        host_mod.parse(host_doc(tmp_path, mirror[0], host_id="mac:1"))
+    with pytest.raises(host_mod.HostRefused, match="host_config_invalid"):
+        host_mod.parse(host_doc(tmp_path, mirror[0], lock_dir=str(tmp_path / "elsewhere")))    # never per file
+    assert host_mod._DOORS is door.DOORS
+    h = make_host(tmp_path, mirror[0])
+    assert h.lock_path == tmp_path / "home" / "minimoi-runtime" / "locks" / "mac-test-1.dev.lock"
+    assert h.runner_id.rsplit(":", 1) == ["mac-test-1", "runner"] and ":" not in h.host_id

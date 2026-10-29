@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT / "tests" / "mc_delegation_runner"))
 from postgres_fixture_support import DSN, PostgresFixture  # noqa: E402
 
 from core.mc_delegation_dispatcher.store import (EFFECT_POLICY, Authority, DispatcherStore,  # noqa: E402
-                                                 item_subject_digest)
+                                                 effect_operation_id, item_subject_digest)
 from core.mc_delegation_runner import cli, fakework, host as host_mod  # noqa: E402
 from core.mc_delegation_runner.dispatcher_adapter import StoreDispatcherV2  # noqa: E402
 from core.minimoi_actions.grants import GrantDefinition  # noqa: E402
@@ -97,7 +97,7 @@ class HostRuntimeOnPostgres(PostgresFixture, unittest.TestCase):
                "artifact_root": str(self.tmp / "artifacts"), "workspace_root": str(self.tmp / "work"),
                "mirrors": {"personal-ai-agents": str(self.mirror)},
                "interpreter": {"path": sys.executable, "version": "%d.%d" % sys.version_info[:2]},
-               "bundle_root": str(self.tmp / "bundle"), "lock_dir": str(self.tmp / "locks"), "gap_detection": "on",
+               "bundle_root": str(self.tmp / "bundle"), "gap_detection": "on",
                "stop_timeout_s": 6, "effect_sink": {"path": str(self.tmp / "sink"), "lookup": True}, **over}
         self.host_path.write_text(json.dumps(doc))
 
@@ -105,11 +105,12 @@ class HostRuntimeOnPostgres(PostgresFixture, unittest.TestCase):
     def store(self):
         return DispatcherStore(self.connect, principal="robert", environment="dev", authority=AUTH, grants=self.grants)
 
-    def runtime(self, **over):
+    def runtime(self, hosts=None, **over):
         if over:
             self.write_host(**over)
         h = host_mod.load(self.host_path)
-        rt = cli.runtime_for(h, AUTH, StoreDispatcherV2(self.store()), digest=DIGEST)
+        auth = AUTH if hosts is None else Authority.parse({**VALUES, "hosts": {**VALUES["hosts"], **hosts}})
+        rt = cli.runtime_for(h, auth, StoreDispatcherV2(self.store()), digest=DIGEST)
         rt.cfg.tick_s, rt.cfg.kill_grace_s = 0.05, 1.0
         self.runtimes.append(rt)
         rt.contact()
@@ -226,6 +227,7 @@ class HostRuntimeOnPostgres(PostgresFixture, unittest.TestCase):
         self.assertEqual(self.item(brief), job)
         rid = self.row(job)["request_id"]
         env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
+        env["HOME"] = str(self.tmp / "home")              # G6's fixed lock folder, here and never the Mac's own
         proc = subprocess.Popen([sys.executable, "-m", "core.mc_delegation_runner.cli", "run", "--host-config",
                                  str(self.host_path), "--once"], cwd=ROOT, env=env, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT)
@@ -294,13 +296,17 @@ class HostRuntimeOnPostgres(PostgresFixture, unittest.TestCase):
         self.assertIn("item.lapsed", self.kinds(rid))
 
     def test_a_stale_effect_after_a_wake_is_refused_and_the_next_effect_is_committed_once(self):
+        """A wake within the item's lease (reconcile answers continue): the dispatch on the receipt lease the worker
+        held before the wake is refused, and e2 is committed once. The injection is asserted, and a failure names its
+        branch before the audit is read (review S4)."""
         job = f"job-{self.n + 1}"
         gid = self.effect_grant(job, "e2b", "e2")
         brief = self.program("checkpoint s1", f"stale_effect_on_wake e2b grant={gid} wait_s=20 gap_s=1",
                              f"effect e2 grant={gid}", "result ok")
         self.assertEqual(self.item(brief), job)
         rt = self.runtime()
-        rid = self.row(job)["request_id"]
+        rid = str(self.row(job)["request_id"])
+        e2b = effect_operation_id(rid, "e2b")
         real = rt.dispatcher
 
         class SlowAnswer:                     # the authority answers the wake's question slowly: the child stays frozen
@@ -311,25 +317,142 @@ class HostRuntimeOnPostgres(PostgresFixture, unittest.TestCase):
                 time.sleep(1.5)
                 return real.reconcile(*a, **k)
         rt.dispatcher = SlowAnswer()
+        box, t0 = {}, time.monotonic()
 
         def sleep_once_the_lease_is_held():
-            for _ in range(400):
-                if self.sql("SELECT 1 FROM guild.mc_action_receipts WHERE lease_until IS NOT NULL"):
-                    # The whole Mac slept past the receipt lease it held (at most 30 s; moved, not waited).
-                    rt.on_wake({"gap_s": 600.0, "wall_minus_mono_s": 600.0, "hint": None})
-                    self.sql("UPDATE guild.mc_action_receipts SET lease_until = clock_timestamp() - interval '1 s'")
-                    return
-                time.sleep(0.02)
-        threading.Thread(target=sleep_once_the_lease_is_held, daemon=True).start()
+            try:
+                for _ in range(3000):                                  # up to about a minute, then fail loudly
+                    if self.sql("SELECT 1 FROM guild.mc_action_receipts WHERE operation_id=%s AND lease_until IS NOT "
+                                "NULL", (e2b,)):
+                        box["lease_seen_s"] = round(time.monotonic() - t0, 3)
+                        rt.on_wake({"gap_s": 600.0, "wall_minus_mono_s": 600.0, "hint": None})
+                        self.sql("UPDATE guild.mc_action_receipts SET lease_until = clock_timestamp() - interval '1 s' "
+                                 "WHERE operation_id=%s", (e2b,))
+                        box["fired"] = True
+                        return
+                    time.sleep(0.02)
+            except BaseException as exc:
+                box["error"] = repr(exc)
+        watcher = threading.Thread(target=sleep_once_the_lease_is_held, daemon=True)
+        watcher.start()
         out = self.run_pass(rt)
-        self.assertEqual(out["state"], "completed", out)
+        watcher.join(5)
+        print(f"S4-evidence: watcher {box}, pass {round(time.monotonic() - t0, 3)} s, out {out.get('state')} "
+              f"generation {out.get('generation')}")
+        self.assertNotIn("error", box, box)
+        self.assertTrue(box.get("fired"), f"the wake was never injected (branch A): {box}")
+        self.assertEqual((out["state"], out["generation"]), ("completed", 1), out)       # branch B would read 2
+        log = (self.tmp / "artifacts" / f"{rid}-g1.log").read_text()
+        self.assertIn("stale e2b: refused receipt_lease_stale", log, log)
         sink = fakework.FileSink(self.tmp / "sink")
         self.assertEqual([x["answer"] for x in sink.lines()], ["committed"])            # e2 once, never e2b
         refused = self.sql("""SELECT body FROM guild.mc_delegation_events WHERE kind='effect.refused'
                               AND item_id=%s""", (rid,))
         self.assertTrue(any(r["body"]["op"] == "dispatch" for r in refused), refused)
-        log = (self.tmp / "artifacts" / f"{rid}-g{out['generation']}.log").read_text()
-        self.assertIn("stale e2b: refused", log)
+
+    def test_t6m_a_sleep_past_the_item_lease_refuses_the_stale_effect_then_resumes_and_e2_once(self):
+        """T6a/T6m's long sleep on the real store: the woken worker sends e2b on its pre-sleep lease before the runtime
+        freezes it, and the authority refuses it (the item's lease lapsed first: lease_lapsed). Then §5.5 resumes it
+        at generation 2, which claims its own lease afresh (S3), and e2 is committed once."""
+        import signal
+        job = f"job-{self.n + 1}"
+        gid = self.effect_grant(job, "e2b", "e2")
+        brief = self.program("checkpoint s1", f"stale_effect_on_wake e2b grant={gid} wait_s=3 gap_s=1",
+                             f"effect e2 grant={gid}", "result ok")
+        self.assertEqual(self.item(brief), job)
+        rt = self.runtime(hosts={"renew_s": 50})                        # no renewal inside the window
+        rid = str(self.row(job)["request_id"])
+        e2b = effect_operation_id(rid, "e2b")
+        chan = self.tmp / "artifacts" / f"{rid}-g1.chan"
+        box = {}
+
+        def sleeper():
+            try:
+                for name in ("ack-000002.json",):
+                    for _ in range(1000):
+                        if (chan / name).exists():
+                            break
+                        time.sleep(0.02)
+                    else:
+                        raise AssertionError(f"never answered: {name}")
+                time.sleep(0.3)
+                child = rt.child
+                os.killpg(child.pgid, signal.SIGSTOP)               # the Mac sleeps (here, the child alone pauses)
+                self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second' "
+                         "WHERE job_id=%s", (job,))
+                self.sql("UPDATE guild.mc_action_receipts SET lease_until = clock_timestamp() - interval '1 s' "
+                         "WHERE operation_id=%s", (e2b,))
+                time.sleep(1.5)
+                os.killpg(child.pgid, signal.SIGCONT)               # it wakes first and sends e2b on its old lease
+                for _ in range(1000):
+                    if (chan / "ack-000003.json").exists():
+                        break
+                    time.sleep(0.02)
+                rt.on_wake({"gap_s": 600.0, "wall_minus_mono_s": 600.0, "hint": None})
+                box["fired"] = True
+            except BaseException as exc:
+                box["error"] = repr(exc)
+        watcher = threading.Thread(target=sleeper, daemon=True)
+        watcher.start()
+        out = self.run_pass(rt)
+        watcher.join(5)
+        self.assertNotIn("error", box, box)
+        self.assertTrue(box.get("fired"), box)
+        self.assertEqual((out["state"], out["generation"]), ("completed", 2), out)
+        refused = self.sql("""SELECT generation, body FROM guild.mc_delegation_events WHERE kind='effect.refused'
+                              AND item_id=%s""", (rid,))
+        self.assertIn((1, "dispatch", "lease_lapsed"), [(r["generation"], r["body"]["op"], r["body"]["code"])
+                                                        for r in refused])
+        claimed = self.sql("""SELECT generation FROM guild.mc_delegation_events WHERE kind='effect.claimed'
+                              AND item_id=%s AND body->>'operation_id'=%s ORDER BY seq""", (rid, e2b))
+        self.assertEqual([r["generation"] for r in claimed], [1, 2])         # generation 2 claimed its own lease
+        sink = fakework.FileSink(self.tmp / "sink")
+        self.assertEqual([x["answer"] for x in sink.lines()], ["committed"])
+        self.assertEqual(sink.lines()[0]["operation_id"], effect_operation_id(rid, "e2"))
+        kinds = self.kinds(rid)
+        self.assertLess(kinds.index("item.lapsed"), kinds.index("item.resumed"))
+
+    def test_s2_a_finish_that_outlived_its_receipt_lease_is_recorded_by_readback_and_never_decided(self):
+        """The finish (the sink's own "committed", on file) cannot reach the authority for longer than its receipt
+        lease. The host keeps it pending and records it under a reconcile lease; the item is never decided."""
+        job = f"job-{self.n + 1}"
+        gid = self.effect_grant(job, "e1")
+        brief = self.program("checkpoint s1", f"effect e1 grant={gid}", "checkpoint s2", "result ok")
+        self.assertEqual(self.item(brief), job)
+        rt = self.runtime()
+        rid = str(self.row(job)["request_id"])
+        e1 = effect_operation_id(rid, "e1")
+        real, box = rt.dispatcher, {}
+        test = self
+
+        class Outage:                         # the authority is unreachable from the finish until past its lease
+            def __getattr__(self, name):
+                if box.get("down"):
+                    def down(*a, **k):
+                        raise ConnectionError("authority unreachable")
+                    return down
+                return getattr(real, name)
+
+            def effect(self, *a, **k):
+                if a[3]["op"] == "finish" and "done" not in box:
+                    box.update(done=True, down=True)
+                    test.sql("UPDATE guild.mc_action_receipts SET lease_until = clock_timestamp() - interval '1 s' "
+                             "WHERE operation_id=%s", (e1,))
+                    threading.Timer(0.5, lambda: box.update(down=False)).start()
+                    raise ConnectionError("authority unreachable")
+                return self.__getattr__("effect")(*a, **k)
+        rt.dispatcher = Outage()
+        rt.start_contact()
+        out = self.run_pass(rt)
+        self.assertEqual((out["state"], out["generation"]), ("completed", 1), out)
+        self.assertEqual(self.sql("SELECT state FROM guild.mc_action_receipts WHERE operation_id=%s", (e1,))[0]["state"],
+                         "verified")
+        kinds = self.kinds(rid)
+        self.assertNotIn("decision.queued", kinds)
+        self.assertNotIn("item.unknown", kinds)
+        self.assertIn("effect.reconciling", kinds)                       # recorded by the readback route
+        sink = fakework.FileSink(self.tmp / "sink")
+        self.assertEqual([x["answer"] for x in sink.lines()], ["committed"])
 
     def test_t0m_a_do_not_resume_session_is_refused_before_any_spawn(self):
         rt = self.runtime()
