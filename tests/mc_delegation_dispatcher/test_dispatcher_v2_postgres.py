@@ -179,6 +179,47 @@ class DispatcherV2(PostgresFixture, unittest.TestCase):
             with self.connect() as conn, conn.cursor() as cur:
                 cur.execute("DROP SCHEMA IF EXISTS mig_check CASCADE")
 
+    def test_migration_002_waits_at_most_its_lock_timeout_and_then_changes_nothing(self):
+        """Codex part 2: adding queue_seq rewrites the table under an exclusive lock, and 002 set no lock_timeout, so it
+        could wait behind a long reader for ever while every new query queued behind it. Now it waits at most 5 s,
+        then everything rolls back. (Before the fix this test ends on its own 20 s statement_timeout instead.)"""
+        import psycopg2
+        texts = [(ROOT / m).read_text().replace("guild.", "mig_lock.") for m in MIGRATIONS[:2]]
+        holder = self.connect()
+        try:
+            with self.connect() as conn, conn.cursor() as cur:
+                cur.execute("DROP SCHEMA IF EXISTS mig_lock CASCADE; CREATE SCHEMA mig_lock")
+                cur.execute(texts[0])
+            with holder.cursor() as cur:                              # a long reader, its transaction left open
+                cur.execute("SELECT count(*) FROM mig_lock.mc_delegations")
+            conn = self.connect()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SET statement_timeout = '20s'")
+                    started = time.monotonic()
+                    with self.assertRaises(psycopg2.Error) as got:
+                        cur.execute(texts[1])
+                    waited = time.monotonic() - started
+                conn.rollback()
+            finally:
+                conn.close()
+            self.assertEqual(got.exception.pgcode, "55P03", got.exception.pgerror)   # lock_not_available
+            self.assertLess(waited, 15)
+            holder.rollback()
+            with self.connect() as conn2, conn2.cursor() as cur:       # rolled back whole: not one column added
+                cur.execute("""SELECT count(*) FROM information_schema.columns WHERE table_schema='mig_lock'
+                    AND table_name='mc_delegations' AND column_name IN ('queue_seq', 'route', 'card_id')""")
+                self.assertEqual(cur.fetchone()[0], 0)
+                cur.execute(texts[1])                                  # nothing in the way: it applies
+                cur.execute(texts[1])                                  # and again: idempotent
+                cur.execute("""SELECT count(*) FROM information_schema.columns WHERE table_schema='mig_lock'
+                    AND table_name='mc_delegations' AND column_name='queue_seq'""")
+                self.assertEqual(cur.fetchone()[0], 1)
+        finally:
+            holder.close()
+            with self.connect() as conn, conn.cursor() as cur:
+                cur.execute("DROP SCHEMA IF EXISTS mig_lock CASCADE")
+
     # ── version 1 on the migrated schema ──
     def test_version_1_keeps_its_meaning_on_the_migrated_schema(self):
         for authority in (None, AUTH, Authority.load(ROOT / "core/mc_delegation_dispatcher/authority.prod.json")):

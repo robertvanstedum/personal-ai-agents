@@ -10,6 +10,14 @@
 -- version 2 item it could match is the oldest queued row (the check below), so version 1 work behind it waits.
 -- Version 2 items therefore never share a database with an unconfigured store (spec R2.4-a, R2.4-d).
 -- The version 2 authority needs Python 3.10 or later (core.minimoi_actions); version 1 still runs on 3.9.
+--
+-- Lock (Codex part 2 review): adding queue_seq rewrites guild.mc_delegations under an ACCESS EXCLUSIVE lock. SET LOCAL
+-- bounds the wait for that lock to 5 s inside this transaction (or, with BEGIN/COMMIT stripped by
+-- mc_prod_db_migrate.sh, inside its one transaction); on LockNotAvailable everything rolls back, so apply it again.
+-- The timeout bounds only the wait: once the lock is held, the rewrite takes as long as the table needs, and every
+-- reader and writer of the table waits for it. Rehearse it on a production-shaped copy before any apply.
+BEGIN;
+SET LOCAL lock_timeout = '5s';
 
 ALTER TABLE guild.mc_delegations
   ADD COLUMN IF NOT EXISTS card_id               TEXT,
@@ -131,3 +139,4 @@ CREATE TABLE IF NOT EXISTS guild.mc_delegation_reservations (
 );
 CREATE INDEX IF NOT EXISTS mc_delegation_reservations_held ON guild.mc_delegation_reservations (environment, route)
   WHERE usage_hold IS NOT NULL;
+COMMIT;
