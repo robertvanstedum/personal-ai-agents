@@ -10,7 +10,6 @@ Group C: resolver functions — sync, with optional progress_cb for mid-executio
 """
 
 import fcntl
-import hashlib
 import html
 import os
 import re
@@ -19,8 +18,8 @@ import random
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
+
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 
@@ -30,6 +29,11 @@ _REPO_ROOT  = _BASE_DIR.parent.parent        # repo root
 import sys as _sys
 _sys.path.insert(0, str(_REPO_ROOT))
 from core.get_secret import get_secret as _get_secret
+from domains.german.reading_rules import (
+    normalize_url as _normalize_lesen_url,
+    article_id as _lesen_article_id,
+    apply_source_cap as _apply_source_cap,
+)
 GERMAN_BASE = _BASE_DIR                      # domains/german/ (scripts run here)
 GERMAN_DIR  = _BASE_DIR / "data"             # domains/german/data/ (bundled app config: prompts, personas, source lists -- ships with the reviewed code)
 
@@ -721,30 +725,6 @@ def _load_lesen_selection_config() -> dict:
         return {}
 
 
-def _apply_source_cap(articles: list, config: dict) -> list:
-    """Cap articles per source per category. Applied at display time, not ingestion."""
-    max_per_cat = config.get("max_per_category", 10)
-    max_per_src = config.get("max_per_source_per_category", 3)
-    min_per_cat = config.get("min_per_category", 3)
-    source_counts: dict[str, int] = {}
-    selected = []
-    for article in articles:
-        src = article.get("source", "")
-        if source_counts.get(src, 0) < max_per_src:
-            selected.append(article)
-            source_counts[src] = source_counts.get(src, 0) + 1
-        if len(selected) >= max_per_cat:
-            break
-    if len(selected) < min_per_cat:
-        already = set(id(a) for a in selected)
-        for article in articles:
-            if id(article) not in already:
-                selected.append(article)
-                if len(selected) >= min_per_cat:
-                    break
-    return selected
-
-
 def _load_lesen_blocked_keywords() -> list:
     try:
         data = json.loads(_LESEN_FILTERS_FILE.read_text())
@@ -828,48 +808,6 @@ def _save_lesen_articles(data: dict) -> None:
     """Compatibility wrapper for a coordinated atomic article-store mutation."""
     with _lesen_lock(_LESEN_MUTATION_LOCK_FILE):
         _atomic_write_lesen_articles(data)
-
-
-def _normalize_lesen_url(url: str) -> str:
-    """Return a stable canonical URL for deduplication and forward-only IDs."""
-    try:
-        parts = urlsplit((url or "").strip())
-        scheme = parts.scheme.lower()
-        hostname = (parts.hostname or "").lower()
-        port = parts.port
-    except ValueError:
-        return ""
-    if not scheme or not hostname:
-        return ""
-    default_port = (scheme == "http" and port == 80) or (
-        scheme == "https" and port == 443
-    )
-    netloc = hostname if port is None or default_port else f"{hostname}:{port}"
-    path = re.sub(r"/{2,}", "/", parts.path or "")
-    if path == "/":
-        path = ""
-    elif path.endswith("/"):
-        path = path[:-1]
-    query = urlencode(
-        sorted(
-            (key, value)
-            for key, value in parse_qsl(parts.query, keep_blank_values=True)
-            if not key.lower().startswith("utm_")
-            and key.lower() not in {"fbclid", "gclid"}
-        ),
-        doseq=True,
-    )
-    return urlunsplit((scheme, netloc, path, query, ""))
-
-
-def _lesen_article_id(normalized_url: str, date_fetched: str | None = None) -> str:
-    """Return a stable ID derived only from the canonical URL.
-
-    ``date_fetched`` remains an accepted argument for compatibility with the
-    old call shape, but it deliberately does not affect identity.
-    """
-    digest = hashlib.sha256(normalized_url.encode("utf-8")).hexdigest()[:24]
-    return f"art_url_{digest}"
 
 
 def _strip_html(raw: str) -> str:
