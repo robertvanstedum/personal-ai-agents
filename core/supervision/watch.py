@@ -151,7 +151,10 @@ def check_in(store, github, *, now=None, since=None, runtime=None, sync_view_bou
                           "text": f"{who} stopped {int(age.total_seconds() // 60)} min ago without saying why."})
     if runtime is not None:
         # The runtime's snapshot is the one rule set (§3.3): its notices, today's delegation keys among them.
-        found, running, runners, failed = runtime.check_in()
+        try:
+            found, running, runners, failed = runtime.check_in()
+        except Exception as exc:                # the link never costs the check-in (SF3)
+            found, running, runners, failed = [], [], [], [f"runtime link unreadable ({type(exc).__name__})"]
         items.extend(found)
         errors.extend(failed)
     else:
@@ -197,13 +200,16 @@ def _sync_view_stale(store, bound_s):
                     + "; no rule fires from its stop lines or exchanges until it reports again."}
 
 
-def staging_watch(store, *, timeout_s):
+def staging_watch(store, *, timeout_s, hosts=None):
     """R5.6-b over the watch rows (one per watched host, written only by its heartbeat credential): silent once when
     its last heartbeat is older than ``timeout_s`` (90 s in production, N3), back once when it beats again. A host
-    with no row has never beaten: the watch is not armed for it. Staging's own account of itself (its view) is quoted
-    with its age, never acted on: production has no say over dev work."""
+    with no row has never beaten: the watch is not armed for it. ``hosts`` names the hosts whose credential is still
+    configured: a row of any other host is ignored, so removing the credential alone disarms the watch. Staging's own
+    account of itself (its view) is quoted with its age, never acted on: production has no say over dev work."""
     out = []
     for row in store.watch_rows():
+        if hosts is not None and row["host_id"] not in hosts:
+            continue
         host, age = row["host_id"], (row["now"] - row["last_at"]).total_seconds()
         view = row["view"] or {}
         if age > timeout_s and row["silent_since"] is None:
@@ -227,6 +233,18 @@ def staging_watch(store, *, timeout_s):
 
 
 LABEL = {"waiting_on_robert": "Waiting on you", "error": "Error", "blocked": "Blocked", "stalled": "Stalled"}
+
+
+def notices_message(items, title="MC: the runtime"):
+    """The runtime's rule notices (and production's staging watch), told as they are raised, between check-ins (S1-G):
+    grouped as the check-in groups them, with no state line."""
+    lines = [title]
+    for kind in ("waiting_on_robert", "error", "blocked", "stalled"):
+        group = [i["text"] for i in items if i["kind"] == kind]
+        if group:
+            lines.append(f"\n{LABEL[kind]}:")
+            lines.extend(f"• {t}" for t in group)
+    return "\n".join(lines)
 
 
 def message(items, summary):

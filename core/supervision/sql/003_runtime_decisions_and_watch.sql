@@ -2,7 +2,11 @@
 -- tables, nothing altered or dropped, no data rewritten. Applying 001, 002 and this again changes nothing. Production's
 -- one-decision-per-message path (supervision_decisions.telegram_message_id and its unique index) is untouched; these
 -- tables are read and written only when a release turns the runtime link, contact recording or the staging watch on.
+-- Lock (review N1): the mapping's foreign key takes SHARE ROW EXCLUSIVE on guild.supervision_decisions for a moment.
+-- SET LOCAL bounds that wait to 5 s inside this transaction (or, with BEGIN/COMMIT stripped by mc_prod_db_migrate.sh,
+-- inside its one transaction, as the last file); on LockNotAvailable everything rolls back, so apply it again.
 BEGIN;
+SET LOCAL lock_timeout = '5s';
 
 -- R3.2-b, R7.4-c: one message may carry several decisions (a batched notice, at most five). A decision is in at most
 -- one batched message; a reply to that message answers each decision listed in it, each receipt bound to its own

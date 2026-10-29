@@ -11,17 +11,21 @@ the same number unless MINIMOI_OWNER_TELEGRAM_USER_ID says otherwise), and the a
 
 Host runtime S1-G, each off unless a release sets it (then see core/supervision/runtime.py and watch.py):
   * MINIMOI_RUNTIME_*: the link to this environment's runtime authority. Its decisions go out as D-codes (a routine
-    notice's together in one message, a solo one alone), a reply to a batched message answers every decision it lists
-    (or one code at a time), each answer is taken to the authority with its receipt, and the check-in's delegation
-    items come from the runtime's snapshot;
+    notice's together in one message, a solo one alone); a reply answers them only as plainly as it says (the whole
+    "yes" or "no", or one code at a time; "wait" changes nothing); each answer is taken to the authority with its
+    receipt and Robert is told what it did; its rule notices are told as they are raised; and the check-in's
+    delegation items come from the runtime's snapshot;
   * MINIMOI_SUPERVISION_SYNC_VIEW_BOUND_S: the Mac sync's mirror is read with its age (R4.6-b);
-  * MINIMOI_SUPERVISION_WATCH_TIMEOUT_S: production's notify-only watch of staging (R5.6-b).
+  * MINIMOI_SUPERVISION_WATCH_TOKEN_SHA256 with MINIMOI_SUPERVISION_WATCH_HOST (the same credential the portal
+    takes; MINIMOI_SUPERVISION_WATCH_TIMEOUT_S, default 90): production's notify-only watch of staging (R5.6-b),
+    armed by the credential alone, so removing it disarms the watch.
 With none set it is exactly today's supervisor.
 """
 from __future__ import annotations
 
 import logging
 import os
+import re
 import signal
 import sys
 import time
@@ -47,6 +51,12 @@ def _token():
     return _get_token("telegram_approvals_bot_token", "telegram", "approvals_bot_token", "TELEGRAM_APPROVALS_BOT_TOKEN")
 
 
+def _code(exc) -> str:
+    text = str(exc)
+    return text if 0 < len(text) <= 64 and text.replace("_", "").isalnum() and text == text.lower() \
+        else type(exc).__name__
+
+
 def _runtime_row(decision) -> bool:
     """A decision the runtime authority queued (S1-G): the runtime link sends it, and takes the answer back."""
     return (decision.get("requester") or {}).get("agent") == "runtime"
@@ -64,12 +74,49 @@ class Supervisor:
 
     # -- decisions out -------------------------------------------------------------------------------------------
     def runtime_tick(self):
-        """S1-G, with a runtime link only: answers already given go to the authority first, then the decision notices
-        it raised go out (a routine notice's decisions in one message, a solo one alone)."""
-        for code, outcome in self.runtime.apply(self.store):
-            log.info("runtime decision %s applied: %s", code, outcome.get("state"))
-        for message_id in self.runtime.deliver(self.store, self.bot, self.chat_id):
-            log.info("runtime decision notice sent (message %s)", message_id)
+        """S1-G, with a runtime link only, on every tick (its own short timer): answers already given go to the
+        authority, and Robert is told what each did; decisions the authority closed itself are closed here; the
+        decision notices it raised go out (a routine notice's in one message, a solo one alone); then the rule notices
+        it raised at its sweeps (the outbox), and a dead sweeper's. Nothing here stops the tick (SF3): a failure is
+        logged by its code and told once per key and day, and today's approvals and check-ins go on."""
+        steps = (("apply", lambda: self.runtime.apply(self.store, self.bot, self.chat_id)),
+                 ("close", lambda: self.runtime.close_closed(self.store, self.bot, self.chat_id)),
+                 ("deliver", lambda: self.runtime.deliver(self.store, self.bot, self.chat_id)),
+                 ("drain", lambda: self.runtime.drain(self.store, self.bot, self.chat_id)))
+        for name, step in steps:
+            try:
+                step()
+            except Exception as exc:
+                self.runtime.errors.append(f"{name}:{_code(exc)}")
+        self._runtime_failed(self.runtime.take_errors())
+
+    def _runtime_failed(self, codes):
+        """The runtime link's failures this tick, each told once per key and day, in one message (SF3)."""
+        if not codes:
+            return
+        for code in codes:
+            log.warning("runtime link: %s", code)
+        day = f"{datetime.now(timezone.utc):%Y%m%d}"
+        try:
+            fresh = self.store.new_alert_keys(sorted({f"runtime-link-error:{c}:{day}" for c in codes}))
+            if fresh:
+                told = ", ".join(k.split(":", 1)[1].rsplit(":", 1)[0] for k in fresh)
+                self.bot.send(self.chat_id, f"MC: the runtime link failed ({told}). Today's approvals and check-ins go "
+                                            "on; the runtime's decisions and notices wait until it works again.")
+        except Exception:
+            log.exception("runtime link failure not told")
+
+    def watch_tick(self):
+        """Production's notify-only watch of staging (R5.6-b), on every tick: silent once past the timeout, back once,
+        told at once rather than at the next check-in. Never stops the tick."""
+        try:
+            items = watch.staging_watch(self.store, timeout_s=self.watch["timeout_s"], hosts=self.watch.get("hosts"))
+            fresh = set(self.store.new_alert_keys([i["key"] for i in items])) if items else set()
+            told = [i for i in items if i["key"] in fresh]
+            if told:
+                self.bot.send(self.chat_id, watch.notices_message(told, "MC: staging, watched by production"))
+        except Exception:
+            log.exception("staging watch failed")
 
     def send_new(self):
         for d in self.store.pending():
@@ -82,9 +129,6 @@ class Supervisor:
         """Tell Robert how each decision ended (answered here, in the Guild chat, or expired)."""
         for d in self.store.unannounced():
             code, r = f"D-{d['id']}", public_receipt(d["receipt"]) or {}
-            if _runtime_row(d):
-                self._announce_runtime(d, code, r)
-                continue
             if d["state"] == "expired":
                 text = f"{code} expired unanswered after 24 h. The agent was told; it will ask again if still needed."
             else:
@@ -93,18 +137,6 @@ class Supervisor:
                         f"The agent that asked gets it next.")
             self.bot.send(self.chat_id, text, reply_to=d["telegram_message_id"])
             self.store.mark_announced(d["id"])
-
-    def _announce_runtime(self, d, code, r):
-        """A runtime decision's end, answered in the message (alone, or in a batched one) that carried it."""
-        if d["state"] == "expired":
-            text = f"{code} expired unanswered. The runtime keeps it waiting; nothing was done."
-        else:
-            where = "here" if r.get("channel") == "telegram" else "in the Guild chat"
-            text = (f"Recorded: {code} {d['state']} {where}, in your words: “{r.get('text', '')}”. "
-                    f"The runtime applies it next.")
-        reply_to = d["telegram_message_id"] or self.store.batch_of(d["id"])
-        self.bot.send(self.chat_id, text, reply_to=reply_to)
-        self.store.mark_announced(d["id"])
 
     # -- answers in ----------------------------------------------------------------------------------------------
     def read_answers(self, wait=25):
@@ -123,10 +155,12 @@ class Supervisor:
                 log.warning("telegram update ignored (%s)", msg)    # someone else, or a forward: never an answer
             return
         decision = self.store.by_message(reply_to)
+        if decision is not None and _runtime_row(decision):
+            return self.handle_runtime(update, msg, [decision], batch=False)
         if decision is None and self.runtime is not None:
             batch = self.store.by_batch(reply_to)
             if batch:
-                return self.handle_batch(update, msg, batch)
+                return self.handle_runtime(update, msg, batch, batch=True)
         if decision is None:
             self.bot.send(self.chat_id, "Not counted: that message is not a decision.", reply_to=msg["message_id"])
             return
@@ -147,34 +181,48 @@ class Supervisor:
                           reply_to=msg["message_id"])
         log.info("decision %s %s by Telegram reply", code, answer if done else "not recorded")
 
-    def handle_batch(self, update, msg, batch):
-        """Robert's reply to a batched message (R7.4-c, OWN-6). The whole short reply "yes" approves every decision
-        it lists that still waits, "no" declines them; "approve D-12" / "no D-12" answers one of them. Each answer is
-        recorded once, with its own receipt: the same words, bound to that decision's own digest."""
+    def handle_runtime(self, update, msg, rows, *, batch):
+        """Robert's reply to a runtime decision's message, alone or batched (R7.4-c, OWN-6, SF1). A runtime decision
+        acts on work, so a reply never declines more than it says: the whole short "yes" approves every decision the
+        message lists that still waits, the whole short "no" declines them (each does what its words say), "wait",
+        "hold", "not now", "stop" change nothing, and anything else is not counted; one code at a time ("approve
+        D-12", "no D-13") answers them differently. A solo decision is never answered by a batched reply (N2). Each
+        answer is recorded once, with its own receipt: the same words, bound to that decision's own digest. What it
+        did is told once the authority has applied it."""
+        reply = msg["message_id"]
+        codes = ", ".join(d["code"] for d in rows)
         per_code = tg.parse_code_command(msg["text"])
         if per_code is not None:
             answer, code = per_code
-            targets = [d for d in batch if d["code"] == code]
+            targets = [d for d in rows if d["code"] == code]
             if not targets:
-                self.bot.send(self.chat_id, f"Not counted: {code} is not in that message.", reply_to=msg["message_id"])
+                self.bot.send(self.chat_id, f"Not counted: {code} is not in that message.", reply_to=reply)
+                return
+            if batch and len(rows) > 1 and (targets[0]["requester"] or {}).get("solo"):
+                self.bot.send(self.chat_id, f"Not counted: {code} arrives on its own; answer it in its own message.",
+                              reply_to=reply)
                 return
         else:
-            answer, targets = tg.parse_answer(msg["text"]), batch
+            answer = tg.parse_runtime_reply(msg["text"])
+            targets = [d for d in rows if not (batch and len(rows) > 1 and (d["requester"] or {}).get("solo"))]
             if answer is None:
-                self.bot.send(self.chat_id, "Not counted: reply just “yes” to approve every decision listed, “no” to "
-                                            "decline them, or one code at a time (approve D-n).",
-                              reply_to=msg["message_id"])
+                self.bot.send(self.chat_id, f"Not counted for {codes}: reply just “yes” or just “no” (each does what "
+                                            "its words say), “wait” to leave them, or one code at a time "
+                                            f"(approve {rows[0]['code']}, no {rows[-1]['code']}).", reply_to=reply)
                 return
-        done = []
+        live = [d for d in targets if d["state"] in ("new", "sent")]
+        if answer == "held":
+            self.bot.send(self.chat_id, f"Nothing changed: {', '.join(d['code'] for d in live) or codes} still "
+                                        "wait. Reply just “no” to decline, or name one code at a time.", reply_to=reply)
+            return
+        done = [d["code"] for d in live if self.store.decide(d["id"], answer, tg.receipt(update, msg, d),
+                                                             text_sha256=d["text_sha256"])]
+        log.info("runtime decisions %s %s by Telegram reply", ",".join(done) or "none", answer)
+        reason = getattr(self.runtime, "closed_reason_for", None)
         for d in targets:
-            if d["state"] in ("new", "sent") and self.store.decide(d["id"], answer, tg.receipt(update, msg, d),
-                                                                   text_sha256=d["text_sha256"]):
-                done.append(d["code"])
-        left = [d["code"] for d in targets if d["code"] not in done]
-        log.info("batched decisions %s %s by Telegram reply", ",".join(done) or "none", answer)
-        if left:
-            self.bot.send(self.chat_id, f"{', '.join(left)}: already answered or expired; nothing changed.",
-                          reply_to=msg["message_id"])
+            if d["code"] not in done:
+                why = reason(d) if reason is not None else f"already {d['state']}"
+                self.bot.send(self.chat_id, f"{d['code']} is no longer open ({why}); nothing changed.", reply_to=reply)
 
     # -- check-ins -----------------------------------------------------------------------------------------------
     def checkin_due(self):
@@ -183,7 +231,7 @@ class Supervisor:
     def checkin(self, now=None):
         self.next_checkin = self.clock() + self.every
         summary, items = watch.check_in(self.store, self.github, now=now, runtime=self.runtime,
-                                        sync_view_bound_s=self.sync_view_bound_s, watch=self.watch)
+                                        sync_view_bound_s=self.sync_view_bound_s)   # the watch runs on the tick
         fresh = set(self.store.new_alert_keys([i["key"] for i in items]))
         new_items = [i for i in items if i["key"] in fresh]
         status = "none"
@@ -201,7 +249,12 @@ class Supervisor:
 
     def tick(self):
         if self.runtime is not None:
-            self.runtime_tick()
+            try:                    # S1-G: the runtime link never stops today's approvals, check-ins or health (SF3)
+                self.runtime_tick()
+            except Exception:
+                log.exception("runtime tick failed")
+        if self.watch is not None:
+            self.watch_tick()
         self.send_new()
         self.announce()
         if self.checkin_due():
@@ -220,9 +273,11 @@ def _s1g_options(environ, connect) -> dict:
     bound = environ.get("MINIMOI_SUPERVISION_SYNC_VIEW_BOUND_S")
     if bound:
         out["sync_view_bound_s"] = int(bound)
-    timeout = environ.get("MINIMOI_SUPERVISION_WATCH_TIMEOUT_S")
-    if timeout:
-        out["watch"] = {"timeout_s": int(timeout)}
+    # The watch is armed by staging's credential itself (R5.6-b): removing the credential alone disarms it.
+    credential = (environ.get("MINIMOI_SUPERVISION_WATCH_TOKEN_SHA256") or "").strip().lower()
+    host = environ.get("MINIMOI_SUPERVISION_WATCH_HOST") or ""
+    if re.fullmatch(r"[0-9a-f]{64}", credential) and re.fullmatch(r"[A-Za-z0-9._:-]{1,64}", host):
+        out["watch"] = {"timeout_s": int(environ.get("MINIMOI_SUPERVISION_WATCH_TIMEOUT_S") or 90), "hosts": [host]}
     return out
 
 
