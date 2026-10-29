@@ -1868,7 +1868,7 @@ def research_scan_view(hash_id: str):
     """
     md_path = _find_dd_md(hash_id)
     if not md_path:
-        return f"Scan '{hash_id}' not found", 404
+        return f"Scan '{_html_lib.escape(hash_id)}' not found", 404
 
     dd      = _parse_scan_md(md_path)
     return _render_scan_page(dd, hash_id), 200, {'Content-Type': 'text/html'}
