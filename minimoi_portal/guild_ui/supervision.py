@@ -178,8 +178,7 @@ def context_block(principal, *, environ, store_factory=store):
         lines.extend(f"- {d['code']}: {d['text']}" for d in pending)
     if last:
         sm = last["summary"]
-        lines.append(f"Last check-in {last['at']:%H:%M %Z}: {len(sm.get('prs', []))} open PRs, "
-                     f"nudged: {', '.join(sm.get('nudged') or []) or 'none'}.")
+        lines.append(f"Last check-in {last['at']:%H:%M %Z}: {len(sm.get('prs', []))} open PRs.")
         for r in sm.get("running") or []:
             who = name(r["agent"])
             lines.append(f"- running: {who}, {r['state']} {r['minutes']} min: {r['brief']}")
