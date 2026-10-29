@@ -11,6 +11,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
+import math
 from pathlib import Path
 
 
@@ -28,9 +29,16 @@ class CostPolicy:
 def _optional_nonnegative_number(value: object, name: str) -> float | None:
     if value is None:
         return None
+    message = f"{name} must be a finite non-negative number or null"
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
-        raise ValueError(f"{name} must be a non-negative number or null")
-    return float(value)
+        raise ValueError(message)
+    try:
+        number = float(value)
+    except OverflowError as error:
+        raise ValueError(message) from error
+    if not math.isfinite(number):
+        raise ValueError(message)
+    return number
 
 
 def load_cost_policy(path: Path) -> CostPolicy:
@@ -59,10 +67,12 @@ def load_cost_policy(path: Path) -> CostPolicy:
         (minimum_requests, "minimum_requests_for_fallback_rate"),
         (unpriced_warn, "unpriced_request_warn"),
     ):
-        if value is not None and (
-            isinstance(value, bool) or not isinstance(value, int) or value < 0
-        ):
-            raise ValueError(f"{name} must be a non-negative integer or null")
+        optional = name == "unpriced_request_warn"
+        if optional and value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            suffix = " or null" if optional else ""
+            raise ValueError(f"{name} must be a non-negative integer{suffix}")
 
     return CostPolicy(
         daily_warn_usd=_optional_nonnegative_number(
