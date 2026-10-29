@@ -255,6 +255,17 @@ def test_sf2_robert_is_told_what_his_answer_did():
     assert closed_reason({"answer": "superseded"}) == "a newer question replaced it"
 
 
+def test_s7_a_stale_answer_names_a_fresh_decision_only_when_one_is_open():
+    from core.supervision.runtime import outcome_text
+    r = {"code": "D-7", "state": "approved"}
+    stale = {"state": "stale", "generation_now": 3}
+    assert outcome_text(r, {**stale, "fresh_decision_id": None}).endswith("generation 3, so nothing was done.")
+    assert outcome_text(r, {**stale, "fresh_decision_id": "x", "fresh": "queued"}).endswith(
+        "so nothing was done. A fresh decision follows.")
+    assert outcome_text(r, {**stale, "fresh_decision_id": "x", "fresh": "waiting"}).endswith(
+        "so nothing was done. A decision for that generation is already waiting.")
+
+
 class FailingLink:
     """A runtime link whose every step fails, as a missing table or a database error would make it."""
 

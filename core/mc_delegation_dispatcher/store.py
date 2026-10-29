@@ -3400,13 +3400,19 @@ class DispatcherStore:
                 self._event(cur, "decision.resolved", item=row["request_id"], generation=row["generation"],
                             source="owner", once=_once("decision_resolved", did),
                             body={**refs, "answer": "stale", "generation_now": row["generation"]})
-                fresh = None
+                fresh, fresh_state = None, None
                 if answer == "approved" and self._reassignable(row) \
                         and self._runner(cur, dq["body"].get("runner_id")) is not None:
+                    asked = self._recorded(cur, _once("reassign_proposal", str(row["request_id"]), row["generation"],
+                                                      dq["body"]["runner_id"])) is not None
                     fresh = self._queue_reassignment(cur, row, dq["body"]["runner_id"],
                                                      dq["body"].get("proposed_by") or by)
+                    if self._recorded(cur, _once("decision_resolved", fresh)) is not None:
+                        fresh = None      # that very question was asked and already closed (sweep S7): none follows
+                    else:
+                        fresh_state = "waiting" if asked else "queued"
                 return {"state": "stale", "action": action, "generation_now": row["generation"],
-                        "fresh_decision_id": fresh}
+                        "fresh_decision_id": fresh, **({"fresh": fresh_state} if fresh else {})}
             if action == "leave":
                 self._event(cur, "decision.answered", item=row["request_id"], generation=row["generation"],
                             source="owner", body=refs)

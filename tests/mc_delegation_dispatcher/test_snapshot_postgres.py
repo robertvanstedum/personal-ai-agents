@@ -1196,6 +1196,45 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         self.assertTrue(any(t.startswith(f"Not applied: D-1 was refused and replaced by {code}") for t in texts),
                         texts)
 
+    # ── sweep S7: after a stale yes, a fresh decision is named only when one is open ──
+    def stale_reassignment(self):
+        """R1 asks to reassign the item at generation 1; the item then resumes and lapses at generation 2. -> (item
+        id, R1 as waiting)."""
+        self.admit(card())
+        _, env = self.claim()
+        rid = env["request_id"]
+        self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second' "
+                 "WHERE request_id=%s", (rid,))
+        self.store.sweep()
+        self.store.propose_reassignment(rid, "mac-a", by="mc")
+        (r1,) = self.waiting(self.publish(), "reassignment")
+        self.assertEqual(self.store.reconcile("mac-a", rid, 1, {"child": "stopped", "checkpoint": None}, [])
+                         ["generation"], 2)
+        self.sql("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '1 second' "
+                 "WHERE request_id=%s", (rid,))
+        self.store.sweep()
+        return rid, r1
+
+    def test_s7_a_stale_yes_names_no_fresh_decision_when_that_question_was_already_closed(self):
+        from core.supervision.runtime import outcome_text
+        rid, r1 = self.stale_reassignment()
+        r2 = self.store.propose_reassignment(rid, "mac-a", by="mc")["decision_id"]     # generation 2's own question
+        self.assertEqual(self.answer(r2, "declined", "no")["action"], "withdraw")       # Robert says no to it
+        out = self.store.resolve(r1["decision_id"], "approved", by="robert", receipt=self.receipt_of(r1, "yes"))
+        self.assertEqual((out["state"], out["fresh_decision_id"]), ("stale", None))      # nothing re-raised
+        self.assertEqual(self.waiting(self.publish(), "reassignment"), [])
+        text = outcome_text({"code": "D-1", "state": "approved"}, out)
+        self.assertNotIn("fresh decision", text)
+        self.assertTrue(text.endswith("so nothing was done."), text)
+
+    def test_s7_a_stale_yes_says_a_decision_already_waiting_waits_and_a_new_one_follows(self):
+        from core.supervision.runtime import outcome_text
+        rid, r1 = self.stale_reassignment()
+        r2 = self.store.propose_reassignment(rid, "mac-a", by="mc")["decision_id"]     # open, not answered
+        out = self.store.resolve(r1["decision_id"], "approved", by="robert", receipt=self.receipt_of(r1, "yes"))
+        self.assertEqual((out["state"], out["fresh_decision_id"], out["fresh"]), ("stale", r2, "waiting"))
+        self.assertIn("already waiting", outcome_text({"code": "D-1", "state": "approved"}, out))
+
     # ── a batch whose send failed, with one of its rows answered in the Guild and refused: the rest still go out ──
     def test_deliver_never_strands_the_unsent_rows_of_a_batch_one_of_whose_rows_was_answered_in_the_guild(self):
         store, sup = self.faulty_supervisor(self.narrow_store())
