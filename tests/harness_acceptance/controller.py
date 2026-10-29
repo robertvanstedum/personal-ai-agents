@@ -83,13 +83,13 @@ def now_iso():
 
 class Run:
     def __init__(self, evidence: Path, *, server_dsn, container=None, only=None, acceptance=None, ref="HEAD",
-                 python=sys.executable, seed=None):
+                 python=sys.executable, seed=None, resume=False):
         self.ev = Path(evidence).resolve()
-        if self.ev.exists() and any(self.ev.iterdir()):
+        if not resume and self.ev.exists() and any(self.ev.iterdir()):
             raise SystemExit("refused: the evidence folder is not empty (a run is never rerun into it)")
         self.ev.mkdir(parents=True, exist_ok=True)
         self.acc = Path(acceptance or str(self.ev) + ".acceptance").resolve()
-        if self.acc.exists():
+        if not resume and self.acc.exists():
             raise SystemExit("refused: the acceptance folder exists (each run starts fresh)")
         self.server_dsn, self.container, self.ref_name, self.python = server_dsn, container, ref, python
         self.only = set(only) if only else None
@@ -243,6 +243,14 @@ class Run:
         self.keep_host("installed")
         self.log("setup", "installed (rendered, not loaded)", commit=self.install["commit"],
                  bundle_digest=self.bundle_digest, label=self.plist["Label"])
+        self.instruments()
+        self.runtime_start("first start")
+        self.collector.start()
+        self.notifier.start()
+
+    def instruments(self):
+        """The authority's store as the owner path and the checkers read it, the sink service, the collector, the
+        notifier, the owner identity and the second runner identity."""
         from core.mc_delegation_dispatcher import cards
         from core.mc_delegation_dispatcher.store import Authority, DispatcherStore
         from core.mc_delegation_runner import fakework
@@ -260,9 +268,6 @@ class Run:
         self.notifier = I.Notifier(self.connect, self.store, self.ev / "notify.jsonl")
         self.owner = I.Owner(self)
         self.scripted = I.ScriptedHost(self)
-        self.runtime_start("first start")
-        self.collector.start()
-        self.notifier.start()
 
     # ── host.yaml variants (an operator's edit, then a restart) ──
     def keep_host(self, name):
@@ -771,7 +776,14 @@ class Plan(Run):
                    {"causes": [e["body"].get("cause") for e in lapsed]}, n=len(lapsed))
         suspended = [e for e in self.window_events() if e["kind"] == "authority.suspended"]
         self.check("T8.outage_recorded", bool(suspended), {"outages": [e["body"] for e in suspended]}, n=len(suspended))
-        self.check("T8.grace_extended", any(e["kind"] == "item.grace_extended" for e in evs), {})
+        # R5.2-a: the outage does not count. A lease that ran out inside it takes its grace from the restart (its
+        # lapse's deadline is the outage's end plus the grace); one already lapsed when it began is moved on by it.
+        ends = [C._at(e["body"]["to"]) for e in suspended]
+        moved = [e for e in evs if e["kind"] == "item.grace_extended"]
+        from_restart = [e for e in lapsed if ends and C._at(e["body"]["grace_deadline"]).timestamp()
+                        >= max(ends).timestamp() + e["body"]["grace_s"] - 1]
+        self.check("T8.grace_extended", bool(moved) or bool(from_restart),
+                   {"grace_extended_events": len(moved), "lapse_grace_from_restart": len(from_restart)})
         self.check("T8.resumed_completed", bool(row) and row["state"] == "completed" and row["generation"] >= 2,
                    {"state": row and row["state"], "generation": row and row["generation"]})
         mine = [x for x in self.sink_lines() if x["item_id"] == rid]
@@ -1360,10 +1372,26 @@ def main(argv=None) -> int:
     r.add_argument("--acceptance", type=Path, help="the acceptance folder (default: beside the evidence)")
     r.add_argument("--ref", default="HEAD", help="the commit the bundle is built from")
     r.add_argument("--seed", type=int)
+    pr = sub.add_parser("prepare", help="gate M's owner session: the database and the render, nothing started")
+    pr.add_argument("--plan", required=True, choices=(PLAN,))
+    pr.add_argument("--evidence", required=True, type=Path)
+    pr.add_argument("--python", required=True, help="the interpreter the runtime is pinned to")
+    pr.add_argument("--ref", required=True, help="the commit the bundle is built from")
+    pr.add_argument("--dsn-env", default="MC_BINDING_TEST_DSN")
+    pr.add_argument("--acceptance", type=Path)
+    st = sub.add_parser("owner-step", help="one owner-present step, attached to the launchd job")
+    from harness_acceptance import owner_session
+    st.add_argument("step", choices=owner_session.STEPS)
+    st.add_argument("--evidence", required=True, type=Path)
     a = p.parse_args(argv)
+    if a.command == "owner-step":
+        return owner_session.owner_step(a.step, a.evidence)
     dsn = os.environ.get(a.dsn_env)
     if not dsn:
         raise SystemExit(f"refused: {a.dsn_env} is not set")
+    if a.command == "prepare":
+        owner_session.prepare(a.evidence, dsn=dsn, python=a.python, ref=a.ref, acceptance=a.acceptance)
+        return 0
     only = [x.strip() for x in a.only.split(",")] if a.only else None
     if only and set(only) - set(SCENARIOS):
         raise SystemExit("refused: unknown scenario " + ",".join(sorted(set(only) - set(SCENARIOS))))
