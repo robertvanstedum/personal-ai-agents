@@ -351,13 +351,19 @@ class Cards(PostgresFixture, unittest.TestCase):
         admitted = self.admit(card(attempts=2))
         got, env = self.claim()
         self.progress(env, "s1")
-        eid = str(uuid4())
-        ack = self.result(env, status="failed", detail={"exit_code": 70}, artifacts=[art("output", "b1")],
-                          event_id=eid)                                          # crash: self
+        eid, made = str(uuid4()), self.db_now()
+        crashed = dict(status="failed", detail={"exit_code": 70}, artifacts=[art("output", "b1")], event_id=eid,
+                       at=made)                                                   # crash: self, as the host keeps it
+        ack = self.result(env, **crashed)
         self.assertEqual(ack, {"state": "accepted", "event_id": eid, "code": "retry", "attempt": 2, "generation": 2})
-        replay = self.result(env, status="failed", detail={"exit_code": 70}, artifacts=[art("output", "b1")],
-                             event_id=eid)
+        replay = self.result(env, **crashed)
         self.assertEqual((replay["state"], replay["code"], replay["generation"]), ("already_applied", "retry", 2))
+        # Probe P1b (review N5): anything else under that event id is refused, as for every owner write (S1-A).
+        for other in (dict(status="completed", artifacts=[art("patch", "x")], detail={"exit_code": 0}),
+                      dict(detail={"exit_code": 71}), dict(amount=0.2), dict(artifacts=[]),
+                      dict(at=made - timedelta(seconds=1))):
+            conflict = self.result(env, **{**crashed, **other})
+            self.assertEqual((conflict["state"], conflict["code"]), ("refused", "event_id_conflict"), other)
         build = self.item("C-17.build")
         self.assertEqual((build["state"], build["generation"], build["runner_id"], build["result_event_id"],
                           build["facts"]["card"]["attempt"]), ("queued", 2, "mac-a", None, 2))
@@ -369,9 +375,11 @@ class Cards(PostgresFixture, unittest.TestCase):
         self.assertEqual(self.result(env, artifacts=[art("patch", "b2")])["state"], "accepted")
         self.assertEqual(self.day(), (0.0, 2 * USED))
         self.assertEqual([(i["step"], i["state"]) for i in self.items()], [("build", "completed"), ("review", "queued")])
-        late = self.result({"request_id": env["request_id"], "generation": 1}, status="failed",
-                           detail={"exit_code": 70}, artifacts=[art("output", "b1")], event_id=eid)
+        late = self.result({"request_id": env["request_id"], "generation": 1}, **crashed)
         self.assertEqual((late["state"], late["code"]), ("already_applied", "retry"))     # resent after it all: DUP-5
+        other = self.result({"request_id": env["request_id"], "generation": 1},
+                            **{**crashed, "status": "completed", "artifacts": [art("patch", "b2")]})
+        self.assertEqual((other["state"], other["code"]), ("refused", "event_id_conflict"))
         # DUP-4: one accepted result for the item; the failed attempt is its own record. OWN-5: no owner call.
         rid = env["request_id"]
         self.assertEqual((len(self.events("result.accepted", rid)), len(self.events("attempt.failed", rid)),

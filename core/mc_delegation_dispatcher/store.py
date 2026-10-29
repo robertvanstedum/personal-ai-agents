@@ -1423,9 +1423,9 @@ class DispatcherStore:
         if row is None or row["route"] is None:
             return {"state": "refused", "event_id": eid,
                     "code": "unknown_request" if row is None else "protocol_mismatch"}
-        retried = self._retried(cur, eid, rid)
+        retried = self._retried(cur, eid, rid, generation, when, status, route, used, detail, artifacts)
         if retried is not None:      # a definite failure already given its retry (R4.3-d), whatever came after: DUP-5
-            return {"state": "already_applied", "event_id": eid, "code": "retry", **retried}
+            return retried
         if row["result_event_id"] is not None:
             same = str(row["result_event_id"]) == eid
             return {"state": "already_applied" if same else "refused", "event_id": eid,
@@ -1736,14 +1736,22 @@ class DispatcherStore:
                               "attempt": _attempt(row)})
 
     # ── attempts (R4.3-d) ──
-    def _retried(self, cur, event_id, request_id) -> dict | None:
-        """The retry already given for this result event (its replay), or None."""
+    def _retried(self, cur, event_id, request_id, generation, when, status, route, used, detail, artifacts):
+        """None unless ``event_id`` already recorded a failed attempt of this item that was given its retry. Then S1-A's
+        rule for every owner write: the identical report replayed answers already_applied, with the retry it was given
+        (DUP-5); anything else under that id is refused event_id_conflict (review N5)."""
         cur.execute("""SELECT generation, body FROM guild.mc_delegation_events WHERE event_id=%s AND kind='attempt.failed'
             AND item_id=%s AND principal_id=%s AND environment=%s""",
                     (event_id, str(request_id), self.principal, self.environment))
         found = cur.fetchone()
-        return None if found is None else {"attempt": found["body"]["attempt"] + 1,
-                                           "generation": found["generation"] + 1}
+        if found is None:
+            return None
+        n = found["body"]["attempt"]
+        body = _attempt_body(status, route, used, n, detail, artifacts)
+        if self._replay(cur, event_id, "attempt.failed", request_id, generation, when, body) != "already_applied":
+            return {"state": "refused", "event_id": event_id, "code": "event_id_conflict"}
+        return {"state": "already_applied", "event_id": event_id, "code": "retry", "attempt": n + 1,
+                "generation": found["generation"] + 1}
 
     def _retry_refusal(self, cur, row, detail, used) -> str | None:
         """None when a card step's definite failure may be retried from its last checkpoint without asking the owner
@@ -1787,12 +1795,8 @@ class DispatcherStore:
         at a resume)."""
         rid, g, n = row["request_id"], row["generation"], _attempt(row)
         _, compiled = self._card_record(cur, row["card_id"])
-        usage = {**used, "amount": None if used["amount"] is None else float(used["amount"])}
         written = self._host_event(cur, "attempt.failed", eid, item=rid, generation=g, host_id=host_id, at=when,
-                                   body={"status": "failed", "route": route, "usage": usage, "attempt": n,
-                                         "exit_code": detail["exit_code"],
-                                         "artifacts": [{"kind": a["kind"], "ref": a["ref"], "sha256": a["sha256"]}
-                                                       for a in card_mod.recorded_outputs(artifacts)]})
+                                   body=_attempt_body("failed", route, used, n, detail, artifacts))
         if written is not None:
             return {"state": "refused", "event_id": eid, "code": "event_id_conflict"}
         res, amount = dict(row["reservation"]), used["amount"]
@@ -2631,6 +2635,15 @@ def _remaining(row) -> dict:
     its own durable cost record says earlier generations used): {reserved, unit}."""
     res = row["reservation"] or {}
     return {"reserved": res.get("reserved"), "unit": res.get("unit")}
+
+
+def _attempt_body(status, route, used, attempt, detail, artifacts) -> dict:
+    """A failed attempt's report as attempt.failed records it: what a replay of it must match exactly."""
+    return {"status": status, "route": route,
+            "usage": {**used, "amount": None if used["amount"] is None else float(used["amount"])},
+            "attempt": attempt, "exit_code": (detail or {}).get("exit_code"),
+            "artifacts": [{"kind": a["kind"], "ref": a["ref"], "sha256": a["sha256"]}
+                          for a in card_mod.recorded_outputs(artifacts)]}
 
 
 def _attempt(row):
