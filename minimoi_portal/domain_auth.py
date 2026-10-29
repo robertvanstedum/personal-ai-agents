@@ -23,23 +23,26 @@ def _db_url() -> str:
 
 def _query(sql: str, params=None) -> list:
     conn = psycopg2.connect(_db_url(), cursor_factory=psycopg2.extras.RealDictCursor)
-    with conn.cursor() as cur:
-        cur.execute(sql, params or [])
-        rows = list(cur.fetchall())
-    conn.close()
-    return rows
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params or [])
+            return list(cur.fetchall())
+    finally:
+        conn.close()
 
 
 def _execute(sql: str, params=None):
     conn = psycopg2.connect(_db_url())
-    result = None
-    with conn.cursor() as cur:
-        cur.execute(sql, params or [])
-        if cur.description:
-            result = cur.fetchone()
-    conn.commit()
-    conn.close()
-    return result
+    try:
+        result = None
+        with conn.cursor() as cur:
+            cur.execute(sql, params or [])
+            if cur.description:
+                result = cur.fetchone()
+        conn.commit()
+        return result
+    finally:
+        conn.close()
 
 
 def create_user(email: str, name: str, role: str = "user") -> int:
