@@ -19,12 +19,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from german_domain import GERMAN_DIR, GERMAN_STATE_DIR
+from domains.german.transcript_text import (
+    HEADER_FIELDS,
+    INLINE_SPEAKER_RE as _INLINE_SPEAKER_RE,
+    parse_header as _parse_header,
+    split_inline_turns as _split_inline_turns,
+    parse_import_turns as _parse_turns,
+)
 
 START_TRIGGER = "---SESSION---"
 START_TRIGGER_ALT = "\u2014SESSION\u2014"  # iPhone auto-corrects --- to em-dash
 END_TRIGGER = "---END---"
 END_TRIGGER_ALT = "\u2014END\u2014"
-HEADER_FIELDS = {"date", "persona", "scenario", "duration", "mode", "drill", "drill-session"}
 
 # Format 3: ##YYYY-MM-DD|persona|scenario|duration|mode
 _KEY_LINE_RE = re.compile(
@@ -49,76 +55,6 @@ def _next_session_id(date_str: str, sessions_dir: Path) -> str:
     last = existing[-1].stem
     n = int(last.split("_")[-1]) + 1
     return f"{date_str}_{n:03d}"
-
-
-def _parse_header(lines: list) -> dict:
-    # Expand lines that contain multiple fields inline (e.g. Grok single-line format:
-    # "Date: 2026-04-26 Persona: Klaus Scenario: ..." all on one line)
-    field_re = re.compile(
-        r'\b(' + '|'.join(re.escape(f) for f in HEADER_FIELDS) + r')\s*:',
-        re.IGNORECASE,
-    )
-    expanded = []
-    for line in lines:
-        matches = list(field_re.finditer(line))
-        if len(matches) <= 1:
-            expanded.append(line)
-        else:
-            for i, m in enumerate(matches):
-                end = matches[i + 1].start() if i + 1 < len(matches) else len(line)
-                expanded.append(line[m.start():end].strip())
-
-    fields = {}
-    for line in expanded:
-        if ":" in line:
-            key, _, val = line.partition(":")
-            key = key.strip().lower()
-            if key in HEADER_FIELDS:
-                fields[key] = val.strip()
-    return fields
-
-
-# Matches "Speaker Name:" at turn boundaries within a single-line dump.
-# Speaker names are 1-3 words, each word starts with a capital letter,
-# optionally prefixed with a title abbreviation ending in a period (e.g. Dr.).
-_INLINE_SPEAKER_RE = re.compile(
-    r'(?:^|(?<=[\s.?!]))'
-    r'(?:(?:Dr|Frau|Herr|Prof)\.\s+)?'
-    r'(?:[A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)?)'
-    r':'
-)
-
-
-def _split_inline_turns(line: str) -> list:
-    """Split a single-line conversation dump on speaker-name boundaries."""
-    matches = list(_INLINE_SPEAKER_RE.finditer(line))
-    if len(matches) < 2:
-        return [line]
-    segments = []
-    for i, m in enumerate(matches):
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(line)
-        segments.append(line[m.start():end].strip())
-    return segments
-
-
-def _parse_turns(lines: list) -> list:
-    turns = []
-    for line in lines:
-        # Normalize em-dash and en-dash to hyphen; collapse Unicode whitespace
-        line = line.replace('\u2014', '-').replace('\u2013', '-')
-        line = ' '.join(line.split())
-        if not line:
-            continue
-        # Detect single-line dump (multiple speaker prefixes on one line)
-        segments = _split_inline_turns(line)
-        for seg in segments:
-            if ":" in seg:
-                speaker, _, text = seg.partition(":")
-                speaker = speaker.strip()
-                text = text.strip()
-                if speaker and text:
-                    turns.append({"speaker": speaker, "text": text})
-    return turns
 
 
 def _load_domain_defaults(sessions_dir: Path) -> dict:

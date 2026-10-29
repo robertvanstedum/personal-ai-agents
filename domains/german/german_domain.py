@@ -29,6 +29,7 @@ _REPO_ROOT  = _BASE_DIR.parent.parent        # repo root
 import sys as _sys
 _sys.path.insert(0, str(_REPO_ROOT))
 from core.get_secret import get_secret as _get_secret
+from domains.german.transcript_text import parse_review_turns as _parse_transcript_turns
 from domains.german.reading_rules import (
     normalize_url as _normalize_lesen_url,
     article_id as _lesen_article_id,
@@ -1995,27 +1996,6 @@ Required schema:
 
 def build_review_system_prompt(learner_name: str) -> str:
     return _REVIEW_SYSTEM_PROMPT.replace("LEARNER_NAME", learner_name)
-
-
-def _parse_transcript_turns(text: str) -> list:
-    """Parse raw transcript into list of {speaker, text} dicts."""
-    turns = []
-    for line in text.strip().splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        if ':' in line:
-            speaker, _, body = line.partition(':')
-            speaker = speaker.strip()
-            body = body.strip()
-            if speaker and body and len(speaker) < 40:
-                turns.append({"speaker": speaker, "text": body})
-                continue
-        if turns:
-            turns[-1]["text"] += " " + line
-        else:
-            turns.append({"speaker": "Transcript", "text": line})
-    return turns or [{"speaker": "Transcript", "text": text.strip()}]
 
 
 def _next_session_filename(date_str: str) -> str:
