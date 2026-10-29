@@ -74,6 +74,7 @@ def test_standalone_cli_reports_date_error_without_writing(tmp_path, date, expec
     text_module = checkout / 'domains/german/transcript_text.py'
     text_module.parent.mkdir(parents=True)
     shutil.copyfile(source.with_name('transcript_text.py'), text_module)
+    shutil.copyfile(source.with_name('session_files.py'), text_module.with_name('session_files.py'))
     # The entrypoint itself is real; only domain config resolution is synthetic.
     (checkout / 'german_domain.py').write_text(
         'from pathlib import Path\nGERMAN_DIR = Path(__file__).parent\n'

@@ -30,6 +30,7 @@ import sys as _sys
 _sys.path.insert(0, str(_REPO_ROOT))
 from core.get_secret import get_secret as _get_secret
 from domains.german.transcript_text import parse_review_turns as _parse_transcript_turns
+from domains.german.session_files import next_session_id as _next_session_id
 from domains.german.reading_rules import (
     normalize_url as _normalize_lesen_url,
     article_id as _lesen_article_id,
@@ -1999,17 +2000,9 @@ def build_review_system_prompt(learner_name: str) -> str:
 
 
 def _next_session_filename(date_str: str) -> str:
-    """Return next available session filename for date (matching parse_transcript.py convention)."""
+    """Return the next session name; this caller owns directory creation."""
     _SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
-    existing = sorted(_SESSIONS_DIR.glob(f"{date_str}_*.json"))
-    if not existing:
-        return f"{date_str}_001"
-    last = existing[-1].stem
-    try:
-        n = int(last.split("_")[-1]) + 1
-    except ValueError:
-        n = len(existing) + 1
-    return f"{date_str}_{n:03d}"
+    return _next_session_id(date_str, _SESSIONS_DIR)
 
 
 def analyse_session(
