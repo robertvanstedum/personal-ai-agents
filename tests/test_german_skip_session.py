@@ -60,3 +60,21 @@ def test_normal_skip_still_records_session_and_advances_rotation(skip_world, mon
     progress = json.loads((state / 'progress.json').read_text())
     assert progress['personas_practiced'] == ['Test Persona']
     assert (state / 'lessons/2026-10-28_lesson.json').exists()
+
+
+@pytest.mark.parametrize('names,expected', [
+    (['2026-10-28_999.json', '2026-10-28_1000.json'], '2026-10-28_1001.json'),
+    (['2026-10-28_9999.json', '2026-10-28_10000.json'], '2026-10-28_10001.json'),
+    (['2026-10-28_001.json', '2026-10-28_notes.json'], '2026-10-28_002.json'),
+])
+def test_skip_preserves_existing_sessions_beyond_three_digits(skip_world, monkeypatch, names, expected):
+    root, state, calls = skip_world
+    sessions = state / 'sessions'
+    for name in names:
+        (sessions / name).write_text(json.dumps({'preserve': name}))
+    before = {name: (sessions / name).read_bytes() for name in names}
+    invoke(monkeypatch, state)
+    assert all((sessions / name).read_bytes() == raw for name, raw in before.items())
+    saved = json.loads((sessions / expected).read_text())
+    assert saved['session_id'] == expected.removesuffix('.json')
+    assert calls == [saved]

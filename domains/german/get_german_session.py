@@ -24,6 +24,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from german_domain import GERMAN_DIR, GERMAN_STATE_DIR
+from domains.german.session_files import next_session_id
 
 try:
     import keyring
@@ -534,9 +535,7 @@ def main():
         # Write a minimal skipped session JSON so the session log stays coherent
         sessions_dir = base / 'sessions'
         sessions_dir.mkdir(exist_ok=True)
-        existing = sorted(sessions_dir.glob(f"{date_str}_*.json"))
-        n = int(existing[-1].stem.split("_")[-1]) + 1 if existing else 1
-        session_id = f"{date_str}_{n:03d}"
+        session_id = next_session_id(date_str, sessions_dir)
         skipped_session = {
             "date": date_str,
             "session_id": session_id,
