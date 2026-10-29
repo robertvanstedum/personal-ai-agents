@@ -2,11 +2,12 @@
 
 A restart is a new app instance over the same folder: her real adapter and FileStore (cos_voice_rig.build again on the
 same tmp_path), the core's real routes, nothing of the old process's ledger. End names her one conversation ("owner", as
-her page does); the session's durable start marker must name this owner and that conversation. S3 runs as production
-does: admitted by MINIMOI_COS_DIRECT_VOICE_PRODUCTION, then restarted without it. No provider, no Keychain, no
+her page does); the session's durable start marker must name this owner and that conversation. S3 runs on her real
+cos-scheduler app (review S-2): admitted by MINIMOI_COS_DIRECT_VOICE_PRODUCTION, then restarted without it. No provider, no Keychain, no
 microphone, no network."""
 from __future__ import annotations
 
+import os
 import sys
 import uuid
 from pathlib import Path
@@ -18,7 +19,6 @@ from core.realtime_voice import direct_host as core  # noqa: E402
 from domains.cos import direct_voice, voice_store  # noqa: E402
 
 BASE, OWNER = rig.BASE, rig.OWNER
-PRODUCTION = {**rig.ENV, "MINIMOI_ROLE": "production"}
 
 
 def end(r, sid, headers=OWNER, **body):
@@ -58,17 +58,33 @@ def test_end_after_a_restart_refuses_a_forged_id_another_owners_session_and_no_c
     assert end(after, mine, conversation_id="owner").get_json()["ended"] is True
 
 
-def test_s3_on_her_host_end_closes_an_open_session_after_admission_is_turned_off(monkeypatch, tmp_path):
-    """Spec 165 §11.1 S2 -> S3 as production runs it: admitted by her production switch, a session starts; the process
-    restarts without the switch (S3). End on the open session closes it; a fresh start is refused with NOT_ON."""
-    s2 = rig.build(monkeypatch, tmp_path, environ={**PRODUCTION, direct_voice.PRODUCTION_SWITCH: "1"})
-    sid = rig.start(s2)
-    rig.post(s2, sid, [rig.event(s2, "user", "t0", "What is on my agenda?")])
-    s3 = rig.build(monkeypatch, tmp_path, environ=dict(PRODUCTION))
-    assert direct_voice.may_start(s3.env) is False
-    closed = end(s3, sid, conversation_id="owner", last_item_id="t0", unacknowledged=[])
-    assert closed.status_code == 200 and closed.get_json() == {"ok": True, "ended": True, "capture": "incomplete"}
-    assert store_of(s3).read_marker(voice_store.HANDLE, sid, "end")["capture"] == "incomplete"
-    refused = s3.client.post(BASE + "/bootstrap", headers=OWNER, json={"persona": "chief_of_staff", "provider": "openai",
-                                                                        "conversation_id": "owner"})
-    assert refused.status_code == 503 and refused.get_json()["error"] == core.NOT_ON and len(s3.mints) == 0
+def test_s3_on_her_real_cos_scheduler_app_end_closes_an_open_session_after_admission_is_turned_off(monkeypatch, tmp_path):
+    """Review S-2: Spec 165 §11.1 S2 -> S3 on her real app (domains/cos/chief_of_staff.py, imported fresh by
+    test_cos_direct_voice_wiring.load, its install reading the process environment as production does). Production role
+    (MINIMOI_ROLE unset) with her production switch: admitted, a session starts. Then cos-scheduler restarts over the same
+    voice folder without the switch (S3): End on the open session, naming her conversation, closes it from its start
+    marker; a fresh start is refused with NOT_ON; nothing is minted again."""
+    from test_cos_direct_voice_wiring import OWNER as PORTAL_OWNER, PREFIX, load
+    try:
+        s2 = load(monkeypatch, tmp_path, MINIMOI_COS_VOICE_DIRECT="1", MINIMOI_COS_DIRECT_VOICE_PRODUCTION="1")
+        assert s2._cos_direct_voice is not None and direct_voice.may_start(dict(os.environ)) is True
+        boot = s2.app.test_client().post(PREFIX + "/bootstrap", headers=PORTAL_OWNER, json={
+            "persona": "chief_of_staff", "provider": "openai", "conversation_id": "owner"})
+        assert boot.status_code == 200, boot.get_json()
+        sid, minted = boot.get_json()["voice_session_id"], len(s2.test.minted)
+        monkeypatch.delenv("MINIMOI_COS_DIRECT_VOICE_PRODUCTION")
+        s3 = load(monkeypatch, tmp_path, MINIMOI_COS_VOICE_DIRECT="1")          # the restart: a new app, the same folder
+        assert s3 is not s2 and s3.test.voice == s2.test.voice
+        client = s3.app.test_client()
+        assert client.post(PREFIX + f"/session/{sid}/end", headers=PORTAL_OWNER, json={}).status_code == 403   # none named
+        closed = client.post(PREFIX + f"/session/{sid}/end", headers=PORTAL_OWNER,
+                             json={"conversation_id": "owner", "unacknowledged": []})
+        assert closed.status_code == 200 and closed.get_json() == {"ok": True, "ended": True, "capture": "incomplete"}
+        marker = voice_store.FileStore(s3.test.voice).read_marker(voice_store.HANDLE, sid, "end")
+        assert marker["capture"] == "incomplete" and marker["reason"] == "end"
+        refused = client.post(PREFIX + "/bootstrap", headers=PORTAL_OWNER, json={
+            "persona": "chief_of_staff", "provider": "openai", "conversation_id": "owner"})
+        assert refused.status_code == 503 and refused.get_json()["error"] == core.NOT_ON
+        assert len(s3.test.minted) == 0 and minted == 1
+    finally:
+        sys.modules.pop("domains.cos.chief_of_staff", None)
