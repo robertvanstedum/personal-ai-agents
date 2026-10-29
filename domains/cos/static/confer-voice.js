@@ -488,7 +488,14 @@ export function conferVoice(d) {
   return {
     toggle: () => (s || starting ? stop('user_ended') : start()),
     start, stop,
-    pagehide: () => { if (s) s.end('pagehide'); },
+    // The page is going away: the session module sends its one keepalive End in this same tick, and the session is over
+    // here (a page restored from the back-forward cache shows Voice ready, not a session that has already ended).
+    pagehide: () => {
+      const mine = s;
+      if (!mine) return;
+      mine.end('pagehide');
+      if (s === mine) { s = null; live = false; ending = false; starting = false; bar.hidden = true; els.status.textContent = ''; release(); paint(); }
+    },
     busy: () => Boolean(s || starting || ending),
     show, paint, records,
     provider: () => select.value,

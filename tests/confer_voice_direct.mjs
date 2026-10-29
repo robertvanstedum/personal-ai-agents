@@ -103,7 +103,8 @@ function page({ caps = CAPS, path = '/ui/confer', managed = true, routes = {}, s
   const dictation = { stops: [], available: null, on: false, starts: 0, opts: null };
   const bindConferDictation = (o) => {
     dictation.opts = o;
-    return { stop: async (reason) => { dictation.stops.push(reason); dictation.on = false; }, setAvailable: (v) => { dictation.available = v; } };
+    return { stop: async (reason) => { dictation.stops.push(reason); if (reason === 'voice_started' && dictation.slow) await dictation.slow; dictation.on = false; },
+      setAvailable: (v) => { dictation.available = v; } };
   };
   dictation.press = async () => { await dictation.opts.beforeStart(); dictation.on = true; dictation.starts += 1; };
   // The direct controller: the public surface the session module reads, started on a synthetic transport.
@@ -586,6 +587,24 @@ await scenario('pagehide: one End leaves at once with keepalive, carrying the ow
   assert.deepEqual(p.dictation.stops.at(-1), 'pagehide');
   await flush();
   assert.equal(p.gets(`/sessions/${SID}`).length, 0, 'a leaving page read the reveal');
+  // Restored from the back-forward cache: Voice is ready again, and a new session can start.
+  assert.equal(p.nodes('btn-voice').textContent, '🎤');
+  assert.equal(p.nodes('voice-live').hidden, true);
+  await p.voice();
+  assert.equal(p.direct.instances.length, 2);
+});
+await scenario('stopped while Dictate is still yielding the microphone: no session starts at all', {}, async (p) => {
+  let yielded;
+  const gate = new Promise((r) => { yielded = r; });
+  p.dictation.slow = gate;                                             // Dictate takes its time to let go
+  const pressing = p.voice();                                          // Voice: Dictate is asked to yield first
+  await flush();
+  let waited = null;
+  for (const fn of p.docEvents['minimoi:companion-opening'] || []) fn({ detail: { waitUntil: (x) => { waited = x; } } });
+  await flush();
+  yielded(); await pressing; await waited; await flush();
+  assert.deepEqual(p.direct.instances, [], 'a session started after it was stopped');
+  assert.equal(p.nodes('btn-voice').textContent, '🎤');
 });
 
 // ── the portal path: her server's paths rebased under /app/cos ──────────────────────────────────────────────────────
