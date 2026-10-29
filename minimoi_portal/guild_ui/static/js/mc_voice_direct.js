@@ -1,7 +1,9 @@
 // The Guild's thread for MC voice on the direct path (Spec 164 v0.3 §6–§7; UI_CONTRACT_chunk_B.md). mc_voice.js loads this file
-// only when the capabilities answer carries direct_voice; without it the file is never asked for, the page does not list it,
-// and the server does not serve it. The session itself (bridge, capture, End, summary) is the shared browser session module,
-// core/realtime_voice/static/direct-voice-session.js (Spec 165 §4.3), which mc_voice.js loads beside it.
+// only when the capabilities answer carries direct_voice (admitted) or direct_records (installed, not admitted: Spec 165 §11.1
+// S1, S3, where this thread alone is painted, so an earlier session's proposal can still be decided); without either the file
+// is never asked for, the page does not list it, and the server does not serve it. The session itself (bridge, capture, End,
+// summary) is the shared browser session module, core/realtime_voice/static/direct-voice-session.js (Spec 165 §4.3), which
+// mc_voice.js loads beside it; with direct_records only its jsonPost is used.
 //
 // No imports: mc_voice.js hands in the document, the thread, the post (the session module's jsonPost) and the reveal, so the
 // node tests drive this file with a small fake DOM.

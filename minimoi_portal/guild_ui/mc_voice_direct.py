@@ -14,9 +14,16 @@ conversation, turn ledger and receipts. A note is spoken as saved only on its pl
 mc_managed_realtime.install and MANAGED_VOICE_CHANNEL are not used here. MC's realtime operating rules (INSTRUCTIONS)
 live here, and the managed host reads them from here, so the managed code can be retired without touching this path.
 
-Off unless the voice switch is on (mc_voice.enabled) AND MINIMOI_MC_VOICE_DIRECT=1, which production holds off
-(guild_mounts.PRODUCTION_HELD_OFF): production already runs with MINIMOI_MC_VOICE=1. Off: no route is registered.
-A session reserves MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO against the shared daily voice budget before the provider
+Switches (Spec 165 §11.1): installing is not admission. Off unless the voice switch is on (mc_voice.enabled) AND
+MINIMOI_MC_VOICE_DIRECT=1; off, no route is registered. On, the routes are installed, record routes included. Outside
+production installing also allows starts, as before. On the production mount (guild_mounts.production_environ) the install
+switch passes only where MC voice is admitted (production already runs with MINIMOI_MC_VOICE=1), and starts are admitted
+only by MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION, which production_environ alone turns into ADMITTED (may_start). Installed,
+not admitted (S1, S3): a start is refused with the core's NOT_ON before anything is recorded or reserved, and the page's
+Voice keeps today's path (the relay, or managed where that is on); the record routes still answer: the reveal, the summary, its decision and reconciliation read the
+durable markers, so an earlier session's records reveal and its proposal is decided after a restart (End closes only a
+session this process issued). Admission is read once, at install: a per-process snapshot, as the mount's environment
+is. A session reserves MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO against the shared daily voice budget before the provider
 is contacted; unset, voice is unavailable and says so. Sessions live in this process (the portal is one process).
 
 Durable capture (§6, mc_voice_reveal): bootstrap keeps a start marker on the conversation's floor; every owner and
@@ -44,6 +51,8 @@ from .stores import NOTE_MAX
 
 log = logging.getLogger(__name__)
 ENV = "MINIMOI_MC_VOICE_DIRECT"
+# Spec 165 §11.1: written only by guild_mounts.production_environ ("1" admitted, "0" not); absent off the production mount.
+ADMITTED = "MINIMOI_MC_VOICE_DIRECT_ADMITTED"
 PREFIX = "/api/v1/mc/voice/direct"
 # MC's card: <CARD_ROOT>/pin.json names the adopted release; read at each bootstrap, so a session keeps the card it started with.
 CARD_ROOT = Path(__file__).resolve().parents[2] / "services/mc_operations/personas/mc-chat"
@@ -374,17 +383,34 @@ class _MasterCraftsman(DirectVoiceAdapter):
         return result
 
 
+def may_start(environ):
+    """Whether a session may start on this mount (Spec 165 §11.1). ADMITTED absent (not the production mount): True,
+    installing allows starts, as before. Present: only "1". production_environ always writes it, so a stray value
+    anywhere else can only hold starts off, never admit what production holds off."""
+    admitted = environ.get(ADMITTED)
+    return admitted is None or admitted == "1"
+
+
 def install(app, mount, *, environ, budget=None, clock=time.time, summary_http=None):
-    """Register MC's direct-path bootstrap, consult and transcript routes on this mount (the core's routes, with this
-    adapter); False (nothing registered) when off."""
+    """Register MC's direct-path bootstrap, consult, transcript and record routes on this mount (the core's routes, with
+    this adapter); False (nothing registered) when off.
+
+    Admission (may_start) is read once, here, and handed to the core, which refuses a start not admitted with NOT_ON
+    before anything is recorded or reserved: a per-process snapshot, as the mount's environment is. Admitted:
+    config["mc_direct_voice"] is the metadata, the page's "direct is on" (the live bar, direct_voice, the direct path's
+    controller and CSP entry). Installed, not admitted (S1, S3): it is None. Either way config["mc_direct_voice_records"]
+    is the metadata (the thread's script, the session module and direct_records), and the reveal's hooks are set."""
     from .mc_voice import enabled
     if not enabled(environ) or environ.get(ENV) != "1":
         return False
     config = app.extensions[mount]
     adapter = _MasterCraftsman(app, config, mount)
+    admitted = may_start(environ)
     metadata, sessions = install_direct_voice(app, adapter, url_prefix=config["url_prefix"] + PREFIX, environ=environ,
-                                              budget=budget, clock=clock, summary_http=summary_http)
-    config["mc_direct_voice"] = metadata
+                                              budget=budget, clock=clock, summary_http=summary_http,
+                                              may_start=lambda: admitted)
+    config["mc_direct_voice"] = metadata if admitted else None
+    config["mc_direct_voice_records"] = metadata        # installed, admitted or not: the thread and its record routes
     config["mc_direct_voice_live"] = sessions.live      # server-side only: which sessions the reveal treats as live
     config["mc_direct_voice_tagged"] = adapter.tags.tagged   # server-side only: notes this process tagged with a session
     config["mc_direct_voice_known"] = sessions.known    # server-side only: sessions this process issued

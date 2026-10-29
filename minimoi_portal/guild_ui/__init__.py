@@ -161,9 +161,9 @@ def asset_version() -> str:
 def asset(filename, ver=None):
     """The unversioned address always revalidates; the versioned one is kept by the browser, but only when the
     fingerprint in it is this deploy's (an address from an older page is served fresh and never stored). The direct voice
-    script is served only while MC voice's direct path is on here (pages.DIRECT_VOICE_JS)."""
-    from .pages import DIRECT_VOICE_JS, _mc_voice_direct_on
-    if filename == "js/" + DIRECT_VOICE_JS and not _mc_voice_direct_on():
+    script is served only while MC voice's direct path is installed here, admitted or not (pages.DIRECT_VOICE_JS)."""
+    from .pages import DIRECT_VOICE_JS, _mc_voice_direct_installed
+    if filename == "js/" + DIRECT_VOICE_JS and not _mc_voice_direct_installed():
         abort(404)
     response = send_from_directory(STATIC, filename, max_age=0)
     response._guild_immutable_asset = ver is not None and ver == asset_version()

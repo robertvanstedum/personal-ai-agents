@@ -306,6 +306,91 @@ def test_production_holds_the_direct_path_off():
     assert "MINIMOI_MC_VOICE_DIRECT" in PRODUCTION_HELD_OFF
 
 
+@pytest.mark.parametrize("switch,admitted", [(None, False), ("0", False), ("1", True)])
+def test_production_installs_the_direct_path_where_mc_voice_is_and_admits_starts_only_by_its_switch(
+        monkeypatch, tmp_path, switch, admitted):
+    """Spec 165 §11.1: on the production mount the install switch passes where MC voice does (S1), and starts are admitted
+    only by MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION (S2), through the key production_environ writes; a raw copy of that key
+    is never trusted."""
+    from minimoi_portal.guild_mounts import production_environ
+    raw = {**ON, "MINIMOI_GUILD_CHAT": "cos", "MINIMOI_GUILD_VOICE_PRODUCTION": "1", direct.ADMITTED: "1"}
+    if switch is not None:
+        raw["MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION"] = switch
+    env = production_environ(raw)
+    assert env[direct.ENV] == "1" and env[direct.ADMITTED] == ("1" if admitted else "0")
+    r = build(monkeypatch, tmp_path, env)
+    assert r.installed is True and direct.may_start(env) is admitted
+    assert (r.config["mc_direct_voice"] is r.config["mc_direct_voice_records"]) is admitted
+    assert r.config["mc_direct_voice_records"]["summary_decision_url"].startswith("/guild-next/api/v1/mc/voice/direct/")
+    boot = r.client.post(BASE + "/bootstrap", json={"persona": "master_craftsman", "provider": "openai",
+                                                    "conversation_id": CID}, headers=r.headers)
+    assert boot.status_code == (200 if admitted else 503) and len(r.mints) == (1 if admitted else 0)
+
+
+@pytest.mark.parametrize("value,admitted", [(None, True), ("1", True), ("0", False), ("", False), ("yes", False)])
+def test_may_start_holds_starts_off_only_where_the_admission_key_says_so(value, admitted):
+    """Absent (staging, the Mac): installing allows starts, as at 89d115b6. Present: only "1" admits, so a stray value off
+    the production mount can only hold starts off."""
+    env = dict(ON) if value is None else {**ON, direct.ADMITTED: value}
+    assert direct.may_start(env) is admitted
+
+
+NOT_ADMITTED = {**ON, direct.ADMITTED: "0"}
+
+
+def test_installed_but_not_admitted_refuses_every_start_before_anything_is_recorded_or_reserved(monkeypatch, tmp_path):
+    """S1 and S3 (Spec 165 §11.1): the routes are installed, record routes included, and a start is refused with NOT_ON
+    before a marker, a reservation or a mint. The page's "direct is on" signal is off; the records signal is on."""
+    r = build(monkeypatch, tmp_path, dict(NOT_ADMITTED))
+    assert r.installed is True
+    assert r.config["mc_direct_voice"] is None and r.config["mc_direct_voice_records"]["path"] == "direct"
+    for hook in ("mc_direct_voice_live", "mc_direct_voice_tagged", "mc_direct_voice_known", "mc_direct_voice_running"):
+        assert callable(r.config[hook]), hook                              # the reveal's hooks, set whenever installed
+    refused = r.client.post(BASE + "/bootstrap", json={"persona": "master_craftsman", "provider": "openai",
+                                                       "conversation_id": CID}, headers=r.headers)
+    assert refused.status_code == 503
+    assert refused.get_json() == {"error": direct_host.NOT_ON, "message": direct_host.NOT_ON}
+    assert not r.mints and r.budget.status()["reserved_usd"] == 0 and r.notes.rows == {}
+    assert r.client.post(BASE + "/bootstrap", json={}, headers={**r.headers, "X-CSRF-Token": "forged"}).status_code == 403
+    assert call(r, str(uuid.uuid4())).status_code == 403 and not r.turns              # no session: nothing to consult
+
+
+def test_after_admission_is_turned_off_earlier_sessions_still_reveal_reconcile_and_are_decided(monkeypatch, tmp_path):
+    """S3 (Spec 165 §11.1): sessions kept while admitted (S2), then a restart with admission off. The record routes answer
+    from the durable markers: the reveal withholds a session that never ended and reveals it once closed, an earlier
+    consult reconciles, its summary is asked for and a waiting proposal is decided. End answers too (not 404); it closes
+    only a session this process issued, so an earlier one is closed by asking for its summary. No new session starts."""
+    s2 = build(monkeypatch, tmp_path / "s2", {**ON, direct.ADMITTED: "1"})
+    proposed = start(s2)["voice_session_id"]
+    post(s2, proposed, [turn(s2, "user", "item_u1", "What is stuck on #12?")])
+    assert call(s2, proposed).get_json()["answered"] is True
+    assert summarize(s2, proposed).get_json()["state"] == "proposed"
+    open_ = start(s2)["voice_session_id"]
+    post(s2, open_, [turn(s2, "user", "item_u2", "The kiln needs a seal.")])           # the page went away: no End
+    s3 = build(monkeypatch, tmp_path / "s3", dict(NOT_ADMITTED))                       # the restart: same floor
+    s3.notes.rows.update(s2.notes.rows)
+    rows, sessions = shown(s3)
+    by_id = {s["session_id"]: s for s in sessions}
+    assert by_id[open_]["state"] == "recovering" and by_id[open_]["line"] == reveal.RECOVERY
+    assert "The kiln needs a seal." not in str([row.get("voice") for row in rows])           # withheld
+    assert by_id[proposed]["state"] == "ended" and by_id[proposed]["summary"] == "proposed"
+    item = item_of("call-1")
+    settled = s3.client.get(BASE + f"/consult/{proposed}/{item}?conversation_id={CID}", headers=s3.headers)
+    assert settled.status_code == 200 and settled.get_json()["recorded"] is True
+    assert settled.get_json()["answered"] is True and settled.get_json()["receipt"] == "reply-1"
+    ended = s3.client.post(BASE + f"/session/{open_}/end", headers=s3.headers)
+    assert ended.status_code == 403 and ended.get_json()["error"] == "not your session"
+    assert summarize(s3, open_).get_json()["state"] == "proposed"
+    rows, sessions = shown(s3)
+    by_id = {s["session_id"]: s for s in sessions}
+    assert by_id[open_]["state"] == "ended" and "The kiln needs a seal." in str([row.get("voice") for row in rows])
+    done = summarize(s3, proposed, path="summary/decision", decision="confirm")
+    assert done.status_code == 200 and done.get_json()["state"] == "confirmed"
+    assert len(s2.turns) == 1 and not s3.turns and not s3.mints
+    assert s3.client.post(BASE + "/bootstrap", json={"persona": "master_craftsman", "provider": "openai",
+                                                      "conversation_id": CID}, headers=s3.headers).status_code == 503
+
+
 def test_the_managed_sideband_and_its_channel_are_unchanged(ready):
     from minimoi_portal.guild_ui import mc_managed_realtime
     from minimoi_portal.guild_ui.mc import cos

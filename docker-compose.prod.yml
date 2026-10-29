@@ -242,6 +242,9 @@ services:
       - MINIMOI_GUILD_VOICE_PRODUCTION=1
       - MINIMOI_MC_VOICE=1
       - MINIMOI_DICTATION=1
+      # MC's direct voice (Spec 165 §11.1; minimoi_portal/guild_mounts.py production_environ): MINIMOI_MC_VOICE_DIRECT
+      # installs it (its routes, record routes included) and MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION admits starts; both
+      # come from env_file and default off.
       # Explicit controls; activation follows reviewed production schema/runtime checks.
       - MINIMOI_ROLE=production
       - MINIMOI_MC_BOARD_OUTCOMES=${MINIMOI_MC_BOARD_OUTCOMES:-0}

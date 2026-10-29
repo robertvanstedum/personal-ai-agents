@@ -315,3 +315,152 @@ def test_production_chat_mc_admits_voice_like_cos_but_never_the_cos_shared_files
     assert "MINIMOI_MC_MANAGED_REALTIME" not in admitted
     assert not set(PRODUCTION_COS_FILES) & set(admitted)
     assert admitted["MINIMOI_GUILD_MC"] == "openclaw"
+
+
+# ── MC's direct voice in production (Spec 165 §11.1): installing is separate from admission ──────────────────────────────
+
+DIRECT_INSTALL, DIRECT_SWITCH = "MINIMOI_MC_VOICE_DIRECT", "MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION"
+COS_FILES = {"MINIMOI_MC_COS_FILES_DIR": "/app/runtime/guild/mc-evidence",
+             "MINIMOI_MC_COS_FILES_AGENT_DIR": "/minimoi/data/guild/mc-evidence",
+             "MINIMOI_MC_COS_FILES_UID": "1000", "MINIMOI_MC_COS_FILES_GID": "1000"}
+
+
+@pytest.mark.parametrize("switch", [None, "", "0", "1", "yes"])
+@pytest.mark.parametrize("voice", [None, "0", "1"])
+@pytest.mark.parametrize("chat", [None, "", "cos", "mc", "stub", "openclaw"])
+def test_mc_direct_voice_installs_only_with_voice_production_and_a_partner_and_starts_only_by_its_switch(chat, voice, switch):
+    from minimoi_portal.guild_mounts import production_environ
+    from minimoi_portal.guild_ui.mc_voice_direct import ADMITTED
+    raw = {DIRECT_INSTALL: "1", "MINIMOI_MC_VOICE": "1", ADMITTED: "1"}      # a raw admission is never trusted
+    if chat is not None:
+        raw["MINIMOI_GUILD_CHAT"] = chat
+    if chat == "mc":
+        raw.update(MC_RUNTIME_URL=MC_RELAY, MC_RUNTIME_TOKEN="t")
+    if voice is not None:
+        raw["MINIMOI_GUILD_VOICE_PRODUCTION"] = voice
+    if switch is not None:
+        raw[DIRECT_SWITCH] = switch
+    admitted = production_environ(raw)
+    installs = voice == "1" and chat in ("cos", "mc")
+    assert (DIRECT_INSTALL in admitted) is installs and ("MINIMOI_MC_VOICE" in admitted) is installs
+    assert admitted[ADMITTED] == ("1" if installs and switch in ("1", "yes") else "0")
+
+
+def test_a_raw_admission_without_the_switch_is_overwritten_and_the_switch_alone_installs_nothing():
+    from minimoi_portal.guild_mounts import production_environ
+    from minimoi_portal.guild_ui.mc_voice_direct import ADMITTED, may_start
+    voice = {"MINIMOI_GUILD_CHAT": "cos", "MINIMOI_GUILD_VOICE_PRODUCTION": "1", "MINIMOI_MC_VOICE": "1"}
+    stray = production_environ({**voice, DIRECT_INSTALL: "1", ADMITTED: "1"})
+    assert stray[DIRECT_INSTALL] == "1" and stray[ADMITTED] == "0" and not may_start(stray)        # S1
+    alone = production_environ({**voice, DIRECT_SWITCH: "1"})
+    assert DIRECT_INSTALL not in alone and alone[ADMITTED] == "1"                  # admitted, but nothing installed
+    assert production_environ({})[ADMITTED] == "0"                                  # always written on this mount
+
+
+@pytest.mark.parametrize("chat", ["cos", "mc"])
+def test_mc_direct_voice_leaves_managed_voice_and_the_cos_files_exactly_as_they_were(chat):
+    """test_production_managed_controls.py's gates and the CoS shared files: the same with the direct switches as without."""
+    from minimoi_portal.guild_mounts import PRODUCTION_COS_FILES, production_environ
+    from minimoi_portal.guild_ui.mc_voice_direct import ADMITTED
+    for managed in (None, "1"):
+        base = {"MINIMOI_GUILD_CHAT": chat, "MC_RUNTIME_URL": MC_RELAY, "MC_RUNTIME_TOKEN": "t",
+                "MINIMOI_GUILD_VOICE_PRODUCTION": "1", "MINIMOI_MC_VOICE": "1", "MINIMOI_DICTATION": "1",
+                "MINIMOI_MC_MANAGED_REALTIME": "1", **COS_FILES,
+                **({"MINIMOI_GUILD_MANAGED_VOICE_PRODUCTION": managed} if managed else {})}
+        without = production_environ(base)
+        with_direct = production_environ({**base, DIRECT_INSTALL: "1", DIRECT_SWITCH: "1"})
+        assert {k: v for k, v in with_direct.items() if k not in (DIRECT_INSTALL, DIRECT_SWITCH, ADMITTED)} == \
+               {k: v for k, v in without.items() if k != ADMITTED}
+        assert ("MINIMOI_MC_MANAGED_REALTIME" in with_direct) is (managed == "1")
+        assert set(PRODUCTION_COS_FILES).issubset(with_direct) is (chat == "cos")
+        assert with_direct[ADMITTED] == "1" and without[ADMITTED] == "0"
+
+
+API = "/guild-next/api/v1"
+DIRECT = API + "/mc/voice/direct/api/realtime-voice"
+THREAD_JS = "/guild-next/guild/ui-assets/js/mc_voice_direct.js"
+
+
+def _production_voice(load_portal, monkeypatch, tmp_path, *, install, switch):
+    """The real portal on minimoi.ai with today's production voice (CoS partner, MINIMOI_MC_VOICE=1), MC's direct install
+    switch and its production switch as given, and a raw admission key that must not count. The provider mint is a stub."""
+    from minimoi_portal.guild_ui import voice_release
+    from minimoi_portal.guild_ui.mc_voice_direct import ADMITTED
+    from voice_budget_helpers import install as install_budget
+    monkeypatch.setattr(voice_release, "SHARED_VOICE_READY", True)
+    budget = install_budget(monkeypatch, tmp_path)
+    minted = []
+    monkeypatch.setattr("core.realtime_voice.bootstrap.openai_realtime.mint_ephemeral_credential",
+                        lambda **kw: minted.append(kw) or {"provider": "openai", "client_secret": "ek_synthetic"})
+    monkeypatch.setattr("core.realtime_voice.bootstrap._rate_limit_state", {})
+    for name, value in {"MINIMOI_GUILD_PRODUCTION": "1", "COS_BACKEND": "http://cos-scheduler:8769",
+                        "MINIMOI_GUILD_CHAT": "cos", "MINIMOI_GUILD_VOICE_PRODUCTION": "1", "MINIMOI_MC_VOICE": "1",
+                        "MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO": "2000000", ADMITTED: "1"}.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("MINIMOI_MC_MANAGED_REALTIME", raising=False)
+    for name, value in ((DIRECT_INSTALL, "1" if install else None), (DIRECT_SWITCH, switch)):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+    portal = load_portal(next_flag="1", base_url=PROD)
+    client = portal.owner()
+    html = client.get("/guild-next/guild/build")
+    assert html.status_code == 200
+    boot = client.post(DIRECT + "/bootstrap", json={"persona": "master_craftsman", "provider": "openai"},
+                       headers={**write_headers(portal.csrf(client), origin=PROD, fetch_site="same-origin"),
+                                "Content-Type": "application/json"})
+    return client, html, boot, minted, budget
+
+
+def _preloads(html):
+    import re
+    return re.findall(r'<link rel="modulepreload" href="([^"]+)"', html.get_data(as_text=True).split("</head>")[0])
+
+
+def test_s1_in_production_mc_direct_voice_installed_not_admitted_keeps_todays_voice_and_shows_the_records(
+        load_portal, monkeypatch, tmp_path):
+    from core.realtime_voice.direct_host import NOT_ON
+    client, html, boot, minted, budget = _production_voice(load_portal, monkeypatch, tmp_path, install=True, switch=None)
+    page = html.get_data(as_text=True)
+    assert 'data-mc-voice="true"' in page and "data-mc-voice-live" not in page              # no live bar
+    assert any(href.endswith("/js/mc_voice_direct.js") for href in _preloads(html))
+    served = client.get(THREAD_JS)
+    assert served.status_code == 200 and b"export function voiceThread" in served.data
+    session = client.get(API + "/mc/voice/static/direct-voice-session.js")
+    assert session.status_code == 200 and b"export function jsonPost" in session.data
+    assert client.get(API + "/mc/voice/static/realtime-voice-controller.js").status_code == 404
+    assert client.get(API + "/mc/voice/static/realtime-confer-controller.js").status_code == 200    # today's relay
+    caps = client.get(API + "/mc/voice/capabilities").get_json()
+    assert caps["ok"] is True and caps["direct_voice"] is None and caps["managed_realtime"] is None
+    assert caps["direct_records"]["summary_decision_url"] == DIRECT + "/session/{session_id}/summary/decision"
+    assert boot.status_code == 503 and boot.get_json()["error"] == NOT_ON
+    assert not minted and budget.status()["reserved_usd"] == 0
+    csp = html.headers["Content-Security-Policy"]
+    assert "https://api.openai.com" in csp and "wss://api.x.ai" not in csp
+
+
+def test_s2_in_production_the_switch_admits_mc_direct_voice(load_portal, monkeypatch, tmp_path):
+    client, html, boot, minted, _budget = _production_voice(load_portal, monkeypatch, tmp_path, install=True, switch="1")
+    assert "data-mc-voice-live" in html.get_data(as_text=True)
+    assert any(href.endswith("/js/mc_voice_direct.js") for href in _preloads(html))
+    caps = client.get(API + "/mc/voice/capabilities").get_json()
+    assert caps["direct_voice"]["path"] == "direct" and "direct_records" not in caps
+    assert client.get(API + "/mc/voice/static/realtime-voice-controller.js").status_code == 200
+    assert boot.status_code == 422 and not minted                       # admitted: past NOT_ON, to the conversation check
+    assert "wss://api.x.ai" in html.headers["Content-Security-Policy"]
+
+
+@pytest.mark.parametrize("switch", [None, "1"])
+def test_not_installed_in_production_mc_voice_is_exactly_todays(load_portal, monkeypatch, tmp_path, switch):
+    client, html, boot, minted, budget = _production_voice(load_portal, monkeypatch, tmp_path, install=False, switch=switch)
+    page = html.get_data(as_text=True)
+    assert 'data-mc-voice="true"' in page and "data-mc-voice-live" not in page and "mc_voice_direct.js" not in page
+    assert client.get(THREAD_JS).status_code == 404
+    for name in ("direct-voice-session.js", "realtime-voice-controller.js"):
+        assert client.get(API + f"/mc/voice/static/{name}").status_code == 404, name
+    assert client.get(API + "/mc/voice/static/realtime-confer-controller.js").status_code == 200
+    caps = client.get(API + "/mc/voice/capabilities").get_json()
+    assert caps["direct_voice"] is None and caps["managed_realtime"] is None and "direct_records" not in caps
+    assert boot.status_code == 404 and not minted and budget.status()["reserved_usd"] == 0
+    assert "wss://api.x.ai" not in html.headers["Content-Security-Policy"]

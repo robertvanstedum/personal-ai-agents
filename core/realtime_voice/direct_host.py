@@ -1774,7 +1774,8 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
     ``summary_http``: the summary client's HTTP post (requests.post unless a test hands in its own).
 
     ``may_start`` (Spec 165 §6.8, §11.1; D11 (a)): installing is not admission. None: every installed host may start
-    sessions (MC, whose production hold-off decides whether it is installed at all). Otherwise it is called at each
+    sessions. MC passes its admission (mc_voice_direct.may_start: MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION on the production
+    mount, read through guild_mounts.production_environ), CoS hers (direct_voice.may_start). Otherwise it is called at each
     start, and anything but True refuses it before anything is recorded or reserved: its words when it gives them (a
     str: admitted, but refused now, as CoS with no store), else NOT_ON (False: not admitted). The record routes (End, reveal, reconcile, summary, decision, and a listing store's needs-attention
     routes) answer either way, so open sessions end and recovering ones reveal after admission is turned off (S3).

@@ -92,12 +92,12 @@ def module_preloads() -> list:
         return []
     if not reserve_pages_enabled():
         names = [n for n in names if n != "bench.js"]
-    if not _mc_voice_direct_on():
+    if not _mc_voice_direct_installed():
         names = [n for n in names if n != DIRECT_VOICE_JS]
     return [url_for(".asset", filename=f"js/{n}") for n in names]
 
 
-DIRECT_VOICE_JS = "mc_voice_direct.js"       # MC voice on the direct path: listed and served only while that path is on
+DIRECT_VOICE_JS = "mc_voice_direct.js"       # MC voice on the direct path: listed and served only while that path is installed
 
 
 def _urls(c) -> dict:
@@ -188,8 +188,16 @@ def _mc_voice_on() -> bool:
 
 
 def _mc_voice_direct_on() -> bool:
-    """MC voice on the direct path: the voice switch, and the direct routes installed on this mount (mc_voice_direct)."""
+    """MC voice on the direct path: the voice switch, and the direct routes installed and admitted on this mount
+    (mc_voice_direct). The live bar is shown only then."""
     return _mc_voice_on() and bool(cfg().get("mc_direct_voice"))
+
+
+def _mc_voice_direct_installed() -> bool:
+    """The direct routes installed on this mount, admitted or not (Spec 165 §11.1 S1, S3): the thread's script
+    (DIRECT_VOICE_JS) is listed and served, so an earlier session's proposal can still be decided."""
+    c = cfg()
+    return _mc_voice_on() and bool(c.get("mc_direct_voice_records") or c.get("mc_direct_voice"))
 
 
 def _dictation_on() -> bool:

@@ -29,7 +29,7 @@ const DIRECT = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenA
   person: { name: 'Master Craftsman', short: 'MC' } };
 
 async function rig({ capabilities = { ok: true, mode: 'agent_conversation', providers: [], managed_realtime: null, direct_voice: DIRECT }, summary = null,
-  notesBody = null, controller = null } = {}) {
+  notesBody = null, controller = null, session = realSession } = {}) {
   const nodes = {}, instances = [], docEvents = {}, windowEvents = {}, dispatched = [], calls = [], timers = [];
   const confers = [], submitted = [];
   let directLoads = 0, sessionLoads = 0, conferLoads = 0;
@@ -100,7 +100,7 @@ async function rig({ capabilities = { ok: true, mode: 'agent_conversation', prov
     importConfer: async () => { conferLoads++; return { ConferVoiceController }; },
     MutationObserver: class { observe() {} }, window: win, fetch, console,
     importControlled: async () => ({ RealtimeVoiceController: controller || Controller }), importDirect: async () => { directLoads++; return realDirect; },
-    importSession: async () => { sessionLoads++; return realSession; } };
+    importSession: async () => { sessionLoads++; return session; } };
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox);
   const page = { urls: { api: '/api' }, csrf_token: 'csrf-synthetic', conversation: { id: 'c-1' }, floor: { notes: { recent: [], voice_sessions: [] } } };
@@ -200,6 +200,55 @@ let n = 0;
   assert.equal(r2.timers.filter((t) => t.ms === 5000).length, 0);                        // an error is not a passing note
   r2.node('[data-mc-composer]').submit();                                                 // the next send
   assert.equal(r2.status(), '');
+  n++;
+}
+// Spec 165 §11.1 S1 and S3 (the direct path installed, not admitted): direct_records without direct_voice. The thread is loaded
+// and painted, so a waiting proposal from an earlier session gets its card and Confirm posts the decision through the session
+// module's jsonPost; no live control is bound, and Voice takes today's relay: no direct start, no directVoice call.
+{
+  const EARLIER = '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
+  let directVoiceCalls = 0;
+  const watched = { ...realSession, directVoice: (...a) => { directVoiceCalls++; return realSession.directVoice(...a); } };
+  const relay = { ok: true, mode: 'agent_conversation', default_provider: 'openai', providers: [{ provider: 'openai', label: 'OpenAI' }],
+    managed_realtime: null, direct_voice: null, direct_records: DIRECT };
+  const r = await rig({ capabilities: relay, session: watched });
+  assert.equal(r.node('[data-mc-voice-btn]').hidden, false);
+  assert.equal(r.directLoads, 1); assert.equal(r.sessionLoads, 1);                       // loaded for the thread only
+  assert.equal(r.node('[data-mc-voice-transcript-choice]').parentElement.hidden, false);  // the relay's choice, as today
+  for (const control of ['[data-mc-voice-end]', '[data-mc-voice-check]', '[data-mc-voice-sumup]', '[data-mc-voice-keep]']) {
+    assert.equal(r.node(control).listeners.click, undefined, control);                   // no live control is bound
+  }
+  assert.equal(r.docEvents['guild:notes-read'].length, 1); assert.equal(r.docEvents.visibilitychange.length, 1);
+  // A proposal kept in S2, in the thread as the server renders it, named by a notes read: its card, with its controls.
+  const thread = r.node('[data-mc-thread]');
+  const row = r.document.createElement('li');
+  row.setAttribute('data-voice-kind', 'summary_proposal'); row.setAttribute('data-voice-session', EARLIER);
+  thread.append(row);
+  r.docEvents['guild:notes-read'].forEach((fn) => fn({ detail: { conversationId: 'c-1',
+    voice_sessions: [{ session_id: EARLIER, state: 'ended', summary: 'proposed', capture: 'complete', started_at: '2026-10-28T10:00:00.000Z' }],
+    notes: [{ id: 31, text: 'Proposed summary\n\nWe looked at item twelve.', voice: { kind: 'summary_proposal', session_id: EARLIER } }] } }));
+  const card = row.querySelector('[data-voice-summary-card]');
+  assert.ok(card, 'the waiting proposal has its card');
+  for (const control of ['[data-voice-summary-confirm]', '[data-voice-summary-edit]', '[data-voice-summary-decline]']) assert.ok(card.querySelector(control), control);
+  card.querySelector('[data-voice-summary-confirm]').click();
+  await flush();
+  const decided = r.posts(`/session/${EARLIER}/summary/decision`);
+  assert.equal(decided.length, 1);
+  assert.equal(decided[0].url, `${BASE}/session/${EARLIER}/summary/decision`);
+  assert.deepEqual({ ...decided[0].body }, { conversation_id: 'c-1', decision: 'confirm' });
+  assert.equal(decided[0].opts.headers['X-CSRF-Token'], 'csrf-synthetic');
+  assert.equal(card.querySelector('[data-voice-summary-confirm]'), null);                 // decided: its controls go
+  // Voice: today's chained relay, exactly as without direct_records.
+  await r.click();
+  assert.equal(r.conferLoads, 1); assert.equal(r.confers.length, 1); assert.equal(r.confers[0].provider, 'openai');
+  assert.equal(r.instances.length, 0); assert.equal(directVoiceCalls, 0);
+  assert.equal(r.node('[data-mc-voice-live]').hidden, true);
+  assert.equal(r.posts('/bootstrap').length, 0);
+  await r.confers[0]._submitTurn('What is on the board?', 'req-1');
+  assert.deepEqual(r.submitted, [['What is on the board?', 'req-1']]);
+  await r.click();
+  assert.equal(r.status(), 'Voice ended. Agent work already accepted may still finish.');   // the relay's words, not the direct path's
+  assert.equal(r.directLoads, 1); assert.equal(r.sessionLoads, 1);
   n++;
 }
 // managed_realtime only: the managed path, unchanged (the direct file and the chained relay are never loaded).

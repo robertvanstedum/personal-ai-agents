@@ -1,7 +1,10 @@
 // Which path Voice takes is the capabilities answer's: direct_voice present -> the direct path (mc_voice_direct.js, Spec 164
 // v0.3, the provider speaking directly with MC's typed turn behind each consult); else managed_realtime present -> the managed
-// path below; else today's chained relay (production MC voice until the direct path is switched on there; retired in Spec 165
+// path below; else today's chained relay (production MC voice until the direct path is admitted there; retired in Spec 165
 // A6). A direct or managed path that was offered and failed says why; no other is tried.
+// direct_records without direct_voice (Spec 165 §11.1 S1, S3: the direct path installed, not admitted): the thread alone
+// (initThread: recovering and incomplete lines, and the summary card, so an earlier session's proposal can be decided). No
+// live control is bound, nothing starts on the direct path, and Voice takes the managed path or the relay exactly as without it.
 // Speaking with Master Craftsman (MC voice, v1). Off unless the server says so (data-mc-voice) AND the capabilities call answers.
 //
 // Chained, on the shared Confer controller: the microphone goes straight to the speech provider for TRANSCRIPTION only; each final transcript is submitted through the
@@ -95,6 +98,8 @@ export function initMcVoice(page) {
       const r = await fetch(`${api}/mc/voice/capabilities`, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
       const body = await r.json().catch(() => ({}));
       direct = body.direct_voice && typeof body.direct_voice === 'object' && (body.direct_voice.providers || []).length ? body.direct_voice : null;
+      const records = !direct && body.direct_records && typeof body.direct_records === 'object' ? body.direct_records : null;
+      if (r.ok && body.ok && records) initThread(records);              // installed, not admitted: the thread only
       if (!r.ok || !body.ok || !((body.providers || []).length || direct)) return null;
       managed=body.managed_realtime || null;
       if (managed || direct) $('[data-mc-managed-settings]').hidden=false;
@@ -149,8 +154,9 @@ export function initMcVoice(page) {
     paint(true);
     if (direct) {await startDirect(mine,current);return;}
     if (managed) {await startManaged(mine,current);return;}
-    // Neither offered (production today: MINIMOI_MC_VOICE=1, direct held off, managed off): today's chained relay, exactly as
-    // on main, until the direct path is switched on there (Spec 165 §9, §11). Never reached once direct or managed is offered.
+    // Neither offered (production today: MINIMOI_MC_VOICE=1, direct not installed or not admitted, managed off): today's chained
+    // relay, exactly as on main, until the direct path is admitted there (Spec 165 §9, §11). Never reached once direct or
+    // managed is offered.
     say(`Connecting… Your speech is sent to ${provider} to be turned into text, and Master Craftsman's replies are read aloud by the same service.`);
     try {
       const { ConferVoiceController } = await import(`${api}/mc/voice/static/realtime-confer-controller.js`);
@@ -222,15 +228,16 @@ export function initMcVoice(page) {
       directThread.paint(body.voice_sessions, body.notes);
     } catch (e) { /* the thread shows it on the next load */ }
   }
-  async function initDirect() {
-    const choice = $('[data-mc-voice-transcript-choice]');
-    if (choice?.parentElement) choice.parentElement.hidden = true;          // no running text on this path: it is revealed at End
+  // The thread on the direct path's records (`meta`: direct_voice when admitted, direct_records when only installed): its
+  // recovering and incomplete lines and the summary card (Confirm, Edit, Decline), posting through the session module's
+  // jsonPost. It binds no live control and starts nothing; initDirect adds those.
+  async function initThread(meta) {
     try {
       const [mod, voice] = await Promise.all([loadDirect(), loadSession()]);
-      directThread = mod.voiceThread({ doc: document, direct, thread: () => $('[data-mc-thread]'), mine: () => directSession?.sessionId() || null,
+      directThread = mod.voiceThread({ doc: document, direct: meta, thread: () => $('[data-mc-thread]'), mine: () => directSession?.sessionId() || null,
         post: voice.jsonPost((...a) => fetch(...a), headers), conversationId: () => page.conversation?.id, reveal: revealDirect });
       directThread.paint(page.floor?.notes?.voice_sessions, page.floor?.notes?.recent);
-    } catch (e) { /* Voice says so when it is pressed */ }
+    } catch (e) { /* admitted: Voice says so when it is pressed; installed only: the server-rendered thread stays as it is */ }
     // The thread's voice lines follow the conversation, not only this tab's own End (UI review #7): repainted from every notes
     // read the page already makes, and read afresh when the tab comes back into view.
     document.addEventListener('guild:notes-read', (e) => {
@@ -240,6 +247,11 @@ export function initMcVoice(page) {
       directThread.paint(read.voice_sessions, read.notes);
     });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) revealDirect(); });
+  }
+  async function initDirect() {
+    const choice = $('[data-mc-voice-transcript-choice]');
+    if (choice?.parentElement) choice.parentElement.hidden = true;          // no running text on this path: it is revealed at End
+    await initThread(direct);
     $('[data-mc-voice-end]')?.addEventListener?.('click', () => { if (directSession?.proposing()) directSession.sumUp(); else if (busy()) stop('user_ended'); });
     $('[data-mc-voice-check]')?.addEventListener?.('click', () => directSession?.check());
     $('[data-mc-voice-sumup]')?.addEventListener?.('click', () => directSession?.sumUp());

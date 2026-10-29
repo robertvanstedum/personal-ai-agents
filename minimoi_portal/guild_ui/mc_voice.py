@@ -77,8 +77,12 @@ def capabilities():
         mode, default, listed = _providers()
     except ProviderUnavailableError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 503
+    direct, records = cfg().get("mc_direct_voice"), cfg().get("mc_direct_voice_records")
+    # direct_voice: MC's direct path admitted here (mc_voice_direct.install). direct_records: installed, not admitted (Spec 165
+    # §11.1 S1, S3): its record routes' metadata, so the page paints the thread and earlier proposals can be decided, while
+    # Voice keeps today's path. Not installed: neither, as before.
     return jsonify({"ok": True, "mode": mode, "default_provider": default.provider, "providers": [p.public_dict() for p in listed], "budget": budget.public_status(), "managed_realtime": cfg().get("mc_managed_realtime"),
-                    "direct_voice": cfg().get("mc_direct_voice")})
+                    "direct_voice": direct, **({"direct_records": records} if records and not direct else {})})
 
 
 def _budget_refusal(exc):
@@ -164,12 +168,15 @@ def speech(note_request_id):
 
 
 def static_file(name):
-    """The shared controller and its transport adapter, served from the one shared copy (never a second copy), only while voice is on."""
+    """The shared controller and its transport adapter, served from the one shared copy (never a second copy), only while voice is on.
+    The direct path's controller only while it is admitted here; its session module while it is installed, admitted or not
+    (Spec 165 §11.1 S1, S3: the thread posts its decisions through the module's jsonPost)."""
     if not enabled():
         return _off()
     direct = bool(cfg().get("mc_direct_voice"))
+    installed = direct or bool(cfg().get("mc_direct_voice_records"))
     if (name not in _STATIC_OK and not ((cfg().get("mc_managed_realtime") or direct) and name in _MANAGED_STATIC)
-            and not (direct and name in _DIRECT_STATIC)):
+            and not (installed and name in _DIRECT_STATIC)):
         return json_error("not_found", "No such file.", 404)
     return send_from_directory(_STATIC_DIR, name, mimetype="text/javascript")
 
