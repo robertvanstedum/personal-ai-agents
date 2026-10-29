@@ -210,6 +210,20 @@ seed_files() {
   # Portal sign-in and published docs
   copy_file "$R/minimoi_portal/auth/users.json" auth/users.json
   copy_file "$R/minimoi_portal/auth/guests.json" auth/guests.json
+  # Open registrations and reset requests are single-file binds in docker-compose.prod.yml (create_host_path: false,
+  # action-waiting notices spec v0.2 C7): copy them when the checkout has them, else start them empty.
+  if [[ -f "$R/minimoi_portal/auth/pending.json" ]]; then
+    copy_file "$R/minimoi_portal/auth/pending.json" auth/pending.json
+  else
+    echo '{"pending": []}' > "$S/auth/pending.json"
+    printf '%-44s (absent: %s; created empty)\n' auth/pending.json "$R/minimoi_portal/auth/pending.json" >> "$SEEDED_FROM"
+  fi
+  if [[ -f "$R/minimoi_portal/auth/reset_requests.json" ]]; then
+    copy_file "$R/minimoi_portal/auth/reset_requests.json" auth/reset_requests.json
+  else
+    echo '{"requests": []}' > "$S/auth/reset_requests.json"
+    printf '%-44s (absent: %s; created empty)\n' auth/reset_requests.json "$R/minimoi_portal/auth/reset_requests.json" >> "$SEEDED_FROM"
+  fi
   git_tree "$sha:docs/specs" docs/specs
   git_tree "$sha:docs/design" docs/design
   copy_dir "$R/agent_logs" agent_logs optional
