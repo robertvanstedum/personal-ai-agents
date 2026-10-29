@@ -1243,3 +1243,108 @@ def test_n_d1_a_group_is_verified_right_before_every_signal_and_a_child_reaped_e
     c = child_of(live)
     assert c.end_group() == "stopped" and live.returncode == 0
     assert [sig for _, sig in sent] == [runner.signal.SIGTERM, runner.signal.SIGKILL]
+
+
+# ── third fix round (closure check) ────────────────────────────────────────────────────────────────────────────────
+def test_nc1_a_known_effect_outcome_blocked_at_readback_is_never_reconciled_into_a_decision(tmp_path, mirror,
+                                                                                            capsys):
+    """The runtime dies at a committed effect; on restart readback finds it committed, and the authority errors on
+    the finish. The finish stays pending, the task is blocked, and reconcile is not asked: no decision for Robert. The
+    block is visible (host-state.json, state --json, doctor), and a restart clears it and finishes the work."""
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake, gap_detection="off")
+    grant = str(uuid.uuid4())
+    rid = fake.add(program("checkpoint s1", f"effect e1 grant={grant}", "checkpoint s2", "result ok"))
+
+    def crash(*a, **k):
+        raise Crash()
+    rt._effect_end = crash
+    with pytest.raises(Crash):
+        run_pass_raw(rt)
+    fake.items[rid]["lease_until"] = 0.0
+    for r in fake.receipts.values():
+        r["until"] = 0.0
+    once = []
+
+    def store_fault(request_id, generation, what):
+        if what == "finish:e1" and not once:
+            once.append(1)
+            raise RuntimeError("audit_event_not_written")
+    fake.hooks["effect"] = store_fault
+    rt2 = make_rt(tmp_path, mirror[0], fake, gap_detection="off")
+    out = run_pass(rt2)
+    task = f"{rid}-g1"
+    assert out["state"] == "blocked" and out["blocked"] == {task: "authority_error:audit_event_not_written"}, out
+    finish = [c for c in rt2.journal(task).calls() if c["kind"] == "effect_finish"]
+    assert len(finish) == 1 and finish[0]["mark"] is None                       # the known outcome is kept
+    assert not fake.reconciles and not fake.decisions and fake.items[rid]["state"] != "unknown"
+    # N-E3: visible with its code and since when, in the host-local view, state --json and doctor.
+    item = json.loads((tmp_path / "artifacts" / "host-state.json").read_text())["items"][0]
+    assert item["blocked"]["code"] == "authority_error:audit_event_not_written" and item["blocked"]["since"]
+    assert item["blocked"]["cleared_by"] == "operator_restart"
+    assert cli.main(["state", "--host-config", str(tmp_path / "host.yaml"), "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["items"][0]["blocked"]["code"].startswith("authority_error:")
+    assert cli.main(["doctor", "--host-config", str(tmp_path / "host.yaml")]) == 1
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["blocked"][0]["task"] == task and f"task_blocked:{task}" in doc["problems"]
+    # An operator restart replays the finish (under a reconcile lease) and the item resumes after e1.
+    fake.hooks.pop("effect")
+    for r in fake.receipts.values():
+        r["until"] = 0.0
+    rt3 = make_rt(tmp_path, mirror[0], fake, gap_detection="off")
+    out = run_pass(rt3)
+    assert (out["state"], out["generation"]) == ("completed", 2), out
+    assert [x["answer"] for x in fakework.FileSink(tmp_path / "sink").lines()] == ["committed"]
+    assert {r["state"] for r in fake.receipts.values()} == {"verified"} and not fake.decisions
+
+
+def _bare_child(proc, rt):
+    class Notes:
+        def note(self, *a, **k):
+            pass
+    c = runner._Child.__new__(runner._Child)
+    c.rt, c.proc, c.pgid, c.identity, c.frozen, c.signalled, c.lost = rt, proc, proc.pid, "recorded", False, False, \
+        False
+    c.lock, c.capture, c.journal, c.request_id, c.generation, c.task = threading.RLock(), None, Notes(), "r", 1, "t"
+    return c
+
+
+def test_n_e1_end_group_holds_the_childs_lock_so_no_freeze_can_signal_after_the_reap(monkeypatch):
+    sent = []
+    monkeypatch.setattr(runner.os, "killpg", lambda pgid, sig: sent.append(sig))
+    rt = type("RT", (), {"cfg": type("Cfg", (), {"kill_grace_s": 2.0})(), "at": lambda self: "now"})()
+    proc = subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True)
+    c = _bare_child(proc, rt)
+    time.sleep(0.3)                                             # it has exited: a zombie, still pinned
+    c.lock.acquire()                                            # a freeze from the contact thread holds it
+    t = threading.Thread(target=c.end_group, kwargs={"term": False})
+    t.start()
+    time.sleep(0.3)
+    assert t.is_alive() and sent == [] and proc.returncode is None   # the reap waits for the lock
+    c.lock.release()
+    t.join(5)
+    assert sent == [runner.signal.SIGKILL] and proc.returncode == 0
+    assert c.freeze("wake") == "stopped" and sent == [runner.signal.SIGKILL]   # after the reap: never signalled
+
+
+def test_n_e2_on_the_python_3_9_path_a_failing_ps_never_leaves_the_runtimes_own_child_unreaped(monkeypatch):
+    sent = []
+    monkeypatch.setattr(runner.os, "killpg", lambda pgid, sig: sent.append(sig))
+    monkeypatch.delattr(runner.os, "waitid", raising=False)    # the 3.9 fallback
+    rt = type("RT", (), {"cfg": type("Cfg", (), {"kill_grace_s": 1.0})(), "at": lambda self: "now"})()
+    live = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.3)"], start_new_session=True)
+
+    def ps_fails(*a, **k):
+        raise subprocess.TimeoutExpired("ps", 5)
+    monkeypatch.setattr(runner.subprocess, "run", ps_fails)
+    c = _bare_child(live, rt)
+    assert c.verified() and not c.exited()                      # ps failed: "not yet", never "gone"
+    assert c.end_group() == "stopped" and live.returncode == 0   # still signalled and reaped, with no ps at all
+    assert sent == [runner.signal.SIGTERM, runner.signal.SIGKILL]
+    # ps that finds no such pid: this unreaped child was reaped elsewhere; it is lost and never signalled.
+    gone = subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True)
+    os.waitpid(gone.pid, 0)
+    monkeypatch.setattr(runner.subprocess, "run",
+                        lambda *a, **k: subprocess.CompletedProcess(a[0], 1, stdout="", stderr=""))
+    c = _bare_child(gone, rt)
+    assert c.exited() and c.lost and c.end_group() == "unverified" and len(sent) == 2
