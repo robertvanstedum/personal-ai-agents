@@ -77,7 +77,10 @@ def connect(path: str | Path, *, create: bool = False, readonly: bool = False, k
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     if sqlite_vec is None and not readonly and not keyword_only:
         raise IndexIncompatible("vector extension unavailable: an index can only be opened read-only here")
-    uri = f"file:{path}?mode={'ro' if readonly else 'rwc'}"
+    # Encode path punctuation as a filename, not SQLite URI query/fragment syntax.
+    # Only an explicit create may recreate a file that vanished after the check.
+    mode = "ro" if readonly else "rwc" if create else "rw"
+    uri = f"{path.absolute().as_uri()}?mode={mode}"
     con = sqlite3.connect(uri, uri=True, timeout=30)
     if sqlite_vec is not None and not keyword_only:
         con.enable_load_extension(True)
