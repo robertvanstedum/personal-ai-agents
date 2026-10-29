@@ -236,6 +236,11 @@ class Recovery(PostgresFixture, unittest.TestCase):
         row = self.row(job)
         self.assertEqual((row["state"], row["generation"], row["runner_id"]), ("claimed", 2, "mac-a"))
         self.assertGreater(row["lease_until"], row["now"])
+        # The sweeper never saw that lapse; the audit still has it, with its cause, before the rise (N-R5).
+        kinds = [(e["kind"], e["generation"]) for e in self.events(item=env["request_id"])
+                 if e["kind"] in ("item.lapsed", "item.resumed")]
+        self.assertEqual(kinds, [("item.lapsed", 1), ("item.resumed", 2)])
+        self.assertIn(self.events("item.lapsed")[0]["body"]["cause"], ("owner_contact_lost", "lease_not_renewed"))
         self.assertEqual(row["reservation"]["generation"], 2)
         # The old generation is fenced: its writes are refused; the new one's are taken.
         self.assertEqual(self.progress(env)["code"], "stale_generation")
@@ -646,9 +651,12 @@ class Recovery(PostgresFixture, unittest.TestCase):
         replay = dict(phase="testing", protocol=2, runner_id="mac-a", event_id=eid,
                       at=(now - timedelta(seconds=20)).isoformat(), checkpoint=cp2)
         self.assertEqual(self.store.progress(env["request_id"], 1, **replay)["state"], "applied")
+        dated = self.row(job)["progress_at"]
         self.assertEqual(self.store.progress(env["request_id"], 1, **replay)["state"], "already_applied")   # DUP-5
         row = self.row(job)
         self.assertEqual((row["checkpoint"]["name"], row["progress_phase"]), ("s2", "testing"))
+        self.assertEqual(row["progress_at"], dated)                   # an exact replay changes nothing (N-R5)
+        self.assertLessEqual(dated, row["lease_until"])               # never fresh progress on a lapsed item
         self.assertLessEqual(row["lease_until"], row["now"])                      # still lapsed: no lease reopened
         late = dict(replay, event_id=str(uuid4()), at=(now - timedelta(seconds=5)).isoformat())
         self.assertEqual(self.store.progress(env["request_id"], 1, **late)["code"], "lease_lapsed")
@@ -911,6 +919,102 @@ class Recovery(PostgresFixture, unittest.TestCase):
         self.assertEqual((day["reserved"], day["observed"]), (0, USED))
         self.reconcile(env, cp=None)                                                  # once
         self.assertEqual(self.sql("SELECT observed FROM guild.mc_delegation_reservations")[0]["observed"], USED)
+
+    # ── second fix round ──
+    def test_sfr1_a_result_never_ends_an_item_while_an_effect_of_it_is_open(self):
+        """The reviewer's P5 (d), (e) and (f). A result with an effect open is kept as evidence and the item goes to
+        the owner; while a revocation waits on an open effect, a late result is refused."""
+        arts = [{"ref": "job-out", "sha256": "e" * 64}]
+
+        def report(env, runner, status="completed"):
+            return self.store.result(env["request_id"], env["generation"], event_id=str(uuid4()), status=status,
+                                     artifacts=arts, detail={"exit_code": 0}, output_text="done", protocol=2,
+                                     runner_id=runner, at=self.db_now().isoformat(), route="fakework",
+                                     usage={"amount": USED, "unit": "test_units", "children_stopped": True})
+        # (d) completed while e1 is still dispatched
+        job, env = self.claimed()
+        gid = self.effect_grant(job, "e1")
+        self.assertEqual(self.send(env, "e1", gid)[0], "committed")
+        op = effect_operation_id(env["request_id"], "e1")
+        ack = report(env, "mac-a")
+        self.assertEqual((ack["state"], ack["code"]), ("accepted", "effects_open"))       # the host stops resending
+        row = self.row(job)
+        self.assertEqual((row["state"], row["generation"], row["finished_at"]), ("unknown", 1, None))
+        self.assertEqual(row["result_detail"]["operations"], [{"operation_id": op, "state": "dispatched"}])
+        self.assertEqual(row["result_detail"]["ending"], {"state": "completed", "code": "result_reported"})
+        self.assertEqual(row["result_detail"]["reported"]["status"], "completed")
+        self.assertEqual((row["artifacts"], row["reservation"]["state"], row["reservation"]["observed"]),
+                         (arts, "settled", USED))                                         # evidence kept, usage settled
+        self.assertEqual(str(self.events("decision.queued", env["request_id"])[0]["event_id"]), ack["decision_id"])
+        self.assertEqual(self.store.result(env["request_id"], 1, event_id=str(row["result_event_id"]),
+                                           status="completed", artifacts=arts, detail={"exit_code": 0},
+                                           output_text="done", protocol=2, runner_id="mac-a",
+                                           at=self.db_now().isoformat(), route="fakework",
+                                           usage={"amount": USED, "unit": "test_units",
+                                                  "children_stopped": True})["state"], "already_applied")
+        self.assertEqual(self.reconcile(env, cp=None)["decision_id"], ack["decision_id"])  # one decision (DUP-6)
+        self.store.end(env["request_id"], by="robert", note="the decision")             # its resolution ends it
+        self.assertEqual((self.row(job)["state"], self.row(job)["generation"]), ("interrupted", 1))
+        # (e) the sink's answer timed out: the host finished e1 unknown, then reported completed
+        job2, env2 = self.claimed(runner="mac-b", job="job-e")
+        gid2 = self.effect_grant(job2, "e1")
+        _, lease = self.send(env2, "e1", gid2, runner="mac-b")
+        self.assertEqual(self.effect(env2, "finish", "e1", gid2, runner="mac-b", lease=lease, state="unknown")
+                         ["state"], "ok")
+        self.assertEqual(report(env2, "mac-b")["code"], "effects_open")
+        self.assertEqual((self.row(job2)["state"], self.row(job2)["result_detail"]["operations"][0]["state"]),
+                         ("unknown", "unknown"))
+        # (f) a revocation waiting on e1: a late result is refused, and the item ends cancelled once e1 is settled
+        job3, env3 = self.claimed(runner="mac-c", job="job-f")
+        gid3 = self.effect_grant(job3, "e1")
+        _, lease3 = self.send(env3, "e1", gid3, runner="mac-c")
+        self.assertEqual(self.store.revoke(self.grant_of[job3], by="robert", note="W-REV")["waiting"],
+                         [env3["request_id"]])
+        late = report(env3, "mac-c")
+        self.assertEqual((late["state"], late["code"]), ("refused", "grant_revoked"))
+        self.assertEqual((self.row(job3)["state"], self.row(job3)["result_event_id"]), ("claimed", None))
+        self.effect(env3, "finish", "e1", gid3, runner="mac-c", lease=lease3, state="verified",
+                    evidence={"kind": "send", "outcome": "committed"})
+        self.store.sweep()
+        self.assertEqual((self.row(job3)["state"], self.row(job3)["result_detail"]["code"]),
+                         ("cancelled", "grant_revoked"))
+        self.assertEqual(report(env3, "mac-c")["code"], "item_ended")
+        self.assertEqual(len(self.events("decision.queued")), 2)                      # (d) and (e), none for (f)
+
+    def test_nr4_a_reassigned_item_waiting_for_pickup_can_be_ended_or_reassigned_again(self):
+        job, env = self.claimed(runner="mac-a", host="mac-test-1")
+        for runner in ("mac-a2", "mac-a3"):
+            self.beat(runner, "mac-test-1")
+        self.lapse(job, 0)
+        self.assertEqual(self.store.reassign(env["request_id"], "mac-a2", by="robert", note="there")["generation"], 2)
+        # mac-a2 never comes: the owner names another runner.
+        self.assertEqual(self.store.reassign(env["request_id"], "mac-a3", by="robert", note="not there; here")
+                         ["generation"], 3)
+        self.assertIsNone(self.store.claim("mac-a2", CAPS, protocol=2))
+        got = self.store.claim("mac-a3", CAPS, protocol=2)
+        self.assertEqual((got["envelope"]["request_id"], got["envelope"]["generation"]), (env["request_id"], 3))
+        # Or ends it.
+        job2, env2 = self.claimed(runner="mac-b", host="mac-test-1", job="job-w")
+        self.lapse("job-w", 0)
+        self.store.reassign(env2["request_id"], "mac-a2", by="robert", note="there")
+        self.assertEqual(self.store.end(env2["request_id"], by="robert", note="nobody came"),
+                         {"state": "interrupted", "code": "owner_decision"})
+        row = self.row("job-w")
+        self.assertEqual((row["state"], row["generation"], row["reservation"]["state"]),
+                         ("interrupted", 2, "unreported"))
+
+    def test_nr2_an_unverifiable_child_of_an_ended_item_still_reaches_the_owner(self):
+        job, env = self.claimed()
+        out = self.store.revoke(self.grant_of[job], by="robert", note="no effect open: it ends at once")
+        self.assertEqual(out["items"], [env["request_id"]])
+        a = self.reconcile(env, child="unverified", cp=None)
+        self.assertEqual((a["answer"], a["code"], a["state"]), ("decide", "process_unverified", "cancelled"))
+        self.assertEqual(self.reconcile(env, child="unverified", cp=None)["decision_id"], a["decision_id"])
+        row = self.row(job)
+        self.assertEqual((row["state"], row["reservation"]["state"]), ("cancelled", "kept"))     # unchanged, kept
+        self.assertEqual([str(d["event_id"]) for d in self.events("decision.queued")], [a["decision_id"]])
+        self.assertEqual(self.reconcile(env, cp=None)["code"], "grant_revoked")        # a stopped child: released
+        self.assertEqual(self.row(job)["reservation"]["state"], "unreported")
 
     def test_the_relay_reap_moves_to_the_sweeper(self):
         """Where a sweeper runs, relay.status writes nothing and derives the lapse (never running, E11); the sweeper

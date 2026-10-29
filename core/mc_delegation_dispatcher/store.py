@@ -32,7 +32,10 @@ configuration (``Authority``) enables it, and only about version 2 items: those 
   result(request_id, generation, *, ..., protocol=2, runner_id, at, route, usage={amount, unit, children_stopped})
         settles the reservation with the observed usage; a route other than the reserved one is refused; unknown
         usage closes the route until a recorded resolution (resolve_usage_hold); after a revocation the item ends
-        cancelled (grant_revoked), never completed (R4.3-e); a result made before a lapse is taken as progress is
+        cancelled (grant_revoked), never completed (R4.3-e); a result made before a lapse is taken as progress is.
+        With an effect of the item still open (a receipt dispatched or unknown), a result ends nothing: it is kept as
+        evidence (artifacts, usage settled) and the item goes unknown with one decision (code effects_open); while a
+        revocation waits on such an effect, a late result is refused (grant_revoked)
   reconcile(runner_id, request_id, generation, stage={child, checkpoint}, open_operations, protocol=2)
         -> continue | resume(generation + 1, lease_until, checkpoint) | stop(condition, code) | decide(code, decision_id)
         the owner's question for each item it holds after a restart, wake or reconnect (§5.5 step 4). In order:
@@ -66,8 +69,9 @@ The authority's liveness (authority_beat, run_liveness) is a row it beats on a t
 authority's own outage, recorded as authority.suspended {from, to}, with every open grace extended by it (R5.2-a).
 The sweeper (sweep, run_sweeper) writes lapse transitions and never writes running (§5.1): lapsed with its cause and a
 grace deadline from the owner host's grace, and at grace end interrupted, or unknown with a decision while an effect is
-open. No item ends while an effect of it is open. Where it runs, relay.status derives a lapse instead of reaping it
-(R3.3, E11), and the sweeper reaps version 1 items. A version 2 authority always has one.
+open. No item ends while an effect of it is open, on any path: reconcile, the sweeper, a result, Stop, end, revoke.
+Where it runs, relay.status derives a lapse instead of reaping it (R3.3, E11), and the sweeper reaps version 1 items.
+A version 2 authority always has one.
 The owner's acts: reassign (R5.1-d), end (R5.1-c), revoke (R4.3-e, end to end), resolve_usage_hold.
 Admitting an item (enqueue with a route) uses one of its grant's operations in the same transaction that writes it
 queued (GrantStore.use_for_item, R4.3-c). With no grant, none left, or one that doesn't cover it, the item is written
@@ -1241,7 +1245,8 @@ class DispatcherStore:
                 {"state": "refused", "event_id": eid, "code": written}
         # The host's time only orders its own events: phase and checkpoint are each kept newest by it, so a
         # replayed older record never replaces a newer one. progress_at is the authority's clock, when the newest
-        # progress arrived, so ages and stalls are read on one clock.
+        # progress arrived, so ages and stalls are read on one clock; a record replayed after a lapse is dated no
+        # later than the lease's end, so it never reads as fresh progress.
         last = (row["facts"] or {}).get("progress_host_at")
         newer = last is None or when > parse_at(last)
         stored = row["checkpoint"]
@@ -1249,7 +1254,7 @@ class DispatcherStore:
         if not newer and not cp_newer:
             return {"state": "superseded", "event_id": eid}
         cur.execute("""UPDATE guild.mc_delegations SET
-            progress_at=CASE WHEN %s THEN clock_timestamp() ELSE progress_at END,
+            progress_at=CASE WHEN %s THEN LEAST(clock_timestamp(), lease_until) ELSE progress_at END,
             progress_phase=CASE WHEN %s THEN %s ELSE progress_phase END,
             facts=CASE WHEN %s THEN COALESCE(facts, '{}'::jsonb) || jsonb_build_object('progress_host_at', %s::text)
                        ELSE facts END,
@@ -1320,6 +1325,9 @@ class DispatcherStore:
             code = "unit_mismatch"
         if code is None and self._replay(cur, eid, "result.accepted", rid, generation, when, None) is not None:
             code = "event_id_conflict"                 # the id already names another event
+        open_ops = [] if code is not None else self._open_receipts(cur, rid)
+        if open_ops and ((row["facts"] or {}).get("ending") or self._grant_refusal(cur, row) == "grant_revoked"):
+            code = "grant_revoked"     # R4.3-e, T10: a revocation waits on its open effect; a late result is refused
         host_id = self._host_id(cur, runner_id)
         if code is not None:
             self._event(cur, "result.refused", item=rid, generation=row["generation"], host_id=host_id,
@@ -1344,6 +1352,17 @@ class DispatcherStore:
         text = output_text[:OUTPUT_MAX] if isinstance(output_text, str) else None
         fact = "jsonb_build_object('reported_at', clock_timestamp())" + (
             " || jsonb_build_object('released_at', clock_timestamp())" if res["state"] == "settled" else "")
+        if open_ops:
+            # SF1 on the result path: an effect's outcome is still open, so the item does not end. What the host
+            # reports is kept as evidence (artifacts, output, its usage settled), and the item goes to the owner as
+            # unknown with one decision listing the open operations; that decision's resolution ends it. Never
+            # completed with an undecided effect (R5.1-e, DUP-6), and so never a next card step (S1-C).
+            cur.execute("""UPDATE guild.mc_delegations SET result_event_id=%s, artifacts=%s::jsonb, output_text=%s,
+                reservation=%s::jsonb, facts=COALESCE(facts, '{}'::jsonb) || """ + fact + " WHERE request_id=%s",
+                (eid, json.dumps(artifacts or []), text, json.dumps(res), rid))
+            d = self._decide(cur, row, "effect_unknown", open_ops, [], (status, None, "result_reported"),
+                             reported={"status": status, "detail": detail or {}})
+            return {"state": "accepted", "event_id": eid, "code": "effects_open", "decision_id": d["decision_id"]}
         cur.execute("""UPDATE guild.mc_delegations SET state=%s, result_event_id=%s, result_detail=%s::jsonb,
             artifacts=%s::jsonb, output_text=%s, finished_at=clock_timestamp(), lease_until=NULL,
             reservation=%s::jsonb, facts=COALESCE(facts, '{}'::jsonb) || """ + fact + " WHERE request_id=%s",
@@ -1430,6 +1449,8 @@ class DispatcherStore:
         if state in TERMINAL:
             if stopped:
                 self._confirm_stopped(cur, row)
+            if stage["child"] == "unverified":         # §5.5 step 4: an unverifiable process goes to the owner
+                return self._decide_ended(cur, row, state)
             return _stop(None, (row["result_detail"] or {}).get("code") or state, state)
         if state not in ("claimed", "running", "lapsed", "paused", "unknown"):
             return _stop("identity", "not_owned")
@@ -1437,6 +1458,8 @@ class DispatcherStore:
             d = row["result_detail"] or {}
             return {"answer": "decide", "code": d.get("reason"), "decision_id": d.get("decision_id"),
                     "operations": d.get("operations", [])}
+        row = self._lapse_written(cur, row)
+        state = row["state"]
         ending = self._ending(cur, row) or (self._grace_end(row) if self._grace_ended(cur, row) else None)
         open_ops = self._open_receipts(cur, rid)
         if open_ops or stage["child"] == "unverified":
@@ -1484,7 +1507,7 @@ class DispatcherStore:
             raise RuntimeError("generation_raised_twice")      # cannot happen under the item's lock; never commit it
         return {"answer": "resume", "generation": g + 1, "lease_until": _iso(lease_until), "checkpoint": checkpoint}
 
-    def _decide(self, cur, row, reason, open_ops, told, ending=None) -> dict:
+    def _decide(self, cur, row, reason, open_ops, told, ending=None, *, reported=None) -> dict:
         """``decide`` (§5.5 step 4, R4.1-c, R5.1-e): the item becomes ``unknown``, its generation unchanged and its
         workspace kept, and exactly one decision is queued, listing its open operations: an unknown resolution, which
         never shares a batched approval (R7.4-c). ``ending`` is how the item would otherwise have ended (a Stop, a
@@ -1493,7 +1516,8 @@ class DispatcherStore:
         decision_id = str(uuid.uuid4())
         detail = {"code": "decide", "reason": reason, "operations": open_ops, "workspace": "kept",
                   "decision_id": decision_id, **({"host_open_operations": told} if told else {}),
-                  **({"ending": {"state": ending[0], "code": ending[2]}} if ending else {})}
+                  **({"ending": {"state": ending[0], "code": ending[2]}} if ending else {}),
+                  **({"reported": reported} if reported else {})}
         cur.execute("""UPDATE guild.mc_delegations SET state='unknown', result_detail=%s::jsonb, lease_until=NULL
             WHERE request_id=%s""", (json.dumps(detail), str(row["request_id"])))
         rid, g = row["request_id"], row["generation"]
@@ -1502,6 +1526,22 @@ class DispatcherStore:
                     body={"class": "unknown_resolution", "solo": True, "reason": reason, "operations": open_ops,
                           **({"ending": detail["ending"]} if ending else {})})
         return {"answer": "decide", "code": reason, "decision_id": decision_id, "operations": open_ops}
+
+    def _decide_ended(self, cur, row, state) -> dict:
+        """An item that has already ended, whose child the host cannot verify: it stays as it ended, and one decision
+        (process_unverified) is queued for it, once per generation; its reservation stays kept."""
+        once = _once("decision_unverified", row["request_id"], row["generation"])
+        cur.execute("""SELECT event_id FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s
+            AND once_key=%s""", (self.principal, self.environment, once))
+        found = cur.fetchone()
+        decision_id = str(found["event_id"]) if found else str(uuid.uuid4())
+        if found is None:
+            self._event(cur, "decision.queued", item=row["request_id"], generation=row["generation"], once=once,
+                        event_id=decision_id, body={"class": "unknown_resolution", "solo": True,
+                                                    "reason": "process_unverified", "operations": [],
+                                                    "item_state": state})
+        return {"answer": "decide", "code": "process_unverified", "decision_id": decision_id, "operations": [],
+                "state": state}
 
     def _stop_item(self, cur, row, state, condition, code, stopped) -> dict:
         """reconcile's ``stop``: the known outcome is recorded and the workspace kept."""
@@ -1961,6 +2001,15 @@ class DispatcherStore:
         self._close(cur, row, end[0], {"code": end[2]}, children_stopped=False)
         return end[0]
 
+    def _lapse_written(self, cur, row):
+        """A lease that ran out before the sweeper saw it is written as a lapse, with its cause, before anything else
+        acts on the item, so the audit never shows a generation rise or an end without the lapse behind it."""
+        if row["state"] in ("claimed", "running") and row["lease_until"] is not None \
+                and row["lease_until"] <= row["now"]:
+            self._lapse(cur, row, row["lease_until"])
+            row = self._item(cur, row["request_id"])
+        return row
+
     def _lapse(self, cur, row, since, *, paused=False) -> str:
         """lapsed (the lease ran out at ``since``) or paused (its owner announced a stop at ``since``): owner unchanged,
         the lease ended, a grace deadline from the owner's grace (none stated: none given) less any outage."""
@@ -1995,8 +2044,10 @@ class DispatcherStore:
         with self._tx() as cur:
             row = self._item(cur, rid)
             _need(row is not None and row["route"] is not None, "unknown_request")
-            _need(row["state"] in ("claimed", "running", "lapsed", "paused", "unknown"), "item_not_reassignable")
+            _need(row["state"] in ("claimed", "running", "lapsed", "paused", "unknown") or _awaiting(row),
+                  "item_not_reassignable")
             _need(row["state"] not in ("claimed", "running") or row["lease_until"] <= row["now"], "lease_current")
+            row = self._lapse_written(cur, row)
             res = dict(row["reservation"] or {})
             _need("reserved" in res and res.get("state") is None, "reservation_missing")
             _need(not self._open_receipts(cur, rid), "receipts_open")
@@ -2039,15 +2090,17 @@ class DispatcherStore:
         with self._tx() as cur:
             row = self._item(cur, rid)
             _need(row is not None and row["route"] is not None, "unknown_request")
-            _need(row["state"] in ("claimed", "running", "lapsed", "paused", "unknown"), "item_not_endable")
+            _need(row["state"] in ("claimed", "running", "lapsed", "paused", "unknown") or _awaiting(row),
+                  "item_not_endable")
             _need(row["state"] not in ("claimed", "running") or row["lease_until"] <= row["now"], "lease_current")
+            row = self._lapse_written(cur, row)
             open_ops = self._open_receipts(cur, rid)
             if open_ops and row["state"] != "unknown":
                 d = self._decide(cur, row, "effect_unknown", open_ops, [], ("interrupted", None, "owner_decision"))
                 return {"state": "unknown", "decision_id": d["decision_id"], "operations": open_ops}
             self._close(cur, row, "interrupted", {"code": "owner_decision", "by": by, "note": note, "workspace": "kept",
                                                   **({"open_operations": open_ops} if open_ops else {})},
-                        children_stopped=False, source="owner")
+                        children_stopped=_awaiting(row), source="owner")     # never ran under a pickup it awaits
             self._resolve_decision(cur, row, "end", by)
             return {"state": "interrupted", "code": "owner_decision"}
 
@@ -2103,6 +2156,11 @@ class DispatcherStore:
 
 _EFFECT_EVENT = {"prepare": "prepared", "claim": "claimed", "dispatch": "dispatched", "finish": "finished",
                  "reconcile": "reconciling"}
+
+
+def _awaiting(row) -> bool:
+    """A reassigned item waiting, queued, for its named runner's pickup (R5.1-d)."""
+    return row["state"] == "queued" and row["runner_id"] is not None and "reassigned" in (row["facts"] or {})
 
 
 def _stop(condition, code, state=None) -> dict:
