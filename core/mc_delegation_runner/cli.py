@@ -222,7 +222,8 @@ def runtime_for(host, auth, dispatcher, *, digest=None):
     from . import witness
     return runner.HostRuntime(dispatcher, cfg, host, auth.hosts, auth.sweeper.gap_threshold_s, bundle_digest=digest,
                               sink=sink, stores=_stores(host), census=census.CensusFile(host.artifact_root / "census"),
-                              witness=witness.build(host, auth.hosts.contact_timeout_s, host.artifact_root))
+                              witness=witness.build(host, auth.hosts.contact_timeout_s, host.artifact_root,
+                                                    gap_threshold_s=auth.sweeper.gap_threshold_s))
 
 
 def _stores(host) -> dict:

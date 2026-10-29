@@ -304,6 +304,13 @@ services:
       # The Mac delegation runner's HTTPS door (no database port): on with its token hash, set by
       # `deploy_mc_container_ec2.sh runner on <sha256>`.
       - MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256=${MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256:-}
+      # Host runtime P1-a, each empty (off) unless /opt/minimoi/.env sets it on Robert's word: production's version 2
+      # authority file (the image's core/mc_delegation_dispatcher/authority.prod.json), the door's credentials (each
+      # version 2 host's and reader's token SHA-256, never a token) and the published snapshot the read path serves.
+      # Empty: the runner's door and Guild jobs are exactly today's (core/mc_delegation_dispatcher/production.py).
+      - MINIMOI_MC_DELEGATION_AUTHORITY_FILE=${MINIMOI_MC_DELEGATION_AUTHORITY_FILE:-}
+      - MINIMOI_MC_DELEGATION_DOOR_CREDENTIALS=${MINIMOI_MC_DELEGATION_DOOR_CREDENTIALS:-}
+      - MINIMOI_RUNTIME_STATE_FILE=${MINIMOI_RUNTIME_STATE_FILE:-}
       - MINIMOI_MC_AGENT_ENROLLMENT=/run/secrets/mc/enrollment.json
       # Build supervision (#365; docs/runbooks/supervision.md): the Mac sync's path, Robert's "approve D-n" in the
       # Guild chat and MC's "waiting on you" context. Off until `supervisor_ec2.sh on` sets both keys in .env.
@@ -332,6 +339,8 @@ services:
       # portal-owned lesson store (in the daily backup). Created by deploy_mc_container_ec2.sh; empty until then.
       - ${MINIMOI_ROOT:-/opt/minimoi}/mc/portal:/run/secrets/mc:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/mc-lessons:/app/data/mc-lessons
+      # Host runtime P1-a: the door's credentials and the authority's published snapshot, read only (empty until set).
+      - ${MINIMOI_ROOT:-/opt/minimoi}/runtime:/run/minimoi/runtime:ro
       # Nonsecret root-generated deployment observations; MC has read-only access.
       - type: bind
         source: ${MINIMOI_ROOT:-/opt/minimoi}/release-status
@@ -481,20 +490,77 @@ services:
       - TELEGRAM_APPROVALS_BOT_TOKEN_FILE=/run/secrets/supervisor/approvals-bot-token
       - SUPERVISOR_CHECKIN_MINUTES=15
       - TZ=America/Chicago
+      # Host runtime P1-a, each empty (off) unless /opt/minimoi/.env sets it on Robert's word (services/supervisor/main.py):
+      # the runtime link (all four of AUTHORITY_FILE, PRINCIPAL, OWNER, VIEW_BOUND_S, or none), the snapshot it reads,
+      # the authority's own timers (STATE_DIR, ENDPOINT_ID, HOST_ID: all three, with the link), and Telegram answers
+      # (off: Robert answers runtime decisions in MiniMoi; "1" turns S1-G's reply path on).
+      - MINIMOI_RUNTIME_AUTHORITY_FILE=${MINIMOI_RUNTIME_AUTHORITY_FILE:-}
+      - MINIMOI_RUNTIME_PRINCIPAL=${MINIMOI_RUNTIME_PRINCIPAL:-}
+      - MINIMOI_RUNTIME_OWNER=${MINIMOI_RUNTIME_OWNER:-}
+      - MINIMOI_RUNTIME_VIEW_BOUND_S=${MINIMOI_RUNTIME_VIEW_BOUND_S:-}
+      - MINIMOI_RUNTIME_STATE_FILE=${MINIMOI_RUNTIME_STATE_FILE:-}
+      - MINIMOI_RUNTIME_STATE_DIR=${MINIMOI_RUNTIME_STATE_DIR:-}
+      - MINIMOI_RUNTIME_ENDPOINT_ID=${MINIMOI_RUNTIME_ENDPOINT_ID:-}
+      - MINIMOI_RUNTIME_HOST_ID=${MINIMOI_RUNTIME_HOST_ID:-}
+      - MINIMOI_RUNTIME_TELEGRAM_ANSWERS=${MINIMOI_RUNTIME_TELEGRAM_ANSWERS:-}
     volumes:
       - ${MINIMOI_ROOT:-/opt/minimoi}/supervisor:/run/secrets/supervisor:ro
+      # Host runtime P1-a: where the authority's sweeper publishes state.json (written only once its timers are on).
+      - ${MINIMOI_ROOT:-/opt/minimoi}/runtime/authority:/run/minimoi/runtime/authority
     depends_on:
       - postgres
     read_only: true
     tmpfs:
       - /tmp:size=8m,mode=1777
-    mem_limit: 192m
-    cpus: 0.25
+    # 256m and half a CPU (were 192m, 0.25): with its timers on, the authority's sweeper builds the snapshot each pass.
+    mem_limit: 256m
+    cpus: 0.5
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     healthcheck:
       # Alive when a tick finished in the last 3 minutes (a Telegram long poll is 25 s).
       test: [CMD, python, -c, "import os,time,sys; sys.exit(0 if time.time()-os.path.getmtime('/tmp/supervisor.alive')<180 else 1)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+
+  # Host runtime P1-a: production's witness on EC2 (spec v0.5 R5.6-a), a process of its own, never the authority's
+  # (the portal's door and the supervisor's timers). It reads the authority's snapshot through the portal's read path
+  # with an observer credential, and tells Robert on Telegram directly (never through the supervisor, which may be
+  # what is down), its bot token and chat id read from Parameter Store by reference at each send. Its once-per-key
+  # memory is a file of its own, never the database it watches. Off unless the profile is started on Robert's word;
+  # every value comes from /opt/minimoi/.env and none is a secret (references only).
+  runtime-witness:
+    profiles: [runtime-witness]
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-runtime-witness
+    restart: unless-stopped
+    command: [python, -m, core.mc_delegation_runner.witness, serve]
+    environment:
+      - MINIMOI_ROLE=production
+      - PYTHONDONTWRITEBYTECODE=1
+      - MINIMOI_WITNESS_HOST_ID=${MINIMOI_WITNESS_HOST_ID:-}
+      - MINIMOI_WITNESS_ENDPOINT_ID=${MINIMOI_WITNESS_ENDPOINT_ID:-}
+      - MINIMOI_WITNESS_READ_URL=${MINIMOI_WITNESS_READ_URL:-}
+      - MINIMOI_WITNESS_READ_TOKEN_REF=${MINIMOI_WITNESS_READ_TOKEN_REF:-}
+      - MINIMOI_WITNESS_TELEGRAM_TOKEN_REF=${MINIMOI_WITNESS_TELEGRAM_TOKEN_REF:-}
+      - MINIMOI_WITNESS_TELEGRAM_CHAT_REF=${MINIMOI_WITNESS_TELEGRAM_CHAT_REF:-}
+      - MINIMOI_WITNESS_AUTHORITY_FILE=${MINIMOI_WITNESS_AUTHORITY_FILE:-}
+      - MINIMOI_WITNESS_MEMORY_DIR=/run/minimoi/witness
+      - MINIMOI_WITNESS_HEALTH_FILE=/tmp/witness.alive
+      - TZ=America/Chicago
+    volumes:
+      - ${MINIMOI_ROOT:-/opt/minimoi}/runtime/witness:/run/minimoi/witness
+    read_only: true
+    tmpfs:
+      - /tmp:size=4m,mode=1777
+    mem_limit: 128m
+    cpus: 0.1
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      # Alive when a pass finished in the last 3 minutes (a pass every 30 s).
+      test: [CMD, python, -c, "import os,time,sys; sys.exit(0 if time.time()-os.path.getmtime('/tmp/witness.alive')<180 else 1)"]
       interval: 60s
       timeout: 5s
       retries: 3
