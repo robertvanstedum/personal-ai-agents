@@ -67,6 +67,7 @@ def _is_release_only(path: str) -> bool:
         or path.startswith(OPS_ONLY_PREFIXES)
         or path in OPS_ONLY_FILES
         or path.startswith(MC_IMAGE_PREFIXES)
+        or path.startswith(MC_PERSONA_TOOL_PREFIXES)
     )
 
 
@@ -86,6 +87,18 @@ OPS_ONLY_FILES = frozenset({"scripts/operations/deploy_mc_container_ec2.sh",
 # MC's own container: built and deployed only by deploy-mc-agent.yml on an mc-agent-v* tag. The portal image copies the
 # repository, but no service reads these files (tests/test_release_classifier.py guards this).
 MC_IMAGE_PREFIXES = ("docker/mc-agent-container/",)
+
+
+# Master Craftsman's persona releases (Spec 165 §11.7). Their readers in a production image: the portal only, whose voice
+# card loader (core/realtime_voice/voice_card.py, through minimoi_portal/guild_ui/mc_voice_direct.py's CARD_ROOT) reads
+# pin.json and a release's voice.json and manifest.json; the portal image copies the repository. MC's own image copies one
+# pinned release folder (docker/mc-agent-container/Dockerfile) and deploys only by tag through deploy-mc-agent.yml, never
+# through this pipeline. tests/test_release_classifier.py fails if another production file starts reading them.
+MC_PERSONA_PREFIXES = ("services/mc_operations/personas/",)
+# The persona release tools: make_header_release.py writes a new release folder and project_agents.py projects one into
+# the native mc-chat workspace, both run by the operator on the laptop. No service imports, copies or starts them (guarded
+# by the same test).
+MC_PERSONA_TOOL_PREFIXES = ("scripts/mc_persona/",)
 
 
 # docker-compose.prod.yml: a change restarts only the services whose own
@@ -355,6 +368,8 @@ def classify(paths: list[str],
             services.update(("portal", "cos-bot", "cos-scheduler"))
         elif path.startswith("minimoi_portal/"):
             services.add("portal")
+        elif path.startswith(MC_PERSONA_PREFIXES):
+            services.add("portal")                                   # the voice card loader is its only image reader
         elif path.startswith("services/usage/"):
             # The usage record (usage-record U1/U2): the CoS images copy it
             # (Dockerfile.cos*). The production gateway image does not; the

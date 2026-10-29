@@ -782,3 +782,59 @@ def test_mc_container_files_redeploy_nothing_and_no_service_reads_them():
                for p in (root / top).rglob("*") if p.is_file() and p.suffix in (".py", ".sh", ".js", ".mjs", ".json", ".yml", ".yaml")
                and "mc-agent-container" in p.read_text(errors="ignore")]
     assert readers == []
+
+
+# --- Master Craftsman's persona releases and their tools (Spec 165 §11.7; Gate 2 Q S5) -------------------------------
+def test_mc_persona_releases_redeploy_the_portal_only():
+    """The portal's voice card loader is their only production image reader; before this rule each path was full."""
+    for path in ("services/mc_operations/personas/mc-chat/pin.json",
+                 "services/mc_operations/personas/mc-chat/releases/0.1.18/voice.json",
+                 "services/mc_operations/personas/mc-chat/releases/0.1.18/manifest.json",
+                 "services/mc_operations/personas/mc-chat/releases/0.1.18/AGENTS.md",
+                 "services/mc_operations/personas/mc-chat/releases/0.1.18/SOUL.md"):
+        assert classify([path]) == ("domain", ("portal",)), path
+    # Neighbours keep the full fallback.
+    for path in ("services/mc_operations/profile.py", "services/mc_operations/personasx/x.json", "services/mc_operations/relay.py"):
+        assert classify([path]) == ("full", ALL_SERVICES), path
+
+
+def test_mc_persona_tools_redeploy_nothing():
+    assert classify(["scripts/mc_persona/make_header_release.py", "scripts/mc_persona/project_agents.py"]) == ("documents", ())
+    assert classify(["scripts/mc_personas/x.py"]) == ("full", ALL_SERVICES)
+    assert classify(["scripts/mc_persona/project_agents.py", "minimoi_portal/app.py"]) == ("domain", ("portal",))
+
+
+def test_mc_persona_folder_and_tools_have_no_unclassified_production_reader():
+    """The day another production file reads MC's persona folder, or a service runs the persona tools, this fails and that
+    change must classify them as that service too."""
+    root = Path(__file__).resolve().parent.parent
+    readers, tool_users = set(), set()
+    for top in ("minimoi_portal", "core", "domains", "services", "utils", "docker"):
+        for p in (root / top).rglob("*"):
+            rel = p.relative_to(root).as_posix()
+            if (not p.is_file() or SKIPPED_DIRS.intersection(rel.split("/")) or rel.startswith("services/mc_operations/personas/")
+                    or p.suffix not in (".py", ".sh", ".js", ".mjs", ".json", ".yml", ".yaml", "") ):
+                continue
+            text = p.read_text(errors="ignore")
+            if "mc_operations/personas" in text:
+                readers.add(rel)
+            if "mc_persona" in text.replace("mc_operations/personas", ""):
+                tool_users.add(rel)
+    # The portal's card root, the loader's docstring naming it, and MC's own image (tag-only, deploy-mc-agent.yml).
+    assert readers == {"minimoi_portal/guild_ui/mc_voice_direct.py", "core/realtime_voice/voice_card.py",
+                       "docker/mc-agent-container/Dockerfile"}
+    assert tool_users <= {"core/realtime_voice/voice_card.py"}                         # its docstring names the tools
+    for path in (root / "docker-compose.prod.yml", root / "scripts/operations/deploy_scoped_release.sh",
+                 root / ".github/workflows/deploy.yml"):
+        text = path.read_text()
+        assert "mc_operations/personas" not in text and "mc_persona" not in text, path.name
+
+
+def test_the_voice_branch_deploys_seven_services_not_nine():
+    """Spec 165 §2.4: with the persona rules the branch's paths are seven services (core/mc_tools adds curator and
+    system-bot), not the full nine."""
+    paths = ["services/mc_operations/personas/mc-chat/pin.json",
+             "services/mc_operations/personas/mc-chat/releases/0.1.18/voice.json",
+             "scripts/mc_persona/make_header_release.py", "core/mc_tools/service.py", "core/realtime_voice/direct_host.py",
+             "domains/cos/direct_voice.py", "minimoi_portal/guild_ui/mc_voice_direct.py"]
+    assert classify(paths) == ("domain", ("portal", "curator", "german", "portuguese", "system-bot", "cos-bot", "cos-scheduler"))
