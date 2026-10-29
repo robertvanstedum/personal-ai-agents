@@ -73,7 +73,7 @@ def _with_delegation(relay, environ):
             log.error("guild jobs: the authority file is named but refused (%s); delegation stays off",
                       str(exc) if isinstance(exc, production.NotConfigured) else type(exc).__name__)
             return relay
-        log.info("guild jobs: delegation over the version 2 authority (its file named)")
+        log.info("guild jobs: delegation over the version 2 authority (file %s)", production.file_digest(path))
     return RoutingRelay(relay, DelegationRelay(store, ref_for=_main_head))
 
 

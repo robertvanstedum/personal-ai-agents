@@ -55,6 +55,14 @@ def load(path, environment):
     return auth
 
 
+def file_digest(path) -> str:
+    """The authority file's SHA-256, logged by each production process that loads it (portal, supervisor) and printed
+    by the switch-on check, so the three are seen to read one file (Codex's P1 brief review, S1)."""
+    import hashlib
+    with open(Path(path), "rb") as fh:
+        return "sha256:" + hashlib.sha256(fh.read()).hexdigest()
+
+
 def grant_store(authority):
     """The authority's grant catalogue, one for every production process: the two delegation capabilities (one exact
     approval each, as today), cards' ``delegate.card`` row, and, only where the file admits the test routes, the

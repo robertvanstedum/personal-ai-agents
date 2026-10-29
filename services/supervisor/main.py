@@ -389,6 +389,8 @@ def _s1g_options(environ, connect) -> dict:
     link = from_environ(environ, connect)
     if link is not None:
         out["runtime"] = link
+        from core.mc_delegation_dispatcher.production import file_digest
+        log.info("runtime link on: authority file %s", file_digest(environ["MINIMOI_RUNTIME_AUTHORITY_FILE"]))
         # P1-a: production answers runtime decisions in MiniMoi unless the Telegram reply path is turned on.
         out["runtime_answers"] = environ.get("MINIMOI_RUNTIME_TELEGRAM_ANSWERS") == "1"
     loops = _authority_loops(environ, link)

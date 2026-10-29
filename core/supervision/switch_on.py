@@ -1,18 +1,31 @@
-"""Switching the runtime link on in production for the first time (host runtime P1-a, item 3b), and its preflight.
+"""Switching the runtime link on in production for the first time (host runtime P1-a, item 3b), its preflight, and
+the check that must hold before switching version 2 off again.
 
 The runtime link tells Robert every runtime notice never told, a few messages a tick (C-SF1's outbox). Production's
-authority starts fresh, so the first switch-on has nothing old to tell. If the authority already has history (an
-earlier switch-on, an integrated-test run, a rehearsal), every notice it raised before is marked as told **first**, so
-switching the link on sends no burst of stale notices. Decisions still waiting are not notices: they stay waiting and
-go out as decisions.
+authority starts fresh, so the first switch-on normally has nothing old to tell. If the authority already has history
+(an earlier switch-on, an integrated-test run, a rehearsal), the history is **baselined first**, bounded so that
+nothing actionable is silenced (Codex's P1 brief review, S2):
 
-    python -m core.supervision.switch_on check                 what the switch-on would meet; exit 1 if not ready
-    python -m core.supervision.switch_on mark-told --yes       every notice raised so far, recorded as told (once)
+* a **cutoff**: only notices raised up to the authority's last event when the baseline runs; anything raised after it
+  (during or after the switch-on) is told as usual;
+* only **historical information** is baselined: the stall kinds (stalled, lapsed, overdue, drift) and a past
+  sweeper-stale, and only for an item that has ended;
+* **kept, and told**: everything that waits on Robert or is blocked (an unknown, a ready card, an escalation), every
+  ended or interrupted item's notice, and any notice of an item still live;
+* **recorded**: which keys were baselined, and why, in a file the operator keeps with the release record.
 
-Both read the configuration the supervisor reads (DATABASE_URL and MINIMOI_RUNTIME_AUTHORITY_FILE,
-MINIMOI_RUNTIME_PRINCIPAL), and print names and counts only, never a value. ``check`` also answers the operator's
-pre-checks: migrations 002 and 003 applied, ``Store.contacts_ready()`` true (before MINIMOI_SUPERVISION_CONTACTS=1 is
-honoured), and the authority's two timers' ages.
+Decisions still waiting are not notices: they stay waiting and go out as decisions.
+
+    python -m core.supervision.switch_on check                       what the switch-on would meet; exit 1 if not ready
+    python -m core.supervision.switch_on baseline --yes --record F   the bounded baseline above, its record written to F
+    python -m core.supervision.switch_on rollback-check              before switching version 2 off: exit 1 while any
+                                                                     version 2 item is not ended or any effect is open
+
+All read the configuration the supervisor reads (DATABASE_URL and MINIMOI_RUNTIME_AUTHORITY_FILE,
+MINIMOI_RUNTIME_PRINCIPAL), and print names, keys and counts only, never a value. ``check`` also answers the
+operator's pre-checks: migrations 002 and 003 applied, ``Store.contacts_ready()`` true (before
+MINIMOI_SUPERVISION_CONTACTS=1 is honoured), the authority's two timers' ages, and the authority file's SHA-256 (the
+portal and the supervisor log the same digest at start, so all three read one file).
 """
 from __future__ import annotations
 
@@ -28,10 +41,14 @@ MIGRATION_OBJECTS = {
 PAGE = 500
 
 
-def raised_keys(authority) -> list:
-    """Every rule notice the authority has raised (``notice.raised``), whatever its age, oldest first. Decision notices
-    are left out: their decisions go out as decisions, while they wait."""
-    keys, last = [], 0
+HISTORICAL_RULES = ("stalled", "lapsed", "overdue", "drift", "sweeper_stale")   # information, once the item ended
+TERMINAL = ("completed", "failed", "refused", "timed_out", "cancelled", "output_limit", "interrupted", "expired")
+
+
+def raised(authority) -> list:
+    """Every rule notice the authority has raised (``notice.raised``), whatever its age, oldest first:
+    [{seq, key, rule, kind}]. Decision notices are left out: their decisions go out as decisions, while they wait."""
+    out, last = [], 0
     while True:
         page = authority.notices_since(last, hours=None)
         for e in page:
@@ -39,9 +56,13 @@ def raised_keys(authority) -> list:
             n = e["notice"] or {}
             if n.get("rule") in ("decision", "decisions") or not n.get("key"):
                 continue
-            keys.append(n["key"])
+            out.append({"seq": e["seq"], "key": n["key"], "rule": n.get("rule"), "kind": n.get("kind")})
         if len(page) < PAGE:
-            return list(dict.fromkeys(keys))
+            return out
+
+
+def raised_keys(authority) -> list:
+    return list(dict.fromkeys(n["key"] for n in raised(authority)))
 
 
 def untold(authority, store) -> list:
@@ -51,12 +72,63 @@ def untold(authority, store) -> list:
     return [k for k in keys if k not in told]
 
 
-def mark_history_told(authority, store) -> dict:
-    """Record every notice raised so far as told, before the link's first switch-on (3b). Idempotent: a notice told
-    before stays told; a later notice is told as usual. -> {raised, marked}."""
-    keys = raised_keys(authority)
+def live_items(authority) -> set:
+    """The version 2 items not ended, by id (request_id as text)."""
+    with authority._tx() as cur:
+        cur.execute("SELECT request_id::text AS id FROM guild.mc_delegations WHERE route IS NOT NULL "
+                    "AND state <> ALL(%s)", (list(TERMINAL),))
+        return {r["id"] for r in cur.fetchall()}
+
+
+def plan_baseline(notices, live, cutoff) -> dict:
+    """Which raised notices a first switch-on may record as told without telling (pure). -> {cutoff_seq,
+    baselined: [{key, why}], kept: [{key, why}]}."""
+    baselined, kept, seen = [], [], set()
+    for n in notices:
+        key = n["key"]
+        if key in seen:
+            continue
+        seen.add(key)
+        if n["seq"] > cutoff:
+            kept.append({"key": key, "why": "after_cutoff"})
+        elif n.get("kind") in ("waiting_on_robert", "blocked") or n.get("rule") not in HISTORICAL_RULES:
+            kept.append({"key": key, "why": f"actionable:{n.get('rule')}"})
+        elif any(i in key for i in live):
+            kept.append({"key": key, "why": "item_live"})
+        else:
+            baselined.append({"key": key, "why": f"historical:{n.get('rule')}"})
+    return {"cutoff_seq": cutoff, "baselined": baselined, "kept": kept}
+
+
+def baseline(authority, store, *, record=None) -> dict:
+    """The bounded baseline, applied: the baselined keys recorded as told (the check-in's once-per-key memory); the
+    kept ones left for the link to tell. Idempotent. ``record``: a file the plan is written to first (0600)."""
+    notices = raised(authority)
+    cutoff = max((n["seq"] for n in notices), default=0)
+    plan = plan_baseline(notices, live_items(authority), cutoff)
+    if record is not None:
+        import os as _os
+        fd = _os.open(str(record), _os.O_WRONLY | _os.O_CREAT | _os.O_EXCL, 0o600)
+        with _os.fdopen(fd, "w") as fh:
+            json.dump(plan, fh, indent=1, sort_keys=True)
+    keys = [b["key"] for b in plan["baselined"]]
     fresh = store.new_alert_keys(keys) if keys else []
-    return {"raised": len(keys), "marked": len(fresh)}
+    return {"cutoff_seq": cutoff, "baselined": len(keys), "newly_marked": len(fresh), "kept": len(plan["kept"])}
+
+
+def rollback_blockers(authority) -> dict:
+    """Before switching version 2 off (unsetting the authority file in the portal and the supervisor): every version 2
+    item must have ended and no effect of any may be open. A version 1 store's claim stalls behind a queued version 2
+    item (002's header), and an open effect needs the authority to settle it. -> {live: [...], open_effects: [...]}"""
+    live = sorted(live_items(authority))
+    open_effects = []
+    with authority._tx() as cur:
+        cur.execute("SELECT request_id::text AS id FROM guild.mc_delegations WHERE route IS NOT NULL")
+        for r in cur.fetchall():
+            ops = authority._open_receipts(cur, r["id"])
+            if ops:
+                open_effects.append({"item_id": r["id"], "operations": [o["operation_id"] for o in ops]})
+    return {"live": live, "open_effects": open_effects}
 
 
 def _present(cur, name) -> bool:
@@ -74,7 +146,12 @@ def check(authority, store, connect) -> dict:
         cur.execute("""SELECT count(*) AS n FROM information_schema.columns WHERE table_schema='guild'
             AND table_name='mc_delegations' AND column_name='queue_seq'""")
         migrations["002"] = migrations["002"] and cur.fetchone()["n"] == 1
-    out = {"migrations": migrations, "contacts_ready": None, "raised": None, "untold": None, "timers": None}
+    out = {"migrations": migrations, "contacts_ready": None, "raised": None, "untold": None, "timers": None,
+           "authority_file": None}
+    path = getattr(authority, "source_path", None)
+    if path:
+        from core.mc_delegation_dispatcher.production import file_digest
+        out["authority_file"] = file_digest(path)
     if not all(migrations.values()):
         out["ready"] = False
         return out
@@ -82,12 +159,17 @@ def check(authority, store, connect) -> dict:
     keys = raised_keys(authority)
     pending = untold(authority, store)
     out.update(raised=len(keys), untold=len(pending), untold_keys=pending[:20])
+    plan = plan_baseline([n for n in raised(authority) if n["key"] in set(pending)], live_items(authority),
+                         max((n["seq"] for n in raised(authority)), default=0))
+    out["would_baseline"] = len(plan["baselined"])
     try:
         from core.mc_delegation_dispatcher import server
         out["timers"] = server.ages(authority)
     except Exception as exc:
         out["timers"] = {"unreadable": type(exc).__name__}
-    out["ready"] = out["contacts_ready"] and not pending
+    # Ready when nothing historical waits to be told: what the baseline would keep (actionable, live) is told on
+    # purpose, so only baselinable history blocks a switch-on until the baseline has run.
+    out["ready"] = out["contacts_ready"] and not plan["baselined"]
     return out
 
 
@@ -103,6 +185,7 @@ def _from_environ(environ):
         raise SystemExit("refused: MINIMOI_RUNTIME_AUTHORITY_FILE and MINIMOI_RUNTIME_PRINCIPAL are not set")
     env = {"MINIMOI_RUNTIME_OWNER": "robert", "MINIMOI_RUNTIME_VIEW_BOUND_S": "120", **environ}
     link = from_environ(env, connect)
+    link.authority.source_path = environ["MINIMOI_RUNTIME_AUTHORITY_FILE"]
     return link.authority, Store(connect), connect
 
 
@@ -114,11 +197,17 @@ def main(argv=None, environ=None) -> int:
         out = check(authority, store, connect)
         print(json.dumps(out, sort_keys=True, default=str))
         return 0 if out["ready"] else 1
-    if words == ["mark-told", "--yes"]:
+    if words[:2] == ["baseline", "--yes"] and len(words) == 4 and words[2] == "--record":
         authority, store, _ = _from_environ(environ)
-        print(json.dumps(mark_history_told(authority, store), sort_keys=True))
+        print(json.dumps(baseline(authority, store, record=words[3]), sort_keys=True))
         return 0
-    print("usage: python -m core.supervision.switch_on check | mark-told --yes", file=sys.stderr)
+    if words == ["rollback-check"]:
+        authority, _, _ = _from_environ(environ)
+        out = rollback_blockers(authority)
+        print(json.dumps({"live": len(out["live"]), "open_effects": len(out["open_effects"]), **out}, sort_keys=True))
+        return 0 if not out["live"] and not out["open_effects"] else 1
+    print("usage: python -m core.supervision.switch_on check | baseline --yes --record FILE | rollback-check",
+          file=sys.stderr)
     return 2
 
 

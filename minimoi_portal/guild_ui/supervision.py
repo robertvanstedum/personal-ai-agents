@@ -265,8 +265,8 @@ def attach_runner_door_v2(app, environ, legacy_digest, principal, env_name, *, s
 
         app.add_url_rule(server.STATE_PATH, "runtime_state", state_view, methods=["GET"])
         opened += ", and the snapshot's read path"
-    _log.info("delegation: runner door open (%s only), %s; %d version 2 host(s), %d reader(s)", door_mod.PATH,
-              opened, len(hosts), len(readers))
+    _log.info("delegation: runner door open (%s only), %s; %d version 2 host(s), %d reader(s); authority file %s",
+              door_mod.PATH, opened, len(hosts), len(readers), production.file_digest(production.named(environ)))
     return True
 
 
