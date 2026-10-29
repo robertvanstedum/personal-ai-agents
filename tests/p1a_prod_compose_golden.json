@@ -1,0 +1,532 @@
+{
+ "services": {
+  "cos-agent-a": {
+   "cap_drop": [
+    "ALL"
+   ],
+   "container_name": "minimoi-cos-agent-a",
+   "depends_on": {
+    "model-gateway": {
+     "condition": "service_healthy"
+    }
+   },
+   "environment": [
+    "OPENCLAW_GATEWAY_TOKEN=${COS_AGENT_A_GATEWAY_TOKEN:?set COS_AGENT_A_GATEWAY_TOKEN in /opt/minimoi/.env}",
+    "MINIMOI_MODEL_GATEWAY_KEY=${COS_AGENT_MASTER_KEY-${MINIMOI_MODEL_GATEWAY_KEY:?set MINIMOI_MODEL_GATEWAY_KEY in /opt/minimoi/.env}}",
+    "OPENCLAW_STATE_DIR=/home/node/.openclaw",
+    "OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json",
+    "OPENCLAW_DISABLE_BONJOUR=1",
+    "OPENCLAW_NO_AUTO_UPDATE=1",
+    "MALLOC_ARENA_MAX=2",
+    "TZ=${COS_AGENT_TIMEZONE:-America/Chicago}"
+   ],
+   "healthcheck": {
+    "interval": "15s",
+    "retries": 3,
+    "start_period": "60s",
+    "test": [
+     "CMD",
+     "node",
+     "-e",
+     "fetch('http://127.0.0.1:18789/healthz').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+    ],
+    "timeout": "5s"
+   },
+   "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:agent-a-${MINIMOI_IMAGE_TAG:-latest}",
+   "mem_limit": "1400m",
+   "restart": "unless-stopped",
+   "security_opt": [
+    "no-new-privileges:true"
+   ],
+   "volumes": [
+    "cos-agent-a-state:/home/node/.openclaw",
+    "cos-agent-a-auth:/home/node/.config/openclaw",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data:/minimoi/data",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/guild/mc-evidence:/home/node/.openclaw/workspace-cos-agent-a/mc-evidence:ro",
+    "${MINIMOI_ROOT:-/opt/minimoi}/docs:/minimoi/docs",
+    "${MINIMOI_ROOT:-/opt/minimoi}/scripts:/minimoi/scripts:ro",
+    "${MINIMOI_ROOT:-/opt/minimoi}/agent_logs:/minimoi/agent_logs",
+    "${MINIMOI_ROOT:-/opt/minimoi}/cos/inbox:/minimoi/cos/inbox:ro",
+    "${MINIMOI_ROOT:-/opt/minimoi}/cos/outbox:/minimoi/cos/outbox",
+    "${MINIMOI_ROOT:-/opt/minimoi}/cos/conversations:/minimoi/cos/conversations:ro",
+    "${MINIMOI_ROOT:-/opt/minimoi}/cos/planning-studio:/minimoi/planning-studio",
+    "${MINIMOI_ROOT:-/opt/minimoi}/mc/repo:/minimoi/repo:ro",
+    "${MINIMOI_ROOT:-/opt/minimoi}/mc/work:/minimoi/mc/work:ro",
+    "${MINIMOI_ROOT:-/opt/minimoi}/mc/workshops:/minimoi/mc/workshops:ro",
+    "${MINIMOI_ROOT:-/opt/minimoi}/mc/artifacts:/minimoi/mc/artifacts:ro",
+    "${MINIMOI_ROOT:-/opt/minimoi}/cos/agent-key:/run/cos-key:ro"
+   ]
+  },
+  "cos-bot": {
+   "container_name": "minimoi-cos-bot",
+   "depends_on": [
+    "postgres",
+    "cos-scheduler",
+    "cos-agent-a"
+   ],
+   "env_file": "${MINIMOI_ROOT:-/opt/minimoi}/.env",
+   "environment": [
+    "MINIMOI_ROLE=production",
+    "COS_BACKEND_TYPE=${COS_BACKEND_TYPE:-openclaw}",
+    "COS_AGENT_RUNTIME_URL=http://cos-agent-a:18789/v1",
+    "COS_AGENT_RUNTIME_TOKEN=${COS_AGENT_A_GATEWAY_TOKEN:?set COS_AGENT_A_GATEWAY_TOKEN in /opt/minimoi/.env}",
+    "COS_AGENT_RUNTIME_AGENT_ID=${COS_AGENT_RUNTIME_AGENT_ID:-cos-agent-a}",
+    "COS_AGENT_TIMEZONE=${COS_AGENT_TIMEZONE:-America/Chicago}",
+    "COS_MODEL_GATEWAY_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}",
+    "COS_REMINDERS_DIR=/app/data/cos_reminders"
+   ],
+   "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-bot:${MINIMOI_IMAGE_TAG:-latest}",
+   "restart": "unless-stopped",
+   "volumes": [
+    "${MINIMOI_ROOT:-/opt/minimoi}/cos_memory.md:/app/data/cos_memory.md",
+    "${MINIMOI_ROOT:-/opt/minimoi}/cos_reminders:/app/data/cos_reminders",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/model_gateway_receipts.jsonl:/app/data/model_gateway_receipts.jsonl",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json"
+   ]
+  },
+  "cos-scheduler": {
+   "container_name": "minimoi-cos-scheduler",
+   "depends_on": [
+    "postgres",
+    "cos-agent-a"
+   ],
+   "env_file": [
+    "${MINIMOI_ROOT:-/opt/minimoi}/.env",
+    "${MINIMOI_ROOT:-/opt/minimoi}/${MINIMOI_VAULT_READER_ENV_FILE:-.env}"
+   ],
+   "environment": [
+    "MINIMOI_ROLE=production",
+    "MINIMOI_VOICE_BUDGET=1",
+    "MINIMOI_COS_MANAGED_REALTIME=${MINIMOI_COS_MANAGED_REALTIME:-0}",
+    "MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO=${MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO:-}",
+    "MINIMOI_LIMITS_DIR=/app/runtime/guild/limits",
+    "TELEGRAM_CHAT_ID=8379221702",
+    "PORT=8769",
+    "DISABLE_TELEGRAM_POLL=1",
+    "COS_BACKEND_TYPE=${COS_BACKEND_TYPE:-openclaw}",
+    "COS_AGENT_RUNTIME_URL=http://cos-agent-a:18789/v1",
+    "COS_AGENT_RUNTIME_TOKEN=${COS_AGENT_A_GATEWAY_TOKEN:?set COS_AGENT_A_GATEWAY_TOKEN in /opt/minimoi/.env}",
+    "COS_AGENT_RUNTIME_AGENT_ID=${COS_AGENT_RUNTIME_AGENT_ID:-cos-agent-a}",
+    "COS_AGENT_TIMEZONE=${COS_AGENT_TIMEZONE:-America/Chicago}",
+    "COS_MODEL_GATEWAY_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}",
+    "MINIMOI_VAULT_ASK_URL=${MINIMOI_VAULT_ASK_URL:-}",
+    "MINIMOI_VAULT_ASK_INTERNAL_HOSTS=vault-ask",
+    "MINIMOI_VAULT_ASK_INCLUDE_RAW=${MINIMOI_VAULT_ASK_INCLUDE_RAW:-0}",
+    "MINIMOI_VAULT_ASK_CONVERSATIONS=${MINIMOI_COS_VAULT_CONVERSATIONS:-guild-}",
+    "COS_REMINDERS_DIR=/app/data/cos_reminders",
+    "COS_FILES_INBOX=/app/data/cos-files/inbox",
+    "COS_FILES_OUTBOX=/app/data/cos-files/outbox",
+    "COS_CONVERSATIONS_DIR=/app/data/cos-conversations",
+    "COS_AGENT_INBOX=/minimoi/cos/inbox",
+    "COS_AGENT_OUTBOX=/minimoi/cos/outbox",
+    "COS_AGENT_CONVERSATIONS=/minimoi/cos/conversations"
+   ],
+   "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:${MINIMOI_IMAGE_TAG:-latest}",
+   "networks": [
+    "default",
+    "vault-internal"
+   ],
+   "ports": [
+    "127.0.0.1:8769:8769"
+   ],
+   "restart": "unless-stopped",
+   "volumes": [
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/guild/limits:/app/runtime/guild/limits:ro",
+    "${MINIMOI_ROOT:-/opt/minimoi}/cos_memory.md:/app/data/cos_memory.md",
+    "${MINIMOI_ROOT:-/opt/minimoi}/cos_reminders:/app/data/cos_reminders",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/model_gateway_receipts.jsonl:/app/data/model_gateway_receipts.jsonl",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json",
+    "/var/run/docker.sock:/var/run/docker.sock",
+    "${MINIMOI_ROOT:-/opt/minimoi}/cos/inbox:/app/data/cos-files/inbox",
+    "${MINIMOI_ROOT:-/opt/minimoi}/cos/outbox:/app/data/cos-files/outbox:ro",
+    "${MINIMOI_ROOT:-/opt/minimoi}/cos/conversations:/app/data/cos-conversations"
+   ]
+  },
+  "curator": {
+   "container_name": "minimoi-curator",
+   "depends_on": [
+    "postgres"
+   ],
+   "env_file": [
+    "${MINIMOI_ROOT:-/opt/minimoi}/.env",
+    "${MINIMOI_ROOT:-/opt/minimoi}/${MINIMOI_CURATOR_INTAKE_ENV_FILE:-.env}"
+   ],
+   "environment": [
+    "FLASK_ENV=production",
+    "PORT=8766",
+    "MINIMOI_LIBRARY_INTAKE=${MINIMOI_LIBRARY_INTAKE_PRODUCTION:-0}",
+    "MINIMOI_LIBRARY_INTAKE_ENV=production",
+    "MINIMOI_LIBRARY_INTAKE_OWNER=robert",
+    "PORTAL_SECRET_KEY=",
+    "CURATOR_SIGNAL_STORE_PATH=/app/data/curator/signal_store.jsonl",
+    "CURATOR_X_PULL_STATE_PATH=/app/data/curator/x_pull_state.json",
+    "CURATOR_OUTPUT_PATH=/app/data/curator/curator_output.txt",
+    "CURATOR_RESEARCH_STATE_DIR=/app/research-state"
+   ],
+   "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/curator:${MINIMOI_IMAGE_TAG:-latest}",
+   "ports": [
+    "127.0.0.1:8766:8766"
+   ],
+   "restart": "unless-stopped",
+   "volumes": [
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/curator:/app/data/curator",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/curator_archive:/app/curator_archive",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/curator_history.json:/app/curator_history.json",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/curator_costs.json:/app/curator_costs.json",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/interests:/app/interests",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/research-intelligence:/app/data/research-intelligence",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/annotations:/app/data/annotations",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/research-library:/app/research-state/library",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/research-config/config.json:/app/research-state/agent/config.json",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/curator-config/curator_sources.json:/app/domains/curator/curator_sources.json",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/curator_cache:/app/curator_cache"
+   ]
+  },
+  "german": {
+   "container_name": "minimoi-german",
+   "env_file": "${MINIMOI_ROOT:-/opt/minimoi}/.env",
+   "environment": [
+    "FLASK_ENV=production",
+    "MINIMOI_ROLE=production",
+    "PORT=8767",
+    "VOICE_REALTIME_UI_ENABLED=${VOICE_REALTIME_UI_ENABLED:-1}"
+   ],
+   "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/mein-deutsch:${MINIMOI_IMAGE_TAG:-latest}",
+   "ports": [
+    "127.0.0.1:8767:8767"
+   ],
+   "restart": "unless-stopped",
+   "volumes": [
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/german:/app/domains/german/data"
+   ]
+  },
+  "model-gateway": {
+   "cap_drop": [
+    "ALL"
+   ],
+   "command": [
+    "--config",
+    "/app/config.yaml",
+    "--port",
+    "4000",
+    "--num_workers",
+    "1"
+   ],
+   "container_name": "minimoi-model-gateway",
+   "env_file": [
+    {
+     "path": "${MINIMOI_ROOT:-/opt/minimoi}/gateway-keys.env",
+     "required": false
+    }
+   ],
+   "environment": [
+    "LITELLM_MASTER_KEY=${MINIMOI_MODEL_GATEWAY_KEY:?set MINIMOI_MODEL_GATEWAY_KEY in /opt/minimoi/.env}",
+    "XAI_API_KEY=${XAI_API_KEY:?set XAI_API_KEY in /opt/minimoi/.env}",
+    "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in /opt/minimoi/.env}",
+    "MINIMOI_RECEIPT_ENDPOINT=http://cos-scheduler:8769/internal/model-gateway/receipt",
+    "MINIMOI_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}"
+   ],
+   "healthcheck": {
+    "interval": "30s",
+    "retries": 3,
+    "start_period": "120s",
+    "test": [
+     "CMD",
+     "python",
+     "-c",
+     "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=3)"
+    ],
+    "timeout": "5s"
+   },
+   "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:model-gateway-${MINIMOI_IMAGE_TAG:-latest}",
+   "networks": [
+    "default",
+    "mc-portal"
+   ],
+   "restart": "unless-stopped",
+   "security_opt": [
+    "no-new-privileges:true"
+   ]
+  },
+  "portal": {
+   "container_name": "minimoi-portal",
+   "depends_on": [
+    "curator",
+    "german",
+    "portuguese",
+    "postgres",
+    "cos-scheduler"
+   ],
+   "env_file": "${MINIMOI_ROOT:-/opt/minimoi}/.env",
+   "environment": [
+    "FLASK_ENV=production",
+    "PORT=5001",
+    "COS_BACKEND=http://cos-scheduler:8769",
+    "MINIMOI_GUILD_VOICE_PRODUCTION=1",
+    "MINIMOI_MC_VOICE=1",
+    "MINIMOI_DICTATION=1",
+    "MINIMOI_ROLE=production",
+    "MINIMOI_MC_BOARD_OUTCOMES=${MINIMOI_MC_BOARD_OUTCOMES:-0}",
+    "MINIMOI_GUILD_MANAGED_VOICE_PRODUCTION=${MINIMOI_GUILD_MANAGED_VOICE_PRODUCTION:-0}",
+    "MINIMOI_MC_MANAGED_REALTIME=${MINIMOI_MC_MANAGED_REALTIME:-0}",
+    "MINIMOI_COS_MANAGED_REALTIME=${MINIMOI_COS_MANAGED_REALTIME:-0}",
+    "MINIMOI_COS_WRITE_GUARD=${MINIMOI_COS_WRITE_GUARD:-}",
+    "MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO=${MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO:-}",
+    "MINIMOI_MC_DOMAIN_HEALTH=0",
+    "MINIMOI_MC_DOMAIN_HEALTH_PRODUCTION=${MINIMOI_MC_DOMAIN_HEALTH_PRODUCTION:-0}",
+    "MINIMOI_LIBRARY_INTAKE=${MINIMOI_LIBRARY_INTAKE_PRODUCTION:-0}",
+    "MINIMOI_LIBRARY_INTAKE_ENV=production",
+    "MINIMOI_LIBRARY_INTAKE_OWNER=robert",
+    "IOTCONNECT_BACKEND=http://minimoi-iotconnect:8095",
+    "IOTCONNECT_RELEASE_LABEL=${IOTCONNECT_RELEASE_LABEL:-iotconnect-v0.9.0-beta.1}",
+    "GUILD_QUEUE_PATH=/app/runtime/guild/build_queue.json",
+    "MINIMOI_MC_TOOLS=${MINIMOI_MC_TOOLS:-0}",
+    "MINIMOI_MC_TOOLS_ENV=prod",
+    "MINIMOI_MC_TOOLS_PRINCIPAL=robert",
+    "MINIMOI_MC_TOOLS_PORT=5011",
+    "MINIMOI_MC_TOOLS_TOKEN_SHA256=${MINIMOI_MC_TOOLS_TOKEN_SHA256:-}",
+    "MINIMOI_MC_TOOLS_TICKETS=${MINIMOI_MC_TOOLS_TICKETS:-0}",
+    "MINIMOI_MC_TOOLS_COMMENTS=${MINIMOI_MC_TOOLS_COMMENTS:-0}",
+    "MINIMOI_MC_ISSUES_TOKEN_FILE=/run/secrets/mc/github-issues-token",
+    "MINIMOI_MC_TURN_LEDGER=${MINIMOI_MC_TOOLS:-0}",
+    "MINIMOI_MC_POLICY_FILE=/run/secrets/mc/mc-policy.prod.json",
+    "MINIMOI_MC_POLICY_AUTHORITY_FILE=/run/secrets/mc/mc-policy.prod.authority.json",
+    "MINIMOI_MC_STATUS_PROTOCOL_VERSION=2",
+    "MINIMOI_MC_ARTIFACT_ROOT=/opt/minimoi/mc/artifacts",
+    "MINIMOI_BOARD_ACTIONS=${MINIMOI_MC_TOOLS:-0}",
+    "MINIMOI_BOARD_ENV=prod",
+    "MINIMOI_MC_RECALL=${MINIMOI_MC_TOOLS:-0}",
+    "MINIMOI_MC_DELIVERIES=${MINIMOI_MC_TOOLS:-0}",
+    "MINIMOI_MC_OPERATING_RULES=${MINIMOI_MC_TOOLS:-0}",
+    "MINIMOI_MC_MEETINGS=${MINIMOI_MC_TOOLS:-0}",
+    "MINIMOI_MC_LESSONS=${MINIMOI_MC_TOOLS:-0}",
+    "MINIMOI_MC_LESSONS_ENV=prod",
+    "MINIMOI_MC_LESSONS_DIR=/app/data/mc-lessons",
+    "MINIMOI_MC_DELEGATION=${MINIMOI_MC_DELEGATION:-0}",
+    "MINIMOI_MC_DELEGATION_ENV=prod",
+    "MINIMOI_MC_DELEGATION_PRINCIPAL=robert",
+    "MINIMOI_GUILD_JOBS=${MINIMOI_GUILD_JOBS:-0}",
+    "MINIMOI_GUILD_AGENT_REQUESTS=${MINIMOI_GUILD_AGENT_REQUESTS:-0}",
+    "MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256=${MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256:-}",
+    "MINIMOI_MC_AGENT_ENROLLMENT=/run/secrets/mc/enrollment.json",
+    "MINIMOI_SUPERVISION=${MINIMOI_SUPERVISION:-0}",
+    "MINIMOI_SUPERVISION_OWNER=robert",
+    "MINIMOI_SUPERVISION_WORKER_TOKEN_SHA256=${MINIMOI_SUPERVISION_WORKER_TOKEN_SHA256:-}",
+    "MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256=${MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256:-}",
+    "MINIMOI_MC_APPROVED_HANDOFF_REGISTRY=/run/secrets/mc/approved-handoff-registry.json",
+    "MINIMOI_MC_TASK_WATCH_REGISTRY=/run/secrets/mc/task-watch-registry.json"
+   ],
+   "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}",
+   "networks": [
+    "default",
+    "iotconnect-edge",
+    "mc-portal"
+   ],
+   "ports": [
+    "127.0.0.1:5001:5001"
+   ],
+   "restart": "unless-stopped",
+   "volumes": [
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/guild:/app/runtime/guild",
+    "mc-observations:/app/runtime/mc-observations",
+    "${MINIMOI_ROOT:-/opt/minimoi}/docs/design:/app/docs/design",
+    "${MINIMOI_ROOT:-/opt/minimoi}/docs/specs:/app/docs/specs",
+    "${MINIMOI_ROOT:-/opt/minimoi}/auth/users.json:/app/minimoi_portal/auth/users.json",
+    "${MINIMOI_ROOT:-/opt/minimoi}/auth/guests.json:/app/minimoi_portal/auth/guests.json",
+    "${MINIMOI_ROOT:-/opt/minimoi}/agent_logs:/app/agent_logs",
+    "${MINIMOI_ROOT:-/opt/minimoi}/mc/portal:/run/secrets/mc:ro",
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/mc-lessons:/app/data/mc-lessons",
+    {
+     "bind": {
+      "create_host_path": false
+     },
+     "read_only": true,
+     "source": "${MINIMOI_ROOT:-/opt/minimoi}/release-status",
+     "target": "/app/runtime/release",
+     "type": "bind"
+    }
+   ]
+  },
+  "portuguese": {
+   "container_name": "minimoi-portuguese",
+   "depends_on": [
+    "postgres"
+   ],
+   "env_file": "${MINIMOI_ROOT:-/opt/minimoi}/.env",
+   "environment": [
+    "FLASK_ENV=production",
+    "MINIMOI_ROLE=production",
+    "PORT=8770",
+    "VOICE_REALTIME_UI_ENABLED=${VOICE_REALTIME_UI_ENABLED:-1}"
+   ],
+   "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portuguese:${MINIMOI_IMAGE_TAG:-latest}",
+   "ports": [
+    "127.0.0.1:8770:8770"
+   ],
+   "restart": "unless-stopped",
+   "volumes": [
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/portuguese:/app/domains/portuguese/data"
+   ]
+  },
+  "postgres": {
+   "container_name": "postgres-ai-agents",
+   "env_file": "${MINIMOI_ROOT:-/opt/minimoi}/.env",
+   "environment": [
+    "POSTGRES_DB=personal_agents"
+   ],
+   "image": "postgres:latest",
+   "ports": [
+    "127.0.0.1:5432:5432"
+   ],
+   "restart": "unless-stopped",
+   "volumes": [
+    "postgres-data:/var/lib/postgresql"
+   ]
+  },
+  "supervisor": {
+   "cap_drop": [
+    "ALL"
+   ],
+   "command": [
+    "python",
+    "-m",
+    "services.supervisor.main"
+   ],
+   "container_name": "minimoi-supervisor",
+   "cpus": 0.25,
+   "depends_on": [
+    "postgres"
+   ],
+   "environment": [
+    "MINIMOI_ROLE=production",
+    "PYTHONDONTWRITEBYTECODE=1",
+    "DATABASE_URL=${DATABASE_URL:-}",
+    "TELEGRAM_CHAT_ID=8379221702",
+    "TELEGRAM_APPROVALS_BOT_TOKEN_FILE=/run/secrets/supervisor/approvals-bot-token",
+    "SUPERVISOR_CHECKIN_MINUTES=15",
+    "TZ=America/Chicago"
+   ],
+   "healthcheck": {
+    "interval": "60s",
+    "retries": 3,
+    "test": [
+     "CMD",
+     "python",
+     "-c",
+     "import os,time,sys; sys.exit(0 if time.time()-os.path.getmtime('/tmp/supervisor.alive')<180 else 1)"
+    ],
+    "timeout": "5s"
+   },
+   "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}",
+   "mem_limit": "192m",
+   "profiles": [
+    "supervisor"
+   ],
+   "read_only": true,
+   "restart": "unless-stopped",
+   "security_opt": [
+    "no-new-privileges:true"
+   ],
+   "tmpfs": [
+    "/tmp:size=8m,mode=1777"
+   ],
+   "volumes": [
+    "${MINIMOI_ROOT:-/opt/minimoi}/supervisor:/run/secrets/supervisor:ro"
+   ]
+  },
+  "system-bot": {
+   "container_name": "minimoi-system-bot",
+   "depends_on": [
+    "curator",
+    "portal",
+    "german"
+   ],
+   "env_file": "${MINIMOI_ROOT:-/opt/minimoi}/.env",
+   "environment": [
+    "MINIMOI_ROLE=production",
+    "TELEGRAM_CHAT_ID=8379221702"
+   ],
+   "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/system-bot:${MINIMOI_IMAGE_TAG:-latest}",
+   "restart": "unless-stopped",
+   "volumes": [
+    "${MINIMOI_ROOT:-/opt/minimoi}/data/german:/app/domains/german/data"
+   ]
+  },
+  "vault-ask": {
+   "cap_drop": [
+    "ALL"
+   ],
+   "command": [
+    "python",
+    "-m",
+    "core.memory_ask.service",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    "8771",
+    "--shelf-root",
+    "/vault/current/shelf",
+    "--index",
+    "/vault/current/index/memory.sqlite",
+    "--registry",
+    "/vault/memory-ask/agents.json",
+    "--log",
+    "/vault-log/ask-log.jsonl"
+   ],
+   "container_name": "minimoi-vault-ask",
+   "cpus": 0.5,
+   "environment": [
+    "MINIMOI_ROLE=production",
+    "PYTHONDONTWRITEBYTECODE=1",
+    "MOI_OLLAMA_URL=http://127.0.0.1:9"
+   ],
+   "healthcheck": {
+    "interval": "60s",
+    "retries": 3,
+    "test": [
+     "CMD",
+     "python",
+     "-c",
+     "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:8771/v1/health', timeout=3); assert all(os.path.isfile(p) for p in ('/vault/current/index/memory.sqlite','/vault/current/shelf/_ledger/source_index.json','/vault/memory-ask/agents.json'))"
+    ],
+    "timeout": "5s"
+   },
+   "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}",
+   "mem_limit": "512m",
+   "networks": [
+    "vault-internal"
+   ],
+   "profiles": [
+    "vault"
+   ],
+   "read_only": true,
+   "restart": "unless-stopped",
+   "security_opt": [
+    "no-new-privileges:true"
+   ],
+   "tmpfs": [
+    "/tmp:size=16m,mode=1777"
+   ],
+   "volumes": [
+    {
+     "bind": {
+      "create_host_path": false
+     },
+     "read_only": true,
+     "source": "${MINIMOI_ROOT:-/opt/minimoi}/vault",
+     "target": "/vault",
+     "type": "bind"
+    },
+    {
+     "bind": {
+      "create_host_path": false
+     },
+     "source": "${MINIMOI_ROOT:-/opt/minimoi}/vault-log",
+     "target": "/vault-log",
+     "type": "bind"
+    }
+   ]
+  }
+ },
+ "source": "docker-compose.prod.yml at e9445541 (S1's fix tip), every service's rendered values"
+}

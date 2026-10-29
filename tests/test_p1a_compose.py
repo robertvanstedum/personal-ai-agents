@@ -3,8 +3,10 @@ service's configuration is today's (no new environment value, mount, limit or se
 changes lives in docker-compose.runtime.prod.yml, the switch-on layer an operator copies to the host on Robert's word,
 which the deploy scripts layer only when it is there. One authority file and one principal for the portal, the
 supervisor and the witness (review SF5)."""
+import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -23,6 +25,33 @@ def _env(service) -> dict:
         key, _, value = item.partition("=")
         out[key] = value
     return out
+
+
+GOLDEN = ROOT / "tests" / "p1a_prod_compose_golden.json"
+P1A_NAMES = ("MINIMOI_MC_DELEGATION_AUTHORITY_FILE", "MINIMOI_MC_DELEGATION_DOOR_CREDENTIALS", "MINIMOI_RUNTIME_",
+             "MINIMOI_WITNESS_", "runtime-witness", "/run/minimoi/runtime", "docker-compose.runtime.prod.yml",
+             "core.mc_delegation_runner.witness")
+
+
+def _rendered(text) -> dict:
+    """Every service's rendered values, as JSON holds them (the golden's form)."""
+    return json.loads(json.dumps(yaml.safe_load(text)["services"], sort_keys=True, default=str))
+
+
+def test_unconfigured_production_keeps_todays_values_for_every_service_without_git():
+    """Review T1 (M7'): CI checks out one commit, so this guard reads a golden copy committed with it, not the base
+    commit. Every production service's rendered values equal the golden's; a P1-a value added to
+    docker-compose.prod.yml fails here. A change that is not P1-a's regenerates the golden on purpose:
+    python tests/test_p1a_compose.py --regenerate."""
+    golden = json.loads(GOLDEN.read_text())["services"]
+    assert _rendered(PROD.read_text()) == golden, "docker-compose.prod.yml differs from today's (tests/p1a_prod_compose_golden.json)"
+
+
+def test_no_p1a_name_reaches_productions_own_compose_file():
+    text = PROD.read_text()
+    assert [n for n in P1A_NAMES if n in text] == []
+    sup = yaml.safe_load(text)["services"]["supervisor"]
+    assert (sup["mem_limit"], sup["cpus"]) == ("192m", 0.25)                     # today's limits
 
 
 def test_unconfigured_production_is_todays_compose_byte_for_byte():
@@ -102,3 +131,42 @@ def test_a_portal_release_recreates_an_active_witness_only_with_the_layer():
     assert '"${COMPOSE[@]}" --profile runtime-witness up -d --no-deps runtime-witness' in source
     assert source.index("RUNTIME_LAYER=") < source.index("aws ecr get-login-password")
     assert 'wait_for_container_health minimoi-runtime-witness 24' in source
+
+
+# ── the MC container script's supervision switch (review R2) ──
+def _supervision_blocks():
+    source = (ROOT / "scripts/operations/deploy_mc_container_ec2.sh").read_text()
+    body = source[source.index("supervision() {"):source.index("\nrunner() {")]
+    start = body.index('  local compose=(docker-compose --project-name minimoi -f "$ROOT/docker-compose.prod.yml")')
+    layer = body[start:body.index("\n  fi\n", start) + 6]
+    off = body.index("    off)\n")
+    guard = body[off + len("    off)\n"):body.index("\n      fi\n", off) + 9]
+    return layer, guard
+
+
+def test_the_supervision_switch_adds_the_layer_only_when_it_is_on_the_host(tmp_path):
+    layer, _ = _supervision_blocks()
+    run = 'set -euo pipefail\nROOT="$1"\nf() {\n' + layer + '\n  printf "%s\\n" "${compose[@]}"\n}\nf'
+    absent = subprocess.run(["bash", "-c", run, "x", str(tmp_path)], capture_output=True, text=True, timeout=5)
+    assert absent.returncode == 0 and absent.stdout.splitlines()[-1] == f"{tmp_path}/docker-compose.prod.yml"
+    (tmp_path / "docker-compose.runtime.prod.yml").write_text("services: {}\n")
+    present = subprocess.run(["bash", "-c", run, "x", str(tmp_path)], capture_output=True, text=True, timeout=5)
+    assert present.stdout.splitlines()[-2:] == ["-f", f"{tmp_path}/docker-compose.runtime.prod.yml"]
+
+
+def test_supervision_off_is_refused_while_the_runtime_layer_is_on(tmp_path):
+    _, guard = _supervision_blocks()
+    run = ('set -euo pipefail\nROOT="$1"\ndie() { echo "REFUSED: $*" >&2; exit 2; }\n' + guard
+           + '\necho "SUPERVISOR REMOVED"')
+    free = subprocess.run(["bash", "-c", run, "x", str(tmp_path)], capture_output=True, text=True, timeout=5)
+    assert free.returncode == 0 and "SUPERVISOR REMOVED" in free.stdout                 # no layer: today's off
+    (tmp_path / "docker-compose.runtime.prod.yml").write_text("services: {}\n")
+    held = subprocess.run(["bash", "-c", run, "x", str(tmp_path)], capture_output=True, text=True, timeout=5)
+    assert held.returncode == 2 and "SUPERVISOR REMOVED" not in held.stdout and "roll it back first" in held.stderr
+
+
+if __name__ == "__main__":
+    if sys.argv[1:] == ["--regenerate"]:
+        GOLDEN.write_text(json.dumps({"source": "docker-compose.prod.yml, every service's rendered values",
+                                      "services": _rendered(PROD.read_text())}, indent=1, sort_keys=True) + "\n")
+        print(f"wrote {GOLDEN.relative_to(ROOT)}")
