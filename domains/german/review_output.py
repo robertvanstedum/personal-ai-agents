@@ -78,5 +78,3 @@ def parse_llm_response(text: str) -> tuple[dict, bool]:
     print(f"⚠️  LLM response parse failed. Storing raw output for debugging.", file=sys.stderr)
     print(f"   Raw (first 300 chars): {text[:300]}", file=sys.stderr)
     return empty_reviewer_output(), False
-
-
