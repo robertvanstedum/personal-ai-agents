@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from core.mc_delegation_dispatcher import production, server, snapshot as snap  # noqa: E402
-from core.mc_delegation_dispatcher.store import Authority, DispatcherStore  # noqa: E402
+from core.mc_delegation_dispatcher.store import Authority  # noqa: E402
 
 PROD = ROOT / "core" / "mc_delegation_dispatcher" / "authority.prod.json"
 TOKEN, HOST_TOKEN, READ_TOKEN, OTHER = "r" * 48, "h" * 48, "o" * 48, "x" * 48

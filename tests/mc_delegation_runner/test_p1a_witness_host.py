@@ -4,7 +4,6 @@ from the snapshot (R5.6-a), tell once per key through their own notifier and fil
 directly by reference (the Keychain on the Mac, Parameter Store on EC2), each text bounded to one message; the
 stand-alone EC2 witness and the delivery probe. No Keychain, SSM, Telegram or network: every adapter is a fake."""
 import json
-import os
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -224,7 +223,6 @@ class Opener:
 
     def __call__(self, req, timeout=None):
         self.requests.append(req)
-        import io
         return _Resp(self.answer)
 
 

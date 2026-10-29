@@ -3,7 +3,6 @@ the explicit --host-runtime, last in its one transaction; a plain run (operation
 never does. The script runs here against a stand-in ``docker`` that records every call and answers as production's
 containers would; no container, database or production host is touched (the rehearse mode only: apply writes a backup
 under /opt)."""
-import os
 import shutil
 import subprocess
 import sys
