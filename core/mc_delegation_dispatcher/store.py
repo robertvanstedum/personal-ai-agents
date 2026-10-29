@@ -87,7 +87,18 @@ grace deadline from the owner host's grace, and at grace end interrupted, or unk
 open. No item ends while an effect of it is open, on any path: reconcile, the sweeper, a result, Stop, end, revoke.
 Where it runs, relay.status derives a lapse instead of reaping it (R3.3, E11), and the sweeper reaps version 1 items.
 A version 2 authority always has one.
-The owner's acts: reassign (R5.1-d), end (R5.1-c), revoke (R4.3-e, end to end), resolve_usage_hold.
+The owner's acts: reassign (R5.1-d), end (R5.1-c), revoke (R4.3-e, end to end), resolve_usage_hold, accept (an
+item's result reported while an effect was open, once none is), record_owner_act (merge, push, deploy: O).
+The headless state (§7.6, S1-G; snapshot.py): state_records reads, snapshot builds minimoi.runtime.state.v1, publish
+(each sweep, run_sweeper's state_dir) records each notice once (notice.raised) and each review_request once, and
+writes state.json atomically; note_read records a reader's contact. Queued decisions are answered through resolve,
+the owner path (R4.3-b): Robert's verified answer, bound to the digest of the decision's words, does what those words
+say (admit under an exact approval it issues with his turn's id, decline, end, accept, acknowledge, reassign, leave
+waiting), on any item, ended ones included. A card step that failed on a definitively failed effect is never retried
+with the same item: it ends failed (effect_failed) and its card waits on one redo decision; only Robert's yes admits
+the redo, a new item (new operation ids). When the last open effect of an item that reported its result is decided,
+its decision is superseded by one that asks to accept that result. MC's judgment calls are reserved here
+(reserve_judgment, record_judgment: R7.5-c/d's cap, coalescing and escalation); a flag never starts one.
 The census (§6.6): agents() is the agents field of R7.6-b, derived at read time from the census events and each host's
 contact (R6.6-b); census_retention drops census events of agent trees that ended more than census_retention_days ago
 (N3), and nothing else: its every statement names the census kinds and source host, so no authority event (a
@@ -126,6 +137,7 @@ transactions on one connection. A stale generation, a lapsed lease or a cancelle
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import logging
 import math
@@ -140,7 +152,7 @@ from decimal import Decimal
 from pathlib import Path
 from types import MappingProxyType
 
-from core.mc_delegation_dispatcher import cards as card_mod
+from core.mc_delegation_dispatcher import cards as card_mod, snapshot as snap
 from core.mc_delegation_runner import census as census_mod, envelope as env_mod
 
 _log = logging.getLogger("mc_delegation")
@@ -154,7 +166,7 @@ AUTHORITY_SCHEMA = "minimoi.authority.v1"
 EVENT_SCHEMA = "minimoi.runtime.event.v1"
 UNITS = ("usd", "usd_notional", "minutes", "test_units")
 TEST_FAMILY = ("fakework", "fakejudge")       # R6.7-l: the test routes carry no key, and acceptance runs on them
-TEST_ACTORS = ("fakework",)                   # the only worker a test route may run (fakejudge's arrives with S1-G)
+TEST_ACTORS = ("fakework",)                   # the only worker a test route may run (fakejudge is MC's, never a worker)
 ROLES = ("authority", "worker", "witness", "watch:staging")
 V2_ACTORS = ("claude-code", "codex", "fakework")
 GRANT_FAMILY = "delegate."                    # the capabilities whose grants may admit a delegation item
@@ -182,6 +194,7 @@ _CENSUS_SQL = """SELECT host_id, event_id, at, kind, schema, body FROM guild.mc_
     WHERE principal_id=%s AND environment=%s AND source='host' AND once_key IS NULL AND kind = ANY(%s) AND schema=%s
     ORDER BY at, seq"""
 _TOKEN = re.compile(r"^[A-Za-z0-9_-]{43}$")
+RUNTIME_REQUEST_PREFIX = "rt-"                 # a supervision decision row that carries an authority decision (S1-G)
 _CAPABILITY = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
 
 
@@ -226,6 +239,21 @@ class HostValues:
 
 
 @dataclass(frozen=True)
+class Judgment:
+    """MC's judgment reservation (R7.5-c, §8.2): the route its calls are reserved on, in one unit; at most
+    ``calls_per_day`` calls and less than ``per_day`` a day (America/Chicago), each call reserving ``per_call``; after
+    ``escalate_after`` reviews of an item with no state change MC escalates and stops; ``per_item_max`` reviews of an
+    item at most (N3: both 2). The coalescing window is the item's class progress timeout (N3)."""
+    route: str
+    unit: str
+    calls_per_day: int
+    per_day: Decimal
+    per_call: Decimal
+    escalate_after: int
+    per_item_max: int
+
+
+@dataclass(frozen=True)
 class Authority:
     environment: str
     protocols: frozenset
@@ -236,6 +264,8 @@ class Authority:
     reassign_across_hosts: bool = False   # False on a Mac-only build: no cross-host takeover at all (R2.4-c)
     clock_skew_s: int = 0              # how far a host's clock may be off when its pre-lapse records are judged (§2.5)
     hosts: HostValues | None = None    # the host loop's values; None: no version 2 host may start on this file
+    progress_timeout_s: MappingProxyType | None = None   # §5.3 by task class; a class missing: its stall is unknown
+    judgment: Judgment | None = None   # R7.5-c; None: every judgment reservation is refused (judgment_not_configured)
 
     @property
     def speaks_v2(self) -> bool:
@@ -256,7 +286,7 @@ class Authority:
     def parse(cls, doc) -> "Authority":
         _need(type(doc) is dict and set(doc) <= {"schema", "environment", "protocols", "launch_closure", "lease_s",
                                                   "routes", "note", "sweeper", "reassign_across_hosts",
-                                                  "clock_skew_s", "hosts"},
+                                                  "clock_skew_s", "hosts", "progress_timeout_s", "judgment"},
               "authority_config_invalid")
         _need(doc.get("schema") == AUTHORITY_SCHEMA, "authority_schema_invalid")
         _need(doc.get("environment") in ("dev", "prod"), "authority_environment_invalid")
@@ -307,9 +337,34 @@ class Authority:
                              and (sw is None or hv["contact_interval_s"] < sw["gap_threshold_s"])   # a beat is no gap
                              and 1 <= hv["renew_s"] and (lease is None or hv["renew_s"] < lease)
                              and 1 <= hv["offline_hold_s"] <= 86400), "authority_hosts_invalid")
+        pt = doc.get("progress_timeout_s")
+        _need(pt is None or (type(pt) is dict and 1 <= len(pt) <= 16 and all(
+            type(k) is str and _WORD.match(k) and type(v) is int and 1 <= v <= 86400 for k, v in pt.items())),
+              "authority_progress_timeout_invalid")
         return cls(doc["environment"], frozenset(protocols), closure, lease, MappingProxyType(parsed),
                    None if sw is None else Sweeper(sw["sweep_s"], sw["gap_threshold_s"]), across, skew,
-                   None if hv is None else HostValues(*(hv[k] for k in keys)))
+                   None if hv is None else HostValues(*(hv[k] for k in keys)),
+                   None if pt is None else MappingProxyType(dict(pt)), _judgment(doc))
+
+
+def _judgment(doc):
+    """The judgment section, strictly; missing means no judgment call is ever reserved (R2.3-b)."""
+    j = doc.get("judgment")
+    if j is None:
+        return None
+    keys = {"route", "unit", "calls_per_day", "per_day", "per_call", "escalate_after", "per_item_max"}
+    _need(type(j) is dict and set(j) == keys and type(j["route"]) is str and len(j["route"]) <= 64
+          and _ROUTE.match(j["route"]) and j["unit"] in UNITS
+          and all(type(j[k]) is int and 1 <= j[k] <= 1000 for k in ("calls_per_day", "escalate_after", "per_item_max")),
+          "authority_judgment_invalid")
+    per_day, per_call = _amount(j["per_day"]), _amount(j["per_call"])
+    _need(per_call < per_day, "authority_judgment_invalid")
+    test = in_test_family(j["route"]) or j["unit"] == "test_units"
+    _need(not test or (in_test_family(j["route"]) and j["unit"] == "test_units"), "authority_judgment_invalid")
+    _need(not (test and doc["environment"] == "prod"), "authority_test_route_in_production")
+    _need(j["route"] not in doc.get("routes", {}), "authority_judgment_route_shared")     # never a worker's route
+    return Judgment(j["route"], j["unit"], j["calls_per_day"], per_day, per_call, j["escalate_after"],
+                    j["per_item_max"])
 
 
 def in_test_family(route: str) -> bool:
@@ -360,9 +415,23 @@ def check_capabilities(caps) -> list:
     return list(caps)
 
 
+_BLOCK_CODE = re.compile(r"^authority_error:[A-Za-z0-9_]{1,64}$")    # runner._error_code's fixed codes
+
+
 def check_facts(facts) -> dict:
+    """R3.2-a's facts, and optionally ``blocked``: the tasks the host has blocked under an authority error on a known
+    outcome or a reconcile (S1-D N-E3), each {item_id, generation, code, since}, so the authority's snapshot shows
+    them with their age and raises one notice each (S1-G). A host that blocks nothing sends none."""
     keys = {"host_id", "bundle_digest", "roles", "availability", "grace", "last_gap_s", "announced"}
-    _need(type(facts) is dict and set(facts) == keys, "facts_invalid")
+    _need(type(facts) is dict and keys <= set(facts) <= keys | {"blocked"}, "facts_invalid")
+    if "blocked" in facts:
+        b = facts["blocked"]
+        _need(type(b) is list and 1 <= len(b) <= 32 and all(
+            type(x) is dict and set(x) == {"item_id", "generation", "code", "since"}
+            and type(x["item_id"]) is str and _UUID.match(x["item_id"])
+            and type(x["generation"]) is int and not isinstance(x["generation"], bool) and 0 <= x["generation"] < 2**31
+            and type(x["code"]) is str and _BLOCK_CODE.match(x["code"])
+            and type(x["since"]) is str and _AT.match(x["since"]) for x in b), "facts_invalid")
     _need(type(facts["host_id"]) is str and _ID.match(facts["host_id"]), "facts_invalid")
     _need(type(facts["bundle_digest"]) is str and _DIGEST.match(facts["bundle_digest"]), "facts_invalid")
     roles = facts["roles"]
@@ -373,7 +442,10 @@ def check_facts(facts) -> dict:
     gap = facts["last_gap_s"]
     _need(type(gap) in (int, float) and math.isfinite(gap) and 0 <= gap <= 10**8, "facts_invalid")
     _need(facts["announced"] in ("online", "stopping", "stopped"), "facts_invalid")
-    return dict(facts)
+    out = dict(facts)
+    if "blocked" in out:
+        out["blocked"] = [dict(x) for x in out["blocked"]]
+    return out
 
 
 def check_checkpoint(cp) -> dict | None:
@@ -771,7 +843,7 @@ class DispatcherStore:
             self._event(cur, "decision.queued", item=rid, generation=0, once=_once("admission", rid),
                         event_id=decision_id, body={"class": decision["class"], "solo": decision["solo"],
                                                     "reason": code, "card_id": item["card_id"], "step": item["step"],
-                                                    "subject_digest": subject})
+                                                    "subject_digest": subject, **decision.get("record", {})})
         return {"request_id": str(rid), "job_id": item["job_id"], "state": state, "code": code,
                 "decision_id": decision_id}
 
@@ -1063,7 +1135,14 @@ class DispatcherStore:
                 "host_id": old["host_id"], "bundle_digest": old["bundle_digest"], "roles": old["roles"],
                 "availability": old["expected_availability"], "grace": old["unreachable_grace_s"],
                 "last_gap_s": old["last_gap_s"], "announced": old["announced"]}
-            changed = sorted(k for k in facts if before.get(k) != facts[k]
+            if old is not None:                  # blocked has no column: the latest host.facts this runner sent
+                cur.execute("""SELECT body->'blocked' AS blocked FROM guild.mc_delegation_events
+                    WHERE principal_id=%s AND environment=%s AND kind='host.facts' AND body->>'runner_id'=%s
+                    ORDER BY seq DESC LIMIT 1""", (self.principal, self.environment, runner_id))
+                last = cur.fetchone()
+                before["blocked"] = (last or {}).get("blocked")
+            changed = sorted(k for k in {*facts, *(["blocked"] if before.get("blocked") else [])}
+                             if before.get(k) != facts.get(k)
                              and not (k == "last_gap_s" and before.get(k) is not None
                                       and float(before[k]) == float(facts[k])))
             if changed or old is None or old["protocol"] != 2:
@@ -1599,9 +1678,18 @@ class DispatcherStore:
             status = "cancelled"                       # Stop was pressed: the result is kept, not claimed as done
         no_retry = None
         if status == "failed" and not open_ops and _attempt(row) is not None:
-            no_retry = self._retry_refusal(cur, row, detail, used)
-            if no_retry is None:
-                return self._retry(cur, row, eid, when, host_id, route, used, detail, artifacts, output_text)
+            failed_ops = self._failed_operations(cur, rid)
+            if failed_ops:
+                # An effect of this step failed for good (its receipt is failed, and an operation id is the item's
+                # for every generation and attempt), so a retry of the same item would meet the same failed receipt:
+                # it ends failed (effect_failed), and its card waits on one decision, a redo as a new item with new
+                # operation ids, which only Robert's yes admits (S1-D review N-D4; _card_advance, _write_redo).
+                no_retry = "effect_failed"
+                detail = {**(detail or {}), "code": "effect_failed", "failed_operations": failed_ops}
+            else:
+                no_retry = self._retry_refusal(cur, row, detail, used)
+                if no_retry is None:
+                    return self._retry(cur, row, eid, when, host_id, route, used, detail, artifacts, output_text)
         body = {"status": status, "route": route,
                 "usage": {**used, "amount": None if used["amount"] is None else float(used["amount"])},
                 "report": report}
@@ -1742,26 +1830,31 @@ class DispatcherStore:
         with self._tx() as cur:
             row = self._item(cur, rid)
             _need(row is not None and row["route"] is not None, "unknown_request")
-            _need(row["state"] == "proposed", "item_not_proposed")
-            _need(not self._card_finished(cur, row), "card_ended")
-            subject = _row_subject(row)
-            _need(subject is not None, "item_invalid")
-            on_card = ((row["facts"] or {}).get("card") or {}).get("on_card")
-            code = self._use(cur, gid, subject, tuple(w for w in (row["card_id"], row["job_id"]) if w),
-                             step={"item_id": rid, "card_id": row["card_id"], "step": row["step"]} if on_card else None)
-            _need(code is None, code or "")
-            cur.execute("""UPDATE guild.mc_delegations SET state='queued', grant_id=%s, result_detail=NULL
-                WHERE request_id=%s""", (gid, rid))
-            decision = (row["result_detail"] or {}).get("decision_id")
-            self._event(cur, "item.admitted", item=rid, generation=row["generation"], source="owner",
-                        body={"grant_id": gid, "card_id": row["card_id"], "step": row["step"], "by": by, "note": note,
-                              "subject_digest": subject, "decision_id": decision,
-                              "prior": (row["result_detail"] or {}).get("code")})
-            if decision is not None:
-                self._event(cur, "decision.resolved", item=rid, generation=row["generation"], source="owner",
-                            once=_once("decision_resolved", decision),
-                            body={"decision_id": decision, "answer": "admitted", "by": by})
-            return {"state": "queued", "grant_id": gid}
+            return self._admit_in(cur, row, gid, by, note)
+
+    def _admit_in(self, cur, row, gid, by, note) -> dict:
+        """admit's transaction body, for the owner path's own transactions too (resolve)."""
+        rid = str(row["request_id"])
+        _need(row["state"] == "proposed", "item_not_proposed")
+        _need(not self._card_finished(cur, row), "card_ended")
+        subject = _row_subject(row)
+        _need(subject is not None, "item_invalid")
+        on_card = ((row["facts"] or {}).get("card") or {}).get("on_card")
+        code = self._use(cur, gid, subject, tuple(w for w in (row["card_id"], row["job_id"]) if w),
+                         step={"item_id": rid, "card_id": row["card_id"], "step": row["step"]} if on_card else None)
+        _need(code is None, code or "")
+        cur.execute("""UPDATE guild.mc_delegations SET state='queued', grant_id=%s, result_detail=NULL
+            WHERE request_id=%s""", (gid, rid))
+        decision = (row["result_detail"] or {}).get("decision_id")
+        self._event(cur, "item.admitted", item=rid, generation=row["generation"], source="owner",
+                    body={"grant_id": gid, "card_id": row["card_id"], "step": row["step"], "by": by, "note": note,
+                          "subject_digest": subject, "decision_id": decision,
+                          "prior": (row["result_detail"] or {}).get("code")})
+        if decision is not None:
+            self._event(cur, "decision.resolved", item=rid, generation=row["generation"], source="owner",
+                        once=_once("decision_resolved", decision),
+                        body={"decision_id": decision, "answer": "admitted", "by": by})
+        return {"state": "queued", "grant_id": gid}
 
     def _card_finished(self, cur, row) -> bool:
         """Whether ``row`` is a step of a card that has ended (card.ready or card.ended): nothing hands it out,
@@ -1813,22 +1906,30 @@ class DispatcherStore:
             return "card_attempts_exhausted"
         return None
 
-    def _write_step(self, cur, compiled, step, grant_id, *, created_by, earlier) -> dict | None:
+    def _write_step(self, cur, compiled, step, grant_id, *, created_by, earlier, job=None,
+                    redo_of=None) -> dict | None:
         """Write one enumerated step of a card as its template compiles it: its brief, worker, route and caps fixed;
         its input artifacts, the only free field, filled from the authority's records of the card's earlier steps;
         created_by authority for every step after the first (OWN-2). A card step is admitted by one of the card
         grant's operations and queued, or, when the grant no longer admits it, written proposed with one routine
         decision. A step of another model family is never a card step: it is written proposed with one solo decision
-        (R7.4-c) and waits for its own admission (T13)."""
+        (R7.4-c) and waits for its own admission (T13). A redo of a step (``job``, ``redo_of``) is the same step under
+        a new job id, so new operation ids, written proposed with its redo decision (_write_redo)."""
         arts, sources = compiled.inputs(step, earlier)
         card = compiled.card
-        item = self._v2_item(f"{compiled.card_id}.{step.name}", step.actor, step.scope, card["repository"], card["ref"],
-                             step.brief, step.cost_cap_usd, card["step_deadline_s"], step.route, step.amount,
+        item = self._v2_item(job or f"{compiled.card_id}.{step.name}", step.actor, step.scope, card["repository"],
+                             card["ref"], step.brief, step.cost_cap_usd, card["step_deadline_s"], step.route, step.amount,
                              grant_id if step.on_card else None, list(step.required_capabilities), arts,
                              compiled.card_id, step.name, created_by)
         facts = {"card": {"digest": compiled.digest, "class_digest": compiled.class_digest, "kind": step.kind,
                           "index": step.index, "attempt": 1, "on_card": step.on_card, "template_digest": step.digest,
-                          "inputs_from": sources}}
+                          "inputs_from": sources, **({"redo_of": redo_of["redo_of"]} if redo_of else {})}}
+        if redo_of is not None:
+            # A redo is never admitted by the card's grant (its operation for this step was used): it waits, proposed,
+            # on one decision, routine for a card step, solo for another model family's (a cross-vendor admission).
+            return self._write(cur, item, subject=step.digest if step.on_card else item["subject"], facts=facts,
+                               admit=False, decision={"class": "step_redo", "solo": not step.on_card,
+                                                      "code": "effect_failed", "record": redo_of})
         if step.on_card:
             return self._write(cur, item, subject=step.digest, facts=facts,
                                decision={"class": "step_admission", "solo": False})
@@ -1854,6 +1955,9 @@ class DispatcherStore:
                         body={"card_id": card_id, "step": row["step"], "state": status, "code": "card_record_invalid"})
             return
         if status != "completed":
+            if status == "failed" and no_retry == "effect_failed" and \
+                    self._write_redo(cur, row, compiled, step, record["grant_id"]):
+                return                                        # the card waits on Robert's redo decision
             self._event(cur, "card.ended", item=rid, generation=g, once=once,
                         body={"card_id": card_id, "step": step.name, "state": status, "attempt": _attempt(row),
                               "code": no_retry or status})
@@ -2355,6 +2459,8 @@ class DispatcherStore:
                         once=_once("effect_prepared", op_id) if op == "prepare" else None,
                         body={**body, **{k: said[k] for k in ("receipt_state", "receipt_generation", "mode",
                                                               "lease_until", "recorded_as") if k in said}})
+            if op == "finish":
+                self._requeue_outcome(cur, row)
             return {"state": "ok", **answer, **out}
 
     def _effect_conflict(self, cur, row, op_id, recorded, eff, host_id, body, generation, answer) -> dict:
@@ -2475,9 +2581,21 @@ class DispatcherStore:
         from run_sweeper, so a sweeper that dies leaves the authority's liveness intact."""
         self._loop(self.authority_beat, stop, log, "authority liveness beat")
 
-    def run_sweeper(self, stop, *, log=None) -> None:
-        """sweep every sweep_s until ``stop`` (a threading.Event) is set."""
-        self._loop(self.sweep, stop, log, "sweeper pass")
+    def run_sweeper(self, stop, *, log=None, state_dir=None, endpoint_id=None, host_id=None) -> None:
+        """sweep every sweep_s until ``stop`` (a threading.Event) is set. Given ``state_dir``, each pass then publishes
+        the snapshot (``publish``: notices and proposals recorded once, ``state.json`` written atomically, R7.6-a); a
+        publish that fails never costs the sweep, and is logged by its type only."""
+        if state_dir is None:
+            self._loop(self.sweep, stop, log, "sweeper pass")
+            return
+
+        def step():
+            self.sweep()
+            try:
+                self.publish(state_dir, endpoint_id=endpoint_id, host_id=host_id)
+            except Exception as exc:
+                (log or _log).warning("state publish failed (%s)", type(exc).__name__)
+        self._loop(step, stop, log, "sweeper pass")
 
     def _loop(self, step, stop, log, what) -> None:
         """A failed step is logged by its type only and the loop goes on; a step that can't run leaves its row old,
@@ -2694,42 +2812,47 @@ class DispatcherStore:
         with self._tx() as cur:
             row = self._item(cur, rid)
             _need(row is not None and row["route"] is not None, "unknown_request")
-            _need(row["state"] in ("claimed", "running", "lapsed", "paused", "unknown") or _awaiting(row),
-                  "item_not_reassignable")
-            _need(row["state"] not in ("claimed", "running") or row["lease_until"] <= row["now"], "lease_current")
-            # A revocation that is ending the item, or the end of its card, leaves the owner one act: end (NSF1). A
-            # reassignment would clear that mark and hand the work out again.
-            _need(not self._card_finished(cur, row), "card_ended")
-            _need(not (row["facts"] or {}).get("ending"), "item_ending")
-            row = self._lapse_written(cur, row)
-            res = dict(row["reservation"] or {})
-            _need("reserved" in res and res.get("state") is None, "reservation_missing")
-            _need(not self._open_receipts(cur, rid), "receipts_open")
-            target = self._runner(cur, runner_id)
-            _need(target is not None and target["protocol"] == 2 and target["environment"] == self.environment
-                  and "worker" in (target["roles"] or []), "target_invalid")
-            needs = {f"actor:{row['actor']}", f"scope:{row['scope']}", f"repo:{row['repository']}",
-                     *(row["required_capabilities"] or [])}
-            _need(needs <= set(target["capabilities"] or []), "target_not_capable")
-            old_host = self._host_id(cur, row["runner_id"])
-            _need(target["host_id"] == old_host or self.authority.reassign_across_hosts, "cross_host_refused")
-            g = row["generation"]
-            cur.execute("""UPDATE guild.mc_delegations SET state='queued', generation=%s, runner_id=%s,
-                lease_until=NULL, lapsed_since=NULL, lapse_cause=NULL, grace_deadline=NULL, checkpoint=NULL,
-                result_detail=NULL, cancel_requested=FALSE, reservation=%s::jsonb,
-                facts=(COALESCE(facts, '{}'::jsonb) - 'picked_up_at' - 'leased_at' - 'ending' - 'retry')
-                      || jsonb_build_object('reassigned', %s::jsonb)
-                WHERE request_id=%s""",
-                (g + 1, runner_id, json.dumps({**res, "generation": g + 1}),
-                 json.dumps({"from_runner_id": row["runner_id"], "from_generation": g, "by": by}), rid))
-            self._event(cur, "item.reassigned", item=rid, generation=g + 1, host_id=target["host_id"], source="owner",
-                        once=_once("reassigned", rid, g),
-                        body={"from_runner_id": row["runner_id"], "from_host_id": old_host, "runner_id": runner_id,
-                              "host_id": target["host_id"], "from_generation": g, "generation": g + 1,
-                              "prior_state": row["state"], "prior_checkpoint": row["checkpoint"], "by": by,
-                              "note": note})
-            self._resolve_decision(cur, row, "reassigned", by)
-            return {"state": "reassigned", "generation": g + 1, "runner_id": runner_id}
+            return self._reassign_in(cur, row, runner_id, by, note)
+
+    def _reassign_in(self, cur, row, runner_id, by, note) -> dict:
+        """reassign's transaction body, for the owner path's own transactions too (resolve)."""
+        rid = str(row["request_id"])
+        _need(row["state"] in ("claimed", "running", "lapsed", "paused", "unknown") or _awaiting(row),
+              "item_not_reassignable")
+        _need(row["state"] not in ("claimed", "running") or row["lease_until"] <= row["now"], "lease_current")
+        # A revocation that is ending the item, or the end of its card, leaves the owner one act: end (NSF1). A
+        # reassignment would clear that mark and hand the work out again.
+        _need(not self._card_finished(cur, row), "card_ended")
+        _need(not (row["facts"] or {}).get("ending"), "item_ending")
+        row = self._lapse_written(cur, row)
+        res = dict(row["reservation"] or {})
+        _need("reserved" in res and res.get("state") is None, "reservation_missing")
+        _need(not self._open_receipts(cur, rid), "receipts_open")
+        target = self._runner(cur, runner_id)
+        _need(target is not None and target["protocol"] == 2 and target["environment"] == self.environment
+              and "worker" in (target["roles"] or []), "target_invalid")
+        needs = {f"actor:{row['actor']}", f"scope:{row['scope']}", f"repo:{row['repository']}",
+                 *(row["required_capabilities"] or [])}
+        _need(needs <= set(target["capabilities"] or []), "target_not_capable")
+        old_host = self._host_id(cur, row["runner_id"])
+        _need(target["host_id"] == old_host or self.authority.reassign_across_hosts, "cross_host_refused")
+        g = row["generation"]
+        cur.execute("""UPDATE guild.mc_delegations SET state='queued', generation=%s, runner_id=%s,
+            lease_until=NULL, lapsed_since=NULL, lapse_cause=NULL, grace_deadline=NULL, checkpoint=NULL,
+            result_detail=NULL, cancel_requested=FALSE, reservation=%s::jsonb,
+            facts=(COALESCE(facts, '{}'::jsonb) - 'picked_up_at' - 'leased_at' - 'ending' - 'retry')
+                  || jsonb_build_object('reassigned', %s::jsonb)
+            WHERE request_id=%s""",
+            (g + 1, runner_id, json.dumps({**res, "generation": g + 1}),
+             json.dumps({"from_runner_id": row["runner_id"], "from_generation": g, "by": by}), rid))
+        self._event(cur, "item.reassigned", item=rid, generation=g + 1, host_id=target["host_id"], source="owner",
+                    once=_once("reassigned", rid, g),
+                    body={"from_runner_id": row["runner_id"], "from_host_id": old_host, "runner_id": runner_id,
+                          "host_id": target["host_id"], "from_generation": g, "generation": g + 1,
+                          "prior_state": row["state"], "prior_checkpoint": row["checkpoint"], "by": by,
+                          "note": note})
+        self._resolve_decision(cur, row, "reassigned", by)
+        return {"state": "reassigned", "generation": g + 1, "runner_id": runner_id}
 
     def end(self, request_id, *, by, note) -> dict:
         """The owner's "end" for an item no host may continue on its own: lapsed, paused or unknown, or claimed with
@@ -2744,19 +2867,24 @@ class DispatcherStore:
         with self._tx() as cur:
             row = self._item(cur, rid)
             _need(row is not None and row["route"] is not None, "unknown_request")
-            _need(row["state"] in ("claimed", "running", "lapsed", "paused", "unknown") or _awaiting(row),
-                  "item_not_endable")
-            _need(row["state"] not in ("claimed", "running") or row["lease_until"] <= row["now"], "lease_current")
-            row = self._lapse_written(cur, row)
-            open_ops = self._open_receipts(cur, rid)
-            if open_ops and row["state"] != "unknown":
-                d = self._decide(cur, row, "effect_unknown", open_ops, [], ("interrupted", None, "owner_decision"))
-                return {"state": "unknown", "decision_id": d["decision_id"], "operations": open_ops}
-            self._close(cur, row, "interrupted", {"code": "owner_decision", "by": by, "note": note, "workspace": "kept",
-                                                  **({"open_operations": open_ops} if open_ops else {})},
-                        children_stopped=_awaiting(row), source="owner")     # never ran under a pickup it awaits
-            self._resolve_decision(cur, row, "end", by)
-            return {"state": "interrupted", "code": "owner_decision"}
+            return self._end_in(cur, row, by, note)
+
+    def _end_in(self, cur, row, by, note) -> dict:
+        """end's transaction body, for the owner path's own transactions too (resolve)."""
+        rid = str(row["request_id"])
+        _need(row["state"] in ("claimed", "running", "lapsed", "paused", "unknown") or _awaiting(row),
+              "item_not_endable")
+        _need(row["state"] not in ("claimed", "running") or row["lease_until"] <= row["now"], "lease_current")
+        row = self._lapse_written(cur, row)
+        open_ops = self._open_receipts(cur, rid)
+        if open_ops and row["state"] != "unknown":
+            d = self._decide(cur, row, "effect_unknown", open_ops, [], ("interrupted", None, "owner_decision"))
+            return {"state": "unknown", "decision_id": d["decision_id"], "operations": open_ops}
+        self._close(cur, row, "interrupted", {"code": "owner_decision", "by": by, "note": note, "workspace": "kept",
+                                              **({"open_operations": open_ops} if open_ops else {})},
+                    children_stopped=_awaiting(row), source="owner")     # never ran under a pickup it awaits
+        self._resolve_decision(cur, row, "end", by)
+        return {"state": "interrupted", "code": "owner_decision"}
 
     def revoke(self, grant_id, *, by, note) -> dict:
         """Revocation end to end (R4.3-e, E13). One transaction: every open item under the grant is locked first (items
@@ -2819,6 +2947,533 @@ class DispatcherStore:
                                                                      "cards": cards})
             return {"state": "revoked", "grant_id": gid, "items": ended, "waiting": waiting, "cards": cards}
 
+    # ── the headless state (spec v0.5 §7.6, R7.6-a/b/c; snapshot.py) ──
+    STATE_KINDS = ("decision.queued", "decision.resolved", "decision.answered", "card.admitted", "card.ready",
+                   "card.ended", "item.admitted", "item.reassigned", "item.interrupted", "item.cancelled",
+                   "item.accepted", "grant.revoked", "notice.raised", "proposal.review_request", "judgment.reserved",
+                   "judgment.coalesced", "judgment.recorded", "judgment.escalated", "owner.act", "owner.read")
+    STATE_HISTORY_DAYS = 30            # authority events read for the snapshot (and every event of a live item)
+    STATE_RECENT_HOURS = 24            # ended items shown, as the check-in shows them today
+
+    def state_records(self, *, endpoint_id=None, host_id=None) -> dict:
+        """Every authority record the snapshot reads, in two short read-only transactions (the census fold is its
+        own): items live or ended in the last day, the cards they belong to, hosts and the authority's own rows, the
+        events the rules read, grants, open effects, today's judgment use, and the D-code each decision was given
+        (when supervision's tables share this database). Writes nothing (R5.1-b: no write on read)."""
+        _need(self._v2, "protocol_not_enabled")
+        agents, agents_unknown = [], None
+        try:
+            agents = self.agents()
+        except Exception as exc:                       # the census never costs the snapshot; the gap is named
+            agents_unknown = f"census_unreadable:{type(exc).__name__}"
+        cols = """request_id, job_id, actor, scope, repository, state, created_at, started_at, finished_at,
+            heartbeat_at, deadline, left(brief, 120) AS brief, result_detail, runner_id, generation, lease_until,
+            cancel_requested, card_id, step, grant_id, required_capabilities, progress_at, progress_phase, checkpoint,
+            lapsed_since, lapse_cause, grace_deadline, route, reservation, facts, created_by, result_event_id,
+            input_artifacts"""
+        with self._tx() as cur:
+            cur.execute("SELECT clock_timestamp() AS now, (clock_timestamp() AT TIME ZONE 'America/Chicago')::date AS day")
+            clock = cur.fetchone()
+            now = clock["now"]
+            cur.execute(f"""SELECT {cols} FROM guild.mc_delegations WHERE principal_id=%s AND environment=%s
+                AND (state = ANY(%s) OR finished_at > clock_timestamp() - %s * interval '1 hour')
+                ORDER BY created_at, request_id""",
+                        (self.principal, self.environment, list(snap.LIVE), self.STATE_RECENT_HOURS))
+            items = cur.fetchall()
+            ids = [str(r["request_id"]) for r in items]
+            cur.execute("""SELECT event_id, kind, source, item_id, generation, host_id, at, body
+                FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s AND kind = ANY(%s)
+                  AND (recorded_at > clock_timestamp() - %s * interval '1 day' OR item_id = ANY(%s::uuid[]))
+                ORDER BY seq""", (self.principal, self.environment, list(self.STATE_KINDS), self.STATE_HISTORY_DAYS,
+                                  ids))
+            events = cur.fetchall()
+            card_ids = sorted({e["body"].get("card_id") for e in events if e["kind"] == "card.admitted"} - {None})
+            cur.execute(f"""SELECT {cols} FROM guild.mc_delegations WHERE principal_id=%s AND environment=%s
+                AND card_id = ANY(%s) ORDER BY created_at, request_id""", (self.principal, self.environment, card_ids))
+            card_items = cur.fetchall()
+            cur.execute("""SELECT runner_id, state, capabilities, seen_at, host_id, environment, roles, bundle_digest,
+                expected_availability, unreachable_grace_s, announced, last_gap_s, protocol
+                FROM guild.mc_delegation_runners WHERE environment=%s OR environment IS NULL""", (self.environment,))
+            runners = cur.fetchall()
+            cur.execute("""SELECT DISTINCT ON (body->>'runner_id') body->>'runner_id' AS runner_id,
+                    body->'blocked' AS blocked FROM guild.mc_delegation_events
+                WHERE principal_id=%s AND environment=%s AND kind='host.facts'
+                ORDER BY body->>'runner_id', seq DESC""", (self.principal, self.environment))
+            blocked = {r["runner_id"]: r["blocked"] for r in cur.fetchall() if r["blocked"]}
+            cur.execute("""SELECT at, body FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s
+                AND kind='authority.suspended' AND recorded_at > clock_timestamp() - %s * interval '1 hour'
+                ORDER BY seq""", (self.principal, self.environment, self.STATE_RECENT_HOURS))
+            suspended = [{"from": r["body"].get("from"), "to": r["body"].get("to"),
+                          "outage_s": r["body"].get("outage_s")} for r in cur.fetchall()]
+            gids = sorted({str(r["grant_id"]) for r in items + card_items if r["grant_id"] is not None})
+            cur.execute("""SELECT grant_id, max_operations, consumed_operations, expires_at, revoked_at
+                FROM guild.mc_action_grants WHERE principal_id=%s AND environment=%s AND grant_id = ANY(%s::uuid[])""",
+                        (self.principal, self.environment, gids))
+            grants = {str(r["grant_id"]): r for r in cur.fetchall()}
+            cur.execute("SELECT runner_id, seen_at FROM guild.mc_delegation_runners WHERE runner_id = ANY(%s)",
+                        ([self._sweeper_id, self._alive_id],))
+            rows = {r["runner_id"]: r for r in cur.fetchall()}
+            liveness = {"sweeper": rows.get(self._sweeper_id), "authority": rows.get(self._alive_id)}
+            judgment_day = None
+            j = self.authority.judgment
+            if j is not None:
+                cur.execute("""SELECT count(*) AS calls FROM guild.mc_delegation_events WHERE principal_id=%s
+                    AND environment=%s AND kind='judgment.reserved' AND body->>'day' = %s""",
+                            (self.principal, self.environment, clock["day"].isoformat()))
+                calls = cur.fetchone()["calls"]
+                cur.execute("""SELECT reserved + observed AS used FROM guild.mc_delegation_reservations
+                    WHERE environment=%s AND route=%s AND day=%s""", (self.environment, j.route, clock["day"]))
+                used = cur.fetchone()
+                judgment_day = {"calls": calls, "used": 0.0 if used is None else float(used["used"])}
+            decisions = [str(e["event_id"]) for e in events if e["kind"] == "decision.queued"]
+            codes = {}
+            cur.execute("SELECT to_regclass('guild.supervision_decisions') IS NOT NULL AS present")
+            if cur.fetchone()["present"] and decisions:
+                cur.execute("""SELECT id, request_key FROM guild.supervision_decisions WHERE request_key = ANY(%s)""",
+                            ([RUNTIME_REQUEST_PREFIX + d for d in decisions],))
+                codes = {r["request_key"][len(RUNTIME_REQUEST_PREFIX):]: f"D-{r['id']}" for r in cur.fetchall()}
+        values = {"contact_timeout_s": None if self.authority.hosts is None else self.authority.hosts.contact_timeout_s,
+                  "gap_threshold_s": self.authority.sweeper.gap_threshold_s,
+                  "progress_timeout_s": dict(self.authority.progress_timeout_s or {}),
+                  "judgment": None if j is None else {"route": j.route, "unit": j.unit, "calls_per_day": j.calls_per_day,
+                                                      "per_day": float(j.per_day)}}
+        return {"now": now, "environment": self.environment, "values": values, "items": items,
+                "card_items": card_items, "events": events, "runners": runners, "blocked": blocked,
+                "suspended": suspended, "grants": grants, "liveness": liveness, "judgment_day": judgment_day,
+                "codes": codes, "agents": agents, "agents_unknown": agents_unknown,
+                "authority": {"endpoint_id": endpoint_id, "host_id": host_id}}
+
+    def snapshot(self, *, endpoint_id=None, host_id=None) -> dict:
+        """``minimoi.runtime.state.v1``, built live from the authority's records (``state --json``, R7.6-a)."""
+        return snap.build(self.state_records(endpoint_id=endpoint_id, host_id=host_id))
+
+    def publish(self, state_dir=None, *, endpoint_id=None, host_id=None) -> dict:
+        """One sweep's snapshot, published (R7.6-a, R7.4-c/d): each notice not yet raised is recorded once
+        (notice.raised, under a once-key on its key: DUP-7), with the items, step, card and decisions it names (so
+        OWN-3 can tell a prompted owner call from a check); each review_request due is recorded once
+        (proposal.review_request: a flag yields at most one per stall, R7.5-d); then ``<state_dir>/state.json`` is
+        written atomically. -> {doc, raised}: ``raised`` the notices first recorded now, for the notifier adapter."""
+        doc = self.snapshot(endpoint_id=endpoint_id, host_id=host_id)
+        raised = []
+        with self._tx() as cur:
+            cur.execute("SELECT clock_timestamp() AS now")
+            now = _iso(cur.fetchone()["now"])
+            for n in doc["notices"]:
+                if n["raised_at"] is not None:
+                    continue
+                body = {k: n[k] for k in ("key", "kind", "rule", "text", "item_id", "items", "card_id", "step",
+                                          "decisions", "solo", "host_id", "proposal") if n.get(k) is not None}
+                if n.get("words"):
+                    body["words"] = [{"decision_id": w["decision_id"], "text_sha256": w["text_sha256"]}
+                                     for w in n["words"]]
+                if self._event(cur, "notice.raised", once=_once("notice", hashlib.sha256(n["key"].encode()).hexdigest()),
+                               body=body):
+                    n["raised_at"] = now
+                    raised.append(n)
+            for prop in doc["proposals"]:
+                if prop["state"] == "due":
+                    self._event(cur, "proposal.review_request", item=prop["item_id"], generation=prop["generation"],
+                                once=_once("review_request", prop["proposal_id"]),
+                                body={"proposal_id": prop["proposal_id"], "item_id": prop["item_id"],
+                                      "generation": prop["generation"], "since": prop["since"],
+                                      "trigger": "flag:stalled", "starts_no_call": True})
+                    prop.update(state="queued", at=now)
+        if state_dir is not None:
+            snap.write_state_file(state_dir, doc)
+        return {"doc": doc, "raised": raised}
+
+    def note_read(self, reader, role) -> None:
+        """A read of the snapshot through the read path (R7.6-a): the reader's last contact, as a reserved row
+        (``reader/<env>/<name>``: never a host), and, for the owner's own credential, an owner.read event, which C counts
+        unless a notice preceded it (§7.2, OWN-3)."""
+        _need(self._v2, "protocol_not_enabled")
+        _need(type(reader) is str and _ID.match(reader) and role in snap.READ_ROLES, "reader_invalid")
+        with self._tx() as cur:
+            cur.execute("""INSERT INTO guild.mc_delegation_runners (runner_id, state, capabilities, seen_at, environment,
+                roles, protocol) VALUES (%s, 'reading', '[]'::jsonb, clock_timestamp(), %s, %s::jsonb, 2)
+                ON CONFLICT (runner_id) DO UPDATE SET seen_at=EXCLUDED.seen_at""",
+                        (f"reader/{self.environment}/{reader}", self.environment, json.dumps([f"reader:{role}"])))
+            if role == "owner":
+                self._event(cur, "owner.read", source="owner", body={"reader": reader})
+
+    # ── the owner path for queued decisions (R4.3-b, R7.4-c; spec §7.2's A and J) ──
+    def resolve(self, decision_id, answer, *, by, receipt) -> dict:
+        """Robert's verified answer to one queued decision, on any item, ended ones included. ``receipt`` is the owner
+        path's proof: {channel, turn_id, words, decision_sha256}; ``decision_sha256`` must be the digest of the
+        decision's words as the authority renders them (snapshot.decision_words), so an answer binds exactly the text
+        Robert read, and a batched "yes" binds each decision's own digest. His words are kept here only as their
+        digest (the supervision receipt keeps the words). What yes and no do is fixed by the decision (its words say
+        it): admit under an exact approval the owner path issues now with his turn's id, or decline (the step ends,
+        and its card); end; accept an item's reported result once no effect of it is open (its card goes on:
+        _card_advance); acknowledge a decision about an item that has ended; reassign; or leave it waiting. One
+        transaction. -> {state: resolved | waiting | moot | already_resolved, action, outcome?: the act's answer}"""
+        _need(self._v2, "protocol_not_enabled")
+        did = _uuid_text(decision_id, "decision_id_invalid")
+        _need(answer in ("approved", "declined"), "answer_invalid")
+        _need(type(by) is str and _ID.match(by), "owner_invalid")
+        _need(type(receipt) is dict and set(receipt) == {"channel", "turn_id", "words", "decision_sha256"}
+              and receipt["channel"] in ("telegram", "guild", "mc", "test_owner")
+              and type(receipt["turn_id"]) is str and 0 < len(receipt["turn_id"]) <= 128
+              and receipt["turn_id"] == receipt["turn_id"].strip()
+              and not re.search(r"[\x00-\x1f\x7f]", receipt["turn_id"])
+              and type(receipt["words"]) is str and 0 < len(receipt["words"]) <= 600
+              and type(receipt["decision_sha256"]) is str and _SHA.match(receipt["decision_sha256"]), "receipt_invalid")
+        evidence = {"channel": receipt["channel"], "turn_id": receipt["turn_id"],
+                    "words_sha256": hashlib.sha256(receipt["words"].encode("utf-8")).hexdigest(),
+                    "decision_sha256": receipt["decision_sha256"]}
+        with self._tx() as cur:
+            cur.execute("""SELECT event_id, item_id, generation, at, body FROM guild.mc_delegation_events
+                WHERE event_id=%s AND kind='decision.queued' AND principal_id=%s AND environment=%s""",
+                        (did, self.principal, self.environment))
+            dq = cur.fetchone()
+            _need(dq is not None, "decision_not_found")
+            row = self._item(cur, dq["item_id"])
+            _need(row is not None, "unknown_request")
+            done = self._recorded(cur, _once("decision_resolved", did))
+            if done is not None:
+                return {"state": "already_resolved", "answer": done.get("answer"), "action": done.get("action")}
+            d = {"decision_id": did, "class": dq["body"].get("class"), "body": dq["body"],
+                 "generation": dq["generation"]}
+            words = snap.decision_words(d, row)
+            _need(hmac.compare_digest(snap.sha256(words), receipt["decision_sha256"]), "decision_words_changed")
+            yes, no = snap.decision_actions(d, row)
+            action = yes if answer == "approved" else no
+            refs = {"decision_id": did, "answer": answer, "action": action, "by": by, "class": d["class"],
+                    "card_id": row["card_id"], "receipt": evidence}
+            if action == "leave":
+                self._event(cur, "decision.answered", item=row["request_id"], generation=row["generation"],
+                            source="owner", body=refs)
+                return {"state": "waiting", "action": action}
+            if action in ("admit", "decline") and row["state"] != "proposed" or \
+                    action in ("end", "accept", "reassign") and row["state"] in TERMINAL:
+                # The item moved on since the decision was queued (revoked, ended by another act): nothing to do, and
+                # the decision is closed so it never waits for ever.
+                self._event(cur, "decision.resolved", item=row["request_id"], generation=row["generation"],
+                            source="owner", once=_once("decision_resolved", did),
+                            body={**refs, "answer": "moot", "item_state": row["state"]})
+                return {"state": "moot", "action": action, "item_state": row["state"]}
+            # Recorded first, so an act's own decision record (_resolve_decision, admit's) finds it already there.
+            self._event(cur, "decision.resolved", item=row["request_id"], generation=row["generation"], source="owner",
+                        once=_once("decision_resolved", did), body=refs)
+            note = f"decision {did[:8]}, {receipt['channel']} {receipt['turn_id']}"
+            out = {}
+            if action == "admit":
+                out = self._admit_in(cur, row, self._admission_grant(cur, row, did, receipt["turn_id"]), by, note)
+            elif action == "decline":
+                self._close(cur, row, "cancelled", {"code": "owner_declined", "by": by, "decision_id": did},
+                            children_stopped=True, source="owner")
+                out = {"item_state": "cancelled"}
+            elif action == "end":
+                out = self._end_in(cur, row, by, note)
+            elif action == "accept":
+                out = self._accept_in(cur, row, by, note)
+            elif action == "reassign":
+                out = self._reassign_in(cur, row, dq["body"].get("runner_id"), by, note)
+            return {"state": "resolved", "action": action, "outcome": out}
+
+    def _admission_grant(self, cur, row, decision_id, turn_id) -> str:
+        """The exact approval the owner path issues on Robert's yes to admit one proposed card step (a step its card's
+        grant no longer admits, a cross-vendor review, a redo): one operation, for that step's digest only, its work
+        the card, its lifetime the card's own (else a day), its approval window the next 15 minutes (it is used now),
+        issued with his turn's id (R4.3-b). Its id is derived from the decision, so it is issued once."""
+        from core.minimoi_actions.context import ActionContractError
+        from core.minimoi_actions.grants import GrantDefinition
+        subject = _row_subject(row)
+        _need(subject is not None, "item_invalid")
+        _, compiled = self._card_record(cur, row["card_id"])
+        life = (None if compiled is None else compiled.card["lifetime_s"]) or card_mod.DAY_S
+        cur.execute("SELECT clock_timestamp() AS now")
+        now = cur.fetchone()["now"]
+        gid = str(uuid.uuid5(uuid.UUID(decision_id), "owner-admission"))
+        work = row["card_id"] or row["job_id"]
+        capability = "delegate.start_build" if row["scope"] == "build" else "delegate.start_research"
+        try:
+            self._grants.issue(cur.connection, GrantDefinition(
+                gid, self.principal, self.environment, work, (turn_id,), (card_mod.CARD_ACTOR,), card_mod.CARD_POLICY,
+                capability, 1, (subject,), 1, now + timedelta(seconds=life), work_id=work, proposal_id=decision_id,
+                approved_operation_id=str(uuid.uuid5(uuid.UUID(decision_id), "approved-operation")),
+                approval_expires_at=now + timedelta(minutes=15)))
+        except ActionContractError as exc:
+            raise AuthorityRefused(str(exc)) from None
+        return gid
+
+    def accept(self, request_id, *, by, note) -> dict:
+        """The owner accepts the result an item reported while an effect of it was open (S1-B's effects_open), once
+        none is open: the item ends as reported, and a card step's card goes on (_card_advance), in one transaction."""
+        _need(self._v2, "protocol_not_enabled")
+        rid = _uuid_text(request_id, "request_id_invalid")
+        by, note = _owner_act(by, note)
+        with self._tx() as cur:
+            row = self._item(cur, rid)
+            _need(row is not None and row["route"] is not None, "unknown_request")
+            return self._accept_in(cur, row, by, note)
+
+    def _accept_in(self, cur, row, by, note) -> dict:
+        rid = str(row["request_id"])
+        detail = row["result_detail"] or {}
+        reported = detail.get("reported")
+        _need(row["state"] == "unknown", "item_not_unknown")
+        _need(type(reported) is dict and reported.get("status") in RESULT_STATES and row["result_event_id"] is not None,
+              "nothing_reported")
+        _need(not (row["facts"] or {}).get("ending"), "item_ending")
+        _need(not self._open_receipts(cur, rid), "effects_still_open")
+        status = reported["status"]
+        final = {**(reported.get("detail") or {}), "accepted": {"by": by, "decision_id": detail.get("decision_id")}}
+        cur.execute("""UPDATE guild.mc_delegations SET state=%s, result_detail=%s::jsonb, finished_at=clock_timestamp(),
+            lease_until=NULL WHERE request_id=%s""", (status, json.dumps(final), rid))
+        self._event(cur, "item.accepted", item=rid, generation=row["generation"], source="owner",
+                    body={"status": status, "by": by, "note": note, "card_id": row["card_id"],
+                          "decision_id": detail.get("decision_id")})
+        self._event(cur, f"item.{status}", item=rid, generation=row["generation"], source="owner",
+                    once=_once(status, rid, row["generation"]), body={"code": "owner_accepted"})
+        self._resolve_decision(cur, row, "accepted", by)
+        if (row["facts"] or {}).get("card"):
+            self._card_advance(cur, row, status, row["artifacts"])
+        return {"state": status, "code": "owner_accepted"}
+
+    def propose_reassignment(self, request_id, runner_id, *, by) -> dict:
+        """MC proposes a reassignment (R5.1-c: MC reads and proposes; only Robert reassigns, R5.1-d): one queued
+        decision of the reassignment class, which never shares a batched approval (R7.4-c). Robert's yes reassigns."""
+        _need(self._v2, "protocol_not_enabled")
+        rid = _uuid_text(request_id, "request_id_invalid")
+        _need(type(runner_id) is str and _ID.match(runner_id), "runner_id_invalid")
+        _need(type(by) is str and _ID.match(by), "proposer_invalid")
+        with self._tx() as cur:
+            row = self._item(cur, rid)
+            _need(row is not None and row["route"] is not None, "unknown_request")
+            _need(row["state"] in ("lapsed", "paused", "unknown") or
+                  (row["state"] in ("claimed", "running") and row["lease_until"] <= row["now"]), "item_not_reassignable")
+            target = self._runner(cur, runner_id)
+            _need(target is not None and target["protocol"] == 2 and target["environment"] == self.environment
+                  and "worker" in (target["roles"] or []), "target_invalid")
+            once = _once("reassign_proposal", rid, row["generation"], runner_id)
+            decision_id = str(uuid.uuid4())
+            if not self._event(cur, "decision.queued", item=rid, generation=row["generation"], once=once,
+                               event_id=decision_id, body={"class": "reassignment", "solo": True, "reason": "proposed",
+                                                           "runner_id": runner_id, "proposed_by": by,
+                                                           "card_id": row["card_id"], "step": row["step"]}):
+                cur.execute("""SELECT event_id FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s
+                    AND once_key=%s""", (self.principal, self.environment, once))
+                decision_id = str(cur.fetchone()["event_id"])
+            return {"state": "proposed", "decision_id": decision_id}
+
+    def record_owner_act(self, card_id, act, *, by, note) -> dict:
+        """O (§7.2): a merge, push or deploy of a card's work, recorded by the owner path. Counted, not targeted."""
+        _need(self._v2, "protocol_not_enabled")
+        _need(act in ("merge", "push", "deploy"), "owner_act_invalid")
+        by, note = _owner_act(by, note)
+        with self._tx() as cur:
+            _need(type(card_id) is str and self._recorded(cur, _once("card", card_id)) is not None, "card_unknown")
+            self._event(cur, "owner.act", source="owner", body={"card_id": card_id, "act": act, "by": by, "note": note})
+        return {"state": "recorded"}
+
+    def _failed_operations(self, cur, request_id) -> list:
+        """The item's effects whose receipts failed for good (finish failed): a retry of the item meets them again."""
+        return [op for op in self._operations(cur, request_id)
+                if self._receipts.read(cur.connection, self.principal, self.environment, op)["state"] == "failed"]
+
+    def _write_redo(self, cur, row, compiled, step, grant_id) -> bool:
+        """A card step that ended failed on a definitively failed effect: the same step written again as a new item
+        (a new job and request id, so new operation ids), proposed, created by the authority from the card's records
+        (no relay, OWN-2), with one decision (step_redo) that only Robert's yes admits, as one A. True once written;
+        False when this authority refuses to write it now (the card then ends with the reason)."""
+        from core.minimoi_actions.context import ActionContractError
+        rid, card_id = str(row["request_id"]), row["card_id"]
+        cur.execute("""SELECT count(*) AS n FROM guild.mc_delegations WHERE principal_id=%s AND environment=%s
+            AND card_id=%s AND step=%s""", (self.principal, self.environment, card_id, step.name))
+        k = cur.fetchone()["n"]
+        cur.execute("SAVEPOINT mc_card_redo")
+        try:
+            out = self._write_step(cur, compiled, step, grant_id, created_by="authority",
+                                   earlier=self._card_done(cur, card_id), job=f"{card_id}.{step.name}.redo{k}",
+                                   redo_of={"redo_of": rid, "operations": self._failed_operations(cur, rid)})
+        except (card_mod.CardRefused, AuthorityRefused, ActionContractError):
+            cur.execute("ROLLBACK TO SAVEPOINT mc_card_redo")
+            out = None
+        cur.execute("RELEASE SAVEPOINT mc_card_redo")
+        if out is None or out.get("request_id") is None:
+            return False
+        self._event(cur, "card.step_written", item=out["request_id"], generation=0,
+                    body={"card_id": card_id, "step": step.name, "after": step.name, "after_item": rid,
+                          "redo_of": rid, "state": out["state"], "code": out["code"]})
+        return True
+
+    def _requeue_outcome(self, cur, row):
+        """An item that reported its result while an effect of it was open (S1-B's effects_open) waits as unknown on
+        a decision whose yes ends it. Once the last of those effects is decided (its finish, or its readback), the
+        question changes: that decision is withdrawn (superseded), and one new solo decision asks Robert to accept
+        the reported result (his yes: accept, and the card goes on) or end it. Once per item and generation."""
+        detail = row["result_detail"] or {}
+        if row["state"] != "unknown" or not detail.get("reported") or detail.get("reason") == "result_reported":
+            return
+        rid = str(row["request_id"])
+        if self._open_receipts(cur, rid):
+            return
+        tally = {}
+        for op in self._operations(cur, rid):
+            state = self._receipts.read(cur.connection, self.principal, self.environment, op)["state"]
+            tally[state] = tally.get(state, 0) + 1
+        old, new = detail.get("decision_id"), str(uuid.uuid4())
+        g = row["generation"]
+        if not self._event(cur, "decision.queued", item=rid, generation=g, once=_once("decision_outcome", rid, g),
+                           event_id=new, body={"class": "unknown_resolution", "solo": True, "reason": "result_reported",
+                                               "operations": [], "reported": detail["reported"], "effects": tally,
+                                               "card_id": row["card_id"], "step": row["step"]}):
+            return
+        cur.execute("UPDATE guild.mc_delegations SET result_detail=%s::jsonb WHERE request_id=%s",
+                    (json.dumps({**detail, "reason": "result_reported", "operations": [], "decision_id": new,
+                                 "effects": tally}), rid))
+        if old is not None:
+            self._event(cur, "decision.resolved", item=rid, generation=g, once=_once("decision_resolved", old),
+                        body={"decision_id": old, "answer": "superseded", "by": "authority", "superseded_by": new})
+
+    # ── MC's judgment reservation (R7.5-c/d, §8.2, N3) ──
+    @staticmethod
+    def _state_digest(row) -> str:
+        """What a review would see change: state, generation, progress, checkpoint, result, lapse."""
+        cp = row["checkpoint"] or {}
+        return hashlib.sha256(json.dumps([row["state"], row["generation"], _iso(row["progress_at"]), cp.get("digest"),
+                                          str(row["result_event_id"]), row["lapse_cause"]],
+                                         default=str).encode()).hexdigest()
+
+    def reserve_judgment(self, *, trigger, items, by, note=None) -> dict:
+        """MC asks the authority before each judgment call (R7.5-c). Only Robert, or a review slot of a card that its
+        grant already admits, may start one (R7.5-d): ``trigger`` {kind: owner, turn_id} or {kind: card_slot,
+        item_id}; any other (a flag, a detector, a nudge, a timer) is refused judgment_trigger_not_allowed. Per item:
+        once escalated, refused mc_escalated; past its per-item maximum, refused mc_judgment_item_max; reviewed within
+        its window (its class progress timeout, N3), coalesced into that review (no new call). Then the day's cap:
+        calls_per_day calls and less than per_day in the route's unit, else refused mc_judgment_cap. Otherwise one
+        call is reserved, in the same transaction, covering the items not coalesced.
+        -> {state: reserved, reservation_id, amount, unit} | {state: coalesced, reservation_ids} | {state: refused, code}"""
+        _need(self._v2, "protocol_not_enabled")
+        _need(type(by) is str and _ID.match(by), "owner_invalid")
+        _need(type(items) is list and 1 <= len(items) <= 8 and len(set(items)) == len(items), "items_invalid")
+        ids = [_uuid_text(i, "items_invalid") for i in items]
+        j = self.authority.judgment
+        with self._tx() as cur:
+            def refused(code):
+                self._event(cur, "judgment.refused", source="authority",
+                            body={"code": code, "items": ids, "trigger": _trigger_kind(trigger), "by": by})
+                return {"state": "refused", "code": code}
+            if j is None:
+                return refused("judgment_not_configured")
+            kind = _trigger_kind(trigger)
+            if kind not in ("owner", "card_slot"):
+                return refused("judgment_trigger_not_allowed")       # a flag, detector, nudge or timer starts nothing
+            if kind == "owner":
+                _need(set(trigger) == {"kind", "turn_id"} and type(trigger["turn_id"]) is str
+                      and _ID.match(trigger["turn_id"]), "trigger_invalid")
+            else:
+                _need(set(trigger) == {"kind", "item_id"}, "trigger_invalid")
+                slot = self._item(cur, _uuid_text(trigger["item_id"], "trigger_invalid"), lock=False)
+                card = ((slot or {}).get("facts") or {}).get("card") or {}
+                if slot is None or card.get("kind") != "review" or not card.get("on_card") \
+                        or slot["state"] not in ("queued", "claimed", "running") or self._grant_refusal(cur, slot):
+                    return refused("judgment_slot_not_admitted")
+            self._lock_route(cur, j.route)
+            cur.execute("SELECT clock_timestamp() AS now, (clock_timestamp() AT TIME ZONE 'America/Chicago')::date AS day")
+            clock = cur.fetchone()
+            rows = {}
+            for rid in ids:
+                row = self._item(cur, rid, lock=False)
+                _need(row is not None and row["route"] is not None, "unknown_request")
+                rows[rid] = row
+            fresh, coalesced = [], {}
+            for rid, row in rows.items():
+                if self._recorded(cur, _once("judgment_escalated", rid)) is not None:
+                    return refused("mc_escalated")
+                cur.execute("""SELECT body, at FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s
+                    AND kind='judgment.reserved' AND body->'items' ? %s ORDER BY seq""",
+                            (self.principal, self.environment, rid))
+                reviews = cur.fetchall()
+                window = (self.authority.progress_timeout_s or {}).get(snap._class(row))
+                if window is None:
+                    return refused("judgment_window_unknown")
+                if reviews and (clock["now"] - reviews[-1]["at"]).total_seconds() < window:
+                    coalesced[rid] = reviews[-1]["body"]["reservation_id"]
+                elif len(reviews) >= j.per_item_max:
+                    return refused("mc_judgment_item_max")
+                else:
+                    fresh.append(rid)
+            for rid, reservation in coalesced.items():
+                self._event(cur, "judgment.coalesced", item=rid, generation=rows[rid]["generation"], source="authority",
+                            body={"reservation_id": reservation, "trigger": kind, "by": by})
+            if not fresh:
+                return {"state": "coalesced", "reservation_ids": sorted(set(coalesced.values()))}
+            cur.execute("""SELECT count(*) AS calls FROM guild.mc_delegation_events WHERE principal_id=%s
+                AND environment=%s AND kind='judgment.reserved' AND body->>'day' = %s""",
+                        (self.principal, self.environment, clock["day"].isoformat()))
+            calls = cur.fetchone()["calls"]
+            cur.execute("""INSERT INTO guild.mc_delegation_reservations (environment, route, day, unit) VALUES (%s,%s,%s,%s)
+                ON CONFLICT DO NOTHING""", (self.environment, j.route, clock["day"], j.unit))
+            cur.execute("""SELECT * FROM guild.mc_delegation_reservations WHERE environment=%s AND route=%s AND day=%s
+                FOR UPDATE""", (self.environment, j.route, clock["day"]))
+            day = cur.fetchone()
+            if day["unit"] != j.unit:
+                return refused("route_unit_changed")
+            if calls + 1 > j.calls_per_day or Decimal(day["reserved"]) + Decimal(day["observed"]) + j.per_call >= j.per_day:
+                return refused("mc_judgment_cap")
+            cur.execute("""UPDATE guild.mc_delegation_reservations SET reserved=reserved + %s, cap=%s,
+                updated_at=clock_timestamp() WHERE environment=%s AND route=%s AND day=%s""",
+                        (j.per_call, j.per_day, self.environment, j.route, clock["day"]))
+            reservation = str(uuid.uuid4())
+            self._event(cur, "judgment.reserved", source="owner" if kind == "owner" else "authority",
+                        body={"reservation_id": reservation, "trigger": {"kind": kind, **(
+                                  {"turn_id": trigger["turn_id"]} if kind == "owner" else {"item_id": trigger["item_id"]})},
+                              "items": fresh, "route": j.route, "unit": j.unit, "amount": float(j.per_call),
+                              "day": clock["day"].isoformat(), "by": by, "note": (note or "")[:300],
+                              "state_digests": {rid: self._state_digest(rows[rid]) for rid in fresh}})
+            return {"state": "reserved", "reservation_id": reservation, "amount": float(j.per_call), "unit": j.unit,
+                    "route": j.route, "items": fresh, **({"coalesced": coalesced} if coalesced else {})}
+
+    def record_judgment(self, reservation_id, *, usage, outcome) -> dict:
+        """The call's record (R7.5-c): its usage settles the reservation (unknown usage stays reserved, counted, never
+        released as zero), and its outcome is kept by kind and digest only. Then, per item, after ``escalate_after``
+        recorded reviews that each saw the item as it still is (no state change), MC escalates to Robert with the
+        evidence and reviews it no more (judgment.escalated; further reservations refused mc_escalated)."""
+        _need(self._v2, "protocol_not_enabled")
+        rid = _uuid_text(reservation_id, "reservation_invalid")
+        _need(usage is None or (type(usage) in (int, float) and math.isfinite(usage) and usage >= 0), "usage_invalid")
+        _need(type(outcome) is dict and set(outcome) == {"kind", "digest"} and outcome["kind"] in
+              ("proposal", "no_change", "escalate") and type(outcome["digest"]) is str and _SHA.match(outcome["digest"]),
+              "outcome_invalid")
+        j = self.authority.judgment
+        _need(j is not None, "judgment_not_configured")
+        with self._tx() as cur:
+            cur.execute("""SELECT body FROM guild.mc_delegation_events WHERE principal_id=%s AND environment=%s
+                AND kind='judgment.reserved' AND body->>'reservation_id' = %s""", (self.principal, self.environment, rid))
+            found = cur.fetchone()
+            _need(found is not None, "reservation_not_found")
+            body = found["body"]
+            if not self._event(cur, "judgment.recorded", once=_once("judgment_recorded", rid),
+                               body={"reservation_id": rid, "usage": usage, "unit": body["unit"], "outcome": outcome,
+                                     "items": body["items"]}):
+                return {"state": "already_recorded"}
+            self._lock_route(cur, body["route"])
+            if usage is not None:
+                cur.execute("""UPDATE guild.mc_delegation_reservations SET reserved=GREATEST(0, reserved - %s),
+                    observed=observed + %s, updated_at=clock_timestamp() WHERE environment=%s AND route=%s AND day=%s""",
+                            (Decimal(str(body["amount"])), Decimal(str(usage)), self.environment, body["route"],
+                             date.fromisoformat(body["day"])))
+            escalated = []
+            for item in body["items"]:
+                row = self._item(cur, item, lock=False)
+                cur.execute("""SELECT r.body FROM guild.mc_delegation_events r JOIN guild.mc_delegation_events d
+                      ON d.kind='judgment.recorded' AND d.principal_id=r.principal_id AND d.environment=r.environment
+                     AND d.body->>'reservation_id' = r.body->>'reservation_id'
+                    WHERE r.principal_id=%s AND r.environment=%s AND r.kind='judgment.reserved' AND r.body->'items' ? %s
+                    ORDER BY r.seq""", (self.principal, self.environment, item))
+                done = [r["body"] for r in cur.fetchall()]
+                last = done[-j.escalate_after:]
+                now = self._state_digest(row)
+                if len(last) >= j.escalate_after and all(b["state_digests"].get(item) == now for b in last):
+                    if self._event(cur, "judgment.escalated", item=item, generation=row["generation"],
+                                   once=_once("judgment_escalated", item),
+                                   body={"reviews": len(last), "reservations": [b["reservation_id"] for b in last],
+                                         "state_digest": now}):
+                        escalated.append(item)
+            return {"state": "recorded", "escalated": escalated}
+
     def _resolve_decision(self, cur, row, answer, by):
         """An owner act that settles an unknown item's queued decision records that it did."""
         decision = (row["result_detail"] or {}).get("decision_id") if row["state"] == "unknown" else None
@@ -2874,6 +3529,10 @@ def _attempt(row):
 
 def _stop(condition, code, state=None) -> dict:
     return {"answer": "stop", "condition": condition, "code": code, "state": state}
+
+
+def _trigger_kind(trigger):
+    return trigger.get("kind") if type(trigger) is dict and type(trigger.get("kind")) is str else None
 
 
 def _owner_act(by, note) -> tuple:

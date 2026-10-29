@@ -770,9 +770,31 @@ class HostRuntime:
 
     # ── the contact timer (R3.2-a: heartbeat on its own timer) ──
     def facts(self) -> dict:
-        return {"host_id": self.host.host_id, "bundle_digest": self.bundle_digest, "roles": list(self.host.roles),
-                "availability": self.host.expected_availability, "grace": self.host.unreachable_grace_s,
-                "last_gap_s": self.last_gap_s, "announced": self.announced}
+        out = {"host_id": self.host.host_id, "bundle_digest": self.bundle_digest, "roles": list(self.host.roles),
+               "availability": self.host.expected_availability, "grace": self.host.unreachable_grace_s,
+               "last_gap_s": self.last_gap_s, "announced": self.announced}
+        blocked = self._blocked_facts()
+        if blocked:                       # sent only while a task is blocked: otherwise the facts are as before
+            out["blocked"] = blocked
+        return out
+
+    def _blocked_facts(self) -> list:
+        """The tasks this host has blocked (N-E3), as the authority shows them (S1-G's snapshot and one notice each,
+        with the next step, an operator restart): {item_id, generation, code, since}. A task whose claim file can't be
+        read is left out of the facts; it stays in host-state.json and doctor."""
+        with self._lock:
+            blocked, since = dict(self.blocked), dict(self.blocked_since)
+        out = []
+        for task in sorted(blocked):
+            try:
+                claim = self._claim(task)
+            except (OSError, ValueError):
+                continue
+            if since.get(task) is None:
+                continue
+            out.append({"item_id": str(claim["request_id"]), "generation": int(claim["generation"]),
+                        "code": blocked[task], "since": since[task]})
+        return out[:32]
 
     def contact(self, announced=None) -> bool:
         """One heartbeat with the host's facts and, when the census holds unsent events, one bounded batch of them,
