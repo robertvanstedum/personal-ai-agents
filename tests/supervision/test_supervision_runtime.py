@@ -98,19 +98,20 @@ def test_the_portal_path_names_its_caller_only_when_configured(monkeypatch):
 
 
 class BatchStore:
-    """The supervision store's batched-message calls, as the tables answer them."""
+    """The supervision store's runtime-message calls, as the tables answer them: a batched message (77) carrying
+    D-1…D-3, and D-4 sent alone (message 88)."""
 
-    def __init__(self, rows):
-        self.rows, self.decided = rows, []
+    def __init__(self, rows, solo=None):
+        self.rows, self.solo, self.decided = rows, solo, []
 
     def by_message(self, message_id):
-        return None
+        return self.solo if (self.solo is not None and message_id == 88) else None
 
     def by_batch(self, message_id):
         return self.rows if message_id == 77 else []
 
     def decide(self, did, answer, receipt, *, text_sha256):
-        row = next(r for r in self.rows if r["id"] == did)
+        row = next(r for r in self.rows + ([self.solo] if self.solo else []) if r["id"] == did)
         if row["state"] not in ("new", "sent") or text_sha256 != row["text_sha256"]:
             return None
         row["state"] = answer
@@ -129,35 +130,71 @@ class Bot:
         return len(self.sent)
 
 
+def row(i, words, *, solo=False, state="sent"):
+    return {"id": i, "code": f"D-{i}", "state": state, "text": words, "text_sha256": hashlib.sha256(words.encode()).hexdigest(),
+            "requester": {"agent": "runtime", "decision_id": f"0000000{i}-0000-4000-8000-000000000000", "solo": solo}}
+
+
 def batch_rows():
-    words = ["Admit card C-1 step review (fakework on route fakework, 0.25): first.",
-             "Admit card C-2 step review (fakework on route fakework, 0.25): second.",
-             "Admit card C-3 step review (fakework on route fakework, 0.25): third."]
-    return [{"id": i, "code": f"D-{i}", "state": "sent", "text": w, "text_sha256": hashlib.sha256(w.encode()).hexdigest()}
-            for i, w in enumerate(words, 1)]
+    return [row(i, f"Admit card C-{i} step review (fakework on route fakework, 0.25): the card's own approval no longer "
+                   "admits it. Yes admits it; no ends the card.") for i in (1, 2, 3)]
+
+
+def solo_row():
+    return row(4, "Card C-4 step build is unknown: yes ends it; no leaves it waiting.", solo=True)
+
+
+def sup_for(store, bot, runtime=object()):
+    return M.Supervisor(store, bot, None, chat_id=OWNER, user_id=OWNER, runtime=runtime)
 
 
 def test_one_yes_to_a_batched_message_gives_one_receipt_per_decision_bound_to_its_own_digest():
     store, bot = BatchStore(batch_rows()), Bot()
-    sup = M.Supervisor(store, bot, None, chat_id=OWNER, user_id=OWNER, runtime=object())
+    sup = sup_for(store, bot)
     sup.handle(update("yes", reply_to=77))
     assert [(d, a) for d, a, _ in store.decided] == [(1, "approved"), (2, "approved"), (3, "approved")]
     receipts = [r for _, _, r in store.decided]
     assert {r["text"] for r in receipts} == {"yes"} and {r["reply_to_message_id"] for r in receipts} == {77}
-    assert [r["decision_sha256"] for r in receipts] == [row["text_sha256"] for row in store.rows]
+    assert [r["decision_sha256"] for r in receipts] == [r["text_sha256"] for r in store.rows]
     sup.handle(update("yes", reply_to=77))                 # again: nothing changes, and he is told
-    assert len(store.decided) == 3 and "already answered" in bot.sent[-1][0]
-    # an approval is still the whole short reply
-    store2 = BatchStore(batch_rows())
-    M.Supervisor(store2, Bot(), None, chat_id=OWNER, user_id=OWNER, runtime=object()).handle(
-        update("yes, and also merge it", reply_to=77))
+    assert len(store.decided) == 3 and bot.sent[-1][0] == "D-3 is no longer open (already approved); nothing changed."
+    store2 = BatchStore(batch_rows())                      # an approval is still the whole short reply
+    sup_for(store2, Bot()).handle(update("yes, and also merge it", reply_to=77))
     assert store2.decided == []
+
+
+@pytest.mark.parametrize("words", ["wait", "hold", "not now", "stop", "hold on, thinking", "don't"])
+@pytest.mark.parametrize("where", ["batched", "solo"])
+def test_sf1_a_holding_reply_declines_nothing_and_says_so(words, where):
+    store, bot = BatchStore(batch_rows(), solo_row()), Bot()
+    sup_for(store, bot).handle(update(words, reply_to=77 if where == "batched" else 88))
+    assert store.decided == []
+    assert bot.sent[-1][0].startswith("Nothing changed: ") and "still wait" in bot.sent[-1][0]
+
+
+@pytest.mark.parametrize("words", ["no, only D-2", "no D-2 but yes to the others", "no thanks, not that one",
+                                   "nope, later maybe", "maybe", "yes but only D-1"])
+@pytest.mark.parametrize("where", ["batched", "solo"])
+def test_sf1_a_partial_or_mixed_reply_is_not_counted_and_names_the_per_code_form(words, where):
+    store, bot = BatchStore(batch_rows(), solo_row()), Bot()
+    sup_for(store, bot).handle(update(words, reply_to=77 if where == "batched" else 88))
+    assert store.decided == []
+    assert bot.sent[-1][0].startswith("Not counted for ") and "one code at a time (approve D-" in bot.sent[-1][0]
+
+
+@pytest.mark.parametrize("where", ["batched", "solo"])
+def test_sf1_only_the_whole_short_no_declines(where):
+    store, bot = BatchStore(batch_rows(), solo_row()), Bot()
+    sup_for(store, bot).handle(update("No.", reply_to=77 if where == "batched" else 88))
+    expected = [(1, "declined"), (2, "declined"), (3, "declined")] if where == "batched" else [(4, "declined")]
+    assert [(d, a) for d, a, _ in store.decided] == expected
 
 
 def test_mixed_answers_go_one_code_at_a_time_and_never_without_a_runtime_link():
     store, bot = BatchStore(batch_rows()), Bot()
-    sup = M.Supervisor(store, bot, None, chat_id=OWNER, user_id=OWNER, runtime=object())
+    sup = sup_for(store, bot)
     sup.handle(update("no D-2", reply_to=77))
+    sup.handle(update("hold D-3", reply_to=77))           # "hold" one code: nothing changes
     sup.handle(update("approve D-9", reply_to=77))
     assert [(d, a) for d, a, _ in store.decided] == [(2, "declined")]
     assert bot.sent[-1][0] == "Not counted: D-9 is not in that message."
@@ -167,13 +204,160 @@ def test_mixed_answers_go_one_code_at_a_time_and_never_without_a_runtime_link():
     assert plain.decided == [] and bot2.sent[-1][0] == "Not counted: that message is not a decision."   # today's
 
 
+def test_n2_a_solo_decision_is_never_answered_by_a_batched_reply():
+    rows = batch_rows()[:2] + [row(5, "An unknown resolution that must arrive alone: yes ends it.", solo=True)]
+    store, bot = BatchStore(rows), Bot()
+    sup_for(store, bot).handle(update("yes", reply_to=77))
+    assert [d for d, _, _ in store.decided] == [1, 2]
+    sup_for(store, bot).handle(update("approve D-5", reply_to=77))
+    assert bot.sent[-1][0] == "Not counted: D-5 arrives on its own; answer it in its own message."
+
+
+def test_todays_agent_asks_keep_todays_grammar():
+    """Not a runtime row: "wait" still declines an agent's ask, word for word as today (telegram.parse_answer)."""
+    ask = {"id": 9, "state": "sent", "text": "Merge PR #1?", "text_sha256": "a" * 64,
+           "requester": {"agent": "claude-code", "session": "s"}}
+
+    class S(BatchStore):
+        def by_message(self, message_id):
+            return ask if message_id == 99 else None
+
+        def decide(self, did, answer, receipt, *, text_sha256):
+            self.decided.append((did, answer))
+            return ask
+    store = S([])
+    M.Supervisor(store, Bot(), None, chat_id=OWNER, user_id=OWNER).handle(update("wait", reply_to=99))
+    assert store.decided == [(9, "declined")]
+
+
 def test_batch_and_solo_messages_carry_full_words_and_say_what_one_yes_does():
     rows = batch_rows()
     text = tg.batch_message(rows)
-    assert all(r["text"] in text for r in rows) and "yes approves all 3 listed" in text
-    assert "approve D-1, no D-3" in text
+    assert all(r["text"] in text for r in rows) and "just “yes” approves all 3 listed" in text
+    assert "“wait” changes nothing" in text and "approve D-1, no D-3" in text
     solo = tg.runtime_message({"code": "D-4", "text": "Card C-4 step build is unknown: yes ends it."})
-    assert "on its own" in solo and "approve D-4" in solo
+    assert "on its own" in solo and "approve D-4" in solo and "“wait” changes nothing" in solo
+
+
+def test_sf2_robert_is_told_what_his_answer_did():
+    from core.supervision.runtime import outcome_text, closed_reason
+    r = {"code": "D-7", "state": "approved"}
+    assert outcome_text(r, {"state": "resolved", "action": "admit"}).startswith("Applied: D-7 approved: the step is")
+    assert "already moved on (cancelled)" in outcome_text(r, {"state": "moot", "item_state": "cancelled"})
+    assert "generation 3" in outcome_text(r, {"state": "stale", "generation_now": 3, "fresh_decision_id": "x"})
+    assert "already closed D-7 (withdrawn)" in outcome_text(r, {"state": "already_resolved", "answer": "withdrawn"})
+    assert outcome_text(r, {"state": "refused", "code": "grant_capability_unavailable", "reissued": "D-9"}) == \
+        "Not applied: D-7 was refused (grant_capability_unavailable); nothing was done. It still waits, as D-9."
+    assert closed_reason({"answer": "withdrawn", "code": "grant_revoked"}) == "the runtime withdrew it (grant_revoked)"
+    assert closed_reason({"answer": "superseded"}) == "a newer question replaced it"
+
+
+class FailingLink:
+    """A runtime link whose every step fails, as a missing table or a database error would make it."""
+
+    def __init__(self):
+        self.errors = []
+
+    def take_errors(self):
+        out, self.errors = self.errors, []
+        return out
+
+    def _boom(self, *a, **k):
+        raise RuntimeError("boom")
+
+    apply = close_closed = deliver = drain = check_in = _boom
+
+
+class TickStore:
+    def __init__(self):
+        self.alerts, self.checkins = set(), []
+
+    def pending(self):
+        return []
+
+    def unannounced(self):
+        return []
+
+    def offset(self):
+        return 0
+
+    def set_offset(self, value):
+        pass
+
+    def latest_stops(self):
+        return []
+
+    def delegations(self):
+        return {"jobs": [], "runners": []}
+
+    def new_alert_keys(self, keys):
+        fresh = [k for k in keys if k not in self.alerts]
+        self.alerts.update(keys)
+        return fresh
+
+    def record_checkin(self, summary, told, telegram):
+        self.checkins.append((summary, told))
+        return {"id": len(self.checkins)}
+
+
+class TickBot(Bot):
+    def updates(self, offset, *, wait=25):
+        return []
+
+
+def test_sf3_a_failing_runtime_link_never_stops_the_tick(tmp_path, monkeypatch):
+    monkeypatch.setattr(M, "HEALTH", tmp_path / "alive")
+    store, bot = TickStore(), TickBot()
+
+    class GH:
+        def open_prs(self):
+            return []
+
+        def runs(self):
+            return []
+    sup = M.Supervisor(store, bot, GH(), chat_id=OWNER, user_id=OWNER, runtime=FailingLink())
+    sup.tick()
+    sup.next_checkin = 0
+    sup.tick()
+    assert (tmp_path / "alive").exists()                   # the health file is written
+    assert len(store.checkins) == 2                        # today's check-ins went on
+    told = [t for t, _ in bot.sent if t.startswith("MC: the runtime link failed")]
+    assert len(told) == 1 and "apply:boom, close:boom, deliver:boom, drain:boom" in told[0]   # once per key, a day
+    assert any("runtime link unreadable" in e for e in store.checkins[0][0]["errors"])
+
+
+def test_staging_watch_is_armed_by_the_credential_alone():
+    digest = "a" * 64
+    on = M._s1g_options({"MINIMOI_SUPERVISION_WATCH_TOKEN_SHA256": digest,
+                         "MINIMOI_SUPERVISION_WATCH_HOST": "staging-1"}, connect=None)
+    assert on == {"watch": {"timeout_s": 90, "hosts": ["staging-1"]}}           # N3's 90 s by default
+    assert M._s1g_options({"MINIMOI_SUPERVISION_WATCH_HOST": "staging-1",
+                           "MINIMOI_SUPERVISION_WATCH_TIMEOUT_S": "45"}, connect=None) == {}   # removed: disarmed
+
+
+def test_sf7_a_contact_that_cannot_be_written_never_costs_the_call():
+    class Cur:
+        def execute(self, sql, params=()):
+            if "supervision_contacts" in sql:
+                raise RuntimeError("relation guild.supervision_contacts does not exist")
+
+        def fetchone(self):
+            return None
+
+        def fetchall(self):
+            return []
+    s = Store(lambda: None)
+    s._run = lambda fn: fn(Cur())
+    assert s.worker({"phase": "pull"}, credential="worker") == {"decisions": [], "nudges": []}
+
+
+def test_n14_the_runtime_key_space_is_reserved():
+    from core.supervision.store import clean_ask
+    with pytest.raises(Refused):
+        clean_ask({"request_key": "rt-00000000-0000-4000-8000-000000000000", "agent": "codex", "session": "sess-1",
+                   "text": "Approve the thing please"})
+    assert clean_ask({"request_key": "ask-12345678", "agent": "codex", "session": "sess-1",
+                      "text": "Approve the thing please"})["request_key"] == "ask-12345678"
 
 
 class Link(RuntimeLink):
@@ -236,6 +420,9 @@ class WatchStore:
 
 def test_the_staging_watch_tells_silence_once_and_the_return_once_and_is_unarmed_before_a_heartbeat():
     assert watch.staging_watch(WatchStore([]), timeout_s=90) == []
+    stale_row = {"host_id": "staging-9", "last_at": NOW - timedelta(seconds=999), "now": NOW, "silent_since": None,
+                 "view": {}}
+    assert watch.staging_watch(WatchStore([stale_row]), timeout_s=90, hosts=["staging-1"]) == []   # disarmed
     row = {"host_id": "staging-1", "last_at": NOW - timedelta(seconds=30), "now": NOW, "silent_since": None,
            "view": {"authority_answering": True, "sweeper_age_s": 4, "lapsed_always_on": 0}}
     store = WatchStore([row])
