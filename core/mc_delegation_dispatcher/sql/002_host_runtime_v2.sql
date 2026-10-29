@@ -3,6 +3,12 @@
 -- tables. Applying 001 and 002 again changes nothing. No data is rewritten or removed; the only constraints dropped
 -- are 001's narrower state and actor checks, each replaced in the same statement block by a wider one.
 -- An item is a version 2 item exactly when it names a route (R6.7-e); version 1 rows keep route NULL.
+--
+-- Deployment rule: every store that can see version 2 items is built with the authority configuration
+-- (store.Authority). A store built without it runs version 1's statements unchanged, and its claim fails while a
+-- version 2 item it could match is the oldest queued row (the check below), so version 1 work behind it waits.
+-- Version 2 items therefore never share a database with an unconfigured store (spec R2.4-a, R2.4-d).
+-- The version 2 authority needs Python 3.10 or later (core.minimoi_actions); version 1 still runs on 3.9.
 
 ALTER TABLE guild.mc_delegations
   ADD COLUMN IF NOT EXISTS card_id               TEXT,
@@ -49,7 +55,9 @@ BEGIN
       CHECK (actor IN ('claude-code','codex','fakework'));
   END IF;
   -- R8.3-b in the database: a version 2 item is owned only with its spend reserved (the claim writes both in one
-  -- transaction). It also stops a version 1 claim, which knows nothing of reservations, from taking a version 2 item.
+  -- transaction). A version 1 claim knows nothing of reservations, so on an unconfigured store it raises here
+  -- whenever a version 2 item it matches is the oldest queued row: every such claim fails, and version 1 work behind
+  -- that item is not picked up, until the item leaves the queue. Hence the deployment rule in the header.
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'guild.mc_delegations'::regclass
                  AND conname = 'mc_delegations_v2_owned_reserved') THEN
     ALTER TABLE guild.mc_delegations ADD CONSTRAINT mc_delegations_v2_owned_reserved
@@ -89,6 +97,12 @@ CREATE TABLE IF NOT EXISTS guild.mc_delegation_events (
   recorded_at  TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
   body         JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(body) = 'object')
 );
+-- Host-supplied event ids and the authority's never share a predictable space: the authority's own events take a
+-- random event_id, and a transition it must record once carries once_key instead, which no host can write.
+ALTER TABLE guild.mc_delegation_events
+  ADD COLUMN IF NOT EXISTS once_key TEXT CHECK (once_key IS NULL OR (source <> 'host' AND length(once_key) <= 200));
+CREATE UNIQUE INDEX IF NOT EXISTS mc_delegation_events_once ON guild.mc_delegation_events (principal_id, environment, once_key)
+  WHERE once_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS mc_delegation_events_item ON guild.mc_delegation_events (item_id, seq) WHERE item_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS mc_delegation_events_kind ON guild.mc_delegation_events (environment, kind, seq);
 
