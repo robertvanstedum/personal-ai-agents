@@ -846,8 +846,94 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
         fresh = "D-{}".format(self.sql("SELECT max(id) AS id FROM guild.supervision_decisions")[0]["id"])
         solo = [m["text"].split("\n")[0] for m in self.notify.lines() if "on its own" in m["text"]]
         self.assertEqual(solo, [f"Decision {fresh} waiting on you, on its own"])
-        self.assertTrue(any(t.startswith("Not applied: D-1 was refused (grant_capability_unavailable); nothing was "
-                                         f"done. It still waits, as {fresh}.") for t in self.runtime_texts()))
+        # D-1 was replaced before the stop: completed here, never taken to the authority again (fix2 re-check).
+        self.assertTrue(any(t.startswith(f"Not applied: D-1 was refused and replaced by {fresh}; nothing was done.")
+                            for t in self.runtime_texts()), self.runtime_texts())
+
+    # ── Codex's fix2 re-check: once a fresh D-code exists, the answer it replaced never reaches the authority again ──
+    def recheck_setup(self, **faults):
+        """Robert's yes to a step admission that the narrow authority refuses (its capability missing), through a
+        supervision store with the given faults (fail_mark: the next mark fails; stop_after_write: the next fresh
+        D-code's write commits and then the process stops). Returns (store, the first message)."""
+        narrow = DispatcherStore(self.connect, principal="robert", environment="dev", authority=AUTH,
+                                 grants=GrantStore({**C.grant_rows(), SINK: CapabilityRule(1, False, True)}))
+
+        class Faulty(Store):
+            fail_mark = stop_after_write = 0
+
+            def runtime_decision(self, *args, **kwargs):
+                out = super().runtime_decision(*args, **kwargs)
+                if kwargs.get("reissue") and self.stop_after_write:
+                    self.stop_after_write -= 1
+                    raise SystemExit("process_stopped")          # the whole process stops: nothing else runs
+                return out
+
+            def mark_applied(self, decision_id):
+                if self.fail_mark:
+                    self.fail_mark -= 1
+                    raise RuntimeError("process_stopped")
+                return super().mark_applied(decision_id)
+        store = Faulty(self.connect)
+        self.narrow_sup = Supervisor(store, self.notify, GitHub(), chat_id=OWNER, user_id=OWNER,
+                                     runtime=RuntimeLink(narrow, owner="robert", view_bound_s=60))
+        self.admit(card())
+        self.sql("UPDATE guild.mc_action_grants SET consumed_operations = max_operations")
+        _, env = self.claim()
+        self.result(env, artifacts=[art("patch", "b")])
+        self.publish()
+        self.narrow_sup.runtime_tick()
+        (first,) = self.notify.lines()
+        self.notify.reply("yes", first["message_id"])
+        self.narrow_sup.read_answers(wait=0)
+        for k, v in faults.items():
+            setattr(store, k, v)
+        return store, first
+
+    def fresh_code(self):
+        return "D-{}".format(self.sql("SELECT max(id) AS id FROM guild.supervision_decisions")[0]["id"])
+
+    def test_recheck_an_old_yes_never_overrides_a_newer_no(self):
+        """Codex's reproduction, as a regression: the yes is refused, the fresh D-code is written and sent, and the
+        process stops before the yes is marked applied; Robert says no to the fresh code; after a restart, with the
+        capability back, the old yes must not admit the step. His newer no is the one taken."""
+        self.recheck_setup(fail_mark=1)
+        self.narrow_sup.runtime_tick()
+        fresh = next(m for m in self.notify.lines() if "on its own" in m["text"])
+        self.notify.reply("no", fresh["message_id"])
+        self.narrow_sup.read_answers(wait=0)
+        self.assertEqual([r["state"] for r in self.sql("SELECT state FROM guild.supervision_decisions ORDER BY id")],
+                         ["approved", "declined"])
+        self.sup.runtime_tick()                                      # a restart, the ordinary catalogue
+        self.assertEqual(self.item("C-17.review")["state"], "cancelled")      # the no, never the old yes
+        code = self.fresh_code()
+        texts = self.runtime_texts()
+        self.assertTrue(any(t.startswith(f"Not applied: D-1 was refused and replaced by {code}") for t in texts),
+                        texts)
+        self.assertTrue(any(t.startswith(f"Applied: {code} declined") for t in texts), texts)
+        self.assertEqual(self.sql("""SELECT count(*) AS n FROM guild.supervision_decisions
+            WHERE delivered_at IS NULL""")[0]["n"], 0)
+
+    def test_recheck_a_stop_after_the_fresh_code_is_written_before_it_is_sent_asks_robert_again(self):
+        """The fresh D-code's write commits and the process stops before anything is sent or marked. After a restart,
+        with the capability back, the old yes is completed here and never taken to the authority again; the fresh code
+        goes out once, and only Robert's answer to it admits the step."""
+        self.recheck_setup(stop_after_write=1)
+        with self.assertRaises(SystemExit):
+            self.narrow_sup.runtime_tick()
+        self.assertEqual([(r["state"], r["delivered_at"] is None) for r in
+                          self.sql("SELECT state, delivered_at FROM guild.supervision_decisions ORDER BY id")],
+                         [("approved", True), ("new", True)])
+        self.assertEqual([m for m in self.notify.lines() if "on its own" in m["text"]], [])
+        self.sup.runtime_tick()                                      # a restart, the ordinary catalogue
+        self.sup.runtime_tick()
+        self.assertEqual(self.item("C-17.review")["state"], "proposed")       # the old yes admitted nothing
+        code = self.fresh_code()
+        solo = [m for m in self.notify.lines() if "on its own" in m["text"]]
+        self.assertEqual([m["text"].split("\n")[0] for m in solo], [f"Decision {code} waiting on you, on its own"])
+        self.notify.reply("yes", solo[0]["message_id"])
+        self.sup.read_answers(wait=0)
+        self.sup.runtime_tick()
+        self.assertEqual(self.item("C-17.review")["state"], "queued")
 
     def test_sf6_a_reassignment_answer_is_bound_to_the_generation_its_words_name(self):
         self.admit(card())

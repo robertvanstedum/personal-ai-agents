@@ -145,6 +145,15 @@ class RuntimeLink:
         from core.mc_delegation_dispatcher.store import AuthorityRefused
         out = []
         for d in store.runtime_answered():
+            if d.get("superseded_by"):
+                # Refused before, and replaced: a later D-code of the same decision exists (its insert consumed this
+                # answer). Never taken to the authority again, where it could override Robert's newer answer to the
+                # replacement (Codex's fix2 re-check); only completed here. deliver sends the replacement if unsent.
+                outcome = {"state": "superseded", "by": d["superseded_by"]}
+                store.mark_applied(d["id"])
+                self._outcomes[d["id"]] = outcome
+                out.append((d, outcome))
+                continue
             r = d["receipt"] or {}
             receipt = {"channel": r.get("channel"), "turn_id": _turn(r), "words": r.get("text"),
                        "decision_sha256": d["text_sha256"]}
@@ -160,8 +169,9 @@ class RuntimeLink:
                 continue                                     # not taken: tried again next tick
             if outcome["state"] == "refused":
                 # The fresh D-code is written before the answer is marked applied (Codex's fix1 delta check): if its
-                # write fails, or the process stops before the mark, the answer stays unapplied and is taken again,
-                # and the same fresh D-code (its key is fixed by the answered row) is found, never a second one.
+                # write fails, the answer stays unapplied and is taken again, and the fresh D-code's key is fixed by the
+                # answered row, so it is made once. Once written it consumes this answer (``superseded_by``): a stop
+                # before the mark below never lets this answer reach the authority again (Codex's fix2 re-check).
                 made = self._reissue(store, bot, chat_id, d)
                 if made is _NOT_WRITTEN:
                     continue                                 # the answer waits; refused again next tick, then written
@@ -187,9 +197,11 @@ class RuntimeLink:
                 if answer == "moot":
                     return {"state": "moot", "action": st.get("action"), "item_state": st.get("item_state")}
             return {"state": "already_resolved", "answer": st.get("answer"), "action": st.get("action")}
-        later = [r["code"] for r in store.runtime_rows(did) if r["id"] > row["id"] and r["state"] in ("new", "sent")]
+        later = [r for r in store.runtime_rows(did) if r["id"] > row["id"]]
+        if later and later[-1]["state"] in ("new", "sent"):
+            return {"state": "refused", "code": None, "reissued": later[-1]["code"]}
         if later:
-            return {"state": "refused", "code": None, "reissued": later[-1]}
+            return {"state": "superseded", "by": later[-1]["code"]}
         return {"state": "waiting", "action": "leave"}
 
     def tell_outcomes(self, store, bot, chat_id) -> list:
@@ -394,6 +406,9 @@ def outcome_text(row, outcome) -> str:
                 + (". A fresh decision follows." if outcome.get("fresh_decision_id") else "."))
     if state == "already_resolved":
         return f"Not applied: the runtime had already closed {code} ({outcome.get('answer')}); nothing was done."
+    if state == "superseded":
+        return (f"Not applied: {code} was refused and replaced by {outcome.get('by')}; nothing was done. Your answer "
+                f"to {outcome.get('by')} is the one taken.")
     why = f" ({outcome['code']})" if outcome.get("code") else ""     # after a restart the refusal's code is not kept
     return (f"Not applied: {code} was refused{why}; nothing was done"
             + (f". It still waits, as {outcome['reissued']}." if outcome.get("reissued") else "."))
