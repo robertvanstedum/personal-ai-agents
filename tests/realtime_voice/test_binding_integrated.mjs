@@ -180,6 +180,23 @@ await check('B S2 (xai), the usual order: his reply starts first, then the summa
   t.created('r_summary'); await flush(); t.drained('r_summary'); await flush();   // its audio played out
   assert.equal(t.posts('/end')[0].summary_playback, 'drained');
 }, { routes: SUMMARY }));
+// G-S1 (Gate 1 at b0c3518c), through the real page: Check's answer is being said when he says "Yes."; one reply starts and
+// drains; the page sums up; the provider's reply to "Yes." starts only now and drains. The summary never played: it ends at
+// its bound, as timeout, never heard. At b0c3518c this End said drained.
+await check('G-S1 (xai): a Check answer\'s own start never uses up the reply owed to "Yes.": the summary is not heard', () => run('xai', async (t) => {
+  t.start(); t.said('i0', 'What is stuck on twelve?'); t.stop(); t.created('r0'); t.over('r0');
+  t.s.check(); await flush(); await t.advance(8000);                     // Check with the person: its answer, at a pause
+  assert.equal(t.lines().filter((l) => l.startsWith('Say this briefly')).length, 1, 'the answer line was not sent');
+  t.start(); t.said('i1', 'Yes.'); t.stop();                             // "Yes." ends while the answer is in flight
+  t.created('L1_or_theirs'); await flush(); t.over('L1_or_theirs'); await flush();
+  t.s.sumUp(); await flush(); await t.advance(8000);
+  assert.equal(t.lines().filter((l) => l.startsWith('Say only this')).length, 1, 'the summary was not asked for');
+  t.created('auto_yes'); await flush(); t.drained('auto_yes'); await flush();
+  assert.equal(t.posts('/end').length, 0, 'the provider\'s late reply to "Yes." closed the summary');
+  await t.advance(9000);
+  assert.equal(t.posts('/end').length, 1);
+  assert.equal(t.posts('/end')[0].summary_playback, 'timeout');
+}, { routes: SUMMARY }));
 // B S3 + N2: a call from a barged-in reply is answered not done, with no reply asked for it; End names his turn not acted on.
 await check('B S3 + N2 (openai): a barged-in call is answered not done, and End names his turn not acted on', () => run('openai', async (t) => {
   t.start(); t.said('a', 'Save a note that A.'); t.stop(); t.commit('a'); t.asked('RA');

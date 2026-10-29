@@ -310,6 +310,36 @@ await check('B S2 (xAI): the provider\'s reply started first: the summary line\'
   s.start('r_summary'); await tick();
   assert.equal(id, 'r_summary');
 });
+// G-S1 (Gate 1 at b0c3518c, REVIEW_independent_A1_binding.md "Verification at b0c3518c"): the replies still owed are
+// counted, not flagged. The reviewer's order: Check's answer line is in flight when he says "Yes."; one start comes (the
+// line's own reply, or the provider's to "Yes.": either); the summary is asked for; the other one starts now. It is never the
+// summary's.
+await check('G-S1 (xAI): a page line\'s own start never uses up the provider\'s reply still owed to "Yes."', async () => {
+  const s = session('xai');
+  s.c.speakLine('Say this briefly, adding nothing: Check found two items.');   // Check's answer, in flight
+  s.speech(); s.said('i1', 'Yes.'); s.stopped();                                 // "Yes." ends: the provider owes it a reply
+  s.start('L1_or_theirs'); s.done('L1_or_theirs'); await tick();                 // the line's reply, or the provider's
+  let id = 'unset';
+  s.c.speakTracked('Say only this, then stop: we checked the board.').then((x) => { id = x; });
+  s.start('auto_yes'); await tick();                                             // the other of those two
+  assert.equal(id, null, 'the provider\'s late reply to "Yes." was taken for the summary');
+  s.done('auto_yes');
+  s.start('r_summary'); await tick();                                            // one start was still owed: this one
+  assert.equal(id, null);
+});
+await check('G-S1 (xAI), guard: once every reply owed has started, a page request\'s own start is known again', async () => {
+  const s = session('xai');
+  let first = 'unset', second = 'unset';
+  s.c.speakTracked('Say only this, then stop: one.').then((x) => { first = x; });
+  s.start('r1'); await tick();
+  assert.equal(first, 'r1', 'with no reply of the provider\'s owed, the request\'s own start was not known');
+  s.done('r1');
+  s.speech(); s.said('i1', 'Thanks.'); s.stopped(); s.commit('i1');             // one utterance: its stop and its commit
+  s.start('auto_1'); s.done('auto_1');                                           // the provider's reply to it
+  s.c.speakTracked('Say only this, then stop: two.').then((x) => { second = x; });
+  s.start('r2'); await tick();
+  assert.equal(second, 'r2', 'a stop and its commit were counted as two turns, or the reply did not count down');
+});
 await check('B N4 (OpenAI): a holding line still waiting its turn is withdrawn; one already sent is not', async () => {
   const s = session('openai');
   s.utter('item_A'); s.start('R_A');
@@ -681,4 +711,4 @@ if (failures.length) {
   console.log(`${failures.length} of ${cases} response-binding regressions FAILED:\n  ${failures.join('\n  ')}`);
   process.exit(1);
 }
-console.log(`${cases} response-binding regressions passed (C2 by construction, I1–I7; M1, V-M1, LP1, LP2, F1, R3-S1 F/G/H, W N4, F2); real controller and adapters, synthetic provider events.`);
+console.log(`${cases} response-binding regressions passed (C2 by construction, I1–I7; M1, V-M1, LP1, LP2, F1, R3-S1 F/G/H, W N4, F2; B S1–N6; G-S1); real controller and adapters, synthetic provider events.`);

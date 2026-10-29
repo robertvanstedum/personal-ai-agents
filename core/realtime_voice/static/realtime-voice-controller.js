@@ -94,7 +94,8 @@ export class RealtimeVoiceController {
     this._answers = new Map();       // response id -> {owner: his item id or null, turn, acts}, or null: not the page's
     this._turn = 0;                  // his turns: each speech start and each commit begins a new one
     this._lost = false;              // a page request was let go before it started: from then on no untagged start is ours
-    this._awaiting = false;          // the provider may still start its own reply to his last turn (a provider that replies)
+    this._owed = 0;                  // where the provider replies itself: its replies to his turns not yet started (G-S1)
+    this._utterance = null;          // his utterance so far: "speaking", then "stopped" or "committed" (counted once)
     this._echoed = false;            // the provider has echoed a page request's tag: from then on an untagged start is not ours
     this._tags = 0;
     this._expiry = null;
@@ -231,8 +232,8 @@ export class RealtimeVoiceController {
     // The page's own responses (Spec 165 §5.1), first, so a host asking inputOf() from any callback below sees them current.
     on("connected", () => this._reset());
     on("closed", () => this._reset());
-    on("speech_started", () => { this._turn += 1; });
-    on("speech_stopped", () => { if (!this._owned) this._awaiting = true; });
+    on("speech_started", () => { this._turn += 1; this._utterance = "speaking"; });
+    on("speech_stopped", () => this._ended("stopped"));
     on("output_transcript", () => this._alive());
     on("assistant_started", () => this._alive());
     on("input_item", (evt) => this._committed(evt.item_id || null));
@@ -447,10 +448,20 @@ export class RealtimeVoiceController {
   // the earlier one again if he needs it). A commit naming no item still gets a response, which may act on no one.
   _committed(item) {
     this._turn += 1;
-    if (!this._owned) { this._awaiting = true; return; }
+    if (!this._owned) { this._ended("committed"); return; }
     for (const entry of this._queue.filter((e) => e.kind === "turn")) this._let(entry, "superseded");
     if (!item) this._onUnbound({ reason: "commit_without_item" });
     try { this._ask(item, (tag) => this._adapter.createResponse(tag), null, "turn"); } catch (_) { /* the transport is closed */ }
+  }
+
+  // His turn ended (speech_stopped) or was committed. Where the provider creates its own replies (xAI), each turn of his
+  // may still get one: counted, once per utterance, not flagged (review G-S1), so a page line's own start can never use up
+  // the provider's reply still owed to "Yes.". A commit after its own speech_stopped is the same utterance; one with no
+  // stop before it is counted too. Too many only makes a tracked wait end at its bound (never heard): it fails safe.
+  _ended(how) {
+    if (this._owned) return;
+    if (how === "committed" ? this._utterance !== "stopped" : !["stopped", "committed"].includes(this._utterance)) this._owed += 1;
+    this._utterance = how;
   }
 
   // A response this controller asks for: his committed item's (turn), a function result's follow-up (follow), or the
@@ -535,7 +546,7 @@ export class RealtimeVoiceController {
 
   _reset() {
     const pending = this._inflight ? [this._inflight, ...this._queue] : this._queue.slice();
-    this._queue = []; this._inflight = null; this._lost = false; this._echoed = false; this._awaiting = false;
+    this._queue = []; this._inflight = null; this._lost = false; this._echoed = false; this._owed = 0; this._utterance = null;
     for (const entry of pending) if (entry.done) { const done = entry.done; entry.done = null; done(null); }
     this._arm();
   }
@@ -546,20 +557,22 @@ export class RealtimeVoiceController {
   // shown it echoes them) answers no one; where the page creates every response it is logged. Once a request has been let
   // go before it started, no untagged start can be told from that request's late one, for the rest of the session (review
   // B S1): it settles the request in flight but answers no one ("say it again"); a tagged one still binds exactly. Where the
-  // provider creates its own replies (xAI), an untagged start while his last turn may still get the provider's reply cannot
+  // provider creates its own replies (xAI), an untagged start while a turn of his may still get the provider's reply cannot
   // be told from that reply (review B S2): it settles the request in flight but resolves no wait (a tracked summary then
-  // ends at its bound, never heard).
+  // ends at its bound, never heard). The replies still owed are counted, never flagged (review G-S1): such a start leaves
+  // the count as it is (it was that reply or the request's own, and the other can still come); an untagged start with no
+  // request of the page's to be is one of them, and the count goes down by one.
   _started(evt) {
     if (!this._pageResponses) return;
     const id = evt.response_id || null;
     if (id && this._answers.has(id)) return;                     // its start was already seen
     this._pump();                                                // a request past its bound is let go first
     const f = this._inflight;
-    const theirs = !this._owned && !evt.tag && this._awaiting;   // possibly the provider's own reply to his turn
-    this._awaiting = false;
+    const theirs = !this._owned && !evt.tag && this._owed > 0;  // possibly the provider's own reply to a turn of his
     if (evt.tag) this._echoed = true;
     if (!f || f.started || (evt.tag ? evt.tag !== f.tag : this._echoed)) {
       if (id) this._answers.set(id, null);
+      if (theirs) this._owed -= 1;                                // one of the provider's replies still owed has started
       if (this._owned) this._onUnbound({ reason: !f ? "unrequested" : f.started ? "one_too_many" : evt.tag ? "another_tag" : "untagged",
         response_id: id });
       return;
