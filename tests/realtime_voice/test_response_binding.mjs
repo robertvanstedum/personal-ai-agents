@@ -221,9 +221,30 @@ for (const echo of [true, false]) {
     assert.notEqual(words(s, 0), 'Save a note: first request');
     if (!echo) assert.ok(s.unbound.some((u) => u.reason === 'after_lost_request'));
     s.start('F_next', { echo }); s.done('F_next');                       // its result's follow-up
-    s.utter('item_C'); s.start('R_C', { echo }); s.done('R_C', { call: 'c_C' }); await tick();   // the next one is his own
+    s.utter('item_C'); s.start('R_C', { echo }); s.done('R_C', { call: 'c_C' }); await tick();
     s.said('item_C', 'Check the kiln');
-    assert.equal(words(s, 1), 'Check the kiln');
+    // B S1: without the echo, no untagged start binds for the rest of the session (A's could still start); tagged, exact.
+    if (echo) assert.equal(words(s, 1), 'Check the kiln'); else assert.equal(s.bound(1), null);
+  });
+  // B S1 (the independent review of 8eb30a10; its probe, asserting the correct behaviour): A's request is let go at 10 s;
+  // B's own untagged start comes; C's request goes; then A's reply starts at last, carrying the save_note chosen for A. It
+  // must never act on C's words. With the tag echoed the same order binds exactly.
+  await check(`B S1 (OpenAI${echo ? ', tag echoed' : ', no tag echoed'}): a lost request's late reply never takes a later request's owner`, async (time) => {
+    const s = session('openai');
+    s.utter('a'); s.said('a', 'Save a note that the kiln is hot.');
+    time.pass(10500);                                                   // #1 is let go, never started
+    s.utter('b'); s.said('b', 'Hello again.');
+    const tagB = s.creates()[1].response.metadata.minimoi_tag;
+    s.start('RB', { echo, tag: tagB }); s.done('RB');                    // #2's own start
+    s.utter('c'); s.said('c', 'Check the board.');
+    const tagA = s.creates()[0].response.metadata.minimoi_tag;
+    s.start('RA_late', { echo, tag: tagA }); s.done('RA_late', { call: 'c_late', name: 'save_note' }); await tick();
+    assert.notEqual(words(s, 0), 'Check the board.', "the lost request's reply acted on C's words");
+    assert.equal(s.bound(0), null);
+    if (echo) {                                                         // the tag tells: C's own reply binds C
+      s.start('RC'); s.done('RC', { call: 'c_C' }); await tick();       // #3's own reply, still the one in flight
+      assert.equal(words(s, 1), 'Check the board.');
+    }
   });
 }
 
@@ -235,6 +256,76 @@ await check('new (OpenAI): a commit after the transport closed asks nothing and 
   s.a._dc = { send: (f) => s.frames.push(JSON.parse(f)) };
   s.utter('item_B');                                                   // the next commit asks for its own
   assert.equal(s.creates().length, 1);
+});
+
+// B N6 (the independent review of 8eb30a10): two properties the rewrite left without a case.
+await check('B N6 (OpenAI): a call from the page\'s own line reply, and from its follow-up, binds no owner', async () => {
+  const s = session('openai');
+  s.utter('item_A'); s.said('item_A', 'What time is it'); s.start('R_A'); s.done('R_A');
+  assert.equal(s.c.speak('Say this briefly, adding nothing: it is noon.'), true);
+  s.start('R_line'); s.done('R_line', { call: 'c_line' }); await tick();
+  s.start('R_line_f'); s.done('R_line_f', { call: 'c_line_f' }); await tick();
+  assert.equal(s.bound(0), null); assert.equal(s.bound(1), null);
+});
+await check('B N6 (OpenAI): a call with no response id binds nothing', async () => {
+  const s = session('openai');
+  s.utter('item_A'); s.said('item_A', 'Check the board'); s.start('R_A'); s.done('R_A');
+  assert.equal(s.c.inputOf({ call_id: 'x' }), null);
+  assert.equal(s.c.inputOf({ call_id: 'y', response_id: null }), null);
+  assert.equal(s.c.inputOf({ call_id: 'z', response_id: 'R_unknown' }), null);
+});
+// B N5: a started reply with no sign of life is let go after 20 s (never assigned); one whose output keeps coming is not.
+await check('B N5 (OpenAI): a started reply with no output for 20 s is let go; output keeps it in flight', async (time) => {
+  const s = session('openai');
+  s.utter('item_A'); s.start('R_A');
+  s.c.speak('Say this briefly, adding nothing: Still checking.');
+  time.pass(15000);
+  s.ev({ type: 'response.output_audio_transcript.delta', item_id: 'out_A', delta: 'Sure, ', event_id: 'o1' });   // alive
+  time.pass(19999); assert.equal(s.creates().length, 1, 'a reply still speaking was let go');
+  time.pass(1); assert.equal(s.creates().length, 2, 'a silent reply held the page past 20 s');
+  s.done('R_A', { call: 'c_A' }); await tick();                       // its late end: its owner is still its own
+  s.said('item_A', 'Check the board');
+  assert.equal(words(s, 0), 'Check the board');
+  assert.ok(s.unbound.some((u) => u.reason === 'unfinished' && u.owner === 'item_A'));
+});
+// B S2: where the provider creates its own replies (xAI), a page line's reply is known only when that is proven.
+await check('B S2 (xAI): his turn may still get the provider\'s reply: a start while the summary waits resolves no id', async () => {
+  const s = session('xai');
+  s.speech(); s.said('i0', "We're done."); s.stopped(); s.start('r0'); s.done('r0');
+  s.speech(); s.said('i1', 'Yes.'); s.stopped();                       // the provider's reply to it has not started
+  let id = 'unset';
+  s.c.speakTracked('Say only this, then stop: we checked the board.').then((x) => { id = x; });
+  s.start('auto_yes'); await tick();                                   // its reply, or the summary's? not provable
+  assert.equal(id, null, 'another response was taken for the summary');
+  s.done('auto_yes');
+  s.start('r_summary'); await tick();                                  // the summary's own start: one too many now
+  assert.equal(id, null);
+});
+await check('B S2 (xAI): the provider\'s reply started first: the summary line\'s own start is known', async () => {
+  const s = session('xai');
+  s.speech(); s.said('i1', 'Yes.'); s.stopped();
+  s.start('auto_yes'); s.done('auto_yes');                            // the provider's reply to "Yes.": no request in flight
+  let id = 'unset';
+  s.c.speakTracked('Say only this, then stop: we checked the board.').then((x) => { id = x; });
+  s.start('r_summary'); await tick();
+  assert.equal(id, 'r_summary');
+});
+await check('B N4 (OpenAI): a holding line still waiting its turn is withdrawn; one already sent is not', async () => {
+  const s = session('openai');
+  s.utter('item_A'); s.start('R_A');
+  const held = s.c.speakLine('Say this briefly, adding nothing: Still checking.');
+  assert.equal(held.withdraw(), true);
+  s.done('R_A');
+  assert.equal(s.creates().length, 1, 'a withdrawn line was sent');
+  const sent = s.c.speakLine('Say this briefly, adding nothing: Still working on it.');
+  assert.equal(s.creates().length, 2);
+  assert.equal(sent.withdraw(), false);
+});
+await check('B N2 (OpenAI): the place of his item, for naming a turn not acted on', async () => {
+  const s = session('openai');
+  s.utter('item_A'); assert.equal(s.c.placeOf('item_A'), null);       // no words yet: no place
+  s.said('item_A', 'Save a note: first request'); s.utter('item_B'); s.said('item_B', 'Check the board');
+  assert.equal(s.c.placeOf('item_A'), 0); assert.equal(s.c.placeOf('item_B'), 1); assert.equal(s.c.placeOf('nope'), null);
 });
 
 // ── I5: barge-in, cancelled and superseded responses, the earlier commit that never got its own ──────────────────────
@@ -258,7 +349,22 @@ await check('new (OpenAI): a function call from a cancelled response is refused:
   s.said('item_A', 'Make a note that the kiln is hot');
   assert.equal(s.calls.length, 0);
   assert.equal(s.creates().length, 1, 'a follow-up was asked for a refused call');
-  assert.ok(s.unbound.some((u) => u.reason === 'superseded_call' && u.response_id === 'R_A'));
+  assert.ok(s.unbound.some((u) => u.reason === 'superseded_call' && u.response_id === 'R_A' && u.owner === 'item_A'));
+  // B S3: the model's context is true: the call's output says it did not run, and no reply is asked for it.
+  const out = s.frames.filter((f) => f.type === 'conversation.item.create' && f.item.type === 'function_call_output');
+  assert.equal(out.length, 1);
+  assert.equal(out[0].item.call_id, 'c_A');
+  assert.deepEqual(JSON.parse(out[0].item.output), { ok: false, outcome: 'not_done', error: 'superseded',
+    spoken: 'Not run: superseded by what he said next. Nothing was done.' });
+});
+await check('B S3 (OpenAI): an overtaken reply\'s call gets a not-done output and no reply of its own; his newer turn is answered', async () => {
+  const s = session('openai');
+  s.utter('item_A'); s.start('R_A');
+  s.speech(); s.stopped(); s.commit('item_B');
+  s.done('R_A', { call: 'c_A' }); await tick();
+  const out = s.frames.filter((f) => f.type === 'conversation.item.create' && f.item.type === 'function_call_output');
+  assert.deepEqual(out.map((f) => [f.item.call_id, JSON.parse(f.item.output).error]), [['c_A', 'superseded']]);
+  assert.equal(s.creates().length, 2);                                 // B's reply only: none for the refused call
 });
 for (const status of ['incomplete', 'failed']) {
   await check(`new (OpenAI): a call from a response cut short (${status}) is refused`, async () => {

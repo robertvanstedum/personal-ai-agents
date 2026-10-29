@@ -30,7 +30,7 @@ import json
 import re
 import uuid
 
-from core.realtime_voice.direct_host import (LIVE_WINDOW_S, PLAYBACK, PLAYBACK_RECORD, RECOVERY,  # noqa: F401
+from core.realtime_voice.direct_host import (LIVE_WINDOW_S, NOT_ACTED_RECORD, PLAYBACK, PLAYBACK_RECORD, RECOVERY,  # noqa: F401
                                              SUMMARY_PROMPT, SUMMARY_UNAVAILABLE, Put, Receipts, affirmative, done_intent,
                                              full_differs, now, parse_stamp, same_record, session_id, stamp,
                                              state as _state)
@@ -296,6 +296,17 @@ def _playback(floor, sid):
     return {"summary_playback": rec["outcome"], "summary_heard": rec["outcome"] == "drained" and rec.get("heard") is True}
 
 
+def _not_acted(floor, sid):
+    """The note ids of this session's owner turns the page named as not acted on (review B S3, N2), from its durable
+    record: the first part of each such turn, which carries its label. Empty when none was kept or it cannot be read."""
+    try:
+        rec = get_record(floor, sid, NOT_ACTED_RECORD)
+    except Exception:
+        return set()
+    items = rec.get("owner_item_ids") if isinstance(rec, dict) else None
+    return {transcript_id(sid, "user", item) for item in items if isinstance(item, str)} if isinstance(items, list) else set()
+
+
 def process_view(config):
     """view's keywords from a mount's config: what this process (mc_voice_direct.install) knows of its sessions."""
     return {"live": config.get("mc_direct_voice_live") or (lambda _sid: False),
@@ -373,13 +384,14 @@ def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda reques
         sid = str(uuid.UUID(match.group(1))) if match else None
         if sid in direct:
             replies[reply_id(row["request_id"])] = sid
-    unresolved = {}
+    unresolved, not_acted = {}, set()
     for sid in direct:
         if not hider.hidden(sid):
             try:
                 unresolved.update(_unresolved(floor, rows, sid, running))
             except Exception:                           # a floor that cannot be read: the request stays as it is
                 pass
+            not_acted |= _not_acted(floor, sid)
     shown = []
     for row in rows:
         sid = owner(row) or replies.get(row.get("request_id"))
@@ -392,6 +404,8 @@ def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda reques
         if voice.get("kind") == "consult_request" and row.get("request_id") in unresolved:
             voice = {**voice, "kind": "consult_receipt", "outcome": unresolved[row["request_id"]], "unresolved": True,
                      "spoken": "", "ref": None, "ref_kind": None}
+        if voice.get("kind") == "owner_turn" and row.get("request_id") in not_acted:
+            voice = {**voice, "not_acted": True}           # his words that were not acted on: say it again if needed
         shown.append({**row, "voice": voice})
     sessions = []
     for sid in direct:

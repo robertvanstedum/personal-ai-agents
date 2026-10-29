@@ -135,3 +135,36 @@ def test_the_turn_standard_changes_only_for_a_caller_that_passes_interrupt_respo
     assert conversation_turn_detection("openai", create_response=False, interrupt_response=True)["interrupt_response"] is True
     assert conversation_turn_detection("xai") == {"type": "server_vad", "silence_duration_ms": 1200}
     assert conversation_turn_detection("xai", create_response=False) == {"type": "server_vad", "silence_duration_ms": 1200}
+
+
+# ── The binding pass's independent review at 8eb30a10 (REVIEW_independent_A1_binding.md) ──────────────────────────────
+
+def test_b_n7_on_a_provider_not_eligible_the_consult_route_runs_only_check(rig, monkeypatch):
+    """Defence in depth (B N7): the session records its provider's eligibility at bootstrap. On xAI a call that is not the
+    page's own Check ("host-…") runs nothing, and answers not done; Check still acts. On OpenAI the model's call acts."""
+    r = rig
+    xai_mint(monkeypatch, [])
+    grok = boot(r, "xai").get_json()["voice_session_id"]
+    refused = consult(r, grok, call_id="call_model", turn="t0").get_json()
+    assert refused["outcome"] == "not_done" and refused["error"] == "check_only" and "Check with TP" in refused["spoken"]
+    assert r.host.turns == []                                               # nothing ran
+    assert consult(r, grok, call_id="host-7", turn="t0").get_json()["outcome"] == "done" and len(r.host.turns) == 1
+    openai = boot(r, "openai").get_json()["voice_session_id"]
+    assert consult(r, openai, call_id="call_model", turn="t0").get_json()["outcome"] == "done" and len(r.host.turns) == 2
+
+
+def test_b_s3_end_keeps_the_owner_turns_not_acted_on_capture_ids_only_once_each(rig):
+    """B S3 + N2: End may name his turns not acted on (a commit let go, a reply cancelled or overtaken before its call ran).
+    The core keeps them once, capture ids only, de-duplicated and capped; a body that names none keeps nothing."""
+    from core.realtime_voice.direct_host import NOT_ACTED_MAX
+    r = rig
+    sid = boot(r, "openai").get_json()["voice_session_id"]
+    other = boot(r, "openai").get_json()["voice_session_id"]
+    ended = r.client.post(BASE + f"/session/{sid}/end", headers=OWNER,
+                          json={"not_acted": ["t0", "t0", "../x", 7, "t3"] + [f"t{n}" for n in range(10, 100)]})
+    assert ended.status_code == 200 and ended.get_json()["ended"] is True
+    kept = {rid: rec for (s, rid), rec in r.store.kept_records.items() if s == sid}["not_acted"]
+    assert kept["kind"] == "not_acted" and kept["owner_item_ids"][:2] == ["t0", "t3"]
+    assert len(kept["owner_item_ids"]) == NOT_ACTED_MAX
+    r.client.post(BASE + f"/session/{other}/end", headers=OWNER, json={})
+    assert "not_acted" not in {rid for (s, rid) in r.store.kept_records if s == other}

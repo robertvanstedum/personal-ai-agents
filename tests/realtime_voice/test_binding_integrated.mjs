@@ -23,11 +23,11 @@ const HOST = { ...DIRECT, providers: [{ provider: 'openai', label: 'OpenAI' }, {
 const failures = [];
 let cases = 0;
 
-async function run(provider, scenario) {
+async function run(provider, scenario, { routes = {} } = {}) {
   const real = Date.now; let now = 100000; Date.now = () => now;
   const a = provider === 'xai' ? new XAIWebSocketAdapter() : new OpenAIWebRTCAdapter();
   const frames = [];
-  if (provider === 'openai') a._dc = { send: (f) => frames.push(JSON.parse(f)) };
+  if (provider === 'openai') a._dc = { send: (f) => frames.push(JSON.parse(f)), close() {} };
   else a._ws = { send: (f) => frames.push(JSON.parse(f)), readyState: 1, close() {} };
   const posts = [], notices = [], timers = new Map(), unbound = [];
   let serial = 0, c = null;
@@ -47,10 +47,13 @@ async function run(provider, scenario) {
     fetch: async (url, opts = {}) => {
       const body = opts.body ? JSON.parse(opts.body) : null;
       if (opts.method === 'POST') posts.push({ url, body });
-      return { ok: true, status: 200, json: async () => (url.endsWith('/consult') ? { ok: true, outcome: 'done', spoken: 'Done' } : { ok: true, kept: body?.events?.length || 0 }) };
+      const route = Object.keys(routes).find((k) => url.split('?')[0].endsWith(k));
+      const answer = route ? await routes[route](body) : url.endsWith('/consult') ? { ok: true, outcome: 'done', spoken: 'Done' }
+        : url.endsWith('/end') ? { ok: true, ended: true, capture: 'complete' } : { ok: true, kept: body?.events?.length || 0 };
+      return { ok: true, status: 200, json: async () => answer };
     },
     loadController: async () => ({ RealtimeVoiceController: C }), warn: (_words, info) => unbound.push(info),
-    setTimeout: (fn, ms) => { timers.set(++serial, { fn, ms }); return serial; }, clearTimeout: (id) => timers.delete(id),
+    setTimeout: (fn, ms) => { timers.set(++serial, { fn, due: now + ms }); return serial; }, clearTimeout: (id) => timers.delete(id),
     setInterval: () => ++serial, clearInterval: () => {} });
   const ev = (e) => a._handleServerEvent(e);
   const tagOf = () => frames.filter((f) => f.type === 'response.create').at(-1)?.response?.metadata?.minimoi_tag || null;
@@ -68,6 +71,21 @@ async function run(provider, scenario) {
     call: (id, name = 'consult') => ev({ type: 'response.done', response: { id, status: 'completed', output: [{ type: 'function_call', call_id: 'call_' + id, name, arguments: '{}' }] } }),
     over: (id) => ev({ type: 'response.done', response: { id, status: 'completed', output: [] } }),
     pass: (ms) => { now += ms; },
+    // The page's own timers, run in order up to ms from now (the controller's are on Date.now, read at its next event).
+    async advance(ms) {
+      const until = now + ms;
+      for (;;) {
+        const next = [...timers].filter(([, x]) => x.due <= until).sort((p, q) => p[1].due - q[1].due)[0];
+        if (!next) break;
+        timers.delete(next[0]); now = next[1].due; next[1].fn(); await flush();
+      }
+      now = until; await flush();
+    },
+    drained: (id, outcome = 'drained') => a._emit('playback_drained', { response_id: id, outcome }),
+    posts: (end) => posts.filter((p) => p.url.split('?')[0].endsWith(end)).map((p) => p.body),
+    outputs: () => frames.filter((f) => f.type === 'conversation.item.create' && f.item.type === 'function_call_output')
+      .map((f) => [f.item.call_id, JSON.parse(f.item.output)]),
+    lines: () => frames.filter((f) => f.type === 'conversation.item.create' && f.item.type === 'message').map((f) => f.item.content[0].text),
   };
   try { await s.start(provider); await scenario(t); } finally { Date.now = real; }
 }
@@ -129,6 +147,76 @@ await check('I6 (xAI): the page says MC acts only through Check, and a model cal
 await check('I6 (OpenAI): no check-only notice where MC may act', () => run('openai', async (t) => {
   assert.ok(!t.notices.some((n) => /acts only when you press Check/.test(n)));
 }));
+
+// ── The binding pass's independent review at 8eb30a10 (REVIEW_independent_A1_binding.md), through the real page ─────────
+// B S1, the reviewer's probe: OpenAI without the echo. A's request is let go at 10 s; B's own start comes; C's request
+// goes; A's reply starts at last with the save_note chosen for A. Nothing may be posted with C's words for it.
+await check('B S1 (openai, no tag echoed): a lost request\'s late reply posts nothing, never C\'s words', () => run('openai', async (t) => {
+  t.start(); t.said('a', 'Save a note that the kiln is hot.'); t.stop(); t.commit('a'); t.pass(10500);
+  t.start(); t.said('b', 'Hello again.'); t.stop(); t.commit('b');
+  t.created('RB'); t.over('RB');                                        // #2's own start, untagged
+  t.start(); t.said('c', 'Check the board.'); t.stop(); t.commit('c');
+  t.created('RA_late'); t.call('RA_late', 'save_note'); await flush();   // #1's reply, at last
+  assert.deepEqual(t.consults(), [], 'a consult was posted for the lost request\'s reply');
+  assert.ok(t.unbound.some((u) => u.reason === 'never_started'));
+}));
+// B S2 (C4, G3 on xAI), the reviewer's probe: "Yes." ends, its reply has not started; the summary is asked for; xAI's reply
+// to "Yes." starts now and drains. It is not the summary's: the summary ends at its bound, as timeout, never heard.
+const SUMMARY = { '/summary': () => ({ ok: true, state: 'proposed', spoken: 'We checked the board.' }) };
+await check('B S2 (xai): another reply starting after the summary is asked for never closes it or is heard', () => run('xai', async (t) => {
+  t.start(); t.said('i0', "We're done."); t.stop(); t.created('r0'); t.over('r0');
+  t.start(); t.said('i1', 'Yes.'); t.stop();
+  t.s.sumUp(); await flush(); await t.advance(8000);                    // the page's pause bound: his reply has not reported
+  assert.equal(t.lines().filter((l) => l.startsWith('Say only this')).length, 1, 'the summary was not asked for');
+  t.created('auto_yes'); t.drained('auto_yes'); await flush();
+  assert.equal(t.posts('/end').length, 0, 'another reply\'s drain closed the summary');
+  await t.advance(9000);
+  assert.equal(t.posts('/end').length, 1);
+  assert.equal(t.posts('/end')[0].summary_playback, 'timeout');
+}, { routes: SUMMARY }));
+await check('B S2 (xai), the usual order: his reply starts first, then the summary\'s own drain ends it, heard', () => run('xai', async (t) => {
+  t.start(); t.said('i1', 'Yes.'); t.stop(); t.created('auto_yes'); t.over('auto_yes');
+  t.s.sumUp(); await flush(); await t.advance(8000);
+  t.created('r_summary'); await flush(); t.drained('r_summary'); await flush();   // its audio played out
+  assert.equal(t.posts('/end')[0].summary_playback, 'drained');
+}, { routes: SUMMARY }));
+// B S3 + N2: a call from a barged-in reply is answered not done, with no reply asked for it; End names his turn not acted on.
+await check('B S3 + N2 (openai): a barged-in call is answered not done, and End names his turn not acted on', () => run('openai', async (t) => {
+  t.start(); t.said('a', 'Save a note that A.'); t.stop(); t.commit('a'); t.asked('RA');
+  t.start();                                                              // he goes on: the provider's barge-in
+  t.ev({ type: 'response.done', response: { id: 'RA', status: 'cancelled', output: [{ type: 'function_call', call_id: 'call_RA', name: 'save_note', arguments: '{}' }] } });
+  await flush();
+  assert.equal(t.creates(), 1, 'a reply was asked for the refused call');
+  t.said('b', 'And check the board.'); t.stop(); t.commit('b'); t.asked('RB'); t.call('RB'); await flush();
+  assert.deepEqual(t.consults(), [['t1', 'And check the board.']]);
+  assert.deepEqual(t.outputs()[0], ['call_RA', { ok: false, outcome: 'not_done', error: 'superseded',
+    spoken: 'Not run: superseded by what he said next. Nothing was done.' }]);
+  await t.s.end('user_ended'); await flush();
+  assert.deepEqual(t.posts('/end')[0].not_acted, ['t0']);
+}));
+await check('B N2 (openai): an earlier commit let go while a reply is in flight is named not acted on; a consulted one is not', () => run('openai', async (t) => {
+  t.start(); t.said('a', 'What is stuck on twelve?'); t.stop(); t.commit('a'); t.asked('RA'); t.call('RA'); await flush();   // acted
+  t.asked('FA');                                                          // its follow-up, in flight
+  t.start(); t.said('b', 'Save a note that the kiln is hot.'); t.stop(); t.commit('b');
+  t.start(); t.said('c', 'Check the board.'); t.stop(); t.commit('c');   // b is let go: c is his newest
+  t.over('FA'); t.asked('RC'); t.call('RC'); await flush();
+  assert.deepEqual(t.consults(), [['t0', 'What is stuck on twelve?'], ['t2', 'Check the board.']]);
+  await t.s.end('user_ended'); await flush();
+  assert.deepEqual(t.posts('/end')[0].not_acted, ['t1']);
+}));
+// B N4: a holding line already handed on, waiting behind a reply in flight, is withdrawn when its consult answers.
+await check('B N4 (openai): a queued holding line is withdrawn when its result arrives, and never said', () => {
+  let release;
+  return run('openai', async (t) => {
+    t.start(); t.said('a', 'Run the nightly job.'); t.stop(); t.commit('a'); t.asked('RA'); t.call('RA'); await flush();
+    t.start(); t.said('b', 'And the glaze?'); t.stop(); t.commit('b'); t.asked('RB');   // his next reply, in flight
+    await t.advance(16000);                                               // "Still checking." at 8 s, handed on after its pause bound
+    assert.deepEqual(t.lines(), [], 'a line was sent while a reply was in flight');
+    release(); await flush();                                             // the consult answers: the line is not true now
+    t.over('RB'); await flush();
+    assert.ok(!t.lines().includes('Still checking.'), 'the holding line played after its result');
+  }, { routes: { '/consult': () => new Promise((r) => { release = () => r({ ok: true, outcome: 'done', spoken: 'Started.' }); }) } });
+});
 
 if (failures.length) {
   console.log(`${failures.length} of ${cases} integrated binding regressions FAILED:\n  ${failures.join('\n  ')}`);

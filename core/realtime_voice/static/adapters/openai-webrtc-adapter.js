@@ -169,6 +169,12 @@ export class OpenAIWebRTCAdapter {
     this._dc?.send(JSON.stringify(_responseCreate(tag)));
   }
 
+  // Spec 165 §5.1 (C2 by construction; review B S3): a function output that asks for no response, for a call that may not
+  // act. Only a host that creates every response calls it; German never does.
+  sendFunctionOutput(callId, output) {
+    this._dc?.send(JSON.stringify(_functionOutput(callId, output)));
+  }
+
   sendFunctionResult(callId, output, tag) {
     this._dc?.send(JSON.stringify({
       type: "conversation.item.create",
@@ -277,6 +283,12 @@ export class OpenAIWebRTCAdapter {
 // metadata, and response.created reports the tag back. Untagged, the bytes are as before.
 function _responseCreate(tag) {
   return tag ? { type: "response.create", response: { metadata: { minimoi_tag: tag } } } : { type: "response.create" };
+}
+
+// A function call's output item (the bytes sendFunctionResult has always sent first).
+function _functionOutput(callId, output) {
+  return { type: "conversation.item.create",
+    item: { type: "function_call_output", call_id: callId, output: typeof output === "string" ? output : JSON.stringify(output) } };
 }
 
 // Whether a finished response carried audio (its output has an audio content part): its drain is then the provider's

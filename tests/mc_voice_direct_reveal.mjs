@@ -34,6 +34,12 @@ let n = 0;
   n++;
 }
 {
+  // The binding pass's review (B S3, N2): a turn of his not acted on says so on its meta line.
+  const li = sandbox.voiceLine(note(9, { kind: 'owner_turn', text: 'Save a note that A.', started_at: '2026-10-28T10:00:01.000Z', part: 1, parts: 1, not_acted: true }));
+  assert.match(li.textContent, /^You · spoken · local\(2026-10-28T10:00:01\.000Z\) · Not acted on: say it again if you still want itSave a note that A\.$/);
+  n++;
+}
+{
   const li = sandbox.voiceLine(note(2, { kind: 'assistant_turn', text: 'Let me check', interrupted: true, partial: true, part: 1 }));
   assert.match(li.textContent, /^Master Craftsman · spoken · .* · interrupted/);
   assert.equal(li.getAttribute('data-author-kind'), 'agent');

@@ -397,6 +397,10 @@ export function directVoice(d) {
   let playback = null;                                             // how the spoken summary ended (v0.3 §5.3, G3), for End
   let held = null, heldTimer = null, closed, sentFinal = false, settled = false;
   let consultedItem = null, checking = false;                     // the owner item last consulted (by the model or Check)
+  // His items not acted on (review B S3, N2): a commit let go before its reply, or a reply cancelled or overtaken before its
+  // call could run. Named at End by capture id (the controller's placeOf), less any turn consulted after all, so the reveal
+  // marks them "Not acted on: say it again if you still want it".
+  const notActed = new Set(), consulted = new Set();
   const binding = [];                                              // model calls waiting for their owner turn's transcript
   const done = new Promise((resolve) => { closed = resolve; });     // settles once End is sent and the thread is reloaded
   done.then(() => { settled = true; });
@@ -406,6 +410,25 @@ export function directVoice(d) {
   const getJson = jsonGet(d.fetch, d.headers, { setTimeout: later, clearTimeout: cancel });
   const sessionId = () => { const own = c?.sessionId?.(); return sid || (typeof own === 'string' ? own : null); };
   const speak = (instruction) => { try { return Boolean(c?.speak(instruction)); } catch (e) { return false; } };
+  // A line that may stop being true before it is said (review B N4): sent through speakLine where the controller has it, so
+  // it can still be withdrawn while it waits its turn there.
+  const speakLine = (line) => {
+    try {
+      if (typeof c?.speakLine !== 'function') return speak(line.text);
+      line.handle = c.speakLine(line.text);
+      return Boolean(line.handle);
+    } catch (e) { return false; }
+  };
+  // What End names as not acted on: the capture ids of those items whose words were kept, and never consulted.
+  function unacted() {
+    const out = [];
+    for (const item of notActed) {
+      const at = typeof c?.placeOf === 'function' ? c.placeOf(item) : null;
+      const id = Number.isInteger(at) ? `t${at}` : null;
+      if (id && !consulted.has(id) && capture?.said(at) && !out.includes(id)) out.push(id);
+    }
+    return out;
+  }
   function stopTimers() {
     if (ticker) stopEvery(ticker);
     if (beat) stopEvery(beat);
@@ -432,10 +455,12 @@ export function directVoice(d) {
     pump();
     return line;
   }
-  // A line still waiting for its pause is let go (a holding line once its consult has answered: it would no longer be true).
+  // A line still waiting for its pause is let go (a holding line once its consult has answered: it would no longer be true),
+  // and so is one handed on that still waits its turn in the controller (review B N4).
   function letGo(line) {
     const i = line ? lines.indexOf(line) : -1;
     if (i >= 0) lines.splice(i, 1);
+    else if (line && line.handle) { try { line.handle.withdraw(); } catch (e) { /* sent already: it stands */ } }
   }
   function pump() {
     if (finalized) return;
@@ -445,7 +470,7 @@ export function directVoice(d) {
       return;
     }
     if (quietTimer) { cancel(quietTimer); quietTimer = null; }
-    if (speak(lines.shift().text)) responding = true;
+    if (speakLine(lines.shift())) responding = true;
     pump();
   }
   // A consult's holding lines (G2): each at its time, said at a pause; a line not yet said gives way to the next, and the
@@ -536,6 +561,7 @@ export function directVoice(d) {
     if (!advisory || typeof advisory !== 'object' || Array.isArray(advisory)) advisory = {};
     const item = owner.item;
     consultedItem = item;                                             // by the model or by Check with <person>
+    consulted.add(item);
     const request = { session_id: sessionId(), call_id: String(callId), name, owner_transcript_item: owner.text,
       owner_item_id: item, arguments: advisory };
     const lost = (x) => x.status === 0 || x.status >= 500;
@@ -708,7 +734,9 @@ export function directVoice(d) {
     if (!id || sentFinal) return;
     sentFinal = true;
     const { events, ...closing } = capture ? capture.drain(turns || []) : { events: [] };
-    postJson(at(direct.end_url), { ...(events.length ? { events } : {}), ...closing }, { keepalive: true });
+    const skipped = unacted();
+    postJson(at(direct.end_url), { ...(events.length ? { events } : {}), ...closing, ...(skipped.length ? { not_acted: skipped } : {}) },
+      { keepalive: true });
   }
 
   // §6: End on the server (after the last turns are posted), then the reveal. Once, whatever ended the session.
@@ -734,7 +762,9 @@ export function directVoice(d) {
         const delivering = capture?.finish(result?.turns || []);     // closes at the boundary; posts what is owed unless stopped
         if (!abandoned) await within(delivering, FLUSH_WAIT_MS);
         if (sentFinal) return;                               // the page went away meanwhile: End already left with keepalive
-        const closing = { ...(capture ? capture.report() : {}), ...(playback ? { summary_playback: playback } : {}) };   // §5.2, G3
+        const skipped = unacted();                           // his turns not acted on (review B S3, N2)
+        const closing = { ...(capture ? capture.report() : {}), ...(playback ? { summary_playback: playback } : {}),   // §5.2, G3
+          ...(skipped.length ? { not_acted: skipped } : {}) };
         incomplete = Boolean(closing.unacknowledged?.length);
         missing = incomplete ? closing.unacknowledged.length : 0;
         const r = await postJson(at(direct.end_url), closing, { timeoutMs: END_WAIT_MS });
@@ -801,7 +831,12 @@ export function directVoice(d) {
       // The page asks for its responses one at a time, each tagged; where the bootstrap says page_responses (OpenAI), it
       // creates every response that may act, one for each of his committed items (Spec 165 §5.1 as amended, C2).
       pageResponses: true,
-      ...(d.warn ? { onUnbound: (info) => d.warn('voice response bound to nothing', info) } : {}),
+      // A reply that answers no one, a call refused, a commit let go: logged, and his items not acted on are kept for End.
+      onUnbound: (info) => {
+        const ownItem = info && typeof info.owner === 'string' ? info.owner : null;
+        if (ownItem && (info.reason === 'superseded_call' || (info.kind === 'turn' && ['superseded', 'never_started'].includes(info.reason)))) notActed.add(ownItem);
+        if (d.warn) d.warn('voice response bound to nothing', info);
+      },
       openingInstruction: null,                   // the server composes the session's instructions; the page sends none
       onSessionInfo: (info) => {
         if (typeof info?.voice_session_id === 'string') sid = info.voice_session_id;

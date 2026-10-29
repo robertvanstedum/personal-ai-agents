@@ -225,6 +225,7 @@ export function setBriefing(briefing) {
 // receipt); MC's full answer only when it says more than was spoken; the consult's own note hidden (it repeats his words).
 // The server-rendered thread does the same (_mc_conversation.html, voice_row).
 const VOICE_HIDDEN = ['consult_note', 'consult_request'];
+const NOT_ACTED = 'Not acted on: say it again if you still want it';
 function voiceLine(note) {
   const v = note.voice;
   const hidden = VOICE_HIDDEN.includes(v.kind) || (v.kind === 'consult_reply' && v.full_differs === false);
@@ -252,6 +253,8 @@ function voiceLine(note) {
     el('span', { 'data-iso': v.started_at || note.created_at }, localTime(v.started_at || note.created_at)));
   if (v.interrupted) meta.append(document.createTextNode(' · interrupted'));
   else if (v.partial) meta.append(document.createTextNode(' · partial'));
+  // His words that were not acted on (review B S3, N2: a reply cancelled or overtaken, or a commit let go): say so.
+  if (v.not_acted) meta.append(document.createTextNode(' · '), el('span', { 'data-voice-not-acted': '' }, NOT_ACTED));
   li.append(meta);
   if (turn) { li.append(el('p', { class: 'msg-text' }, v.text)); return li; }
   const body = el('div', { class: 'msg-text msg-md' });

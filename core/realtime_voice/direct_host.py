@@ -58,6 +58,7 @@ SUMMARY_UNAVAILABLE = "Summary unavailable."
 SPEECH_MAX_CHARS = 3500              # a longer reply is read in part and the page says so aloud
 CONSULT_WAIT_S = 25                  # a consult is waited for this long, under every proxy and portal timeout, then pending
 CONSULT_MAX_BYTES = 32 * 1024        # a consult body (review R1 P3-10), like the summary's
+CHECK_CALL = "host-"                 # the call id of Check with the person: the page's own consult, never the model's
 PRUNE_AFTER_S = 3600                 # a session's memory here is let go this long after its maximum duration
 SUMMARY_JOIN_S = 40                  # a second ask joins a summary attempt running here this long, inside the page's 45 s
 ATTEMPT_STALE_S = 60                 # an attempt with no outcome this old ran in a process that died: a new one may start
@@ -763,9 +764,10 @@ class DirectSessions(ConsultLedger):
                                                 started=datetime.fromtimestamp(started, timezone.utc))
         if marker is None:                                 # no durable start: no session, nothing could be revealed
             raise SessionRefused("Voice session not recorded")
+        actions = getattr(g, "direct_voice_actions", False) is True     # the provider's eligibility, from the bootstrap
         with self._meta_lock:
             self._meta[sid] = {"conversation": cid, "started": started, "max_s": max_minutes * 60,
-                               "seen": started, "items": set(), "bytes": 0}
+                               "seen": started, "items": set(), "bytes": 0, "actions": actions}
         self.open_session(sid, owner)
         return sid
 
@@ -778,6 +780,13 @@ class DirectSessions(ConsultLedger):
         with self._meta_lock:
             meta = self._meta.get(sid)
             return meta["conversation"] if meta else None
+
+    def model_actions(self, sid):
+        """Whether this session's model may act on its own call (its provider was eligible at bootstrap, Spec 165 §7 as
+        amended; review B N7). Unknown sessions: no."""
+        with self._meta_lock:
+            meta = self._meta.get(sid)
+            return bool(meta and meta.get("actions") is True)
 
     def started_at(self, sid):
         with self._meta_lock:
@@ -1347,6 +1356,31 @@ def keep_playback(adapter, sessions, sid, outcome):
         return None
 
 
+NOT_ACTED_RECORD = "not_acted"
+NOT_ACTED_MAX = 64                  # owner turns a session may name as not acted on
+
+
+def keep_not_acted(adapter, sessions, sid, items):
+    """Keep the owner turns the page names as not acted on (review B S3, N2): his words that got no reply of their own, or
+    whose reply was cancelled or overtaken before its call could run. Capture ids only, each once, at most NOT_ACTED_MAX.
+    The reveal marks those turns "not acted on". A Put, or None when there is nothing to keep or nowhere to keep it. Never
+    raises: End is never stopped by it."""
+    if not isinstance(items, list) or not items:
+        return None
+    named = list(dict.fromkeys(i for i in items if owner_item(i)))[:NOT_ACTED_MAX]
+    if not named:
+        return None
+    try:
+        cid = sessions.conversation_of(sid)
+        handle, refused = adapter.conversation(cid) if cid else (None, True)
+        if refused is not None:
+            return None
+        return put(adapter, handle, sid, record(NOT_ACTED_RECORD, NOT_ACTED_RECORD, owner_item_ids=named))
+    except Exception:
+        log.exception("%s direct voice: turns not acted on not kept", adapter.person["domain"])
+        return None
+
+
 def after_summary(adapter, handle, sid):
     """Whether this session's summary was already made (proposed, decided or unavailable): a receipt landing now is
     late (Spec 165 §5.2). It is kept and revealed after the summary, marked so; the summary is never made again."""
@@ -1552,6 +1586,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         through Check with the person (Spec 165 §7 as amended 28 Oct 2026)."""
         if name != person["key"]:
             return None
+        g.direct_voice_actions = actions is True         # the session ledger records it at issue (review B N7)
         try:
             card = adapter.card()
         except (OSError, ValueError):                      # missing, unreadable or not the manifest's: voice unavailable
@@ -1622,6 +1657,11 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             return jsonify({"ok": False, "error": "not your session"}), 403
         if not isinstance(owner_text, str) or not owner_text.strip():
             return jsonify({"ok": False, "error": "owner text required"}), 400
+        # Defence in depth (review B N7): on a provider not eligible for the model's own actions, only Check with the
+        # person (the page's own call, "host-…") acts. The model has no tools there; a call of its own runs nothing.
+        if not str(call_id).startswith(CHECK_CALL) and not sessions.model_actions(sid):
+            return jsonify({"ok": False, "error": "check_only", "outcome": "not_done",
+                            "spoken": f"On this voice only Check with {person['short']} acts. Nothing was done."}), 200
         answer, status = consult(adapter, sessions, who, sid, call_id, name, owner_text, item)
         return jsonify(answer), status
 
@@ -1659,6 +1699,8 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         capture = sessions.close_session(session_id, report=report)
         if isinstance(body, dict) and "summary_playback" in body:          # how the spoken summary ended (v0.3 §5.3, G3)
             keep_playback(adapter, sessions, session_id, body.get("summary_playback"))
+        if isinstance(body, dict) and "not_acted" in body:                 # his turns not acted on (review B S3, N2)
+            keep_not_acted(adapter, sessions, session_id, body.get("not_acted"))
         return jsonify({"ok": True, "ended": True, "capture": capture["capture"],
                         **({"missing": capture["missing"]} if "missing" in capture else {})})
 

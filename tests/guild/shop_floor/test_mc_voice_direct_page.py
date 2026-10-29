@@ -105,3 +105,33 @@ def test_a_full_answer_is_shown_only_when_it_says_more_than_was_spoken():
     assert full_differs("Run this:\n```\nmake index\n```") is True                        # a code block is not spoken
     assert full_differs("See [the ticket](https://example.invalid/12).") is True          # nor a link's address
     assert full_differs("word " * 1000) is True                                           # cut at the spoken limit (3,500)
+
+
+def test_b_s3_a_turn_not_acted_on_is_marked_so_in_the_server_rendered_thread_and_the_notes(released):
+    """The binding pass's review (B S3, N2): End names his turns not acted on (a reply cancelled or overtaken before its call
+    ran, or a commit let go); the reveal marks each "Not acted on: say it again if you still want it", and only those."""
+    _portal, _runtime, _minted, client, token = released
+    cid = conversation(client, token)
+    sid = client.post(DIRECT + "/bootstrap", headers=headers(token),
+                      json={"persona": "master_craftsman", "provider": "openai", "conversation_id": cid}).get_json()[
+        "voice_session_id"]
+    now = datetime.now(timezone.utc)
+    stamp = lambda s: (now + timedelta(seconds=s)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"     # noqa: E731
+    kept = client.post(DIRECT + f"/session/{sid}/transcript", headers=headers(token), json={"events": [
+        {"role": "user", "item_id": "t0", "index": 0, "text": "Save a note that the kiln is hot.", "partial": False,
+         "interrupted": False, "started_at": stamp(0), "ended_at": stamp(1)},
+        {"role": "user", "item_id": "t1", "index": 0, "text": "And check the board.", "partial": False,
+         "interrupted": False, "started_at": stamp(2), "ended_at": stamp(3)}]})
+    assert kept.status_code == 200, kept.get_json()
+    ended = client.post(DIRECT + f"/session/{sid}/end", headers=headers(token), json={"not_acted": ["t0"]})
+    assert ended.get_json()["ended"] is True
+    html = page(client, cid)
+    rows = re.findall(r'<li class="msg msg-voice msg-note"[^>]*data-voice-kind="owner_turn".*?</li>', html, re.S)
+    first = next(row for row in rows if "the kiln is hot" in row)
+    second = next(row for row in rows if "check the board" in row)
+    assert "Not acted on: say it again if you still want it" in first
+    assert "Not acted on" not in second
+    notes = client.get(API + f"/notes?conversation={cid}").get_json()["notes"]
+    marks = {n["text"].split("]\n")[-1]: n["voice"].get("not_acted", False) for n in notes
+             if n.get("voice", {}).get("kind") == "owner_turn"}
+    assert marks == {"Save a note that the kiln is hot.": True, "And check the board.": False}

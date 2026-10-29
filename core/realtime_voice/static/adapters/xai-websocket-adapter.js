@@ -206,6 +206,15 @@ export class XAIWebSocketAdapter {
     this._ws?.send(JSON.stringify({ type: "response.create" }));
   }
 
+  // Spec 165 §5.1 (C2 by construction; review B S3): a function output that asks for no response, for a call that may not
+  // act. Only a host that asks for its own responses calls it; German never does.
+  sendFunctionOutput(callId, output) {
+    this._ws?.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: { type: "function_call_output", call_id: callId, output: typeof output === "string" ? output : JSON.stringify(output) },
+    }));
+  }
+
   sendFunctionResult(callId, output) {
     this._ws?.send(JSON.stringify({
       type: "conversation.item.create",

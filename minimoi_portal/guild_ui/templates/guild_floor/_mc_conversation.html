@@ -24,7 +24,7 @@
   {%- elif turn and v.part > 1 %}
   <p class="msg-text">{{ v.text }}</p>
   {%- else %}
-  <p class="msg-meta"><span class="msg-label">{{ 'You · spoken' if v.kind == 'owner_turn' else (mc_name ~ ' · spoken' if turn else mc_name ~ '’s full answer') }}</span> · <span data-iso="{{ v.started_at or n.created_at }}">{{ hhmm(v.started_at or n.created_at) }}</span>{% if v.interrupted %} · interrupted{% elif v.partial %} · partial{% endif %}</p>
+  <p class="msg-meta"><span class="msg-label">{{ 'You · spoken' if v.kind == 'owner_turn' else (mc_name ~ ' · spoken' if turn else mc_name ~ '’s full answer') }}</span> · <span data-iso="{{ v.started_at or n.created_at }}">{{ hhmm(v.started_at or n.created_at) }}</span>{% if v.interrupted %} · interrupted{% elif v.partial %} · partial{% endif %}{% if v.not_acted %} · <span data-voice-not-acted>Not acted on: say it again if you still want it</span>{% endif %}</p>
   {%- if turn %}
   <p class="msg-text">{{ v.text }}</p>
   {%- elif n.html %}

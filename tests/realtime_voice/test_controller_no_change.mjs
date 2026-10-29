@@ -2,7 +2,7 @@
 // byte-for-byte the files they ran before, plus additive parts. Some of those parts run in every session (the listeners see
 // every German transcript and response, and xAI's per-response accounting runs; review FR S2), so the behaviour half below
 // drives German's transcript path through them, on a browser without Array.prototype.at too. The additions are: the
-// controller's public methods (sessionId(), state(), speak(), speakTracked(), inputOf()), its optional onPlaybackDrained
+// controller's public methods (sessionId(), state(), speak(), speakLine(), speakTracked(), inputOf(), placeOf()), its optional onPlaybackDrained
 // callback, its oncePerItem option (review F2: a host hears each owner item's completion once; German passes none and hears
 // every completion as before, pinned in test_response_binding.mjs), and its pageResponses and onUnbound options (the binding
 // pass, Robert's C2 decision of 28 Oct 2026, "tie by construction": a host page asks for its responses one at a time, each
@@ -12,7 +12,8 @@
 // a page that passes no callback); the adapters' response tracking that emits those events (Spec 165 §5.1, §5.3; how each
 // response's playback ended, v0.3 G3; each response's end and status, the binding pass), the response id on each function
 // call, the OpenAI adapter's optional response tag (sent only when one is passed; German's bytes are unchanged, checked
-// below), each adapter's createResponse() (called only where the page creates every response; German never does), and new
+// below), each adapter's createResponse() and sendFunctionOutput() (called only where the page asks for its own responses;
+// German never does), and new
 // adapter cache keys. The strip pairs below are generated from a line diff against 93bf00c6 and checked to give its bytes
 // exactly. Pinned two ways: each source with exactly those additions taken out hashes to its 93bf00c6 file (the Chunk B
 // baseline; what production German, Portuguese and CoS receive at merge from origin/main is listed in A1_FIX_RESULT.md);
@@ -36,10 +37,16 @@ import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261
 import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260725-transcript1";
 `],
   [`// The page's own responses (Spec 165 §5.1 as amended for Robert's C2 decision, 28 Oct 2026: "tie by construction"): a page
-// request whose response has not started in this long is let go, and so is a started one that has not finished in this
-// long. A bound only lets a request go (its response, if it starts later, answers no one); it never names an owner.
+// request whose response has not started in this long is let go; so is a started one that has shown no sign of life (no
+// output of any response) in RESPONSE_IDLE_MS, or has not finished in RESPONSE_TTL_MS. A bound only lets a request go (its
+// response keeps the owner it started with, and a later start of a request let go answers no one); it never names an owner.
 const REQUEST_TTL_MS = 10000;
+const RESPONSE_IDLE_MS = 20000;
 const RESPONSE_TTL_MS = 120000;
+// A call from a page response that may not act (cancelled, cut short, overtaken by his speech): what its function output
+// says, so the model's context is true. No response is asked for it (review B S3).
+const SUPERSEDED = { ok: false, outcome: "not_done", error: "superseded",
+  spoken: "Not run: superseded by what he said next. Nothing was done." };
 `,
    ``],
   [`    onSessionInfo, onPlaybackDrained = null, pageResponses = false, oncePerItem = false, onUnbound = null,
@@ -58,7 +65,8 @@ const RESPONSE_TTL_MS = 120000;
     this._inflight = null;           // the one page request in flight, from its response.create to its response.done
     this._answers = new Map();       // response id -> {owner: his item id or null, turn, acts}, or null: not the page's
     this._turn = 0;                  // his turns: each speech start and each commit begins a new one
-    this._lost = 0;                  // page requests let go before they started: a late start of one is not told by order
+    this._lost = false;              // a page request was let go before it started: from then on no untagged start is ours
+    this._awaiting = false;          // the provider may still start its own reply to his last turn (a provider that replies)
     this._echoed = false;            // the provider has echoed a page request's tag: from then on an untagged start is not ours
     this._tags = 0;
     this._expiry = null;
@@ -76,6 +84,9 @@ const RESPONSE_TTL_MS = 120000;
     on("connected", () => this._reset());
     on("closed", () => this._reset());
     on("speech_started", () => { this._turn += 1; });
+    on("speech_stopped", () => { if (!this._owned) this._awaiting = true; });
+    on("output_transcript", () => this._alive());
+    on("assistant_started", () => this._alive());
     on("input_item", (evt) => this._committed(evt.item_id || null));
     on("input_transcript", (evt) => { this._fresh = this._firstCompletion(evt); });
     on("response_started", (evt) => this._started(evt));
@@ -128,6 +139,25 @@ const RESPONSE_TTL_MS = 120000;
     try { this._ask(null, (tag) => this._instruct(instruction, tag)); return true; } catch (_) { return false; }
   }
 
+  /** speak(), for a line that may stop being true before it is said (a holding line; review B N4): {withdraw()} or null
+   *  when the transport refused it. withdraw() lets the line go while it still waits its turn (true), never once it is
+   *  sent (false). German and Portuguese do not call it. */
+  speakLine(instruction) {
+    if (this._managedBootstrap || !this._adapter) return null;
+    let entry = null;
+    try { entry = this._ask(null, (tag) => this._instruct(instruction, tag)); } catch (_) { return null; }
+    return { withdraw: () => { const i = this._queue.indexOf(entry); if (i < 0) return false; this._queue.splice(i, 1); return true; } };
+  }
+
+  /** The place of his item (the provider's id) in the transcript list the host is given, or null while its words have not
+   *  appeared: what the host names it by (review B S3, N2: a commit or call not acted on). German and Portuguese do not call
+   *  it. */
+  placeOf(id) {
+    const order = [...this._items.entries()].sort((a, b) => a[1].firstSeq - b[1].firstSeq);
+    const index = order.findIndex(([key]) => key === id);
+    return index < 0 ? null : index;
+  }
+
   /** speak(), tracked (Spec 165 §5.3; review FR N3, V note D): resolves with the id of the response this instruction
    *  starts, or null when it has not started within maxMs, or the transport refused it. With pageResponses the response is
    *  known as every page request's is (see _started): by its echoed tag, or as the one page request in flight. A host
@@ -176,7 +206,7 @@ const RESPONSE_TTL_MS = 120000;
   // the earlier one again if he needs it). A commit naming no item still gets a response, which may act on no one.
   _committed(item) {
     this._turn += 1;
-    if (!this._owned) return;
+    if (!this._owned) { this._awaiting = true; return; }
     for (const entry of this._queue.filter((e) => e.kind === "turn")) this._let(entry, "superseded");
     if (!item) this._onUnbound({ reason: "commit_without_item" });
     try { this._ask(item, (tag) => this._adapter.createResponse(tag), null, "turn"); } catch (_) { /* the transport is closed */ }
@@ -213,9 +243,9 @@ const RESPONSE_TTL_MS = 120000;
   // that ends it asks for its own response).
   _pump() {
     const f = this._inflight;
-    if (f && Date.now() - f.at >= (f.started ? RESPONSE_TTL_MS : REQUEST_TTL_MS)) {
+    if (f && this._overdue(f, Date.now())) {
       this._inflight = null;
-      if (!f.started) this._lost += 1;
+      if (!f.started) this._lost = true;
       this._let(f, f.started ? "unfinished" : "never_started");
     }
     while (!this._inflight && this._queue.length) {
@@ -230,12 +260,26 @@ const RESPONSE_TTL_MS = 120000;
 
   // One timer for the request in flight, so a bound passes even when no provider event comes. Unreferenced where the
   // runtime allows it (node's tests); cleared when the request settles and when the transport closes.
+  // Whether the request in flight is past its bound: not started in REQUEST_TTL_MS; started, and no output of any response
+  // for RESPONSE_IDLE_MS (review B N5), or not finished in RESPONSE_TTL_MS.
+  _overdue(f, now) {
+    return f.started ? now - f.seen >= RESPONSE_IDLE_MS || now - f.at >= RESPONSE_TTL_MS : now - f.at >= REQUEST_TTL_MS;
+  }
+
+  // Some response's output (its transcript, its audio): the started request in flight is alive. One page request is in
+  // flight at a time; output of a response that is not the page's only keeps the wait going, never names an owner.
+  _alive() {
+    const f = this._inflight;
+    if (f && f.started) { f.seen = Date.now(); this._arm(); }
+  }
+
   _arm() {
     clearTimeout(this._expiry);
     this._expiry = null;
     const f = this._inflight;
     if (!f) return;
-    const left = (f.started ? RESPONSE_TTL_MS : REQUEST_TTL_MS) - (Date.now() - f.at);
+    const now = Date.now();
+    const left = f.started ? Math.min(RESPONSE_IDLE_MS - (now - f.seen), RESPONSE_TTL_MS - (now - f.at)) : REQUEST_TTL_MS - (now - f.at);
     this._expiry = setTimeout(() => { this._expiry = null; this._pump(); }, Math.max(0, left));
     if (this._expiry && typeof this._expiry.unref === "function") this._expiry.unref();
   }
@@ -245,12 +289,12 @@ const RESPONSE_TTL_MS = 120000;
     const i = this._queue.indexOf(entry);
     if (i >= 0) this._queue.splice(i, 1);
     if (entry.done) { const done = entry.done; entry.done = null; done(null); }
-    if (this._owned && entry.kind !== "line") this._onUnbound({ reason, owner: entry.owner || null });
+    if (this._owned && entry.kind !== "line") this._onUnbound({ reason, owner: entry.owner || null, kind: entry.kind });
   }
 
   _reset() {
     const pending = this._inflight ? [this._inflight, ...this._queue] : this._queue.slice();
-    this._queue = []; this._inflight = null; this._lost = 0; this._echoed = false;
+    this._queue = []; this._inflight = null; this._lost = false; this._echoed = false; this._awaiting = false;
     for (const entry of pending) if (entry.done) { const done = entry.done; entry.done = null; done(null); }
     this._arm();
   }
@@ -258,15 +302,20 @@ const RESPONSE_TTL_MS = 120000;
   // A response started (response.created). It is the page's when it echoes the tag of the page request in flight, or, with
   // no tag, while that request has not started yet and no tag has been echoed in this session: it is then that request's,
   // owned as the request is. Any other response (none in flight, one too many, another tag, or no tag once the provider has
-  // shown it echoes them) answers no one; where the page creates every response it is logged. After
-  // a request was let go before it started, an untagged start cannot be told from that request's late one: it settles the
-  // request in flight, but answers no one ("say it again"), once for each request let go.
+  // shown it echoes them) answers no one; where the page creates every response it is logged. Once a request has been let
+  // go before it started, no untagged start can be told from that request's late one, for the rest of the session (review
+  // B S1): it settles the request in flight but answers no one ("say it again"); a tagged one still binds exactly. Where the
+  // provider creates its own replies (xAI), an untagged start while his last turn may still get the provider's reply cannot
+  // be told from that reply (review B S2): it settles the request in flight but resolves no wait (a tracked summary then
+  // ends at its bound, never heard).
   _started(evt) {
     if (!this._pageResponses) return;
     const id = evt.response_id || null;
     if (id && this._answers.has(id)) return;                     // its start was already seen
     this._pump();                                                // a request past its bound is let go first
     const f = this._inflight;
+    const theirs = !this._owned && !evt.tag && this._awaiting;   // possibly the provider's own reply to his turn
+    this._awaiting = false;
     if (evt.tag) this._echoed = true;
     if (!f || f.started || (evt.tag ? evt.tag !== f.tag : this._echoed)) {
       if (id) this._answers.set(id, null);
@@ -274,15 +323,12 @@ const RESPONSE_TTL_MS = 120000;
         response_id: id });
       return;
     }
-    const unsure = !evt.tag && this._lost > 0;
-    if (unsure) {
-      this._lost -= 1;
-      if (this._owned) this._onUnbound({ reason: "after_lost_request", response_id: id });
-    }
-    f.started = true; f.id = id; f.at = Date.now();
+    const unsure = !evt.tag && this._lost;
+    if (unsure && this._owned) this._onUnbound({ reason: "after_lost_request", response_id: id });
+    f.started = true; f.id = id; f.at = f.seen = Date.now();
     if (id) this._answers.set(id, { owner: unsure ? null : f.owner, turn: f.turn, acts: null });
     this._arm();
-    if (f.done) { const done = f.done; f.done = null; done(id); }
+    if (f.done) { const done = f.done; f.done = null; done(unsure || theirs ? null : id); }
   }
 
   // A response is done (response.done, before its function calls are passed on). Its calls act only if it completed and no
@@ -298,11 +344,14 @@ const RESPONSE_TTL_MS = 120000;
   }
 
   // A call from a page response that may not act (cancelled, cut short or overtaken by his speech): nothing is dispatched,
-  // and no result or follow-up is sent for it; the response that answers his newer words is the one that acts.
+  // and no follow-up is asked for it; the response that answers his newer words is the one that acts. Its function output
+  // says it did not run, so the model's context is true (review B S3), and the host is told (onUnbound), so it can show
+  // which of his turns was not acted on.
   _refused(call) {
     const r = this._pageResponses && call && call.response_id ? this._answers.get(call.response_id) : null;
     if (!r || r.acts !== false) return false;
-    if (this._owned) this._onUnbound({ reason: "superseded_call", response_id: call.response_id, owner: r.owner || null });
+    try { this._adapter.sendFunctionOutput(call.call_id, SUPERSEDED); } catch (_) { /* the transport is closed */ }
+    this._onUnbound({ reason: "superseded_call", response_id: call.response_id, owner: r.owner || null });
     return true;
 `,
    `    if (!this._managedBootstrap) this._adapter?.sendContinuationInstruction(CONTINUATION_INSTRUCTION);
@@ -346,12 +395,21 @@ const ADAPTERS = {
 
 `,
    ``],
-  [`    this._ws?.send(JSON.stringify({ type: "response.create" }));
-  }
+  [`  }
 
   // Spec 165 §5.1 as amended (C2 by construction): a response the page asks for itself. xAI is not eligible for the page's
   // own responses until A4 shows it names the committed item and creates none of its own; nothing calls this until then.
   createResponse() {
+    this._ws?.send(JSON.stringify({ type: "response.create" }));
+  }
+
+  // Spec 165 §5.1 (C2 by construction; review B S3): a function output that asks for no response, for a call that may not
+  // act. Only a host that asks for its own responses calls it; German never does.
+  sendFunctionOutput(callId, output) {
+    this._ws?.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: { type: "function_call_output", call_id: callId, output: typeof output === "string" ? output : JSON.stringify(output) },
+    }));
 `,
    ``],
   [`      case "response.created":
@@ -436,6 +494,12 @@ const ADAPTERS = {
     this._dc?.send(JSON.stringify(_responseCreate(tag)));
   }
 
+  // Spec 165 §5.1 (C2 by construction; review B S3): a function output that asks for no response, for a call that may not
+  // act. Only a host that creates every response calls it; German never does.
+  sendFunctionOutput(callId, output) {
+    this._dc?.send(JSON.stringify(_functionOutput(callId, output)));
+  }
+
   sendFunctionResult(callId, output, tag) {
 `,
    `  sendFunctionResult(callId, output) {
@@ -498,6 +562,12 @@ const ADAPTERS = {
 // metadata, and response.created reports the tag back. Untagged, the bytes are as before.
 function _responseCreate(tag) {
   return tag ? { type: "response.create", response: { metadata: { minimoi_tag: tag } } } : { type: "response.create" };
+}
+
+// A function call's output item (the bytes sendFunctionResult has always sent first).
+function _functionOutput(callId, output) {
+  return { type: "conversation.item.create",
+    item: { type: "function_call_output", call_id: callId, output: typeof output === "string" ? output : JSON.stringify(output) } };
 }
 
 // Whether a finished response carried audio (its output has an audio content part): its drain is then the provider's
