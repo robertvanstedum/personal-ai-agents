@@ -254,6 +254,7 @@ class HttpDispatcherV2(HttpDispatcher):
         self.timeout = timeout
 
     def _v2(self, op, **args):
+        import http.client
         import urllib.error
         raw = json.dumps({"op": op, "protocol": 2, **args}).encode()
         if len(raw) > BODY_MAX:
@@ -266,6 +267,14 @@ class HttpDispatcherV2(HttpDispatcher):
                 body = r.read(ANSWER_MAX + 1)
         except urllib.error.HTTPError as exc:
             raise _http_refusal(exc) from None
+        except (OSError, http.client.HTTPException):
+            raise                                       # already a lost connection to the host
+        except Exception as exc:
+            # Anything else on the way is not the door's answer either: a redirect refused (a proxy in front of the
+            # door, such as a login page; S1-H review SF3) or any error from the client's own handlers. A lost
+            # connection, never an authority answer, so the host goes offline and its witness can see it.
+            code = str(exc) if str(exc) == "runner_door_redirect_refused" else "runner_door_answer_not_authority"
+            raise DoorUnreachable(code) from None
         doc = _door_json(body)
         if doc is None or "value" not in doc:
             raise DoorUnreachable("runner_door_answer_not_authority")

@@ -139,6 +139,50 @@ def test_t8_the_runtime_tells_an_authority_outage_once_and_its_return_once(tmp_p
     assert keys[0].split(":", 2)[2] == keys[1].split(":", 2)[2]   # one outage, one since
 
 
+def test_sf3_a_door_that_answers_with_a_redirect_is_an_outage_the_witness_tells(tmp_path, mirror):
+    """S1-H review SF3: a redirect from the door's address (a proxy's login page in front of it, at gate D) was read
+    as an authority answer: the host counted itself in contact and its witness stayed silent. Now the host is
+    offline from the first such call, and past the contact timeout the witness tells it once."""
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    import threading
+    import urllib.request
+    from core.mc_delegation_dispatcher import door
+
+    class Redirect(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.send_response(302)
+            self.send_header("Location", "https://login.example.test/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, *a):
+            pass
+    srv = HTTPServer(("127.0.0.1", 0), Redirect)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        client = door.HttpDispatcherV2(door.DOORS[1], "h" * 48, tmp_path / "artifacts")
+        own = client._open                                     # the client's own handler chain
+
+        def retarget(req, timeout):
+            return own(urllib.request.Request(f"http://127.0.0.1:{srv.server_address[1]}{door.PATH}", data=req.data,
+                                              method=req.get_method(), headers=dict(req.header_items())),
+                       timeout=timeout)
+        client._open = retarget
+        rt = make_rt(tmp_path, mirror[0], client, notifier={"kind": "file", "path": str(tmp_path / "notify.jsonl")})
+        clock = _clocked(rt)
+        step = rt.values.contact_interval_s
+        for _ in range(int(rt.values.contact_timeout_s / step) + 2):
+            assert rt.contact() is False                       # never "in contact"
+            assert rt.offline()
+            clock["mono"] += step
+            clock["wall"] += timedelta(seconds=step)
+            rt.observe_authority()
+        assert [x["key"].split(":")[0] for x in _lines(tmp_path / "notify.jsonl")] == ["authority-unreachable"]
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
 def test_t6m_a_whole_mac_sleep_raises_no_witness_notice(tmp_path, mirror):
     """On the Mac-only gate the authority sleeps with the runtime (R2.4-b). Monotonic time does not run in sleep, so
     neither a wake whose first call succeeds nor one that began failing just before the lid closed reads as an

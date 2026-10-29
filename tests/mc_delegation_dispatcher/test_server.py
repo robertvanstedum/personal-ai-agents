@@ -175,6 +175,61 @@ def test_the_doors_own_refusal_is_an_answer_with_its_code():
         {"state": "recorded"}
 
 
+# ── a redirect, or any error on the way, is no answer either (S1-H review SF3) ───────────────────────────────────
+@pytest.fixture()
+def redirecting():
+    """A plain local server answering every POST with a redirect, as a proxy's login page in front of the door would."""
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class Redirect(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.send_response(self.server.status)
+            self.send_header("Location", "https://login.example.test/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, *a):
+            pass
+    srv = HTTPServer(("127.0.0.1", 0), Redirect)
+    srv.status = 302
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        yield srv
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def own_client(port):
+    """The real client with its own handler chain (no proxy, redirects refused), its request sent to a local port."""
+    client = door.HttpDispatcherV2(door.DOORS[1], HOST_TOKEN, Path("/x"))
+    own = client._open
+
+    def retarget(req, timeout):
+        local = urllib.request.Request(f"http://127.0.0.1:{port}{door.PATH}", data=req.data,
+                                       method=req.get_method(), headers=dict(req.header_items()))
+        return own(local, timeout=timeout)
+    client._open = retarget
+    return client
+
+
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+def test_a_redirect_from_the_doors_address_reads_as_a_lost_connection(redirecting, status):
+    redirecting.status = status
+    with pytest.raises(door.DoorUnreachable, match=r"runner_door_(redirect_refused|status_30\d)") as got:
+        own_client(redirecting.server_address[1]).heartbeat("mac-test-1:runner", "online", [], FACTS)
+    assert runner._transport(got.value) is True                # offline: never counted as contact
+
+
+@pytest.mark.parametrize("error", [RuntimeError("runner_door_redirect_refused"), RuntimeError("Some proxy said no"),
+                                   LookupError("x"), ValueError("not a door answer")])
+def test_any_error_on_the_way_that_is_not_the_doors_answer_is_a_lost_connection(error):
+    with pytest.raises(door.DoorUnreachable) as got:
+        _client(error).renew("8b1e9f00-0000-4000-8000-000000000001", 1, runner_id="mac-test-1:runner")
+    assert runner._transport(got.value) is True
+    assert str(got.value) in ("runner_door_redirect_refused", "runner_door_answer_not_authority")
+
+
 def test_version_1_client_is_unchanged():
     """Production's client still raises its own error for an answer without a value (its behaviour is frozen)."""
     def opener(req, timeout):
