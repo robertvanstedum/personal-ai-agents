@@ -14,6 +14,89 @@ SERVICES=("$@")
 COMPOSE=(docker-compose --project-name minimoi -f /opt/minimoi/docker-compose.prod.yml)
 REGISTRY="332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi"
 
+# ---- portal auth files: begin --------------------------------------------------------------------------------------
+# Once docker-compose.prod.yml binds auth/pending.json and auth/reset_requests.json as host files (create_host_path:
+# false; action-waiting notices spec v0.2 §3.10), a portal release needs both host files to exist, or Docker refuses
+# the new container. The preflight refuses the release before anything changes; the final copy, just before the
+# portal is recreated, carries the running portal's own copies over (they live only in its container layer until the
+# first release with the binds), so nothing asked or answered since `notices prepare` is lost or brought back. Both do
+# nothing while the compose file has no such bind. Every failure stops the release with the old portal running.
+portal_auth_bound_in_compose() {   # COMPOSE_FILE
+  grep -q "target: /app/minimoi_portal/auth/pending.json" "$1"
+}
+
+portal_auth_preflight() {   # AUTH_DIR COMPOSE_FILE
+  local dir="$1" compose="$2" name problems=0
+  portal_auth_bound_in_compose "$compose" || return 0
+  for name in pending.json reset_requests.json; do
+    if [[ -L "$dir/$name" || ! -f "$dir/$name" ]]; then
+      echo "preflight: $dir/$name is missing or not a regular file; Docker would refuse the portal (create_host_path: false)." >&2
+      problems=$((problems + 1))
+    fi
+  done
+  if (( problems > 0 )); then
+    echo "Portal auth preflight FAILED: run 'deploy_mc_container_ec2.sh notices prepare' on this host, then re-run the release. Nothing was changed." >&2
+    return 1
+  fi
+  echo "Portal auth preflight passed."
+}
+
+portal_auth_final_copy() {   # AUTH_DIR COMPOSE_FILE
+  local dir="$1" compose="$2" name target host tmp rc
+  portal_auth_bound_in_compose "$compose" || return 0
+  docker container inspect minimoi-portal >/dev/null 2>&1 || { echo "No portal container yet: keeping the prepared auth files."; return 0; }
+  for name in pending.json reset_requests.json; do
+    target="/app/minimoi_portal/auth/$name"
+    host="$dir/$name"
+    if docker inspect --format '{{range .Mounts}}{{.Destination}}{{"\n"}}{{end}}' minimoi-portal | grep -qx "$target"; then
+      continue                                  # already a host file: the container layer holds nothing to carry over
+    fi
+    if [[ "$(docker inspect --format '{{.State.Running}}' minimoi-portal 2>/dev/null)" != "true" ]]; then
+      echo "minimoi-portal is not running; $name: keeping the prepared host file."
+      continue
+    fi
+    rc=0
+    docker exec minimoi-portal test -e "$target" || rc=$?
+    if (( rc == 1 )); then
+      echo "$name: the running portal has none; keeping the prepared host file."
+      continue
+    fi
+    if (( rc != 0 )); then
+      echo "cannot tell whether the running portal has $name (docker exec exit $rc); refusing the release." >&2
+      return 1
+    fi
+    tmp=$(mktemp "$host.final.XXXXXX")
+    if ! docker cp "minimoi-portal:$target" "$tmp" >/dev/null 2>&1; then
+      rm -f "$tmp"
+      echo "could not copy $name out of the running portal; refusing the release." >&2
+      return 1
+    fi
+    if ! python3 - "$tmp" "$name" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+key = "pending" if sys.argv[2] == "pending.json" else "requests"
+if not isinstance(data, dict) or not isinstance(data.get(key, []), list):
+    raise SystemExit(1)
+PY
+    then
+      rm -f "$tmp"
+      echo "$name from the running portal is not a valid file (a write in progress?); refusing the release. Retry it." >&2
+      return 1
+    fi
+    cp -p "$host" "$host.bak-release-$(date -u +%Y%m%dT%H%M%SZ)"
+    chown --reference="$host" "$tmp"
+    chmod --reference="$host" "$tmp"
+    mv -f "$tmp" "$host"
+    echo "$name: final copy taken from the running portal."
+  done
+}
+# ---- portal auth files: end ----------------------------------------------------------------------------------------
+
+AUTH_HOST_DIR="${MINIMOI_ROOT:-/opt/minimoi}/auth"
+if [[ " ${SERVICES[*]} " == *" portal "* ]]; then
+  portal_auth_preflight "$AUTH_HOST_DIR" /opt/minimoi/docker-compose.prod.yml
+fi
+
 # Host-owned nonsecret activation survives image/Compose updates. Never source/eval it.
 # Fail before any ECR/Docker mutation when present configuration is invalid.
 ACTIVATION_ENV="$(python3 /opt/minimoi/scripts/production_activation.py)"
@@ -197,6 +280,9 @@ if [[ " ${SERVICES[*]} " == *" cos-agent-a "* ]]; then
 fi
 if [[ " ${SERVICES[*]} " == *" curator "* ]]; then
   preserve_curator_state
+fi
+if [[ " ${SERVICES[*]} " == *" portal "* ]]; then
+  portal_auth_final_copy "$AUTH_HOST_DIR" /opt/minimoi/docker-compose.prod.yml
 fi
 "${COMPOSE[@]}" up -d --no-deps --remove-orphans "${SERVICES[@]}"
 # The production Vault Ask service runs the portal image (compose profile `vault`). Once
