@@ -32,6 +32,8 @@ def test_actual_role_and_handbook_combined_budget(tmp_path):
     assert r.returncode==0
     assert len(final.read_text())<=32000
     assert json.loads(receipt.read_bytes())['policy_chars']==len(final.read_text())
+    # Handbook 0.1.1: the outside-reports rule is in what CoS's runtime loads, not only in a reference file.
+    assert final.read_text().count('\n## Outside reports and GitHub issues\n')==1
 
 
 from pathlib import Path
