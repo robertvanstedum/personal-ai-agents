@@ -70,3 +70,12 @@ PyYAML==6.0.3
 pypdf==6.8.0
 beautifulsoup4==4.15.0
 soupsieve==2.10
+
+# The CoS store's command writer validates every command against the frozen contracts (contracts/cos/v1; spec v0.3
+# section 4.5). Exact pins; wheels confirmed for python 3.12 manylinux x86_64 (rpds-py is the only binary one).
+# typing_extensions, which referencing needs on 3.12, is already pinned above.
+attrs==26.1.0
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+referencing==0.37.0
+rpds-py==2026.9.1

@@ -61,6 +61,20 @@ def _cases(kind):
     return out
 
 
+FROZEN_FILES = (
+    "common.schema.json", "activity-record.schema.json", "store-records.schema.json", "store-command.schema.json",
+    "read-surface.schema.json", "incident.schema.json", "consultation.schema.json", "issue-operation.schema.json",
+    "intake.schema.json", "conversation.schema.json", "seat-binding.schema.json",
+    "access-matrix.json", "capabilities.json", "legacy-mapping.json", "loop-inventory.json", "index.json",
+)
+
+
+def test_the_frozen_file_set_is_exactly_what_b0_froze():
+    # Adding or removing a contract file is a spec change, not a coding choice. Naming each file here also lets CI's
+    # focused test selection (scripts/ci/select_tests.py) find this module when any one of them changes.
+    assert sorted(p.name for p in CONTRACTS.glob("*.json")) == sorted(FROZEN_FILES)
+
+
 @pytest.mark.parametrize("path", SCHEMA_FILES, ids=lambda p: p.name)
 def test_every_schema_is_valid_2020_12(path):
     Draft202012Validator.check_schema(_load(path))
