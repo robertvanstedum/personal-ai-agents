@@ -499,6 +499,11 @@ class _Busy(Exception):
     """A step that cannot finish yet (a receipt's own lease still runs): recovery tries again on a later pass."""
 
 
+class _ClockHold(_Busy):
+    """The authority's clock is outside the allowed skew of this host's (HostRuntime.check_authority_clock): nothing is
+    replayed, reconciled, thawed, claimed or sent until the two agree. Tried again on the next tick or pass."""
+
+
 class _AuthorityError(Exception):
     """A call the authority answered with a deterministic error: a refused shape, an integrity or audit failure at the
     authority, a body over the door's bound. It is an answer, never "offline", so it is never retried as a lost
@@ -740,8 +745,15 @@ class HostRuntime:
     run_once's pass. Built by the CLI from host.yaml (host.HostConfig) and the authority's values (Authority.hosts)."""
 
     def __init__(self, dispatcher, cfg: RunnerConfig, host, values, gap_threshold_s, *, bundle_digest, sink=None,
-                 now=_now, wall=time.time, mono=time.monotonic, hint=None, stores=None, census=None, witness=None):
+                 now=_now, wall=time.time, mono=time.monotonic, hint=None, stores=None, census=None, witness=None,
+                 authority_clock=None, clock_bound_s=None):
         self.dispatcher, self.cfg, self.host, self.values = dispatcher, cfg, host, values
+        # The authority's clock against this host's (spec v0.5 §2.5; gate M's T6m finding): ``authority_clock`` reads
+        # the authority's own time (its database's clock_timestamp()); ``clock_bound_s`` is how far apart the two may
+        # be. None (host.yaml's clock_check off): nothing is measured and nothing below changes.
+        self.authority_clock, self.clock_bound_s = authority_clock, clock_bound_s
+        self.clock_last = None             # the last measurement: {offset_s, rtt_s, at, within}
+        self.clock_hold = None             # while the clocks disagree: {since, offset_s, ...}; None otherwise
         # The agent census (spec v0.5 §6.6, census.CensusFile on artifact_root/census): this host's file, which every
         # source on the host appends to; the runtime writes its own children's rows and the capture gaps, sends the
         # file's unsent events with each heartbeat and keeps the host's own view. None: no census (tests of S1-D).
@@ -1075,6 +1087,68 @@ class HostRuntime:
         self._ok()
         return out
 
+    # ── the authority's clock (spec v0.5 §2.5) ──
+    def check_authority_clock(self):
+        """Is the authority's clock within ``clock_bound_s`` of this host's? Read as (host, authority, host): the
+        authority's time against the middle of the round trip, given half the round trip's benefit of the doubt.
+        Leases, receipts and grace are judged on the authority's clock; the effect sink, this host's records (``at``)
+        and its timers on the host's. Gate M showed what happens when they part (29 Oct, T6m): the authority's
+        database runs in a virtual machine that sleeps with the Mac, and for about 4 s after a 10-minute sleep its
+        clock read 672.6 s slow. The authority answered ``continue`` on a lease that had run out ten minutes earlier,
+        handed out an effect lease the sink refused as already expired (the effect lost for good), and refused the
+        result as dated in its future. So, while they disagree the host holds: it raises _ClockHold and nothing is
+        replayed, reconciled, thawed, claimed or sent; a hold's start and end are noted in each owned task's journal.
+        Off (no bound or no reader): None, and nothing is read. Returns the measurement."""
+        if self.clock_bound_s is None or self.authority_clock is None:
+            return None
+        t0 = self._now()
+        try:
+            theirs = self.authority_clock()
+        except Exception as exc:
+            if not _transport(exc):
+                self._ok()
+                raise _AuthorityError(_error_code(exc)) from None
+            self._failed()
+            raise _Offline(type(exc).__name__) from None
+        t1 = self._now()
+        self._ok()
+        rtt = max(0.0, (t1 - t0).total_seconds())
+        offset = (theirs - (t0 + _timedelta(rtt / 2))).total_seconds()
+        within = abs(offset) <= self.clock_bound_s + rtt / 2
+        self.clock_last = {"offset_s": round(offset, 3), "rtt_s": round(rtt, 3), "at": t1.isoformat(),
+                           "within": within, "bound_s": self.clock_bound_s}
+        if not within:
+            self._hold_clock("offset", offset_s=round(offset, 3), rtt_s=round(rtt, 3))
+        if self.clock_hold is not None:
+            held = self.clock_hold
+            self.clock_hold = None
+            for task in self.owned():
+                self.journal(task).note("clock_ok", self.at(), offset_s=round(offset, 3), rtt_s=round(rtt, 3),
+                                        held_since=held["since"], bound_s=self.clock_bound_s)
+        return self.clock_last
+
+    def _clock_shown(self) -> dict:
+        """The last measurement and any hold, as host-state.json and a pass show them (no monotonic times)."""
+        hold = None if self.clock_hold is None else {k: v for k, v in self.clock_hold.items() if k != "since_mono"}
+        return {"last": self.clock_last, "hold": hold, "bound_s": self.clock_bound_s}
+
+    def _hold_clock(self, why, **fields):
+        """Start (or keep) a clock hold, noted once per hold in each owned task's journal, and raise _ClockHold."""
+        with self._lock:
+            self.reasons.add("clock")                  # §5.5 runs again once the clocks agree
+            first = self.clock_hold is None
+            if first:
+                self.clock_hold = {"since": self.at(), "since_mono": self._mono(), "why": why, **fields}
+            else:
+                self.clock_hold.update(fields)
+        if first:
+            for task in self.owned():
+                self.journal(task).note("clock_hold", self.at(), why=why, bound_s=self.clock_bound_s, **fields)
+        child = self.child
+        if child is not None and not child.frozen:
+            child.freeze("clock")                      # as the authority unreachable is (R4.5-f): frozen while held
+        raise _ClockHold(why)
+
     # ── files ──
     def journal(self, task):
         from .journal import Journal
@@ -1168,7 +1242,8 @@ class HostRuntime:
                           "last_gap_s": self.last_gap_s, "last_contact_at": self.last_contact_ok,
                           "authority_reachable": not self.offline(), "contact_failures": self.failures,
                           # calls to the authority by kind since start, where the CLI counts them (T1); else null
-                          "calls": _call_counts(self.dispatcher)}],
+                          "calls": _call_counts(self.dispatcher),
+                          **({} if self.clock_bound_s is None else {"authority_clock": self._clock_shown()})}],
                "items": items,
                "unknowns": ["authority_snapshot: this is the host's own view; the authority's is S1-G's"]}
         if self.witness is not None:              # its failures shown here and by doctor, never dropped (review N1)
@@ -1319,6 +1394,8 @@ class HostRuntime:
             return self._run(launch)
         except _Offline:
             return {"state": "offline"}
+        except _ClockHold:
+            return {"state": "clock_unsynced", "clock": self._clock_shown()}   # nothing acted on; tried each pass
         except _Busy:
             return {"state": "recovering"}
         except _AuthorityError as exc:
@@ -1431,10 +1508,17 @@ class HostRuntime:
         with self._lock:
             reasons = sorted(self.reasons)
         tasks = [t for t in self.owned() if t not in self.damaged and t not in self.blocked]
+        held = self.clock_hold is not None
+        if held:
+            self.check_authority_clock()           # still apart: nothing again, not even a freeze note, until they agree
         stages = {}
         for task in tasks:                                                    # step 2: freeze
             stages[task] = self._freeze_task(task, reasons)
             self._result_from_stage(task)
+        if reasons and not held:
+            # Before anything is sent to the authority (the replay is the first): its clock and this host's agree
+            # (§2.5). After a whole-Mac sleep the authority's own clock may still be catching up (gate M, T6m).
+            self.check_authority_clock()
         readable = []
         for task in tasks:                                                    # step 3: replay
             try:
@@ -1464,6 +1548,11 @@ class HostRuntime:
                 continue
             if answer is None:
                 continue                                                      # blocked at readback (NC1)
+            if self.clock_bound_s is not None and answer.get("answer") == "continue" and answer.get("lease_until") \
+                    and _parse_iso(answer["lease_until"]) <= self._now() - _timedelta(self.clock_bound_s):
+                # "The lease never lapsed", about a lease that ended before now by this host's clock: the two clocks
+                # disagree (the authority's runs behind). The child stays frozen; asked again once they agree.
+                self._hold_clock("continue_on_a_lease_over", lease_until=answer["lease_until"])
             nxt = self._workspace(task, answer)
             if nxt is not None:
                 resumed.append(nxt)
@@ -2097,6 +2186,19 @@ class HostRuntime:
             if self.reasons - {"restart"}:
                 try:
                     launch = self.recover()
+                except _ClockHold:
+                    # Frozen while the clocks disagree; past the offline hold it is stopped at its last checkpoint, as
+                    # an unreachable authority's child is (R4.5-f), and §5.5 decides once they agree.
+                    hold = self.clock_hold or {}
+                    if child.alive() and self._mono() - hold.get("since_mono", self._mono()) \
+                            >= self.values.offline_hold_s:
+                        state = child.kill("clock_hold")
+                        child.journal.note("stop", self.at(), request_id=child.request_id,
+                                           generation=child.generation, reason="clock_hold", child=state,
+                                           checkpoint=self._acked_checkpoint(child.request_id))
+                        return {"state": "clock_unsynced", "request_id": child.request_id, "stopped": "clock_hold"}
+                    time.sleep(cfg.tick_s)
+                    continue
                 except (_Offline, _Busy):
                     time.sleep(cfg.tick_s)
                     continue
@@ -2225,6 +2327,16 @@ class HostRuntime:
             lease = {**got["lease"], "key": key, "grant": grant, "request_id": child.request_id,
                      "generation": child.generation}
             self.held[op_id] = lease
+            if self.clock_bound_s is not None and _parse_iso(lease["lease_until"]) <= self._now():
+                # A receipt lease that the authority just granted and that is already over by this host's clock: the
+                # authority's clock runs behind ours by more than the lease. Sent now, the sink (on the host's clock)
+                # would refuse it as expired and the effect would be lost for good (gate M, T6m: e2). Never sent;
+                # the request waits unanswered, frozen, until the clocks agree and §5.5 has run.
+                child.journal.note("clock_disagrees", self.at(), request_id=child.request_id,
+                                   generation=child.generation, operation_id=op_id, key=key,
+                                   lease_until=lease["lease_until"])
+                self._hold_clock("receipt_lease_over_on_arrival", operation_id=op_id,
+                                 lease_until=lease["lease_until"])
         if not dispatch:
             return {"state": "held", "operation_id": op_id}
         return self._effect_dispatch(child, key, op_id=op_id)

@@ -16,7 +16,7 @@ import threading
 import time
 import unittest
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -411,6 +411,128 @@ class HostRuntimeOnPostgres(PostgresFixture, unittest.TestCase):
         self.assertEqual(sink.lines()[0]["operation_id"], effect_operation_id(rid, "e2"))
         kinds = self.kinds(rid)
         self.assertLess(kinds.index("item.lapsed"), kinds.index("item.resumed"))
+
+    # ── gate M's T6m (29 Oct): the authority's clock behind the host's after a whole-Mac sleep ──
+    BEHIND_S = 672.6             # Colima's ha.stderr.log, 22:13:18: "guest clock adjusted (was -672621ms off)"
+
+    def slow_clock(self):
+        """A connect whose clock_timestamp() is fakeclock's (FLAKES_RESULT.md's probe, kept in the test): PostgreSQL's
+        own clock minus fakeclock.lag's seconds, put first on the search path. Every lease, receipt and grace the
+        store judges calls clock_timestamp() by name, so the authority runs on that clock; the host, fakework and the
+        sink keep the Mac's. Only this test's connections see it."""
+        import psycopg2
+        conn = self.connect()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""CREATE SCHEMA IF NOT EXISTS fakeclock;
+                    CREATE TABLE IF NOT EXISTS fakeclock.lag (one boolean PRIMARY KEY DEFAULT true CHECK (one),
+                                                              behind_s double precision NOT NULL);
+                    INSERT INTO fakeclock.lag VALUES (true, 0) ON CONFLICT (one) DO UPDATE SET behind_s = 0;
+                    CREATE OR REPLACE FUNCTION fakeclock.clock_timestamp() RETURNS timestamptz LANGUAGE sql VOLATILE
+                    AS $$ SELECT pg_catalog.clock_timestamp()
+                                 - make_interval(secs => (SELECT behind_s FROM fakeclock.lag)) $$""")
+            conn.commit()
+        finally:
+            conn.close()
+        return lambda: psycopg2.connect(DSN, connect_timeout=3, options="-c statement_timeout=4000 "
+                                        "-c lock_timeout=3000 -c search_path=fakeclock,pg_catalog,public")
+
+    def test_gate_m_t6m_a_wake_onto_an_authority_672_s_slow_holds_until_the_clocks_agree_then_resumes_and_e2_once(self):
+        """The night of 29 October on the real store, without a sleep. The worker holds e2b's receipt lease; the Mac
+        sleeps (the child is stopped); while it sleeps the authority's clock stands still, so on wake it reads 672.6 s
+        behind the Mac: the item's lease is current on its clock and ten minutes over on the Mac's, e2b's receipt lease
+        over on both. The runtime notices its wake; 4 s later the virtual machine's time sync steps the clock forward.
+        With clock_check on, the runtime measures the authority's clock first and holds, the child frozen, until the
+        clocks agree; then the authority's answer is the true one (lapsed: resume) and generation 2 commits e2 once.
+        That night (clock_check absent) the authority answered continue on the slow clock's word, e2 went out on a
+        receipt lease the sink refused as expired, the result was refused as dated in the authority's future
+        (event_time_invalid), and the item never finished."""
+        import signal
+        connect = self.slow_clock()
+        job = f"job-{self.n + 1}"
+        gid = self.effect_grant(job, "e2b", "e2")
+        brief = self.program("checkpoint s1", f"stale_effect_on_wake e2b grant={gid} wait_s=20 gap_s=1",
+                             f"effect e2 grant={gid}", "result ok")
+        self.assertEqual(self.item(brief), job)
+        self.write_host(clock_check="on")
+        h = host_mod.load(self.host_path)
+        auth = Authority.parse({**VALUES, "hosts": {**VALUES["hosts"], "renew_s": 50, "offline_hold_s": 60}})
+        store = DispatcherStore(connect, principal="robert", environment="dev", authority=auth, grants=self.grants)
+
+        def on_slow_clock(query, args=()):
+            conn = connect()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(query, args)
+                    out = cur.fetchone()[0] if cur.description else None
+                conn.commit()
+                return out
+            finally:
+                conn.close()
+        rt = cli.runtime_for(h, auth, StoreDispatcherV2(store), digest=DIGEST,
+                             authority_clock=lambda: on_slow_clock("SELECT clock_timestamp()"))
+        rt.cfg.tick_s, rt.cfg.kill_grace_s = 0.05, 1.0
+        self.runtimes.append(rt)
+        rt.contact()
+        rid = str(self.row(job)["request_id"])
+        e2b, e2 = effect_operation_id(rid, "e2b"), effect_operation_id(rid, "e2")
+        chan = self.tmp / "artifacts" / f"{rid}-g1.chan"
+        box = {}
+
+        def night_of_29_october():
+            try:
+                for _ in range(1500):
+                    if (chan / "ack-000002.json").exists():          # e2b's receipt lease held, its answer read
+                        break
+                    time.sleep(0.02)
+                else:
+                    raise AssertionError("e2b's lease was never held")
+                time.sleep(0.3)
+                os.killpg(rt.child.pgid, signal.SIGSTOP)                # the Mac sleeps
+                on_slow_clock("UPDATE fakeclock.lag SET behind_s = %s", (self.BEHIND_S,))
+                on_slow_clock("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() + interval '40 s' "
+                              "WHERE job_id=%s", (job,))                # renewed 20 s before the sleep, on its clock
+                on_slow_clock("UPDATE guild.mc_action_receipts SET lease_until = clock_timestamp() - interval '1 s' "
+                              "WHERE operation_id=%s", (e2b,))
+                box["behind_s"] = (datetime.now(timezone.utc)
+                                   - on_slow_clock("SELECT clock_timestamp()")).total_seconds()
+                time.sleep(1.5)                                         # past the worker's gap_s: it sees its wake
+                rt.on_wake({"gap_s": 673.32, "wall_minus_mono_s": 672.698, "hint": None})
+                box["woke"] = True
+                time.sleep(4.0)                                         # Colima's time sync, about 4 s later
+                on_slow_clock("UPDATE fakeclock.lag SET behind_s = 0")
+                box["synced"] = True
+            except BaseException as exc:
+                box["error"] = repr(exc)
+        watcher = threading.Thread(target=night_of_29_october, daemon=True)
+        watcher.start()
+        out = self.run_pass(rt, timeout=90)
+        watcher.join(10)
+        self.assertNotIn("error", box, box)
+        self.assertTrue(box.get("woke") and box.get("synced"), box)
+        self.assertAlmostEqual(box["behind_s"], self.BEHIND_S, delta=5)
+        self.assertEqual((out["state"], out["generation"]), ("completed", 2), out)
+        sink = fakework.FileSink(self.tmp / "sink").lines()
+        self.assertEqual([(x["operation_id"], x["answer"]) for x in sink], [(e2, "committed")])   # e2 once
+        notes = [e for e in rt.journal(f"{rid}-g1").entries() if e["type"] == "note"]
+        order = [e["kind"] for e in notes]
+        hold = next(e["fields"] for e in notes if e["kind"] == "clock_hold")
+        self.assertEqual(hold["why"], "offset")
+        self.assertAlmostEqual(hold["offset_s"], -self.BEHIND_S, delta=5)
+        self.assertLess(order.index("wake"), order.index("clock_hold"))
+        self.assertLess(order.index("clock_hold"), order.index("clock_ok"))
+        self.assertLess(order.index("clock_ok"), order.index("reconcile"))
+        self.assertNotIn("thaw", order)                                 # never let run on the slow clock's word
+        self.assertEqual([e["fields"]["answer"]["answer"] for e in notes if e["kind"] == "reconcile"], ["resume"])
+        events = self.sql("""SELECT kind, generation, body FROM guild.mc_delegation_events WHERE item_id=%s
+                             ORDER BY seq""", (rid,))
+        self.assertFalse([e for e in events if e["kind"] == "effect.dispatched" and e["generation"] == 1
+                          and e["body"]["operation_id"] == e2])          # e2 never sent on the slow clock's lease
+        self.assertFalse([e for e in events if e["kind"] == "result.refused"])
+        self.assertFalse([e for e in events if e["kind"] == "effect.evidence"
+                          and e["body"].get("outcome") == "lease_expired"])
+        self.assertFalse([e for e in events if e["kind"] == "item.reconciled"
+                          and e["body"].get("answer") == "continue"])
 
     def test_s2_a_finish_that_outlived_its_receipt_lease_is_recorded_by_readback_and_never_decided(self):
         """The finish (the sink's own "committed", on file) cannot reach the authority for longer than its receipt

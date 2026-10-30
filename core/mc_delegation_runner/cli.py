@@ -209,8 +209,34 @@ def _dispatcher(host, auth):
     return HttpDispatcherV2(host.authority.url, value, host.artifact_root, timeout=min(20, host.stop_timeout_s // 4 or 1))
 
 
-def runtime_for(host, auth, dispatcher, *, digest=None):
-    """A HostRuntime from a host configuration (the run and journal commands; tests build it the same way)."""
+def clock_bound_s(auth) -> float:
+    """How far the authority's clock may be from a host's (§2.5: under 1 s): the authority's own clock_skew_s, never
+    less than 1 s, since the measurement itself is good only to about the round trip."""
+    return max(1.0, float(auth.clock_skew_s))
+
+
+def clock_reader(dsn_file):
+    """The authority's own clock, read from its database (the Mac-only interim reaches it by DSN): one short
+    connection, ``SELECT clock_timestamp()``, the clock every lease, receipt and grace is judged on. The DSN file is
+    read once, here, under the same rule as the store's own (``_dsn``)."""
+    dsn = _dsn(dsn_file)
+
+    def read():
+        import psycopg2
+        conn = psycopg2.connect(dsn, connect_timeout=5)
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT clock_timestamp()")
+                return cur.fetchone()[0]
+        finally:
+            conn.close()
+    return read
+
+
+def runtime_for(host, auth, dispatcher, *, digest=None, authority_clock=None):
+    """A HostRuntime from a host configuration (the run and journal commands; tests build it the same way). With
+    host.yaml's clock_check on, the runtime checks the authority's clock against its own (``authority_clock``, or by
+    default a read of the authority's database by its DSN file); off, nothing is read and nothing changes."""
     from . import census, host as host_mod
     from .fakework import FileSink
     if digest is None:
@@ -221,10 +247,14 @@ def runtime_for(host, auth, dispatcher, *, digest=None):
                               max_cost_usd=V2_MAX_COST_USD, lease_renew_s=float(auth.hosts.renew_s), tick_s=0.5)
     sink = None if host.effect_sink is None else FileSink(host.effect_sink.path, lookup=host.effect_sink.lookup)
     from . import witness
+    clock = None
+    if host.clock_check:
+        clock = authority_clock if authority_clock is not None else clock_reader(host.authority.dsn_file)
     return runner.HostRuntime(dispatcher, cfg, host, auth.hosts, auth.sweeper.gap_threshold_s, bundle_digest=digest,
                               sink=sink, stores=_stores(host), census=census.CensusFile(host.artifact_root / "census"),
                               witness=witness.build(host, auth.hosts.contact_timeout_s, host.artifact_root,
-                                                    gap_threshold_s=auth.sweeper.gap_threshold_s))
+                                                    gap_threshold_s=auth.sweeper.gap_threshold_s),
+                              authority_clock=clock, clock_bound_s=clock_bound_s(auth) if host.clock_check else None)
 
 
 def _stores(host) -> dict:
@@ -572,6 +602,12 @@ def _doctor(words) -> int:
                             if not a["fresh"])
         except Exception as exc:
             out["authority_timers"] = {"unreadable": type(exc).__name__}
+    if host.clock_check and auth is not None:
+        # §2.5: doctor reports the offset of the authority's clock from this host's; acceptance needs it under 1 s.
+        out["authority_clock"] = _clock_offset(lambda: clock_reader(host.authority.dsn_file)(), clock_bound_s(auth))
+        if not out["authority_clock"].get("within"):
+            problems.append("authority_clock_offset" if "offset_s" in out["authority_clock"]
+                            else "authority_clock_unreadable")
     if args.do_not_resume:
         out["do_not_resume"] = list(host.do_not_resume)
     if args.env_names:                                   # names only (MC-0, LCH-6): never a value
@@ -588,6 +624,20 @@ def _doctor(words) -> int:
     out["problems"] = problems
     print(json.dumps(out, sort_keys=True, indent=1))
     return 0 if out["ok"] else 1
+
+
+def _clock_offset(read, bound_s) -> dict:
+    """One reading of the authority's clock against this host's: {offset_s, rtt_s, bound_s, within}, or why not."""
+    t0 = runner._now()
+    try:
+        theirs = read()
+    except (Exception, SystemExit) as exc:          # SystemExit: a DSN file the store's rule refuses (_dsn)
+        return {"unreadable": type(exc).__name__, "bound_s": bound_s, "within": False}
+    t1 = runner._now()
+    rtt = (t1 - t0).total_seconds()
+    offset = (theirs - (t0 + (t1 - t0) / 2)).total_seconds()
+    return {"offset_s": round(offset, 3), "rtt_s": round(rtt, 3), "bound_s": bound_s,
+            "within": abs(offset) <= bound_s + rtt / 2}
 
 
 def _version(words) -> int:

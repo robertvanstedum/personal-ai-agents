@@ -16,7 +16,10 @@ brief:
     report_usage <amount>|unknown                    report usage in the route's unit (capped at --cap)
     stale_effect_on_wake <key> grant=<uuid> [wait_s=<n>] [gap_s=<n>]
                                                      hold a receipt lease; on noticing its own wake gap (a pause of
-                                                     more than gap_s), dispatch with that old lease
+                                                     more than gap_s), dispatch with that old lease. On a run
+                                                     restarted from a checkpoint (--from: a resume or a retry) it
+                                                     holds its own lease afresh and waits for no wake: the sleep it
+                                                     stood for happened under an earlier generation
     findings [<word>]                                a reviewer's output, recorded as a findings artifact
     resume_session <id>                              no-op: fakework keeps no sessions (the runtime refuses the
                                                      do-not-resume ids before any spawn, R6.4)
@@ -369,6 +372,12 @@ def run(steps, *, channel, sink, cap, unit, start_after=None, census=None) -> in
             ack = client.ask({"kind": "effect_hold", "key": s["key"], "grant": s["grant"]})
             if ack.get("state") != "held":
                 print(f"stale {s['key']}: not held ({ack.get('state')} {ack.get('code')})", flush=True)
+                continue
+            if start_after is not None:
+                # Gate M's T6m (29 Oct): a resumed run that waited here for a second sleep (wait_s=1800) held the one
+                # runtime slot for half an hour after a sleep the step had already stood for.
+                print(f"stale {s['key']}: held afresh on a run restarted from a checkpoint; no wake awaited",
+                      flush=True)
                 continue
             # The lease is held from the moment the runtime claimed it: a pause while the answer was on its way counts,
             # and so does one after the answer was read: one unbroken chain of clock readings, from the request on.
