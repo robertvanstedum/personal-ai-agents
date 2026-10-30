@@ -5,6 +5,7 @@ each bound to its own digest, or one code at a time; the check-in reads the runt
 nothing; the staging watch tells silence once and the return once."""
 from datetime import datetime, timedelta, timezone
 import hashlib
+import json
 from pathlib import Path
 import sys
 
@@ -1045,3 +1046,100 @@ def test_c_n4_a_lost_closing_message_leaves_the_d_code_open_and_goes_out_at_the_
     assert bot.sent == [("D-7 is no longer open: its item has ended (completed). Nothing to answer.", 77)]
     assert link.close_closed(store, bot, OWNER) == [] and len(bot.sent) == 1
     assert closed_reason(st) == "its item has ended (completed)"
+
+
+# ── dev switch-on F2: no false error at start, and plain words when the state's time is unknown ────────────────
+from core.mc_delegation_dispatcher import snapshot as _snap  # noqa: E402
+
+
+class Clock:
+    def __init__(self):
+        self.t = 1000.0
+
+    def __call__(self):
+        return self.t
+
+
+def _published(path, as_of):
+    path.write_text(json.dumps({"schema": "minimoi.runtime.state.v1", "environment": "dev", "as_of": as_of.isoformat(),
+                                "notices": [], "items": [], "hosts": []}))
+
+
+def _file_link(path, clock, now):
+    return RuntimeLink(Authority(), owner="robert", view_bound_s=120, clock=clock,
+                       source=lambda: _snap.read_state_file(str(path), now=now()))
+
+
+def test_f2_no_notice_at_start_before_the_first_snapshot_then_none_once_it_is_published(tmp_path):
+    """The dev log at 23:40:12: the supervisor's first tick ran 8 ms before the sweeper's first state.json. Before the
+    first publish, within one view bound of the link's start, nothing is told (and nothing fires: still stale)."""
+    path, clock, store, bot = tmp_path / "state.json", Clock(), AlertStore(), Bot()
+    link = _file_link(path, clock, lambda: NOW)
+    assert link.drain(store, bot, OWNER) == [] and bot.sent == []              # no snapshot yet: starting
+    doc, stale = link.view()
+    assert stale and link.check_in() == ([], [], [], [])                        # nothing fires, nothing listed
+    assert link.deliver(store, bot, OWNER) == []
+    clock.t += 0.008
+    _published(path, NOW)                                                        # the sweeper's first publish
+    assert link.drain(store, bot, OWNER) == [] and bot.sent == []
+    assert link.check_in()[0] == [] and store.alerts == set()
+
+
+def test_f2_no_snapshot_after_one_view_bound_is_told_once_in_plain_words(tmp_path):
+    path, clock, store, bot = tmp_path / "state.json", Clock(), AlertStore(), Bot()
+    link = _file_link(path, clock, lambda: NOW)
+    assert link.drain(store, bot, OWNER) == []
+    clock.t += 120                                                               # one view bound, still nothing
+    sent = link.drain(store, bot, OWNER)
+    assert sent == ["view-stale:runtime:None"] and len(bot.sent) == 1
+    text = bot.sent[0][0]
+    assert "The runtime's state cannot be read: no snapshot has been published, or the published one is not " \
+           "readable. No delegation rule fires until a fresh snapshot is published." in text
+    assert "unknown age old" not in text and "as of None" not in text
+    clock.t += 30
+    assert link.drain(store, bot, OWNER) == [] and len(bot.sent) == 1             # once per key
+
+
+def test_f2_a_real_stale_snapshot_still_fires_once_even_at_start(tmp_path):
+    """A snapshot with a known age past the bound is a real problem (a dead sweeper's last publish): told at the very
+    first tick, grace or not, and once."""
+    path, clock, store, bot = tmp_path / "state.json", Clock(), AlertStore(), Bot()
+    _published(path, NOW - timedelta(seconds=600))
+    link = _file_link(path, clock, lambda: NOW)
+    sent = link.drain(store, bot, OWNER)
+    key = f"view-stale:runtime:{(NOW - timedelta(seconds=600)).isoformat()}"
+    assert sent == [key] and len(bot.sent) == 1
+    assert (f"The runtime's state is stale: it is 600 s old (as of {(NOW - timedelta(seconds=600)).isoformat()}). "
+            "No delegation rule fires from it until it is fresh.") in bot.sent[0][0]
+    assert [i["key"] for i in link.check_in()[0]] == [key]
+    assert link.drain(store, bot, OWNER) == [] and len(bot.sent) == 1
+
+
+def test_f2_a_snapshot_that_disappears_after_one_was_seen_is_told_at_once(tmp_path):
+    path, clock, store, bot = tmp_path / "state.json", Clock(), AlertStore(), Bot()
+    _published(path, NOW)
+    link = _file_link(path, clock, lambda: NOW)
+    assert link.drain(store, bot, OWNER) == []
+    path.unlink()                                                                # within the start's bound, but seen
+    assert link.drain(store, bot, OWNER) == ["view-stale:runtime:None"]
+
+
+def test_f2_the_stale_words_for_each_case():
+    from core.supervision.runtime import _stale_item
+    at = NOW.isoformat()
+    assert _stale_item({"as_of": None, "view_age_s": None, "unknowns": ["state_file_unreadable"]})["text"] == (
+        "The runtime's state cannot be read: no snapshot has been published, or the published one is not readable. "
+        "No delegation rule fires until a fresh snapshot is published.")
+    assert _stale_item({"as_of": None, "view_age_s": None, "unknowns": ["view_age"]})["text"] == (
+        "The runtime's state carries no time, so its age is unknown. No delegation rule fires until a fresh snapshot "
+        "is published.")
+    assert _stale_item({"as_of": at, "view_age_s": None})["text"] == (
+        f"The runtime's state is stale: its age is unknown (as of {at}). No delegation rule fires from it until it "
+        "is fresh.")
+    assert _stale_item({"as_of": at, "view_age_s": 412.7})["text"] == (
+        f"The runtime's state is stale: it is 412 s old (as of {at}). No delegation rule fires from it until it is "
+        "fresh.")
+    assert _stale_item({"as_of": at, "view_age_s": -75})["text"] == (
+        f"The runtime's state is stale: it is dated 75 s ahead of this clock (as of {at}). No delegation rule fires "
+        "from it until it is fresh.")
+    assert _stale_item({"as_of": None, "view_age_s": None})["key"] == "view-stale:runtime:None"   # key unchanged
