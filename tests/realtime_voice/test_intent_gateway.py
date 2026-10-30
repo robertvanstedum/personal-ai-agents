@@ -2,7 +2,7 @@
 understanding call"): its request body, its fallbacks, its deadline, and the table of natural phrasing in English, German
 and Portuguese (tests/realtime_voice/data/intent_cases.json) through MC's real adapter and the utterance route, with a fake
 gateway that answers the table's word. That tests the wiring and the fallbacks, not a model: the offline script
-scripts/realtime_voice/eval_voice_intent.py runs the real alias over the same table (never in a suite). No provider, no
+scripts/dev/eval_voice_intent.py runs the real alias over the same table (never in a suite). No provider, no
 gateway, no Keychain, no network."""
 import json
 import sys

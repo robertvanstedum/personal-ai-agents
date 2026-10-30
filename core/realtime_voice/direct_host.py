@@ -1250,8 +1250,8 @@ class DirectSessions(ConsultLedger):
             self._let_go(meta, slot, "no", now)
             return {"decision": "dropped", "action_id": slot["action_id"], "kind": slot["kind"], "reason": "no"}
         if label in ("read_back", "read_summary"):
-            if slot is None:
-                return {"decision": "nothing_waiting"}      # read-back after expiry (or of nothing) reads nothing
+            if slot is None:                                # read-back after expiry reads nothing; with nothing ever
+                return {"decision": "nothing_waiting" if now < meta.get("stray_until", 0) else "chat"}   # waiting: chat
             if slot["kind"] != "end":
                 slot["paused"] = True                       # the answer window waits while his words are read
                 return {"decision": "read_back", "action_id": slot["action_id"], "kind": slot["kind"],

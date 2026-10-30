@@ -10,7 +10,7 @@ http://model-gateway:4000/v1). It prints each case's expected and heard word and
 language; the words said are the table's synthetic ones, never Robert's. One call per case, a few tokens each.
 
     MINIMOI_MODEL_GATEWAY_URL=http://localhost:4000/v1 MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_MC=… \\
-        venv/bin/python scripts/realtime_voice/eval_voice_intent.py [--host mc|cos] [--all]
+        venv/bin/python scripts/dev/eval_voice_intent.py [--host mc|cos] [--all]
 """
 from __future__ import annotations
 
