@@ -1,8 +1,11 @@
 """Owned fake sender only. No installed Claude/native/provider execution."""
 from dataclasses import asdict
+import errno
 import hashlib
 import json
+import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import time
@@ -177,3 +180,24 @@ def test_fixed_probe_owned_sender_payload_and_single_intent(tmp_path,monkeypatch
     assert box.observe(rid)['state']=='acknowledged'
     box.dispatch(rid)
     assert len(calls)==1 and all(c.poll() is not None for c in children)
+
+
+@pytest.mark.parametrize('exits_before',['SIGTERM','SIGKILL'])
+def test_cleanup_leaves_a_group_it_cannot_signal_and_still_reaps_the_child(tmp_path,monkeypatch,exits_before):
+    # The child exits between the liveness check and the group signal. macOS then answers EPERM,
+    # not ESRCH, for a group whose only member is exited but unreaped; force that on every platform.
+    box,rid,calls,children,path=fixture(tmp_path,monkeypatch,'timeout')
+    sent=[]
+    def killpg(pgid,sig):
+        child=children[0];sent.append((pgid,sig,child.returncode))
+        if sig==getattr(signal,exits_before):
+            child.kill();os.waitid(os.P_PID,child.pid,os.WEXITED|os.WNOWAIT)
+            raise PermissionError(errno.EPERM,'Operation not permitted')
+    monkeypatch.setattr(C.os,'killpg',killpg)
+    assert box.dispatch(rid,timeout=1)['state']=='unknown'
+    child=children[0]
+    assert child.returncode==-signal.SIGKILL
+    # Only our own child's group, only while it was unreaped; no signal after the EPERM.
+    signals=[signal.SIGTERM] if exits_before=='SIGTERM' else [signal.SIGTERM,signal.SIGKILL]
+    assert sent==[(child.pid,s,None) for s in signals]
+    box.dispatch(rid);assert len(calls)==1
