@@ -279,3 +279,26 @@ def test_p2_2_the_clean_up_is_bound_to_this_run_and_refuses_a_missing_or_foreign
     finally:
         real_killpg(earlier.pid, signal.SIGKILL)
         earlier.wait()
+
+
+# The night's pack 2 notify.jsonl (29 Oct), as written (chat id zeroed): three notices for T6m.W-M.10.
+NIGHT_NOTIFY = [
+    {"chat_id": 0, "message_id": 1001, "reply_to": None, "text": "Decisions D-1 waiting on you, together\n\nD-1: Item "
+     "T6m.W-M.10 (fakework on route fakework, owner mac-test-1) has made no progress since 2026-10-30T02:56:20.446094+00:00, "
+     "past its timeout of 180 s; its owner is in contact and its lease is current."},
+    {"chat_id": 0, "message_id": 1002, "reply_to": None, "text": "MC: the runtime\n\nError:\n\u2022 The authority's "
+     "sweeper has not run since 2026-10-30T03:02:05.759764+00:00. Nothing is shown as running past its lease."},
+    {"chat_id": 0, "message_id": 1003, "reply_to": None, "text": "MC: the runtime\n\nStalled:\n\u2022 Item T6m.W-M.10 "
+     "(fakework on mac-test-1) has made no progress for 181 s; its owner is in contact and its lease is current."}]
+
+
+def test_gate_m_b1_the_no_notice_check_counts_the_nights_three_notices():
+    """Review B1 (30 Oct): the T6m check matched rid[:8] and passed the night with notices 0. It counts every notice
+    naming its job or id, and every notice naming no item (the authority's own); one naming another item is not its."""
+    rid = "a417ea76-8477-5ea3-84ab-af2fffd70ded"
+    assert [m for m in NIGHT_NOTIFY if rid[:8] in m["text"]] == []                   # the old filter saw none
+    got = C.notices_about(NIGHT_NOTIFY, job="T6m.W-M.10", item_id=rid)
+    assert [m["message_id"] for m in got] == [1001, 1002, 1003]
+    other = {"text": "MC: the runtime\n\nStalled:\n\u2022 Item T4a.W-M (fakework on mac-test-1) has made no progress"}
+    assert C.notices_about([other], job="T6m.W-M.10", item_id=rid) == []
+    assert C.notices_about([], job="T6m.W-M.10", item_id=rid) == []

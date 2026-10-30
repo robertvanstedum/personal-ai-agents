@@ -1101,6 +1101,19 @@ class HostRuntime:
         Off (no bound or no reader): None, and nothing is read. Returns the measurement."""
         if self.clock_bound_s is None or self.authority_clock is None:
             return None
+        within, offset, rtt = self._measure_clock()
+        if not within:
+            self._hold_clock("offset", offset_s=round(offset, 3), rtt_s=round(rtt, 3))
+        if self.clock_hold is not None:
+            held = self.clock_hold
+            self.clock_hold = None
+            for task in self.owned():
+                self.journal(task).note("clock_ok", self.at(), offset_s=round(offset, 3), rtt_s=round(rtt, 3),
+                                        held_since=held["since"], bound_s=self.clock_bound_s)
+        return self.clock_last
+
+    def _measure_clock(self):
+        """One reading of the authority's clock against this host's: (within, offset_s, rtt_s); clock_last is kept."""
         t0 = self._now()
         try:
             theirs = self.authority_clock()
@@ -1117,15 +1130,28 @@ class HostRuntime:
         within = abs(offset) <= self.clock_bound_s + rtt / 2
         self.clock_last = {"offset_s": round(offset, 3), "rtt_s": round(rtt, 3), "at": t1.isoformat(),
                            "within": within, "bound_s": self.clock_bound_s}
-        if not within:
-            self._hold_clock("offset", offset_s=round(offset, 3), rtt_s=round(rtt, 3))
-        if self.clock_hold is not None:
-            held = self.clock_hold
-            self.clock_hold = None
-            for task in self.owned():
-                self.journal(task).note("clock_ok", self.at(), offset_s=round(offset, 3), rtt_s=round(rtt, 3),
-                                        held_since=held["since"], bound_s=self.clock_bound_s)
-        return self.clock_last
+        return within, offset, rtt
+
+    def _clock_before_a_held_lease(self, child, op_id, key, lease):
+        """Gate M review S1 (30 Oct): a lease the child has held since before a pause (T6c: detection off, so no wake
+        starts §5.5) is judged by the authority on its own clock. If that clock stood still with the Mac, it would take
+        the stale lease as current: the dispatch accepted, the sink refusing it as expired, and no refusal recorded.
+        So when the lease is already over by this host's clock, the authority's clock is read first; while it is apart
+        the send waits (the child blocked on its answer) and goes once they agree, to be judged on a true clock. Past
+        offline_hold_s apart, the ordinary hold takes over."""
+        since, noted = self._mono(), False
+        while True:
+            within, offset, rtt = self._measure_clock()
+            if within:
+                return
+            if not noted:
+                noted = True
+                child.journal.note("clock_disagrees", self.at(), request_id=child.request_id,
+                                   generation=child.generation, operation_id=op_id, key=key,
+                                   lease_until=lease["lease_until"], offset_s=round(offset, 3), why="held_lease")
+            if self._mono() - since >= self.values.offline_hold_s:
+                self._hold_clock("held_lease_clock_apart", operation_id=op_id, offset_s=round(offset, 3))
+            time.sleep(self.cfg.tick_s)
 
     def _clock_shown(self) -> dict:
         """The last measurement and any hold, as host-state.json and a pass show them (no monotonic times)."""
@@ -2356,6 +2382,9 @@ class HostRuntime:
         if lease is None:
             return {"state": "refused", "code": "receipt_lease_missing"}
         op_id = op_id or next(k for k, v in self.held.items() if v is lease)
+        if self.clock_bound_s is not None and self.authority_clock is not None and lease.get("lease_until") \
+                and _parse_iso(lease["lease_until"]) <= self._now():
+            self._clock_before_a_held_lease(child, op_id, key, lease)
         child.journal.note("effect_open", self.at(), request_id=child.request_id, generation=child.generation,
                            operation_id=op_id, key=key, grant_id=lease["grant"], request=fakework.effect_request(key))
         sent = self._effect(child, "dispatch", key, lease["grant"],

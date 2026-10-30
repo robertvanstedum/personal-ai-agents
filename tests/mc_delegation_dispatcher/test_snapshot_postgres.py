@@ -206,6 +206,48 @@ class HeadlessState(PostgresFixture, unittest.TestCase):
             WHERE request_id=%s""", (seconds, seconds * 2, request_id))
 
     # ── T12, OWN-4, MC-0: the snapshot alone answers; one review_request per stall ──
+    # ── gate M review S2 (30 Oct): no sweeper notice for the authority's own sleep, one for a sweeper that stays dead ──
+    def sweeper_notices(self):
+        return [e for e in self.events("notice.raised") if e["body"].get("rule") == "sweeper_stale"]
+
+    def sleep_the_whole_authority(self, seconds):
+        """The authority slept with the Mac: its own liveness and its sweeper both stopped ``seconds`` ago."""
+        self.store.authority_beat()
+        self.sql("UPDATE guild.mc_delegation_runners SET seen_at = seen_at - %s * interval '1 second' "
+                 "WHERE runner_id LIKE 'sweeper/%%' OR runner_id LIKE 'authority/%%'", (seconds,))
+
+    def test_gate_m_s2_after_the_authoritys_own_sleep_its_sweeper_gets_one_threshold_then_one_notice(self):
+        """29 Oct, 03:13:18: a publish right after the Mac's wake raised sweeper_stale for the sweeper that slept with
+        the authority. Now the publish first records the authority's own outage (authority.suspended) and gives the
+        sweeper one gap_threshold_s (30 s) from its end. A sweeper still not run after that is raised, once."""
+        self.assertTrue(AUTH.sweeper_grace_after_outage)
+        self.sleep_the_whole_authority(673)
+        doc = self.publish()
+        self.assertEqual([n for n in doc["notices"] if n["rule"] == "sweeper_stale"], [])
+        self.assertEqual(self.sweeper_notices(), [])
+        (sus,) = self.events("authority.suspended")
+        self.assertAlmostEqual(sus["body"]["outage_s"], 673, delta=5)
+        # The sweeper never resumes: 31 s after the outage's end (moved back, as a lease column is in these tests).
+        end = S._at(sus["body"]["to"]) - timedelta(seconds=31)
+        self.sql("""UPDATE guild.mc_delegation_events SET body = jsonb_set(body, '{to}', to_jsonb(%s::text))
+            WHERE event_id=%s""", (end.isoformat(), sus["event_id"]))
+        self.store.authority_beat()                     # the authority itself beats on: only the sweeper is dead
+        doc = self.publish()
+        self.assertEqual([n["rule"] for n in doc["notices"] if n["rule"] == "sweeper_stale"], ["sweeper_stale"])
+        self.publish()
+        self.assertEqual(len(self.sweeper_notices()), 1)                       # once (DUP-7)
+
+    def test_gate_m_s2_with_the_grace_off_the_notice_is_todays(self):
+        """Production's file has no sweeper_grace_after_outage: the same sleep raises sweeper_stale at once, and the
+        publish records no outage of its own."""
+        doc = json.loads((Path(__file__).resolve().parent / "authority.test_values.json").read_text())
+        off = Authority.parse({**doc, "sweeper_grace_after_outage": False})
+        self.store = DispatcherStore(self.connect, principal="robert", environment="dev", authority=off, grants=GRANTS)
+        self.sleep_the_whole_authority(673)
+        out = self.publish()
+        self.assertEqual([n["rule"] for n in out["notices"] if n["rule"] == "sweeper_stale"], ["sweeper_stale"])
+        self.assertEqual(self.events("authority.suspended"), [])
+
     def test_t12_the_snapshot_alone_answers_and_a_stall_gives_one_notice_and_one_review_request(self):
         self.admit(card("C-1"))
         self.admit(card("C-2"))

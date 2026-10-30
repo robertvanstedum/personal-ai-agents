@@ -190,8 +190,10 @@ class Session(K.Plan):
         wake = time.strftime("%m/%d/%y %H:%M:%S", time.localtime(time.time() + 60 + minutes * 60))
         self.log("prompt", f"sleep for {minutes} min", wake=wake)
         print(f"\n>>> Sleep the Mac for {minutes} minutes ({label}): close the lid now, and open it again at {wake}"
-              " or later.\n    (Not `pmset sleepnow`: on this MacBook Air the built-in trackpad reverts it within"
-              " 40 ms; gate M, 29 Oct.)\n    This step notices its own wake; do nothing else.\n", flush=True)
+              " or later.\n    Close it within 2 minutes of this line: the item makes no progress while it waits,"
+              " and a stall notice (after 180 s) fails the step's no-notice check.\n    (Not `pmset sleepnow`: on"
+              " this MacBook Air the built-in trackpad reverts it within 40 ms; gate M, 29 Oct.)\n"
+              "    This step notices its own wake; do nothing else.\n", flush=True)
         last = time.time()
         while True:
             time.sleep(1)
@@ -245,6 +247,7 @@ class Session(K.Plan):
         """An item whose worker holds e2b's receipt lease and waits (up to 30 minutes) for its own wake gap; the sleep
         is asked for only once that lease is held, so the stale send is the one T6a/T6m describe."""
         from core.mc_delegation_dispatcher.store import effect_operation_id
+        self._item_notify0 = {**getattr(self, "_item_notify0", {}), job: len(self.notifier.lines())}
         gid = self.owner.effect_grant(job, "e2b", "e2")
         self.owner.item(job, self.program("checkpoint s1", f"stale_effect_on_wake e2b grant={gid} wait_s=1800 gap_s=60",
                                           f"effect e2 grant={gid}", "result ok"))
@@ -276,11 +279,13 @@ class Session(K.Plan):
         self.check(f"{name}.resumed", bool(row) and row["state"] == "completed", {"state": row and row["state"]})
         suspended = [e for e in self.window_events() if e["kind"] == "authority.suspended"]
         self.check(f"{name}.suspended_recorded", bool(suspended), {"outages": [e["body"] for e in suspended]})
-        notices = [m for m in self.notify_since(self.window["notify0"]) if rid[:8] in m["text"]]
+        notices = C.notices_about(self.notify_since(self._item_notify0.get(job, self.window["notify0"])), job=job,
+                                  item_id=rid)
         witness = [m["key"] for m in self.witness_lines() if m["at"] >= self.window["at0"]]
         calls = self.owner_calls_in_window()
         self.check(f"{name}.no_notice_no_owner_call", not notices and not witness and not calls,
-                   {"notices": len(notices), "witness": witness, "owner_calls": len(calls)})
+                   {"notices": len(notices), "texts": [m.get("text", "")[:160] for m in notices][:5],
+                    "witness": witness, "owner_calls": len(calls)})
         self.named(f"{name}.DUP-1", C.dup1, sink, need=1)
         self.named(f"{name}.DUP-2", C.dup2, sink, self.events(item=rid), need=1)
         self.mc0()

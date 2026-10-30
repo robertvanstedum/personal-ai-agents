@@ -406,3 +406,21 @@ def test_n3_the_fixed_login_list_is_the_launch_policys_own():
     assert {t: policy[t]["login_command"] for t in S.LOGIN_COMMANDS} == S.LOGIN_COMMANDS
     # The rest name no command Robert could run as written: Grok's browser sign-in, fakework's none.
     assert set(policy) - set(S.LOGIN_COMMANDS) == {"grok", "fakework"}
+
+
+def test_gate_m_s2_a_sweeper_that_slept_with_the_authority_gets_one_threshold_from_the_outages_end():
+    """Gate M review S2 (30 Oct): on the Mac-only gate the authority sleeps with the Mac; its sweeper is not called
+    stale until one gap_threshold_s (30 s) after the recorded outage ended, and only with the file's switch on."""
+    on = {**VALUES, "sweeper_grace_after_outage": True}
+    slept = {"sweeper": {"seen_at": ago(700)}, "authority": {"seen_at": ago(1)}}
+
+    def stale(values, to_s):
+        doc = S.build(rec(liveness=slept, values=values,
+                          suspended=[{"from": ago(705), "to": ago(to_s), "outage_s": 700 - to_s}]))
+        return [n["key"] for n in doc["notices"] if n["rule"] == "sweeper_stale"]
+    assert stale(on, 5) == []                                     # inside its grace: quiet
+    assert stale(on, 31) == [f"runtime-sweeper-stale:{ago(700).isoformat()}"]   # past it: raised (once, by key)
+    assert stale(VALUES, 5) == [f"runtime-sweeper-stale:{ago(700).isoformat()}"]  # switch off: today's
+    ran_since = S.build(rec(liveness={"sweeper": {"seen_at": ago(40)}, "authority": {"seen_at": ago(1)}}, values=on,
+                            suspended=[{"from": ago(705), "to": ago(50), "outage_s": 655}]))
+    assert [n["rule"] for n in ran_since["notices"] if n["rule"] == "sweeper_stale"] == ["sweeper_stale"]

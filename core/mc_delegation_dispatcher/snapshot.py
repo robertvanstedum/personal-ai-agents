@@ -616,6 +616,24 @@ def _login_step(row):
     return LOGIN_COMMANDS.get(tool)
 
 
+def _sweeper_resuming(rec, now, values, threshold) -> bool:
+    """With sweeper_grace_after_outage (gate M, 29 Oct): the sweeper has not run since the authority's own recorded
+    outage ended, and that end is at most one gap_threshold_s ago. On the Mac-only gate the authority sleeps with the
+    Mac; a sweeper_stale notice the moment it wakes is a false alarm (no notice during expected sleep, R5.1-e). Bounded:
+    a sweeper still not run one threshold after the outage's end is raised as before, once."""
+    if not values.get("sweeper_grace_after_outage"):
+        return False
+    sweeper = rec["liveness"].get("sweeper")
+    seen = None if sweeper is None else _at(sweeper["seen_at"])
+    if seen is None:
+        return False
+    for s in rec["suspended"]:
+        end = _at(s.get("to"))
+        if end is not None and seen <= end and 0 <= (now - end).total_seconds() <= threshold:
+            return True
+    return False
+
+
 def _notices(items, rec, now, values, hosts, cards, waiting, raised, unknowns, reviewed=frozenset()) -> list:
     """Every notice the rules raise now (R7.4-d, R5.1-e), each with its key (one notice per key, DUP-7) and the next
     authorized step. Silent where nothing is needed (R7.4-e)."""
@@ -722,7 +740,8 @@ def _notices(items, rec, now, values, hosts, cards, waiting, raised, unknowns, r
                 item_id=b["item_id"], host_id=h["host_id"]))
     sweeper = rec["liveness"].get("sweeper")
     threshold = values.get("gap_threshold_s")
-    if threshold is not None and (sweeper is None or _age(now, sweeper["seen_at"]) > threshold):
+    if threshold is not None and (sweeper is None or _age(now, sweeper["seen_at"]) > threshold) \
+            and not _sweeper_resuming(rec, now, values, threshold):
         since = "never" if sweeper is None else iso(_at(sweeper["seen_at"]))
         out.append(_notice(
             f"runtime-sweeper-stale:{since}", "sweeper_stale",
