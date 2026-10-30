@@ -550,20 +550,44 @@ def test_s4_a_tap_on_the_ends_own_words_is_never_a_consult(host):
     assert refused["spoken"] == core.END_WAITING and "done." not in refused["spoken"].lower().split("end")[0]
 
 
-def test_s6_a_bare_yes_right_after_the_voice_asked_a_question_is_told_nothing_waits(host):
-    """S6: the app heard no request (chat), the voice asked anyway ("Shall I go ahead?"): his yes reaches nothing, and is
-    told so. After a reply that asked nothing, or with his own words between, a yes is conversation as before."""
+def boot_on(h, monkeypatch, provider):
+    """A session on ``provider`` on any host (xAI's mint faked): (its session id, the session the provider was minted)."""
+    minted = []
+
+    def xai(**kw):
+        minted.append(kw)
+        return {"provider": "xai", "ephemeral_token": "xai_synthetic", "expires_after_seconds": 300,
+                "model": "grok-voice-latest", "session_config": {}}
+    monkeypatch.setattr("core.realtime_voice.bootstrap.xai_voice.mint_ephemeral_credential", xai)
+    answer = h.client.post(h.base + "/bootstrap", headers=h.headers,
+                           json={"persona": h.persona, "provider": provider, "conversation_id": h.cid})
+    assert answer.status_code == 200, answer.get_json()
+    return answer.get_json()["voice_session_id"], (minted[-1] if provider == "xai" else h.r.mints[-1])
+
+
+@pytest.mark.parametrize("provider", ["openai", "xai"])
+def test_s6_r1_a_bare_yes_right_after_a_voice_question_is_a_stray_yes_only_where_the_voice_asks(host, monkeypatch,
+                                                                                               provider):
+    """S6, as the re-check's R1 narrows it: on xAI the voice's own reply is the question, so a yes right after its
+    question, with nothing waiting, is a stray yes: told so, reaching nothing. On OpenAI the page's line is the question
+    and the model never asks one itself, so a voice's question is conversation and "Sure." answers it (chat). On both,
+    a yes soon after an action was dropped is still the stray yes; after a reply that asked nothing, or with his own
+    words between, a yes is conversation."""
     h = host
-    sid = h.start()
+    sid, _session = boot_on(h, monkeypatch, provider)
     assert utter(h, sid, "t0", "Could you check what is stuck on the board?").get_json()["decision"] == "chat"
-    assert post(h, sid, [h.event("assistant", "t1", "Shall I go ahead?")]).status_code == 200
-    stray = utter(h, sid, "t2", "Yes.").get_json()
-    assert stray["decision"] == "nothing_waiting" and h.effects() == 0
+    assert post(h, sid, [h.event("assistant", "t1", "Want to hear more about the glaze?")]).status_code == 200
+    answer = utter(h, sid, "t2", "Sure.").get_json()
+    assert answer["decision"] == ("nothing_waiting" if provider == "xai" else "chat") and h.effects() == 0
     post(h, sid, [h.event("assistant", "t3", "It is in build.")])
     assert utter(h, sid, "t4", "yes").get_json()["decision"] == "chat"
     post(h, sid, [h.event("assistant", "t5", "Anything else?")])
     utter(h, sid, "t6", "Tell me about kilns.")
     assert utter(h, sid, "t7", "okay").get_json()["decision"] == "chat" and h.effects() == 0
+    ask = utter(h, sid, "t8", REQUEST[h.kind]).get_json()                   # the 2-minute rule holds on both
+    utter(h, sid, "t10", "Tell me a joke about kilns.")
+    assert ask["decision"] == "ask" and utter(h, sid, "t12", "yes").get_json()["decision"] == "nothing_waiting"
+    assert h.effects() == 0
 
 
 def test_s7_a_request_ending_in_a_bare_answer_is_refused_whole_on_any_provider(host):
@@ -633,17 +657,7 @@ def test_s6_where_the_page_asks_the_voice_never_asks_itself_and_where_it_answers
     model ask on its own (a yes to a question the app never asked would reach nothing); on xAI the model's own reply is
     the question, as before. Never "done", never his words, on both."""
     h = host
-    minted = []
-
-    def xai(**kw):
-        minted.append(kw)
-        return {"provider": "xai", "ephemeral_token": "xai_synthetic", "expires_after_seconds": 300,
-                "model": "grok-voice-latest", "session_config": {}}
-    monkeypatch.setattr("core.realtime_voice.bootstrap.xai_voice.mint_ephemeral_credential", xai)
-    answer = h.client.post(h.base + "/bootstrap", headers=h.headers,
-                           json={"persona": h.persona, "provider": provider, "conversation_id": h.cid})
-    assert answer.status_code == 200, answer.get_json()
-    text = (minted[-1] if provider == "xai" else h.r.mints[-1])["instructions"]
+    text = boot_on(h, monkeypatch, provider)[1]["instructions"]
     assert "without repeating or describing his words" in text and "never say it is done" in text
     if provider == "openai":
         assert "never ask him to confirm it yourself" in text and "Shall I go ahead?" not in text
