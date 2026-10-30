@@ -493,6 +493,30 @@ def test_m1_n5_n6_the_call_names_the_hosts_owner_and_offers_postit_only_where_th
     assert offered == ((True, True) if h.kind == "MC" else (False, False))
 
 
+def test_s1_a_question_shown_on_screen_only_is_tap_only(host):
+    """S1 (Codex's line, no blind yes): the question could not be spoken, so the screen asks; a spoken yes then asks it
+    again and acts on nothing; Check confirms it. A spoken question later makes it confirmable by voice again."""
+    h = host
+    sid = h.start()
+    ask = utter(h, sid, "t1", REQUEST[h.kind]).get_json()
+    shown = h.client.post(h.base + f"/session/{sid}/utterance/{ask['action_id']}/asked", headers=h.headers,
+                          json={"after_item": "t1", "screen": True}).get_json()
+    assert shown["state"] == "asked" and shown["tap_only"] is True
+    blind = utter(h, sid, "t3", "yes").get_json()
+    assert blind["decision"] == "ask" and blind["again"] is True and blind["tap_only"] is True and h.effects() == 0
+    asked(h, sid, ask["action_id"], "t4")                                      # the question spoken after all
+    yes = utter(h, sid, "t5", "yes").get_json()
+    assert yes["decision"] == "confirm" and confirm(h, sid, yes).get_json()["outcome"] == "done" and h.effects() == 1
+    other = utter(h, sid, "t7", CONSULT[h.kind]).get_json()
+    h.client.post(h.base + f"/session/{sid}/utterance/{other['action_id']}/asked", headers=h.headers,
+                  json={"after_item": "t7", "screen": True})
+    assert tap(h, sid, "t7", CONSULT[h.kind], action_id=other["action_id"]).get_json()["outcome"] == "done"
+    assert h.effects() == 2
+    bad = h.client.post(h.base + f"/session/{sid}/utterance/{'a' * 32}/asked", headers=h.headers,
+                        json={"after_item": "t7", "screen": "yes"})
+    assert bad.status_code == 422
+
+
 def test_s2_asking_for_the_summary_mid_session_never_reads_the_waiting_actions_words(host):
     h = host
     sid = h.start()

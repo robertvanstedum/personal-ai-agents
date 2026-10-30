@@ -260,8 +260,10 @@ await check('xai: a dropped question (no reply within 4 s) gets one page questio
   await t.advance(3999); assert.deepEqual(asks, []);
   await t.advance(1); for (let i = 0; i < 6; i++) await flush();
   assert.deepEqual(asks, [D.ASK_LINE]);                                              // one page question
-  assert.equal(t.said.at(-1)[0], D.ASK_ON_SCREEN);                                    // then the screen asks
-  assert.equal(t.posts('/asked').length, 1);                                          // still confirmable, by voice or tap
+  // Adapted for the v3 fix round (review S1): then the screen asks, tap-only, and the server is told so.
+  assert.equal(t.said.at(-1)[0], D.waitingWords('note', WORDS, true));
+  assert.ok(t.said.at(-1)[0].endsWith('Press Check to go ahead.') && !/say yes/i.test(t.said.at(-1)[0]));
+  assert.deepEqual(t.posts('/asked'), [{ after_item: 't0', screen: true }]);
   await t.s.check(); await flush();
   assert.equal(t.consults()[0].action_id, 'a1');
 }, { routes: table({ [WORDS]: ASK }) }));
@@ -416,15 +418,15 @@ await check('openai: M1 a late typed-turn result with no saved flag says its ans
   ...(body.events.some((e) => e.text === 'Hello.')
     ? { completed: [{ owner_item_id: 't0', tool: 'consult', outcome: 'done', spoken: TURNS.MC.spoken }] } : {}) }) } }));
 
-// S4: the end's own screen and Check.
-await check('xai: S4 the end\'s dropped question shows Sum up or Keep talking, never "press Check"', () => run('xai', async (t) => {
+// S1: a question shown on screen only is tap-only (covered above for an action); S4: the end's own screen and Check.
+await check('xai: S4 the end\'s dropped question shows Sum up or Keep talking, tap-only, never "press Check"', () => run('xai', async (t) => {
   const real = t.c().speakTracked.bind(t.c());
   t.c().speakTracked = (line) => { real(line); return Promise.resolve(null); };
   await t.speak('a', "We're done.");
   await t.advance(4000); await quiet();
   assert.equal(t.said.at(-1)[0], D.END_ON_SCREEN);
   assert.ok(!t.said.some(([w]) => /press Check/i.test(w)));
-  assert.deepEqual(t.posts('/asked'), [{ after_item: 't0' }]);
+  assert.deepEqual(t.posts('/asked'), [{ after_item: 't0', screen: true }]);
 }, { routes: table({ "We're done.": { decision: 'ask', kind: 'end', action_id: 'e1', owner_item_id: 't0' } }) }));
 for (const provider of ['openai', 'xai']) {
   await check(`${provider}: S4 Check with "Shall I sum up?" waiting sends nothing and shows its prompt`, () => run(provider, async (t) => {

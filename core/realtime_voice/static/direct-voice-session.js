@@ -79,13 +79,18 @@ export const ALL_RIGHT = 'All right.';
 export const NOTHING_WAITING = "Nothing's waiting; say it again if you want it.";   // core direct_host.NOTHING_WAITING
 // On screen only (the voice says nothing of it): the waiting action's words, "not done", and the asking fallback.
 export const NOT_DONE_SCREEN = 'Not done. Say it again if you want it.';
-export const ASK_ON_SCREEN = 'Say yes to go ahead, or press Check.';
+export const SAY_OR_CHECK = 'Say yes to go ahead, or press Check.';
+// The v3 fix round (review S1; Codex's line, "do not accept a blind yes against an unannounced proposal"): a question shown
+// on screen only, because it could not be spoken, is tap-only. The server records it so (asked {screen: true}), and a
+// spoken yes then asks it again, never confirms it.
+export const ASK_ON_SCREEN = 'Press Check to go ahead.';
 export const END_ON_SCREEN = 'Shall I sum up? Press Sum up or Keep talking.';   // review S4: the end's prompt, never Check
 export const SUMMARY_LATER = 'The summary comes at the end.';   // review S2: asked for mid-session, never his words read
 export const SUMMARY_READY = 'Your summary is ready.';
 const KIND_WORDS = { note: 'Note', postit: 'Post-it', consult: 'Request' };
-export function waitingWords(kind, words) {
-  return `${KIND_WORDS[kind] || 'Request'} waiting for your yes: “${words}”. ${ASK_ON_SCREEN}`;
+export function waitingWords(kind, words, tapOnly = false) {
+  const what = KIND_WORDS[kind] || 'Request';
+  return tapOnly ? `${what} waiting: “${words}”. ${ASK_ON_SCREEN}` : `${what} waiting for your yes: “${words}”. ${SAY_OR_CHECK}`;
 }
 // The read-back he asked for (the mobile case): his words, as data, then the question again.
 export function readBackLine(words) {
@@ -871,12 +876,12 @@ export function directVoice(d) {
       waits.add(done);
     });
   }
-  function showWaiting() {
+  function showWaiting(tapOnly = false) {
     if (!waiting || waiting.kind === 'end') return;
     const at = Number(String(waiting.item).slice(1));
     const words = capture?.said(at);
-    ui.say(words ? waitingWords(waiting.kind, words) : ASK_ON_SCREEN);
-    ui.waiting?.({ kind: waiting.kind, words: words || null });
+    ui.say(words ? waitingWords(waiting.kind, words, tapOnly) : tapOnly ? ASK_ON_SCREEN : SAY_OR_CHECK);
+    ui.waiting?.({ kind: waiting.kind, words: words || null, ...(tapOnly ? { tap_only: true } : {}) });
   }
   function clearWaiting(screen = null) {
     if (waiting?.timer) cancel(waiting.timer);
@@ -887,11 +892,12 @@ export function directVoice(d) {
     if (was) { ui.waiting?.(null); ui.say(screen || '', screen ? { transient: true } : {}); }
   }
   // The server is told the question started (after_item: the newest item when it was heard); the screen's "not done"
-  // follows its window.
-  async function markAsked(x, start) {
+  // follows its window. ``screen``: it shows on screen only, so it is tap-only (review S1).
+  async function markAsked(x, start, screen = false) {
     if (!waiting || waiting.action_id !== x.action_id || !direct.asked_url) return;
     const after = Math.max(start && Number.isInteger(start.last) ? start.last : (capture ? capture.last() : 0), 0);
-    const r = await postJson(askedUrl(x.action_id), { after_item: `t${after}` }, { timeoutMs: CONTROL_POST_MS });
+    const r = await postJson(askedUrl(x.action_id), { after_item: `t${after}`, ...(screen ? { screen: true } : {}) },
+      { timeoutMs: CONTROL_POST_MS });
     if (!waiting || waiting.action_id !== x.action_id) return;
     if (r.status === 409) { clearWaiting(NOT_DONE_SCREEN); return; }
     if (r.status !== 200) return;
@@ -899,11 +905,11 @@ export function directVoice(d) {
     const seconds = Number(r.body.expires_in) > 0 ? Number(r.body.expires_in) : 30;
     waiting.timer = later(() => { if (waiting && waiting.action_id === x.action_id) clearWaiting(NOT_DONE_SCREEN); }, seconds * 1000);
   }
-  // The question could not be spoken: the screen asks; Check still works. The end's own prompt is Sum up or Keep
-  // talking, never Check (review S4).
+  // The question could not be spoken: the screen asks, and the server records it tap-only (review S1). The end's own
+  // prompt is Sum up or Keep talking, never Check (review S4).
   async function onScreen(x) {
-    if (x.kind === 'end') { propose(true); ui.say(END_ON_SCREEN); } else ui.say(ASK_ON_SCREEN);
-    await markAsked(x, null);
+    if (x.kind === 'end') { propose(true); ui.say(END_ON_SCREEN); } else showWaiting(true);
+    await markAsked(x, null, true);
   }
   async function follow(x, i) {
     x.followed = true;
@@ -943,7 +949,7 @@ export function directVoice(d) {
     const ours = Boolean(start && x.via === 'response' && start.ownerIndex === i);
     if (!start) start = await tracked(line);
     if (!current()) return;
-    if (!start) { await onScreen(x); return; }                       // the screen asks
+    if (!start) { await onScreen(x); return; }                       // the screen asks: tap-only (S1)
     // Review M2: counted from its first audio where reported; never one his speech began over. Spoiled, it is asked
     // again once he stops, unless newer words of his are heard first (they decide it: a bare yes is asked again).
     const at = await whenHeard(start, start.page ? start.base : speechAt.get(i));
@@ -985,8 +991,8 @@ export function directVoice(d) {
     const start = x.via === 'response' ? await questionStart(i) : await tracked(readBackLine(x.text));
     if (!waiting || waiting.action_id !== x.action_id) return;
     if (!start) {                                                           // could not be spoken: the screen shows them
-      ui.say(waitingWords(x.kind, x.text));
-      await markAsked(x, null);
+      ui.say(waitingWords(x.kind, x.text, true));
+      await markAsked(x, null, true);                                       // tap-only (S1)
       return;
     }
     const at = await whenHeard(start, start.page ? start.base : speechAt.get(i));

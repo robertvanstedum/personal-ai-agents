@@ -1322,7 +1322,7 @@ class DirectSessions(ConsultLedger):
             kind = "consult" if tool == "consult" else label
             new = {"action_id": uuid.uuid4().hex, "kind": kind, "owner_item_id": item, "text": text,
                    "text_hash": digest(text), "tool": tool, "state": "waiting",
-                   "created": now, "after": item, "asked_at": None, "expires": None, "paused": False}
+                   "created": now, "after": item, "asked_at": None, "expires": None, "paused": False, "screen": False}
             meta["slot"] = new
             return {"decision": "ask", "action_id": new["action_id"], "kind": kind, "owner_item_id": item,
                     "text_sha256": new["text_hash"], **({"replaced": old["action_id"]} if old is not None else {}),
@@ -1339,10 +1339,12 @@ class DirectSessions(ConsultLedger):
                             "text_sha256": last["text_hash"], "again": True}
                 return {"decision": "nothing_waiting" if self._stray(meta, item, now) else "chat"}
             question = max(item_place(slot["after"]), item_place(slot["owner_item_id"]))
-            if slot["state"] != "asked" or item_place(item) <= question:
-                # Before its question started (or said over it): no effect, and it is asked again.
+            if slot["state"] != "asked" or slot.get("screen") or item_place(item) <= question:
+                # Before its question started (or said over it), or asked on screen only (tap-only, review v3 S1): no
+                # effect, and it is asked again.
                 return {"decision": "ask", "action_id": slot["action_id"], "kind": slot["kind"],
                         "owner_item_id": slot["owner_item_id"], "text_sha256": slot["text_hash"], "again": True,
+                        **({"tap_only": True} if slot.get("screen") else {}),
                         **({"prompt": SUMMARY_PROMPT} if slot["kind"] == "end" else {})}
             meta["slot"] = None
             if slot["kind"] == "end":
@@ -1374,10 +1376,14 @@ class DirectSessions(ConsultLedger):
             return {"decision": "chat", "dropped": slot["action_id"], "dropped_kind": slot["kind"]}
         return {"decision": "chat"}
 
-    def asked(self, sid, action_id, after):
+    def asked(self, sid, action_id, after, screen=False):
         """The page says the question of waiting action ``action_id`` started playing (again, after a read-back or a
         re-ask) when owner item ``after`` was its newest: from now only a later owner item may confirm it, within ANSWER_S
-        (never past LIFETIME_S). {expires_in}, or None when that action is not waiting (replaced, dropped, expired)."""
+        (never past LIFETIME_S). {expires_in}, or None when that action is not waiting (replaced, dropped, expired).
+
+        ``screen`` (review v3 S1, Codex's line "do not accept a blind yes against an unannounced proposal"): the question
+        could not be spoken and shows on screen only, so the action is tap-only: a spoken yes asks it again, never
+        confirms it, and Check still does. A later spoken question makes it confirmable by voice again."""
         with self._meta_lock:
             meta = self._meta.get(sid)
             if meta is None:
@@ -1388,7 +1394,7 @@ class DirectSessions(ConsultLedger):
                 return None
             if item_place(after) > item_place(slot["after"]):
                 slot["after"] = after
-            slot.update(state="asked", asked_at=now, expires=now + ANSWER_S, paused=False)
+            slot.update(state="asked", asked_at=now, expires=now + ANSWER_S, paused=False, screen=screen is True)
             return {"expires_in": max(0, round(min(ANSWER_S, slot["created"] + LIFETIME_S - now)))}
 
     def consume(self, sid, *, action_id=None, confirm_item=None, owner_item=None, text_hash=None, tap_item=None):
@@ -2639,21 +2645,24 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
 
     @transcript.route("/api/realtime-voice/session/<session_id>/utterance/<action_id>/asked", methods=["POST"])
     def asked(session_id, action_id):
-        """The question of waiting action ``action_id`` started playing (or showed on screen, when it could not be
-        spoken), {after_item}: the newest owner item then. Only a later owner item may confirm it, within ANSWER_S; a
-        read-back's question re-arms it. 409 when that action is no longer waiting."""
+        """The question of waiting action ``action_id`` started playing, {after_item}: the newest owner item then. Only a
+        later owner item may confirm it, within ANSWER_S; a read-back's question re-arms it. {after_item, screen: true}:
+        it could not be spoken and shows on screen only, so it is tap-only (review v3 S1). 409 when that action is no
+        longer waiting."""
         found, refused = utterance_session(session_id)
         if refused is not None:
             return refused
         _who, sid = found
         body = request.get_json(silent=True)
         after = body.get("after_item") if isinstance(body, dict) else None
-        if not valid_token(action_id) or not owner_item(after):
+        if (not valid_token(action_id) or not owner_item(after) or set(body) - {"after_item", "screen"}
+                or body.get("screen", False) not in (True, False)):
             return refusal("invalid", "That is not a question's start. Nothing was done.", 422)
-        got = sessions.asked(sid, action_id, after)
+        got = sessions.asked(sid, action_id, after, screen=body.get("screen") is True)
         if got is None:
             return refusal("not_waiting", NOT_WAITING, 409)
-        return jsonify({"ok": True, "action_id": action_id, "state": "asked", **got})
+        return jsonify({"ok": True, "action_id": action_id, "state": "asked", **got,
+                        **({"tap_only": True} if body.get("screen") is True else {})})
 
     def records_blueprint():
         """The needs-attention list, one session's detail and download, dismissing one, and the capabilities read (§6.5,
