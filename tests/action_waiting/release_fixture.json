@@ -33,6 +33,7 @@
     "tests/action_waiting/test_aw_sender.py",
     "tests/action_waiting/test_aw_sources.py",
     "tests/action_waiting/test_aw_store.py",
+    "tests/guild/shop_floor/test_route_allowlist.py",
     "tests/test_release_classifier.py",
     "tests/test_staging_environment.py"
   ],
