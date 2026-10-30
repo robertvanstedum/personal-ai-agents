@@ -1,6 +1,7 @@
 // Confirm by voice, v3 (V3_BUILD_BRIEF.md "The voice side"; DESIGN_confirm_by_voice_v3_simple.md): the app acts; the voice
 // only talks. Through the real direct page (direct-voice-session.js), the real controller and the real OpenAI and xAI
-// adapters, with fake HTTP (the server's decisions answered from a table), synthetic provider events and a fake clock.
+// adapters, with fake HTTP (the server's decisions answered from a table, or from the server's own yes rule (ruled)),
+// synthetic provider events and a fake clock.
 // What is asserted is what the page sends: the utterances it posts, the questions it asks and when it tells the server they
 // started, the action it sends after a yes (the request's own owner item and hash, never the yes's), the instructions it
 // gives the voice on every path (none carries his words, except a read-back he asked for), and that no model call acts.
@@ -74,8 +75,14 @@ async function run(provider, scenario, { routes = {} } = {}) {
       if (provider === 'openai') ev({ type: 'input_audio_buffer.committed', item_id: id });
       for (let i = 0; i < 6; i++) await flush();
     },
-    created: (id) => ev({ type: 'response.created', response: { id } }),
-    asked: (id) => ev({ type: 'response.created', response: { id, ...(tagOf() ? { metadata: { minimoi_tag: tagOf() } } : {}) } }),
+    // A response starts, then its first audio plays, as the transport reports it (the v3 fix round, review M2: a question
+    // counts from its first audio). started/tagged: the start alone; sounded: its first audio alone.
+    started: (id) => ev({ type: 'response.created', response: { id } }),
+    tagged: (id) => ev({ type: 'response.created', response: { id, ...(tagOf() ? { metadata: { minimoi_tag: tagOf() } } : {}) } }),
+    sounded: (id) => ev(provider === 'openai' ? { type: 'output_audio_buffer.started', response_id: id }
+      : { type: 'response.output_audio.delta', response_id: id, delta: '' }),
+    created: (id) => { t.started(id); t.sounded(id); },
+    asked: (id) => { t.tagged(id); t.sounded(id); },
     replied: (id, text) => {                // a reply's words, then its end
       ev({ type: provider === 'openai' ? 'response.output_audio_transcript.done' : 'response.output_audio_transcript.done', item_id: 'out_' + id,
         transcript: text, response_id: id, event_id: 'out_' + id });
@@ -204,7 +211,7 @@ await check('openai: a late result says its outcome, never his words', () => run
   assert.ok(t.lines().includes('Say this briefly, adding nothing: About what you asked earlier: Saved.'), JSON.stringify(t.lines()));
   contentFree(t);
 }, { routes: { ...table({ [WORDS]: ASK }), '/transcript': (body) => ({ ok: true, kept: body.events.length,
-  completed: [{ owner_item_id: 't0', tool: 'save_note', outcome: 'done', spoken: 'Saved. The kiln is hot.' }] }) } }));
+  completed: [{ owner_item_id: 't0', tool: 'save_note', outcome: 'done', saved: true, spoken: 'Saved. The kiln is hot.' }] }) } }));
 
 await check('openai: refusals, pending and unknown are said in content-free words', () => run('openai', async (t) => {
   for (const n of ['a', 'b', 'c']) {
@@ -287,6 +294,190 @@ for (const provider of ['openai', 'xai']) {
     assert.deepEqual(t.consults(), []);
   }, { routes: table({ [WORDS]: ASK }) }));
 }
+
+// ── the fix round (REVIEW_v3_build.md): each finding's page regression ──────────────────────────────────────────────────
+// The server's rule for a yes, as direct_host.DirectSessions._apply holds it (tests/realtime_voice/test_confirm_by_voice.py
+// proves it there): a request asks; a yes
+// confirms only once the question was marked asked and the yes is a later item; otherwise it is asked again.
+function ruled(requests = { [WORDS]: 'note' }) {
+  let slot = null;
+  const of = (x) => ({ action_id: x.action_id, kind: x.kind, owner_item_id: x.owner_item_id, text_sha256: x.text_sha256 });
+  return {
+    '/utterance': (body) => {
+      const at = Number(body.owner_item_id.slice(1));
+      if (requests[body.text]) {
+        slot = { action_id: 'a1', kind: requests[body.text], owner_item_id: body.owner_item_id, text_sha256: 'h1', after: at, asked: false };
+        return { ok: true, decision: 'ask', ...of(slot) };
+      }
+      if (/^yes/i.test(body.text) && slot) {
+        if (!slot.asked || at <= slot.after) return { ok: true, decision: 'ask', again: true, ...of(slot) };
+        const yes = { ok: true, decision: 'confirm', ...of(slot), confirm_item_id: body.owner_item_id };
+        slot = null;
+        return yes;
+      }
+      return { ok: true, decision: 'chat' };
+    },
+    '/asked': (body) => {
+      if (slot) { slot.asked = true; slot.after = Math.max(slot.after, Number(body.after_item.slice(1))); }
+      return { ok: true, state: 'asked', expires_in: 30 };
+    },
+  };
+}
+const quiet = async () => { for (let i = 0; i < 8; i++) await flush(); };
+
+// M2, the review's probe order on both providers: the question's response starts after his "Yes." began, and his barge-in
+// cancels it before any audio. It is never counted, so "Yes." is asked again and acts on nothing; after the question is
+// heard, his next yes acts once, on the request's own item.
+for (const provider of ['openai', 'xai']) {
+  await check(`${provider}: M2 a yes begun before the question started never confirms it; it is asked again, then a later yes acts once`, () => run(provider, async (t) => {
+    await t.speak('a', WORDS);
+    if (provider === 'openai') assert.deepEqual(t.lines(), [D.ASK_LINE]);         // the page's asking response, sent
+    t.ev({ type: 'input_audio_buffer.speech_started', item_id: 'b' });             // he begins "Yes." at once
+    const q = provider === 'openai' ? 'RA' : 'XA';
+    if (provider === 'openai') t.tagged(q); else t.started(q);                      // its start comes after his speech began
+    t.ev({ type: 'response.done', response: { id: q, status: 'cancelled', output: [] } });   // barge-in: no audio at all
+    await quiet();
+    assert.deepEqual(t.posts('/asked'), [], 'a question his speech began over was counted as asked');
+    t.ev({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'b', transcript: 'Yes.', event_id: 'ev_b', status: 'completed' });
+    t.ev({ type: 'input_audio_buffer.speech_stopped' });
+    if (provider === 'openai') t.ev({ type: 'input_audio_buffer.committed', item_id: 'b' });
+    await quiet();
+    if (provider === 'openai') t.asked('RB'); else t.created('XB');                 // the question, asked again, plays
+    await quiet();
+    assert.deepEqual(t.consults(), [], '"Yes." said over the question acted');
+    assert.deepEqual(t.posts('/asked'), [{ after_item: 't1' }]);                    // counted after "Yes.", never t0
+    t.replied(provider === 'openai' ? 'RB' : 'XB', 'Shall I go ahead?'); await quiet();
+    await t.speak('c', 'Yes.'); await quiet();
+    assert.equal(t.consults().length, 1);
+    assert.equal(t.consults()[0].owner_item_id, 't0'); assert.equal(t.consults()[0].confirm_item_id, 't3');
+    contentFree(t);
+  }, { routes: ruled() }));
+  // M2, the other half: a question whose start was clean but whose first audio came only after his speech began.
+  await check(`${provider}: M2 a yes said over the question's start, before its first audio, never confirms it`, () => run(provider, async (t) => {
+    await t.speak('a', WORDS);
+    const q = provider === 'openai' ? 'RA' : 'XA';
+    if (provider === 'openai') t.tagged(q); else t.started(q);                      // the start, clean
+    await quiet();
+    t.ev({ type: 'input_audio_buffer.speech_started', item_id: 'b' });             // then his speech, before any audio
+    t.sounded(q); await quiet();
+    assert.deepEqual(t.posts('/asked'), []);
+    await t.advance(5000);
+    assert.deepEqual(t.posts('/asked'), [], 'counted while he was still speaking');
+    assert.deepEqual(t.consults(), []);
+  }, { routes: ruled() }));
+  await check(`${provider}: M2 a question heard from its first audio counts from then`, () => run(provider, async (t) => {
+    await t.speak('a', WORDS);
+    const q = provider === 'openai' ? 'RA' : 'XA';
+    if (provider === 'openai') t.tagged(q); else t.started(q);
+    await quiet();
+    assert.deepEqual(t.posts('/asked'), [], 'counted before its audio');
+    t.sounded(q); await quiet();
+    assert.deepEqual(t.posts('/asked'), [{ after_item: 't0' }]);
+  }, { routes: ruled() }));
+}
+
+// M1: the outcome words follow what ran. MC's and CoS's typed turns answer a consult with no saved flag (the shapes of
+// mc_voice_direct.typed_turn's consult branch and direct_voice.ChiefOfStaff._result, with run_action's fields), so the voice
+// says that answer, never "Saved." or "Post-it added.", whatever the request was heard as.
+const TURNS = {
+  MC: { ok: true, call_id: 'confirm-a1', outcome: 'done', note_request_id: 'vc-s-t0', answered: true, receipt: 'reply-1',
+    receipt_kind: 'reply', spoken: 'I can only keep that as a conversation turn, not a note.', action_id: 'a1', kind: 'consult', owner_item_id: 't0' },
+  CoS: { ok: true, call_id: 'confirm-a1', outcome: 'done', answered: true, receipt: 'turn-1', receipt_kind: 'turn',
+    spoken: 'Two items are stuck on 12.', action_id: 'a1', kind: 'consult', owner_item_id: 't0' },
+};
+const NATURAL = 'Could you jot down that the glaze needs a second firing?';
+for (const provider of ['openai', 'xai']) {
+  for (const [host, answer] of Object.entries(TURNS)) {
+    for (const kind of ['consult', 'note', 'postit']) {
+      await check(`${provider}: M1 ${host}'s typed turn answered a request waiting as ${kind}: its own answer is said, never "Saved."`, () => run(provider, async (t) => {
+        await t.speak('a', NATURAL);
+        if (provider === 'openai') t.asked('RA'); else t.created('XA');
+        await quiet(); t.replied(provider === 'openai' ? 'RA' : 'XA', 'Shall I go ahead?'); await quiet();
+        if (kind === 'consult') assert.match(t.said.find(([w]) => /waiting/.test(w))[0], /^Request waiting for your yes/);
+        await t.speak('b', 'Yes.'); await quiet();
+        if (provider === 'xai') { t.created('XB'); t.replied('XB', 'Okay.'); }
+        await t.advance(10000);
+        assert.equal(t.consults().length, 1);
+        assert.ok(t.lines().includes(`Say this briefly, adding nothing: ${answer.spoken}`), JSON.stringify(t.lines()));
+        assert.ok(!t.lines().some((l) => /Saved\.|Post-it added\./.test(l)), JSON.stringify(t.lines()));
+      }, { routes: { ...table({ [NATURAL]: { ...ASK, kind }, 'Yes.': { ...YES, kind } }), '/consult': () => answer } }));
+    }
+  }
+}
+await check('openai: M1 a late typed-turn result with no saved flag says its answer, never "Saved."', () => run('openai', async (t) => {
+  await t.speak('a', WORDS); t.asked('RA'); await quiet(); t.replied('RA', 'Shall I go ahead?');
+  await t.speak('b', 'Hello.'); await quiet();
+  t.asked('RB'); t.replied('RB', 'Hi.'); await quiet();                             // its own reply, done
+  await t.advance(8000);
+  assert.ok(t.lines().includes(`Say this briefly, adding nothing: About what you asked earlier: ${TURNS.MC.spoken}`), JSON.stringify(t.lines()));
+  assert.ok(!t.lines().some((l) => /Saved\./.test(l)));
+}, { routes: { ...table({ [WORDS]: ASK }), '/transcript': (body) => ({ ok: true, kept: body.events.length,
+  // with "Hello." (after the request waited as a note), never with the request's own post
+  ...(body.events.some((e) => e.text === 'Hello.')
+    ? { completed: [{ owner_item_id: 't0', tool: 'consult', outcome: 'done', spoken: TURNS.MC.spoken }] } : {}) }) } }));
+
+// S4: the end's own screen and Check.
+await check('xai: S4 the end\'s dropped question shows Sum up or Keep talking, never "press Check"', () => run('xai', async (t) => {
+  const real = t.c().speakTracked.bind(t.c());
+  t.c().speakTracked = (line) => { real(line); return Promise.resolve(null); };
+  await t.speak('a', "We're done.");
+  await t.advance(4000); await quiet();
+  assert.equal(t.said.at(-1)[0], D.END_ON_SCREEN);
+  assert.ok(!t.said.some(([w]) => /press Check/i.test(w)));
+  assert.deepEqual(t.posts('/asked'), [{ after_item: 't0' }]);
+}, { routes: table({ "We're done.": { decision: 'ask', kind: 'end', action_id: 'e1', owner_item_id: 't0' } }) }));
+for (const provider of ['openai', 'xai']) {
+  await check(`${provider}: S4 Check with "Shall I sum up?" waiting sends nothing and shows its prompt`, () => run(provider, async (t) => {
+    await t.speak('a', "We're done.");
+    if (provider === 'openai') t.asked('RA'); else t.created('XA');
+    await quiet();
+    await t.s.check(); await quiet();
+    assert.deepEqual(t.consults(), []);
+    assert.equal(t.said.at(-1)[0], D.END_ON_SCREEN);
+  }, { routes: table({ "We're done.": { decision: 'ask', kind: 'end', action_id: 'e1', owner_item_id: 't0' } }) }));
+}
+
+// S2: asking for the summary mid-session gets one content-free line, never his words.
+await check('openai: S2 "read me the summary" mid-session says the summary comes at the end, never the waiting words', () => run('openai', async (t) => {
+  await t.speak('a', WORDS); t.asked('RA'); await quiet(); t.replied('RA', 'Shall I go ahead?');
+  await t.speak('b', 'Read me the summary.'); await quiet();
+  assert.equal(t.lines().at(-1), `Say this briefly, adding nothing: ${D.SUMMARY_LATER}`);
+  contentFree(t);
+}, { routes: table({ [WORDS]: ASK, 'Read me the summary.': { decision: 'summary_later' } }) }));
+
+// S3: the first yes's answer is lost (both attempts): the second yes's "again" carries the action's own item and hash, and
+// the page sends that confirmation once.
+await check('openai: S3 a second yes after a lost answer sends one confirmation, with the action\'s own item and hash', () => {
+  let yeses = 0;
+  const AGAIN = { decision: 'confirm', again: true, action_id: 'a1', kind: 'note', confirm_item_id: 't2', owner_item_id: 't0', text_sha256: 'h1' };
+  return run('openai', async (t) => {
+    await t.speak('a', WORDS); t.asked('RA'); await quiet(); t.replied('RA', 'Shall I go ahead?');
+    await t.speak('b', 'Yes.'); await quiet();
+    assert.deepEqual(t.consults(), []);                                              // lost: nothing sent
+    await t.speak('c', 'Yes.'); await quiet();
+    assert.deepEqual(t.consults(), [{ session_id: SID, call_id: 'confirm-a1', action_id: 'a1', confirm_item_id: 't2',
+      owner_item_id: 't0', text_sha256: 'h1' }]);
+  }, { routes: { '/utterance': (body) => {
+    if (body.text === WORDS) return { ok: true, ...ASK };
+    if (++yeses <= 2) throw new Error('the answer was lost');
+    return { ok: true, ...AGAIN };
+  } } });
+});
+
+// N2 and S7: what was dropped is said on screen.
+await check('openai: N2 "yes, we\'re done" with an action waiting says on screen that action was not done', () => run('openai', async (t) => {
+  await t.speak('a', WORDS); t.asked('RA'); await quiet(); t.replied('RA', 'Shall I go ahead?');
+  await t.speak('b', "Yes, we're done."); await quiet();
+  assert.ok(t.said.some(([w]) => w === D.NOT_DONE_SCREEN), JSON.stringify(t.said));
+  assert.equal(t.lines().at(-1), D.END_LINE);
+  assert.deepEqual(t.consults(), []);
+}, { routes: table({ [WORDS]: ASK, "Yes, we're done.": { decision: 'ask', kind: 'end', action_id: 'e1', owner_item_id: 't2',
+  replaced: 'a1', replaced_kind: 'note', prompt: 'Shall I sum up?' } }) }));
+await check('xai: S7 a request folded with its yes, nothing waiting, says not done on screen and acts on nothing', () => run('xai', async (t) => {
+  await t.speak('a', `${WORDS}. Yes.`); t.created('XA'); await quiet();
+  assert.equal(t.said.at(-1)[0], D.NOT_DONE_SCREEN);
+  assert.deepEqual(t.consults(), []); assert.deepEqual(t.posts('/asked'), []);
+}, { routes: table({ [`${WORDS}. Yes.`]: { decision: 'dropped', reason: 'folded' } }) }));
 
 if (failures.length) {
   console.log(`${failures.length} of ${cases} confirm-by-voice page regressions FAILED:\n  ${failures.join('\n  ')}`);

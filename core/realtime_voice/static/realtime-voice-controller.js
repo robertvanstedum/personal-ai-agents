@@ -24,10 +24,11 @@
 // Both adapters changed for the playback events and response attribution, OpenAI's again for the response tag on every
 // request, both again for how a response's playback ended, and both again for the page's own responses (each response's
 // end, and creating one for a committed item), and both for the live probes (OpenAI: a reply's end reported once, LV1; xAI:
-// an interim transcript's status, LV2), and xAI's for a microphone granted after the start ended (Gate 2 V S2): new keys
-// so browsers fetch them (Spec 165 §4.3, §5.1, §5.3; review FR N3, V R2-M1; v0.3 G3; the C2 binding pass).
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-live1";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261029-gate2";
+// an interim transcript's status, LV2), and xAI's for a microphone granted after the start ended (Gate 2 V S2), and both
+// for each response's first audio (audio_started; the v3 fix round, review M2): new keys so browsers fetch them (Spec 165
+// §4.3, §5.1, §5.3; review FR N3, V R2-M1; v0.3 G3; the C2 binding pass).
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261029-v3fix";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261029-v3fix";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
 // The page's own responses (Spec 165 §5.1 as amended for Robert's C2 decision, 28 Oct 2026: "tie by construction"): a page
@@ -72,7 +73,7 @@ export class RealtimeVoiceController {
     bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
     onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall, onTranscriptUpdate, onPlayback,
     onSessionInfo, onPlaybackDrained = null, pageResponses = false, oncePerItem = false, onUnbound = null, bootstrapTimeoutMs = 0,
-    respondFor = null, onResponseStarted = null, refuseCalls = false,
+    respondFor = null, onResponseStarted = null, refuseCalls = false, onAudioStarted = null,
     openingInstruction = OPENING_INSTRUCTION,
     managedBootstrap = null, requestHeaders = null, includeTranscriptAfterEnd = true,
   }) {
@@ -119,6 +120,9 @@ export class RealtimeVoiceController {
     this._respondFor = typeof respondFor === "function" ? respondFor : null;
     this._onResponseStarted = typeof onResponseStarted === "function" ? onResponseStarted : null;
     this._refuseCalls = refuseCalls === true;
+    // - onAudioStarted(responseId): the first audio of a response began to play, where the transport reports it (the v3
+    //   fix round, review M2): a host counts a question from then, not from response.created. Evidence, never authority.
+    this._onAudioStarted = typeof onAudioStarted === "function" ? onAudioStarted : null;
     this._owned = false;             // every response of this session is the page's (the bootstrap said page_responses)
     this._queue = [];                // page requests waiting their turn, in order: {kind, owner, turn, tag, send, done}
     this._inflight = null;           // the one page request in flight, from its response.create to its response.done
@@ -295,6 +299,9 @@ export class RealtimeVoiceController {
     on("input_item", (evt) => this._committed(evt.item_id || null));
     on("input_transcript", (evt) => { if (this._interim(evt)) evt.completed = false; this._fresh = this._firstCompletion(evt); });
     on("response_started", (evt) => this._started(evt));
+    on("audio_started", (evt) => {
+      if (this._onAudioStarted) { try { this._onAudioStarted(evt.response_id || null); } catch (_) { /* an observer only */ } }
+    });
     on("response_done", (evt) => this._finished(evt));
     on("connected", () => {
       this._setState("active");

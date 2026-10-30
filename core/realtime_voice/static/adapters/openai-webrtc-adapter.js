@@ -245,6 +245,9 @@ export class OpenAIWebRTCAdapter {
         break;
       case "output_audio_buffer.started":
         this._audible.add(event.response_id || null);
+        // The v3 fix round (review M2): the response's first audio, for a host that counts a question from it. Nothing
+        // listens unless a host passes onAudioStarted to the controller; German and Portuguese do not.
+        this._emit("audio_started", { response_id: event.response_id || null });
         break;
       case "output_audio_buffer.stopped":
       case "output_audio_buffer.cleared":
