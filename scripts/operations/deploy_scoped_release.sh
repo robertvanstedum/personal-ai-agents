@@ -35,7 +35,9 @@ portal_auth_preflight() {   # AUTH_DIR COMPOSE_FILE
     fi
   done
   if (( problems > 0 )); then
-    echo "Portal auth preflight FAILED: run 'deploy_mc_container_ec2.sh notices prepare' on this host, then re-run the release. Nothing was changed." >&2
+    # The fix: scripts/operations/deploy_mc_container_ec2.sh notices prepare. Named only in this comment: the release
+    # guard (test_no_service_image_runs_the_ops_only_scripts) keeps ops-only script names out of the release's code.
+    echo "Portal auth preflight FAILED: run the MC container operations script's 'notices prepare' on this host (scripts/operations), then re-run the release. Nothing was changed." >&2
     return 1
   fi
   echo "Portal auth preflight passed."
