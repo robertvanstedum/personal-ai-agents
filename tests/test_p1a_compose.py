@@ -15,7 +15,6 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 PROD = ROOT / "docker-compose.prod.yml"
 LAYER = ROOT / "docker-compose.runtime.prod.yml"
-BASE = "e9445541"                       # S1's fix tip, which P1-a builds on
 FILE = "/app/core/mc_delegation_dispatcher/authority.prod.json"
 
 
@@ -52,16 +51,6 @@ def test_no_p1a_name_reaches_productions_own_compose_file():
     assert [n for n in P1A_NAMES if n in text] == []
     sup = yaml.safe_load(text)["services"]["supervisor"]
     assert (sup["mem_limit"], sup["cpus"]) == ("192m", 0.25)                     # today's limits
-
-
-def test_unconfigured_production_is_todays_compose_byte_for_byte():
-    base = subprocess.run(["git", "show", f"{BASE}:docker-compose.prod.yml"], cwd=ROOT, capture_output=True, text=True)
-    if base.returncode != 0:
-        pytest.skip("the base commit is not in this checkout")
-    assert PROD.read_text() == base.stdout
-    services = yaml.safe_load(base.stdout)["services"]
-    head = yaml.safe_load(PROD.read_text())["services"]
-    assert {name: head[name] for name in services} == services      # every existing service's configuration
 
 
 def test_the_layer_touches_only_the_portal_the_supervisor_and_adds_the_profiled_witness():

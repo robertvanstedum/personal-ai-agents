@@ -966,9 +966,11 @@ def test_p1as_production_compose_layer_is_an_operator_file_and_production_compos
     assert classify(["docker-compose.runtime.prod.yml"]) == ("documents", ())
     workflows = [p for p in (root / ".github" / "workflows").glob("*.yml")]
     assert [p.name for p in workflows if "docker-compose.runtime.prod.yml" in p.read_text()] == []
-    import subprocess
-    base = subprocess.run(["git", "show", "e9445541:docker-compose.prod.yml"], cwd=root, capture_output=True, text=True)
-    if base.returncode != 0:
-        import pytest
-        pytest.skip("the base commit is not in this checkout")
-    assert (root / "docker-compose.prod.yml").read_text() == base.stdout
+    # Production's own compose holds today's values, read from the committed golden (no git: CI checks out one
+    # commit), never skipped; tests/test_p1a_compose.py holds the same guard and how to regenerate the golden.
+    import json
+    import yaml
+    golden = json.loads((root / "tests" / "p1a_prod_compose_golden.json").read_text())["services"]
+    rendered = json.loads(json.dumps(yaml.safe_load((root / "docker-compose.prod.yml").read_text())["services"],
+                                     sort_keys=True, default=str))
+    assert rendered == golden
