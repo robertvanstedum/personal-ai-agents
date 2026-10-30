@@ -1,0 +1,38 @@
+{
+  "schema": "minimoi.activity.v2",
+  "data_scope": "personal",
+  "environment": "prod",
+  "domain": "guild-build",
+  "part": "update",
+  "local_date": "2026-10-30",
+  "tz": "America/Chicago",
+  "generation": "8f0c2a91",
+  "seq": 4,
+  "digest": "sha256:740b4559a3f175c37219e928a456ee1c2bc3d84cc28361dec7e8ea145ffe5638",
+  "producer": {
+    "host": "prod-ec2-1",
+    "service": "minimoi-portal",
+    "image_tag": "1.2.0",
+    "commit": "4f531c6f"
+  },
+  "metric": "build_update",
+  "observation": {
+    "state": "complete",
+    "covers": {
+      "from": "2026-10-30T00:00:00-05:00",
+      "to": "2026-10-30T23:59:59-05:00"
+    },
+    "source_checked_at": "2026-10-31T00:20:00-05:00",
+    "final": true
+  },
+  "published_at": "2026-10-31T00:20:01-05:00",
+  "count": 0,
+  "items": [],
+  "items_total": 0,
+  "items_truncated": false,
+  "withdrawn": [],
+  "health": {
+    "writer_last_ok": "2026-10-31T00:20:01-05:00",
+    "last_error": null
+  }
+}

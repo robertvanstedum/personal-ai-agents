@@ -1,0 +1,15 @@
+{
+  "schema": "minimoi.cos.reader_response/1",
+  "reader": "harness_snapshot",
+  "state": "unavailable",
+  "as_of": null,
+  "data_scope": "personal",
+  "environment": "prod",
+  "limits": {
+    "max_items": 50,
+    "max_bytes": 65536,
+    "timeout_ms": 2000
+  },
+  "truncated": false,
+  "reason": "not_available_here"
+}

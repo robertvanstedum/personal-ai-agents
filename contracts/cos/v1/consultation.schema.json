@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:cos:consultation",
+  "title": "consult_v1: CoS asks MC, and one bounded MC turn answers",
+  "description": "Spec v0.3 section 4.11. Not a handoff (core/mc_tools/handoffs.py keeps its approved-transfer meaning). A consultation never carries or fakes Robert's approval. No ping-pong: MC cannot consult CoS from inside one.",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/status" }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "request_id", "from_seat", "to_seat", "kind", "cos_conversation_ref", "question", "context_refs", "deadline_s", "turn_budget", "data_scope", "environment"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.consult_request/1" },
+        "request_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+        "from_seat": { "const": "cos" },
+        "to_seat": { "const": "mc" },
+        "kind": {
+          "description": "publish_request is the chase's ask: MC's turn writes its update through publish_update_v1, or says why it can't.",
+          "enum": ["question", "publish_request"]
+        },
+        "cos_conversation_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
+        "episode_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
+        "question": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "context_refs": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" }
+        },
+        "deadline_s": { "type": "integer", "minimum": 5, "maximum": 300 },
+        "turn_budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max_tokens"],
+          "properties": { "max_tokens": { "type": "integer", "minimum": 64, "maximum": 4000 } }
+        },
+        "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
+        "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "publish_request" } } }, "then": { "required": ["episode_ref"] } }
+      ]
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "request_id", "state", "updated_at"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.consult_status/1" },
+        "request_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+        "state": { "enum": ["accepted", "pending", "answered", "unavailable", "expired"] },
+        "updated_at": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" },
+        "elapsed_ms": { "type": "integer", "minimum": 0 },
+        "reservation_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+        "code": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+        "answer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text", "seat", "provenance", "evidence_refs", "mc_conversation_ref"],
+          "properties": {
+            "text": { "type": "string", "minLength": 1, "maxLength": 4000 },
+            "seat": { "const": "mc" },
+            "provenance": { "const": "agent_draft" },
+            "evidence_refs": { "type": "array", "maxItems": 10, "items": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" } },
+            "mc_conversation_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
+            "published_update": {
+              "description": "publish_request only: the update record MC wrote, if it wrote one.",
+              "$ref": "urn:minimoi:contract:cos:store-records#/$defs/record_key"
+            }
+          }
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "state": { "const": "answered" } } }, "then": { "required": ["answer", "elapsed_ms"] }, "else": { "not": { "required": ["answer"] } } },
+        { "if": { "properties": { "state": { "enum": ["unavailable", "expired"] } } }, "then": { "required": ["code"] } }
+      ]
+    }
+  }
+}

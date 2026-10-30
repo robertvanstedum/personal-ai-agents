@@ -1,0 +1,8 @@
+{
+  "schema": "minimoi.cos.tool_arguments/1",
+  "tool": "cos.commitment.open",
+  "arguments": {
+    "what": "Ask MC where the ideas go",
+    "due": "2026-10-30T18:00:00-05:00"
+  }
+}

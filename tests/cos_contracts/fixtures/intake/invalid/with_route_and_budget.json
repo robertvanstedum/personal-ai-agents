@@ -1,0 +1,15 @@
+{
+  "schema": "minimoi.cos.intake_submit/1",
+  "intake_id": "INT-0001",
+  "data_scope": "personal",
+  "environment": "prod",
+  "from_seat": "cos",
+  "title": "Drag-and-drop bin for Board notes",
+  "words_ref": {
+    "type": "cos.turn",
+    "id": "cosc-0a1b2c3d4e5f:t-0a1b2c3d4e5f6a"
+  },
+  "kind": "idea",
+  "route": "mc.build",
+  "budget": 5
+}

@@ -1,0 +1,13 @@
+{
+  "schema": "minimoi.cos.incident_raise/1",
+  "class": "E4",
+  "dedup_key": "E4:obl-tax-filing",
+  "evidence_ref": {
+    "type": "cos.obligation",
+    "id": "OBL-tax"
+  },
+  "raised_by_seat": "cos",
+  "data_scope": "personal",
+  "environment": "prod",
+  "one_line": "Production portal not answering"
+}

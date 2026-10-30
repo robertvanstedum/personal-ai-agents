@@ -1,0 +1,8 @@
+{
+  "schema": "minimoi.cos.store_result/1",
+  "command_id": "cmd-0002",
+  "outcome": "accepted",
+  "revision": 1,
+  "receipt_id": "rcpt-0002",
+  "replayed": true
+}

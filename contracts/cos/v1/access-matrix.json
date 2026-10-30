@@ -1,0 +1,88 @@
+{
+  "description": "Spec v0.3 section 4.7: who may touch what. A row that isn't listed is no access. Host paths are under /opt/minimoi. B0 lookup (docker/Dockerfile.*, origin/main 4f531c6f): the Python service images have no USER line and run as uid 0; cos-agent-a runs as the OpenClaw image's node user (uid 1000 expected; confirm on the host at B1a deploy). Hence files are 0640 with group gid 1000, so the agent can read what it must read and write nothing. No parent mount may bypass a narrower one.",
+  "file_mode": "0640",
+  "dir_mode": "0750",
+  "reader_group_gid": 1000,
+  "services": [
+    {
+      "service": "cos-scheduler",
+      "container": "minimoi-cos-scheduler",
+      "runs_as": "uid 0 (no USER in docker/Dockerfile.cos-scheduler)",
+      "access": [
+        { "host_path": "cos/store/", "container_path": "/app/cos-store", "mode": "rw", "note": "the only store writer (section 4.5)" },
+        { "host_path": "cos/conversations/", "container_path": "/app/data/cos-conversations", "mode": "rw", "note": "canonical history writer (section 4.19); mount exists today, docker-compose.prod.yml:448" },
+        { "host_path": "data/activity/", "container_path": "/app/data/activity", "mode": "ro" },
+        { "api": "domain detail readers", "mode": "read" },
+        { "api": "internal command and read API", "mode": "serve", "note": "compose network only; service token as a file" }
+      ]
+    },
+    {
+      "service": "cos-agent-a",
+      "container": "minimoi-cos-agent-a",
+      "runs_as": "node (OpenClaw image)",
+      "access": [
+        { "host_path": "cos/store/", "container_path": "/minimoi/cos/store", "mode": "ro" },
+        { "host_path": "cos/conversations/", "container_path": "/minimoi/cos/conversations", "mode": "ro", "note": "mount exists today, docker-compose.prod.yml:102" },
+        { "host_path": "data/", "container_path": "/minimoi/data", "mode": "ro", "note": "R-1. Today rw (docker-compose.prod.yml:88). Narrowed only after the write inventory (section 4.7)." },
+        { "api": "internal command API", "mode": "call", "note": "every store change is a command" }
+      ]
+    },
+    {
+      "service": "cos-bot",
+      "container": "minimoi-cos-bot",
+      "runs_as": "uid 0 (no USER in docker/Dockerfile.cos-bot)",
+      "access": [
+        { "api": "internal command and read API", "mode": "call", "note": "N7: no store mount" },
+        { "host_path": "cos_reminders/", "container_path": "/app/data/cos_reminders", "mode": "rw", "note": "retires when reminders migrate into obligations (B3); docker-compose.prod.yml:390" }
+      ]
+    },
+    {
+      "service": "german",
+      "container": "minimoi-german",
+      "runs_as": "uid 0",
+      "access": [
+        { "host_path": "data/activity/german/", "container_path": "/app/data/activity/german", "mode": "rw", "note": "new mount, its own folder only" }
+      ]
+    },
+    {
+      "service": "portuguese",
+      "container": "minimoi-portuguese",
+      "runs_as": "uid 0",
+      "access": [
+        { "host_path": "data/activity/portuguese/", "container_path": "/app/data/activity/portuguese", "mode": "rw", "note": "new mount, its own folder only" }
+      ]
+    },
+    {
+      "service": "curator",
+      "container": "minimoi-curator",
+      "runs_as": "uid 0",
+      "access": [
+        { "host_path": "data/activity/curator/", "container_path": "/app/data/activity/curator", "mode": "rw", "note": "new mount, its own folder only" }
+      ]
+    },
+    {
+      "service": "supervisor",
+      "container": "minimoi-supervisor",
+      "runs_as": "confirm at B6a (read-only container, compose profile supervisor)",
+      "access": [
+        { "host_path": "data/activity/guild-build/", "container_path": "/app/data/activity/guild-build", "mode": "rw", "note": "facts part only (section 4.4)" },
+        { "db": "incident tables", "mode": "owner", "note": "role and grants named at B6a" }
+      ]
+    },
+    {
+      "service": "portal",
+      "container": "minimoi-portal",
+      "runs_as": "uid 0, read_only root filesystem",
+      "access": [
+        { "host_path": "data/activity/guild-build/", "container_path": "/app/data/activity/guild-build", "mode": "rw", "note": "update part only, through publish_update_v1" },
+        { "db": "raise_incident()", "mode": "execute" }
+      ]
+    }
+  ],
+  "invariants": [
+    "cos/store/ is rw for cos-scheduler only.",
+    "Every data/activity/<domain>/ folder is rw for exactly one service, except guild-build, where the two parts (facts, update) are separate files with separate writers.",
+    "cos-agent-a has no rw path into cos/store/, cos/conversations/ or data/activity/.",
+    "cos-bot has no store mount."
+  ]
+}

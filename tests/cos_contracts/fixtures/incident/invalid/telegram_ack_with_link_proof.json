@@ -1,0 +1,10 @@
+{
+  "schema": "minimoi.cos.incident_ack/1",
+  "incident_id": "inc-0001",
+  "via": "telegram_reply",
+  "at": "2026-10-30T14:20:00-05:00",
+  "proof": {
+    "kind": "signed_link",
+    "ref": "x"
+  }
+}

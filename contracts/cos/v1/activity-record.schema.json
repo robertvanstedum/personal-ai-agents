@@ -1,0 +1,279 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:cos:activity-record",
+  "title": "Domain activity record (DAR v2)",
+  "description": "Spec v0.3 section 4.3 and 4.4. A daily observation per domain and an index into its knowledge, never the knowledge itself. File: /opt/minimoi/data/activity/<domain>/<local_date>.<part>.json, one writer per key (data_scope, environment, domain, part, local_date). Ordering, withdrawal and digest rules are in README.md; the schema enforces the shape and the honesty states.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "data_scope", "environment", "domain", "part", "local_date", "tz",
+    "generation", "seq", "digest", "producer", "metric", "observation", "published_at",
+    "count", "items", "items_total", "items_truncated", "withdrawn", "health"
+  ],
+  "properties": {
+    "schema": { "const": "minimoi.activity.v2" },
+    "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
+    "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" },
+    "domain": { "$ref": "urn:minimoi:contract:cos:common#/$defs/domain" },
+    "part": { "enum": ["main", "facts", "update"] },
+    "local_date": { "$ref": "urn:minimoi:contract:cos:common#/$defs/local_date" },
+    "tz": { "$ref": "urn:minimoi:contract:cos:common#/$defs/tz" },
+    "generation": {
+      "description": "A fresh id each time the writer process starts, and after any restore.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8,64}$"
+    },
+    "seq": { "type": "integer", "minimum": 1 },
+    "digest": { "$ref": "urn:minimoi:contract:cos:common#/$defs/digest" },
+    "producer": { "$ref": "urn:minimoi:contract:cos:common#/$defs/source_instance" },
+    "metric": {
+      "description": "What was measured. CoS says this and nothing more (section 4.3 table).",
+      "enum": ["sessions_completed", "feedback_actions", "build_facts", "build_update"]
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "covers", "source_checked_at", "final"],
+      "properties": {
+        "state": {
+          "description": "complete: the whole declared interval was read; only this replaces last-known. partial: read up to covers.to; adds or updates, never retracts. unreadable: the source could not be read; count is null and the reader keeps last-known, marked stale.",
+          "enum": ["complete", "partial", "unreadable"]
+        },
+        "covers": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "to"],
+          "properties": {
+            "from": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" },
+            "to": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" }
+          }
+        },
+        "source_checked_at": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" },
+        "final": {
+          "description": "true only for the batch-window pass that covers the whole local day to 23:59:59. Quiet-day observations read final, complete records only.",
+          "type": "boolean"
+        }
+      }
+    },
+    "published_at": {
+      "description": "For display and age only. Never used to order records across hosts.",
+      "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp"
+    },
+    "count": {
+      "description": "null exactly when the observation is unreadable. A zero claims only the covers interval.",
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 50,
+      "items": { "$ref": "#/$defs/item" }
+    },
+    "items_total": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "items_truncated": {
+      "description": "A truncated list says so. Omitted items are not withdrawn.",
+      "type": "boolean"
+    },
+    "withdrawn": {
+      "description": "Withdrawal is explicit: event ids corrected away, at a higher seq. Leaving an item out never withdraws it.",
+      "type": "array",
+      "maxItems": 200,
+      "uniqueItems": true,
+      "items": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" }
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["writer_last_ok", "last_error"],
+      "properties": {
+        "writer_last_ok": { "$ref": "urn:minimoi:contract:cos:common#/$defs/nullable_timestamp" },
+        "last_error": {
+          "description": "A fixed code, never text from a source.",
+          "type": ["string", "null"],
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        }
+      }
+    },
+    "detail": {
+      "description": "guild-build only. facts: build_facts; update: build_update.",
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "observation": { "properties": { "state": { "const": "unreadable" } } } } },
+      "then": {
+        "properties": {
+          "count": { "type": "null" },
+          "items": { "maxItems": 0 },
+          "items_total": { "type": "null" },
+          "observation": { "properties": { "final": { "const": false } } }
+        }
+      },
+      "else": {
+        "properties": {
+          "count": { "type": "integer" },
+          "items_total": { "type": "integer" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "observation": { "properties": { "state": { "const": "partial" } } } } },
+      "then": { "properties": { "observation": { "properties": { "final": { "const": false } } } } }
+    },
+    {
+      "if": { "properties": { "domain": { "const": "guild-build" } } },
+      "then": {
+        "required": ["detail"],
+        "properties": { "part": { "enum": ["facts", "update"] } },
+        "allOf": [
+          {
+            "if": { "properties": { "part": { "const": "facts" } } },
+            "then": {
+              "properties": {
+                "metric": { "const": "build_facts" },
+                "detail": { "$ref": "#/$defs/build_facts" }
+              }
+            }
+          },
+          {
+            "if": { "properties": { "part": { "const": "update" } } },
+            "then": {
+              "properties": {
+                "metric": { "const": "build_update" },
+                "detail": { "$ref": "#/$defs/build_update" }
+              }
+            }
+          }
+        ]
+      },
+      "else": {
+        "not": { "required": ["detail"] },
+        "properties": { "part": { "const": "main" } }
+      }
+    },
+    {
+      "if": { "properties": { "domain": { "enum": ["german", "portuguese"] } } },
+      "then": { "properties": { "metric": { "const": "sessions_completed" } } }
+    },
+    {
+      "if": { "properties": { "domain": { "const": "curator" } } },
+      "then": { "properties": { "metric": { "const": "feedback_actions" } } }
+    }
+  ],
+  "$defs": {
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "kind", "one_line", "ref", "time_precision"],
+      "properties": {
+        "event_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+        "kind": {
+          "enum": ["session", "drill", "writing", "feedback_like", "feedback_dislike", "feedback_save", "build_event"]
+        },
+        "time_precision": {
+          "description": "B0 finding: German and Portuguese session files record a date only (german_domain.py:2278, :2323). second means event_time is set; day means event_date is set.",
+          "enum": ["second", "day"]
+        },
+        "event_time": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" },
+        "event_date": { "$ref": "urn:minimoi:contract:cos:common#/$defs/local_date" },
+        "one_line": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
+        "link": { "type": "string", "pattern": "^/[A-Za-z0-9/_.:-]{0,200}$" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "time_precision": { "const": "second" } } },
+          "then": { "required": ["event_time"], "not": { "required": ["event_date"] } }
+        },
+        {
+          "if": { "properties": { "time_precision": { "const": "day" } } },
+          "then": { "required": ["event_date"], "not": { "required": ["event_time"] } }
+        }
+      ]
+    },
+    "build_facts": {
+      "description": "Section 4.4. Generated by code beside the supervisor. Never chased.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkins", "build_log", "snapshot"],
+      "properties": {
+        "checkins": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "last_at", "count"],
+          "properties": {
+            "state": { "$ref": "urn:minimoi:contract:cos:common#/$defs/reader_state" },
+            "last_at": { "$ref": "urn:minimoi:contract:cos:common#/$defs/nullable_timestamp" },
+            "count": { "type": ["integer", "null"], "minimum": 0 }
+          }
+        },
+        "build_log": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "in_build", "blocked", "done_today"],
+          "properties": {
+            "state": { "$ref": "urn:minimoi:contract:cos:common#/$defs/reader_state" },
+            "in_build": { "type": ["integer", "null"], "minimum": 0 },
+            "blocked": { "type": ["integer", "null"], "minimum": 0 },
+            "done_today": { "type": ["integer", "null"], "minimum": 0 }
+          }
+        },
+        "snapshot": {
+          "description": "The harness snapshot: not_available_here until the harness is in production.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state"],
+          "properties": {
+            "state": { "enum": ["ok", "stale", "unavailable", "not_available_here"] },
+            "as_of": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" }
+          }
+        }
+      }
+    },
+    "build_update": {
+      "description": "Section 4.4. Written by MC's seat through publish_update_v1. This part is chased.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seat", "decisions_needed", "next", "blocked"],
+      "properties": {
+        "seat": { "const": "mc" },
+        "decisions_needed": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["one_line"],
+            "properties": {
+              "one_line": { "type": "string", "minLength": 1, "maxLength": 200 },
+              "ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" }
+            }
+          }
+        },
+        "next": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "type": "string", "minLength": 1, "maxLength": 200 }
+        },
+        "blocked": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["one_line", "who_can_unblock"],
+            "properties": {
+              "one_line": { "type": "string", "minLength": 1, "maxLength": 200 },
+              "who_can_unblock": { "$ref": "urn:minimoi:contract:cos:common#/$defs/who" },
+              "ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" }
+            }
+          }
+        }
+      }
+    }
+  }
+}
