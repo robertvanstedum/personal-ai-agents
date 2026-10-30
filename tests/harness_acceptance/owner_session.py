@@ -189,9 +189,9 @@ class Session(K.Plan):
     def _sleep(self, minutes, label):
         wake = time.strftime("%m/%d/%y %H:%M:%S", time.localtime(time.time() + 60 + minutes * 60))
         self.log("prompt", f"sleep for {minutes} min", wake=wake)
-        print(f"\n>>> Sleep the Mac for {minutes} minutes ({label}). Run, in another terminal:\n"
-              f"    sudo pmset schedule wake \"{wake}\" && pmset sleepnow\n"
-              "    This step notices its own wake; do nothing else.\n", flush=True)
+        print(f"\n>>> Sleep the Mac for {minutes} minutes ({label}): close the lid now, and open it again at {wake}"
+              " or later.\n    (Not `pmset sleepnow`: on this MacBook Air the built-in trackpad reverts it within"
+              " 40 ms; gate M, 29 Oct.)\n    This step notices its own wake; do nothing else.\n", flush=True)
         last = time.time()
         while True:
             time.sleep(1)
@@ -200,6 +200,46 @@ class Session(K.Plan):
                 self.log("observe", "woke", gap_s=round(now - last))
                 return now - last
             last = now
+
+    def _authority_clock_after_wake(self, name, *, bound_s=1.0, wait_s=120):
+        """Gate M's environment (T6m, 29 Oct): the authority's database runs in Colima's virtual machine, whose clock
+        stands still while the Mac sleeps and is stepped forward by lima's time sync (every 10 s) a few seconds after
+        the wake; that night it read 672.6 s slow for about 4 s. The runtime itself holds while the clocks disagree
+        (host.yaml clock_check, HostRuntime.check_authority_clock), and acts within a second of the wake, before any
+        step here could force a sync. So this step does not force one: it reads the authority's clock against the
+        Mac's, once a second, until they agree (or ``wait_s`` passes), records every reading, and checks that they
+        came to agree. A run whose authority clock never comes back is not a meaningful gate M run."""
+        t_end, samples = time.time() + wait_s, []
+        while True:
+            t0 = time.time()
+            try:
+                theirs = self.db_now().timestamp()
+                t1 = time.time()
+                samples.append({"after_s": round(t1 - samples[0]["t"], 2) if samples else 0.0, "t": t1,
+                                "offset_s": round(theirs - (t0 + t1) / 2, 3), "rtt_s": round(t1 - t0, 3)})
+            except Exception as exc:                       # the database not answering yet is a reading too
+                samples.append({"after_s": round(time.time() - samples[0]["t"], 2) if samples else 0.0,
+                                "t": time.time(), "unreadable": type(exc).__name__})
+            last = samples[-1]
+            if ("offset_s" in last and abs(last["offset_s"]) <= bound_s + last["rtt_s"] / 2) or time.time() > t_end:
+                break
+            time.sleep(1)
+        shown = [{k: v for k, v in x.items() if k != "t"} for x in samples]
+        self.log("observe", "authority clock after the wake", readings=shown[:30], n=len(shown))
+        held = []
+        for f in self.artifacts.glob("*.pending.jsonl"):
+            for line in f.read_text().splitlines():
+                try:
+                    e = json.loads(line)
+                except ValueError:
+                    continue
+                if e.get("type") == "note" and e.get("kind") in ("clock_hold", "clock_ok", "clock_disagrees"):
+                    held.append({"task": f.name[:-len(".pending.jsonl")], "kind": e["kind"], "at": e.get("at"),
+                                 **{k: v for k, v in (e.get("fields") or {}).items()
+                                    if k in ("why", "offset_s", "held_since")}})
+        self.check(f"{name}.authority_clock_in_skew", "offset_s" in samples[-1]
+                   and abs(samples[-1]["offset_s"]) <= bound_s + samples[-1]["rtt_s"] / 2,
+                   {"first": shown[0], "last": shown[-1], "readings": len(shown), "runtime_held": held[-6:]})
 
     def _stale_item(self, job):
         """An item whose worker holds e2b's receipt lease and waits (up to 30 minutes) for its own wake gap; the sleep
@@ -250,6 +290,7 @@ class Session(K.Plan):
             job = f"T6m.W-M.{minutes}"
             rid = self._stale_item(job)
             self._sleep(minutes, f"T6m/X7, {minutes} min")
+            self._authority_clock_after_wake(f"T6m.{minutes}min")
             self._after_wake(f"T6m.{minutes}min", job, rid, must_refuse=False)
 
     def m_t6c(self):
@@ -260,6 +301,7 @@ class Session(K.Plan):
             job = "T6c.W-M"
             rid = self._stale_item(job)
             self._sleep(10, "T6c, detection off")
+            self._authority_clock_after_wake("T6c")
             self._after_wake("T6c", job, rid, must_refuse=True)
         finally:
             self.set_host("installed-after-t6c", gap_detection="on")
@@ -273,6 +315,7 @@ class Session(K.Plan):
         self.wait(lambda: any(a["agent_id"] == root + "/long1" for a in self.store.agents()), 60, every=3)
         self._sleep(10, "T18c")
         first = self.collector.take("t18c-first-after-wake")
+        self._authority_clock_after_wake("T18c")              # after the first snapshot, which must come first
         reconciled = [e for e in self.events(item=rid) if e["kind"] == "item.reconciled"]
         running = [a["agent_id"] for a in (first["doc"] or {}).get("agents", []) if a["state"] == "running"
                    and a.get("item_id") == rid]

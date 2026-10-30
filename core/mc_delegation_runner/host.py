@@ -77,10 +77,10 @@ _KEYS = {"schema", "host_id", "environment", "roles", "expected_availability", "
          "authority", "capabilities", "concurrency", "offline_scope_default", "do_not_resume", "artifact_root",
          "workspace_root", "mirrors", "interpreter", "bundle_root", "gap_detection", "stop_timeout_s",
          "effect_sink", "principal", "note", "tools", "route_keys", "test_credentials", "door", "notifier",
-         "test_routes_in_production", "witness_read"}
+         "test_routes_in_production", "witness_read", "clock_check"}
 _REQUIRED = _KEYS - {"do_not_resume", "gap_detection", "stop_timeout_s", "effect_sink", "note",
                      "service_manager", "offline_scope_default", "tools", "route_keys", "test_credentials", "door",
-                     "notifier", "test_routes_in_production", "witness_read"}
+                     "notifier", "test_routes_in_production", "witness_read", "clock_check"}
 TOOL_ACTORS = ("claude-code", "codex", "fakework")
 
 
@@ -186,6 +186,10 @@ class HostConfig:
     # a test credential file.
     test_routes_in_production: bool = False
     witness_read: WitnessRead | None = None              # the witness's read of the snapshot (witness hosts only)
+    # Gate M's T6m finding (29 Oct): the authority's clock checked against this host's before the host acts on its
+    # answers after a restart, wake, reconnect or refusal (runner.HostRuntime.check_authority_clock). Off unless the
+    # file says so; on only where the host reads its authority's database itself (transport dsn).
+    clock_check: bool = False
     source: Path | None = None
 
     @property
@@ -280,6 +284,10 @@ def parse(doc) -> HostConfig:
     _need(version >= needs, "interpreter_too_old")           # refused at load: a role this pin cannot run
     gap = doc.get("gap_detection", "on")
     _need(gap in ("on", "off"), "host_gap_detection_invalid")
+    clock = doc.get("clock_check", "off")                                          # missing: off, as before
+    _need(clock in ("on", "off"), "host_clock_check_invalid")
+    # The host reads the authority's clock from its database; through a door there is no such read yet (gate D).
+    _need(clock == "off" or authority.transport == "dsn", "host_clock_check_needs_dsn")
     stop = doc.get("stop_timeout_s", 20)
     _need(type(stop) is int and 2 <= stop <= 600, "host_stop_timeout_invalid")
     sink = doc.get("effect_sink")
@@ -308,7 +316,8 @@ def parse(doc) -> HostConfig:
         notifier=None if doc.get("notifier") is None else _notifier(doc["notifier"], roles, doc["environment"]),
         test_routes_in_production=test_in_prod,
         witness_read=None if doc.get("witness_read") is None else _witness_read(doc["witness_read"], roles,
-                                                                               doc["environment"]))
+                                                                               doc["environment"]),
+        clock_check=clock == "on")
 
 
 STATE_PATH = "/internal/mc/v1/runtime/state"          # the snapshot's read path (server.STATE_PATH, the portal's too)

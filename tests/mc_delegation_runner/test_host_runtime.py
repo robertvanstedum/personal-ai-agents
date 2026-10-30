@@ -63,6 +63,16 @@ class FakeAuthority:
         self.down, self.renew_ok, self.lock = False, True, threading.RLock()
         self.decisions, self.bound = [], {}
         self.census = {}                                    # event_id -> census event, as applied (S1-F)
+        # The authority's own clock, as many seconds behind the host's as this says (gate M's T6m: the authority's
+        # database in a virtual machine whose clock stood still while the Mac slept). 0: the host's clock.
+        self.behind_s = 0.0
+
+    def clock(self):
+        return time.time() - self.behind_s
+
+    def clock_read(self):
+        """Its clock as the runtime reads it (cli.clock_reader's shape: an aware datetime)."""
+        return datetime.fromtimestamp(self.clock(), timezone.utc)
 
     def enter(self, name, *args):
         hook = self.hooks.get(name)
@@ -77,7 +87,7 @@ class FakeAuthority:
         env = {"schema": envelope.SCHEMA, "request_id": rid, "work_id": f"job-{len(self.items) + 1}", "generation": 1,
                "actor": "fakework", "principal_id": "robert", "environment": "dev", "scope": "build",
                "repository": "personal-ai-agents", "ref": self.ref, "brief": brief, "input_artifacts": [],
-               "deadline": iso(time.time() + deadline_s), "cost_cap_usd": 1.0}
+               "deadline": iso(self.clock() + deadline_s), "cost_cap_usd": 1.0}
         self.items[rid] = {"env": env, "gen": 0, "state": "queued", "reserved": reserved, "unit": unit, "route": route,
                            "checkpoint": None, "result": None, "lease_until": 0.0, "resumed": {}}
         self.queue.append(rid)
@@ -110,7 +120,7 @@ class FakeAuthority:
         if claim_id is not None and claim_id in self.bound:
             rid, gen = self.bound[claim_id]
             it = self.items[rid]
-            if it["gen"] == gen and it["state"] in ("claimed", "running") and it["lease_until"] > time.time():
+            if it["gen"] == gen and it["state"] in ("claimed", "running") and it["lease_until"] > self.clock():
                 return {"state": "claimed", "claim_id": claim_id, "replayed": True, **self._entry(rid)}
             return {"state": "claim_superseded", "claim_id": claim_id, "replayed": True, "request_id": rid,
                     "generation": gen}
@@ -124,7 +134,7 @@ class FakeAuthority:
             return None if claim_id is None else {"state": "none"}
         rid = self.queue.pop(0)
         it = self.items[rid]
-        it.update(gen=it["gen"] + 1, state="claimed", lease_until=time.time() + self.lease_s)
+        it.update(gen=it["gen"] + 1, state="claimed", lease_until=self.clock() + self.lease_s)
         if claim_id is None:
             return self._entry(rid)
         self.bound[claim_id] = (rid, it["gen"])
@@ -160,7 +170,7 @@ class FakeAuthority:
         it = self.items[request_id]
         ok = self.renew_ok and generation == it["gen"] and it["state"] in ("claimed", "running")
         if ok:
-            it["lease_until"] = time.time() + self.lease_s
+            it["lease_until"] = self.clock() + self.lease_s
         return ok
 
     def result(self, request_id, generation, *, runner_id, event_id, at, status, artifacts, detail, output_text, route,
@@ -197,14 +207,14 @@ class FakeAuthority:
                       "operations": sorted(o for o, r in self.receipts.items() if r.get("rid") == request_id
                                            and r["state"] in ("dispatched", "unknown"))}
             it["state"] = "unknown"
-        elif stage["child"] == "frozen" and it["lease_until"] > time.time():
+        elif stage["child"] == "frozen" and it["lease_until"] > self.clock():
             answer = {"answer": "continue", "generation": generation, "lease_until": iso(it["lease_until"])}
         else:
             answer = self.resume(it, generation)
         return answer
 
     def resume(self, it, generation):
-        it.update(gen=generation + 1, state="claimed", lease_until=time.time() + self.lease_s)
+        it.update(gen=generation + 1, state="claimed", lease_until=self.clock() + self.lease_s)
         answer = {"answer": "resume", "generation": it["gen"], "lease_until": iso(it["lease_until"]),
                   "checkpoint": it["checkpoint"], "reserved": it["reserved"], "unit": it["unit"]}
         it["resumed"][generation] = answer
@@ -228,11 +238,11 @@ class FakeAuthority:
         if op in ("prepare", "claim", "dispatch"):        # a new effect: the owner, now, under its lease (store order)
             if generation != it["gen"]:
                 return {"state": "refused", **out, "code": "stale_generation"}
-            if it["lease_until"] <= time.time():
+            if it["lease_until"] <= self.clock():
                 return {"state": "refused", **out, "code": "lease_lapsed"}
         r = self.receipts.setdefault(op_id, {"state": None, "gen": 0, "token": None, "until": 0.0, "mode": None,
                                              "rid": request_id})
-        live = r["until"] > time.time()
+        live = r["until"] > self.clock()
         if op == "prepare":
             r["state"] = r["state"] or "prepared"
             return {"state": "ok", **out, "receipt_state": r["state"]}
@@ -245,7 +255,7 @@ class FakeAuthority:
                 if r["state"] not in ("dispatched", "unknown"):
                     return {"state": "refused", **out, "code": "receipt_not_dispatched"}
                 r["state"] = "unknown"
-            r.update(gen=r["gen"] + 1, token=secrets.token_urlsafe(32)[:43].ljust(43, "A"), until=time.time() + 30,
+            r.update(gen=r["gen"] + 1, token=secrets.token_urlsafe(32)[:43].ljust(43, "A"), until=self.clock() + 30,
                      mode="execute" if op == "claim" else "reconcile")
             return {"state": "ok", **out, "receipt_state": r["state"],
                     "lease": {"receipt_generation": r["gen"], "token": r["token"], "mode": r["mode"],
@@ -330,7 +340,7 @@ def _reap(tmp_path, monkeypatch):
 def make_rt(tmp_path, mirror_path, fake, hosts=None, **over):
     h = make_host(tmp_path, mirror_path, hosts, **over)
     auth = Authority.load(h.authority.values)
-    rt = cli.runtime_for(h, auth, fake, digest="sha256:" + "0" * 64)
+    rt = cli.runtime_for(h, auth, fake, digest="sha256:" + "0" * 64, authority_clock=getattr(fake, "clock_read", None))
     rt.cfg.tick_s, rt.cfg.kill_grace_s = 0.05, 1.0
     RUNTIMES.append(rt)
     return rt
@@ -1128,7 +1138,9 @@ def test_s3_t6a_the_woken_child_sends_its_stale_effect_first_and_the_authority_r
         assert (out["state"], out["generation"]) == ("completed", 2), out
         assert ("claim:e2b", 2, "ok", None) in fake.answers_log           # its own lease, claimed afresh (S3a)
         assert not [a for a in fake.answers_log if a[0] == "dispatch:e2b" and a[1] == 2]
-        assert "stale e2b: no wake observed" in (tmp_path / "artifacts" / f"{rid}-g2.log").read_text()
+        # A resumed run holds its own lease and awaits no second sleep (gate M's T6m: it once waited out wait_s).
+        assert "stale e2b: held afresh on a run restarted from a checkpoint; no wake awaited" in \
+            (tmp_path / "artifacts" / f"{rid}-g2.log").read_text()
     else:
         assert (out["state"], out["generation"]) == ("completed", 1), out
         assert any(r["generation"] == 1 for r in fake.reconciles)
@@ -1519,3 +1531,199 @@ def test_h1_a_stop_between_the_next_claim_and_the_close_never_launches_an_older_
     assert closed == {f"{rid}-g1.closed.json": "resumed", f"{rid}-g2.closed.json": "resumed",
                       f"{rid}-g3.closed.json": "result"}
     assert rt2.owned() == []
+
+
+# ── gate M's T6m (29 Oct): the authority's clock behind the host's after a whole-Mac sleep ─────────────────────────────
+BEHIND_S = 672.6                 # Colima's ha.stderr.log, 22:13:18: "guest clock adjusted (was -672621ms off)"
+WAKE = {"gap_s": 673.32, "wall_minus_mono_s": 672.698, "hint": None}       # the runtime's own wake note that night
+
+
+def _t6m_program(grant, wait_s=20):
+    return program("checkpoint s1", f"stale_effect_on_wake e2b grant={grant} wait_s={wait_s} gap_s=1",
+                   f"effect e2 grant={grant}", "result ok")
+
+
+def _sleep_onto_a_slow_authority(rt, fake, rid, chan, box, *, behind_for_s=4.0):
+    """The night of 29 Oct, without a sleep. The worker holds e2b's receipt lease; the Mac sleeps (the child is
+    stopped); while it sleeps, real time runs on and the authority's clock stands still, so on wake the authority reads
+    672.6 s behind the host: the item's lease (renewed 20 s before the sleep, 60 s long) is current on its clock and
+    ten minutes over on the host's, and e2b's receipt lease is over on both. The runtime notices its wake; 4 s later
+    the virtual machine's time sync steps the authority's clock forward."""
+    import signal
+    try:
+        wait_for(chan / "ack-000002.json")                     # e2b's receipt lease is held and the worker waits
+        time.sleep(0.3)
+        os.killpg(rt.child.pgid, signal.SIGSTOP)                # the Mac sleeps
+        fake.behind_s = BEHIND_S
+        fake.items[rid]["lease_until"] = fake.clock() + 40
+        for r in fake.receipts.values():
+            r["until"] = min(r["until"], fake.clock() - 1)
+        time.sleep(1.5)                                        # more than the worker's gap_s: it will see its wake
+        rt.on_wake(dict(WAKE))                                 # the runtime notices first, and freezes it
+        box["woke"] = time.monotonic()
+        threading.Timer(behind_for_s, lambda: setattr(fake, "behind_s", 0.0)).start()
+    except BaseException as exc:                               # never silent: the test fails on it
+        box["error"] = exc
+
+
+
+def test_gate_m_t6m_a_wake_onto_an_authority_672_s_slow_holds_until_the_clocks_agree_then_resumes_and_e2_once(
+        tmp_path, mirror):
+    """With clock_check on, the host measures the authority's clock before it replays or reconciles anything after the
+    wake, finds it 672.6 s behind, and holds the child frozen. Once the clocks agree, the authority's answer is the
+    true one (the lease lapsed during the sleep): resume at generation 2, whose own e2 is committed once. That night,
+    without the check, the authority answered continue, e2 went out on a receipt lease the sink refused as expired
+    (lost for good) and the item never finished."""
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake, hosts={**HOSTS, "renew_s": 50, "offline_hold_s": 60}, clock_check="on")
+    grant = str(uuid.uuid4())
+    rid = fake.add(_t6m_program(grant))
+    box = {}
+    t = threading.Thread(target=_sleep_onto_a_slow_authority,
+                         args=(rt, fake, rid, tmp_path / "artifacts" / f"{rid}-g1.chan", box), daemon=True)
+    t.start()
+    out = run_pass(rt, timeout=60)
+    t.join(5)
+    assert "error" not in box and "woke" in box, box
+    assert (out["state"], out["generation"]) == ("completed", 2), out
+    lines = fakework.FileSink(tmp_path / "sink").lines()
+    assert [(x["operation_id"], x["answer"]) for x in lines] == \
+        [(str(uuid.uuid5(uuid.NAMESPACE_URL, f"{rid}:e2")), "committed")]          # e2 once; nothing expired
+    notes1 = [e for e in rt.journal(f"{rid}-g1").entries() if e["type"] == "note"]
+    order = [e["kind"] for e in notes1]
+    hold = next(e["fields"] for e in notes1 if e["kind"] == "clock_hold")
+    assert hold["why"] == "offset" and abs(hold["offset_s"] + BEHIND_S) < 5, hold
+    assert order.index("wake") < order.index("clock_hold") < order.index("clock_ok") < order.index("reconcile")
+    assert "thaw" not in order                                 # never let run on the slow clock's word
+    rec = [e["fields"] for e in notes1 if e["kind"] == "reconcile"]
+    assert [r["answer"]["answer"] for r in rec] == ["resume"]
+    assert [a for a in fake.answers_log if a[0] in ("dispatch:e2", "claim:e2") and a[1] == 1] == []
+    assert not any(a[0] == "dispatch:e2b" and a[2] == "ok" for a in fake.answers_log)   # e2b never sent, or refused
+    assert rt.clock_hold is None and rt.clock_last["within"]
+
+
+def test_gate_m_t6m_with_clock_check_off_the_runtime_is_todays_and_reads_no_clock(tmp_path, mirror):
+    """The switch off (production's configuration): nothing is measured and the runtime is today's. On the same night
+    it reproduces what gate M saw: continue on the slow clock's word, e2b refused receipt_lease_stale, e2 sent on a
+    receipt lease the sink refuses as expired, the item failed."""
+    fake = FakeAuthority(mirror[1])
+    read = []
+    fake.clock_read = lambda: read.append(1) or datetime.now(timezone.utc)
+    rt = make_rt(tmp_path, mirror[0], fake, hosts={**HOSTS, "renew_s": 50, "offline_hold_s": 60})
+    assert rt.clock_bound_s is None and rt.authority_clock is None
+    grant = str(uuid.uuid4())
+    rid = fake.add(_t6m_program(grant))
+    box = {}
+    t = threading.Thread(target=_sleep_onto_a_slow_authority,
+                         args=(rt, fake, rid, tmp_path / "artifacts" / f"{rid}-g1.chan", box), daemon=True)
+    t.start()
+    out = run_pass(rt, timeout=60)
+    t.join(5)
+    assert "error" not in box and "woke" in box, box
+    assert read == []                                           # no clock read with the check off
+    assert "authority_clock" not in json.loads((tmp_path / "artifacts" / "host-state.json").read_text())["hosts"][0]
+    assert (out["state"], out["generation"]) == ("failed", 1), out
+    assert [x["answer"] for x in fakework.FileSink(tmp_path / "sink").lines()] == ["lease_expired"]
+    rec = [e["fields"] for e in rt.journal(f"{rid}-g1").entries() if e["type"] == "note" and e["kind"] == "reconcile"]
+    assert rec[0]["answer"]["answer"] == "continue"
+    assert ("dispatch:e2b", 1, "refused", "receipt_lease_stale") in fake.answers_log
+
+
+def test_gate_m_a_receipt_lease_over_on_arrival_is_never_sent_and_held_until_the_clocks_agree(tmp_path, mirror):
+    """Detection off (T6c's set-up), so no wake starts §5.5: the authority's clock falls 672.6 s behind while the item
+    runs, and the next effect's receipt lease arrives already over by the host's clock. It is never sent (the sink
+    would refuse it as expired and the effect would be lost); the child is frozen and held until the clocks agree,
+    then §5.5 decides (here: resume, the lease having lapsed) and e2 is committed once."""
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake, hosts={**HOSTS, "renew_s": 50, "offline_hold_s": 60},
+                 gap_detection="off", clock_check="on")
+    grant = str(uuid.uuid4())
+    rid = fake.add(program("checkpoint s1", f"effect e2 grant={grant}", "result ok"))
+
+    def fall_behind(request_id, generation, name):
+        if name == "s1" and generation == 1 and not fake.behind_s:
+            fake.behind_s = BEHIND_S
+            fake.items[rid]["lease_until"] = fake.clock() + 40
+            threading.Timer(2.0, lambda: setattr(fake, "behind_s", 0.0)).start()
+    fake.hooks["progress"] = fall_behind
+    out = run_pass(rt, timeout=60)
+    assert (out["state"], out["generation"]) == ("completed", 2), out
+    assert [x["answer"] for x in fakework.FileSink(tmp_path / "sink").lines()] == ["committed"]
+    assert not [a for a in fake.answers_log if a[0] == "dispatch:e2" and a[1] == 1]          # never sent at g1
+    notes1 = [e for e in rt.journal(f"{rid}-g1").entries() if e["type"] == "note"]
+    order = [e["kind"] for e in notes1]
+    assert order.index("clock_disagrees") < order.index("clock_hold") < order.index("clock_ok") \
+        < order.index("reconcile")
+    assert next(e["fields"] for e in notes1 if e["kind"] == "clock_hold")["why"] == "receipt_lease_over_on_arrival"
+
+
+def test_gate_m_a_continue_about_a_lease_already_over_by_the_hosts_clock_is_never_a_thaw(tmp_path, mirror):
+    """The clocks were measured to agree, then the authority answered continue about a lease that ended ten minutes
+    ago by the host's clock (its clock moved between the two): the child stays frozen, and the question is asked again
+    once the clocks agree, which here is a resume."""
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake, clock_check="on")
+    rid = fake.add(program("checkpoint s1 hold_s=3", "result ok"))
+
+    def sleep_at_s1(request_id, generation, name):
+        if name == "s1" and generation == 1 and not fake.answers:
+            fake.items[rid]["lease_until"] = 0.0
+            fake.answers.append({"answer": "continue", "generation": 1, "lease_until": iso(time.time() - 600)})
+            threading.Timer(0.2, lambda: rt.on_wake(dict(WAKE))).start()
+    fake.hooks["progress"] = sleep_at_s1
+    out = run_pass(rt, timeout=60)
+    assert (out["state"], out["generation"]) == ("completed", 2), out
+    notes1 = [e for e in rt.journal(f"{rid}-g1").entries() if e["type"] == "note"]
+    order = [e["kind"] for e in notes1]
+    assert [e["fields"]["answer"]["answer"] for e in notes1 if e["kind"] == "reconcile"] == ["continue", "resume"]
+    assert next(e["fields"] for e in notes1 if e["kind"] == "clock_hold")["why"] == "continue_on_a_lease_over"
+    assert "thaw" not in order
+
+
+def test_gate_m_clock_check_is_off_unless_said_and_only_where_the_authority_is_read_by_dsn(tmp_path, mirror):
+    assert make_host(tmp_path, mirror[0]).clock_check is False
+    assert make_host(tmp_path, mirror[0], clock_check="on").clock_check is True
+    for over, code in (({"clock_check": "maybe"}, "host_clock_check_invalid"),
+                       ({"clock_check": "on", "authority": {
+                           "endpoint_id": "x", "values": str(tmp_path / "authority.json"),
+                           "url": "https://dev.minimoi.ai/internal/mc/v1/delegation-runner",
+                           "credential_ref": "keychain:minimoi_runtime/dev"}}, "host_clock_check_needs_dsn")):
+        with pytest.raises(host_mod.HostRefused) as exc:
+            make_host(tmp_path, mirror[0], **over)
+        assert str(exc.value) == code
+    auth = Authority.load(make_host(tmp_path, mirror[0]).authority.values)
+    assert cli.clock_bound_s(auth) == 1.0                         # §2.5: under 1 s (clock_skew_s 1 in §9.2's values)
+    now = datetime.now(timezone.utc)
+    assert cli._clock_offset(lambda: now, 1.0)["within"] is True
+    slow = cli._clock_offset(lambda: datetime.now(timezone.utc) - timedelta(seconds=BEHIND_S), 1.0)
+    assert slow["within"] is False and abs(slow["offset_s"] + BEHIND_S) < 1
+    assert cli._clock_offset(lambda: 1 / 0, 1.0) == {"unreadable": "ZeroDivisionError", "bound_s": 1.0,
+                                                     "within": False}
+
+
+def test_fakework_on_a_resumed_run_holds_the_stale_lease_afresh_and_awaits_no_second_sleep(tmp_path, monkeypatch,
+                                                                                           capsys):
+    """Gate M's T6m (29 Oct): generation 2 restarted after s1 and waited again for a wake (wait_s=1800), holding the
+    runtime's one slot; the 20-minute item never ran. On a run restarted from a checkpoint the step claims its own
+    lease (S3) and goes straight on."""
+    clock = {"t": 1000.0}
+    channel = tmp_path / "chan"
+    channel.mkdir()
+    asked = []
+
+    def sleep(s):
+        clock["t"] += s
+        for seq, doc in fakework.Channel(channel).requests():
+            asked.append(doc["kind"])
+            fakework.Channel(channel).answer(seq, {"state": "held", "operation_id": "op-e2b"}
+                                             if doc["kind"] == "effect_hold" else {"state": "applied"})
+    monkeypatch.setattr(fakework, "time", type("Clock", (), {"time": staticmethod(lambda: clock["t"]),
+                                                              "monotonic": staticmethod(lambda: clock["t"]),
+                                                              "sleep": staticmethod(sleep)}))
+    steps = fakework.parse_program(f"fakework/1\ncheckpoint s1\nstale_effect_on_wake e2b grant={uuid.uuid4()} "
+                                   "wait_s=1800 gap_s=60\nresult ok")
+    assert fakework.run(steps, channel=channel, sink=fakework.FileSink(tmp_path / "sink"), cap=1.0,
+                        unit="test_units", start_after="s1") == fakework.EXIT["done"]
+    assert asked == ["effect_hold"]                               # its own lease, claimed; nothing dispatched
+    assert "stale e2b: held afresh on a run restarted from a checkpoint; no wake awaited" in capsys.readouterr().out
+    assert clock["t"] < 1010                                      # never waited out its 1800 s

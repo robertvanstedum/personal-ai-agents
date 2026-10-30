@@ -261,6 +261,9 @@ class Run:
                 "capabilities": CAPS, "concurrency": 1, "offline_scope_default": "none",
                 "artifact_root": str(self.artifacts), "workspace_root": str(self.base / "work"),
                 "mirrors": {"personal-ai-agents": str(self.mirror)}, "gap_detection": "on", "stop_timeout_s": 20,
+                # Gate M's authority is PostgreSQL in Colima's virtual machine, whose clock lags after a whole-Mac
+                # sleep (T6m, 29 Oct): the runtime checks it against the Mac's before acting after a wake.
+                "clock_check": "on",
                 "effect_sink": {"path": str(self.sink_dir), "lookup": True},
                 "notifier": {"kind": "file", "path": str(self.ev / "notify.jsonl")},       # the witness's (R5.6-a)
                 "note": "gate M acceptance (S1-H): mac-test-1, §9.2's test values"}
