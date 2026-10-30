@@ -31,7 +31,10 @@ from pathlib import Path
 
 SCHEMA = 1
 CALL_KINDS = ("progress", "result", "effect_finish", "claim")   # claim: the host's own claim requests (Codex F2)
-NOTE_KINDS = ("freeze", "thaw", "reconcile", "usage", "effect_open", "effect_closed", "stop", "wake", "checkpoint")
+NOTE_KINDS = ("freeze", "thaw", "reconcile", "usage", "effect_open", "effect_closed", "stop", "wake", "checkpoint",
+              # the authority's clock apart from the host's, and back (runner.HostRuntime.check_authority_clock); only
+              # ever written with host.yaml's clock_check on
+              "clock_hold", "clock_ok", "clock_disagrees")
 MARKS = ("applied", "final")
 MAX_BYTES = 16 * 1024 * 1024
 # Refusals a resend cannot change: the same bytes get the same answer. Anything else (a transport failure, or a host
