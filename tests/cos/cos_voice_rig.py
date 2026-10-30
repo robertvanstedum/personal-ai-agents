@@ -69,8 +69,14 @@ class Gateway:
 
     def __init__(self):
         self.requests, self.model = [], '{"spoken": "We checked twelve.", "written": "- #12: two items stuck."}'
+        self.intents, self.intent = [], None
 
     def __call__(self, url, *, json, timeout, allow_redirects, headers):
+        if json.get("model") == "minimoi-voice-intent":          # v3's understanding call: answered apart, never a summary
+            self.intents.append(json)
+            word = self.intent(json) if callable(self.intent) else "chat"
+            return SimpleNamespace(status_code=200, json=lambda: {"choices": [{"index": 0, "finish_reason": "stop",
+                                                                               "message": {"role": "assistant", "content": word}}]})
         self.requests.append({"url": url, "json": json, "headers": headers})
         if not self.model:
             return SimpleNamespace(status_code=503, json=lambda: {})

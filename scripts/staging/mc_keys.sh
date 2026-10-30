@@ -102,10 +102,12 @@ cos_keygen_py() {
 
 # The voice summary's two capped keys (Spec 165 §5.4, decision D22 (a);
 # voice.sh summary-keys): one per host, voice-summary-mc (MC, mc.env) and
-# voice-summary-cos (CoS, cos.env). The summary's alias only; chat completions
-# only (one plain completion when a voice session ends, never tools); a monthly
-# budget; rpm 10. Like MC's, /key/info is not allowed.
-VOICE_SUMMARY_KEY_MODELS='["minimoi-voice-summary"]'
+# voice-summary-cos (CoS, cos.env). The summary's alias and the voice
+# understanding call's (minimoi-voice-intent: confirm by voice, v3; one word
+# of a few tokens per finished utterance the grammar did not hear, never
+# tools); chat completions only; a monthly budget; rpm 10. Like MC's,
+# /key/info is not allowed.
+VOICE_SUMMARY_KEY_MODELS='["minimoi-voice-summary", "minimoi-voice-intent"]'
 VOICE_SUMMARY_KEY_ROUTES='["/v1/chat/completions", "/chat/completions"]'
 VOICE_SUMMARY_KEY_BUDGET_DURATION="30d"
 VOICE_SUMMARY_KEY_RPM=10

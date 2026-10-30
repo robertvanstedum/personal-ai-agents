@@ -90,15 +90,29 @@ class Store(DirectVoiceStore):
         return Kept("kept", text, False)
 
 
+def intent_answer(fake, json):
+    """v3: the understanding call (core/realtime_voice/intent_gateway.py) reaches this fake gateway too, under its own alias:
+    kept apart from the summaries (``intents``), answered with ``fake.intent(json)`` (default chat), never a summary."""
+    fake.intents.append(json)
+    word = fake.intent(json) if callable(getattr(fake, "intent", None)) else "chat"
+    if word is None:
+        return SimpleNamespace(status_code=503, json=lambda: {})
+    answer = {"object": "chat.completion", "choices": [{"index": 0, "finish_reason": "stop",
+                                                        "message": {"role": "assistant", "content": word}}]}
+    return SimpleNamespace(status_code=200, json=lambda: answer)
+
+
 class Gateway:
     """The model gateway, faked: one chat completion from the host's ``model`` text (None: the gateway answers 503). Every
     request is kept, and its user message is the host's prompt."""
 
     def __init__(self, host):
-        self.host, self.requests = host, []
+        self.host, self.requests, self.intents, self.intent = host, [], [], None
         self.entered, self.hold = threading.Event(), None       # a test may hold the gateway's answer
 
     def __call__(self, url, *, json, timeout, allow_redirects, headers):
+        if json.get("model") == "minimoi-voice-intent":
+            return intent_answer(self, json)
         self.entered.set()
         if self.hold is not None:
             assert self.hold.wait(5)

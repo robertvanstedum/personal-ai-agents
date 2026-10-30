@@ -76,7 +76,7 @@ class Cos:
     kind = "cos"
 
     def __init__(self):
-        self.calls, self.fail, self.prompts = [], False, []
+        self.calls, self.fail, self.prompts, self.intents, self.intent = [], False, [], [], None
         self.summary = ('{"spoken": "We looked at item twelve; it is in build. Nothing else was done.", '
                         '"written": "- Asked what is stuck on #12: in build (reply-1)."}')
 
@@ -85,7 +85,13 @@ class Cos:
         raise AssertionError("the voice summary reached MC's agent runtime")
 
     def gateway(self, url, *, json, timeout, allow_redirects, headers):
-        """The model gateway, faked (summary_gateway's HTTP post): a chat completion from ``summary`` (None: 503)."""
+        """The model gateway, faked (summary_gateway's HTTP post): a chat completion from ``summary`` (None: 503). v3's
+        understanding call reaches it too, under its own alias: answered apart (intents), never counted as a summary."""
+        if json.get("model") == "minimoi-voice-intent":
+            self.intents.append(json)
+            word = self.intent(json) if callable(self.intent) else "chat"
+            return SimpleNamespace(status_code=200, json=lambda: {"choices": [{"index": 0, "finish_reason": "stop",
+                                                                               "message": {"role": "assistant", "content": word}}]})
         self.prompts.append(SimpleNamespace(text=json["messages"][-1]["content"], request=json, url=url, timeout=timeout,
                                             headers=headers))
         if self.summary is None:

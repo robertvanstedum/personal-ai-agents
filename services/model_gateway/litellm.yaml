@@ -94,6 +94,21 @@ model_list:
       base_model: xai/grok-4.3
       mode: chat
 
+  # The voice understanding call (confirm by voice, v3; core/realtime_voice/intent_gateway.py): one plain completion of a
+  # few tokens, no tools, for one finished owner utterance the grammar did not hear; it answers one word and acts on
+  # nothing. Reached only with the same capped keys as the summary (voice-summary-mc, voice-summary-cos). The server
+  # bounds each call at 2.5 s and never retries.
+  - model_name: minimoi-voice-intent
+    litellm_params:
+      model: xai/grok-4.3
+      api_key: os.environ/XAI_API_KEY
+      timeout: 5
+      reasoning_effort: none
+    model_info:
+      id: voice-intent-xai
+      base_model: xai/grok-4.3
+      mode: chat
+
 router_settings:
   fallbacks:
     - minimoi-cos-agent:

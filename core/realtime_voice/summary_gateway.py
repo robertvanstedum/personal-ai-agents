@@ -71,45 +71,53 @@ class GatewaySummary:
     def __call__(self, system, prompt):
         if not self._key:
             return None, "no_summary_key"
-        post = self._post or _streamed(time.monotonic() + TOTAL_TIMEOUT_S)
-        body, headers = self.request(system, prompt), {"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"}
-        lock, finished, box = threading.Lock(), threading.Event(), {}
+        payload, error = bounded_post(self._post or _streamed(time.monotonic() + TOTAL_TIMEOUT_S), self.url,
+                                      self.request(system, prompt), self._key, total_s=TOTAL_TIMEOUT_S,
+                                      timeout=(CONNECT_TIMEOUT_S, READ_TIMEOUT_S), thread="voice-summary-gateway")
+        return (None, error) if error is not None else answer_text(payload)
 
-        def call():
-            try:
-                answer = post(self.url, json=body, timeout=(CONNECT_TIMEOUT_S, READ_TIMEOUT_S), allow_redirects=False,
-                              headers=headers)
-            except Exception as exc:                        # never retried: one bounded call
-                answer, box["error"] = None, exc
-            with lock:
-                late = box.get("abandoned", False)
-                box["response"] = answer
-            finished.set()
-            if late and answer is not None and callable(getattr(answer, "close", None)):
-                answer.close()                              # past the deadline: nobody reads it
-        threading.Thread(target=call, name="voice-summary-gateway", daemon=True).start()
-        if not finished.wait(TOTAL_TIMEOUT_S):
-            with lock:
-                if "response" not in box:
-                    box["abandoned"] = True
-            if box.get("abandoned"):
-                return None, "timeout"
-        if "error" in box:
-            name = type(box["error"]).__name__.lower()
-            return None, "timeout" if "timeout" in name or isinstance(box["error"], _Late) else "gateway_down"
-        response = box["response"]
-        status = getattr(response, "status_code", 0)
-        if status in (401, 403):
-            return None, "key_refused"
-        if status == 429:
-            return None, "rate_limited"
-        if status != 200:
-            return None, "gateway_error"
+
+def bounded_post(post, url, body, key, *, total_s, timeout, thread):
+    """One gateway call, never retried, in its own (daemon) thread named ``thread``; the caller stops waiting at
+    ``total_s`` (the deadline ``post`` itself reads by, for _streamed). (the answer's JSON, None) for a 200, else (None,
+    error word): timeout, gateway_down, key_refused, rate_limited, gateway_error or malformed. Shared by the summary and
+    the understanding call (intent_gateway): one bounded call, one copy (review: "reuse, don't copy")."""
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    lock, finished, box = threading.Lock(), threading.Event(), {}
+
+    def call():
         try:
-            payload = response.json()
-        except ValueError:
-            return None, "malformed"
-        return answer_text(payload)
+            answer = post(url, json=body, timeout=timeout, allow_redirects=False, headers=headers)
+        except Exception as exc:                        # never retried: one bounded call
+            answer, box["error"] = None, exc
+        with lock:
+            late = box.get("abandoned", False)
+            box["response"] = answer
+        finished.set()
+        if late and answer is not None and callable(getattr(answer, "close", None)):
+            answer.close()                              # past the deadline: nobody reads it
+    threading.Thread(target=call, name=thread, daemon=True).start()
+    if not finished.wait(total_s):
+        with lock:
+            if "response" not in box:
+                box["abandoned"] = True
+        if box.get("abandoned"):
+            return None, "timeout"
+    if "error" in box:
+        name = type(box["error"]).__name__.lower()
+        return None, "timeout" if "timeout" in name or isinstance(box["error"], _Late) else "gateway_down"
+    response = box["response"]
+    status = getattr(response, "status_code", 0)
+    if status in (401, 403):
+        return None, "key_refused"
+    if status == 429:
+        return None, "rate_limited"
+    if status != 200:
+        return None, "gateway_error"
+    try:
+        return response.json(), None
+    except ValueError:
+        return None, "malformed"
 
 
 class _Late(Exception):

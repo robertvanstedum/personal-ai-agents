@@ -2129,10 +2129,12 @@ def _kind():
 
 
 def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, clock=time.time, summary_http=None,
-                         may_start=None):
+                         may_start=None, intent_http=None):
     """Register the bootstrap, consult, transcript, End, summary and decision routes under ``url_prefix`` for one host.
     Returns (the capabilities metadata, the session ledger). The host decides whether to call it (its switches).
-    ``summary_http``: the summary client's HTTP post (requests.post unless a test hands in its own).
+    ``summary_http``: the summary client's HTTP post (requests.post unless a test hands in its own). ``intent_http``: the
+    understanding call's (v3, intent_gateway), the same gateway's: a test that hands in summary_http hands it in for both
+    unless it names its own, so no test ever reaches a real gateway.
 
     ``may_start`` (Spec 165 §6.8, §11.1; D11 (a)): installing is not admission. None: every installed host may start
     sessions. MC passes its admission (mc_voice_direct.may_start: MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION on the production
@@ -2146,6 +2148,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
     words why; and direct_records: the owner has sessions needing attention),
     GET …/sessions (those sessions), GET …/sessions/<id> (one session: while live only its existence and state, after End
     or recovery its records), GET …/sessions/<id>/transcript (the download, D7) and POST …/sessions/<id>/dismiss."""
+    from core.realtime_voice.intent_gateway import GatewayIntent
     from core.realtime_voice.summary_gateway import GatewaySummary
     from core.realtime_voice.bootstrap import create_bootstrap_blueprint
     from core.realtime_voice.capabilities import (AGENT_CONVERSATION_MODE, get_provider_capability, model_actions,
@@ -2156,6 +2159,10 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
     sessions = DirectSessions(adapter, clock)
     summary_client = (GatewaySummary(adapter.summary_key, environ=environ, http_post=summary_http)
                       if adapter.summary_key else None)
+    # v3's understanding call: the same capped per-host key as the summary, its own gateway alias (minimoi-voice-intent).
+    intent_client = (GatewayIntent(adapter.summary_key, {"name": person["name"], "short": person["short"]}, environ=environ,
+                                   http_post=intent_http if intent_http is not None else summary_http)
+                     if adapter.summary_key else None)
     names = {part: f"{adapter.name}_{part}" for part in ("bootstrap", "consult", "transcript")}
     try:
         pinned = adapter.card()                  # the locale and release offered; each bootstrap reads the card again
@@ -2289,8 +2296,9 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
     grammar = consult_grammar(person)
 
     def understand(words, waiting):
-        """The understanding call (intent_gateway), for words the grammar did not hear: without it, chat."""
-        return "chat"
+        """The understanding call (intent_gateway), for words the grammar did not hear: one word, never an act. A host
+        with no summary key has none: chat."""
+        return intent_client(words, waiting) if intent_client is not None else "chat"
 
     def tool_of(kind, text):
         """The dispatch a new waiting action will use: save_note for a note or post-it the host's own grammar names
