@@ -14,10 +14,14 @@ What it does, in order:
    archived as it stands (nothing is fetched here), and its commit is recorded.
 2. **The digest** (``bundle_digest``): computed by the bundle's own ``host.tree_digest`` under the pinned interpreter,
    P0's method exactly, and recorded in ``<base>/install.json``. Every heartbeat reports the same value.
-3. **The interpreter pin** (S1-D): ``--python`` is asked, under ``-I`` as the runtime runs, for its version, its
+3. **The interpreter pin** (S1-D): ``--python`` is first resolved to the interpreter's own executable (its
+   ``sys.executable``; dev switch-on F1: the Mac's ``/usr/bin/python3`` is a shim, and the runtime refuses a pinned
+   shim), then asked, under ``-I`` as the runtime runs, for its version, its
    ``sys.prefix`` (the virtual environment) and ``host.packages_digest()`` (what is installed in it). All four go into
    the installed ``host.yaml``, and the service file runs exactly that path with ``-I``. A host that reaches its store
    by DSN, or serves a door, needs ``psycopg2`` importable there: checked now, never found missing at start.
+   The runtime's own pin check (``host.interpreter_problems``) is then run under the pinned path: the install is
+   refused (``interpreter_pin_check_failed``) rather than rendering a pin the runtime would refuse at start.
    The installer creates no environment (that needs the network); the operator makes it, outside any checkout.
 4. **host.yaml**: the template with ``interpreter`` and ``bundle_root`` written in, checked by the bundle's own
    ``host.parse`` (the same rules the runtime starts under), with the authority's values file checked too.
@@ -112,6 +116,30 @@ def build_bundle(ref, dest: Path) -> str:
     return commit
 
 
+_EXECUTABLE = "print(json.dumps({'executable': sys.executable}))"
+
+
+def resolve_interpreter(python) -> Path:
+    """The interpreter's own executable: the path the runtime's pin check accepts (dev switch-on F1).
+
+    The runtime compares the real path of its running ``sys.executable`` with the pinned path's (host.py's
+    ``interpreter_problems``). A launcher is not the interpreter: on a Mac with only the Command Line Tools,
+    ``/usr/bin/python3`` is a shim that runs ``/Library/Developer/CommandLineTools/usr/bin/python3``, so pinning the
+    shim gives ``interpreter_unpinned`` and a runtime that refuses to start. So ``--python`` is asked for its
+    ``sys.executable``: when that is the same file as ``--python`` (a real interpreter, or a venv's symlink, whose
+    path is kept as given so the venv stays the prefix), ``--python`` is pinned; otherwise that executable is pinned,
+    once it is asked in turn and names itself. Anything else is refused (``interpreter_unresolvable``)."""
+    exe = _ask(python, _EXECUTABLE).get("executable")
+    _need(isinstance(exe, str) and os.path.isabs(exe) and os.access(exe, os.X_OK), "interpreter_unresolvable")
+    if os.path.realpath(exe) == os.path.realpath(str(python)):
+        return python
+    again = _ask(Path(exe), _EXECUTABLE).get("executable")
+    _need(isinstance(again, str) and os.path.realpath(again) == os.path.realpath(exe), "interpreter_unresolvable")
+    print(f"note: --python {python} runs {exe}; pinning {exe}, the path the runtime's pin check accepts",
+          file=sys.stderr)
+    return Path(exe)
+
+
 def interpreter_pin(python, bundle, needs_db) -> dict:
     """The four facts the runtime checks at every start (host.py's interpreter: path, version, prefix, packages)."""
     got = _ask(python, "from core.mc_delegation_runner import host\n"
@@ -133,7 +161,8 @@ def check_host(python, bundle, doc) -> dict:
                         "assert auth.hosts is not None and auth.sweeper is not None and auth.speaks_v2, "
                         "'host_values_missing'\n"
                         "print(json.dumps({'runner_id': cfg.runner_id, 'roles': list(cfg.roles),"
-                        " 'transport': cfg.authority.transport, 'door': cfg.door is not None}))", bundle=bundle)
+                        " 'transport': cfg.authority.transport, 'door': cfg.door is not None,"
+                        " 'pin_problems': host.interpreter_problems(cfg)}))", bundle=bundle)
 
 
 def bundle_digest(python, bundle) -> tuple:
@@ -210,6 +239,7 @@ def install(args) -> dict:
     home = Path(args.home or "~").expanduser().resolve()
     python = Path(args.python).expanduser()
     _need(python.is_absolute() and os.access(python, os.X_OK), "interpreter_invalid")
+    python = resolve_interpreter(python)                # F1: a launcher (the CLT shim) is never what gets pinned
     manager = template.get("service_manager", "launchd")
     label = args.label or f"ai.minimoi.runtime.{env}"
     _need(_LABEL.match(label) is not None and label != "ai.minimoi.delegation-runner.prod", "label_invalid")
@@ -223,6 +253,8 @@ def install(args) -> dict:
     pin = interpreter_pin(python, bundle, "dsn_file" in authority or template.get("door") is not None)
     doc = {**template, "interpreter": pin, "bundle_root": str(bundle)}
     checked = check_host(python, bundle, doc)
+    # The runtime's own pin check, run now under the pinned interpreter: a pin it would refuse at start is refused here.
+    _need(not checked["pin_problems"], "interpreter_pin_check_failed:" + ",".join(checked["pin_problems"]))
     host_config = base / "host.yaml"
     text = (json.dumps(doc, indent=1, sort_keys=True) + "\n").encode()
     _write(host_config, text)
@@ -248,6 +280,7 @@ def install(args) -> dict:
               "roles": checked["roles"], "authority_transport": checked["transport"], "service_manager": manager,
               "label": label if manager == "launchd" else None, "ref": args.ref, "commit": commit,
               "bundle_root": str(bundle), "bundle_digest": digest, "bundle_files": files, "interpreter": pin,
+              "interpreter_requested": str(Path(args.python).expanduser()),
               "host_config": {"path": str(host_config), "sha256": _sha(text)},
               "services": {n: {"path": str(base / "service" / n), "sha256": _sha(d)} for n, d in services.items()},
               "home": str(home), "path": path, "rendered_at": datetime.now(timezone.utc).isoformat(), "loaded": False}

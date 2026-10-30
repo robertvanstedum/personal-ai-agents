@@ -306,3 +306,106 @@ def test_p1a_production_mac_worker_renders_from_its_template_beside_the_version_
     refused = _render(tmp_path, path, "--load")
     assert refused.returncode != 0 and "load_prod_not_in_this_build" in refused.stderr
     assert not (tmp_path / "home" / "Library").exists()
+
+
+# ── dev switch-on F1: a launcher is never what gets pinned ──────────────────────────────────────────────────────
+def _shim(tmp, target=None):
+    """A launcher like the Mac's /usr/bin/python3 (the Command Line Tools shim): a different file that execs the real
+    interpreter, so the running process's sys.executable is the real one, never the shim's own path."""
+    shim = tmp / "shim-bin" / "python3"
+    shim.parent.mkdir(parents=True, exist_ok=True)
+    shim.write_text(f'#!/bin/sh\nexec "{target or sys.executable}" "$@"\n')
+    shim.chmod(0o755)
+    return shim
+
+
+def _render_with(tmp, template, python, *extra):
+    return subprocess.run(["/bin/bash", str(SCRIPT), "--host-config", str(template), "--python", str(python),
+                           "--ref", "HEAD", "--base", str(tmp / "base"), "--home", str(tmp / "home"), *extra],
+                          capture_output=True, text=True, timeout=180,
+                          env={**os.environ, "MINIMOI_INSTALL_PYTHON": sys.executable})
+
+
+def test_the_runtimes_pin_check_refuses_a_shim_path(tmp_path):
+    """The defect as dev found it: a pin naming the launcher fails the runtime's own check while the real
+    interpreter runs (host.interpreter_problems compares real paths)."""
+    shim = _shim(tmp_path)
+    real = subprocess.run([str(shim), "-I", "-c", "import sys; print(sys.executable)"], capture_output=True,
+                          text=True, check=True).stdout.strip()
+    assert os.path.realpath(real) != os.path.realpath(shim)                     # the shim is not the interpreter
+    doc = json.loads(_template(tmp_path).read_text())
+    for path, problems in ((shim, ["interpreter_unpinned"]), (real, [])):
+        cfg = host_mod.parse({**doc, "interpreter": {"path": str(path), "version": "%d.%d" % sys.version_info[:2]},
+                              "bundle_root": str(ROOT)})
+        assert host_mod.interpreter_problems(cfg, executable=real) == problems, path
+
+
+def test_a_shim_python_is_resolved_and_the_pinned_path_passes_doctor(tmp_path):
+    """F1: --python names a launcher. The installer pins the interpreter the launcher runs (host.yaml and the
+    plist), says so, and the runtime's own doctor under that pin is ok (interpreter pinned = running)."""
+    shim = _shim(tmp_path)
+    proc = _render_with(tmp_path, _template(tmp_path), shim)
+    assert proc.returncode == 0, proc.stderr
+    base = tmp_path / "base"
+    real = sys.executable                                    # what the shim runs (a venv's python keeps its venv)
+    record = json.loads((base / "install.json").read_text())
+    assert record["interpreter"]["path"] == real and record["interpreter_requested"] == str(shim)
+    assert f"note: --python {shim} runs {real}" in proc.stderr
+    installed = host_mod.load(base / "host.yaml")
+    assert str(installed.interpreter.path) == real
+    plist = plistlib.loads((base / "service" / "ai.minimoi.runtime.dev.plist").read_bytes())
+    assert plist["ProgramArguments"][0] == real                                  # launchd runs the pinned file
+    doctor = subprocess.run([real, "-I", str(base / "bundle" / "run_runner.py"), "doctor", "--host-config",
+                             str(base / "host.yaml")], capture_output=True, text=True, timeout=120)
+    assert doctor.returncode == 0, doctor.stdout + doctor.stderr
+    assert "interpreter_unpinned" not in doctor.stdout
+
+
+def test_a_real_or_venv_interpreter_is_pinned_as_given(tmp_path):
+    """No launcher: the given path is kept (a venv's bin/python stays the pin, so the venv stays the prefix)."""
+    proc = _render(tmp_path, _template(tmp_path))
+    assert proc.returncode == 0, proc.stderr
+    record = json.loads((tmp_path / "base" / "install.json").read_text())
+    assert record["interpreter"]["path"] == sys.executable and "note: --python" not in proc.stderr
+
+
+def test_an_interpreter_that_cannot_be_resolved_is_refused_before_anything_is_written(tmp_path):
+    liar = tmp_path / "liar" / "python3"
+    liar.parent.mkdir()
+    liar.write_text('#!/bin/sh\necho \'{"executable": "python3"}\'\n')         # not an absolute path
+    liar.chmod(0o755)
+    proc = _render_with(tmp_path, _template(tmp_path), liar)
+    assert proc.returncode != 0 and "interpreter_unresolvable" in proc.stderr
+    assert not (tmp_path / "base").exists()
+
+
+def test_the_macs_own_usr_bin_python3_renders_the_production_worker_pinned_to_the_real_interpreter(tmp_path):
+    """F1 on the real thing, where the Mac has it: production's runbook command with ``--python /usr/bin/python3``
+    (the Command Line Tools shim). The pin, host.yaml and the plist name the interpreter the shim runs, and the
+    runtime's own pin check (run by the installer under that pin) passes. Skipped where /usr/bin/python3 is not a
+    launcher."""
+    usr = Path("/usr/bin/python3")
+    if not usr.exists():
+        pytest.skip("no /usr/bin/python3")
+    probe = subprocess.run([str(usr), "-I", "-c", "import sys; print(sys.executable)"], capture_output=True, text=True,
+                           timeout=60)
+    if probe.returncode != 0 or os.path.realpath(probe.stdout.strip()) == os.path.realpath(usr):
+        pytest.skip("/usr/bin/python3 is not a launcher here")
+    real = probe.stdout.strip()
+    template = json.loads((ROOT / "scripts" / "mc_host" / "host.mac-prod-1.json").read_text())
+    base = tmp_path / "base"
+    template["authority"]["values"] = str(base / "bundle" / "core" / "mc_delegation_dispatcher" / "authority.prod.json")
+    for key in ("artifact_root", "workspace_root"):
+        template[key] = str(tmp_path / "home" / key)
+    template["mirrors"] = {"personal-ai-agents": str(tmp_path / "mirror.git")}
+    template["effect_sink"]["path"] = str(tmp_path / "home" / "acceptance" / "effects.jsonl")
+    path = tmp_path / "host.mac-prod-1.json"
+    path.write_text(json.dumps(template))
+    proc = _render_with(tmp_path, path, usr)
+    assert proc.returncode == 0, proc.stderr
+    record = json.loads((base / "install.json").read_text())
+    assert record["interpreter"]["path"] == real != str(usr) and record["interpreter_requested"] == str(usr)
+    assert str(host_mod.load(base / "host.yaml").interpreter.path) == real
+    plist = plistlib.loads((base / "service" / "ai.minimoi.runtime.prod.plist").read_bytes())
+    assert plist["ProgramArguments"][0] == real
+    print("f1-mac:", json.dumps({"requested": str(usr), "pinned": real, "version": record["interpreter"]["version"]}))
