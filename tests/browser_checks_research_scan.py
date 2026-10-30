@@ -127,3 +127,29 @@ def test_dive_refusal_restores_launch_control(scan):
     expect(page.locator("#btn-dive")).to_be_enabled()
     expect(page.locator("#btn-dive")).to_have_text("Generate Deeper Dive")
     assert calls == [("/api/research/scan-to-dive", {"hash_id": "abc12"})]
+
+
+def test_catalog_expand_and_collapse_preserve_literal_titles(browser):
+    from datetime import datetime
+    from domains.curator.research.scan_index_render import render_catalog
+    scans=[{'title':f'Article {n} <literal>', 'source':'Example', 'hash_id':f'id{n}', 'date':datetime(2026,10,29)} for n in range(6)]
+    dives=[{'topic':f'Thread {n}', 'excerpt':'A finding', 'stats':'2 sessions', 'stem':f'topic-{n}', 'date':datetime(2026,10,29)} for n in range(4)]
+    context=browser.new_context(service_workers='block')
+    context.route('**/*', lambda route: route.abort())
+    page=context.new_page();errors=[]
+    page.on('pageerror',lambda error: errors.append(str(error)))
+    try:
+        page.set_content(render_catalog(scans,dives),wait_until='domcontentloaded')
+        expect(page.locator('.row-article:visible')).to_have_count(5)
+        expect(page.locator('.row-thread:visible')).to_have_count(3)
+        page.locator('#section-articles .toggle-btn').click()
+        expect(page.locator('.row-article:visible')).to_have_count(6)
+        expect(page.locator('.row-article').last).to_contain_text('Article 5 <literal>')
+        assert page.locator('literal').count()==0
+        page.locator('#section-articles .toggle-btn').click()
+        expect(page.locator('.row-article:visible')).to_have_count(5)
+        page.locator('#section-threads .expand-footer').click()
+        expect(page.locator('.row-thread:visible')).to_have_count(4)
+        assert errors==[]
+    finally:
+        context.close()

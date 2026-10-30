@@ -325,103 +325,19 @@ _NON_SESSION_PREFIXES = ('sources-candidates-',)
 
 
 def _get_topic_sessions(topic: str) -> list:
-    """
-    Return session IDs for a topic by reading topics/{topic}/ directory.
-
-    Inclusion rule: .md files matching ^[a-z][a-z0-9-]*\\.md$ that do NOT
-    start with a known non-session prefix (sources-candidates-).
-
-    This is an explicit inclusion pattern — more robust than a blocklist as
-    new static files won't accidentally be counted as sessions.
-
-    Used by: dashboard saved count, candidate count, last run, top find.
-    Will be called by multiple routes as the dashboard grows.
-
-    Returns list of session ID strings (stem, no .md extension), unsorted.
-    """
-    topic_dirs = [
-        STATE_ROOT / 'topics' / topic,
-        DATA_ROOT / 'threads' / topic / 'sessions',
-    ]
-    sessions = set()
-    for topic_dir in topic_dirs:
-        if not topic_dir.exists():
-            continue
-        sessions.update(
-            p.stem
-            for p in topic_dir.iterdir()
-            if p.is_file()
-            and _SESSION_FILE_RE.match(p.name)
-            and not any(p.name.startswith(pfx) for pfx in _NON_SESSION_PREFIXES)
-        )
-    return sorted(sessions)
+    """Sorted unique sessions from both supported storage homes."""
+    from domains.curator.research.session_catalog import list_sessions
+    return list_sessions([STATE_ROOT / 'topics' / topic,
+                          DATA_ROOT / 'threads' / topic / 'sessions'],
+                         pattern=_SESSION_FILE_RE, excluded_prefixes=_NON_SESSION_PREFIXES)
 
 
 def _parse_session_log() -> dict:
-    """
-    Parse library/session-log.md markdown table.
-
-    Reads the agent_active flag from the file header and extracts each
-    session row. Budget cumulative is taken from the last row's Cumulative
-    column — the running total maintained by OpenClaw.
-
-    Note: session-log.md is markdown, not JSON. A future cleanup task
-    (tracked in BACKLOG) will migrate this to session-log.json for
-    simpler parsing as the project grows.
-
-    Returns:
-        {
-            "agent_active": bool,
-            "budget_cumulative": float,
-            "rows": [
-                {"date", "session_id", "duration", "cost", "cumulative", "notes"},
-                ...
-            ]
-        }
-    """
-    log_path = STATE_ROOT / 'library' / 'session-log.md'
-    if not log_path.exists():
+    from domains.curator.research.session_catalog import parse_session_log
+    path = STATE_ROOT / 'library' / 'session-log.md'
+    if not path.exists():
         return {"agent_active": False, "budget_cumulative": 0.0, "rows": []}
-
-    text = log_path.read_text()
-
-    # agent_active flag — line like "agent_active: false"
-    active_match = _re.search(r'^agent_active:\s*(true|false)', text,
-                               _re.MULTILINE | _re.IGNORECASE)
-    agent_active = bool(active_match and active_match.group(1).lower() == 'true')
-
-    # Parse markdown table rows
-    rows = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line.startswith('|'):
-            continue
-        cols = [c.strip() for c in line.split('|')[1:-1]]
-        if len(cols) < 5:
-            continue
-        # Skip header row and separator row
-        if cols[0] in ('Date', '') or _re.match(r'^-+$', cols[0]):
-            continue
-        try:
-            cost_str = cols[3].replace('$', '').replace('—', '0').strip()
-            cum_str  = cols[4].replace('$', '').replace('—', '0').strip()
-            rows.append({
-                "date":       cols[0],
-                "session_id": cols[1],
-                "duration":   cols[2],
-                "cost":       float(cost_str) if cost_str else 0.0,
-                "cumulative": float(cum_str)  if cum_str  else 0.0,
-                "notes":      cols[5] if len(cols) > 5 else '',
-            })
-        except (ValueError, IndexError):
-            continue
-
-    budget_cumulative = rows[-1]['cumulative'] if rows else 0.0
-    return {
-        "agent_active":      agent_active,
-        "budget_cumulative": budget_cumulative,
-        "rows":              rows,
-    }
+    return parse_session_log(path.read_text())
 
 
 # ── HTML: Dashboard ───────────────────────────────────────────────────────────
@@ -501,40 +417,13 @@ def api_research_dashboard():
     log = _parse_session_log()
     log_by_session = {r['session_id']: r for r in log['rows']}
 
+    from domains.curator.research.dashboard_view import topic_summary, dashboard_payload
     topic_summaries = []
     for topic in topics:
         session_ids = _get_topic_sessions(topic)
-        session_set = set(session_ids)
-
-        # Saves: article signals whose session_id belongs to this topic
-        saved_count = sum(1 for s in article_signals
-                          if s.get('session_id') in session_set)
-
-        # Candidates: query candidates for this topic still in 'candidate' status
-        candidate_count = sum(1 for c in all_candidates
-                               if c.get('topic') == topic
-                               and c.get('status') == 'candidate')
-
-        # Last run + top find: most recent session-log row for this topic's sessions
-        topic_rows = sorted(
-            [log_by_session[sid] for sid in session_ids if sid in log_by_session],
-            key=lambda r: r['date'],
-            reverse=True,
-        )
-
-        last_run = None
-        top_find = None
-        if topic_rows:
-            latest   = topic_rows[0]
-            last_run = latest['date']
-            tf_match = _re.search(r'top find:\s*(.+)', latest.get('notes', ''))
-            top_find = tf_match.group(1).strip() if tf_match else None
-
         # Thread lifecycle fields
         from domains.curator.research.agent.threads import load_thread as _lt
         _thread = _lt(topic)
-        thread_status       = _thread.status      if _thread else "active"
-        thread_expires      = _thread.expires     if _thread else None
         thread_dd_generated = _thread.deeper_dive_generated if _thread else False
         thread_dd_path      = _thread.deeper_dive_path      if _thread else None
 
@@ -547,32 +436,12 @@ def api_research_dashboard():
                 if _m:
                     sessions_at_last_dive = int(_m.group(1))
 
-        topic_summaries.append({
-            "topic":                  topic,
-            "session_count":          len(session_ids),
-            "saved_count":            saved_count,
-            "candidate_count":        candidate_count,
-            "last_run":               last_run,
-            "top_find":               top_find,
-            "status":                 thread_status,
-            "expires":                thread_expires,
-            "deeper_dive_generated":  thread_dd_generated,
-            "deeper_dive_path":       thread_dd_path,
-            "sessions_at_last_dive":  sessions_at_last_dive,
-        })
+        topic_summaries.append(topic_summary(topic, session_ids, article_signals,
+                                             all_candidates, log_by_session,
+                                             _thread, sessions_at_last_dive))
 
-    used = log['budget_cumulative']
-    return jsonify({
-        "ok":           True,
-        "topics":       topic_summaries,
-        "budget": {
-            "used":  used,
-            "total": budget_total,
-            "warn":  budget_warn,
-            "pct":   round(used / budget_total * 100, 1) if budget_total else 0.0,
-        },
-        "agent_active": _run_state_active(),
-    })
+    return jsonify(dashboard_payload(topic_summaries, log['budget_cumulative'],
+                                     budget_total, budget_warn, _run_state_active()))
 
 
 # ── API: Run Session ──────────────────────────────────────────────────────────
@@ -1019,75 +888,8 @@ def _start_dive_job(topic: str, out_path: Path) -> tuple[subprocess.Popen, Path]
 
 
 def _build_challenger_html(ch: dict) -> str:
-    """Build the challenger process section HTML for a dive page.
-    Returns empty string when show_process is false or challenger is disabled.
-    """
-    if not ch.get('show_process') or not ch.get('enabled'):
-        return ''
-
-    points          = ch.get('challenge_points', [])
-    accepted_count  = ch.get('accepted_count', 0)
-    rejected_count  = ch.get('rejected_count', 0)
-    key_change      = _html_lib.escape(ch.get('key_change', ''))
-    # Strip residual markdown symbols from first_pass_summary before display
-    _fps_raw = ch.get('first_pass_summary', '') or ''
-    _fps_raw = _re.sub(r'^#{1,6}\s+.*$', '', _fps_raw, flags=_re.MULTILINE)
-    _fps_raw = _re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', _fps_raw)
-    _fps_raw = _re.sub(r'\*+', '', _fps_raw)            # unpaired asterisks
-    _fps_raw = _re.sub(r'_{1,2}([^_]+)_{1,2}', r'\1', _fps_raw)
-    _fps_raw = _re.sub(r'_+', '', _fps_raw).strip()
-    first_pass_sum  = _html_lib.escape(_fps_raw)
-
-    points_html = ''
-    for p in points:
-        accepted     = p.get('accepted', False)
-        border_color = '#C68A5E' if accepted else '#888'
-        label_color  = '#C68A5E' if accepted else '#888'
-        mark         = '✓' if accepted else '✗'
-        ptype        = _html_lib.escape(p.get('type', '').replace('_', ' '))
-        desc         = _html_lib.escape(p.get('description', ''))
-        impact_note  = ' · high impact' if p.get('impact') == 'high' else ''
-        points_html += (
-            f'<div style="margin-bottom:0.5rem;padding-left:1rem;'
-            f'border-left:2px solid {border_color};">'
-            f'<span style="font-size:0.75rem;text-transform:uppercase;'
-            f'letter-spacing:0.05em;color:{label_color};">'
-            f'{mark} {ptype}{impact_note}</span><br>{desc}</div>\n'
-        )
-
-    key_change_html = (
-        f'<div style="margin-top:0.75rem;font-style:italic;color:#666;">'
-        f'Key change: {key_change}</div>'
-        if key_change else ''
-    )
-
-    return (
-        '<div class="challenger-process" '
-        'style="margin-top:2rem;border-top:1px solid #C68A5E44;">\n'
-        '  <details>\n'
-        '    <summary style="cursor:pointer;padding:0.75rem 0;color:#C68A5E;'
-        'font-size:0.85rem;letter-spacing:0.05em;text-transform:uppercase;">\n'
-        f'      Challenger review\n'
-        f'      <span style="color:#888;font-weight:normal;text-transform:none;letter-spacing:0;">'
-        f'({len(points)} points · {accepted_count} accepted · {rejected_count} rejected)'
-        f'</span>\n'
-        '    </summary>\n'
-        '    <div style="padding:0.75rem 0 1rem 0;font-size:0.9rem;line-height:1.6;">\n'
-        f'      {points_html}{key_change_html}\n'
-        '    </div>\n'
-        '  </details>\n'
-        '  <details>\n'
-        '    <summary style="cursor:pointer;padding:0.75rem 0;color:#888;'
-        'font-size:0.85rem;letter-spacing:0.05em;text-transform:uppercase;">\n'
-        '      Initial draft\n'
-        '    </summary>\n'
-        '    <div style="padding:0.75rem 0 1rem 0;font-size:0.9rem;line-height:1.6;'
-        'color:#666;font-style:italic;">\n'
-        f'      {first_pass_sum or "(not stored)"}\n'
-        '    </div>\n'
-        '  </details>\n'
-        '</div>'
-    )
+    from domains.curator.research.dive_render import render_challenger
+    return render_challenger(ch)
 
 
 @research_bp.route('/research/dive-result/<stem>')
@@ -1122,82 +924,8 @@ def research_dive_result(stem: str):
         except Exception:
             pass
 
-    # Lightweight markdown → HTML
-    def _md_to_html(text: str) -> str:
-        lines  = text.splitlines()
-        out    = []
-        in_p   = False
-        for line in lines:
-            if _re.match(r'^#{1,6}\s', line):
-                if in_p: out.append('</p>'); in_p = False
-                level = len(_re.match(r'^(#+)', line).group(1))
-                content = _html_lib.escape(line.lstrip('#').strip())
-                out.append(f'<h{level}>{content}</h{level}>')
-            elif line.strip() == '---':
-                if in_p: out.append('</p>'); in_p = False
-                out.append('<hr>')
-            elif line.startswith('- ') or line.startswith('* '):
-                if in_p: out.append('</p>'); in_p = False
-                out.append(f'<li>{_html_lib.escape(line[2:].strip())}</li>')
-            elif line.strip() == '':
-                if in_p: out.append('</p>'); in_p = False
-            else:
-                # Italics from *...*
-                escaped = _html_lib.escape(line.strip())
-                escaped = _re.sub(r'\*(.+?)\*', r'<em>\1</em>', escaped)
-                if not in_p: out.append('<p>'); in_p = True
-                out.append(escaped + ' ')
-        if in_p: out.append('</p>')
-        return '\n'.join(out)
-
-    body_html = _md_to_html(raw)
-    safe_title = _html_lib.escape(title)
-
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{safe_title}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <style>
-    :root {{
-      --bg: #f5f0e8; --surface: #faf7f2; --border: #ddd6c8;
-      --text: #2a2418; --text-muted: #6b5f4e; --text-dim: #9e9080;
-      --accent: #8b5e2a;
-    }}
-    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{ font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); padding: 0; }}
-    .page-header {{
-      background: var(--surface); border-bottom: 1px solid var(--border);
-      padding: 0 2rem; height: 52px; display: flex; align-items: center;
-      justify-content: space-between; position: sticky; top: 0; z-index: 100;
-    }}
-    .page-header a {{ font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; color: var(--text); text-decoration: none; }}
-    .back-link {{ font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); text-decoration: none; }}
-    .back-link:hover {{ color: var(--accent); }}
-    .container {{ max-width: 760px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }}
-    h1 {{ font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: normal; margin-bottom: 0.5rem; line-height: 1.3; }}
-    h2 {{ font-family: 'Playfair Display', serif; font-size: 1.15rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--text); }}
-    h3 {{ font-family: 'DM Mono', monospace; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 1.5rem 0 0.5rem; }}
-    p {{ font-size: 1rem; line-height: 1.7; color: var(--text); margin-bottom: 1rem; }}
-    li {{ font-size: 1rem; line-height: 1.6; color: var(--text); margin-left: 1.5rem; margin-bottom: 0.35rem; list-style: disc; }}
-    hr {{ border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }}
-    em {{ color: var(--text-muted); font-style: italic; }}
-  </style>
-</head>
-<body>
-<header class="page-header">
-  <a href="/">mini-moi</a>
-  <a href="/scans-dives" class="back-link">← Scans &amp; Dives</a>
-</header>
-<div class="container">
-{body_html}
-{ch_section_html}
-</div>
-</body>
-</html>""", 200, {'Content-Type': 'text/html'}
+    from domains.curator.research.dive_render import render_dive
+    return render_dive(raw, title, ch_section_html), 200, {'Content-Type': 'text/html'}
 
 
 @research_bp.route('/research/dive-confirm')

@@ -1,0 +1,34 @@
+{
+  "baseline": "85ae32a6213b248f6e3d91b245ee8b37c04f51ad",
+  "entries": [
+    {
+      "title": "Caf\u00e9: gold and fiscal policy",
+      "summary": "\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\u03b1\nTAIL",
+      "source": "Synthetic & Co",
+      "category": "fiscal"
+    },
+    {
+      "title": "Second article",
+      "summary": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\nTAIL"
+    }
+  ],
+  "profile": "\nUSER PREFERENCE: synthetic policy only.\n",
+  "sha256": {
+    "haiku_prompt": {
+      "empty": "ebdc3d7add550f9c7a2fc0157cd21aa47d6d199425e315617965239870093178",
+      "articles": "9b8d50a96ec8c5afd7df31e32a462d6fc2b643750b3f37458ff0854033ec23d6"
+    },
+    "prefilter_prompt": {
+      "empty": "64a47c404a4f46e5bba0ce1d48355acf18a7853d6403d1342d3901ec1e520992",
+      "articles": "2b7f72fd5beffff0fcee1ae70078605f7307f1862df9c7b2b70042acd3a50f65"
+    },
+    "sonnet_prompt": {
+      "empty": "538d9b9489f204dac50613f33711b1da883266558c60acd181ff96a83d2165eb",
+      "articles": "97310533d8fa360cb54e0ebaebc75fce29f5011ac7908bdc78476b80a50246c3"
+    },
+    "xai_prompt": {
+      "empty": "67453132307897912c1efea34a77f9f612ee04ac486cf773ae5712ea0bf8cb75",
+      "articles": "e011f818f605ef1a81f4f20684e2f14e76282c81b322bf29e4e09642a530b24b"
+    }
+  }
+}
