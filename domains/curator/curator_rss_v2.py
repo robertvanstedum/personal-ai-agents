@@ -97,7 +97,8 @@ from utils.role import is_production as _is_production
 
 # Curator user data directory — same convention as curator_server.py and curator_feedback.py.
 # Override with CURATOR_DATA_DIR env var on EC2.
-_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(REPO_ROOT / "data" / "curator")))
+from domains.curator.data_paths import data_directory
+_DATA_DIR = data_directory(REPO_ROOT)
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------

@@ -30,7 +30,8 @@ _RESEARCH_DATA = research_paths().data
 # Defaults to data/curator/ within the repo so data lives under version control
 # boundaries (but is gitignored as personal data).
 # Override with CURATOR_DATA_DIR env var on EC2 or any non-default layout.
-_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(REPO_ROOT / "data" / "curator")))
+from domains.curator.data_paths import data_directory
+_DATA_DIR = data_directory(REPO_ROOT)
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
 # Bookmark and appearance history. Every writer (curator_rss_v2, feedback,
 # scan_job) uses the repo-root file, which production bind-mounts at

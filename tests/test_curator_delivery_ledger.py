@@ -20,7 +20,7 @@ import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "run_curator_cron_ec2.sh"
-TODAY = datetime.now(timezone.utc).date().isoformat()
+TODAY = "2026-10-16"
 
 
 class Reply:
@@ -47,6 +47,8 @@ def _briefing_text():
 @pytest.fixture()
 def bot(tmp_path, monkeypatch):
     from core.telegram import telegram_bot as tb
+    from functools import partial
+    monkeypatch.setattr(tb, "deliver_briefing", partial(tb.deliver_briefing, today=TODAY))
     out = tmp_path / "curator_output.txt"
     out.write_text(_briefing_text())
     monkeypatch.setenv("CURATOR_OUTPUT_PATH", str(out))
@@ -197,6 +199,8 @@ rss._DATA_DIR = Path("data/curator").resolve()
 rss.__file__ = os.path.join(os.environ["PAGES"], "curator_rss_v2.py")
 sys.argv = ["curator_rss_v2.py", "--model=xai"]
 rss.main()
+stamp = datetime(2026, 10, 16, 13, tzinfo=timezone.utc).timestamp()
+os.utime(os.environ["CURATOR_OUTPUT_PATH"], (stamp, stamp))
 """
 
 TG_HELPER = """
@@ -229,6 +233,7 @@ def cron(tmp_path):
     for d in (app / "data" / "curator", helpers, pages, bin_dir):
         d.mkdir(parents=True)
     (helpers / "rss_helper.py").write_text(RSS_HELPER)
+    (helpers / "sitecustomize.py").write_text(CLOCK_BOOTSTRAP)
     (helpers / "tg_helper.py").write_text(TG_HELPER)
     for name, body in (("docker", FAKE_DOCKER), ("date", FAKE_DATE)):
         (bin_dir / name).write_text(body)
@@ -236,7 +241,7 @@ def cron(tmp_path):
     mode = tmp_path / "tg_mode"
     env = {**os.environ, "PATH": f"{bin_dir}:/usr/bin:/bin", "FAKE": str(tmp_path), "APP": str(app),
            "HELPERS": str(helpers), "PAGES": str(pages), "PY": sys.executable, "REPO": str(ROOT),
-           "PYTHONPATH": str(ROOT), "TG_MODE_FILE": str(mode),
+           "PYTHONPATH": f"{helpers}:{ROOT}", "TG_MODE_FILE": str(mode),
            "CURATOR_OUTPUT_PATH": str(app / "data" / "curator" / "curator_output.txt"),
            "CURATOR_DELIVERY_DIR": str(app / "data" / "curator" / "telegram_delivery")}
 
@@ -283,3 +288,35 @@ def test_composed_curation_crash_reaches_neither_telegram_nor_a_ledger(cron):
     result, calls = cron("ok")
     assert result.returncode == 0, result.stdout + result.stderr
     assert calls == ["state", "x_pull", "rss", "telegram"] and cron.ledger()["state"] == "acknowledged"
+
+
+# Only disposable composed child processes load this through their private PATH.
+CLOCK_BOOTSTRAP = """
+import datetime
+class FixedDatetime(datetime.datetime):
+    @classmethod
+    def now(cls, tz=None):
+        value = cls(2026, 10, 16, 13, tzinfo=datetime.timezone.utc)
+        return value.astimezone(tz) if tz else value.replace(tzinfo=None)
+datetime.datetime = FixedDatetime
+"""
+
+
+def test_default_sender_day_advances_across_utc_midnight(bot, monkeypatch):
+    import datetime as clock
+    real_datetime = clock.datetime
+    class AdvancingClock(real_datetime):
+        instant = real_datetime(2026, 10, 16, 23, 59, tzinfo=clock.timezone.utc)
+        @classmethod
+        def now(cls, tz=None):
+            return cls.instant.astimezone(tz) if tz else cls.instant.replace(tzinfo=None)
+    monkeypatch.setattr(clock, "datetime", AdvancingClock)
+    # Bypass the fixture's default-day partial to exercise production's clock.
+    send = bot.deliver_briefing.func
+    assert send("t", "c") == 0
+    AdvancingClock.instant = real_datetime(2026, 10, 17, 0, 1, tzinfo=clock.timezone.utc)
+    assert send("t", "c") == 0
+    for day in ("2026-10-16", "2026-10-17"):
+        record = json.loads((bot.DELIVERY_DIR / f"{day}.json").read_text())
+        assert record["date"] == day and record["state"] == "acknowledged"
+    assert len(bot.posts) == 8

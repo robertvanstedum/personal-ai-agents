@@ -66,7 +66,7 @@ def test_import_loop_tracks_only_nonempty_results_and_preserves_hooks(importer, 
     csv_file(importer, "a.csv")
     calls = []
     monkeypatch.setattr(importer, "ankiconnect", lambda action, **kw:
-                        calls.append((action, kw)) or {"result": [101, None]})
+                        calls.append((action, kw)) or {"result": [101], "error": None})
     importer.main()
     assert len(calls) == 2 and all(c[0] == "addNotes" for c in calls)
     assert importer.TRACKER.read_text() == "a.csv\nb.csv\n"
@@ -79,17 +79,17 @@ def test_import_loop_tracks_only_nonempty_results_and_preserves_hooks(importer, 
 @pytest.mark.parametrize("result", [[], None])
 def test_no_result_does_not_mark_imported(importer, monkeypatch, result, capsys):
     csv_file(importer)
-    monkeypatch.setattr(importer, "ankiconnect", lambda *a, **kw: {"result": result})
+    monkeypatch.setattr(importer, "ankiconnect", lambda *a, **kw: {"result": result, "error": None})
     importer.main()
     assert not importer.TRACKER.exists()
     assert "Not marked as imported." in capsys.readouterr().out
 
 
-def test_duplicates_are_still_marked_as_imported(importer, monkeypatch):
+def test_null_is_unconfirmed_and_not_marked_as_imported(importer, monkeypatch):
     csv_file(importer)
-    monkeypatch.setattr(importer, "ankiconnect", lambda *a, **kw: {"result": [None]})
+    monkeypatch.setattr(importer, "ankiconnect", lambda *a, **kw: {"result": [None], "error": None})
     importer.main()
-    assert importer.load_tracker() == {"new.csv"}
+    assert importer.load_tracker() == set()
 
 
 def test_empty_file_does_not_mark_imported(importer):
@@ -146,3 +146,34 @@ assert 'flask' not in sys.modules
     result = subprocess.run([sys.executable, "-I", "-S", "-c", code, str(SCRIPTS[1])],
                             cwd=tmp_path, capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("response", [
+    None, [], {}, {"result": [11, 12]},
+    {"result": [11, 12], "error": "synthetic failure"},
+    {"result": [11], "error": None}, {"result": [None], "error": None},
+    {"result": [11, 12, 13], "error": None}, {"result": "12", "error": None},
+    {"result": [11, None], "error": None}, {"result": [11, True], "error": None},
+    {"result": [11, "12"], "error": None}, {"result": [11, 0], "error": None},
+    {"result": [11, -1], "error": None},
+])
+def test_incomplete_acknowledgment_keeps_whole_file_pending(importer, monkeypatch, response, capsys):
+    csv_file(importer, rows="one,first,tag\ntwo,second,tag\n")
+    calls = []
+    monkeypatch.setattr(importer, "ankiconnect", lambda *a, **kw: calls.append(kw) or response)
+    importer.main()
+    assert len(calls) == 1
+    assert len(calls[0]["notes"]) == 2
+    assert not importer.TRACKER.exists()
+    assert "Inspect Anki before retrying" in capsys.readouterr().out
+
+
+def test_complete_acknowledgment_marks_batch_once(importer, monkeypatch):
+    csv_file(importer, rows="one,first,tag\ntwo,second,tag\n")
+    calls = []
+    monkeypatch.setattr(importer, "ankiconnect", lambda *a, **kw:
+                        calls.append(kw) or {"result": [11, 12], "error": None})
+    importer.main()
+    importer.main()
+    assert len(calls) == 1
+    assert importer.load_tracker() == {"new.csv"}

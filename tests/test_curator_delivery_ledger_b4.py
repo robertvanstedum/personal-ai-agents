@@ -14,7 +14,7 @@ import pytest
 
 from core.telegram import delivery_ledger as dl
 
-TODAY = datetime.now(timezone.utc).date().isoformat()
+TODAY = "2026-10-16"
 
 ACK = ('{"format": "%s", "date": "%s", "state": "acknowledged", "started_at": "2026-10-16T13:00:00+00:00", '
        '"finished_at": "2026-10-16T13:00:05+00:00", "planned": 3, %s "briefing_sha256": "%s"}')
@@ -91,7 +91,7 @@ def test_the_bot_holds_a_duplicate_key_record_and_sends_nothing(ledger, monkeypa
     out.write_text("unused")
     monkeypatch.setenv("CURATOR_OUTPUT_PATH", str(out))
     ledger.write_text(_ack_text('"accepted": 0, "accepted": 3,'))
-    assert tb.deliver_briefing("t", "c") == 3 and posts == []
+    assert tb.deliver_briefing("t", "c", today=TODAY) == 3 and posts == []
 
 
 def _bounded(fn, seconds=5):
