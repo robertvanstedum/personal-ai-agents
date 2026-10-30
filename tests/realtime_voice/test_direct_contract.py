@@ -55,14 +55,31 @@ def host(request, monkeypatch, tmp_path):
     return driver(request.param, request, monkeypatch, tmp_path)
 
 
+def tap(call_id):
+    """v3 (the app acts; the voice only talks): the action path acts only on a confirmed waiting action or a tap on Check
+    (call id "host-…"), so a test that drives the one dispatcher names its call as Check's; distinct ids stay distinct."""
+    return call_id if str(call_id).startswith("host-") else "host-" + str(call_id)
+
+
 def ask(h, sid, call_id, item, words="What is stuck on #12?", name="consult"):
     return h.client.post(h.base + "/consult", headers=h.headers, json={
-        "session_id": sid, "call_id": call_id, "name": name, "owner_transcript_item": words, "owner_item_id": item,
+        "session_id": sid, "call_id": tap(call_id), "name": name, "owner_transcript_item": words, "owner_item_id": item,
         "arguments": {"question": "the model's paraphrase"}})
 
 
 def post(h, sid, events, **body):
     return h.client.post(h.base + f"/session/{sid}/transcript", headers=h.headers, json={"events": events, **body})
+
+
+def utter(h, sid, item, text):
+    """v3: one finished owner item through the utterance route, where the spoken end is decided now."""
+    return h.client.post(h.base + f"/session/{sid}/utterance", headers=h.headers,
+                         json={"conversation_id": h.cid, "owner_item_id": item, "text": text})
+
+
+def asked(h, sid, action_id, after):
+    return h.client.post(h.base + f"/session/{sid}/utterance/{action_id}/asked", headers=h.headers,
+                         json={"after_item": after})
 
 
 def test_one_owner_turn_is_one_effect_whichever_tool_or_call_asks(host):
@@ -115,9 +132,11 @@ def test_the_close_counts_what_the_server_does_not_hold_and_refuses_later_posts(
 def test_keep_talking_withdraws_the_proposal(host):
     h = host
     sid = h.start()
-    assert post(h, sid, [h.event("user", "t0", "We're done.")]).get_json()["propose_end"] is True
+    end = utter(h, sid, "t0", "We're done.").get_json()                     # v3: the utterance route hears the end
+    assert end["decision"] == "ask" and end["kind"] == "end" and end["proposing"] is True
+    asked(h, sid, end["action_id"], "t0")
     assert h.client.post(h.base + f"/session/{sid}/keep_talking", headers=h.headers, json={}).status_code == 200
-    assert "end_confirmed" not in post(h, sid, [h.event("user", "t1", "Yes.", 3)]).get_json()
+    assert utter(h, sid, "t1", "Yes.").get_json()["decision"] == "chat"
 
 
 def test_the_summary_is_a_plain_gateway_completion_with_no_tools(host):
@@ -158,18 +177,23 @@ def test_one_effect_per_owner_turn_holds_from_save_note_to_check_and_from_check_
 
 def test_a_bare_confirmation_is_refused_in_writing_on_every_host_and_the_summary_yes_still_works(host):
     """Spec 165 v0.3 §6.4, D16 (a), G1: the core refuses a consult whose words are only a confirmation or a stop word, on
-    every host, before anything is recorded or run. The yes to "Shall I sum up?" is a transcript turn, and still ends."""
+    every host, before anything is recorded or run. The yes to "Shall I sum up?" still ends: v3 hears it on the utterance
+    route, as the session's one waiting action (kind end), and a tap on a bare yes says the stray-yes line (addition 3)."""
     h = host
     sid = h.start()
-    assert post(h, sid, [h.event("user", "t0", "We're done.")]).get_json()["propose_end"] is True
+    end = utter(h, sid, "t0", "We're done.").get_json()
+    assert end["kind"] == "end"
+    asked(h, sid, end["action_id"], "t0")
     refused = ask(h, sid, "call_1", "t1", words="Yes.").get_json()
-    assert refused["outcome"] == "not_done" and refused["spoken"] == "Confirm that in writing." and h.effects() == 0
+    assert refused["outcome"] == "not_done" and refused["spoken"] == "Nothing's waiting; say it again if you want it."
+    assert h.effects() == 0
     read = h.client.get(h.base + f"/consult/{sid}/t1?conversation_id={h.cid}", headers=h.headers)
     assert read.status_code == 404                                       # never admitted
     assert ask(h, sid, "call_2", "t1", words="Yes.", name="save_note").get_json()["error"] == "confirmation"
     assert ask(h, sid, "call_3", "t2", words="Yes, what is stuck on #12?").get_json()["outcome"] == "done"
     assert h.turns() == 1                                                # not bare: it runs
-    assert post(h, sid, [h.event("user", "t1", "Yes.", 3)]).get_json()["end_confirmed"] is True
+    confirmed = utter(h, sid, "t3", "Yes.").get_json()
+    assert confirmed["decision"] == "confirm" and confirmed["kind"] == "end" and h.turns() == 1
 
 
 # A1's binding pass (Spec 165 §7 as amended 28 Oct 2026, I6): eligibility is the core's one value, the same for every host. On

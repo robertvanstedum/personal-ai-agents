@@ -274,6 +274,15 @@ class ChiefOfStaff(DirectVoiceAdapter):
             return {"error": "not_a_note", "saved": False, "spoken": NOT_A_NOTE}
         return None
 
+    def explicit_request(self, text):
+        """v3's grammar fast path (core.direct_host.fast_label): an explicit note by the one note grammar
+        (confer_service.parse_explicit_note), unchanged. She has no Board: a post-it is the understanding call's, and
+        her typed turn reads it. It only proposes a waiting action; nothing runs before his yes."""
+        try:
+            return "note" if parse_explicit_note(text) is not None else None
+        except InvalidConferTurn:                         # explicit but empty or too long: refuse() says so at dispatch
+            return None
+
     def in_writing(self, name, text):
         """Text the turn service treats as a command (/new resets her runtime session; /remind sets a reminder; any other
         slash command), read by the service's own parser (confer_service.slash_command): done in writing only (§6.4)."""

@@ -266,9 +266,11 @@ def test_save_note_without_an_explicit_note_saves_nothing_and_leaves_the_turn_fr
 
 
 def test_a_bare_confirmation_is_confirmed_in_writing(r):
+    """v3 addition 3: a tap on Check whose last words are a bare yes is still refused before anything runs (D16), with the
+    stray-yes line instead of "Confirm that in writing." (adapted)."""
     sid = rig.start(r)
     for n, words in enumerate(("Yes.", "Ja, genau.", "go ahead", "Okay, sure.")):
-        assert rig.ask(r, sid, f"call_{n}", "t1", words=words).get_json()["spoken"] == "Confirm that in writing."
+        assert rig.ask(r, sid, f"call_{n}", "t1", words=words).get_json()["spoken"] == "Nothing's waiting; say it again if you want it."
     assert rig.effects(r) == 0
 
 
@@ -399,8 +401,9 @@ def test_on_grok_she_has_no_tools_and_acts_through_check_with_cos(monkeypatch, t
     assert not session.get("tools") and "press Check with CoS" in session["instructions"]
     assert "Use consult whenever" not in session["instructions"] and "ask Robert to press Check with CoS" in session["instructions"]
     sid = answer.get_json()["voice_session_id"]
-    model = rig.ask(r, sid, "call_1", "t1").get_json()
-    assert model["error"] == "check_only" and r.turns == []                 # the model's own call runs nothing (B N7)
+    model = r.client.post(BASE + "/consult", headers=OWNER, json={"session_id": sid, "call_id": "call_1", "name": "consult",
+                                                                  "owner_transcript_item": "What is stuck?", "owner_item_id": "t1"}).get_json()
+    assert model["error"] == "not_confirmed" and r.turns == []              # the model's own call runs nothing (B N7, v3)
     assert rig.ask(r, sid, "host-1", "t1").get_json()["outcome"] == "done"   # Check with CoS acts
 
 

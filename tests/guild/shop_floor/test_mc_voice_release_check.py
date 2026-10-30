@@ -58,8 +58,9 @@ def conversation(client, token):
 
 
 def consult(client, token, sid, call_id="call_1", words="What is stuck on #12?", **extra):
+    # v3: the action path acts only on Check (call id "host-…") or a confirmed action, so the release check consults as Check.
     return client.post(DIRECT + "/consult", headers=headers(token, **extra), json={
-        "session_id": sid, "call_id": call_id, "name": "consult", "owner_transcript_item": words,
+        "session_id": sid, "call_id": "host-" + call_id, "name": "consult", "owner_transcript_item": words,
         "owner_item_id": "t" + str(sum(map(ord, call_id)) % 9000 + 1000),                      # its own turn (B1)
         "arguments": {"question": "the model's paraphrase"}})
 

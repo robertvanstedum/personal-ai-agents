@@ -5,7 +5,8 @@ from test_direct_host import BASE, ENV, OWNER, consult, rig, start  # noqa: F401
 
 
 def bare(r, sid, **fields):
-    return r.client.post(BASE + "/consult", headers=OWNER, json={"session_id": sid, "call_id": "call_1", "name": "consult",
+    # v3: the dispatcher is driven through Check's call id (the action path acts only on Check or a confirmed action).
+    return r.client.post(BASE + "/consult", headers=OWNER, json={"session_id": sid, "call_id": "host-call_1", "name": "consult",
                                                                  "owner_transcript_item": "What is on my agenda?", **fields})
 
 
@@ -39,7 +40,7 @@ def test_the_request_is_recorded_durably_before_dispatch_and_its_outcome_after(r
     request, outcome = records_of(r, sid)["consult_request:t5"], records_of(r, sid)["consult_outcome:t5"]
     assert request["schema"] == 1 and request["kind"] == "consult_request" and request["owner_item_id"] == "t5"
     assert request["at"] and len(request["text_sha256"]) == 64 and "agenda" not in str(request)   # the words' digest only
-    assert outcome["kind"] == "consult_outcome" and outcome["outcome"] == "done" and outcome["call_id"] == "call_1"
+    assert outcome["kind"] == "consult_outcome" and outcome["outcome"] == "done" and outcome["call_id"] == "host-call_1"
     assert outcome["tool"] == "consult" and outcome["result"]["receipt"] == answer["receipt"]
 
 
@@ -540,16 +541,19 @@ def test_a_gateway_that_times_out_is_unavailable_once_and_nothing_is_written_aft
 # ── Item 8: Keep talking is its own route; the transcript answers carry whether a proposal stands (R2 N9) ────────────────
 
 def test_keep_talking_is_its_own_route_and_the_old_transcript_withdrawal_is_gone(rig):
-    from test_direct_host import post, turn
+    from test_direct_host import asked, post, utter
     r = rig
     sid = start(r)
-    assert post(r, sid, [turn(r, "user", "t0", "We're done.")]).get_json()["proposing"] is True
+    end = utter(r, sid, "t0", "We're done.").get_json()                            # v3: the end is heard here
+    assert end["proposing"] is True
+    asked(r, sid, end["action_id"], "t0")
     old = r.client.post(BASE + f"/session/{sid}/transcript", headers=OWNER, json={"events": [], "proposal": "withdrawn"})
     assert old.status_code == 200 and r.sessions.proposing(sid)                    # A1's control post withdraws nothing now
     answer = r.client.post(BASE + f"/session/{sid}/keep_talking", headers=OWNER, json={})
     assert answer.get_json() == {"ok": True, "proposal": "withdrawn", "proposing": False}
     assert "keep_talking" in r.host.kinds
-    assert "end_confirmed" not in post(r, sid, [turn(r, "user", "t1", "Yes.")]).get_json()
+    assert utter(r, sid, "t1", "Yes.").get_json()["decision"] == "chat"
+    assert post(r, sid, []).status_code == 200
     other = {**OWNER, "X-Owner": "guest"}
     assert r.client.post(BASE + f"/session/{sid}/keep_talking", headers=other, json={}).status_code == 403
     r.client.post(BASE + f"/session/{sid}/end", headers=OWNER, json={})
@@ -558,10 +562,12 @@ def test_keep_talking_is_its_own_route_and_the_old_transcript_withdrawal_is_gone
 
 
 def test_a_later_ordinary_turn_withdraws_the_proposal_and_the_answer_says_so(rig):
-    from test_direct_host import post, turn
+    from test_direct_host import post, turn, utter
     r = rig
     sid = start(r)
-    assert post(r, sid, [turn(r, "user", "t0", "We're done.")]).get_json()["proposing"] is True
+    assert utter(r, sid, "t0", "We're done.").get_json()["proposing"] is True     # v3: heard on the utterance route
+    later = utter(r, sid, "t1", "Actually, one more thing about the kiln.").get_json()
+    assert later["proposing"] is False and later["decision"] == "chat" and later["dropped_kind"] == "end"
     assert post(r, sid, [turn(r, "user", "t1", "Actually, one more thing about the kiln.")]).get_json()["proposing"] is False
 
 
@@ -960,7 +966,8 @@ def test_fr_n1_an_attempt_whose_outcome_cannot_be_kept_is_never_still_being_writ
 # ── The last pass: Spec 165 v0.3 (G1–G4) and Codex's delta review at a17ddc8d (CC_22) ────────────────────────────────────
 
 # G1 (Spec 165 v0.3 §6.4, D16 (a)): a consult whose owner words are only a confirmation or a stop word is refused in the core,
-# before anything is recorded or run, on every host: "Confirm that in writing." A small closed set, tested phrase by phrase.
+# before anything is recorded or run, on every host: v3 says the stray-yes line (addition 3). A small closed set, tested
+# phrase by phrase.
 BARE = ["yes", "Yes.", "YES!", "yeah", "Yep.", "Sure.", "okay", "OK, go ahead.", "Yes, go ahead.", "Go ahead", "do it",
         "Yes please.", "Yes, do it.", "Alright, go for it!", "That’s right.", "Sounds good.", "Of course.", "Right, then do it.",
         "no", "No.", "Stop.", "stop", "Cancel.", "Never mind.", "Wait.", "Hold on.", "Don't.", "Don’t!", "Nope.",
@@ -994,7 +1001,7 @@ def test_g1_a_bare_yes_is_refused_in_writing_runs_nothing_and_counts_as_a_refusa
         answer = consult(r, sid, call_id=f"call_{i}", words=words, turn=f"t{i}")
         body = answer.get_json()
         assert answer.status_code == 200 and body["outcome"] == "not_done" and body["error"] == "confirmation"
-        assert body["spoken"] == "Confirm that in writing."
+        assert body["spoken"] == "Nothing's waiting; say it again if you want it."     # v3 addition 3, still refused
         assert f"consult_request:t{i}" not in records_of(r, sid)                    # never admitted: no record of an effect
     assert not r.host.turns
     for i in range(3, REFUSAL_CAP):                                                  # each counts under the refusals' cap
@@ -1006,12 +1013,16 @@ def test_g1_a_bare_yes_is_refused_in_writing_runs_nothing_and_counts_as_a_refusa
 
 
 def test_g1_the_yes_to_shall_i_sum_up_still_ends_the_session_while_a_bare_consult_yes_is_refused(rig):
-    from test_direct_host import post, turn
+    from test_direct_host import asked, utter
     r = rig
     sid = start(r)
-    assert post(r, sid, [turn(r, "user", "t0", "We're done.")]).get_json()["propose_end"] is True
-    assert consult(r, sid, call_id="call_yes", words="Yes.", turn="t1").get_json()["spoken"] == "Confirm that in writing."
-    assert post(r, sid, [turn(r, "user", "t1", "Yes.", 3)]).get_json()["end_confirmed"] is True
+    end = utter(r, sid, "t0", "We're done.").get_json()                            # v3: the end is the waiting action
+    assert end["decision"] == "ask" and end["kind"] == "end"
+    asked(r, sid, end["action_id"], "t0")
+    tapped = consult(r, sid, call_id="host-yes", words="Yes.", turn="t1").get_json()   # a tap on a bare yes: refused
+    assert tapped["spoken"] == "Nothing's waiting; say it again if you want it." and tapped["error"] == "confirmation"
+    got = utter(r, sid, "t1", "Yes.").get_json()                                  # the spoken yes still ends it
+    assert got["decision"] == "confirm" and got["kind"] == "end"
     assert not r.host.turns
 
 
@@ -1071,7 +1082,7 @@ def test_l_s1_words_that_are_not_bare_still_run(rig):
         body = consult(r, sid, call_id=f"call_{i}", words=words, turn=f"t{i}").get_json()
         assert body["outcome"] == "done", (words, body)
     assert len(r.host.turns) == 3
-    assert consult(r, sid, call_id="call_um", words="Um, yes.", turn="t9").get_json()["spoken"] == "Confirm that in writing."
+    assert consult(r, sid, call_id="call_um", words="Um, yes.", turn="t9").get_json()["spoken"] == "Nothing's waiting; say it again if you want it."
     assert len(r.host.turns) == 3
 
 

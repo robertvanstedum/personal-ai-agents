@@ -309,6 +309,17 @@ class _MasterCraftsman(DirectVoiceAdapter):
             return {"error": "not_a_note", "saved": False, "spoken": NOT_A_NOTE}
         return None
 
+    def explicit_request(self, text):
+        """v3's grammar fast path (core.direct_host.fast_label): his words are an explicit note or post-it by part 1's
+        grammar, unchanged (owner_actions' note, the Board's post-it; _is_note_command's two parsers). A note the grammar
+        itself refuses, or a Board request with no words, is not one here: the understanding call or the typed turn reads
+        it. It only proposes a waiting action; nothing runs before his yes."""
+        from . import board_commands, owner_actions
+        action = owner_actions.parse(text)
+        if action is not None and action.kind == "note" and not getattr(action, "refusal", None):
+            return "note"
+        return "postit" if board_commands.parse(text) else None
+
     def typed_turn(self, conv, principal, session_id, n, name, text, *, item):
         from . import api
         from .mc.ledger_gate import Refusal

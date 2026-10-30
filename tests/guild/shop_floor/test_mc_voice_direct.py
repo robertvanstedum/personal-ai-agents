@@ -167,10 +167,16 @@ def start(r):
     return response.get_json()
 
 
+def tap(call_id):
+    """v3 (the app acts; the voice only talks): the action path acts only on a confirmed waiting action or a tap on Check
+    (call id "host-…"), so a test that drives the one dispatcher names its call as Check's; distinct ids stay distinct."""
+    return call_id if str(call_id).startswith("host-") else "host-" + str(call_id)
+
+
 def call(r, sid, call_id="call-1", name="consult", words="What is stuck on #12?", headers=None, **body):
     # Each call names the owner turn it acts on (review B1); by default its own, so separate calls are separate turns.
     return r.client.post(BASE + "/consult", headers=r.headers if headers is None else headers, json={
-        "session_id": sid, "call_id": call_id, "name": name, "owner_transcript_item": words, "owner_item_id": item_of(call_id),
+        "session_id": sid, "call_id": tap(call_id), "name": name, "owner_transcript_item": words, "owner_item_id": item_of(call_id),
         "arguments": {"question": "the model's paraphrase"}, **body})
 
 
@@ -479,6 +485,17 @@ def post(r, sid, events, headers=None):
                          headers=r.headers if headers is None else headers)
 
 
+def utter(r, sid, item, text):
+    """v3: one finished owner item through the utterance route (the spoken end and every confirmation are decided there)."""
+    return r.client.post(BASE + f"/session/{sid}/utterance", headers=r.headers,
+                         json={"conversation_id": CID, "owner_item_id": item, "text": text})
+
+
+def asked(r, sid, action_id, after):
+    """v3: the page says the waiting action's question started playing after owner item ``after``."""
+    return r.client.post(BASE + f"/session/{sid}/utterance/{action_id}/asked", headers=r.headers, json={"after_item": after})
+
+
 def shown(r, **kw):
     rows = sorted(r.notes.rows.values(), key=lambda row: list(r.notes.rows).index(row["request_id"]))
     return reveal.view(r.notes, rows, **{**reveal.process_view(r.config), **kw})
@@ -622,12 +639,17 @@ def test_were_done_then_yes_ends_and_the_summary_is_from_this_session_only(ready
     r.client.post(BASE + f"/session/{earlier}/end", headers=r.headers)
     sid = start(r)["voice_session_id"]
     call(r, sid)
-    assert "propose_end" not in post(r, sid, [turn(r, "user", "item_u0", "We're not done yet.")]).get_json()
-    proposed = post(r, sid, [turn(r, "user", "item_u1", "Okay, we're done.")]).get_json()
-    assert proposed["propose_end"] is True and proposed["prompt"] == "Shall I sum up?"
+    # v3: the transcript posts keep the turns; the utterance route hears the spoken end (one control owner).
+    assert "propose_end" not in post(r, sid, [turn(r, "user", "t1", "We're not done yet.")]).get_json()
+    assert utter(r, sid, "t1", "We're not done yet.").get_json()["decision"] == "chat"
+    post(r, sid, [turn(r, "user", "t2", "Okay, we're done.")])
+    proposed = utter(r, sid, "t2", "Okay, we're done.").get_json()
+    assert proposed["decision"] == "ask" and proposed["kind"] == "end" and proposed["prompt"] == "Shall I sum up?"
     assert r.config["mc_direct_voice_live"](sid)                                   # proposing ends nothing
-    yes = post(r, sid, [turn(r, "assistant", "item_a1", "Shall I sum up?", 3), turn(r, "user", "item_u2", "Yes please", 2)])
-    assert yes.get_json()["end_confirmed"] is True
+    asked(r, sid, proposed["action_id"], "t3")
+    post(r, sid, [turn(r, "assistant", "t3", "Shall I sum up?", 3), turn(r, "user", "t4", "Yes please", 2)])
+    yes = utter(r, sid, "t4", "Yes please").get_json()
+    assert yes["decision"] == "confirm" and yes["kind"] == "end"
     summary = summarize(r, sid).get_json()
     assert summary["ok"] is True and summary["state"] == "proposed"
     assert summary["spoken"] == "We looked at item twelve; it is in build. Nothing else was done."

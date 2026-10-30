@@ -140,17 +140,22 @@ def test_the_turn_standard_changes_only_for_a_caller_that_passes_interrupt_respo
 # ── The binding pass's independent review at 8eb30a10 (REVIEW_independent_A1_binding.md) ──────────────────────────────
 
 def test_b_n7_on_a_provider_not_eligible_the_consult_route_runs_only_check(rig, monkeypatch):
-    """Defence in depth (B N7): the session records its provider's eligibility at bootstrap. On xAI a call that is not the
-    page's own Check ("host-…") runs nothing, and answers not done; Check still acts. On OpenAI the model's call acts."""
+    """Defence in depth (B N7), as v3 makes it (the app acts; the voice only talks): on every provider the action path acts
+    only on Check ("host-…") or a confirmed waiting action. A model's own call runs nothing and answers not done, on xAI
+    and now on OpenAI too (adapted: before v3 the OpenAI model's call acted); Check still acts on both."""
     r = rig
     xai_mint(monkeypatch, [])
+    model = lambda sid: r.client.post(BASE + "/consult", headers=OWNER, json={          # noqa: E731
+        "session_id": sid, "call_id": "call_model", "name": "consult", "owner_transcript_item": "What is on my agenda?",
+        "owner_item_id": "t0"}).get_json()
     grok = boot(r, "xai").get_json()["voice_session_id"]
-    refused = consult(r, grok, call_id="call_model", turn="t0").get_json()
-    assert refused["outcome"] == "not_done" and refused["error"] == "check_only" and "Check with TP" in refused["spoken"]
+    refused = model(grok)
+    assert refused["outcome"] == "not_done" and refused["error"] == "not_confirmed" and "his words" not in refused["spoken"]
     assert r.host.turns == []                                               # nothing ran
     assert consult(r, grok, call_id="host-7", turn="t0").get_json()["outcome"] == "done" and len(r.host.turns) == 1
     openai = boot(r, "openai").get_json()["voice_session_id"]
-    assert consult(r, openai, call_id="call_model", turn="t0").get_json()["outcome"] == "done" and len(r.host.turns) == 2
+    assert model(openai)["error"] == "not_confirmed" and len(r.host.turns) == 1
+    assert consult(r, openai, call_id="host-8", turn="t0").get_json()["outcome"] == "done" and len(r.host.turns) == 2
 
 
 def test_b_s3_end_keeps_the_owner_turns_not_acted_on_capture_ids_only_once_each(rig):

@@ -5,7 +5,8 @@ they also run (and fail) against 93bf00c6. No provider, no Keychain, no micropho
 import json
 
 from minimoi_portal.guild_ui import mc_voice_reveal as reveal
-from test_mc_voice_direct import BASE, CID, call, post, ready, shown, start, summarize, turn, voice_records  # noqa: F401
+from test_mc_voice_direct import (BASE, CID, asked, call, post, ready, shown, start, summarize, turn,  # noqa: F401
+                                  utter, voice_records)
 
 
 def sessions_of(r):
@@ -56,7 +57,7 @@ def test_a_call_without_its_owner_turn_is_refused_before_anything_runs(ready):
     r = ready
     sid = start(r)["voice_session_id"]
     bare = r.client.post(BASE + "/consult", headers=r.headers, json={
-        "session_id": sid, "call_id": "c1", "name": "consult", "owner_transcript_item": "What is stuck?"})
+        "session_id": sid, "call_id": "host-c1", "name": "consult", "owner_transcript_item": "What is stuck?"})
     assert bare.status_code == 400 and not r.turns
 
 
@@ -65,29 +66,38 @@ def test_a_call_without_its_owner_turn_is_refused_before_anything_runs(ready):
 def test_a_replayed_were_done_event_is_not_a_second_confirmation(ready):
     r = ready
     sid = start(r)["voice_session_id"]
-    event = turn(r, "user", "same-event", "Yes, we're done.")
-    first = post(r, sid, [event]).get_json()
-    replay = post(r, sid, [event]).get_json()
-    assert first.get("propose_end") is True and not first.get("end_confirmed")
-    assert replay.get("propose_end") is True and not replay.get("end_confirmed")          # the same answer, nothing moved
+    event = turn(r, "user", "t1", "Yes, we're done.")
+    post(r, sid, [event]), post(r, sid, [event])                                         # kept once
+    first = utter(r, sid, "t1", "Yes, we're done.").get_json()                          # v3: heard on the utterance route
+    replay = utter(r, sid, "t1", "Yes, we're done.").get_json()
+    assert first["decision"] == "ask" and first["kind"] == "end"
+    assert replay["decision"] == "ask" and replay["action_id"] == first["action_id"]     # the same answer, nothing moved
     assert len(voice_records(r, sid)) == 1
-    later = post(r, sid, [turn(r, "user", "next-event", "Yes.", 3)]).get_json()
-    assert later.get("end_confirmed") is True                                            # only his next turn confirms
+    asked(r, sid, first["action_id"], "t2")
+    later = utter(r, sid, "t3", "Yes.").get_json()
+    assert later["decision"] == "confirm" and later["kind"] == "end"                     # only his next turn confirms
 
 
 def test_keep_talking_withdraws_the_proposal_so_a_later_yes_ends_nothing(ready):
     r = ready
     sid = start(r)["voice_session_id"]
-    assert post(r, sid, [turn(r, "user", "u1", "We're done.")]).get_json().get("propose_end") is True
+    end = utter(r, sid, "t1", "We're done.").get_json()                                 # v3: the utterance route
+    assert end["kind"] == "end" and end["proposing"] is True
+    asked(r, sid, end["action_id"], "t2")
     assert r.client.post(BASE + f"/session/{sid}/keep_talking", headers=r.headers, json={}).status_code == 200   # §5.3
-    assert not post(r, sid, [turn(r, "user", "u2", "Yes, the glaze first.", 3)]).get_json().get("end_confirmed")
+    assert utter(r, sid, "t3", "Yes.").get_json()["decision"] == "chat"
 
 
 def test_a_proposal_and_a_later_yes_in_one_post_confirm(ready):
+    """Adapted for v3: the page posts each finished owner item to the utterance route on its own, so a proposal and a
+    later yes posted in one transcript post decide nothing; heard one after the other (after the question), they confirm."""
     r = ready
     sid = start(r)["voice_session_id"]
-    both = post(r, sid, [turn(r, "user", "u1", "We're done."), turn(r, "user", "u2", "Yes.", 3)]).get_json()
-    assert both.get("end_confirmed") is True
+    both = post(r, sid, [turn(r, "user", "t1", "We're done."), turn(r, "user", "t3", "Yes.", 3)]).get_json()
+    assert "end_confirmed" not in both and both["proposing"] is False
+    end = utter(r, sid, "t1", "We're done.").get_json()
+    asked(r, sid, end["action_id"], "t2")
+    assert utter(r, sid, "t3", "Yes.").get_json()["decision"] == "confirm"
 
 
 # ── B7: a kept answer can be asked for again, read only, even after the session ended ───────────────────────────────────

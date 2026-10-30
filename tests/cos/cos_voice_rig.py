@@ -166,9 +166,15 @@ def start(r, provider="openai", headers=OWNER):
     return answer.get_json()["voice_session_id"]
 
 
+def tap(call_id):
+    """v3 (the app acts; the voice only talks): the action path acts only on a confirmed waiting action or a tap on Check
+    (call id "host-…"), so a test that drives the one dispatcher names its call as Check's; distinct ids stay distinct."""
+    return call_id if str(call_id).startswith("host-") else "host-" + str(call_id)
+
+
 def ask(r, sid, call_id="call_1", item="t1", words="What is stuck on #12?", name="consult", headers=OWNER):
     return r.client.post(BASE + "/consult", headers=headers, json={
-        "session_id": sid, "call_id": call_id, "name": name, "owner_transcript_item": words, "owner_item_id": item,
+        "session_id": sid, "call_id": tap(call_id), "name": name, "owner_transcript_item": words, "owner_item_id": item,
         "arguments": {"question": "the model's paraphrase"}})
 
 

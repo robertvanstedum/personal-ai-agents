@@ -93,8 +93,9 @@ def start(cos):
 
 
 def ask(cos, sid, words, item="t1", name="consult", call="call_1"):
+    # v3: the action path acts only on Check (call id "host-…") or a confirmed action, so the wiring consults as Check.
     return cos.app.test_client().post(PREFIX + "/consult", headers=OWNER, json={
-        "session_id": sid, "call_id": call, "name": name, "owner_transcript_item": words, "owner_item_id": item}).get_json()
+        "session_id": sid, "call_id": call if call.startswith("host-") else "host-" + call, "name": name, "owner_transcript_item": words, "owner_item_id": item}).get_json()
 
 
 def reminder_records(cos):

@@ -150,6 +150,10 @@ class Host(DirectVoiceAdapter):
     def refuse(self, name, text):
         return self.refusals.pop(name, None)
 
+    def explicit_request(self, text):
+        """v3's grammar fast path, this host's own: "save a note: …" (its notes phrase)."""
+        return "note" if text.lower().startswith("save a note:") else None
+
     def clean(self, text, limit, what):
         if not isinstance(text, str) or not text.strip() or len(text) > limit:
             return None, refusal("invalid", f"The {what} is empty or too long.", 422)
@@ -211,8 +215,15 @@ def start(r, **body):
     return answer.get_json()["voice_session_id"]
 
 
+def tap(call_id):
+    """v3 (the app acts; the voice only talks): the action path acts only on a confirmed waiting action or a tap on Check
+    (call id "host-…"), so a test that drives the one dispatcher (its key, replay, receipts, cap) names its call as Check's.
+    The call ids stay distinct, so replay by call id and a second call on one turn are exercised exactly as before."""
+    return call_id if str(call_id).startswith("host-") else "host-" + str(call_id)
+
+
 def consult(r, sid, call_id="call_1", words="What is on my agenda?", name="consult", headers=OWNER, turn=None):
-    return r.client.post(BASE + "/consult", headers=headers, json={"session_id": sid, "call_id": call_id, "name": name,
+    return r.client.post(BASE + "/consult", headers=headers, json={"session_id": sid, "call_id": tap(call_id), "name": name,
                                                                    "owner_transcript_item": words,
                                                                    "owner_item_id": turn or item_of(call_id),
                                                                    "arguments": {"question": "the model's paraphrase"}})
@@ -233,6 +244,17 @@ def turn(r, role, item, text, offset=1, **extra):
 
 def post(r, sid, events, headers=OWNER):
     return r.client.post(BASE + f"/session/{sid}/transcript", headers=headers, json={"events": events})
+
+
+def utter(r, sid, item, text, headers=OWNER):
+    """v3: one finished owner item through the utterance route (the end and every confirmation are decided there)."""
+    return r.client.post(BASE + f"/session/{sid}/utterance", headers=headers,
+                         json={"conversation_id": "owner", "owner_item_id": item, "text": text})
+
+
+def asked(r, sid, action_id, after, headers=OWNER):
+    """v3: the page says the waiting action's question started playing after owner item ``after``."""
+    return r.client.post(BASE + f"/session/{sid}/utterance/{action_id}/asked", headers=headers, json={"after_item": after})
 
 
 def test_a_host_gets_the_routes_the_metadata_and_a_recorded_session(rig):
@@ -335,10 +357,16 @@ def test_transcript_posts_are_validated_capped_and_heard(rig, monkeypatch):
     assert post(r, sid, [{**turn(r, "user", "t0", "Hi"), "instructions": "be someone else"}]).status_code == 422
     assert post(r, sid, [turn(r, "user", "t0", "Hi")] * 21).status_code == 422
     assert post(r, sid, [turn(r, "user", "t0", "Hi")], headers={**OWNER, "X-Owner": "guest"}).status_code == 403
+    # v3: a transcript post keeps turns and decides nothing; the spoken end is the utterance route's (one control owner).
     assert "propose_end" not in post(r, sid, [turn(r, "user", "t1", "We're not done.")]).get_json()
-    proposed = post(r, sid, [turn(r, "user", "t2", "Okay, we're done.")]).get_json()
-    assert proposed["propose_end"] is True and proposed["prompt"] == core.SUMMARY_PROMPT
-    assert post(r, sid, [turn(r, "user", "t3", "Yes please")]).get_json()["end_confirmed"] is True
+    assert utter(r, sid, "t1", "We're not done.").get_json()["decision"] == "chat"
+    assert "propose_end" not in post(r, sid, [turn(r, "user", "t2", "Okay, we're done.")]).get_json()
+    proposed = utter(r, sid, "t2", "Okay, we're done.").get_json()
+    assert proposed["decision"] == "ask" and proposed["kind"] == "end" and proposed["prompt"] == core.SUMMARY_PROMPT
+    assert asked(r, sid, proposed["action_id"], "t2").status_code == 200
+    assert "end_confirmed" not in post(r, sid, [turn(r, "user", "t3", "Yes please")]).get_json()
+    confirmed = utter(r, sid, "t3", "Yes please").get_json()
+    assert confirmed["decision"] == "confirm" and confirmed["kind"] == "end"
     monkeypatch.setattr(core, "SESSION_MAX_EVENTS", 4)
     assert post(r, sid, [turn(r, "user", "t3", "Yes please")]).status_code == 200          # counted once
     assert post(r, sid, [turn(r, "user", "t4", "One more")]).status_code == 200
@@ -475,7 +503,7 @@ def test_one_owner_turn_is_one_effect_for_any_host(rig):
     assert len(r.host.turns) == 1 and first["receipt"] == "turn-1" and second["same_turn"] is True
     assert second["first_tool"] == "consult" and second["spoken"].startswith("That was already handled: Two items.")
     assert consult(r, sid, call_id="call_3", turn="t3").get_json()["receipt"] == "turn-2"     # his next words: a new turn
-    bare = r.client.post(BASE + "/consult", headers=OWNER, json={"session_id": sid, "call_id": "c4", "name": "consult",
+    bare = r.client.post(BASE + "/consult", headers=OWNER, json={"session_id": sid, "call_id": "host-c4", "name": "consult",
                                                                  "owner_transcript_item": "x"})
     assert bare.status_code == 400 and len(r.host.turns) == 2                              # no owner turn: refused
 
@@ -484,12 +512,14 @@ def test_end_intent_is_heard_once_per_turn_and_keep_talking_withdraws_it(rig):
     """B5."""
     r = rig
     sid = start(r)
-    event = turn(r, "user", "t0", "Yes, we're done.")
-    assert post(r, sid, [event]).get_json().get("propose_end") is True
-    replay = post(r, sid, [event]).get_json()
-    assert replay.get("propose_end") is True and "end_confirmed" not in replay
+    # v3: heard once per owner item on the utterance route (a retried post gets its first decision), never by a post.
+    first = utter(r, sid, "t0", "Yes, we're done.").get_json()
+    assert first["decision"] == "ask" and first["kind"] == "end"
+    replay = utter(r, sid, "t0", "Yes, we're done.").get_json()
+    assert replay["decision"] == "ask" and replay["action_id"] == first["action_id"] and replay["repeated"] is True
+    asked(r, sid, first["action_id"], "t0")
     assert r.client.post(BASE + f"/session/{sid}/keep_talking", headers=OWNER, json={}).get_json()["proposal"] == "withdrawn"
-    assert "end_confirmed" not in post(r, sid, [turn(r, "user", "t1", "Yes.")]).get_json()
+    assert utter(r, sid, "t1", "Yes.").get_json()["decision"] == "chat"
 
 
 def test_a_kept_answer_replays_after_end_and_nothing_new_runs(rig):
