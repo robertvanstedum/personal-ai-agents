@@ -2,6 +2,7 @@
 a row, a log, an API answer or a page. Synthetic values only."""
 from __future__ import annotations
 
+import gc
 import logging
 import re
 import time
@@ -69,13 +70,54 @@ def test_scrub_is_idempotent():
     assert scrub(once) == once
 
 
-@pytest.mark.parametrize("text", ["x" * 2000, "*" * 2000, "Visa " + "x" * 2000, "1 " * 1000, "Visa " + "* " * 999,
-                                  "1-" * 1000 + "Visa", "a@" * 1000, "xx " * 700, "ending in " * 200,
-                                  "a" * 32000, "a@" * 16000, "1" * 32000], ids=lambda s: f"{len(s)}-chars-{_id(s[:6])}")
-def test_scrub_is_fast_on_hostile_input(text):
-    start = time.perf_counter()
-    scrub(text)
-    assert time.perf_counter() - start < 0.5
+# The speed tests check how the scrub's time grows with the length of its text, not one timed run: on 28 Oct
+# one run of "1 " * 1000 took 0.555 s on a busy CI runner, and two seconds later in the same job the same text
+# with no-break spaces (which the scrub reads as plain spaces) took at most 0.043 s.
+# Each case is (head, unit, count, tail), so the text can be cut to a quarter of its repeats.
+
+def _text(case) -> str:
+    head, unit, count, tail = case
+    return head + unit * count + tail
+
+
+def _best_times(case, runs: int = 5) -> tuple[float, float]:
+    """The scrub's time on the text with a quarter of the repeats and on the whole text: the best of ``runs``
+    runs of each, taken in turn, with the cyclic gc off (as timeit does). A stall on a busy machine only makes
+    a run longer, so the best run is what the scrub itself costs."""
+    head, unit, count, tail = case
+    texts = (head + unit * (count // 4) + tail, _text(case))
+    best = [float("inf"), float("inf")]
+    gc_was_on = gc.isenabled()
+    gc.disable()
+    try:
+        for _ in range(runs):
+            for n, text in enumerate(texts):
+                start = time.perf_counter()
+                scrub(text)
+                best[n] = min(best[n], time.perf_counter() - start)
+    finally:
+        if gc_was_on:
+            gc.enable()
+    return best[0], best[1]
+
+
+def _assert_time_grows_with_length(case):
+    """Time in proportion to the length grows 4x for 4x the text; time in its square grows 16x. 8x sits
+    between the two with room either way. The best run on the whole text must also stay inside half a second."""
+    quarter, whole = _best_times(case)
+    assert whole / quarter < 8, f"{whole / quarter:.1f}x the time for 4x the text ({quarter * 1e3:.2f} -> {whole * 1e3:.2f} ms)"
+    assert whole < 0.5, f"best run {whole:.3f} s"
+
+
+@pytest.mark.parametrize("case", [("", "x", 2000, ""), ("", "*", 2000, ""), ("Visa ", "x", 2000, ""),
+                                  ("", "1 ", 1000, ""), ("Visa ", "* ", 999, ""), ("", "1-", 1000, "Visa"),
+                                  ("", "a@", 1000, ""), ("", "xx ", 700, ""), ("", "ending in ", 200, ""),
+                                  ("", "a", 32000, ""), ("", "a@", 16000, ""), ("", "1", 32000, ""),
+                                  # masked groups, one start per group: was time in the square of the length
+                                  ("", "•• ", 700, ""), ("", "xx ", 21845, "")],   # 65,535: a GitHub issue body
+                         ids=lambda case: f"{len(_text(case))}-chars-{_id(_text(case)[:6])}")
+def test_scrub_is_fast_on_hostile_input(case):
+    _assert_time_grows_with_length(case)
 
 
 def test_payment_details_never_reach_a_row_a_log_an_answer_or_a_page(floored, caplog):
@@ -298,11 +340,10 @@ def test_ordinary_text_with_unicode_spaces_comes_back_exactly():
         assert scrub(text) == text
 
 
-@pytest.mark.parametrize("text", ["1." * 1000, "1 - " * 500, "1\n" * 1000, "4242, " * 400, "Visa " + "1/" * 1000,
-                                  "1_2" * 700, "1 , " * 500, "1 " * 1000, "1 \n " * 500, "1      " * 300,
-                                  "4242 | " * 300],
-                         ids=lambda s: f"{len(s)}-chars")
-def test_scrub_stays_fast_with_the_wider_separators(text):
-    start = time.perf_counter()
-    scrub(text)
-    assert time.perf_counter() - start < 0.5
+@pytest.mark.parametrize("case", [("", "1.", 1000, ""), ("", "1 - ", 500, ""), ("", "1\n", 1000, ""),
+                                  ("", "4242, ", 400, ""), ("Visa ", "1/", 1000, ""), ("", "1_2", 700, ""),
+                                  ("", "1 , ", 500, ""), ("", "1 ", 1000, ""), ("", "1 \n ", 500, ""),
+                                  ("", "1      ", 300, ""), ("", "4242 | ", 300, "")],
+                         ids=lambda case: f"{len(_text(case))}-chars")
+def test_scrub_stays_fast_with_the_wider_separators(case):
+    _assert_time_grows_with_length(case)
