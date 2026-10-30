@@ -6,7 +6,10 @@ With one, three things, all deterministic, none calling a model:
 * **The check-in is a client of the snapshot** (``minimoi.runtime.state.v1``) for delegation items: the notices the
   authority raised (one rule set, today's three delegation keys among them, R7.4-d), its hosts and running items. A
   snapshot read as a view carries its age; past ``view_bound_s``, or of unknown age, no rule fires from it, and one
-  ``view-stale`` item says so instead (R4.6-b).
+  ``view-stale`` item says so instead (R4.6-b). At start, before the authority has published its first snapshot,
+  the link is starting, not stale: for one view bound after the link starts, a view with no snapshot behind it
+  (no ``as_of``) is told nothing, and nothing fires from it either (dev switch-on F2). A snapshot with a known age
+  past the bound is told at once, start or not; once any snapshot was seen, a missing one is told at once too.
 * **Decisions get D-codes and go out** (``deliver``): each decision notice the authority raised becomes one message,
   its decisions supervision rows in the authority's own words. A routine notice carries up to five, one "yes" approving
   every decision it lists; a solo one (an ``unknown`` resolution, a reassignment, a cross-vendor admission) carries one
@@ -21,6 +24,7 @@ Telegram bot for real, a fake that writes ``notify.jsonl`` in tests.
 from __future__ import annotations
 
 import os
+import time
 
 from core.mc_delegation_dispatcher import snapshot as snap
 from core.supervision import telegram as tg
@@ -40,12 +44,15 @@ class RuntimeLink:
     Nothing here raises into the supervisor's tick: each step's failures are kept in ``errors`` (fixed codes), for the
     supervisor to tell once per key while today's approvals and check-ins go on (SF3)."""
 
-    def __init__(self, authority, *, owner, view_bound_s, source=None):
+    def __init__(self, authority, *, owner, view_bound_s, source=None, clock=time.monotonic):
         if not isinstance(owner, str) or not owner or not isinstance(view_bound_s, int) or view_bound_s < 1:
             raise ValueError("runtime_link_invalid")
         self.authority, self.owner, self.view_bound_s = authority, owner, view_bound_s
         self.source = source or authority.snapshot
         self.errors = []
+        # F2: the link starts a few milliseconds before the authority's first publish. Until a snapshot is seen, or
+        # one view bound has passed since the link started, a view with nothing published behind it is "starting".
+        self._clock, self._started, self._published = clock, clock(), False
         # Every message is marked told only after it went out (C-SF1, C-N4): a failed send is tried again next tick.
         # What went out but could not be recorded yet is held here, so it is never sent twice while this process
         # lives (DUP-7); a restart between a send and its record could repeat that one message, never lose it.
@@ -62,7 +69,19 @@ class RuntimeLink:
     def view(self):
         """(snapshot, stale): stale when its age is unknown or past the bound (R4.6-b: then nothing fires from it)."""
         doc = self.source()
+        if isinstance(doc, dict) and doc.get("as_of") is not None:
+            self._published = True
         return doc, snap.view_stale(doc, self.view_bound_s)
+
+    def starting(self, doc) -> bool:
+        """F2: no snapshot published yet (no ``as_of``), none seen since the link started, and less than one view
+        bound since then. Such a view is still stale (nothing fires from it); it is only not told as an error."""
+        return (not self._published and isinstance(doc, dict) and doc.get("as_of") is None
+                and self._clock() - self._started < self.view_bound_s)
+
+    def stale_items(self, doc) -> list:
+        """The ``view-stale`` item a stale view gives, or none while the link is starting."""
+        return [] if self.starting(doc) else [_stale_item(doc)]
 
     @staticmethod
     def sweeper_stale(doc) -> list:
@@ -81,7 +100,7 @@ class RuntimeLink:
         except Exception as exc:
             return [], [], [], [f"runtime snapshot unreadable ({type(exc).__name__})"]
         if stale:
-            return [dict(_stale_item(doc), drained=True)], [], [], []
+            return [dict(i, drained=True) for i in self.stale_items(doc)], [], [], []
         items = [{"key": n["key"], "kind": n["kind"], "text": n["text"], "drained": True}
                  for n in doc.get("notices", [])
                  if (n.get("raised_at") or n.get("rule") == "sweeper_stale")
@@ -332,7 +351,7 @@ class RuntimeLink:
             doc, stale = self.view()
             live.extend({"key": n["key"], "kind": n["kind"], "text": n["text"]} for n in self.sweeper_stale(doc))
             if stale:
-                live.append(_stale_item(doc))
+                live.extend(self.stale_items(doc))
         except Exception as exc:
             self.errors.append(f"view:{_code(exc)}")
         items = outbox + live
@@ -457,9 +476,24 @@ def _chunks(items) -> list:
 
 
 def _stale_item(doc) -> dict:
-    return {"key": f"view-stale:runtime:{doc.get('as_of')}", "kind": "error",
-            "text": f"The runtime's state is {_age_words(doc.get('view_age_s'))} old (as of {doc.get('as_of')}); no "
-                    f"delegation rule fires from it until it is fresh."}
+    return {"key": f"view-stale:runtime:{doc.get('as_of')}", "kind": "error", "text": _stale_words(doc)}
+
+
+def _stale_words(doc) -> str:
+    """Why the runtime's state is not read, in plain words (F2: never "of unknown age old (as of None)")."""
+    as_of, age = doc.get("as_of"), doc.get("view_age_s")
+    if as_of is None:
+        what = ("The runtime's state cannot be read: no snapshot has been published, or the published one is not "
+                "readable" if "state_file_unreadable" in (doc.get("unknowns") or [])
+                else "The runtime's state carries no time, so its age is unknown")
+        return f"{what}. No delegation rule fires until a fresh snapshot is published."
+    if age is None:
+        when = "its age is unknown"
+    elif age < 0:
+        when = f"it is dated {int(-age)} s ahead of this clock"
+    else:
+        when = f"it is {int(age)} s old"
+    return f"The runtime's state is stale: {when} (as of {as_of}). No delegation rule fires from it until it is fresh."
 
 
 def _code(exc) -> str:
@@ -475,10 +509,6 @@ def _turn(receipt) -> str:
     if receipt.get("channel") == "guild":
         return f"guild:{receipt.get('conversation_id')}:{receipt.get('note_id')}"
     return str(receipt.get("turn_id") or "")
-
-
-def _age_words(age) -> str:
-    return "of unknown age" if age is None else f"{int(age)} s"
 
 
 def from_environ(environ, connect):
