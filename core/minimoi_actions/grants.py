@@ -5,7 +5,11 @@ not an intent inference component. No tool or HTTP handler exposes issue().
 The issuer must authenticate retained owner turns, resolve authorized resources,
 and compile the exact canonical domain request under a reviewed template.
 Quoted/pasted content and lessons cannot mint these objects. Natural-language
-compilation and broader field-constrained templates are separate work.
+compilation and broader field-constrained templates are separate work, except
+one narrow rule: delegate.card (host runtime spec v0.5 R4.3-c, N1). One exact
+owner approval of a card covers that card's enumerated steps: one operation per
+step template digest, used and rechecked on the work-item path (use_for_item,
+covers_item). Its approval window bounds the card's first operation only.
 
 Borrow the binding transaction: binding/session -> grant -> receipt lock order.
 prepare_effect consumes cardinality and prepares its receipt atomically. At the
@@ -30,6 +34,8 @@ from .receipts import EffectIntent, ReceiptStore, _cursor, _uuid
 
 _DIGEST = re.compile('[0-9a-f]{64}')
 _CAPABILITY = re.compile(r'[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+')
+# R4.3-c (N1): the one capability whose single exact approval covers several operations, a card's enumerated steps.
+CARD_CAPABILITY = 'delegate.card'
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,10 +92,16 @@ class GrantDefinition:
         if any(x is not None and not _identifier(x) for x in (self.work_id, self.expected_target_version)):
             raise ActionContractError('grant_scope_invalid')
         exact = (self.proposal_id, self.approved_operation_id, self.approval_expires_at)
+        card = self.capability == CARD_CAPABILITY
+        if card and (self.work_id is None or any(x is None for x in exact)):
+            raise ActionContractError('grant_approval_invalid')   # one exact approval of one card (R4.3-c, R4.3-f)
         if any(x is not None for x in exact):
+            # The exact-approval rule: one operation on one exact request. A card's approval covers its enumerated
+            # steps instead: one operation per step template digest, at most 100 (R4.3-c).
             if (not _uuid(self.proposal_id) or not _uuid(self.approved_operation_id)
-                    or not _aware(self.approval_expires_at) or self.max_operations != 1
-                    or len(self.argument_digests) != 1):
+                    or not _aware(self.approval_expires_at)
+                    or (self.max_operations != len(self.argument_digests) if card
+                        else self.max_operations != 1 or len(self.argument_digests) != 1)):
                 raise ActionContractError('grant_approval_invalid')
 
     @property
@@ -273,6 +285,58 @@ class GrantStore:
             consumed = cur.fetchone()
             if consumed is None or consumed['intent_digest'] != intent.digest:
                 raise ActionContractError('grant_effect_not_prepared')
+
+    # Work items admitted under a grant (host runtime spec v0.5 R4.3): the delegation authority's admission and its
+    # later rechecks. Both return a fixed code, or None, and hold the grant row lock until the caller commits.
+    def covers_item(self, conn, principal, environment, grant_id, *, subject_digest, capability_prefix,
+                    work_ids=()):
+        """Read only: None while the grant is current (valid record, catalogue rule, not revoked, not expired) and
+        covers the item: a capability under ``capability_prefix``, ``subject_digest`` among its argument digests,
+        and, when the grant names a work id, one of ``work_ids``. Never uses an operation."""
+        with _cursor(conn) as cur:
+            return self._item_refusal(cur, principal, environment, grant_id, subject_digest, capability_prefix,
+                                      work_ids)[0]
+
+    def use_for_item(self, conn, principal, environment, grant_id, *, subject_digest, capability_prefix,
+                     work_ids=()):
+        """covers_item, an exact approval's window still open, then one of the grant's operations used, in the
+        caller's transaction (grant_exhausted when none is left). The caller uses it once per newly written item, in
+        that item's transaction, so a retry of the same item uses nothing more."""
+        with _cursor(conn) as cur:
+            code, row, grant, now = self._item_refusal(cur, principal, environment, grant_id, subject_digest,
+                                                       capability_prefix, work_ids)
+            if code is not None:
+                return code
+            if (grant.approval_expires_at is not None and grant.approval_expires_at <= now
+                    and not (grant.capability == CARD_CAPABILITY and row['consumed_operations'] > 0)):
+                return 'grant_approval_expired'       # a card's window bounds its first step's admission (R4.3-c)
+            if row['consumed_operations'] >= grant.max_operations:
+                return 'grant_exhausted'
+            cur.execute('''UPDATE guild.mc_action_grants SET consumed_operations=consumed_operations+1
+                WHERE grant_id=%s''', (grant.grant_id,))
+            return None
+
+    def _item_refusal(self, cur, principal, environment, grant_id, subject_digest, capability_prefix, work_ids):
+        if (type(subject_digest) is not str or not _DIGEST.fullmatch(subject_digest)
+                or type(capability_prefix) is not str or not capability_prefix.endswith('.')
+                or type(work_ids) is not tuple or not all(_identifier(w) for w in work_ids)):
+            raise ActionContractError('grant_request_invalid')
+        try:
+            row, grant, now = self._locked(cur, grant_id, principal, environment)
+            self._rule(grant)
+        except ActionContractError as exc:
+            return str(exc), None, None, None
+        if row['revoked_at'] is not None:
+            code = 'grant_revoked'
+        elif grant.expires_at <= now:
+            code = 'grant_expired'
+        elif not grant.capability.startswith(capability_prefix) or subject_digest not in grant.argument_digests:
+            code = 'grant_effect_not_covered'
+        elif grant.work_id is not None and grant.work_id not in work_ids:
+            code = 'grant_context_mismatch'
+        else:
+            code = None
+        return code, row, grant, now
 
     def revoke(self, conn, principal, environment, grant_id):
         """Authenticated owner/cancellation control only; replay is harmless."""

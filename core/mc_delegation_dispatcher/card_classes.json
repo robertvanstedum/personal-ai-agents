@@ -1,0 +1,20 @@
+{
+  "schema": "minimoi.card.classes.v1",
+  "note": "Card classes (host runtime spec v0.5 R4.3-c, R6.8): each a catalogue row the authority compiles cards from; a new kind of work joins as a new row (or a new version of one), never as code. families says which model family each worker belongs to: a step run by another family than its card's first step is never a card step, and needs its own admission (a cross-vendor review, R6.2, T13). A card pins the row and families it was approved under, so editing this file never changes an admitted card.",
+  "families": {"claude-code": "anthropic", "codex": "openai", "fakework": "fakework"},
+  "classes": {
+    "build": {
+      "version": 1,
+      "note": "One bounded chunk of build work, from the owner's go to ready for his merge (spec section 7.2's reference card): a build, one fresh review, then up to the card's stated fix rounds, each only while the step before it reported findings. The review reads the build's patch and its checklist (its brief), never the builder's output (R6.2). A fix reads the latest patch and the latest findings. Each brief is the card's own words for that step kind, unframed, because the worker's program comes from its brief (fakework/1 in acceptance).",
+      "roles": ["builder", "reviewer"],
+      "steps": [
+        {"kind": "build", "role": "builder", "scope": "build", "brief": "{brief}", "required_capabilities": [],
+         "inputs": "card", "after": null, "repeat": false},
+        {"kind": "review", "role": "reviewer", "scope": "research", "brief": "{brief}", "required_capabilities": [],
+         "inputs": ["patch"], "after": null, "repeat": false},
+        {"kind": "fix", "role": "builder", "scope": "build", "brief": "{brief}", "required_capabilities": [],
+         "inputs": ["patch", "findings"], "after": "findings", "repeat": true}
+      ]
+    }
+  }
+}

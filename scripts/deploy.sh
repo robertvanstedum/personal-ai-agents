@@ -29,6 +29,13 @@ if [[ -n "$RECORDS_ENV" ]]; then
   COMPOSE+=(-f /opt/minimoi/docker-compose.records-production-portal.yml)
 fi
 
+# Host runtime P1-a's production layer: present on the host only once switched on (an operator act on Robert's word),
+# then layered on every release so none drops it; absent, nothing changes. Never sourced or evaluated.
+RUNTIME_LAYER=/opt/minimoi/docker-compose.runtime.prod.yml
+if [[ -f "$RUNTIME_LAYER" ]]; then
+  COMPOSE+=(-f "$RUNTIME_LAYER")
+fi
+
 python3 /opt/minimoi/scripts/release_status.py begin "$MINIMOI_IMAGE_TAG" portal curator german portuguese system-bot cos-bot cos-scheduler cos-agent-a model-gateway
 
 echo "=== Authenticating with ECR ==="

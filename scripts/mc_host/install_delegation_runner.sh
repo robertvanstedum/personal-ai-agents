@@ -9,8 +9,22 @@
 # branch switch never changes what runs), makes a bare mirror of the public repository, and loads the launchd job
 # ai.minimoi.delegation-runner.prod. Research only (read-only checkouts). Claude Code: 2 USD cap per job; Codex: 30
 # minutes per job. One job at a time. Prints ONLY the token's SHA-256, for `deploy_mc_container_ec2.sh runner on <sha256>`.
+#
+# The version 2 host runtime (spec v0.5 §2.2; S1-H) is the same program under a host configuration:
+#
+#   bash scripts/mc_host/install_delegation_runner.sh --host-config TEMPLATE --python PY [--ref REF] [--base DIR] \
+#        [--home DIR] [--path-prefix DIR]... [--label LABEL] [--load]
+#
+# renders the bundle (core/minimoi_actions added), records its digest, pins the interpreter into host.yaml and the
+# service file (launchd ai.minimoi.runtime.<env>, or the systemd units beside this script) and loads nothing without
+# --load (scripts/mc_host/runtime_install.py). Without --host-config this script is exactly production's installer.
 set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+for arg in "$@"; do
+  if [[ "$arg" == --host-config || "$arg" == --host-config=* ]]; then
+    exec "${MINIMOI_INSTALL_PYTHON:-/usr/bin/python3}" -I "$REPO_DIR/scripts/mc_host/runtime_install.py" "$@"
+  fi
+done
 BASE="$HOME/minimoi-runtime/runner-prod"
 BUNDLE="$BASE/bundle"
 MIRROR="$BASE/mirrors/personal-ai-agents.git"

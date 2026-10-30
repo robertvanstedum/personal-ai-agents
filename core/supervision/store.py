@@ -2,14 +2,25 @@
 
 The Mac sync (worker token) can report stop lines and ASK decisions; it can never answer one. Answers are written only
 by ``decide``, which the Telegram bridge and the portal's owner-command path call after verifying Robert himself.
+
+Host runtime S1-G (sql/003, spec v0.5 R3.2-b, R4.6-b, R5.6-b, R7.4-c), each used only when a release turns it on:
+* ``worker(..., credential=...)``: the endpoint names the credential that called; its last contact is recorded on
+  every call, pull included (``contacts``). The staging watch's credential (``watch:<host_id>``) may only send its
+  heartbeat, which writes its own row (``watch_rows``) and nothing else; the worker credential may not send one.
+  Without ``credential`` the worker is exactly today's.
+* Runtime decisions: an authority decision (core/mc_delegation_dispatcher) gets a D-code as a row here, request key
+  ``rt-<decision id>``, requester ``{"agent": "runtime", ...}``, in the authority's own words (``runtime_decision``).
+  The Mac sync never pulls one; a batched notice maps one message to its decisions (``add_batch``, ``by_batch``).
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
 import hashlib
 import json
+import logging
 import re
 
+_log = logging.getLogger("supervision")
 KEY = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 SESSION = re.compile(r"^[A-Za-z0-9._:-]{4,96}$")
 AGENTS = ("claude-code", "codex", "grok")
@@ -19,6 +30,12 @@ EXCHANGE_ACTORS = ("mc", "claude-code", "codex", "grok", "robert")
 REQUEST_ID = re.compile(r"^r-[0-9a-f]{20,40}$")
 EVENT_ID = re.compile(r"^(ask|[0-9a-f]{8,40})$")
 MAX_EXCHANGES = 50
+RUNTIME = "runtime"                            # the requester of a decision the runtime authority queued (S1-G)
+RUNTIME_KEY = re.compile(r"^rt-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\.r[0-9]{1,3})?$")
+RUNTIME_PREFIX = "rt-"                         # reserved for runtime decisions: no agent's ask may use it (N14)
+WATCH = re.compile(r"^watch:([A-Za-z0-9._:-]{1,64})$")
+PHASES = ("report", "pull", "ack", "heartbeat")
+RUNTIME_DECISION_DAYS = 30                     # the authority holds the decision; its D-code lives as long, bounded
 
 
 def name(agent):
@@ -92,6 +109,7 @@ def clean_stop(s):
 def clean_ask(a):
     need(type(a) is dict and set(a) <= {"request_key", "agent", "session", "branch", "text"})
     need(type(a.get("request_key")) is str and KEY.match(a["request_key"]))
+    need(not a["request_key"].startswith(RUNTIME_PREFIX), "request_key_reserved")     # the runtime's D-codes (N14)
     need(a.get("agent") in AGENTS and type(a.get("session")) is str and SESSION.match(a["session"]))
     text = _text(a.get("text"), 1500, required=True)
     need(len(text) >= 10, "decision_text_too_short")
@@ -131,13 +149,24 @@ class Store:
             conn.close()
 
     # ---- the Mac sync (worker token) ----------------------------------------------------------------------------
-    def worker(self, body, relay=None):
+    def worker(self, body, relay=None, *, credential=None):
         """One bounded call from the Mac sync: report | pull | ack. Raises Refused for anything malformed. ``relay``
         (core/supervision/relay.Relay over production's request ledger, or None while MC's front door is off) also
-        carries Robert's requests to the agents down and their replies up."""
+        carries Robert's requests to the agents down and their replies up. ``credential`` (S1-G, configured only)
+        names the caller: ``worker`` (the Mac sync) or ``watch:<host_id>`` (staging's heartbeat, R5.6-b); its contact
+        is recorded first, on every call (R4.6-b), and the watch credential may send only its heartbeat."""
         from . import relay as R
-        need(type(body) is dict and body.get("phase") in ("report", "pull", "ack"))
+        phases = ("report", "pull", "ack")
+        if credential is not None:
+            need(credential == "worker" or bool(WATCH.match(credential)), "supervision_credential_invalid")
+            phase = body.get("phase") if type(body) is dict and body.get("phase") in PHASES else "invalid"
+            self._record_contact(credential, phase)
+            if credential != "worker":
+                phases = ("heartbeat",)
+        need(type(body) is dict and body.get("phase") in phases)
         phase = body["phase"]
+        if phase == "heartbeat":
+            return self._run(lambda cur: self._heartbeat(cur, WATCH.match(credential).group(1), body))
         if phase == "report":
             need(set(body) <= {"phase", "stops", "asks", "exchanges", "relay_events", "listeners"})
             stops = body.get("stops", [])
@@ -205,10 +234,52 @@ class Store:
                                 "accepted": row["text_sha256"] == sha256(a["text"])})
         return out
 
+    _contact_failed = False          # one error recorded per process when contacts cannot be written (SF7)
+
+    def _record_contact(self, credential, phase):
+        """R4.6-b's contact, in its own transaction. It never costs the call: a database without migration 003 (or any
+        failure to write it) skips it, and the first failure is recorded once, by type (SF7)."""
+        try:
+            self._run(lambda cur: self._contact(cur, credential, phase))
+        except Exception as exc:
+            if not Store._contact_failed:
+                Store._contact_failed = True
+                _log.error("supervision contact not recorded (%s): is migration 003 applied?", type(exc).__name__)
+
+    def contacts_ready(self) -> bool:
+        """Whether migration 003's contacts table exists (the portal checks it before naming callers, SF7)."""
+        def q(cur):
+            cur.execute("SELECT to_regclass('guild.supervision_contacts') IS NOT NULL AS present")
+            return cur.fetchone()["present"]
+        return self._run(q)
+
+    @staticmethod
+    def _contact(cur, credential, phase):
+        cur.execute("""INSERT INTO guild.supervision_contacts (credential, last_phase) VALUES (%s, %s)
+            ON CONFLICT (credential) DO UPDATE SET last_at=clock_timestamp(), last_phase=EXCLUDED.last_phase,
+              calls=guild.supervision_contacts.calls + 1""", (credential, phase))
+
+    @staticmethod
+    def _heartbeat(cur, host_id, body):
+        """Staging's heartbeat (R5.6-b): its own row, keyed by the host its credential names, and nothing else."""
+        need(set(body) == {"phase", "host_id", "view"} and body["host_id"] == host_id)
+        v = body["view"]
+        need(type(v) is dict and set(v) == {"as_of", "authority_answering", "sweeper_age_s", "lapsed_always_on"})
+        need(type(v["as_of"]) in (int, float) and 1.6e9 < v["as_of"] < 4e9)
+        need(v["authority_answering"] in (True, False, None))
+        need(v["sweeper_age_s"] is None or (type(v["sweeper_age_s"]) in (int, float) and 0 <= v["sweeper_age_s"] < 1e8))
+        need(v["lapsed_always_on"] is None or (type(v["lapsed_always_on"]) is int and 0 <= v["lapsed_always_on"] < 1e6))
+        cur.execute("""INSERT INTO guild.supervision_watch (host_id, credential, view) VALUES (%s, %s, %s::jsonb)
+            ON CONFLICT (host_id) DO UPDATE SET last_at=clock_timestamp(), view=EXCLUDED.view""",
+                    (host_id, f"watch:{host_id}", json.dumps(v, sort_keys=True)))
+        return {"recorded": True}
+
     @staticmethod
     def _pull(cur):
+        # A decision the runtime authority queued is applied by the runtime link, never handed to a Mac session.
         cur.execute("""SELECT id, request_key, requester, state, text_sha256, receipt, decided_at
             FROM guild.supervision_decisions WHERE state IN ('approved', 'declined', 'expired') AND delivered_at IS NULL
+              AND requester->>'agent' IS DISTINCT FROM 'runtime'
             ORDER BY id LIMIT 20""")
         decisions = [{"request_key": r["request_key"], "code": code_of(r["id"]), "state": r["state"],
                       "session": r["requester"].get("session"), "agent": r["requester"].get("agent"),
@@ -225,7 +296,8 @@ class Store:
     def _ack(cur, decisions, nudges):
         if decisions:
             cur.execute("""UPDATE guild.supervision_decisions SET delivered_at=clock_timestamp()
-                WHERE request_key = ANY(%s) AND state IN ('approved', 'declined', 'expired') AND delivered_at IS NULL""",
+                WHERE request_key = ANY(%s) AND state IN ('approved', 'declined', 'expired') AND delivered_at IS NULL
+                  AND requester->>'agent' IS DISTINCT FROM 'runtime'""",
                         (decisions,))
         if nudges:
             cur.execute("""UPDATE guild.supervision_nudges SET delivered_at=clock_timestamp()
@@ -278,8 +350,9 @@ class Store:
 
     def unannounced(self):
         def q(cur):
+            # A runtime decision's end is told by the runtime link, with what the authority did (S1-G, SF2).
             cur.execute("""SELECT * FROM guild.supervision_decisions WHERE state IN ('approved', 'declined', 'expired')
-                AND announced_at IS NULL ORDER BY id LIMIT 20""")
+                AND announced_at IS NULL AND requester->>'agent' IS DISTINCT FROM 'runtime' ORDER BY id LIMIT 20""")
             return cur.fetchall()
         return self._run(q)
 
@@ -340,6 +413,16 @@ class Store:
             return fresh
         return self._run(q)
 
+    def told_keys(self, keys):
+        """The keys among ``keys`` told before, read only (the runtime link records a key once its message went out)."""
+        if not keys:
+            return set()
+
+        def q(cur):
+            cur.execute("SELECT key FROM guild.supervision_alerts WHERE key = ANY(%s)", (list(keys),))
+            return {r["key"] for r in cur.fetchall()}
+        return self._run(q)
+
     def record_checkin(self, summary, told, telegram):
         def q(cur):
             cur.execute("""INSERT INTO guild.supervision_checkins (summary, told, telegram) VALUES (%s::jsonb, %s, %s)
@@ -384,6 +467,203 @@ class Store:
             cur.execute("SELECT * FROM guild.supervision_checkins ORDER BY id DESC LIMIT 1")
             return cur.fetchone()
         return self._run(q)
+
+    # ---- host runtime S1-G (sql/003): runtime decisions, batched notices, contacts, the staging watch -------------
+    def runtime_decision(self, decision_id, words, *, notice, position, solo, environment, reissue=None):
+        """The D-code of one authority decision, in the authority's own words: a row made once (request key
+        ``rt-<decision id>``, or ``rt-<decision id>.r<n>`` when an answer was refused and the decision still waits:
+        ``reissue``), never pulled by the Mac sync. Returns the row; refused when the key holds another requester's
+        row or other words (the first words are the decision, as for an ask)."""
+        need(reissue is None or (type(reissue) is int and 2 <= reissue <= 999), "runtime_decision_invalid")
+        key = "rt-" + str(decision_id) + ("" if reissue is None else f".r{reissue}")
+        need(bool(RUNTIME_KEY.match(key)) and type(words) is str and 10 <= len(words) <= 1500, "runtime_decision_invalid")
+        need(type(notice) is str and len(notice) <= 128 and type(position) is int and 1 <= position <= 5
+             and type(solo) is bool and environment in ("dev", "prod"), "runtime_decision_invalid")
+        requester = {"agent": RUNTIME, "decision_id": str(decision_id), "notice": notice, "position": position,
+                     "solo": solo, "environment": environment}
+
+        def q(cur):
+            cur.execute("""INSERT INTO guild.supervision_decisions (request_key, requester, text, text_sha256, expires_at)
+                VALUES (%s, %s::jsonb, %s, %s, clock_timestamp() + make_interval(days => %s))
+                ON CONFLICT (request_key) DO NOTHING""",
+                        (key, json.dumps(requester), words, sha256(words), RUNTIME_DECISION_DAYS))
+            cur.execute("SELECT * FROM guild.supervision_decisions WHERE request_key=%s", (key,))
+            row = cur.fetchone()
+            need(row["requester"].get("agent") == RUNTIME and row["text_sha256"] == sha256(words),
+                 "runtime_decision_key_taken")
+            return dict(row, code=code_of(row["id"]))
+        return self._run(q)
+
+    def add_batch(self, message_id, decision_ids):
+        """One message carried these decisions (a batched notice, R7.4-c): each mapped to it once, in order, and sent."""
+        need(type(message_id) is int and type(decision_ids) is list and 1 <= len(decision_ids) <= 5
+             and len(set(decision_ids)) == len(decision_ids), "batch_invalid")
+
+        def q(cur):
+            # A solo decision (an unknown, a reassignment, a cross-vendor admission) never shares a message (N2).
+            cur.execute("""SELECT count(*) AS n FROM guild.supervision_decisions WHERE id = ANY(%s)
+                AND (requester->>'agent' IS DISTINCT FROM 'runtime' OR requester->>'solo' = 'true')""", (decision_ids,))
+            need(cur.fetchone()["n"] == 0, "batch_solo_or_not_runtime")
+            for pos, did in enumerate(decision_ids, 1):
+                cur.execute("""INSERT INTO guild.supervision_decision_messages (message_id, decision_id, position)
+                    VALUES (%s, %s, %s)""", (message_id, did, pos))
+            cur.execute("""UPDATE guild.supervision_decisions SET state='sent', sent_at=clock_timestamp()
+                WHERE id = ANY(%s) AND state='new'""", (decision_ids,))
+        self._run(q)
+
+    def by_batch(self, message_id):
+        """The decisions one batched message carried, in its order; [] when it carried none."""
+        def q(cur):
+            cur.execute("""SELECT d.*, m.position FROM guild.supervision_decision_messages m
+                JOIN guild.supervision_decisions d ON d.id = m.decision_id WHERE m.message_id=%s ORDER BY m.position""",
+                        (message_id,))
+            return [dict(r, code=code_of(r["id"])) for r in cur.fetchall()]
+        return self._run(q)
+
+    def batch_of(self, decision_id):
+        """The message a batched decision went out in, or None."""
+        def q(cur):
+            cur.execute("SELECT message_id FROM guild.supervision_decision_messages WHERE decision_id=%s", (decision_id,))
+            row = cur.fetchone()
+            return None if row is None else row["message_id"]
+        return self._run(q)
+
+    def runtime_answered(self):
+        """Runtime decisions Robert answered that the runtime link has not applied at the authority yet. Each carries
+        ``superseded_by``: the newest later D-code of the same decision, or None. A row that has one was refused at
+        the authority and replaced (the replacement's own insert is what consumes it, Codex's fix2 re-check): it must
+        never be taken to the authority again, only completed here, so an older answer can't override a newer one."""
+        def q(cur):
+            cur.execute("""SELECT d.*, (SELECT max(l.id) FROM guild.supervision_decisions l
+                    WHERE l.requester->>'agent' = 'runtime' AND l.requester->>'decision_id' = d.requester->>'decision_id'
+                      AND l.id > d.id) AS superseded_by_id
+                FROM guild.supervision_decisions d WHERE d.requester->>'agent' = 'runtime'
+                AND d.state IN ('approved', 'declined') AND d.delivered_at IS NULL ORDER BY d.id LIMIT 50""")
+            return [dict(r, code=code_of(r["id"]), superseded_by=None if r["superseded_by_id"] is None
+                         else code_of(r["superseded_by_id"])) for r in cur.fetchall()]
+        return self._run(q)
+
+    def runtime_untold(self):
+        """Runtime decisions whose answer the runtime link applied and whose outcome Robert has not been told yet."""
+        def q(cur):
+            cur.execute("""SELECT * FROM guild.supervision_decisions WHERE requester->>'agent' = 'runtime'
+                AND state IN ('approved', 'declined') AND delivered_at IS NOT NULL AND announced_at IS NULL
+                ORDER BY id LIMIT 50""")
+            return [dict(r, code=code_of(r["id"])) for r in cur.fetchall()]
+        return self._run(q)
+
+    def runtime_open(self):
+        """Runtime decisions still answerable here (new or sent, not expired), oldest first."""
+        def q(cur):
+            cur.execute("""SELECT * FROM guild.supervision_decisions WHERE requester->>'agent' = 'runtime'
+                AND state IN ('new', 'sent') AND expires_at > clock_timestamp() ORDER BY id LIMIT 200""")
+            return [dict(r, code=code_of(r["id"])) for r in cur.fetchall()]
+        return self._run(q)
+
+    def runtime_rows(self, decision_id):
+        """Every D-code one authority decision was given, oldest first (a refused answer's re-issues after it)."""
+        def q(cur):
+            cur.execute("""SELECT * FROM guild.supervision_decisions WHERE requester->>'agent' = 'runtime'
+                AND requester->>'decision_id' = %s ORDER BY id""", (str(decision_id),))
+            return [dict(r, code=code_of(r["id"])) for r in cur.fetchall()]
+        return self._run(q)
+
+    def close_runtime(self, decision_id):
+        """The authority closed this decision itself (withdrawn, superseded, resolved another way): its D-code can no
+        longer be answered (expired now, and counted as told: the runtime link tells Robert why). True when closed."""
+        def q(cur):
+            cur.execute("""UPDATE guild.supervision_decisions SET state='expired', expires_at=clock_timestamp(),
+                announced_at=clock_timestamp() WHERE id=%s AND state IN ('new', 'sent')
+                AND requester->>'agent' = 'runtime' RETURNING id""", (decision_id,))
+            return cur.fetchone() is not None
+        return self._run(q)
+
+    def mark_applied(self, decision_id):
+        """The runtime link took the answer to the authority (its delivery, as the Mac sync's ack is for an ask)."""
+        self._run(lambda cur: cur.execute("""UPDATE guild.supervision_decisions SET delivered_at=clock_timestamp()
+            WHERE id=%s AND requester->>'agent' = 'runtime'""", (decision_id,)))
+
+    def contacts(self):
+        """{credential: {last_at, last_phase, calls, now}} (R4.6-b); {} before contacts are recorded."""
+        def q(cur):
+            cur.execute("SELECT to_regclass('guild.supervision_contacts') IS NOT NULL AS present")
+            if not cur.fetchone()["present"]:
+                return {}
+            cur.execute("SELECT *, clock_timestamp() AS now FROM guild.supervision_contacts")
+            return {r["credential"]: dict(r) for r in cur.fetchall()}
+        return self._run(q)
+
+    def watch_rows(self):
+        """Staging's heartbeat rows (R5.6-b), each with the database clock."""
+        def q(cur):
+            cur.execute("SELECT *, clock_timestamp() AS now FROM guild.supervision_watch ORDER BY host_id")
+            return cur.fetchall()
+        return self._run(q)
+
+    def watch_transition(self, host_id, to, since, notice) -> bool:
+        """One staging transition and its notice, in one transaction (Codex part 2 P2-3): ``silent`` sets the row's
+        silent_since to ``since`` (from none), ``back`` clears it (from ``since``), and the notice is queued in the
+        outbox. False, with nothing queued, when the row had moved already. Robert is told by the outbox's delivery."""
+        need(to in ("silent", "back"), "watch_transition_invalid")
+        item = _outbox_item(notice)
+
+        def q(cur):
+            if to == "silent":
+                cur.execute("""UPDATE guild.supervision_watch SET silent_since=%s
+                    WHERE host_id=%s AND silent_since IS NULL RETURNING host_id""", (since, host_id))
+            else:
+                cur.execute("""UPDATE guild.supervision_watch SET silent_since=NULL
+                    WHERE host_id=%s AND silent_since=%s RETURNING host_id""", (host_id, since))
+            if cur.fetchone() is None:
+                return False
+            self._queue(cur, "staging_watch", item)
+            return True
+        return self._run(q)
+
+    # ---- the supervisor's outbox (sql/003 supervision_outbox; Codex part 2 P2-3) --------------------------------
+    @staticmethod
+    def _queue(cur, channel, item) -> bool:
+        cur.execute("""INSERT INTO guild.supervision_outbox (key, channel, kind, text) VALUES (%s, %s, %s, %s)
+            ON CONFLICT (key) DO NOTHING RETURNING key""", (item["key"], channel, item["kind"], item["text"]))
+        return cur.fetchone() is not None
+
+    def queue_notices(self, channel, items) -> list:
+        """Each notice queued once per key: a key queued before, sent or not, is never queued again. -> keys queued."""
+        need(channel in OUTBOX_CHANNELS, "outbox_channel_invalid")
+        clean = [_outbox_item(i) for i in items]
+
+        def q(cur):
+            return [i["key"] for i in clean if self._queue(cur, channel, i)]
+        return self._run(q)
+
+    def outbox_unsent(self, limit=50) -> list:
+        """Notices queued and not yet sent, oldest first."""
+        def q(cur):
+            cur.execute("""SELECT key, channel, kind, text, attempts, last_error FROM guild.supervision_outbox
+                WHERE sent_at IS NULL ORDER BY queued_at, key LIMIT %s""", (limit,))
+            return cur.fetchall()
+        return self._run(q)
+
+    def outbox_sent(self, keys):
+        """These notices went out in a message: marked sent, once."""
+        self._run(lambda cur: cur.execute("""UPDATE guild.supervision_outbox SET sent_at=clock_timestamp()
+            WHERE key = ANY(%s) AND sent_at IS NULL""", (list(keys),)))
+
+    def outbox_failed(self, keys, code):
+        """A send of these notices failed: counted, with its fixed code; they stay unsent, tried again next tick."""
+        self._run(lambda cur: cur.execute("""UPDATE guild.supervision_outbox SET attempts=attempts + 1,
+            last_error=%s WHERE key = ANY(%s) AND sent_at IS NULL""", (str(code)[:64], list(keys))))
+
+
+OUTBOX_CHANNELS = ("staging_watch", "runtime_link")
+OUTBOX_KINDS = ("waiting_on_robert", "error", "blocked", "stalled")
+
+
+def _outbox_item(item) -> dict:
+    need(type(item) is dict and type(item.get("key")) is str and 1 <= len(item["key"]) <= 200
+         and item.get("kind") in OUTBOX_KINDS and type(item.get("text")) is str and 1 <= len(item["text"]) <= 2000,
+         "outbox_item_invalid")
+    return {"key": item["key"], "kind": item["kind"], "text": item["text"]}
 
 
 def public_receipt(receipt):

@@ -13,7 +13,7 @@ import uuid
 
 import pytest
 
-from agent_fakes import CONTROLS_PRELUDE, fake_controls, given_environments
+from agent_fakes import CONTROLS_PRELUDE, fake_controls, given_environments, pin_of, signed_in
 from core import agent_requests as ar
 from core.agent_requests.claude_stream import ClaudeStreamProvider
 from core.agent_requests.connection import (BACKOFF_S, MAX_ATTEMPTS, ConnectionManager, Delivery, IdentityMismatch, LeaseHeld, Probe, Provider,
@@ -392,6 +392,7 @@ def fake_cli(tmp_path, root, monkeypatch):
     fake_controls(tmp_path, FAKE_SID=SID)
     monkeypatch.delenv("MINIMOI_AGENT_REQUESTS_DIR", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))                     # the default ledger lives under HOME: a command that fell back to it would write there
+    signed_in(tmp_path / "home", "claude-code")                            # the launch contract checks the plan sign-in under the child's HOME
     return str(wrapper)
 
 
@@ -406,6 +407,7 @@ class LivePipe:
 
 
 def provider(fake_cli, tmp_path, **kw):
+    kw.setdefault("binary_sha256", pin_of(fake_cli))                       # every start is pinned (launch contract)
     return ClaudeStreamProvider(claude_bin=fake_cli, session_id=SID, cwd=str(tmp_path), allowed_tools=["Read"],
                                 ledger_root=kw.pop("ledger_root", str(tmp_path / "ledger")), **kw)
 
@@ -518,7 +520,7 @@ def test_the_notice_written_to_the_session_is_one_json_line_with_tokens_only(fak
         def wait(self, timeout=None):
             return 0
 
-    p = ClaudeStreamProvider(claude_bin=fake_cli, session_id=SID, cwd=str(tmp_path), allowed_tools=["Read"], ledger_root=root, popen=lambda *a, **k: Spy())
+    p = ClaudeStreamProvider(claude_bin=fake_cli, session_id=SID, cwd=str(tmp_path), allowed_tools=["Read"], ledger_root=root, binary_sha256=pin_of(fake_cli), popen=lambda *a, **k: Spy())
     rid = ask(root)
     p.start()
     m = mgr(root, p)
@@ -654,7 +656,7 @@ def test_the_child_process_gets_the_managers_ledger_in_its_environment(fake_cli,
 
         def wait(self, timeout=None):
             return 0
-    p = ClaudeStreamProvider(claude_bin=fake_cli, session_id=SID, cwd=str(tmp_path), allowed_tools=["Read"], ledger_root=root, popen=lambda *a, **k: Spy(*a, **k))
+    p = ClaudeStreamProvider(claude_bin=fake_cli, session_id=SID, cwd=str(tmp_path), allowed_tools=["Read"], ledger_root=root, binary_sha256=pin_of(fake_cli), popen=lambda *a, **k: Spy(*a, **k))
     p.start()
     assert seen["env"]["MINIMOI_AGENT_REQUESTS_DIR"] == root and seen["cwd"] == str(tmp_path)
     p.close()
@@ -702,7 +704,7 @@ def test_provider_keys_and_tokens_in_the_managers_environment_never_reach_the_cl
     monkeypatch.setenv("MINIMOI_AGENT_REQUESTS_DIR", str(tmp_path / "the-global-default"))          # a ledger in the manager's own environment is not the session's
     monkeypatch.setenv("NOT_ON_THE_LIST", "harmless")                                               # not a secret, and still not passed: an allowlist, not a filter
     seen = {}
-    p = ClaudeStreamProvider(claude_bin=fake_cli, session_id=SID, cwd=str(tmp_path), allowed_tools=["Read"], ledger_root=root, popen=lambda *a, **k: EnvSpy(seen, *a, **k))
+    p = ClaudeStreamProvider(claude_bin=fake_cli, session_id=SID, cwd=str(tmp_path), allowed_tools=["Read"], ledger_root=root, binary_sha256=pin_of(fake_cli), popen=lambda *a, **k: EnvSpy(seen, *a, **k))
     p.start()
     env = seen["env"]
     assert not set(PARENT_SECRETS) & set(env) and FAKE_VALUE not in env.values()
@@ -720,7 +722,7 @@ def test_the_claude_session_keeps_a_utf8_locale_without_one_in_the_manager(fake_
     monkeypatch.delenv("LC_ALL", raising=False)
     monkeypatch.setenv("LC_CTYPE", "C.UTF-8")
     seen = {}
-    p = ClaudeStreamProvider(claude_bin=fake_cli, session_id=SID, cwd=str(tmp_path), allowed_tools=["Read"], ledger_root=root, popen=lambda *a, **k: EnvSpy(seen, *a, **k))
+    p = ClaudeStreamProvider(claude_bin=fake_cli, session_id=SID, cwd=str(tmp_path), allowed_tools=["Read"], ledger_root=root, binary_sha256=pin_of(fake_cli), popen=lambda *a, **k: EnvSpy(seen, *a, **k))
     p.start()
     assert seen["env"]["LANG"] == "en_US.UTF-8" and "LC_CTYPE" not in seen["env"]
     p.close()
@@ -730,7 +732,7 @@ def test_the_claude_sessions_own_extras_go_through_the_policys_refusal(fake_cli,
     from core.mc_delegation_runner import launch_env
     monkeypatch.setattr(launch_env, "DENY_OVERRIDES", frozenset())                                 # without its review, the ledger name matches ^MINIMOI_ and is refused
     seen = {}
-    p = ClaudeStreamProvider(claude_bin=fake_cli, session_id=SID, cwd=str(tmp_path), allowed_tools=["Read"], ledger_root=root, popen=lambda *a, **k: EnvSpy(seen, *a, **k))
+    p = ClaudeStreamProvider(claude_bin=fake_cli, session_id=SID, cwd=str(tmp_path), allowed_tools=["Read"], ledger_root=root, binary_sha256=pin_of(fake_cli), popen=lambda *a, **k: EnvSpy(seen, *a, **k))
     with pytest.raises(launch_env.EnvRefused, match="MINIMOI_AGENT_REQUESTS_DIR"):
         p.start()
     assert seen == {}                                                                               # nothing was started

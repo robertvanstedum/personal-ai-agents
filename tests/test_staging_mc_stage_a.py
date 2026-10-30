@@ -25,9 +25,23 @@ COS_NAMES = {"MINIMOI_MODEL_GATEWAY_KEY", "COS_AGENT_A_GATEWAY_TOKEN", "ANTHROPI
              "MC_ANTHROPIC_API_KEY", "GATEWAY_ANTHROPIC_API_KEY", "GATEWAY_XAI_API_KEY"}
 
 
+BASELINE = Path(__file__).resolve().parent / "staging_mc_stage_a_baseline"
+
+
+def _baseline_doc() -> dict:
+    """The reviewed baseline these checks compare with, committed beside them (baseline.json), so CI's one-commit
+    checkout compares deterministically. A missing baseline fails, never skips: these are safety checks."""
+    path = BASELINE / "baseline.json"
+    if not path.is_file():
+        pytest.fail(f"required safety baseline missing: {path.relative_to(REPO)}")
+    return json.loads(path.read_text())
+
+
 def _main(path):
-    shown = subprocess.run(["git", "-C", str(REPO), "show", f"origin/main:{path}"], capture_output=True, text=True)
-    return shown.stdout if shown.returncode == 0 else None
+    """The reviewed baseline's copy of a compose file (was: origin/main, which CI's test job does not fetch)."""
+    if path not in _baseline_doc()["copies"] or not (BASELINE / path).is_file():
+        pytest.fail(f"required safety baseline missing: {path} in {BASELINE.relative_to(REPO)}")
+    return (BASELINE / path).read_text()
 
 
 def _mc_render(env=None):
@@ -138,8 +152,6 @@ def _without_own_usage_folder(after_svc, before_svc):
 def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tmp_path):
     main_staging = _main("docker-compose.staging.yml")
     main_prod = _main("docker-compose.prod.yml")
-    if main_staging is None or main_prod is None:
-        pytest.skip("origin/main is not available")
     (tmp_path / "docker-compose.prod.yml").write_text(main_prod)
     (tmp_path / "docker-compose.staging.yml").write_text(main_staging)
     before = _staging_render([tmp_path / "docker-compose.prod.yml", tmp_path / "docker-compose.staging.yml"])
@@ -177,7 +189,14 @@ def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tm
         after_svc = _without_own_usage_folder(after["services"][name], before["services"][name])
         assert without_usage(after_svc, before["services"][name]) == before["services"][name], name
     gw_before, gw_after = before["services"]["model-gateway"], after["services"]["model-gateway"]
-    assert set(gw_after["networks"]) == {"default", "mc-net"}
+    # The staging network contract (Codex's P1-a re-check): the gateway keeps exactly the networks production declares
+    # for it (default, and mc-portal since main's f0f3717f) and gains staging's mc-net; every other network the
+    # rendered stack defines stays forbidden to it.
+    permitted = set(yaml.safe_load(PROD.read_text())["services"]["model-gateway"].get("networks") or ["default"])
+    assert "default" in permitted
+    assert set(gw_after["networks"]) == permitted | {"mc-net"}
+    forbidden = set(after.get("networks") or {}) - permitted - {"mc-net"}
+    assert not set(gw_after["networks"]) & forbidden, sorted(set(gw_after["networks"]) & forbidden)
     # Stage C: provider keys under gateway-only names, the default names empty,
     # and MC's own provider key (a placeholder until Robert's).
     env_before, env_after = gw_before["environment"], gw_after["environment"]
@@ -203,17 +222,92 @@ def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tm
     assert gw_after == gw_before
 
 
-def test_production_compose_and_cos_files_are_byte_identical_to_main():
-    for path in ("docker-compose.prod.yml", "docker-compose.yml", "docker/Dockerfile.cos-agent-a",
-                 "docker/cos-agent-a/openclaw.json", "docker/cos-agent-a/apply-config.sh",
-                 "services/model_gateway/litellm.prod.yaml",
-                 "scripts/operations/deploy_scoped_release.sh"):
+UNTOUCHED = ("docker-compose.prod.yml", "docker-compose.yml", "docker/Dockerfile.cos-agent-a",
+             "docker/cos-agent-a/openclaw.json", "docker/cos-agent-a/apply-config.sh",
+             "services/model_gateway/litellm.prod.yaml")
+# Host runtime P1-a's guarded blocks in the scoped deploy (they act only with its runtime layer on the host); the
+# script without them is the reviewed baseline's, byte for byte.
+P1A_BLOCKS = (("# Host runtime P1-a's production layer", "\nfi\n"),
+              ("# Host runtime P1-a's EC2 witness", "\nfi\n"),
+              ('\nif [[ "$WITNESS_RECREATED" == "1" ]]; then', "\nfi\n"))
+
+
+def _without_p1a_blocks(text):
+    for start, end in P1A_BLOCKS:
+        if start not in text:
+            continue
+        i = text.index(start)
+        j = text.index(end, i) + len(end)
+        text = text[:i] + text[j:] if not start.startswith("\n") else text[:i] + "\n" + text[j:]
+    return text.replace("\n\n\n", "\n\n")
+
+
+def test_production_compose_and_cos_files_are_byte_identical_to_the_reviewed_baseline():
+    import hashlib
+    doc = _baseline_doc()
+    for path in UNTOUCHED:
         # deploy.yml may change (its classify step); that it never builds or
         # deploys MC is guarded by tests/test_release_classifier.py.
-        main = _main(path)
-        if main is None:
-            pytest.skip("origin/main is not available")
-        assert (REPO / path).read_text() == main, path
+        assert hashlib.sha256((REPO / path).read_bytes()).hexdigest() == doc["digests"][path], path
+    # The scoped deploy: bounded behaviour, not blanket equality (Codex's P1-a re-check). Without P1-a's guarded
+    # blocks it is the baseline's byte for byte; the blocks themselves are checked by behaviour below.
+    script = (REPO / "scripts/operations/deploy_scoped_release.sh").read_text()
+    assert hashlib.sha256(_without_p1a_blocks(script).encode()).hexdigest() == doc["deploy_scoped_release_base_sha256"]
+
+
+def _deploy_block(start, end="\nfi\n"):
+    script = (REPO / "scripts/operations/deploy_scoped_release.sh").read_text()
+    i = script.index(start)
+    return script[i:script.index(end, i) + len(end)]
+
+
+def _run_block(block, *, services, layer, active, image="portal:tag", prelude=""):
+    """One deploy-script block under bash with stand-ins that record every docker/compose call."""
+    lines = ['set -euo pipefail', f'SERVICES=({" ".join(services)})', f'RUNTIME_LAYER="{layer}"',
+             'COMPOSE=(compose)', 'calls=()', 'compose() { calls+=("compose $*"); }',
+             'docker() { calls+=("docker $*"); if [[ "$1 $2" == "container inspect" ]]; then '
+             + ('return 0' if active else 'return 1') + '; fi; if [[ "$1" == inspect ]]; then echo "' + image
+             + '"; fi; }',
+             'expected_image() { echo "portal:tag"; }', 'wait_for_container_health() { calls+=("health $*"); }',
+             prelude, block, 'printf "%s\\n" "${calls[@]}"', 'echo "RECREATED=${WITNESS_RECREATED:-unset}"']
+    return subprocess.run(["bash", "-c", "\n".join(lines)], capture_output=True, text=True, timeout=5)
+
+
+def test_the_scoped_deploy_refreshes_an_active_witness_and_never_starts_an_inactive_one(tmp_path):
+    block = _deploy_block("WITNESS_RECREATED=0")
+    layer = tmp_path / "docker-compose.runtime.prod.yml"
+    layer.write_text("services: {}\n")
+    up = "compose --profile runtime-witness up -d --no-deps runtime-witness"
+    active = _run_block(block, services=["portal"], layer=layer, active=True)
+    assert active.returncode == 0 and up in active.stdout and "RECREATED=1" in active.stdout
+    for services, path, live in ((["portal"], layer, False),                  # inactive: never started
+                                 (["portal"], tmp_path / "absent.yml", True),  # no layer: nothing
+                                 (["curator"], layer, True)):                  # not a portal release
+        out = _run_block(block, services=services, layer=path, active=live)
+        assert out.returncode == 0 and up not in out.stdout and "RECREATED=0" in out.stdout, (services, path, live)
+
+
+def test_a_refreshed_witness_is_checked_for_the_portals_image_and_its_health(tmp_path):
+    check = _deploy_block('if [[ "$WITNESS_RECREATED" == "1" ]]; then')
+    good = _run_block(check, services=["portal"], layer=tmp_path / "l", active=True, prelude="WITNESS_RECREATED=1")
+    assert good.returncode == 0 and "health minimoi-runtime-witness 24" in good.stdout
+    bad = _run_block(check, services=["portal"], layer=tmp_path / "l", active=True, image="portal:old",
+                     prelude="WITNESS_RECREATED=1")
+    assert bad.returncode == 1 and "health" not in bad.stdout                      # a stale image stops the release
+    none = _run_block(check, services=["portal"], layer=tmp_path / "l", active=True, prelude="WITNESS_RECREATED=0")
+    assert none.returncode == 0 and "docker" not in none.stdout
+
+
+def test_the_scoped_deploy_adds_the_layer_only_when_it_is_on_the_host(tmp_path):
+    block = _deploy_block("RUNTIME_LAYER=/opt/minimoi/docker-compose.runtime.prod.yml")
+    layer = tmp_path / "docker-compose.runtime.prod.yml"
+    block = block.replace("/opt/minimoi/docker-compose.runtime.prod.yml", str(layer))
+    run = 'set -euo pipefail\nCOMPOSE=(docker-compose -f prod.yml)\n' + block + '\nprintf "%s\\n" "${COMPOSE[@]}"'
+    assert subprocess.run(["bash", "-c", run], capture_output=True, text=True).stdout.split() == \
+        ["docker-compose", "-f", "prod.yml"]                                          # absent: today's commands
+    layer.write_text("services: {}\n")
+    assert subprocess.run(["bash", "-c", run], capture_output=True, text=True).stdout.split()[-2:] == \
+        ["-f", str(layer)]
 
 
 # ── focus.sh ──────────────────────────────────────────────────────────────────

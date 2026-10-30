@@ -44,7 +44,12 @@ def build_manager(services, *, environ=None, clock=None, relay=None) -> JobManag
 
 def _with_delegation(relay, environ):
     """When MINIMOI_MC_DELEGATION=1 (with the owner principal, environment and DATABASE_URL), jobs that name a delegate
-    go to the delegation dispatcher; every other job is unchanged."""
+    go to the delegation dispatcher; every other job is unchanged.
+
+    Host runtime P1-a: the store is today's (version 1) unless production's configuration names the authority's file
+    (MINIMOI_MC_DELEGATION_AUTHORITY_FILE, core/mc_delegation_dispatcher/production.py); then it is the version 2
+    store over that file, whose version 1 calls keep today's meaning. A named file that cannot be used keeps
+    delegation off, logged by its code: never a quiet version 1 beside version 2 items."""
     if str(environ.get("MINIMOI_MC_DELEGATION", "")).strip() != "1":
         return relay
     principal, env_name, dsn = (environ.get("MINIMOI_MC_DELEGATION_PRINCIPAL"), environ.get("MINIMOI_MC_DELEGATION_ENV"),
@@ -54,8 +59,25 @@ def _with_delegation(relay, environ):
         return relay
     import psycopg2
     from core.mc_delegation_dispatcher.relay import DelegationRelay, RoutingRelay
-    from core.mc_delegation_dispatcher.store import DispatcherStore
-    store = DispatcherStore(lambda: psycopg2.connect(dsn, connect_timeout=5), principal=principal, environment=env_name)
+    from core.mc_delegation_dispatcher import production
+    connect = lambda: psycopg2.connect(dsn, connect_timeout=5)                          # noqa: E731
+    path = production.named(environ)
+    if path is None:
+        from core.mc_delegation_dispatcher.store import DispatcherStore
+        store = DispatcherStore(connect, principal=principal, environment=env_name)
+    else:
+        try:
+            store = production.store(connect, principal=principal, environment=env_name,
+                                     authority=production.load(path, env_name))
+            # The runner's door refuses to open over a named credentials file it can't use; jobs refuse with it, so
+            # MC never queues work no runner can reach (review SF3).
+            production.door_credentials(environ, env_name)
+        except (ValueError, RuntimeError) as exc:
+            log.error("guild jobs: the authority file or the door's credentials are named but refused (%s); "
+                      "delegation stays off", str(exc) if isinstance(exc, production.NotConfigured)
+                      else type(exc).__name__)
+            return relay
+        log.info("guild jobs: delegation over the version 2 authority (file %s)", production.file_digest(path))
     return RoutingRelay(relay, DelegationRelay(store, ref_for=_main_head))
 
 

@@ -142,6 +142,13 @@ class ReceiptStore:
             row, _ = self._row(cur, _scope(principal, environment, operation_id))
             return self._public(row)
 
+    def lease_until(self, conn, principal, environment, operation_id):
+        """When the receipt's current lease ends, or None without one. A sender passes it to a target that
+        must refuse a send after it, since a receipt alone cannot fence a remote service. Read only."""
+        with _cursor(conn) as cur:
+            row, _ = self._row(cur, _scope(principal, environment, operation_id))
+            return row['lease_until']
+
     @staticmethod
     def _authorize(conn, scope, authority):
         # Lazy import avoids the receipt/grant definition cycle. This is a

@@ -7,6 +7,24 @@
 #   mc_prod_db_migrate.sh apply      back up prod's database (pg_dump, root 0600 under /opt/minimoi/backups), then apply
 #                                    every migration in ONE transaction: all or nothing.
 #
+#   ... rehearse|apply --host-runtime   the same, with the host runtime's two migrations added LAST, in this order:
+#                                    dispatcher 002 (protocol version 2), then supervision 003 (runtime decisions, contacts,
+#                                    watch, outbox). Only by this explicit opt-in (host runtime P1-a, on Robert's word):
+#                                    a plain run, which operations makes for other teams' migrations, never applies them.
+#                                    Lock waits: with --host-runtime the one transaction opens with SET LOCAL
+#                                    lock_timeout = '5s' (right after SET ROLE), so every file's lock wait is bounded, the
+#                                    38 earlier ones' too (they re-run ALTER TABLE ... IF NOT EXISTS, which takes its lock
+#                                    even with nothing to do); 002 and 003 also say it themselves. On LockNotAvailable the
+#                                    whole transaction rolls back: nothing changed, run it again (a fresh backup is taken
+#                                    each time). A plain run's transaction is unchanged. A timeout bounds the wait, not
+#                                    002's rewrite of guild.mc_delegations (queue_seq): the rehearsal prints how long the
+#                                    whole apply took on the production-shaped copy. After an --host-runtime run the
+#                                    script checks that every 002 and 003 object exists.
+#   mc_prod_db_migrate.sh version     prints this script's version; a copy older than P1-a has no `version` and prints
+#                                    its usage instead (it would ignore --host-runtime: never run that copy with it). The
+#                                    script and the SQL reach /opt/minimoi only through an MC image release (mc-agent-v*,
+#                                    deploy-mc-agent.yml installs /opt/minimoi/scripts/ and /opt/minimoi/mc-migrations).
+#
 # The migration files are shipped beside this script in $DIR (MIGRATIONS lists them in dependency order; each is written
 # to be safe to re-run). They run as the role that owns the existing Guild tables, so new tables have the same owner.
 set -euo pipefail
@@ -54,6 +72,21 @@ MIGRATIONS=(
   core/supervision/sql/001_supervision.sql
   core/supervision/sql/002_grok_and_exchanges.sql
 )
+# The host runtime's migrations (P1-a): never in the list above; added, in this order and last, only by --host-runtime.
+# 003 must stay last (S1-G closure C-N7): its SET LOCAL lock_timeout then bounds nothing but its own and 002's waits.
+HOST_RUNTIME_MIGRATIONS=(
+  core/mc_delegation_dispatcher/sql/002_host_runtime_v2.sql
+  core/supervision/sql/003_runtime_decisions_and_watch.sql
+)
+VERSION="mc-migrate host-runtime-1"
+if [[ "${1:-}" == version && $# -eq 1 ]]; then echo "$VERSION"; exit 0; fi
+HOST_RUNTIME=0
+case "${2:-}" in
+  "") ;;
+  --host-runtime) HOST_RUNTIME=1; MIGRATIONS+=("${HOST_RUNTIME_MIGRATIONS[@]}") ;;
+  *) echo "usage: $0 rehearse|apply [--host-runtime]" >&2; exit 2 ;;
+esac
+[[ $# -le 2 ]] || { echo "usage: $0 rehearse|apply [--host-runtime]" >&2; exit 2; }
 
 log() { echo "mc-migrate: $*"; }
 die() { echo "mc-migrate: REFUSED: $*" >&2; exit 2; }
@@ -68,6 +101,8 @@ apply_all() {  # container $1: every migration, one transaction, as the Guild ow
   local c="$1" role; role=$(owner_of "$c")
   [[ "$role" =~ ^[a-z_][a-z0-9_]{0,62}$ ]] || die "cannot read the Guild owner role"
   local args=(-U postgres -d "$DB" -v ON_ERROR_STOP=1 --single-transaction -q -c "SET ROLE $role")
+  # --host-runtime: every lock wait in the one transaction is bounded, not only 002's and 003's (P1-a review SF1).
+  if [[ "$HOST_RUNTIME" == "1" ]]; then args+=(-c "SET LOCAL lock_timeout = '5s'"); fi
   for f in "${MIGRATIONS[@]}"; do args+=(-f "/mc-migrations/$f"); done
   docker exec "$c" rm -rf /mc-migrations
   docker cp "$DIR" "$c:/mc-migrations"
@@ -94,6 +129,28 @@ apply_all() {  # container $1: every migration, one transaction, as the Guild ow
 
 tables() { docker exec "$1" psql -U postgres -d "$DB" -Atc "select count(*) from pg_tables where schemaname='guild'"; }
 
+verify_host_runtime() {  # container $1: after --host-runtime, every 002 and 003 object is there, or the run is refused
+  local c="$1" q
+  q="select (select count(*) from information_schema.columns where table_schema='guild' and table_name='mc_delegations'
+       and column_name='queue_seq') = 1
+     and to_regclass('guild.mc_delegation_events') is not null and to_regclass('guild.mc_delegation_reservations') is not null
+     and to_regclass('guild.supervision_decision_messages') is not null and to_regclass('guild.supervision_contacts') is not null
+     and to_regclass('guild.supervision_watch') is not null and to_regclass('guild.supervision_outbox') is not null"
+  [[ "$(docker exec "$c" psql -U postgres -d "$DB" -Atc "$q")" == "t" ]] || die "host runtime objects missing after apply"
+  log "host runtime: 002 and 003 objects present (mc_delegations has $(docker exec "$c" psql -U postgres -d "$DB" -Atc \
+    "select count(*) from guild.mc_delegations") rows)"
+}
+
+timed_apply() {  # container $1: apply_all, timed (the rehearsal's measure of 002's rewrite on a production-shaped copy)
+  local start=$SECONDS
+  if [[ "$HOST_RUNTIME" == "1" ]]; then
+    log "host runtime opt-in: ${#MIGRATIONS[@]} migrations, the last two dispatcher 002 then supervision 003"
+  fi
+  apply_all "$1"
+  log "the one transaction took $((SECONDS - start)) s"
+  if [[ "$HOST_RUNTIME" == "1" ]]; then verify_host_runtime "$1"; fi
+}
+
 case "${1:-}" in
   rehearse)
     R=mc-migrate-rehearsal
@@ -111,7 +168,7 @@ case "${1:-}" in
     docker exec "$PG" pg_dump -U postgres -Fc "$DB" | docker exec -i "$R" pg_restore -U postgres -d "$DB" 2>/dev/null || true
     log "copy owners: database $(docker exec "$R" psql -U postgres -Atc "select pg_get_userbyid(datdba) from pg_database where datname='$DB'"), CREATE for $(owner_of "$PG"): $(docker exec "$R" psql -U postgres -Atc "select has_database_privilege('$(owner_of "$PG")','$DB','CREATE')")"
     log "copy restored: $(tables "$R") guild tables (prod has $(tables "$PG"))"
-    apply_all "$R"
+    timed_apply "$R"
     log "after: $(tables "$R") guild tables"
     docker exec "$R" psql -U postgres -d "$DB" -Atc "select tablename from pg_tables where schemaname='guild' order by 1" | tr '\n' ' '; echo
     log "rehearsal copy deleted; prod untouched"
@@ -122,8 +179,8 @@ case "${1:-}" in
     ( umask 077; docker exec "$PG" pg_dump -U postgres -Fc "$DB" > "$b" )
     [[ -s "$b" ]] || die "backup is empty"
     log "backup $b ($(du -h "$b" | cut -f1))"
-    apply_all "$PG"
+    timed_apply "$PG"
     log "prod now has $(tables "$PG") guild tables"
     ;;
-  *) echo "usage: $0 rehearse|apply" >&2; exit 2;;
+  *) echo "usage: $0 rehearse|apply [--host-runtime] | version" >&2; exit 2;;
 esac

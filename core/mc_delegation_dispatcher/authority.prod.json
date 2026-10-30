@@ -1,0 +1,32 @@
+{
+  "schema": "minimoi.authority.v1",
+  "environment": "prod",
+  "note": "Production's authority profile, version 2 (P1-a). Nothing reads this file unless production's configuration names it: the portal's MINIMOI_MC_DELEGATION_AUTHORITY_FILE and the supervisor's MINIMOI_RUNTIME_AUTHORITY_FILE; with neither set, every store is today's version 1. Values are Robert's (spec v0.5 section 5.3, section 8.2): lease 120 s, renewed every 40 s; contact every 30 s, unreachable past 90 s; grace at most 8 h for an intermittent host and 30 min for an always-on one (each host states its own, cut to this); a frozen child stopped at its checkpoint after 10 min offline; the sweeper and the authority's liveness every 30 s, and a gap over 60 s (2 x contact) is the authority's own outage; progress timeouts build 30 min and review 10 min. API routes: 10 USD a day each and 3 USD per item. MC's judgment: at most 20 calls a day and under 1 USD a day (0.04 reserved a call, so 20 calls fit under the cap). The subscription routes keep today's per-job caps and no daily cap, so they admit nothing unattended. Every real route is supervised-only and launch_closure stays pending until the owner records both gating N5 items (R6.7-l, R6.7-h). fakework and fakejudge are the test routes (test units, no key, no spend): admitted here only because test_routes_in_production says so, for P1-a's integrated test; fakework runs only fakework, and fakejudge runs no worker (MC's judgment stand-in). No cross-host takeover (one worker host). A host's records replayed after a lapse are judged with 1 s of clock skew (section 2.5).",
+  "protocols": [1, 2],
+  "launch_closure": "pending",
+  "lease_s": 120,
+  "sweeper": {"sweep_s": 30, "gap_threshold_s": 60},
+  "clock_skew_s": 1,
+  "hosts": {"contact_interval_s": 30, "contact_timeout_s": 90, "renew_s": 40, "offline_hold_s": 600},
+  "grace_s": {"intermittent": 28800, "always_on": 1800},
+  "progress_timeout_s": {"build": 1800, "review": 600},
+  "test_routes_in_production": true,
+  "judgment": {"route": "mc.judgment", "unit": "usd", "calls_per_day": 20, "per_day": 1.0, "per_call": 0.04,
+               "escalate_after": 2, "per_item_max": 2},
+  "routes": {
+    "claude-code.subscription": {"unit": "usd_notional", "actors": ["claude-code"], "per_item": 2.0, "supervised_only": true,
+                                 "note": "Today's relay cap (Claude's own estimate on the plan, not a bill). Supervised-only until the vendor-terms record (R6.7-h)."},
+    "codex.subscription": {"unit": "minutes", "actors": ["codex"], "per_item": 30, "supervised_only": true,
+                           "note": "Codex on the ChatGPT plan: a deadline only. Supervised-only until the vendor-terms record (R6.7-h)."},
+    "anthropic.api": {"unit": "usd", "actors": ["claude-code"], "per_day": 10.0, "per_item": 3.0, "supervised_only": true,
+                      "note": "Unqualified (R4.5-d): its key's reach is not shown."},
+    "openai.api": {"unit": "usd", "actors": ["codex"], "per_day": 10.0, "per_item": 3.0, "supervised_only": true,
+                   "note": "Unqualified (R4.5-d): its key's reach is not shown."},
+    "xai.api": {"unit": "usd", "actors": [], "per_day": 10.0, "per_item": 3.0, "supervised_only": true,
+                "note": "Grok is stopped (R6.5): no worker may run on it."},
+    "fakework": {"unit": "test_units", "actors": ["fakework"], "per_day": 20.0, "per_item": 2.0, "supervised_only": false,
+                 "note": "P1-a's integrated test worker: no key, no connection but the runtime's and its sink, no spend."},
+    "fakejudge": {"unit": "test_units", "actors": [], "per_day": 2.0, "per_item": 0.25, "supervised_only": false,
+                  "note": "MC's judgment stand-in (section 9.3): never launched as a worker, so no worker may claim on it."}
+  }
+}

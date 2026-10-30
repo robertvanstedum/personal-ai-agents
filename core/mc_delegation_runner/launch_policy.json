@@ -1,0 +1,168 @@
+{
+  "schema": "minimoi.launch_policy.v1",
+  "version": 1,
+  "note": "The launch contract's one policy (host runtime spec v0.5 R6.7-d), read by the delegation runner, the two front-door connections, the fixed-send probe and, later, the fallback door. launch_env.py reads and checks it; launch.py applies its pins, checks, routes and records. Its SHA-256 goes into every launch record (LCH-6). Names only: no value of any kind is ever written here or in anything built from it. Changing a list is a reviewed change of this file, recorded by its new digest.",
+  "base": [
+    {"name": "PATH", "reason": "Claude Code reads its plan sign-in by running `security find-generic-password` by name; both CLIs' shell tools find programs with it."},
+    {"name": "HOME", "reason": "Claude Code's ~/.claude and the login Keychain; Codex's CODEX_HOME defaults to ~/.codex (auth.json). Inherited from the parent only: as an extra it would move the CLI's sign-in and settings, so a deny pattern refuses it there (deny_overrides)."},
+    {"name": "LANG", "reason": "the locale of the commands they run. The connections also pass LANG as an extra."},
+    {"name": "LC_ALL", "reason": "the locale of the commands they run."},
+    {"name": "TERM", "reason": "terminal handling only, harmless without a terminal; kept so the runner's list is unchanged."},
+    {"name": "TMPDIR", "reason": "the runtime's temporary folder (Claude Code's runtime: TMPDIR, else /tmp); Codex adds it to its sandbox's writable roots."},
+    {"name": "USER", "reason": "the Keychain account Claude Code reads the plan sign-in under (USER, else the OS user name)."},
+    {"name": "SHELL", "reason": "the shell Claude Code's Bash tool and Codex's command runner start."}
+  ],
+  "extras": [
+    {"name": "MINIMOI_AGENT_REQUESTS_DIR", "reason": "a connection's own ledger folder, a path and not a credential: the ledger helper (scripts/agent_requests.py) falls back to it when a command has no --root, so the session never reaches the global default ledger"},
+    {"name": "DISABLE_AUTOUPDATER", "reason": "Claude Code: the pinned CLI never replaces itself (the CLI reads it; the installed connection plist set it to 1)"},
+    {"name": "LANG", "reason": "a UTF-8 locale (en_US.UTF-8) for the agents and the commands they run. Under launchd the manager has no LANG; Python's locale coercion (PEP 538) gave it LC_CTYPE=C.UTF-8, which the whole-environment copy used to pass on. The fixed sender and the Codex read observer set the same value."},
+    {"name": "GIT_TERMINAL_PROMPT", "reason": "the delegation runner's git never waits on a credential prompt (value 0)"}
+  ],
+  "profiles": {
+    "unattended": {
+      "used_by": ["runtime", "connection", "probe"],
+      "note": "Runtime items and the front-door connections (R6.7-d). The base list plus reviewed exact names. No credential name at all, no SSH_AUTH_SOCK, no push (R4.5-c).",
+      "inherit": []
+    },
+    "supervised": {
+      "used_by": ["fallback"],
+      "note": "The fallback door, with Robert present (R6.7-d, R6.7-i). Also his own git agent, his terminal and locale names and his editors, so his own git use works. Still no provider key and no token.",
+      "inherit": [
+        {"name": "SSH_AUTH_SOCK", "reason": "Robert's own git over ssh, with him present"},
+        {"name": "LOGNAME", "reason": "the login name his own tools read"},
+        {"name": "TERM_PROGRAM", "reason": "terminal handling for an interactive session"},
+        {"name": "TERM_PROGRAM_VERSION", "reason": "terminal handling for an interactive session"},
+        {"name": "COLORTERM", "reason": "terminal colour support for an interactive session"},
+        {"name": "LC_CTYPE", "reason": "locale (LC_*)"},
+        {"name": "LC_COLLATE", "reason": "locale (LC_*)"},
+        {"name": "LC_MESSAGES", "reason": "locale (LC_*)"},
+        {"name": "LC_MONETARY", "reason": "locale (LC_*)"},
+        {"name": "LC_NUMERIC", "reason": "locale (LC_*)"},
+        {"name": "LC_TIME", "reason": "locale (LC_*)"},
+        {"name": "__CF_USER_TEXT_ENCODING", "reason": "macOS text encoding for an interactive session"},
+        {"name": "EDITOR", "reason": "his editor, for git commit messages"},
+        {"name": "VISUAL", "reason": "his editor, for git commit messages"}
+      ]
+    }
+  },
+  "deny_patterns": [
+    {"pattern": "^GH_", "class": "credentials"},
+    {"pattern": "^GITHUB_", "class": "credentials"},
+    {"pattern": "^AWS_", "class": "credentials"},
+    {"pattern": "^MINIMOI_", "class": "minimoi_services"},
+    {"pattern": "_API_KEY$", "class": "credentials"},
+    {"pattern": "_TOKEN$", "class": "credentials"},
+    {"pattern": "^DATABASE_URL", "class": "credential_urls"},
+    {"pattern": "^SSH_AUTH_SOCK$", "class": "agent_socket"},
+    {"pattern": "(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)$", "class": "credentials"},
+    {"pattern": "API_KEY", "class": "credentials"},
+    {"pattern": "AUTH_TOKEN", "class": "credentials"},
+    {"pattern": "OAUTH", "class": "credentials"},
+    {"pattern": "FILE_DESCRIPTOR", "class": "credentials"},
+    {"pattern": "^ANTHROPIC_", "class": "provider_switches"},
+    {"pattern": "^CLAUDE_CODE_USE_", "class": "provider_switches"},
+    {"pattern": "^OPENAI_", "class": "provider_switches"},
+    {"pattern": "^XAI_", "class": "provider_switches"},
+    {"pattern": "TOKEN_FILE$", "class": "credentials"},
+    {"pattern": "_BASE_URL$", "class": "endpoints"},
+    {"pattern": "_ENDPOINT$", "class": "endpoints"},
+    {"pattern": "^CLOUD_ML_", "class": "endpoints"},
+    {"pattern": "_DSN$", "class": "credential_urls"},
+    {"pattern": "^REDIS_URL", "class": "credential_urls"},
+    {"pattern": "PROXY$", "class": "proxies_and_trust"},
+    {"pattern": "^NODE_EXTRA_CA_CERTS$", "class": "proxies_and_trust"},
+    {"pattern": "^NODE_TLS_", "class": "proxies_and_trust"},
+    {"pattern": "^SSL_CERT_", "class": "proxies_and_trust"},
+    {"pattern": "^REQUESTS_CA_BUNDLE$", "class": "proxies_and_trust"},
+    {"pattern": "^CURL_CA_BUNDLE$", "class": "proxies_and_trust"},
+    {"pattern": "^CLAUDE_CONFIG_DIR$", "class": "config_redirects"},
+    {"pattern": "^CODEX_HOME$", "class": "config_redirects"},
+    {"pattern": "^GROK_HOME$", "class": "config_redirects"},
+    {"pattern": "^HOME$", "class": "config_redirects"},
+    {"pattern": "^NODE_OPTIONS$", "class": "code_injection"},
+    {"pattern": "^PYTHON", "class": "code_injection"},
+    {"pattern": "^DYLD_", "class": "code_injection"},
+    {"pattern": "^LD_", "class": "code_injection"},
+    {"pattern": "^BASH_ENV$", "class": "code_injection"},
+    {"pattern": "^ENV$", "class": "code_injection"},
+    {"pattern": "^ZDOTDIR$", "class": "code_injection"},
+    {"pattern": "^GIT_SSH", "class": "git"},
+    {"pattern": "^GIT_CONFIG", "class": "git"}
+  ],
+  "deny_overrides": [
+    {"name": "MINIMOI_AGENT_REQUESTS_DIR", "way": "extra", "profiles": ["unattended", "supervised"], "reason": "matches ^MINIMOI_ but is a ledger folder path, never a credential (R6.7-d's own example: claude_stream.py against workspace.py)"},
+    {"name": "HOME", "way": "inherited", "profiles": ["unattended", "supervised"], "reason": "a base name, copied from the parent only; ^HOME$ exists so that no caller can move it as an extra"},
+    {"name": "SSH_AUTH_SOCK", "way": "inherited", "profiles": ["supervised"], "reason": "Robert's own ssh agent, with him present (the supervised profile only; never unattended)"}
+  ],
+  "routes": {
+    "claude-code.subscription": {"kind": "subscription", "tools": ["claude-code"], "note": "Claude Code on Robert's plan sign-in (usd_notional, not a bill)."},
+    "codex.subscription": {"kind": "subscription", "tools": ["codex"], "note": "Codex on the ChatGPT plan (deadline only)."},
+    "anthropic.api": {"kind": "api", "tools": ["claude-code"], "key_name": "ANTHROPIC_API_KEY", "qualified": false, "note": "Unqualified (R4.5-d, R6.7-f, N5): whether a key given to Claude Code reaches its tool processes, or a key helper keeps it out, is not shown."},
+    "openai.api": {"kind": "api", "tools": ["codex"], "key_name": "OPENAI_API_KEY", "qualified": false, "note": "Unqualified (R4.5-d, R6.7-f, N5): the key's reach inside Codex is not shown."},
+    "xai.api": {"kind": "api", "tools": ["grok"], "key_name": "XAI_API_KEY", "qualified": false, "note": "Unqualified, and Grok is stopped (R6.5)."},
+    "fakework": {"kind": "test", "tools": ["fakework", "fakecli"], "test": true, "note": "The test route in test_units (§9.2)."},
+    "fakework.subscription": {"kind": "subscription", "tools": ["fakework", "fakecli"], "test": true, "note": "T11b's test subscription route, configured supervised-only at the authority."},
+    "fakework.plan": {"kind": "subscription", "tools": ["fakework", "fakecli"], "test": true, "note": "T19a-d's test subscription route that the authority admits unattended (the T11b route stays supervised-only)."},
+    "fakework.api": {"kind": "api", "tools": ["fakework", "fakecli"], "key_name": "FAKEWORK_API_KEY", "qualified": true, "test": true, "note": "T19e's test API route. Qualified by R6.7-f's third way: fakework runs no tool process and no shell, so the key reaches nothing beyond its own process."},
+    "fakejudge": {"kind": "test", "tools": [], "test": true, "note": "MC's judgment stand-in (T16): reserved at the authority, never launched as a tool."}
+  },
+  "tools": {
+    "claude-code": {
+      "login_command": "claude /login",
+      "signin": [
+        {"file": "{home}/.claude.json", "nonempty": "oauthAccount"},
+        {"file": "{home}/.claude/.credentials.json", "exists": true}
+      ],
+      "config": [
+        {"file": "{home}/.claude.json", "scope": "user", "format": "json", "keys": ["apiKeyHelper", "primaryApiKey"], "env_tables": ["env"]},
+        {"file": "{home}/.claude/settings.json", "scope": "user", "format": "json", "keys": ["apiKeyHelper", "awsAuthRefresh", "awsCredentialExport"], "env_tables": ["env"]},
+        {"file": "{home}/.claude/settings.local.json", "scope": "user", "format": "json", "keys": ["apiKeyHelper", "awsAuthRefresh", "awsCredentialExport"], "env_tables": ["env"]},
+        {"file": "/Library/Application Support/ClaudeCode/managed-settings.json", "scope": "managed", "format": "json", "keys": ["apiKeyHelper", "awsAuthRefresh", "awsCredentialExport"], "env_tables": ["env"]},
+        {"file": "/etc/claude-code/managed-settings.json", "scope": "managed", "format": "json", "keys": ["apiKeyHelper", "awsAuthRefresh", "awsCredentialExport"], "env_tables": ["env"]},
+        {"file": "{project}/.claude/settings.json", "scope": "project", "format": "json", "keys": ["apiKeyHelper", "awsAuthRefresh", "awsCredentialExport"], "env_tables": ["env"]},
+        {"file": "{project}/.claude/settings.local.json", "scope": "project", "format": "json", "keys": ["apiKeyHelper", "awsAuthRefresh", "awsCredentialExport"], "env_tables": ["env"]}
+      ]
+    },
+    "codex": {
+      "login_command": "codex login",
+      "ignores_user_config_flag": "--ignore-user-config",
+      "signin": [
+        {"file": "{home}/.codex/auth.json", "equals": ["auth_mode", "chatgpt"]}
+      ],
+      "config": [
+        {"file": "{home}/.codex/auth.json", "scope": "signin", "format": "json", "keys": ["OPENAI_API_KEY"]},
+        {"file": "{home}/.codex/config.toml", "scope": "user", "format": "toml", "names_anywhere": ["env_key", "experimental_bearer_token", "api_key"], "values_allowed": {"model_provider": ["openai"], "preferred_auth_method": ["chatgpt"], "forced_login_method": ["chatgpt"]}, "env_tables": ["shell_environment_policy.set"]},
+        {"file": "{project}/.codex/config.toml", "scope": "project", "format": "toml", "names_anywhere": ["env_key", "experimental_bearer_token", "api_key"], "values_allowed": {"model_provider": ["openai"], "preferred_auth_method": ["chatgpt"], "forced_login_method": ["chatgpt"]}, "env_tables": ["shell_environment_policy.set"]}
+      ]
+    },
+    "grok": {
+      "login_command": "grok (its browser sign-in)",
+      "note": "No adapter is built and Grok is stopped (R6.5). The sign-in file and auth_mode are R6.7-e's; config.toml is the file in ~/.grok; its key names are R6.7-d's, unverified against the installed grok (N5).",
+      "signin": [
+        {"file": "{home}/.grok/auth.json", "equals": ["auth_mode", "oidc"]}
+      ],
+      "config": [
+        {"file": "{home}/.grok/config.toml", "scope": "user", "format": "toml", "names_anywhere": ["api_key", "env_key"]}
+      ]
+    },
+    "fakework": {
+      "login_command": "none: fakework/1 keeps no sign-in",
+      "test": true,
+      "note": "The bundle's own fakework/1, run by the pinned interpreter (its digest is the bundle's). No sign-in and no configuration, so a subscription route refuses it (signin_missing).",
+      "signin": [],
+      "config": []
+    },
+    "fakecli": {
+      "login_command": "fakecli login",
+      "test": true,
+      "note": "A fakework/1 build packaged like a vendor CLI (§9.3), with its own sign-in file and user and project configuration. A host runs it for actor fakework when host.yaml pins it.",
+      "signin": [
+        {"file": "{home}/.fakecli/auth.json", "equals": ["auth_mode", "plan"]}
+      ],
+      "config": [
+        {"file": "{home}/.fakecli/settings.json", "scope": "user", "format": "json", "keys": ["apiKeyHelper"], "env_tables": ["env"]},
+        {"file": "{project}/.fakecli/settings.json", "scope": "project", "format": "json", "keys": ["apiKeyHelper"], "env_tables": ["env"]}
+      ]
+    }
+  }
+}

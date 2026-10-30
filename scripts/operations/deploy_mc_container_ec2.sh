@@ -251,6 +251,11 @@ supervision() {
   tag=$(docker inspect --format '{{.Config.Image}}' minimoi-portal | sed 's/.*://')
   [[ -n "$tag" ]] || die "cannot read the running portal tag"
   local compose=(docker-compose --project-name minimoi -f "$ROOT/docker-compose.prod.yml")
+  # Host runtime P1-a's production layer, when switched on: the same layer every deploy script adds (never sourced),
+  # so the supervisor is recreated with its runtime link and the authority's timers.
+  if [[ -f "$ROOT/docker-compose.runtime.prod.yml" ]]; then
+    compose+=(-f "$ROOT/docker-compose.runtime.prod.yml")
+  fi
   case "$to" in
     on)
       local worker_sha="${2:-}"
@@ -272,6 +277,11 @@ supervision() {
       "$ROOT/scripts/deploy_scoped_release.sh" "$tag" portal
       ;;
     off)
+      # With the host runtime's layer on, the supervisor runs the authority's timers: removing it would leave a version
+      # 2 portal with no sweeper. Roll the runtime back first (P1-A_RESULT.md §6.7), then switch supervision off.
+      if [[ -f "$ROOT/docker-compose.runtime.prod.yml" ]]; then
+        die "the host runtime's layer is on ($ROOT/docker-compose.runtime.prod.yml): roll it back first (switch_on rollback-check, then remove the layer), then supervision off"
+      fi
       "${compose[@]}" --profile supervisor rm -sf supervisor || true
       rm -f "$SUPERVISOR_DIR/approvals-bot-token"
       set_env_keys MINIMOI_SUPERVISION "" MINIMOI_SUPERVISION_WORKER_TOKEN_SHA256 ""

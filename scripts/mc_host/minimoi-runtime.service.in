@@ -1,0 +1,26 @@
+# The MiniMoi host runtime (spec v0.5 §2.2, R2.1-a), rendered by scripts/mc_host/runtime_install.py from host.yaml.
+# Its own settings live in @HOST_CONFIG@ and the authority's values file it names; nothing secret is here.
+# G1: runs with no session open. G2: restarted after a crash. G4: SIGTERM to the runtime alone (KillMode=mixed), which
+# stops its children at a checkpoint and records what it owes before it exits; TimeoutStopSec is above its own bound.
+[Unit]
+Description=MiniMoi host runtime @HOST_ID@ (@ENVIRONMENT@)
+Wants=network-online.target
+After=network-online.target @AFTER@
+
+[Service]
+Type=simple
+User=@USER@
+Environment=HOME=@HOME@
+Environment=PATH=@PATH@
+ExecStart=@PYTHON@ -I @BUNDLE@/run_runner.py run --host-config @HOST_CONFIG@
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStopSec=@STOP_TIMEOUT@
+Restart=always
+RestartSec=30
+StandardOutput=append:@BASE@/runtime.log
+StandardError=append:@BASE@/runtime.log
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -260,6 +260,24 @@ class ReceiptPostgresTests(PostgresFixture, unittest.TestCase):
         with self.assertRaisesRegex(ActionContractError, 'dispatch_refused'), self.connect() as conn:
             self.store.dispatch(conn, lease,authority=self.authority())
 
+    def test_lease_until_reads_the_current_lease_and_changes_nothing(self):
+        self.prepare()
+        with self.connect() as conn:
+            self.assertIsNone(self.store.lease_until(conn, 'owner', 'dev', self.intent.operation_id))
+        lease = self.claim(seconds=20)
+        with self.connect() as conn, conn.cursor() as cur:
+            until = self.store.lease_until(conn, 'owner', 'dev', self.intent.operation_id)
+            cur.execute('SELECT lease_until, event_sequence FROM guild.mc_action_receipts')
+            self.assertEqual(cur.fetchone(), (until, 2))           # the claim's lease; no event written by the read
+        with self.connect() as conn:
+            self.store.dispatch(conn, lease, authority=self.authority())
+            self.assertEqual(self.store.lease_until(conn, 'owner', 'dev', self.intent.operation_id), until)
+        with self.connect() as conn:
+            self.store.finish(conn, lease, 'unknown')
+            self.assertIsNone(self.store.lease_until(conn, 'owner', 'dev', self.intent.operation_id))
+        with self.assertRaisesRegex(ActionContractError, 'receipt_not_found'), self.connect() as conn:
+            self.store.lease_until(conn, 'owner', 'dev', str(uuid4()))
+
 
 if __name__ == '__main__':
     unittest.main()

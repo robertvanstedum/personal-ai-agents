@@ -413,9 +413,15 @@ MC_RUNNER = "core.mc_delegation_runner"
 MC_DISPATCHER = "core.mc_delegation_dispatcher"
 # Portal-owned homes that may read the runner's portal files (and nothing else of the runner).
 MC_RUNNER_PORTAL_HOMES = ("minimoi_portal/", "core/mc_delegation_dispatcher/", "core/agent_requests/")
-# Who may import the portal's dispatcher: the portal, the dispatcher itself, and the Mac runner's client of its door.
-MC_DISPATCHER_HOMES = ("minimoi_portal/", "core/mc_delegation_dispatcher/")
-MC_DISPATCHER_FILES = {"core/mc_delegation_runner/cli.py"}
+# Who may import the portal's dispatcher: the portal, the dispatcher itself, the Mac runner's client of its door, and
+# build supervision (core/supervision/, in the portal image with the supervisor): its check-in reads the runtime's
+# snapshot and shares its delegation rules, and its runtime link is the owner path (host runtime S1-G).
+MC_DISPATCHER_HOMES = ("minimoi_portal/", "core/mc_delegation_dispatcher/", "core/supervision/")
+MC_DISPATCHER_FILES = {"core/mc_delegation_runner/cli.py",
+                       "core/mc_delegation_runner/host.py",     # the door's one URL allowlist (S1-D review N4)
+                       # P1-a: the witness reads the snapshot through the door's read path (its client's refusal of a
+                       # redirect) and the authority file's host values; the supervisor runs the authority's timers.
+                       "core/mc_delegation_runner/witness.py", "services/supervisor/main.py"}
 
 
 def _runner_names(rel, source):
@@ -462,7 +468,8 @@ def _mc_runner_importers(root):
 def test_mc_runner_files_redeploy_only_the_portal_or_nothing():
     from scripts.ci.classify_release import MC_RUNNER_LOCAL_FILES, MC_RUNNER_PORTAL_FILES
     on_disk = {p.relative_to(Path(__file__).resolve().parent.parent).as_posix()
-               for p in (Path(__file__).resolve().parent.parent / "core" / "mc_delegation_runner").glob("*.py")}
+               for pattern in ("*.py", "*.json")                                 # code, and the launch policy's data file
+               for p in (Path(__file__).resolve().parent.parent / "core" / "mc_delegation_runner").glob(pattern)}
     assert MC_RUNNER_PORTAL_FILES | MC_RUNNER_LOCAL_FILES == on_disk                  # every runner file has a decided owner
     assert not MC_RUNNER_PORTAL_FILES & MC_RUNNER_LOCAL_FILES
     for path in MC_RUNNER_PORTAL_FILES:
@@ -484,7 +491,8 @@ def test_the_agent_child_environment_change_redeploys_only_the_portal():
 def test_mc_runner_has_no_unclassified_production_consumer():
     root = Path(__file__).resolve().parent.parent
     assert _mc_runner_importers(root) == []
-    # No production entrypoint starts the runner: it runs only from the Mac's own bundle.
+    # No production entrypoint starts the runner: it runs only from the Mac's own bundle. (P1-a's EC2 witness runs
+    # the witness, a portal-side runner file, only from the runtime layer, docker-compose.runtime.prod.yml.)
     paths = [root / ".github/workflows/deploy.yml", root / "docker-compose.prod.yml",
              root / "docker-compose.yml", root / "scripts/operations/deploy_scoped_release.sh"]
     paths.extend(p for p in (root / "docker").rglob("*") if p.is_file())
@@ -888,6 +896,35 @@ def test_no_service_image_runs_the_ops_only_scripts():
     assert deploy_job.index("COS_SECRET_SYNC=") < deploy_job.index("/opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/.env")
 
 
+def test_the_host_runtime_installer_redeploys_nothing_and_no_service_runs_it():
+    """S1-H: the installer and its systemd templates are operator files (MC_HOST_INSTALL_FILES). The day a service
+    image copies, imports or starts one, this fails and it must be classified as that service."""
+    from scripts.ci.classify_release import MC_HOST_INSTALL_FILES
+    for path in sorted(MC_HOST_INSTALL_FILES):
+        assert classify([path]) == ("documents", ()), path
+    for path in ("scripts/mc_host/agent_worker.py", "scripts/mc_host/other.sh", "scripts/mc_host/runtime_install2.py"):
+        assert classify([path]) == ("full", ALL_SERVICES), path               # neighbours keep the full fallback
+    root = Path(__file__).resolve().parent.parent
+    markers = ("install_delegation_runner", "runtime_install", "minimoi-runtime.service", "minimoi-authority.service")
+    production = [root / "docker-compose.prod.yml", root / "scripts/operations/deploy_scoped_release.sh"]
+    production.extend(p for p in (root / "docker").rglob("*") if p.is_file())
+    production.extend((root / ".github" / "workflows").glob("*.yml"))
+    assert [(str(p.relative_to(root)), m) for p in production for m in markers
+            if m in p.read_text(errors="ignore")] == []
+    importers = []
+    for path in sorted(root.rglob("*.py")):
+        rel = path.relative_to(root).as_posix()
+        if SKIPPED_DIRS.intersection(rel.split("/")) or rel.startswith("tests/"):
+            continue
+        try:
+            names = _imported_names(path.read_text(errors="ignore"))
+        except SyntaxError:
+            continue
+        if any(n == "scripts.mc_host.runtime_install" or n.startswith("scripts.mc_host.runtime_install.") for n in names):
+            importers.append(rel)
+    assert importers == []
+
+
 def test_the_test_selector_and_nightly_workflow_redeploy_nothing():
     assert classify(["scripts/ci/select_tests.py", ".github/workflows/nightly-tests.yml"]) == ("documents", ())
     assert classify([".github/workflows/deploy-mc-agent.yml"]) == ("full", ALL_SERVICES)          # other workflows keep the fallback
@@ -990,3 +1027,42 @@ def _portal_cos_closure(root):
 def test_portal_cos_files_are_exactly_the_cos_modules_the_portal_imports():
     from scripts.ci.classify_release import PORTAL_COS_FILES
     assert _portal_cos_closure(Path(__file__).resolve().parents[1]) == set(PORTAL_COS_FILES)
+
+
+def test_the_build_supervisor_redeploys_only_the_portal_image_it_runs():
+    """services/supervisor/ runs from the portal image, recreated with each portal release (deploy_scoped_release.sh);
+    a change to it is the portal's, as its Compose block already is (COMPOSE_SERVICE_OWNERS)."""
+    assert classify(["services/supervisor/main.py"]) == ("domain", ("portal",))
+    assert classify(["services/supervisor/main.py", "core/supervision/watch.py"])[0] == "domain"
+    deploy = (Path(__file__).resolve().parent.parent / "scripts/operations/deploy_scoped_release.sh").read_text()
+    assert "--profile supervisor up -d --no-deps supervisor" in deploy
+
+
+# --- host runtime P1-a ---------------------------------------------------------------------------------------------------
+def test_p1a_files_classify_by_the_image_that_runs_them():
+    assert classify(["core/mc_delegation_runner/witness.py"]) == ("domain", ("portal",))   # the EC2 witness's image
+    assert classify(["scripts/mc_host/host.mac-prod-1.json"]) == ("documents", ())         # the installer's template
+    assert classify(["tests/harness_acceptance/p1a.py", "tests/harness_acceptance/p1a_mac.py"]) == ("documents", ())
+    assert classify(["scripts/operations/mc_prod_db_migrate.sh"]) == ("documents", ())     # operations-only, as before
+    # The deploy scripts layer the runtime file when present: they keep their own full-release fallback.
+    assert classify(["scripts/operations/deploy_scoped_release.sh"]) == ("full", ALL_SERVICES)
+    # New modules in the dispatcher and supervision packages keep the conservative core fallback (seven services).
+    assert classify(["core/mc_delegation_dispatcher/production.py"])[1] == ALL_SERVICES[:7]
+    assert classify(["core/supervision/switch_on.py"])[1] == ALL_SERVICES[:7]
+
+
+def test_p1as_production_compose_layer_is_an_operator_file_and_production_compose_is_untouched():
+    """P1-a's Compose changes live in docker-compose.runtime.prod.yml, which no workflow ships (the operator copies it
+    at switch-on); production's own compose file is the base's, so P1-a restarts nothing through it."""
+    root = Path(__file__).resolve().parent.parent
+    assert classify(["docker-compose.runtime.prod.yml"]) == ("documents", ())
+    workflows = [p for p in (root / ".github" / "workflows").glob("*.yml")]
+    assert [p.name for p in workflows if "docker-compose.runtime.prod.yml" in p.read_text()] == []
+    # Production's own compose holds today's values, read from the committed golden (no git: CI checks out one
+    # commit), never skipped; tests/test_p1a_compose.py holds the same guard and how to regenerate the golden.
+    import json
+    import yaml
+    golden = json.loads((root / "tests" / "p1a_prod_compose_golden.json").read_text())["services"]
+    rendered = json.loads(json.dumps(yaml.safe_load((root / "docker-compose.prod.yml").read_text())["services"],
+                                     sort_keys=True, default=str))
+    assert rendered == golden
