@@ -169,10 +169,14 @@ def affirmative(text):
 
 
 # Spec 165 v0.3 §6.4, D16 (a): a consult whose owner words are only a confirmation or a stop word ("yes", "go ahead",
-# "stop") is refused before anything is recorded or run, on every host. What the voice asked ("shall I …?") is confirmed in
-# writing: a spoken yes authorizes nothing. The yes to "Shall I sum up?" is a transcript turn (affirmative, above), not a
-# consult, and still closes capture; End and barge-in still stop the audio. A small closed set, tested phrase by phrase.
-CONFIRM_IN_WRITING = "Confirm that in writing."
+# "stop") is refused before anything is recorded or run, on every host. Under v3 a yes confirms only the session's one
+# waiting action, through the utterance route and the action path (below); as a consult's own words it authorizes
+# nothing. The yes to "Shall I sum up?" is the same waiting action's (kind end). A small closed set, tested phrase by phrase.
+# v3 (V3_BUILD_BRIEF addition 3): a bare yes or stop with nothing waiting, spoken or a tap on Check, says the stray-yes line,
+# never "Confirm that in writing." It is still refused before anything is recorded or run (D16). The old name is kept for
+# its callers; it now holds the stray-yes words.
+NOTHING_WAITING = "Nothing's waiting; say it again if you want it."
+CONFIRM_IN_WRITING = NOTHING_WAITING
 IN_WRITING = "Do that in writing."          # a host's commands done in writing only (DirectVoiceAdapter.in_writing)
 _BARE = frozenset((
     "yes", "yeah", "yep", "yup", "yes please", "sure", "ok", "okay", "alright", "all right", "right", "correct", "exactly",
@@ -207,54 +211,160 @@ def bare_confirmation(text):
     return found > 0
 
 
-# ── the two tools and the rules that go with them ──────────────────────────────────────────────────────────────────
+# ── confirm by voice (v3: the app acts; the voice only talks) ────────────────────────────────────────────────────────
+# DESIGN_confirm_by_voice_v3_simple.md, V3_BUILD_BRIEF.md (Spec 165 v0.4.3 in progress), keeping Codex's safety lines
+# (REVIEW_codex_confirm_by_voice.md): only the app acts, through one dispatch path, after a yes that is a new owner item
+# following the question; the action is pinned to the request's own owner item and text, never the model's words and
+# never the yes; one waiting action per session, one effect, with receipts; one control owner for the action, its
+# read-back and "Shall I sum up?". No speaker recognition: a bystander's request and yes are not told apart; confirmation
+# is an accident barrier, said honestly.
+#
+# Each finished owner item is posted once to the utterance route, which hears it by a closed grammar first (no model call)
+# and, only when that says nothing, by one small understanding call (intent_gateway); the result is one word, which has no
+# power to act. A request becomes the session's one waiting action; his next item decides it.
+KINDS = ("note", "postit", "consult", "end")                     # what may wait; end is "Shall I sum up?"
+LABELS = ("note", "postit", "consult", "yes", "no", "read_back", "read_summary", "chat")   # what the understanding call says
+DECISIONS = ("ask", "confirm", "dropped", "read_back", "nothing_waiting", "chat")
+ANSWER_S = 30            # the answer window, from the question starting to play; paused during a read-back
+LIFETIME_S = 120         # a waiting action's whole life, however often it is re-asked
+CONSUME_S = 15           # a yes the server judged is consumed by the action path within this long, else it is let go
+UTTERANCE_MAX_BYTES = 32 * 1024
+NOT_WAITING = "That is no longer waiting. Nothing was done."          # a confirmation of an action replaced, dropped or expired
+NOT_CONFIRMED = "Nothing was done: the app acts only on a confirmed request."   # any other call on the action path
+
+# The bare answers to a waiting question (D16's closed set, _BARE, split): a stop word anywhere makes it a no.
+_BARE_NO = frozenset(("no", "nope", "nah", "stop", "cancel", "abort", "wait", "hold on", "hang on", "never mind",
+                      "nevermind", "don't", "forget it", "not now", "nein", "stopp", "halt", "não", "nao"))
+
+
+def _phrases(text):
+    """The words of ``text`` read as _BARE and _GLUE phrases, longest first, or None when any word is something else."""
+    words = re.sub(r"[^\w']+", " ", text.lower().replace("’", "'")).replace("_", " ").split()
+    found, i = [], 0
+    while i < len(words):
+        for n in (3, 2, 1):
+            phrase = " ".join(words[i:i + n])
+            if len(words) - i >= n and (phrase in _BARE or phrase in _GLUE):
+                found.append(phrase)
+                i += n
+                break
+        else:
+            return None
+    return found
+
+
+def bare_answer(text):
+    """"yes", "no" or None: his words are only confirmation or stop words (bare_confirmation), and a stop word anywhere is a
+    no ("yes, no, wait" never confirms). Anything else said is not a bare answer: the understanding call hears it."""
+    if not isinstance(text, str):
+        return None
+    found = _phrases(text)
+    said = [p for p in found or () if p in _BARE]
+    if not said:
+        return None
+    return "no" if any(p in _BARE_NO for p in said) else "yes"
+
+
+# Read-back (Robert, 29 Oct: "I should be able to ask for it to speak it back to me, if I'm in a car"): a closed set in
+# English, German and Portuguese, matched whole after its punctuation and a polite word are set aside.
+READ_BACK = frozenset((
+    "read it back", "read it back to me", "read that back", "read that back to me", "read me back", "read back",
+    "read it again", "say it back", "what did i say", "what did i just say", "read me the summary", "read the summary",
+    "read me the note", "read the note",
+    "lies es vor", "lies es mir vor", "lies das vor", "lies mir das vor", "lies es noch mal vor", "lies vor",
+    "was habe ich gesagt", "was hab ich gesagt", "lies mir die zusammenfassung vor",
+    "lê de novo", "le de novo", "leia de novo", "lê novamente", "leia novamente", "lê para mim", "leia para mim",
+    "o que eu disse", "lê o resumo", "leia o resumo"))
+_POLITE = ("please", "bitte", "por favor", "can you", "could you", "kannst du", "pode")
+
+
+def read_back_request(text):
+    """Whether his words are only a request to hear the waiting action's words (READ_BACK), politely or not."""
+    if not isinstance(text, str) or len(text) > 200:
+        return False
+    said = " ".join(re.sub(r"[^\w'\s]+", " ", text.lower().replace("’", "'")).split())
+    for polite in _POLITE:
+        if said.startswith(polite + " "):
+            said = said[len(polite) + 1:]
+        if said.endswith(" " + polite):
+            said = said[:-len(polite) - 1]
+    return said in READ_BACK
+
+
+def consult_grammar(person):
+    """The explicit consult of this host's own person ("ask MC …", "check with MC …", "frag MC …", "pergunte ao MC …"; CoS
+    likewise, by her short name or her name), compiled once per host: anchored, with no nested repetition (linear time).
+    The other host's person is not named here: there is no cross-host consult in v3, so it is chat."""
+    names = "|".join(re.escape(n) for n in (person["short"], person["name"]))
+    return re.compile(r"\A\W*(?:(?:please|bitte|por favor)\W+)?"
+                      r"(?:ask|check with|frag(?:e)?(?:\s+mal)?|pergunt[ae]\s+(?:ao|à|a|o))\s+"
+                      r"(?:(?:the|den|die|der)\s+)?(?:" + names + r")\b(?P<rest>.*)\Z", re.I | re.S)
+
+
+def explicit_consult(grammar, text):
+    """Whether ``text`` is an explicit consult by ``grammar`` (consult_grammar) with something asked after the name."""
+    if not isinstance(text, str) or len(text) > TURN_MAX_BYTES:
+        return False
+    match = grammar.match(text)
+    return match is not None and re.search(r"\w", match["rest"]) is not None
+
+
+def fast_label(adapter, grammar, text, waiting):
+    """The grammar fast path (no model call): his words heard as a label, or None for the understanding call. With an
+    action waiting, a bare yes or no and a read-back come first; "we're done" is the end (done_intent, as before); then
+    the host's explicit note and post-it grammar (part 1's, unchanged) and the explicit consult. With an end waiting,
+    today's spoken yes ("yes, sum it up": affirmative) still confirms it."""
+    if waiting is not None:
+        answer = bare_answer(text)
+        if answer is not None:
+            return answer
+        if waiting == "end" and affirmative(text):
+            return "yes"
+        if read_back_request(text):
+            return "read_back"
+    if done_intent(text):
+        return "end"
+    try:
+        kind = adapter.explicit_request(text)
+    except Exception:                                   # a hook that raises says nothing: the call hears it
+        log.exception("%s direct voice: explicit_request failed", adapter.person["domain"])
+        kind = None
+    if kind in ("note", "postit"):
+        return kind
+    if explicit_consult(grammar, text):
+        return "consult"
+    if waiting is None and (bare_answer(text) == "yes" or read_back_request(text)):
+        return "yes" if bare_answer(text) == "yes" else "read_back"
+    return None
+
+
+def item_place(item):
+    """An owner item's place ("t12" -> 12), or -1."""
+    return int(item[1:]) if owner_item(item) else -1
+
+
+# ── the rules a direct session adds (v3: no tools on any provider) ────────────────────────────────────────────────────
 
 OWNER = "the owner"              # the owner's name in the core's words when a host names none (the adapter's owner_name)
 
 
-def tools(person, owner=OWNER):
-    """The session's two functions, named exactly as bootstrap._allowlisted_tools allows: only type, name, description
-    and parameters. The descriptions are the model's rules. ``owner``: the host's name for its owner (MC: Robert)."""
-    notes = " or ".join(f"'{phrase}'" for phrase in person["notes"])
-    return [
-        {"type": "function", "name": "consult",
-         "description": (f"Ask {person['name']}'s own turn for current facts, project state, files, jobs or any work. "
-                         f"The server acts on {owner}'s own last words, not on these arguments. Speak the result's 'spoken' "
-                         "text without adding claims. Its 'outcome' is done, not_done, pending (still running: the answer "
-                         "will be in the conversation; say only that) or unknown (the result did not come back: say only "
-                         "that, and that it must be checked before asking again). If 'same_turn' is true, his words were "
-                         "already acted on (by the other tool, or by Check): say only 'spoken'."),
-         "parameters": {"type": "object", "properties": {"question": {"type": "string"}}}},
-        {"type": "function", "name": "save_note",
-         "description": (f"Save a note when {owner} says {notes}. The server saves his own "
-                         "words, not these arguments. Say it is saved only when the result has 'saved' true. If "
-                         "'outcome' is pending or unknown, say only what 'spoken' says: the note must be checked before it "
-                         "is saved again. If 'same_turn' is true, his words were already acted on (by the other tool, or by "
-                         "Check): say only 'spoken'."),
-         "parameters": {"type": "object", "properties": {"note": {"type": "string"}}}},
-    ]
-
-
-def direct_rules(person, owner=OWNER, actions=True):
-    """Spec 164 §7, part 1: what a direct session adds to the host's own operating rules (its two tools, the spoken end,
-    no summary from memory). ``actions`` False (Spec 165 §7 as amended 28 Oct 2026: a provider not eligible for the
-    model's own actions, capabilities.MODEL_ACTIONS): the session has no tools, and every action goes through Check with
-    the person, which the owner presses."""
-    if actions:
-        tools_rule = (f"On this voice path your two tools are 'consult' ({person['name']}'s own turn on {owner}'s last "
-                      f"words: current facts, project state, files, jobs, any work) and 'save_note' (only for "
-                      f"'{person['notes'][0]}'). Speak what a tool returns; do not add claims to it. If it says it did "
-                      "not go through, say so. ")
-    else:
-        tools_rule = (f"On this voice path you have no tools: you cannot ask {person['name']}'s own turn or save a note "
-                      f"yourself, whatever any other rule here says. When {owner} asks for current facts, project state, "
-                      f"files, jobs, any work or a note, tell him to press Check with {person['short']}: it sends his last "
-                      f"words to {person['name']}, and you will be given the answer to say. Never say you checked, did or "
-                      "saved anything yourself. ")
-    return (tools_rule +
-            f"When {owner} says he is done (\"we're done\"), answer only: \"{SUMMARY_PROMPT}\" A negated or "
-            "questioned one (\"we're not done\") is not an ending; carry on. Never summarize from memory: the "
-            "summary is made from this session's kept record after it ends.")
+def direct_rules(person, owner=OWNER, actions=False):
+    """Spec 164 §7, part 1, as confirm by voice v3 makes it (V3_BUILD_BRIEF "The voice side"): what a direct session adds to
+    the host's own operating rules, the same on every provider. The model has no tools: it cannot act, the app does, and
+    only after the owner confirms. It asks for that confirmation briefly and naturally, never repeating his words; it never
+    says anything is done; outcomes come from the app; and "Shall I sum up?" is kept exactly. ``actions`` is ignored (kept
+    for its callers): no provider's model may act now (capabilities.MODEL_ACTIONS), so I6 holds trivially."""
+    name, short = person["name"], person["short"]
+    return (f"On this voice path you cannot act, whatever any other rule here says: you have no tools, and you cannot ask "
+            f"{name}'s own turn, save a note, put up a post-it or do any work yourself. The app does that, and only after "
+            f"{owner} confirms. When {owner} asks for a note, a post-it, or something only {short} can do (current facts, "
+            "project state, files, jobs, any work), ask him briefly and naturally to confirm, for example \"Sure, just "
+            "confirm for me\" or \"Shall I go ahead?\", without repeating or describing his words, and never say it is "
+            "done. Never repeat his words back unless he asks you to. Outcomes come from the app: say only what it gives "
+            f"you, and never claim anything was checked, saved or done otherwise. When {owner} says he is done "
+            f"(\"we're done\"), answer only: \"{SUMMARY_PROMPT}\" A negated or questioned one (\"we're not done\") is "
+            "not an ending; carry on. Never summarize from memory: the summary is made from this session's kept record "
+            "after it ends.")
 
 
 def compose_instructions(operating_rules, card, data):
@@ -722,6 +832,12 @@ class DirectVoiceAdapter:
         clarifies a bare confirm, cancel or stop in writing itself."""
         return False
 
+    def explicit_request(self, text):
+        """Optional (v3's grammar fast path): "note" or "postit" when the owner's words are an explicit note or post-it by
+        the host's own grammar (part 1's, unchanged: MC's owner_actions and Board, CoS's parse_explicit_note), else None.
+        It only proposes a waiting action, which acts on nothing until his yes; the dispatch still passes refuse()."""
+        return None
+
     def typed_turn(self, handle, principal, sid, n, name, text, *, item):
         """The owner's words through the person's typed turn, as if typed: the result the provider is given (ok,
         spoken, receipt, receipt_kind, saved, answered, …). ``n``: this consult's place in the session (1–12). ``item``:
@@ -733,10 +849,10 @@ class DirectVoiceAdapter:
         """The person's pinned card (voice_card.load_pinned); OSError or ValueError when unavailable."""
         raise NotImplementedError
 
-    def instructions(self, card, handle, actions=True):
+    def instructions(self, card, handle, actions=False):
         """The session's text (compose_instructions), with bounded continuity from ``handle`` (None: none readable).
-        ``actions``: whether this session's model may act (its provider is eligible, Spec 165 §7 as amended): passed on
-        to direct_rules, which says the tools, or that every action goes through Check with the person."""
+        ``actions``: kept for its callers; under v3 always False (no model action on any provider), and direct_rules
+        says the same rules for every provider."""
         raise NotImplementedError
 
     def ended(self, handle, sid):
@@ -778,6 +894,7 @@ class DirectSessions(ConsultLedger):
         super().__init__()
         self._adapter, self._meta, self._meta_lock, self.clock = adapter, {}, threading.Lock(), clock
         self._summaries, self._summary_lock = {}, threading.Lock()       # session -> the summary attempt running here
+        self._deciding = {}                  # session -> its utterance lock: one owner item decided at a time (v3)
 
     def summary_begin(self, sid):
         """(True, run) when this request makes the session's summary now, or (False, run) for the attempt already running
@@ -818,6 +935,7 @@ class DirectSessions(ConsultLedger):
             gone = [sid for sid, meta in self._meta.items() if meta["started"] + meta["max_s"] < cutoff]
             for sid in gone:
                 del self._meta[sid]
+                self._deciding.pop(sid, None)
         if gone:
             with self._lock:
                 for sid in gone:
@@ -842,7 +960,11 @@ class DirectSessions(ConsultLedger):
         with self._meta_lock:
             self._meta[sid] = {"conversation": cid, "started": started, "max_s": max_minutes * 60,
                                "seen": started, "items": set(), "bytes": 0, "actions": actions,
-                               "provider": provider if isinstance(provider, str) else None}
+                               "provider": provider if isinstance(provider, str) else None,
+                               # v3: the one waiting action, those confirmed and not yet consumed, those consumed, and
+                               # each owner item's decision (a retried post gets the same answer)
+                               "slot": None, "confirmed": {}, "consumed": {}, "decided": {}, "last_place": -1}
+            self._deciding[sid] = threading.Lock()
         self.open_session(sid, owner)
         return sid
 
@@ -1001,28 +1123,229 @@ class DirectSessions(ConsultLedger):
             meta["bytes"] += added
             return True
 
-    def heard(self, sid, owner_turns):
-        """§8 on the owner's own completed words, [(turn key, text)]: "we're done" proposes ending; a yes to that
-        proposal confirms it; anything else withdraws it. Each turn is heard once, by its key (review B5): a retried post
-        (its answer lost) gets the answer its turns gave the first time and moves nothing on, so only a later turn of his
-        can confirm a proposal. Returns (proposed, confirmed)."""
-        proposed = confirmed = False
+    # ── v3: the one waiting action (confirm by voice) ──────────────────────────────────────────────────────────────────
+    # One slot per session, beside the session's other state: {action_id, kind (note | postit | consult | end), owner_item_id,
+    # text (the committed owner item's words, never the model's), text_hash, tool, state, created, after (the question's
+    # after_item), asked_at, expires, paused}. state: waiting (made; its question has not started) → asked (the page said
+    # its question started playing: only an owner item after ``after`` may confirm it) → confirmed (the server heard his
+    # yes, a new item after the question; it waits CONSUME_S for the action path) → done (consumed: dispatched once), or
+    # dropped (no, anything else, replaced, folded, expired, End, capture full, the session's end). "Shall I sum up?" is the
+    # same slot (kind end, review CC_25 "one control owner"), so one utterance never confirms both an action and the end;
+    # today's spoken end (sessions.heard: propose_end, end_confirmed) moved onto it with its spoken behaviour kept.
+
+    def _live(self, meta, now):
+        """The session's waiting action (waiting or asked), or None. One past its answer window (ANSWER_S from its question
+        starting, not while a read-back plays) or its lifetime (LIFETIME_S) is dropped here: expired."""
+        slot = meta.get("slot")
+        if slot is None:
+            return None
+        if now >= slot["created"] + LIFETIME_S or (slot["state"] == "asked" and not slot["paused"]
+                                                    and now >= slot["expires"]):
+            self._let_go(meta, slot, "expired", now)
+            return None
+        return slot
+
+    @staticmethod
+    def _let_go(meta, slot, why, now):
+        """Drop the waiting action. A yes soon after one expired, or was dropped by other words or a fold, is a stray yes
+        (NOTHING_WAITING); after a no, a consumed action or nothing at all a yes is only conversation (chat)."""
+        slot["state"], slot["why"] = "dropped", why
+        if meta.get("slot") is slot:
+            meta["slot"] = None
+        if why in ("expired", "other", "folded"):
+            meta["stray_until"] = now + LIFETIME_S
+
+    def deciding(self, sid):
         with self._meta_lock:
-            meta = self._meta[sid]
-            outcomes = meta.setdefault("heard", {})
-            for key, text in owner_turns:
-                if key not in outcomes:
-                    if meta.get("proposed") and affirmative(text):
-                        outcomes[key], meta["proposed"] = "confirm", False
-                    elif done_intent(text):
-                        outcomes[key], meta["proposed"] = "propose", True
-                    else:
-                        outcomes[key], meta["proposed"] = None, False
-                if outcomes[key] == "confirm":
-                    confirmed = True
+            return self._deciding.get(sid)
+
+    def decide(self, sid, item, text, hear, tool_of):
+        """His finished owner item ``item`` (its words ``text``), decided once (a retried post gets the first answer): the
+        decision dict (DECISIONS), "cap" when the session's decisions are used up, or None (no such session here).
+        ``hear(text, waiting kind)`` is the grammar fast path, then the understanding call: it runs outside the ledger's
+        lock, under this session's own utterance lock, so one item is decided at a time and a Check tap is never held up.
+        ``tool_of(kind, text)`` names the dispatch a new waiting action will use. An item older than one already decided
+        changes nothing (chat)."""
+        lock = self.deciding(sid)
+        if lock is None:
+            return None
+        with lock:
+            with self._meta_lock:
+                meta = self._meta.get(sid)
+                if meta is None:
+                    return None
+                if item in meta["decided"]:
+                    return {**meta["decided"][item], "repeated": True}
+                if len(meta["decided"]) >= SESSION_MAX_EVENTS:
+                    return "cap"
+                if item_place(item) <= meta["last_place"]:
+                    meta["decided"][item] = {"decision": "chat", "heard": "chat", "stale": True}
+                    return dict(meta["decided"][item])
+                slot = self._live(meta, self.clock())
+                waiting = slot["kind"] if slot else None
+            try:
+                label = hear(text, waiting)
+            except Exception:                                   # the hearing failed: chat, which acts on nothing
+                log.exception("%s direct voice: an utterance was not heard; chat", self._adapter.person["domain"])
+                label = "chat"
+            with self._meta_lock:
+                meta = self._meta.get(sid)
+                if meta is None:
+                    return None
+                decision = {**self._apply(meta, item, text, label if label in (*LABELS, "end") else "chat", tool_of),
+                            "heard": label if label in (*LABELS, "end") else "chat"}
+                meta["decided"][item] = decision
+                meta["last_place"] = item_place(item)
+                return dict(decision)
+
+    def _apply(self, meta, item, text, label, tool_of):
+        """One owner item's label applied to the session's waiting action, under the ledger's lock (the brief's table).
+        A fold (FOLDS_OVERTAKEN: the provider repeats an overtaken item's words at the start of the next, LV6) of the
+        waiting action's own words is refused: dropped, never a note holding "yes" (review CC_25 §2)."""
+        now = self.clock()
+        slot = self._live(meta, now)
+        norm = lambda words: " ".join(str(words).split()).casefold()          # noqa: E731
+        if (slot is not None and slot["kind"] != "end" and meta.get("provider") in FOLDS_OVERTAKEN
+                and norm(text) != norm(slot["text"]) and norm(text).startswith(norm(slot["text"]))):
+            self._let_go(meta, slot, "folded", now)
+            return {"decision": "dropped", "action_id": slot["action_id"], "kind": slot["kind"], "reason": "folded"}
+        if label in ("note", "postit", "consult") and bare_confirmation(text):
+            label = "chat"                                  # a bare yes or stop is never a request (D16)
+        if label in ("note", "postit", "consult", "end"):
+            old = slot
+            if old is not None:
+                self._let_go(meta, old, "replaced", now)    # a new request replaces it: a yes now confirms the new one
+            new = {"action_id": uuid.uuid4().hex, "kind": label, "owner_item_id": item, "text": text,
+                   "text_hash": digest(text), "tool": None if label == "end" else tool_of(label, text), "state": "waiting",
+                   "created": now, "after": item, "asked_at": None, "expires": None, "paused": False}
+            meta["slot"] = new
+            return {"decision": "ask", "action_id": new["action_id"], "kind": label, "owner_item_id": item,
+                    "text_sha256": new["text_hash"], **({"replaced": old["action_id"]} if old is not None else {}),
+                    **({"prompt": SUMMARY_PROMPT} if label == "end" else {})}
+        if label == "yes":
+            if slot is None:
+                last = meta.get("last_confirmed")
+                if last is not None and now < last["at"] + CONSUME_S:   # a second yes to one just confirmed: the same
+                    return {"decision": "confirm", "action_id": last["action_id"], "kind": last["kind"],
+                            "confirm_item_id": last["confirm_item"], "again": True}
+                return {"decision": "nothing_waiting" if now < meta.get("stray_until", 0) else "chat"}
+            question = max(item_place(slot["after"]), item_place(slot["owner_item_id"]))
+            if slot["state"] != "asked" or item_place(item) <= question:
+                # Before its question started (or said over it): no effect, and it is asked again.
+                return {"decision": "ask", "action_id": slot["action_id"], "kind": slot["kind"],
+                        "owner_item_id": slot["owner_item_id"], "text_sha256": slot["text_hash"], "again": True,
+                        **({"prompt": SUMMARY_PROMPT} if slot["kind"] == "end" else {})}
+            meta["slot"] = None
+            if slot["kind"] == "end":
+                slot["state"] = "done"
+                return {"decision": "confirm", "action_id": slot["action_id"], "kind": "end", "confirm_item_id": item}
+            slot.update(state="confirmed", confirm_item=item, confirmed_at=now)
+            meta["confirmed"][slot["action_id"]] = slot
+            meta["last_confirmed"] = {"action_id": slot["action_id"], "kind": slot["kind"], "confirm_item": item, "at": now}
+            return {"decision": "confirm", "action_id": slot["action_id"], "kind": slot["kind"], "confirm_item_id": item,
+                    "owner_item_id": slot["owner_item_id"], "text_sha256": slot["text_hash"]}
+        if label == "no":
+            if slot is None:
+                return {"decision": "chat"}
+            self._let_go(meta, slot, "no", now)
+            return {"decision": "dropped", "action_id": slot["action_id"], "kind": slot["kind"], "reason": "no"}
+        if label in ("read_back", "read_summary"):
+            if slot is None:                                # read-back after expiry reads nothing; with nothing ever
+                return {"decision": "nothing_waiting" if now < meta.get("stray_until", 0) else "chat"}   # waiting: chat
+            if slot["kind"] != "end":
+                slot["paused"] = True                       # the answer window waits while his words are read
+                return {"decision": "read_back", "action_id": slot["action_id"], "kind": slot["kind"],
+                        "owner_item_id": slot["owner_item_id"], "text": slot["text"]}
+        if slot is not None:                                # anything else: dropped, and handled as new
+            self._let_go(meta, slot, "other", now)
+            return {"decision": "chat", "dropped": slot["action_id"], "dropped_kind": slot["kind"]}
+        return {"decision": "chat"}
+
+    def asked(self, sid, action_id, after):
+        """The page says the question of waiting action ``action_id`` started playing (again, after a read-back or a
+        re-ask) when owner item ``after`` was its newest: from now only a later owner item may confirm it, within ANSWER_S
+        (never past LIFETIME_S). {expires_in}, or None when that action is not waiting (replaced, dropped, expired)."""
+        with self._meta_lock:
+            meta = self._meta.get(sid)
+            if meta is None:
+                return None
+            now = self.clock()
+            slot = self._live(meta, now)
+            if slot is None or slot["action_id"] != action_id:
+                return None
+            if item_place(after) > item_place(slot["after"]):
+                slot["after"] = after
+            slot.update(state="asked", asked_at=now, expires=now + ANSWER_S, paused=False)
+            return {"expires_in": max(0, round(min(ANSWER_S, slot["created"] + LIFETIME_S - now)))}
+
+    def consume(self, sid, *, action_id=None, confirm_item=None, owner_item=None, text_hash=None, tap_item=None):
+        """The action path's check, then the one consumption (atomic, under the ledger's lock): ("run", slot) when this
+        request consumes the action now; ("again", slot) when it was consumed already (a retried confirm, or Check and the
+        yes together: the dispatcher's own key on the action's owner item gives the first receipt, no second effect); or
+        (refusal word, None). A spoken confirmation names ``action_id`` and the ``confirm_item`` the server heard as its
+        yes, with the action's ``owner_item`` and ``text_hash``; it must still be in its CONSUME_S. A tap on Check names
+        ``action_id`` (what the page shows), or, naming none, consumes the waiting action only when it is the tap's own
+        owner item ``tap_item``; otherwise (None, None): nothing waits for this tap, and Check acts on his last words."""
+        with self._meta_lock:
+            meta = self._meta.get(sid)
+            if meta is None:
+                return "not_waiting", None
+            now, consumed = self.clock(), meta["consumed"]
+            live = self._live(meta, now)
+            if confirm_item is not None:                                    # his spoken yes
+                slot = meta["confirmed"].get(action_id)
+                if slot is None:
+                    done = consumed.get(action_id)
+                    if done is not None and (done.get("confirm_item") in (confirm_item, None)):
+                        return "again", done
+                    return "not_waiting", None
+                if (slot["confirm_item"] != confirm_item or slot["owner_item_id"] != owner_item
+                        or slot["text_hash"] != text_hash or digest(slot["text"]) != slot["text_hash"]):
+                    return "not_confirmed", None
+                if now >= slot["confirmed_at"] + CONSUME_S:
+                    del meta["confirmed"][action_id]
+                    self._let_go(meta, slot, "expired", now)
+                    return "not_waiting", None
+                del meta["confirmed"][action_id]
+            elif action_id is not None:                                     # a tap on Check, naming what it shows
+                if live is not None and live["action_id"] == action_id and live["kind"] != "end":
+                    slot, meta["slot"] = live, None
+                elif action_id in meta["confirmed"]:
+                    slot = meta["confirmed"].pop(action_id)
+                elif action_id in consumed:
+                    return "again", consumed[action_id]
                 else:
-                    proposed = outcomes[key] == "propose"
-        return proposed, confirmed
+                    return "not_waiting", None
+            elif live is not None and live["kind"] != "end" and live["owner_item_id"] == tap_item:
+                slot, meta["slot"] = live, None                             # a tap on the request's own words
+            else:
+                return None, None
+            slot.update(state="done", consumed_at=now, by="voice" if confirm_item is not None else "tap")
+            consumed[slot["action_id"]] = slot
+            while len(consumed) > 2 * CAP:
+                consumed.pop(next(iter(consumed)))
+            return "run", slot
+
+    def drop_waiting(self, sid, why, kinds=KINDS):
+        """End, capture full, the session's end, Keep talking (``kinds`` ("end",)): the waiting action of those kinds is
+        dropped, and so are actions confirmed but not yet consumed (unless only the end is withdrawn)."""
+        with self._meta_lock:
+            meta = self._meta.get(sid)
+            if meta is None:
+                return
+            slot = meta.get("slot")
+            if slot is not None and slot["kind"] in kinds:
+                self._let_go(meta, slot, why, self.clock())
+            if kinds is KINDS:
+                meta["confirmed"].clear()
+                meta.pop("last_confirmed", None)
+
+    def waiting(self, sid):
+        """The waiting action's public view {action_id, kind, owner_item_id, state}, or None."""
+        with self._meta_lock:
+            meta = self._meta.get(sid)
+            slot = self._live(meta, self.clock()) if meta else None
+            return ({k: slot[k] for k in ("action_id", "kind", "owner_item_id", "state")} if slot is not None else None)
 
     def tell_when_done(self, sid, item):
         """Someone was told this turn is still running (a reconciliation read): tell its result when it lands."""
@@ -1056,15 +1379,14 @@ class DirectSessions(ConsultLedger):
             return [dict(done) for done in left]
 
     def proposing(self, sid):
-        """Whether the server's proposal to end stands (a later ordinary owner turn withdraws it, as Keep talking does)."""
-        with self._meta_lock:
-            return bool((self._meta.get(sid) or {}).get("proposed"))
+        """Whether the server's proposal to end stands: the waiting action is "Shall I sum up?" (kind end). A later
+        ordinary owner item drops it, as Keep talking does."""
+        found = self.waiting(sid)
+        return bool(found and found["kind"] == "end")
 
     def withdraw(self, sid):
         """Keep talking: the proposal to end is withdrawn here too, so a later conversational yes ends nothing."""
-        with self._meta_lock:
-            if sid in self._meta:
-                self._meta[sid]["proposed"] = False
+        self.drop_waiting(sid, "keep_talking", kinds=("end",))
 
     # Capture (Spec 165 §5.2): which turns the server holds, which it knows it does not (refused with End, or dropped off the
     # record), and the posts refused after the close (counted).
@@ -1119,7 +1441,10 @@ class DirectSessions(ConsultLedger):
     def close_session(self, sid, reason="end", report=None):
         """End: closed here, and the end marker kept once (the reveal) with what it says of capture (the store's close),
         then the adapter's ``ended``. A failed write leaves the reveal to the clock. Returns the capture the marker says
-        (or would): for a later End (a duplicate, another device), what the first close kept (Spec 165 §6.5)."""
+        (or would): for a later End (a duplicate, another device), what the first close kept (Spec 165 §6.5). The waiting
+        action, and any confirmed but not consumed, is dropped first (v3: End, a reconnect, a provider switch and the
+        session's end all end the session)."""
+        self.drop_waiting(sid, "closed")
         super().close_session(sid)
         cid, capture = self.conversation_of(sid), self.capture(sid, report)
         try:
@@ -1768,18 +2093,22 @@ def transcript_text(adapter, handle, sid, view):
 def _kind():
     if request.method == "GET":
         return "read"                                   # reconciliation: owner-only, no-store, runs nothing
+    # v3's utterance and asked posts have keep_transcript's checks: the host's guard asks the same of them (transcript).
     for kind, tail in (("end", "/end"), ("decision", "/decision"), ("summary", "/summary"), ("keep_talking", "/keep_talking"),
-                       ("transcript", "/transcript"), ("consult", "/consult"), ("dismiss", "/dismiss")):
+                       ("transcript", "/transcript"), ("transcript", "/utterance"), ("transcript", "/asked"),
+                       ("consult", "/consult"), ("dismiss", "/dismiss")):
         if request.path.endswith(tail):
             return kind
     return "bootstrap"
 
 
 def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, clock=time.time, summary_http=None,
-                         may_start=None):
+                         may_start=None, intent_http=None):
     """Register the bootstrap, consult, transcript, End, summary and decision routes under ``url_prefix`` for one host.
     Returns (the capabilities metadata, the session ledger). The host decides whether to call it (its switches).
-    ``summary_http``: the summary client's HTTP post (requests.post unless a test hands in its own).
+    ``summary_http``: the summary client's HTTP post (requests.post unless a test hands in its own). ``intent_http``: the
+    understanding call's (v3, intent_gateway), the same gateway's: a test that hands in summary_http hands it in for both
+    unless it names its own, so no test ever reaches a real gateway.
 
     ``may_start`` (Spec 165 §6.8, §11.1; D11 (a)): installing is not admission. None: every installed host may start
     sessions. MC passes its admission (mc_voice_direct.may_start: MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION on the production
@@ -1793,16 +2122,22 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
     words why; and direct_records: the owner has sessions needing attention),
     GET …/sessions (those sessions), GET …/sessions/<id> (one session: while live only its existence and state, after End
     or recovery its records), GET …/sessions/<id>/transcript (the download, D7) and POST …/sessions/<id>/dismiss."""
+    from core.realtime_voice.intent_gateway import GatewayIntent
     from core.realtime_voice.summary_gateway import GatewaySummary
     from core.realtime_voice.bootstrap import create_bootstrap_blueprint
     from core.realtime_voice.capabilities import (AGENT_CONVERSATION_MODE, get_provider_capability, model_actions,
                                                   providers_for_mode)
+    from core.realtime_voice.capabilities import page_responses as capabilities_page_responses
     from core.realtime_voice.config import resolve_provider
     from core.realtime_voice.standards import TRANSCRIPTION_VOCABULARY
     person, store = adapter.person, adapter.store
     sessions = DirectSessions(adapter, clock)
     summary_client = (GatewaySummary(adapter.summary_key, environ=environ, http_post=summary_http)
                       if adapter.summary_key else None)
+    # v3's understanding call: the same capped per-host key as the summary, its own gateway alias (minimoi-voice-intent).
+    intent_client = (GatewayIntent(adapter.summary_key, {"name": person["name"], "short": person["short"]}, environ=environ,
+                                   http_post=intent_http if intent_http is not None else summary_http)
+                     if adapter.summary_key else None)
     names = {part: f"{adapter.name}_{part}" for part in ("bootstrap", "consult", "transcript")}
     try:
         pinned = adapter.card()                  # the locale and release offered; each bootstrap reads the card again
@@ -1861,12 +2196,12 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
 
     def get_persona(name, actions=True):
         """The bootstrap's allow-list: only this person, with the card the pin names now (a session keeps the card it
-        started with), the two tools, and the host's composed instructions. ``actions`` (the bootstrap's page_responses,
-        from capabilities.model_actions for the chosen provider): False gives no tools, and rules that send every action
-        through Check with the person (Spec 165 §7 as amended 28 Oct 2026)."""
+        started with) and the host's composed instructions. v3: never a tool, on any provider (tools() is gone), and the
+        same rules on every provider. ``actions`` is the bootstrap's page_responses (capabilities.page_responses): whether
+        the page creates every response, which says nothing about tools any more."""
         if name != person["key"]:
             return None
-        g.direct_voice_actions = actions is True         # the session ledger records it at issue (review B N7)
+        g.direct_voice_actions = False                   # no model action, ever (v3): the ledger records it at issue
         try:
             card = adapter.card()
         except (OSError, ValueError):                      # missing, unreadable or not the manifest's: voice unavailable
@@ -1880,12 +2215,12 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             handle, refused = adapter.conversation(cid)
             handle = handle if refused is None else None
         return {"name": person["name"], "prompt_txt": card["card"], "scenes": {}, "voices": card["voices"],
-                **({"tools": tools(person, adapter.owner_name or OWNER)} if actions else {}), "notices": card["notices"],
+                "notices": card["notices"],
                 # D19 (a): a bilingual card is transcribed in the language spoken (the bootstrap sends no single language)
                 **({"transcription": card["transcription"]} if card.get("transcription") else {}),
                 # A4-2: MiniMoi's names and command words for the transcriber, where the provider takes a hint (OpenAI)
                 "transcription_vocabulary": TRANSCRIPTION_VOCABULARY,
-                "instructions": adapter.instructions(card["card"], handle, actions=actions)}
+                "instructions": adapter.instructions(card["card"], handle, actions=False)}
 
     def guard():
         return adapter.guard(_kind())
@@ -1919,10 +2254,10 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         return response
 
     def page_responses(provider):
-        """capabilities.model_actions, as the bootstrap reads it for the chosen provider; the provider is kept for the
-        session ledger to record at issue (LV6: the summary's words)."""
+        """capabilities.page_responses, as the bootstrap reads it for the chosen provider (OpenAI: the page creates every
+        response); the provider is kept for the session ledger to record at issue (LV6, and v3's fold rule)."""
         g.direct_voice_provider = provider
-        return model_actions(provider)
+        return capabilities_page_responses(provider)
 
     boot = create_bootstrap_blueprint(domain=person["domain"], locale=locale, get_persona=get_persona,
                                       is_production=adapter.is_production, consult_ledger=sessions, owner=adapter.owner,
@@ -1933,10 +2268,43 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
     boot.register_error_handler(VoiceUnavailable, lambda exc: refusal(str(exc), str(exc), 503))
     consulting = Blueprint("voice_consult", __name__)
 
+    grammar = consult_grammar(person)
+
+    def understand(words, waiting):
+        """The understanding call (intent_gateway), for words the grammar did not hear: one word, never an act. A host
+        with no summary key has none: chat."""
+        return intent_client(words, waiting) if intent_client is not None else "chat"
+
+    def tool_of(kind, text):
+        """The dispatch a new waiting action will use: save_note for a note or post-it the host's own grammar names
+        (explicit_request, which refuse() lets through), else consult: his words through the person's typed turn, as if
+        typed (a natural request the understanding call heard as a note is the typed turn's to read, never guessed)."""
+        try:
+            return "save_note" if kind in ("note", "postit") and adapter.explicit_request(text) in ("note", "postit") \
+                else "consult"
+        except Exception:
+            log.exception("%s direct voice: explicit_request failed; consult", person["domain"])
+            return "consult"
+
+    def run_action(who, sid, call_id, slot):
+        """A consumed waiting action through the one dispatcher, on the action's own owner item and text, never the yes
+        item's: the (session, owner_item_id) key, receipts, one effect per owner item, reconcile and retry unchanged."""
+        answer, status = consult(adapter, sessions, who, sid, call_id, slot["tool"], slot["text"], slot["owner_item_id"])
+        return jsonify({**answer, "action_id": slot["action_id"], "kind": slot["kind"],
+                        "owner_item_id": slot["owner_item_id"]}), status
+
     @consulting.route("/api/realtime-voice/consult", methods=["POST"])
     def consult_route():
-        """The model's function call, or Check with <person>: one owner action through the durable dispatcher (consult).
-        The server acts on the owner's own transcript item, named by its capture id, never on the model's arguments."""
+        """The action path (v3: the app acts; the voice only talks). It acts only on:
+        * a confirmed waiting action: ``action_id`` with ``confirm_item_id`` (the owner item the utterance route heard as
+          his yes), the action's ``owner_item_id`` and ``text_sha256``. The server checks the action was asked and
+          confirmed by a later owner item, in time, unconsumed, and that its owner item and text hash match; it consumes
+          it atomically, then dispatches the action's own owner item and words;
+        * a tap on Check (call id "host-…"): naming the waiting action (``action_id``), or on the request's own words, it
+          confirms that action through the same consumption; with nothing waiting it acts on his last words as before,
+          and a bare yes or stop there is refused with the stray-yes line (D16; v3 addition 3).
+        Anything else (a model's call: no tools are offered on either provider, so I6 holds trivially) is refused before
+        anything runs. Concurrent Check and yes, and a retried confirm, consume once: the second gets the first receipt."""
         if not adapter.csrf_ok():
             return jsonify({"ok": False, "error": "csrf"}), 403
         who = principal()
@@ -1947,18 +2315,29 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         body = request.get_json(force=True, silent=True) or {}
         sid, call_id, name = body.get("session_id"), body.get("call_id"), body.get("name")
         owner_text, item = body.get("owner_transcript_item"), body.get("owner_item_id")
-        if (not valid_token(sid) or not valid_token(call_id) or name not in {"consult", "save_note"}
-                or not owner_item(item)):
+        action_id, confirm_item = body.get("action_id"), body.get("confirm_item_id")
+        tap = isinstance(call_id, str) and call_id.startswith(CHECK_CALL)
+        if not valid_token(sid) or not valid_token(call_id) or (action_id is not None and not valid_token(action_id)):
             return jsonify({"ok": False, "error": "invalid consult"}), 400
         if sessions.owner_of(sid) != who:
             return jsonify({"ok": False, "error": "not your session"}), 403
+        if not tap and (action_id is None or not owner_item(confirm_item)):
+            return jsonify({"ok": False, "error": "not_confirmed", "outcome": "not_done", "spoken": NOT_CONFIRMED}), 200
+        if action_id is not None:
+            done, slot = (sessions.consume(sid, action_id=action_id) if tap else
+                          sessions.consume(sid, action_id=action_id, confirm_item=confirm_item, owner_item=item,
+                                           text_hash=body.get("text_sha256")))
+            if slot is None:
+                return jsonify({"ok": False, "error": done, "outcome": "not_done", "action_id": action_id,
+                                "spoken": NOT_CONFIRMED if done == "not_confirmed" else NOT_WAITING}), 200
+            return run_action(who, sid, call_id, slot)
+        if name not in {"consult", "save_note"} or not owner_item(item):
+            return jsonify({"ok": False, "error": "invalid consult"}), 400
         if not isinstance(owner_text, str) or not owner_text.strip():
             return jsonify({"ok": False, "error": "owner text required"}), 400
-        # Defence in depth (review B N7): on a provider not eligible for the model's own actions, only Check with the
-        # person (the page's own call, "host-…") acts. The model has no tools there; a call of its own runs nothing.
-        if not str(call_id).startswith(CHECK_CALL) and not sessions.model_actions(sid):
-            return jsonify({"ok": False, "error": "check_only", "outcome": "not_done",
-                            "spoken": f"On this voice only Check with {person['short']} acts. Nothing was done."}), 200
+        _done, slot = sessions.consume(sid, tap_item=item)
+        if slot is not None:                              # the tap on the waiting request's own words confirms it
+            return run_action(who, sid, call_id, slot)
         answer, status = consult(adapter, sessions, who, sid, call_id, name, owner_text, item)
         return jsonify(answer), status
 
@@ -2070,6 +2449,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         if not posted:
             return jsonify(ok=True, kept=0, **told())
         if not sessions.count(sid, [(e[:3], len(e[3].encode())) for e in posted]):
+            sessions.drop_waiting(sid, "capture_full")            # v3: capture full drops the waiting action
             return refusal("cap", "This voice session has kept all it may. Nothing more was kept.", 429)
         handle, refused = adapter.conversation(sessions.conversation_of(sid))
         if refused is not None:
@@ -2083,13 +2463,68 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
                 kept += 1
         except (SessionRefused, ValueError):
             return refusal("not_kept", "A transcript turn could not be kept.", 409, kept=kept)
-        proposed, confirmed = sessions.heard(sid, [(e[:3], e[3]) for e in posted if e[0] == "user" and not e[4]])
-        answer = {"ok": True, "kept": kept, "proposing": sessions.proposing(sid), **told()}
-        if proposed:
-            answer.update(propose_end=True, prompt=SUMMARY_PROMPT)       # the page offers End; nothing ends yet
-        if confirmed:
-            answer["end_confirmed"] = True                              # the page asks for the summary (it ends)
-        return jsonify(answer)
+        # v3: the spoken end ("we're done", then yes) is decided by the utterance route, on the session's one waiting
+        # action, never here: a transcript post keeps turns and decides nothing (one control owner).
+        return jsonify({"ok": True, "kept": kept, "proposing": sessions.proposing(sid), **told()})
+
+    def utterance_session(raw_sid):
+        """(owner, session) for an utterance or asked post (keep_transcript's checks: the host's guard ran, as for a
+        transcript post), or (None, refusal)."""
+        who, sid = principal(), session_id(raw_sid)
+        if sid is None or who is None or sessions.owner_of(sid) != who:
+            return None, refusal("not_your_session", "That is not your voice session. Nothing was done.", 403)
+        if request.content_length is None or request.content_length > UTTERANCE_MAX_BYTES:
+            return None, refusal("too_large", "That post is too large. Nothing was done.", 413)
+        if not sessions.is_open(sid) or sessions.expired(sid):
+            return None, refusal("session_ended", "That voice session has ended. Nothing was done.", 409)
+        return (who, sid), None
+
+    @transcript.route("/api/realtime-voice/session/<session_id>/utterance", methods=["POST"])
+    def utterance(session_id):
+        """One finished owner item, {conversation_id, owner_item_id, text}, heard once (v3): the grammar fast path, then
+        the understanding call; the answer is the decision (ask, confirm, dropped, read_back, nothing_waiting or chat).
+        Nothing here acts: a confirmation is consumed only by the action path. read_back carries the waiting action's
+        words, to this owner's page only. A retried post gets its first decision."""
+        found, refused = utterance_session(session_id)
+        if refused is not None:
+            return refused
+        _who, sid = found
+        body = request.get_json(silent=True)
+        item = body.get("owner_item_id") if isinstance(body, dict) else None
+        text = body.get("text") if isinstance(body, dict) else None
+        if (not isinstance(body, dict) or set(body) - {"conversation_id", "owner_item_id", "text"}
+                or body.get("conversation_id") != sessions.conversation_of(sid) or not owner_item(item)
+                or not isinstance(text, str) or not text.strip() or len(text.encode()) > TURN_MAX_BYTES):
+            return refusal("invalid", "That utterance is not valid. Nothing was done.", 422)
+        sessions.seen(sid)
+
+        def hear(words, waiting):
+            label = fast_label(adapter, grammar, words, waiting)
+            return label if label is not None else understand(words, waiting)
+        decision = sessions.decide(sid, item, text.strip(), hear, tool_of)
+        if decision is None:
+            return refusal("session_ended", "That voice session has ended. Nothing was done.", 409)
+        if decision == "cap":
+            return refusal("cap", "This voice session has decided all it may. Nothing was done.", 429)
+        return jsonify({"ok": True, **decision, "proposing": sessions.proposing(sid)})
+
+    @transcript.route("/api/realtime-voice/session/<session_id>/utterance/<action_id>/asked", methods=["POST"])
+    def asked(session_id, action_id):
+        """The question of waiting action ``action_id`` started playing (or showed on screen, when it could not be
+        spoken), {after_item}: the newest owner item then. Only a later owner item may confirm it, within ANSWER_S; a
+        read-back's question re-arms it. 409 when that action is no longer waiting."""
+        found, refused = utterance_session(session_id)
+        if refused is not None:
+            return refused
+        _who, sid = found
+        body = request.get_json(silent=True)
+        after = body.get("after_item") if isinstance(body, dict) else None
+        if not valid_token(action_id) or not owner_item(after):
+            return refusal("invalid", "That is not a question's start. Nothing was done.", 422)
+        got = sessions.asked(sid, action_id, after)
+        if got is None:
+            return refusal("not_waiting", NOT_WAITING, 409)
+        return jsonify({"ok": True, "action_id": action_id, "state": "asked", **got})
 
     def records_blueprint():
         """The needs-attention list, one session's detail and download, dismissing one, and the capabilities read (§6.5,
@@ -2331,10 +2766,15 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
                 "summary_decision_url": url_prefix + "/api/realtime-voice/session/{session_id}/summary/decision",
                 "reconcile_url": url_prefix + "/api/realtime-voice/consult/{session_id}/{owner_item_id}",
                 "keep_talking_url": url_prefix + "/api/realtime-voice/session/{session_id}/keep_talking",
+                # v3 (confirm by voice): each finished owner item is heard here; a question's start is recorded here
+                "utterance_url": url_prefix + "/api/realtime-voice/session/{session_id}/utterance",
+                "asked_url": url_prefix + "/api/realtime-voice/session/{session_id}/utterance/{action_id}/asked",
                 "heartbeat_seconds": HEARTBEAT_SECONDS, "persona": person["key"], "locale": locale,
                 "card_release": release, "person": {"name": person["name"], "short": person["short"]},
-                # Which offered provider's model may act on its own call (Spec 165 §7 as amended): the page's words only.
+                # Which offered provider's model may act on its own call: none under v3 (no page labels say otherwise).
                 "model_actions": {p["provider"]: model_actions(p["provider"]) for p in offered},
+                # Where the page creates every response (OpenAI), each waiting for its item's decision (v3).
+                "page_responses": {p["provider"]: capabilities_page_responses(p["provider"]) for p in offered},
                 "words": dict(adapter.words)}
     if not adapter.default_voices:
         metadata["unvoiced"] = unvoiced_now

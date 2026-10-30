@@ -32,10 +32,13 @@ def boot(r, provider):
 
 
 def test_eligibility_is_one_reviewed_value_openai_yes_xai_no():
-    assert capabilities.MODEL_ACTIONS == {"openai": True, "xai": False}
-    assert capabilities.model_actions("openai") is True
-    assert capabilities.model_actions("xai") is False
+    """Adapted for v3 (the app acts; the voice only talks): no provider's model may act, so I6 holds trivially; where the
+    page creates every response is its own reviewed value (OpenAI yes, xAI no)."""
+    assert capabilities.MODEL_ACTIONS == {"openai": False, "xai": False}
+    assert capabilities.model_actions("openai") is False and capabilities.model_actions("xai") is False
     assert capabilities.model_actions("claude") is False                 # anything not named is not eligible
+    assert capabilities.PAGE_RESPONSES == {"openai": True, "xai": False}
+    assert capabilities.page_responses("openai") is True and capabilities.page_responses("claude") is False
 
 
 def test_openai_direct_the_page_creates_every_response_and_the_model_has_its_tools(rig):
@@ -49,9 +52,10 @@ def test_openai_direct_the_page_creates_every_response_and_the_model_has_its_too
     assert vad["create_response"] is False                               # the provider starts no response of its own
     assert vad["interrupt_response"] is True                             # barge-in still cancels a response (I5)
     assert vad["type"] == "server_vad" and vad["silence_duration_ms"] == 1200 and vad["prefix_padding_ms"] == 300
-    assert [t["name"] for t in minted["tools"]] == ["consult", "save_note"]
-    assert "your two tools are 'consult'" in minted["instructions"]
-    assert "you have no tools" not in minted["instructions"]
+    # Adapted for v3: the page still creates every response, but the model has no tools; the same rules as on xAI.
+    assert minted["tools"] is None
+    assert "you have no tools" in minted["instructions"] and "your two tools" not in minted["instructions"]
+    assert "without repeating or describing his words" in minted["instructions"] and "press Check" not in minted["instructions"]
 
 
 def test_xai_direct_has_no_action_tool_its_rules_send_actions_to_check_and_check_still_works(rig, monkeypatch):
@@ -66,7 +70,8 @@ def test_xai_direct_has_no_action_tool_its_rules_send_actions_to_check_and_check
     assert minted.get("tools") is None and "tools" not in body["session_config"]
     assert minted["turn_detection"] == conversation_turn_detection("xai")   # xAI's turn detection unchanged
     text = minted["instructions"]
-    assert "you have no tools" in text and "press Check with TP" in text and "your two tools" not in text
+    # Adapted for v3: the same rules as OpenAI's (no "press Check" line: he confirms by voice on both providers).
+    assert "you have no tools" in text and "press Check" not in text and "your two tools" not in text
     assert "Shall I sum up?" in text                                     # the spoken end is unchanged
     # Check with the person is page-initiated, its id and words from one capture record: it still works on xAI.
     sid = body["voice_session_id"]
@@ -76,7 +81,8 @@ def test_xai_direct_has_no_action_tool_its_rules_send_actions_to_check_and_check
 
 
 def test_the_capabilities_metadata_names_which_offered_provider_may_act(rig):
-    assert rig.metadata["model_actions"] == {"openai": True, "xai": False}
+    assert rig.metadata["model_actions"] == {"openai": False, "xai": False}          # v3: none (adapted)
+    assert rig.metadata["page_responses"] == {"openai": True, "xai": False}
 
 
 def test_a_host_persona_that_offers_tools_where_the_page_cannot_name_the_owner_is_refused(monkeypatch):
@@ -93,7 +99,7 @@ def test_a_host_persona_that_offers_tools_where_the_page_cannot_name_the_owner_i
         return {"name": "P", "prompt_txt": "p", "scenes": {}, "voices": {}, "tools": tools, "instructions": "rules"}
     app.register_blueprint(create_bootstrap_blueprint(domain="t", locale="en-US", get_persona=persona,
                                                       is_production=lambda: True, owner=lambda: ("robert", "Robert"),
-                                                      page_responses=capabilities.model_actions))
+                                                      page_responses=capabilities.page_responses))
     answer = app.test_client().post("/api/realtime-voice/bootstrap", json={"persona": "p", "provider": "xai"})
     assert answer.status_code == 400 and answer.get_json()["error"] == "invalid tools"
     assert seen == [False] and mints == []
@@ -140,17 +146,22 @@ def test_the_turn_standard_changes_only_for_a_caller_that_passes_interrupt_respo
 # ── The binding pass's independent review at 8eb30a10 (REVIEW_independent_A1_binding.md) ──────────────────────────────
 
 def test_b_n7_on_a_provider_not_eligible_the_consult_route_runs_only_check(rig, monkeypatch):
-    """Defence in depth (B N7): the session records its provider's eligibility at bootstrap. On xAI a call that is not the
-    page's own Check ("host-…") runs nothing, and answers not done; Check still acts. On OpenAI the model's call acts."""
+    """Defence in depth (B N7), as v3 makes it (the app acts; the voice only talks): on every provider the action path acts
+    only on Check ("host-…") or a confirmed waiting action. A model's own call runs nothing and answers not done, on xAI
+    and now on OpenAI too (adapted: before v3 the OpenAI model's call acted); Check still acts on both."""
     r = rig
     xai_mint(monkeypatch, [])
+    model = lambda sid: r.client.post(BASE + "/consult", headers=OWNER, json={          # noqa: E731
+        "session_id": sid, "call_id": "call_model", "name": "consult", "owner_transcript_item": "What is on my agenda?",
+        "owner_item_id": "t0"}).get_json()
     grok = boot(r, "xai").get_json()["voice_session_id"]
-    refused = consult(r, grok, call_id="call_model", turn="t0").get_json()
-    assert refused["outcome"] == "not_done" and refused["error"] == "check_only" and "Check with TP" in refused["spoken"]
+    refused = model(grok)
+    assert refused["outcome"] == "not_done" and refused["error"] == "not_confirmed" and "his words" not in refused["spoken"]
     assert r.host.turns == []                                               # nothing ran
     assert consult(r, grok, call_id="host-7", turn="t0").get_json()["outcome"] == "done" and len(r.host.turns) == 1
     openai = boot(r, "openai").get_json()["voice_session_id"]
-    assert consult(r, openai, call_id="call_model", turn="t0").get_json()["outcome"] == "done" and len(r.host.turns) == 2
+    assert model(openai)["error"] == "not_confirmed" and len(r.host.turns) == 1
+    assert consult(r, openai, call_id="host-8", turn="t0").get_json()["outcome"] == "done" and len(r.host.turns) == 2
 
 
 def test_b_s3_end_keeps_the_owner_turns_not_acted_on_capture_ids_only_once_each(rig):

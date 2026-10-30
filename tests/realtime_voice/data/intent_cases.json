@@ -1,0 +1,331 @@
+{
+  "about": "Confirm by voice, v3: varied natural phrasing in English, German and Portuguese, and what the understanding call (core/realtime_voice/intent_gateway.py) should answer for each. 'waiting' is the kind of action waiting (null: nothing). 'path' is 'model' (the grammar fast path does not hear it, so the call does) or 'grammar' (heard without a call; 'label' is then the fast path's). The host is MC (its person names the consult). tests/realtime_voice/test_intent_gateway.py drives the wiring with a fake gateway; scripts/dev/eval_voice_intent.py runs the real alias over the 'model' cases (offline, never in a suite).",
+  "person": {
+    "name": "Master Craftsman",
+    "short": "MC"
+  },
+  "cases": [
+    {
+      "lang": "en",
+      "waiting": null,
+      "text": "Could you jot down that the glaze needs a second firing?",
+      "label": "note",
+      "path": "model"
+    },
+    {
+      "lang": "en",
+      "waiting": null,
+      "text": "Remember for me that Anna called about the invoice.",
+      "label": "note",
+      "path": "model"
+    },
+    {
+      "lang": "en",
+      "waiting": null,
+      "text": "Stick a post-it on the board saying order more clay.",
+      "label": "postit",
+      "path": "model"
+    },
+    {
+      "lang": "en",
+      "waiting": null,
+      "text": "What's the status of item twelve?",
+      "label": "consult",
+      "path": "model"
+    },
+    {
+      "lang": "en",
+      "waiting": null,
+      "text": "Can you find out whether last night's deploy finished?",
+      "label": "consult",
+      "path": "model"
+    },
+    {
+      "lang": "en",
+      "waiting": null,
+      "text": "How are you doing today?",
+      "label": "chat",
+      "path": "model"
+    },
+    {
+      "lang": "en",
+      "waiting": null,
+      "text": "Tell me something funny about kilns.",
+      "label": "chat",
+      "path": "model"
+    },
+    {
+      "lang": "en",
+      "waiting": null,
+      "text": "Ask CoS what is on my calendar tomorrow.",
+      "label": "chat",
+      "path": "model"
+    },
+    {
+      "lang": "de",
+      "waiting": null,
+      "text": "Kannst du dir merken, dass der Ofen heiß ist?",
+      "label": "note",
+      "path": "model"
+    },
+    {
+      "lang": "de",
+      "waiting": null,
+      "text": "Schreib dir auf, dass Anna angerufen hat.",
+      "label": "note",
+      "path": "model"
+    },
+    {
+      "lang": "de",
+      "waiting": null,
+      "text": "Mach mir einen Merkzettel für die Pinnwand, dass wir Ton brauchen.",
+      "label": "postit",
+      "path": "model"
+    },
+    {
+      "lang": "de",
+      "waiting": null,
+      "text": "Kleb einen Zettel ans Board: Ton nachbestellen.",
+      "label": "postit",
+      "path": "grammar"
+    },
+    {
+      "lang": "de",
+      "waiting": null,
+      "text": "Wie ist der Stand bei Punkt zwölf?",
+      "label": "consult",
+      "path": "model"
+    },
+    {
+      "lang": "de",
+      "waiting": null,
+      "text": "Wie geht es dir heute?",
+      "label": "chat",
+      "path": "model"
+    },
+    {
+      "lang": "pt",
+      "waiting": null,
+      "text": "Anota aí que o forno está quente.",
+      "label": "note",
+      "path": "model"
+    },
+    {
+      "lang": "pt",
+      "waiting": null,
+      "text": "Coloca um lembrete no quadro: comprar argila.",
+      "label": "postit",
+      "path": "model"
+    },
+    {
+      "lang": "pt",
+      "waiting": null,
+      "text": "Qual é a situação do item doze?",
+      "label": "consult",
+      "path": "model"
+    },
+    {
+      "lang": "pt",
+      "waiting": null,
+      "text": "Tudo bem contigo hoje?",
+      "label": "chat",
+      "path": "model"
+    },
+    {
+      "lang": "en",
+      "waiting": "note",
+      "text": "Yes, that's right, save it.",
+      "label": "yes",
+      "path": "model"
+    },
+    {
+      "lang": "en",
+      "waiting": "note",
+      "text": "Sounds good to me.",
+      "label": "yes",
+      "path": "model"
+    },
+    {
+      "lang": "en",
+      "waiting": "note",
+      "text": "No, leave it for now.",
+      "label": "no",
+      "path": "model"
+    },
+    {
+      "lang": "en",
+      "waiting": "note",
+      "text": "Actually, don't bother with that.",
+      "label": "no",
+      "path": "model"
+    },
+    {
+      "lang": "en",
+      "waiting": "note",
+      "text": "How did that note go again?",
+      "label": "read_back",
+      "path": "model"
+    },
+    {
+      "lang": "en",
+      "waiting": "note",
+      "text": "Yes, and also remind me about the kiln at five.",
+      "label": "chat",
+      "path": "model"
+    },
+    {
+      "lang": "en",
+      "waiting": "consult",
+      "text": "Yeah, go on and ask him.",
+      "label": "yes",
+      "path": "model"
+    },
+    {
+      "lang": "en",
+      "waiting": "consult",
+      "text": "Let's skip that one.",
+      "label": "no",
+      "path": "model"
+    },
+    {
+      "lang": "de",
+      "waiting": "note",
+      "text": "Ja, passt so.",
+      "label": "yes",
+      "path": "model"
+    },
+    {
+      "lang": "de",
+      "waiting": "note",
+      "text": "Nein, lass es lieber.",
+      "label": "no",
+      "path": "model"
+    },
+    {
+      "lang": "de",
+      "waiting": "note",
+      "text": "Wie war das nochmal genau?",
+      "label": "read_back",
+      "path": "model"
+    },
+    {
+      "lang": "de",
+      "waiting": "consult",
+      "text": "Ja, frag ihn ruhig.",
+      "label": "yes",
+      "path": "model"
+    },
+    {
+      "lang": "pt",
+      "waiting": "note",
+      "text": "Sim, pode salvar.",
+      "label": "yes",
+      "path": "model"
+    },
+    {
+      "lang": "pt",
+      "waiting": "note",
+      "text": "Não, deixa pra lá.",
+      "label": "no",
+      "path": "model"
+    },
+    {
+      "lang": "pt",
+      "waiting": "note",
+      "text": "Pode repetir o que eu falei?",
+      "label": "read_back",
+      "path": "model"
+    },
+    {
+      "lang": "pt",
+      "waiting": "consult",
+      "text": "Sim, pergunta para ele.",
+      "label": "yes",
+      "path": "model"
+    },
+    {
+      "lang": "en",
+      "waiting": null,
+      "text": "make a note that the kiln is hot",
+      "label": "note",
+      "path": "grammar"
+    },
+    {
+      "lang": "en",
+      "waiting": null,
+      "text": "Ask MC what is stuck on 12",
+      "label": "consult",
+      "path": "grammar"
+    },
+    {
+      "lang": "de",
+      "waiting": null,
+      "text": "Frag MC, ob der Build durch ist",
+      "label": "consult",
+      "path": "grammar"
+    },
+    {
+      "lang": "pt",
+      "waiting": null,
+      "text": "Pergunte ao MC o que falta",
+      "label": "consult",
+      "path": "grammar"
+    },
+    {
+      "lang": "en",
+      "waiting": "note",
+      "text": "Yes, go ahead.",
+      "label": "yes",
+      "path": "grammar"
+    },
+    {
+      "lang": "de",
+      "waiting": "note",
+      "text": "Ja, mach das.",
+      "label": "yes",
+      "path": "grammar"
+    },
+    {
+      "lang": "pt",
+      "waiting": "note",
+      "text": "Sim, pode fazer.",
+      "label": "yes",
+      "path": "grammar"
+    },
+    {
+      "lang": "en",
+      "waiting": "note",
+      "text": "No, cancel.",
+      "label": "no",
+      "path": "grammar"
+    },
+    {
+      "lang": "en",
+      "waiting": "note",
+      "text": "Read it back, please.",
+      "label": "read_back",
+      "path": "grammar"
+    },
+    {
+      "lang": "de",
+      "waiting": "note",
+      "text": "Lies es mir vor.",
+      "label": "read_back",
+      "path": "grammar"
+    },
+    {
+      "lang": "pt",
+      "waiting": "note",
+      "text": "Lê de novo.",
+      "label": "read_back",
+      "path": "grammar"
+    },
+    {
+      "lang": "en",
+      "waiting": null,
+      "text": "Okay, we're done.",
+      "label": "end",
+      "path": "grammar"
+    }
+  ]
+}

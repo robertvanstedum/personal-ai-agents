@@ -12,15 +12,17 @@
 #                           (default 5). Then:
 #                           1. the LIVE gateway config
 #                              (~/minimoi-staging/config/litellm.staging.yaml,
-#                              not the repo file) gets the route
-#                              minimoi-voice-summary if it lacks it: exactly this
-#                              checkout's block, with a timestamped backup beside
-#                              it; then ONLY the gateway container restarts
+#                              not the repo file) gets the routes
+#                              minimoi-voice-summary and minimoi-voice-intent
+#                              (confirm by voice, v3: the understanding call,
+#                              under the same keys) where it lacks them: exactly
+#                              this checkout's blocks, with one timestamped backup
+#                              beside it; then ONLY the gateway container restarts
 #                              (CoS's and MC's model calls fail for about a
 #                              minute). The backup goes back if the gateway is
 #                              not healthy on the new file;
-#                           2. each key is made inside the gateway: the alias
-#                              only, chat completions only, a monthly budget,
+#                           2. each key is made inside the gateway: the two
+#                              aliases only, chat completions only, a monthly budget,
 #                              rpm 10; written unprinted (600) as
 #                              MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_MC to mc.env and
 #                              MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS to cos.env.
@@ -47,6 +49,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/mc_keys.sh"
 
 GATEWAY_CONTAINER=minimoi-model-gateway
 VOICE_ALIAS=minimoi-voice-summary
+# Every voice route the keys reach (VOICE_SUMMARY_KEY_MODELS), the summary's first.
+VOICE_ALIASES=("$VOICE_ALIAS" minimoi-voice-intent)
 VOICE_DEFAULT_CAP=5
 # The live gateway's model map: build.sh copies it from the release, and
 # docker-compose.staging.yml mounts it over the image's /app/config.yaml.
@@ -67,9 +71,11 @@ env_value() { sed -n "s/^$2=//p" "$1" 2>/dev/null | tail -n 1 | sed "s/^'\\(.*\\
 health_of() { docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$1" 2>/dev/null || echo absent; }
 sha_of() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | awk '{print $1}'; }
 
-# has_route FILE: does this gateway config route the summary alias?
-ROUTE_RE="^[[:space:]]*-[[:space:]]+model_name:[[:space:]]*$VOICE_ALIAS[[:space:]]*\$"
-has_route() { grep -Eq "$ROUTE_RE" "$1" 2>/dev/null; }
+# has_route FILE [ALIAS]: does this gateway config route that alias (the summary's when none is named)?
+route_re() { echo "^[[:space:]]*-[[:space:]]+model_name:[[:space:]]*${1:-$VOICE_ALIAS}[[:space:]]*\$"; }
+ROUTE_RE=$(route_re "$VOICE_ALIAS")
+has_route() { grep -Eq "$(route_re "${2:-$VOICE_ALIAS}")" "$1" 2>/dev/null; }
+has_routes() { local a; for a in "${VOICE_ALIASES[@]}"; do has_route "$1" "$a" || return 1; done; }
 
 # deploy_has TEXT: does the switch-over script contain TEXT, literally?
 deploy_has() { grep -Fq "$1" "$VOICE_DEPLOY"; }
@@ -108,18 +114,19 @@ voice_key_problems() {
   echo "${problems# }"
 }
 
-# voice_route_py: Python run INSIDE the gateway container (stdin; the gateway's
-# own YAML parser). Env in: VOICE_LIVE_CFG (the live config's text),
+# voice_route_py ALIAS: Python run INSIDE the gateway container (stdin; the
+# gateway's own YAML parser). Env in: VOICE_LIVE_CFG (the live config's text),
 # VOICE_ROUTE_SRC (the repo file's text). Prints the live config with exactly
-# the repo's route block added (its comment lines too), re-indented to the
-# live file's style, before minimoi-mc-agent as in the repo (else after the
-# last route). Refuses unless the result parses to the live config plus that
-# one route and nothing else. The config holds no secret (provider keys are
-# os.environ/ references).
+# the repo's route block for ALIAS added (its comment lines too), re-indented
+# to the live file's style, before the first route that follows it in the repo
+# and is in the live file (else after the last route). Refuses unless the
+# result parses to the live config plus that one route and nothing else. The
+# config holds no secret (provider keys are os.environ/ references).
 voice_route_py() {
+  printf 'ALIAS = "%s"\n' "$1"
   cat <<'PY'
 import copy, os, sys, yaml
-ALIAS, NEXT, ITEM = "minimoi-voice-summary", "minimoi-mc-agent", "- model_name: "
+ITEM = "- model_name: "
 live, src = os.environ["VOICE_LIVE_CFG"], os.environ["VOICE_ROUTE_SRC"]
 def fail(why):
     print("voice summary route: " + why, file=sys.stderr)
@@ -128,6 +135,8 @@ def indent(line):
     return len(line) - len(line.lstrip(" "))
 old, repo = yaml.safe_load(live), yaml.safe_load(src)
 names = [r.get("model_name") for r in old.get("model_list") or []]
+order = [r.get("model_name") for r in repo.get("model_list") or []]
+NEXT = next((n for n in order[order.index(ALIAS) + 1:] if n in names), None) if ALIAS in order else None
 if ALIAS in names:
     fail("the live config already has it")
 want = [r for r in repo.get("model_list") or [] if r.get("model_name") == ALIAS]
@@ -164,7 +173,7 @@ for l in block:
         moved.append(l[-shift:])
     else:
         fail("the route block cannot be re-indented to the live file's style")
-nxt = [k for k in items if lines[k].strip() == ITEM + NEXT and indent(lines[k]) == live_base]
+nxt = [k for k in items if NEXT and lines[k].strip() == ITEM + NEXT and indent(lines[k]) == live_base]
 if nxt:
     pos = nxt[0]
     while pos > 0 and lines[pos - 1].lstrip().startswith("#") and indent(lines[pos - 1]) == live_base:
@@ -206,31 +215,45 @@ restart_gateway() {
   [[ -n "$want" && "$want" == "$got" ]]
 }
 
-# The live gateway config gets the summary route, if it lacks it.
+# The live gateway config gets each voice route (VOICE_ALIASES) it lacks, in
+# one change: one backup, then one gateway restart.
 ensure_route() {
-  local cfg="$STAGING_GATEWAY_CONFIG" backup tmp rc=0
-  if has_route "$cfg"; then
-    note "the live gateway config already routes $VOICE_ALIAS (unchanged; the gateway is not restarted)"
+  local cfg="$STAGING_GATEWAY_CONFIG" backup tmp next rc alias added=""
+  for alias in "${VOICE_ALIASES[@]}"; do
+    if has_route "$cfg" "$alias"; then
+      note "the live gateway config already routes $alias (unchanged)"
+    fi
+  done
+  if has_routes "$cfg"; then
+    note "the gateway is not restarted"
     return 0
   fi
   tmp="$cfg.voice-tmp.$$"
-  voice_route_py | VOICE_LIVE_CFG=$(cat "$cfg") VOICE_ROUTE_SRC=$(cat "$VOICE_ROUTE_SOURCE") \
-    docker exec -i -e VOICE_LIVE_CFG -e VOICE_ROUTE_SRC "$GATEWAY_CONTAINER" python - > "$tmp" || rc=$?
-  if [[ "$rc" != 0 || ! -s "$tmp" ]] || ! has_route "$tmp"; then
-    rm -f "$tmp"
-    die "could not add $VOICE_ALIAS to the live gateway config (nothing changed)"
-  fi
+  cp -p "$cfg" "$tmp"
+  for alias in "${VOICE_ALIASES[@]}"; do
+    has_route "$tmp" "$alias" && continue
+    rc=0
+    next="$tmp.next"
+    voice_route_py "$alias" | VOICE_LIVE_CFG=$(cat "$tmp") VOICE_ROUTE_SRC=$(cat "$VOICE_ROUTE_SOURCE") \
+      docker exec -i -e VOICE_LIVE_CFG -e VOICE_ROUTE_SRC "$GATEWAY_CONTAINER" python - > "$next" || rc=$?
+    if [[ "$rc" != 0 || ! -s "$next" ]] || ! has_route "$next" "$alias"; then
+      rm -f "$tmp" "$next"
+      die "could not add $alias to the live gateway config (nothing changed)"
+    fi
+    mv -f "$next" "$tmp"
+    added="$added $alias"
+  done
   backup="$cfg.before-voice-summary.$(date -u +%Y%m%dT%H%M%SZ)"
   cp -p "$cfg" "$backup"
   chmod "$(file_mode "$cfg")" "$tmp"               # build.sh's mode: the gateway reads it as its own user
   mv -f "$tmp" "$cfg"
-  note "added $VOICE_ALIAS to $cfg (backup: $backup)"
+  note "added${added} to $cfg (backup: $backup)"
   if ! restart_gateway; then
     cp -p "$backup" "$cfg"
     restart_gateway || true
     die "the gateway was not healthy on the new config: put the backup back and restarted it (no key was made)"
   fi
-  note "the gateway is healthy and reads the new route"
+  note "the gateway is healthy and reads the new routes"
 }
 
 # make_key HOST CAP: makes that host's key inside the gateway and writes it,
@@ -261,7 +284,7 @@ summary_keys() {
   gateway_keys_on || die "the gateway has no key database yet: run mc.sh gateway-keys first"
   [[ "$(health_of "$GATEWAY_CONTAINER")" == healthy ]] || die "the model gateway is not healthy"
   [[ -f "$STAGING_GATEWAY_CONFIG" ]] || die "missing $STAGING_GATEWAY_CONFIG (build.sh writes it)"
-  has_route "$VOICE_ROUTE_SOURCE" || die "$VOICE_ROUTE_SOURCE has no $VOICE_ALIAS route (run voice.sh from the branch that carries it)"
+  has_routes "$VOICE_ROUTE_SOURCE" || die "$VOICE_ROUTE_SOURCE has no ${VOICE_ALIASES[*]} routes (run voice.sh from the branch that carries them)"
   [[ -x "$VOICE_DEPLOY" ]] || die "missing $VOICE_DEPLOY (dev's voice switch-over)"
   for host in mc cos; do
     var=$(voice_var "$host")
@@ -315,7 +338,7 @@ summary_keys() {
     note "the portal and cos-scheduler already have their keys (not recreated)"
   fi
   printf '%s' "$report"
-  echo "portal: $(voice_var mc) set; cos-scheduler: $(voice_var cos) set; gateway routes $VOICE_ALIAS"
+  echo "portal: $(voice_var mc) set; cos-scheduler: $(voice_var cos) set; gateway routes ${VOICE_ALIASES[*]}"
   note "next: end a voice session with MC and one with CoS; each summary should read as a summary, not \"unavailable\""
 }
 

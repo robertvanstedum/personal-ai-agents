@@ -21,6 +21,7 @@ const DIRECT = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenA
   bootstrap_url: `${BASE}/bootstrap`, consult_url: `${BASE}/consult`, end_url: `${BASE}/session/{session_id}/end`,
   transcript_url: `${BASE}/session/{session_id}/transcript`, summary_url: `${BASE}/session/{session_id}/summary`,
   summary_decision_url: `${BASE}/session/{session_id}/summary/decision`, keep_talking_url: `${BASE}/session/{session_id}/keep_talking`,
+  utterance_url: `${BASE}/session/{session_id}/utterance`, asked_url: `${BASE}/session/{session_id}/utterance/{action_id}/asked`,
   heartbeat_seconds: 20, persona: 'master_craftsman',
   locale: 'en-US', card_release: '0.1.18', person: { name: 'Master Craftsman', short: 'MC' } };
 const UNKNOWN = "I didn't get the result back. Check it in writing before asking again.";      // Spec 165 §5.1's words
@@ -110,20 +111,27 @@ async function check(name, fn) {
 }
 
 // ── B1: one owner turn, one effect, whoever dispatches it ───────────────────────────────────────────────────────────────
-await check('B1 manual Check then the model on the same words name the same owner turn', async () => {
-  const r = rig(); await r.s.start('openai');
-  r.c.utter('Save a note: the kiln needs a new seal');
+// Adapted for v3 (the app acts; the voice only talks): the model no longer dispatches. B1's rule holds between Check and his
+// spoken yes, which both confirm the one waiting action: one post, on the request's own owner turn.
+const say = (line) => `Say this briefly, adding nothing: ${line}`;
+const askFor = (item) => ({ status: 200, body: { ok: true, decision: 'ask', action_id: 'a1', kind: 'note', owner_item_id: item, text_sha256: 'h1' } });
+await check('B1 Check on the waiting request and his spoken yes name the same owner turn, once', async () => {
+  const r = rig({ routes: { '/utterance': (body) => (body.text === 'Yes.' ? { status: 200, body: { ok: true, decision: 'confirm',
+    action_id: 'a1', kind: 'note', owner_item_id: 't0', confirm_item_id: 't1', text_sha256: 'h1' } } : askFor(body.owner_item_id)) } });
+  await r.s.start('openai');
+  r.c.utter('Save a note: the kiln needs a new seal'); await flush();
   await r.s.check();
-  await r.c.options.onFunctionCall({ call_id: 'provider-repeat', name: 'save_note', arguments: {} });
-  const turns = r.posts('/consult').map((p) => p.body.owner_item_id);
-  assert.equal(turns.length, 2); assert.ok(turns[0]); assert.equal(turns[0], turns[1]);
+  r.c.utter('Yes.'); await flush();
+  const posts = r.posts('/consult');
+  assert.equal(posts.length, 1); assert.equal(posts[0].body.owner_item_id, 't0'); assert.equal(posts[0].body.action_id, 'a1');
+  assert.match(posts[0].body.call_id, /^host-/);
 });
 await check('B1 the same words said again are a new owner turn', async () => {
   const r = rig(); await r.s.start('openai');
-  r.c.utter('What is stuck on #12?');
-  await r.c.options.onFunctionCall({ call_id: 'a', name: 'consult', arguments: {} });
-  r.c.utter('What is stuck on #12?');
-  await r.c.options.onFunctionCall({ call_id: 'b', name: 'consult', arguments: {} });
+  r.c.utter('What is stuck on #12?'); await flush();
+  await r.s.check();
+  r.c.utter('What is stuck on #12?'); await flush();
+  await r.s.check();
   const [first, second] = r.posts('/consult').map((p) => p.body.owner_item_id);
   assert.ok(first && second); assert.notEqual(first, second);
 });
@@ -131,8 +139,9 @@ await check('B1 a second dispatch while the first runs is told it is still being
   const r = rig({ routes: { '/consult': () => ({ status: 409, body: { ok: false, error: 'in flight', spoken: 'Still checking.' } }) } });
   await r.s.start('openai');
   r.c.utter('Run the nightly job.');
-  const out = await r.c.options.onFunctionCall({ call_id: 'provider-2', name: 'consult', arguments: {} });
-  assert.equal(out.outcome, 'pending'); assert.doesNotMatch(out.spoken, /did not go through/);   // only done is ok (§5.1)
+  await r.s.check(); await flush();
+  assert.equal(r.c.instructions.at(-1), say(D.HANDLING));                                // only done is ok (§5.1)
+  assert.doesNotMatch(r.c.instructions.at(-1), /did not go through/);
 });
 
 // ── B2: Sum up closes the record only after the last turns are kept ─────────────────────────────────────────────────────
@@ -180,13 +189,13 @@ await check('B2 a final post that never answers holds the summary at most five s
 });
 await check('B2 a spoken yes asks for the summary after its own post, without waiting on itself', async () => {
   const r = rig({ routes: {
-    '/transcript': (body) => (body.events.some((e) => e.text === 'Yes.') ? { status: 200, body: { ok: true, kept: 1, end_confirmed: true } } : null),
+    '/utterance': (body) => (body.text === 'Yes.' ? { status: 200, body: { ok: true, decision: 'confirm', kind: 'end', action_id: 'e1', confirm_item_id: 't0' } } : null),
     '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'We looked at item twelve.' } }) } });
   await r.s.start('openai');
   r.c.hear([user('Yes.')]);
   await flush(20);
   assert.equal(r.posts('/summary').length, 1);
-  assert.deepEqual(r.c.instructions, ['Say only this, then stop: We looked at item twelve.']);
+  assert.deepEqual(r.c.instructions, ['Say only this, then stop: Your summary is ready.']);     // v3: shown, not read
 });
 
 // ── B3: a slow summary is not ended by the session's own heartbeat ─────────────────────────────────────────────────────
@@ -202,7 +211,7 @@ await check('B3 no heartbeat while the summary is being made; the summary is sti
   assert.equal(r.posts('/transcript').length, before, 'a heartbeat was sent after capture closed');
   assert.deepEqual(r.c.ended, []);
   release(); await asked; await flush();
-  assert.deepEqual(r.c.instructions, ['Say only this, then stop: Slow summary.']);
+  assert.deepEqual(r.c.instructions, ['Say only this, then stop: Your summary is ready.']);     // v3: shown, not read
 });
 await check('B3 a summary that does not answer in time ends honestly, once; a late answer is not spoken', async () => {
   let release;
@@ -284,7 +293,7 @@ await check('B4 edge: a leaving page sends End once, with one post of turns, and
 
 // ── B5: Keep talking withdraws the proposal on the server too ──────────────────────────────────────────────────────────
 await check('B5 Keep talking sends the withdrawal after the posts before it', async () => {
-  const r = rig({ routes: { '/transcript': (body) => (body.events.length ? { status: 200, body: { ok: true, kept: 1, propose_end: true } } : null),
+  const r = rig({ routes: { '/utterance': () => ({ status: 200, body: { ok: true, decision: 'ask', kind: 'end', action_id: 'e1', owner_item_id: 't0' } }),
     '/keep_talking': () => ({ status: 200, body: { ok: true, proposal: 'withdrawn' } }) } });
   await r.s.start('openai');
   r.c.hear([user("We're done.")]); await flush();
@@ -300,6 +309,8 @@ async function summarized(spoken = SPOKEN) {
   const r = rig({ routes: { '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken } }) } });
   await r.s.start('openai');
   await r.s.sumUp(); await flush();
+  r.c.options.onPlaybackDrained('resp_sum'); await flush();          // v3: "Your summary is ready" played out
+  r.c.options.onUserTurn('Read it.'); await flush();                // his one reply asks for it: it is read
   return r;
 }
 await check('B6 the summary ends the session only after its own response\'s audio has drained', async () => {
@@ -333,29 +344,33 @@ await check('B6 a long summary is let play to its own bound, past 45 s', async (
 });
 
 // ── B7: a lost answer is not a failed action ────────────────────────────────────────────────────────────────────────────
+// Adapted for v3: through Check (the model no longer consults); the same dispatcher, the same retry and reconciliation.
 await check('B7 an answer lost on the way back is asked again as the same call and its real result spoken', async () => {
   let n = 0;
-  const r = rig({ routes: { '/consult': (body) => (++n === 1 ? 'network' : { status: 200, body: { ok: true, call_id: body.call_id, answered: true, saved: true, receipt: 'op-1', spoken: 'Saved.' } }) } });
+  const r = rig({ routes: { '/consult': (body) => (++n === 1 ? 'network' : { status: 200, body: { ok: true, outcome: 'done', call_id: body.call_id, answered: true, saved: true, receipt: 'op-1', spoken: 'Saved.' } }) } });
   await r.s.start('openai');
   r.c.utter('Save a note: the kiln is hot');
-  const out = await r.c.options.onFunctionCall({ call_id: 'call_1', name: 'save_note', arguments: {} });
-  assert.equal(out.saved, true); assert.equal(out.spoken, 'Saved.');
-  assert.deepEqual(r.posts('/consult').map((p) => p.body.call_id), ['call_1', 'call_1']);
+  await r.s.check(); await flush();
+  assert.equal(r.c.instructions.at(-1), say('Saved.'));
+  const ids = r.posts('/consult').map((p) => p.body.call_id);
+  assert.equal(ids.length, 2); assert.equal(ids[0], ids[1]);
 });
 await check('B7 a retry the server no longer knows (a restart) leaves the first attempt unknown, not failed', async () => {
   let n = 0;
   const r = rig({ routes: { '/consult': () => (++n === 1 ? 'network' : { status: 409, body: { ok: false, error: 'session ended' } }) } });
   await r.s.start('openai');
   r.c.utter('Run the nightly job.');
-  const out = await r.c.options.onFunctionCall({ call_id: 'call_1', name: 'consult', arguments: {} });
-  assert.equal(out.outcome, 'unknown'); assert.equal(out.spoken, UNKNOWN);
+  await r.s.check(); await flush(20);
+  // The server no longer holds the session: the voice ends here (UI review #2), and nothing ever says it did not go through.
+  assert.deepEqual(r.c.ended, ['server_ended']);
+  assert.ok(!r.c.instructions.some((x) => /did not go through/.test(x)));
 });
 await check('B7 an answer that never comes back is unknown, never "did not go through"', async () => {
   const r = rig({ routes: { '/consult': () => 'network' } });
   await r.s.start('openai');
   r.c.utter('Run the nightly job.');
-  const out = await r.c.options.onFunctionCall({ call_id: 'call_1', name: 'consult', arguments: {} });
-  assert.equal(out.outcome, 'unknown'); assert.equal(out.spoken, UNKNOWN); assert.doesNotMatch(out.spoken, /did not go through/);
+  await r.s.check(); await flush();
+  assert.equal(r.c.instructions.at(-1), say(UNKNOWN)); assert.doesNotMatch(r.c.instructions.at(-1), /did not go through/);
 });
 
 if (failures.length) {

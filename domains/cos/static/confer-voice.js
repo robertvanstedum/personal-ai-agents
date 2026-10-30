@@ -381,14 +381,13 @@ export function conferVoice(d) {
 
   // ── the provider choice, in the meta row: remembered under her own key ──
   const unvoiced = direct.unvoiced && typeof direct.unvoiced === 'object' ? direct.unvoiced : {};
-  const checkOnly = (p) => Boolean(direct.model_actions && direct.model_actions[p] === false);
   const select = make('select', { class: 'voice-provider-choice', 'data-voice-provider': '', 'aria-label': 'Voice provider' });
   const offered = (Array.isArray(direct.providers) ? direct.providers : []).filter((p) => p && typeof p.provider === 'string');
   for (const p of offered) {
     const name = p.label || p.provider;
     const refused = typeof unvoiced[p.provider] === 'string' ? unvoiced[p.provider] : null;
     const option = make('option', { value: p.provider, ...(refused ? { title: refused } : {}) },
-      refused ? `${name} · ${NO_VOICE_CHOSEN}` : checkOnly(p.provider) ? `${name} · acts only through Check with ${short}` : name);
+      refused ? `${name} · ${NO_VOICE_CHOSEN}` : name);      // v3: both providers confirm by voice; none is "Check only"
     option.disabled = Boolean(refused);
     select.append(option);
   }

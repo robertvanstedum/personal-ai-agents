@@ -93,8 +93,9 @@ def start(cos):
 
 
 def ask(cos, sid, words, item="t1", name="consult", call="call_1"):
+    # v3: the action path acts only on Check (call id "host-…") or a confirmed action, so the wiring consults as Check.
     return cos.app.test_client().post(PREFIX + "/consult", headers=OWNER, json={
-        "session_id": sid, "call_id": call, "name": name, "owner_transcript_item": words, "owner_item_id": item}).get_json()
+        "session_id": sid, "call_id": call if call.startswith("host-") else "host-" + call, "name": name, "owner_transcript_item": words, "owner_item_id": item}).get_json()
 
 
 def reminder_records(cos):
@@ -214,7 +215,7 @@ def test_installed_the_capabilities_answer_has_what_confer_draws(on):
     caps = on.app.test_client().get(PREFIX + "/capabilities", headers=OWNER).get_json()
     assert caps["path"] == "direct" and caps["direct_voice"] is True and caps["direct_records"] is False
     assert caps["person"] == {"name": "Chief of Staff", "short": "CoS"} and caps["persona"] == "chief_of_staff"
-    assert caps["model_actions"] == {"openai": True, "xai": False}
+    assert caps["model_actions"] == {"openai": False, "xai": False}                 # v3: no model action (adapted)
     assert caps["unvoiced"] == {}                                       # her card names both voices (0.1.3)
     for key in ("bootstrap_url", "end_url", "session_url", "sessions_url", "session_transcript_url", "session_dismiss_url",
                 "summary_url", "summary_decision_url", "keep_talking_url", "consult_url", "transcript_url"):

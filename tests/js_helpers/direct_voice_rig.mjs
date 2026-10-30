@@ -15,6 +15,7 @@ export const DIRECT = { path: 'direct', providers: [{ provider: 'openai', label:
   transcript_url: `${BASE}/session/{session_id}/transcript`, summary_url: `${BASE}/session/{session_id}/summary`,
   summary_decision_url: `${BASE}/session/{session_id}/summary/decision`,
   reconcile_url: `${BASE}/consult/{session_id}/{owner_item_id}`, keep_talking_url: `${BASE}/session/{session_id}/keep_talking`,
+  utterance_url: `${BASE}/session/{session_id}/utterance`, asked_url: `${BASE}/session/{session_id}/utterance/{action_id}/asked`,
   heartbeat_seconds: 20, persona: 'master_craftsman', locale: 'en-US', card_release: '0.1.18',
   person: { name: 'Master Craftsman', short: 'MC' } };
 
@@ -48,6 +49,7 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
       else if (path.endsWith('/transcript')) out = { status: 200, body: { ok: true, kept: body.events.length } };
       else if (path.endsWith('/consult')) out = { status: 200, body: { ok: true, outcome: 'done', call_id: body.call_id, answered: true, receipt: 'mc-1', spoken: 'Item 12 is in build.' } };
       else if (path.endsWith('/keep_talking')) out = { status: 200, body: { ok: true, proposal: 'withdrawn' } };
+      else if (path.endsWith('/asked')) out = { status: 200, body: { ok: true, state: 'asked', expires_in: 30 } };
       else out = { status: 404, body: {} };
     }
     if (out === 'network') throw new Error('offline');
@@ -117,11 +119,30 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
       this.turns = turns.map((t) => ({ ...t }));
       this.turns.forEach((t, i) => { if (t.speaker === 'user') this.saw(i); });
       this.options.onTranscriptUpdate(this.turns.map((t) => ({ ...t })));
+      this.committed = this.committed || new Set();             // v3: each of his items, once completed, is committed once
+      this.turns.forEach((t, i) => { if (t.speaker === 'user' && t.completed && !this.committed.has(i)) { this.committed.add(i); this.commit(i); } });
     }
     utter(text) {                                          // a completed owner turn: the transcript update, then the turn
       this.turns = [...this.turns, user(text)];
       this.saw(this.turns.length - 1);
       this.options.onTranscriptUpdate(this.turns.map((t) => ({ ...t }))); this.options.onUserTurn(text);
+      this.committed = this.committed || new Set();
+      this.committed.add(this.turns.length - 1);
+      this.commit(this.turns.length - 1);
+    }
+    // v3, as the real controller does where the page makes every response (OpenAI): his committed item's one response waits
+    // for the page's word on it (respondFor, its server decision), then starts (onResponseStarted, owned by the item), with
+    // the page's instruction if it gave one; {skip} makes none. The provider's item id here is "i" + its place.
+    ownsResponses() { return this.owns !== false; }
+    placeOf(id) { return typeof id === 'string' && /^i\d+$/.test(id) ? Number(id.slice(1)) : null; }
+    commit(i) {
+      if (typeof this.options.respondFor !== 'function') return;
+      Promise.resolve(this.options.respondFor(`i${i}`)).then((word) => {
+        if (word && word.skip) return;
+        if (word && word.instruction) this.instructions.push(word.instruction);
+        const id = `turn_resp_${i}`;
+        this.options.onResponseStarted?.({ response_id: id, owner: `i${i}`, page: true, kind: 'turn' });
+      });
     }
     drained(id, outcome = 'drained') { this.options.onPlaybackDrained?.(id, outcome); }   // how it ended (v0.3 G3)
   }
@@ -133,7 +154,15 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
     reveal: async () => { reveals.push(true); }, loadController: async () => ({ RealtimeVoiceController: Controller }), clock: () => now,
     setTimeout: (fn, ms) => later(fn, ms), clearTimeout: (id) => timers.delete(id),
     setInterval: (fn, ms) => later(fn, ms, true), clearInterval: (id) => timers.delete(id) });
-  return { s, calls, said, ended, reveals, lifecycle, checks, notices, timers, advance, get c() { return controller; }, now: () => now,
+  // v3: the summary is shown and the voice says only "Your summary is ready" (the first tracked line); readIt() lets that
+  // line play out and answers the one reply window with "read it", so the summary itself is read (the next tracked line).
+  const readIt = async (words = 'Read it.') => {
+    controller.drained(controller.tracked[0]);
+    for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r));
+    controller.options.onUserTurn(words);
+    for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r));
+  };
+  return { s, calls, said, ended, reveals, lifecycle, checks, notices, timers, advance, readIt, get c() { return controller; }, now: () => now,
     posts: (end) => calls.filter((x) => x.url.split('?')[0].endsWith(end) && x.method === 'POST'),
     gets: (part) => calls.filter((x) => x.method === 'GET' && x.url.includes(part)) };
 }

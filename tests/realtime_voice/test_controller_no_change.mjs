@@ -26,6 +26,101 @@ import assert from 'node:assert/strict';
 const PATH = new URL('../../core/realtime_voice/static/realtime-voice-controller.js', import.meta.url);
 const BEFORE = '682906489b0b3f9f02cd3df951da6fbaaef74c2aa49927d5905827ea3b8c7f05';     // 93bf00c6, as German loads it today
 const CONTROLLER = [
+  // Confirm by voice, v3 (V3_BUILD_BRIEF): the controller's opt-in respondFor, onResponseStarted and refuseCalls options,
+  // NO_ACTIONS and ownsResponses(), taken out first (generated from a line diff against the binding pass's file); German
+  // and Portuguese pass none of the options. Then A1's additions, as before.
+  [`const PENDING = { ok: false, outcome: "pending", spoken: "That's still running. I'll tell you when it's back." };
+// Confirm by voice, v3 (the app acts; the voice only talks): a host that refuses every model call (refuseCalls) answers
+// one that arrives anyway with this output and asks no reply for it. No tools are offered on either provider.
+const NO_ACTIONS = { ok: false, outcome: "not_done", error: "no_model_actions",
+  spoken: "Not run: on this voice the app acts, only after he confirms. Nothing was done." };
+const LATE_LINE = "Say this briefly, adding nothing: ";
+`,
+   `const PENDING = { ok: false, outcome: "pending", spoken: "That's still running. I'll tell you when it's back." };
+const LATE_LINE = "Say this briefly, adding nothing: ";
+`],
+  [`    onSessionInfo, onPlaybackDrained = null, pageResponses = false, oncePerItem = false, onUnbound = null, bootstrapTimeoutMs = 0,
+    respondFor = null, onResponseStarted = null, refuseCalls = false,
+    openingInstruction = OPENING_INSTRUCTION,
+`,
+   `    onSessionInfo, onPlaybackDrained = null, pageResponses = false, oncePerItem = false, onUnbound = null, bootstrapTimeoutMs = 0,
+    openingInstruction = OPENING_INSTRUCTION,
+`],
+  [`    this._pageResponses = pageResponses;
+    // Optional, confirm by voice v3 (V3_BUILD_BRIEF "Asking, per provider"); the direct page passes them, German and
+    // Portuguese pass none, so nothing changes for them:
+    // - respondFor(itemId): where the page creates every response (OpenAI), each committed item's response waits for the
+    //   host's word on it (its server decision, at most the host's own bound): a Promise of {instruction} (the response
+    //   is created with that page instruction), {skip: true} (no response for this item: the host speaks for it later), or
+    //   null (a normal response). A newer turn of his while it waits supersedes it, as before.
+    // - onResponseStarted({response_id, owner, page}): a response started (owner: his item id, where the page made it for
+    //   one; page: whether it was a page request of the host's). Evidence of when something started playing, never
+    //   authority to act.
+    // - refuseCalls: every model function call is answered NO_ACTIONS, with no reply asked, and never passed to the host.
+    this._respondFor = typeof respondFor === "function" ? respondFor : null;
+    this._onResponseStarted = typeof onResponseStarted === "function" ? onResponseStarted : null;
+    this._refuseCalls = refuseCalls === true;
+    this._owned = false;             // every response of this session is the page's (the bootstrap said page_responses)
+`,
+   `    this._pageResponses = pageResponses;
+    this._owned = false;             // every response of this session is the page's (the bootstrap said page_responses)
+`],
+  [`      if (this._once(call) || this._refused(call)) return;
+      if (this._refuseCalls) {                                   // v3: no model action, on any provider
+        this._outstanding.delete(call.call_id);
+        try { this._adapter.sendFunctionOutput(call.call_id, NO_ACTIONS); } catch (_) { /* the transport is closed */ }
+        this._onUnbound({ reason: "model_call", response_id: call.response_id || null, name: call.name || null });
+        return;
+      }
+      if (!this._onFunctionCall) {
+`,
+   `      if (this._once(call) || this._refused(call)) return;
+      if (!this._onFunctionCall) {
+`],
+  [`  sessionId() { return this._sessionId; }
+
+  /** Whether the page creates every response of this session (the bootstrap's page_responses: OpenAI's direct path).
+   *  For the direct page (v3); German and Portuguese do not call it. */
+  ownsResponses() { return this._owned; }
+
+`,
+   `  sessionId() { return this._sessionId; }
+
+`],
+  [`    if (!item) this._onUnbound({ reason: "commit_without_item" });
+    const respond = (word) => {
+      const instruction = word && typeof word.instruction === "string" && word.instruction ? word.instruction : null;
+      try {
+        this._ask(item, (tag) => (instruction ? this._instruct(instruction, tag) : this._adapter.createResponse(tag)), null, "turn");
+      } catch (_) { /* the transport is closed */ }
+    };
+    if (!this._respondFor || !item) { respond(null); return; }
+    // v3: the host's word on this item first (its decision), then one response, or none. A newer turn of his meanwhile
+    // supersedes it: it gets no response, exactly as a commit overtaken in the queue.
+    const turn = this._turn, generation = this._generation;
+    Promise.resolve().then(() => this._respondFor(item)).catch(() => null).then((word) => {
+      if (generation !== this._generation || !this._owned || !this._adapter) return;
+      if (turn !== this._turn) { this._onUnbound({ reason: "superseded", owner: item, kind: "turn" }); return; }
+      if (word && word.skip === true) return;
+      respond(word);
+    });
+  }
+`,
+   `    if (!item) this._onUnbound({ reason: "commit_without_item" });
+    try { this._ask(item, (tag) => this._adapter.createResponse(tag), null, "turn"); } catch (_) { /* the transport is closed */ }
+  }
+`],
+  [`    const f = this._inflight;
+    if (this._onResponseStarted) {                               // v3: when it started, never who may act
+      const mine = Boolean(f && !f.started && (evt.tag ? evt.tag === f.tag : !this._echoed));
+      try { this._onResponseStarted({ response_id: id, owner: mine && f.owner ? f.owner : null, page: mine, kind: mine ? f.kind : null }); }
+      catch (_) { /* a host's observer never stops the binding */ }
+    }
+    const theirs = !this._owned && !evt.tag && this._owed > 0;  // possibly the provider's own reply to a turn of his
+`,
+   `    const f = this._inflight;
+    const theirs = !this._owned && !evt.tag && this._owed > 0;  // possibly the provider's own reply to a turn of his
+`],
   [`// Both adapters changed for the playback events and response attribution, OpenAI's again for the response tag on every
 // request, both again for how a response's playback ended, and both again for the page's own responses (each response's
 // end, and creating one for a committed item), and both for the live probes (OpenAI: a reply's end reported once, LV1; xAI:

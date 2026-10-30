@@ -69,8 +69,14 @@ class Gateway:
 
     def __init__(self):
         self.requests, self.model = [], '{"spoken": "We checked twelve.", "written": "- #12: two items stuck."}'
+        self.intents, self.intent = [], None
 
     def __call__(self, url, *, json, timeout, allow_redirects, headers):
+        if json.get("model") == "minimoi-voice-intent":          # v3's understanding call: answered apart, never a summary
+            self.intents.append(json)
+            word = self.intent(json) if callable(self.intent) else "chat"
+            return SimpleNamespace(status_code=200, json=lambda: {"choices": [{"index": 0, "finish_reason": "stop",
+                                                                               "message": {"role": "assistant", "content": word}}]})
         self.requests.append({"url": url, "json": json, "headers": headers})
         if not self.model:
             return SimpleNamespace(status_code=503, json=lambda: {})
@@ -166,9 +172,15 @@ def start(r, provider="openai", headers=OWNER):
     return answer.get_json()["voice_session_id"]
 
 
+def tap(call_id):
+    """v3 (the app acts; the voice only talks): the action path acts only on a confirmed waiting action or a tap on Check
+    (call id "host-…"), so a test that drives the one dispatcher names its call as Check's; distinct ids stay distinct."""
+    return call_id if str(call_id).startswith("host-") else "host-" + str(call_id)
+
+
 def ask(r, sid, call_id="call_1", item="t1", words="What is stuck on #12?", name="consult", headers=OWNER):
     return r.client.post(BASE + "/consult", headers=headers, json={
-        "session_id": sid, "call_id": call_id, "name": name, "owner_transcript_item": words, "owner_item_id": item,
+        "session_id": sid, "call_id": tap(call_id), "name": name, "owner_transcript_item": words, "owner_item_id": item,
         "arguments": {"question": "the model's paraphrase"}})
 
 

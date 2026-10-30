@@ -31,7 +31,7 @@ def _keys(fn, *args):
 @pytest.mark.parametrize("host", ["mc", "cos"])
 def test_summary_key_is_the_alias_only_chat_only_monthly_and_rate_limited(host):
     py = _keys("voice_summary_keygen_py", host).stdout
-    assert '"models": ["minimoi-voice-summary"]' in py
+    assert '"models": ["minimoi-voice-summary", "minimoi-voice-intent"]' in py      # v3: the understanding call too
     assert '"allowed_routes": ["/v1/chat/completions", "/chat/completions"]' in py
     assert "/key/info" not in py and "/v1/responses" not in py
     assert '"budget_duration": "30d"' in py and '"rpm_limit": 10' in py and '"max_budget": cap' in py
@@ -179,7 +179,7 @@ def test_summary_keys_adds_the_route_writes_both_keys_unprinted_and_redeploys(tm
     assert "sk-fake-voice-key" not in out and "sk-master-key" not in out and "sk-mc-agent-key" not in out
     assert "Master Craftsman's voice summary key (voice-summary-mc): monthly cap $7 (30d)" in out and "…ab11" in out
     assert "Chief of Staff's voice summary key (voice-summary-cos): monthly cap $5 (30d)" in out and "…ab22" in out
-    assert '["minimoi-voice-summary"]' in out and "rpm 10" in out
+    assert '["minimoi-voice-summary", "minimoi-voice-intent"]' in out and "rpm 10" in out
     assert _read(fake / "keygen.env").splitlines() == ["cap=7 old=", "cap=5 old="]
     # The route: exactly the repo's, the rest of the live config unchanged; a backup of the file before.
     assert yaml.safe_load(cfg.read_text()) == yaml.safe_load(GATEWAY_STAGING.read_text())
@@ -292,3 +292,41 @@ def test_summary_status_reports_presence_only_and_changes_nothing(tmp_path, shel
     assert "live gateway config: routes minimoi-voice-summary" in out
     assert "running gateway: healthy, no minimoi-voice-summary (restart it" in out          # not restarted yet
     assert f"minimoi-portal: {MC_VAR} set" in out
+
+
+# ── v3: the understanding call's route (minimoi-voice-intent) goes in beside the summary's ───────────────────────────
+
+INTENT = "minimoi-voice-intent"
+
+
+def _without(text, *aliases):
+    data = yaml.safe_load(text)
+    data["model_list"] = [r for r in data["model_list"] if r["model_name"] not in aliases]
+    return yaml.safe_dump(data, sort_keys=False)
+
+
+@pytest.mark.parametrize("missing", [(ALIAS, INTENT), (INTENT,)])
+def test_summary_keys_adds_every_missing_voice_route_in_one_change(tmp_path, shell, missing):
+    """A live config made before v3 (it has the summary's route, not the understanding call's), or with neither, gets each
+    one it lacks, exactly the repo's, in the repo's order, with one backup and one gateway restart."""
+    env, fake, root = _world(tmp_path, config=_without(GATEWAY_STAGING.read_text(), *missing))
+    cfg = root / "config" / "litellm.staging.yaml"
+    before = cfg.read_text()
+    result = _voice(shell, env, "summary-keys", stdin="\n\n")
+    assert result.returncode == 0, result.stderr
+    assert yaml.safe_load(cfg.read_text()) == yaml.safe_load(GATEWAY_STAGING.read_text())
+    assert _read(fake / "route.calls").splitlines() == ["route"] * len(missing)
+    assert len(_backups(root)) == 1 and _backups(root)[0].read_text() == before
+    assert [l for l in _read(fake / "argv.log").splitlines() if l.startswith("restart")] == ["restart --time 20 minimoi-model-gateway"]
+    if missing == (INTENT,):
+        assert "already routes minimoi-voice-summary (unchanged)" in result.stdout
+
+
+def test_the_intent_route_is_the_summarys_model_with_reasoning_off_on_every_gateway():
+    for name in ("litellm.yaml", "litellm.staging.yaml", "litellm.prod.yaml"):
+        routes = {r["model_name"]: r for r in yaml.safe_load((GATEWAY_STAGING.parent / name).read_text())["model_list"]}
+        intent, summary = routes[INTENT]["litellm_params"], routes[ALIAS]["litellm_params"]
+        assert intent["model"] == summary["model"] and intent["api_key"] == summary["api_key"], name
+        assert intent["reasoning_effort"] == "none" and intent["timeout"] == 5, name
+    from core.realtime_voice.intent_gateway import INTENT_MODEL
+    assert INTENT_MODEL == INTENT

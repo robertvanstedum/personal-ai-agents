@@ -83,8 +83,8 @@ export function initMcVoice(page) {
       const name = option.dataset.name || option.textContent.split(' · ')[0];
       option.dataset.name = name;
       option.disabled = !usable.has(option.value);
-      const checkOnly = body.model_actions && body.model_actions[option.value] === false;
-      option.textContent = option.disabled ? `${name} · not available yet` : checkOnly ? `${name} · acts only through Check with MC` : name;
+      // v3 (confirm by voice): both providers confirm by voice, the same for Robert, so none is labelled "Check only".
+      option.textContent = option.disabled ? `${name} · not available yet` : name;
     }
     let saved = null;
     try { saved = window.localStorage.getItem(PROVIDER_KEY); } catch (e) { /* the choice simply is not remembered */ }
