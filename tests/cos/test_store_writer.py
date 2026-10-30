@@ -3,6 +3,9 @@
 Each test names the guarantee it holds: a receipt only after read-back, replay without a second write, conflicts on
 stale revisions, transitions folded from events, one claim per nudge and per ask, and recovery that resolves every
 intent and never reads a torn line as a record.
+
+The writer validates against contracts/cos/v1/store-command.schema.json, contracts/cos/v1/store-records.schema.json and
+contracts/cos/v1/common.schema.json at runtime, so a change to any of them runs these tests too.
 """
 from __future__ import annotations
 

@@ -1252,6 +1252,10 @@ app.register_blueprint(create_confer_voice_blueprint(
 from domains.cos.managed_realtime import install as _install_managed_realtime
 _cos_managed_realtime_ready = _install_managed_realtime(app, environ=os.environ,
     process_turn=_process_confer_turn, instructions=_build_cos_voice_instructions)
+# The CoS store's one writer and its internal API (CoS 1.2 spec v0.3 section 4.5). Mounted only when COS_STORE_DIR,
+# COS_STORE_ENVIRONMENT and COS_STORE_TOKEN_FILE are all set; otherwise nothing changes.
+from domains.cos.store.api import install as _install_cos_store
+_cos_store_writer = _install_cos_store(app, environ=os.environ)
 
 
 
