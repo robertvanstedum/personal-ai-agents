@@ -1727,3 +1727,50 @@ def test_fakework_on_a_resumed_run_holds_the_stale_lease_afresh_and_awaits_no_se
     assert asked == ["effect_hold"]                               # its own lease, claimed; nothing dispatched
     assert "stale e2b: held afresh on a run restarted from a checkpoint; no wake awaited" in capsys.readouterr().out
     assert clock["t"] < 1010                                      # never waited out its 1800 s
+
+
+def test_gate_m_s1_a_held_lease_is_sent_only_once_the_clocks_agree_so_the_refusal_is_the_authoritys(tmp_path, mirror):
+    """Review S1 (30 Oct), T6c's set-up: detection off, so no wake starts §5.5. The lid closed soon after e2b's lease was
+    held, so on the authority's clock (which stood still) that lease is still current, while on the Mac's it ran out
+    long ago. The woken child sends e2b on it. Sent at once, the authority would accept it, the sink refuse it as
+    expired, and no refusal be recorded (T6c's must-refuse fails). With clock_check on the send waits until the clocks
+    agree, and the authority refuses it on a true clock; e2 is then committed once."""
+    import signal
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake, hosts={**HOSTS, "renew_s": 50, "offline_hold_s": 60},
+                 gap_detection="off", clock_check="on")
+    grant = str(uuid.uuid4())
+    rid = fake.add(_t6m_program(grant))
+    chan = tmp_path / "artifacts" / f"{rid}-g1.chan"
+    box = {}
+
+    def quick_lid():
+        try:
+            wait_for(chan / "ack-000002.json")
+            time.sleep(0.3)
+            os.killpg(rt.child.pgid, signal.SIGSTOP)              # the lid closes 0.3 s after the hold
+            fake.behind_s = BEHIND_S
+            fake.items[rid]["lease_until"] = fake.clock() + 40
+            for r in fake.receipts.values():
+                r["until"] = fake.clock() + 20                     # current on its clock, over on the Mac's
+            for lease in rt.held.values():                         # 11 minutes on the Mac's clock: its lease is over
+                lease["lease_until"] = iso(time.time() - 600)
+            time.sleep(1.5)
+            threading.Timer(3.0, lambda: setattr(fake, "behind_s", 0.0)).start()
+            os.killpg(rt.child.pgid, signal.SIGCONT)              # it wakes; the runtime notices nothing
+            box["woke"] = True
+        except BaseException as exc:
+            box["error"] = exc
+    t = threading.Thread(target=quick_lid, daemon=True)
+    t.start()
+    out = run_pass(rt, timeout=60)
+    t.join(5)
+    assert "error" not in box and box.get("woke"), box
+    e2b_sends = [a for a in fake.answers_log if a[0] == "dispatch:e2b"]
+    assert e2b_sends and all(a[2] == "refused" for a in e2b_sends), e2b_sends     # the authority's own refusal
+    lines = fakework.FileSink(tmp_path / "sink").lines()
+    assert [x["answer"] for x in lines] == ["committed"] and lines[0]["digest"] == fakework.effect_digest("e2")
+    notes1 = [e["fields"] for e in rt.journal(f"{rid}-g1").entries() if e["type"] == "note"
+              and e["kind"] == "clock_disagrees"]
+    assert notes1 and notes1[0]["why"] == "held_lease"
+    assert (out["state"], out["generation"]) == ("completed", 2), out

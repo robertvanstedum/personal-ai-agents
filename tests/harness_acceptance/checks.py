@@ -6,6 +6,7 @@ passes vacuously. ``detail`` names what failed, never a value from a credential.
 """
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from datetime import datetime
 
@@ -143,6 +144,25 @@ def dup7(events, notify_lines, *, need=0):
     if _vacuous(n, need):
         return False, n, {"no_facts": f"{n} notices, {need} expected"}
     return not twice and not delivered_twice, n, {"raised_twice": twice, "delivered_twice": delivered_twice}
+
+
+_ITEM_NAMED = re.compile(r"\bItem (\S+) ")
+
+
+def notices_about(notify_lines, *, job, item_id) -> list:
+    """The notices an owner-step item's "no notice" check counts (spec T6m/X7, OWN-5; gate M review B1, 30 Oct): every
+    notice in its window except one that names another item. A notice text names its item by job (``Item T6m.W-M.10
+    …``), seldom by id, so matching the id alone saw none of the night's three. A notice naming no item (the
+    authority's own: its sweeper, its liveness) counts: on the Mac-only gate the authority sleeps with the Mac, so it
+    too must stay quiet. A stall before the sleep counts as well: it is a real notice to Robert; the step asks for the
+    lid to be closed well inside the progress timeout."""
+    out = []
+    for m in notify_lines:
+        text = str(m.get("text", ""))
+        named = _ITEM_NAMED.findall(text)
+        if job in text or item_id in text or item_id[:8] in text or not named or job in named:
+            out.append(m)
+    return out
 
 
 def dup8(events, dev_hosts, *, need=0):

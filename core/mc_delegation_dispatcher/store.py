@@ -275,6 +275,10 @@ class Authority:
     # P1-a (§5.3): the most grace a host of each availability may claim; a host's own larger value is cut to it.
     # None: each host's own grace, as in S1.
     grace_max_s: MappingProxyType | None = None
+    # Gate M (29 Oct): after the authority's own outage (a whole-Mac sleep on the Mac-only gate), its sweeper is given
+    # one gap_threshold_s from the outage's end to run again before sweeper_stale is raised; the outage is recorded
+    # before each publish. Off unless the file says so (production's file doesn't).
+    sweeper_grace_after_outage: bool = False
 
     @property
     def speaks_v2(self) -> bool:
@@ -296,7 +300,8 @@ class Authority:
         _need(type(doc) is dict and set(doc) <= {"schema", "environment", "protocols", "launch_closure", "lease_s",
                                                   "routes", "note", "sweeper", "reassign_across_hosts",
                                                   "clock_skew_s", "hosts", "progress_timeout_s", "judgment",
-                                                  "test_routes_in_production", "grace_s"},
+                                                  "test_routes_in_production", "grace_s",
+                                                  "sweeper_grace_after_outage"},
               "authority_config_invalid")
         _need(doc.get("schema") == AUTHORITY_SCHEMA, "authority_schema_invalid")
         _need(doc.get("environment") in ("dev", "prod"), "authority_environment_invalid")
@@ -357,6 +362,8 @@ class Authority:
         _need(pt is None or (type(pt) is dict and 1 <= len(pt) <= 16 and all(
             type(k) is str and _WORD.match(k) and type(v) is int and 1 <= v <= 86400 for k, v in pt.items())),
               "authority_progress_timeout_invalid")
+        quiet = doc.get("sweeper_grace_after_outage", False)                    # missing: off, as before
+        _need(type(quiet) is bool, "authority_sweeper_grace_invalid")
         gm = doc.get("grace_s")
         _need(gm is None or (type(gm) is dict and gm and set(gm) <= {"intermittent", "always_on"}
                              and all(type(v) is int and 1 <= v <= 7 * 86400 for v in gm.values())),
@@ -365,7 +372,7 @@ class Authority:
                    None if sw is None else Sweeper(sw["sweep_s"], sw["gap_threshold_s"]), across, skew,
                    None if hv is None else HostValues(*(hv[k] for k in keys)),
                    None if pt is None else MappingProxyType(dict(pt)), _judgment(doc), test_in_prod,
-                   None if gm is None else MappingProxyType(dict(gm)))
+                   None if gm is None else MappingProxyType(dict(gm)), quiet)
 
 
 def _judgment(doc):
@@ -3262,6 +3269,7 @@ class DispatcherStore:
                 codes = {d: c for d, (c, _) in codes.items()}
         values = {"contact_timeout_s": None if self.authority.hosts is None else self.authority.hosts.contact_timeout_s,
                   "gap_threshold_s": self.authority.sweeper.gap_threshold_s,
+                  **({"sweeper_grace_after_outage": True} if self.authority.sweeper_grace_after_outage else {}),
                   "progress_timeout_s": dict(self.authority.progress_timeout_s or {}),
                   "judgment": None if j is None else {"route": j.route, "unit": j.unit, "calls_per_day": j.calls_per_day,
                                                       "per_day": float(j.per_day)}}
@@ -3285,6 +3293,11 @@ class DispatcherStore:
         Robert at the sweep that raised it, even if it has cleared by the next check-in (OWN-4)."""
         with self._tx() as cur:
             self._withdraw_ended_reviews(cur)
+        if self.authority.sweeper_grace_after_outage:
+            # An outage the authority's liveness has not recorded yet (it slept with the Mac and its next beat is still
+            # to come) is recorded now, so the sweeper's grace below runs from its end, never from a stale beat.
+            with self._session() as conn:
+                self._account_outage(conn)
         doc = self.snapshot(endpoint_id=endpoint_id, host_id=host_id)
         due = [p for p in doc["proposals"] if p["state"] == "due"]
         if due:
