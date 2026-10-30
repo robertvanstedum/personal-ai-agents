@@ -40,12 +40,14 @@ assert.equal(s.disabled, true); assert.ok(s.options.every((o) => o.disabled));  
 s = run({ providers: [{ provider: 'openai' }], storageThrows: true });
 assert.equal(s.value, 'openai');                                                       // blocked storage: works, just not remembered
 
-// The C2 binding pass (Spec 165 §7 as amended): a provider offered on which MC's voice may not act by itself says so; one
-// that may, or an answer that names none (the managed path), reads as before.
-s = run({ providers: [{ provider: 'openai' }, { provider: 'xai' }], model_actions: { openai: true, xai: false } });
-assert.equal(label(s, 'xai'), 'Grok (xAI) · acts only through Check with MC'); assert.equal(off(s, 'xai'), false);
+// Confirm by voice, v3 (adapted from the C2 binding pass): both providers confirm by voice, the same for Robert, so no
+// offered provider is labelled "acts only through Check", whatever the answer's model_actions say.
+s = run({ providers: [{ provider: 'openai' }, { provider: 'xai' }], model_actions: { openai: false, xai: false } });
+assert.equal(label(s, 'xai'), 'Grok (xAI)'); assert.equal(off(s, 'xai'), false);
 assert.equal(label(s, 'openai'), 'OpenAI');
+s = run({ providers: [{ provider: 'openai' }, { provider: 'xai' }], model_actions: { openai: true, xai: false } });
+assert.equal(label(s, 'xai'), 'Grok (xAI)');
 s = run({ providers: [{ provider: 'openai' }], model_actions: { openai: true, xai: false } });
 assert.equal(label(s, 'xai'), 'Grok (xAI) · not available yet');                       // not offered: unavailable first
 
-console.log('8 voice-provider choice scenarios passed; no DOM, network or microphone.');
+console.log('9 voice-provider choice scenarios passed; no DOM, network or microphone.');

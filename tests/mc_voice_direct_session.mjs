@@ -12,6 +12,7 @@ const DIRECT = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenA
   bootstrap_url: `${BASE}/bootstrap`, consult_url: `${BASE}/consult`, end_url: `${BASE}/session/{session_id}/end`,
   transcript_url: `${BASE}/session/{session_id}/transcript`, summary_url: `${BASE}/session/{session_id}/summary`,
   summary_decision_url: `${BASE}/session/{session_id}/summary/decision`, heartbeat_seconds: 20, persona: 'master_craftsman',
+  utterance_url: `${BASE}/session/{session_id}/utterance`, asked_url: `${BASE}/session/{session_id}/utterance/{action_id}/asked`,
   locale: 'en-US', card_release: '0.1.18', person: { name: 'Master Craftsman', short: 'MC' },
   words: { no_conversation: 'Open a saved conversation before using voice.',                           // MC's own words (the server's)
     not_listening: 'Voice is on the record only. Go back on the record to use it.', invalid: 'Voice unavailable: open a saved conversation, on the record.' } };
@@ -44,7 +45,8 @@ function rig({ routes = {}, refuse = null, holdConnect = false, conversation = '
     if (!out) {
       if (url.endsWith('/end')) out = { status: 200, body: { ok: true, ended: true } };
       else if (url.endsWith('/transcript')) out = { status: 200, body: { ok: true, kept: body.events.length } };
-      else if (url.endsWith('/consult')) out = { status: 200, body: { ok: true, call_id: body.call_id, answered: true, receipt: 'mc-1', spoken: 'Item 12 is in build.' } };
+      else if (url.endsWith('/consult')) out = { status: 200, body: { ok: true, outcome: 'done', call_id: body.call_id, answered: true, receipt: 'mc-1', spoken: 'Item 12 is in build.' } };
+      else if (url.endsWith('/asked')) out = { status: 200, body: { ok: true, state: 'asked', expires_in: 30 } };
       else out = { status: 404, body: {} };
     }
     if (out === 'network') throw new Error('offline');
@@ -155,56 +157,69 @@ for (const [status, detail, words] of [
   assert(words.startsWith('Voice') || words.startsWith('Too many') || words.startsWith('Today'));
   scenarios++;
 }
-// §4: the bridge posts Robert's own last words with the provider's call id; whatever comes back is the output.
+// §4 under v3 (adapted from the model bridge: the app acts; the voice only talks). The model has no call to make: the page
+// passes no function bridge and asks the controller to refuse every call. A confirmed action posts its id, the yes item and
+// the request's own owner item and hash (never his words, never the yes's); the holding lines run while it is out; the
+// outcome is said in content-free words.
+const decide = (table) => (body) => {
+  const x = table[body.text];
+  return x ? { status: 200, body: { ok: true, owner_item_id: body.owner_item_id, ...x } } : { status: 200, body: { ok: true, decision: 'chat' } };
+};
+const ASK = { decision: 'ask', action_id: 'a1', kind: 'note', text_sha256: 'h1' };
+const YES = { decision: 'confirm', action_id: 'a1', kind: 'note', confirm_item_id: 't1', text_sha256: 'h1' };
 {
   let release;
-  const r = rig({ routes: { '/consult': (body) => (body.call_id === 'call_slow' ? new Promise((res) => { release = () => res({ status: 200, body: { ok: true, spoken: 'Done.' } }); })
-    : body.call_id === 'call_cap' ? { status: 429, body: { ok: false, error: 'cap', spoken: "I'll check the rest after we talk." } } : null) } });
+  const r = rig({ routes: {
+    '/utterance': (body) => decide({ 'Make a note that the kiln is hot.': ASK,
+      'Yes.': { ...YES, owner_item_id: 't0' } })(body),
+    '/consult': (body) => (body.call_id === 'confirm-a1' ? new Promise((res) => { release = () => res({ status: 200, body: { ok: true, outcome: 'done', saved: true, spoken: 'Saved.' } }); }) : null) } });
   await r.s.start('openai');
   const c = r.c;
-  c.utter('What is stuck on #12?');
-  const out = await c.options.onFunctionCall({ call_id: 'call_1', name: 'consult', arguments: '{"question":"the model\'s words"}' });
+  assert.equal(c.options.onFunctionCall, undefined); assert.equal(c.options.refuseCalls, true);   // no model action
+  c.utter('Make a note that the kiln is hot.'); await flush();
+  assert.deepEqual(r.posts('/utterance')[0].body, { conversation_id: 'c-1', owner_item_id: 't0', text: 'Make a note that the kiln is hot.' });
+  r.advance(4000); await flush();                                                       // no question started: the page asks
+  assert.deepEqual(c.instructions, [D.ASK_LINE]);
+  assert.deepEqual(r.posts('/asked')[0].body, { after_item: 't0' });
+  c.utter('Yes.'); await flush();
   const consult = r.posts('/consult')[0];
-  assert.deepEqual(consult.body, { session_id: SID, call_id: 'call_1', name: 'consult', owner_transcript_item: 'What is stuck on #12?',
-    owner_item_id: 't0', arguments: { question: "the model's words" } });              // the owner turn it acts on: its capture id (B1)
+  assert.deepEqual(consult.body, { session_id: SID, call_id: 'confirm-a1', action_id: 'a1', confirm_item_id: 't1',
+    owner_item_id: 't0', text_sha256: 'h1' });                                         // the request's item, never the yes
   assert.deepEqual(consult.opts.headers, HEADERS);
   assert.equal(consult.opts.credentials, 'same-origin');
-  assert.equal(out.spoken, 'Item 12 is in build.');
-  const capped = await c.options.onFunctionCall({ call_id: 'call_cap', name: 'consult', arguments: 'not json' });
-  assert.deepEqual(capped, { ok: false, error: 'cap', spoken: "I'll check the rest after we talk." });   // any status: as given
-  assert.deepEqual(r.posts('/consult')[1].body.arguments, {});
-  const saved = c.options.onFunctionCall({ call_id: 'call_slow', name: 'save_note', arguments: {} });
-  await flush();
-  assert.equal(r.posts('/consult')[2].body.name, 'save_note');
-  r.advance(7999); assert.deepEqual(c.instructions, []);
-  r.advance(1); assert.deepEqual(c.instructions, ['Still checking.']);                    // the holding lines (Spec 165 §12.4)
+  r.advance(7999); assert.deepEqual(c.instructions, [D.ASK_LINE]);
+  r.advance(1); assert.deepEqual(c.instructions, [D.ASK_LINE, 'Still checking.']);      // the holding lines (Spec 165 §12.4)
   c.options.onAssistantTurn('Still checking.');
-  r.advance(9000); assert.deepEqual(c.instructions, ['Still checking.', 'Still working on it.']);
-  r.advance(13000); assert.deepEqual(c.instructions, ['Still checking.', 'Still working on it.']);   // 30 s: inside the page's 35 s bound (F3)
-  release(); assert.deepEqual(await saved, { ok: true, spoken: 'Done.' });
+  r.advance(9000); assert.deepEqual(c.instructions.slice(1), ['Still checking.', 'Still working on it.']);
+  release(); await flush();
+  c.options.onAssistantTurn('Still working on it.'); await flush();                      // said at a pause, as every line
+  assert.equal(c.instructions.at(-1), 'Say this briefly, adding nothing: Saved.');
+  assert.ok(!c.instructions.some((x) => x.includes('kiln')));                           // nothing said carries his words
   scenarios++;
 }
-// Review B7: a consult the server never answered is asked once more as the same call (one effect: the server keeps its
-// answer), and if that is not answered either, its outcome is unknown, never "did not go through". The holding line is
-// cleared when it answers in time.
+// Review B7, through Check (adapted: the model no longer consults): a consult the server never answered is asked once more as
+// the same call (one effect: the server keeps its answer), and if that is not answered either, its outcome is unknown,
+// never "did not go through". The holding line is cleared when it answers in time.
 const UNKNOWN_RESULT = { ok: false, error: 'unknown', outcome: 'unknown', spoken: D.UNKNOWN };
 {
   const r = rig({ routes: { '/consult': () => 'network' } });
   await r.s.start('openai');
   r.c.utter('Anything new?');
-  assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'call_n', name: 'consult', arguments: {} }), UNKNOWN_RESULT);
-  assert.deepEqual(r.posts('/consult').map((p) => [p.body.call_id, p.body.owner_item_id]), [['call_n', 't0'], ['call_n', 't0']]);
+  await r.s.check();
+  assert.deepEqual(r.posts('/consult').map((p) => p.body.owner_item_id), ['t0', 't0']);
+  assert.equal(r.posts('/consult')[0].body.call_id, r.posts('/consult')[1].body.call_id);
+  assert.deepEqual(r.c.instructions, [`Say this briefly, adding nothing: ${UNKNOWN_RESULT.spoken}`]);
   r.advance(20000);
-  assert.deepEqual(r.c.instructions, []);
+  assert.deepEqual(r.c.instructions, [`Say this briefly, adding nothing: ${UNKNOWN_RESULT.spoken}`]);
   scenarios++;
 }
 // An unreadable answer: refused (4xx) is not done; accepted or the server failing is not known. A refused microphone says so.
-for (const [status, expected, posts] of [[502, UNKNOWN_RESULT, 2], [200, UNKNOWN_RESULT, 1],
-  [400, { ok: false, error: 'unavailable', outcome: 'not_done', spoken: D.NOT_DONE }, 1]]) {
+for (const [status, line, posts] of [[502, D.UNKNOWN, 2], [200, D.UNKNOWN, 1], [400, D.NOT_DONE, 1]]) {
   const r = rig({ routes: { '/consult': () => ({ status, body: null }) } });
   await r.s.start('openai');
   r.c.utter('Anything new?');
-  assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'call_u', name: 'consult', arguments: {} }), expected, String(status));
+  await r.s.check();
+  assert.deepEqual(r.c.instructions, [`Say this briefly, adding nothing: ${line}`], String(status));
   assert.equal(r.posts('/consult').length, posts, String(status));
   assert.match(D.startRefusal({ reason: 'microphone_denied' }), /^Voice unavailable: the microphone/);
   scenarios++;
@@ -245,11 +260,7 @@ for (const [status, expected, posts] of [[502, UNKNOWN_RESULT, 2], [200, UNKNOWN
   r.c.utter('Run the nightly job.');                                         // said again: a new turn
   await r.s.check();
   assert.equal(r.posts('/consult').length, 2);
-  r.c.utter('What is stuck on #12?');
-  await r.c.options.onFunctionCall({ call_id: 'call_m', name: 'consult', arguments: {} });  // the model consulted it
-  await r.s.check();
-  assert.equal(r.posts('/consult').length, 3);
-  assert.deepEqual(r.said.at(-1), [D.ALREADY_CHECKED, { transient: true }]);
+  assert.equal(r.c.options.onFunctionCall, undefined);                      // v3: no model consult to collide with
   scenarios++;
 }
 // §5: each item posted once when it completes, keyed by place; an interrupted reply posted partial; a heartbeat every 20 s.
@@ -367,13 +378,13 @@ for (const [status, error, words, beat] of [
   assert.equal(r.timers.size, 0);
   scenarios++;
 }
-// A consult the server answers "session ended" or refuses (403): the answer goes back, then the voice is ended here too.
+// A consult the server answers "session ended" or refuses (403): the voice is ended here too (adapted: through Check).
 for (const [status, error, words] of [[409, 'session ended', D.SERVER_ENDED.session_ended], [403, 'not your session', D.SERVER_ENDED.refused],
   [403, 'csrf', D.SERVER_ENDED.csrf]]) {
   const r = rig({ routes: { '/consult': () => ({ status, body: { ok: false, error } }) } });
   await r.s.start('openai');
   r.c.utter('Anything new?');
-  assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'call_e', name: 'consult', arguments: {} }), { ok: false, error });
+  await r.s.check();
   await flush(10);
   assert.deepEqual(r.c.ended, ['server_ended'], error);
   assert.deepEqual(r.said.at(-1), [words, { loud: true, error: true }]);
@@ -502,24 +513,24 @@ for (const [status, error, words] of [[409, 'session ended', D.SERVER_ENDED.sess
   assert.deepEqual(r2.c.ended, ['user_ended']); assert.equal(r2.posts('/end').length, 1);
   scenarios++;
 }
-// §7: "we're done" offers Sum up / Keep talking and ends nothing; Keep talking withdraws it.
+// §7: "we're done" offers Sum up / Keep talking and ends nothing; Keep talking withdraws it (v3: heard on the utterance route).
 {
-  let n = 0;
-  const r = rig({ routes: { '/transcript': (body) => (body.events.length && ++n === 1 ? { status: 200, body: { ok: true, kept: 1, propose_end: true, prompt: 'Shall I sum up?' } } : null) } });
+  const r = rig({ routes: { '/utterance': decide({ "We're done.": { decision: 'ask', kind: 'end', action_id: 'e1', prompt: 'Shall I sum up?' } }) } });
   await r.s.start('openai');
   r.c.hear([{ speaker: 'user', text: "We're done.", completed: true }]);
   await flush(10);
-  assert.deepEqual(r.propose, [false, true].slice(1));
+  assert.deepEqual(r.propose, [true]);
   assert.equal(r.s.proposing(), true);
   assert.equal(r.posts('/end').length, 0); assert.deepEqual(r.c.ended, []);
   r.s.keepTalking();
   assert.equal(r.s.proposing(), false); assert.deepEqual(r.propose, [true, false]);
   scenarios++;
 }
-// A spoken yes: the summary is asked for this conversation, spoken once ("say only this"), and the session ends after it.
+// A spoken yes: the summary is asked for this conversation; v3 shows it and the voice says only "Your summary is ready";
+// "read it" in the one reply window reads it ("say only this"), and the session ends after it has played out.
 {
   const r = rig({ routes: {
-    '/transcript': (body) => (body.events.length ? { status: 200, body: { ok: true, kept: 1, end_confirmed: true } } : null),
+    '/utterance': decide({ 'Yes.': { decision: 'confirm', kind: 'end', action_id: 'e1', confirm_item_id: 't0' } }),
     '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'We looked at item twelve.', written: '[Voice summary proposal] …', covers: {} } }),
   } });
   await r.s.start('openai');
@@ -529,16 +540,37 @@ for (const [status, error, words] of [[409, 'session ended', D.SERVER_ENDED.sess
   assert.equal(ask.url, `${BASE}/session/${SID}/summary`);
   assert.deepEqual(ask.body, { conversation_id: 'c-1', last_item_id: 't0', unacknowledged: [] });   // the close's report (§5.2)
   assert.deepEqual(ask.opts.headers, HEADERS);
-  assert.deepEqual(r.c.instructions, ['Say only this, then stop: We looked at item twelve.']);
+  assert.deepEqual(r.c.instructions, ['Say only this, then stop: Your summary is ready.']);         // never the summary itself
+  r.c.options.onPlaybackDrained('resp_1');                                                // "ready" played out: the window
+  await flush(10);
+  r.c.options.onUserTurn('Read it, please.');                                             // his one reply
+  await flush(10);
+  assert.deepEqual(r.c.instructions.at(-1), 'Say only this, then stop: We looked at item twelve.');
   assert.deepEqual(r.c.ended, []);
   r.c.options.onAssistantTurn('We looked at item twelve.');
   await flush(10);
   assert.deepEqual(r.c.ended, []);                                                        // generated, not yet heard (§5.3)
-  r.c.options.onPlaybackDrained('resp_1');                                                // its own response has played out
+  r.c.options.onPlaybackDrained('resp_2', 'drained');                                     // its own response has played out
   await flush(10);
   assert.deepEqual(r.c.ended, ['normal_end']);
   assert.equal(r.posts('/end').length, 1); assert.equal(r.reveals.length, 1);
+  assert.equal(r.posts('/end')[0].body.summary_playback, 'drained');
   assert.equal(r.posts('/summary').length, 1);
+  assert.equal(r.posts('/utterance').length, 1);                                          // the window posts nothing
+  scenarios++;
+}
+// v3: anything else in the window, or silence, ends it without reading; nothing is posted or acted on from the window.
+for (const reply of ['No thanks.', null]) {
+  const r = rig({ routes: { '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'We looked at item twelve.', written: 'w' } }) } });
+  await r.s.start('openai');
+  r.s.sumUp(); await flush(10);
+  r.c.options.onPlaybackDrained('resp_1'); await flush(10);
+  if (reply) r.c.options.onUserTurn(reply); else r.advance(15000);
+  await flush(10);
+  assert.deepEqual(r.c.ended, ['normal_end'], String(reply));
+  assert.ok(!r.c.instructions.some((x) => x.includes('item twelve')), String(reply));     // never spoken unasked
+  assert.equal(r.posts('/consult').length + r.posts('/utterance').length, 0);
+  assert.equal(r.posts('/end')[0].body.summary_playback, undefined);                      // nothing claimed heard
   scenarios++;
 }
 // The Sum up button does the same; an unavailable summary still ends and reveals, and says "Summary unavailable."
@@ -551,13 +583,13 @@ for (const [status, error, words] of [[409, 'session ended', D.SERVER_ENDED.sess
   assert.deepEqual(r.ended.at(-1), [D.SUMMARY_UNAVAILABLE, { error: false }]);
   scenarios++;
 }
-// A spoken summary that never finishes still ends the session.
+// A spoken summary that never finishes still ends the session (v3: "ready" that never reports its end, a window with no
+// reply, each at its bound).
 {
   const r = rig({ routes: { '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'Short.', written: 'w' } }) } });
   await r.s.start('openai');
-  await r.s.sumUp();
-  r.advance(45000);
-  await flush(10);
+  r.s.sumUp(); await flush(10);
+  for (let i = 0; i < 6; i++) { r.advance(8000); await flush(10); }
   assert.deepEqual(r.c.ended, ['normal_end']);
   scenarios++;
 }

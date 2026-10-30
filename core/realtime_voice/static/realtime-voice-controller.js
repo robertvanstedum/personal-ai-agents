@@ -48,6 +48,10 @@ const CUT_SHORT = { ok: false, outcome: "not_done", error: "cut_short",
 // honest answer for now, as the sentence the voice should say, since the model reads it out word for word (Gate 2 E N2).
 // Its result is said later, as a page line.
 const PENDING = { ok: false, outcome: "pending", spoken: "That's still running. I'll tell you when it's back." };
+// Confirm by voice, v3 (the app acts; the voice only talks): a host that refuses every model call (refuseCalls) answers
+// one that arrives anyway with this output and asks no reply for it. No tools are offered on either provider.
+const NO_ACTIONS = { ok: false, outcome: "not_done", error: "no_model_actions",
+  spoken: "Not run: on this voice the app acts, only after he confirms. Nothing was done." };
 const LATE_LINE = "Say this briefly, adding nothing: ";
 const LATE_DONE = "That earlier check has finished; its answer is in the conversation.";
 const OPENING_INSTRUCTION =
@@ -68,6 +72,7 @@ export class RealtimeVoiceController {
     bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
     onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall, onTranscriptUpdate, onPlayback,
     onSessionInfo, onPlaybackDrained = null, pageResponses = false, oncePerItem = false, onUnbound = null, bootstrapTimeoutMs = 0,
+    respondFor = null, onResponseStarted = null, refuseCalls = false,
     openingInstruction = OPENING_INSTRUCTION,
     managedBootstrap = null, requestHeaders = null, includeTranscriptAfterEnd = true,
   }) {
@@ -101,6 +106,19 @@ export class RealtimeVoiceController {
     // of its own), the page creates every response that may act, one for each committed owner item, and a call acts on
     // that item's words alone. German and Portuguese pass no option: every request is sent at once, untagged, as before.
     this._pageResponses = pageResponses;
+    // Optional, confirm by voice v3 (V3_BUILD_BRIEF "Asking, per provider"); the direct page passes them, German and
+    // Portuguese pass none, so nothing changes for them:
+    // - respondFor(itemId): where the page creates every response (OpenAI), each committed item's response waits for the
+    //   host's word on it (its server decision, at most the host's own bound): a Promise of {instruction} (the response
+    //   is created with that page instruction), {skip: true} (no response for this item: the host speaks for it later), or
+    //   null (a normal response). A newer turn of his while it waits supersedes it, as before.
+    // - onResponseStarted({response_id, owner, page}): a response started (owner: his item id, where the page made it for
+    //   one; page: whether it was a page request of the host's). Evidence of when something started playing, never
+    //   authority to act.
+    // - refuseCalls: every model function call is answered NO_ACTIONS, with no reply asked, and never passed to the host.
+    this._respondFor = typeof respondFor === "function" ? respondFor : null;
+    this._onResponseStarted = typeof onResponseStarted === "function" ? onResponseStarted : null;
+    this._refuseCalls = refuseCalls === true;
     this._owned = false;             // every response of this session is the page's (the bootstrap said page_responses)
     this._queue = [];                // page requests waiting their turn, in order: {kind, owner, turn, tag, send, done}
     this._inflight = null;           // the one page request in flight, from its response.create to its response.done
@@ -318,6 +336,12 @@ export class RealtimeVoiceController {
         return;
       }
       if (this._once(call) || this._refused(call)) return;
+      if (this._refuseCalls) {                                   // v3: no model action, on any provider
+        this._outstanding.delete(call.call_id);
+        try { this._adapter.sendFunctionOutput(call.call_id, NO_ACTIONS); } catch (_) { /* the transport is closed */ }
+        this._onUnbound({ reason: "model_call", response_id: call.response_id || null, name: call.name || null });
+        return;
+      }
       if (!this._onFunctionCall) {
         this._sendResult(call, {
           error: "Function bridge unavailable",
@@ -406,6 +430,10 @@ export class RealtimeVoiceController {
   /** The session's id (the server's voice_session_id when it issued one), or null. For a host page (Spec 165 §4.3);
    *  German and Portuguese do not call it. */
   sessionId() { return this._sessionId; }
+
+  /** Whether the page creates every response of this session (the bootstrap's page_responses: OpenAI's direct path).
+   *  For the direct page (v3); German and Portuguese do not call it. */
+  ownsResponses() { return this._owned; }
 
   /** The session's state (idle, requesting_mic, connecting, active, reconnecting, ending, ended). For a host page (Spec 165
    *  §4.3), so it never reads a private field; German and Portuguese do not call it. */
@@ -496,7 +524,22 @@ export class RealtimeVoiceController {
     if (!this._owned) { this._ended("committed"); return; }
     for (const entry of this._queue.filter((e) => e.kind === "turn")) this._let(entry, "superseded");
     if (!item) this._onUnbound({ reason: "commit_without_item" });
-    try { this._ask(item, (tag) => this._adapter.createResponse(tag), null, "turn"); } catch (_) { /* the transport is closed */ }
+    const respond = (word) => {
+      const instruction = word && typeof word.instruction === "string" && word.instruction ? word.instruction : null;
+      try {
+        this._ask(item, (tag) => (instruction ? this._instruct(instruction, tag) : this._adapter.createResponse(tag)), null, "turn");
+      } catch (_) { /* the transport is closed */ }
+    };
+    if (!this._respondFor || !item) { respond(null); return; }
+    // v3: the host's word on this item first (its decision), then one response, or none. A newer turn of his meanwhile
+    // supersedes it: it gets no response, exactly as a commit overtaken in the queue.
+    const turn = this._turn, generation = this._generation;
+    Promise.resolve().then(() => this._respondFor(item)).catch(() => null).then((word) => {
+      if (generation !== this._generation || !this._owned || !this._adapter) return;
+      if (turn !== this._turn) { this._onUnbound({ reason: "superseded", owner: item, kind: "turn" }); return; }
+      if (word && word.skip === true) return;
+      respond(word);
+    });
   }
 
   // His turn ended (speech_stopped) or was committed. Where the provider creates its own replies (xAI), each turn of his
@@ -684,6 +727,11 @@ export class RealtimeVoiceController {
     this._holding = true;
     try { this._pump(); } finally { this._holding = false; }     // a request past its bound is let go first; none is sent now
     const f = this._inflight;
+    if (this._onResponseStarted) {                               // v3: when it started, never who may act
+      const mine = Boolean(f && !f.started && (evt.tag ? evt.tag === f.tag : !this._echoed));
+      try { this._onResponseStarted({ response_id: id, owner: mine && f.owner ? f.owner : null, page: mine, kind: mine ? f.kind : null }); }
+      catch (_) { /* a host's observer never stops the binding */ }
+    }
     const theirs = !this._owned && !evt.tag && this._owed > 0;  // possibly the provider's own reply to a turn of his
     if (!this._owned && !evt.tag) this._due = 0;                // a reply has started: his turn's is no longer to come (LV3)
     if (evt.tag) this._echoed = true;

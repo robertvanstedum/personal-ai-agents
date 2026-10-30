@@ -22,10 +22,10 @@ In production (any MINIMOI_ROLE but standby or development, unset included) a st
 MINIMOI_COS_DIRECT_VOICE_PRODUCTION=1, read only here, through production_environ (shaped like
 guild_mounts.production_environ). The portal needs no CoS flag. Off: nothing is registered and Confer behaves as before. Not a single provider call, credential or Keychain read happens here at install.
 
-Inherited unchanged from the core (A1's binding, Robert's C2 decision "A: tie by construction"): on OpenAI the page makes
-every reply that may act, for one committed item of his (page_responses), and the model has consult and save_note; on xAI
-the model has no action tool (capabilities.MODEL_ACTIONS) and she acts only through Check with CoS. Her card names no Grok
-voice yet (D2 (a)), so an xAI start is refused with that reason until the audition: default_voices is False.
+Inherited from the core (confirm by voice, v3: the app acts; the voice only talks): on no provider has the model an action
+tool. Her request by voice becomes the session's one waiting action, which the app runs only after Robert's spoken yes or a
+tap on Check, the same on OpenAI and xAI. On OpenAI the page still makes every reply (page_responses). Her card names no
+Grok voice yet (D2 (a)), so an xAI start is refused with that reason until the audition: default_voices is False.
 """
 from __future__ import annotations
 
@@ -104,24 +104,21 @@ _RULES = ("You are the low-latency voice of Robert's Chief of Staff. Keep ordina
           "most one useful question per turn and do not force a question onto every reply. Never use Markdown, headings, "
           "or bullet lists in speech. Robert may interrupt you; stop cleanly and listen. If Robert interrupts, abandon the "
           "unfinished explanation and respond to his new direction; do not automatically resume it. ")
-_ACTS = ("Use consult whenever the answer requires live or current facts, web research, MiniMoi state beyond the supplied "
-         "context, stored history, or substantive domain judgment, and before saying that a capability, tool or piece of "
-         "history is unavailable. Give a very brief spoken acknowledgment before consulting when helpful, then summarize "
-         "the returned answer in the same short spoken style, preserving its uncertainty and action status rather than "
-         "reading it out in full. Use save_note only for an explicit request to save a note ('save a note that …'). "
-         "Never claim that a note was saved unless that tool returned a successful platform receipt. ")
-_CHECKS = ("When the answer requires live or current facts, web research, MiniMoi state beyond the supplied context, stored "
-           "history, or substantive domain judgment, or before saying that a capability, tool or piece of history is "
-           "unavailable, ask Robert to press Check with CoS, then say the answer you are given in the same short spoken "
-           "style, preserving its uncertainty and action status. Never claim that a note was saved unless the answer you "
-           "are given carries its platform receipt. ")
+# v3 (confirm by voice: the app acts; the voice only talks): one text for every provider. She has no tools; the app consults
+# her turn only after Robert confirms, and gives the voice her answer to say.
+_CONFIRM = ("When the answer requires live or current facts, web research, MiniMoi state beyond the supplied context, stored "
+            "history, or substantive domain judgment, or before saying that a capability, tool or piece of history is "
+            "unavailable, ask Robert briefly to confirm that you should check; the app then asks her own turn and gives you "
+            "her answer: say it in the same short spoken style, preserving its uncertainty and action status, rather than "
+            "reading it out in full. Never claim that a note was saved unless the app says so. ")
 _WRITING = ("Set reminders in writing: you cannot set a reminder by voice, so if Robert asks for one, tell him to set it in "
             "writing in Confer. Commands such as /new are done in writing too.")
 
 
-def her_rules(actions):
-    """Her own operating rules for this session (§6.2, §6.4): with the model's two tools, or with Check with CoS."""
-    return _RULES + (_ACTS if actions else _CHECKS) + _WRITING
+def her_rules(actions=False):
+    """Her own operating rules for this session (§6.2, §6.4), the same on every provider under v3 (``actions`` is ignored,
+    kept for its callers): no tools; the app consults her after Robert's yes."""
+    return _RULES + _CONFIRM + _WRITING
 
 
 # The roles that are not production (staging and the Mac: docker-compose.staging.yml's standby; the Mac's development).

@@ -27,9 +27,11 @@ await t.check('B N8: a Check that sends nothing (nothing said yet) shows no word
   assert.deepEqual(r.checks, []);
   assert.equal(r.posts('/consult').length, 0);
 });
+// Adapted for v3 (coordinator addition 1): both providers confirm by voice, so no notice says only Check acts on xAI.
 await t.check('B N8 (xai): the notice says only Check acts on this voice', async () => {
   const r = rig({ direct: HOST }); await r.s.start('xai');
-  assert.deepEqual(r.notices, ['On this voice, Master Craftsman acts only when you press Check with MC.']);
+  assert.deepEqual(r.notices, ['']);
+  assert.ok(!r.notices.some((n) => /acts only/.test(n)));
 });
 
 // W N3: the direct path asks the controller to bound its bootstrap (the controller's own bound: realtime_voice_direct_host.mjs).

@@ -343,54 +343,28 @@ def item_place(item):
     return int(item[1:]) if owner_item(item) else -1
 
 
-# ── the two tools and the rules that go with them ──────────────────────────────────────────────────────────────────
+# ── the rules a direct session adds (v3: no tools on any provider) ────────────────────────────────────────────────────
 
 OWNER = "the owner"              # the owner's name in the core's words when a host names none (the adapter's owner_name)
 
 
-def tools(person, owner=OWNER):
-    """The session's two functions, named exactly as bootstrap._allowlisted_tools allows: only type, name, description
-    and parameters. The descriptions are the model's rules. ``owner``: the host's name for its owner (MC: Robert)."""
-    notes = " or ".join(f"'{phrase}'" for phrase in person["notes"])
-    return [
-        {"type": "function", "name": "consult",
-         "description": (f"Ask {person['name']}'s own turn for current facts, project state, files, jobs or any work. "
-                         f"The server acts on {owner}'s own last words, not on these arguments. Speak the result's 'spoken' "
-                         "text without adding claims. Its 'outcome' is done, not_done, pending (still running: the answer "
-                         "will be in the conversation; say only that) or unknown (the result did not come back: say only "
-                         "that, and that it must be checked before asking again). If 'same_turn' is true, his words were "
-                         "already acted on (by the other tool, or by Check): say only 'spoken'."),
-         "parameters": {"type": "object", "properties": {"question": {"type": "string"}}}},
-        {"type": "function", "name": "save_note",
-         "description": (f"Save a note when {owner} says {notes}. The server saves his own "
-                         "words, not these arguments. Say it is saved only when the result has 'saved' true. If "
-                         "'outcome' is pending or unknown, say only what 'spoken' says: the note must be checked before it "
-                         "is saved again. If 'same_turn' is true, his words were already acted on (by the other tool, or by "
-                         "Check): say only 'spoken'."),
-         "parameters": {"type": "object", "properties": {"note": {"type": "string"}}}},
-    ]
-
-
-def direct_rules(person, owner=OWNER, actions=True):
-    """Spec 164 §7, part 1: what a direct session adds to the host's own operating rules (its two tools, the spoken end,
-    no summary from memory). ``actions`` False (Spec 165 §7 as amended 28 Oct 2026: a provider not eligible for the
-    model's own actions, capabilities.MODEL_ACTIONS): the session has no tools, and every action goes through Check with
-    the person, which the owner presses."""
-    if actions:
-        tools_rule = (f"On this voice path your two tools are 'consult' ({person['name']}'s own turn on {owner}'s last "
-                      f"words: current facts, project state, files, jobs, any work) and 'save_note' (only for "
-                      f"'{person['notes'][0]}'). Speak what a tool returns; do not add claims to it. If it says it did "
-                      "not go through, say so. ")
-    else:
-        tools_rule = (f"On this voice path you have no tools: you cannot ask {person['name']}'s own turn or save a note "
-                      f"yourself, whatever any other rule here says. When {owner} asks for current facts, project state, "
-                      f"files, jobs, any work or a note, tell him to press Check with {person['short']}: it sends his last "
-                      f"words to {person['name']}, and you will be given the answer to say. Never say you checked, did or "
-                      "saved anything yourself. ")
-    return (tools_rule +
-            f"When {owner} says he is done (\"we're done\"), answer only: \"{SUMMARY_PROMPT}\" A negated or "
-            "questioned one (\"we're not done\") is not an ending; carry on. Never summarize from memory: the "
-            "summary is made from this session's kept record after it ends.")
+def direct_rules(person, owner=OWNER, actions=False):
+    """Spec 164 §7, part 1, as confirm by voice v3 makes it (V3_BUILD_BRIEF "The voice side"): what a direct session adds to
+    the host's own operating rules, the same on every provider. The model has no tools: it cannot act, the app does, and
+    only after the owner confirms. It asks for that confirmation briefly and naturally, never repeating his words; it never
+    says anything is done; outcomes come from the app; and "Shall I sum up?" is kept exactly. ``actions`` is ignored (kept
+    for its callers): no provider's model may act now (capabilities.MODEL_ACTIONS), so I6 holds trivially."""
+    name, short = person["name"], person["short"]
+    return (f"On this voice path you cannot act, whatever any other rule here says: you have no tools, and you cannot ask "
+            f"{name}'s own turn, save a note, put up a post-it or do any work yourself. The app does that, and only after "
+            f"{owner} confirms. When {owner} asks for a note, a post-it, or something only {short} can do (current facts, "
+            "project state, files, jobs, any work), ask him briefly and naturally to confirm, for example \"Sure, just "
+            "confirm for me\" or \"Shall I go ahead?\", without repeating or describing his words, and never say it is "
+            "done. Never repeat his words back unless he asks you to. Outcomes come from the app: say only what it gives "
+            f"you, and never claim anything was checked, saved or done otherwise. When {owner} says he is done "
+            f"(\"we're done\"), answer only: \"{SUMMARY_PROMPT}\" A negated or questioned one (\"we're not done\") is "
+            "not an ending; carry on. Never summarize from memory: the summary is made from this session's kept record "
+            "after it ends.")
 
 
 def compose_instructions(operating_rules, card, data):
@@ -875,10 +849,10 @@ class DirectVoiceAdapter:
         """The person's pinned card (voice_card.load_pinned); OSError or ValueError when unavailable."""
         raise NotImplementedError
 
-    def instructions(self, card, handle, actions=True):
+    def instructions(self, card, handle, actions=False):
         """The session's text (compose_instructions), with bounded continuity from ``handle`` (None: none readable).
-        ``actions``: whether this session's model may act (its provider is eligible, Spec 165 §7 as amended): passed on
-        to direct_rules, which says the tools, or that every action goes through Check with the person."""
+        ``actions``: kept for its callers; under v3 always False (no model action on any provider), and direct_rules
+        says the same rules for every provider."""
         raise NotImplementedError
 
     def ended(self, handle, sid):
@@ -2153,6 +2127,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
     from core.realtime_voice.bootstrap import create_bootstrap_blueprint
     from core.realtime_voice.capabilities import (AGENT_CONVERSATION_MODE, get_provider_capability, model_actions,
                                                   providers_for_mode)
+    from core.realtime_voice.capabilities import page_responses as capabilities_page_responses
     from core.realtime_voice.config import resolve_provider
     from core.realtime_voice.standards import TRANSCRIPTION_VOCABULARY
     person, store = adapter.person, adapter.store
@@ -2221,12 +2196,12 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
 
     def get_persona(name, actions=True):
         """The bootstrap's allow-list: only this person, with the card the pin names now (a session keeps the card it
-        started with), the two tools, and the host's composed instructions. ``actions`` (the bootstrap's page_responses,
-        from capabilities.model_actions for the chosen provider): False gives no tools, and rules that send every action
-        through Check with the person (Spec 165 §7 as amended 28 Oct 2026)."""
+        started with) and the host's composed instructions. v3: never a tool, on any provider (tools() is gone), and the
+        same rules on every provider. ``actions`` is the bootstrap's page_responses (capabilities.page_responses): whether
+        the page creates every response, which says nothing about tools any more."""
         if name != person["key"]:
             return None
-        g.direct_voice_actions = actions is True         # the session ledger records it at issue (review B N7)
+        g.direct_voice_actions = False                   # no model action, ever (v3): the ledger records it at issue
         try:
             card = adapter.card()
         except (OSError, ValueError):                      # missing, unreadable or not the manifest's: voice unavailable
@@ -2240,12 +2215,12 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             handle, refused = adapter.conversation(cid)
             handle = handle if refused is None else None
         return {"name": person["name"], "prompt_txt": card["card"], "scenes": {}, "voices": card["voices"],
-                **({"tools": tools(person, adapter.owner_name or OWNER)} if actions else {}), "notices": card["notices"],
+                "notices": card["notices"],
                 # D19 (a): a bilingual card is transcribed in the language spoken (the bootstrap sends no single language)
                 **({"transcription": card["transcription"]} if card.get("transcription") else {}),
                 # A4-2: MiniMoi's names and command words for the transcriber, where the provider takes a hint (OpenAI)
                 "transcription_vocabulary": TRANSCRIPTION_VOCABULARY,
-                "instructions": adapter.instructions(card["card"], handle, actions=actions)}
+                "instructions": adapter.instructions(card["card"], handle, actions=False)}
 
     def guard():
         return adapter.guard(_kind())
@@ -2279,10 +2254,10 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         return response
 
     def page_responses(provider):
-        """capabilities.model_actions, as the bootstrap reads it for the chosen provider; the provider is kept for the
-        session ledger to record at issue (LV6: the summary's words)."""
+        """capabilities.page_responses, as the bootstrap reads it for the chosen provider (OpenAI: the page creates every
+        response); the provider is kept for the session ledger to record at issue (LV6, and v3's fold rule)."""
         g.direct_voice_provider = provider
-        return model_actions(provider)
+        return capabilities_page_responses(provider)
 
     boot = create_bootstrap_blueprint(domain=person["domain"], locale=locale, get_persona=get_persona,
                                       is_production=adapter.is_production, consult_ledger=sessions, owner=adapter.owner,
@@ -2796,8 +2771,10 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
                 "asked_url": url_prefix + "/api/realtime-voice/session/{session_id}/utterance/{action_id}/asked",
                 "heartbeat_seconds": HEARTBEAT_SECONDS, "persona": person["key"], "locale": locale,
                 "card_release": release, "person": {"name": person["name"], "short": person["short"]},
-                # Which offered provider's model may act on its own call (Spec 165 §7 as amended): the page's words only.
+                # Which offered provider's model may act on its own call: none under v3 (no page labels say otherwise).
                 "model_actions": {p["provider"]: model_actions(p["provider"]) for p in offered},
+                # Where the page creates every response (OpenAI), each waiting for its item's decision (v3).
+                "page_responses": {p["provider"]: capabilities_page_responses(p["provider"]) for p in offered},
                 "words": dict(adapter.words)}
     if not adapter.default_voices:
         metadata["unvoiced"] = unvoiced_now

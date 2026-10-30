@@ -25,6 +25,7 @@ const BASE = '/api/mc/voice/direct/api/realtime-voice';
 const DIRECT = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenAI' }, { provider: 'xai', label: 'Grok' }], default_provider: 'openai',
   bootstrap_url: `${BASE}/bootstrap`, consult_url: `${BASE}/consult`, end_url: `${BASE}/session/{session_id}/end`,
   transcript_url: `${BASE}/session/{session_id}/transcript`, summary_url: `${BASE}/session/{session_id}/summary`,
+  utterance_url: `${BASE}/session/{session_id}/utterance`, asked_url: `${BASE}/session/{session_id}/utterance/{action_id}/asked`,
   summary_decision_url: `${BASE}/session/{session_id}/summary/decision`, heartbeat_seconds: 20, persona: 'master_craftsman',
   person: { name: 'Master Craftsman', short: 'MC' } };
 
@@ -406,10 +407,10 @@ for (const who of ['dictation', 'companion-closed']) {
 // §7: while "Shall I sum up?" is offered, End asks for the summary (as Sum up does); an error line stays until the next send.
 {
   const r = await rig({ summary: { status: 403, body: { error: 'csrf', message: 'This page is out of date. Reload it.' } } });
-  // Patch the transcript answer to propose the end.
+  // Patch the utterance answer to propose the end (v3: the utterance route decides it, as the session's waiting action).
   const original = r.sandbox.fetch;
-  r.sandbox.fetch = async (url, opts) => (url.endsWith('/transcript') && JSON.parse(opts.body).events.length
-    ? { ok: true, status: 200, json: async () => ({ ok: true, kept: 1, propose_end: true, prompt: 'Shall I sum up?' }) } : original(url, opts));
+  r.sandbox.fetch = async (url, opts) => (url.endsWith('/utterance')
+    ? { ok: true, status: 200, json: async () => ({ ok: true, decision: 'ask', kind: 'end', action_id: 'e1', owner_item_id: 't0', prompt: 'Shall I sum up?' }) } : original(url, opts));
   await r.click();
   r.instances[0].options.onTranscriptUpdate([{ speaker: 'user', text: "We're done.", completed: true }]);
   await flush();

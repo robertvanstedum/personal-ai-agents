@@ -210,8 +210,7 @@ def test_bootstrap_issues_an_owner_session_with_a_sceneless_english_persona_and_
     assert minted["transcription_language"] is None and minted["voice"] == "marin"      # bilingual (D19, review S-3)
     assert "Master Craftsman, Robert's longtime collaborator and friend in the work" in minted["instructions"]
     assert "SCENARIO FOR THIS SESSION" not in minted["instructions"]
-    assert [t["name"] for t in minted["tools"]] == ["consult", "save_note"]
-    assert all(set(t) == {"type", "name", "description", "parameters"} for t in minted["tools"])
+    assert minted["tools"] is None                                   # v3: no tools on any provider (adapted)
     assert r.budget.status()["reserved_usd"] == 2.0
 
 
@@ -225,8 +224,9 @@ def test_the_transcriber_is_given_minimois_command_words_and_stays_bilingual(rea
     assert minted["transcription_prompt"] == BILINGUAL_TRANSCRIPTION_HINT
 
 def test_the_session_text_is_composed_here_rules_then_card_then_this_conversation(ready):
-    """Spec 164 §7: the shared operating rules whole, then MC's card, then bounded continuity; no language-practice text."""
-    from minimoi_portal.guild_ui.mc_managed_realtime import INSTRUCTIONS
+    """Spec 164 §7: the operating rules, then MC's card, then bounded continuity; no language-practice text. Adapted for v3:
+    the direct path's rules are DIRECT_INSTRUCTIONS (the managed path keeps INSTRUCTIONS whole) with v3's direct_rules."""
+    INSTRUCTIONS = direct.DIRECT_INSTRUCTIONS
     from core.realtime_voice.voice_card import load_pinned
     r = ready
     earlier = start(r)["voice_session_id"]

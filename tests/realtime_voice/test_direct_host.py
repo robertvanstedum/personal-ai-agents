@@ -282,12 +282,11 @@ def test_a_host_gets_the_routes_the_metadata_and_a_recorded_session(rig):
     assert r.store.markers[(sid, "start")]["conversation_id"] == "owner"
     minted = r.mints[0]
     assert minted["transcription_language"] == "pt" and minted["voice"] == "cedar"       # the card's language and voice
-    assert [t["name"] for t in minted["tools"]] == ["consult", "save_note"]
-    assert "Ask Test Person's own turn" in minted["tools"][0]["description"]
-    assert "'save a note:'" in minted["tools"][1]["description"]
+    assert minted["tools"] is None                                    # v3: no tools on any provider (adapted)
     text = minted["instructions"]
     assert text.index("Test rules.") < text.index("Test Person, plain and brief.") < text.index("continuity of owner")
-    assert "Test Person's own turn on Rosa's last words" in text and "Shall I sum up?" in text and "Robert" not in text
+    assert "cannot ask Test Person's own turn" in text and "only after Rosa confirms" in text
+    assert "Shall I sum up?" in text and "Robert" not in text
     assert r.budget.status()["reserved_usd"] == 2.0
 
 

@@ -47,6 +47,7 @@ const CAPS = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenAI'
   transcript_url: `${P}/session/{session_id}/transcript`, summary_url: `${P}/session/{session_id}/summary`,
   summary_decision_url: `${P}/session/{session_id}/summary/decision`, reconcile_url: `${P}/consult/{session_id}/{owner_item_id}`,
   keep_talking_url: `${P}/session/{session_id}/keep_talking`, heartbeat_seconds: 20, persona: 'chief_of_staff', locale: 'en-US',
+  utterance_url: `${P}/session/{session_id}/utterance`, asked_url: `${P}/session/{session_id}/utterance/{action_id}/asked`,
   card_release: '0.1.0', person: { name: 'Chief of Staff', short: 'CoS' }, model_actions: { openai: true, xai: false },
   words: { no_conversation: "Voice unavailable: Confer's conversation is not available here.", invalid: 'Voice unavailable: open Confer to talk with CoS.',
     kept_in: "in Chief of Staff's voice records, which she can recall" },
@@ -281,15 +282,16 @@ await scenario('admitted: one Voice button; the mode select and running transcri
   assert.equal(p.dictation.available, true);                                       // Dictate as today
   assert.equal(p.nodes('voice-live').hidden, true);
 });
-await scenario('admitted: a provider the card names is offered; on Grok it says only Check acts, before and during', {
+// Adapted for v3 (confirm by voice; coordinator addition 1): both providers confirm by voice, so Grok is no longer labelled
+// "acts only through Check", before or during.
+await scenario('admitted: a provider the card names is offered, with no Check-only label, before and during', {
   caps: { ...CAPS, unvoiced: {} }, saved: 'xai' }, async (p) => {
   const select = p.nodes('voice-provider').querySelector('[data-voice-provider]');
-  assert.deepEqual(select.elements.map((o) => o.textContent), ['OpenAI', 'Grok · acts only through Check with CoS']);
+  assert.deepEqual(select.elements.map((o) => o.textContent), ['OpenAI', 'Grok']);
   assert.equal(select.value, 'xai');                                                // remembered under her own key
   await p.voice();
   assert.equal(p.c.args.provider, 'xai');
-  assert.equal(textOf(p.bar('[data-voice-notice]')), 'On this voice, Chief of Staff acts only when you press Check with CoS.');
-  assert.equal(p.bar('[data-voice-notice]').hidden, false);
+  assert.ok(!/acts only/.test(textOf(p.bar('[data-voice-notice]'))));            // no Check-only notice on Grok now
   select.value = 'openai'; select.dispatch('change');
   assert.equal(p.store.get('minimoi.cos.voice.provider'), 'openai');
 });
@@ -319,8 +321,10 @@ await scenario('the live bar: voice on, the time, Check with CoS and End; nothin
   assert.ok(!p.nodes('voice-live').textContent.includes('agenda') && !p.chat.textContent.includes('agenda'));
   assert.equal(p.posts('/transcript').length >= 1, true);                          // kept on her server as it is said
 });
+// Adapted for v3: the end is offered by the utterance route's decision (the session's one waiting action), not a post.
 await scenario('Sum up and Keep talking show only when offered; Keep talking withdraws; End while offered sums up', {
-  routes: { '/transcript': (body) => (body.events.some((e) => e.text === 'I think we are done.') ? { status: 200, body: { ok: true, kept: 1, propose_end: true } } : null),
+  routes: { '/utterance': (body) => (body.text === 'I think we are done.' ? { status: 200, body: { ok: true, decision: 'ask', kind: 'end',
+    action_id: `e-${body.owner_item_id}`, owner_item_id: body.owner_item_id, prompt: 'Shall I sum up?' } } : null),
     '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'We covered the agenda.' } }) } }, async (p) => {
   await p.voice();
   p.c.utter('I think we are done.'); await flush();
@@ -671,7 +675,7 @@ await t.check('phone width (375 px model): every voice row wraps, no fixed width
   const width = (label) => Math.ceil(label.length * 7 + 2 * 10 + 2);
   const room = 375 - 2 * 20;
   for (const label of ['Check with CoS', 'End', 'Sum up', 'Keep talking', 'Confirm', 'Edit', 'Decline', 'Ask for a summary', 'Open', 'Dismiss',
-    'Grok · acts only through Check with CoS', 'Download transcript (partial)'])
+    'Grok', 'Download transcript (partial)'])
     assert.ok(width(label) <= room, `"${label}" (${width(label)} px) does not fit ${room} px`);
 });
 await scenario('phone width: every live control is a button in the bar, shown and enabled while live, and works by tap', {}, async (p) => {

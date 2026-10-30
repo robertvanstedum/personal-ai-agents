@@ -201,6 +201,7 @@ def test_a_bare_confirmation_is_refused_in_writing_on_every_host_and_the_summary
 # send every action through Check with the person, and Check still acts on his words.
 @pytest.mark.parametrize("provider", ["openai", "xai"])
 def test_each_host_gives_the_models_tools_only_where_the_provider_is_eligible(host, monkeypatch, provider):
+    """Kept by name (A1's I6); under v3 no provider is eligible, so no host gives a tool anywhere."""
     h = host
     minted = []
 
@@ -215,14 +216,15 @@ def test_each_host_gives_the_models_tools_only_where_the_provider_is_eligible(ho
     body = answer.get_json()
     session = minted[-1] if provider == "xai" else h.r.mints[-1]
     short = h.short
+    # Adapted for v3 (the app acts; the voice only talks): no host gives the model a tool on either provider, and the
+    # rules are the same on both; only the plumbing differs (OpenAI's page still makes every response).
     if provider == "openai":
         assert body["page_responses"] is True and session["turn_detection"]["create_response"] is False
-        assert [t["name"] for t in session["tools"]] == ["consult", "save_note"]
-        assert "your two tools are 'consult'" in session["instructions"]
     else:
-        assert "page_responses" not in body and not session.get("tools")
-        assert "create_response" not in session["turn_detection"]
-        assert f"press Check with {short}" in session["instructions"] and "your two tools" not in session["instructions"]
+        assert "page_responses" not in body and "create_response" not in session["turn_detection"]
+    assert not session.get("tools") and "you have no tools" in session["instructions"]
+    assert f"something only {short} can do" in session["instructions"] and "press Check" not in session["instructions"]
+    assert "your two tools" not in session["instructions"]
     check = ask(h, body["voice_session_id"], "host-1", "t0").get_json()           # Check with the person: page-initiated
     assert check["outcome"] == "done" and h.turns() == 1
 

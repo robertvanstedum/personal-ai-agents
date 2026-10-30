@@ -286,9 +286,12 @@ def test_a_consult_then_the_models_save_note_is_not_saved_unless_the_first_saved
 
 
 def test_the_tool_texts_say_how_to_speak_same_turn_and_pending():
-    from core.realtime_voice.direct_host import tools
-    for tool in tools({"name": "Test Person", "notes": ("save a note:",)}):
-        assert "'same_turn'" in tool["description"] and "pending" in tool["description"]
+    """Adapted for v3: the model has no tools (tools() is gone), so no tool text says anything; the page says pending and
+    an already-handled turn itself, in content-free words (direct-voice-session.js outcomeLine)."""
+    from core.realtime_voice import direct_host
+    assert not hasattr(direct_host, "tools")
+    rules = direct_host.direct_rules({"name": "Test Person", "short": "TP", "notes": ("save a note:",)})
+    assert "you have no tools" in rules and "Outcomes come from the app" in rules
 
 
 # ── Item 5: reconciliation, GET …/consult/<session>/<owner_item_id>: the stored outcome, running nothing ────────────────
@@ -604,8 +607,8 @@ def test_the_core_names_the_owner_only_as_the_host_does(rig):
     r = rig
     sid = start(r)
     minted = r.mints[-1]
-    assert "Rosa's own last words" in minted["tools"][0]["description"] and "Robert" not in str(minted["tools"])
-    assert "Rosa's last words" in minted["instructions"] and "Robert" not in minted["instructions"]
+    assert minted["tools"] is None                                     # v3: no tools; the rules name the owner (adapted)
+    assert "only after Rosa confirms" in minted["instructions"] and "Robert" not in minted["instructions"]
     post(r, sid, [turn(r, "user", "t0", "We're done.")])
     r.client.post(BASE + f"/session/{sid}/summary", headers=OWNER, json={"conversation_id": "owner"})
     assert r.host.prompts[-1].startswith("Rosa ended a voice conversation")

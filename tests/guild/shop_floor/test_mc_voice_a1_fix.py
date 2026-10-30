@@ -241,20 +241,24 @@ def test_mcs_tags_and_first_words_are_let_go_with_a_long_ended_session(ready):
 # ── R1 P3-12, R2 N2: MC's adapter supplies the owner's name and the Guild's words; his text is byte-identical ───────────
 
 MC_TEXT_SHA = "260acffefbc343c6eba7169a156c355a7327eb42247518418d86aee007c6245a"   # at acf5d756, before the words moved
+# v3 (confirm by voice) changes the direct path's tools (none now) and rules by design; what stays byte-identical is the
+# summary's decision heads and prompt, and the managed path's INSTRUCTIONS (computed at ecb45341, where they last changed).
+MC_UNCHANGED_SHA = "60df69f1d888a6ca56839e4e1fb5f0ef71bf76689419b46bca1a91bf7fae71cc"
 
 
 def test_mcs_instructions_tool_text_heads_and_summary_prompt_are_byte_identical_now_his_adapter_supplies_them():
+    """Adapted for v3: the tool texts are gone (no model action on any provider) and the direct rules are v3's; the heads,
+    the summary prompt and the managed path's INSTRUCTIONS are byte-identical to before."""
     import hashlib
     import json
     from core.realtime_voice import direct_host as core
     owner = direct._MasterCraftsman.owner_name
+    blob = json.dumps({"heads": {d: core.decision_head(d, owner) for d in ("confirm", "edit", "decline")},
+                       "prompt": core.summary_prompt([("owner ASR", "We're done.", False, False)], True, owner=owner)[0],
+                       "managed_instructions": direct.INSTRUCTIONS}, sort_keys=True)
+    assert hashlib.sha256(blob.encode()).hexdigest() == MC_UNCHANGED_SHA
     rules = core.direct_rules(direct.PERSON, owner)
-    blob = json.dumps({"tools": core.tools(direct.PERSON, owner), "rules": rules,
-                       "instructions": direct.INSTRUCTIONS + "\n\n" + rules,
-                       "heads": {d: core.decision_head(d, owner) for d in ("confirm", "edit", "decline")},
-                       "prompt": core.summary_prompt([("owner ASR", "We're done.", False, False)], True, owner=owner)[0]},
-                      sort_keys=True)
-    assert hashlib.sha256(blob.encode()).hexdigest() == MC_TEXT_SHA
+    assert not hasattr(core, "tools") and "you have no tools" in rules and "only after Robert confirms" in rules
 
 
 def test_mcs_page_words_come_from_his_adapter(ready):

@@ -14,20 +14,28 @@ from core.realtime_voice.config import ALLOWED_PROVIDERS
 MEMO_MODE = "memo"
 AGENT_CONVERSATION_MODE = "agent_conversation"
 
-# Spec 165 §5.1 and §7, as amended for Robert's C2 decision of 28 Oct 2026 ("A: tie by construction"): the providers whose
-# direct voice may act on the model's own call (consult, save_note). Eligible means both:
-#   1. the provider names the committed item (input_audio_buffer.committed carries item_id);
-#   2. it lets the page create every response (turn detection with create_response false, barge-in still on).
-# Only then can the page create each response that may act for one committed item of the owner's, and a call act on that
-# item's words alone. OpenAI documents both (CoS's controlled voice relies on 2 today). xAI is not eligible until A4 shows
-# both: its direct voice talks, and Check with the person still works, but the model is given no action tool. Turning a
-# provider on is a reviewed change of this one value, with that evidence; nothing else decides it.
-MODEL_ACTIONS = {"openai": True, "xai": False}
+# Spec 165 §5.1 and §7, as amended for Robert's C2 decision of 28 Oct 2026 ("A: tie by construction"), and by confirm by
+# voice, v3 (V3_BUILD_BRIEF.md: "the app acts; the voice only talks"). Two values, each reviewed:
+#
+# MODEL_ACTIONS: the providers whose direct voice may act on the model's own call. Under v3 none: no provider's model is
+# given an action tool, a call that arrives anyway does nothing, and the app acts only after Robert's spoken yes (or a tap
+# on Check), the same on both providers. I6 ("no model action where the page cannot name the owner") now holds trivially.
+MODEL_ACTIONS = {"openai": False, "xai": False}
+# PAGE_RESPONSES: the providers whose direct page creates every response (A1's binding, kept: the provider names the
+# committed item, input_audio_buffer.committed's item_id, and lets the page create responses, create_response false with
+# barge-in still on). OpenAI only: xAI answers every utterance by itself whatever it is told (live probes, 28 Oct). On
+# OpenAI each committed item's one response now waits for its server decision (at most 1.5 s on the page).
+PAGE_RESPONSES = {"openai": True, "xai": False}
 
 
 def model_actions(provider: str) -> bool:
-    """Whether a direct voice session on ``provider`` may act on the model's own call (MODEL_ACTIONS)."""
+    """Whether a direct voice session on ``provider`` may act on the model's own call (MODEL_ACTIONS): never, under v3."""
     return MODEL_ACTIONS.get(provider) is True
+
+
+def page_responses(provider: str) -> bool:
+    """Whether the direct page creates every response on ``provider`` (PAGE_RESPONSES)."""
+    return PAGE_RESPONSES.get(provider) is True
 
 
 @dataclass(frozen=True)

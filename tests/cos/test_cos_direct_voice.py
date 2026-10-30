@@ -373,7 +373,7 @@ def test_her_session_text_is_rules_then_card_then_her_briefing_and_continuity_as
     rules, card, data = (text.index(h) for h in ("=== OPERATING RULES ===", "=== WHO YOU ARE ===",
                                                   "=== THIS CONVERSATION SO FAR (DATA) ==="))
     assert rules < card < data
-    assert text.index("your two tools are 'consult'") < text.index("You are the low-latency voice of Robert's Chief")
+    assert text.index("you have no tools") < text.index("You are the low-latency voice of Robert's Chief")   # v3
     assert text.index(direct_voice.BRIEFING_HEAD.strip()) < text.index(direct_voice.CONTINUITY_HEAD.strip())
     assert "Set reminders in writing" in text and "remind me at <time>" not in text
     assert "consult_cos_agent" not in text and "save_cos_note" not in text
@@ -398,8 +398,9 @@ def test_on_grok_she_has_no_tools_and_acts_through_check_with_cos(monkeypatch, t
                                                                       "conversation_id": "owner"})
     assert answer.status_code == 200 and "page_responses" not in answer.get_json()
     session = r.mints[-1]
-    assert not session.get("tools") and "press Check with CoS" in session["instructions"]
-    assert "Use consult whenever" not in session["instructions"] and "ask Robert to press Check with CoS" in session["instructions"]
+    # Adapted for v3: no tools, and the same rules as on OpenAI (he confirms by voice; no "press Check" line).
+    assert not session.get("tools") and "press Check" not in session["instructions"]
+    assert "Use consult whenever" not in session["instructions"] and "ask Robert briefly to confirm" in session["instructions"]
     sid = answer.get_json()["voice_session_id"]
     model = r.client.post(BASE + "/consult", headers=OWNER, json={"session_id": sid, "call_id": "call_1", "name": "consult",
                                                                   "owner_transcript_item": "What is stuck?", "owner_item_id": "t1"}).get_json()
@@ -413,7 +414,7 @@ def test_on_openai_the_page_makes_every_reply_that_may_act(r):
     session = r.mints[-1]
     assert answer["page_responses"] is True and session["turn_detection"]["create_response"] is False
     assert session["turn_detection"]["interrupt_response"] is True
-    assert [t["name"] for t in session["tools"]] == ["consult", "save_note"]
+    assert session["tools"] is None                                   # v3: the page makes every reply; the model has no tools
 
 
 def test_over_the_bound_continuity_is_cut_first_then_memory_each_marked_rules_and_card_never():
@@ -515,7 +516,7 @@ def test_a_card_naming_no_grok_voice_refuses_a_grok_start(monkeypatch, tmp_path)
                                                                        "conversation_id": "owner"})
     words = "Voice unavailable: no Grok voice is chosen for Chief of Staff yet."
     assert refused.status_code == 503 and refused.get_json()["error"] == words and r.mints == []
-    assert r.metadata["unvoiced"] == {"xai": words} and r.metadata["model_actions"] == {"openai": True, "xai": False}
+    assert r.metadata["unvoiced"] == {"xai": words} and r.metadata["model_actions"] == {"openai": False, "xai": False}   # v3
 
 
 # ── her records: the needs-attention list, detail and download through her store (§6.5, D7) ─────────────────────────
