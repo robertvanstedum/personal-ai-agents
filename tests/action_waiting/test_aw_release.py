@@ -101,4 +101,7 @@ def test_ops_command_shape():
         assert set(re.findall(r"MINIMOI_[A-Z_]+", line)) <= {"MINIMOI_ACTION_NOTICES", "MINIMOI_ACTION_NOTICES_AGENT_TOKENS"}
     assert 'chmod 0600 "$tmp"' in body and "--with-decryption" in body
     prepare = text[text.index("notices_prepare() {"):text.index("\nnotices() {")]
-    assert "create_host_path" in prepare and "docker cp" in prepare and '{"pending": []}' in prepare
+    # The review fixes (cced3668) made prepare fail closed: it copies a live file out (docker cp), or starts an empty one
+    # with its own key only when the running portal confirms it has none ({"pending": []} / {"requests": []}).
+    assert "notices binds" in prepare and "docker cp" in prepare
+    assert "printf '{\"%s\": []}\\n' \"$key\"" in prepare and "echo pending || echo requests" in prepare

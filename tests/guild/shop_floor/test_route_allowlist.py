@@ -65,6 +65,8 @@ EXPECTED = {
     "/guild-next/api/v1/topics/<tid>/record",
     "/guild-next/api/v1/topics/<tid>/record-link",
     "/guild-next/api/v1/session",
+    # Action-waiting notices (spec v0.2 Appendix A): the strip's read-only contract; "mode: off" while notices are off.
+    "/guild-next/api/v1/waiting",
     "/guild-next/api/v1/wiki/pages",
     "/guild-next/api/v1/floor",
     "/guild-next/api/v1/queue",
