@@ -242,6 +242,9 @@ services:
       - MINIMOI_GUILD_VOICE_PRODUCTION=1
       - MINIMOI_MC_VOICE=1
       - MINIMOI_DICTATION=1
+      # MC's direct voice (Spec 165 §11.1; minimoi_portal/guild_mounts.py production_environ): MINIMOI_MC_VOICE_DIRECT
+      # installs it (its routes, record routes included) and MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION admits starts; both
+      # come from env_file and default off.
       # Explicit controls; activation follows reviewed production schema/runtime checks.
       - MINIMOI_ROLE=production
       - MINIMOI_MC_BOARD_OUTCOMES=${MINIMOI_MC_BOARD_OUTCOMES:-0}
@@ -313,6 +316,16 @@ services:
       - MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256=${MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256:-}
       - MINIMOI_MC_APPROVED_HANDOFF_REGISTRY=/run/secrets/mc/approved-handoff-registry.json
       - MINIMOI_MC_TASK_WATCH_REGISTRY=/run/secrets/mc/task-watch-registry.json
+      # Action-waiting notices (planning-studio/operations/specs/SPEC_ACTION_WAITING_NOTICES_v0.2_2026-10-29.md). OFF
+      # unless .env sets MINIMOI_ACTION_NOTICES (only `deploy_mc_container_ec2.sh notices on|off`). The bot token is a
+      # root 0600 file projected from Parameter Store; agent tokens are hashes only.
+      - MINIMOI_ACTION_NOTICES=${MINIMOI_ACTION_NOTICES:-off}
+      - MINIMOI_ACTION_NOTICES_ENV=prod
+      - MINIMOI_ACTION_NOTICES_DIR=/app/runtime/guild/notices
+      - MINIMOI_ACTION_NOTICES_BOT_TOKEN_FILE=/run/secrets/notices/bot-token
+      - MINIMOI_ACTION_NOTICES_CHAT_ID=8379221702
+      - MINIMOI_ACTION_NOTICES_OWNER=robert
+      - MINIMOI_ACTION_NOTICES_AGENT_TOKENS=${MINIMOI_ACTION_NOTICES_AGENT_TOKENS:-}
     volumes:
       # Mount the queue FOLDER, not the file: an atomic replace (the verified
       # Save, the deploy seed, --publish-queue) changes the file's inode, which
@@ -327,6 +340,23 @@ services:
       - ${MINIMOI_ROOT:-/opt/minimoi}/docs/specs:/app/docs/specs
       - ${MINIMOI_ROOT:-/opt/minimoi}/auth/users.json:/app/minimoi_portal/auth/users.json
       - ${MINIMOI_ROOT:-/opt/minimoi}/auth/guests.json:/app/minimoi_portal/auth/guests.json
+      # Open registrations and reset requests survive a portal release (notices spec v0.2, review B2). auth.py writes
+      # them in place, as for users.json. create_host_path is false so a missing host file refuses the container
+      # instead of mounting an empty directory: run `deploy_mc_container_ec2.sh notices prepare` before the release.
+      - type: bind
+        source: ${MINIMOI_ROOT:-/opt/minimoi}/auth/pending.json
+        target: /app/minimoi_portal/auth/pending.json
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MINIMOI_ROOT:-/opt/minimoi}/auth/reset_requests.json
+        target: /app/minimoi_portal/auth/reset_requests.json
+        bind:
+          create_host_path: false
+      # The notices bot token (read-only). The notices store needs no bind of its own: it is the notices/ folder inside
+      # the guild folder above (data/guild/notices on the host), so its renames stay in a mount and the daily backup
+      # of data/guild/ covers it.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/notices:/run/secrets/notices:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/agent_logs:/app/agent_logs
       # Master Craftsman: its operator-installed policy, authority record and registries (read-only), and the
       # portal-owned lesson store (in the daily backup). Created by deploy_mc_container_ec2.sh; empty until then.
@@ -432,6 +462,11 @@ services:
       - COS_AGENT_INBOX=/minimoi/cos/inbox
       - COS_AGENT_OUTBOX=/minimoi/cos/outbox
       - COS_AGENT_CONVERSATIONS=/minimoi/cos/conversations
+      # Her direct voice (Spec 165 §6.5, §6.8; domains/cos/direct_voice.py): its voice store's folder, mounted below, and her
+      # capped summary key (empty until operations provisions it: the summary then reads "unavailable", nothing fails).
+      # The switches MINIMOI_COS_VOICE_DIRECT and MINIMOI_COS_DIRECT_VOICE_PRODUCTION default off.
+      - COS_VOICE_DIR=/app/data/cos-voice
+      - MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS=${MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS:-}
     volumes:
       # Same owner limit registry as the portal, including next-day limits.
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/limits:/app/runtime/guild/limits:ro
@@ -446,6 +481,9 @@ services:
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos/inbox:/app/data/cos-files/inbox
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos/outbox:/app/data/cos-files/outbox:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos/conversations:/app/data/cos-conversations
+      # Her voice store (Spec 165 §6.5, D5 (b)): beside cos_reminders, outside data/ and cos/, and never mounted into
+      # cos-agent-a, so her runtime cannot read a live session. Operations creates it 0700 before her voice is on.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos_voice:/app/data/cos-voice
     ports:
       - "127.0.0.1:8769:8769"
     # Vault retrieval for MC/CoS turns (owner decisions 17 Oct 2026). Off until the Vault
