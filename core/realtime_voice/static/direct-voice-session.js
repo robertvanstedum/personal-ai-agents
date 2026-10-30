@@ -723,6 +723,7 @@ export function directVoice(d) {
   // normal response at the bound. During the summary's window, his words get no response (the page reads it itself).
   function respondFor(pid) {
     if (lifecycle !== 'live') return Promise.resolve({ skip: true });
+    if (!direct.utterance_url) return Promise.resolve(null);     // a server with no utterance route: as before, at once
     return new Promise((resolve) => {
       let timer = null;
       const waits = (word) => {
@@ -735,7 +736,14 @@ export function directVoice(d) {
       commits.set(pid, waits);
       const place = typeof c?.placeOf === 'function' ? c.placeOf(pid) : null;   // decided already (words before the commit)
       if (Number.isInteger(place) && decisions.has(place)) {
-        decisions.get(place).then((x) => { if (commits.get(pid) === waits) { x.via = 'response'; waits(wordFor(x)); } });
+        decisions.get(place).then((x) => {
+          if (commits.get(pid) !== waits) return;
+          // Decided before this commit: what follow() has already said is not said twice (only an ask still needs the
+          // item's own response as its question; a chat gets a normal one).
+          const followed = x.followed === true && x.decision !== 'ask';
+          x.via = 'response';
+          waits(followed ? (x.decision === 'chat' ? null : { skip: true }) : wordFor(x));
+        });
       }
     });
   }
@@ -820,6 +828,7 @@ export function directVoice(d) {
     waiting.timer = later(() => { if (waiting && waiting.action_id === x.action_id) clearWaiting(NOT_DONE_SCREEN); }, seconds * 1000);
   }
   async function follow(x, i) {
+    x.followed = true;
     if (finalized || lifecycle !== 'live') return;
     if (x.decision === 'ask') return asking(x, i);
     if (x.decision === 'confirm') {
