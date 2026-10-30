@@ -201,6 +201,8 @@ BACKEND_IMPORT_EXPECTED = {
     "scripts/mc/morning.py": ("core.jobs.registry", "core.jobs.schedule", "core.jobs.status"),
     "scripts/mc/github_awareness.py": ("core.jobs.registry", "core.jobs.status"),
     "scripts/rooms/archive.py": ("core.jobs.registry", "core.jobs.schedule", "core.jobs.status"),
+    # The agents' action-waiting CLI (Mac only) scrubs the words of its fallback Telegram message.
+    "scripts/agents/waiting.py": ("utils.credential_scrub", "utils.payment_scrub"),
     "core/memory_shelf/render.py": ("utils.credential_scrub", "utils.payment_scrub"),
     "core/memory_shelf/report.py": ("core.jobs",),
     "scripts/jobs/watchdog.py": ("core.jobs",),
@@ -638,7 +640,8 @@ def test_laptop_workshop_export_seam_cannot_silently_become_a_portal_consumer(tm
 
 def test_only_reviewed_laptop_entrypoints_are_release_only():
     from scripts.ci.classify_release import LOCAL_TOOL_FILES
-    assert LOCAL_TOOL_FILES == {"scripts/mc/morning.py", "scripts/mc/regression.py", "scripts/rooms/archive.py"}
+    assert LOCAL_TOOL_FILES == {"scripts/mc/morning.py", "scripts/mc/regression.py", "scripts/rooms/archive.py",
+                                "scripts/agents/waiting.py"}
     for path in LOCAL_TOOL_FILES:
         assert classify([path]) == ("documents", ())
         assert classify([path.removesuffix(".py") + "_extra.py"]) == ("full", ALL_SERVICES)
@@ -649,7 +652,7 @@ def test_only_reviewed_laptop_entrypoints_are_release_only():
 
 def test_exact_laptop_files_cannot_become_production_dependencies(tmp_path):
     for module in ("core.memory_ask.assessment", "core.memory_ask.regression", "core.memory_ask.runner",
-                   "scripts.mc.morning", "scripts.mc.regression", "scripts.rooms.archive"):
+                   "scripts.mc.morning", "scripts.mc.regression", "scripts.rooms.archive", "scripts.agents.waiting"):
         target = tmp_path / "domains/cos/new_consumer.py"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("import " + module + "\n")

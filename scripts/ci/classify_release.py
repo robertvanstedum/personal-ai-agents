@@ -256,7 +256,10 @@ STAGING_ONLY_PREFIXES = ("scripts/staging/",)
 # runs them (the Dockerfiles copy the repository, but nothing starts these).
 LOCAL_TOOL_PREFIXES = ("scripts/workshop/", "scripts/vault/", "tools/workshop/", "scripts/release/", "scripts/dev/")
 # Exact laptop operator entrypoints; no production service starts or mounts these.
-LOCAL_TOOL_FILES = frozenset({"scripts/mc/morning.py", "scripts/mc/regression.py", "scripts/rooms/archive.py"})
+LOCAL_TOOL_FILES = frozenset({"scripts/mc/morning.py", "scripts/mc/regression.py", "scripts/rooms/archive.py",
+                              # The agents' action-waiting CLI (notices spec v0.2 §3.8): runs on the Mac, calls the
+                              # portal's door over HTTPS; no service starts or imports it.
+                              "scripts/agents/waiting.py"})
 
 # Workshop readers/writers remain portal-owned, with laptop-only callers.
 # The two exact scrub modules also serve the CoS Vault context renderer below;

@@ -101,6 +101,11 @@ EXPECTED_PROD_MOUNTS = [
     ("portal", "/opt/minimoi/docs/specs", "/app/docs/specs"),
     ("portal", "/opt/minimoi/auth/users.json", "/app/minimoi_portal/auth/users.json"),
     ("portal", "/opt/minimoi/auth/guests.json", "/app/minimoi_portal/auth/guests.json"),
+    # Action-waiting notices (planning-studio/operations/specs/SPEC_ACTION_WAITING_NOTICES_v0.2_2026-10-29.md): the two
+    # request files kept across releases (long form, create_host_path false) and the notices bot token (read-only).
+    ("portal", "/opt/minimoi/auth/pending.json", "/app/minimoi_portal/auth/pending.json"),
+    ("portal", "/opt/minimoi/auth/reset_requests.json", "/app/minimoi_portal/auth/reset_requests.json"),
+    ("portal", "/opt/minimoi/notices", "/run/secrets/notices"),
     ("portal", "/opt/minimoi/agent_logs", "/app/agent_logs"),
     # Master Craftsman's own container (docs/runbooks/mc_container_prod.md): its protected files and lesson store.
     ("portal", "/opt/minimoi/mc/portal", "/run/secrets/mc"),
@@ -859,7 +864,7 @@ def _staging_world(tmp_path, *, launchctl=FAKE_LAUNCHCTL_CLEAN, bots_on=False, t
     sha = _release_repo(release)
     for rel in ("data/curator_history.json", "data/curator_costs.json", "data/research-config/config.json",
                 "data/curator-config/curator_sources.json", "auth/users.json", "auth/guests.json",
-                "cos_memory.md", "data/model_gateway_receipts.jsonl", "data/guild/cos_context.json",
+                "auth/pending.json", "auth/reset_requests.json", "cos_memory.md", "data/model_gateway_receipts.jsonl", "data/guild/cos_context.json",
                 "data/guild/build_queue.json", "config/litellm.staging.yaml",
                 "config/usage/usage_record.py", "config/usage/litellm_recorder.py"):
         (root / rel).parent.mkdir(parents=True, exist_ok=True)

@@ -39,7 +39,7 @@ S="$STAGING_ROOT"
 
 # A missing single-file bind source would make Docker create a DIRECTORY in
 # its place, so every one must exist before compose runs.
-for f in auth/users.json auth/guests.json \
+for f in auth/users.json auth/guests.json auth/pending.json auth/reset_requests.json \
          cos_memory.md data/model_gateway_receipts.jsonl data/guild/cos_context.json \
          data/guild/build_queue.json config/litellm.staging.yaml \
          config/usage/usage_record.py config/usage/litellm_recorder.py; do

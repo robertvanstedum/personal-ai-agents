@@ -1,0 +1,52 @@
+{
+  "_about": "Action-waiting notices (spec v0.2): every path this change touches, and the release class they must give. Committed so the class is checked the same way on a pull request, on the push to main and locally (review B2 on the build). test_aw_release.py also checks, where git has a real base, that this list still covers the branch's diff.",
+  "notices_paths": [
+    "docker-compose.prod.yml",
+    "minimoi_portal/action_waiting/__init__.py",
+    "minimoi_portal/action_waiting/__main__.py",
+    "minimoi_portal/action_waiting/door.py",
+    "minimoi_portal/action_waiting/sender.py",
+    "minimoi_portal/action_waiting/service.py",
+    "minimoi_portal/action_waiting/settings.py",
+    "minimoi_portal/action_waiting/sources.py",
+    "minimoi_portal/action_waiting/store.py",
+    "minimoi_portal/action_waiting/words.py",
+    "minimoi_portal/app.py",
+    "minimoi_portal/guest_requests.py",
+    "minimoi_portal/guild_ui/action_waiting.py",
+    "minimoi_portal/guild_ui/api.py",
+    "minimoi_portal/guild_ui/pages.py",
+    "scripts/agents/waiting.py",
+    "scripts/ci/classify_release.py",
+    "scripts/operations/deploy_mc_container_ec2.sh",
+    "scripts/staging/seed.sh",
+    "scripts/staging/up.sh",
+    "tests/action_waiting/aw_fakes.py",
+    "tests/action_waiting/release_fixture.json",
+    "tests/action_waiting/test_aw_cli.py",
+    "tests/action_waiting/test_aw_door.py",
+    "tests/action_waiting/test_aw_mc.py",
+    "tests/action_waiting/test_aw_portal.py",
+    "tests/action_waiting/test_aw_postgres.py",
+    "tests/action_waiting/test_aw_release.py",
+    "tests/action_waiting/test_aw_review_fixes.py",
+    "tests/action_waiting/test_aw_sender.py",
+    "tests/action_waiting/test_aw_sources.py",
+    "tests/action_waiting/test_aw_store.py",
+    "tests/test_release_classifier.py",
+    "tests/test_staging_environment.py"
+  ],
+  "compose_services_changed": [
+    "portal"
+  ],
+  "expected": {
+    "release_class": "domain",
+    "services": [
+      "portal"
+    ]
+  },
+  "pipeline_paths": [
+    "scripts/operations/deploy_scoped_release.sh"
+  ],
+  "expected_with_pipeline": "full"
+}
