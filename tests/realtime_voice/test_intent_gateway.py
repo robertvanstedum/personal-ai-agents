@@ -163,3 +163,22 @@ def test_without_its_key_the_explicit_forms_still_work_and_the_rest_is_chat(monk
     mc.asked(r, sid, ask["action_id"], "t4")
     yes = mc.utter(r, sid, "t5", "yes").get_json()
     assert yes["decision"] == "confirm"
+
+
+def test_a_natural_note_the_call_heard_is_his_typed_turn_after_his_yes_never_a_guessed_note(ready):
+    """The call names a note the grammar did not; after his yes the action runs his words through MC's typed turn, as if
+    typed (dispatch consult), on the request's own owner item, never as a note the model guessed."""
+    r = ready
+    words = "Could you jot down that the glaze needs a second firing?"
+    r.cos.intent = lambda body: "note" if words in body["messages"][1]["content"] else "chat"
+    sid = mc.start(r)["voice_session_id"]
+    ask = mc.utter(r, sid, "t1", words).get_json()
+    assert ask["decision"] == "ask" and ask["kind"] == "note"
+    mc.asked(r, sid, ask["action_id"], "t2")
+    yes = mc.utter(r, sid, "t3", "yes").get_json()
+    assert yes["decision"] == "confirm"
+    done = r.client.post(mc.BASE + "/consult", headers=r.headers, json={
+        "session_id": sid, "call_id": "confirm-" + yes["action_id"], "action_id": yes["action_id"],
+        "confirm_item_id": "t3", "owner_item_id": "t1", "text_sha256": yes["text_sha256"]}).get_json()
+    assert done["outcome"] == "done" and done["owner_item_id"] == "t1" and done["kind"] == "note"
+    assert len(r.turns) == 1 and r.cos.calls == []                   # his typed turn, once; no note was guessed
