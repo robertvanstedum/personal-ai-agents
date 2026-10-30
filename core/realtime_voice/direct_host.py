@@ -1228,11 +1228,17 @@ class DirectSessions(ConsultLedger):
     @staticmethod
     def _stray(meta, item, now):
         """Whether a yes with nothing waiting is a stray yes (NOTHING_WAITING), not conversation: soon after an action
-        expired or was dropped (_let_go), or (review v3 S6) right after a turn of the voice's that asked a question, with
-        no owner item of his between them: he answered a question the app never asked, so his yes reaches nothing, and he
-        is told so."""
+        expired or was dropped (_let_go), on every provider; or (review v3 S6) right after a turn of the voice's that asked
+        a question, with no owner item of his between them: he answered a question the app never asked, so his yes reaches
+        nothing, and he is told so. That second rule holds only where the voice's own reply is the question (xAI answers by
+        itself). Where the page creates every response (OpenAI, capabilities.page_responses) its asking line is the
+        question and the model never asks one itself, so a voice's question there is conversation, and "Sure." answers it
+        (the fix round's re-check, R1)."""
+        from core.realtime_voice.capabilities import page_responses
         if now < meta.get("stray_until", 0):
             return True
+        if page_responses(meta.get("provider")):
+            return False
         place, question = meta.get("voice_said") or (-1, False)
         return question and meta["last_place"] < place < item_place(item)
 
