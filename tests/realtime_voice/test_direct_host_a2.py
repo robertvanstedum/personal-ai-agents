@@ -152,7 +152,7 @@ def test_a_session_text_the_host_refuses_says_why_and_nothing_is_recorded(monkey
     r = build(monkeypatch, tmp_path)
     words = "Voice unavailable: her briefing does not fit one voice session."
 
-    def too_big(card, handle, actions=True):
+    def too_big(card, handle, actions=True, page_asks=False):      # adapted for the v3 fix round (S6: page_asks)
         raise VoiceUnavailable(words)
     monkeypatch.setattr(r.host, "instructions", too_big)
     refused = boot(r)

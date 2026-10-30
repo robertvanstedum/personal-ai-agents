@@ -23,7 +23,7 @@
 #                              not healthy on the new file;
 #                           2. each key is made inside the gateway: the two
 #                              aliases only, chat completions only, a monthly budget,
-#                              rpm 10; written unprinted (600) as
+#                              rpm 60; written unprinted (600) as
 #                              MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_MC to mc.env and
 #                              MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS to cos.env.
 #                              A rotated key's old one is deleted after the new

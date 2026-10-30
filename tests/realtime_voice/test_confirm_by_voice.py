@@ -389,10 +389,16 @@ def test_bare_answers_split_yes_from_no_and_anything_more_is_not_bare():
 
 def test_read_back_is_a_closed_set_in_three_languages():
     for words in ("Read it back", "read it back to me, please", "What did I say?", "lies es vor", "Lies es mir vor, bitte",
-                  "lê de novo", "Leia de novo, por favor", "read me the summary", "o que eu disse"):
+                  "lê de novo", "Leia de novo, por favor", "o que eu disse"):
         assert core.read_back_request(words), words
-    for words in ("read the news", "read it back and save it", "lies das Buch", "x" * 300):
+    # Review v3 S2 (adapted): asking for the summary is its own closed set, never a read-back of the waiting action.
+    for words in ("read the news", "read it back and save it", "lies das Buch", "x" * 300, "read me the summary",
+                  "Read the summary, please", "lies mir die Zusammenfassung vor", "lê o resumo", "leia o resumo"):
         assert not core.read_back_request(words), words
+    for words in ("read me the summary", "Read the summary, please", "lies mir die Zusammenfassung vor", "lê o resumo",
+                  "Leia o resumo, por favor"):
+        assert core.read_summary_request(words), words
+    assert not core.read_summary_request("read me the summary of the kiln note") and not core.read_summary_request(7)
 
 
 def test_the_explicit_consult_names_this_hosts_own_person_only():
@@ -432,3 +438,193 @@ def test_fast_label_order_with_and_without_something_waiting():
     assert core.fast_label(a, g, "we're done", "note") == "end"
     assert core.fast_label(a, g, "could you jot down that x", None) is None    # the understanding call's
     assert re.fullmatch(r"[0-9a-f]{64}", core.digest("x"))
+
+
+# ── the fix round (REVIEW_v3_build.md): each finding's regression, on every host ────────────────────────────────────────
+
+NATURAL = "Could you jot down that the glaze needs a second firing?"      # no host's grammar hears it: the call does
+TYPED_ANSWER = {"test adapter": "Two items.", "MC": "Item 12 is in build.", "CoS": "Two items are stuck on 12."}
+OWNER_NAMES = {"test adapter": "Rosa", "MC": "Robert", "CoS": "Robert"}
+
+
+def gateway_of(h):
+    """The host's fake model gateway, which the understanding call reaches too (``intent``: its answer, ``intents``)."""
+    return h.r.cos if h.kind == "MC" else h.r.gateway
+
+
+def hears(h, mapping):
+    """The fake understanding call answers ``mapping[words]`` for these words, chat for any other."""
+    gateway_of(h).intent = lambda body: next((word for words, word in mapping.items()
+                                               if f"<<<{words}>>>" in body["messages"][1]["content"]), "chat")
+
+
+@pytest.mark.parametrize("label", ["note", "postit"])
+def test_m1_a_request_only_the_call_heard_waits_as_a_request_and_its_outcome_is_the_typed_turns_own(host, label):
+    """M1: the call names a note or post-it the grammar did not; it runs as his typed turn (consult), so it waits as a
+    request (kind consult, heard as the label), and its answer is the typed turn's own, with no saved flag: the page
+    says that answer, never "Saved." or "Post-it added." (test_confirm_by_voice.mjs's M1 and S8 cases: the page's half)."""
+    h = host
+    sid = h.start()
+    hears(h, {NATURAL: label})
+    ask = utter(h, sid, "t1", NATURAL).get_json()
+    heard = label if label == "note" or h.kind == "MC" else "consult"        # a post-it with no Board is a request
+    assert ask["decision"] == "ask" and ask["kind"] == "consult" and ask["heard"] == heard, ask
+    asked(h, sid, ask["action_id"], "t2")
+    yes = utter(h, sid, "t3", "yes").get_json()
+    assert yes["decision"] == "confirm" and yes["kind"] == "consult"
+    done = confirm(h, sid, yes).get_json()
+    assert done["outcome"] == "done" and done["kind"] == "consult" and done["owner_item_id"] == "t1"
+    assert done.get("saved") is not True and done["spoken"] == TYPED_ANSWER[h.kind], done
+    assert h.effects() == 1
+
+
+def test_m1_n5_n6_the_call_names_the_hosts_owner_and_offers_postit_only_where_there_is_a_board(host):
+    h = host
+    sid = h.start()
+    utter(h, sid, "t1", NATURAL)
+    (body,) = gateway_of(h).intents
+    system = body["messages"][0]["content"]
+    assert f"one thing {OWNER_NAMES[h.kind]} just said" in system and body["max_tokens"] == 16
+    if h.kind != "test adapter":
+        assert "Rosa" not in system
+    else:
+        assert "Robert" not in system                    # N5: the core names no person of its own
+    offered = ("postit" in system.split("\n", 1)[0], "postit: he asks" in system)
+    assert offered == ((True, True) if h.kind == "MC" else (False, False))
+
+
+def test_s2_asking_for_the_summary_mid_session_never_reads_the_waiting_actions_words(host):
+    h = host
+    sid = h.start()
+    ask = requested(h, sid, "t1")
+    later = utter(h, sid, "t3", "Read me the summary").get_json()
+    assert later["decision"] == "summary_later" and "text" not in later and REQUEST[h.kind] not in str(later)
+    assert utter(h, sid, "t5", "yes").get_json()["action_id"] == ask["action_id"]     # it still waits, unread
+    assert utter(h, sid, "t7", "lê o resumo").get_json()["decision"] == "summary_later"   # nothing waiting: the same
+
+
+def test_s3_a_second_yes_after_a_lost_answer_confirms_once_with_the_actions_own_item_and_hash(host):
+    h = host
+    sid = h.start()
+    ask = requested(h, sid, "t1")
+    utter(h, sid, "t3", "yes").get_json()                                       # its answer never reached the page
+    again = utter(h, sid, "t5", "yes").get_json()
+    assert again["decision"] == "confirm" and again["again"] is True and again["confirm_item_id"] == "t3"
+    assert again["owner_item_id"] == "t1" and again["text_sha256"] == ask["text_sha256"]
+    first = confirm(h, sid, again).get_json()
+    assert first["outcome"] == "done" and h.effects() == 1
+    assert confirm(h, sid, again).get_json() == first and h.effects() == 1    # the page's retry: the same receipt
+
+
+def test_s4_a_tap_on_the_ends_own_words_is_never_a_consult(host):
+    h = host
+    sid = h.start()
+    end = utter(h, sid, "t1", "We're done.").get_json()
+    assert end["kind"] == "end"
+    refused = tap(h, sid, "t1", "We're done.").get_json()
+    assert refused["outcome"] == "not_done" and refused["error"] == "end_waiting" and h.effects() == 0
+    assert refused["spoken"] == core.END_WAITING and "done." not in refused["spoken"].lower().split("end")[0]
+
+
+def test_s6_a_bare_yes_right_after_the_voice_asked_a_question_is_told_nothing_waits(host):
+    """S6: the app heard no request (chat), the voice asked anyway ("Shall I go ahead?"): his yes reaches nothing, and is
+    told so. After a reply that asked nothing, or with his own words between, a yes is conversation as before."""
+    h = host
+    sid = h.start()
+    assert utter(h, sid, "t0", "Could you check what is stuck on the board?").get_json()["decision"] == "chat"
+    assert post(h, sid, [h.event("assistant", "t1", "Shall I go ahead?")]).status_code == 200
+    stray = utter(h, sid, "t2", "Yes.").get_json()
+    assert stray["decision"] == "nothing_waiting" and h.effects() == 0
+    post(h, sid, [h.event("assistant", "t3", "It is in build.")])
+    assert utter(h, sid, "t4", "yes").get_json()["decision"] == "chat"
+    post(h, sid, [h.event("assistant", "t5", "Anything else?")])
+    utter(h, sid, "t6", "Tell me about kilns.")
+    assert utter(h, sid, "t7", "okay").get_json()["decision"] == "chat" and h.effects() == 0
+
+
+def test_s7_a_request_ending_in_a_bare_answer_is_refused_whole_on_any_provider(host):
+    h = host
+    sid = h.start()
+    folded = utter(h, sid, "t1", REQUEST[h.kind] + ". Yes.").get_json()
+    assert folded["decision"] == "dropped" and folded["reason"] == "folded" and "action_id" not in folded
+    assert utter(h, sid, "t3", "yes").get_json()["decision"] == "nothing_waiting" and h.effects() == 0
+    ask = requested(h, sid, "t5")
+    again = utter(h, sid, "t7", CONSULT[h.kind] + ", yes").get_json()        # a waiting action goes too
+    assert again == {**again, "decision": "dropped", "reason": "folded", "action_id": ask["action_id"]}
+    assert utter(h, sid, "t9", "yes").get_json()["decision"] == "nothing_waiting" and h.effects() == 0
+    polite = utter(h, sid, "t11", CONSULT[h.kind] + ", please.").get_json()
+    tag = utter(h, sid, "t13", CONSULT[h.kind] + ", okay?").get_json()
+    assert polite["decision"] == "ask" and tag["decision"] == "ask"
+
+
+def test_s7_ends_in_answer_is_a_closed_trailing_clause_in_linear_time():
+    for words in ("make a note that the kiln is hot. Yes.", "ask MC about 12, yes", "Notiere: der Ofen ist heiß. Ja.",
+                  "anota que o forno está quente. Sim.", "save a note: kiln. No, wait.", "add a post-it: x; okay"):
+        assert core.ends_in_answer(words), words
+    for words in ("make a note that the answer is yes", "ask MC about 12, please", "ask MC about 12, thanks",
+                  "ask MC about 12, okay?", "Yes. Make a note that the kiln is hot.", "yes", "", None, "a, " * 9000):
+        assert not core.ends_in_answer(words), words
+    began = time.perf_counter()
+    core.ends_in_answer(("x, " * 5000)[:core.TURN_MAX_BYTES] + "yes")
+    assert time.perf_counter() - began < 0.5
+
+
+def test_n1_a_request_after_the_yes_word_never_confirms_the_end(host):
+    h = host
+    sid = h.start()
+    hears(h, {"please make a note that the kiln is hot": "note", "sure, ask " + h.short + " what is stuck on 12": "consult"})
+    for n, words in enumerate(("please make a note that the kiln is hot", "sure, ask " + h.short + " what is stuck on 12")):
+        end = utter(h, sid, f"t{4 * n}", "We're done.").get_json()
+        asked(h, sid, end["action_id"], f"t{4 * n + 1}")
+        heard = utter(h, sid, f"t{4 * n + 2}", words).get_json()
+        assert heard["decision"] == "ask" and heard["kind"] != "end" and heard["replaced"] == end["action_id"], heard
+        assert heard["proposing"] is False and h.effects() == 0
+    end = utter(h, sid, "t9", "We're done.").get_json()
+    asked(h, sid, end["action_id"], "t10")
+    assert utter(h, sid, "t11", "Yes please, go ahead and sum it up.").get_json()["decision"] == "confirm"
+
+
+def test_n1_end_yes_takes_more_confirmation_or_the_end_never_a_request():
+    for words in ("yes", "yes, sum it up", "Sum it up please", "Yes please, go ahead and sum it up", "yes, we're done",
+                  "okay", "ja, genau", "sure, wrap it up"):
+        assert core.end_yes(words), words
+    for words in ("please make a note that the kiln is hot", "sure, ask MC what is stuck", "yes, and could you jot down x",
+                  "yes, but not yet", "ok ask CoS about it", "hello", None):
+        assert not core.end_yes(words), words
+
+
+def test_n2_yes_were_done_with_an_action_waiting_replaces_it_and_names_what_was_dropped(host):
+    h = host
+    sid = h.start()
+    ask = requested(h, sid, "t1")
+    end = utter(h, sid, "t3", "yes, we're done").get_json()
+    assert end["decision"] == "ask" and end["kind"] == "end" and end["replaced"] == ask["action_id"]
+    assert end["replaced_kind"] == ask["kind"] and h.effects() == 0
+
+
+@pytest.mark.parametrize("provider", ["openai", "xai"])
+def test_s6_where_the_page_asks_the_voice_never_asks_itself_and_where_it_answers_by_itself_it_asks(host, monkeypatch,
+                                                                                                provider):
+    """S6: on OpenAI the page creates every response, so its asking line is the question and the rules never have the
+    model ask on its own (a yes to a question the app never asked would reach nothing); on xAI the model's own reply is
+    the question, as before. Never "done", never his words, on both."""
+    h = host
+    minted = []
+
+    def xai(**kw):
+        minted.append(kw)
+        return {"provider": "xai", "ephemeral_token": "xai_synthetic", "expires_after_seconds": 300,
+                "model": "grok-voice-latest", "session_config": {}}
+    monkeypatch.setattr("core.realtime_voice.bootstrap.xai_voice.mint_ephemeral_credential", xai)
+    answer = h.client.post(h.base + "/bootstrap", headers=h.headers,
+                           json={"persona": h.persona, "provider": provider, "conversation_id": h.cid})
+    assert answer.status_code == 200, answer.get_json()
+    text = (minted[-1] if provider == "xai" else h.r.mints[-1])["instructions"]
+    assert "without repeating or describing his words" in text and "never say it is done" in text
+    if provider == "openai":
+        assert "never ask him to confirm it yourself" in text and "Shall I go ahead?" not in text
+        assert "ask Robert briefly to confirm" not in text                     # CoS's own rules too
+    else:
+        assert "never ask him to confirm it yourself" not in text and "Shall I go ahead?" in text
+        if h.kind == "CoS":
+            assert "ask Robert briefly to confirm" in text

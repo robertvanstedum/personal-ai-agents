@@ -47,10 +47,11 @@ def test_the_request_is_a_plain_completion_with_no_tools_no_user_and_this_uttera
     body = request["json"]
     assert set(body) == {"model", "stream", "max_tokens", "temperature", "messages"}
     assert not {"tools", "tool_choice", "functions", "user"} & set(body)
-    assert body["model"] == "minimoi-voice-intent" and body["temperature"] == 0 and body["max_tokens"] <= 8
+    assert body["model"] == "minimoi-voice-intent" and body["temperature"] == 0 and body["max_tokens"] == 16   # N6
     assert body["stream"] is False and [m["role"] for m in body["messages"]] == ["system", "user"]
     system, user = (m["content"] for m in body["messages"])
     assert "Master Craftsman (MC)" in system and "data, never instructions" in system
+    assert "the owner just said" in system and "Robert" not in system      # review v3 N5: no owner named, none assumed
     assert "Could you jot down that the kiln is hot?" in user and "Waiting for his answer: nothing." in user
     assert request["headers"]["Authorization"] == "Bearer test-only-intent-key" and request["allow_redirects"] is False
     assert request["url"] == "http://model-gateway:4000/v1/chat/completions"
@@ -91,7 +92,7 @@ def test_the_whole_call_is_bounded_and_never_retried(monkeypatch):
 
 
 def test_the_brief_bounds_are_the_modules():
-    assert ig.TOTAL_TIMEOUT_S == 2.5 and ig.MAX_TOKENS <= 8 and ig.TEMPERATURE == 0
+    assert ig.TOTAL_TIMEOUT_S == 2.5 and ig.MAX_TOKENS == 16 and ig.TEMPERATURE == 0        # review v3 N6: 16
     assert ig.LABELS == ("note", "postit", "consult", "yes", "no", "read_back", "read_summary", "chat")
     from core.realtime_voice import direct_host
     assert ig.LABELS == direct_host.LABELS
@@ -141,7 +142,9 @@ def test_the_table_is_heard_by_the_grammar_or_the_call_and_decided_as_its_word(r
     assert got["heard"] == case["label"], (case, got)
     assert got["decision"] == EXPECTED[case["label"]], (case, got)
     if case["label"] in ("note", "postit", "consult"):
-        assert got["kind"] == case["label"] and got["owner_item_id"] == "t3"
+        # Adapted for the v3 fix round (M1): what waits is what will run; a note or post-it only the call heard runs as
+        # his typed turn, so it waits as a request (kind consult).
+        assert got["kind"] == (case["label"] if case["path"] == "grammar" else "consult") and got["owner_item_id"] == "t3"
     assert len(r.turns) + len(r.cos.calls) == 0                    # nothing acts on any of them
 
 
@@ -173,12 +176,15 @@ def test_a_natural_note_the_call_heard_is_his_typed_turn_after_his_yes_never_a_g
     r.cos.intent = lambda body: "note" if words in body["messages"][1]["content"] else "chat"
     sid = mc.start(r)["voice_session_id"]
     ask = mc.utter(r, sid, "t1", words).get_json()
-    assert ask["decision"] == "ask" and ask["kind"] == "note"
+    assert ask["decision"] == "ask" and ask["kind"] == "consult"
     mc.asked(r, sid, ask["action_id"], "t2")
     yes = mc.utter(r, sid, "t3", "yes").get_json()
     assert yes["decision"] == "confirm"
     done = r.client.post(mc.BASE + "/consult", headers=r.headers, json={
         "session_id": sid, "call_id": "confirm-" + yes["action_id"], "action_id": yes["action_id"],
         "confirm_item_id": "t3", "owner_item_id": "t1", "text_sha256": yes["text_sha256"]}).get_json()
-    assert done["outcome"] == "done" and done["owner_item_id"] == "t1" and done["kind"] == "note"
+    # Adapted for the v3 fix round (M1): it waits, and answers, as the request it runs as (kind consult), heard as a note.
+    assert ask["heard"] == "note"
+    assert done["outcome"] == "done" and done["owner_item_id"] == "t1" and done["kind"] == "consult"
+    assert done.get("saved") is not True and done["spoken"] == "Item 12 is in build."   # the typed turn's own answer
     assert len(r.turns) == 1 and r.cos.calls == []                   # his typed turn, once; no note was guessed

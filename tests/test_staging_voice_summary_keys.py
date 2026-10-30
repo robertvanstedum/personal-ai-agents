@@ -34,7 +34,8 @@ def test_summary_key_is_the_alias_only_chat_only_monthly_and_rate_limited(host):
     assert '"models": ["minimoi-voice-summary", "minimoi-voice-intent"]' in py      # v3: the understanding call too
     assert '"allowed_routes": ["/v1/chat/completions", "/chat/completions"]' in py
     assert "/key/info" not in py and "/v1/responses" not in py
-    assert '"budget_duration": "30d"' in py and '"rpm_limit": 10' in py and '"max_budget": cap' in py
+    # rpm 60 (the v3 fix round, review S5): the summary keeps headroom over a busy minute of understanding calls
+    assert '"budget_duration": "30d"' in py and '"rpm_limit": 60' in py and '"max_budget": cap' in py
     assert f'"voice-summary-{host}-" + os.urandom(3).hex()' in py and f'"role": "voice.summary.{host}"' in py
     assert 'os.environ["VOICE_CAP"]' in py and 'os.environ.get("VOICE_OLD_KEY", "")' in py
     assert py.index('call("/key/generate"') < py.index('call("/key/delete"')      # the old key goes after the new exists
@@ -179,7 +180,7 @@ def test_summary_keys_adds_the_route_writes_both_keys_unprinted_and_redeploys(tm
     assert "sk-fake-voice-key" not in out and "sk-master-key" not in out and "sk-mc-agent-key" not in out
     assert "Master Craftsman's voice summary key (voice-summary-mc): monthly cap $7 (30d)" in out and "…ab11" in out
     assert "Chief of Staff's voice summary key (voice-summary-cos): monthly cap $5 (30d)" in out and "…ab22" in out
-    assert '["minimoi-voice-summary", "minimoi-voice-intent"]' in out and "rpm 10" in out
+    assert '["minimoi-voice-summary", "minimoi-voice-intent"]' in out and "rpm 60" in out
     assert _read(fake / "keygen.env").splitlines() == ["cap=7 old=", "cap=5 old="]
     # The route: exactly the repo's, the rest of the live config unchanged; a backup of the file before.
     assert yaml.safe_load(cfg.read_text()) == yaml.safe_load(GATEWAY_STAGING.read_text())

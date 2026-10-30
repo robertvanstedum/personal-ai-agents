@@ -33,21 +33,26 @@ LABELS = ("note", "postit", "consult", "yes", "no", "read_back", "read_summary",
 CONNECT_TIMEOUT_S = 1
 READ_TIMEOUT_S = 2.5
 TOTAL_TIMEOUT_S = 2.5                                     # the whole call, never retried
-MAX_TOKENS = 8                                            # one word ("read_summary" is the longest)
+# One word ("read_summary" is the longest), with room for a stray reasoning token: at 8 a model that spends one despite
+# reasoning off would answer nothing, which counts as chat every time (review v3 N6).
+MAX_TOKENS = 16
 TEMPERATURE = 0
 WAITING = {None: "nothing", "note": "a note", "postit": "a post-it", "consult": "a request to {short}",
            "end": "ending the conversation with a summary"}
 
 
-def system_message(person):
-    """What the call is told: the host's person, the labels and their meaning, and that his words are data. The other
-    host's person is not this host's consult (no cross-host consult in v3): chat."""
+def system_message(person, owner=None, board=True):
+    """What the call is told: the host's person and owner, the labels and their meaning, and that his words are data. The
+    other host's person is not this host's consult (no cross-host consult in v3): chat. ``owner``: the adapter's
+    owner_name, as the core's words name him (review v3 N5: the core names no person of its own). ``board``: the host
+    has a Board; without one (CoS) postit is not offered (review v3 M1)."""
     name, short = person.get("name") or "the agent", person.get("short") or "the agent"
-    return (f"You classify one thing Robert just said to {name} ({short}) in a live voice conversation. Answer with "
-            "exactly one word from this list, and nothing else: note, postit, consult, yes, no, read_back, read_summary, "
-            "chat.\n"
+    who = owner if isinstance(owner, str) and owner.strip() else "the owner"
+    labels = [label for label in LABELS if board or label != "postit"]
+    return (f"You classify one thing {who} just said to {name} ({short}) in a live voice conversation. Answer with "
+            f"exactly one word from this list, and nothing else: {', '.join(labels)}.\n"
             "note: he asks to make or save a note.\n"
-            "postit: he asks to put a post-it on the Board.\n"
+            + ("postit: he asks to put a post-it on the Board.\n" if board else "") +
             f"consult: he asks {short} to do or check something only {short} can do: current facts, project state, "
             f"files, jobs, a lookup, or any work. A request for anyone other than {short} is chat.\n"
             "yes: he confirms the request that is waiting, and asks for nothing more.\n"
@@ -72,12 +77,14 @@ def label_of(text):
 
 class GatewayIntent:
     """One host's understanding call: ``(text, waiting kind) -> label``. ``key_name``: the host's summary key (the same
-    capped key, D22 (a)); ``person``: the host's person ({name, short}). ``http_post`` is requests.post, read as it
-    arrives (summary_gateway._streamed), unless a test hands in its own. Never raises."""
+    capped key, D22 (a)); ``person``: the host's person ({name, short}); ``owner``: the host's owner_name (N5);
+    ``board``: whether the host has a Board (M1). ``http_post`` is requests.post, read as it arrives
+    (summary_gateway._streamed), unless a test hands in its own. Never raises."""
 
-    def __init__(self, key_name, person, *, environ=None, http_post=None):
+    def __init__(self, key_name, person, *, owner=None, board=True, environ=None, http_post=None):
         environ = os.environ if environ is None else environ
         self.key_name, self.env, self.person = key_name, key_env(key_name), dict(person or {})
+        self.owner, self.board = owner, board is True
         self._key = environ.get(self.env) or ""
         self.url = (environ.get(GATEWAY_URL_ENV) or DEFAULT_GATEWAY_URL).rstrip("/") + "/chat/completions"
         self._post = http_post
@@ -88,7 +95,7 @@ class GatewayIntent:
     def request(self, text, waiting):
         """The whole request body: a plain completion, nothing else (no tools, no tool choice, no user binding)."""
         return {"model": INTENT_MODEL, "stream": False, "max_tokens": MAX_TOKENS, "temperature": TEMPERATURE,
-                "messages": [{"role": "system", "content": system_message(self.person)},
+                "messages": [{"role": "system", "content": system_message(self.person, self.owner, self.board)},
                              {"role": "user", "content": user_message(text, waiting, self.person)}]}
 
     def __call__(self, text, waiting=None):

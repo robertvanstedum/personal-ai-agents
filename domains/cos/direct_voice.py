@@ -104,21 +104,26 @@ _RULES = ("You are the low-latency voice of Robert's Chief of Staff. Keep ordina
           "most one useful question per turn and do not force a question onto every reply. Never use Markdown, headings, "
           "or bullet lists in speech. Robert may interrupt you; stop cleanly and listen. If Robert interrupts, abandon the "
           "unfinished explanation and respond to his new direction; do not automatically resume it. ")
-# v3 (confirm by voice: the app acts; the voice only talks): one text for every provider. She has no tools; the app consults
-# her turn only after Robert confirms, and gives the voice her answer to say.
-_CONFIRM = ("When the answer requires live or current facts, web research, MiniMoi state beyond the supplied context, stored "
-            "history, or substantive domain judgment, or before saying that a capability, tool or piece of history is "
-            "unavailable, ask Robert briefly to confirm that you should check; the app then asks her own turn and gives you "
-            "her answer: say it in the same short spoken style, preserving its uncertainty and action status, rather than "
-            "reading it out in full. Never claim that a note was saved unless the app says so. ")
+# v3 (confirm by voice: the app acts; the voice only talks). She has no tools; the app consults her turn only after Robert
+# confirms, and gives the voice her answer to say. Who asks for that confirmation is plumbing (review v3 S6): where the page
+# makes every response (OpenAI) its own asking line is the question and the voice never asks one itself; where the
+# provider answers by itself (xAI) her voice's own reply is the question.
+_NEEDS = ("When the answer requires live or current facts, web research, MiniMoi state beyond the supplied context, stored "
+          "history, or substantive domain judgment, or before saying that a capability, tool or piece of history is "
+          "unavailable, ")
+_ASKS = "ask Robert briefly to confirm that you should check; the app then asks her own turn "
+_PAGE_ASKS = ("never ask Robert to confirm on your own: when the app has heard such a request its own instruction tells you "
+              "to ask him; after his yes it asks her own turn ")
+_ANSWER = ("and gives you her answer: say it in the same short spoken style, preserving its uncertainty and action status, "
+           "rather than reading it out in full. Never claim that a note was saved unless the app says so. ")
 _WRITING = ("Set reminders in writing: you cannot set a reminder by voice, so if Robert asks for one, tell him to set it in "
             "writing in Confer. Commands such as /new are done in writing too.")
 
 
-def her_rules(actions=False):
-    """Her own operating rules for this session (§6.2, §6.4), the same on every provider under v3 (``actions`` is ignored,
-    kept for its callers): no tools; the app consults her after Robert's yes."""
-    return _RULES + _CONFIRM + _WRITING
+def her_rules(actions=False, *, page_asks=False):
+    """Her own operating rules for this session (§6.2, §6.4) under v3 (``actions`` is ignored, kept for its callers): no
+    tools; the app consults her after Robert's yes. ``page_asks``: the page's line is the question (OpenAI, S6)."""
+    return _RULES + _NEEDS + (_PAGE_ASKS if page_asks else _ASKS) + _ANSWER + _WRITING
 
 
 # The roles that are not production (staging and the Mac: docker-compose.staging.yml's standby; the Mac's development).
@@ -285,12 +290,13 @@ class ChiefOfStaff(DirectVoiceAdapter):
         slash command), read by the service's own parser (confer_service.slash_command): done in writing only (§6.4)."""
         return slash_command(text) is not None
 
-    def instructions(self, card, handle, actions=True):
+    def instructions(self, card, handle, actions=True, page_asks=False):
         """§6.3, in Spec 164 §7's order: the core's direct rules and her rules, her card, then as DATA her briefing and
-        bounded continuity, within INSTRUCTIONS_MAX_BYTES."""
+        bounded continuity, within INSTRUCTIONS_MAX_BYTES. ``page_asks``: OpenAI's page asks (review v3 S6)."""
         token = "\x00cos-voice-memory\x00"
         built = self._briefing(token)                     # once: it reads files and asks for live status
-        rules = direct_rules(PERSON, OWNER_NAME, actions) + "\n\n" + her_rules(actions)
+        rules = (direct_rules(PERSON, OWNER_NAME, actions, page_asks=page_asks) + "\n\n"
+                 + her_rules(actions, page_asks=page_asks))
         return bounded(rules, card, lambda memory: built.replace(token, memory), self._memory(), self._continuity())
 
     def _continuity(self):
