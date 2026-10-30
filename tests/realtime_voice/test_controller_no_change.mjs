@@ -14,7 +14,8 @@
 // call, the OpenAI adapter's optional response tag (sent only when one is passed; German's bytes are unchanged, checked
 // below), each adapter's createResponse() and sendFunctionOutput() (called only where the page asks for its own responses;
 // German never does), and new
-// adapter cache keys. The strip pairs below are generated from a line diff against 93bf00c6 and checked to give its bytes
+// adapter cache keys; and the v3 fix round's opt-in onAudioStarted with the adapters' audio_started event (review M2:
+// nothing reaches a page that passes no callback). The strip pairs below are generated from a line diff against 93bf00c6 and checked to give its bytes
 // exactly. Pinned two ways: each source with exactly those additions taken out hashes to its 93bf00c6 file (the Chunk B
 // baseline; what production German, Portuguese and CoS receive at merge from origin/main is listed in A1_FIX_RESULT.md);
 // and the methods, driven on a synthetic transport, send nothing unless a host calls them, and nothing on the managed
@@ -26,6 +27,33 @@ import assert from 'node:assert/strict';
 const PATH = new URL('../../core/realtime_voice/static/realtime-voice-controller.js', import.meta.url);
 const BEFORE = '682906489b0b3f9f02cd3df951da6fbaaef74c2aa49927d5905827ea3b8c7f05';     // 93bf00c6, as German loads it today
 const CONTROLLER = [
+  // The v3 fix round (REVIEW_v3_build M2): the controller's opt-in onAudioStarted option and its audio_started listener,
+  // and the adapters' new cache keys, taken out first (back to v3's file); German and Portuguese pass no such option.
+  [`// an interim transcript's status, LV2), and xAI's for a microphone granted after the start ended (Gate 2 V S2), and both
+// for each response's first audio (audio_started; the v3 fix round, review M2): new keys so browsers fetch them (Spec 165
+// §4.3, §5.1, §5.3; review FR N3, V R2-M1; v0.3 G3; the C2 binding pass).
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261029-v3fix";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261029-v3fix";
+`,
+   `// an interim transcript's status, LV2), and xAI's for a microphone granted after the start ended (Gate 2 V S2): new keys
+// so browsers fetch them (Spec 165 §4.3, §5.1, §5.3; review FR N3, V R2-M1; v0.3 G3; the C2 binding pass).
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-live1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261029-gate2";
+`],
+  [`    respondFor = null, onResponseStarted = null, refuseCalls = false, onAudioStarted = null,
+`,
+   `    respondFor = null, onResponseStarted = null, refuseCalls = false,
+`],
+  [`    // - onAudioStarted(responseId): the first audio of a response began to play, where the transport reports it (the v3
+    //   fix round, review M2): a host counts a question from then, not from response.created. Evidence, never authority.
+    this._onAudioStarted = typeof onAudioStarted === "function" ? onAudioStarted : null;
+`,
+   ``],
+  [`    on("audio_started", (evt) => {
+      if (this._onAudioStarted) { try { this._onAudioStarted(evt.response_id || null); } catch (_) { /* an observer only */ } }
+    });
+`,
+   ``],
   // Confirm by voice, v3 (V3_BUILD_BRIEF): the controller's opt-in respondFor, onResponseStarted and refuseCalls options,
   // NO_ACTIONS and ownsResponses(), taken out first (generated from a line diff against the binding pass's file); German
   // and Portuguese pass none of the options. Then A1's additions, as before.
@@ -676,6 +704,14 @@ const source = fs.readFileSync(PATH, 'utf8');
 // The adapters: exactly the additions below, nothing else (each taken out, the file is its 93bf00c6 bytes).
 const ADAPTERS = {
   'adapters/xai-websocket-adapter.js': ['afe83aa8aae73e4b47d6eaa920f8893932cf4bf04ee225e0918db06d5db3afbf', [
+  [`        // The v3 fix round (review M2): each response's first audio, for a host that counts a question from it. Nothing
+        // listens unless a host passes onAudioStarted to the controller; German and Portuguese do not.
+        if (event.response_id && event.response_id !== this._sounding) {
+          this._sounding = event.response_id;
+          this._emit("audio_started", { response_id: event.response_id });
+        }
+`,
+   ``],
   [`    // A host that may end a start before the microphone is granted says so (isCurrent: the direct page only; Gate 2 V S2).
     this._isCurrent = typeof credentials.isCurrent === "function" ? credentials.isCurrent : null;
 `,
@@ -801,6 +837,11 @@ const ADAPTERS = {
 `],
   ]],
   'adapters/openai-webrtc-adapter.js': ['dae118fd252add9a80755a363d64ce6b4ef377b004d177e8dc10bba5a3c274a7', [
+  [`        // The v3 fix round (review M2): the response's first audio, for a host that counts a question from it. Nothing
+        // listens unless a host passes onAudioStarted to the controller; German and Portuguese do not.
+        this._emit("audio_started", { response_id: event.response_id || null });
+`,
+   ``],
   [`    this._audible = new Set();       // responses whose audio the provider says is playing (output_audio_buffer.started)
     this._ended = new Set();         // responses whose response.done was seen (LV1: OpenAI may send a second one)
     this._played = new Set();        // responses whose playback end was reported: each once (LV1)

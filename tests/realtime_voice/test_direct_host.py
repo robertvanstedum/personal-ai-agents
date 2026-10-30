@@ -183,8 +183,9 @@ class Host(DirectVoiceAdapter):
     def card(self):
         return load_pinned(self.card_root)
 
-    def instructions(self, card, handle, actions=True):
-        return compose_instructions("Test rules.\n\n" + direct_rules(self.person, self.owner_name, actions), card,
+    def instructions(self, card, handle, actions=True, page_asks=False):
+        return compose_instructions("Test rules.\n\n" + direct_rules(self.person, self.owner_name, actions,
+                                                                     page_asks=page_asks), card,
                                     f"continuity of {handle}")
 
     def ended(self, handle, sid):

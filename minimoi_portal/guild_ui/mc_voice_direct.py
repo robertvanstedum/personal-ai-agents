@@ -227,6 +227,7 @@ class _MasterCraftsman(DirectVoiceAdapter):
     store = _FloorStore()
     summary_key = "voice-summary-mc"        # MC's capped model-gateway key for the summary (Spec 165 §5.4, D22 (a))
     owner_name = "Robert"                    # the core's words name the owner as MC's always have (review R1 P3-12)
+    board = True                             # MC has the Board: a post-it may wait as one (review v3 M1)
     words = {"no_conversation": "Open a saved conversation before using voice.",                      # the Guild's words
              "not_listening": "Voice is on the record only. Go back on the record to use it.",
              "invalid": "Voice unavailable: open a saved conversation, on the record."}
@@ -284,16 +285,17 @@ class _MasterCraftsman(DirectVoiceAdapter):
     def card(self):
         return load_pinned(CARD_ROOT)
 
-    def instructions(self, card, conv, actions=False):
+    def instructions(self, card, conv, actions=False, page_asks=False):
         """Composed here on the server in Spec 164 §7's order: (1) this path's operating rules (DIRECT_INSTRUCTIONS, then
-        the core's v3 direct_rules: no tools, ask to confirm without repeating him, the same on every provider), (2) MC's
-        card, (3) bounded continuity from this conversation (mc_voice_transcripts.block). Never the language-practice text
-        German and Portuguese use (no "learner", no corrections). ``actions`` is ignored (no model action under v3)."""
+        the core's v3 direct_rules: no tools, never repeating him; where the page asks (OpenAI, ``page_asks``) the page's
+        line is the question, else the voice asks to confirm, review v3 S6), (2) MC's card, (3) bounded continuity from this
+        conversation (mc_voice_transcripts.block). Never the language-practice text German and Portuguese use (no
+        "learner", no corrections). ``actions`` is ignored (no model action under v3)."""
         from . import api
         from .mc_voice_transcripts import block
         continuity = block("", api._conv_floor(conv), scrub=api.scrub, include_recent=True) if conv is not None else ""
-        return compose_instructions(DIRECT_INSTRUCTIONS + "\n\n" + direct_rules(PERSON, self.owner_name), card,
-                                    continuity or NO_CONTINUITY)
+        rules = DIRECT_INSTRUCTIONS + "\n\n" + direct_rules(PERSON, self.owner_name, page_asks=page_asks)
+        return compose_instructions(rules, card, continuity or NO_CONTINUITY)
 
     def forget(self, sids):
         """Sessions that ended long ago (the core prunes them): their tags and first consult words go too."""

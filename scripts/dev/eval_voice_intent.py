@@ -30,6 +30,8 @@ from core.realtime_voice.summary_gateway import key_env  # noqa: E402
 
 TABLE = ROOT / "tests" / "realtime_voice" / "data" / "intent_cases.json"
 PEOPLE = {"mc": {"name": "Master Craftsman", "short": "MC"}, "cos": {"name": "Chief of Staff", "short": "CoS"}}
+OWNER = "Robert"                                # both hosts' owner_name (review v3 N5: the call names the host's owner)
+BOARD = {"mc": True, "cos": False}              # MC has the Board; CoS has none, so she is offered no postit (M1)
 
 
 def main(argv=None):
@@ -43,13 +45,13 @@ def main(argv=None):
         return 2
     table = json.loads(TABLE.read_text())
     person = PEOPLE[args.host]
-    client = GatewayIntent(key_name, person)
+    client = GatewayIntent(key_name, person, owner=OWNER, board=BOARD[args.host])
     cases = [c for c in table["cases"] if args.all or c["path"] == "model"]
     if args.host != "mc":                       # the table's person is MC: cases that name a person are MC's own
         cases = [c for c in cases if not any(name in c["text"] for name in ("MC", "CoS"))]
     tally, misses = Counter(), []
     for case in cases:
-        expected = case["label"]
+        expected = case["label"] if BOARD[args.host] or case["label"] != "postit" else "consult"   # the server's map
         began = time.monotonic()
         heard = client(case["text"], case["waiting"])
         took = time.monotonic() - began

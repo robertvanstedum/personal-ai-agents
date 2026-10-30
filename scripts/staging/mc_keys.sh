@@ -105,12 +105,16 @@ cos_keygen_py() {
 # voice-summary-cos (CoS, cos.env). The summary's alias and the voice
 # understanding call's (minimoi-voice-intent: confirm by voice, v3; one word
 # of a few tokens per finished utterance the grammar did not hear, never
-# tools); chat completions only; a monthly budget; rpm 10. Like MC's,
-# /key/info is not allowed.
+# tools); chat completions only; a monthly budget; rpm 60, so the summary's
+# one call always has headroom over a busy minute of understanding calls
+# (the v3 fix round, review S5: at 10 a minute of ten utterances the grammar
+# did not hear left the summary rate-limited, "Summary unavailable"); the
+# monthly budget, not the rpm, is the cost cap. Like MC's, /key/info is not
+# allowed.
 VOICE_SUMMARY_KEY_MODELS='["minimoi-voice-summary", "minimoi-voice-intent"]'
 VOICE_SUMMARY_KEY_ROUTES='["/v1/chat/completions", "/chat/completions"]'
 VOICE_SUMMARY_KEY_BUDGET_DURATION="30d"
-VOICE_SUMMARY_KEY_RPM=10
+VOICE_SUMMARY_KEY_RPM=60
 
 # voice_summary_keygen_py HOST (mc or cos): that host's summary key.
 # Env in: VOICE_CAP, VOICE_OLD_KEY.

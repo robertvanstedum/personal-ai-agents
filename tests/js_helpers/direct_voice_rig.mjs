@@ -103,7 +103,12 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
     state() { return this._state; }
     speak(t) { this.instructions.push(t); return true; }
     // The tracked form (Spec 165 §5.3): the instruction, and the id of the response it starts.
-    speakTracked(t) { this.instructions.push(t); const id = `resp_${++this.responses}`; this.tracked.push(id); return Promise.resolve(id); }
+    // The v3 fix round (review M2): its first audio is reported a moment later, as both adapters now report it.
+    speakTracked(t) {
+      this.instructions.push(t); const id = `resp_${++this.responses}`; this.tracked.push(id);
+      setImmediate(() => this.options.onAudioStarted?.(id));
+      return Promise.resolve(id);
+    }
     mute() { this.muted += 1; }
     async startSession(args) {
       this.args = args; this._state = 'connecting'; this._sid = SID;
@@ -142,6 +147,7 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
         if (word && word.instruction) this.instructions.push(word.instruction);
         const id = `turn_resp_${i}`;
         this.options.onResponseStarted?.({ response_id: id, owner: `i${i}`, page: true, kind: 'turn' });
+        this.options.onAudioStarted?.(id);                // its first audio, as the transport reports it (review M2)
       });
     }
     drained(id, outcome = 'drained') { this.options.onPlaybackDrained?.(id, outcome); }   // how it ended (v0.3 G3)

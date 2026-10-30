@@ -58,7 +58,11 @@ function rig({ routes = {}, refuse = null, holdConnect = false, conversation = '
     sessionId() { return this.sid; }
     state() { return this._state; }                                                        // public (item 11)
     speak(t) { this.instructions.push(t); return true; }
-    speakTracked(t) { this.instructions.push(t); return Promise.resolve(`resp_${this.instructions.length}`); }   // §5.3
+    speakTracked(t) {                                      // §5.3; its first audio a moment later (the v3 fix round, M2)
+      this.instructions.push(t); const id = `resp_${this.instructions.length}`;
+      setImmediate(() => this.options.onAudioStarted?.(id));
+      return Promise.resolve(id);
+    }
     async startSession(args) {
       this.args = args; this._state = 'requesting_mic';
       this.bootstrapHeaders = this.options.requestHeaders();

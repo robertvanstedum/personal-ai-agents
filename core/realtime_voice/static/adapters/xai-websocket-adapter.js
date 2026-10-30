@@ -262,6 +262,12 @@ export class XAIWebSocketAdapter {
         this._emit("input_item", { item_id: event.item_id || null });
         break;
       case "response.output_audio.delta":
+        // The v3 fix round (review M2): each response's first audio, for a host that counts a question from it. Nothing
+        // listens unless a host passes onAudioStarted to the controller; German and Portuguese do not.
+        if (event.response_id && event.response_id !== this._sounding) {
+          this._sounding = event.response_id;
+          this._emit("audio_started", { response_id: event.response_id });
+        }
         this._playAudioChunk(event.delta || event.audio, event.response_id);
         this._emit("assistant_started", {});
         break;

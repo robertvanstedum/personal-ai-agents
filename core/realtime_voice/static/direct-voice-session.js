@@ -5,9 +5,9 @@
 // The provider speaks directly, as in German: the shared RealtimeVoiceController in direct mode. Confirm by voice, v3 (the
 // app acts; the voice only talks; V3_BUILD_BRIEF.md): the model has no action tools on either provider, and a call that
 // arrives anyway does nothing. This module posts every turn as it completes (and a heartbeat), posts each finished owner
-// item to the server's utterance route, which decides it (ask, confirm, dropped, read_back, nothing_waiting or chat), has
-// the voice ask for a short confirmation in content-free words, sends a confirmed action, or a tap on Check, to the
-// action path, and ends with End. While the session is live nothing that is said is shown: the live state is voice on,
+// item to the server's utterance route, which decides it (ask, confirm, dropped, read_back, nothing_waiting, summary_later
+// or chat), has the voice ask for a short confirmation in content-free words, sends a confirmed action, or a tap on Check,
+// to the action path, and ends with End. While the session is live nothing that is said is shown: the live state is voice on,
 // the time so far, End and Check with <person>. End reveals the session's kept records (the host page renders them). A
 // refusal says "Voice unavailable: <reason>"; nothing else is tried, and no other voice path is a fallback.
 //
@@ -79,11 +79,18 @@ export const ALL_RIGHT = 'All right.';
 export const NOTHING_WAITING = "Nothing's waiting; say it again if you want it.";   // core direct_host.NOTHING_WAITING
 // On screen only (the voice says nothing of it): the waiting action's words, "not done", and the asking fallback.
 export const NOT_DONE_SCREEN = 'Not done. Say it again if you want it.';
-export const ASK_ON_SCREEN = 'Say yes to go ahead, or press Check.';
+export const SAY_OR_CHECK = 'Say yes to go ahead, or press Check.';
+// The v3 fix round (review S1; Codex's line, "do not accept a blind yes against an unannounced proposal"): a question shown
+// on screen only, because it could not be spoken, is tap-only. The server records it so (asked {screen: true}), and a
+// spoken yes then asks it again, never confirms it.
+export const ASK_ON_SCREEN = 'Press Check to go ahead.';
+export const END_ON_SCREEN = 'Shall I sum up? Press Sum up or Keep talking.';   // review S4: the end's prompt, never Check
+export const SUMMARY_LATER = 'The summary comes at the end.';   // review S2: asked for mid-session, never his words read
 export const SUMMARY_READY = 'Your summary is ready.';
 const KIND_WORDS = { note: 'Note', postit: 'Post-it', consult: 'Request' };
-export function waitingWords(kind, words) {
-  return `${KIND_WORDS[kind] || 'Request'} waiting for your yes: “${words}”. ${ASK_ON_SCREEN}`;
+export function waitingWords(kind, words, tapOnly = false) {
+  const what = KIND_WORDS[kind] || 'Request';
+  return tapOnly ? `${what} waiting: “${words}”. ${ASK_ON_SCREEN}` : `${what} waiting for your yes: “${words}”. ${SAY_OR_CHECK}`;
 }
 // The read-back he asked for (the mobile case): his words, as data, then the question again.
 export function readBackLine(words) {
@@ -105,6 +112,9 @@ export function readIt(text) {
 // page once. A reply that started is judged a question by its words (evidence only) within QUESTION_CHECK_MS.
 const HOLD_RESPONSE_MS = 1500;
 const QUESTION_WAIT_MS = 4000;
+// The v3 fix round (review M2): a question counts from its first audio where the transport reports it (audio_started); a
+// start whose audio is not reported this long after it counts from the start itself, as before.
+const AUDIO_WAIT_MS = 1500;
 const QUESTION_CHECK_MS = 8000;
 const UTTERANCE_POST_MS = 6000;          // above the server's 2.5 s understanding call
 const READ_WINDOW_MS = 15000;            // the summary's one control-only reply window
@@ -659,36 +669,47 @@ export function directVoice(d) {
     return r.status === 200 && ['done', 'not_done', 'pending'].includes(r.body.outcome) ? r.body : unknown;
   }
   // What the voice says of an action's result: content-free for a note or post-it and for every refusal, pending or unknown;
-  // a consult's own answer when it is done (MC's or CoS's words, not his).
+  // a consult's own answer when it is done (MC's or CoS's words, not his). The v3 fix round (review M1): the words follow
+  // what ran, never the label. "Saved." or "Post-it added." only when the host says it saved (saved: true); a done result
+  // that does not say so is the typed turn's own answer (its spoken), whatever was asked for.
   function outcomeLine(kind, body) {
     const outcome = body && body.outcome;
-    if (outcome === 'done' && (kind === 'note' || kind === 'postit')) return body.saved === false ? NOT_SAVED : kind === 'postit' ? POSTED : SAVED;
-    if (outcome === 'done') return typeof body.spoken === 'string' && body.spoken.trim() ? body.spoken.trim() : 'It is done.';
+    const own = typeof body?.spoken === 'string' && body.spoken.trim() ? body.spoken.trim() : null;
+    const note = kind === 'note' || kind === 'postit';
+    if (outcome === 'done' && note && body.saved === true) return kind === 'postit' ? POSTED : SAVED;
+    if (outcome === 'done' && note && body.saved === false) return NOT_SAVED;
+    if (outcome === 'done') return own || 'It is done.';
     if (outcome === 'pending') return body.same_turn ? HANDLING : PENDING;
     if (outcome === 'unknown') return UNKNOWN;
+    if (body && body.error === 'end_waiting') return END_ON_SCREEN;
     return body && body.error === 'confirmation' ? NOTHING_WAITING : NOT_DONE;
   }
 
   // ── v3: the one waiting action (confirm by voice) ──────────────────────────────────────────────────────────────────
   // Each finished owner item is posted once to the utterance route, in order (one at a time), and its decision followed:
   // ask (a waiting action: the voice asks, content-free, and the page tells the server when the question started), confirm
-  // (the action path, once), read_back (his words read, then asked again), dropped, nothing_waiting or chat. The server
-  // holds and enforces the waiting action; the page only mirrors it for the screen and its 30 s "not done".
+  // (the action path, once), read_back (his words read, then asked again), dropped, nothing_waiting, summary_later (the
+  // summary comes at the end, review S2) or chat. The server holds and enforces the waiting action; the page only mirrors
+  // it for the screen and its 30 s "not done".
   let waiting = null;                      // {action_id, kind, item, sha, timer}
   let hearing = Promise.resolve();         // the decisions, one at a time, in order
   const decisions = new Map();             // capture index -> its decision (a promise)
   const commits = new Map();               // OpenAI: a committed item's provider id -> the answer its response waits for
-  const starts = [];                       // responses that started: {id, ownerIndex, page, stop, last, words}
-  const startWatch = new Set(), wordWatch = new Set();
+  const starts = [];                       // responses that started: {id, ownerIndex, page, stop, last, words, speaking,
+                                           // speech, audio}
+  const startWatch = new Set(), wordWatch = new Set(), audioWatch = new Set(), speechWatch = new Set(), stopWatch = new Set();
+  const speechAt = new Map();              // capture index -> his speech starts so far when it was heard (review M2)
   const kinds = new Map();                 // owner capture id -> the kind of action it asked for (late results' words)
   const sent = new Set();                  // action ids already sent to the action path
   let stops = 0;                           // his speech stops so far
+  let speeches = 0;                        // his speech starts so far (review M2: a question his speech began over)
   let owned = false;                       // the page creates every response (the bootstrap's page_responses: OpenAI)
-  const DECIDED = ['ask', 'confirm', 'dropped', 'read_back', 'nothing_waiting', 'chat'];
+  const DECIDED = ['ask', 'confirm', 'dropped', 'read_back', 'nothing_waiting', 'summary_later', 'chat'];
   const askedUrl = (aid) => at(direct.asked_url || '').split('{action_id}').join(encodeURIComponent(aid));
 
   function hear(i, text) {
     if (!direct.utterance_url || lifecycle !== 'live' || finalized) return;
+    speechAt.set(i, speeches);
     const decided = hearing.then(() => decide(i, text));
     decisions.set(i, decided);
     hearing = decided.then((x) => follow(x, i)).catch((e) => (d.warn || (() => {}))('voice utterance not followed', e));
@@ -709,6 +730,7 @@ export function directVoice(d) {
       case 'confirm': return { skip: true, quiet: true };  // no reply follows his yes: the outcome is said when it answers
       case 'read_back': return { instruction: readBackLine(x.text) };
       case 'nothing_waiting': return { instruction: SAY + NOTHING_WAITING };
+      case 'summary_later': return { instruction: SAY + SUMMARY_LATER };
       case 'dropped': return x.reason === 'no' ? { instruction: SAY + ALL_RIGHT } : null;
       default: return null;                                // chat: a normal response
     }
@@ -747,13 +769,22 @@ export function directVoice(d) {
       }
     });
   }
+  // Each start keeps whether his speech had begun by then (speaking, and his speech starts so far), and later its first
+  // audio, where the transport reports it (audioStarted): review M2.
   function responseStarted(info) {
     const place = info && info.owner && typeof c?.placeOf === 'function' ? c.placeOf(info.owner) : null;
     const s = { id: info?.response_id || null, ownerIndex: Number.isInteger(place) ? place : null,
-      page: Boolean(info?.page && info.kind === 'line'), stop: stops, last: capture ? capture.last() : -1, words: null };
+      page: Boolean(info?.page && info.kind === 'line'), stop: stops, last: capture ? capture.last() : -1, words: null,
+      speaking, speech: speeches, audio: null };
     starts.push(s);
     if (starts.length > 24) starts.shift();
     for (const watch of [...startWatch]) watch(s);
+  }
+  function audioStarted(id) {
+    const s = id ? starts.find((x) => x.id === id && x.audio === null) : null;
+    if (!s) return;
+    s.audio = { last: capture ? capture.last() : -1, speaking, speech: speeches };
+    for (const watch of [...audioWatch]) watch(s);
   }
   function spoke(text) {                                  // an assistant turn's words: the last started reply's
     const s = [...starts].reverse().find((x) => x.words === null);
@@ -765,28 +796,73 @@ export function directVoice(d) {
   // playing, never authority: a yes must still be a later owner item, which the server checks.
   // A wait for a question (or a reply's words) ends at once when the waiting action goes (dropped, withdrawn, End).
   const waits = new Set();
+  // The v3 fix round (review M2): where the provider answers by itself (xAI), a reply that started over speech of his newer
+  // than item i (his speech starts past those when item i was heard) is not item i's question. It ends the wait at once,
+  // spoiled (whenHeard says so, and the question is asked again), so his newer words are decided without waiting out
+  // QUESTION_WAIT_MS. On OpenAI the item's own response is its question, and whenHeard judges it the same way.
   function questionStart(i) {
     const all = typeof c?.ownsResponses === 'function' ? c.ownsResponses() : owned;
-    const ok = (s) => (all ? s.ownerIndex === i : !s.page && s.stop === stops && !speaking);
+    const base = speechAt.has(i) ? speechAt.get(i) : speeches;
+    const ok = (s) => (all ? s.ownerIndex === i : !s.page && s.stop === stops && !speaking && !s.speaking && s.speech === base);
+    const over = (s) => !all && !s.page && (s.speaking || s.speech !== base);
     const seen = [...starts].reverse().find(ok);
     if (seen) return Promise.resolve(seen);
     return new Promise((resolve) => {
       let timer = null;
-      const watch = (s) => { if (ok(s)) done(s); };
+      const watch = (s) => { if (ok(s) || over(s)) done(s); };
       const done = (s) => { cancel(timer); startWatch.delete(watch); waits.delete(done); resolve(s); };
       timer = later(() => done(null), QUESTION_WAIT_MS);
       startWatch.add(watch);
       waits.add(done);
     });
   }
-  // A page line, tracked: its start (or null when it did not start in its bound).
+  // A page line, tracked: its start (or null when it did not start in its bound). ``base``: his speech starts when it was
+  // asked for, so speech of his before its start spoils it too (review M2).
   async function tracked(instruction) {
     if (!connected || finalized || typeof c?.speakTracked !== 'function') return null;
+    const base = speeches;
     const id = await c.speakTracked(instruction);
     if (!id) return null;
-    const s = [...starts].reverse().find((x) => x.id === id) || { id, last: capture ? capture.last() : -1, words: null };
+    let s = [...starts].reverse().find((x) => x.id === id);
+    if (!s) {                                            // its start was not reported: kept, so its audio still can be
+      s = { id, last: capture ? capture.last() : -1, words: null, speaking, speech: speeches, audio: null };
+      starts.push(s);
+      if (starts.length > 24) starts.shift();
+    }
     s.page = true;                                       // the page's own line, whatever the controller reported
+    s.base = base;
     return s;
+  }
+  // When a question was heard (review M2: "the yes must come after the question started playing"): {last} (the newest
+  // item then, the server's after_item) from its first audio where the transport reports it, else from its start once
+  // AUDIO_WAIT_MS passes with no report; or null when his speech had already begun as it started, or began before its
+  // audio (a yes said before or over the question never confirms it). A start is judged against his speech starts when
+  // its item was heard, or, for a page line, when it was asked for.
+  function whenHeard(s, base = s.base ?? s.speech) {
+    const judge = (x) => (x.speaking || x.speech !== base ? null
+      : x.audio ? (x.audio.speaking || x.audio.speech !== base ? null : { last: x.audio.last }) : undefined);
+    const now = judge(s);
+    if (now !== undefined) return Promise.resolve(now);
+    return new Promise((resolve) => {
+      let timer = null;
+      const watch = (x) => { if (x === s) done(judge(s)); };
+      const spoke = () => done(null);                              // his speech began before its audio
+      const done = (v) => { cancel(timer); audioWatch.delete(watch); speechWatch.delete(spoke); waits.delete(done); resolve(v); };
+      timer = later(() => done(speeches === base && !speaking ? { last: s.last } : null), AUDIO_WAIT_MS);
+      audioWatch.add(watch);
+      speechWatch.add(spoke);
+      waits.add(done);
+    });
+  }
+  // His speech has stopped (now, or once it does), then a moment for his words to be heard: the re-ask's wait (M2).
+  function quietThen(ms) {
+    return new Promise((resolve) => {
+      let timer = null;
+      const go = () => { stopWatch.delete(go); waits.delete(done); timer = later(() => done(true), ms); };
+      const done = (v) => { cancel(timer); stopWatch.delete(go); waits.delete(done); resolve(v); };
+      waits.add(done);
+      if (speaking) stopWatch.add(go); else go();
+    });
   }
   // A reply's words, once it has them (or null by QUESTION_CHECK_MS): only to judge whether it asked a question.
   function wordsOf(s) {
@@ -800,12 +876,12 @@ export function directVoice(d) {
       waits.add(done);
     });
   }
-  function showWaiting() {
+  function showWaiting(tapOnly = false) {
     if (!waiting || waiting.kind === 'end') return;
     const at = Number(String(waiting.item).slice(1));
     const words = capture?.said(at);
-    ui.say(words ? waitingWords(waiting.kind, words) : ASK_ON_SCREEN);
-    ui.waiting?.({ kind: waiting.kind, words: words || null });
+    ui.say(words ? waitingWords(waiting.kind, words, tapOnly) : tapOnly ? ASK_ON_SCREEN : SAY_OR_CHECK);
+    ui.waiting?.({ kind: waiting.kind, words: words || null, ...(tapOnly ? { tap_only: true } : {}) });
   }
   function clearWaiting(screen = null) {
     if (waiting?.timer) cancel(waiting.timer);
@@ -815,17 +891,25 @@ export function directVoice(d) {
     if (was?.kind === 'end') propose(false);
     if (was) { ui.waiting?.(null); ui.say(screen || '', screen ? { transient: true } : {}); }
   }
-  // The server is told the question started (after_item: the newest item then); the screen's "not done" follows its window.
-  async function markAsked(x, start) {
+  // The server is told the question started (after_item: the newest item when it was heard); the screen's "not done"
+  // follows its window. ``screen``: it shows on screen only, so it is tap-only (review S1).
+  async function markAsked(x, start, screen = false) {
     if (!waiting || waiting.action_id !== x.action_id || !direct.asked_url) return;
     const after = Math.max(start && Number.isInteger(start.last) ? start.last : (capture ? capture.last() : 0), 0);
-    const r = await postJson(askedUrl(x.action_id), { after_item: `t${after}` }, { timeoutMs: CONTROL_POST_MS });
+    const r = await postJson(askedUrl(x.action_id), { after_item: `t${after}`, ...(screen ? { screen: true } : {}) },
+      { timeoutMs: CONTROL_POST_MS });
     if (!waiting || waiting.action_id !== x.action_id) return;
     if (r.status === 409) { clearWaiting(NOT_DONE_SCREEN); return; }
     if (r.status !== 200) return;
     if (waiting.timer) cancel(waiting.timer);
     const seconds = Number(r.body.expires_in) > 0 ? Number(r.body.expires_in) : 30;
     waiting.timer = later(() => { if (waiting && waiting.action_id === x.action_id) clearWaiting(NOT_DONE_SCREEN); }, seconds * 1000);
+  }
+  // The question could not be spoken: the screen asks, and the server records it tap-only (review S1). The end's own
+  // prompt is Sum up or Keep talking, never Check (review S4).
+  async function onScreen(x) {
+    if (x.kind === 'end') { propose(true); ui.say(END_ON_SCREEN); } else showWaiting(true);
+    await markAsked(x, null, true);
   }
   async function follow(x, i) {
     x.followed = true;
@@ -838,41 +922,66 @@ export function directVoice(d) {
     }
     if (x.decision === 'read_back') return reading(x, i);
     if (x.decision === 'dropped') {
+      // A fold (review S7) with nothing waiting still says it was not done: he may think his "yes" went with it.
+      if (!waiting && x.reason === 'folded') ui.say(NOT_DONE_SCREEN, { transient: true });
       clearWaiting(x.reason === 'no' ? null : NOT_DONE_SCREEN);
       if (x.reason === 'no' && x.via !== 'response') sayAtPause(SAY + ALL_RIGHT);
       return;
     }
     if (x.decision === 'nothing_waiting') { if (x.via !== 'response') sayAtPause(SAY + NOTHING_WAITING); return; }
+    if (x.decision === 'summary_later') { if (x.via !== 'response') sayAtPause(SAY + SUMMARY_LATER); return; }
     if (x.dropped && waiting && waiting.action_id === x.dropped) clearWaiting(NOT_DONE_SCREEN);   // anything else drops it
   }
   async function asking(x, i) {
     if (!waiting || waiting.action_id !== x.action_id) {
-      clearWaiting();
+      // Review N2: a new request or the end replacing an action that waited says that action was not done.
+      clearWaiting(x.replaced && waiting && waiting.action_id === x.replaced && waiting.kind !== 'end' ? NOT_DONE_SCREEN : null);
       waiting = { action_id: x.action_id, kind: x.kind, item: x.owner_item_id, sha: x.text_sha256, timer: null };
       kinds.set(x.owner_item_id, x.kind);
     }
     if (x.kind === 'end') propose(true); else showWaiting();
     const line = x.kind === 'end' ? END_LINE : ASK_LINE;
+    const current = () => waiting && waiting.action_id === x.action_id;
     // OpenAI in time: the item's own response is the question. Otherwise the reply that follows his words is (xAI), and
     // when none starts in QUESTION_WAIT_MS (a dropped response, live probes) the page asks once, then the screen does.
     let start = await questionStart(i);
-    if (!waiting || waiting.action_id !== x.action_id) return;
+    if (!current()) return;
     const ours = Boolean(start && x.via === 'response' && start.ownerIndex === i);
     if (!start) start = await tracked(line);
-    if (!waiting || waiting.action_id !== x.action_id) return;
-    if (!start) { ui.say(ASK_ON_SCREEN); await markAsked(x, null); return; }      // the screen asks; Check still works
-    await markAsked(x, start);
+    if (!current()) return;
+    if (!start) { await onScreen(x); return; }                       // the screen asks: tap-only (S1)
+    // Review M2: counted from its first audio where reported; never one his speech began over. Spoiled, it is asked
+    // again once he stops, unless newer words of his are heard first (they decide it: a bare yes is asked again).
+    const at = await whenHeard(start, start.page ? start.base : speechAt.get(i));
+    if (!current()) return;
+    if (!at) { askAgain(x, i, line); return; }
+    await markAsked(x, at);
     // Builder's call (V3_BUILD_BRIEF): a reply that was not the page's own asking line and asked no question (its words, as
     // evidence only, hold no "?") is followed by the page's question, once, and the question is re-armed after it. It runs
     // beside the next utterances, never holding them up, and lets go once he has said anything newer.
     if (ours || x.kind === 'end' || start.page) return;
     (async () => {
       const words = await wordsOf(start);
-      const moved = () => !waiting || waiting.action_id !== x.action_id || [...decisions.keys()].some((k) => k > i);
+      const moved = () => !current() || [...decisions.keys()].some((k) => k > i);
       if (words === null || words.includes('?') || moved()) return;
       const again = await tracked(line);
-      if (again && !moved()) await markAsked(x, again);
+      const heardAgain = again && !moved() ? await whenHeard(again) : null;
+      if (heardAgain && !moved()) await markAsked(x, heardAgain);
     })().catch((e) => (d.warn || (() => {}))('voice question not checked', e));
+  }
+  // Review M2: the question was spoiled by his speech. Once he stops (and his words have had a moment to be heard), the
+  // page asks once more, unless newer words of his were heard meanwhile; spoiled again, or not started, the screen asks.
+  // It runs beside the next utterances, never holding them up.
+  function askAgain(x, i, line) {
+    const moved = () => !waiting || waiting.action_id !== x.action_id || [...decisions.keys()].some((k) => k > i);
+    (async () => {
+      if (!(await quietThen(HOLD_RESPONSE_MS)) || moved()) return;
+      const again = await tracked(line);
+      if (moved()) return;
+      const at = again ? await whenHeard(again) : null;
+      if (moved()) return;
+      if (at) await markAsked(x, at); else await onScreen(x);
+    })().catch((e) => (d.warn || (() => {}))('voice question not asked again', e));
   }
   async function reading(x, i) {
     if (!waiting || waiting.action_id !== x.action_id) {
@@ -881,8 +990,15 @@ export function directVoice(d) {
     if (waiting.timer) { cancel(waiting.timer); waiting.timer = null; }   // the answer window waits while it is read
     const start = x.via === 'response' ? await questionStart(i) : await tracked(readBackLine(x.text));
     if (!waiting || waiting.action_id !== x.action_id) return;
-    if (!start) ui.say(waitingWords(x.kind, x.text));                       // could not be spoken: the screen shows them
-    await markAsked(x, start);                                              // re-armed after the read-back's question
+    if (!start) {                                                           // could not be spoken: the screen shows them
+      ui.say(waitingWords(x.kind, x.text, true));
+      await markAsked(x, null, true);                                       // tap-only (S1)
+      return;
+    }
+    const at = await whenHeard(start, start.page ? start.base : speechAt.get(i));
+    if (!waiting || waiting.action_id !== x.action_id) return;
+    if (!at) { askAgain(x, i, ASK_LINE); return; }                          // his speech over it (M2)
+    await markAsked(x, at);                                                 // re-armed after the read-back's question
   }
   async function confirmed(x) {
     if (sent.has(x.action_id)) return;                // a second yes to one already confirmed: the same action, once
@@ -903,6 +1019,8 @@ export function directVoice(d) {
   async function check() {
     if (!connected || finalized || checking || summary) return;
     if (capture?.stopped) { ui.say(CHECK_FULL, { transient: true }); return; }
+    // Review S4: with "Shall I sum up?" waiting, his last words are the end's: Check sends nothing, and shows the prompt.
+    if (waiting && waiting.kind === 'end') { propose(true); ui.say(END_ON_SCREEN, { transient: true }); return; }
     const action = waiting && waiting.kind !== 'end' && !sent.has(waiting.action_id) ? waiting : null;
     const owner = action ? { item: action.item, text: capture?.said(Number(String(action.item).slice(1))) || '' } : capture?.owner();
     if (!owner) { ui.say(words.sayFirst, { transient: true }); return; }
@@ -1128,7 +1246,7 @@ export function directVoice(d) {
       // The page asks for its responses one at a time, each tagged; where the bootstrap says page_responses (OpenAI), it
       // creates every response, one for each of his committed items (Spec 165 §5.1 as amended, C2), and under v3 each waits
       // for its item's decision (respondFor). No model action on either provider: a function call does nothing.
-      pageResponses: true, respondFor, onResponseStarted: responseStarted, refuseCalls: true,
+      pageResponses: true, respondFor, onResponseStarted: responseStarted, onAudioStarted: audioStarted, refuseCalls: true,
       // A reply that answers no one, a call refused, a commit let go: logged, and his items not acted on are kept for End.
       onUnbound: (info) => {
         const ownItem = info && typeof info.owner === 'string' ? info.owner : null;
@@ -1162,9 +1280,14 @@ export function directVoice(d) {
         if (state === 'reconnecting' && !finalized) c.endSession('disconnect');     // no silent reconnect: end visibly
       },
       onInputState: (phase) => {
-        if (phase === 'speech_started') { speaking = true; if (lifecycle === 'speaking_summary') summaryHeard('barged_in'); }
+        if (phase === 'speech_started') {
+          speaking = true; speeches += 1;
+          for (const watch of [...speechWatch]) watch();               // a question not yet heard is spoiled (M2)
+          if (lifecycle === 'speaking_summary') summaryHeard('barged_in');
+        }
         if (phase === 'speech_stopped') {                                                // a response follows his words
           speaking = false; responding = true; stops += 1;
+          for (const watch of [...stopWatch]) watch();
           if (quietTimer) { cancel(quietTimer); quietTimer = null; }
           pump();                                            // a waiting line's bound starts now (FR N3)
         }
