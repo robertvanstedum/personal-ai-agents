@@ -52,7 +52,7 @@ def attach(app, service, *, clock=time.monotonic, per_minute=PER_MINUTE):
                 return jsonify(error="unauthorized"), 401
             if request.mimetype != "application/json" or (request.content_length or 0) > BODY_MAX:
                 return jsonify(error="request_invalid"), 400
-            raw = request.get_data(cache=False)[:BODY_MAX + 1]
+            raw = request.stream.read(BODY_MAX + 1)    # bounded before reading, chunked bodies included (Codex note)
             if len(raw) > BODY_MAX:
                 return jsonify(error="request_invalid"), 400
             try:

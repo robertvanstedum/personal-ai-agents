@@ -32,7 +32,8 @@ SESSION = re.compile(r"^[A-Za-z0-9._:-]{1,96}$")
 BRANCH = re.compile(r"^[A-Za-z0-9._/-]{1,120}$")
 
 _DECISIONS_SQL = ("SELECT id, requester, text, state, created_at, expires_at FROM guild.supervision_decisions"
-                  " WHERE state IN ('new', 'sent') AND expires_at > clock_timestamp() ORDER BY id LIMIT 200")
+                  " WHERE state IN ('new', 'sent') AND expires_at > clock_timestamp() ORDER BY id LIMIT %s")
+DECISIONS_MAX = 1000          # one read holds at most this many; more is a truncated (partial) read (Codex S2)
 
 
 def scrub_words(text, limit=1500) -> str:
@@ -47,16 +48,27 @@ def agent_name(agent) -> str:
     return AGENT_NAMES.get(agent, "An agent")
 
 
+def screened(value, pattern):
+    """An identifier (session, branch) only when it matches its pattern AND no scrubber would change it: a value that
+    looks like a credential, a card or an email is dropped, never shown or stored (Codex B4)."""
+    if not isinstance(value, str) or not pattern.match(value):
+        return None
+    from utils.credential_scrub import scrub as scrub_credentials
+    from utils.payment_scrub import scrub as scrub_payment
+    cleaned, changed = scrub_credentials(value)
+    return value if not changed and scrub_payment(value) == value else None
+
+
 def requester_facts(requester) -> dict:
-    """Agent, session and branch, each only when it matches its pattern (never free text)."""
+    """Agent, session and branch, each only when it matches its pattern and carries no secret (never free text)."""
     r = requester if isinstance(requester, dict) else {}
     out = {}
     if isinstance(r.get("agent"), str) and _AGENT.match(r["agent"]):
         out["agent"] = r["agent"]
-    if isinstance(r.get("session"), str) and SESSION.match(r["session"]):
-        out["session"] = r["session"]
-    if isinstance(r.get("branch"), str) and BRANCH.match(r["branch"]):
-        out["branch"] = r["branch"]
+    for name, pattern in (("session", SESSION), ("branch", BRANCH)):
+        value = screened(r.get(name), pattern)
+        if value:
+            out[name] = value
     return out
 
 
@@ -104,6 +116,11 @@ class Obs:
 
 @dataclass
 class Snapshot:
+    """What the sources showed. ``seq`` is the store's change mark read just BEFORE the sources were read (and
+    ``started_at`` the time): an item changed after that is newer than this snapshot, and its absence here proves
+    nothing. A snapshot with neither falls back to the ``now`` it is reconciled at."""
+    seq: int | None = None
+    started_at: float | None = None
     obs: list = field(default_factory=list)
     coverage: dict = field(default_factory=dict)     # store → ok | unavailable | missing | skipped
     present: dict = field(default_factory=dict)      # store → keys with an open entry (only when read)
@@ -221,6 +238,8 @@ class Sources:
         if rows is None:                              # the table is absent: supervision is not installed here
             snap.coverage["decisions"] = "skipped"
             return
+        truncated = len(rows) > DECISIONS_MAX
+        rows = rows[:DECISIONS_MAX]
         present = set()
         for r in rows:
             did = int(r["id"])
@@ -234,7 +253,8 @@ class Sources:
                                  "words_sha256": hashlib.sha256(words.encode("utf-8")).hexdigest()},
                                 notify_after=created + DECISION_GRACE_S, state=r.get("state")))
             present.add(key)
-        snap.coverage["decisions"], snap.present["decisions"] = "ok", present
+        snap.coverage["decisions"] = "truncated" if truncated else "ok"
+        snap.present["decisions"] = present
 
     # ---- the decisions table, read-only ------------------------------------------------------------------------
     @staticmethod
@@ -252,7 +272,7 @@ class Sources:
         try:
             with conn.cursor() as cur:
                 try:
-                    cur.execute(_DECISIONS_SQL)
+                    cur.execute(_DECISIONS_SQL, (DECISIONS_MAX + 1,))
                 except psycopg2.errors.UndefinedTable:
                     return None
                 return [dict(r) for r in cur.fetchall()]
@@ -287,7 +307,14 @@ def reconcile(tx, snap: Snapshot, now) -> dict:
     counts = {"created": 0, "joined": 0, "resolved": 0, "source_lost": 0, "stale": 0}
     open_now = st.open_items(data)
 
-    # Missing or replaced source files (Codex B1): never resolve from them; flag what they lost.
+    def newer_than_snapshot(item):
+        if snap.seq is not None:
+            return int(item.get("changed_seq") or 0) > snap.seq
+        start = snap.started_at if snap.started_at is not None else now
+        return (item.get("changed_at") or item.get("opened_at") or 0) >= start
+
+    # Missing or replaced source files (Codex B1 on v0.1; independent S3 on the build): never resolve from them; flag
+    # what they lost, so Robert sees it and can dismiss it.
     replaced = set()
     for name in FILE_STORES:
         if name not in snap.identities and snap.coverage.get(name) != "ok":
@@ -296,8 +323,11 @@ def reconcile(tx, snap: Snapshot, now) -> dict:
         prev = data["sources"].get(name)
         holds_items = any(st.store_of(r) == name for i in open_now for r in i["refs"])
         if current is None:
-            if snap.coverage.get(name) == "missing" and not holds_items:
-                snap.coverage[name] = "ok"          # a fresh setup with no such file: genuinely nothing there
+            if snap.coverage.get(name) == "missing":
+                if holds_items:
+                    replaced.add(name)              # its items' records are gone: the same as a replaced file
+                else:
+                    snap.coverage[name] = "ok"      # a fresh setup with no such file: genuinely nothing there
             continue
         if prev and prev != current and snap.coverage.get(name) == "ok":
             replaced.add(name)
@@ -307,7 +337,7 @@ def reconcile(tx, snap: Snapshot, now) -> dict:
     for name in replaced:
         for item in open_now:
             stores = {st.store_of(r) for r in item["refs"]}
-            if name not in stores or item["key"] in snap.present.get(name, set()):
+            if name not in stores or item["key"] in snap.present.get(name, set()) or newer_than_snapshot(item):
                 continue
             alive_elsewhere = any(snap.coverage.get(s) == "ok" and item["key"] in snap.present.get(s, set())
                                   for s in stores - {name})
@@ -355,8 +385,8 @@ def reconcile(tx, snap: Snapshot, now) -> dict:
                 tx.event("stale", item["code"])
                 counts["stale"] += 1
             continue
-        if item.get("source_lost"):
-            continue
+        if item.get("source_lost") or newer_than_snapshot(item):
+            continue                                   # recorded or joined after the sources were read: not this sweep
         stores = {st.store_of(r) for r in item["refs"]} - {None}
         for name in sorted(stores):
             # Only a store read completely, and the same file as last time, may say an item is answered.

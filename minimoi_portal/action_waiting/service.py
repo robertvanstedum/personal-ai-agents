@@ -52,6 +52,7 @@ class Service:
         self.legacy_bot = legacy_bot or default_legacy_bot
         self.source_timeout = source_timeout
         self.coverage = {}
+        self.coverage_at = None                         # when this process last read the sources (None: never)
         self._inflight = {}
         self._wake = threading.Event()
         self._stop = threading.Event()
@@ -102,11 +103,13 @@ class Service:
 
     def sweep(self) -> dict:
         now = self.clock()
+        seq = int(self.store.read().get("seq", 0))     # the change mark BEFORE the sources are read (independent B1)
         snap = self._collect()
+        snap.seq, snap.started_at = seq, now
         with self.store.edit() as tx:
             counts = src.reconcile(tx, snap, now)
             self._archive_old(tx, now)
-        self.coverage = dict(snap.coverage)
+        self.coverage, self.coverage_at = dict(snap.coverage), now
         if self.sender.holds_lock():
             if self.settings.mode == "on":
                 self.sender.deliver(self.sources, now)
@@ -278,8 +281,9 @@ class Service:
                         stored["delivery"].update(state="told", told_at=self.clock(), message_id=message_id,
                                                   via="direct", next_try_at=None, failing_since=None)
                         tx.event("told", code, reason="direct", message_id=message_id)
-            except st.StoreUnavailable:
-                _log.warning("action notices: direct notice for %s sent but not recorded", code)
+            except Exception as exc:                    # sent is sent: never let the record step cause a second send
+                _log.warning("action notices: direct notice for %s sent but not recorded (%s)", code,
+                             type(exc).__name__)
         return message_id
 
     # ---- agent asks (the door, §3.8) ----------------------------------------------------------------------------
@@ -312,11 +316,11 @@ class Service:
         text = body.get("words")
         if not isinstance(text, str) or not 10 <= len(text) <= 1500 or _CONTROL.search(text):
             raise Refused("words_invalid")
-        session = self._field(body, "session", src.SESSION)
-        branch = self._field(body, "branch", src.BRANCH)
+        session = src.screened(self._field(body, "session", src.SESSION), src.SESSION)   # a secret-looking id is
+        branch = src.screened(self._field(body, "branch", src.BRANCH), src.BRANCH)       # dropped (Codex B4)
         cleaned = src.scrub_words(text)
         sha = hashlib.sha256(cleaned.encode("utf-8")).hexdigest()
-        full_key = f"agent:{agent}:{key}"
+        full_key = self.agent_key(agent, key)
         now = self.clock()
         with self.store.edit() as tx:
             current = st.by_key(tx.data, full_key)
@@ -340,12 +344,18 @@ class Service:
         answer["delivery"] = self.deliverability(snapshot)
         return answer
 
+    @staticmethod
+    def agent_key(agent, key) -> str:
+        """The stored key: the caller's key hashed, so whatever an agent puts in it never lands in the store (Codex B4).
+        The same caller key always gives the same stored key, so dedup and resolve are unchanged."""
+        return f"agent:{agent}:{hashlib.sha256(key.encode('utf-8')).hexdigest()[:32]}"
+
     def resolve_agent(self, agent, body) -> dict:
         if not isinstance(body, dict):
             raise Refused("body_invalid")
         key = self._field(body, "key", KEY, required=True)
         with self.store.edit() as tx:
-            item = st.by_key(tx.data, f"agent:{agent}:{key}")
+            item = st.by_key(tx.data, self.agent_key(agent, key))
             if item is None:
                 return {"code": None, "state": "not_found"}
             st.resolve(tx, item, "agent_resolved", self.clock())
@@ -366,8 +376,14 @@ class Service:
             return "dismissed", dict(item)
 
     def coverage_view(self) -> dict:
-        unavailable = sorted(n for n, c in self.coverage.items() if c in ("unavailable", "missing"))
-        return {"complete": not unavailable, "unavailable": unavailable}
+        """Complete only when every source was read in a current sweep (or is skipped for a stated reason): never
+        read, stale, unreadable, missing or truncated is partial (Codex S1, S2)."""
+        unavailable = sorted(n for n, c in self.coverage.items() if c in ("unavailable", "missing", "truncated"))
+        unknown = [n for n in src.STORES if n not in self.coverage]
+        stale = self.coverage_at is None or self.clock() - self.coverage_at > 2 * self.settings.sweep_seconds
+        return {"complete": not unavailable and not unknown and not stale, "unavailable": unavailable,
+                "unknown": unknown, "stale": stale,
+                "read_at": src.iso(self.coverage_at) if self.coverage_at is not None else None}
 
     def item_view(self, item) -> dict:
         now = self.clock()
@@ -394,7 +410,8 @@ class Service:
             data = self.store.read()
         except st.StoreUnavailable:
             return dict(base, available=False, health=self.health(), sender=self.sender_view(),
-                        coverage=dict(self.coverage_view(), source_lost=[]), open_count=0, items=[], focus=None)
+                        coverage=dict(self.coverage_view(), complete=False, source_lost=[]), open_count=0, items=[],
+                        focus=None)
         items = st.open_items(data)
         found = data["items"].get(focus) if focus else None
         return dict(base, available=True, health=self.health(), sender=self.sender_view(),

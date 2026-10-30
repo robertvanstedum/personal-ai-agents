@@ -59,7 +59,7 @@ def headline(item) -> str:
     if kind == "agent_ask":
         text = f"{agent_name(facts.get('agent'))} is blocked on you"
         if facts.get("branch"):
-            text += f" · branch {facts['branch']}"
+            text += f" · branch {facts['branch'][:60]}"             # screened when stored; capped when shown (S4)
         if facts.get("session"):
             text += f" · session {facts['session'][:8]}"
         return text

@@ -101,9 +101,11 @@ def context_block(principal, owner_text="", *, environ=None, guest_actions=False
               "failing": f"failing since {words.when(sender.get('since'), day=False)}",
               "stalled": "stalled (no recent sweep)", "off": "off"}.get(sender["state"], sender["state"])
     notes = [f"Notices: {status}"]
-    if not coverage["complete"]:
-        notes.append(f"coverage partial: {', '.join(coverage['unavailable'])} could not be read, so this list may be "
-                     "incomplete")
+    if coverage["unavailable"]:
+        notes.append(f"coverage partial: {', '.join(coverage['unavailable'])} could not be read completely, so this "
+                     "list may be incomplete")
+    elif coverage["unknown"] or coverage["stale"]:
+        notes.append("coverage not current: the sources have not been read recently, so this list may be incomplete")
     if supervision_on:
         notes.append("D-codes: see build supervision")
     if not shown and not extra and coverage["complete"] and sender["state"] in ("ok", "record_only"):

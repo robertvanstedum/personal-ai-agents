@@ -16,6 +16,8 @@ from .settings import Settings
 
 _log = logging.getLogger("action_waiting")
 _SERVICE = None
+# What the minimal fault notice needs, copied at install so it never asks the service (D12, Robert 29 Oct).
+_MINIMAL = {"base_url": "", "label": "", "chat_id": None}
 
 
 def install(app, environ, *, base_url):
@@ -25,6 +27,7 @@ def install(app, environ, *, base_url):
     if settings.mode == "off":
         _SERVICE = None
         return None
+    _MINIMAL.update(base_url=settings.base_url, label=settings.label, chat_id=settings.chat_id)
     from .service import Service
     _SERVICE = Service(settings)
     if settings.agent_tokens:
@@ -66,8 +69,10 @@ def after_create(kind, code, legacy, *, facts=None, app=None, refs=()):
     * off: ``legacy()``, today's function with today's arguments, unchanged;
     * on, this request's item recorded open (``code``), and the service healthy: nothing (the service tells it, D5);
     * otherwise: the safe direct notice on the legacy bot (no name or email, D11);
-    * an unexpected fault in the service: today's send, so Robert still knows (D12).
-    Returns "legacy", "suppressed" or "direct"."""
+    * any fault inside the service (in wake, health, suppression or the safe direct notice itself): the minimal
+      no-name notice, through a sender that needs no store and no service state (D12, Robert 29 Oct: "No-name
+      notice"). Today's name-and-email message is never sent while the service is record or on.
+    Returns "legacy", "suppressed", "direct" or "minimal"."""
     svc = _SERVICE
     if svc is None:
         legacy()
@@ -78,10 +83,32 @@ def after_create(kind, code, legacy, *, facts=None, app=None, refs=()):
             return "suppressed"
         svc.direct_notice(kind, code, facts=facts, app=app, refs=refs)
         return "direct"
-    except Exception as exc:          # a fault here must never cost Robert the notice: today's send goes instead
-        _log.warning("action notices: after_create failed (%s); today's direct send goes", type(exc).__name__)
-        legacy()
-        return "legacy"
+    except Exception as exc:          # never lose the notice, never send a name or an email (D12)
+        _log.warning("action notices: after_create failed (%s); the minimal no-name notice goes", type(exc).__name__)
+        minimal_notice()
+        return "minimal"
+
+
+def minimal_bot():
+    """Today's bot for direct sends (TELEGRAM_BOT_TOKEN, else Keychain telegram/polling_bot_token). Replaced in tests."""
+    from core.get_secret import get_secret
+    from core.supervision.telegram import Bot
+    return Bot(get_secret("TELEGRAM_BOT_TOKEN", "telegram", "polling_bot_token"))
+
+
+def minimal_text() -> str:
+    """Fixed words only: an action is waiting, and the MiniMoi link. No kind detail, name, email or words."""
+    return (f"{_MINIMAL['label']}MiniMoi · action waiting (NOT RECORDED in MiniMoi)\n"
+            f"Open MiniMoi: {_MINIMAL['base_url']}/guild-next/guild/build")
+
+
+def minimal_notice():
+    """The independent no-name sender: no store, no service, nothing that can carry personal data. Never raises."""
+    try:
+        minimal_bot().send(_MINIMAL["chat_id"] or 8379221702, minimal_text())
+    except Exception as exc:
+        from .sender import failure_code
+        _log.warning("action notices: minimal notice failed (%s)", failure_code(exc))
 
 
 def main(argv=None):

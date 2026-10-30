@@ -8,11 +8,13 @@
 Spec v0.2 §3.8 (planning-studio/operations/specs/SPEC_ACTION_WAITING_NOTICES_v0.2_2026-10-29.md). Standard library only;
 it uses the repository's own standard-library scrubbers for the fallback message when they can be imported.
 
-Exit codes: 0 recorded; 2 refused (bad token, bad request, key conflict, too many open); 3 MiniMoi unreachable after 3
-tries over about 30 s. On 3, one direct Telegram message goes on the Mac's outbound bot (Keychain telegram/bot_token
-and telegram/chat_id, the bot tg.py uses), marked "NOT RECORDED in MiniMoi". On 0, when MiniMoi recorded the ask but
-says it will not tell Robert now (record only, not configured, failing, stalled), one direct message says "recorded as
-W-n, not sent by MiniMoi". --no-fallback turns both off. Fallback messages are not deduplicated (spec §3.8).
+Exit codes: 0 recorded; 2 refused (bad token, bad request, key conflict, too many open, no door); 3 MiniMoi unreachable
+after 3 tries over about 30 s. Whenever the ask was NOT recorded (3, and every refusal except 409 key_conflict, where an
+open item already holds it: a 404 after `notices off`, a 401, a 429), one direct Telegram message goes on the Mac's
+outbound bot (Keychain telegram/bot_token and telegram/chat_id, the bot tg.py uses), marked "NOT RECORDED in MiniMoi".
+On 0, when MiniMoi recorded the ask but says it will not tell Robert now (record only, not configured, failing,
+stalled), one direct message says "recorded as W-n, not sent by MiniMoi". --no-fallback turns both off. Fallback
+messages are not deduplicated (spec §3.8).
 
 The agent's token: ~/.minimoi/notices/<agent>-<env>.token (0600) when present, else the Keychain (service
 minimoi-notices, account <agent>-<env>). No token, URL with a token, or secret is ever printed.
@@ -140,6 +142,19 @@ def _scrub(text):
     return scrub_payment(cleaned)
 
 
+def fallback_on_refusal(status) -> bool:
+    """A refusal leaves the ask unrecorded, so Robert is told directly, except 409: an open item already holds it."""
+    return status != 409
+
+
+def _identifier(value):
+    """A branch or session for the fallback text only when the scrubbers leave it unchanged (else left out)."""
+    if not value:
+        return None
+    cleaned = _scrub(value)
+    return value if cleaned == value else None
+
+
 def default_key(agent, session, words) -> str:
     return hashlib.sha256(f"{agent}|{session or ''}|{words}".encode("utf-8")).hexdigest()[:16]
 
@@ -159,30 +174,40 @@ def do_raise(args, deps) -> int:
         deps.say("refused: --key must match ^[A-Za-z0-9._:-]{8,128}$")
         return REFUSED
     label = "" if args.env == "prod" else "[dev] "
-    where = " · ".join(x for x in (f"branch {args.branch}" if args.branch else "",
-                                   f"session {args.session[:8]}" if args.session else "") if x)
+    branch, session = _identifier(args.branch), _identifier(args.session)
+    where = " · ".join(x for x in (f"branch {branch}" if branch else "",
+                                   f"session {session[:8]}" if session else "") if x)
     who = NAMES[args.agent] + " is blocked on you" + (f" · {where}" if where else "")
-    token = read_token(args.agent, args.env, deps)
-    if not token:
-        deps.say(f"refused: no token for {args.agent} on {args.env} (waiting.py install --env {args.env})")
-        return REFUSED
     body = {"key": key, "words": words}
     if args.session:
         body["session"] = args.session
     if args.branch:
         body["branch"] = args.branch
     base = base_url(args.env, deps)
+
+    def not_recorded(why):
+        if args.no_fallback:
+            return
+        scrubbed = _scrub(words)
+        text = f"{label}MiniMoi · NOT RECORDED in MiniMoi ({why})\n{who}\n" + (
+            f"“{scrubbed[:1000]}”" if scrubbed is not None else "(words left out: the scrubber is not available)")
+        deps.say(deps.telegram(text))
+
+    token = read_token(args.agent, args.env, deps)
+    if not token:
+        deps.say(f"refused: no token for {args.agent} on {args.env} (waiting.py install --env {args.env})")
+        not_recorded("no token on this Mac")
+        return REFUSED
     status, answer = call(base + "/internal/notices/v1/raise", token, body, deps)
     if status is None:
         deps.say("MiniMoi unreachable after 3 tries: NOT RECORDED")
-        if not args.no_fallback:
-            scrubbed = _scrub(words)
-            text = f"{label}MiniMoi · NOT RECORDED in MiniMoi\n{who}\n" + (
-                f"“{scrubbed[:1000]}”" if scrubbed is not None else "(words left out: the scrubber is not available)")
-            deps.say(deps.telegram(text))
+        not_recorded("unreachable")
         return UNREACHABLE
     if status != 200 or not isinstance(answer, dict) or not answer.get("code"):
-        deps.say(f"refused: {status} {answer.get('error', '') if isinstance(answer, dict) else ''}".rstrip())
+        error = answer.get("error", "") if isinstance(answer, dict) else ""
+        deps.say(f"refused: {status} {error}".rstrip())
+        if fallback_on_refusal(status):
+            not_recorded(f"refused {status}")
         return REFUSED
     code, delivery = answer["code"], answer.get("delivery")
     deps.say(f"{code} {'new' if answer.get('new') else 'already waiting'} · delivery {delivery}")

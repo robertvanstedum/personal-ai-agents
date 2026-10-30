@@ -318,35 +318,59 @@ portal_binds() {
 
 notices_prepare() {
   # Before the release that adds the notices binds: the two folders, and pending.json / reset_requests.json as host
-  # files copied from the running portal (they live only in its container layer until then; a release would erase
-  # them). A missing host file would refuse the new container (create_host_path: false), never mount a directory.
+  # files (they live only in the portal's container layer until then). It fails closed: only a confirmed "the running
+  # portal has no such file" may start an empty one, and an existing host file is never replaced by an empty one.
+  # Copies are validated, written atomically (temp, then rename) and the previous host copy is kept, dated.
+  # The release itself takes a final copy just before it recreates the portal (deploy_scoped_release.sh), so requests
+  # made or answered between this copy and the release are carried over; only the seconds between that final copy and
+  # the old portal stopping remain uncovered.
   install -d -m 0700 -o root -g root "$NOTICES_DIR" "$NOTICES_DATA"
   [[ -f "$ROOT/auth/users.json" ]] || die "$ROOT/auth/users.json missing; cannot take its owner and mode"
-  local name target host tmp
+  [[ "$(docker inspect --format '{{.State.Running}}' minimoi-portal 2>/dev/null)" == "true" ]] \
+    || die "minimoi-portal is not running (or docker cannot be asked); nothing changed"
+  local name target host tmp rc key
   for name in pending.json reset_requests.json; do
     target=/app/minimoi_portal/auth/$name
     host=$ROOT/auth/$name
+    key=$([[ "$name" == pending.json ]] && echo pending || echo requests)
     if portal_binds "$target"; then
-      [[ -f "$host" ]] || die "$host is bound but is not a regular file"
+      [[ -f "$host" && ! -L "$host" ]] || die "$host is bound but is not a regular file"
       log "$name: already a host file ($host); nothing to copy"
       continue
     fi
-    [[ -d "$host" ]] && die "$host is a directory (a bind made it); move it aside first"
-    [[ -f "$host" ]] && cp -p "$host" "$host.bak-notices-$(date -u +%Y%m%dT%H%M%SZ)"
-    tmp=$(mktemp "$host.XXXXXX")
-    if docker cp "minimoi-portal:$target" "$tmp" >/dev/null 2>&1; then
-      python3 -c 'import json, sys; json.load(open(sys.argv[1]))' "$tmp" \
-        || die "the running portal's $name is not valid JSON; kept at $tmp for you to look at"
-      log "$name: copied from the running portal"
-    else
-      if [[ "$name" == pending.json ]]; then echo '{"pending": []}' > "$tmp"; else echo '{"requests": []}' > "$tmp"; fi
-      log "$name: the running portal has none; created empty"
+    [[ -d "$host" || -L "$host" ]] && die "$host is a directory or a link (a bind made it?); move it aside first"
+    rc=0
+    docker exec minimoi-portal test -e "$target" || rc=$?
+    if (( rc == 1 )); then
+      if [[ -f "$host" ]]; then
+        log "$name: the running portal has none; keeping the existing host file"
+      else
+        tmp=$(mktemp "$host.XXXXXX")
+        printf '{"%s": []}\n' "$key" > "$tmp"
+        chown --reference="$ROOT/auth/users.json" "$tmp"; chmod --reference="$ROOT/auth/users.json" "$tmp"
+        mv -f "$tmp" "$host"
+        log "$name: the running portal has none; created empty"
+      fi
+      continue
     fi
-    chown --reference="$ROOT/auth/users.json" "$tmp"
-    chmod --reference="$ROOT/auth/users.json" "$tmp"
+    (( rc == 0 )) || die "cannot tell whether the running portal has $name (docker exec exit $rc); nothing changed"
+    tmp=$(mktemp "$host.XXXXXX")
+    docker cp "minimoi-portal:$target" "$tmp" >/dev/null 2>&1 \
+      || { rm -f "$tmp"; die "could not copy $name out of the running portal; the host file is untouched"; }
+    python3 - "$tmp" "$key" <<'PY' || { rm -f "$tmp"; die "$name from the running portal is not valid (a write in progress?); retry; the host file is untouched"; }
+import json, sys
+data = json.load(open(sys.argv[1]))
+if not isinstance(data, dict) or not isinstance(data.get(sys.argv[2], []), list):
+    raise SystemExit(1)
+PY
+    [[ -f "$host" ]] && cp -p "$host" "$host.bak-notices-$(date -u +%Y%m%dT%H%M%SZ)"
+    chown --reference="$ROOT/auth/users.json" "$tmp"; chmod --reference="$ROOT/auth/users.json" "$tmp"
     mv -f "$tmp" "$host"
+    log "$name: copied from the running portal"
   done
-  log "prepared. Merge and release next: entries made after this copy and before the release are not in it."
+  log "prepared. Until the release: requests made after this copy are not in it, and requests answered after this copy"
+  log "are still in it. The release's final copy (deploy_scoped_release.sh, just before the portal is recreated)"
+  log "replaces both with the live files; only the seconds between that copy and the old portal stopping stay open."
 }
 
 notices() {

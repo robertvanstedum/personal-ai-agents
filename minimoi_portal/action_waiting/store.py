@@ -41,7 +41,7 @@ class StoreUnavailable(RuntimeError):
 
 
 def empty() -> dict:
-    return {"schema": SCHEMA, "next_code": 1, "index": {}, "items": {}, "sources": {}}
+    return {"schema": SCHEMA, "next_code": 1, "seq": 0, "index": {}, "items": {}, "sources": {}}
 
 
 def code_number(code) -> int:
@@ -272,6 +272,13 @@ def _apply(item, fields, *, only_missing=False):
                 item[name] = value
 
 
+def touch(data, item, now):
+    """Mark an item changed: the store's sequence moves on, and the item carries the new mark. A sweep resolves only
+    items last changed before its sources were read (reviews: independent B1, Codex B3)."""
+    data["seq"] = int(data.get("seq", 0)) + 1
+    item["changed_seq"], item["changed_at"] = data["seq"], now
+
+
 def _create(tx, *, key, kind, versions, now, fields=None, notify_after=None, generation=1, seen=()):
     data = tx.data
     code = f"W-{data['next_code']}"
@@ -281,6 +288,7 @@ def _create(tx, *, key, kind, versions, now, fields=None, notify_after=None, gen
             "opened_at": now, "state": "open", "stale": False, "source_lost": False,
             "resolved_at": None, "resolution": None, "delivery": new_delivery(now, notify_after)}
     _apply(item, fields)
+    touch(data, item, now)
     data["items"][code] = item
     data["index"][key] = {"code": code, "generation": generation, "state": "open",
                           "seen": list(dict.fromkeys(list(seen) + list(versions)))}
@@ -306,6 +314,7 @@ def observe(tx, *, key, kind, versions, now, fields=None, notify_after=None):
             idx["seen"] = seen + fresh
             item["source_lost"] = False
             _apply(item, fields, only_missing=True)
+            touch(data, item, now)
             tx.event("joined", item["code"])
             return "joined", item
         return "open", item
