@@ -1,12 +1,14 @@
 // Confirm by voice, v3 (V3_BUILD_BRIEF.md "The voice side"; DESIGN_confirm_by_voice_v3_simple.md): the app acts; the voice
 // only talks. Through the real direct page (direct-voice-session.js), the real controller and the real OpenAI and xAI
-// adapters, with fake HTTP (the server's decisions answered from a table, or from the server's own yes rule (ruled)),
-// synthetic provider events and a fake clock.
+// adapters, with fake HTTP (the server's decisions answered from a table, from the server's own yes rule (ruled), or, for
+// the fix round's integrated cases (review S8), replayed from the real server's recorded answers), synthetic provider
+// events and a fake clock.
 // What is asserted is what the page sends: the utterances it posts, the questions it asks and when it tells the server they
 // started, the action it sends after a yes (the request's own owner item and hash, never the yes's), the instructions it
 // gives the voice on every path (none carries his words, except a read-back he asked for), and that no model call acts.
 // No provider, microphone or network.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { DIRECT, SID, flush } from '../js_helpers/direct_voice_rig.mjs';
 
@@ -48,7 +50,7 @@ async function run(provider, scenario, { routes = {} } = {}) {
       const body = opts.body ? JSON.parse(opts.body) : null;
       if (opts.method === 'POST') posts.push({ url, body });
       const key = Object.keys(routes).sort((x, y) => y.length - x.length).find((k) => url.split('?')[0].endsWith(k));
-      let out = key ? await routes[key](body) : null;
+      let out = key ? await routes[key](body, url) : null;
       if (!out) {
         out = url.endsWith('/consult') ? { ok: true, outcome: 'done', saved: true, spoken: 'Saved.' }
           : url.endsWith('/asked') ? { ok: true, state: 'asked', expires_in: 30 }
@@ -299,7 +301,7 @@ for (const provider of ['openai', 'xai']) {
 
 // ── the fix round (REVIEW_v3_build.md): each finding's page regression ──────────────────────────────────────────────────
 // The server's rule for a yes, as direct_host.DirectSessions._apply holds it (tests/realtime_voice/test_confirm_by_voice.py
-// proves it there): a request asks; a yes
+// proves it there, and the S8 cases below run the page on its recorded answers): a request asks; a yes
 // confirms only once the question was marked asked and the yes is a later item; otherwise it is asked again.
 function ruled(requests = { [WORDS]: 'note' }) {
   let slot = null;
@@ -480,6 +482,74 @@ await check('xai: S7 a request folded with its yes, nothing waiting, says not do
   assert.equal(t.said.at(-1)[0], D.NOT_DONE_SCREEN);
   assert.deepEqual(t.consults(), []); assert.deepEqual(t.posts('/asked'), []);
 }, { routes: table({ [`${WORDS}. Yes.`]: { decision: 'dropped', reason: 'folded' } }) }));
+
+// ── S8: the real server's answers, through the real page ────────────────────────────────────────────────────────────
+// Recorded from MC's and CoS's real adapters by tests/realtime_voice/test_confirm_by_voice_recorded.py, which fails when
+// the server no longer answers so: the decisions, the question's after_item, the confirmation's fields and the action
+// path's real result shapes (no saved flag on a typed turn's answer). Each request the page makes must be the recorded
+// one, in order; a step marked lost is a lost answer (both attempts). Run on both providers.
+const RECORDED = JSON.parse(fs.readFileSync(new URL('data/confirm_by_voice_recorded.json', import.meta.url), 'utf8')).scenarios;
+function replay(scenario) {
+  const steps = scenario.steps, used = new Set();
+  const take = (route, match) => {
+    const st = steps.find((x) => x.route === route && !used.has(x) && match(x));
+    assert.ok(st, `the page made a ${route} request the server never answered so`);
+    if (route !== 'utterance' || !st.lost) used.add(st);
+    return st;
+  };
+  let lostTries = 0;
+  return {
+    routes: {
+      '/utterance': (body) => {
+        assert.equal(body.conversation_id, 'c-1');
+        const st = take('utterance', (x) => x.request.owner_item_id === body.owner_item_id);
+        assert.equal(body.text, st.request.text);
+        if (st.lost) { if (++lostTries === 2) used.add(st); throw new Error('the answer was lost on the way back'); }
+        return st.response;
+      },
+      '/asked': (body, url) => {
+        const aid = decodeURIComponent(url.split('/utterance/')[1].split('/')[0]);
+        const st = take('asked', () => true);
+        assert.deepEqual({ action_id: aid, ...body }, st.request);
+        return st.response;
+      },
+      '/consult': (body) => {
+        const st = take('consult', () => true);
+        assert.deepEqual(body, st.request);
+        return st.response;
+      },
+    },
+    done: () => assert.deepEqual(steps.filter((x) => !used.has(x)).map((x) => x.route), [], 'a recorded request the page never made'),
+  };
+}
+for (const provider of ['openai', 'xai']) {
+  for (const scenario of RECORDED) {
+    const q = (n) => (provider === 'openai' ? `R${n}` : `X${n}`);
+    const reply = (t, n) => (provider === 'openai' ? t.asked(q(n)) : t.created(q(n)));
+    const played = replay(scenario);
+    const done = scenario.steps.at(-1).response;
+    await check(`${provider}: S8 ${scenario.host} ${scenario.scenario}, the real server's answers through the real page`, () => run(provider, async (t) => {
+      await t.speak('a', scenario.steps[0].request.text);                             // t0
+      reply(t, 'A'); await quiet(); t.replied(q('A'), 'Shall I go ahead?'); await quiet();   // the question, t1
+      await t.speak('b', 'Yes.'); await quiet();                                       // t2
+      if (scenario.scenario.startsWith('s3')) {
+        reply(t, 'B'); await quiet(); t.replied(q('B'), 'Okay.'); await quiet();      // its answer lost: chat, t3
+        assert.deepEqual(t.consults(), []);
+        await t.speak('c', 'Yes.'); await quiet();                                     // t4: again
+      }
+      if (provider === 'xai') { reply(t, 'C'); t.replied(q('C'), 'Okay.'); }
+      await t.advance(10000);
+      played.done();
+      assert.equal(t.consults().length, 1);
+      const line = done.saved === true ? 'Saved.' : done.spoken;                      // M1: what ran, never the label
+      assert.ok(t.lines().includes(`Say this briefly, adding nothing: ${line}`), JSON.stringify(t.lines()));
+      if (done.saved !== true) {
+        assert.ok(!t.lines().some((l) => /Saved\.|Post-it added\./.test(l)), JSON.stringify(t.lines()));
+        assert.match(t.said.find(([w]) => /waiting/.test(w))[0], /^Request waiting for your yes/);
+      }
+    }, { routes: played.routes }));
+  }
+}
 
 if (failures.length) {
   console.log(`${failures.length} of ${cases} confirm-by-voice page regressions FAILED:\n  ${failures.join('\n  ')}`);
