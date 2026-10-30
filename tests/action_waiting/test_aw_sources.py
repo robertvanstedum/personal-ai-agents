@@ -29,8 +29,10 @@ def world(tmp_path, auth_dir, make_settings, clock):
     w.sources = src.Sources(w.settings, store.digest, guild_db=db, decision_rows=lambda: rows["value"],
                             decision_state=lambda did: None, clock=clock)
 
-    def sweep():
+    def sweep():                                    # as Service.sweep: the change mark is read before the sources
+        seq = store.read().get("seq", 0)
         snap = w.sources.collect()
+        snap.seq = seq
         with store.edit() as tx:
             counts = src.reconcile(tx, snap, clock())
         w.snap = snap

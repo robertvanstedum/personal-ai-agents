@@ -62,7 +62,8 @@ def test_the_agent_comes_from_the_token_never_the_body(world):
     r = call(client, "raise", {"key": "k-000001", "words": WORDS, "agent": "claude-code"}, token=CODEX)
     assert r.status_code == 200
     item = svc.store.read()["items"][r.get_json()["code"]]
-    assert item["facts"]["agent"] == "codex" and item["key"] == "agent:codex:k-000001"
+    assert item["facts"]["agent"] == "codex" and item["key"] == Service.agent_key("codex", "k-000001")
+    assert "k-000001" not in item["key"]                      # the caller's key is stored hashed (Codex B4)
 
 
 def test_same_key_is_one_item_and_one_notice_conflicts_are_refused(world, telegram):

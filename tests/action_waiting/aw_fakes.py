@@ -117,3 +117,21 @@ def telegram():
 def legacy():
     """The legacy bot for the safe direct notice, faked."""
     return FakeTelegram()
+
+
+def build_service(make_settings, clock, telegram, legacy=None, db=None, decisions=None, decision_state=None, **over):
+    """A Service on a temp folder with fake Telegram, a fake guild table and fake decision rows."""
+    from core.supervision.telegram import Bot
+    from minimoi_portal.action_waiting import sources as src, store as st
+    from minimoi_portal.action_waiting.service import Service
+    settings = make_settings(**over)
+    store = st.Store(settings.root, clock=clock)
+    db = db if db is not None else FakeGuildDB()
+    rows = decisions if decisions is not None else {"value": []}
+    sources = src.Sources(settings, store.digest, guild_db=db, decision_rows=lambda: rows["value"],
+                          decision_state=decision_state or (lambda did: "new"), clock=clock)
+    legacy = legacy or FakeTelegram()
+    svc = Service(settings, store=store, sources=sources, opener=telegram, clock=clock,
+                  legacy_bot=lambda: Bot(FAKE_TOKEN, opener=legacy), source_timeout=5)
+    svc.db, svc.rows, svc.legacy = db, rows, legacy
+    return svc

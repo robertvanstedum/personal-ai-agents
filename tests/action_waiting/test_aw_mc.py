@@ -119,6 +119,7 @@ def test_record_mode_says_record_only(svc, make_settings, monkeypatch):
     svc.settings = make_settings(mode="record")
     svc.sender.settings = svc.settings
     _agent(svc)
+    svc.sweep()                                               # coverage is current, so the last line is the mode
     block = mc.context_block("robert")
     assert "NOT told: record only" in block and block.endswith("Notices: record only (not sent to Telegram)")
 

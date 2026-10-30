@@ -115,12 +115,27 @@ def test_no_fallback_flag(server, deps):
     assert deps.sent == []
 
 
-@pytest.mark.parametrize("status,error", [(401, "unauthorized"), (400, "request_invalid"), (409, "key_conflict"),
-                                          (429, "too_many_open")])
-def test_refusals_exit_2_without_fallback(server, deps, status, error):
+@pytest.mark.parametrize("status,error", [(401, "unauthorized"), (400, "request_invalid"), (404, "not_found"),
+                                          (429, "too_many_open"), (409, "key_conflict")])
+def test_refusals_exit_2_and_tell_robert_unless_an_open_item_holds_it(server, deps, status, error):
+    """Independent S1: a 404 after `notices off`, a 401, a 429 or a 400 recorded nothing, so Robert is told directly;
+    a 409 means an open item already holds the ask."""
     server.replies = [(status, {"error": error})]
     code, out = run(deps, "raise", "--env", "dev", "--agent", "codex", WORDS)
-    assert code == 2 and error in out and deps.sent == [] and len(server.calls) == 1
+    assert code == 2 and error in out and len(server.calls) == 1
+    if status == 409:
+        assert deps.sent == []
+    else:
+        [text] = deps.sent
+        assert text.startswith(f"[dev] MiniMoi · NOT RECORDED in MiniMoi (refused {status})")
+
+
+def test_a_secret_looking_branch_is_left_out_of_the_fallback(deps):
+    deps.environ = {"MINIMOI_NOTICES_DEV_URL": "http://127.0.0.1:1"}
+    secret = "ghp_" + "B" * 36
+    assert run(deps, "raise", "--env", "dev", "--agent", "codex", "--branch", secret, WORDS)[0] == 3
+    [text] = deps.sent
+    assert secret not in text and "branch" not in text.splitlines()[1]
 
 
 def test_unreachable_exits_3_after_three_tries_and_sends_not_recorded(deps):
@@ -132,7 +147,7 @@ def test_unreachable_exits_3_after_three_tries_and_sends_not_recorded(deps):
     code, out = run(deps, "raise", "--env", "dev", "--agent", "codex", "--branch", "codex/x", planted)
     assert code == 3 and "NOT RECORDED" in out and deps.sleeps == [cli.WAIT_S, cli.WAIT_S]
     [text] = deps.sent
-    assert text.startswith("[dev] MiniMoi · NOT RECORDED in MiniMoi\nCodex is blocked on you · branch codex/x")
+    assert text.startswith("[dev] MiniMoi · NOT RECORDED in MiniMoi (unreachable)\nCodex is blocked on you · branch codex/x")
     assert "ghp_" not in text and "[credential removed]" in text
     deps.sent.clear()
     assert run(deps, "raise", "--env", "dev", "--agent", "codex", "--no-fallback", WORDS)[0] == 3

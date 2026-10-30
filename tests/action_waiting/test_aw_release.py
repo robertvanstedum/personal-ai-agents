@@ -2,10 +2,12 @@
 compose binds can never become empty directories; the ops command never writes the bot token into .env."""
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
 
 from scripts.ci.classify_release import classify, compose_changed_services
@@ -14,29 +16,43 @@ ROOT = Path(__file__).resolve().parents[2]
 COMPOSE = ROOT / "docker-compose.prod.yml"
 OPS = ROOT / "scripts" / "operations" / "deploy_mc_container_ec2.sh"
 
-BRANCH_PATHS = [
-    "minimoi_portal/action_waiting/__init__.py", "minimoi_portal/action_waiting/__main__.py",
-    "minimoi_portal/action_waiting/door.py", "minimoi_portal/action_waiting/sender.py",
-    "minimoi_portal/action_waiting/service.py", "minimoi_portal/action_waiting/settings.py",
-    "minimoi_portal/action_waiting/sources.py", "minimoi_portal/action_waiting/store.py",
-    "minimoi_portal/action_waiting/words.py", "minimoi_portal/app.py", "minimoi_portal/guest_requests.py",
-    "minimoi_portal/guild_ui/action_waiting.py", "minimoi_portal/guild_ui/api.py", "minimoi_portal/guild_ui/pages.py",
-    "scripts/agents/waiting.py", "scripts/ci/classify_release.py", "scripts/operations/deploy_mc_container_ec2.sh",
-    "tests/action_waiting/test_aw_release.py", "tests/test_release_classifier.py"]
+FIXTURE = json.loads((Path(__file__).resolve().parent / "release_fixture.json").read_text())
 
 
-def _main_compose():
-    done = subprocess.run(["git", "show", "origin/main:docker-compose.prod.yml"], cwd=ROOT, capture_output=True,
-                          text=True)
-    return done.stdout if done.returncode == 0 else None
+def test_the_notices_change_is_a_portal_only_release():
+    """Deterministic (no git): the committed fixture's paths, with the compose change owned by the portal block."""
+    paths = FIXTURE["notices_paths"]
+    assert "docker-compose.prod.yml" in paths and "scripts/agents/waiting.py" in paths
+    expected = (FIXTURE["expected"]["release_class"], tuple(FIXTURE["expected"]["services"]))
+    assert classify(paths, lambda: tuple(FIXTURE["compose_services_changed"])) == expected == ("domain", ("portal",))
 
 
-def test_the_branch_is_a_portal_only_release():
-    before, after = _main_compose(), COMPOSE.read_text()
-    assert before is not None
-    assert compose_changed_services(before, after) == ("portal",)
-    assert classify(BRANCH_PATHS + ["docker-compose.prod.yml"],
-                    lambda: compose_changed_services(before, after)) == ("domain", ("portal",))
+def test_the_release_pipeline_preflight_makes_its_own_release_full():
+    """The auth-file preflight lives in deploy_scoped_release.sh, which bootstraps with a full release by design
+    (tests/test_release_classifier.py). Shipped as its own PR first, it leaves the notices release portal-only."""
+    assert FIXTURE["pipeline_paths"] == ["scripts/operations/deploy_scoped_release.sh"]
+    assert classify(FIXTURE["pipeline_paths"])[0] == FIXTURE["expected_with_pipeline"] == "full"
+
+
+def _git(*args):
+    done = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
+    return done.stdout.strip() if done.returncode == 0 else None
+
+
+def test_the_fixture_still_covers_the_branch_and_its_compose_change():
+    """Where git has a real base (a branch checkout with origin/main), the fixture must cover the diff and the compose
+    change must be the portal's alone. On CI's pull-request checkout there is no origin/main, and on the push to main
+    the base is HEAD itself; both have nothing to compare, and the deterministic tests above still run."""
+    base = _git("merge-base", "origin/main", "HEAD")
+    if not base or base == _git("rev-parse", "HEAD"):
+        pytest.skip("no separate base to diff against in this checkout (the fixture tests above cover the class)")
+    changed = set((_git("diff", "--name-only", f"{base}...HEAD") or "").split())
+    assert changed, "git diff gave nothing"
+    uncovered = changed - set(FIXTURE["notices_paths"]) - set(FIXTURE["pipeline_paths"])
+    assert not uncovered, f"update release_fixture.json for: {sorted(uncovered)}"
+    before = _git("show", f"{base}:docker-compose.prod.yml")
+    if "docker-compose.prod.yml" in changed:
+        assert compose_changed_services(before, COMPOSE.read_text()) == tuple(FIXTURE["compose_services_changed"])
 
 
 def test_the_cli_and_the_ops_command_are_release_only():
