@@ -3,15 +3,40 @@
 | | |
 |---|---|
 | **Spec** | 165 |
-| **Date** | 28 October 2026 (v0.1, v0.2 and v0.3); 29 October 2026 (v0.4, v0.4.1 and v0.4.2) |
+| **Date** | 28 October 2026 (v0.1, v0.2 and v0.3); 29 October 2026 (v0.4, v0.4.1, v0.4.2 and v0.4.3) |
 | **Author** | Claude Code, for Robert |
-| **Status** | **Draft v0.4.2 for review; D1–D23 answered (§16), and the three points left open answered on 29 Oct.** Robert authorized the build on 28 Oct (§1). This spec authorizes no deploy, flag, merge, credential or provider call. |
+| **Status** | **Draft v0.4.3 for review; D1–D23 answered (§16), the three points left open answered on 29 Oct, and confirm by voice v3 recorded (D25).** Robert authorized the build on 28 Oct and v3's on 29 Oct (§1). This spec authorizes no deploy, flag, merge, credential or provider call. |
 | **Decision owner** | Robert |
-| **Review record** | v0.1 (`64b1896f`): independent review (`docs/specs/reviews/REVIEW_independent_spec_165_v0.1.md`, `5f2ebdce`); Codex (`docs/specs/reviews/REVIEW_codex_spec_165_v0.1.md`, `89edb852`); Codex's Chunk B code review (`planning-studio/…/trial-01-mc-voice-2026-10-27/REVIEW_codex_chunk_B.md`), carried in §5. v0.2 (`729d29c9`): Codex's delta review (`docs/specs/reviews/REVIEW_codex_spec_165_v0.2_delta.md`, `49dae6de`), V2-1 to V2-5, all answered in v0.3. v0.3 (`a772980d`): the build thread's amendment request (`planning-studio/operations/threads/HANDOFF_BUILD_TO_DESIGN_SPEC_165_C2_BINDING_2026-10-28.md`, items 1–11), Gate 2's code review and the post-Gate-2 review (`…/minimoi-1-2-voice/REVIEW_gate2_code.md`, `REVIEW_post_gate2.md`), all recorded in v0.4. Codex's CC_24 was withdrawn by Robert (§1, item 8). **Pending on v0.4:** Grok, then Claude Chat (the order agreed for v0.3; no review of v0.3 is recorded) |
+| **Review record** | v0.1 (`64b1896f`): independent review (`docs/specs/reviews/REVIEW_independent_spec_165_v0.1.md`, `5f2ebdce`); Codex (`docs/specs/reviews/REVIEW_codex_spec_165_v0.1.md`, `89edb852`); Codex's Chunk B code review (`planning-studio/…/trial-01-mc-voice-2026-10-27/REVIEW_codex_chunk_B.md`), carried in §5. v0.2 (`729d29c9`): Codex's delta review (`docs/specs/reviews/REVIEW_codex_spec_165_v0.2_delta.md`, `49dae6de`), V2-1 to V2-5, all answered in v0.3. v0.3 (`a772980d`): the build thread's amendment request (`planning-studio/operations/threads/HANDOFF_BUILD_TO_DESIGN_SPEC_165_C2_BINDING_2026-10-28.md`, items 1–11), Gate 2's code review and the post-Gate-2 review (`…/minimoi-1-2-voice/REVIEW_gate2_code.md`, `REVIEW_post_gate2.md`), all recorded in v0.4. Codex's CC_24 was withdrawn by Robert (§1, item 8). **Pending on v0.4:** Grok, then Claude Chat (the order agreed for v0.3; no review of v0.3 is recorded). v0.4.2 (`cc0b7cf3`): Codex's design opinion on confirm by voice (CC_25; `…/minimoi-1-2-voice/REVIEW_codex_confirm_by_voice.md`, CV) and its v2 design; v0.4.3 records v3, which keeps the CV lines §5.1 names and leaves out what D25 lists. **Pending on v0.4.3:** Codex's quick read of v3 (CC_26; no result recorded), which goes into the v3 build's one review round |
 | **Builds on** | Spec 164 v0.3, approved 27 Oct (`437b7f8c`, PR #421); its phase order (§9–§11) is replaced here, the rest stands unless this spec says otherwise |
-| **Code base** | `grok/mc-voice-conversation` `93bf00c6` (PR #426, open; never merged alone). The build is on `claude/voice-1-2`, stacked on `93bf00c6`: A1 from `99b3d0f0`; its fix round to `96601e7e`; the binding pass (Robert's C2 decision) `8eb30a10`, Gate 1 at `b0c3518c`; A2 and A3; Gate 2 at `c5edaf86`, clean at `89d115b6`; MC's production switch `5c44feb8`, `ecbd3741`; the cards Robert picked, to `c06adcdd`. §5.7 says where the build does not yet meet this contract |
+| **Code base** | `grok/mc-voice-conversation` `93bf00c6` (PR #426, open; never merged alone). The build is on `claude/voice-1-2`, stacked on `93bf00c6`: A1 from `99b3d0f0`; its fix round to `96601e7e`; the binding pass (Robert's C2 decision) `8eb30a10`, Gate 1 at `b0c3518c`; A2 and A3; Gate 2 at `c5edaf86`, clean at `89d115b6`; MC's production switch `5c44feb8`, `ecbd3741`; the cards Robert picked, to `c06adcdd`. Confirm by voice v3 (D25) is built on `claude/voice-1-2-v3`, cut from A4's fix round at `ecb45341`. §5.7 says where the build does not yet meet this contract |
 | **Initiative** | INIT-2026-0010. Part B: issue #433 (queued) |
 | **References** | `file:line` is `93bf00c6` unless marked `main` (`4954ad9f`), `A1` (`99b3d0f0`), `A1F` (`005c9e81`) or `V` (`c06adcdd`). Findings marked P1–P6, LV, Q, B are in `…/minimoi-1-2-voice/A1_FIX_FINDINGS.md`; S-1 to S-4 and N1–N7 in `REVIEW_post_gate2.md`. **Unverified** items are in §20 |
+
+## Changes from v0.4.2 (29 October 2026): confirm by voice v3
+
+While testing voice on dev, Robert set a rule: the providers work the same for him, nothing acts on words the microphone
+caught without his spoken confirmation, and nothing he said is spoken back unless he asks
+(`planning-studio/operations/threads/HANDOFF_BUILD_TO_DESIGN_VOICE_CONFIRM_BY_VOICE_2026-10-29.md`, RH). Codex's
+opinion (CV) and its v2 followed. Then **Robert, 29 Oct: "new simpler design", "go ahead and build v3"** (§1, items
+15–16; D25). V3 = `…/minimoi-1-2-voice/DESIGN_confirm_by_voice_v3_simple.md`, the design he chose; VB =
+`V3_BUILD_BRIEF.md`, the mechanism as decided for the build, which supersedes `A4_PART2_BRIEF.md`; CV =
+`REVIEW_codex_confirm_by_voice.md`.
+
+| Change | Addressed in |
+|---|---|
+| The app acts; the voice only talks. Neither provider's model has action tools, so I6 now holds on every provider | In plain words; §5.1; §6.4; §7; §8; D24 |
+| One waiting action per session, held and enforced by the server, pinned to the request's owner item id and text hash; the confirmation is a later owner item, after the question started; 30 s, paused during read-back, 2-minute cap; one control slot shared with "Shall I sum up?" | §5.1; §5.3 |
+| The consult route acts only on a consumed confirmation or Check's tap | §5.1; §6.9; §8 |
+| The understanding call: `minimoi-voice-intent`, the summary's capped keys, a plain completion, no tools, 2.5 s, one word, a failure is chat; the grammar fast path first | §5.4 |
+| Every consult is confirmed (D18 stands); a yes with nothing waiting does nothing (D16 stands, its text amended) | §6.4; §6.9; D16; D18 |
+| Privacy: app lines content-free; consult answers spoken; his words and the summary only on request; the summary shown, "Your summary is ready", then a 15 s control-only reply window behind the closed barrier. The voice's own replies are instructed not to repeat his words: best effort, not enforced | §5.1; §5.3; §6.2; §8 |
+| Unchanged: typing; the German and Portuguese pages; production with every switch off; D20; one effect per owner item and receipts | §5.1; §11.1 |
+| Not supported in v3: corrections of a waiting action, a mixed "yes, and …", speaker recognition. Confirmation is an accident barrier, not authentication | §6.9; §8; §17; D25 |
+| Superseded, and marked where it stands: model actions per provider, Check as Grok's only way to act, the spoken summary, D24's eligibility half | §5.1; §5.3; §6.4; §6.6; §7; §8; §11.3; §15; §20; D24 |
+| The scripts: say it, hear the action asked, confirm; read-back on the phone | §11.3 |
+| The latency the decision adds on OpenAI | §12.4 |
+| Where the build stands on v3 | §5.7; §19 |
 
 ## Changes from v0.4.1 (29 October 2026)
 
@@ -115,13 +140,17 @@ IR = independent review (M must fix, S should fix, m minor); CX = Codex spec rev
 
 MiniMoi 1.2 is one voice, used two ways. Master Craftsman and Chief of Staff both talk with Robert through the
 direct voice path German Gespräche already uses and Chunk B extended for MC: the browser talks to OpenAI or Grok
-Voice directly, and when real work is needed the voice asks the real agent, which runs as if Robert had typed.
+Voice directly, and when real work is needed and Robert says yes to the voice's short question, the app asks the real
+agent, which runs as if Robert had typed (v0.4.3).
 
 - **MC in production moves** from today's turn-by-turn relay to a live conversation: he can interrupt, a pause
   doesn't send, nothing scrolls while he talks, and what was said appears at End with a short summary he confirms
   in writing. Until the switch, production keeps the relay.
 - **CoS moves at the same time onto the same code:** one voice mode instead of two, OpenAI or Grok. She stays in the
   persona Robert approved for both, as his longtime collaborator (§6.2), with her own name and voices.
+- **Every spoken action waits for his yes** (v0.4.3), the same on both providers. A note, a post-it or a request to
+  MC or CoS is asked about in a few words that never repeat his ("Shall I go ahead?"), and acts once when he says yes
+  or taps Check. Nothing he said, and no summary, is spoken back unless he asks: "read it back" is for the car.
 - **Dictate is unchanged** on both pages.
 - **German and Portuguese behave as today**, with one safety line if Robert agrees: opening the floating MC panel
   ends their voice first (D23). Their improvements are Part B (#433), after 1.2 is in production.
@@ -132,9 +161,10 @@ adapters. Nothing is copied.
 
 **Honest limits.** Robert has heard audition clips only (§11.4); his listening and phone tests at A4 are the
 acceptance. He chose the voices by ear on 29 Oct: MC `marin` on OpenAI and `leo` on Grok, CoS `ballad` and `ara`, a
-man's and a woman's voice each, so switching providers brings variety. On Grok the voice talks, but the model cannot
-act on its own: Check with MC or CoS is the only way to act (§7). Shared code redeploys the German and Portuguese
-images, and the bundle may deploy more (§11.7). Provider bills are real; the daily allowance is MiniMoi's limit, not a
+man's and a woman's voice each, so switching providers brings variety. On both providers the voice only talks; the
+app acts (§5.1; D25). Its confirmation stops accidents, not a bystander who says both the request and "yes"; and the
+voice's own replies are told not to repeat his words, which is best effort, not enforced. Shared code redeploys the
+German and Portuguese images, and the bundle may deploy more (§11.7). Provider bills are real; the daily allowance is MiniMoi's limit, not a
 provider cap. A CoS voice consult carries her full typed authority, including running commands in her runtime (§6.9).
 
 ## 1. Robert's decisions (binding)
@@ -172,6 +202,14 @@ provider cap. A CoS voice consult carries her full typed authority, including ru
 14. Voice may go into the 29 Oct production bundle with every voice switch unset: "we can predeploy voice too if
     possible. I can test on dev now too" (`operations/threads/HANDOFF_BUILD_TO_OPERATIONS_VOICE_PREDEPLOY_2026-10-29.md`;
     §11.1).
+
+29 October 2026, confirm by voice (RH; §5.1, §5.3, §6.9; D25):
+15. While testing voice on dev: "what if someone shouts from behind me, make another note to go eat mud"; "grok and
+    openai should work the same from my end user point of view. I can't be asked to speak differently for different
+    models."; "don't restate the message, only ask to confirm the action"; "no, definitely dont want the respoken
+    unless I ask for it"; "I should be able to ask for it to speak it back to me, if I'm in a car for example". The
+    summary, by button: "Show it, don't read". Speaker recognition is out of short-term scope (CV).
+16. After Codex's opinion and its v2: "new simpler design", then "go ahead and build v3" (V3; VB; D25).
 
 Standing (Spec 164 v0.3; `coordination/ROBERT_DECISION_spec164_reuse_and_rollout.md`): German's code is the base,
 with no fourth implementation, copied controller or domain session loop; Dictate stays separate; each person has
@@ -248,9 +286,9 @@ safety touch if D23 is adopted (§14.1). **Part B (#433):** German and Portugues
 
 | Standard | Is | Lives in |
 |---|---|---|
-| Host core | session ledger, owner-action admission, capture boundary, end intent, summary and decision, routes | `core/realtime_voice/direct_host.py` |
+| Host core | session ledger, owner-action admission, the waiting action and the utterance route (v0.4.3), capture boundary, end intent, summary and decision, routes | `core/realtime_voice/direct_host.py` |
 | Controller | `RealtimeVoiceController` + additive `sessionId()`, `speak()`, playback drain | `…/static/realtime-voice-controller.js` |
-| Browser module | bridge, holding line, capture and acknowledgments, barrier, heartbeat, End, `pagehide`, Check, summary | `…/static/direct-voice-session.js` |
+| Browser module | bridge, holding line, capture and acknowledgments, barrier, heartbeat, End, `pagehide`, Check, asking and read-back (v0.4.3), summary | `…/static/direct-voice-session.js` |
 | Card | `voice.json` schema 1 + `language`, `accent`, `transcription`; hash; pin | `voice_card.py` |
 | Contracts | `UI_CONTRACT_chunk_B.md` corrected by §5; consult per §5.1 | the 1.2 contract (§15) |
 | Budget | `admit(kind="realtime_direct_session", domain=<host>, required=True)` before any mint | `budget.py` |
@@ -272,7 +310,7 @@ image copies: **moved, not copied**, and moved with the §5 corrections, so both
 | `_Sessions`; `_events` and its limits | `direct_host.DirectSessions` (markers via the store); `direct_host` (values unchanged) |
 | route flows `keep_events`, `end_events`, `owned_session`, `summary`, `decide` | `direct_host.install_direct_voice(app, adapter, *, url_prefix, environ, budget, may_start)` |
 | `_summary_prompt`, `_summary_texts`, heads; `_receipt_line`, `JOB_DONE` | `direct_host`; the person's name and receipt kinds from the adapter |
-| `TOOLS`, `DIRECT_RULES` | `direct_host.tools(person)`, `direct_rules(person)`; names stay `consult`, `save_note` |
+| `TOOLS`, `DIRECT_RULES` | `direct_host.tools(person)`, `direct_rules(person)`; names stay `consult`, `save_note`. Since v0.4.3 `tools()` is offered to neither provider (§5.1) |
 | `done_intent`, `affirmative`, `receipt_parts`, `full_differs`, `state` (`mc_voice_reveal.py`); `_speakable` | `direct_host`; Guild's `view()` stays Guild |
 | `SessionRefused`; MC's `INSTRUCTIONS` | `core/realtime_voice/errors.py`; the MC adapter (text unchanged) |
 | `voice_card.load_card(release)` | `load_card(root, release)`, `load_pinned(root)` (§4.5) |
@@ -330,14 +368,80 @@ code change with tests.
 Codex's Chunk B review (B1–B7) reproduced lifecycle defects the Chunk B suites miss. A1 fixes them once, in the
 core, before CoS uses it. This section is the contract A1 meets for both hosts.
 
-### 5.1 One owner action, one effect; four outcomes (B1, B7, CX-S1, CX V2-1, IR-M4, IR-M5)
+### 5.1 One owner action, one effect; four outcomes (B1, B7, CX-S1, CX V2-1, IR-M4, IR-M5; v0.4.3: CV, D25)
 
-- **Identity.** Every consult, from the model or from Check, carries `owner_item_id`: the capture id (`t<i>`) of
-  the completed owner turn it acts on. **The action key is `(session, owner_item_id)`, across both tools** (CX
-  V2-1). One thing Robert said is acted on once, whether it reaches `consult`, `save_note`, Check, or more than one
-  of them. Both typed-turn paths can save a note, so a key per tool would let one sentence save two.
+- **The app acts; the voice only talks** (v0.4.3; Robert, 29 Oct, §1 items 15–16; D25). Neither provider's model has
+  action tools: `tools()` is offered to no session, the direct rules say the app acts (§6.2), and a `function_call`
+  event, if one arrives, does nothing. Model-started actions are gone on both providers, and with them the main
+  difference between the providers. I6 (`A1_BINDING_BRIEF.md`: the model gets `consult` and `save_note` only on an
+  eligible provider) now holds on every provider, since none gets them. Every effect is dispatched by the server,
+  once, from a waiting action that his spoken yes or a tap on Check confirms (below).
+- **Identity.** Every consult, from a confirmed waiting action or from Check (before v0.4.3: from the model or from
+  Check), carries `owner_item_id`: the capture id (`t<i>`) of the completed owner turn it acts on. For a waiting
+  action that is the request's item, never the yes item's. **The action key is `(session, owner_item_id)`, across
+  every path** (CX V2-1). One thing Robert said is acted on once, whether it reaches `consult` or `save_note`, by his
+  yes, by Check, or by both. Both typed-turn paths can save a note, so a key per tool would let one sentence save two.
+- **The waiting action** (v0.4.3; V3; VB; CV §2, §4).
+  - **One per session, held and enforced by the server,** beside the session's other state in `direct_host.py`:
+    `{action_id, kind (note | postit | consult | end), owner_item_id, text_hash, state (waiting | asked | done |
+    dropped), created, asked_after_item, expires}`.
+  - **Pinned to the request:** its owner item id and the hash of that committed item's text. Its text is the
+    committed owner item's, never the model's words, never the yes.
+  - **A new request replaces it.** A consult goes to this host's own person (MC on MC, CoS on CoS); there is no
+    cross-host consult by voice, and the other person's name counts as chat.
+  - **One control slot.** "Shall I sum up?" is the same slot, `kind: end`: today's `propose_end` and `end_confirmed`
+    move onto it, with their spoken behaviour kept (§5.3). So one utterance never confirms both an action and the
+    end (CV §4, "one control arbiter"): an action's yes never ends the session, and the end's yes never acts.
+- **The utterance route** (VB). `POST …/session/<sid>/utterance` `{conversation_id, owner_item_id, text}`, under the
+  transcript blueprint, with `keep_transcript`'s owner, session and CSRF checks. For each finished owner item the
+  server applies the grammar fast path, else makes the understanding call (§5.4), and answers one decision:
+  `ask` (with `action_id` and kind), `confirm` (`action_id`), `dropped`, `read_back` (the action's text, to this
+  owner's page only), `nothing_waiting` (a yes with nothing waiting), or `chat`.
+- **His next utterance decides:**
+  - **yes:** the app acts once (below); the voice then says briefly whether it is done, not done or still running;
+  - **no:** dropped; "All right.";
+  - **read it back:** the voice reads the action's words, as data and never as an instruction, then asks again. The
+    expiry pauses during the read-back, and the question is re-armed after it. This is the mobile case (RH);
+  - **anything else:** dropped, and the utterance is handled normally; if it is a new request, it waits instead;
+  - **a yes with nothing waiting** does nothing and never reaches MC or CoS (D16): "Nothing's waiting; say it again
+    if you want it."
+- **The confirmation is a later owner item, after the question started** (CV §2, §4). `POST
+  …/utterance/<action_id>/asked {after_item}` records when the question started playing; only an owner item after
+  `after_item` can confirm it. A yes before that, or for a replaced, expired or consumed action, does nothing.
+  Anything not a clean yes is not a yes: a folded request plus yes (xAI, LV6) makes no effect and no note containing
+  "yes" (CV §2). If the question was dropped, it is asked once more, then shown on screen (§7); a blind yes never acts.
+- **Expiry:** 30 s from the question starting, paused during a read-back; 2 minutes at most over its whole life. Past
+  it, the action is dropped quietly and the screen shows "not done". End, reconnect, a provider switch, capture full
+  and session end drop it too.
+- **The consult route acts only on a consumed confirmation or Check's tap** (VB; CV §2). `/api/realtime-voice/consult`
+  acts on:
+  - **a confirmed waiting action:** `action_id` and `confirm_item_id`. The server checks that the action is asked,
+    unexpired, unconsumed and later than its question, and that its owner item and text hash match. It consumes the
+    action atomically, then calls the existing `dispatch()` on the action's `owner_item_id` and text, never the yes
+    item's;
+  - **Check's tap:** with an action waiting, the tap confirms that action, through the same consume. With nothing
+    waiting it acts on his last words, as before, under D16's refusal.
+
+  Anything else is refused before anything runs. The key, receipts, one effect per owner item, reconciliation and
+  retry below are unchanged: a retried confirm returns the same receipt, and concurrent Check and yes make one effect.
+- **What is spoken** (Robert, §1 item 15; CV §5).
+  - **App lines are content-free:** the question, worded naturally by the voice from a content-free instruction ("Sure,
+    just confirm for me", "Shall I go ahead?"); done, not done, still running, unknown; "All right."; the stray-yes
+    line; refusals, which name the form and never quote him; late results. A note's receipt is "Saved.", a post-it's
+    "Posted." (VB).
+  - **Consult answers are spoken:** they are MC's or CoS's words, not his. Otherwise voice is no use in the car (V3).
+  - **His words, and the summary, are spoken only when he asks** ("read it back", "read me the summary"; §5.3).
+  - **Honestly:** the voice's own replies are *instructed* not to repeat his words (§6.2). That is best effort, not
+    enforced: provider audio is not gated, and a reply already played cannot be retracted (CV §5; V3's table).
+- **What does not change** (V3; VB): typing; the German and Portuguese pages (their `93bf00c6` no-change tests);
+  production with every switch off (§11.1); D20, no reminders by voice; one effect per owner item, and its receipts.
 - **Each call is bound to its own turn, by construction** (CX A1-C2; Robert, 28 Oct: "A: tie by construction", D24).
-  Nothing is inferred from the order or timing of provider events.
+  Nothing is inferred from the order or timing of provider events. **Superseded in part by v0.4.3:** no model call
+  acts any more. On OpenAI the page still creates every reply (`page_responses`, §7), now to choose the line each
+  reply speaks for the item the server decided on (the question, an outcome, a read-back, or chat). The rules below
+  still bind those replies, barge-in and playback. The rules about a call (a follow-up after a function result, a
+  call's 3 s wait for words, a barged-in call's not-done output, LV4's pending answer to a call) are kept as the
+  record of v0.4–v0.4.2; no call they describe acts.
   - **The page creates every reply that may act.** Only on a provider eligible for model actions (§7). There the
     session's turn detection is `create_response: false`, `interrupt_response: true`: the provider starts no reply of
     its own, and barge-in still cancels one. On each `input_audio_buffer.committed`, in the same tick, the page asks
@@ -368,19 +472,21 @@ core, before CoS uses it. This section is the contract A1 meets for both hosts.
     refuses an overlapping or uncorrelated one (`V:controlled_session.py:349-372`).
   - **Replaced:** the inference rules A1's fix round tested (the 3 s ownership mark, order-only mode, one-to-one
     spans, holds) are removed, not layered underneath (binding pass, `8eb30a10`). What this rests on is in §20.
-- **Model actions, per provider** (§7). The model gets `consult` and `save_note` only on an eligible provider. On
-  any other, the session has no tools and Check is the only way to act; the server also refuses a model-originated
-  consult there (`check_only`).
+- **Model actions, per provider** (§7). **Superseded by v0.4.3.** It read: the model gets `consult` and `save_note`
+  only on an eligible provider; on any other, the session has no tools, Check is the only way to act, and the server
+  refuses a model-originated consult (`check_only`). Now no provider's model gets tools, and on every provider the
+  consult route refuses everything but a consumed confirmation or Check's tap (above).
 - **Durable admission at the host.** Before dispatch the core writes a `consult_request` record under the key,
   first write wins: `{schema, id, kind, at, owner_item_id, text_sha256}`.
   - The record keeps a hash of Robert's words, not the words; the words are in the visible consult record, and the
     hash keeps the request within MC's floor-note size.
   - A second dispatch of the key gets the stored outcome, or `in_flight` while the first runs here, or `unknown` if
-    it was admitted but has no outcome and runs nowhere. A second dispatch means another call id, Check after the
-    model, a retry, or the other tool.
+    it was admitted but has no outcome and runs nowhere. A second dispatch means a retried confirm, Check after his
+    yes or the reverse, a retry, or the other tool (before v0.4.3: another call id, or Check after the model).
   - The second tool is told the turn was already handled. It is never handed the first one's success as its own.
   - Call-id dedup stays as a second layer.
-  - Check goes through the same dispatcher as the model; the disabled button is presentation, not the guard.
+  - Check and his spoken yes go through the same consume and dispatcher (before v0.4.3: Check and the model); the
+    disabled button is presentation, not the guard.
 - **A new effect needs a new turn.** Saying the words again is a new turn, so a deliberate repeat is a new effect.
   A refusal before dispatch did nothing, so it does not use up the turn.
 - **Exception: a provider that folds** (`FOLDS_OVERTAKEN`, today `xai`; Gate 2 Q S6). xAI folds a turn overtaken
@@ -400,8 +506,8 @@ core, before CoS uses it. This section is the contract A1 meets for both hosts.
 
 | Outcome | When | Spoken | At reveal |
 |---|---|---|---|
-| `done` | the typed turn returned, with its receipt | the reply; "Saved." only with the receipt | answered / receipt |
-| `not_done` | refused before dispatch, or the backend said it did not happen | "That did not go through. Nothing was done." or the refusal | not done + reason |
+| `done` | the typed turn returned, with its receipt | a consult's answer; "Saved." (a post-it "Posted.") only with the receipt | answered / receipt |
+| `not_done` | refused before dispatch, or the backend said it did not happen | "That did not go through. Nothing was done." or the refusal, which names the form and never quotes him | not done + reason |
 | `pending` | still running after 25 s | "That's taking longer; the answer will be in the conversation." | the outcome when it lands |
 | `unknown` | dispatched, no answer: network loss, timeout, 5xx, edge 504, backend exception after dispatch | "I didn't get the result back. Check it in writing before asking again." | result unknown until reconciled |
 
@@ -410,7 +516,8 @@ core, before CoS uses it. This section is the contract A1 meets for both hosts.
   dispatch is `unknown`, even when the backend's own exception says "failed".
 - **Long turns.** The core runs the typed turn in a worker and waits 25 s (under every timeout), then `pending`;
   the receipt is written when it completes; the next heartbeat answer lists completed actions and the voice says
-  the result once, at a pause. No extra request, no timer.
+  the result once, at a pause: the outcome, or the consult's answer, never his words (v0.4.3). No extra request, no
+  timer.
 - **Reconciliation.** `GET …/consult/<session>/<owner_item_id>` returns the stored outcome and runs nothing. MC
   also names the conversation in the query, because its store is per conversation. The browser asks once after
   `unknown`; the store answers after a restart. A request with no receipt (the process
@@ -432,11 +539,33 @@ core, before CoS uses it. This section is the contract A1 meets for both hosts.
 - The page sends `response.create` in the same tick as the commit.
 - xAI: no tools; a model-originated consult refused; Check still acts; a folded repeat refused.
 
+**Superseded in part by v0.4.3:** the regressions above that dispatch a model call (manual→model, model→manual, Check
+then the model's `save_note`, a delayed function call, a call from a cancelled reply, a follow-up) now assert that a
+`function_call` event does nothing. The binding tests are adapted only where a model call no longer acts, each
+adaptation listed (VB).
+
+*v0.4.3 regressions* (VB), on both hosts and both providers, with the fake transports and recorded provider sequences:
+- request, ask, yes: one effect, on the request's owner item id and text hash, never the yes item's;
+- no: no effect. Anything else: no effect, and it is handled (a new request waits instead). 30 s of silence: no
+  effect, and "not done" shows;
+- a yes before the question started, for a replaced action, after expiry, or twice; concurrent Check and yes: each
+  makes zero or one effect, as stated above;
+- a yes with nothing waiting never reaches MC or CoS (D16);
+- an action's yes never also ends the session; the end's yes never also acts;
+- a folded request plus yes (xAI): no effect, and no note containing "yes";
+- read-back, then yes: one effect; read-back after expiry reads nothing;
+- no tools offered on either provider; a `function_call` event, if one arrives, does nothing;
+- xAI's dropped question (no reply within 4 s): one page ask, then the screen fallback (§7);
+- no forbidden spoken line contains his words, asserted on the instructions sent to the transport on every path
+  (asking, done, not done, pending, unknown, refusals, late results), not only on the final strings;
+- a reconnect, End or capture full drops the waiting action.
+
 ### 5.2 Capture barrier and honest retention (B2, B4, pagehide, CX V2-4)
 
 - Events are `queued → sent → acknowledged`, or `failed(reason)` after two attempts under the same id. Only
   acknowledged events are kept; a 422 or an exhausted retry is `failed`, never a silent warning.
-- **One barrier closes capture** for End, Sum up, the spoken "yes" and a server end. In order:
+- **One barrier closes capture** for End, Sum up, the spoken "yes" to "Shall I sum up?" (never an action's yes, §5.1)
+  and a server end. In order:
   1. stop admitting owner input;
   2. flush the open partial as `partial`;
   3. post everything unacknowledged;
@@ -477,10 +606,12 @@ device); a close post that never settles, on Sum up and on plain End (finalizati
 
 - **End intent is idempotent by event id:** a replay gets its first answer and never advances state. A confirmation
   must come from a later owner turn than the proposal. Keep talking clears the server's proposal
-  (`POST …/keep_talking`).
+  (`POST …/keep_talking`). Since v0.4.3 the proposal is the waiting action's `kind: end` (§5.1): one control slot, so
+  an action's yes never ends the session and the end's yes never acts.
 - **States:** `live → closing → summarizing → speaking_summary → ended` (End goes straight to `ended`). In
   `summarizing` capture heartbeats stop and are not expected; the transport stays open. In `live` a server refusal
-  still ends the voice at once.
+  still ends the voice at once. Since v0.4.3, `summarizing` is followed by the summary's reply window (below), and
+  `speaking_summary` is reached only when he asks for the summary to be read.
 - **A summary has its own attempt** (CX V2-5).
   - The core records one `summary_attempt` per session, first write wins, and moves it from `running` to `done` or
     `failed`. It stays `running` until the server's call ends.
@@ -496,8 +627,17 @@ device); a close post that never settles, on Sum up and on plain End (finalizati
   - A lost answer (0, 502, 504) says "The summary may still appear in the conversation." A refusal says "The summary
     could not be asked for."
   - End during `summarizing` closes the voice; the summary still lands in writing.
-- **The summary ends when it has been heard:** it is one tracked response; the session ends when the adapter
-  reports that response's audio drained, at barge-in, or at a bound (15 characters a second plus 5 s, at most 90 s).
+- **The summary is shown, not spoken** (v0.4.3; Robert, 29 Oct, by button: "Show it, don't read"; CV §5; VB).
+  - It is shown, as today, in writing. The voice says only "Your summary is ready".
+  - Then comes **one bounded, control-only reply window of 15 s.** The microphone opens, but the capture barrier stays
+    closed (§5.2): nothing is posted to the record, there is no consult and no action, and the summary's revision is
+    fixed.
+  - "Read it" (a closed set, in English, German and Portuguese) reads it through the tracked response below, then the
+    session ends. Anything else, or silence, ends it.
+  - The playback outcome on End is kept as today. Confirm, edit and decline stay in writing.
+- **The summary ends when it has been heard** (since v0.4.3, only a summary read on request): it is one tracked
+  response; the session ends when the adapter reports that response's audio drained, at barge-in, or at a bound (15
+  characters a second plus 5 s, at most 90 s).
   Another response never closes it. New optional `onPlaybackDrained(responseId)`: xAI, its AudioContext queue empty;
   OpenAI WebRTC, candidate `output_audio_buffer.stopped` (**unverified**; A1 checks). German and Portuguese pass no
   callback and behave as today. The callback names how the response ended: `drained` (heard to the end),
@@ -508,9 +648,10 @@ device); a close post that never settles, on Sum up and on plain End (finalizati
 "yes"; summary before and after a heartbeat; summary failure, timeout and End during it (transport closed once,
 honest written result); response done with audio queued; empty response; barge-in; an unrelated pending response; a
 summary call still running past 45 s (never "unavailable"; one proposal when it lands); "Ask for a summary" while one
-runs (it joins); two devices asking at once (one proposal, one decision).
+runs (it joins); two devices asking at once (one proposal, one decision). v0.4.3: the summary is never spoken unless
+asked; "read it" in the window reads it; anything else, or silence, ends; the window cannot post turns or act.
 
-### 5.4 The summary's execution boundary (CX-S2, D22)
+### 5.4 The summary's execution boundary (CX-S2, D22), and the understanding call's (v0.4.3)
 
 A "use no tools" prompt is not a boundary: neither agent adapter enforces `tool_policy` (`openclaw_backend.py:343`;
 MC `guild_ui/mc/openclaw.py:200-210`), and `cos-agent-a` runs `exec` `full`. The summary is a **plain completion through the
@@ -525,6 +666,32 @@ the request; a tool-call-shaped answer counts as unavailable; a missing key refu
 - The keys are read from `MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_MC` and `…_COS`.
 - The alias, the keys and the portal's environment are not provisioned. Operations provides them before A4
   (`A1_FIX_RESULT.md`). Until then the summary reads "Summary unavailable".
+
+**The understanding call** (v0.4.3; V3; VB; CV §1, "no execution authority"). It decides what a finished owner
+utterance asks for (§5.1), behind the same boundary as the summary.
+- **The grammar fast path comes first,** with no model call:
+  - an explicit note or post-it, through `parse_explicit_note` and `board_commands.parse` (A4's fix-round grammar,
+    unchanged);
+  - an explicit consult: "ask MC …", "check with MC …", "frag MC …", "pergunte ao MC …", and CoS likewise. These
+    forms are new, small, linear (no ReDoS) and tested;
+  - with an action waiting, a bare yes or no (`bare_confirmation`, `affirmative`, the `_BARE` sets);
+  - read-back: "read it back", "what did I say", "lies es vor", "lê de novo", "read me the summary".
+- **Otherwise, one plain completion through the gateway,** alias `minimoi-voice-intent`, under the summary's capped
+  per-host keys (`voice-summary-mc`, `voice-summary-cos`). Module `core/realtime_voice/intent_gateway.py`, reusing
+  `summary_gateway.py`'s key lookup and streaming guard, not copying them. The route sits beside the summary's in
+  `litellm.yaml`, `litellm.staging.yaml` and `litellm.prod.yaml` (same model, `reasoning_effort: none`, `timeout: 5`),
+  and the alias joins `VOICE_SUMMARY_KEY_MODELS` in `scripts/staging/mc_keys.sh`.
+  - No tools and no `user`; `temperature` 0; a few tokens. **A total deadline of 2.5 s,** never retried.
+  - It is given only this utterance's text, the kind of action waiting (if any), and the host's person: no history,
+    no other utterance.
+  - It returns **one word:** `note`, `postit`, `consult`, `yes`, `no`, `read_back`, `read_summary` or `chat`. Anything
+    else, a failure, a timeout or no key counts as `chat`. It has no power to act: its word only selects a decision
+    that the server then enforces (§5.1).
+- **Without the key** the grammar fast path still covers the explicit forms, and everything else is chat. The alias
+  is not provisioned, like the summary's keys (§20).
+- *Tests:* a fake gateway, table-driven over varied natural phrasing in English, German and Portuguese; a timeout, an
+  error, no key and an off-list word are `chat`; the request has no `tools` and no `user`. An offline eval script,
+  outside every suite, runs the real alias over the same table in the live check.
 
 ### 5.5 Tests carried from Chunk B
 
@@ -549,7 +716,7 @@ hosts".
 
 | Point | This contract | At `c06adcdd` | Closes in |
 |---|---|---|---|
-| Binding a call to its turn (A1-C2) | by construction (§5.1) | met: binding pass `8eb30a10`, Gate 1 `b0c3518c`; on xAI no model call binds | closed |
+| Binding a call to its turn (A1-C2) | by construction (§5.1) | met: binding pass `8eb30a10`, Gate 1 `b0c3518c`; on xAI no model call binds | closed; since v0.4.3 no model call acts on either provider |
 | The barrier's timeout (A1-C3) | final (§5.2) | met (`c34c80c0`) | closed |
 | Summary attempt (V2-5) | its own attempt; "still being written" while running (§5.3) | met (`512cc448`, `b465bf68`) | closed |
 | Playback outcomes (B6) | named outcomes; only `drained` is heard (§5.3) | met (`c38928c3`); on xAI the summary is likely never read as heard (LV5: `timeout`, never a false "heard") | closed; A4 listens |
@@ -559,6 +726,7 @@ hosts".
 | A repeated sentence is a new effect (§5.1) | a new effect | refused on xAI by the folding exception (§5.1) | recorded exception; A4 counts it |
 | S3: open sessions End (§11.1) | End answers in S3 | End answers 403 after any restart, on both hosts (PG S-2; shared core) | fixed in the core before either admission (§11.5 step 3; Robert, 29 Oct) |
 | MC's manifest names its persona (§4.5) | `persona: {source, version, sha256}` | MC's manifest has `"persona": "mc-chat"`, its package name (PG N7) | open; a new MC release adds it (build thread) |
+| Confirm by voice v3 (D25) | no model tools; the server's waiting action, its routes and the consult route's check (§5.1); the understanding call (§5.4); the summary shown (§5.3) | not built: OpenAI's model acts by itself, xAI acts only through Check, the summary is spoken | v3 on `claude/voice-1-2-v3` from `ecb45341`, one review at the end, a live check on both providers under the $20 cap, then Robert on dev (VB; §19). Operations provisions the alias and keys (§5.4) |
 
 ## 6. Chief of Staff standardization (core goal)
 
@@ -580,6 +748,10 @@ images). Schema 1: `language`, `accent`, `transcription`, `card`, `voices` (D2);
 
 The mc-agent container still runs MC's 0.1.16; only the portal reads his `voice.json` (§11.7).
 
+**v0.4.3.** Neither card's text (§6.2) mentions tools, Check, or reading the summary aloud, so v3 needs no new card
+release. If the build finds a contrary line, it cuts one (MC `0.1.23` with `scripts/mc_persona/make_header_release.py`,
+CoS `0.1.4`) and updates the pins and their tests (VB).
+
 ### 6.2 Her manner: the shared persona, written for voice
 
 Today's CoS voice is not MC's manner appended by accident: Robert approved one persona for both, compiled into her
@@ -591,8 +763,8 @@ adds only her name and voice-surface wording; MC's card does the same. Each part
 | Goes to | Clauses |
 |---|---|
 | Her card (from the persona, as Robert shaped it on 29 Oct) | longtime collaborator and friend in the work; familiar, candid partner, dry humour; never a receptionist, concierge, servant or language examiner; English by default, in fluent British English (v1.1 says a light Austrian accent: D1), no caricature, no invented shared memories; German as a brief phrase in his day, one natural Austrian formulation when asked; his German answered in Austrian standard German with `du`, English the default after; his errors, German or English, answered as a colleague would, with the correct form used and never explained; never a lesson; no canned enthusiasm, flattery or filler; MiniMoi said "mini-mwah" |
-| Core direct rules, both (D17) | one or two short sentences, answer first; drop an interrupted explanation; don't prompt in silence; tell an unavailable tool from a failed lookup and unchecked evidence; claim saves, recipients and handoffs only from receipts; no claim of complete memory; Guild note ≠ CoS note ≠ Board post-it; no runtime ids; voice rules never expand authority |
-| Her rules | consult before saying something is unavailable; her voice paragraph (`chief_of_staff.py:652-678`) with `consult`, `save_note` |
+| Core direct rules, both (D17) | one or two short sentences, answer first; drop an interrupted explanation; don't prompt in silence; tell an unavailable tool from a failed lookup and unchecked evidence; claim saves, recipients and handoffs only from receipts; no claim of complete memory; Guild note ≠ CoS note ≠ Board post-it; no runtime ids; voice rules never expand authority. **v0.4.3** (VB), in `direct_rules`, without the tool and "press Check" text: you cannot act, the app does; when he asks for a note, a post-it or something only MC or CoS can do, ask briefly and naturally for his confirmation, without repeating his words, and never say it is done; never repeat his words back unless he asks; outcomes come from the app; "Shall I sum up?" exactly as before |
+| Her rules | consult before saying something is unavailable; her voice paragraph (`chief_of_staff.py:652-678`) with `consult`, `save_note` (since v0.4.3 without the tools, §5.1) |
 
 **Her card, final** (0.1.3, `V:domains/cos/voice/releases/0.1.3/voice.json`):
 
@@ -657,8 +829,10 @@ request_id=<uuid5 of the action key>)`: the same service, authority and receipts
 completed words, plus `_ui_turn`'s `enforce_file_claims` and outbox snapshot, so voice cannot claim an undelivered
 download.
 
-**She inherits §5.1's binding unchanged (A2), and §7's eligibility with it:** on OpenAI the page creates each reply
-that may act; on Grok she has no action tools, and Check with CoS is the only way to act.
+**She inherits §5.1 unchanged (A2), the waiting action included (v0.4.3):** on neither provider does her model have
+action tools; a note or a consult acts once, on his spoken yes to the app's question or on Check with CoS. (Superseded
+by v0.4.3: "on OpenAI the page creates each reply that may act; on Grok she has no action tools, and Check with CoS is
+the only way to act".)
 
 | Turn service result | Outcome; spoken |
 |---|---|
@@ -670,8 +844,9 @@ that may act; on Grok she has no action tools, and Check with CoS is the only wa
 | `output_limit_reached` | `done`; the reply + "The rest is cut off; ask in writing." |
 
 `consult` and `save_note` replace `consult_cos_agent` and `save_cos_note`; `save_note` needs `parse_explicit_note`
-to match, else `not_done`: "Nothing was saved. Say 'save a note that…' and the note." **Reminders** are not by
-voice in 1.2 (D20): her rules say "Set reminders in writing", without MC's "remind me at <time>" sentence.
+to match, else `not_done`: "Nothing was saved. Say 'save a note that…' and the note." Since v0.4.3 neither is a
+model tool; a confirmed note still goes through this path, and its refusal names the form, never his words.
+**Reminders** are not by voice in 1.2 (D20): her rules say "Set reminders in writing", without MC's "remind me at <time>" sentence.
 
 **Refused before dispatch, in the CoS adapter** (CX).
 - Consult text that the turn service would treat as a command is refused with "Do that in writing." before
@@ -685,7 +860,10 @@ voice in 1.2 (D20): her rules say "Set reminders in writing", without MC's "remi
 two plugins and OpenClaw's built-ins, with no approval mode configured (`exec` `full`, elevated off). No platform
 approval waits on a "yes"; the risk is conversational (she asks "shall I…?" and acts on "yes"). The core refuses a
 consult whose owner text is only a confirmation or stop word, both hosts: "Confirm that in writing." The "yes" to
-"Shall I sum up?" stays: it closes capture and authorizes nothing.
+"Shall I sum up?" stays: it closes capture and authorizes nothing. **v0.4.3 (D16 amended):** a spoken yes now
+confirms a waiting action, and only that (§5.1). With nothing waiting it does nothing, never reaches MC or CoS, and
+hears "Nothing's waiting; say it again if you want it."; Check on a bare yes with nothing waiting is still refused as
+above. Her own "shall I …?" can no longer lead to an act: only the app's question can be confirmed.
 
 ### 6.5 Her store (D5, CX-S3)
 
@@ -743,11 +921,15 @@ nothing lost because the summary is unavailable.
 ### 6.6 Confer UI on the same contract
 
 - **One Voice button** once she is admitted (D8): no mode select, no "Hearing: …"; nothing said shows while live.
-- **Live bar:** voice on, elapsed, End, Check with CoS; Sum up and Keep talking when offered.
-- **Provider choice** in Confer's quiet style, remembered under its own key; `voice_notices` as one line. Grok is
-  labelled "acts only through Check with CoS" (§7).
+- **Live bar:** voice on, elapsed, End, Check with CoS; Sum up and Keep talking when offered. Since v0.4.3 also the
+  waiting action's state: "not done" when it lapses, and "Say yes to go ahead, or press Check" when xAI's question
+  could not be spoken (§7).
+- **Provider choice** in Confer's quiet style, remembered under its own key; `voice_notices` as one line.
+  **Superseded by v0.4.3:** "Grok is labelled 'acts only through Check with CoS' (§7)". Both providers now act the same
+  way (§5.1), so the label goes, and so does MC's "acts only through Check with MC".
 - **Reveal, recovery line, summary card, needs-attention list** in Confer's styles; the card says "Confirming
-  confirms the summary only. Anything it mentions still needs its own request."
+  confirms the summary only. Anything it mentions still needs its own request." The summary is shown, and read aloud
+  only on request (§5.3).
 - **Download transcript (D7)** after reveal, from kept records, partial capture labelled.
 - **Dictate unchanged**, bootstrap included. Voice and Dictate yield to each other as today; the companion handler
   ends the direct session; `pagehide` sends its one close envelope (§5.2), not the barrier.
@@ -776,6 +958,19 @@ consult can do what a typed message can. Safeguards: Spec 164 §3's, one effect 
 bare-confirmation refusal, CSRF on every voice POST: stricter than typed Confer, whose CSRF depends on
 `MINIMOI_COS_WRITE_GUARD` (production value unverified).
 
+**Every consult is confirmed** (v0.4.3; D18 stands; CV §3). The voice layer cannot tell from the words whether a consult
+will change something, so every request to MC or CoS becomes a waiting action, and the consult route acts only on a
+consumed confirmation or Check's tap (§5.1). His yes forwards the exact request with her existing authority. It
+approves no unspecified later action and overrides no other approval gate. One effect per owner item means one
+dispatch; it does not mean that one CoS turn performs only one downstream operation (CV §3).
+
+**Limits, stated honestly** (CV §1; Robert, §1 item 15):
+- **Confirmation is an accident barrier, not authentication.** A bystander who says both the request and "yes" is not
+  stopped. There is no speaker recognition, which Robert placed out of short-term scope.
+- **The question names the action, not his words, so it checks intent, not transcription.** Read-back is optional: a
+  mishearing is caught only if he asks for it or looks at the screen. This corrects RH's claim that read-back catches
+  D18's misheard request.
+
 ## 7. Providers, voices, transcription, budget
 
 | | MC | CoS |
@@ -783,12 +978,16 @@ bare-confirmation refusal, CSRF on every voice POST: stricter than typed Confer,
 | Providers; models | OpenAI `gpt-realtime-2.1`, Grok `grok-voice-latest` | same (Grok new for her) |
 | Default | `config.resolve_provider` (§2.4); the env default may override (production value unverified) | same |
 | Voice today; in 1.2 | `cedar` (relay); OpenAI `marin`, Grok `leo`, by Robert's ear (D3) | `cedar`; OpenAI `ballad`, Grok `ara`, by Robert's ear (D2) |
-| Model actions (`consult`, `save_note`) | OpenAI yes; Grok no, Check with MC only | same, Check with CoS |
+| Model actions (`consult`, `save_note`) | none on either provider since v0.4.3: the app acts on his spoken yes or Check with MC (§5.1). Was: OpenAI yes; Grok no, Check with MC only | same, Check with CoS |
 | Transcription | bilingual (D19), card 0.1.20 on | bilingual (D19) |
 | Budget; allowance; cap | `domain="mc"`; `MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO`; $20 per Chicago day, shared with both Dictates | `domain="cos"`; same (D10) |
 
-**Model actions, per provider** (Robert's C2 decision, D24). On the direct path the model gets `consult` and
-`save_note` only where the provider:
+**Model actions, per provider** (Robert's C2 decision, D24). **Superseded by v0.4.3 in what it grants** (D25): no
+provider's model gets `consult` or `save_note`, so I6 holds on every provider and Robert speaks the same way on both.
+The value below now decides only whether the page creates every reply (`page_responses`): OpenAI yes, xAI no. That
+changes how the app's lines get spoken, never what Robert says or what acts (asking, per provider, below). The rest of
+this block is the record of v0.4–v0.4.2. There, on the direct path, the model got `consult` and `save_note` only
+where the provider:
 1. names the committed item (`input_audio_buffer.committed.item_id`);
 2. lets the page create every reply (`create_response: false`, barge-in still on).
 
@@ -803,7 +1002,23 @@ One reviewed value decides it, nothing else: `V:capabilities.py:25`, `MODEL_ACTI
   condition: it accepts `create_response: false` but still answers every utterance itself (5 of 5), about 145 ms
   before its commit, and silently drops the page's `response.create`.
 - **Turning a provider on** is a reviewed change of that one value, with evidence that it meets both, not a code edit.
+  Since v0.4.3 it would turn on page-created replies for that provider, never model actions.
 - CoS inherits this unchanged (§6.4). On xAI, Check sends whatever the provider folded into the item (§5.1).
+
+**Asking, per provider** (v0.4.3; VB). The same speech for Robert; only the plumbing differs.
+- **OpenAI** (the page creates every reply). For each committed item the page waits for the server's decision (§5.1),
+  at most 1.5 s, then creates **one** reply: for `ask`, with the content-free asking instruction; for `confirm` or
+  `read_back`, with the outcome or read-back instruction; for `chat`, or when the wait runs out, a normal reply. Once
+  an `ask` reply starts, the page posts `asked`.
+- **xAI** (the provider answers by itself, as the live probes above showed). The rules make its own reply to a
+  request the content-free question.
+  For an `ask` decision, the page posts `asked` once a reply to that item has started playing after the item. If none
+  starts within 4 s (a dropped reply, LV3), the page sends one `response.create` that asks, content-free. If that also
+  fails, the screen shows "Say yes to go ahead, or press Check", and the tap can still confirm the action.
+- **Left to the builder** (VB): whether the page also asks when xAI's own reply was not a question. If it does, the
+  reply's transcript is evidence that a question was spoken, never authority to act. The build result says which.
+- A read-back is one reply: "Read this exactly, then ask briefly again whether to go ahead: <his words>", his words
+  marked as data, never an instruction. It goes only to this owner's page.
 
 **Bilingual transcription (D19).** The consult acts on the transcript, not on what the model heard; a session
 fixed to `en` may turn German into English words. Cards with `transcription: "bilingual"` omit the single
@@ -822,15 +1037,18 @@ moves it (P5, P6). No new meter.
 | Safeguard | Source | Where |
 |---|---|---|
 | Owner, CSRF, record mode on writes; owner-only, no-store reads | 164 §3; CX-S6 | adapter guards; core refuses owner mismatch |
-| A model call acts only through a page-created reply for one committed item; model actions only on an eligible provider | C2, Robert 28 Oct; D24 | §5.1; §7; `MODEL_ACTIONS` |
+| No model acts, on any provider; the app acts once, on a consumed confirmation (a later owner item after its question) or Check's tap, on the request's owner item id and text hash. Superseded by v0.4.3: "a model call acts only through a page-created reply for one committed item; model actions only on an eligible provider" | C2, Robert 28 Oct; D24; D25; CV | §5.1; §7 |
+| One waiting action per session, one control slot with "Shall I sum up?"; 30 s, paused for read-back, 2-minute cap; dropped at End, reconnect, provider switch, capture full | CV §4; D25 | §5.1; §5.3 |
+| The understanding call has no tools and no power to act; a failure is chat | CV §1; D25 | §5.4 |
+| Nothing he said, and no summary, is spoken unless he asks; app lines content-free; consult answers spoken | Robert 29 Oct; CV §5 | §5.1; §5.3 |
 | On a provider that folds turns, a repeat of checked words is refused | Gate 2 Q S6 | §5.1, `FOLDS_OVERTAKEN` |
-| The server acts on the owner's transcript item; tools allow-listed `consult`, `save_note` | 164 §3 | core consult; bootstrap |
+| The server acts on the owner's transcript item; no tools offered (v0.4.3; was: allow-listed `consult`, `save_note`) | 164 §3 | core consult; bootstrap |
 | One effect per owner action; four truthful outcomes; reconciliation | B1, B7 | §5.1 |
 | Capture barrier; retention claimed only when acknowledged | B2, B4 | §5.2 |
-| Idempotent end intent; summarizing state; summary heard to its end | B3, B5, B6 | §5.3 |
+| Idempotent end intent; summarizing state; summary heard to its end, when read on request; otherwise shown, with a control-only reply window (v0.4.3) | B3, B5, B6; CV §5 | §5.3 |
 | Summary generation cannot call tools | CX-S2 | §5.4 |
 | Saves spoken only with receipts; done actions reported as done | 164 §9; review B #2 | adapter mapping |
-| Bare confirmations and stop words refused as consult text | review B #1; D16 | core |
+| Bare confirmations and stop words refused as consult text; a spoken yes confirms only a waiting action, and with nothing waiting does nothing (v0.4.3) | review B #1; D16 | core |
 | Chunk B items carried as built: budget after the record, `abandon()` on a failed mint (B #4); caps and times (B #5, #6); no live title (B #7); lazy imports (B #8); marker-read failure (B #9); hide, reveal once, recovery line; server-ended ends the provider (UI #2); tagging fails open for MC outputs only (UI #9) | Chunk B reviews | core or MC adapter |
 | CoS voice store outside her runtime's mounts | IR-M3 | §6.5; release check |
 | No silent fallback: a page offered direct tries nothing else | 164 §2; C7 | release check |
@@ -842,6 +1060,13 @@ at once (D21). Consults run in the live runtime session (MC's conversation; CoS'
 was said before End and a typed or Telegram reply could refer to it. On Grok, instructions pass through his browser.
 On Grok, words folded from an overtaken turn may show twice in the reveal and the summary (LV6). Her runtime can reach
 `cos-scheduler`'s voice routes with forged headers (§6.5; D5): a follow-up spec closes it.
+
+**Known limits of confirm by voice, accepted** (v0.4.3; V3's table; D25):
+- Confirmation is an accident barrier, not authentication: a bystander who says both the request and "yes" is not
+  stopped (§6.9).
+- The voice's own replies are instructed not to repeat his words: best effort, not enforced (§5.1).
+- **Not supported in v3:** corrections of a waiting action ("no, make it tomorrow": "no" drops it, and he says the
+  new request); a mixed "yes, and …" (not a yes; at worst he says yes again); speaker recognition.
 
 ## 9. Retirement: what is removed, when, what stays
 
@@ -910,6 +1135,12 @@ cards' data and their tests. Two conditions:
   `MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION` and keeps `MINIMOI_MC_VOICE_DIRECT` (S3). Removing both leaves earlier
   proposals without Confirm, Edit or Decline, as in S5. The release note says so.
 
+**Confirm by voice v3 under the switches** (v0.4.3; VB). The waiting action, the utterance route and the
+understanding call are part of the direct host: none of them is mounted unless the host is installed, and no session
+starts unless it is admitted (S1–S3). The German and Portuguese pages get nothing new. The proof that production
+with every switch unset is as at `89d115b6` was made at `1eb36ff8`; at the v3 head it rests on the S1–S3 and
+no-change tests VB requires until that proof is re-run (§5.7).
+
 **Open: S3's "open sessions End" is not met** (PG S-2). Admission is a per-process snapshot, so S2 → S3 is a restart.
 After it, End on a session started before the restart answers 403 "not your session" (`V:direct_host.py:1968`). The
 provider audio, browser to provider, carries on; its consults and transcript posts are refused too; what was said
@@ -947,41 +1178,50 @@ keys, the voice folders and the allowance.
 
 | # | Robert | Passes when |
 |---|---|---|
-| 1 | "What's open on the board today?" | one consult, a short answer, one "Checked with MC · answered" |
+| 1 | "What's open on the board today?" → asked to confirm → "yes" | the question without his words; one consult, the answer spoken, one "Checked with MC · answered" |
 | 2 | A sentence with a one-second pause | one owner turn |
 | 3 | Interrupt mid-reply | playback stops; reveal marks MC interrupted |
-| 4 | "Save a note that the voice test ran on <provider>." | "Saved." with a receipt; one note |
+| 4 | "Save a note that the voice test ran on <provider>." → asked → "yes" | the question without his words; "Saved." with a receipt; one note |
 | 5 | A German sentence, then an English question | he follows and returns; the reveal shows German as German |
 | 6 | Check twice; the same words again, Check | "Already checked"; the repeat is a new effect |
-| 7 | Check on words the model just consulted | "Already checked"; one effect |
-| 8 | "We're done" → "yes" | the summary heard to its end; the card in writing; confirm |
+| 7 | Check after his spoken yes to the same request (v0.4.3; was: Check on words the model just consulted) | "Already checked"; one effect |
+| 8 | "We're done" → "yes" | "Your summary is ready", the summary shown, not read; "read it" within 15 s reads it; the card in writing; confirm (v0.4.3; was: the summary heard to its end) |
 | 9 | Reload during a second session | recovery line, then reveal |
 | 10 | Phone: Wi-Fi off during a consult | never "did not go through"; reveal shows the true outcome |
+| 11 | A note request → "no" | "All right."; nothing saved |
+| 12 | A note request, then silence past 30 s | nothing saved; "not done" on screen |
+| 13 | A note request → "read it back" → "yes" | his words read once, the question again; one note |
+| 14 | A bare "yes" with nothing waiting | "Nothing's waiting; say it again if you want it."; nothing reaches MC |
 
 **CoS** (Mac, then phone; each provider):
 
 | # | Robert | Passes when |
 |---|---|---|
-| 1 | "What's on my agenda this week?" | one consult; a short answer |
+| 1 | "What's on my agenda this week?" → asked → "yes" | the question without his words; one consult; a short answer |
 | 2–3 | The paused sentence; interrupt | one turn; playback stops |
-| 4 | "Save a note that the voice test ran on <provider>." | "Saved." with a receipt; the note in Record |
+| 4 | "Save a note that the voice test ran on <provider>." → asked → "yes" | "Saved." with a receipt; the note in Record |
 | 5 | "Remind me at 5 pm to stretch." | "Set reminders in writing."; nothing saved |
 | 6 | Check with CoS twice | "Already checked" |
-| 7 | A bare "yes" when she asked something | "Confirm that in writing."; no consult |
+| 7 | A bare "yes" when she asked something | "Nothing's waiting; say it again if you want it." (v0.4.3; was "Confirm that in writing."); no consult |
 | 8 | A German sentence | her manner holds; the reveal shows German |
 | 9 | Open the floating MC panel | her voice ends first |
 | 10 | Dictate after ending | unchanged |
 | 11 | Reload mid-session | recovery, reveal |
-| 12 | "We're done" → summary; decide on another device | one decision, shown on both |
+| 12 | "We're done" → summary; decide on another device | the summary shown, not read; one decision, shown on both |
+| 13 | MC #11–#14, with a consult in place of the note | as MC's; no consult without his yes |
 
-**On Grok** (§5.1, §7), for both scripts: a step that acts (a consult, a note) is done with Check, and the voice says
-so when asked to act; MC #6's repeat is refused ("… Check it in writing."), the folding exception; MC #7 does not
-apply.
+**On Grok** (§5.1, §7). **Superseded by v0.4.3:** "a step that acts (a consult, a note) is done with Check, and the
+voice says so when asked to act; MC #7 does not apply". Both scripts now run the same on both providers: he says it,
+hears the action asked, and confirms by voice; Check stays the tap fallback. MC #6's repeat is still refused on Grok
+("… Check it in writing."), the folding exception (§5.1). On Grok also note whether the question came from the voice,
+from the page's ask, or only on screen (§7).
 
 **Phone cases** (each host, once): screen locked; app switched; AirPods or Bluetooth; speakerphone barge-in (echo
-must not interrupt); Wi-Fi to cellular. Pass: the session continues, or ends with what was kept revealed and any gap
-marked; never a silent loss. **Robert's marks** (never in logs): sounds like MC / CoS; accent held; a stray German
-word did not flip the language; names right; as quick as Maria; anything untrue.
+must not interrupt); Wi-Fi to cellular; and, since v0.4.3, the mobile case with eyes off the screen: a request, "read
+it back", "yes"; and "read it" in the summary's window (RH). Pass: the session continues, or ends with what was kept
+revealed and any gap marked; never a silent loss. **Robert's marks** (never in logs): sounds like MC / CoS; accent
+held; a stray German word did not flip the language; names right; as quick as Maria; his words never spoken unless
+he asked; anything untrue.
 
 ### 11.4 Identity audition
 
@@ -1036,6 +1276,9 @@ no-change tests.
   `cos-agent-a`'s mounts; prefix, timeouts and reads through the portal; not admitted = today; 24,000 bytes and order;
   no `VOICE_MANNER` text beyond the placed clauses; no tools in the summary request; one ledger, concurrent
   reservations adding up.
+- **Confirm by voice (v0.4.3):** §5.1's v3 regressions, §5.3's reply window and §5.4's understanding-call tests, on
+  both hosts and both providers (VB). The binding regressions still pass, adapted only where a model call no longer
+  acts.
 - **German and Portuguese no-change:** the same bootstrap request, answer and instructions, no tools, no notices, no
   new import; the controller without new callbacks as before; with D23, the listener and the new key on both.
 - **Node:** the four Guild suites; a Confer suite (live bar, reveal, recovery, summary card, needs-attention,
@@ -1048,7 +1291,9 @@ no-change tests.
 
 On the deployed configuration, real backends, stubbed transports: capabilities report providers, persona, locale,
 card release; one stub session with one consult reaches the real typed turn and returns `done`; forged and replayed
-call ids, a repeated owner action, a call after End and a missing CSRF token each have one effect or none; S1, S2,
+call ids, a repeated owner action, a call after End and a missing CSRF token each have one effect or none; a consult
+with neither a consumed confirmation nor Check's tap is refused, and neither the session nor the understanding call's
+request carries tools (v0.4.3); S1, S2,
 S3 behave as §11.1, and a page offered direct references no other path; the record, End, reconcile and decision routes stay installed and owner-authorized in S3 and S4; a provider failure while S2 stays selected is tested apart from a deliberate S3 rollback; no tools in the summary request; the CoS
 voice folder is not mounted into `cos-agent-a`; German and Portuguese answers unchanged. Robert's microphone and
 phone tests stay separate until he does them.
@@ -1064,8 +1309,10 @@ language handover is a recorded limit, never a pass.
 ### 12.4 Conversation quality and latency (Spec 164 §13a; IR-S13, CX-S8)
 
 A session that asks permission to check, narrates receipts, reads lists aloud or answers in paragraphs fails,
-whatever its latency. Robert scores intent, clarification, continuity, useful action, truthful concise replies and
-responsiveness; the booleans (turn completeness, interruption, identity, retention, truthful outcomes) all pass.
+whatever its latency. **Amended by v0.4.3:** the app's one short confirmation question before each action, every
+consult included, is required (§5.1; D18, D25), so it is not a failure; any other asking of permission still is. CV
+§3 asks for the extra turn per consult to be measured: A4 notes how it feels. Robert scores intent, clarification,
+continuity, useful action, truthful concise replies and responsiveness; the booleans (turn completeness, interruption, identity, retention, truthful outcomes) all pass.
 
 **Latency, like for like:** speech end to first assistant transcript, German's Phase 0 metric; at least 10 ordinary
 replies per provider per host; same device class and network, noted; median and worst. Proposed pass (Robert may set
@@ -1073,7 +1320,12 @@ it): median within 100 ms of German's Phase 0 median on that provider, and at mo
 reference is five samples; Part B re-measures it. **A known cost (C2):** on OpenAI the page creates each reply (§5.1),
 which adds one round trip before every reply. The live probes measured about 80 ms over WebSocket (28 Oct), close to
 the 100 ms tolerance; A4 measures it on WebRTC against this target. Grok replies on its own, so it adds nothing
-there. **Consults** (CX): a holding line by 8 s ("Still checking."), a second
+there. **A further cost (v0.4.3):** on OpenAI the page now waits for the server's decision on each finished item, at
+most 1.5 s, before creating its reply (§7): the transcript's arrival, then the grammar or the understanding call.
+V3's own estimate for the call alone, about 0.3–0.6 s, is beyond the proposed 100 ms tolerance, so an ordinary reply
+on OpenAI is expected to miss it (unmeasured). A4 measures it, and Robert sets the pass. Grok answers on its own
+while the decision runs, so its replies are not delayed. **Consults** (CX): a holding line by 8 s ("Still checking."),
+a second
 line by 17 s ("Still working on it."), and `pending` at 25 s, so there is never more than 10 s of silence. The lines
 say only what is true, never a result. First audible is recorded for Part B; 1.2 claims no audible parity.
 
@@ -1117,14 +1369,15 @@ voices, scenes and prompts do not change. Rollback: both previous image tags, to
 2. `UI_CONTRACT_chunk_B.md` → the 1.2 contract: person-neutral, corrected by §5, with the CoS host and §11.1 states.
 3. `B_direct_path.md`: unchanged (history).
 4. Shared voice standard, "Current mapping": MC and CoS Confer are Conversation mode (turn owner the provider,
-   allow-listed `consult`/`save_note` into the person's typed turn); both Dictates Memo mode. Robert approves it with
-   this spec.
+   allow-listed `consult`/`save_note` into the person's typed turn; since v0.4.3 no model tools, and the app's
+   confirmed waiting action dispatches into the person's typed turn, §5.1); both Dictates Memo mode. Robert approves
+   it with this spec.
 5. `conversation_log.system_note`: names the voice projection files.
 
 ## 16. Decisions for Robert
 
-D1–D17 are Robert's as in v0.1, some reframed; D18–D23 are new; D24 is new in v0.4. Each shows Claude Code's (CC), the
-independent reviewer's (IR) and Codex's (CX) recommendation. In v0.3, Codex's recommendations are those of its v0.2 delta review. None is settled until Robert says so.
+D1–D17 are Robert's as in v0.1, some reframed; D18–D23 are new; D24 is new in v0.4; D25 in v0.4.3. Each shows
+Claude Code's (CC), the independent reviewer's (IR) and Codex's (CX) recommendation. In v0.3, Codex's recommendations are those of its v0.2 delta review. None is settled until Robert says so.
 In v0.4, **Robert's words** follow a decision where something he said since 28 Oct settles it, or part of it, quoted
 from §1. Every other decision stays open, Robert's.
 
@@ -1138,6 +1391,9 @@ D1–D23, including D4, D12 and D18 explicitly; on D10 one host may use up the o
 - **Answered 29 Oct:** the D5 caveat, by a follow-up spec. S-2 (§11.1), by a core fix before either admission (§11.5).
 - **Not yet built:** D17 (the shared rules into the core) and D23 (§14.1). They follow on their own branch after the
   switched-off predeploy.
+
+**Answered, 29 Oct (v0.4.3).** Confirm by voice: "new simpler design", then "go ahead and build v3" (§1, item 16;
+D25). D16 and D18 stand; D16's text is amended. D24's principle stands; its eligibility half is superseded.
 
 **D1. CoS manner — a persona decision.** (a) Keep the shared persona; her card restates it for voice; (b) a
 CoS-only manner: split the persona, re-lock, rebuild `cos-agent-a`; (c) a new shared manner, same route. *CC: (a);
@@ -1205,6 +1461,9 @@ Claude Chat; header) are not named in his words: open, Robert's.
 **D16. Bare confirmations.** Inventory done (§6.4). (a) Refuse bare confirmation and stop words as consult text in
 the core, both hosts; (b) allow for CoS. *CC: (a); "yes" to "Shall I sum up?" stays. IR: inventory what is loaded
 (done). CX: (a); tell harmless confirmation from granting authority; End and Stop still stop audio, and the refusal never blocks stopping.*
+**Amended 29 Oct (v0.4.3; D25):** (a) stands. A spoken yes now confirms a waiting action (§5.1), but only that: the
+one action the app asked about, after its question. With nothing waiting a yes does nothing and never reaches MC or
+CoS; as consult text it is still refused.
 
 **D17. Person-neutral rules.** (a) In the core for both; (b) MC as built, CoS in her rules. *CC: (a). IR: none. CX:
 (a); test the prompt change on both hosts and providers.*
@@ -1212,6 +1471,8 @@ the core, both hosts; (b) allow for CoS. *CC: (a); "yes" to "Shall I sum up?" st
 **D18. Spec 164 §3 trust for CoS (new).** (a) Extend it with §6.9's safeguards; (b) CoS voice without `consult`;
 (c) defer CoS voice. *CC: (a): typed Confer already has this authority; voice adds guards. IR: make it a named
 decision. CX: (a), if Robert adopts it explicitly; bind the utterance, enforce excluded commands, keep receipts and unknowns.*
+**v0.4.3:** stands. Every consult is confirmed by his spoken yes or Check's tap, as CV §3 asks under the current D18
+contract (§6.9).
 
 **D19. Bilingual transcription (new).** (a) MC and CoS transcribe bilingually (§7); (b) English only, an accepted
 limit. *CC: (a). IR: requirement or accepted limit; check the transcript. CX: (a); test the kept German and English transcript on both providers, and if xAI cannot meet it, report that for a decision.*
@@ -1242,13 +1503,31 @@ each reply that may act, for one committed item the provider names; model action
 action after an unresolved stretch of speech. *CC: (A). IR: none recorded. CX: rejects (B), which breaks "never
 guessed" (LP1, LP2).*
 **Settled, (A)** (Robert, 28 Oct; §1, item 7): "A: tie by construction" (`DECISION_C2_ATTRIBUTION_2026-10-28.md`).
+**v0.4.3 (D25):** the principle stands and now holds on every provider: an effect is tied by construction to the
+request's owner item id and text hash, through the waiting action (§5.1). The half "model actions only on a provider
+that allows it" is superseded: no provider's model acts.
+
+**D25. Confirm by voice (new in v0.4.3).** (A) v3 (V3): the app acts and the voice only talks; one server-held
+waiting action, decided by his next utterance; the understanding call; the summary shown; (B) Codex's v2
+(`DESIGN_confirm_by_voice_v2.md`): proposals with corrections and mixed intent, tracking whether the question was
+heard, gated provider audio, a separate speech generator, consult answers shown; (C) the build thread's first
+proposal (`A4_PART2_BRIEF.md`, which Robert first approved: "yes, implement that"): page-held proposals, with the OpenAI
+model's own call becoming a proposal. *CC: (A). IR: none recorded. CX: "build with changes" on (C) (CV), and wrote
+(B); the must-level lines (A) keeps are §5.1's; V3's table says what (A) leaves out and why.*
+**Settled, (A)** (Robert, 29 Oct; §1, item 16): "new simpler design", "go ahead and build v3". Left out of (B), and
+recorded as limits (§8, §17): corrections of a waiting action; a mixed "yes, and …"; tracking whether the question's
+audio was heard (a yes must follow the question's start; a dropped question is asked once more, then shown); gated
+provider audio (the voice is instructed, best effort, said honestly); a separate speech generator. Unlike (B), consult
+answers are spoken.
 
 ## 17. Not in this build
 
 A fourth voice implementation, copied controller or domain session loop; a server-held xAI session or media relay;
 any German or Portuguese change beyond §14.1; persona voice changes; Curator or Telegram voice; voice cloning; a
 French CoS; an `en-US` memo bootstrap for CoS Dictate; spoken reminders for CoS; Command mode; dropping
-`voice_control_*`; deploys or flags without Robert's word; choosing voice ids for Robert.
+`voice_control_*`; deploys or flags without Robert's word; choosing voice ids for Robert. From confirm by voice v3
+(D25): corrections of a waiting action, a mixed "yes, and …", speaker recognition, gated provider audio, and a consult
+to the other host's person by voice.
 
 ## 18. Future (consideration only)
 
@@ -1264,6 +1543,8 @@ Each chunk: **build → independent review → fixes → verify**, then one hand
 session. Codex reviewed A1 through CC_23; from the binding pass on, the gates are Claude agents only, two gates (§1,
 item 8). **At `c06adcdd`:** A1 (with the binding pass), A2 and A3 are built; Gate 1 passed at `b0c3518c`, Gate 2 clean
 at `89d115b6`; MC's production switch and the picked cards are on top, reviewed at `1eb36ff8`. A4 is next.
+**Since (v0.4.3):** A4's fix round, to `ecb45341` (`A4_FIX_RESULT.md`); then confirm by voice v3 (D25), on
+`claude/voice-1-2-v3` from `ecb45341`, which supersedes `A4_PART2_BRIEF.md` (VB).
 
 One writer per workspace. No polling or pings, and nothing relies on the retired nudge: a chunk that stops
 without its handoff shows as "stalled" to Robert and MC (PR #434), and work resumes from the last handoff. No push,
@@ -1275,6 +1556,7 @@ merge, flag or deploy without Robert's word.
 | **A2 CoS backend** (built) | `domains/cos/direct_voice.py`; card and pin; instructions and bound; store and projection; summary keys; portal prefix, guards, timeouts; switches | CoS refusal set; §6.5 acceptance; release check; not admitted = today |
 | **A3 Confer UI** (+ §14.1 if D23 (a)) (built) | live bar, provider, reveal, recovery, needs-attention, summary card, `pagehide`, companion; Dictate untouched | Confer suite; handover tests on both language pages; phone-width visual check |
 | **A4 Staging and listening** | install on staging; release checks; Robert's scripts, phone cases, audition (done 29 Oct); cards adopted | §11.2 steps 1–6 by Robert |
+| **A4 confirm by voice v3** (in build; D25) | four slices: the waiting-action core and route; the understanding call and gateway; the voice side (no model tools, content-free lines, read-back, the summary's window); the cards if needed | VB's tests against the builder's own baseline at `ecb45341`; one review at the end; a live check on both providers under the $20 cap; then Robert on dev |
 | **A5 Production** | release worktree, PR, bundle; tags and classifier output recorded | §11.5 steps 1–4 |
 | **A6 Cleanup** | §9 removals after D9 | no page references a retired path |
 | **B0–B2 Languages** | §14.3 baselines; §14.2 integration, mirrored; Robert's runs | every gate, both languages, both providers |
@@ -1286,8 +1568,9 @@ merge, flag or deploy without Robert's word.
   it sets none of the four voice switches (§11.1, PG S-1).
 - `cos_memory.md`'s production size (the 24,000-byte bound).
 - OpenAI WebRTC's playback-complete signal; xAI transcription without a language hint; a dated xAI model id.
-- **What §5.1's binding rests on**, on OpenAI over WebRTC, which the page uses. The live probes (28 Oct) checked them
-  over WebSocket only:
+- **What §5.1's binding rests on**, on OpenAI over WebRTC, which the page uses; since v0.4.3 for which line a
+  page-created reply speaks, and for barge-in and playback, no longer for who may act. The live probes (28 Oct)
+  checked them over WebSocket only:
   - OpenAI honours `create_response: false` and creates no reply of its own;
   - `input_audio_buffer.committed` carries `item_id` for every commit, a cough included;
   - `interrupt_response: true` cancels a page-created reply at his speech;
@@ -1302,6 +1585,11 @@ merge, flag or deploy without Robert's word.
   3 s after its call only refuses. xAI meets neither condition (§7), so no model action on xAI rests on its event
   order; its spoken summary is likely never read as heard, and never falsely (LV5).
 - How often the folding exception (§5.1) refuses a deliberate repeat on xAI.
+- **Confirm by voice v3** (§5.1, §5.4, §7), beyond fake transports and recorded sequences: real transcription of a
+  short "yes", "no" or "read it back"; whether xAI's own reply serves as the question, and how often the page's ask or
+  the screen fallback is needed; the understanding call's accuracy and latency on the real alias (the offline eval,
+  in the live check); the 1.5 s wait's cost on OpenAI (§12.4); whether a real model obeys the no-repeat rule.
+- The `minimoi-voice-intent` alias and its use of the summary keys (not yet provisioned).
 - S3 on the real portal, after the S-2 core fix, on both hosts (§11.1). Before the fix, End after any restart
   answers 403 on both.
 - Whether OpenClaw's built-ins ask for confirmation in ways its configuration does not show.
@@ -1309,6 +1597,7 @@ merge, flag or deploy without Robert's word.
 - The summary keys (not yet created); the gateway's reachability from portal and `cos-scheduler` (both share its
   default compose network; not exercised); backup coverage of `${MINIMOI_ROOT}/cos_voice`.
 - In a browser: the panel over a live German or Portuguese session; MC's direct records under an old image (S5).
-- The code beyond `c06adcdd`. This spec states the contract; §5.7 lists what the build does not yet meet.
+- The code beyond `c06adcdd`, A4's fix round and v3 included. This spec states the contract; §5.7 lists what the
+  build does not yet meet.
 - Every listening, phone and latency claim for the direct path beyond the audition clips; Grok Voice's first-audible
   timing.
