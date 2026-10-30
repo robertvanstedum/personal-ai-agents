@@ -71,14 +71,19 @@ class TaskWatch:
                     (sid,service.principal,service.environment,d['spec']['task_id'],d['spec']['generation'],json.dumps(d),sha(d)))
             cur.execute('''SELECT * FROM guild.mc_task_subscriptions WHERE principal_id=%s AND environment=%s
                 AND state='armed' ORDER BY created_at FOR UPDATE''',(service.principal,service.environment))
+            rows=cur.fetchall()
+            # next_observe_at is stamped by the database's clock, so due-ness reads that clock
+            # (after the row locks), never this host's: the two can differ (a Docker VM's clock).
+            cur.execute('SELECT clock_timestamp() AS now')
+            now=cur.fetchone()['now']
             jobs=[]
-            for row in cur.fetchall():
+            for row in rows:
                 d=declarations.get(str(row['subscription_id']))
                 if d != row['declaration'] or not d or not self.allowed(service,d):
                     state='expired' if row['declaration']['expires_at'] <= time.time() else 'revoked'
                     cur.execute('UPDATE guild.mc_task_subscriptions SET state=%s WHERE subscription_id=%s',(state,row['subscription_id']))
                     continue
-                if row['next_observe_at'].timestamp() <= time.time():
+                if row['next_observe_at'] <= now:
                     jobs.append({'mode':'task_observe','subscription_ref':str(row['subscription_id'])})
             return jobs[:16]
 
@@ -93,14 +98,17 @@ class TaskWatch:
         d=self.declarations(service).get(sid)
         require(d is not None and self.allowed(service,d))
         with service._tx() as conn,_cursor(conn) as cur:
-            cur.execute('''SELECT *,extract(epoch FROM challenge_expires_at) AS challenge_expiry
-                FROM guild.mc_task_subscriptions WHERE subscription_id=%s AND principal_id=%s AND environment=%s FOR UPDATE''',
-                (sid,service.principal,service.environment))
+            cur.execute('''SELECT * FROM guild.mc_task_subscriptions WHERE subscription_id=%s AND principal_id=%s
+                AND environment=%s FOR UPDATE''',(sid,service.principal,service.environment))
             row=cur.fetchone()
             require(row and row['declaration']==d and row['state']=='armed')
+            # The database stamps the challenge expiry, so it is read against the database's clock (as in poll).
+            cur.execute('SELECT clock_timestamp() AS now')
+            now=cur.fetchone()['now']
+            challenge_live=row['challenge_expires_at'] is not None and row['challenge_expires_at']>now
             if phase=='task_begin':
                 # Overlapping/restarted ticks cannot replace an active challenge.
-                if row['challenge_expiry'] and float(row['challenge_expiry'])>time.time():return {'state':'busy'}
+                if challenge_live:return {'state':'busy'}
                 nonce=secrets.token_hex(32)
                 cur.execute('''UPDATE guild.mc_task_subscriptions SET nonce_sha256=%s,staged='',
                     challenge_expires_at=clock_timestamp()+interval '120 seconds',
@@ -110,8 +118,7 @@ class TaskWatch:
                 return {'subscription_ref':sid,'nonce':nonce,'expires_at':time.time()+115,'target':d['target'],
                         'principal':d['principal'],'environment':d['environment'],'spec':d['spec'],
                         'checkpoint_bytes':len(raw),'checkpoint_sha256':hashlib.sha256(raw).hexdigest()}
-            require(type(body['nonce']) is str and row['nonce_sha256'] and row['challenge_expiry'] and
-                    float(row['challenge_expiry'])>time.time() and
+            require(type(body['nonce']) is str and row['nonce_sha256'] and challenge_live and
                     secrets.compare_digest(hashlib.sha256(body['nonce'].encode()).hexdigest(),row['nonce_sha256']))
             if phase=='task_chunk':
                 raw=encoded(row['checkpoint']).decode('ascii')

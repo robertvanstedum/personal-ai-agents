@@ -5,6 +5,8 @@ import time
 import unittest
 from copy import deepcopy
 from dataclasses import asdict
+from types import SimpleNamespace
+from unittest.mock import patch
 from test_tool_path_postgres import Base, DSN, MIGRATIONS, OWNER
 from test_board_postgres import BOARD_MIGRATIONS
 from test_agent_contact_postgres import TARGET, CONV, TOKEN, EXECUTOR
@@ -112,6 +114,17 @@ class TaskWatchTests(Base,unittest.TestCase):
         self.assertEqual(self.api('task_stage',nonce=d['nonce'],offset=0,data='{}').status_code,409)
         self.assertEqual(self.commit(fresh,self.output()).status_code,200)
         self.assertEqual(self.one('SELECT count(*) FROM guild.mc_agent_contacts')[0],0)
+
+    def test_due_and_challenge_read_the_database_clock_not_this_hosts(self):
+        # The database stamps next_observe_at and the challenge expiry. A Docker VM's clock can run ahead of or
+        # behind this host's (Colima's ran 96 ms ahead on 29 Oct): neither may hide a due job or expire a challenge.
+        import core.mc_tools.task_watch as module
+        real=time.time
+        for skew in (-5,300):
+            with self.subTest(skew=skew),patch.object(module,'time',SimpleNamespace(time=lambda:real()+skew)):
+                with self.connect() as conn,conn.cursor() as cur:cur.execute('TRUNCATE guild.mc_task_subscriptions')
+                d=self.begin()
+                self.assertEqual(self.api('task_stage',nonce=d['nonce'],offset=0,data='{}').status_code,200)
 
     def test_wrong_digest_offset_and_partial_upload_refuse(self):
         d=self.begin()

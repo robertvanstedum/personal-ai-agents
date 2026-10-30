@@ -285,9 +285,12 @@ def resolve(conn, *, session_key, agent_id, allowed_agents, principal: str, envi
                 conn.commit()
                 sleep(_RUN_POLL_S)
                 continue
-            cur.execute("""SELECT ledger_id FROM guild.mc_tool_turns WHERE runtime_run_id=%s
-                AND ledger_id=%s AND claim_generation=%s FOR NO KEY UPDATE""", (run_id, *locked_ledger))
-            if cur.fetchone() is None:
+            # The run's turn at its own claim generation: a ledger entry reclaimed since (a later
+            # generation) is refused below as a turn no longer live, not as a run never bound.
+            cur.execute("""SELECT ledger_id, claim_generation FROM guild.mc_tool_turns WHERE runtime_run_id=%s
+                AND ledger_id=%s FOR NO KEY UPDATE""", (run_id, locked_ledger[0]))
+            locked_turn = cur.fetchone()
+            if locked_turn is None:
                 raise NotBound("tool_run_not_bound")
             # A lock wait can outlive the lease. Use a fresh statement/snapshot
             # after all locks, so clock and revocation checks are not pre-wait.
@@ -300,7 +303,7 @@ def resolve(conn, *, session_key, agent_id, allowed_agents, principal: str, envi
                             AND r.claim_generation = t.claim_generation) AS stopped
                 FROM guild.mc_tool_turns t JOIN guild.mc_turn_ledger l ON l.id = t.ledger_id
                 WHERE t.runtime_run_id=%s AND t.ledger_id=%s AND t.claim_generation=%s
-                """, (run_id, *locked_ledger))
+                """, (run_id, *locked_turn))
             row = cur.fetchone()
             if row is not None or clock() >= deadline:
                 break

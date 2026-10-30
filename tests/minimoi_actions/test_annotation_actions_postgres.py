@@ -20,7 +20,7 @@ from core.minimoi_actions.receipts import EffectIntent, ReceiptStore
 from core.minimoi_actions.requests import ToolRequest
 from core.workshop_journal.errors import CommitUnknown
 from postgres_fixture_support import DSN, PostgresFixture
-from test_statement_journal import prepared
+from test_statement_journal import NOW, prepared
 
 
 @unittest.skipUnless(DSN,'requires disposable MC_BINDING_TEST_DSN')
@@ -97,11 +97,14 @@ class AnnotationActionPostgresTests(PostgresFixture,unittest.TestCase):
         self.assertEqual(result['state'],'verified')
         self.assertEqual(result['receipt_id'],first['receipt_id'])
         self.assertTrue(self.verified())
+        # prepared() dates the source turn at its fixed NOW (20 Oct 2026), so the window reaches back to it;
+        # a window of the last day stopped containing the statement on 21 Oct.
+        start = NOW-timedelta(days=1)
         with self.connect() as conn:
             view = project_corrections(context=self.context,rows=self.journal.snapshot(),
                 annotations=self.shelf.snapshot(context=self.context,now=datetime.now(timezone.utc),can_read_statement=lambda *_:True).annotations,
-                start=self.now-timedelta(days=1),end=self.now,now=datetime.now(timezone.utc),
-                coverage=CaptureCoverage(self.now-timedelta(days=1),self.now),can_read_statement=lambda *_:True,
+                start=start,end=self.now,now=datetime.now(timezone.utc),
+                coverage=CaptureCoverage(start,self.now),can_read_statement=lambda *_:True,
                 verify_owner_annotation=lambda c,p,d,s:self.actions.verify_completed(conn,c,p,d,s))
         self.assertEqual(view['corrections'],1)
         self.assertEqual(view['entries'][0]['original_kind'],'direction')

@@ -28,13 +28,22 @@ class RecallTests(Base,unittest.TestCase):
         self.ledger_id=self.claim(NOTE,C);self.bind(self.ledger_id,NOTE,C);self.run=self.runs[self.ledger_id]
         with self.connect() as conn,conn.cursor() as q:
             q.execute('TRUNCATE guild.floor_messages CASCADE')
-            # Disposable negative fixture deliberately permits private rows and large notes.
+            # Disposable negative fixture deliberately permits private rows and large notes. The schema's own
+            # checks go back after each test: later tests on this database rely on them (owner note, artifacts).
+            q.execute("""SELECT conname,pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='guild.floor_messages'::regclass
+                AND conname IN ('floor_messages_record_mode_check','floor_messages_text_check')""")
+            self.addCleanup(self.restore_checks,q.fetchall())
             q.execute('ALTER TABLE guild.floor_messages DROP CONSTRAINT IF EXISTS floor_messages_record_mode_check')
             q.execute('ALTER TABLE guild.floor_messages DROP CONSTRAINT IF EXISTS floor_messages_text_check')
         self.meta(C);self.meta(D)
         self.add(C,'old','needle old');self.add(C,NOTE,'current owner request');self.add(C,'later','needle forbidden')
         self.add(D,'prior','needle historical');self.add(D,'private','needle private',mode='off_record')
         self.add('cos','cross-role','needle CoS')
+    def restore_checks(self,dropped):
+        with self.connect() as conn,conn.cursor() as q:
+            q.execute('TRUNCATE guild.floor_messages CASCADE')
+            for name,definition in dropped:
+                q.execute(f'ALTER TABLE guild.floor_messages ADD CONSTRAINT {name} {definition}')
     def meta(self,c,**extra):
         data=dict(id=c,principal=OWNER,legacy=False,archived=False,scope='operate',notes_floor='guild/'+c);data.update(extra)
         (self.folder/(c+'.json')).write_text(json.dumps(data))

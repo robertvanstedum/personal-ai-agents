@@ -72,6 +72,23 @@ jobs:
   test:
     needs: classify
     runs-on: ubuntu-latest
+    # A throwaway PostgreSQL for the opt-in database tests (MC_BINDING_TEST_DSN):
+    # trust auth, synthetic data only, gone when the job ends. It is the image
+    # production runs (docker-compose.prod.yml). Without it those tests skip.
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: mc12_test_ci
+        ports:
+          - 5432:5432
+        # Over TCP: during first-start setup the server listens on its socket only.
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres -d mc12_test_ci"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
     steps:
       - uses: actions/checkout@v4
 
@@ -90,11 +107,13 @@ jobs:
       # A focused set for a domain or document release (scripts/ci/select_tests.py);
       # the whole suite for a full release, a manual run, or any doubt. Anything
       # other than "focused" runs the whole suite. The whole suite also runs
-      # nightly on main (nightly-tests.yml).
+      # nightly on main (nightly-tests.yml). The database tests run whenever
+      # their files are in the set.
       - name: Run regression tests
         env:
           TEST_SCOPE: ${{ needs.classify.outputs.test_scope }}
           TEST_TARGETS: ${{ needs.classify.outputs.test_targets }}
+          MC_BINDING_TEST_DSN: host=127.0.0.1 port=5432 dbname=mc12_test_ci user=postgres
         run: |
           if [ "$TEST_SCOPE" = "focused" ] && [ -n "$TEST_TARGETS" ]; then
             echo "Focused tests: $TEST_TARGETS"
