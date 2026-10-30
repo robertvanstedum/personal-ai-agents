@@ -71,7 +71,7 @@ H = the build thread's amendment request (items 1–11); PG = the post-Gate-2 re
 | The cards' accents against persona v1.1: Robert's choice, the record open (PG S-4) | §6.2; D1 |
 | MC's German transcribed as German: his card is bilingual from 0.1.20 (PG S-3) | §6.1; §7; D19 |
 | MC's production admission switch as built; Robert's predeploy with every switch unset, and production then as at `89d115b6` (P1; PG S-1, N3, N4) | §1; §11.1; §20 |
-| S3's "open sessions End" not met after the admission restart: open, before §11.5 step 3 (PG S-2) | §11.1; §11.5; §20 |
+| S3's "open sessions End" after the admission restart (PG S-2): fixed in the core at `d96414b2` (A4 fix round, reviewed clean); the real-portal S3 test on each host is still to run, before §11.5 step 3 | §11.1; §11.5; §20 |
 | The 1.2 code gates are Claude agents only (Robert, 28 Oct) | §1; §5.5; §19; D15 |
 | Code base, references and the unmet-contract table brought to `c06adcdd` | header; §5.7; §20 |
 
@@ -428,7 +428,7 @@ core, before CoS uses it. This section is the contract A1 meets for both hosts.
   - **App lines are content-free:** the question, worded naturally by the voice from a content-free instruction ("Sure,
     just confirm for me", "Shall I go ahead?"); done, not done, still running, unknown; "All right."; the stray-yes
     line; refusals, which name the form and never quote him; late results. A note's receipt is "Saved.", a post-it's
-    "Posted." (VB).
+    "Post-it added." (the A4 fix round's existing receipt, `b337f1cd`).
   - **Consult answers are spoken:** they are MC's or CoS's words, not his. Otherwise voice is no use in the car (V3).
   - **His words, and the summary, are spoken only when he asks** ("read it back", "read me the summary"; §5.3).
   - **Honestly:** the voice's own replies are *instructed* not to repeat his words (§6.2). That is best effort, not
@@ -506,7 +506,7 @@ core, before CoS uses it. This section is the contract A1 meets for both hosts.
 
 | Outcome | When | Spoken | At reveal |
 |---|---|---|---|
-| `done` | the typed turn returned, with its receipt | a consult's answer; "Saved." (a post-it "Posted.") only with the receipt | answered / receipt |
+| `done` | the typed turn returned, with its receipt | a consult's answer; "Saved." (a post-it "Post-it added.") only with the receipt | answered / receipt |
 | `not_done` | refused before dispatch, or the backend said it did not happen | "That did not go through. Nothing was done." or the refusal, which names the form and never quotes him | not done + reason |
 | `pending` | still running after 25 s | "That's taking longer; the answer will be in the conversation." | the outcome when it lands |
 | `unknown` | dispatched, no answer: network loss, timeout, 5xx, edge 504, backend exception after dispatch | "I didn't get the result back. Check it in writing before asking again." | result unknown until reconciled |
@@ -724,7 +724,7 @@ hosts".
 | Store `close`, `records`, `state`, `sessions` (§4.4) | A2 adds what CoS needs | built in A2; `close` returns `(closed\|already, fields)`, its boundary inside `capture` (`A2_RESULT.md`) | closed |
 | CoS projection by revision; tail repair (§6.5) | as §6.5 | built in A2; Gate 2 Q N2, Q N5 fixed | closed |
 | A repeated sentence is a new effect (§5.1) | a new effect | refused on xAI by the folding exception (§5.1) | recorded exception; A4 counts it |
-| S3: open sessions End (§11.1) | End answers in S3 | End answers 403 after any restart, on both hosts (PG S-2; shared core) | fixed in the core before either admission (§11.5 step 3; Robert, 29 Oct) |
+| S3: open sessions End (§11.1) | End answers in S3 | End answers 403 after any restart, on both hosts (PG S-2; shared core) | fixed in the core at `d96414b2` (A4 fix round); the real-portal S3 test still to run before either admission (§11.5 step 3; Robert, 29 Oct) |
 | MC's manifest names its persona (§4.5) | `persona: {source, version, sha256}` | MC's manifest has `"persona": "mc-chat"`, its package name (PG N7) | open; a new MC release adds it (build thread) |
 | Confirm by voice v3 (D25) | no model tools; the server's waiting action, its routes and the consult route's check (§5.1); the understanding call (§5.4); the summary shown (§5.3) | not built: OpenAI's model acts by itself, xAI acts only through Check, the summary is spoken | v3 on `claude/voice-1-2-v3` from `ecb45341`, one review at the end, a live check on both providers under the $20 cap, then Robert on dev (VB; §19). Operations provisions the alias and keys (§5.4) |
 
@@ -1141,7 +1141,7 @@ starts unless it is admitted (S1–S3). The German and Portuguese pages get noth
 with every switch unset is as at `89d115b6` was made at `1eb36ff8`; at the v3 head it rests on the S1–S3 and
 no-change tests VB requires until that proof is re-run (§5.7).
 
-**Open: S3's "open sessions End" is not met** (PG S-2). Admission is a per-process snapshot, so S2 → S3 is a restart.
+**Fixed in the core at `d96414b2` (A4 fix round, reviewed clean); the real-portal S3 test on each host is still to run.** As found (PG S-2): Admission is a per-process snapshot, so S2 → S3 is a restart.
 After it, End on a session started before the restart answers 403 "not your session" (`V:direct_host.py:1968`). The
 provider audio, browser to provider, carries on; its consults and transcript posts are refused too; what was said
 reveals only when the summary is asked for or the session's maximum passes. S3 has been exercised on a synthetic
