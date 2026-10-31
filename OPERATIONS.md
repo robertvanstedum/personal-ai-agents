@@ -450,8 +450,8 @@ is the fully verified picture (live `launchctl`/`docker`/`crontab`/`lsof` inspec
 
 | Service | Port | Runs as | Notes |
 |---|---|---|---|
-| Guild Operations agent | 8768 | launchd `com.user.operations` | **Guild's agents appear only here** — absent from the prod container list entirely |
-| Guild Dev agent | 8771 | launchd `com.user.devagent` | Same |
+| Guild Operations agent | 8768 | launchd `com.user.operations` | **Guild's agents appear only here** — absent from the prod container list entirely. Code is deployed with `deploy_dev.sh deploy operations` (below) |
+| Vault Ask | 8771 | launchd `com.vanstedum.minimoi-vault-ask` | `core.memory_ask.service`. The former Guild Dev agent (`com.user.devagent`) that used this port is no longer loaded (checked 2026-10-24) |
 | CoS (bare) | 8769 | launchd `com.user.cos` | Runs **simultaneously** with the containerized dev CoS below — dual-instance |
 | CoS (containerized dev) | 18769 | Docker `minimoi-cos-dev` | |
 | Portuguese | 8770 | launchd `com.user.portuguese` | Plus scheduled `com.user.portuguese-leitura` |
@@ -477,6 +477,70 @@ port in `lsof` is Colima's port-forwarder acting on the container's behalf, not 
 native listener. Both native curator launchd jobs (`com.user.curator-server`,
 `com.vanstedum.minimoi-curator`) were pre-Docker leftovers that could never bind, and
 are disabled as `*.plist.disabled-2026-09-08`.
+
+### Deploying to dev by domain (one command per unit)
+
+Merging to `main` is a production release, so dev is never updated by merging. Dev gets one command per
+**deployable unit**, a whole domain or part of one, run on the Mac from any worktree. Spec:
+[docs/specs/spec_163_dev_deploy_by_domain_2026-10-24.md](docs/specs/spec_163_dev_deploy_by_domain_2026-10-24.md)
+(item 163, issue #373).
+
+```bash
+scripts/operations/deploy_dev.sh units                                                 # the registry
+scripts/operations/deploy_dev.sh deploy <unit> <commit> --operator <name> --dry-run    # checks only
+scripts/operations/deploy_dev.sh deploy <unit> <commit> --operator <name>              # build, apply, verify
+scripts/operations/deploy_dev.sh rollback <unit> --operator <name>                     # undo the last change
+scripts/operations/deploy_dev.sh status [<unit>]                                       # what each unit runs
+```
+
+**The registry** is [scripts/operations/dev_deploy_units.json](scripts/operations/dev_deploy_units.json):
+
+| Unit | Domain | Runtime | Notes |
+|---|---|---|---|
+| `portal` | portal | docker | Includes **the Guild UI (Build, Operate, queue) and MC chat** (`minimoi_portal/guild_ui`); moves the `board-api` sidecar with it |
+| `guild-ui` | guild | docker, part of `portal` | Only `minimoi_portal/guild_ui`, as an overlay on the running portal image |
+| `german`, `portuguese` | german, portuguese | docker | Deploy both for a parity fix |
+| `cos-scheduler` | cos | docker | |
+| `curator` | curator | docker | State stays on its host mounts; the config check refuses mount changes |
+| `records` | records | docker | Health is the container's own healthcheck; full builds only |
+| `operations` | guild | launchd `com.user.operations` | Guild Operations agent, 8768 (see below) |
+| `dev-agent` | guild | launchd `com.user.devagent` | Registered, **not deployable today**: plist disabled 26 Sep 2026; 8771 is now Vault Ask |
+| `model-gateway`, `postgres` | — | — | **Out of bounds**: refused by name |
+
+**Adding a unit (a new domain or function):** add one entry to `dev_deploy_units.json` (`domain`,
+`runtime`, `deps`, `source`, `health`; for docker also `container` and `dockerfile`; for launchd `label`,
+`script` and `state`; `part_of` for part of a domain; spec 163 section 1 lists every field). Run
+`tests/test_dev_deploy.py`, which checks that the entry is complete and its files exist, then run
+`deploy … --dry-run`, which must show `config_diff: []`. No code change is needed.
+
+- **What a docker deploy does:** builds the production Dockerfile over `git archive <commit>` (`--overlay`,
+  or always for a part, copies just the unit's source onto the running image, and only when dependencies
+  are unchanged). It labels the image with the commit and rewrites `~/minimoi-runtime/dev-pins/<service>.json`
+  (the last file in the running compose chain). It refuses if anything but the image would change, recreates
+  only that container, and checks it: health URLs, every deployed file (code and HTML/JS/CSS assets) against
+  the commit, and the OpenClaw gateway untouched. For `portal` and `guild-ui`, the `board-api` sidecar is stopped
+  first, rejoined to the new portal, and proven: same namespace, same security settings, same credentials, signed
+  readiness. A failed check rolls back by itself.
+- **What a launchd deploy does** (`operations`): extracts the commit once into
+  `~/minimoi-runtime/dev-code/<unit>/<commit>/` and links `logs/` and `data/guild/memory/` back to the agent's
+  state home (`~/.worktrees/ops-runtime`). It re-points the plist with plistlib (script path and
+  WorkingDirectory only), then runs `launchctl bootout`/`bootstrap`. Health means a new PID running the pinned
+  script, `127.0.0.1:8768/health` 200 and matching source files. Rollback re-points to the previous location.
+- **Record:** `~/minimoi-runtime/operators/dev-<deploy|rollback>-<unit>-<sha>-<UTC>/` (REQUEST, pin or plist
+  before/after, config before/after as key lists and digests, health, RESULT or FAILURE/REFUSED,
+  `rollback.sh`), plus one line per change in `~/minimoi-runtime/dev-pins/HISTORY.jsonl`.
+- **It refuses** when:
+  - the unit, or the domain it is part of, is held by another operator (`~/minimoi-runtime/dev-pins/HOLD-<unit>`,
+    JSON `{"owner", "reason"}`);
+  - the deploy would drop commits dev runs now (`--replace-unrelated` overrides);
+  - the current code has no known commit (`--accept-unknown-current`, first deploy only);
+  - migrations are involved: apply them as their own step, then `--with-migrations-applied`. Rollback never
+    undoes schema;
+  - an MC turn is in progress (portal, guild-ui);
+  - another deploy or heavy job is running.
+- `deploy_dev.sh` takes the host-wide lock (`_working/tools/heavy_job.py`); dry runs, `status` and `units`
+  do not. There is no CI job for dev: reaching the Mac from GitHub would need a runner or an inbound endpoint on
+  the host that holds the Keychain and personal data.
 
 ## Mac restart protocol
 
