@@ -1,0 +1,43 @@
+{
+  "schema": "minimoi.cos.store_command/1",
+  "command_id": "cmd-0002",
+  "kind": "commitment.open",
+  "target": {
+    "type": "cos.obligation",
+    "id": "OBL-cos-followup-0001"
+  },
+  "expected_revision": null,
+  "actor": "cos",
+  "seat": "cos",
+  "origin": "owner_turn",
+  "basis_ref": {
+    "type": "cos.turn",
+    "id": "cosc-0a1b2c3d4e5f:t-0a1b2c3d4e5f6a"
+  },
+  "payload": {
+    "schema": "minimoi.cos.obligation_definition/1",
+    "data_scope": "personal",
+    "environment": "prod",
+    "id": "OBL-cos-followup-0001",
+    "revision": 0,
+    "who": "cos",
+    "what": "Find out from MC where the three new feature ideas should go",
+    "basis_ref": {
+      "type": "cos.turn",
+      "id": "cosc-0a1b2c3d4e5f:t-0a1b2c3d4e5f6a"
+    },
+    "recurrence": {
+      "kind": "once",
+      "tz": "America/Chicago",
+      "due": "2026-10-30T18:00:00-05:00"
+    },
+    "practice_period": "until_due",
+    "reminder_window": null,
+    "evidence_rule": null,
+    "must_not_miss": false,
+    "state": "active"
+  },
+  "payload_digest": "sha256:3e8e0143e18c267b93464432e3506c145dbeef39e493a949212f49ea203ddfe2",
+  "data_scope": "company:rvs",
+  "environment": "prod"
+}

@@ -1,0 +1,6 @@
+{
+  "schema": "minimoi.cos.store_result/1",
+  "command_id": "cmd-0004",
+  "outcome": "failed",
+  "code": "store_unavailable"
+}

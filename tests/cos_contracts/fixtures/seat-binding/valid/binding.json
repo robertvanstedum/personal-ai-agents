@@ -1,0 +1,12 @@
+{
+  "schema": "minimoi.cos.seat_binding/1",
+  "session_key": "agent:cos-agent-a:cos:owner-01",
+  "run_id": "run-1",
+  "dispatch_id": "dsp-1",
+  "generation": 3,
+  "context_reference": "ctx-1",
+  "seat": "cos",
+  "actor": "cos",
+  "origin": "owner_turn",
+  "grant_ref": null
+}

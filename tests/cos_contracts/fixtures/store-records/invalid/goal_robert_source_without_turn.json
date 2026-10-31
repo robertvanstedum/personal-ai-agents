@@ -1,0 +1,23 @@
+{
+  "schema": "minimoi.cos.goal/1",
+  "data_scope": "personal",
+  "environment": "prod",
+  "id": "GOAL-german-b1",
+  "revision": 1,
+  "title": "German to B1",
+  "owner_words": [
+    {
+      "text": "I want to learn German",
+      "provenance": "robert_source"
+    }
+  ],
+  "domains": [
+    "german"
+  ],
+  "plan_ref": {
+    "type": "cos.plan",
+    "id": "PLAN-german-b1"
+  },
+  "state": "active",
+  "created_at": "2026-10-30T14:12:05-05:00"
+}

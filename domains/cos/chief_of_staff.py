@@ -55,6 +55,8 @@ from domains.cos.confer_service import (
 )
 from domains.cos.cost_checkpoint import run_cost_checkpoint
 from domains.cos import conversation_log
+from domains.cos import history as cos_history
+from domains.cos.store import memory as cos_memory_store
 from domains.cos.claim_truth import enforce_file_claims
 from domains.cos import files as cos_files
 from domains.cos import reminders
@@ -79,6 +81,9 @@ _routing_receipts = RoutingReceiptStore(MODEL_GATEWAY_RECEIPT_FILE)
 # (domains/cos/conversation_log.py); each None (off) until its folders are configured.
 _cos_files = cos_files.from_environ(os.environ)
 _conversations_dir = conversation_log.folder(os.environ)
+# The canonical CoS history (CoS 1.2 spec v0.3 section 4.19): on only with COS_CONVERSATIONS_DIR and
+# COS_STORE_ENVIRONMENT, the store's own switch. When on, the recall log above becomes its projection.
+_history = cos_history.from_environ(os.environ)
 
 
 def _workspace_note() -> str | None:
@@ -160,6 +165,15 @@ def _append_memory_entry(
     operation_id: str | None = None,
 ) -> dict:
     """Write one platform memory entry with optional durable deduplication."""
+    if _cos_store_writer is not None and cos_memory_store.imported(_cos_store_writer):
+        # After the import (CoS 1.2 spec section 4.5), the store is canonical and cos_memory.md is its projection.
+        try:
+            return cos_memory_store.remember(
+                _cos_store_writer, COS_MEMORY_FILE, entry,
+                kind="explicit_note" if entry_type == "note" else "memory_tool", operation_id=operation_id)
+        except (OSError, ValueError) as e:
+            _log_file("memory_write_error", str(e))
+            return {"saved": False, "deduplicated": False}
     try:
         current = _read_memory()
         if current == "(no memory yet)":
@@ -814,6 +828,7 @@ def _process_confer_turn(
     channel: str = "api_text",
     conversation_id: str = "owner",
     request_id: str | None = None,
+    turn_id: str | None = None,
 ):
     receipt_resolver = (
         _get_routing_receipt
@@ -836,6 +851,7 @@ def _process_confer_turn(
         channel=channel,
         conversation_id=conversation_id,
         request_id=request_id,
+        turn_id=turn_id,
     ))
 
 
@@ -1252,6 +1268,14 @@ app.register_blueprint(create_confer_voice_blueprint(
 from domains.cos.managed_realtime import install as _install_managed_realtime
 _cos_managed_realtime_ready = _install_managed_realtime(app, environ=os.environ,
     process_turn=_process_confer_turn, instructions=_build_cos_voice_instructions)
+# The CoS store's one writer and its internal API (CoS 1.2 spec v0.3 section 4.5). Mounted only when COS_STORE_DIR,
+# COS_STORE_ENVIRONMENT and COS_STORE_TOKEN_FILE are all set; otherwise nothing changes.
+from domains.cos.store.api import install as _install_cos_store
+_cos_store_writer = _install_cos_store(app, environ=os.environ,
+                                       verify_robert_source=_history.verify_robert_source if _history else None)
+if _history is not None:
+    from domains.cos.history_api import create_blueprint as _history_blueprint
+    app.register_blueprint(_history_blueprint(_history, resolve_owner=resolve_user_id))
 
 
 
@@ -1461,13 +1485,25 @@ def _ui_turn(body: dict) -> tuple[dict, int]:
                 text = _cos_files.compose_turn(text, attachments)
             except cos_files.FileRefused as e:
                 raise InvalidConferTurn(str(e)) from None
+        kept = None
+        if _history is not None and not _is_confer_operation(text):
+            kept, early = _history_begin(body, owner_text, attachment_names, channel)
+            if early is not None:
+                return early
         before = _cos_files.snapshot() if _cos_files is not None else None
-        result = _process_confer_turn(
-            text,
-            channel=channel,
-            conversation_id=body.get("conversation_id") or "owner",
-            request_id=body.get("request_id"),
-        )
+        try:
+            result = _process_confer_turn(
+                text,
+                channel=channel,
+                conversation_id=cos_history.backend_session(kept["conversation_id"]) if kept
+                else body.get("conversation_id") or "owner",
+                request_id=body.get("request_id"),
+                turn_id=_receipt_turn_id(kept["turn_id"]) if kept else None,
+            )
+        except BaseException as exc:
+            if kept:
+                _history_fail(kept, exc)
+            raise
         payload = result.public_dict()
         if before is not None:
             delivered = _cos_files.delivered_since(before)
@@ -1476,7 +1512,9 @@ def _ui_turn(body: dict) -> tuple[dict, int]:
             else:
                 # No file reached the outbox: a sentence claiming a saved or downloadable file is untrue (claim_truth).
                 payload["reply"], _ = enforce_file_claims(payload["reply"])
-        if not payload.get("operation"):       # notes, reminders and /new keep their own records
+        if kept:
+            payload["history"] = _history_answer(kept, payload, channel, owner_text, attachment_names)
+        elif not payload.get("operation"):     # notes, reminders and /new keep their own records
             conversation_log.append(_conversations_dir, conversation_id=result.conversation_id, turn_id=result.turn_id,
                                     channel=channel, owner_text=owner_text, attachments=attachment_names,
                                     reply=payload["reply"], files=payload.get("files"))
@@ -1530,10 +1568,88 @@ def _start_ui_turn(body: dict) -> str:
     return handle
 
 
+def _is_confer_operation(text: str) -> bool:
+    """/new, notes and reminders are operations with their own records, not conversation turns."""
+    return text.casefold() == "/new" or parse_explicit_note(text) is not None \
+        or parse_explicit_reminder(text) is not None
+
+
+def _receipt_turn_id(turn_id: str) -> str:
+    """The routing receipt keeps the UUID form Confer has always used, so V-1 and the receipts match the history."""
+    try:
+        return str(uuid.UUID(turn_id[2:]))
+    except ValueError:
+        return turn_id
+
+
+def _history_begin(body: dict, owner_text: str, attachment_names: list, channel: str):
+    """Save Robert's turn in the canonical history before CoS sees it. Returns (kept turn, None) or (None, response).
+    A repeated send returns the turn as it stands and never calls the model twice."""
+    owner = body.get("_owner")
+    requested = body.get("conversation_id")
+    try:
+        if requested and requested != "owner":
+            cid = requested
+        elif owner is not None:
+            cid = _history.selected(owner, body.get("device"))
+        else:
+            cid = _history.ensure_default()["conversation_id"]
+        words = owner_text or " ".join(f"[attached: {name}]" for name in attachment_names) or "[attachment]"
+        send = {"schema": "minimoi.cos.send/1", "conversation_id": cid,
+                "turn_id": cos_history.turn_id_for(body.get("turn_id") or body.get("request_id")),
+                "text": words, "channel": "voice" if channel == "html_voice" else "web"}
+        turn, replayed = _history.begin(send)
+    except cos_history.HistoryRefused as e:
+        return None, ({"reply": f"Not sent: {e.code.replace('_', ' ')}. Your draft is preserved.",
+                       "history": {"refused": e.code}}, 409 if e.code == "turn_id_reused" else 400)
+    except OSError:
+        _log_file("history_unavailable", "canonical history could not save the turn")
+        return None, ({"reply": "Not sent: CoS couldn't save your message. Your draft is preserved.",
+                       "history": {"refused": "history_unavailable"}}, 503)
+    if not replayed:
+        return turn, None
+    state = {"conversation_id": turn["conversation_id"], "turn_id": turn["turn_id"], "status": turn["status"],
+             "saved": True, "replayed": True}
+    if turn["status"] in ("answered", "recovered"):
+        return None, ({"reply": turn["reply_text"], "turn_id": _receipt_turn_id(turn["turn_id"]),
+                       "conversation_id": turn["conversation_id"], "history": state}, 200)
+    if turn["status"] == "pending":
+        return None, ({"reply": "CoS is still working on this message.", "history": state}, 202)
+    return None, ({"reply": "This message failed earlier. Send it again as a new message.", "history": state}, 409)
+
+
+def _history_fail(kept: dict, exc: BaseException) -> None:
+    code = {"ProviderUnavailableError": "provider_unavailable", "InvalidConferTurn": "refused",
+            "ConferOperationFailed": "operation_failed", "TimeoutError": "backend_timeout"}.get(
+        type(exc).__name__, "backend_error")
+    try:
+        _history.fail(kept["conversation_id"], kept["turn_id"], code)
+    except (cos_history.HistoryRefused, OSError):
+        _log_file("history_fail_unrecorded", f"turn {kept['turn_id']} failed ({code}) but was not recorded")
+
+
+def _history_answer(kept: dict, payload: dict, channel: str, owner_text: str, attachment_names: list) -> dict:
+    """Put the reply on its own turn, then write the recall log as the history's projection."""
+    try:
+        turn = _history.answer(kept["conversation_id"], kept["turn_id"], payload["reply"])
+    except (cos_history.HistoryRefused, OSError):
+        _log_file("history_answer_unrecorded", f"turn {kept['turn_id']} answered but the reply was not saved")
+        return {"conversation_id": kept["conversation_id"], "turn_id": kept["turn_id"], "status": "pending",
+                "saved": True, "reply_saved": False}
+    conversation_log.append(_conversations_dir, conversation_id=turn["conversation_id"], turn_id=turn["turn_id"],
+                            channel=channel, owner_text=owner_text, attachments=attachment_names,
+                            reply=payload["reply"], files=payload.get("files"), projection=True)
+    return {"conversation_id": turn["conversation_id"], "turn_id": turn["turn_id"], "status": turn["status"],
+            "saved": True, "reply_saved": True}
+
+
 @app.route("/ui/send", methods=["POST"])
 def ui_send():
     body = request.get_json(silent=True) or {}
     body.pop("_user_id", None)
+    body.pop("_owner", None)
+    if _history is not None:
+        body["_owner"] = resolve_user_id(request)
     if (body.get("channel") or "html_text") == "html_voice":
         body["_user_id"] = resolve_user_id(request)
     if body.get("background") is True and (body.get("channel") or "html_text") == "html_text":

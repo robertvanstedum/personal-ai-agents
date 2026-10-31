@@ -1,0 +1,54 @@
+{
+  "schema": "minimoi.activity.v2",
+  "data_scope": "personal",
+  "environment": "prod",
+  "domain": "guild-build",
+  "part": "facts",
+  "local_date": "2026-10-30",
+  "tz": "America/Chicago",
+  "generation": "8f0c2a91",
+  "seq": 4,
+  "digest": "sha256:4c9f6e4e3460ea45ec2d317c7867fb79967fadf0b388b8580c723c8adceaeee9",
+  "producer": {
+    "host": "prod-ec2-1",
+    "service": "minimoi-supervisor",
+    "image_tag": "1.2.0",
+    "commit": "4f531c6f"
+  },
+  "metric": "build_facts",
+  "observation": {
+    "state": "complete",
+    "covers": {
+      "from": "2026-10-30T00:00:00-05:00",
+      "to": "2026-10-30T23:59:59-05:00"
+    },
+    "source_checked_at": "2026-10-31T00:20:00-05:00",
+    "final": true
+  },
+  "published_at": "2026-10-31T00:20:01-05:00",
+  "count": 0,
+  "items": [],
+  "items_total": 0,
+  "items_truncated": false,
+  "withdrawn": [],
+  "health": {
+    "writer_last_ok": "2026-10-31T00:20:01-05:00",
+    "last_error": null
+  },
+  "detail": {
+    "checkins": {
+      "state": "ok",
+      "last_at": "2026-10-30T14:00:00-05:00",
+      "count": 40
+    },
+    "build_log": {
+      "state": "ok",
+      "in_build": 3,
+      "blocked": 1,
+      "done_today": 2
+    },
+    "snapshot": {
+      "state": "not_available_here"
+    }
+  }
+}

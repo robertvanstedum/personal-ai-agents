@@ -1,0 +1,336 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:cos:store-records",
+  "title": "CoS store records",
+  "description": "Spec v0.3 sections 4.2, 4.5, 4.6. Authoritative records under /opt/minimoi/cos/store/, written only by the CoS backend's command writer. Occurrences and episodes are folded from events and are never stored as editable rows.",
+  "oneOf": [
+    { "$ref": "#/$defs/goal" },
+    { "$ref": "#/$defs/plan" },
+    { "$ref": "#/$defs/obligation_definition" },
+    { "$ref": "#/$defs/obligation_event" },
+    { "$ref": "#/$defs/episode_event" },
+    { "$ref": "#/$defs/decision" },
+    { "$ref": "#/$defs/correction" },
+    { "$ref": "#/$defs/meeting_link" },
+    { "$ref": "#/$defs/standing_fact" }
+  ],
+  "$defs": {
+    "base": {
+      "type": "object",
+      "required": ["schema", "data_scope", "environment", "id", "revision"],
+      "properties": {
+        "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
+        "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" },
+        "id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+        "revision": { "$ref": "urn:minimoi:contract:cos:common#/$defs/revision" }
+      }
+    },
+    "goal": {
+      "description": "goals/GOAL-<id>.json. owner_words hold Robert's words with a verified turn. A goal with no robert_source span never enables a quiet-day observation (N3).",
+      "allOf": [{ "$ref": "#/$defs/base" }],
+      "type": "object",
+      "unevaluatedProperties": false,
+      "required": ["title", "owner_words", "domains", "state", "created_at"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.goal/1" },
+        "data_scope": true, "environment": true, "revision": true,
+        "id": { "type": "string", "pattern": "^GOAL-[A-Za-z0-9_-]{1,64}$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "owner_words": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "$ref": "urn:minimoi:contract:cos:common#/$defs/attributed_text" }
+        },
+        "domains": {
+          "description": "Domains this goal concerns. A quiet observation runs only for a domain named here, on an active goal holding a robert_source span.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "urn:minimoi:contract:cos:common#/$defs/domain" }
+        },
+        "plan_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/nullable_typed_ref" },
+        "state": { "enum": ["active", "paused", "retired"] },
+        "created_at": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" }
+      }
+    },
+    "plan": {
+      "description": "plans/PLAN-<id>.json. A program or personal plan; never carries MC's delivery detail.",
+      "allOf": [{ "$ref": "#/$defs/base" }],
+      "type": "object",
+      "unevaluatedProperties": false,
+      "required": ["title", "kind", "milestones", "as_of"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.plan/1" },
+        "data_scope": true, "environment": true, "revision": true,
+        "id": { "type": "string", "pattern": "^PLAN-[A-Za-z0-9_-]{1,64}$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "kind": { "enum": ["program", "personal"] },
+        "goal_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/nullable_typed_ref" },
+        "milestones": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "text", "state"],
+            "properties": {
+              "id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+              "text": { "$ref": "urn:minimoi:contract:cos:common#/$defs/attributed_text" },
+              "target_date": { "$ref": "urn:minimoi:contract:cos:common#/$defs/local_date" },
+              "state": { "enum": ["planned", "in_progress", "done", "dropped"] },
+              "refs": {
+                "type": "array",
+                "maxItems": 10,
+                "items": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" }
+              }
+            }
+          }
+        },
+        "as_of": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" }
+      }
+    },
+    "obligation_definition": {
+      "description": "obligations/definitions/OBL-<id>.json, revisioned. practice_period (when doing it counts) and reminder_window (when a nudge may be sent) are separate.",
+      "type": "object",
+      "unevaluatedProperties": false,
+      "required": ["who", "what", "basis_ref", "recurrence", "practice_period", "state"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.obligation_definition/1" },
+        "data_scope": true, "environment": true, "revision": true,
+        "id": { "type": "string", "pattern": "^OBL-[A-Za-z0-9_-]{1,64}$" },
+        "who": { "$ref": "urn:minimoi:contract:cos:common#/$defs/who" },
+        "what": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "goal_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/nullable_typed_ref" },
+        "basis_ref": {
+          "description": "Robert's turn, an approved recommendation, or a recorded policy decision.",
+          "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref"
+        },
+        "recurrence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "tz"],
+          "properties": {
+            "kind": { "enum": ["daily", "weekly", "once"] },
+            "tz": { "$ref": "urn:minimoi:contract:cos:common#/$defs/tz" },
+            "weekday": { "type": "integer", "minimum": 0, "maximum": 6 },
+            "due": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" }
+          },
+          "allOf": [
+            { "if": { "properties": { "kind": { "const": "weekly" } } }, "then": { "required": ["weekday"] } },
+            { "if": { "properties": { "kind": { "const": "once" } } }, "then": { "required": ["due"] } }
+          ]
+        },
+        "practice_period": { "enum": ["local_day", "local_week", "until_due"] },
+        "reminder_window": {
+          "description": "Agreed with Robert in conversation; recorded as a definition revision whose basis_ref is his turn. null means no nudges.",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["from", "to"],
+              "properties": {
+                "from": { "$ref": "urn:minimoi:contract:cos:common#/$defs/local_time" },
+                "to": { "$ref": "urn:minimoi:contract:cos:common#/$defs/local_time" }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "evidence_rule": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["domain", "metric", "min_count"],
+              "properties": {
+                "domain": { "$ref": "urn:minimoi:contract:cos:common#/$defs/domain" },
+                "metric": { "enum": ["sessions_completed", "feedback_actions", "build_update"] },
+                "min_count": { "type": "integer", "minimum": 1 }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "quiet_after_days": { "type": ["integer", "null"], "minimum": 1, "maximum": 30 },
+        "must_not_miss": {
+          "description": "E4. Only Robert sets it, in his own words: basis_ref must then be his turn.",
+          "type": "boolean"
+        },
+        "issue_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/nullable_typed_ref" },
+        "state": { "enum": ["active", "paused", "retired"] }
+      },
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "if": { "properties": { "must_not_miss": { "const": true } }, "required": ["must_not_miss"] },
+          "then": { "properties": { "basis_ref": { "properties": { "type": { "enum": ["cos.turn", "telegram.message", "rooms.event"] } } } } }
+        }
+      ]
+    },
+    "obligation_event": {
+      "description": "One line of obligations/events.jsonl. Immutable. Occurrence id is OBL-<id>@<local_date>. Completion needs evidence_ref; acknowledging never completes.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "data_scope", "environment", "event_id", "type", "occurrence_id", "at", "actor", "seat", "revision_before"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.obligation_event/1" },
+        "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
+        "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" },
+        "event_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+        "type": {
+          "enum": ["opened", "nudge_claimed", "nudged", "acknowledged", "evidence_linked", "satisfied", "satisfied_late", "postponed", "cancelled", "reopened", "missed"]
+        },
+        "occurrence_id": { "type": "string", "pattern": "^OBL-[A-Za-z0-9_-]{1,64}@[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "at": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" },
+        "actor": { "$ref": "urn:minimoi:contract:cos:common#/$defs/actor" },
+        "seat": { "oneOf": [{ "$ref": "urn:minimoi:contract:cos:common#/$defs/seat" }, { "type": "null" }] },
+        "basis_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
+        "evidence_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
+        "revision_before": { "$ref": "urn:minimoi:contract:cos:common#/$defs/revision" },
+        "claim_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "enum": ["satisfied", "satisfied_late", "evidence_linked"] } } },
+          "then": { "required": ["evidence_ref"] }
+        },
+        {
+          "if": { "properties": { "type": { "enum": ["postponed", "cancelled", "reopened"] } } },
+          "then": { "required": ["basis_ref"] }
+        },
+        {
+          "if": { "properties": { "type": { "enum": ["nudge_claimed", "nudged"] } } },
+          "then": { "required": ["claim_id"] }
+        }
+      ]
+    },
+    "episode_event": {
+      "description": "A reporting-episode event (section 4.6), in obligations/events.jsonl. Episodes are folded from these plus their claims: one ask at 24 h, one escalation at 36 h, closed by a full record ref.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "data_scope", "environment", "event_id", "type", "episode_id", "publisher", "part", "at", "revision_before"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.episode_event/1" },
+        "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
+        "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" },
+        "event_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+        "type": { "enum": ["opened", "ask_claimed", "asked", "escalation_claimed", "escalated", "closed", "reopened", "missed_cycle", "paused", "resumed"] },
+        "episode_id": { "type": "string", "pattern": "^EP-[a-z-]+-[a-z]+@[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "publisher": { "enum": ["mc"] },
+        "part": { "const": "update" },
+        "at": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" },
+        "claim_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+        "consultation_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
+        "closed_by": { "$ref": "#/$defs/record_key" },
+        "basis_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
+        "revision_before": { "$ref": "urn:minimoi:contract:cos:common#/$defs/revision" }
+      },
+      "allOf": [
+        { "if": { "properties": { "type": { "const": "closed" } } }, "then": { "required": ["closed_by"] } },
+        { "if": { "properties": { "type": { "enum": ["ask_claimed", "escalation_claimed"] } } }, "then": { "required": ["claim_id"] } },
+        { "if": { "properties": { "type": { "const": "asked" } } }, "then": { "required": ["claim_id", "consultation_ref"] } },
+        { "if": { "properties": { "type": { "enum": ["paused", "resumed"] } } }, "then": { "required": ["basis_ref"] } }
+      ]
+    },
+    "record_key": {
+      "description": "A full activity-record reference: key, generation and seq.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain", "part", "local_date", "generation", "seq"],
+      "properties": {
+        "domain": { "$ref": "urn:minimoi:contract:cos:common#/$defs/domain" },
+        "part": { "enum": ["main", "facts", "update"] },
+        "local_date": { "$ref": "urn:minimoi:contract:cos:common#/$defs/local_date" },
+        "generation": { "type": "string", "pattern": "^[0-9a-f]{8,64}$" },
+        "seq": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "decision": {
+      "description": "One line of decisions.jsonl: a CoS policy change with its recorded basis. Anything granting authority goes through supervision decisions instead and is referenced by D-code here.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "data_scope", "environment", "id", "at", "kind", "target", "basis", "summary"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.decision/1" },
+        "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
+        "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" },
+        "id": { "type": "string", "pattern": "^DEC-[A-Za-z0-9_-]{1,64}$" },
+        "at": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" },
+        "kind": { "enum": ["pause_nudge", "resume_nudge", "change_goal", "close_without_evidence", "build_phase", "reporting_pause", "standup_schedule"] },
+        "target": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
+        "basis": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "ref"],
+          "properties": {
+            "kind": { "enum": ["robert_words", "approved_recommendation", "supervision_decision"] },
+            "ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" }
+          }
+        },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 300 }
+      }
+    },
+    "correction": {
+      "description": "One line of corrections.jsonl, in the judgment store's real shape (scripts/judgment/judgment_store.py:43, FIELDS; tags at :44). owner-said comes only from an actual correction by Robert. Moving these into the Refinery is not in 1.2.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "data_scope", "environment", "id", "state", "when", "task", "did", "owner-said", "should-have", "tag", "source", "owner_turn_ref"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.correction/1" },
+        "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
+        "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" },
+        "id": { "type": "string", "pattern": "^COR-[A-Za-z0-9_-]{1,64}$" },
+        "state": { "enum": ["proposed", "adopted"] },
+        "when": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "task": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "did": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "owner-said": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "should-have": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "tag": { "enum": ["scope", "role", "authorization", "priority", "evidence", "effort"] },
+        "source": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "owner_turn_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" }
+      }
+    },
+    "meeting_link": {
+      "description": "meetings/<occurrence>.link.json. Ids only; Rooms owns the record.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "data_scope", "environment", "occurrence_id", "room_id", "session_id", "event_ids"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.meeting_link/1" },
+        "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
+        "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" },
+        "occurrence_id": { "type": "string", "pattern": "^OBL-[A-Za-z0-9_-]{1,64}@[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "room_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+        "session_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+        "event_ids": {
+          "description": "Rooms events.id (TEXT UNIQUE, rooms/store.py:108), not the seq.",
+          "type": "array",
+          "maxItems": 500,
+          "uniqueItems": true,
+          "items": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" }
+        }
+      }
+    },
+    "standing_fact": {
+      "description": "One line of facts.jsonl (section 4.5, memory layers): a standing fact CoS keeps about Robert's context. cos_memory.md migrates here with its real provenance (section 4.2) and then becomes a derived projection of these lines. Model-written lines are agent_draft; an explicit note Robert asked to save is approved, citing the note's own operation; robert_source needs a verified turn, as everywhere.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "data_scope", "environment", "id", "at", "section", "entry", "source", "state"],
+      "properties": {
+        "schema": {"const": "minimoi.cos.standing_fact/1"},
+        "data_scope": {"$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope"},
+        "environment": {"$ref": "urn:minimoi:contract:cos:common#/$defs/environment"},
+        "id": {"type": "string", "pattern": "^FACT-[0-9a-f]{12,32}$"},
+        "at": {"$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp"},
+        "section": {"type": "string", "minLength": 1, "maxLength": 120},
+        "entry": {"$ref": "urn:minimoi:contract:cos:common#/$defs/attributed_text"},
+        "source": {"type": "object", "additionalProperties": false, "required": ["kind", "tag", "entry_date"], "properties": {"kind": {"enum": ["cos_memory_md", "memory_tool", "explicit_note"], "description": "cos_memory_md: imported from the file; memory_tool: the model's write_memory call; explicit_note: Robert's /note or 'Save a note:'."}, "tag": {"enum": ["chat", "note", "action", "distilled"], "description": "The file's [tag], or distilled for untagged lines under a section."}, "entry_date": {"oneOf": [{"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}, {"type": "null"}]}, "operation_id": {"$ref": "urn:minimoi:contract:cos:common#/$defs/id"}, "line_digest": {"$ref": "urn:minimoi:contract:cos:common#/$defs/digest"}}},
+        "state": {"enum": ["active"]}
+      },
+      "allOf": [
+        {"if": {"properties": {"source": {"properties": {"kind": {"enum": ["cos_memory_md", "memory_tool"]}, "tag": {"enum": ["chat", "action", "distilled"]}}}}}, "then": {"properties": {"entry": {"properties": {"provenance": {"const": "agent_draft"}}}}}},
+        {"if": {"properties": {"entry": {"properties": {"provenance": {"const": "approved"}}}}}, "then": {"properties": {"source": {"required": ["operation_id"], "properties": {"tag": {"const": "note"}}}, "entry": {"properties": {"ref": {"properties": {"type": {"const": "cos.memory_note"}}}}}}}}
+      ]
+    }
+  }
+}

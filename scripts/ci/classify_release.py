@@ -366,6 +366,8 @@ def classify(paths: list[str],
             services.add("portuguese")
         elif path.startswith("domains/curator/") or path.startswith("config/curator/"):
             services.update(("curator", "system-bot"))
+        elif path.startswith("contracts/cos/"):
+            services.add("cos-scheduler")          # copied into the scheduler image; the store writer reads it
         elif path.startswith("domains/cos/"):
             services.update(("cos-bot", "cos-scheduler"))
         elif path.startswith("domains/guild/"):

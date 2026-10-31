@@ -1,0 +1,18 @@
+{
+  "schema": "minimoi.cos.reader_response/1",
+  "reader": "activity",
+  "state": "stale",
+  "as_of": "2026-10-30T14:12:05-05:00",
+  "data_scope": "personal",
+  "environment": "prod",
+  "limits": {
+    "max_items": 50,
+    "max_bytes": 65536,
+    "timeout_ms": 2000
+  },
+  "truncated": false,
+  "value": {
+    "count": 1
+  },
+  "reason": "timeout"
+}

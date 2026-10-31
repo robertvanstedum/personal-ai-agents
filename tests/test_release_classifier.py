@@ -132,6 +132,13 @@ def test_dormant_master_craftsman_files_redeploy_nothing_until_a_service_uses_th
     assert builders == ["Dockerfile.mc-agent"]
 
 
+def test_cos_contracts_restart_only_the_scheduler_that_copies_them():
+    assert classify(["contracts/cos/v1/store-command.schema.json"]) == ("domain", ("cos-scheduler",))
+    dockerfile = (Path(__file__).resolve().parent.parent / "docker" / "Dockerfile.cos-scheduler").read_text()
+    assert "COPY contracts/cos/ contracts/cos/" in dockerfile
+    assert classify(["contracts/domain-api/v1/guild-board/tools.json"]) == ("full", ALL_SERVICES)
+
+
 def test_production_builds_exactly_the_classifier_services():
     """A new build entry in deploy.yml (for example MC under another name) must
     be a classified service first (PR #260 review F2)."""

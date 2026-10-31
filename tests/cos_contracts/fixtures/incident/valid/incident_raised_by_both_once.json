@@ -1,0 +1,22 @@
+{
+  "schema": "minimoi.cos.incident/1",
+  "id": "inc-0001",
+  "class": "E1",
+  "dedup_key": "E1:prod-portal-down",
+  "state": "acknowledged",
+  "opened_at": "2026-10-30T14:12:05-05:00",
+  "acknowledged_at": "2026-10-30T14:20:00-05:00",
+  "recovered_at": null,
+  "raised_by": [
+    "cos",
+    "mc"
+  ],
+  "evidence_ref": {
+    "type": "supervision.checkin",
+    "id": "chk-1"
+  },
+  "one_line": "Production portal not answering",
+  "recovery_note": null,
+  "data_scope": "personal",
+  "environment": "prod"
+}

@@ -1,0 +1,28 @@
+{
+  "schema": "minimoi.cos.issue_operation/1",
+  "operation_id": "op-0001",
+  "op": "create",
+  "repo": "robertvanstedum/mini-moi-private",
+  "issue_number": null,
+  "payload_digest": "sha256:7b442755969630e28a983c76716ddc36972be93c72827ce56af09bc7bdecbdc7",
+  "state": "unknown",
+  "prepared_at": "2026-10-30T14:12:05-05:00",
+  "seat": "cos",
+  "approval": {
+    "tier": "exact",
+    "decision_ref": {
+      "type": "supervision.decision",
+      "id": "D-0042"
+    }
+  },
+  "reconciliation": {
+    "at": "2026-10-30T14:12:05-05:00",
+    "listing_complete": true,
+    "pages": 3,
+    "matched": false,
+    "matched_issue": null
+  },
+  "retry_allowed": true,
+  "data_scope": "personal",
+  "environment": "prod"
+}
