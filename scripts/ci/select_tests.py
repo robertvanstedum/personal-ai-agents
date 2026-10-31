@@ -288,7 +288,7 @@ def tests_for(repo: Repo, path: str) -> tuple[set[str], bool]:
     return selected, not selected and not is_doc(path)
 
 
-def select(paths: list[str], release_class: str, event: str = "push", repo: Repo | None = None) -> dict:
+def _select(paths: list[str], release_class: str, event: str = "push", repo: Repo | None = None) -> dict:
     """{"test_scope": "full"|"focused", "test_targets": [...], "reason": str}."""
     paths = [item.strip() for item in paths if item.strip()]
     if event in ("schedule", "workflow_dispatch"):
@@ -312,6 +312,22 @@ def select(paths: list[str], release_class: str, event: str = "push", repo: Repo
     # file can lose node-scoped conftest fixtures in pytest 9.1.
     return {"test_scope": "focused", "test_targets": sorted([*dirs, *files]),
             "reason": f"{covered} of {len(repo.tests)} test files for {len(paths)} changed paths"}
+
+
+RECORDS_TESTS = "prototype-lab/projects/project-records-room-poc/tests/"
+RECORDS_PREFIXES = ("domains/records/", "prototype-lab/projects/project-records-room-poc/",
+                    "services/records_", "tests/test_records_package.py")
+RECORDS_PACKAGING = {"docker/Dockerfile.records", "docker-compose.records.yml", "scripts/staging/records.sh"}
+
+
+def select(paths: list[str], release_class: str, event: str = "push", repo: Repo | None = None) -> dict:
+    """Keep the retained Records acceptance suite attached to its runtime."""
+    paths = [path.strip() for path in paths if path.strip()]
+    result = _select(paths, release_class, event, repo)
+    if any(path.startswith(RECORDS_PREFIXES) or path in RECORDS_PACKAGING for path in paths):
+        result["test_targets"] = sorted(set(result["test_targets"]) | {RECORDS_TESTS})
+        result["reason"] += "; Records acceptance suite"
+    return result
 
 
 def _full(reason: str) -> dict:

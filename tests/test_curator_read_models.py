@@ -31,7 +31,8 @@ def test_briefing_date_contracts_missing_invalid_and_stale(tmp_path):
     path=tmp_path/'latest.json';clock=lambda:NOW
     assert queries.load_briefing(path,clock=clock,datetime_type=datetime,enrich=enrich) is None
     path.write_text('{invalid')
-    assert queries.load_briefing(path,clock=clock,datetime_type=datetime,enrich=enrich) is None
+    with pytest.raises(views.InvalidBriefing):
+        queries.load_briefing(path,clock=clock,datetime_type=datetime,enrich=enrich)
     path.write_text(json.dumps([{'title':'Old','briefing_date':'2020-01-02','briefing_model':'mechanical'}]))
     result=queries.load_briefing(path,clock=clock,datetime_type=datetime,enrich=enrich)
     assert result[-1]=='2020-01-02' and result[3]=='mechanical'
@@ -137,7 +138,22 @@ def test_real_briefing_api_and_archive_routes_use_temporary_inputs(tmp_path,monk
     assert b'2020-01-02' in client.get('/archive').data
     assert client.get('/scans-dives').status_code==200
     (data/'curator_latest.json').write_text('{invalid')
-    assert client.get('/api/briefing').status_code==500
+    assert client.get('/api/briefing').status_code==503
+    for url in ('/briefing', '/curator_briefing.html', '/curator_latest.html'):
+        response = client.get(url)
+        assert response.status_code == 503, url
+        assert b'Briefing temporarily unavailable' in response.data
+
+    for raw_score in ('bad', True, float('inf'), 10 ** 400):
+        (data/'curator_latest.json').write_text(json.dumps([{**article, 'raw_score': raw_score}]))
+        for url in ('/api/briefing', '/briefing', '/curator_briefing.html', '/curator_latest.html'):
+            assert client.get(url).status_code == 503, (url, raw_score)
+    for extra in ({}, {'raw_score': None}, {'raw_score': 7.25}):
+        (data/'curator_latest.json').write_text(json.dumps([{**article, **extra}]))
+        for url in ('/briefing', '/curator_briefing.html', '/curator_latest.html'):
+            response = client.get(url)
+            assert response.status_code == 200, url
+            assert (b'N/A' if extra.get('raw_score') is None else b'7.2') in response.data
 
 
 def test_server_route_map_matches_parent():

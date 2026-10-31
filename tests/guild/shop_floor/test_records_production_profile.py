@@ -8,11 +8,11 @@ from minimoi_portal import records_bridge as B,rooms_identity as RI
 from minimoi_portal.transport_profiles import DEV,PRODUCTION,select_records_profile
 from services import records_runtime as RT
 ROOT=Path(__file__).resolve().parents[3]
-APPDIR=ROOT/'prototype-lab/projects/project-records-room-poc'
+APPDIR=ROOT/'domains/records'
 ENV={'BASE_URL':'https://minimoi.ai','MINIMOI_ROLE':'production','MINIMOI_RECORDS_PROFILE':'production','MINIMOI_RECORDS_PRODUCTION':'1','RECORDS_PORTAL_ENV':'production','RECORDS_ALLOWED_HOSTS':'minimoi-records:18880','RECORDS_BACKEND':'http://minimoi-records:18880'}
 def app_module():
- if str(APPDIR)not in sys.path:sys.path.append(str(APPDIR))
- s=importlib.util.spec_from_file_location('records_production_fixture',APPDIR/'app.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m
+ from domains.records import app
+ return app
 @pytest.fixture
 def prepared(tmp_path,monkeypatch):
  app=app_module();data=tmp_path/'prepared';dev=app.create_app(str(data),runtime_environ={'RECORDS_PORTAL_ENV':'dev'},portal_key=('dev-key','d'*48));key=tmp_path/'portal.key';key.write_text('prod-key:'+('p'*48));key.chmod(0o600);monkeypatch.setattr(RT,'KEY_PATH',str(key));env=dict(ENV,RECORDS_PORTAL_KEY_FILE=str(key))

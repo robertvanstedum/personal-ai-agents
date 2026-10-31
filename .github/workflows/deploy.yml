@@ -74,6 +74,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -101,7 +103,7 @@ jobs:
             # shellcheck disable=SC2086 # the targets are space-separated repository paths
             pytest $TEST_TARGETS -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke
           else
-            pytest tests/ -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke
+            pytest tests/ prototype-lab/projects/project-records-room-poc/tests/ -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke
           fi
 
       - name: Check docs/specs naming/duplicates/supersession

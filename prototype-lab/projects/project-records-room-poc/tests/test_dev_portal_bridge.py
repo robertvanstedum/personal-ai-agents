@@ -3,7 +3,7 @@ from functools import wraps
 from types import SimpleNamespace
 from flask import Flask,session
 import pytest
-from dev_portal_bridge import install,rewrite_paths
+from domains.records.dev_portal_bridge import install, rewrite_paths
 
 
 class Upstream:

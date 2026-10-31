@@ -20,8 +20,8 @@ from referencing import Registry, Resource
 from werkzeug.serving import make_server
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
-from app import create_app
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+from domains.records.app import create_app
 
 WIDTHS = [1280, 1024, 736, 390, 360, 320]
 SCREENS = ["save", "continue", "collaborate", "work", "work-detail"]

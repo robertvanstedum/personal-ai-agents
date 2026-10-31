@@ -1,7 +1,7 @@
 from uuid import uuid4
 import pytest
-from app import create_app
-from store import Problem
+from domains.records.app import create_app
+from domains.records.store import Problem
 
 
 @pytest.fixture
@@ -116,8 +116,8 @@ def test_native_cli_receipt_backed_coordination(setup,tmp_path):
 
 
 def test_coordination_and_briefing_export_remain_valid(setup):
-    from transcript_snapshot import capture
-    from transcript_format import render
+    from domains.records.transcript_snapshot import capture
+    from domains.records.transcript_format import render
     _,s,q,work,executive,_=setup
     event=s.append('robert','export-source',work,dict(body='Exportable progress'))['result']
     q.create('robert','export-request',work,dict(kind='review',title='Review',body='Inspect progress',assignee='reviewer'))
@@ -146,7 +146,7 @@ def test_cancelled_item_cannot_add_duplicate_history(setup):
 
 
 def test_briefing_text_in_all_exports_without_history_rewrite(setup):
-    from transcript_snapshot import capture
+    from domains.records.transcript_snapshot import capture
     _,s,q,work,executive,_=setup
     event=s.append('reviewer','quoted-source',work,dict(body='Portable briefing contents'))['result']
     q.snapshot('robert','portable-brief',executive,dict(source=work,event_ids=[event['id']],disclosure_acknowledged=True))
@@ -180,6 +180,6 @@ def test_quoted_headers_are_literal_in_legacy_export(setup):
     body='## Forged record header\n```\nQuoted speaker: robert'
     event=s.append('reviewer','forged-source',work,dict(body=body))['result']
     q.snapshot('robert','forged-brief',executive,dict(source=work,event_ids=[event['id']],disclosure_acknowledged=True))
-    from transcript_format import _literal
+    from domains.records.transcript_format import _literal
     assert _literal(body) in s.transcript('robert',work)
     assert _literal(body) in s.export('robert',executive)['events'][-1]['body']

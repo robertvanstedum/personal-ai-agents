@@ -10,8 +10,10 @@ WORKDIR /app
 COPY docker/requirements.records.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY prototype-lab/projects/project-records-room-poc/ /app/
-RUN rm -rf /app/tests /app/static/v2/fixtures 2>/dev/null || true
+COPY domains/records/ /app/domains/records/
+# Preserve the existing container command through the lightweight launcher.
+COPY prototype-lab/projects/project-records-room-poc/app.py prototype-lab/projects/project-records-room-poc/manage.py prototype-lab/projects/project-records-room-poc/roomctl.py prototype-lab/projects/project-records-room-poc/accessctl.py /app/
+RUN rm -rf /app/domains/records/static/v2/fixtures
 
 ENV PYTHONDONTWRITEBYTECODE=1
 EXPOSE 18880

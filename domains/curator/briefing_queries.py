@@ -1,21 +1,23 @@
 """Read-only briefing files selected by the caller; no application discovery."""
 import json
 from datetime import timezone
+from domains.curator.briefing_views import InvalidBriefing, validate_articles
 
 def load_briefing(json_path, *, clock, datetime_type, enrich):
     """Read curator_latest.json and enrich each article with time_ago and score_pct.
 
     Returns (articles, day_str, date_str, model_display, briefing_date) or None
-    if the JSON file does not exist.
+    if the JSON file does not exist. Invalid/unreadable snapshots are refused.
     """
     if not json_path.exists():
         return None
 
     try:
         raw = json.loads(json_path.read_text())
-    except Exception:
-        return None
+    except (OSError, ValueError) as error:
+        raise InvalidBriefing("Briefing snapshot is unavailable") from error
 
+    validate_articles(raw)
     now = clock()
 
     # Prefer explicit generation metadata. Older files did not include it, so
@@ -28,7 +30,10 @@ def load_briefing(json_path, *, clock, datetime_type, enrich):
     try:
         briefing_dt = datetime_type.strptime(str(candidate)[:10], '%Y-%m-%d')
     except (TypeError, ValueError):
-        briefing_dt = datetime_type.fromtimestamp(json_path.stat().st_mtime, timezone.utc)
+        try:
+            briefing_dt = datetime_type.fromtimestamp(json_path.stat().st_mtime, timezone.utc)
+        except (OSError, ValueError, OverflowError) as error:
+            raise InvalidBriefing("Briefing date is unavailable") from error
     briefing_date = briefing_dt.strftime('%Y-%m-%d')
     day_str = briefing_dt.strftime('%A')
     date_str = briefing_dt.strftime('%B %d, %Y')

@@ -2061,10 +2061,9 @@ def guild_experiment_unavailable(initiative_id):
 
 # Rooms UI preview (Rooms package U): owner-only, simulated fixtures only.
 # Serves the prototype's static preview straight from the image, so there is one
-# source (prototype-lab/projects/project-records-room-poc/static/v2). It reads no
+# source (domains/records/static/v2). It reads no
 # Records store and calls no API; every screen and action is labelled simulated.
-_ROOMS_PREVIEW_DIR = (Path(__file__).resolve().parent.parent / "prototype-lab" / "projects"
-                      / "project-records-room-poc" / "static" / "v2")
+_ROOMS_PREVIEW_DIR = (Path(__file__).resolve().parent.parent / "domains" / "records" / "static" / "v2")
 _ROOMS_PREVIEW_ASSETS = "/guild/rooms-preview/assets/"
 
 

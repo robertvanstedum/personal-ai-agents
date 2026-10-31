@@ -900,3 +900,9 @@ def test_mc_container_files_redeploy_nothing_and_no_service_reads_them():
                for p in (root / top).rglob("*") if p.is_file() and p.suffix in (".py", ".sh", ".js", ".mjs", ".json", ".yml", ".yaml")
                and "mc-agent-container" in p.read_text(errors="ignore")]
     assert readers == []
+
+
+def test_canonical_records_changes_keep_conservative_full_release():
+    for path in ("domains/records/app.py", "domains/records/store.py",
+                 "domains/records/static/style.css"):
+        assert classify([path]) == ("full", ALL_SERVICES)

@@ -411,6 +411,9 @@ def record_feedback(
     else:
         metadata = _deterministic_metadata(article)
 
+    from domains.curator.feedback_learning import metadata_for_feedback
+    metadata = metadata_for_feedback(metadata, article)
+
     # Inject source and URL into metadata so update_learned_patterns can track them
     if article.get('source'):
         metadata['source'] = article['source']

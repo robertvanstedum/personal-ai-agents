@@ -909,7 +909,11 @@ def briefing():
     """Daily briefing — previously served at /."""
     from flask import request as _req
     tier = _req.headers.get("X-Minimoi-User-Tier", "guest")  # least-privilege default (H1)
-    result = _load_briefing_articles()
+    from domains.curator.briefing_views import InvalidBriefing
+    try:
+        result = _load_briefing_articles()
+    except InvalidBriefing:
+        return 'Briefing temporarily unavailable. Please try again later.', 503
     if result is not None:
         articles, day_str, date_str, model_display, briefing_date = result
         tips_file = REPO_ROOT / 'config' / 'curator' / 'tips.json'
@@ -1073,7 +1077,11 @@ def briefing_page():
     """Serve briefing from Jinja2 template when JSON exists."""
     from flask import request as _req
     tier = _req.headers.get("X-Minimoi-User-Tier", "guest")  # least-privilege default (H1)
-    result = _load_briefing_articles()
+    from domains.curator.briefing_views import InvalidBriefing
+    try:
+        result = _load_briefing_articles()
+    except InvalidBriefing:
+        return 'Briefing temporarily unavailable. Please try again later.', 503
     if result is not None:
         articles, day_str, date_str, model_display, briefing_date = result
         return render_template(
@@ -1113,13 +1121,16 @@ def api_briefing():
 
     try:
         raw = json.loads(json_path.read_text())
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except (OSError, ValueError):
+        return jsonify({'error': 'Briefing temporarily unavailable'}), 503
 
     now = datetime.now(timezone.utc)
-    from domains.curator.briefing_views import enrich_articles
-    articles = enrich_articles(raw, now, time_ago=_calc_time_ago,
-                               strip_summary=_strip_summary, ranked=True)
+    from domains.curator.briefing_views import enrich_articles, InvalidBriefing
+    try:
+        articles = enrich_articles(raw, now, time_ago=_calc_time_ago,
+                                   strip_summary=_strip_summary, ranked=True)
+    except InvalidBriefing:
+        return jsonify({'error': 'Briefing temporarily unavailable'}), 503
 
     return jsonify({'date': req_date, 'articles': articles})
 
@@ -1127,7 +1138,11 @@ def api_briefing():
 @app.route('/curator_latest.html')
 def latest_page():
     """Serve briefing from Jinja2 template when JSON exists."""
-    result = _load_briefing_articles()
+    from domains.curator.briefing_views import InvalidBriefing
+    try:
+        result = _load_briefing_articles()
+    except InvalidBriefing:
+        return 'Briefing temporarily unavailable. Please try again later.', 503
     if result is not None:
         articles, day_str, date_str, model_display, briefing_date = result
         return render_template(

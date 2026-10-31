@@ -6,6 +6,7 @@ Priority matching annotates the caller's entry; radar returns shallow copies.
 Existing selection policy is intentionally preserved.
 """
 from typing import Dict, List
+import math
 
 
 # Keyword categories are shared by mechanical and AI selection. When more
@@ -189,6 +190,18 @@ def find_radar_articles(pool: List[Dict], top_ids: set, topic_tags: dict,
     return radar[:cap]
 
 
+def validated_reserve(value):
+    """Malformed stored settings use the established 20% reserve default."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return 0.20
+    try:
+        if math.isfinite(value) and 0 <= value <= 1:
+            return value
+    except OverflowError:
+        pass
+    return 0.20
+
+
 def select_articles(all_entries, top_n, diversity_weight, serendipity_reserve, *,
                     active_interests, active_priorities, source_trust, x_post_cap,
                     domain_from_url, interest_boost_fn, priorities_boost_fn, report):
@@ -197,6 +210,8 @@ def select_articles(all_entries, top_n, diversity_weight, serendipity_reserve, *
     Stable candidate order, cap state and annotations carry across both phases.
     No provider, preference or filesystem access; callbacks are caller-owned.
     """
+    serendipity_reserve = validated_reserve(serendipity_reserve)
+
     # Calculate split between personalized and serendipity articles
     serendipity_count = int(top_n * serendipity_reserve)
     personalized_count = top_n - serendipity_count

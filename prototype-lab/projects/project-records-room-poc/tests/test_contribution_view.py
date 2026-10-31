@@ -4,7 +4,7 @@ import json
 import pytest
 from test_cos_agent_responder import agent_setup, turn
 from test_cos_records_bridge import bridge
-from contribution_view import connector_view
+from domains.records.contribution_view import connector_view
 
 
 def test_receipt_backed_reply_preserves_raw_record(agent_setup):
@@ -58,7 +58,7 @@ def test_ordinary_room_does_not_require_connector_evidence(agent_setup):
 
 
 def test_executive_snapshot_copies_readable_reply_and_warning(agent_setup):
-    from coordination import Coordination
+    from domains.records.coordination import Coordination
     from uuid import uuid4
     s=agent_setup;turn(s)
     event=s.store.room('robert',s.room)['events'][-1]
