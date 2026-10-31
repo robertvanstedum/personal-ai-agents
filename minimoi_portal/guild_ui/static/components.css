@@ -658,6 +658,23 @@ body.gu[data-off-record="true"] .sel-bar, body.gu[data-record-known="false"] .se
 .mc-voice[aria-pressed="true"] { font-weight: 700; color: var(--gu-accent); }
 .mc-voice-status { margin: 4px var(--gu-s3) 0; color: var(--gu-text-muted); overflow-wrap: anywhere; }
 .mc-voice-status[hidden], .mc-voice[hidden] { display: none; }
+/* MC voice on the direct path: one quiet line of live state above the composer (voice on, the time, Check with MC, End);
+   what is said is never shown while the session is live. */
+.mc-voice-live { margin: 0 0 var(--gu-s2); padding: 4px 10px; font-size: var(--gu-size-sm); color: var(--gu-text-muted); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.mc-voice-live[hidden], .mc-voice-propose[hidden], .mc-voice-notice[hidden] { display: none; }
+.mc-voice-on { display: inline-flex; align-items: center; gap: 6px; color: var(--gu-accent); font-weight: 700; }
+.mc-voice-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.mc-voice-propose { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; color: var(--gu-text); }
+.mc-voice-notice { flex-basis: 100%; font-size: var(--gu-size-xs); color: var(--gu-text-dim); }
+/* Revealed at End: the turns, one compact line per consult, the recovering line and the summary card, in the thread's own styles. */
+.mc-thread .msg-voice-line { background: none; border: 0; box-shadow: none; font-size: var(--gu-size-sm); color: var(--gu-text-muted); font-style: italic; }
+.mc-thread .msg-voice-receipt { font-size: var(--gu-size-xs); color: var(--gu-text-muted); }
+.mc-voice-summary { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.mc-voice-summary-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.mc-voice-summary-note { margin: 0; color: var(--gu-text-muted); }
+.mc-voice-summary-edit textarea { width: 100%; box-sizing: border-box; }
+.mc-voice-summary [hidden] { display: none; }
+@media (max-width: 640px) { .mc-voice-live .btn-mini, .mc-voice-summary .btn-mini { min-height: var(--gu-target-phone); min-width: 64px; } }
 .mc-history-controls { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; }
 /* The status strip, low and compact. */
 .floor-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--gu-s3); margin: 0 var(--gu-gutter) var(--gu-s2); padding: 4px var(--gu-s3); }

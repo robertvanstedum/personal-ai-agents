@@ -278,6 +278,7 @@ export class XAIWebSocketAdapter {
     source.buffer = buffer;
     source.connect(this._audioContext.destination);
     this._playbackSources.add(source);
+    if (this._playbackSources.size === 1) this._emit("playback_started", {});
     source.addEventListener("ended", () => this._playbackSources.delete(source), { once: true });
     const startAt = Math.max(this._audioContext.currentTime, this._playbackQueueTime);
     source.start(startAt);

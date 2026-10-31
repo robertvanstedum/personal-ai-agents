@@ -41,7 +41,8 @@ function admissionRefused(error) {
 export class RealtimeVoiceController {
   constructor({
     bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
-    onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall, onTranscriptUpdate,
+    onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall, onTranscriptUpdate, onPlayback,
+    onSessionInfo,
     openingInstruction = OPENING_INSTRUCTION,
     managedBootstrap = null, requestHeaders = null, includeTranscriptAfterEnd = true,
   }) {
@@ -63,6 +64,8 @@ export class RealtimeVoiceController {
     this._onUserTurn = onUserTurn || (() => {});
     this._onAssistantTurn = onAssistantTurn || (() => {});
     this._onFunctionCall = onFunctionCall || null;
+    this._onPlayback = onPlayback || (() => {});
+    this._onSessionInfo = onSessionInfo || (() => {});
     this._openingInstruction = openingInstruction;
     this._pendingAssistantTurns = [];
 
@@ -105,8 +108,10 @@ export class RealtimeVoiceController {
         ok: true, json: async () => ({provider: "openai", model: "gpt-realtime-2.1", warning_minutes: 13, max_minutes: 15}),
       } : await fetch(this._bootstrapUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, persona, scene, learner_name }),
+        // A host that guards its bootstrap (MC on the Guild: CSRF, record mode) passes requestHeaders and names
+        // its conversation; German and Portuguese pass neither, so their request is unchanged.
+        headers: { "Content-Type": "application/json", ...this._requestHeaders() },
+        body: JSON.stringify({ provider, persona, scene, learner_name, ...(conversation_id ? { conversation_id } : {}) }),
       });
     } catch (err) {
       this._setState("idle");
@@ -153,9 +158,12 @@ export class RealtimeVoiceController {
     }
     this._provider = bootstrap.provider;
     this._model = bootstrap.model;
-    this._sessionId = this._managedBootstrap ? null : `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    this._sessionId = bootstrap.voice_session_id || (this._managedBootstrap ? null : `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     this._warningMinutes = bootstrap.warning_minutes;
     this._maxMinutes = bootstrap.max_minutes;
+    // Optional, host-owned: what the bootstrap said about this session (MC shows its voice notices). Never the credential.
+    this._onSessionInfo({provider: bootstrap.provider, model: bootstrap.model, voice_session_id: bootstrap.voice_session_id || null,
+      voice_notices: Array.isArray(bootstrap.voice_notices) ? bootstrap.voice_notices.slice() : []});
 
     this._adapter = bootstrap.provider === "openai" ? new OpenAIWebRTCAdapter() : new XAIWebSocketAdapter();
     this._wireAdapterEvents();
@@ -208,6 +216,7 @@ export class RealtimeVoiceController {
         this._pendingAssistantTurns.push(evt.text.trim());
       }
     });
+    on("playback_started", () => this._onPlayback());
     on("assistant_stopped", () => {
       for (const text of this._pendingAssistantTurns.splice(0)) {
         this._onAssistantTurn(text);

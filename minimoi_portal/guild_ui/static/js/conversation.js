@@ -221,9 +221,55 @@ export function setBriefing(briefing) {
   if (text) text.textContent = briefing.text.replace(/^As of [^·]+·/, `As of ${localTime(briefing.observed_at)} ·`);
 }
 
+// A revealed voice record (Spec 164 §6): Robert's spoken words and MC's, each as said; one compact line per consult (its
+// receipt); MC's full answer only when it says more than was spoken; the consult's own note hidden (it repeats his words).
+// The server-rendered thread does the same (_mc_conversation.html, voice_row).
+const VOICE_HIDDEN = ['consult_note', 'consult_request'];
+function voiceLine(note) {
+  const v = note.voice;
+  const hidden = VOICE_HIDDEN.includes(v.kind) || (v.kind === 'consult_reply' && v.full_differs === false);
+  const turn = v.kind === 'owner_turn' || v.kind === 'assistant_turn';
+  if (!hidden && !turn && v.kind !== 'consult_receipt' && v.kind !== 'consult_reply') return null;     // summaries, outcomes: as notes
+  const li = el('li', { class: `msg msg-voice ${v.kind === 'consult_receipt' ? 'msg-platform msg-voice-receipt' : 'msg-note'}`,
+    'data-note': note.id, 'data-voice-kind': v.kind, 'data-voice-session': v.session_id, 'data-at': v.started_at || note.created_at,
+    'data-author-kind': v.kind === 'owner_turn' ? 'owner' : turn || v.kind === 'consult_reply' ? 'agent' : 'platform' });
+  if (hidden) { li.hidden = true; return li; }
+  if (v.kind === 'consult_receipt' && v.outcome) {
+    // "Checked with MC · answered", then what was spoken; the reply / operation / job id stays in the record and the
+    // title, never in the visible text (UI review D1).
+    if (v.ref) { li.setAttribute('data-voice-ref', v.ref); li.setAttribute('title', `${v.ref_kind || 'Receipt'} ${v.ref}`); }
+    const head = el('p', { class: 'msg-meta' });
+    head.append(el('span', { class: 'msg-label' }, `Checked with MC · ${v.outcome}`));
+    li.append(head);
+    if (v.spoken) li.append(el('p', { class: 'msg-text small' }, v.spoken));
+    return li;
+  }
+  if (v.kind === 'consult_receipt') { li.append(el('p', { class: 'msg-text small' }, v.text || note.text)); return li; }
+  if (turn && Number(v.part) > 1) { li.setAttribute('data-voice-part', String(v.part)); li.append(el('p', { class: 'msg-text' }, v.text)); return li; }
+  const label = v.kind === 'owner_turn' ? 'You · spoken' : v.kind === 'assistant_turn' ? `${mcName()} · spoken` : `${mcName()}'s full answer`;
+  const meta = el('p', { class: 'msg-meta' });
+  meta.append(el('span', { class: 'msg-label' }, label), document.createTextNode(' · '),
+    el('span', { 'data-iso': v.started_at || note.created_at }, localTime(v.started_at || note.created_at)));
+  if (v.interrupted) meta.append(document.createTextNode(' · interrupted'));
+  else if (v.partial) meta.append(document.createTextNode(' · partial'));
+  li.append(meta);
+  if (turn) { li.append(el('p', { class: 'msg-text' }, v.text)); return li; }
+  const body = el('div', { class: 'msg-text msg-md' });
+  if (typeof note.html === 'string' && note.html) body.innerHTML = note.html;          // sanitised on the server
+  else body.textContent = note.text;
+  li.append(body);
+  return li;
+}
+
 function noteLine(note) {
+  if (note && note.voice && typeof note.voice === 'object') {
+    const voiced = voiceLine(note);
+    if (voiced) return voiced;
+  }
   const li = clone('tpl-note');
   li.dataset.note = note.id;
+  if (note.created_at) li.dataset.at = note.created_at;
+  if (note.voice && typeof note.voice === 'object') { li.dataset.voiceKind = note.voice.kind; li.dataset.voiceSession = note.voice.session_id; }
   if (note.request_id) li.dataset.noteRequest = note.request_id;
   setSlot(li, 'label', note.author_label);
   setSlot(li, 'when', localTime(note.created_at));
@@ -276,9 +322,37 @@ function askForTokens() {
   }, 4000);
 }
 
+// Notes this page did not have yet (a voice session revealed at End): each put in its place by id, never twice. Only notes
+// newer than the oldest one shown are added, as watchPlatformNotes reads only after its mark: older history the page never
+// showed stays unloaded (UI review #6). Returns how many were added. Nothing is re-sent: these are the server's kept records.
+export function mergeNotes(notes) {
+  if (!thread || !Array.isArray(notes)) return 0;
+  const shown = Array.from(thread.querySelectorAll('[data-note]'), (n) => Number(n.dataset.note)).filter(Number.isSafeInteger);
+  const oldest = shown.length ? Math.min(...shown) : 0;
+  let added = 0;
+  for (const note of notes.slice().sort((a, b) => Number(a.id) - Number(b.id))) {
+    if (!note || note.id == null || !(Number(note.id) > oldest) || thread.querySelector(`[data-note="${note.id}"]`)) continue;
+    const next = Array.from(thread.querySelectorAll('[data-note]')).find((n) => Number(n.dataset.note) > Number(note.id));
+    thread.insertBefore(noteLine(note), next || thread.querySelector('[data-live-turn]') || null);
+    added += 1;
+  }
+  if (added) follow();
+  return added;
+}
+
 function appendNote(note) {
   thread.append(noteLine(note));
   follow();
+}
+
+// Every first page of notes this page reads for a conversation is announced, so the voice thread (mc_voice.js) repaints its
+// recovering / elsewhere-live lines and summary cards from it, with no read of its own (UI review #7).
+function notesRead(conversationId, r, before) {
+  if (!before && r?.ok && Array.isArray(r.body?.voice_sessions)) {
+    document.dispatchEvent(new CustomEvent('guild:notes-read', { detail: { conversationId: conversationId || null,
+      notes: Array.isArray(r.body.notes) ? r.body.notes : [], voice_sessions: r.body.voice_sessions } }));
+  }
+  return r;
 }
 
 // The assistant response is not the platform's proposal. Read the persisted
@@ -295,7 +369,7 @@ function watchPlatformNotes(t) {
       const timeout = window.setTimeout(() => controller.abort(), 5000);
       try {
         const conv = t.conversationId ? `&conversation=${encodeURIComponent(t.conversationId)}` : '';
-        return await apiGet(`/notes?limit=200${conv}${before ? `&before=${before}` : ''}`, undefined, controller.signal);
+        return notesRead(t.conversationId, await apiGet(`/notes?limit=200${conv}${before ? `&before=${before}` : ''}`, undefined, controller.signal), before);
       } finally { window.clearTimeout(timeout); }
     },
     insert: (note) => {
@@ -1157,7 +1231,7 @@ export function initConversation(p) {
         const timeout = window.setTimeout(() => controller.abort(), 5000);
         try {
           const conv = conversationId ? `&conversation=${encodeURIComponent(conversationId)}` : '';
-          return await apiGet(`/notes?limit=200${conv}${before ? `&before=${before}` : ''}`, undefined, controller.signal);
+          return notesRead(conversationId, await apiGet(`/notes?limit=200${conv}${before ? `&before=${before}` : ''}`, undefined, controller.signal), before);
         } finally { window.clearTimeout(timeout); }
       },
       insert: (note) => {

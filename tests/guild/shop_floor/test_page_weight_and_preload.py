@@ -30,7 +30,7 @@ def test_every_script_module_is_preloaded_in_the_head_before_main_runs(v11):
     head = page.split("</head>")[0]
     preloaded = re.findall(r'<link rel="modulepreload" href="([^"]+)"', head)
     from minimoi_portal.guild_ui import asset_version
-    expected = sorted(f"{BASE}/guild/ui-assets/_v/{asset_version()}/js/{p.name}" for p in JS.glob("*.js") if p.name != "bench.js")
+    expected = sorted(f"{BASE}/guild/ui-assets/_v/{asset_version()}/js/{p.name}" for p in JS.glob("*.js") if p.name not in ("bench.js", "mc_voice_direct.js"))
     assert sorted(preloaded) == expected and len(expected) >= 25
     assert head.index('rel="modulepreload"') < head.index('<script type="module"')
     assert "bench.js" not in head                                                    # the retired Workbench script is not announced

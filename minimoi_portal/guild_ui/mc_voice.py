@@ -43,8 +43,16 @@ def enabled(environ=None) -> bool:
 
 
 def csp_connect_extra(environ=None) -> str:
-    """What the page's connect-src may also reach while voice is on: the provider's session endpoint, for the browser-to-provider audio session."""
-    return " https://api.openai.com" if enabled(environ) else ""
+    """What the page's connect-src may also reach while voice is on: the provider's session endpoint, for the browser-to-provider audio session.
+    With MC's direct path offering Grok on this mount, also xAI's realtime socket (the browser opens wss://api.x.ai itself)."""
+    if not enabled(environ):
+        return ""
+    try:
+        direct = cfg().get("mc_direct_voice") if environ is None else None
+    except RuntimeError:                                   # no mount bound (a probe): the OpenAI origin only, as before
+        direct = None
+    xai = bool(direct) and any(p.get("provider") == "xai" for p in direct.get("providers") or ())
+    return " https://api.openai.com" + (" wss://api.x.ai" if xai else "")
 
 
 def _off():
@@ -67,7 +75,8 @@ def capabilities():
         mode, default, listed = _providers()
     except ProviderUnavailableError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 503
-    return jsonify({"ok": True, "mode": mode, "default_provider": default.provider, "providers": [p.public_dict() for p in listed], "budget": budget.public_status(), "managed_realtime": cfg().get("mc_managed_realtime")})
+    return jsonify({"ok": True, "mode": mode, "default_provider": default.provider, "providers": [p.public_dict() for p in listed], "budget": budget.public_status(), "managed_realtime": cfg().get("mc_managed_realtime"),
+                    "direct_voice": cfg().get("mc_direct_voice")})
 
 
 def _budget_refusal(exc):
@@ -171,7 +180,7 @@ def static_file(name):
     """The shared controller and its transport adapter, served from the one shared copy (never a second copy), only while voice is on."""
     if not enabled():
         return _off()
-    if name not in _STATIC_OK and not (cfg().get("mc_managed_realtime") and name in _MANAGED_STATIC):
+    if name not in _STATIC_OK and not ((cfg().get("mc_managed_realtime") or cfg().get("mc_direct_voice")) and name in _MANAGED_STATIC):
         return json_error("not_found", "No such file.", 404)
     return send_from_directory(_STATIC_DIR, name, mimetype="text/javascript")
 

@@ -25,7 +25,10 @@ def download(cid):
     try:
         conv = authorized()
         floor = api._conv_floor(conv)
-        result = mc_voice_export.render(floor, before=int(raw) if raw is not None else None, scrub=api.scrub)
+        from .mc_voice_reveal import Hider
+        process = api._voice_view()
+        result = mc_voice_export.render(floor, before=int(raw) if raw is not None else None, scrub=api.scrub,
+                                        withheld=Hider(floor, live=process["live"], direct=process["known"]).hidden)
         fresh = authorized()
         if any(fresh.get(k) != conv.get(k) for k in ('principal', 'notes_floor', 'scope')):
             raise ConversationNotFound(cid)

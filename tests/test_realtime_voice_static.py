@@ -3,6 +3,21 @@ tests/test_realtime_voice_static.py — both domains serve the shared
 realtime-voice JS from one source of truth (core/realtime_voice/static/),
 not a per-domain copy.
 """
+import shutil
+import subprocess
+
+import pytest
+
+
+def test_playback_event_is_wired_once():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    done = subprocess.run(
+        [node, "--test", "tests/realtime_voice/test_playback_event.mjs"],
+        capture_output=True, text=True, timeout=20,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
 
 
 def test_german_serves_shared_controller_js(german_client):
