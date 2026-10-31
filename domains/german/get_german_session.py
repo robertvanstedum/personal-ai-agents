@@ -24,6 +24,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from german_domain import GERMAN_DIR, GERMAN_STATE_DIR
+from domains.german.session_files import next_session_id, validate_session_date
 
 try:
     import keyring
@@ -458,7 +459,9 @@ def main():
     prompts_dir = config_dir / 'prompts'
     lessons_dir = base / 'lessons'
 
-    date_str = args.date or datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    date_str = validate_session_date(
+        args.date if args.date is not None else datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    )
 
     domain = {}
     domain_file = config_dir / 'domain.json'
@@ -517,6 +520,10 @@ def main():
             )
 
     if args.skip:
+        if args.dry_run:
+            print(f"Would skip {persona_name} ({scenario}) and advance lesson rotation.")
+            return
+
         # Import reviewer helpers here to avoid circular deps at module level
         import sys as _sys
         _reviewer_dir = Path(__file__).parent
@@ -530,9 +537,7 @@ def main():
         # Write a minimal skipped session JSON so the session log stays coherent
         sessions_dir = base / 'sessions'
         sessions_dir.mkdir(exist_ok=True)
-        existing = sorted(sessions_dir.glob(f"{date_str}_*.json"))
-        n = int(existing[-1].stem.split("_")[-1]) + 1 if existing else 1
-        session_id = f"{date_str}_{n:03d}"
+        session_id = next_session_id(date_str, sessions_dir)
         skipped_session = {
             "date": date_str,
             "session_id": session_id,
@@ -553,7 +558,8 @@ def main():
         progress_file.write_text(json.dumps(progress, indent=2, ensure_ascii=False), encoding='utf-8')
 
         # Generate next lesson plan (writes {today}_lesson.json, increments lesson counter)
-        _generate_lesson_plan(_empty_reviewer_output(), skipped_session, domain, personas, progress, lessons_dir)
+        _generate_lesson_plan(_empty_reviewer_output(), skipped_session, domain, personas, progress, lessons_dir,
+                              lesson_date=date_str)
         domain_file.write_text(json.dumps(domain, indent=2, ensure_ascii=False), encoding='utf-8')
 
         # Read back what was just written to report to user

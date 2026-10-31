@@ -173,7 +173,7 @@ def shelf_facts(root) -> dict:
 
 
 def _ro(path) -> sqlite3.Connection:
-    return sqlite3.connect(f"file:{Path(path)}?mode=ro&immutable=1", uri=True, timeout=30)
+    return sqlite3.connect(f"{Path(path).absolute().as_uri()}?mode=ro&immutable=1", uri=True, timeout=30)
 
 
 def index_facts(path) -> dict:
@@ -200,7 +200,8 @@ def index_facts(path) -> dict:
 
 FTS_PROBE_CODE = (
     "import json,sqlite3,sys\n"
-    "c=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro&immutable=1',uri=True)\n"
+    "from pathlib import Path\n"
+    "c=sqlite3.connect(Path(sys.argv[1]).absolute().as_uri()+'?mode=ro&immutable=1',uri=True)\n"
     "n=c.execute('SELECT count(*) FROM fts WHERE fts MATCH ?',(sys.argv[2],)).fetchone()[0]\n"
     "print(json.dumps({'ok':True,'sqlite':sqlite3.sqlite_version,'rows':int(n)>=0}))\n")
 
@@ -269,22 +270,19 @@ def copy_index(index_path: Path, out: Path, *, lock_wait: float = 120.0) -> None
         raise BackupError("index_missing")
     try:
         with index_lock(index_path, wait=lock_wait):
-            src = _ro_live(index_path)
-            dst = sqlite3.connect(str(out))
-            try:
-                src.backup(dst)
-            except sqlite3.DatabaseError:
-                raise BackupError("index_copy_failed") from None
-            finally:
-                dst.close()
-                src.close()
+            with contextlib.closing(_ro_live(index_path)) as src:
+                with contextlib.closing(sqlite3.connect(str(out))) as dst:
+                    try:
+                        src.backup(dst)
+                    except sqlite3.DatabaseError:
+                        raise BackupError("index_copy_failed") from None
     except IndexBusy:
         raise BackupError("index_busy") from None
     os.chmod(out, 0o600)
 
 
 def _ro_live(path: Path) -> sqlite3.Connection:
-    return sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=60)
+    return sqlite3.connect(f"{path.absolute().as_uri()}?mode=ro", uri=True, timeout=60)
 
 
 FINGERPRINT_SKIP = ("_ledger/ledger.jsonl", "_status/")         # append-only / per-run files: they change on every pass

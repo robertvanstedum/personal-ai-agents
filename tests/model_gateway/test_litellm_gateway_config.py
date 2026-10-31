@@ -58,13 +58,12 @@ def test_gateway_has_one_logical_primary_and_ordered_fallbacks():
         "minimoi-cos-agent-xai-fast": "xai/grok-4.3",
         "minimoi-cos-web-search": "xai/grok-4.3",
         "minimoi-cos-agent-anthropic": "anthropic/claude-sonnet-5-5",
-        "minimoi-cos-agent-local": "ollama_chat/qwen3:4b",
+        "minimoi-cos-agent-local": "ollama_chat/llama3.2:3b",
     }
     assert config["router_settings"]["fallbacks"] == [{
         "minimoi-cos-agent": [
             "minimoi-cos-agent-xai-fast",
             "minimoi-cos-agent-anthropic",
-            "minimoi-cos-agent-local",
         ],
     }]
     assert config["router_settings"]["num_retries"] == 0
@@ -144,16 +143,30 @@ def test_bounded_search_uses_gateway_credential_boundary():
     assert "XAI_API_KEY" not in plugin
 
 
-def test_local_fallback_declares_tool_capability_and_realistic_token_budget():
+def test_explicit_local_chat_route_does_not_claim_unverified_tool_or_thinking_support():
     local = next(
         item
         for item in _config()["model_list"]
         if item["model_name"] == "minimoi-cos-agent-local"
     )
 
-    assert local["model_info"]["supports_function_calling"] is True
-    assert local["model_info"]["max_output_tokens"] >= 500
-    assert local["litellm_params"]["think"] is True
+    assert local["model_info"]["mode"] == "chat"
+    assert "supports_function_calling" not in local["model_info"]
+    assert "think" not in local["litellm_params"]
+
+
+def test_local_regression_is_explicit_and_never_a_fallback():
+    for filename in ('litellm.yaml', 'litellm.staging.yaml'):
+        config = yaml.safe_load((CONFIG_PATH.parent / filename).read_text())
+        route = next(r for r in config['model_list'] if r['model_name'] == 'minimoi-cos-agent-local')
+        assert route['litellm_params'] == {
+            'model': 'ollama_chat/llama3.2:3b', 'api_base': 'os.environ/OLLAMA_API_BASE', 'timeout': 180}
+        assert 'minimoi-cos-agent-local' not in str(config['router_settings']['fallbacks'])
+        assert 'fallback_position' not in route['model_info']
+    prod = yaml.safe_load((CONFIG_PATH.parent / 'litellm.prod.yaml').read_text())
+    assert all('ollama' not in r['litellm_params']['model'] for r in prod['model_list'])
+    staging = yaml.safe_load((REPO_ROOT / 'docker-compose.staging.yml').read_text())
+    assert 'OLLAMA_API_BASE=${OLLAMA_API_BASE:-http://host.docker.internal:11434}' in staging['services']['model-gateway']['environment']
 
 
 def test_no_route_switches_a_shared_chat_backend_to_responses_mode():
@@ -190,13 +203,13 @@ def test_every_config_defines_the_nine_tiers_with_explicit_effort():
 
 def test_every_route_and_fallback_serves_a_tier_model():
     """A role route takes its model from a tier (`<<: *<provider>-<tier>`), so nothing names a model outside the set and
-    no fallback reaches a removed model. The Mac-only Ollama route is the one exception, and only in the dev config."""
+    no fallback reaches a removed model. The explicit Ollama regression route is the one exception, only in non-production configs."""
     allowed = set(TIERS.values())
     for path in GATEWAY_CONFIGS:
         config = yaml.safe_load(path.read_text())
         routes = {item["model_name"]: item["litellm_params"]["model"] for item in config["model_list"]}
         for name, model in routes.items():
-            if name == "minimoi-cos-agent-local" and path.name == "litellm.yaml":
+            if name == "minimoi-cos-agent-local" and path.name in ("litellm.yaml", "litellm.staging.yaml"):
                 continue
             assert model in allowed, (path.name, name, model)
         for chain in config["router_settings"]["fallbacks"]:

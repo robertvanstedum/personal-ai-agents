@@ -2,10 +2,11 @@
 Manifest creation, migration, keys/grants and service installation are operator work.
 """
 from __future__ import annotations
-import argparse,hashlib,importlib.util,json,os,re,sqlite3,stat,sys
+import argparse,hashlib,json,os,re,sqlite3,stat
 from pathlib import Path
+from contextlib import closing
 from minimoi_portal.transport_profiles import PRODUCTION, select_records_profile
-APP_DIR=Path(__file__).resolve().parents[1]/'prototype-lab/projects/project-records-room-poc'
+APP_DIR=Path(__file__).resolve().parents[1]/'domains/records'
 MANIFEST='production-runtime.json'
 KEY_PATH='/run/secrets/rooms-bridge/portal-bridge.key'
 REQUIRED_TABLES={'credential_audit', 'cos_auto', 'web_sessions', 'notes', 'events', 'operations', 'hosted_teammates', 'rooms', 'presence', 'cos_auto_audit', 'executive_snapshots', 'documents', 'room_transfers', 'turn_order', 'room_archive', 'agent_credential_generations', 'meetings', 'artifact_refs', 'meta', 'client_installations', 'cos_auto_jobs', 'persistent_rooms', 'coordination_steps', 'credential_scopes', 'disclosure_grants', 'member_rsvp', 'agent_approvals', 'agent_approval_audit', 'principals', 'teammates', 'routing_notes', 'turns', 'room_generations', 'coordination_items', 'members', 'cos_requests', 'teammate_status', 'client_credentials', 'portal_nonces'}
@@ -42,7 +43,7 @@ def preflight(data_dir,environ,*,port=18880):
     owner=private_file(root/'owner-key.txt',4096).strip();session=private_file(root/'session-key.txt',4096).strip()
     refuse(len(owner)>=32 and len(session)>=32 and hashlib.sha256(owner).hexdigest()==marker['owner_key_sha256'] and hashlib.sha256(session).hexdigest()==marker['session_key_sha256'],'prepared_store_keys_required')
     private_file(root/'records.sqlite3',512*1024*1024,metadata_only=True)
-    with sqlite3.connect((root/'records.sqlite3').as_uri()+'?mode=ro',uri=True) as db:
+    with closing(sqlite3.connect((root/'records.sqlite3').as_uri()+'?mode=ro',uri=True)) as db:
         refuse(schema_hash(db)==marker['schema_sha256'],'prepared_schema_mismatch')
         tables={r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")};refuse(REQUIRED_TABLES<=tables,'prepared_schema_incomplete')
         refuse(db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()==('5',),'prepared_schema_version_required')
@@ -56,9 +57,9 @@ def preflight(data_dir,environ,*,port=18880):
     return {'profile':'production','schema_sha256':marker['schema_sha256'],'provisioned_here':False}
 def build_app(data_dir,environ):
     preflight(data_dir,environ)
-    if str(APP_DIR) not in sys.path:sys.path.append(str(APP_DIR))
-    spec=importlib.util.spec_from_file_location('minimoi_production_records_app',APP_DIR/'app.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
-    return module.create_app(data_dir,port=18880,runtime_environ=dict(environ))
+    from domains.records.app import create_app
+    return create_app(data_dir,port=18880,runtime_environ=dict(environ))
+
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--data-dir',required=True);p.add_argument('--execute',action='store_true');args=p.parse_args();preflight(args.data_dir,os.environ)
     if not args.execute:print(json.dumps({'plan_only':True,'profile':'production','provisioned_here':False}));return

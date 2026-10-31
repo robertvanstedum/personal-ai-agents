@@ -4,9 +4,9 @@ import json
 from uuid import uuid4
 
 import pytest
-from app import create_app
-from store import Store
-from platform_access import AccessError
+from domains.records.app import create_app
+from domains.records.store import Store
+from domains.records.platform_access import AccessError
 
 
 @pytest.fixture
@@ -102,8 +102,8 @@ def test_owner_only_and_explicit_existing_grants(setup):
 
 
 def test_import_declared_speakers_atomicity_export_and_closed_state(setup):
-    from transcript_snapshot import capture
-    from transcript_format import render
+    from domains.records.transcript_snapshot import capture
+    from domains.records.transcript_format import render
     app,store,owner,rooms,legacy,issue=setup
     cred=issue();client=app.test_client();headers={**auth(cred),'Idempotency-Key':'import-1'}
     labels=['robert','claude-code','unknown','outside-team','<img src=x onerror=alert(1)>']

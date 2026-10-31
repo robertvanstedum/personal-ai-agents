@@ -2,9 +2,9 @@ from uuid import uuid4
 import pytest
 from test_cos_agent_responder import agent_setup
 from test_cos_records_bridge import bridge
-from cos_agent_responder import respond
-from cos_requests import CoSRequests
-from store import Problem
+from domains.records.integration.cos_agent_responder import respond
+from domains.records.cos_requests import CoSRequests
+from domains.records.store import Problem
 
 
 def setup_auto(s):

@@ -32,6 +32,8 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 
+from .probe_metrics import probe_cap, total
+
 PROMPTS = [
     ("thread", "Summarise the in-build Build Queue items and what blocks each, in 5 bullets."),
     ("thread", "Which one should I do first, and why? One paragraph."),
@@ -73,8 +75,7 @@ def usage_in_window(folder: str | None, start: datetime, end: datetime) -> list[
 
 
 def _sum(recs, key):
-    vals = [r.get(key) for r in recs if isinstance(r.get(key), (int, float)) and not isinstance(r.get(key), bool)]
-    return sum(vals) if vals else None
+    return total(r.get(key) for r in recs)
 
 
 def run(services, conversations, *, principal: str, label: str, turns: int = 3, cap: float = HARD_CAP,
@@ -83,7 +84,7 @@ def run(services, conversations, *, principal: str, label: str, turns: int = 3, 
     from ..conversations import LEGACY_ID
     from ..stores import Author
 
-    cap = min(float(cap), HARD_CAP)
+    cap = probe_cap(cap, HARD_CAP)
     if not usage_dir or not os.path.isdir(usage_dir):
         out("Refused: no usage store to read (MINIMOI_USAGE_DIR); each turn's cost would be unknown. Nothing was sent.")
         return {"rows": [], "spent": 0.0, "fresh": None, "run_id": None, "stopped": "no_usage_store"}
@@ -120,9 +121,8 @@ def run(services, conversations, *, principal: str, label: str, turns: int = 3, 
                 waited += 1.0
         counted.update(r.get("record_id") for r in recs)
         answered = answer.get("status") == "answered"
-        known = bool(recs) and all(isinstance(r.get("cost_usd"), (int, float)) and not isinstance(r.get("cost_usd"), bool)
-                                   for r in recs)
-        cost = _sum(recs, "cost_usd") if known else None
+        cost = total((r.get("cost_usd") for r in recs), require_all=True)
+        known = cost is not None
         spent += cost or 0.0
         row = {"turn": i, "conversation": conv["id"], "where": where, "status": answer.get("status", status),
                "calls": len(recs), "input_tokens": _sum(recs, "input_tokens"),
@@ -162,6 +162,11 @@ def main(argv=None, *, services=None) -> int:
     ap.add_argument("--stop-after-first-text", action="store_true",
                     help="with --stream: turn B alone (Stop after the first text)")
     a = ap.parse_args(argv)
+    try:
+        a.cap = probe_cap(a.cap, HARD_CAP)
+    except ValueError as exc:
+        print(f"Refused: {exc}.")
+        return 2
     if a.stop_after_first_text and not a.stream:
         print("Refused: --stop-after-first-text goes with --stream.")
         return 2

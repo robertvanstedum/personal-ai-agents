@@ -1,0 +1,234 @@
+# Frozen pure functions from 8a6276b65736c96d32b4a63d925bb507d73f9f69; no service startup.
+def _calc_time_ago(published_str, now):
+    """Return a human-readable 'Xh ago' / 'Xd ago' string for a published timestamp."""
+    if not published_str:
+        return 'N/A'
+    try:
+        import dateutil.parser
+        pub_dt = dateutil.parser.parse(published_str)
+        if pub_dt.tzinfo is None:
+            pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+        diff = now - pub_dt
+        hours = diff.total_seconds() / 3600
+        if hours < 1:
+            return f'{int(diff.total_seconds() / 60)}m ago'
+        elif hours < 24:
+            return f'{int(hours)}h ago'
+        else:
+            return f'{int(hours / 24)}d ago'
+    except Exception:
+        return 'N/A'
+
+def _strip_summary(text: str, max_len: int=200) -> str:
+    """Strip HTML tags, decode entities, trim RSS footer boilerplate, cap length."""
+    if not text:
+        return ''
+    clean = _html.unescape(re.sub('<[^>]+>', ' ', text))
+    clean = re.sub('\\s+', ' ', clean).strip()
+    clean = re.sub('\\s*The post .+ appeared first on .+\\.$', '', clean, flags=re.DOTALL).strip()
+    if len(clean) > max_len:
+        clean = clean[:max_len].rsplit(' ', 1)[0] + '…'
+    return clean
+
+def _load_briefing_articles():
+    """Read curator_latest.json and enrich each article with time_ago and score_pct.
+
+    Returns (articles, day_str, date_str, model_display, briefing_date) or None
+    if the JSON file does not exist.
+    """
+    json_path = _DATA_DIR / 'curator_latest.json'
+    if not json_path.exists():
+        return None
+    try:
+        raw = json.loads(json_path.read_text())
+    except Exception:
+        return None
+    now = datetime.now(timezone.utc)
+    candidate = raw[0].get('briefing_date') or raw[0].get('date') if raw else None
+    try:
+        briefing_dt = datetime.strptime(str(candidate)[:10], '%Y-%m-%d')
+    except (TypeError, ValueError):
+        briefing_dt = datetime.fromtimestamp(json_path.stat().st_mtime, timezone.utc)
+    briefing_date = briefing_dt.strftime('%Y-%m-%d')
+    day_str = briefing_dt.strftime('%A')
+    date_str = briefing_dt.strftime('%B %d, %Y')
+    model_display = raw[0].get('briefing_model', 'unknown') if raw else 'unknown'
+    articles = []
+    for entry in raw:
+        score = entry.get('final_score', 0) or 0
+        score_pct = min(100, max(0, score / 20.0 * 100)) if score > 0 else 0
+        enriched = dict(entry)
+        enriched['time_ago'] = _calc_time_ago(entry.get('published', ''), now)
+        enriched['score_pct'] = score_pct
+        enriched['summary'] = _strip_summary(entry.get('summary', ''))
+        articles.append(enriched)
+    return (articles, day_str, date_str, model_display, briefing_date)
+
+def api_briefing():
+    """Return briefing articles as JSON for a given date.
+
+    Query params:
+      date=YYYY-MM-DD  (default: today, i.e. curator_latest.json)
+
+    Reads from curator_archive/curator_YYYY-MM-DD.json when a date is supplied.
+    Falls back to curator_latest.json for today or when archive file is missing.
+    """
+    from datetime import date as _date
+    req_date = request.args.get('date', '')
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    if req_date and req_date != today_str:
+        json_path = REPO_ROOT / 'curator_archive' / f'curator_{req_date}.json'
+        if not json_path.exists():
+            return (jsonify({'error': f'No archive for {req_date}'}), 404)
+    else:
+        json_path = _DATA_DIR / 'curator_latest.json'
+        req_date = today_str
+    try:
+        raw = json.loads(json_path.read_text())
+    except Exception as e:
+        return (jsonify({'error': str(e)}), 500)
+    now = datetime.now(timezone.utc)
+    articles = []
+    for i, entry in enumerate(raw, 1):
+        score = entry.get('final_score', 0) or 0
+        score_pct = min(100, max(0, score / 20.0 * 100)) if score > 0 else 0
+        enriched = dict(entry)
+        enriched['time_ago'] = _calc_time_ago(entry.get('published', ''), now)
+        enriched['score_pct'] = score_pct
+        enriched['summary'] = _strip_summary(entry.get('summary', ''))
+        enriched['rank'] = i
+        articles.append(enriched)
+    return jsonify({'date': req_date, 'articles': articles})
+
+def parent(all_entries, top_n, diversity_weight, serendipity_reserve, active_interests, active_priorities, _source_trust, X_POST_CAP):
+    # Calculate split between personalized and serendipity articles
+    serendipity_count = int(top_n * serendipity_reserve)
+    personalized_count = top_n - serendipity_count
+    
+    if serendipity_count > 0:
+        print(f"\n🎲 Serendipity reserve: {serendipity_count}/{top_n} articles ({int(serendipity_reserve*100)}%) from outside learned patterns")
+    
+    # Apply diversity-aware selection
+    selected = []
+    source_counts = {}
+    category_counts = {}  # Track category distribution
+    x_post_count = 0      # Hard cap on X bookmark posts across both selection phases
+    candidates = all_entries.copy()
+    
+    # PHASE 1: Select personalized articles (with interest/priority boosts)
+    while len(selected) < personalized_count and candidates:
+        # Recalculate final scores based on current distribution
+        for entry in candidates:
+            source = entry["source"]
+            category = entry.get("category", "other")
+            
+            source_count = source_counts.get(source, 0)
+            category_count = category_counts.get(category, 0)
+            
+            # Source diversity penalty (existing logic; halved for trusted-tier sources)
+            domain = _domain_from_url(entry.get('link', ''))
+            trust = _source_trust.get(domain, 'neutral') if _source_trust else 'neutral'
+            discount = 0.5 if trust == 'trusted' else 1.0
+            source_penalty = (source_count ** 2) * 30 * diversity_weight * discount
+            
+            # Category diversity penalty (NEW: avoid topic echo chambers)
+            # Less aggressive than source penalty (we want some depth per topic)
+            category_penalty = (category_count ** 2) * 15 * diversity_weight
+            
+            # Apply interest-based boosting
+            interest_boost = apply_interest_boost(entry, active_interests)
+
+            # Apply priorities-based boosting
+            priorities_boost = apply_priorities_boost(entry, active_priorities)
+
+            # Scale boosts by age multiplier so old articles don't get amplified
+            # by historical interest. A 13d FAST article gets 65% of its boost;
+            # a 1d article gets 100%. SLOW sources at <30d retain full boost.
+            # This makes fresh content win when Grok scores are similar.
+            age_mult = entry.get('age_multiplier', 1.0)
+            scaled_interest = interest_boost * age_mult
+            scaled_priorities = priorities_boost * age_mult
+
+            entry["final_score"] = entry["score"] - source_penalty - category_penalty + scaled_interest + scaled_priorities
+            if interest_boost != 0:
+                entry["interest_boosted"] = True
+                entry["interest_modifier"] = scaled_interest
+            if priorities_boost > 0:
+                entry["priorities_boosted"] = True
+                entry["priorities_modifier"] = scaled_priorities
+        
+        # Pick the highest-scoring candidate (respecting X post hard cap)
+        candidates.sort(key=lambda x: x["final_score"], reverse=True)
+        best = None
+        for _i, _cand in enumerate(candidates):
+            if _cand.get('content_type') == 'x_bookmark' and x_post_count >= X_POST_CAP:
+                continue  # Skip X posts once cap is reached
+            best = candidates.pop(_i)
+            break
+        if best is None:
+            break  # All remaining candidates are X posts at cap limit
+
+        selected.append(best)
+
+        source = best["source"]
+        category = best.get("category", "other")
+        if best.get('content_type') == 'x_bookmark':
+            x_post_count += 1
+        source_counts[source] = source_counts.get(source, 0) + 1
+        category_counts[category] = category_counts.get(category, 0) + 1
+
+    # PHASE 2: Select serendipity articles (NO interest/priority boosts, only base score + diversity)
+    if serendipity_count > 0 and candidates:
+        print(f"   Selecting {serendipity_count} serendipity articles from {len(candidates)} remaining candidates...")
+        serendipity_selected = []
+        
+        while len(serendipity_selected) < serendipity_count and candidates:
+            # Recalculate scores WITHOUT personalization boosts
+            for entry in candidates:
+                source = entry["source"]
+                category = entry.get("category", "other")
+                
+                source_count = source_counts.get(source, 0)
+                category_count = category_counts.get(category, 0)
+                
+                source_penalty = (source_count ** 2) * 30 * diversity_weight
+                category_penalty = (category_count ** 2) * 15 * diversity_weight
+                
+                # Serendipity score = base score + diversity penalties ONLY (no boosts)
+                entry["final_score"] = entry["score"] - source_penalty - category_penalty
+                entry["serendipity_pick"] = True
+            
+            # Pick highest base-scoring candidate (respecting X post hard cap)
+            candidates.sort(key=lambda x: x["final_score"], reverse=True)
+            best = None
+            for _i, _cand in enumerate(candidates):
+                if _cand.get('content_type') == 'x_bookmark' and x_post_count >= X_POST_CAP:
+                    continue  # Skip X posts once cap is reached
+                best = candidates.pop(_i)
+                break
+            if best is None:
+                break  # All remaining candidates are X posts at cap limit
+
+            serendipity_selected.append(best)
+
+            source = best["source"]
+            category = best.get("category", "other")
+            if best.get('content_type') == 'x_bookmark':
+                x_post_count += 1
+            source_counts[source] = source_counts.get(source, 0) + 1
+            category_counts[category] = category_counts.get(category, 0) + 1
+        
+        # Merge serendipity articles into main selection
+        selected.extend(serendipity_selected)
+        print(f"   ✅ Added {len(serendipity_selected)} serendipity articles")
+    
+    # Report distributions
+    print("\n📊 Source distribution in top 20:")
+    for source, count in sorted(source_counts.items(), key=lambda x: x[1], reverse=True):
+        print(f"   {source}: {count} articles")
+    
+    print("\n🏷️  Category distribution in top 20:")
+    for category, count in sorted(category_counts.items(), key=lambda x: x[1], reverse=True):
+        print(f"   {category}: {count} articles")
+
+    return selected

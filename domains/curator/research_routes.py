@@ -16,7 +16,6 @@ import re as _re
 import secrets
 import subprocess
 import sys
-import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -24,6 +23,20 @@ from flask import Blueprint, jsonify, request, redirect, render_template_string
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))  # repo root, for core.get_secret import below
 from core.get_secret import get_secret
+from domains.curator.research.document_text import (
+    parse_session_header as _parse_session_header,
+    parse_session_sections as _parse_session_sections,
+    escape_inline as _dd_escape,
+    render_analysis_html as _dd_md_to_html,
+)
+
+from domains.curator.research.scan_render import render_scan_page as _render_scan_page
+from domains.curator.research.scan_documents import (
+    parse_bibliography as _parse_scan_bibliography,
+    parse_scan as _parse_scan_md,
+    build_session as _build_session_from_scan,
+    research_directions as _scan_research_directions,
+)
 
 # ── Blueprint ─────────────────────────────────────────────────────────────────
 
@@ -38,7 +51,6 @@ DATA_ROOT = PATHS.data
 STATE_ROOT = PATHS.state
 SCANS_DIR      = _REPO_ROOT / 'interests' / '2026' / 'scans'
 DIVES_DIR      = DATA_ROOT / 'dives'
-
 
 
 # ── HTML pages ────────────────────────────────────────────────────────────────
@@ -313,103 +325,19 @@ _NON_SESSION_PREFIXES = ('sources-candidates-',)
 
 
 def _get_topic_sessions(topic: str) -> list:
-    """
-    Return session IDs for a topic by reading topics/{topic}/ directory.
-
-    Inclusion rule: .md files matching ^[a-z][a-z0-9-]*\\.md$ that do NOT
-    start with a known non-session prefix (sources-candidates-).
-
-    This is an explicit inclusion pattern — more robust than a blocklist as
-    new static files won't accidentally be counted as sessions.
-
-    Used by: dashboard saved count, candidate count, last run, top find.
-    Will be called by multiple routes as the dashboard grows.
-
-    Returns list of session ID strings (stem, no .md extension), unsorted.
-    """
-    topic_dirs = [
-        STATE_ROOT / 'topics' / topic,
-        DATA_ROOT / 'threads' / topic / 'sessions',
-    ]
-    sessions = set()
-    for topic_dir in topic_dirs:
-        if not topic_dir.exists():
-            continue
-        sessions.update(
-            p.stem
-            for p in topic_dir.iterdir()
-            if p.is_file()
-            and _SESSION_FILE_RE.match(p.name)
-            and not any(p.name.startswith(pfx) for pfx in _NON_SESSION_PREFIXES)
-        )
-    return sorted(sessions)
+    """Sorted unique sessions from both supported storage homes."""
+    from domains.curator.research.session_catalog import list_sessions
+    return list_sessions([STATE_ROOT / 'topics' / topic,
+                          DATA_ROOT / 'threads' / topic / 'sessions'],
+                         pattern=_SESSION_FILE_RE, excluded_prefixes=_NON_SESSION_PREFIXES)
 
 
 def _parse_session_log() -> dict:
-    """
-    Parse library/session-log.md markdown table.
-
-    Reads the agent_active flag from the file header and extracts each
-    session row. Budget cumulative is taken from the last row's Cumulative
-    column — the running total maintained by OpenClaw.
-
-    Note: session-log.md is markdown, not JSON. A future cleanup task
-    (tracked in BACKLOG) will migrate this to session-log.json for
-    simpler parsing as the project grows.
-
-    Returns:
-        {
-            "agent_active": bool,
-            "budget_cumulative": float,
-            "rows": [
-                {"date", "session_id", "duration", "cost", "cumulative", "notes"},
-                ...
-            ]
-        }
-    """
-    log_path = STATE_ROOT / 'library' / 'session-log.md'
-    if not log_path.exists():
+    from domains.curator.research.session_catalog import parse_session_log
+    path = STATE_ROOT / 'library' / 'session-log.md'
+    if not path.exists():
         return {"agent_active": False, "budget_cumulative": 0.0, "rows": []}
-
-    text = log_path.read_text()
-
-    # agent_active flag — line like "agent_active: false"
-    active_match = _re.search(r'^agent_active:\s*(true|false)', text,
-                               _re.MULTILINE | _re.IGNORECASE)
-    agent_active = bool(active_match and active_match.group(1).lower() == 'true')
-
-    # Parse markdown table rows
-    rows = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line.startswith('|'):
-            continue
-        cols = [c.strip() for c in line.split('|')[1:-1]]
-        if len(cols) < 5:
-            continue
-        # Skip header row and separator row
-        if cols[0] in ('Date', '') or _re.match(r'^-+$', cols[0]):
-            continue
-        try:
-            cost_str = cols[3].replace('$', '').replace('—', '0').strip()
-            cum_str  = cols[4].replace('$', '').replace('—', '0').strip()
-            rows.append({
-                "date":       cols[0],
-                "session_id": cols[1],
-                "duration":   cols[2],
-                "cost":       float(cost_str) if cost_str else 0.0,
-                "cumulative": float(cum_str)  if cum_str  else 0.0,
-                "notes":      cols[5] if len(cols) > 5 else '',
-            })
-        except (ValueError, IndexError):
-            continue
-
-    budget_cumulative = rows[-1]['cumulative'] if rows else 0.0
-    return {
-        "agent_active":      agent_active,
-        "budget_cumulative": budget_cumulative,
-        "rows":              rows,
-    }
+    return parse_session_log(path.read_text())
 
 
 # ── HTML: Dashboard ───────────────────────────────────────────────────────────
@@ -489,40 +417,13 @@ def api_research_dashboard():
     log = _parse_session_log()
     log_by_session = {r['session_id']: r for r in log['rows']}
 
+    from domains.curator.research.dashboard_view import topic_summary, dashboard_payload
     topic_summaries = []
     for topic in topics:
         session_ids = _get_topic_sessions(topic)
-        session_set = set(session_ids)
-
-        # Saves: article signals whose session_id belongs to this topic
-        saved_count = sum(1 for s in article_signals
-                          if s.get('session_id') in session_set)
-
-        # Candidates: query candidates for this topic still in 'candidate' status
-        candidate_count = sum(1 for c in all_candidates
-                               if c.get('topic') == topic
-                               and c.get('status') == 'candidate')
-
-        # Last run + top find: most recent session-log row for this topic's sessions
-        topic_rows = sorted(
-            [log_by_session[sid] for sid in session_ids if sid in log_by_session],
-            key=lambda r: r['date'],
-            reverse=True,
-        )
-
-        last_run = None
-        top_find = None
-        if topic_rows:
-            latest   = topic_rows[0]
-            last_run = latest['date']
-            tf_match = _re.search(r'top find:\s*(.+)', latest.get('notes', ''))
-            top_find = tf_match.group(1).strip() if tf_match else None
-
         # Thread lifecycle fields
         from domains.curator.research.agent.threads import load_thread as _lt
         _thread = _lt(topic)
-        thread_status       = _thread.status      if _thread else "active"
-        thread_expires      = _thread.expires     if _thread else None
         thread_dd_generated = _thread.deeper_dive_generated if _thread else False
         thread_dd_path      = _thread.deeper_dive_path      if _thread else None
 
@@ -535,32 +436,12 @@ def api_research_dashboard():
                 if _m:
                     sessions_at_last_dive = int(_m.group(1))
 
-        topic_summaries.append({
-            "topic":                  topic,
-            "session_count":          len(session_ids),
-            "saved_count":            saved_count,
-            "candidate_count":        candidate_count,
-            "last_run":               last_run,
-            "top_find":               top_find,
-            "status":                 thread_status,
-            "expires":                thread_expires,
-            "deeper_dive_generated":  thread_dd_generated,
-            "deeper_dive_path":       thread_dd_path,
-            "sessions_at_last_dive":  sessions_at_last_dive,
-        })
+        topic_summaries.append(topic_summary(topic, session_ids, article_signals,
+                                             all_candidates, log_by_session,
+                                             _thread, sessions_at_last_dive))
 
-    used = log['budget_cumulative']
-    return jsonify({
-        "ok":           True,
-        "topics":       topic_summaries,
-        "budget": {
-            "used":  used,
-            "total": budget_total,
-            "warn":  budget_warn,
-            "pct":   round(used / budget_total * 100, 1) if budget_total else 0.0,
-        },
-        "agent_active": _run_state_active(),
-    })
+    return jsonify(dashboard_payload(topic_summaries, log['budget_cumulative'],
+                                     budget_total, budget_warn, _run_state_active()))
 
 
 # ── API: Run Session ──────────────────────────────────────────────────────────
@@ -1007,75 +888,8 @@ def _start_dive_job(topic: str, out_path: Path) -> tuple[subprocess.Popen, Path]
 
 
 def _build_challenger_html(ch: dict) -> str:
-    """Build the challenger process section HTML for a dive page.
-    Returns empty string when show_process is false or challenger is disabled.
-    """
-    if not ch.get('show_process') or not ch.get('enabled'):
-        return ''
-
-    points          = ch.get('challenge_points', [])
-    accepted_count  = ch.get('accepted_count', 0)
-    rejected_count  = ch.get('rejected_count', 0)
-    key_change      = _html_lib.escape(ch.get('key_change', ''))
-    # Strip residual markdown symbols from first_pass_summary before display
-    _fps_raw = ch.get('first_pass_summary', '') or ''
-    _fps_raw = _re.sub(r'^#{1,6}\s+.*$', '', _fps_raw, flags=_re.MULTILINE)
-    _fps_raw = _re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', _fps_raw)
-    _fps_raw = _re.sub(r'\*+', '', _fps_raw)            # unpaired asterisks
-    _fps_raw = _re.sub(r'_{1,2}([^_]+)_{1,2}', r'\1', _fps_raw)
-    _fps_raw = _re.sub(r'_+', '', _fps_raw).strip()
-    first_pass_sum  = _html_lib.escape(_fps_raw)
-
-    points_html = ''
-    for p in points:
-        accepted     = p.get('accepted', False)
-        border_color = '#C68A5E' if accepted else '#888'
-        label_color  = '#C68A5E' if accepted else '#888'
-        mark         = '✓' if accepted else '✗'
-        ptype        = _html_lib.escape(p.get('type', '').replace('_', ' '))
-        desc         = _html_lib.escape(p.get('description', ''))
-        impact_note  = ' · high impact' if p.get('impact') == 'high' else ''
-        points_html += (
-            f'<div style="margin-bottom:0.5rem;padding-left:1rem;'
-            f'border-left:2px solid {border_color};">'
-            f'<span style="font-size:0.75rem;text-transform:uppercase;'
-            f'letter-spacing:0.05em;color:{label_color};">'
-            f'{mark} {ptype}{impact_note}</span><br>{desc}</div>\n'
-        )
-
-    key_change_html = (
-        f'<div style="margin-top:0.75rem;font-style:italic;color:#666;">'
-        f'Key change: {key_change}</div>'
-        if key_change else ''
-    )
-
-    return (
-        '<div class="challenger-process" '
-        'style="margin-top:2rem;border-top:1px solid #C68A5E44;">\n'
-        '  <details>\n'
-        '    <summary style="cursor:pointer;padding:0.75rem 0;color:#C68A5E;'
-        'font-size:0.85rem;letter-spacing:0.05em;text-transform:uppercase;">\n'
-        f'      Challenger review\n'
-        f'      <span style="color:#888;font-weight:normal;text-transform:none;letter-spacing:0;">'
-        f'({len(points)} points · {accepted_count} accepted · {rejected_count} rejected)'
-        f'</span>\n'
-        '    </summary>\n'
-        '    <div style="padding:0.75rem 0 1rem 0;font-size:0.9rem;line-height:1.6;">\n'
-        f'      {points_html}{key_change_html}\n'
-        '    </div>\n'
-        '  </details>\n'
-        '  <details>\n'
-        '    <summary style="cursor:pointer;padding:0.75rem 0;color:#888;'
-        'font-size:0.85rem;letter-spacing:0.05em;text-transform:uppercase;">\n'
-        '      Initial draft\n'
-        '    </summary>\n'
-        '    <div style="padding:0.75rem 0 1rem 0;font-size:0.9rem;line-height:1.6;'
-        'color:#666;font-style:italic;">\n'
-        f'      {first_pass_sum or "(not stored)"}\n'
-        '    </div>\n'
-        '  </details>\n'
-        '</div>'
-    )
+    from domains.curator.research.dive_render import render_challenger
+    return render_challenger(ch)
 
 
 @research_bp.route('/research/dive-result/<stem>')
@@ -1110,82 +924,8 @@ def research_dive_result(stem: str):
         except Exception:
             pass
 
-    # Lightweight markdown → HTML
-    def _md_to_html(text: str) -> str:
-        lines  = text.splitlines()
-        out    = []
-        in_p   = False
-        for line in lines:
-            if _re.match(r'^#{1,6}\s', line):
-                if in_p: out.append('</p>'); in_p = False
-                level = len(_re.match(r'^(#+)', line).group(1))
-                content = _html_lib.escape(line.lstrip('#').strip())
-                out.append(f'<h{level}>{content}</h{level}>')
-            elif line.strip() == '---':
-                if in_p: out.append('</p>'); in_p = False
-                out.append('<hr>')
-            elif line.startswith('- ') or line.startswith('* '):
-                if in_p: out.append('</p>'); in_p = False
-                out.append(f'<li>{_html_lib.escape(line[2:].strip())}</li>')
-            elif line.strip() == '':
-                if in_p: out.append('</p>'); in_p = False
-            else:
-                # Italics from *...*
-                escaped = _html_lib.escape(line.strip())
-                escaped = _re.sub(r'\*(.+?)\*', r'<em>\1</em>', escaped)
-                if not in_p: out.append('<p>'); in_p = True
-                out.append(escaped + ' ')
-        if in_p: out.append('</p>')
-        return '\n'.join(out)
-
-    body_html = _md_to_html(raw)
-    safe_title = _html_lib.escape(title)
-
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{safe_title}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <style>
-    :root {{
-      --bg: #f5f0e8; --surface: #faf7f2; --border: #ddd6c8;
-      --text: #2a2418; --text-muted: #6b5f4e; --text-dim: #9e9080;
-      --accent: #8b5e2a;
-    }}
-    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{ font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); padding: 0; }}
-    .page-header {{
-      background: var(--surface); border-bottom: 1px solid var(--border);
-      padding: 0 2rem; height: 52px; display: flex; align-items: center;
-      justify-content: space-between; position: sticky; top: 0; z-index: 100;
-    }}
-    .page-header a {{ font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 600; color: var(--text); text-decoration: none; }}
-    .back-link {{ font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); text-decoration: none; }}
-    .back-link:hover {{ color: var(--accent); }}
-    .container {{ max-width: 760px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }}
-    h1 {{ font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: normal; margin-bottom: 0.5rem; line-height: 1.3; }}
-    h2 {{ font-family: 'Playfair Display', serif; font-size: 1.15rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--text); }}
-    h3 {{ font-family: 'DM Mono', monospace; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 1.5rem 0 0.5rem; }}
-    p {{ font-size: 1rem; line-height: 1.7; color: var(--text); margin-bottom: 1rem; }}
-    li {{ font-size: 1rem; line-height: 1.6; color: var(--text); margin-left: 1.5rem; margin-bottom: 0.35rem; list-style: disc; }}
-    hr {{ border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }}
-    em {{ color: var(--text-muted); font-style: italic; }}
-  </style>
-</head>
-<body>
-<header class="page-header">
-  <a href="/">mini-moi</a>
-  <a href="/scans-dives" class="back-link">← Scans &amp; Dives</a>
-</header>
-<div class="container">
-{body_html}
-{ch_section_html}
-</div>
-</body>
-</html>""", 200, {'Content-Type': 'text/html'}
+    from domains.curator.research.dive_render import render_dive
+    return render_dive(raw, title, ch_section_html), 200, {'Content-Type': 'text/html'}
 
 
 @research_bp.route('/research/dive-confirm')
@@ -1708,76 +1448,6 @@ def research_sessions_ui():
 
 # ── API: Sessions ─────────────────────────────────────────────────────────────
 
-def _parse_session_header(text: str) -> dict:
-    """Extract the machine-readable header block from a session .md file."""
-    header = {}
-    m = _re.search(
-        r'<!-- MACHINE-READABLE HEADER.*?-->(.*?)<!-- END HEADER -->',
-        text, _re.DOTALL
-    )
-    if m:
-        for line in m.group(1).strip().splitlines():
-            if ':' in line:
-                k, _, v = line.partition(':')
-                header[k.strip()] = v.strip()
-    return header
-
-
-def _parse_session_sections(text: str) -> dict:
-    """
-    Parse a session .md file into structured sections.
-    Returns dict with keys: findings, sources, threads, agent_notes, cost_table
-    Each finding is a plain string. Each source is {num, domain, title, url}.
-    """
-    sections: dict = {
-        'findings': [],
-        'sources': [],
-        'threads': [],
-        'agent_notes': '',
-        'cost_table': '',
-    }
-
-    # ── Key Findings ─────────────────────────────────────────────────────────
-    fm = _re.search(r'## Key Findings\s*\n(.*?)(?=\n## |\Z)', text, _re.DOTALL)
-    if fm:
-        for line in fm.group(1).splitlines():
-            line = line.strip().lstrip('- ').strip()
-            if line:
-                sections['findings'].append(line)
-
-    # ── Sources ──────────────────────────────────────────────────────────────
-    sm = _re.search(r'## Sources\s*\n(.*?)(?=\n## |\Z)', text, _re.DOTALL)
-    if sm:
-        entries = _re.findall(
-            r'\[(\d+)\]\s+(\S+)\.\s+"([^"]+)"\.\s*\n\s*(https?://\S+)',
-            sm.group(1)
-        )
-        for num, domain, title, url in entries:
-            sections['sources'].append({
-                'num': int(num), 'domain': domain,
-                'title': title, 'url': url
-            })
-
-    # ── Threads to Continue ───────────────────────────────────────────────────
-    tm = _re.search(r'## Threads to Continue\s*\n(.*?)(?=\n## |\Z)', text, _re.DOTALL)
-    if tm:
-        for line in tm.group(1).splitlines():
-            line = line.strip().lstrip('- ').strip()
-            if line:
-                sections['threads'].append(line)
-
-    # ── Agent Notes ───────────────────────────────────────────────────────────
-    am = _re.search(r'## Agent Notes\s*\n(.*?)(?=\n## |\Z)', text, _re.DOTALL)
-    if am:
-        sections['agent_notes'] = am.group(1).strip()
-
-    # ── Cost Breakdown ────────────────────────────────────────────────────────
-    cm = _re.search(r'## Cost Breakdown\s*\n(.*?)(?=\n---|\Z)', text, _re.DOTALL)
-    if cm:
-        sections['cost_table'] = cm.group(1).strip()
-
-    return sections
-
 
 @research_bp.route('/api/research/sessions')
 def api_research_sessions_list():
@@ -1900,302 +1570,6 @@ def api_research_session_annotate(topic: str, session_id: str):
 
 # ── Deep Dive helpers ──────────────────────────────────────────────────────────
 
-def _dd_escape(text: str) -> str:
-    """HTML-escape and convert **bold** / *italic* inline markdown."""
-    text = _html_lib.escape(str(text))
-    text = _re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
-    text = _re.sub(r'\*([^*]+?)\*',   r'<em>\1</em>',        text)
-    return text
-
-
-def _dd_md_to_html(text: str) -> str:
-    """
-    Lightweight markdown→HTML for deep dive analysis sections.
-    Handles: ## h2, ### h3, - list items, --- hr, paragraphs, blank lines.
-    Excludes the Sources section (handled separately with buttons).
-    """
-    lines    = text.split('\n')
-    parts    = []
-    in_ul    = False
-    buf_para = []
-
-    def flush_para():
-        if buf_para:
-            parts.append(f'<p>{_dd_escape(" ".join(buf_para))}</p>')
-            buf_para.clear()
-
-    def close_ul():
-        nonlocal in_ul
-        if in_ul:
-            parts.append('</ul>')
-            in_ul = False
-
-    for line in lines:
-        stripped = line.strip()
-
-        if stripped.startswith('## '):
-            close_ul(); flush_para()
-            parts.append(f'<h2>{_dd_escape(stripped[3:])}</h2>')
-        elif stripped.startswith('### '):
-            close_ul(); flush_para()
-            parts.append(f'<h3>{_dd_escape(stripped[4:])}</h3>')
-        elif stripped.startswith('- ') or stripped.startswith('* '):
-            flush_para()
-            if not in_ul:
-                parts.append('<ul>')
-                in_ul = True
-            parts.append(f'<li>{_dd_escape(stripped[2:])}</li>')
-        elif stripped.startswith('---'):
-            close_ul(); flush_para()
-            parts.append('<hr>')
-        elif stripped == '':
-            close_ul(); flush_para()
-        else:
-            if in_ul:
-                close_ul()
-            buf_para.append(stripped)
-
-    close_ul(); flush_para()
-    return '\n'.join(parts)
-
-
-def _parse_scan_bibliography(md_path: Path) -> list:
-    """
-    Parse '## 7. Sources & Further Reading' (or similar) from a deep dive .md.
-    Returns list of {raw, title, url, has_url, author, bracket_note}.
-    """
-    text = md_path.read_text()
-    m = _re.search(
-        r'##\s+\d*\.?\s*Sources[^\n]*\n(.*?)(?=\n## |\Z)',
-        text, _re.DOTALL | _re.IGNORECASE
-    )
-    if not m:
-        return []
-
-    items = []
-    for line in m.group(1).splitlines():
-        line = line.strip().lstrip('- ').strip()
-        if not line or line.startswith('---') or line.startswith('*Generated'):
-            continue
-
-        title_m   = _re.search(r'"([^"]+)"',   line)
-        url_m     = _re.search(r'(https?://\S+)', line)
-        bracket_m = _re.search(r'\[([^\]]+)\]', line)
-
-        title        = title_m.group(1)   if title_m   else ''
-        url          = url_m.group(1)     if url_m     else None
-        bracket_note = bracket_m.group(1) if bracket_m else None
-
-        author = ''
-        if title_m:
-            author = line[:title_m.start()].strip().rstrip('.,')
-
-        items.append({
-            'raw':          line,
-            'title':        title,
-            'url':          url,
-            'has_url':      bool(url),
-            'author':       author,
-            'bracket_note': bracket_note,
-        })
-
-    return items
-
-
-def _parse_scan_md(md_path: Path) -> dict:
-    """Parse a deep dive .md file into structured data for Flask rendering."""
-    text  = md_path.read_text()
-    lines = text.split('\n')
-
-    title = lines[0].replace('# ', '').strip() if lines else 'Untitled'
-
-    metadata: dict = {}
-    for line in lines[1:20]:
-        for key, marker in [
-            ('source',   '**Source:**'),
-            ('url',      '**URL:**'),
-            ('hash_id',  '**Hash ID:**'),
-            ('interest', '**Your Interest:**'),
-            ('focus',    '**Focus:**'),
-            ('date',     '**Analyzed:**'),
-            ('date',     '**Date:**'),
-        ]:
-            if line.startswith(marker):
-                metadata[key] = line.replace(marker, '').strip()
-
-    # Also extract ## Your Interest section (multi-line, common format)
-    if 'interest' not in metadata or not metadata['interest']:
-        interest_m = _re.search(
-            r'##\s+Your Interest\s*\n(.*?)(?=\n\*\*Focus:\*\*|\n---|\n## |\Z)',
-            text, _re.DOTALL | _re.IGNORECASE
-        )
-        if interest_m:
-            metadata['interest'] = interest_m.group(1).strip()
-
-    # Analysis: everything from first ## up to Sources section
-    analysis_start = 0
-    for i, line in enumerate(lines):
-        if line.startswith('## '):
-            analysis_start = i
-            break
-    analysis_raw = '\n'.join(lines[analysis_start:])
-    # Strip ## Your Interest section — already shown in the meta card
-    analysis_raw = _re.sub(
-        r'^##\s+Your Interest\s*\n.*?(?=\n## )',
-        '', analysis_raw, flags=_re.DOTALL | _re.IGNORECASE
-    ).lstrip('\n -').strip()
-    sources_m = _re.search(r'\n##\s+\d*\.?\s*Sources[^\n]*', analysis_raw, _re.IGNORECASE)
-    if sources_m:
-        analysis_raw = analysis_raw[:sources_m.start()]
-
-    cost_m = _re.search(r'(\d+) input \+ (\d+) output tokens.*?\$(\d+\.\d+)', text)
-
-    return {
-        'title':        title,
-        'metadata':     metadata,
-        'analysis_html': _dd_md_to_html(analysis_raw),
-        'bibliography':  _parse_scan_bibliography(md_path),
-        'cost':         cost_m.group(3) if cost_m else None,
-        'tokens_in':    cost_m.group(1) if cost_m else None,
-        'tokens_out':   cost_m.group(2) if cost_m else None,
-    }
-
-
-def _build_session_from_scan(dd: dict, hash_id: str, topic: str) -> str:
-    """Build a synthetic research session .md from a parsed scan for use by generate_dive.py."""
-    from datetime import date as _date
-    today = _date.today().isoformat()
-
-    # Extract findings from numbered scan analysis sections (### 1. Title + paragraph)
-    # Prefer section-title + first sentence of body so findings are coherent, not fragments.
-    analysis_html = dd.get('analysis_html', '')
-    from bs4 import BeautifulSoup as _BS
-    _soup = _BS(analysis_html, 'html.parser')
-    findings = []
-    for h in _soup.find_all(['h3', 'h2']):
-        heading_text = h.get_text(strip=True)
-        # Only numbered sections (e.g. "1. Why This Matters")
-        if not _re.match(r'^\d+\.', heading_text):
-            continue
-        # Get the first non-empty paragraph or list item after the heading
-        sibling = h.find_next_sibling()
-        while sibling:
-            text = sibling.get_text(' ', strip=True)
-            if len(text) > 40:
-                # Take first sentence (up to 220 chars)
-                sentence = _re.split(r'(?<=[.!?])\s+', text)[0][:220]
-                findings.append(f"{heading_text}: {sentence}")
-                break
-            sibling = sibling.find_next_sibling()
-        if len(findings) >= 5:
-            break
-    # Fallback: strip HTML and grab long lines
-    if not findings:
-        plain = _re.sub(r'<[^>]+>', '\n', analysis_html)
-        for line in _re.sub(r'\n{2,}', '\n', plain).strip().splitlines():
-            line = line.strip()
-            if len(line) > 60 and not _re.match(r'^\d+\.', line) and not line.startswith('#'):
-                findings.append(line)
-            if len(findings) >= 5:
-                break
-    findings_text = '\n'.join(f'- {f}' for f in findings) or '- (see scan analysis)'
-
-    # Build sources in the [N] domain. "title".\n    url format that generate_dive.py parses
-    bib = dd.get('bibliography', [])
-    src_lines = []
-    for i, item in enumerate(bib[:10], 1):
-        domain = item.get('domain', '') or ''
-        if not domain and item.get('url'):
-            domain = _re.sub(r'^https?://(www\.)?', '', item['url'] or '').split('/')[0]
-        title_s = item.get('title') or item.get('raw', '')[:80]
-        url_s   = item.get('url', '') or ''
-        src_lines.append(f'[{i}] {domain}. "{title_s}".')
-        if url_s:
-            src_lines.append(f'    {url_s}')
-    sources_text = '\n'.join(src_lines) if src_lines else '(none recorded)'
-
-    return f"""# Session Findings: {topic}-001
-
-<!-- MACHINE-READABLE HEADER — do not remove or reorder these lines -->
-date: {today}
-session: {topic}-001
-topic: {topic}
-cost: $0.0000
-duration: 1min
-sources_reviewed: {len(bib)}
-scan_synthetic: true
-<!-- END HEADER -->
-
-## Research Question
-
-Analysis of scan {hash_id}: {dd['title']}
-
----
-
-## Key Findings
-
-{findings_text}
-
----
-
-## Sources
-
-{sources_text}
-
----
-
-## Threads to Continue
-
-- Deeper investigation of: {dd['title']}
-
----
-
-*Generated from scan {hash_id} on {today}*
-"""
-
-
-def _scan_research_directions(dd: dict) -> tuple[list[str], list[str]]:
-    """Derive topic-specific searches and triage targets from a Scan."""
-    from bs4 import BeautifulSoup as _BS
-
-    title = (dd.get('title') or 'Untitled scan').strip()
-    motivation = (dd.get('metadata') or {}).get('interest', '').strip()
-    focus = (dd.get('metadata') or {}).get('focus', '').strip()
-    soup = _BS(dd.get('analysis_html', ''), 'html.parser')
-    questions: list[str] = []
-
-    for heading in soup.find_all(['h2', 'h3']):
-        if 'next question' not in heading.get_text(' ', strip=True).lower():
-            continue
-        sibling = heading.find_next_sibling()
-        while sibling and sibling.name not in ('h2', 'h3'):
-            if sibling.name in ('ul', 'ol'):
-                questions.extend(
-                    item.get_text(' ', strip=True)
-                    for item in sibling.find_all('li', recursive=False)
-                    if item.get_text(' ', strip=True)
-                )
-            elif sibling.name == 'li':
-                text = sibling.get_text(' ', strip=True)
-                if text:
-                    questions.append(text)
-            sibling = sibling.find_next_sibling()
-
-    # Preserve order while removing duplicates and blank entries.
-    questions = list(dict.fromkeys(q.strip() for q in questions if q.strip()))
-    if not questions:
-        questions = [
-            f"What primary evidence supports or challenges the claims in {title}?",
-            f"What mechanisms explain the central outcome discussed in {title}?",
-            f"What historical or empirical comparisons best test the argument in {title}?",
-        ]
-
-    searches = list(dict.fromkeys([title, *questions]))[:8]
-    targets = list(dict.fromkeys(
-        [item for item in (motivation, focus, *questions) if item]
-    ))[:6]
-    return searches, targets
-
 
 def _find_dd_md(hash_id: str):
     """Return Path to the .md file for a given hash_id, or None."""
@@ -2222,404 +1596,10 @@ def research_scan_view(hash_id: str):
     """
     md_path = _find_dd_md(hash_id)
     if not md_path:
-        return f"Scan '{hash_id}' not found", 404
+        return f"Scan '{_html_lib.escape(hash_id)}' not found", 404
 
     dd      = _parse_scan_md(md_path)
-    title   = _html_lib.escape(dd['title'])
-    meta    = dd['metadata']
-    bib     = dd['bibliography']
-
-    # ── Bibliography HTML ────────────────────────────────────────────────────
-    bib_rows = []
-    for idx, item in enumerate(bib):
-        t   = _html_lib.escape(item['title'] or item['raw'][:80])
-        auth = _html_lib.escape(item['author'])
-        raw_esc = _html_lib.escape(item['raw'])
-
-        if item['bracket_note']:
-            link_html = f'<span class="bib-title">{t}</span> <span class="bib-library-tag">Library</span>'
-        elif item['has_url']:
-            url_esc = _html_lib.escape(item['url'])
-            link_html = f'<a class="bib-title" href="{url_esc}" target="_blank" rel="noopener">{t}</a>'
-        elif item['title']:
-            scholar_q = urllib.parse.quote(item['title'])
-            link_html = f'<a class="bib-title" href="https://scholar.google.com/scholar?q={scholar_q}" target="_blank" rel="noopener">{t}</a> <span class="bib-scholar-tag">Scholar</span>'
-        else:
-            link_html = f'<span class="bib-title">{t}</span>'
-
-        bib_rows.append(f'''
-        <div class="bib-item" id="bib-{idx}" data-idx="{idx}">
-          <div class="bib-main">
-            <div class="bib-text">
-              {link_html}
-              {f'<span class="bib-author">{auth}</span>' if auth else ''}
-            </div>
-            <button class="btn-add-research"
-                    onclick="addToResearch({idx})"
-                    data-title="{_html_lib.escape(item['title'] or '')}"
-                    data-url="{_html_lib.escape(item['url'] or '')}"
-                    data-has-url="{'true' if item['has_url'] else 'false'}"
-                    data-author="{_html_lib.escape(item['author'])}"
-                    data-raw="{_html_lib.escape(item['raw'][:200])}">
-              + Research
-            </button>
-            <span class="bib-added-tick" id="tick-{idx}" style="display:none">✓ Added</span>
-          </div>
-        </div>''')
-
-    bib_html = '\n'.join(bib_rows) if bib_rows else '<p class="bib-empty">No bibliography items found.</p>'
-
-    # ── Metadata block ───────────────────────────────────────────────────────
-    source_link = ''
-    if meta.get('url') and meta.get('url') != 'N/A':
-        src_esc = _html_lib.escape(meta['url'])
-        src_label = _html_lib.escape(meta.get('source', meta['url']))
-        source_link = f'<a href="{src_esc}" target="_blank" rel="noopener">{src_label}</a>'
-    elif meta.get('source'):
-        source_link = _html_lib.escape(meta['source'])
-
-    meta_parts = []
-    if source_link:
-        meta_parts.append(f'<div class="meta-row"><span class="meta-label">Source</span>{source_link}</div>')
-    if meta.get('date'):
-        meta_parts.append(f'<div class="meta-row"><span class="meta-label">Analyzed</span>{_html_lib.escape(meta["date"])}</div>')
-    if meta.get('interest'):
-        meta_parts.append(f'<div class="meta-row"><span class="meta-label">Your interest</span>{_html_lib.escape(meta["interest"])}</div>')
-    if meta.get('focus'):
-        meta_parts.append(f'<div class="meta-row"><span class="meta-label">Focus</span>{_html_lib.escape(meta["focus"])}</div>')
-    meta_block    = '\n'.join(meta_parts)
-    interest_text = _html_lib.escape(meta.get('interest', ''))
-
-    # Derive a short topic slug: strip stop words, take first 3 meaningful words
-    _STOP = {'a','an','the','in','on','at','of','to','and','or','for','by',
-             'with','from','is','are','was','were','be','been','as','it','its',
-             'this','that','how','why','what','when','where','who'}
-    _words = _re.sub(r'[^a-z0-9\s]', ' ', dd['title'].lower()).split()
-    _keep  = [w for w in _words if w not in _STOP and len(w) > 1][:3]
-    topic_slug = '-'.join(_keep) if _keep else _re.sub(r'[^a-z0-9]+', '-', dd['title'].lower()).strip('-')[:40]
-
-    footer = ''
-    if dd['cost']:
-        footer = f'<p class="dd-footer">Generated by Claude Sonnet &nbsp;·&nbsp; {dd["tokens_in"]} in + {dd["tokens_out"]} out tokens &nbsp;·&nbsp; ${dd["cost"]}</p>'
-
-    page = f'''<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{title} – Deep Dive</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-  <style>
-    :root {{
-      --bg: #f5f0e8; --bg-texture: #ede8df; --surface: #faf7f2; --surface2: #f0ebe0;
-      --border: #ddd6c8; --border2: #c8bfaf; --text: #2a2418; --text-muted: #6b5f4e;
-      --text-dim: #9e9080; --accent: #8b5e2a; --accent-dim: rgba(139,94,42,0.08);
-      --accent-glow: rgba(139,94,42,0.18); --shadow: rgba(42,36,24,0.08);
-    }}
-    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{ font-family: 'Source Sans 3', sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.65; }}
-    nav.curator-subnav {{ position: sticky; top: 0; z-index: 100; height: 44px; background: rgba(245,240,232,0.96); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 1.5rem; }}
-    .subnav-tab {{ font-family: 'DM Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); text-decoration: none; padding: 0 14px; height: 44px; display: flex; align-items: center; border-bottom: 2px solid transparent; transition: color 0.15s; }}
-    .subnav-tab:hover {{ color: var(--text); }}
-    .subnav-tab.active {{ color: var(--accent); border-bottom-color: var(--accent); }}
-    .subnav-focus {{ margin-left: auto; }}
-    main {{ max-width: 780px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }}
-    h1 {{ font-family: 'Playfair Display', serif; font-size: 1.75rem; font-weight: normal; line-height: 1.3; margin-bottom: 1.25rem; }}
-    .meta-block {{ background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 2rem; font-size: 0.88rem; }}
-    .meta-row {{ display: flex; gap: 0.75rem; margin-bottom: 0.35rem; }}
-    .meta-row:last-child {{ margin-bottom: 0; }}
-    .meta-label {{ font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; min-width: 90px; padding-top: 1px; }}
-    .meta-row a {{ color: var(--accent); text-decoration: none; }}
-    .meta-row a:hover {{ text-decoration: underline; }}
-    .analysis h2 {{ font-family: 'Playfair Display', serif; font-size: 1.15rem; font-weight: 600; margin: 2rem 0 0.6rem; color: var(--text); }}
-    .analysis h3 {{ font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 600; margin: 1.4rem 0 0.4rem; color: var(--text); }}
-    .analysis p {{ margin-bottom: 0.9rem; }}
-    .analysis ul {{ margin: 0.5rem 0 0.9rem 1.4rem; }}
-    .analysis li {{ margin-bottom: 0.35rem; }}
-    .analysis hr {{ border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }}
-    .sources-section {{ margin-top: 2.5rem; padding-top: 1.5rem; border-top: 2px solid var(--border); }}
-    .sources-section h2 {{ font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text); }}
-    .bib-item {{ padding: 0.75rem 0; border-bottom: 1px solid var(--border); }}
-    .bib-item:last-child {{ border-bottom: none; }}
-    .bib-main {{ display: flex; align-items: flex-start; gap: 0.75rem; }}
-    .bib-text {{ flex: 1; font-size: 0.9rem; line-height: 1.45; }}
-    .bib-title {{ color: var(--accent); text-decoration: none; font-weight: 500; }}
-    a.bib-title:hover {{ text-decoration: underline; }}
-    .bib-author {{ display: block; font-size: 0.82rem; color: var(--text-muted); margin-top: 0.15rem; }}
-    .bib-library-tag, .bib-scholar-tag {{ font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--text-dim); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; margin-left: 6px; vertical-align: middle; }}
-    .btn-add-research {{ font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--accent); background: var(--accent-dim); border: 1px solid rgba(139,94,42,0.2); border-radius: 4px; padding: 4px 10px; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: all 0.15s; }}
-    .btn-add-research:hover {{ background: var(--accent); color: var(--surface); }}
-    .btn-add-research:disabled {{ opacity: 0.4; cursor: not-allowed; }}
-    .bib-added-tick {{ font-family: 'DM Mono', monospace; font-size: 0.72rem; color: #4a8c28; white-space: nowrap; flex-shrink: 0; }}
-    .bib-empty {{ color: var(--text-muted); font-style: italic; }}
-    .dd-footer {{ margin-top: 2.5rem; font-size: 0.8rem; color: var(--text-dim); font-family: 'DM Mono', monospace; }}
-    #toast {{ position: fixed; bottom: 24px; right: 24px; background: #4a8c28; color: #fff; font-family: 'DM Mono', monospace; font-size: 0.82rem; padding: 10px 18px; border-radius: 6px; display: none; z-index: 200; }}
-    .dive-panel {{ margin-top: 2.5rem; padding: 1.25rem 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap; }}
-    .dive-panel-text h3 {{ font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 600; color: var(--text); margin-bottom: 0.35rem; }}
-    .dive-panel-text p {{ font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; margin: 0; }}
-    .dive-panel-text .one-session-note {{ font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--text-dim); margin-top: 0.4rem; }}
-    .btn-dive {{ font-family: 'DM Mono', monospace; font-size: 0.82rem; background: var(--accent); color: var(--surface); border: none; border-radius: 5px; padding: 9px 20px; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: opacity 0.15s; align-self: center; }}
-    .btn-dive:hover:not(:disabled) {{ opacity: 0.85; }}
-    .btn-dive:disabled {{ opacity: 0.45; cursor: not-allowed; }}
-    #dive-status {{ margin-top: 0.6rem; width: 100%; font-family: 'DM Mono', monospace; font-size: 0.78rem; color: var(--text-muted); }}
-    #dive-status.err {{ color: #8b2020; }}
-    .spawn-thread-panel {{ margin-top: 3rem; padding: 1.5rem 1.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }}
-    .spawn-thread-panel h2 {{ font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 600; margin-bottom: 1.25rem; color: var(--text); }}
-    .spawn-field {{ margin-bottom: 1rem; }}
-    .spawn-field label {{ display: block; font-family: 'DM Mono', monospace; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin-bottom: 0.4rem; }}
-    .spawn-field label .muted {{ font-style: italic; text-transform: none; letter-spacing: 0; color: var(--text-dim); opacity: 0.7; }}
-    .spawn-field input[type="text"], .spawn-field textarea, .spawn-field select {{ width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 8px 12px; font-family: 'Source Sans 3', sans-serif; font-size: 0.9rem; color: var(--text); outline: none; transition: border-color 0.15s; }}
-    .spawn-field input:focus, .spawn-field textarea:focus, .spawn-field select:focus {{ border-color: var(--accent); }}
-    .spawn-field textarea {{ resize: vertical; min-height: 72px; }}
-    #st-queries {{ display: flex; flex-direction: column; gap: 0.4rem; }}
-    .st-query-row {{ display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.88rem; }}
-    .spawn-field label.st-query-row {{ text-transform: none; letter-spacing: 0; font-family: 'Source Sans 3', sans-serif; color: var(--text); }}
-    .st-query-row input[type="checkbox"] {{ margin-top: 3px; flex-shrink: 0; accent-color: var(--accent); }}
-    .st-query-row span {{ color: var(--text); line-height: 1.4; }}
-    #st-launch {{ margin-top: 1.25rem; background: var(--accent); color: var(--surface); border: none; border-radius: 5px; padding: 10px 22px; font-family: 'DM Mono', monospace; font-size: 0.82rem; cursor: pointer; transition: opacity 0.15s; }}
-    #st-launch:hover {{ opacity: 0.85; }}
-    #st-launch:disabled {{ opacity: 0.45; cursor: not-allowed; }}
-    #st-status {{ margin-top: 0.75rem; font-family: 'DM Mono', monospace; font-size: 0.82rem; color: var(--text-muted); min-height: 1.2em; }}
-    #st-status.err {{ color: #8b2020; }}
-  </style>
-  <link rel="stylesheet" href="/research/static/css/nav.css">
-  <script src="/research/static/js/nav.js"></script>
-</head>
-<body data-domain="curator" data-page="scan" data-ref-id="{_html_lib.escape(hash_id)}">
-<nav class="curator-subnav">
-  <a href="/briefing" class="subnav-tab">Daily</a>
-  <a href="/curator_library.html" class="subnav-tab">Reading Room</a>
-  <a href="/scans-dives" class="subnav-tab active">Scans &amp; Dives</a>
-  <a href="/research/leanings" class="subnav-tab">Leanings</a>
-  <a href="/archive" class="subnav-tab">Archive</a>
-  <a href="/research/dashboard" class="subnav-tab subnav-focus">Desk</a>
-</nav>
-<main>
-  <p style="margin-bottom:1.5rem"><a href="/scans-dives" style="font-family:'DM Mono',monospace;font-size:0.8rem;color:var(--text-muted);text-decoration:none;letter-spacing:0.04em;">← Scans &amp; Dives</a></p>
-  <h1>{title}</h1>
-  <div class="meta-block">
-    {meta_block}
-  </div>
-  <div class="analysis">
-    {dd['analysis_html']}
-  </div>
-  <div class="sources-section">
-    <h2>Sources &amp; Further Reading</h2>
-    {bib_html}
-  </div>
-  <div class="dive-panel" id="dive-panel">
-    <div class="dive-panel-text">
-      <h3>→ Generate Deeper Dive</h3>
-      <p>Synthesize this article with Claude + Grok challenge pass.</p>
-      <p class="one-session-note">Note: this dive draws from a single article. For multi-session depth, use Start Research Thread below.</p>
-      <div id="dive-status"></div>
-    </div>
-    <button class="btn-dive" id="btn-dive" onclick="generateDive()">Generate Deeper Dive</button>
-  </div>
-
-  <section class="spawn-thread-panel" id="spawn-thread">
-    <h2>🔬 Start Research Thread</h2>
-    <div class="spawn-field">
-      <label>Topic name (slug)</label>
-      <input id="st-topic" type="text" placeholder="e.g. taiwan-defense" value="{topic_slug}">
-    </div>
-    <div class="spawn-field">
-      <label>Motivation</label>
-      <textarea id="st-motivation" rows="3">{interest_text}</textarea>
-    </div>
-    <div class="spawn-field" id="st-queries-wrapper">
-      <label>Starting queries <span class="muted">(from bibliography)</span></label>
-      <div id="st-queries"><span style="color:var(--text-dim);font-size:0.85rem">Loading…</span></div>
-    </div>
-    <div class="spawn-field">
-      <label>Duration</label>
-      <select id="st-duration">
-        <option value="3">3 days</option>
-        <option value="5" selected>5 days</option>
-        <option value="7">7 days</option>
-        <option value="14">14 days</option>
-      </select>
-    </div>
-    <button id="st-launch" onclick="spawnThread()">Launch Research Thread →</button>
-    <div id="st-status"></div>
-  </section>
-  {footer}
-</main>
-<div id="toast"></div>
-<script>
-  const HASH_ID = '{_html_lib.escape(hash_id)}';
-
-  async function addToResearch(idx) {{
-    const btn  = document.querySelector(`[data-idx="${{idx}}"] .btn-add-research`) ||
-                 document.querySelector(`#bib-${{idx}} .btn-add-research`);
-    const tick = document.getElementById(`tick-${{idx}}`);
-    if (!btn) return;
-    btn.disabled = true;
-    const payload = {{
-      title:        btn.dataset.title,
-      url:          btn.dataset.url || null,
-      has_url:      btn.dataset.hasUrl === 'true',
-      author:       btn.dataset.author,
-      raw:          btn.dataset.raw,
-      scan_id: HASH_ID,
-    }};
-    try {{
-      const res  = await fetch('/api/research/inbox/add', {{
-        method: 'POST',
-        headers: {{'Content-Type': 'application/json'}},
-        body: JSON.stringify(payload),
-      }});
-      const data = await res.json();
-      if (data.ok) {{
-        btn.style.display = 'none';
-        if (tick) tick.style.display = 'inline';
-        showToast(`Added to Research inbox`);
-      }} else {{
-        btn.disabled = false;
-        showToast(`Error: ${{data.error}}`, true);
-      }}
-    }} catch (err) {{
-      btn.disabled = false;
-      showToast(`Network error`, true);
-    }}
-  }}
-
-  function showToast(msg, isErr) {{
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.style.background = isErr ? '#8b2020' : '#4a8c28';
-    t.style.display = 'block';
-    setTimeout(() => {{ t.style.display = 'none'; }}, 3000);
-  }}
-</script>
-<script>
-  // ── Spawn Thread ─────────────────────────────────────────────────────────────
-  document.addEventListener('DOMContentLoaded', async () => {{
-    const container = document.getElementById('st-queries');
-    try {{
-      const res  = await fetch('/api/research/scans/{_html_lib.escape(hash_id)}/bibliography');
-      const data = await res.json();
-      if (!data.ok || !data.items.length) {{
-        container.innerHTML = '<span style="color:var(--text-dim);font-size:0.85rem">No bibliography items found.</span>';
-        return;
-      }}
-      container.innerHTML = data.items
-        .filter(item => item.title && item.title.trim())
-        .map((item, i) => {{
-          const safe = item.title.replace(/"/g, '&quot;').replace(/</g, '&lt;');
-          return `<label class="st-query-row"><input type="checkbox" value="${{safe}}" checked><span>${{safe}}</span></label>`;
-        }})
-        .join('');
-    }} catch (e) {{
-      container.innerHTML = '<span style="color:#8b2020;font-size:0.85rem">Could not load bibliography.</span>';
-    }}
-  }});
-
-  async function generateDive() {{
-    const btn    = document.getElementById('btn-dive');
-    const status = document.getElementById('dive-status');
-    btn.disabled = true;
-    btn.textContent = 'Generating…';
-    status.className = '';
-    status.textContent = 'Creating thread and launching dive…';
-    try {{
-      const res  = await fetch('/api/research/scan-to-dive', {{
-        method:  'POST',
-        headers: {{'Content-Type': 'application/json'}},
-        body:    JSON.stringify({{hash_id: HASH_ID}}),
-      }});
-      const data = await res.json();
-      if (data.ok) {{
-        status.textContent = 'Deeper Dive is running…';
-        while (true) {{
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          const poll = await fetch('/api/research/generate-dive/status');
-          const result = await poll.json();
-          if (result.running) continue;
-          if (!poll.ok || result.failed) {{
-            throw new Error(result.error || 'Deeper Dive generation failed.');
-          }}
-          if (result.view_url) {{
-            status.textContent = 'Deeper Dive complete — opening…';
-            window.location.href = result.view_url;
-            return;
-          }}
-          throw new Error('Deeper Dive finished without an output.');
-        }}
-      }} else {{
-        status.textContent = data.error || 'Failed to start dive.';
-        status.className = 'err';
-        btn.disabled = false;
-        btn.textContent = 'Generate Deeper Dive';
-      }}
-    }} catch (e) {{
-      status.textContent = e.message || 'Network error — please try again.';
-      status.className = 'err';
-      btn.disabled = false;
-      btn.textContent = 'Generate Deeper Dive';
-    }}
-  }}
-
-  async function spawnThread() {{
-    const btn      = document.getElementById('st-launch');
-    const status   = document.getElementById('st-status');
-    const topic    = document.getElementById('st-topic').value.trim();
-    const motivation = document.getElementById('st-motivation').value.trim();
-    const duration = parseInt(document.getElementById('st-duration').value, 10);
-    const queries  = Array.from(document.querySelectorAll('#st-queries input[type="checkbox"]:checked'))
-                         .map(cb => cb.value)
-                         .filter(Boolean);
-
-    status.className = '';
-    if (!topic) {{ status.textContent = 'Topic slug is required.'; return; }}
-    if (!/^[a-z0-9-]+$/.test(topic)) {{ status.textContent = 'Topic must be lowercase letters, numbers, and hyphens only.'; return; }}
-    if (!queries.length) {{ status.textContent = 'Select at least one starting query.'; return; }}
-
-    btn.disabled = true;
-    status.textContent = 'Launching…';
-
-    try {{
-      const res  = await fetch('/api/research/spawn-thread', {{
-        method: 'POST',
-        headers: {{'Content-Type': 'application/json'}},
-        body: JSON.stringify({{
-          topic,
-          motivation,
-          queries,
-          scan_id: HASH_ID,
-          scan_title: document.querySelector('h1') ? document.querySelector('h1').textContent : '',
-          duration_days: duration,
-        }}),
-      }});
-      const data = await res.json();
-      if (data.ok) {{
-        status.textContent = 'Thread created! Redirecting…';
-        setTimeout(() => {{ window.location.href = data.redirect; }}, 800);
-      }} else {{
-        status.textContent = data.error || 'Unknown error.';
-        status.className = 'err';
-        btn.disabled = false;
-      }}
-    }} catch (e) {{
-      status.textContent = 'Network error — please try again.';
-      status.className = 'err';
-      btn.disabled = false;
-    }}
-  }}
-</script>
-<link rel="stylesheet" href="/research/static/css/annotations.css">
-<script src="/research/static/js/annotations.js"></script>
-<script>
-  document.addEventListener('DOMContentLoaded', () => {{
-    AnnotationSystem.initFloating();
-    AnnotationSystem.initSelectionPopup();
-  }});
-</script>
-</body>
-</html>'''
-
-    return page, 200, {'Content-Type': 'text/html'}
+    return _render_scan_page(dd, hash_id), 200, {'Content-Type': 'text/html'}
 
 
 # ── API: Deep Dives ────────────────────────────────────────────────────────────

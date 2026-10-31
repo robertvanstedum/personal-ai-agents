@@ -1,0 +1,153 @@
+[
+  {
+    "name": "empty",
+    "markdown": "",
+    "parsed": {
+      "title": "",
+      "metadata": {},
+      "analysis_html": "",
+      "bibliography": [],
+      "cost": null,
+      "tokens_in": null,
+      "tokens_out": null
+    },
+    "session": "# Session Findings: synthetic-topic-001\n\n<!-- MACHINE-READABLE HEADER — do not remove or reorder these lines -->\ndate: <TODAY>\nsession: synthetic-topic-001\ntopic: synthetic-topic\ncost: $0.0000\nduration: 1min\nsources_reviewed: 0\nscan_synthetic: true\n<!-- END HEADER -->\n\n## Research Question\n\nAnalysis of scan abc12: \n\n---\n\n## Key Findings\n\n- (see scan analysis)\n\n---\n\n## Sources\n\n(none recorded)\n\n---\n\n## Threads to Continue\n\n- Deeper investigation of: \n\n---\n\n*Generated from scan abc12 on <TODAY>*\n",
+    "directions": [
+      [
+        "Untitled scan",
+        "What primary evidence supports or challenges the claims in Untitled scan?",
+        "What mechanisms explain the central outcome discussed in Untitled scan?",
+        "What historical or empirical comparisons best test the argument in Untitled scan?"
+      ],
+      [
+        "What primary evidence supports or challenges the claims in Untitled scan?",
+        "What mechanisms explain the central outcome discussed in Untitled scan?",
+        "What historical or empirical comparisons best test the argument in Untitled scan?"
+      ]
+    ],
+    "page_sha256": "94580aa0dcde4974e505f08d1f8709c6b0ed0bf214074a6d156bb2db0572218e"
+  },
+  {
+    "name": "plain",
+    "markdown": "# Plain scan\n\nA long unstructured paragraph about synthetic evidence that offers sufficient detail for a fallback finding without any numbered headings.\n",
+    "parsed": {
+      "title": "Plain scan",
+      "metadata": {},
+      "analysis_html": "<p># Plain scan</p>\n<p>A long unstructured paragraph about synthetic evidence that offers sufficient detail for a fallback finding without any numbered headings.</p>",
+      "bibliography": [],
+      "cost": null,
+      "tokens_in": null,
+      "tokens_out": null
+    },
+    "session": "# Session Findings: synthetic-topic-001\n\n<!-- MACHINE-READABLE HEADER — do not remove or reorder these lines -->\ndate: <TODAY>\nsession: synthetic-topic-001\ntopic: synthetic-topic\ncost: $0.0000\nduration: 1min\nsources_reviewed: 0\nscan_synthetic: true\n<!-- END HEADER -->\n\n## Research Question\n\nAnalysis of scan abc12: Plain scan\n\n---\n\n## Key Findings\n\n- A long unstructured paragraph about synthetic evidence that offers sufficient detail for a fallback finding without any numbered headings.\n\n---\n\n## Sources\n\n(none recorded)\n\n---\n\n## Threads to Continue\n\n- Deeper investigation of: Plain scan\n\n---\n\n*Generated from scan abc12 on <TODAY>*\n",
+    "directions": [
+      [
+        "Plain scan",
+        "What primary evidence supports or challenges the claims in Plain scan?",
+        "What mechanisms explain the central outcome discussed in Plain scan?",
+        "What historical or empirical comparisons best test the argument in Plain scan?"
+      ],
+      [
+        "What primary evidence supports or challenges the claims in Plain scan?",
+        "What mechanisms explain the central outcome discussed in Plain scan?",
+        "What historical or empirical comparisons best test the argument in Plain scan?"
+      ]
+    ],
+    "page_sha256": "8d4ba3d95da68111d6c9aaf238a7911603f376e1ae13aa6c90fd372db46988fb"
+  },
+  {
+    "name": "structured",
+    "markdown": "# Synthetic scan <A>\n\n**Source:** Example & Co\n**URL:** https://example.test/article\n**Hash ID:** abc12\n**Date:** 2026-01-02\n\n## Your Interest\n\nUnderstand the synthetic evidence.\n\n**Focus:** Prefer primary sources.\n\n---\n\n## Scan Analysis\n\n### 1. Evidence\n\nThis synthetic paragraph has more than forty characters and is the first finding. Another sentence follows.\n\n### 2. Counterpoint\n\nA different sufficiently long synthetic paragraph supplies the counterpoint.\n\n## 5. Next Questions\n\n- Which claim can be independently checked?\n- What evidence is missing?\n- Which claim can be independently checked?\n\n## 7. Sources & Further Reading\n\n- Analyst. \"A quoted source\". https://example.test/one [primary]\n- A source without a URL\n\n*Generated with 123 input + 45 output tokens for $0.0123*\n",
+    "parsed": {
+      "title": "Synthetic scan <A>",
+      "metadata": {
+        "source": "Example & Co",
+        "url": "https://example.test/article",
+        "hash_id": "abc12",
+        "date": "2026-01-02",
+        "focus": "Prefer primary sources.",
+        "interest": "Understand the synthetic evidence."
+      },
+      "analysis_html": "<h2>Scan Analysis</h2>\n<h3>1. Evidence</h3>\n<p>This synthetic paragraph has more than forty characters and is the first finding. Another sentence follows.</p>\n<h3>2. Counterpoint</h3>\n<p>A different sufficiently long synthetic paragraph supplies the counterpoint.</p>\n<h2>5. Next Questions</h2>\n<ul>\n<li>Which claim can be independently checked?</li>\n<li>What evidence is missing?</li>\n<li>Which claim can be independently checked?</li>\n</ul>",
+      "bibliography": [
+        {
+          "raw": "Analyst. \"A quoted source\". https://example.test/one [primary]",
+          "title": "A quoted source",
+          "url": "https://example.test/one",
+          "has_url": true,
+          "author": "Analyst",
+          "bracket_note": "primary"
+        },
+        {
+          "raw": "A source without a URL",
+          "title": "",
+          "url": null,
+          "has_url": false,
+          "author": "",
+          "bracket_note": null
+        }
+      ],
+      "cost": "0.0123",
+      "tokens_in": "123",
+      "tokens_out": "45"
+    },
+    "session": "# Session Findings: synthetic-topic-001\n\n<!-- MACHINE-READABLE HEADER — do not remove or reorder these lines -->\ndate: <TODAY>\nsession: synthetic-topic-001\ntopic: synthetic-topic\ncost: $0.0000\nduration: 1min\nsources_reviewed: 2\nscan_synthetic: true\n<!-- END HEADER -->\n\n## Research Question\n\nAnalysis of scan abc12: Synthetic scan <A>\n\n---\n\n## Key Findings\n\n- 1. Evidence: This synthetic paragraph has more than forty characters and is the first finding.\n- 2. Counterpoint: A different sufficiently long synthetic paragraph supplies the counterpoint.\n- 5. Next Questions: Which claim can be independently checked?\n\n---\n\n## Sources\n\n[1] example.test. \"A quoted source\".\n    https://example.test/one\n[2] . \"A source without a URL\".\n\n---\n\n## Threads to Continue\n\n- Deeper investigation of: Synthetic scan <A>\n\n---\n\n*Generated from scan abc12 on <TODAY>*\n",
+    "directions": [
+      [
+        "Synthetic scan <A>",
+        "Which claim can be independently checked?",
+        "What evidence is missing?"
+      ],
+      [
+        "Understand the synthetic evidence.",
+        "Prefer primary sources.",
+        "Which claim can be independently checked?",
+        "What evidence is missing?"
+      ]
+    ],
+    "page_sha256": "9e0bdc3a6553c71a67621cab20f42dc31ff3b5a45bdd93d71f8563b324cd4e98"
+  },
+  {
+    "name": "inline_interest",
+    "markdown": "# Metadata\n**Your Interest:** Explicit interest\n**Focus:** Explicit focus\n**Analyzed:** 2026-01-01\n**Date:** 2026-01-02\n\n## Findings\n\n**Bold** and *italics* with <unsafe> characters.\n\n## Sources\n- Writer, \"Quoted\" https://example.test/a\n",
+    "parsed": {
+      "title": "Metadata",
+      "metadata": {
+        "interest": "Explicit interest",
+        "focus": "Explicit focus",
+        "date": "2026-01-02"
+      },
+      "analysis_html": "<h2>Findings</h2>\n<p><strong>Bold</strong> and <em>italics</em> with &lt;unsafe&gt; characters.</p>",
+      "bibliography": [
+        {
+          "raw": "Writer, \"Quoted\" https://example.test/a",
+          "title": "Quoted",
+          "url": "https://example.test/a",
+          "has_url": true,
+          "author": "Writer",
+          "bracket_note": null
+        }
+      ],
+      "cost": null,
+      "tokens_in": null,
+      "tokens_out": null
+    },
+    "session": "# Session Findings: synthetic-topic-001\n\n<!-- MACHINE-READABLE HEADER — do not remove or reorder these lines -->\ndate: <TODAY>\nsession: synthetic-topic-001\ntopic: synthetic-topic\ncost: $0.0000\nduration: 1min\nsources_reviewed: 1\nscan_synthetic: true\n<!-- END HEADER -->\n\n## Research Question\n\nAnalysis of scan abc12: Metadata\n\n---\n\n## Key Findings\n\n- (see scan analysis)\n\n---\n\n## Sources\n\n[1] example.test. \"Quoted\".\n    https://example.test/a\n\n---\n\n## Threads to Continue\n\n- Deeper investigation of: Metadata\n\n---\n\n*Generated from scan abc12 on <TODAY>*\n",
+    "directions": [
+      [
+        "Metadata",
+        "What primary evidence supports or challenges the claims in Metadata?",
+        "What mechanisms explain the central outcome discussed in Metadata?",
+        "What historical or empirical comparisons best test the argument in Metadata?"
+      ],
+      [
+        "Explicit interest",
+        "Explicit focus",
+        "What primary evidence supports or challenges the claims in Metadata?",
+        "What mechanisms explain the central outcome discussed in Metadata?",
+        "What historical or empirical comparisons best test the argument in Metadata?"
+      ]
+    ],
+    "page_sha256": "7a98aca793ab9215c0063db60b10e36051df6dad7e9d037b56c519a03b55972f"
+  }
+]

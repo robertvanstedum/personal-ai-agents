@@ -32,7 +32,7 @@ import json
 
 from . import stores as S
 
-LABELS = ("decide", "blocked", "remember", "followup", "idea", "fyi")
+from domains.guild.board_contract import LABELS
 STEP = 1024                      # the gap between renumbered sort keys
 BOARD_W, BOARD_MAX_Y = 1200, 20000   # the logical board: 1200 wide, growing downward (sql/004_board_place.sql)
 NOTE_W, NOTE_H = 180, 170            # the footprint of every note and photo on it

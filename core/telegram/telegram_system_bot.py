@@ -29,6 +29,10 @@ _REPO_ROOT = Path(__file__).parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from core.telegram.owner_policy import owner_only
+from utils.telegram import get_chat_id
+
+
 _IN_DOCKER = os.path.exists('/.dockerenv')
 _CURATOR_URL = "http://curator:8766" if _IN_DOCKER else "http://localhost:8766"
 _GERMAN_URL  = "http://german:8767"  if _IN_DOCKER else "http://localhost:8767"
@@ -58,12 +62,14 @@ def _check_service(name: str, url: str) -> str:
         return f"{name}: unreachable ({e})"
 
 
+@owner_only(lambda: get_chat_id())
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"minimoi system bot — {_identity()}\n\nCommands:\n/status — service health\n!ops — ops summary"
     )
 
 
+@owner_only(lambda: get_chat_id())
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lines = [f"<b>Status</b> — {_identity()}"]
     lines.append(_check_service("curator", _CURATOR_URL + "/"))
@@ -72,6 +78,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
+@owner_only(lambda: get_chat_id())
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (update.message.text or "").strip()
 
@@ -110,7 +117,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     # German voice notes, .txt transcript uploads, and drill-state restore.
     from core.telegram.telegram_bot import register_german_handlers
-    register_german_handlers(app, include_text=False)
+    register_german_handlers(app, include_text=False, resolve_owner=lambda: get_chat_id())
 
     log.info("Polling...")
     app.run_polling(drop_pending_updates=True)

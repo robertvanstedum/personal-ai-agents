@@ -1,57 +1,70 @@
-"""
-Sends a real Telegram message with feedback buttons (Like/Dislike/Save) to
-verify inline-keyboard callback wiring end to end. This has a live side
-effect — it actually posts to Telegram — so it only runs when a bot token is
-available (keychain or TELEGRAM_BOT_TOKEN) and TELEGRAM_CHAT_ID is set.
-Skips cleanly otherwise, which is the expected state on CI runners.
-"""
+"""Offline contracts for the actual Telegram article sender.
 
-import os
+Load only its two sending functions so collection never imports a runtime,
+reads credentials or sends a message. Full bot integration is covered by the
+separate delivery-ledger tests. Live acceptance is an explicit operator action.
+"""
+import ast
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
-
-keyring = pytest.importorskip("keyring", reason="keyring not installed")
 import requests
 
 
-def _get_telegram_token():
-    try:
-        return keyring.get_password("telegram", "bot_token")
-    except Exception:
-        return os.environ.get("TELEGRAM_BOT_TOKEN")
+@pytest.fixture
+def sender():
+    source = Path(__file__).resolve().parents[1] / "core/telegram/telegram_bot.py"
+    tree = ast.parse(source.read_text())
+    names = {"_article_payload", "send_article"}
+    functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in names]
+    assert {node.name for node in functions} == names
+    calls = []
+    replies = []
+
+    def post(url, **kwargs):
+        calls.append((url, kwargs))
+        reply = replies.pop(0) if replies else None
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+    namespace = {"requests": SimpleNamespace(post=post, exceptions=requests.exceptions)}
+    exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), "exec"), namespace)
+    return SimpleNamespace(send=namespace["send_article"], calls=calls, replies=replies)
 
 
-@pytest.mark.skipif(not _get_telegram_token(), reason="no Telegram bot token available")
-@pytest.mark.skipif(not os.environ.get("TELEGRAM_CHAT_ID"), reason="TELEGRAM_CHAT_ID not set")
-def test_send_feedback_buttons():
-    token = _get_telegram_token()
-    chat_id = os.environ["TELEGRAM_CHAT_ID"]
+def test_send_feedback_buttons_uses_fake_transport(sender, monkeypatch):
+    # Ambient settings never select the destination or credentials in this test.
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "unused-ambient-token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "unused-ambient-chat")
+    sender.send("synthetic-token", "synthetic-chat", 3, "Überblick\n第二行",
+                "https://example.invalid/article", "Synthetic", "fiscal", "5.7/10")
+    assert sender.calls == [(
+        "https://api.telegram.org/botsynthetic-token/sendMessage",
+        {"json": {
+            "chat_id": "synthetic-chat",
+            "text": "<b>#3</b> • FISCAL • Synthetic\n\n<b>Überblick\n第二行</b>\n\n"
+                    "<a href='https://example.invalid/article'>🔗 Read article</a>\n\nScore: 5.7/10",
+            "parse_mode": "HTML", "disable_web_page_preview": True,
+            "reply_markup": {"inline_keyboard": [[
+                {"text": "👍 Like", "callback_data": "like:3"},
+                {"text": "👎 Dislike", "callback_data": "dislike:3"},
+                {"text": "🔖 Save", "callback_data": "save:3"},
+            ]]},
+        }, "timeout": 30},
+    )]
 
-    message = (
-        "<b>#3</b> • FISCAL • Fed On The Economy\n\n"
-        "<b>Inflation and the Accuracy of Public Debt Forecasts</b>\n\n"
-        '<a href="https://www.stlouisfed.org/on-the-economy/2026/feb/inflation-accuracy-public-debt-forecasts">\U0001F517 Read article</a>\n\n'
-        "Score: 5.7/10 (mechanical)"
-    )
-    keyboard = {
-        "inline_keyboard": [[
-            {"text": "\U0001F44D Like", "callback_data": "like:3"},
-            {"text": "\U0001F44E Dislike", "callback_data": "dislike:3"},
-            {"text": "\U0001F516 Save", "callback_data": "save:3"},
-        ]]
-    }
 
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    response = requests.post(
-        url,
-        json={
-            "chat_id": chat_id,
-            "text": message,
-            "parse_mode": "HTML",
-            "reply_markup": keyboard,
-            "disable_web_page_preview": True,
-        },
-        timeout=10,
-    )
+def test_sender_retries_timeouts_with_the_same_payload(sender):
+    sender.replies[:] = [requests.exceptions.Timeout(), None]
+    sender.send("fake", "fake", 1, "Title", "https://example.invalid", "Source", "other", "?")
+    assert len(sender.calls) == 2
+    assert sender.calls[0] == sender.calls[1]
 
-    assert response.status_code == 200, response.text
+
+def test_sender_surfaces_exhausted_timeouts(sender):
+    sender.replies[:] = [requests.exceptions.Timeout() for _ in range(3)]
+    with pytest.raises(requests.exceptions.Timeout):
+        sender.send("fake", "fake", 1, "Title", "https://example.invalid", "Source", "other", "?")
+    assert len(sender.calls) == 3

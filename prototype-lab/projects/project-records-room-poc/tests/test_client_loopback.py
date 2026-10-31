@@ -8,7 +8,7 @@ import threading
 from uuid import uuid4
 
 from werkzeug.serving import make_server, WSGIRequestHandler
-from app import create_app
+from domains.records.app import create_app
 
 
 class QuietHandler(WSGIRequestHandler):

@@ -30,7 +30,8 @@ _RESEARCH_DATA = research_paths().data
 # Defaults to data/curator/ within the repo so data lives under version control
 # boundaries (but is gitignored as personal data).
 # Override with CURATOR_DATA_DIR env var on EC2 or any non-default layout.
-_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(REPO_ROOT / "data" / "curator")))
+from domains.curator.data_paths import data_directory
+_DATA_DIR = data_directory(REPO_ROOT)
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
 # Bookmark and appearance history. Every writer (curator_rss_v2, feedback,
 # scan_job) uses the repo-root file, which production bind-mounts at
@@ -77,159 +78,49 @@ _init_sentry()
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _calc_time_ago(published_str, now):
-    """Return a human-readable 'Xh ago' / 'Xd ago' string for a published timestamp."""
-    if not published_str:
-        return 'N/A'
-    try:
-        import dateutil.parser
-        pub_dt = dateutil.parser.parse(published_str)
-        if pub_dt.tzinfo is None:
-            pub_dt = pub_dt.replace(tzinfo=timezone.utc)
-        diff = now - pub_dt
-        hours = diff.total_seconds() / 3600
-        if hours < 1:
-            return f"{int(diff.total_seconds() / 60)}m ago"
-        elif hours < 24:
-            return f"{int(hours)}h ago"
-        else:
-            return f"{int(hours / 24)}d ago"
-    except Exception:
-        return 'N/A'
+    from domains.curator.briefing_views import time_ago
+    return time_ago(published_str, now)
 
 
 def _strip_summary(text: str, max_len: int = 200) -> str:
-    """Strip HTML tags, decode entities, trim RSS footer boilerplate, cap length."""
-    if not text:
-        return ''
-    clean = _html.unescape(re.sub(r'<[^>]+>', ' ', text))
-    clean = re.sub(r'\s+', ' ', clean).strip()
-    # Drop common RSS footer lines ("The post X appeared first on Y.")
-    clean = re.sub(r'\s*The post .+ appeared first on .+\.$', '', clean, flags=re.DOTALL).strip()
-    if len(clean) > max_len:
-        clean = clean[:max_len].rsplit(' ', 1)[0] + '…'
-    return clean
+    from domains.curator.briefing_views import strip_summary
+    return strip_summary(text, max_len)
 
 
 def _load_briefing_articles():
-    """Read curator_latest.json and enrich each article with time_ago and score_pct.
-
-    Returns (articles, day_str, date_str, model_display, briefing_date) or None
-    if the JSON file does not exist.
-    """
-    json_path = _DATA_DIR / 'curator_latest.json'
-    if not json_path.exists():
-        return None
-
-    try:
-        raw = json.loads(json_path.read_text())
-    except Exception:
-        return None
-
-    now = datetime.now(timezone.utc)
-
-    # Prefer explicit generation metadata. Older files did not include it, so
-    # their modification date is a truthful fallback; never label stale data
-    # with the server's current date.
-    candidate = (
-        (raw[0].get('briefing_date') or raw[0].get('date'))
-        if raw else None
-    )
-    try:
-        briefing_dt = datetime.strptime(str(candidate)[:10], '%Y-%m-%d')
-    except (TypeError, ValueError):
-        briefing_dt = datetime.fromtimestamp(json_path.stat().st_mtime, timezone.utc)
-    briefing_date = briefing_dt.strftime('%Y-%m-%d')
-    day_str = briefing_dt.strftime('%A')
-    date_str = briefing_dt.strftime('%B %d, %Y')
-
-    model_display = raw[0].get('briefing_model', 'unknown') if raw else 'unknown'
-
-    articles = []
-    for entry in raw:
-        score = entry.get('final_score', 0) or 0
-        score_pct = min(100, max(0, (score / 20.0) * 100)) if score > 0 else 0
-        enriched = dict(entry)
-        enriched['time_ago'] = _calc_time_ago(entry.get('published', ''), now)
-        enriched['score_pct'] = score_pct
-        enriched['summary'] = _strip_summary(entry.get('summary', ''))
-        articles.append(enriched)
-
-    return articles, day_str, date_str, model_display, briefing_date
+    from domains.curator.briefing_queries import load_briefing
+    from domains.curator.briefing_views import enrich_articles
+    return load_briefing(_DATA_DIR / 'curator_latest.json',
+                        clock=lambda: datetime.now(timezone.utc), datetime_type=datetime,
+                        enrich=lambda raw, now: enrich_articles(raw, now,
+                            time_ago=_calc_time_ago, strip_summary=_strip_summary))
 
 
 def _load_radar_articles():
-    """Load on-radar articles from curator_radar.json. Returns [] if missing or empty."""
-    radar_path = _DATA_DIR / 'curator_radar.json'
-    if not radar_path.exists():
-        return []
-    try:
-        data = json.loads(radar_path.read_text())
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
+    from domains.curator.briefing_queries import load_radar
+    return load_radar(_DATA_DIR / 'curator_radar.json')
 
 
 # ── Landing page data helpers ─────────────────────────────────────────────────
 
 def _get_latest_briefing_date() -> str:
-    """Return the persisted briefing date without claiming stale data is today."""
-    latest_path = _DATA_DIR / 'curator_latest.json'
-    try:
-        raw = json.loads(latest_path.read_text())
-        if raw:
-            d = raw[0].get('briefing_date') or raw[0].get('date', '')
-            if d:
-                from datetime import datetime as _dt
-                return _dt.strptime(d[:10], '%Y-%m-%d').strftime('%A, %B %-d, %Y')
-            fallback = datetime.fromtimestamp(latest_path.stat().st_mtime, timezone.utc)
-            return fallback.strftime('%A, %B %-d, %Y')
-    except Exception:
-        pass
-    return '—'
+    from domains.curator.briefing_queries import latest_briefing_date
+    return latest_briefing_date(_DATA_DIR / 'curator_latest.json', datetime_type=datetime)
 
 
 def _get_latest_article_count() -> int:
-    """Return count of articles in latest briefing. Falls back to 0."""
-    try:
-        raw = json.loads((_DATA_DIR / 'curator_latest.json').read_text())
-        return len(raw)
-    except Exception:
-        return 0
+    from domains.curator.briefing_queries import latest_article_count
+    return latest_article_count(_DATA_DIR / 'curator_latest.json')
 
 
 def _get_topics_summary() -> dict:
-    """Count topics by status from threads directory. Falls back to all zeros."""
-    threads_dir = _RESEARCH_DATA / 'threads'
-    result = {'total': 0, 'active': 0, 'dormant': 0}
-    try:
-        for f in threads_dir.glob('*/thread.json'):
-            t = json.loads(f.read_text())
-            status = t.get('status', '')
-            result['total'] += 1
-            if status in ('active', 'active-pull'):
-                result['active'] += 1
-            elif status in ('dormant', 'paused'):
-                result['dormant'] += 1
-    except Exception:
-        pass
-    return result
+    from domains.curator.landing_queries import topics_summary
+    return topics_summary(_RESEARCH_DATA / 'threads')
 
 
 def _get_leanings_summary() -> dict:
-    """Count leanings by state from leanings.json. Falls back to all zeros."""
-    leanings_path = (_RESEARCH_DATA / 'leanings' / 'leanings.json')
-    result = {'total': 0, 'question': 0, 'leaning': 0, 'hold': 0}
-    try:
-        raw = json.loads(leanings_path.read_text())
-        leanings = raw.get('leanings', raw) if isinstance(raw, dict) else raw
-        for lean in leanings:
-            result['total'] += 1
-            state = lean.get('state', 'question')
-            if state in result:
-                result[state] += 1
-    except Exception:
-        pass
-    return result
+    from domains.curator.landing_queries import leanings_summary
+    return leanings_summary(_RESEARCH_DATA / 'leanings' / 'leanings.json')
 
 # Shared navigation HTML
 SHARED_NAV_HTML = """
@@ -1018,7 +909,11 @@ def briefing():
     """Daily briefing — previously served at /."""
     from flask import request as _req
     tier = _req.headers.get("X-Minimoi-User-Tier", "guest")  # least-privilege default (H1)
-    result = _load_briefing_articles()
+    from domains.curator.briefing_views import InvalidBriefing
+    try:
+        result = _load_briefing_articles()
+    except InvalidBriefing:
+        return 'Briefing temporarily unavailable. Please try again later.', 503
     if result is not None:
         articles, day_str, date_str, model_display, briefing_date = result
         tips_file = REPO_ROOT / 'config' / 'curator' / 'tips.json'
@@ -1057,121 +952,33 @@ def library_page():
 # ── Archive data helpers (Phase 5) ────────────────────────────────────────────
 
 def _archive_daily_editions():
-    """Sorted list of daily editions from curator_archive/. Most recent first."""
-    archive_dir = REPO_ROOT / 'curator_archive'
-    editions = []
-    seen = set()
-    try:
-        for f in sorted(archive_dir.glob('curator_*.html'), reverse=True):
-            parts = f.stem.replace('curator_', '').split('-')
-            if len(parts) >= 3:
-                date_str = '-'.join(parts[:3])
-                if date_str in seen:
-                    continue
-                seen.add(date_str)
-                count = 0
-                json_f = archive_dir / f'curator_{date_str}.json'
-                if json_f.exists():
-                    try:
-                        count = len(json.loads(json_f.read_text()))
-                    except Exception:
-                        pass
-                editions.append({'date': date_str, 'count': count, 'file': f.name})
-    except Exception:
-        pass
-    return editions
+    from domains.curator.archive_queries import daily_editions
+    return daily_editions(REPO_ROOT / 'curator_archive')
 
 
 def _archive_sources():
-    """Bookmarked articles from curator_history.json. Most recent first."""
-    hist_path = HISTORY_PATH
-    articles = []
-    try:
-        hist = json.loads(hist_path.read_text())
-        for art in hist.values():
-            if art.get('bookmarked'):
-                articles.append({
-                    'date':   art.get('bookmark_date') or art.get('first_seen', ''),
-                    'title':  art.get('title', ''),
-                    'source': art.get('source', ''),
-                    'url':    art.get('url', ''),
-                })
-        articles.sort(key=lambda x: x['date'], reverse=True)
-    except Exception:
-        pass
-    return articles
+    from domains.curator.archive_queries import bookmarked_sources
+    return bookmarked_sources(HISTORY_PATH)
 
 
 def _scan_md_meta(md_path):
-    """Extract title, source, date, hash_id from a scan .md file."""
-    text = md_path.read_text()
-    title_m = re.match(r'^# (.+)', text)
-    title   = title_m.group(1).strip() if title_m else md_path.stem
-    source_m = re.search(r'\*\*Source:\*\*\s*(.+)', text)
-    source   = source_m.group(1).strip() if source_m else ''
-    date_m   = re.search(r'\*\*Date:\*\*\s*(.+)', text)
-    date     = date_m.group(1).strip() if date_m else ''
-    hash_id  = md_path.stem.split('-')[0]
-    return {'title': title, 'source': source, 'date': date, 'hash_id': hash_id}
+    from domains.curator.archive_queries import scan_metadata
+    return scan_metadata(md_path)
 
 
 def _archive_scans():
-    """Scan list read directly from interests/2026/scans/*.md files."""
-    scans_dir = REPO_ROOT / 'interests' / '2026' / 'scans'
-    scans = []
-    try:
-        raw = []
-        for md in scans_dir.glob('*.md'):
-            m = _scan_md_meta(md)
-            raw.append({
-                'date':   m['date'],
-                'title':  m['title'],
-                'source': m['source'],
-                'url':    f'research/scan/{m["hash_id"]}',
-            })
-        scans = sorted(raw, key=lambda s: s['date'], reverse=True)
-    except Exception:
-        pass
-    return scans
+    from domains.curator.archive_queries import scans
+    return scans(REPO_ROOT / 'interests' / '2026' / 'scans', scan_metadata=_scan_md_meta)
 
 
 def _archive_dives():
-    """Deeper-dive summaries from the dives data directory."""
-    dives_dir = _RESEARCH_DATA / 'dives'
-    dives = []
-    try:
-        for f in sorted(dives_dir.glob('*.md'), reverse=True):
-            stem  = f.stem  # e.g. hellscape-taiwan-porcupine-deeper-dive-001
-            parts = stem.rsplit('-deeper-dive-', 1)
-            topic = parts[0] if len(parts) == 2 else stem
-            title = ' '.join(w.capitalize() for w in topic.split('-'))
-            dives.append({'topic': topic, 'title': title, 'file': f.name, 'slug': stem})
-    except Exception:
-        pass
-    return dives
+    from domains.curator.archive_queries import dives
+    return dives(_RESEARCH_DATA / 'dives')
 
 
 def _archive_observations():
-    """Daily intelligence observation dates from ~/.openclaw/workspace/."""
-    workspace = _DATA_DIR
-    entries = []
-    try:
-        for f in sorted(workspace.glob('intelligence_*.json'), reverse=True):
-            stem = f.stem
-            if 'weekly' in stem:
-                continue
-            raw = stem.replace('intelligence_', '')
-            if len(raw) == 8:
-                date_str = f'{raw[:4]}-{raw[4:6]}-{raw[6:]}'
-                try:
-                    data = json.loads(f.read_text())
-                    count = len(data.get('observations', []))
-                except Exception:
-                    count = 0
-                entries.append({'date': date_str, 'count': count})
-    except Exception:
-        pass
-    return entries
+    from domains.curator.archive_queries import observations
+    return observations(_DATA_DIR)
 
 
 @app.route('/archive')
@@ -1197,53 +1004,8 @@ def archive_page():
 # ── Scans & Dives helpers (Flask route) ───────────────────────────────────────
 
 def _scans_dives_data():
-    """Build scans and dives lists directly from .md files — no index.html dependency."""
-    scans, dives = [], []
-
-    # ── Scans from interests/2026/scans/*.md ─────────────────────────────────
-    scans_dir = REPO_ROOT / 'interests' / '2026' / 'scans'
-    try:
-        raw_scans = []
-        for md in scans_dir.glob('*.md'):
-            m = _scan_md_meta(md)
-            raw_scans.append({
-                'href':   f'/research/scan/{m["hash_id"]}',
-                'date':   m['date'],
-                'source': m['source'],
-                'title':  m['title'],
-            })
-        scans = sorted(raw_scans, key=lambda s: s['date'], reverse=True)
-    except Exception:
-        pass
-
-    # ── Dives from data/dives/*.md ────────────────────────────────────────────
-    dives_dir = _RESEARCH_DATA / 'dives'
-    try:
-        raw_dives = []
-        for f in dives_dir.glob('*.md'):
-            text    = f.read_text()
-            title_m = re.match(r'^#\s+DEEPER DIVE:\s*(.+)', text, re.IGNORECASE)
-            title   = title_m.group(1).strip() if title_m else ' '.join(
-                w.capitalize() for w in f.stem.split('-')
-            )
-            date_m  = re.search(r'Generated:\s*(\d{4}-\d{2}-\d{2})', text)
-            date    = date_m.group(1) if date_m else ''
-            sort_key = date if date else str(f.stat().st_mtime)
-            raw_dives.append({
-                'href':     f'/research/dive-result/{f.stem}',
-                'title':    title,
-                'excerpt':  '',
-                'meta':     date,
-                'date':     date,
-                '_sort_key': sort_key,
-            })
-        dives = sorted(raw_dives, key=lambda d: d['_sort_key'], reverse=True)
-        for d in dives:
-            del d['_sort_key']
-    except Exception:
-        pass
-
-    return dives, scans
+    from domains.curator.archive_queries import scans_dives_data
+    return scans_dives_data(REPO_ROOT / 'interests' / '2026' / 'scans', _RESEARCH_DATA / 'dives', scan_metadata=_scan_md_meta)
 
 
 @app.route('/scans-dives')
@@ -1315,7 +1077,11 @@ def briefing_page():
     """Serve briefing from Jinja2 template when JSON exists."""
     from flask import request as _req
     tier = _req.headers.get("X-Minimoi-User-Tier", "guest")  # least-privilege default (H1)
-    result = _load_briefing_articles()
+    from domains.curator.briefing_views import InvalidBriefing
+    try:
+        result = _load_briefing_articles()
+    except InvalidBriefing:
+        return 'Briefing temporarily unavailable. Please try again later.', 503
     if result is not None:
         articles, day_str, date_str, model_display, briefing_date = result
         return render_template(
@@ -1355,20 +1121,16 @@ def api_briefing():
 
     try:
         raw = json.loads(json_path.read_text())
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except (OSError, ValueError):
+        return jsonify({'error': 'Briefing temporarily unavailable'}), 503
 
     now = datetime.now(timezone.utc)
-    articles = []
-    for i, entry in enumerate(raw, 1):
-        score = entry.get('final_score', 0) or 0
-        score_pct = min(100, max(0, (score / 20.0) * 100)) if score > 0 else 0
-        enriched = dict(entry)
-        enriched['time_ago'] = _calc_time_ago(entry.get('published', ''), now)
-        enriched['score_pct'] = score_pct
-        enriched['summary'] = _strip_summary(entry.get('summary', ''))
-        enriched['rank'] = i
-        articles.append(enriched)
+    from domains.curator.briefing_views import enrich_articles, InvalidBriefing
+    try:
+        articles = enrich_articles(raw, now, time_ago=_calc_time_ago,
+                                   strip_summary=_strip_summary, ranked=True)
+    except InvalidBriefing:
+        return jsonify({'error': 'Briefing temporarily unavailable'}), 503
 
     return jsonify({'date': req_date, 'articles': articles})
 
@@ -1376,7 +1138,11 @@ def api_briefing():
 @app.route('/curator_latest.html')
 def latest_page():
     """Serve briefing from Jinja2 template when JSON exists."""
-    result = _load_briefing_articles()
+    from domains.curator.briefing_views import InvalidBriefing
+    try:
+        result = _load_briefing_articles()
+    except InvalidBriefing:
+        return 'Briefing temporarily unavailable. Please try again later.', 503
     if result is not None:
         articles, day_str, date_str, model_display, briefing_date = result
         return render_template(

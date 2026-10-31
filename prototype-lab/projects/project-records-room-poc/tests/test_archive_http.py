@@ -1,8 +1,8 @@
 """Applied-package HTTP acceptance; run after the private patch is integrated."""
 from datetime import datetime, timedelta, timezone
 import pytest
-import archive as module
-from app import create_app
+from domains.records import archive as module
+from domains.records.app import create_app
 
 NOW=datetime(2026,10,14,12,tzinfo=timezone.utc)
 

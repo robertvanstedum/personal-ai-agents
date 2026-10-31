@@ -415,7 +415,7 @@
                 <div class="card-meta">
                     <span class="cat-badge cat-{{ entry.category | lower }}">{{ entry.category | lower }}</span>
                     <span class="source-label">{{ entry.source }}</span>
-                    <span class="score-label">{{ "%.1f" | format(entry.raw_score) }}{% if entry.interest_boosted %} ⭐{% endif %}</span>
+                    <span class="score-label">{{ "%.1f" | format(entry.raw_score) if entry.raw_score is number else "N/A" }}{% if entry.interest_boosted %} ⭐{% endif %}</span>
                     <span class="time-label">{{ entry.time_ago }}</span>
                 </div>
                 <h2 class="card-title">

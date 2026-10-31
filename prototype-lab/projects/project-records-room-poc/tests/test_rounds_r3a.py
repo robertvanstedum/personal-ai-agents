@@ -4,15 +4,15 @@ the earlier replies of its round; a lost teammate is skipped, fenced or
 released by Records so it can never start late; delivery-only recovery of a
 saved reply survives the inference deadline."""
 from datetime import datetime, timedelta, timezone
-from meetings import DEFAULT_MAX_TURNS
+from domains.records.meetings import DEFAULT_MAX_TURNS
 import json
 from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 
-from app import create_app
-from manage import provision_rooms
+from domains.records.app import create_app
+from domains.records.manage import provision_rooms
 
 
 def past(seconds):
@@ -192,7 +192,7 @@ def test_saved_reply_recovery_survives_the_inference_deadline_outside_rounds(env
 
 
 def test_round_replies_export_under_transcript_1_1(env):
-    from transcript_snapshot import capture
+    from domains.records.transcript_snapshot import capture
     env.say("@everyone go")
     mc = env.claim(env.mcw, "mc"); env.run(env.mcw, env.mc, mc, "one")
     cc = env.claim(env.ccw, "claude-code"); env.run(env.ccw, env.cc, cc, "two")

@@ -17,7 +17,7 @@ import pytest
 
 from core.telegram import delivery_ledger as dl
 
-TODAY = datetime.now(timezone.utc).date().isoformat()
+TODAY = "2026-10-16"
 
 
 class Reply:
@@ -41,6 +41,8 @@ def _briefing_text():
 @pytest.fixture()
 def bot(tmp_path, monkeypatch):
     from core.telegram import telegram_bot as tb
+    from functools import partial
+    monkeypatch.setattr(tb, "deliver_briefing", partial(tb.deliver_briefing, today=TODAY))
     out = tmp_path / "curator_output.txt"
     out.write_text(_briefing_text())
     monkeypatch.setenv("CURATOR_OUTPUT_PATH", str(out))

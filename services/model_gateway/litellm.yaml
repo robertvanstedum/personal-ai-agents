@@ -93,23 +93,16 @@ model_list:
     litellm_params: {<<: *anthropic-mid, timeout: 120}
     model_info: {id: cos-anthropic-secondary, mode: chat, supports_function_calling: true, fallback_position: 2}
 
-  # Mac-hosted Ollama, dev only: outside the tier set.
+  # Explicit local regression route; never an automatic cloud fallback.
   - model_name: minimoi-cos-agent-local
     litellm_params:
-      model: ollama_chat/qwen3:4b
+      model: ollama_chat/llama3.2:3b
       api_base: os.environ/OLLAMA_API_BASE
       timeout: 180
-      # Keep reasoning in Ollama's separate thinking field so OpenClaw does not
-      # expose the trace as assistant-visible content.
-      think: true
     model_info:
       id: cos-ollama-local
-      base_model: qwen3:4b
+      base_model: llama3.2:3b
       mode: chat
-      max_input_tokens: 32768
-      max_output_tokens: 8192
-      supports_function_calling: true
-      fallback_position: 3
 
 # ── Ordered reliability policy ────────────────────────────────────────────────
 
@@ -118,7 +111,6 @@ router_settings:
     - minimoi-cos-agent:
         - minimoi-cos-agent-xai-fast
         - minimoi-cos-agent-anthropic
-        - minimoi-cos-agent-local
   num_retries: 0
   allowed_fails: 1
   cooldown_time: 60

@@ -7,7 +7,7 @@ import pytest
 @pytest.fixture
 def german_server(monkeypatch):
     monkeypatch.setenv("FLASK_SECRET", "issue-95-test-secret")
-    import html_server
+    from domains.german import html_server
 
     html_server.app.config.update(TESTING=True)
     return html_server

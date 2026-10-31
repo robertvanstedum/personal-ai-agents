@@ -10,9 +10,9 @@ import pytest
 
 from test_cos_agent_responder import agent_setup, turn
 from test_cos_records_bridge import bridge
-import synthetic_cos_setup as setup
-from cos_agent_responder import OpenClawMeetingModel
-from cos_records_bridge import RoomBridgeError
+from domains.records.integration import synthetic_cos_setup as setup
+from domains.records.integration.cos_agent_responder import OpenClawMeetingModel
+from domains.records.integration.cos_records_bridge import RoomBridgeError
 
 
 def digest():

@@ -1,0 +1,453 @@
+{
+  "parent": "8df22e438961399e16d7c34fa96f541248f8d211",
+  "date": "2026-10-29",
+  "scan_args": [
+    "abc12",
+    {
+      "title": "A useful article",
+      "source": "Example",
+      "url": "https://example.com/article"
+    },
+    "Institutional evidence",
+    "Compare results",
+    "## Scan Analysis\n\n## Findings\nUseful **evidence**.\n\n- First point\n- Second point\n\n## Sources\n- A source",
+    0.0123,
+    123,
+    456
+  ],
+  "scan_sha256": "590a39bd01a34e73191d4cec9412f5d50f1b952e53cc63626e923bd7eb2adec2",
+  "challenger": {
+    "show_process": true,
+    "enabled": true,
+    "accepted_count": 1,
+    "rejected_count": 1,
+    "key_change": "Better framing",
+    "first_pass_summary": "## Header\n**First** _draft_",
+    "challenge_points": [
+      {
+        "accepted": true,
+        "type": "evidence_gap",
+        "description": "A useful point",
+        "impact": "high"
+      },
+      {
+        "accepted": false,
+        "type": "scope",
+        "description": "Keep scope"
+      }
+    ]
+  },
+  "challenger_sha256": "e68c240f5b6943cb5d78d0d4a29ac0be7ff9bb831ecf9226ec5701b06e88dfd2",
+  "empty_index_sha256": "ed65a3a47f84df2dd04f3f7d7a42b5aa8c0113bf4e4c353c09ebc2d3b15eb922",
+  "scan_document": "# A useful article\n**Source:** Example\n**Date:** 2026-10-28\n",
+  "dive_document": "# DEEPER DIVE: Topic\nGenerated: 2026-10-29\n2 sessions 3 sources Est. cost: $0.20\n## 1. REVISED FRAMING\nA useful revision.\n",
+  "index_sha256": "f02622fe42da5612b9141a958773f33130e33091f963752df660b7eb6d0e5f23",
+  "dive_raw": "# A useful Dive\n\nA *careful* explanation.\n\n- First point\n\n---\n\n## Evidence\nText.",
+  "dive_sha256": "969e7b1a29e20cb811200447c3e064a8dae17fa6d955df95c9db4d71d3e4324e",
+  "routes": [
+    [
+      "/research/observe",
+      "research_observe_ui",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/research/candidates",
+      "research_candidates_ui",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/research/save",
+      "research_save_ui",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/observe",
+      "api_research_observe",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/observations",
+      "api_research_observations_list",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/observations/<filename>",
+      "api_research_observation_detail",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/candidates",
+      "api_research_candidates",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/candidates/promote",
+      "api_research_candidates_promote",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/candidates/retire",
+      "api_research_candidates_retire",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/save",
+      "api_research_save",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/research/dashboard",
+      "research_dashboard_ui",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/dashboard",
+      "api_research_dashboard",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/run-session",
+      "api_research_run_session",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/run-session/status",
+      "api_research_run_session_status",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/generate-scan",
+      "api_research_generate_scan",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/generate-scan/status",
+      "api_research_generate_scan_status",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/research/dive-result/<stem>",
+      "research_dive_result",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/research/dive-confirm",
+      "research_dive_confirm",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/dive-confirm-data",
+      "api_research_dive_confirm_data",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/generate-dive",
+      "api_research_generate_dive",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/generate-dive/status",
+      "api_research_generate_dive_status",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/scan-to-dive",
+      "api_research_scan_to_dive",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/thread/<topic>",
+      "api_research_thread_get",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/thread/<topic>/annotate",
+      "api_research_thread_annotate",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/thread/create",
+      "api_research_thread_create",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/spawn-thread",
+      "api_research_spawn_thread",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/thread/<topic>/retire",
+      "api_research_thread_retire",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/thread/<topic>/wrap-up",
+      "api_research_thread_wrap_up",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/thread/<topic>/expire",
+      "api_research_thread_expire",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/thread/<topic>/archive",
+      "api_research_thread_archive",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/research/sessions",
+      "research_sessions_ui",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/sessions",
+      "api_research_sessions_list",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/sessions/<topic>/<session_id>",
+      "api_research_session_detail",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/sessions/<topic>/<session_id>/annotate",
+      "api_research_session_annotate",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/research/deep-dive/<hash_id>",
+      "research_deep_dive_compat",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/research/scan/<hash_id>",
+      "research_scan_view",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/scans",
+      "api_research_scans_list",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/scans/<hash_id>/bibliography",
+      "api_research_scan_bibliography",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/inbox/add",
+      "api_research_inbox_add",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/candidates/assign",
+      "api_research_candidates_assign",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/annotate",
+      "annotate",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/annotations",
+      "get_annotations",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/research/static/<path:filename>",
+      "research_static",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/topics/status",
+      "api_topics_status",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/topic/<slug>/activate",
+      "api_activate_topic",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/research/leanings",
+      "research_leanings_ui",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/leanings",
+      "api_list_leanings",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/leanings",
+      "api_create_leaning",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/leanings/<leaning_id>",
+      "api_get_leaning",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/research/leanings/<leaning_id>",
+      "api_update_leaning",
+      [
+        "PATCH"
+      ]
+    ],
+    [
+      "/api/research/leanings/<leaning_id>",
+      "api_delete_leaning",
+      [
+        "DELETE"
+      ]
+    ],
+    [
+      "/api/research/leanings/<leaning_id>/evidence",
+      "api_add_evidence",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/research/leanings/<leaning_id>/evidence/<ev_id>",
+      "api_remove_evidence",
+      [
+        "DELETE"
+      ]
+    ],
+    [
+      "/api/research/leanings/<leaning_id>/teammate-read",
+      "api_teammate_read",
+      [
+        "POST"
+      ]
+    ]
+  ],
+  "prompt_cases": [
+    {
+      "args": {
+        "article": {
+          "title": "A title",
+          "source": "Example",
+          "category": "fiscal"
+        },
+        "user_words": "",
+        "feedback_type": "liked"
+      },
+      "sha256": "019f643d09d5bdd578a89b8cd99db59d30dcd7141ccfa337b0245ee377a1a229"
+    },
+    {
+      "args": {
+        "article": {
+          "title": "A title",
+          "source": "Example",
+          "category": "fiscal"
+        },
+        "user_words": "Useful “evidence” — café\nSecond line",
+        "feedback_type": "liked"
+      },
+      "sha256": "ab6ab1af131327381d1ed6ae55e8983d45d2b332c1939d1936e573198a2ae1c6"
+    }
+  ]
+}
