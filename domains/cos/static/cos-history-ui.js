@@ -88,7 +88,7 @@
   document.getElementById('history-more').onclick=()=>list(true).catch(()=>state.textContent='Could not load more history.');
   document.getElementById('history-earlier').onclick=()=>{if(viewingEarlier){viewingEarlier=false;signature='';document.getElementById('history-earlier').textContent='Earlier messages';reload().catch(()=>state.textContent='Could not load messages.');}else{reload(true).then(()=>{document.getElementById('history-earlier').hidden=false;document.getElementById('history-earlier').textContent='Return to latest';}).catch(()=>state.textContent='Could not load earlier messages.');}};
   document.getElementById('history-new').onclick=async()=>{if(input.disabled||uploading){state.textContent='Wait for the current message or upload.';return;}try{const c=await api('history/conversations',{title:'New conversation'});await select(c.conversation_id,c);document.getElementById('history-sheet').close();}catch(_){state.textContent='Could not create a conversation.';}};
-  document.getElementById('mc-page').href=location.origin + '/guild/build';
+  document.getElementById('mc-page').href=location.origin + '/guild-next/guild/build';
   document.getElementById('existing-rooms').href=location.origin + '/app/records/';
   document.getElementById('both-open').onclick=async()=>{
     const frame=document.getElementById('mc-both'), button=document.getElementById('both-open'), open=frame.hidden;
@@ -97,7 +97,7 @@
       if(open) await releaseVoice();
       else { try {frame.contentDocument?.dispatchEvent(new frame.contentWindow.CustomEvent('guild:mic-claim',{detail:{who:'companion-closed'}}));} catch(_){} }
       frame.hidden=!open;document.body.classList.toggle('both-open',open);button.setAttribute('aria-pressed',String(open));
-      if(open&&!frame.src)frame.src=location.origin + '/guild/companion';
+      if(open&&!frame.src)frame.src=location.origin + '/guild-next/guild/companion/cos';
     } catch(_) {state.textContent='Voice has not confirmed it ended. Finish it before opening MC.';}
     finally {button.disabled=false;}
   };

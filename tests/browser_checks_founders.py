@@ -17,6 +17,8 @@ def test_history_draft_picture_and_reply_survive_reload(tmp_path,width,height):
     app.register_blueprint(create_blueprint(history,resolve_owner=lambda request: 1))
     @app.get('/ui/confer')
     def page():return render_template('cos_ui.html',initial_tab='confer',managed_realtime_ready=False)
+    @app.get('/guild-next/guild/companion/cos')
+    def companion():return '<main data-mc-embed>MC test conversation</main>'
     @app.get('/ui/files')
     def files():return jsonify(available=True,files=[])
     @app.post('/ui/send')
@@ -44,6 +46,8 @@ def test_history_draft_picture_and_reply_survive_reload(tmp_path,width,height):
         expect(tab.locator('#mc-both')).to_be_hidden()
         tab.locator('#both-open').click()
         expect(tab.locator('#mc-both')).to_be_visible()
+        expect(tab.frame_locator('#mc-both').locator('[data-mc-embed]')).to_contain_text('MC test conversation')
+        expect(tab.locator('#mc-page')).to_have_attribute('href','https://founders.invalid/guild-next/guild/build')
         tab.locator('#both-open').click()
         expect(tab.locator('#mc-both')).to_be_hidden()
         tab.locator('#send-input').fill('Keep this draft')
