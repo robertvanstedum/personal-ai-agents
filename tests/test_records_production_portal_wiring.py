@@ -32,7 +32,7 @@ def environment(tmp_path):
     tmp_path.chmod(0o700)
     (tmp_path/'.env').write_text('BASE_URL=https://minimoi.ai\nPRIVATE_SENTINEL=synthetic-preserved\n')
     (tmp_path/'.env').chmod(0o600)
-    env={'PATH':os.environ.get('PATH',''),'HOME':str(tmp_path),'COMPOSE_DISABLE_ENV_FILE':'1','DOCKER_HOST':'unix:///nonexistent/records-test-no-daemon.sock','MINIMOI_ROOT':str(tmp_path),'MINIMOI_MODEL_GATEWAY_KEY':'synthetic','XAI_API_KEY':'synthetic','ANTHROPIC_API_KEY':'synthetic','MINIMOI_MODEL_GATEWAY_RECEIPT_KEY':'synthetic','COS_AGENT_A_GATEWAY_TOKEN':'synthetic','MINIMOI_RECORDS_IMAGE':'332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal@sha256:'+'a'*64,'MINIMOI_RECORDS_STATE':str(tmp_path/'empty-production'),'MINIMOI_RECORDS_PORTAL_KEY':str(tmp_path/'private-key'),'MINIMOI_RECORDS_NETWORK':'minimoi-records-production-fixture'}
+    env={'PATH':os.environ.get('PATH',''),'HOME':str(tmp_path),'COMPOSE_DISABLE_ENV_FILE':'1','DOCKER_HOST':'unix:///nonexistent/records-test-no-daemon.sock','MINIMOI_ROOT':str(tmp_path),'MINIMOI_MODEL_GATEWAY_KEY':'synthetic','XAI_API_KEY':'synthetic','ANTHROPIC_API_KEY':'synthetic','OPENAI_API_KEY':'synthetic','MINIMOI_MODEL_GATEWAY_RECEIPT_KEY':'synthetic','COS_AGENT_A_GATEWAY_TOKEN':'synthetic','MINIMOI_RECORDS_IMAGE':'332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal@sha256:'+'a'*64,'MINIMOI_RECORDS_STATE':str(tmp_path/'empty-production'),'MINIMOI_RECORDS_PORTAL_KEY':str(tmp_path/'private-key'),'MINIMOI_RECORDS_NETWORK':'minimoi-records-production-fixture'}
     return env
 
 def render(env,*files):

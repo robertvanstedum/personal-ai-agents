@@ -101,7 +101,7 @@ services:
   # Shared provider gateway. Domains and agent runtimes request stable logical
   # models; this service alone owns concrete providers and fallback policy.
   model-gateway:
-    image: ghcr.io/berriai/litellm-non_root@sha256:4a5befcc82c01af9fa2b66ed3c139ea2eff31a5b75babc448e6341157e27ff79
+    image: ghcr.io/berriai/litellm-non_root@sha256:6363e53f135dafbf4a68fac25f77aec3f2b99be37665e8c5f623a952637c220b
     container_name: minimoi-model-gateway
     restart: unless-stopped
     command:
@@ -115,7 +115,7 @@ services:
       - LITELLM_MASTER_KEY=${MINIMOI_MODEL_GATEWAY_KEY:?set MINIMOI_MODEL_GATEWAY_KEY in .env}
       - XAI_API_KEY=${XAI_API_KEY:?set XAI_API_KEY in .env}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?set OPENAI_API_KEY in .env}
       - OLLAMA_API_BASE=${MINIMOI_OLLAMA_URL:-http://host.docker.internal:11434}
       - MINIMOI_RECEIPT_ENDPOINT=http://cos:18769/internal/model-gateway/receipt
       - MINIMOI_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in .env}

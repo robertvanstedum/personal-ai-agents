@@ -35,6 +35,10 @@ def _model_dump(value) -> dict:
     return {}
 
 
+def _first(*values):
+    return next((value for value in values if value is not None), None)
+
+
 def _message_text(message: object) -> str:
     if not isinstance(message, dict):
         return ""
@@ -71,6 +75,10 @@ def _provider_and_model(kwargs: dict) -> tuple[str, str]:
     provider = str(litellm_params.get("custom_llm_provider") or "").strip()
     model_info = litellm_params.get("model_info") or {}
     base_model = str(model_info.get("base_model") or "").strip()
+    if not provider:
+        # The /v1/responses path (the web-search route) leaves litellm_params
+        # without custom_llm_provider; LiteLLM still passes it at the top level.
+        provider = str(kwargs.get("custom_llm_provider") or "").strip()
     if not provider and "/" in served_model:
         provider = served_model.split("/", 1)[0]
     if not provider and "/" in base_model:
@@ -109,6 +117,9 @@ def build_receipt(kwargs: dict, response_obj, start_time, end_time) -> dict | No
     model_info = litellm_params.get("model_info") or {}
     provider, served_model = _provider_and_model(kwargs)
     usage = _model_dump(response.get("usage") or getattr(response_obj, "usage", {}))
+    # The /v1/responses path can arrive without a usage block LiteLLM has
+    # normalized; its standard logging object carries the counted tokens.
+    logged = kwargs.get("standard_logging_object") or {}
     latency_ms = max(0.0, (end_time - start_time).total_seconds() * 1000)
     return {
         "receipt_id": receipt_id,
@@ -120,9 +131,11 @@ def build_receipt(kwargs: dict, response_obj, start_time, end_time) -> dict | No
         "served_provider": provider,
         "served_model": served_model,
         "latency_ms": round(latency_ms, 3),
-        "input_tokens": usage.get("prompt_tokens", usage.get("input_tokens")),
-        "output_tokens": usage.get("completion_tokens", usage.get("output_tokens")),
-        "total_tokens": usage.get("total_tokens"),
+        "input_tokens": _first(usage.get("prompt_tokens"), usage.get("input_tokens"), logged.get("prompt_tokens")),
+        "output_tokens": _first(
+            usage.get("completion_tokens"), usage.get("output_tokens"), logged.get("completion_tokens")
+        ),
+        "total_tokens": _first(usage.get("total_tokens"), logged.get("total_tokens")),
         "cost_usd": kwargs.get("response_cost"),
         "fallback_position": model_info.get("fallback_position"),
         "fallback_reason": (
