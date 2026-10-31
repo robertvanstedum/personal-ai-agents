@@ -59,7 +59,7 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
   class Controller {
     constructor(options) {
       this.options = options; this._state = 'idle'; this._sid = null; this.instructions = []; this.ended = []; this.muted = 0;
-      this.turns = []; this.responses = 0; this.tracked = [];
+      this.turns = []; this.responses = 0; this.tracked = []; this.chats = [];
       // Response construction, as the real controller does it where the page creates every response (Spec 165 §5.1 as
       // amended for Robert's C2 decision, 28 Oct 2026): each response that may act was created by the page for one committed
       // owner item, named by the provider's commit; a function result's follow-up is owned by the item of the call it
@@ -137,14 +137,16 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
     }
     // v3, as the real controller does where the page makes every response (OpenAI): his committed item's one response waits
     // for the page's word on it (respondFor, its server decision), then starts (onResponseStarted, owned by the item), with
-    // the page's instruction if it gave one; {skip} makes none. The provider's item id here is "i" + its place.
+    // the page's instruction if it gave one; {skip} makes none. The provider's item id here is "i" + its place. A chat's
+    // word (CHAT_LINE, the v3 live check's fix round) goes with that item's own response, as a plain one did before, so it
+    // is kept in chats, apart from the page's lines the tests count in instructions.
     ownsResponses() { return this.owns !== false; }
     placeOf(id) { return typeof id === 'string' && /^i\d+$/.test(id) ? Number(id.slice(1)) : null; }
     commit(i) {
       if (typeof this.options.respondFor !== 'function') return;
       Promise.resolve(this.options.respondFor(`i${i}`)).then((word) => {
         if (word && word.skip) return;
-        if (word && word.instruction) this.instructions.push(word.instruction);
+        if (word && word.instruction) (word.instruction === D.CHAT_LINE ? this.chats : this.instructions).push(word.instruction);
         const id = `turn_resp_${i}`;
         this.options.onResponseStarted?.({ response_id: id, owner: `i${i}`, page: true, kind: 'turn' });
         this.options.onAudioStarted?.(id);                // its first audio, as the transport reports it (review M2)

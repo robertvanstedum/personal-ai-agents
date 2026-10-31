@@ -515,6 +515,16 @@ await check('openai: fault 2, a chat, a lost decision and a refused fold each ge
   } } });
 });
 
+await check('openai: a chat decided and followed before its commit still gets CHAT_LINE with its one response (review S2)', () => run('openai', async (t) => {
+  t.ev({ type: 'input_audio_buffer.speech_started', item_id: 'a' });
+  t.ev({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'a', transcript: 'Tell me about glazes.', event_id: 'ev_a', status: 'completed' });
+  t.ev({ type: 'input_audio_buffer.speech_stopped' });
+  await quiet();                                                                     // decided (and followed) before the commit
+  assert.equal(t.posts('/utterance').length, 1); assert.equal(t.creates(), 0);
+  t.ev({ type: 'input_audio_buffer.committed', item_id: 'a' }); await quiet();
+  assert.deepEqual(t.lines(), [D.CHAT_LINE]); assert.deepEqual(roles(t), ['system']); assert.equal(t.creates(), 1);
+}, { routes: table({}) }));
+
 await check('xai: the page\'s lines stay user items, the bytes as before (xAI kept every rule live)', () => run('xai', async (t) => {
   await t.speak('a', WORDS);
   t.created('X1'); for (let i = 0; i < 4; i++) await flush();
