@@ -336,3 +336,12 @@ def test_new_folders_keep_the_setgid_bit_so_files_stay_in_the_reader_group(tmp_p
     plain = tmp_path / "plain"
     fsio.ensure_dir(plain / "x")
     assert stat.S_IMODE((plain / "x").stat().st_mode) == 0o750
+
+
+def test_a_later_recovery_leaves_live_turns_alone(hist):
+    # Review S6 (#462): only the first recovery of a process interrupts pending turns; those belonged to a gone process.
+    cid = hist.ensure_default()["conversation_id"]
+    hist.begin(send(cid))
+    hist._needs_recovery = True                       # e.g. after a read-back mismatch
+    hist.ensure_default()                             # any locked call runs recovery again
+    assert hist.turn(cid, "t-0a1b2c3d4e5f6a")["status"] == "pending"

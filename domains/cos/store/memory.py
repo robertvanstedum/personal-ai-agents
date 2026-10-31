@@ -43,6 +43,11 @@ NEW_SECTION = "Recent"
 PROJECTION_HEADER = ("# CoS Memory (a projection of the CoS store's standing facts; it is rewritten from the store, "
                      "so change it through CoS, not here)")
 DONE_MARKER = "imports/cos_memory.done"
+IMPORT_MANIFEST = "imports/cos_memory.import.json"
+
+
+class ImportRefused(Exception):
+    """The import would duplicate facts: it already ran, or the file is already the store's projection."""
 
 _TAGGED = re.compile(r"^\[([a-z_]+)\] (?:([0-9]{4}-[0-9]{2}-[0-9]{2}): )?(.*)$")
 _PLACEHOLDER = re.compile(r"^\[[^\]]*\]$")
@@ -124,17 +129,36 @@ def imported(writer: StoreWriter) -> bool:
     return (writer.root / DONE_MARKER).exists()
 
 
+def _import_time(writer: StoreWriter) -> str:
+    """One timestamp for every undated line, fixed on the first run and reused, so a re-run sends identical payloads
+    and replays its receipts (review M1)."""
+    manifest = writer.root / IMPORT_MANIFEST
+    try:
+        return json.loads(manifest.read_text("utf-8"))["at"]
+    except (FileNotFoundError, ValueError, KeyError):
+        at = _now()
+        fsio.write_bytes(manifest, json.dumps({"at": at}).encode("utf-8") + b"\n")
+        return at
+
+
 def import_file(writer: StoreWriter, memory_file: Path | str) -> dict:
-    """Move cos_memory.md into the store. Stops at the first fact not accepted, and marks done only when all are."""
+    """Move cos_memory.md into the store. Stops at the first fact not accepted, and marks done only when all are.
+    Refuses (ImportRefused) once the import is done or the file is already the projection: importing the projection
+    would add every fact a second time, and the store is append-only."""
     path = Path(memory_file)
+    if imported(writer):
+        raise ImportRefused("already imported: imports/cos_memory.done exists")
     raw = path.read_bytes()
+    if raw.decode("utf-8", errors="replace").lstrip().startswith(PROJECTION_HEADER):
+        raise ImportRefused("cos_memory.md is already the store's projection")
+    undated_at = _import_time(writer)
     original = writer.root / "imports" / f"cos_memory.md.{hashlib.sha256(raw).hexdigest()[:16]}.orig"
     if not original.exists():
         fsio.write_bytes(original, raw)
     entries = parse(raw.decode("utf-8"))
     counts = {"entries": len(entries), "accepted": 0, "replayed": 0, "approved_notes": 0}
     for entry in entries:
-        fact = fact_for(entry, writer.environment)
+        fact = fact_for(entry, writer.environment, at=None if entry.get("entry_date") else undated_at)
         result = record(writer, fact, origin="import", actor="scheduler")
         if result["outcome"] != "accepted":
             counts["stopped"] = {"fact": fact["id"], "outcome": result["outcome"],
@@ -206,9 +230,9 @@ def remember(writer: StoreWriter, memory_file: Path | str, text: str, *, kind: s
     fact = fact_for(entry, writer.environment, kind=kind, at=when)
     if operation_id:
         fact["id"] = "FACT-" + hashlib.sha256(f"{kind}:{operation_id}".encode("utf-8")).hexdigest()[:24]
-        existing = next((f for f in writer.rows("cos.fact") if f["id"] == fact["id"]), None)
-        if existing is not None:
-            return {"saved": True, "deduplicated": True}
+    # The same note retried, or the model writing the same line twice in a day, is already kept (review S2).
+    if any(f["id"] == fact["id"] for f in writer.rows("cos.fact")):
+        return {"saved": True, "deduplicated": True}
     # Both happen inside a turn Robert started. The note cites its own operation; the model's write cites itself,
     # because the Grok backend's write_memory call carries no turn id.
     basis = ({"type": "cos.memory_note", "id": operation_id} if kind == "explicit_note"
@@ -228,7 +252,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--project", action="store_true", help="after a complete import, rewrite the file as the projection")
     args = parser.parse_args(argv)
     writer = StoreWriter(args.store, args.environment)
-    counts = import_file(writer, args.memory)
+    try:
+        counts = import_file(writer, args.memory)
+    except ImportRefused as exc:
+        print(json.dumps({"refused": str(exc)}))
+        return 2
     if "stopped" not in counts and args.project:
         write_projection(writer, args.memory)
         counts["projected"] = True

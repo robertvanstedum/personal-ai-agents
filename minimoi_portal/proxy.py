@@ -241,7 +241,8 @@ def _forward_headers(user: dict | None, strip_header_prefixes: tuple[str, ...] =
 
 
 def _internal_domain_api_path(path: str) -> bool:
-    # Do not expose the internal signed API via an authenticated browser proxy.
+    # Do not expose any backend's internal API via an authenticated browser proxy: /internal/ is the compose
+    # network's, never the browser's (the domain API, the CoS store API, the model-gateway receipts; CoS 1.2 review S3).
     # Account for URL decoding and dot-segment normalization on either hop.
     decoded = path
     for _ in range(4):
@@ -261,7 +262,7 @@ def _internal_domain_api_path(path: str) -> bool:
     if '//' in decoded or any(part in {'.', '..'} for part in decoded.split('/')):
         return True
     normalized = posixpath.normpath('/' + decoded.lstrip('/'))
-    return normalized == '/internal/domain-api' or normalized.startswith('/internal/domain-api/')
+    return normalized == '/internal' or normalized.startswith('/internal/')
 
 
 def proxy_to(backend_url: str, path: str, portal_prefix: str,

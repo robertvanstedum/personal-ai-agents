@@ -123,6 +123,7 @@ class StoreWriter:
         self._clock = clock
         self._thread_lock = threading.Lock()
         self._index: dict[str, tuple[str, dict]] = {}
+        self._journal_size = 0      # the journal's size when this process last read it (review S4)
         self._recovered = False
         self._needs_recovery = True
 
@@ -137,6 +138,7 @@ class StoreWriter:
             try:
                 if self._needs_recovery:
                     self._recover_locked()
+                self._refresh_index_locked()
                 return self._submit_locked(command)
             except StoreRefused as exc:
                 return {"schema": "minimoi.cos.store_result/1", "command_id": command_id,
@@ -319,6 +321,22 @@ class StoreWriter:
 
     # ---- recovery ------------------------------------------------------------------------------------------------
 
+    def _refresh_index_locked(self) -> None:
+        """Another process holding a writer on this folder may have completed commands since this one last read the
+        journal; pick up their receipts so a retry anywhere replays the first receipt (review S4)."""
+        try:
+            size = (self.root / _JOURNAL).stat().st_size
+        except FileNotFoundError:
+            size = 0
+        if size == self._journal_size:
+            return
+        for row in self._read_stream(self.root / _JOURNAL):
+            if row.get("t") == "completed" and row.get("command_id") not in self._index:
+                self._index[row["command_id"]] = (row["payload_digest"], {
+                    "schema": "minimoi.cos.store_result/1", "command_id": row["command_id"], "outcome": "accepted",
+                    "revision": row["revision"], "receipt_id": row["receipt_id"], "replayed": False})
+        self._journal_size = size
+
     def _recover_locked(self) -> dict:
         counts = {"quarantined": 0, "recovered": 0, "abandoned": 0}
         self._ensure_dir(self.root / "journal")
@@ -355,6 +373,7 @@ class StoreWriter:
                 self._journal({"t": "abandoned", "command_id": cid, "at": self._clock()})
                 counts["abandoned"] += 1
         self._index = index
+        self._journal_size = 0      # re-read on the next command, under the lock
         self._recovered = True
         self._needs_recovery = False
         return counts
