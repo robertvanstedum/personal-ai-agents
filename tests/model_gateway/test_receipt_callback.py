@@ -139,3 +139,24 @@ def test_build_receipt_accounts_for_bounded_search_without_retaining_content():
     duplicate = callback.build_receipt(kwargs, response, start, end)
     assert duplicate is not None
     assert duplicate["receipt_id"] == receipt["receipt_id"]
+
+
+def test_bounded_search_receipt_reads_provider_and_tokens_litellm_passes_outside_the_response():
+    """LiteLLM 1.106's /v1/responses path, as measured on staging (31 Oct 2026): the served model has no provider
+    prefix, litellm_params has no custom_llm_provider, the response's usage is not normalized, and the deployment has
+    no base_model (tier routes, #458). The provider and token counts come from LiteLLM's own top-level fields."""
+    callback = _load_callback_module()
+    moment = datetime(2026, 10, 31, 14, 0, tzinfo=timezone.utc)
+    kwargs = {
+        "model": "grok-4.3",
+        "custom_llm_provider": "xai",
+        "litellm_params": {"model_info": {"id": "cos-xai-bounded-web-search"}},
+        "standard_logging_object": {"prompt_tokens": 199, "completion_tokens": 200, "total_tokens": 399},
+        "response_cost": 0.0004,
+    }
+
+    receipt = callback.build_receipt(kwargs, {"id": "resp_1"}, moment, moment)
+
+    assert receipt["served_provider"] == "xai"
+    assert receipt["served_model"] == "grok-4.3"
+    assert (receipt["input_tokens"], receipt["output_tokens"], receipt["total_tokens"]) == (199, 200, 399)

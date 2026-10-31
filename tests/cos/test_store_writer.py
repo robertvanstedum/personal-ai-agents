@@ -391,3 +391,15 @@ def test_everything_stored_validates_against_the_frozen_contracts(store):
     for row in store.rows("cos.occurrence"):
         name = "obligation_event" if row["schema"] == "minimoi.cos.obligation_event/1" else "episode_event"
         assert not contracts.errors("store-records", name, row)
+
+
+def test_a_retry_through_another_writer_on_the_same_folder_replays_the_first_receipt(tmp_path):
+    # Review S4 (#462): two processes may each hold a writer on the store; a retry anywhere returns the first receipt.
+    a = StoreWriter(tmp_path / "store", ENV, verify_robert_source=verified)
+    b = StoreWriter(tmp_path / "store", ENV, verify_robert_source=verified)
+    b.recover()
+    cmd = command("goal.put", "cos.goal", "GOAL-german-b1", goal())
+    first = a.submit(cmd)
+    again = b.submit(cmd)
+    assert first["outcome"] == "accepted"
+    assert again["outcome"] == "accepted" and again["replayed"] is True and again["receipt_id"] == first["receipt_id"]

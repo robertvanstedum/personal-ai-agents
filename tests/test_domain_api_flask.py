@@ -114,3 +114,15 @@ def test_real_raw_proxy_refuses_dot_empty_and_encoded_aliases():
     finally:
         portal.shutdown(); portal.server_close(); pw.join(timeout=2)
         backend.shutdown(); backend.server_close(); worker.join(timeout=2)
+
+
+def test_proxy_refuses_every_internal_api_not_only_the_domain_api():
+    # CoS 1.2 review S3: the CoS store's internal API (and any other /internal/ route) is the compose network's,
+    # never reachable through the owner's browser proxy.
+    from minimoi_portal.proxy import _internal_domain_api_path
+    for path in ('internal/cos-store/v1/commands', '/internal/cos-store/v1/records/cos.goal/G1',
+                 'internal/model-gateway/receipt', 'internal', 'ui/../internal/cos-store/v1/commands',
+                 'internal%2Fcos-store%2Fv1%2Fcommands', 'internal/domain-api/v1/german/woerter/phrases'):
+        assert _internal_domain_api_path(path), path
+    for path in ('ui/send', 'ui/history/conversations', 'health', 'internalish/page'):
+        assert not _internal_domain_api_path(path), path
