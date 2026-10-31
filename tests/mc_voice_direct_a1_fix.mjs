@@ -133,7 +133,7 @@ await t.check('item 4: a finished result the heartbeat reports is said once, at 
   r.advance(3000); await flush();
   assert.deepEqual(r.c.instructions, []);
   r.c.options.onAssistantTurn('Sure.'); await flush();                 // the pause
-  const said = ['Say this briefly, adding nothing: About what you asked earlier: The nightly job finished.'];
+  const said = [D.answerLine('The nightly job finished.', 'About what you asked earlier:')];   // data (review S1)
   assert.deepEqual(r.c.instructions, said);
   r.c.options.onAssistantTurn('Good.');
   r.advance(20000); await flush();                                     // reported again: said once
@@ -188,7 +188,7 @@ await t.check('item 5: an answer lost twice is asked about once, and the stored 
   const [asked] = r.gets('/consult/');
   assert.equal(asked.url, `/guild-next/api/v1/mc/voice/direct/api/realtime-voice/consult/${SID}/t0?conversation_id=c-1`);
   assert.equal(r.gets('/consult/').length, 1);
-  assert.equal(r.c.instructions.at(-1), SAY + 'Item 12 is in build.');
+  assert.equal(r.c.instructions.at(-1), D.answerLine('Item 12 is in build.'));
 });
 await t.check('item 5: a read that does not answer, or says unknown, leaves it unknown', async () => {
   // Adapted (v3): through Check.
@@ -466,7 +466,7 @@ await t.check('FR N7: a finished result the server repeats is said once, and eve
   await r.s.start('openai');
   r.advance(20000); await flush();                                     // reported; the page has not acknowledged it yet
   r.advance(20000); await flush();                                     // reported again (as if the first answer was lost)
-  const said = ['Say this briefly, adding nothing: About what you asked earlier: The nightly job finished.'];
+  const said = [D.answerLine('The nightly job finished.', 'About what you asked earlier:')];   // data (review S1)
   assert.deepEqual(r.c.instructions, said);                            // said once
   assert.equal(acks[0], null);                                         // nothing told before the first report
   assert.deepEqual(acks.at(-1), ['t0']);                               // the next post acknowledges it
@@ -631,7 +631,7 @@ await t.check('G2: a consult answered at 9 s gets one holding line only', async 
   r.advance(8000); r.c.options.onAssistantTurn('Still checking.');
   r.advance(1000); release(); await flush();
   r.advance(30000); await flush();
-  assert.deepEqual(r.c.instructions, ['Still checking.', SAY + 'Item 12 is in build.']);
+  assert.deepEqual(r.c.instructions, ['Still checking.', D.answerLine('Item 12 is in build.')]);
 });
 await t.check('G2: a holding line due while he speaks waits for the pause, and one whose consult answered first is never said', async () => {
   // Adapted (v3): through Check.
@@ -651,7 +651,7 @@ await t.check('G2: a holding line due while he speaks waits for the pause, and o
   release(); await flush();                                            // answered before the pause
   r.c.options.onInputState('speech_stopped'); r.c.options.onAssistantTurn('Right.');
   r.advance(30000); await flush();
-  assert.deepEqual(r.c.instructions, ['Still checking.', SAY + 'Item 12 is in build.'], 'a holding line was said after its consult had answered');
+  assert.deepEqual(r.c.instructions, ['Still checking.', D.answerLine('Item 12 is in build.')], 'a holding line was said after its consult had answered');
 });
 
 // G3 (Spec 165 v0.3 §5.3): how the spoken summary's response ended (the controller's drained, barged_in, cancelled, cleared,

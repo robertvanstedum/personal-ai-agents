@@ -241,7 +241,7 @@ for (const [status, line, posts] of [[502, D.UNKNOWN, 2], [200, D.UNKNOWN, 1], [
   assert.match(body.call_id, /^host-\d+$/);
   assert.equal(body.call_id.length <= 80, true);
   assert.equal(body.owner_transcript_item, 'Is the kiln job done?');
-  assert.deepEqual(r.c.instructions, ['Say this briefly, adding nothing: Item 12 is in build.']);
+  assert.deepEqual(r.c.instructions, [D.answerLine('Item 12 is in build.')]);            // MC's own words: data (review S1)
   scenarios++;
 }
 // UI review #3: Check with MC runs one at a time (a double tap sends one consult) and never twice for the same turn of
@@ -549,7 +549,7 @@ for (const [status, error, words] of [[409, 'session ended', D.SERVER_ENDED.sess
   await flush(10);
   r.c.options.onUserTurn('Read it, please.');                                             // his one reply
   await flush(10);
-  assert.deepEqual(r.c.instructions.at(-1), 'Say only this, then stop: We looked at item twelve.');
+  assert.deepEqual(r.c.instructions.at(-1), D.summaryLine('We looked at item twelve.'));  // data (review S1)
   assert.deepEqual(r.c.ended, []);
   r.c.options.onAssistantTurn('We looked at item twelve.');
   await flush(10);

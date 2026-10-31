@@ -16,7 +16,7 @@ const root = process.env.VOICE_REVIEW_ROOT ? pathToFileURL(process.env.VOICE_REV
 const { RealtimeVoiceController } = await import(new URL('core/realtime_voice/static/realtime-voice-controller.js', root));
 const { XAIWebSocketAdapter } = await import(new URL('core/realtime_voice/static/adapters/xai-websocket-adapter.js', root));
 const { OpenAIWebRTCAdapter } = await import(new URL('core/realtime_voice/static/adapters/openai-webrtc-adapter.js', root));
-const { directVoice } = await import(process.env.VOICE_SESSION_MODULE ? pathToFileURL(process.env.VOICE_SESSION_MODULE)
+const { directVoice, answerLine, summaryLine } = await import(process.env.VOICE_SESSION_MODULE ? pathToFileURL(process.env.VOICE_SESSION_MODULE)
   : new URL('core/realtime_voice/static/direct-voice-session.js', root));
 
 // The capabilities answer as the core gives it under v3 (capabilities.MODEL_ACTIONS: none; PAGE_RESPONSES: OpenAI), and the
@@ -195,7 +195,7 @@ await check('B S2 (xai), the usual order: his reply starts first, then the summa
   t.s.sumUp(); await flush(); await t.advance(8000);
   t.created('r_ready'); await flush(); t.drained('r_ready'); await flush();   // "Your summary is ready" played out
   t.start(); t.said('i2', 'Read it.'); t.stop(); t.created('their_reply'); t.over('their_reply'); await flush();
-  assert.ok(t.lines().includes('Say only this, then stop: We checked the board.'), 'the summary was not read when asked');
+  assert.ok(t.lines().includes(summaryLine('We checked the board.')), 'the summary was not read when asked');
   t.created('r_summary'); await flush(); t.drained('r_summary'); await flush();   // its audio played out
   assert.equal(t.posts('/end')[0].summary_playback, 'drained');
 }, { routes: SUMMARY }));
@@ -204,7 +204,8 @@ await check('B S2 (xai), the usual order: his reply starts first, then the summa
 await check('G-S1 (xai): a Check answer\'s own start never uses up the reply owed to "Yes.": the summary is not heard', () => run('xai', async (t) => {
   t.start(); t.said('i0', 'What is stuck on twelve?'); t.stop(); t.created('r0'); t.over('r0');
   t.s.check(); await flush(); await t.advance(8000);                     // Check with the person: its answer, at a pause
-  assert.equal(t.lines().filter((l) => l.startsWith('Say this briefly')).length, 1, 'the answer line was not sent');
+  assert.equal(t.lines().filter((l) => l.startsWith('Say this briefly') || l.startsWith('Say the words between the markers')).length, 1,
+    'the answer line was not sent');
   t.start(); t.said('i1', 'Yes.'); t.stop();                             // "Yes." ends while the answer is in flight
   t.created('L1_or_theirs'); await flush(); t.over('L1_or_theirs'); await flush();
   t.s.sumUp(); await flush(); await t.advance(8000);
@@ -258,7 +259,7 @@ await check('LV4 (openai): a running consult is answered pending before his next
   t.asked('RH'); t.over('RH'); await flush();
   releaseLV4(); await flush(); await flush(); await t.advance(8000);   // said at a pause (a reply with no words reports no turn)
   assert.equal(t.outputs().length, 1, 'a call was answered twice');
-  assert.ok(t.lines().includes('Say this briefly, adding nothing: The board is green.'), 'its result was not said');
+  assert.ok(t.lines().includes(answerLine('The board is green.')), 'its result was not said');
 }, { routes: { '/consult': () => new Promise((r) => { releaseLV4 = () => r({ ok: true, outcome: 'done', spoken: 'The board is green.' }); }) } }));
 // B S3 + N2 (kept, with v3's refusal): a call from a barged-in reply is answered not done, with no reply asked for it; End
 // names his turn not acted on; the next reply's call is refused (no model action), never posted.
@@ -357,7 +358,7 @@ await check('E S1 (openai): a second call in one reply is told the turn is alrea
   t.s.check(); await flush();
   assert.equal(t.consults().length, 1);
   releaseNote(); await flush(); await flush(); await t.advance(8000);
-  assert.equal(t.lines().filter((l) => l === 'Say this briefly, adding nothing: Saved.').length, 1, "Check's result was not said once");
+  assert.equal(t.lines().filter((l) => l === answerLine('Saved.')).length, 1, "Check's result was not said once");   // a consult's words
 }, { routes: { '/consult': () => new Promise((r) => { releaseNote = () => r({ ok: true, outcome: 'done', saved: true, spoken: 'Saved.' }); }) } }));
 await check('E S1 (openai): a 409 in flight with no words of its own is still told the turn is being handled', () => run('openai', async (t) => {
   t.start(); t.said('a', 'Check the kiln.'); t.stop(); await t.commit('a'); t.asked('RA'); t.over('RA'); await flush();

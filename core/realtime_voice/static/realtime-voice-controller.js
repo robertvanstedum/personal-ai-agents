@@ -25,10 +25,11 @@
 // request, both again for how a response's playback ended, and both again for the page's own responses (each response's
 // end, and creating one for a committed item), and both for the live probes (OpenAI: a reply's end reported once, LV1; xAI:
 // an interim transcript's status, LV2), and xAI's for a microphone granted after the start ended (Gate 2 V S2), and both
-// for each response's first audio (audio_started; the v3 fix round, review M2): new keys so browsers fetch them (Spec 165
-// §4.3, §5.1, §5.3; review FR N3, V R2-M1; v0.3 G3; the C2 binding pass).
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261029-v3fix";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261029-v3fix";
+// for each response's first audio (audio_started; the v3 fix round, review M2), and OpenAI's for the page's lines as system
+// items (the v3 live check, fault 1): new keys so browsers fetch them (Spec 165 §4.3, §5.1, §5.3; review FR N3, V R2-M1;
+// v0.3 G3; the C2 binding pass).
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261031-live1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261031-live1";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
 // The page's own responses (Spec 165 §5.1 as amended for Robert's C2 decision, 28 Oct 2026: "tie by construction"): a page
@@ -609,8 +610,12 @@ export class RealtimeVoiceController {
     return entry;
   }
 
+  // Where the page creates every response (OpenAI's direct path), its lines go as system items: sent as his words, the
+  // model could not tell the app's "Saved." from a claim he asked it to make, and refused it (the v3 live check, 31 Oct,
+  // fault 1: 2 of 2; as system items, "Saved."). Everywhere else the bytes are as before.
   _instruct(text, tag) {
-    if (tag) this._adapter.sendContinuationInstruction(text, tag); else this._adapter.sendContinuationInstruction(text);
+    if (this._owned) this._adapter.sendContinuationInstruction(text, tag, "system");
+    else if (tag) this._adapter.sendContinuationInstruction(text, tag); else this._adapter.sendContinuationInstruction(text);
   }
 
   // A function result: its follow-up is owned by the item of the call it continues (V R2-M1, R2-S1).

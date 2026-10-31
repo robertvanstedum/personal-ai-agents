@@ -412,9 +412,11 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False):
 
     Who asks for the confirmation differs by plumbing only, never by what he says (review v3 S6). ``page_asks`` (the
     bootstrap's page_responses: OpenAI, where the page creates every response): the page's own asking line is the
-    question, so the model never asks one itself; a request the app did not hear gets "I can't do that here", never a
-    question whose yes would reach nothing. Otherwise (xAI answers by itself, live probes) the model's own reply to a
-    request is the question: it asks briefly and naturally."""
+    question, and the model is told never to ask one itself; a request the app did not hear should get "I can't do that
+    here", never a question whose yes would reach nothing. Told is not kept: the v3 live check (31 Oct, fault 2) found
+    OpenAI asking anyway (4 of 4), so the page also sends CHAT_LINE beside such a response, and a yes after any voice
+    question with nothing waiting is told so on every provider (_stray). Otherwise (xAI answers by itself, live probes)
+    the model's own reply to a request is the question: it asks briefly and naturally."""
     name, short = person["name"], person["short"]
     request = f"When {owner} asks for a note, a post-it, or something only {short} can do (current facts, project state, " \
               "files, jobs, any work), "
@@ -1230,15 +1232,14 @@ class DirectSessions(ConsultLedger):
         """Whether a yes with nothing waiting is a stray yes (NOTHING_WAITING), not conversation: soon after an action
         expired or was dropped (_let_go), on every provider; or (review v3 S6) right after a turn of the voice's that asked
         a question, with no owner item of his between them: he answered a question the app never asked, so his yes reaches
-        nothing, and he is told so. That second rule holds only where the voice's own reply is the question (xAI answers by
-        itself). Where the page creates every response (OpenAI, capabilities.page_responses) its asking line is the
-        question and the model never asks one itself, so a voice's question there is conversation, and "Sure." answers it
-        (the fix round's re-check, R1)."""
-        from core.realtime_voice.capabilities import page_responses
+        nothing, and he is told so. Both rules hold on every provider. R1 (the fix round's re-check) had kept the second
+        to xAI, on the premise that where the page creates every response (OpenAI) the model never asks a question itself;
+        the live check (LIVE_CHECK_V3_RESULT.md, 31 Oct, fault 2) found OpenAI asking "Shall I go ahead?" by itself for
+        a request the app did not hear (4 of 4), and then telling his "Yes." the app would handle it, with nothing
+        waiting. So a yes after any voice question with nothing waiting is told so again (Robert, 31 Oct: option c); the
+        cost, kept knowingly, is R1's case: "Sure." to a conversational question gets the line too."""
         if now < meta.get("stray_until", 0):
             return True
-        if page_responses(meta.get("provider")):
-            return False
         place, question = meta.get("voice_said") or (-1, False)
         return question and meta["last_place"] < place < item_place(item)
 

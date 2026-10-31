@@ -348,7 +348,7 @@ await scenario('Check shows the words it sends, then with the answer; the answer
   assert.equal(p.posts('/consult')[0].body.owner_transcript_item, 'okay');
   assert.equal(textOf(p.bar('[data-voice-checked]')), 'Checked “okay”');
   assert.equal(p.bar('[data-voice-checked]').hidden, false);
-  assert.ok(p.c.instructions.some((x) => x === 'Say this briefly, adding nothing: Two meetings today.'));
+  assert.ok(p.c.instructions.some((x) => x === SESSION.answerLine('Two meetings today.')));   // CoS's own words: data (review S1)
   assert.ok(!p.nodes('voice-live').textContent.includes('Two meetings today'));
 });
 await scenario('Check, while it runs, says "Checking" with the words and cannot be pressed again', {
