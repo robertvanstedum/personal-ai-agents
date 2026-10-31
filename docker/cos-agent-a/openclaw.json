@@ -100,7 +100,7 @@
         "cacheTtlMinutes": 15
       }
     },
-    "profile": "full",
+    "profile": "minimal",
     "exec": {
       "mode": "full"
     },
@@ -143,10 +143,26 @@
           "mode": "off"
         },
         "tools": {
+          "profile": "minimal",
+          "alsoAllow": [
+            "read",
+            "ls",
+            "write",
+            "edit",
+            "exec",
+            "web_search",
+            "web_fetch",
+            "memory_search",
+            "memory_get",
+            "pdf",
+            "view_image"
+          ],
+          "deny": [
+            "gateway"
+          ],
           "elevated": {
             "enabled": false
-          },
-          "profile": "full"
+          }
         }
       }
     }
