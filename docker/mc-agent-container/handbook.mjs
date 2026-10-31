@@ -45,9 +45,19 @@ const files = names.map(name => {
 });
 
 // Lay out: replace <workspace>/handbook wholesale with the checked bytes. A symlink there is removed, never followed.
+// MC can write its workspace, so a folder it made unwritable (chmod) is given back owner access first: otherwise the
+// removal fails and the container could not start until an operator stepped in.
+function removable(p) {
+  const st = fs.lstatSync(p);
+  if (!st.isDirectory()) return;
+  fs.chmodSync(p, 0o700);
+  for (const name of fs.readdirSync(p)) removable(path.join(p, name));
+}
 const root = path.join(path.resolve(workspace), 'handbook');
-const there = fs.lstatSync(root, {throwIfNoEntry: false});
-if (there) fs.rmSync(root, {recursive: there.isDirectory() && !there.isSymbolicLink(), force: true});
+if (fs.lstatSync(root, {throwIfNoEntry: false})) {
+  removable(root);
+  fs.rmSync(root, {recursive: true, force: true});
+}
 for (const [name, bytes] of [['manifest.json', manifestBytes], ...files]) {
   const out = path.join(root, name);
   fs.mkdirSync(path.dirname(out), {recursive: true, mode: 0o755});

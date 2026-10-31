@@ -40,7 +40,9 @@ Production and staging today run `mc-agent-v0.1.16-5`: persona 0.1.16, no handbo
   Dockerfile copies.
   - **Pass with:** the handbook block is in the loaded `AGENTS.md`, pinned by the manifest hash, with the manifest's
     path named. Every file the block names matches the manifest. The rule appears once, the handbook's words. The merged
-    persona carries every line of 0.1.17's contract and 0.1.22's card. Tampering and a missing pin each refuse.
+    persona carries every line of 0.1.17's contract and 0.1.22's card. Tampering and a missing pin each refuse. A
+    workspace `handbook/` that MC changed, symlinked or locked (chmod) is replaced at the next start, so start never
+    wedges on it.
   - **Fail without:** the same tests on the code before this release fail. With only `start.sh` reverted, the
     handbook block is missing and 0.1.23 would lose the outside-reports rule. Both caught.
 - **In the image:** the workflow runs `start.sh` steps 1–2 inside the built image and requires the handbook block before

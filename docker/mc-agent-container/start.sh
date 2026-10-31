@@ -41,12 +41,11 @@ const h=require(process.argv[1]).handbook||{};
 if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(h.version||"")||!/^[0-9a-f]{64}$/.test(h.manifest_sha256||"")) process.exit(1);
 console.log(h.version+" "+h.manifest_sha256);
 ' "$PERSONA/manifest.json") || die "persona release names no handbook (manifest.json handbook.version, handbook.manifest_sha256)"
-BLOCK="$STATE/.mc-handbook-block"
+# The block is held in memory, not a file MC could replace. $(...) drops its final newline; printf puts it back.
 # shellcheck disable=SC2086
-node "$IMAGE_DIR/handbook.mjs" "$IMAGE_DIR/handbook" "$WORKSPACE" $hb > "$BLOCK" || die "handbook ${hb%% *} failed verification"
+block=$(node "$IMAGE_DIR/handbook.mjs" "$IMAGE_DIR/handbook" "$WORKSPACE" $hb) || die "handbook ${hb%% *} failed verification"
 cp "$PERSONA/SOUL.md" "$WORKSPACE/SOUL.md"
-{ cat "$PERSONA/AGENTS.md"; printf '\n'; cat "$PERSONA/RUNTIME.openclaw.md"; printf '\n'; cat "$BLOCK"; } > "$WORKSPACE/AGENTS.md"
-rm -f "$BLOCK"
+{ cat "$PERSONA/AGENTS.md"; printf '\n'; cat "$PERSONA/RUNTIME.openclaw.md"; printf '\n%s\n' "$block"; } > "$WORKSPACE/AGENTS.md"
 chars=$(node -e 'console.log([...require("fs").readFileSync(process.argv[1],"utf8")].length)' "$WORKSPACE/AGENTS.md")
 [ "$chars" -le 16000 ] || die "projected AGENTS.md is $chars characters (budget 16000)"
 log "handbook ${hb%% *} loaded (manifest ${hb#* }) into $WORKSPACE/handbook"

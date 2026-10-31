@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import subprocess
 
 TARGETS = {
@@ -162,7 +163,8 @@ def _():
     with open(p, "w") as f:
         f.write('{"format": "minimoi-mc-handbook/1", "files": {}}\n')
     code, out = oneoff(env={"OPENCLAW_GATEWAY_TOKEN": "t"}, mounts=[f"{p}:/opt/minimoi/mc-agent/handbook/manifest.json:ro"])
-    return code == 78 and "failed verification" in out and "handbook" in out, \
+    refused = re.search(r"REFUSED: handbook [0-9.]+ failed verification", out)
+    return code == 78 and bool(refused) and "the persona pins" in out, \
         f"exit {code}: {out.splitlines()[-1] if out else ''}"
 
 

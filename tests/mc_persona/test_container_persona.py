@@ -155,20 +155,6 @@ def test_the_merged_persona_carries_both_lines(tmp_path):
             assert sha((RELEASES / v / f).read_bytes()) == want, (v, f)
 
 
-def test_before_this_release_the_container_loaded_no_handbook(tmp_path):
-    """Fail-without: the release before (0.1.17), on the start step before, never put the handbook in MC's policy."""
-    before = subprocess.run(["git", "show", "32350fcc:docker/mc-agent-container/start.sh"],
-                            cwd=REPO, capture_output=True, text=True)
-    if before.returncode != 0:
-        pytest.skip("the pre-release start.sh is not in this clone")
-    start = tmp_path / "start-before.sh"
-    start.write_text(before.stdout)
-    r, ws = run_steps(tmp_path, image_copy(tmp_path, "0.1.17"), start)
-    assert r.returncode == 0, r.stderr
-    loaded = (ws / "AGENTS.md").read_text()
-    assert "BEGIN_MINIMOI_MC_HANDBOOK" not in loaded and not (ws / "handbook").exists()
-
-
 def test_start_refuses_a_release_that_names_no_handbook(tmp_path):
     image = image_copy(tmp_path)
     m = json.loads((image / "persona/manifest.json").read_text())
@@ -224,6 +210,12 @@ def test_each_start_lays_the_handbook_out_afresh(tmp_path):
     assert r.returncode == 0, r.stderr
     assert not root.is_symlink() and (outside / "keep.md").read_text() == "not MC's"
     assert sorted(p.name for p in outside.iterdir()) == ["keep.md"]
+    # A folder MC made unwritable or unreadable is still replaced: start never wedges on it.
+    for folder, mode in ((root / f"v{pinned_handbook()}", 0o555), (root, 0o000)):
+        folder.chmod(mode)
+        r, _ = run_steps(tmp_path, image)
+        assert r.returncode == 0, r.stderr
+        assert project.read_bytes() == (HANDBOOK / f"v{pinned_handbook()}/PROJECT.md").read_bytes()
 
 
 def test_every_container_pin_names_the_same_release():

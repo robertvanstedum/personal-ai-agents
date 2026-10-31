@@ -62,7 +62,8 @@ jobs:
         run: |
           docker run --rm --entrypoint /bin/sh -e OPENCLAW_STATE_DIR=/tmp/mc-state mc-agent-local -c \
             'sed "/^# 3\. Config/,\$d" /opt/minimoi/mc-agent/start.sh > /tmp/steps.sh && sh /tmp/steps.sh &&
-             grep -cx "BEGIN_MINIMOI_MC_HANDBOOK 0.1.1" /tmp/mc-state/workspace-mc/AGENTS.md' > /tmp/steps.out 2>&1
+             grep -cx "BEGIN_MINIMOI_MC_HANDBOOK 0.1.1" /tmp/mc-state/workspace-mc/AGENTS.md' > /tmp/steps.out 2>&1 \
+            || { cat /tmp/steps.out; exit 1; }
           cat /tmp/steps.out
           grep -q "handbook 0.1.1 loaded" /tmp/steps.out && grep -q "persona 0.1.23 laid out" /tmp/steps.out
           test "$(tail -n 1 /tmp/steps.out)" = 1
