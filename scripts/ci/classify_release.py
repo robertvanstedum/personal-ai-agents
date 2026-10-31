@@ -68,6 +68,7 @@ def _is_release_only(path: str) -> bool:
         or path.startswith(OPS_ONLY_PREFIXES)
         or path in OPS_ONLY_FILES
         or path.startswith(MC_IMAGE_PREFIXES)
+        or path.startswith(MC_PERSONA_TOOL_PREFIXES)
     )
 
 
@@ -87,6 +88,19 @@ OPS_ONLY_FILES = frozenset({"scripts/operations/deploy_mc_container_ec2.sh",
 # MC's own container: built and deployed only by deploy-mc-agent.yml on an mc-agent-v* tag. The portal image copies the
 # repository, but no service reads these files (tests/test_release_classifier.py guards this).
 MC_IMAGE_PREFIXES = ("docker/mc-agent-container/",)
+
+
+# Master Craftsman's persona releases (Spec 165 §11.7). Their readers in a production image: the portal only, whose voice
+# card loader (core/realtime_voice/voice_card.py, through minimoi_portal/guild_ui/mc_voice_direct.py's CARD_ROOT) reads
+# pin.json and a release's voice.json and manifest.json; the portal image copies the repository. MC's own image copies one
+# pinned release folder (docker/mc-agent-container/Dockerfile) and deploys only by tag through deploy-mc-agent.yml, never
+# through this pipeline. tests/test_release_classifier.py fails if another production file starts reading them.
+MC_PERSONA_PREFIXES = ("services/mc_operations/personas/",)
+# The persona release tools: make_header_release.py writes a new release folder and project_agents.py projects one into
+# the native mc-chat workspace, both run by the operator on the laptop. The portal image copies them with the rest of the
+# repository (docker/Dockerfile.portal), but no service imports, names or starts them (the same test checks that no
+# service file names them), so a change to them deploys nothing.
+MC_PERSONA_TOOL_PREFIXES = ("scripts/mc_persona/",)
 
 
 # docker-compose.prod.yml: a change restarts only the services whose own
@@ -242,6 +256,18 @@ SHARED_SCRUB_FILES = frozenset({"utils/credential_scrub.py", "utils/payment_scru
 # The actual Ask service/query log, shelf, index and backup remain on the laptop.
 # Unknown neighbouring paths retain the conservative fallback; import guards
 # fail if a production service starts depending on a laptop-only module.
+# The Chief of Staff modules the portal image also runs (Dockerfile.portal copies the repository): MC's owner notes read
+# her note grammar (minimoi_portal/guild_ui/owner_actions.py -> confer_service), the Board its pointer check
+# (board_commands.py -> owner_words), MC's turns her file-claim check (api.py -> claim_truth), MC's managed voice the
+# grammar (core/realtime_voice/controlled_session.py -> confer_service), and what those import inside domains/cos
+# (reminders). A change to one redeploys the portal too, so MC and CoS never run two grammars (A4 fix round, review N-8).
+# tests/test_release_classifier.py derives this set from the imports and fails when it drifts.
+PORTAL_COS_FILES = frozenset({
+    "domains/cos/confer_service.py",
+    "domains/cos/owner_words.py",
+    "domains/cos/claim_truth.py",
+    "domains/cos/reminders.py",
+})
 VAULT_COS_FILES = frozenset({"core/memory_ask/consumer.py", "core/memory_ask/context.py", "core/memory_ask/citation.py"})
 # The production Vault Ask service (vault-ask, behind the compose `vault` profile) runs the portal image, so every module
 # it imports (measured 17 Oct 2026: import core.memory_ask.service with sqlite_vec absent) must rebuild and redeploy the
@@ -368,10 +394,14 @@ def classify(paths: list[str],
             services.update(("curator", "system-bot"))
         elif path.startswith("domains/cos/"):
             services.update(("cos-bot", "cos-scheduler"))
+            if path in PORTAL_COS_FILES:
+                services.add("portal")                               # the portal runs these too (PORTAL_COS_FILES)
         elif path.startswith("domains/guild/"):
             services.update(("portal", "cos-bot", "cos-scheduler"))
         elif path.startswith("minimoi_portal/"):
             services.add("portal")
+        elif path.startswith(MC_PERSONA_PREFIXES):
+            services.add("portal")                                   # the voice card loader is its only image reader
         elif path.startswith("services/usage/"):
             # The usage record (usage-record U1/U2): the CoS images copy it
             # (Dockerfile.cos*). The production gateway image does not; the

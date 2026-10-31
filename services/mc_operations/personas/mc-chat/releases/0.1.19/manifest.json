@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "persona": "mc-chat",
+  "version": "0.1.19",
+  "base": "0.1.18 + voices and voice wording (Robert's audition, 29 Oct)",
+  "spec": "spec_mc_agent_container v0.2",
+  "status": "candidate",
+  "target": "mc-agent container",
+  "files": {
+    "SOUL.md": "3f79bf7edf148b8971f9707e67e334266027c0d12cecb5e18c1513f5996bd671",
+    "AGENTS.md": "520f990573a9576154307971e2c7504cbe27f165945636d7653d67ff5d17f206",
+    "RUNTIME.openclaw.md": "2b2428ccded1174e6a9857bd17f1ccfa2b2b0f860c786649bfe39a2dbfdb7197",
+    "CHANGES.md": "2d630960bdc5411c03d24535b8538ec6f196c38810583b475e576e7cbd4934e0",
+    "voice.json": "8ac50ee603f02688ce2c1c085a5c59ab0fbf194bb2b683fd87856dad5d2e0a89"
+  },
+  "projection": "SOUL verbatim; AGENTS + runtime binding",
+  "projection_budget_chars": 16000,
+  "config_change": true
+}

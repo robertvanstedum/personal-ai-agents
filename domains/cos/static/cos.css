@@ -600,3 +600,58 @@ body.landing-mode .cos-header { position: sticky; top: 0; }
 #cos-files summary { cursor: pointer; color: var(--muted); }
 #cos-files ul { margin: 6px 0 0; padding-left: 18px; }
 #cos-files .muted { color: var(--muted); list-style: none; margin-left: -18px; }
+
+/* ── Her direct voice on Confer (Spec 165 v0.3 §6.6, 28 Oct 2026): small, quiet controls; the work is the star. While a
+   session is live only its state shows (voice on, the time, Check with CoS, End); End reveals the kept records in the
+   conversation, in its own message style. Every row wraps, so nothing scrolls sideways at phone width. ── */
+.voice-live[hidden], .voice-live [hidden], .voice-sessions[hidden], .voice-sessions [hidden], .voice-session [hidden] {
+  display: none !important;
+}
+.voice-live {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; max-width: 100%;
+  margin-top: 8px; font-size: 0.76rem; color: var(--ink-mid);
+}
+.voice-on { display: inline-flex; align-items: center; gap: 6px; }
+.voice-dot { width: 8px; height: 8px; border-radius: 50%; background: #8A3020; flex-shrink: 0; }
+.voice-elapsed { font-family: 'Courier New', monospace; color: var(--muted); }
+.voice-act {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); color: var(--ink-mid);
+  padding: 4px 10px; font-family: Georgia, serif; font-size: 0.76rem; cursor: pointer; max-width: 100%;
+}
+.voice-act:hover { background: var(--border); color: var(--ink); }
+.voice-act:disabled { opacity: 0.45; cursor: default; }
+.voice-propose { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: 100%; }
+.voice-checked, .voice-notice { flex-basis: 100%; min-width: 0; color: var(--muted); font-style: italic; overflow-wrap: anywhere; }
+.voice-provider-choice {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); color: var(--ink-mid);
+  padding: 3px 6px; font-family: Georgia, serif; font-size: 0.76rem; max-width: 100%;
+}
+.voice-provider-choice:disabled { opacity: 0.55; }
+#voice-transcript.voice-error { color: #8A3020; font-style: normal; }
+.voice-session { border-top: 1px solid var(--border); padding-top: 10px; margin: 6px 0 16px; max-width: 100%; }
+.voice-line { font-size: 0.78rem; color: var(--muted); font-style: italic; overflow-wrap: anywhere; }
+.voice-records .msg { margin: 8px 0 10px; }
+.msg-voice-note .msg-label { color: var(--muted); }
+.msg-voice .msg-text, .voice-card .msg-text { overflow-wrap: anywhere; }
+.voice-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; max-width: 100%; }
+.voice-download { color: var(--accent); font-size: 0.8rem; overflow-wrap: anywhere; }
+.voice-card {
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); padding: 10px 12px;
+  margin-top: 10px; max-width: 100%;
+}
+.voice-card-head, .voice-card-scope, .voice-card-result { font-size: 0.74rem; color: var(--muted); margin-top: 6px; overflow-wrap: anywhere; }
+.voice-edit textarea {
+  width: 100%; max-width: 100%; font-family: Georgia, serif; font-size: 0.85rem; color: var(--ink);
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; margin-top: 8px;
+}
+.voice-sessions { margin-top: 12px; font-size: 0.8rem; color: var(--ink-mid); max-width: 100%; }
+.voice-sessions-title {
+  font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; font-family: 'Courier New', monospace;
+  color: var(--muted); margin-bottom: 6px;
+}
+.voice-attention { border-top: 1px solid var(--border); padding: 8px 0; }
+.voice-attention-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.voice-attention-when { font-family: 'Courier New', monospace; font-size: 0.72rem; color: var(--muted); }
+@media (max-width: 600px) {
+  .voice-act, .voice-provider-choice { min-height: 44px; }
+}

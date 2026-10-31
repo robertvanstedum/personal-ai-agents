@@ -36,7 +36,7 @@ def mint_ephemeral_credential(
     instructions: str,
     voice: str,
     turn_detection: dict,
-    transcription_language: str,
+    transcription_language: str | None,
     tools: list[dict] | None = None,
     tool_choice: str | None = None,
 ) -> dict:
@@ -45,6 +45,10 @@ def mint_ephemeral_credential(
     it must send as its first session.update message (built server-side,
     the browser does not construct it) -- the ephemeral token itself never
     exposes the long-lived XAI_API_KEY.
+
+    ``transcription_language`` None (a bilingual card, Spec 165 D19): no
+    language hint is sent, so xAI transcribes the language spoken (its
+    behaviour without a hint is not verified; A4's scripts check it).
     """
     api_key = get_secret("XAI_API_KEY", "xai", "api_key")
     if not api_key:
@@ -79,7 +83,7 @@ def mint_ephemeral_credential(
                 "format": {"type": "audio/pcm", "rate": 24000},
                 "transcription": {
                     "model": "grok-transcribe",
-                    "language_hint": transcription_language,
+                    **({"language_hint": transcription_language} if transcription_language is not None else {}),
                 },
             },
             "output": {"format": {"type": "audio/pcm", "rate": 24000}},

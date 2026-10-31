@@ -34,11 +34,25 @@ enforces this against the actual old prompt text.
 _LOCALE_LANGUAGE = {
     "de-AT": "German",
     "pt-BR": "Brazilian Portuguese",
+    "en-US": "English",
 }
 
 # Fixed, scene-neutral -- used for idle re-engagement (Section 9). Not
 # built per-persona/per-scene; the same instruction works for any session.
 CONTINUATION_INSTRUCTION = "Continue naturally in character."
+
+
+def _language_rule(locale: str, language: str) -> str:
+    if locale == "en-US":
+        return (
+            "3. LANGUAGE: English is the default. Answer a real German sentence "
+            "in German, briefly. An isolated German word stays inside the English "
+            "reply. Do not switch because of accent."
+        )
+    return (
+        f"3. LANGUAGE: Always respond in {language}. Never switch to "
+        f"English unless the learner explicitly asks for it."
+    )
 
 
 def build_realtime_instructions(
@@ -77,8 +91,7 @@ def build_realtime_instructions(
         "2. NO NAME PREFIX: Do not announce your name before each turn — "
         "speak directly in character, without a \"Name:\" prefix.",
 
-        f"3. LANGUAGE: Always respond in {language}. Never switch to "
-        f"English unless the learner explicitly asks for it.",
+        _language_rule(locale, language),
 
         "4. CORRECTIONS: If the learner makes a grammatical error, gently "
         "use the correct form naturally in your reply. Do not break "

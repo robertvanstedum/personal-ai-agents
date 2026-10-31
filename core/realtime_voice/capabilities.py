@@ -14,6 +14,29 @@ from core.realtime_voice.config import ALLOWED_PROVIDERS
 MEMO_MODE = "memo"
 AGENT_CONVERSATION_MODE = "agent_conversation"
 
+# Spec 165 §5.1 and §7, as amended for Robert's C2 decision of 28 Oct 2026 ("A: tie by construction"), and by confirm by
+# voice, v3 (V3_BUILD_BRIEF.md: "the app acts; the voice only talks"). Two values, each reviewed:
+#
+# MODEL_ACTIONS: the providers whose direct voice may act on the model's own call. Under v3 none: no provider's model is
+# given an action tool, a call that arrives anyway does nothing, and the app acts only after Robert's spoken yes (or a tap
+# on Check), the same on both providers. I6 ("no model action where the page cannot name the owner") now holds trivially.
+MODEL_ACTIONS = {"openai": False, "xai": False}
+# PAGE_RESPONSES: the providers whose direct page creates every response (A1's binding, kept: the provider names the
+# committed item, input_audio_buffer.committed's item_id, and lets the page create responses, create_response false with
+# barge-in still on). OpenAI only: xAI answers every utterance by itself whatever it is told (live probes, 28 Oct). On
+# OpenAI each committed item's one response now waits for its server decision (at most 1.5 s on the page).
+PAGE_RESPONSES = {"openai": True, "xai": False}
+
+
+def model_actions(provider: str) -> bool:
+    """Whether a direct voice session on ``provider`` may act on the model's own call (MODEL_ACTIONS): never, under v3."""
+    return MODEL_ACTIONS.get(provider) is True
+
+
+def page_responses(provider: str) -> bool:
+    """Whether the direct page creates every response on ``provider`` (PAGE_RESPONSES)."""
+    return PAGE_RESPONSES.get(provider) is True
+
 
 @dataclass(frozen=True)
 class ProviderCapability:

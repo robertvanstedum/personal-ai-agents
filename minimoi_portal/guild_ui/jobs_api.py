@@ -48,7 +48,7 @@ def job_command(found):
     mgr = manager()
     if mgr is None:
         return None
-    from .jobs import ACTIVE, interpret
+    from .jobs import ACTIVE, interpret, names_the_job
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
     delegate = delegation_command(note.get("text", ""))
     if delegate is not None:
@@ -67,6 +67,8 @@ def job_command(found):
         active = [j for j in mgr.store.list(conv.get("id", "")) if j.get("principal") == principal and j["state"] in ACTIVE]
         if not active:
             return None                                              # nothing to stop: an ordinary message
+        if not names_the_job(note.get("text", "")) and _api()._voice_named_only():
+            return _api()._voice_name_it("job_stop", _api().VOICE_NAME_JOB)
         job, outcome = mgr.stop(conv["id"], principal, active[0]["id"])
         mgr.wake.set()
         return jsonify({"job_command": "stop", "status": "job", "result": outcome, "job": mgr.view(job) if job else None,

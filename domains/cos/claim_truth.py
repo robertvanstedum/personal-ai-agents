@@ -71,8 +71,10 @@ _LATER = re.compile(
     re.IGNORECASE,
 )
 # Sentence spans within one line, keeping every character: a break needs whitespace after the
-# punctuation, so "5.30 pm" or "v1.2" never split.
-_BREAK = re.compile(r"[.!?]+(?=\s|$)\s*")
+# punctuation, so "5.30 pm" or "v1.2" never split. A break starts where a run of marks starts: a match inside a run could
+# never succeed where the run's start failed, and trying every position in a long run was quadratic (review M-4 sweep:
+# 10 KB of dots, 0.9 s). The same breaks are found.
+_BREAK = re.compile(r"(?<![.!?])[.!?]+(?=\s|$)\s*")
 _MARKER_ONLY = re.compile(r"^[\s>*•\-–—]*(?:\d+[.)]\s*)?$")
 
 

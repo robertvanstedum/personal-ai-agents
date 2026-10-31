@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "card": "chief-of-staff voice",
+  "version": "0.1.1",
+  "status": "candidate",
+  "spec": "Spec 165 v0.3 §6.1, §6.2: Robert's audition picks of 29 Oct (marin, ara; American English, Austrian German; MiniMoi said the French way) and the reworded German passage (A1_FIX_FINDINGS P2); adopted after A4",
+  "persona": {
+    "source": "MASTER_CRAFTSMAN_PERSONA.md",
+    "version": "1.1",
+    "sha256": "f07078f5c913323f1098381faf44d38f77223258e48498ddd0552f53042c4f1b"
+  },
+  "files": {
+    "voice.json": "5a9c990725994d1624b9c8538864ac72fb64d8cf7254be55904b6efaf39ae435"
+  }
+}

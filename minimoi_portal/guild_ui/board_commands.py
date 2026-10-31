@@ -11,20 +11,113 @@ import re
 from .stores import Author, GUILD_PLATFORM, POSTIT_MAX, FloorStoreUnavailable
 from .payment_scrub import scrub
 
-# Polite framing around a request: "please", "could you (please)", "can you kindly", and a
+# Polite framing around a request: "okay,", "please", "could you (please)", "can you kindly", and a
 # trailing ", please" / "for me" / "thanks". It changes nothing about the request itself.
-_PREFIX = r"(?:please\s+|kindly\s+|(?:can|could|would|will)\s+you\s+(?:please\s+|kindly\s+)?)?"
-_TAIL = r"(?:\s*,?\s*(?:please|for\s+me|thanks|thank\s+you))*\s*[.!?]*"
-_COMMAND = re.compile(_PREFIX + r"(?:create|make|add|save|write|put|pin)\s+(?:me\s+)?(?:a\s+|this\s+)?(?:post[- ]?it(?:\s+note)?\b|(?:board\s+note)|note\s+(?:on|to)\s+(?:the\s+|my\s+)?board)(?:\s+(?:on|to)\s+(?:the\s+|my\s+)?board)?\b\s*(?::|[-–—]|that\s+|saying\s+|to\s+|about\s+)?\s*(?P<text>.*)", re.I | re.S)
-_GERMAN = re.compile(r"(?:bitte\s+)?(?:erstelle|schreibe|mach|mache)\s+(?:mir\s+)?(?:einen?\s+)?(?:post[- ]?it|notiz\s+(?:auf|an)\s+(?:dem|das)\s+board)\b\s*:?\s*(?P<text>.*)", re.I | re.S)
+_PREFIX = r"(?:(?:okay|ok)(?:\s*,\s+|\s+))?(?:please\s+|kindly\s+|(?:can|could|would|will)\s+you\s+(?:please\s+|kindly\s+)?)?"
+# Each separator has one reading (review M-4): a comma with spaces around it, or spaces, or nothing, which is exactly what
+# "\s*,?\s*" read; its two "\s*" split a run of spaces every way, doubling the work with each repeated "please".
+_TAIL = r"(?:(?:\s*,\s*|\s+)?(?:please|for\s+me|thanks|thank\s+you))*\s*[.!?]*"
+# A4-1 (29 Oct, Robert on dev: "Can you put a test note on the board, just a post-it note, say test?" was refused). Three
+# natural parts of how he asks, none of which ever becomes the words saved:
+# * a one-word kind before the noun ("a test note", "a quick post-it"): a closed list, so no other word is read as framing;
+# * an aside naming the post-it after the Board (", just a post-it note");
+# * "say X" or "that says X" introducing the words, beside the colon, dash, "that", "saying", "to" and "about" there
+#   were. "that says" is tried before "that", so "says" is never saved as a word. A bare "say" introduces them only after
+#   a comma or the aside, or with a colon (review S-3): "Add a post-it say thanks to Anna" keeps "say thanks to Anna".
+_KIND = r"(?:(?:test|quick|short|little|small|new|sticky|simple)\s+)?"
+_ASIDE = r"(?:\s*,\s*(?:just\s+)?(?:a\s+)?post[- ]?it(?:\s+note)?)?"
+_SAYS = (r"(?::|[-–—]|that\s+says(?:\s*:)?\s+|that\s+|saying(?:\s*:)?\s+|to\s+|about\s+|say\s*:\s*"
+         r"|,\s*(?:say|saying|that\s+says)(?:\s*:)?\s+)")
+_COMMAND = re.compile(_PREFIX + r"(?:create|make|add|save|write|put|pin)\s+(?:me\s+)?(?:a\s+|this\s+)?" + _KIND + r"(?:post[- ]?it(?:\s+note)?\b|(?:board\s+note)|note\s+(?:on|to)\s+(?:the\s+|my\s+)?board)(?:\s+(?:on|to)\s+(?:the\s+|my\s+)?board)?" + _ASIDE + r"\b\s*(?P<says>" + _SAYS + r")?\s*(?P<text>.*)", re.I | re.S)
+# German (A4-1, the same parts): "ein Post-it" as well as "einen"/"eine", the Board as "ans Board", "aufs Board" or "auf/an
+# dem/das/den Board", the verbs one hangs, sticks or pins a note with, and "mit (dem Text)", "sag(e)", "auf dem steht" or
+# "das/der sagt" introducing the words ("sag(e)" only after a comma or with a colon, as "say"). A "Notiz" or "Zettel" is a Board post-it only with the Board named; "mach eine
+# Notiz: …" alone is not one. "Kannst du …" puts the verb last: "Kannst du ein Post-it ans Board hängen, mit dem Text X?"
+_DE_ART = r"(?:(?:ein|eine|einen)\s+)?"
+_DE_BOARD = r"(?:(?:auf|an)\s+(?:dem|das|den)\s+board|ans\s+board|aufs\s+board)"
+_DE_NOUN = r"(?:post[- ]?it(?:\s+" + _DE_BOARD + r")?|(?:notiz|zettel)\s+" + _DE_BOARD + r")"
+_DE_ASIDE = r"(?:\s*,\s*(?:nur\s+)?(?:ein\s+)?post[- ]?it)?"
+_DE_SAYS = (r"(?::|[-–—]|,?\s*(?:mit\s+dem\s+text|mit|auf\s+dem\s+steht|das\s+sagt|der\s+sagt)(?:\s*:)?\s+"
+            r"|sage?\s*:\s*|,\s*sage?(?:\s*:)?\s+)")
+_GERMAN = re.compile(r"(?:bitte\s+)?(?:erstelle|schreib|schreibe|mach|mache|häng|hänge|kleb|klebe|pinn|pinne)\s+(?:mir\s+)?" + _DE_ART + _DE_NOUN + _DE_ASIDE + r"\b\s*(?P<says>" + _DE_SAYS + r")?\s*(?P<text>.*)", re.I | re.S)
+_GERMAN_ASKED = re.compile(r"(?:kannst|könntest)\s+du\s+(?:bitte\s+)?(?:mir\s+)?" + _DE_ART + _DE_NOUN + r"\s+(?:machen|erstellen|schreiben|hängen|kleben|pinnen)" + _DE_ASIDE + r"\b\s*(?P<says>" + _DE_SAYS + r")?\s*(?P<text>.*)", re.I | re.S)
+# A request asked as a question ("Can you … say test?", "Kannst du …?"): its question mark closes the question, never the
+# words, and is not saved (A4-1). A quoted payload is literal and keeps it.
+_ASKED = re.compile(r"(?:(?:okay|ok)(?:\s*,\s+|\s+))?(?:(?:can|could|would|will)\s+you|kannst\s+du|könntest\s+du)\b", re.I)
+
+
+def _command(text):
+    """The first board-command grammar that matches the whole text: English, German, German asked with the verb last."""
+    return _COMMAND.fullmatch(text) or _GERMAN.fullmatch(text) or _GERMAN_ASKED.fullmatch(text)
+
+
+# What the "no separator, take the rest" rule must not save (review S-3): words that start with a mark ("…ans Board,
+# nicht jetzt" leaves ", nicht jetzt"), or a separator word left alone ("Schreib ein Post-it mit"). Asked for instead.
+# Only without an explicit separator (verification S-5): after a colon or a dash ("Add a post-it: .env needs rotating")
+# the words are his as typed, a leading mark included.
+_NOT_WORDS = frozenset({"mit", "sag", "sage", "say", "saying", "that", "to", "about"})
+
+
+def _his_postit(payload):
+    """``payload``, or '' (ask for the words) when it starts with a mark or is only a separator word (_NOT_WORDS). String
+    work only (review M-3: its regular expression was quadratic on a long run of spaces)."""
+    words = (payload or "").lstrip()
+    if words[:1] in (",", ";", ".", "!", "?") or words.rstrip(" \t\n.!?").casefold() in _NOT_WORDS:
+        return ''
+    return payload
+
+
+def _explicit(match):
+    """Whether the words were introduced by a colon or a dash (the named ``says`` group), not by a pause or nothing."""
+    says = match.groupdict().get("says")
+    return bool(says) and re.search(r"[:\-–—]", says) is not None
+
+
+def _unasked(request, words):
+    """``words`` without the closing question mark when the request itself is a question (_ASKED)."""
+    if not words or not _ASKED.match(request):
+        return words
+    return without_question_mark(words, polite=("please", "bitte"))
 
 
 # One explicit text-first directive may sit among conversational questions.
 # Extract only its stated literal payload, never a previous message/referent.
-_TEXT_FIRST = re.compile(_PREFIX + r"(?:write|put|pin|add)\s+(?P<text>.+?)\s+(?:on|onto|to)\s+(?:a\s+|the\s+|my\s+)?(?:post[- ]?it(?:\s+note)?|board)\b" + _TAIL, re.I | re.S)
+#
+# Review M-4: each lazy group here starts after the whitespace before it, all of it, never given back ("\s++"), and
+# starts and ends with a non-space ("\S(?:.*?\S)?" for ".+?"); so across a long run of spaces each step is one character
+# test, not a rescan of the run ("put" and 1,990 spaces took 165 ms, the old tail seconds). The first match found is the
+# same: the old "\s+" before a group was greedy, so a match whose group starts with whitespace was found only when none
+# starting at the next word existed, and a lazy group never ends in whitespace a shorter one could leave to what follows.
+# That leaves one old reading the main pattern cannot have: a group that is a single whitespace character, inside a run
+# of three or more ("put   on the board"). The _WS twin finds exactly that case, in one pass, and is tried second, as
+# the old pattern reached it last; the group's value is whitespace either way, and only its emptiness is used.
+_V = r"(?:write|put|pin|add)"
+_ON_A = r"(?:on|onto|to)\s+(?:a\s+|the\s+|my\s+)?(?:post[- ]?it(?:\s+note)?|board)\b" + _TAIL
+_TEXT_FIRST = re.compile(_PREFIX + _V + r"\s++(?P<text>\S(?:.*?\S)?)\s+" + _ON_A, re.I | re.S)
+_TEXT_FIRST_WS = re.compile(_PREFIX + _V + r"\s(?=(?P<text>\s)\s)\s++" + _ON_A, re.I | re.S)
+
+
+def _text_first(clause):
+    """The text-first directive in one clause (_TEXT_FIRST, or its single-whitespace twin), or None."""
+    return _TEXT_FIRST.fullmatch(clause) or _TEXT_FIRST_WS.fullmatch(clause)
+
+
 # "Put these three on the Board as one post-it: a; b; c" / "Put the following on the Board: a, b":
-# a pointer that announces the words, then the words after a colon or dash.
-_POINTED = re.compile(_PREFIX + r"(?:write|put|pin|add)\s+(?P<pointer>[^:\n–—]+?)\s+(?:on|onto|to)\s+(?:a\s+|the\s+|my\s+)?(?:board|post[- ]?it(?:\s+note)?)(?:\s+as\s+(?:one|a\s+single|a)\s+(?:post[- ]?it(?:\s+note)?|card|note))?(?:\s*(?::|\s[-–—])\s*(?P<text>.+?))?" + _TAIL, re.I | re.S)
+# a pointer that announces the words, then the words after a colon or dash. The pointer and the words follow M-4's rule
+# above; a pointer that is one whitespace character (a run of three or more, its last non-newline character in the old
+# reading) is _POINTED_WS's. The words never need that case: the text is stripped, so a non-space reading always exists.
+_POINTED_REST = (r"(?:on|onto|to)\s+(?:a\s+|the\s+|my\s+)?(?:board|post[- ]?it(?:\s+note)?)"
+                 r"(?:\s+as\s+(?:one|a\s+single|a)\s+(?:post[- ]?it(?:\s+note)?|card|note))?"
+                 r"(?:\s*(?::|\s[-–—])\s*+(?P<text>\S(?:.*?\S)?))?" + _TAIL)
+_POINTED = re.compile(_PREFIX + _V + r"\s++(?P<pointer>[^:\n–—\s](?:[^:\n–—]*?[^:\n–—\s])?)\s+" + _POINTED_REST, re.I | re.S)
+_POINTED_WS = re.compile(_PREFIX + _V + r"\s(?=\s*?(?P<pointer>[^\S\n])\s)\s++" + _POINTED_REST, re.I | re.S)
+
+
+def _pointed(text):
+    """The pointed form (_POINTED, or its single-whitespace pointer twin), or None."""
+    return _POINTED.fullmatch(text) or _POINTED_WS.fullmatch(text)
+
+
 _ANNOUNCING = re.compile(r"(?:all\s+)?(?:these|those|them|this|it|the\s+following|the\s+list|my\s+list|the\s+items?|the\s+points?)(?:\s+(?:\d+|two|three|four|five|six|seven|eight|nine|ten))?(?:\s+(?:items|things|points|tasks|notes|bullets|lines|ones|reminders))?", re.I)
 _OUTSIDE_REFUSAL = re.compile(r"\b(?:not|do\s+not|don['’]t|never|cancel|revoke|no\s+need|not\s+now|if|unless|whether|maybe|perhaps|example|hypothetical|suppose|imagine|yesterday|previously|said|says|asked|told|wrote|reported|quoted|document|transcript|translate|summari[sz]e|analy[sz]e)\b", re.I)
 # Code, block quotes and indented blocks are material to read, never a request.
@@ -40,17 +133,9 @@ _WRAPPED = re.compile(r'(["“‘’\'])(.*)(["”’\'])\s*[.!?]*', re.S)
 
 # A payload that only points at something ("this", "your last answer", "the summary above")
 # or names a generic thing ("a reminder") is not the note's text. Ask for the words instead
-# of saving the pointer. Quoted words are always literal.
-_REFERENT = re.compile(r"""(?:
-    this|that|it|these|those|same|the\s+same|above|the\s+above|below|the\s+below
-  | (?:all\s+of\s+)?(?:this|that|it)(?:\s+(?:above|below|again))?
-  | everything(?:\s+(?:above|you\s+said))?
-  | (?:(?:the|that|this|your|my|our)\s+)?(?:(?:last|previous|latest|recent|earlier|above|current|full)\s+)?
-      (?:answer|reply|response|message|summary|text|note|list|plan|points?|ideas?|suggestions?|output|results?|draft|one|thing|stuff)
-      (?:\s+(?:above|below|earlier|again|you\s+(?:just\s+)?(?:gave|wrote|sent|made)))?
-  | what\s+(?:you|i|we)\s+(?:just\s+)?(?:said|wrote|suggested|mentioned|proposed|sent|described|discussed)(?:\s+(?:above|earlier))?
-)""", re.I | re.X)
-_GENERIC = re.compile(r"(?:(?:a|an|another|some|one|new|a\s+new)\s+)?(?:reminder|note|post[- ]?it|task|to-?do|item|card|entry|message|thing)s?|something|anything", re.I)
+# of saving the pointer. Quoted words are always literal. The check is shared with the note
+# grammar (domains/cos/owner_words.py, review S-1), unchanged.
+from domains.cos.owner_words import points_only as _points_only, without_question_mark  # noqa: E402
 
 
 def _mask_quotes(text):
@@ -102,8 +187,7 @@ def _literal(payload):
     """'' for a pointer or generic placeholder (ask for the words), else the payload unchanged."""
     if payload is None:
         return None
-    bare = payload.rstrip('.!?').strip()
-    if _REFERENT.fullmatch(bare) or _GENERIC.fullmatch(bare):
+    if _points_only(payload):
         return ''
     return payload
 
@@ -114,11 +198,11 @@ def _text_first_request(text):
     clauses=_clauses(text)
     payloads=[];outside=[];literal=[]
     for clause in clauses:
-        match=_TEXT_FIRST.fullmatch(clause)or _COMMAND.fullmatch(clause)or _GERMAN.fullmatch(clause)
+        match=_text_first(clause)or _command(clause)
         found=_payload(match)if match else None
         if found is None:outside.append(clause)
         else:payloads.append(found[0]);literal.append(found[1])
-    if not any(_TEXT_FIRST.fullmatch(clause)and _payload(_TEXT_FIRST.fullmatch(clause))is not None for clause in clauses):return None
+    if not any(_text_first(clause)and _payload(_text_first(clause))is not None for clause in clauses):return None
     if _OUTSIDE_REFUSAL.search(' '.join(outside)):return None
     # Two differing explicit requests cannot be collapsed to an inferred one.
     if len(set(payloads))!=1:return ''
@@ -149,15 +233,18 @@ def parse(text):
     stripped = text.strip()
     if re.fullmatch(_PREFIX + r'(?:put|pin|save)\s+(?:this|that|it)\s+(?:on|to)\s+(?:the\s+|my\s+)?board' + _TAIL, stripped, re.I):
         return ''  # no guessed referent: ask for the actual note text
-    match = _COMMAND.fullmatch(stripped) or _GERMAN.fullmatch(stripped)
+    match = _command(stripped)
     if match:
         if _CODE_OR_BLOCK.search(_mask_quotes(text)):
             return None
         found = _payload(match)
         if found is None:
             return None
-        return found[0] if found[1] else _literal(found[0])
-    pointed = _POINTED.fullmatch(stripped)
+        if found[1]:
+            return found[0]
+        words = _unasked(stripped, found[0])
+        return _literal(words if _explicit(match) else _his_postit(words))
+    pointed = _pointed(stripped)
     announced = bool(pointed) and _ANNOUNCING.fullmatch(pointed.group('pointer').strip()) is not None
     if pointed and (pointed.group('text') is not None
                     or (announced and re.search(r'\bas\s+(?:one|a\s+single|a)\s', stripped, re.I))):

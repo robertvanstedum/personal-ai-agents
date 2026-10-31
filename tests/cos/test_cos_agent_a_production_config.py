@@ -30,6 +30,11 @@ def test_production_gateway_omits_development_only_ollama():
         "minimoi-cos-agent-xai-fast": "xai/grok-4.3",
         "minimoi-cos-web-search": "xai/grok-4.3",
         "minimoi-cos-agent-anthropic": "anthropic/claude-sonnet-5-5",
+        # The voice summary's own route (Spec 165 §5.4, D22 (a)): reached only with the capped voice-summary keys, never
+        # a fallback of CoS's agent routes (checked below).
+        "minimoi-voice-summary": "xai/grok-4.3",
+        # The voice understanding call's (confirm by voice, v3): the same capped keys, never a fallback of CoS's routes.
+        "minimoi-voice-intent": "xai/grok-4.3",
     }
     assert config["router_settings"]["fallbacks"] == [{
         "minimoi-cos-agent": [

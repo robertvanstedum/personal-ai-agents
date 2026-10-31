@@ -30,6 +30,7 @@ from flask import (
     Response,
     flash,
     jsonify,
+    make_response,
     redirect,
     render_template,
     request,
@@ -706,6 +707,10 @@ def curator_static_passthrough(filename):
 COS_CSRF_SESSION_KEY = "cos_web_csrf"
 COS_CSRF_META = "minimoi-csrf-token"
 _COS_MULTIPART_PATHS = {"ui/transcribe", "ui/upload"}
+# Chief of Staff's direct voice (Spec 165 v0.3 §6.7): every route of hers is under this one prefix. Its POSTs are always
+# CSRF-checked here and then given the verified-write marker, whatever MINIMOI_COS_WRITE_GUARD says; its reads need the
+# owner only and are never cached. The portal needs no CoS flag: with her voice off, cos-scheduler has no such route.
+COS_DIRECT_VOICE_PREFIX = "api/realtime-voice/direct/"
 
 
 def _cos_write_guard_on() -> bool:
@@ -720,7 +725,10 @@ def _cos_write_guard_on() -> bool:
 
 
 def _cos_page_meta():
-    return {COS_CSRF_META: _csrf.token(COS_CSRF_SESSION_KEY)} if (_cos_write_guard_on() or os.environ.get("MINIMOI_COS_MANAGED_REALTIME") == "1") else None
+    """Confer always renders the CSRF meta tag (Spec 165 v0.3 §6.7): her direct voice's writes are always checked, so the
+    page must always have the token. Where the legacy guard is off, nothing else reads it: the earlier page script sends
+    none and its writes are forwarded as before."""
+    return {COS_CSRF_META: _csrf.token(COS_CSRF_SESSION_KEY)}
 
 
 def _cos_write_refused(path: str):
@@ -745,16 +753,26 @@ def cos_root():
 @_require_owner
 def cos_proxy(path):
     user = _current_user()
+    direct_voice = path.strip("/").startswith(COS_DIRECT_VOICE_PREFIX)
     if request.method != "GET":
         managed_voice = path.strip("/").startswith("api/realtime-voice/managed/")
-        refused = _cos_write_refused(path) if (_cos_write_guard_on() or managed_voice) else None
+        refused = _cos_write_refused(path) if (_cos_write_guard_on() or managed_voice or direct_voice) else None
         if refused is not None:
             return refused
         # Marker is derived after the authenticated owner and CSRF gates. Proxy
         # forwarding strips every browser-supplied X-Minimoi-* value first.
-        return _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user,
-                               verified_cos_voice_write=managed_voice)
-    return _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user, head_meta=_cos_page_meta())
+        answer = _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user,
+                                 verified_cos_voice_write=managed_voice or direct_voice)
+        return _private(answer) if direct_voice else answer
+    answer = _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user, head_meta=_cos_page_meta())
+    return _private(answer) if direct_voice else answer
+
+
+def _private(answer):
+    """Her direct-voice answers are the owner's own records: never stored by any cache (§6.7)."""
+    response = make_response(answer)
+    response.headers["Cache-Control"] = "no-store, private"
+    return response
 
 
 # ── IoT Connect reference demo (owner only in v0.9 — Spec #154 §4.1) ────────

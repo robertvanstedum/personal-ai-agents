@@ -1,5 +1,10 @@
-// Optional managed realtime uses the shared controlled-session host and controller.
-// The chained behavior below remains the fallback when managed metadata is absent.
+// Which path Voice takes is the capabilities answer's: direct_voice present -> the direct path (mc_voice_direct.js, Spec 164
+// v0.3, the provider speaking directly with MC's typed turn behind each consult); else managed_realtime present -> the managed
+// path below; else today's chained relay (production MC voice until the direct path is admitted there; retired in Spec 165
+// A6). A direct or managed path that was offered and failed says why; no other is tried.
+// direct_records without direct_voice (Spec 165 §11.1 S1, S3: the direct path installed, not admitted): the thread alone
+// (initThread: recovering and incomplete lines, and the summary card, so an earlier session's proposal can be decided). No
+// live control is bound, nothing starts on the direct path, and Voice takes the managed path or the relay exactly as without it.
 // Speaking with Master Craftsman (MC voice, v1). Off unless the server says so (data-mc-voice) AND the capabilities call answers.
 //
 // Chained, on the shared Confer controller: the microphone goes straight to the speech provider for TRANSCRIPTION only; each final transcript is submitted through the
@@ -13,7 +18,7 @@ import { $, announce } from './dom.js';
 import { paintVoiceButton } from './voice_button.js';
 import { live, onChange } from './state.js';
 import { recordMode } from './api.js';
-import { submitVoiceUtterance, panelMode } from './conversation.js';
+import { submitVoiceUtterance, panelMode, mergeNotes } from './conversation.js';
 
 const WORDS = {
   private: 'Voice stopped: it is not built for Private yet. Typing in Private works as before.',
@@ -21,6 +26,7 @@ const WORDS = {
   minimized: 'Voice stopped: the chat was minimized.',
   limit: 'Voice stopped: the session reached its time limit.',
 };
+const STATUS_CLEAR_MS = 5000;        // #420: "Voice ended…" clears after about five seconds, or at the next send
 
 export function initMcVoice(page) {
   const button = $('[data-mc-voice-btn]');
@@ -39,7 +45,7 @@ export function initMcVoice(page) {
   onChange(paintExport);
 
   // `session` numbers the attempt: stop() moves it on, and every callback of an older attempt (a late transcript, error, state change or answer) is then ignored.
-  let controller = null, starting = false, session = 0, provider = null, showingError = false, managed = null, transcriptEnding = null, endedAttempt = null, restartBlocked = false, ending = null, transcriptPaint = null, transcriptReveal = null, transcriptCancel = null, transcriptEpoch = 0;
+  let controller = null, starting = false, session = 0, provider = null, showingError = false, managed = null, direct = null, directMod = null, sessionMod = null, directSession = null, directThread = null, transcriptEnding = null, endedAttempt = null, restartBlocked = false, ending = null, transcriptPaint = null, transcriptReveal = null, transcriptCancel = null, transcriptEpoch = 0;
 
   let visualState = 'idle', pressed = false;
   const draw = () => {
@@ -51,13 +57,21 @@ export function initMcVoice(page) {
     }
   };
   const setPhase = state => { visualState = state; draw(); };
-  const say = (text, { loud = false, error = false } = {}) => { showingError = error; status.textContent = text; status.hidden = !text; draw(); if (loud && text) announce(text); };
+  let clearing = null;
+  const say = (text, { loud = false, error = false, transient = false } = {}) => {
+    showingError = error; status.textContent = text; status.hidden = !text; draw(); if (loud && text) announce(text);
+    if (clearing) window.clearTimeout?.(clearing);
+    clearing = null;
+    // An ended line is a passing note (#420); an error stays until the next action.
+    if (transient && text && typeof window.setTimeout === 'function') clearing = window.setTimeout(() => { if (status.textContent === text && !showingError) say(''); }, STATUS_CLEAR_MS);
+  };
   const paint = (on) => { pressed=on;button.setAttribute('aria-pressed', String(on));draw();button.disabled=restartBlocked||Boolean(ending); };
   const headers = () => ({ 'Content-Type':'application/json', 'X-CSRF-Token': page.csrf_token, 'X-Record-Mode': recordMode() });
   const busy = () => Boolean(controller || starting || ending);
 
   // The Voice choice offers what this host can actually run (the capabilities answer) and plainly marks the rest unavailable;
-  // nothing is substituted silently, and the choice never changes an active session (owner, 18 Oct).
+  // nothing is substituted silently, and the choice never changes an active session (owner, 18 Oct). A provider on which MC's
+  // voice may not act by itself (direct_voice.model_actions false: Grok until A4, Spec 165 §7 as amended) says so.
   const PROVIDER_KEY = 'minimoi.voice.provider';
   function offerProviders(body) {
     const select = $('[data-mc-voice-provider]');
@@ -69,11 +83,12 @@ export function initMcVoice(page) {
       const name = option.dataset.name || option.textContent.split(' · ')[0];
       option.dataset.name = name;
       option.disabled = !usable.has(option.value);
+      // v3 (confirm by voice): both providers confirm by voice, the same for Robert, so none is labelled "Check only".
       option.textContent = option.disabled ? `${name} · not available yet` : name;
     }
     let saved = null;
     try { saved = window.localStorage.getItem(PROVIDER_KEY); } catch (e) { /* the choice simply is not remembered */ }
-    const pick = options.find(o => o.value === saved && !o.disabled) || options.find(o => !o.disabled);
+    const pick = options.find(o => o.value === saved && !o.disabled) || options.find(o => o.value === body.default_provider && !o.disabled) || options.find(o => !o.disabled);
     if (pick) select.value = pick.value;
     else select.disabled = true;                // nothing this host can run: no choice to make, and none faked
   }
@@ -82,10 +97,14 @@ export function initMcVoice(page) {
     try {
       const r = await fetch(`${api}/mc/voice/capabilities`, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
       const body = await r.json().catch(() => ({}));
-      if (!r.ok || !body.ok || !(body.providers || []).length) return null;
+      direct = body.direct_voice && typeof body.direct_voice === 'object' && (body.direct_voice.providers || []).length ? body.direct_voice : null;
+      const records = !direct && body.direct_records && typeof body.direct_records === 'object' ? body.direct_records : null;
+      if (r.ok && body.ok && records) initThread(records);              // installed, not admitted: the thread only
+      if (!r.ok || !body.ok || !((body.providers || []).length || direct)) return null;
       managed=body.managed_realtime || null;
-      if (managed) $('[data-mc-managed-settings]').hidden=false;
-      offerProviders(body);
+      if (managed || direct) $('[data-mc-managed-settings]').hidden=false;
+      offerProviders(direct ? { providers: direct.providers, default_provider: direct.default_provider, model_actions: direct.model_actions } : body);
+      if (direct) { initDirect(); const first = direct.providers[0]; return first.label || first.provider; }
       return body.providers[0].label || body.providers[0].provider || 'the speech provider';
     } catch (e) { return null; }
   }
@@ -107,7 +126,7 @@ export function initMcVoice(page) {
       if(['user_ended','limit'].includes(reason))transcriptReveal?.();
       for(const selector of ['[data-mc-voice-provider]','[data-mc-voice-transcript-choice]']){const node=$(selector);if(node)node.disabled=false;}
       paint(false);
-      if(!quiet&&!showingError)say(WORDS[reason]||'Voice ended. Agent work already accepted may still finish.',{loud:Boolean(WORDS[reason])});
+      if(!quiet&&!showingError)say(WORDS[reason]||(direct?DIRECT_ENDED:'Voice ended. Agent work already accepted may still finish.'),{loud:Boolean(WORDS[reason]),transient:!WORDS[reason]});
     };
     if(result&&typeof result.then==='function'){
       const pending=Promise.resolve(result).catch(()=>{
@@ -133,7 +152,11 @@ export function initMcVoice(page) {
     const current = () => mine === session;
     setPhase('connecting');
     paint(true);
+    if (direct) {await startDirect(mine,current);return;}
     if (managed) {await startManaged(mine,current);return;}
+    // Neither offered (production today: MINIMOI_MC_VOICE=1, direct not installed or not admitted, managed off): today's chained
+    // relay, exactly as on main, until the direct path is admitted there (Spec 165 §9, §11). Never reached once direct or
+    // managed is offered.
     say(`Connecting… Your speech is sent to ${provider} to be turned into text, and Master Craftsman's replies are read aloud by the same service.`);
     try {
       const { ConferVoiceController } = await import(`${api}/mc/voice/static/realtime-confer-controller.js`);
@@ -186,6 +209,87 @@ export function initMcVoice(page) {
     } finally {
       if (current()) starting = false;
     }
+  }
+
+  // The direct path (UI_CONTRACT_chunk_B.md). Its files are loaded only now that the capabilities answer offered it: the
+  // Guild's thread (mc_voice_direct.js) and the shared session module (Spec 165 §4.3), served beside the controller.
+  const DIRECT_ENDED = 'Voice ended. What was said is in the conversation.';
+  const loadDirect = () => directMod ? Promise.resolve(directMod) : import('./mc_voice_direct.js').then((m) => (directMod = m));
+  const loadSession = () => sessionMod ? Promise.resolve(sessionMod) : import(`${api}/mc/voice/static/direct-voice-session.js`).then((m) => (sessionMod = m));
+  const liveBar = () => $('[data-mc-voice-live]');
+  async function revealDirect() {
+    const cid = page.conversation?.id;
+    if (!cid || !directThread) return;
+    try {
+      const r = await fetch(`${api}/notes?limit=200&conversation=${encodeURIComponent(cid)}`, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok || page.conversation?.id !== cid) return;
+      mergeNotes(body.notes || []);
+      directThread.paint(body.voice_sessions, body.notes);
+    } catch (e) { /* the thread shows it on the next load */ }
+  }
+  // The thread on the direct path's records (`meta`: direct_voice when admitted, direct_records when only installed): its
+  // recovering and incomplete lines and the summary card (Confirm, Edit, Decline), posting through the session module's
+  // jsonPost. It binds no live control and starts nothing; initDirect adds those.
+  async function initThread(meta) {
+    try {
+      const [mod, voice] = await Promise.all([loadDirect(), loadSession()]);
+      directThread = mod.voiceThread({ doc: document, direct: meta, thread: () => $('[data-mc-thread]'), mine: () => directSession?.sessionId() || null,
+        post: voice.jsonPost((...a) => fetch(...a), headers), conversationId: () => page.conversation?.id, reveal: revealDirect });
+      directThread.paint(page.floor?.notes?.voice_sessions, page.floor?.notes?.recent);
+    } catch (e) { /* admitted: Voice says so when it is pressed; installed only: the server-rendered thread stays as it is */ }
+    // The thread's voice lines follow the conversation, not only this tab's own End (UI review #7): repainted from every notes
+    // read the page already makes, and read afresh when the tab comes back into view.
+    document.addEventListener('guild:notes-read', (e) => {
+      const read = e.detail || {};
+      if (!directThread || !page.conversation?.id || read.conversationId !== page.conversation.id) return;
+      mergeNotes((read.notes || []).filter((note) => note && note.voice));
+      directThread.paint(read.voice_sessions, read.notes);
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) revealDirect(); });
+  }
+  async function initDirect() {
+    const choice = $('[data-mc-voice-transcript-choice]');
+    if (choice?.parentElement) choice.parentElement.hidden = true;          // no running text on this path: it is revealed at End
+    await initThread(direct);
+    $('[data-mc-voice-end]')?.addEventListener?.('click', () => { if (directSession?.proposing()) directSession.sumUp(); else if (busy()) stop('user_ended'); });
+    $('[data-mc-voice-check]')?.addEventListener?.('click', () => directSession?.check());
+    $('[data-mc-voice-sumup]')?.addEventListener?.('click', () => directSession?.sumUp());
+    $('[data-mc-voice-keep]')?.addEventListener?.('click', () => directSession?.keepTalking());
+  }
+  async function startDirect(mine,current) {
+    const selector=$('[data-mc-voice-provider]');
+    if(selector)selector.disabled=true;
+    say('Connecting voice…');
+    let handle=null,mineSession=null;
+    const mineNow=()=>controller===handle&&handle!==null;
+    const ui={
+      say:(text,o)=>{if(current()||endedAttempt===mine)say(text,o);},
+      phase:(state)=>{if(current())setPhase(state);},
+      live:(on)=>{const bar=liveBar();if(bar)bar.hidden=!on||!current();if(!on){const p=$('[data-mc-voice-propose]');if(p)p.hidden=true;}},
+      elapsed:(text)=>{const n=$('[data-mc-voice-elapsed]');if(n)n.textContent=text;},
+      notice:(text)=>{const n=$('[data-mc-voice-notice]');if(n){n.textContent=text||'';n.hidden=!text;}},
+      propose:(on)=>{const p=$('[data-mc-voice-propose]');if(p)p.hidden=!on||!current();if(on&&current())announce('Shall I sum up?');},
+      checking:(on)=>{const b=$('[data-mc-voice-check]');if(b)b.disabled=Boolean(on);},
+      // The session ended by itself (a refusal, the provider, the summary, the time limit): the button is ready again.
+      ended:(words,{error=false}={})=>{
+        if(directSession===mineSession)directSession=null;
+        if(mineNow()){controller=null;starting=false;endedAttempt=mine;paint(false);setPhase('idle');if(selector)selector.disabled=false;}
+        if(words&&(current()||endedAttempt===mine))say(words,{loud:error,error,transient:!error});
+      },
+    };
+    try {
+      const voice=await loadSession();
+      if(!current())return;
+      const s=voice.directVoice({page,direct,ui,headers,fetch:(...a)=>fetch(...a),reveal:revealDirect,
+        loadController:()=>import(`${api}/mc/voice/static/realtime-voice-controller.js`),
+        setTimeout:(fn,ms)=>window.setTimeout(fn,ms),clearTimeout:(t)=>window.clearTimeout(t),
+        setInterval:(fn,ms)=>window.setInterval(fn,ms),clearInterval:(t)=>window.clearInterval(t)});
+      handle={stop:reason=>s.end(reason)};
+      controller=handle;directSession=mineSession=s;
+      await s.start(selector?.value||direct.default_provider);
+    } catch (_) {if(current()){stop('failed',{quiet:true});say('Voice unavailable: the voice page could not load. Typing still works.',{loud:true,error:true});}}
+    finally {if(current())starting=false;if(!busy()&&selector)selector.disabled=false;}
   }
 
   async function startManaged(mine,current) {
@@ -249,7 +353,8 @@ export function initMcVoice(page) {
             terminal=true;endedAttempt=mine;controller=null;starting=false;paint(false);
             selector.disabled=false;choice.disabled=false;
             revealSaved();
-            if(!showingError)say('Voice ended. Agent work already accepted may still finish.');
+            // #420 on every MC voice path (UI review #5): the ended line clears after about five seconds or at the next send.
+            if(!showingError)say('Voice ended. Agent work already accepted may still finish.',{transient:true});
           }
         },
         onInputState:phase=>{
@@ -302,10 +407,14 @@ export function initMcVoice(page) {
     transcriptPaint?.();
   });
   button.addEventListener('click', () => { if (busy()) stop('user_ended'); else start(); });
+  // #420: the next send clears the voice status line, an ended note or an error alike (an error stays until an action).
+  $('[data-mc-composer]')?.addEventListener?.('submit', () => { if (!busy() && status.textContent) say(''); });
   document.addEventListener('guild:mic-claim', (e) => { if (e.detail?.who !== 'voice' && busy()) stop('user_ended', { quiet: true }); });
   onChange(() => { if (live.off || !live.known) {transcriptEpoch++;transcriptCancel?.();transcriptCancel=null;transcriptReveal=null;transcriptPaint=null;if(busy())stop(live.off?'private':'record_unknown');const box=$('[data-mc-voice-transcript]');if(box)box.hidden=true;const text=$('[data-mc-voice-transcript-text]');if(text)text.textContent='';} });
   new MutationObserver(() => { if (busy() && panelMode() === 'pill') stop('minimized'); }).observe(document.body, { attributes: true, attributeFilter: ['data-mc-mode'] });
-  window.addEventListener('pagehide', () => { if (busy()) stop('pagehide', { quiet: true }); });
+  // A direct session already ending (End pressed, its last post or End unanswered) is told too: it sends End again with
+  // keepalive, since stop() returns the ending in progress (UI review #1).
+  window.addEventListener('pagehide', () => { directSession?.end('pagehide'); if (busy()) stop('pagehide', { quiet: true }); });
 
   available().then((label) => { if (label) { provider = label; button.hidden = false; } });
 }

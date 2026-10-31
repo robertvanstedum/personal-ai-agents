@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chief of Staff</title>
-  <link rel="stylesheet" href="/static/cos.css?v=20261026-files1">
+  <link rel="stylesheet" href="/static/cos.css?v=20261028-voice1">
 </head>
 <body>
 
@@ -45,6 +45,8 @@
           <button id="btn-dictate" type="button" disabled aria-label="Dictate into the message draft">Dictate</button>
           <button id="btn-send">Send</button>
         </div>
+        {# Her direct voice (Spec 165 v0.3 §6.6): filled only when the capabilities read offers it; empty and hidden otherwise. #}
+        <div id="voice-live" class="voice-live" role="group" aria-label="Voice conversation" hidden></div>
         <div class="talk-meta">
           <span id="voice-status"></span>
           <span id="voice-provider"></span>
@@ -60,6 +62,7 @@
         <label><input type="checkbox" id="voice-keep-transcript">Download transcript on End</label>
         {% endif %}
         <div id="voice-transcript" aria-live="polite"></div>
+        <div id="voice-sessions" class="voice-sessions" aria-label="Voice sessions to look at" hidden></div>
       </div>
 
       <!-- Record -->
@@ -496,6 +499,8 @@ const status=document.getElementById('voice-status');
 const provider=document.getElementById('voice-provider');
 const transcript=document.getElementById('voice-transcript');
 let active=false; let activeController=null; let stopping=null; let voiceRestartBlocked=false;
+// Her direct voice (Spec 165 v0.3 §6.6; D8 (a)): set only once its capabilities read offers it (readDirect, below).
+let direct=null,pendingDirect=null,directRefusal=null,pendingRefusal=null,voiceRecords=null;
 const mode=document.getElementById('voice-mode');
 const keepTranscript=document.getElementById('voice-keep-transcript');
 const labels={requesting:'Connecting…',listening:'Listening',thinking:'Working on it…',speaking:'Speaking…',reconnecting:'Reconnecting…',interrupted:'Listening'};
@@ -557,6 +562,7 @@ const dictation=bindConferDictation({
   onBusy:busy=>{document.getElementById('btn-send').disabled=busy||document.getElementById('send-input').disabled;},
 });
 function stopVoice(reason){
+  if(direct)return direct.stop(reason);      // Dictate, the companion panel: the direct session ends, its microphone released
   if(stopping)return stopping;
   const selected=activeController;
   const pending=(async()=>{
@@ -566,7 +572,10 @@ function stopVoice(reason){
   stopping=pending;return pending;
 }
 function updateVoiceAvailability(){
+  adoptDirect();
   const availability=conferVoiceAvailability({legacyReady,realtimeReady:Boolean(mode),mode});
+  if(direct){dictation.setAvailable(availability.dictationReady);direct.paint();return;}
+  if(directRefusal){button.disabled=false;dictation.setAvailable(availability.dictationReady);provider.textContent='Voice unavailable · typing still works';return;}
   button.disabled=!availability.voiceReady||Boolean(stopping)||voiceRestartBlocked;
   if(mode)mode.disabled=active||Boolean(stopping)||voiceRestartBlocked;
   dictation.setAvailable(availability.dictationReady);
@@ -581,6 +590,9 @@ async function refreshLegacyAvailability(){
   updateVoiceAvailability();
 }
 button.addEventListener('click',async()=>{
+  adoptDirect();
+  if(direct){await direct.toggle();return;}
+  if(directRefusal){transcript.textContent=directRefusal;return;}   // admitted, its page not loaded: never another mode
   if(stopping||voiceRestartBlocked)return;
   if(active){await stopVoice('user_ended');return;}
   await dictation.stop('voice_started');
@@ -598,8 +610,68 @@ document.addEventListener('minimoi:companion-opening', event => {
     if (voiceRestartBlocked) throw new Error('Earlier voice termination needs verification.');
   })());
 });
-window.addEventListener('pagehide',()=>{dictation.stop('pagehide');controller.stop('pagehide');realtime.endSession('pagehide');});
+window.addEventListener('pagehide',()=>{direct?.pagehide();dictation.stop('pagehide');controller.stop('pagehide');realtime.endSession('pagehide');});
 void refreshLegacyAvailability();
+// Her direct voice (Spec 165 v0.3 §6.6, §11.1). One capabilities read; its code is loaded only when the answer offers the
+// direct path. Admitted (direct_voice): one Voice button on the direct path, with no mode select and no "Hearing: …"; a
+// refused start says "Voice unavailable: <reason>" and nothing else is tried. Admitted but refused now (direct_refused:
+// no store, no allowance; or no provider offered): the Voice button says why, and today's modes are not offered.
+// Sessions needing attention (direct_records) are listed below the composer, also once admission is off. Not admitted
+// (her routes not installed, or admission off): Confer is exactly as it was. Not while a voice session of today's modes
+// runs: the path changes once it has ended.
+const DIRECT_CAPABILITIES='../api/realtime-voice/direct/api/realtime-voice/capabilities';
+const DIRECT_KEY='20261031-live1';   // v3's live check (31 Oct) changed the session module, the controller and an adapter
+// Not while a session of today's modes runs, nor while an earlier one's end is unconfirmed (its restart block, Gate 2 Q N10).
+// Admitted and refused (Q S2): the button says why, and no other mode is offered.
+function adoptDirect(){
+  if(direct||directRefusal||(!pendingDirect&&!pendingRefusal)||active||stopping||voiceRestartBlocked)return;
+  for(const node of [mode,keepTranscript]){if(!node)continue;node.disabled=true;const label=node.closest?.('label');if(label)label.hidden=true;}
+  transcript.textContent='';
+  if(pendingRefusal){directRefusal=pendingRefusal;pendingRefusal=pendingDirect=null;return;}
+  direct=pendingDirect;pendingDirect=null;
+  direct.show();
+}
+async function readDirect(){
+  let caps=null,base='';
+  try{
+    base=(typeof UI_BASE==='string'?UI_BASE:'/ui/').replace(/\/ui\/$/,'');
+    const r=await fetch(DIRECT_CAPABILITIES,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}});
+    const body=await r.json().catch(()=>null);
+    if(r.ok&&body&&body.path==='direct')caps=body;
+  }catch(error){return;}
+  if(!caps)return;
+  const admitted=caps.direct_voice===true&&Array.isArray(caps.providers)&&caps.providers.length>0;
+  // Admitted and refused (Spec 165 §6.6; Gate 2 Q S2): the server's words (no store, no allowance), or, admitted with no
+  // provider offered, why. Never today's modes then.
+  const refused=admitted?null:typeof caps.direct_refused==='string'&&caps.direct_refused.trim()?caps.direct_refused.trim()
+    :caps.direct_voice===true?'Voice unavailable here right now. Typing still works.':null;
+  if(refused){pendingRefusal=refused;updateVoiceAvailability();}
+  if(!admitted&&caps.direct_records!==true)return;
+  try{
+    const [page,session]=await Promise.all([import(`../static/confer-voice.js?v=${DIRECT_KEY}`),
+      import(`../static/realtime-voice/direct-voice-session.js?v=${DIRECT_KEY}`)]);
+    const info=page.rebase(caps,base);
+    const headers=()=>({'Content-Type':'application/json',...cosWriteHeaders()});
+    const timers={setTimeout:(fn,ms)=>window.setTimeout(fn,ms),clearTimeout:t=>window.clearTimeout(t)};
+    const get=session.jsonGet((...a)=>fetch(...a),headers,timers),post=session.jsonPost((...a)=>fetch(...a),headers,timers);
+    const els={button,status,line:transcript,provider,chat:chatLog,
+      live:document.getElementById('voice-live'),sessions:document.getElementById('voice-sessions')};
+    if(admitted){
+      let storage=null;try{storage=window.localStorage;}catch(error){/* the provider choice is not remembered */}
+      pendingDirect=page.conferVoice({doc:document,els,direct:info,session,get,post,headers,storage,...timers,
+        fetch:(...a)=>fetch(...a),warn:(...a)=>console.warn(...a),
+        setInterval:(fn,ms)=>window.setInterval(fn,ms),clearInterval:t=>window.clearInterval(t),
+        loadController:()=>import(`../static/realtime-voice/realtime-voice-controller.js?v=${DIRECT_KEY}`),
+        beforeStart:()=>dictation.stop('voice_started')});
+      voiceRecords=pendingDirect.records;
+      updateVoiceAvailability();
+    }else voiceRecords=page.conferSessions({doc:document,direct:info,chat:chatLog,list:els.sessions,get,post});
+    if(caps.direct_records===true)await voiceRecords.refresh();
+  }catch(error){
+    if(admitted&&!direct&&!pendingDirect){pendingRefusal='Voice unavailable: the voice page could not load. Typing still works.';updateVoiceAvailability();}
+  }
+}
+void readDirect();
 </script>
 </body>
 </html>

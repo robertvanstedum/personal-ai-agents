@@ -42,6 +42,23 @@ def _uuid_or_none(value):
         return None
 
 
+def _base_url(environ):
+    """CoS's internal address (``COS_BACKEND``, http or https only), or None: not connected."""
+    base = str(environ.get("COS_BACKEND", "") or "").strip()
+    return base if base.startswith(("http://", "https://")) else None
+
+
+def operations_from_env(environ, *, http_post=None):
+    """The Chief of Staff's own operation client for owner notes and reminders (owner_actions; A4-3), whichever backend
+    Master Craftsman chats through. Built from the configuration the CoS backend uses: the same ``COS_BACKEND``, the same
+    one-POST ``/chat`` operation (``ChiefOfStaffBackend.operation``) with its receipt, timeout and request id, and no caller
+    headers, since that backend sends none. The owner and write guards stay the Shop floor's, before any owner action
+    (api._mc_prelude; on voice, the direct host's guard). Only ``operation`` is used: never a turn, a file or a health
+    read. No valid ``COS_BACKEND``: None, which owner_actions answers UNAVAILABLE exactly as before."""
+    base = _base_url(environ)
+    return ChiefOfStaffBackend(base, http_post=http_post) if base is not None else None
+
+
 class ChiefOfStaffBackend(MasterCraftsmanBackend):
     kind = "cos"
     display_name = "Chief of Staff"
@@ -55,8 +72,8 @@ class ChiefOfStaffBackend(MasterCraftsmanBackend):
 
     @classmethod
     def from_env(cls, environ, *, http_get=None, http_post=None):
-        base = str(environ.get("COS_BACKEND", "") or "").strip()
-        if not base.startswith(("http://", "https://")):
+        base = _base_url(environ)
+        if base is None:
             return UnavailableBackend(cls.kind, "not_connected")
         from ..mc_files import cos_dirs
         return cls(base, http_get=http_get, http_post=http_post, accepts_files=cos_dirs(environ) is not None)

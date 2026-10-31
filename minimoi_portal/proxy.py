@@ -302,7 +302,7 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
     fwd_headers = _forward_headers(user, strip_header_prefixes)
     if (verified_cos_voice_write is True and portal_prefix == "/app/cos" and
             request.method == "POST" and user and user.get("tier") == "owner" and
-            path.strip("/").startswith("api/realtime-voice/managed/")):
+            path.strip("/").startswith(_COS_VOICE_WRITES)):
         fwd_headers["X-Minimoi-Voice-Write-Verified"] = "1"
 
     try:
@@ -482,11 +482,28 @@ DEFAULT_TIMEOUT = (5, 30)
 ROUTE_TIMEOUTS = {
     ("/app/cos", "POST", "ui/send"): (5, 125),
     ("/app/cos", "POST", "chat"): (5, 125),
+    # Chief of Staff's direct voice (Spec 165 v0.3 §6.7): a consult's request is answered by 25 s (pending after that: the
+    # core's CONSULT_WAIT_S), so this bound holds. Her turn itself runs on in its worker for typed Confer's own bound plus
+    # slack (domains/cos/direct_voice.py turn_deadline(): 120 s + 10 s, A2-D1); its result is said when it lands, or kept
+    # as a late receipt after End.
+    ("/app/cos", "POST", "api/realtime-voice/direct/api/realtime-voice/consult"): (5, 40),
 }
+# Routes whose path names a session: her summary waits for its one bounded gateway call, or joins one running (§6.7).
+ROUTE_TIMEOUT_PATTERNS = (
+    (("/app/cos", "POST"), re.compile(r"api/realtime-voice/direct/api/realtime-voice/session/[0-9a-f-]{36}/summary"), (5, 60)),
+)
+# The POSTs the portal marks verified for cos-scheduler once its owner and CSRF gates have passed (app.cos_proxy).
+_COS_VOICE_WRITES = ("api/realtime-voice/managed/", "api/realtime-voice/direct/")
 
 
 def _route_timeout(portal_prefix: str, path: str, method: str):
-    return ROUTE_TIMEOUTS.get((portal_prefix, method.upper(), (path or "").strip("/")), DEFAULT_TIMEOUT)
+    key = (portal_prefix, method.upper(), (path or "").strip("/"))
+    if key in ROUTE_TIMEOUTS:
+        return ROUTE_TIMEOUTS[key]
+    for (prefix, verb), pattern, bound in ROUTE_TIMEOUT_PATTERNS:
+        if prefix == key[0] and verb == key[1] and pattern.fullmatch(key[2]):
+            return bound
+    return DEFAULT_TIMEOUT
 
 
 def _wants_json() -> bool:

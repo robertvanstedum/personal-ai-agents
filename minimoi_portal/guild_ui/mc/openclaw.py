@@ -73,6 +73,10 @@ STOP_TIMEOUT_S = 5
 # sets finish_reason to "stop", "length" or (pending client tools) "tool_calls".
 OPENCLAW_NO_RESPONSE = "No response from OpenClaw."
 ANSWER_FINISH_REASONS = (None, "stop", "length")
+# Spec 164 §9: a direct-path voice consult (mc_voice_direct) is MC's typed turn carrying this server-held marker
+# (api.run_mc_turn host_channel). It is an object, so no browser value can equal it; the adapter writes these words.
+VOICE_MARKER = object()
+VOICE_CHANNEL_WORDS = "voice: the owner's spoken words, as transcribed; the reply is spoken aloud"
 
 
 def _root(url: str) -> str:
@@ -194,7 +198,11 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
             self._last = _Settled(result.status, result.failure_class)
 
     def _payload(self, req, *, stream: bool = False) -> bytes | TurnResult:
-        context = {k: v for k, v in (req.context or {}).items() if v not in (None, "")}
+        context = {k: v for k, v in (req.context or {}).items() if v not in (None, "") and k != "host_channel"}
+        # A host channel is a server-held object, never JSON: only this adapter's own voice marker is translated, into
+        # plain words. Anything else under that key (another host's sentinel, a string) is dropped, never serialized.
+        if (req.context or {}).get("host_channel") is VOICE_MARKER:
+            context["channel"] = VOICE_CHANNEL_WORDS
         content = req.text if not context else f"[Shop floor context: {json.dumps(context, sort_keys=True)}]\n{req.text}"
         body = {"model": self.chat_model, "user": self._user(req.conversation_id),
                 "messages": [{"role": "user", "content": content}]}

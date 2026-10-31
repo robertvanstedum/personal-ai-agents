@@ -45,10 +45,17 @@ def test_production_voice_upload_without_a_token_reaches_cos_as_before(load_port
     assert response.status_code == 200 and len(forwarded) == 1 and forwarded[0][0][1] == "ui/transcribe"
 
 
-def test_production_pages_get_no_token_meta_so_the_html_is_unchanged(load_portal, monkeypatch):
+def test_production_pages_always_carry_the_token_meta_and_writes_without_it_still_reach_cos(load_portal, monkeypatch):
+    """Spec 165 v0.3 §6.7 (A2): Confer always renders the CSRF meta tag, because her direct voice's writes are always
+    checked. This replaces the earlier pin that production pages carry none (the HTML is no longer byte-identical: one meta
+    tag). Behaviour is unchanged: with the legacy guard off, the earlier page script's tokenless writes still reach
+    cos-scheduler (the two tests above), and nothing else reads the tag."""
     portal, forwarded = _portal(load_portal, monkeypatch, "https://minimoi.ai")
-    portal.owner().get("/app/cos/ui/confer")
-    assert forwarded and forwarded[-1][1].get("head_meta") is None
+    client = portal.owner()
+    client.get("/app/cos/ui/confer")
+    assert forwarded and forwarded[-1][1].get("head_meta", {}).get("minimoi-csrf-token")
+    forwarded.clear()
+    assert client.post("/app/cos/ui/send", json=TEXT).status_code == 200 and len(forwarded) == 1
 
 
 def test_a_staging_origin_keeps_the_guard(load_portal, monkeypatch):

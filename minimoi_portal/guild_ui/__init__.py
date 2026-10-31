@@ -25,7 +25,7 @@ import json
 import logging
 from pathlib import Path
 
-from flask import Blueprint, current_app, has_request_context, request, send_from_directory
+from flask import Blueprint, abort, current_app, has_request_context, request, send_from_directory
 from werkzeug.exceptions import HTTPException
 
 log = logging.getLogger(__name__)
@@ -160,7 +160,11 @@ def asset_version() -> str:
 @owner_page
 def asset(filename, ver=None):
     """The unversioned address always revalidates; the versioned one is kept by the browser, but only when the
-    fingerprint in it is this deploy's (an address from an older page is served fresh and never stored)."""
+    fingerprint in it is this deploy's (an address from an older page is served fresh and never stored). The direct voice
+    script is served only while MC voice's direct path is installed here, admitted or not (pages.DIRECT_VOICE_JS)."""
+    from .pages import DIRECT_VOICE_JS, _mc_voice_direct_installed
+    if filename == "js/" + DIRECT_VOICE_JS and not _mc_voice_direct_installed():
+        abort(404)
     response = send_from_directory(STATIC, filename, max_age=0)
     response._guild_immutable_asset = ver is not None and ver == asset_version()
     return response
@@ -301,6 +305,8 @@ def register_guild_ui(app, *, owner_guard, current_user, url_prefix: str, bluepr
     attach_agent_asks(app, blueprint_name, services)   # asking Claude Code / Codex through MC: nothing happens unless MINIMOI_GUILD_AGENT_REQUESTS is on
     from .mc_managed_realtime import install as attach_mc_realtime
     attach_mc_realtime(app,blueprint_name,environ=app.extensions[blueprint_name]['feature_environ'])
+    from .mc_voice_direct import install as attach_mc_direct_voice
+    attach_mc_direct_voice(app, blueprint_name, environ=app.extensions[blueprint_name]["feature_environ"])   # MC voice, direct path: off unless MINIMOI_MC_VOICE and MINIMOI_MC_VOICE_DIRECT
     from .mc_tools_wiring import attach as attach_mc_tools
     attach_mc_tools(app, blueprint_name, services)     # MC's tool listener: nothing happens unless MINIMOI_MC_TOOLS is on
     from .supervision import attach as attach_supervision, attach_runner_door

@@ -31,6 +31,7 @@ from core.minimoi_actions.context import ActionContext, ActionContractError
 from core.minimoi_actions.receipts import EffectIntent, _cursor
 
 from . import effects, offers
+from .service import _CODE_ALPHABET
 
 _log = logging.getLogger("mc_tools")
 KINDS = {"lesson": "lessons.adopt", "guest_reject": "guest.reject_request", "issue_comment": "issue.comment",
@@ -58,6 +59,26 @@ def parse(text):
         kind = "cancel" if m.group("word").lower() in ("no", "nein", "cancel") else "confirm"
         return kind, "P-" + m.group("code").upper()
     return ("confirm", None) if _YES.match(t) else ("cancel", None) if _NO.match(t) else None
+
+
+# Voice only (mc_voice_direct's consult): speech recognition writes a spoken code with spaces, dots or hyphens, and may
+# spell it out letter by letter ("yes P 7K3M", "yes, P-7K3M", "Yes P. 7 K 3 M."). Exactly four characters of the code
+# alphabet after the P (service._CODE_ALPHABET: no 0/O or 1/I/L), so an ordinary reply is never read as a code: "no,
+# plan B" (L) and "ok, pay it" (I) are left as they were said.
+_SPOKEN_CODE = "[" + _CODE_ALPHABET + _CODE_ALPHABET.lower() + "]"
+_SPOKEN = re.compile(r"^(?P<word>yes|ja|ok(?:ay)?|confirm|approve|no|nein|cancel)[,:.]?\s+(?:proposal\s+)?"
+                     r"p(?P<code>(?:[\s.\-]*" + _SPOKEN_CODE + r"){4})\s*[.!]?$", re.I)
+
+
+def spoken_named(text):
+    """The voice path's spoken proposal code in the typed named form ("yes P-7K3M"), else the text unchanged. Typed
+    turns never call this: parse() reads exactly what Robert typed."""
+    if not isinstance(text, str) or len(text) > 60:
+        return text
+    m = _SPOKEN.match(text.strip())
+    if m is None:
+        return text
+    return f"{m.group('word')} P-{re.sub(r'[^a-z0-9]', '', m.group('code'), flags=re.I).upper()}"
 
 
 def issue_text(payload, operation_id):

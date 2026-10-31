@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "card": "chief-of-staff voice",
+  "version": "0.1.3",
+  "status": "candidate",
+  "spec": "Spec 165 v0.3 §6.1, §6.2: Robert's direction of 29 Oct, \"mixed sexes for both\": ballad on OpenAI (\"good for CoS\"), ara on Grok; British English asked for (OpenAI's voices keep their own accent, by ear); Austrian German; MiniMoi said the French way; the P2 German passage; adopted after A4",
+  "persona": {
+    "source": "MASTER_CRAFTSMAN_PERSONA.md",
+    "version": "1.1",
+    "sha256": "f07078f5c913323f1098381faf44d38f77223258e48498ddd0552f53042c4f1b"
+  },
+  "files": {
+    "voice.json": "23da2ab3d85d459f3704006d2eb4283ce5daa91a40e1d7944130032010851220"
+  }
+}
