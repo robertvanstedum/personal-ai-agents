@@ -43,8 +43,15 @@
     else { log.replaceChildren(frag); if (!d.items.length) { const hello = document.createElement('div'); hello.innerHTML = '<h1>Hello, Robert.</h1><p>Your conversations, kept here.</p>'; log.append(hello); } if (atBottom) log.scrollTop = log.scrollHeight; }
     document.getElementById('history-earlier').hidden = !before;
   }
+  async function releaseVoice() {
+    const pending=[]; let deadline;
+    document.dispatchEvent(new CustomEvent('minimoi:companion-opening',{detail:{waitUntil:p=>pending.push(Promise.resolve(p))}}));
+    try { await Promise.race([Promise.all(pending),new Promise((_,reject)=>{deadline=setTimeout(()=>reject(new Error('Voice termination pending')),8000);})]); }
+    finally { clearTimeout(deadline); }
+  }
   async function select(id, doc) {
     if (input.disabled || uploading) throw new Error('Wait for the current message or upload.');
+    if (cid && cid !== id) await releaseVoice();
     persistDraft(); await api('history/selection', {device, conversation_id:id});
     cid = id; conversation = doc; generation++; signature = ''; before = null; viewingEarlier = false;
     input.value = storage(draftKey()) || '';
@@ -83,7 +90,17 @@
   document.getElementById('history-new').onclick=async()=>{if(input.disabled||uploading){state.textContent='Wait for the current message or upload.';return;}try{const c=await api('history/conversations',{title:'New conversation'});await select(c.conversation_id,c);document.getElementById('history-sheet').close();}catch(_){state.textContent='Could not create a conversation.';}};
   document.getElementById('mc-page').href=location.origin + '/guild/build';
   document.getElementById('existing-rooms').href=location.origin + '/app/records/';
-  document.getElementById('both-open').onclick=()=>{const frame=document.getElementById('mc-both'); const open=frame.hidden; frame.hidden=!open; document.body.classList.toggle('both-open',open); document.getElementById('both-open').setAttribute('aria-pressed',String(open)); if(open&&!frame.src)frame.src=location.origin + '/guild/companion';};
+  document.getElementById('both-open').onclick=async()=>{
+    const frame=document.getElementById('mc-both'), button=document.getElementById('both-open'), open=frame.hidden;
+    button.disabled=true;
+    try {
+      if(open) await releaseVoice();
+      else { try {frame.contentDocument?.dispatchEvent(new frame.contentWindow.CustomEvent('guild:mic-claim',{detail:{who:'companion-closed'}}));} catch(_){} }
+      frame.hidden=!open;document.body.classList.toggle('both-open',open);button.setAttribute('aria-pressed',String(open));
+      if(open&&!frame.src)frame.src=location.origin + '/guild/companion';
+    } catch(_) {state.textContent='Voice has not confirmed it ended. Finish it before opening MC.';}
+    finally {button.disabled=false;}
+  };
   document.addEventListener('keydown',e=>{if(e.ctrlKey && e.code==='Backquote'){e.preventDefault();document.getElementById('both-open').click();}});
   const files=document.getElementById('cos-files'); document.getElementById('files-sheet-content').append(files); files.open=true;
   document.getElementById('files-open').onclick=()=>{document.getElementById('files-sheet').showModal();loadCosFiles();};
