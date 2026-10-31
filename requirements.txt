@@ -60,3 +60,5 @@ Pillow>=10.0.0
 tavily-python
 watchdog
 markdown
+python-docx==1.2.0
+pypdf==6.10.0

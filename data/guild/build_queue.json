@@ -1136,5 +1136,17 @@
     "blocked_reason": "Final Claude Code review pending (Claude Chat and Codex reviews folded into v0.4). Build after Master Craftsman stage 1 works (Robert, 2026-09-28).",
     "notes": "v0.4 (SHA-256 baaab1ab…). Owner direction: planning-studio INIT-2026-0007 documents/OWNER_DIRECTION_AGENT_MEMORY_V04_2026-09-28.md.",
     "last_transition_at": "2026-09-28T17:30:00+00:00"
+  },
+  {
+    "id": 162,
+    "spec_title": "Career Narrative Kit — CoS early capability (method, workbook generator, exports)",
+    "spec_file": "spec_162_career_narrative_kit_2026-10-24.md",
+    "status": "design",
+    "github_issue": null,
+    "priority": "medium",
+    "blocked_reason": "Draft v0.2; Grok review pending, then Robert's acceptance.",
+    "last_transition_at": "2026-10-24T18:08:06.216338+00:00",
+    "summary": "A method and tools to rebuild a career story job by job in the owner's voice and export resume, LinkedIn text and a cover letter from one source. Tools public, data private.",
+    "notes": "Registered 2026-10-24 at Robert's request. Number 162: 161 is used by the observability spec on unmerged branches (claude/spec-161-observability). Tools on PR #369 (domains/cos/career_kit/). Queue registration is not a claim that anything is accepted."
   }
 ]

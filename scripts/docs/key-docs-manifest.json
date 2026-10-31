@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-06T14:02:36.920543+00:00",
+  "generated_at": "2026-10-24T18:24:32.075624+00:00",
   "publisher": "python3 scripts/docs/publish_key_docs.py",
   "documents": [
     {
@@ -8,7 +8,7 @@
       "pdf": "README.pdf",
       "source_sha256": "0db2d395ea8906d8dd90b691e455983720465879c65ee5d726a6369be6c74bc7",
       "renderer_sha256": "d6b762ea5ed9e605152865845dca8ec2d3f7812d930f4a899774724578d88323",
-      "pdf_sha256": "517bc628205d7d294b7b33a9e4f08687612105034206e60b8058fb34a916fadb",
+      "pdf_sha256": "bfdb7138b52fa7011d5bf9b00d3a67e893b954d6db23d9b15999184ed7b153e3",
       "mermaid_diagrams": 5,
       "pages": 12,
       "extractable_text_characters": 18405,
@@ -28,12 +28,12 @@
     {
       "source": "OPERATIONS.md",
       "pdf": "OPERATIONS.pdf",
-      "source_sha256": "cf3100bea6751427ac6c19a482ad82947627c6b8e8330673dd9a9e5349f5e4a6",
+      "source_sha256": "3fb0abb917092ae08d2c3babbe414485bac52b5d2e96a0849dd5e51942ee80c9",
       "renderer_sha256": "d6b762ea5ed9e605152865845dca8ec2d3f7812d930f4a899774724578d88323",
-      "pdf_sha256": "c617ef3b5373e704dda56233178b9e1d431a315afce1fcb3f15651bf4887273b",
+      "pdf_sha256": "e58e51e0259088b8524a32e622db2d1b96d3e38c5e67d5358cfffe25c70d58ad",
       "mermaid_diagrams": 1,
-      "pages": 13,
-      "extractable_text_characters": 28864,
+      "pages": 14,
+      "extractable_text_characters": 29691,
       "title": "mini-moi Operations"
     },
     {

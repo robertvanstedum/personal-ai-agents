@@ -465,6 +465,15 @@ private-repo sync (`scripts/sync_private_repo.sh`, 02:00 local). The original
 personal OpenClaw remains Mac-local, while COS Agent A is a separate production
 container. Keychain-based credentials are the dev flow; production uses SSM.
 
+**Owner tools (Mac, run on demand, no service).** The Career Narrative Kit (`domains/cos/career_kit/`, CoS early
+capability) runs from the repo venv: resume import, workbook generator, export of the owner's finals (single-column,
+ATS-safe resume, LinkedIn text, report) and cover-letter assembly. Dependencies: `python-docx` and `pypdf` (pinned in
+`requirements.txt`; `requirements.test.txt` for CI); install with `pip install -r requirements.txt`. Resume page
+counts use LibreOffice headless (`brew install --cask libreoffice`, installed on the Mac 2026-10-24); without it the
+export reports "not checked". Real
+workbooks, resumes and letters stay in the owner's private career area outside this repository; the tools never
+overwrite a file. Usage: `domains/cos/career_kit/README.md`.
+
 **Legacy automation still loaded:** five launchd jobs from the pre-AWS era remain
 loaded but idle (`com.vanstedum.curator`, `curator-intelligence`,
 `curator-priority-feed`, `portal-boot-restart`, `minimoi-portal`). Not flagged for

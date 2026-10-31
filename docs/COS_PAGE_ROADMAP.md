@@ -37,6 +37,7 @@ The CoS page is the strategic entry point; the queue is tactical.
 ### What the page shows
 - **Active flags** — what CoS has surfaced that needs Robert's attention
 - **Periodic tasks status** — GitHub sanity check, career scout, etc.
+  (Career work method and tools: Career Narrative Kit, `docs/specs/spec_162_career_narrative_kit_2026-10-24.md`, `domains/cos/career_kit/`.)
   Last run, next run, last finding
 - **Briefing** — today's CoS summary (career, build, German, system health)
 - **Interaction panel** — voice or text input to CoS directly

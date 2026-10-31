@@ -25,3 +25,4 @@ watchdog>=4.0.0
 reportlab>=4.0
 jsonschema>=4,<5
 sqlite-vec==0.1.9
+python-docx>=1.2.0
