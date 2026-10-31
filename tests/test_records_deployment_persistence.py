@@ -126,7 +126,7 @@ def test_real_offline_render_proves_project_isolation_and_future_portal_tag(tmp_
     executable=shutil.which('docker-compose')
     if not executable:pytest.skip('standalone Compose CLI needed for offline project check')
     (tmp_path/'.env').write_text('BASE_URL=https://minimoi.ai\n')
-    env={'PATH':os.environ.get('PATH',''),'HOME':str(tmp_path),'COMPOSE_DISABLE_ENV_FILE':'1','DOCKER_HOST':'unix:///nonexistent/records-no-daemon.sock','COMPOSE_PROJECT_NAME':'hostile-inherited-name','MINIMOI_ROOT':str(tmp_path),'MINIMOI_IMAGE_TAG':'future-release','MINIMOI_MODEL_GATEWAY_KEY':'synthetic','XAI_API_KEY':'synthetic','ANTHROPIC_API_KEY':'synthetic','MINIMOI_MODEL_GATEWAY_RECEIPT_KEY':'synthetic','COS_AGENT_A_GATEWAY_TOKEN':'synthetic'}
+    env={'PATH':os.environ.get('PATH',''),'HOME':str(tmp_path),'COMPOSE_DISABLE_ENV_FILE':'1','DOCKER_HOST':'unix:///nonexistent/records-no-daemon.sock','COMPOSE_PROJECT_NAME':'hostile-inherited-name','MINIMOI_ROOT':str(tmp_path),'MINIMOI_IMAGE_TAG':'future-release','MINIMOI_MODEL_GATEWAY_KEY':'synthetic','XAI_API_KEY':'synthetic','ANTHROPIC_API_KEY':'synthetic','OPENAI_API_KEY':'synthetic','MINIMOI_MODEL_GATEWAY_RECEIPT_KEY':'synthetic','COS_AGENT_A_GATEWAY_TOKEN':'synthetic'}
     env.update(D.plan_module().plan(inputs)['environment_references'])
     def render(project,files):
         argv=[executable,'--project-name',project,'--project-directory',str(ROOT)]
