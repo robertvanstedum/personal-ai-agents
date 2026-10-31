@@ -5,6 +5,7 @@
 **Status:** Approved baseline; COS production conformance accepted 2026-08-16
 **Owner:** Robert
 **Scope:** All current and future mini-moi domains
+**Amendment (27 October 2026, #420):** Robert approved one standard mode per voice control, and Master Craftsman in the mapping table (Voice: Conversation; Dictate: Memo). Issue #420.
 
 ## Purpose
 
@@ -63,7 +64,7 @@ Reserved for future short, explicit commands.
 
 ## Conformance rules
 
-1. A new voice surface declares exactly one standard mode.
+1. Each voice control declares exactly one standard mode. A surface may offer more than one control. It may not leave a control's mode implicit, and it may not mix two modes on one control.
 2. Domain templates use shared controllers and adapters; provider protocol does
    not live in domain code.
 3. Long-lived provider credentials remain server-side. Browsers receive only
@@ -85,12 +86,17 @@ Reserved for future short, explicit commands.
 | Gespräche | Conversation | Realtime provider | Realtime provider/persona |
 | Conversas | Conversation | Realtime provider | Realtime provider/persona |
 | COS Confer | Conversation | Realtime provider | Realtime provider, with allow-listed COS Agent Runtime tools |
+| Master Craftsman — Voice | Conversation | Realtime provider | Realtime provider, with allow-listed MC tools |
+| Master Craftsman — Dictate | Memo | Robert presses Stop | None during capture |
 | Lesen / Schreiben | Memo | Robert presses Stop | None during capture |
 | Leitura / Escrita | Memo | Robert presses Stop | None during capture |
+
+Master Craftsman — Voice and Master Craftsman — Dictate are one conversation. They apply in the Guild and in the floating panel on another domain. They do not replace the voice of the page underneath. Gespräche, Conversas, Lesen, Schreiben, Leitura, and Escrita keep their own rows. Chief of Staff Confer keeps its own row. Curator has no voice surface in this table.
 
 ## Acceptance baseline
 
 - conversation: a natural one-second pause does not create a fragment;
+- MC conversation: a one-second pause does not create a fragment; turns are added to the conversation only after voice ends; on "we're done" a short summary is offered for written confirmation; the MC release check exercises a voice consult, not only the route;
 - memo: a multi-second pause does not submit or end capture;
 - COS conversation: OpenAI and Grok can each complete a natural multi-turn
   session, and barge-in stops the active reply;
