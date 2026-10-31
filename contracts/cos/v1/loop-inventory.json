@@ -11,6 +11,10 @@
     { "id": "loop_i", "name": "model_gateway_cost_check", "schedule": "cron daily 07:45 (:1859)", "becomes": "raises E3 incidents when spend passes the caps; otherwise unchanged" },
     { "id": "loop_r", "name": "reminder_delivery", "schedule": "interval 1 min", "becomes": "migrates with domains/cos/reminders.py into obligations (recurrence once); one owner for every reminder" }
   ],
+  "processes": [
+    { "process": "minimoi-cos-scheduler", "starts_loops": "yes: it is the CoS backend", "becomes": "the one process that runs the loops" },
+    { "process": "minimoi-cos-bot", "starts_loops": "hypothesis, from the code; no log confirms it: core/telegram/telegram_cos_bot.py:51,:143 imports domains.cos.chief_of_staff, whose _start_cos() runs at import (:1766, :1906) and starts the scheduler and a Telegram poll thread; the cos-bot image copies domains/cos (docker/Dockerfile.cos-bot) and compose sets neither COS_BACKGROUND_JOBS nor DISABLE_TELEGRAM_POLL (docker-compose.prod.yml:372-392), though /opt/minimoi/.env could. Only loop_r has a guard against a second copy (the reminder store lock).", "becomes": "imports nothing from chief_of_staff; it reaches CoS through the store client (domains/cos/store/client.py) and the backend's API, so exactly one scheduler process remains. Confirmed or refuted by the cos-bot startup log in the V-1 host visit." }
+  ],
   "stores": [
     { "id": "guild.cos_agenda", "becomes": "the loops' recommendation queue until B and C stop, then read-only history; the ledger points at its rows" }
   ]

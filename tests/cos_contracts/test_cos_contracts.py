@@ -200,5 +200,8 @@ def test_legacy_mapping_and_loop_inventory_cover_the_spec():
     mapping = _load(CONTRACTS / "legacy-mapping.json")["mappings"]
     assert mapping == [{"data_scope": "personal", "vault_scope": "robert", "harness_principal_id": "robert",
                         "rooms_database": mapping[0]["rooms_database"]}]
-    loops = {row["id"] for row in _load(CONTRACTS / "loop-inventory.json")["loops"]}
+    inventory = _load(CONTRACTS / "loop-inventory.json")
+    loops = {row["id"] for row in inventory["loops"]}
     assert {"loop_b", "loop_c", "loop_h", "loop_r"} <= loops
+    # One owner per loop: every process that imports chief_of_staff is named, so B1a/B3 can leave exactly one.
+    assert {row["process"] for row in inventory["processes"]} == {"minimoi-cos-scheduler", "minimoi-cos-bot"}

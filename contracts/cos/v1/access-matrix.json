@@ -66,7 +66,7 @@
       "runs_as": "confirm at B6a (read-only container, compose profile supervisor)",
       "access": [
         { "host_path": "data/activity/guild-build/", "container_path": "/app/data/activity/guild-build", "mode": "rw", "note": "facts part only (section 4.4)" },
-        { "db": "incident tables", "mode": "owner", "note": "role and grants named at B6a" }
+        { "db": "incident tables", "mode": "owner", "note": "needs a dedicated role (e.g. minimoi_supervisor) granted the incident tables and its existing guild.supervision_* tables only, its URL projected as a file like its token. Today the supervisor has no role of its own: it connects with the portal's DATABASE_URL (docker-compose.prod.yml:479, services/supervisor/main.py:141) and core/supervision/sql/ creates no role or grant. A new production credential: Robert's yes at B6a." }
       ]
     },
     {
