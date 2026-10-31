@@ -1,0 +1,13 @@
+{
+  "schema": "minimoi.cos.obligation_event/1",
+  "data_scope": "personal",
+  "environment": "prod",
+  "event_id": "ev-0002",
+  "type": "nudge_claimed",
+  "occurrence_id": "OBL-german-daily@2026-10-30",
+  "at": "2026-10-30T14:12:05-05:00",
+  "actor": "scheduler",
+  "seat": null,
+  "revision_before": 3,
+  "claim_id": "claim-0001"
+}

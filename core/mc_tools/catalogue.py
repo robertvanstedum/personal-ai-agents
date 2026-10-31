@@ -66,7 +66,8 @@ def validate(name: str, arguments) -> dict:
     schema = TOOLS[name]["parameters"]
     if type(arguments) is not dict:
         raise ArgumentsRefused("tool_arguments_invalid")
-    if name.startswith("minimoi_board_") or name in ("minimoi_clarify_action", "minimoi_working_write"):
+    if name.startswith("minimoi_board_") or name in ("minimoi_clarify_action", "minimoi_working_write",
+                                                      "minimoi_publish_update"):
         from jsonschema import Draft202012Validator
         if list(Draft202012Validator(schema).iter_errors(arguments)):
             raise ArgumentsRefused("tool_arguments_invalid")

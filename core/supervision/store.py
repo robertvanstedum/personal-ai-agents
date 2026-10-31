@@ -462,6 +462,16 @@ class Store:
             return cur.fetchall()
         return self._run(q)
 
+    def checkins_between(self, start, end):
+        """For guild-build's activity facts (CoS 1.2 spec section 4.4): how many check-ins in [start, end], and the
+        newest one at or before end."""
+        def q(cur):
+            cur.execute("""SELECT count(*) FILTER (WHERE at >= %s AND at <= %s) AS count,
+                                  max(at) FILTER (WHERE at <= %s) AS last_at
+                           FROM guild.supervision_checkins""", (start, end, end))
+            return cur.fetchone()
+        return self._run(q)
+
     def latest_checkin(self):
         def q(cur):
             cur.execute("SELECT * FROM guild.supervision_checkins ORDER BY id DESC LIMIT 1")

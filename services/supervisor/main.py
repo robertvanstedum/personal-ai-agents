@@ -43,6 +43,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from core.supervision import telegram as tg, watch  # noqa: E402
 from core.supervision.store import Store, public_receipt  # noqa: E402
+from services.supervisor import activity_facts  # noqa: E402
 
 log = logging.getLogger("supervisor")
 OUTBOX_PER_MESSAGE = 10                 # notices per message from the supervisor's outbox (P2-3)
@@ -312,6 +313,8 @@ class Supervisor:
         summary["open_items"] = [{"kind": i["kind"], "text": i["text"]} for i in items][:20]
         row = self.store.record_checkin(summary, [i["key"] for i in new_items], status)
         log.info("check-in %s: %d items, %d new, telegram %s", row["id"], len(items), len(new_items), status)
+        # guild-build's activity facts for CoS (CoS 1.2 spec section 4.4): off unless configured, never fails this loop.
+        activity_facts.after_checkin(self.store)
         return summary, new_items
 
     def tick(self):

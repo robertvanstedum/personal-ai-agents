@@ -1,0 +1,52 @@
+{
+  "schema": "minimoi.activity.v2",
+  "data_scope": "personal",
+  "environment": "prod",
+  "domain": "german",
+  "part": "main",
+  "local_date": "2026-10-30",
+  "tz": "America/Chicago",
+  "generation": "8f0c2a91",
+  "seq": 2,
+  "digest": "sha256:4090183fe39d525d63333e3e9e2e3911443b04e0996a534c6b658e20646dc20b",
+  "producer": {
+    "host": "prod-ec2-1",
+    "service": "minimoi-german",
+    "image_tag": "1.2.0",
+    "commit": "4f531c6f"
+  },
+  "metric": "sessions_completed",
+  "observation": {
+    "state": "partial",
+    "covers": {
+      "from": "2026-10-30T00:00:00-05:00",
+      "to": "2026-10-30T14:12:05-05:00"
+    },
+    "source_checked_at": "2026-10-31T00:20:00-05:00",
+    "final": false
+  },
+  "published_at": "2026-10-31T00:20:01-05:00",
+  "count": 1,
+  "items": [
+    {
+      "event_id": "german-sess-2026-10-30_001",
+      "kind": "session",
+      "time_precision": "day",
+      "event_date": "2026-10-30",
+      "one_line": "Gespräche · Dativ",
+      "ref": {
+        "type": "german.session",
+        "id": "2026-10-30_001",
+        "revision": 1
+      },
+      "link": "/german/sessions/2026-10-30_001"
+    }
+  ],
+  "items_total": 1,
+  "items_truncated": false,
+  "withdrawn": [],
+  "health": {
+    "writer_last_ok": "2026-10-31T00:20:01-05:00",
+    "last_error": null
+  }
+}

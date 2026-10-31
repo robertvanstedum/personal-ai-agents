@@ -1,0 +1,38 @@
+{
+  "schema": "minimoi.activity.v2",
+  "data_scope": "personal",
+  "environment": "prod",
+  "domain": "curator",
+  "part": "main",
+  "local_date": "2026-10-30",
+  "tz": "America/Chicago",
+  "generation": "8f0c2a91",
+  "seq": 4,
+  "digest": "sha256:52db4b98cdd9ff2d02dcef6f8e57f94ea504cd915cec666836439bcb5d795dc5",
+  "producer": {
+    "host": "prod-ec2-1",
+    "service": "minimoi-curator",
+    "image_tag": "1.2.0",
+    "commit": "4f531c6f"
+  },
+  "metric": "sessions_completed",
+  "observation": {
+    "state": "complete",
+    "covers": {
+      "from": "2026-10-30T00:00:00-05:00",
+      "to": "2026-10-30T23:59:59-05:00"
+    },
+    "source_checked_at": "2026-10-31T00:20:00-05:00",
+    "final": true
+  },
+  "published_at": "2026-10-31T00:20:01-05:00",
+  "count": 0,
+  "items": [],
+  "items_total": 0,
+  "items_truncated": false,
+  "withdrawn": [],
+  "health": {
+    "writer_last_ok": "2026-10-31T00:20:01-05:00",
+    "last_error": null
+  }
+}

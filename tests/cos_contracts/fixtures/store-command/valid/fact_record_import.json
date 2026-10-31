@@ -1,0 +1,36 @@
+{
+  "schema": "minimoi.cos.store_command/1",
+  "command_id": "cmd-memimport-0a1b2c3d4e5f6a7b",
+  "kind": "fact.record",
+  "target": {
+    "type": "cos.fact",
+    "id": "FACT-0a1b2c3d4e5f6a7b"
+  },
+  "expected_revision": 0,
+  "actor": "scheduler",
+  "seat": null,
+  "origin": "import",
+  "basis_ref": null,
+  "payload": {
+    "schema": "minimoi.cos.standing_fact/1",
+    "data_scope": "personal",
+    "environment": "prod",
+    "id": "FACT-0a1b2c3d4e5f6a7b",
+    "at": "2026-07-11T00:00:00+00:00",
+    "section": "General",
+    "entry": {
+      "text": "Robert prefers short morning check-ins.",
+      "provenance": "agent_draft"
+    },
+    "source": {
+      "kind": "cos_memory_md",
+      "tag": "chat",
+      "entry_date": "2026-07-11",
+      "line_digest": "sha256:e362898dfeb647caf187ac0ed6e88f52d7ea561cde86682294fcdbc41923e06f"
+    },
+    "state": "active"
+  },
+  "payload_digest": "sha256:042016c19c9693a00eabd3e4ff46763e6457e5dd49f9caca36a73c6bee0d9e6c",
+  "data_scope": "personal",
+  "environment": "prod"
+}

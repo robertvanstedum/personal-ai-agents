@@ -110,6 +110,8 @@ class ConferTurnRequest:
     # dispatched when the turn raises. It may raise to stop the turn there, before anything is dispatched. None (every
     # caller but CoS's voice): nothing changes.
     on_dispatch: Callable[[str], None] | None = None
+    # The canonical history's turn, as a UUID string, so the routing receipt and the history name the same turn.
+    turn_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -389,7 +391,7 @@ class ConferTurnService:
                 },
             )
 
-        turn_id = str(uuid4())
+        turn_id = request.turn_id or str(uuid4())
         timing = VoiceTiming(correlation=turn_id,parent=request.request_id)
         timing.emit("context_start")
         try:

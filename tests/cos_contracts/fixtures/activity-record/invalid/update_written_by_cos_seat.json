@@ -1,0 +1,59 @@
+{
+  "schema": "minimoi.activity.v2",
+  "data_scope": "personal",
+  "environment": "prod",
+  "domain": "guild-build",
+  "part": "update",
+  "local_date": "2026-10-30",
+  "tz": "America/Chicago",
+  "generation": "8f0c2a91",
+  "seq": 4,
+  "digest": "sha256:de995ac62235c7e1a24a8e0191405fb0e2388bf10d370a1b1a6cd5a64c6686a5",
+  "producer": {
+    "host": "prod-ec2-1",
+    "service": "minimoi-portal",
+    "image_tag": "1.2.0",
+    "commit": "4f531c6f"
+  },
+  "metric": "build_update",
+  "observation": {
+    "state": "complete",
+    "covers": {
+      "from": "2026-10-30T00:00:00-05:00",
+      "to": "2026-10-30T23:59:59-05:00"
+    },
+    "source_checked_at": "2026-10-31T00:20:00-05:00",
+    "final": true
+  },
+  "published_at": "2026-10-31T00:20:01-05:00",
+  "count": 0,
+  "items": [],
+  "items_total": 0,
+  "items_truncated": false,
+  "withdrawn": [],
+  "health": {
+    "writer_last_ok": "2026-10-31T00:20:01-05:00",
+    "last_error": null
+  },
+  "detail": {
+    "seat": "cos",
+    "decisions_needed": [
+      {
+        "one_line": "Approve the R-1 narrowing",
+        "ref": {
+          "type": "github.issue",
+          "id": "449"
+        }
+      }
+    ],
+    "next": [
+      "B1a store writer"
+    ],
+    "blocked": [
+      {
+        "one_line": "Records not in production",
+        "who_can_unblock": "robert"
+      }
+    ]
+  }
+}

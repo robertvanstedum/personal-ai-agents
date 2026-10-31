@@ -169,7 +169,7 @@ class ToolService:
                  isolated_runtime: bool = False, worker: str = "mc-tools", guests_lookup=None, people=None,
                  standard_changes=None, display_tz: str = offers.DISPLAY_TZ, policy=None, read_owner_note=None,
                  domain_health=None, registers=None, board=None, export_conversation=None, artifact_root=None, agent_contact=None, recall_source=None,
-                 agent_ask=None):
+                 agent_ask=None, activity_update=None):
         """``connect()`` returns a new psycopg2 connection to the guild database (autocommit off).
         ``lessons`` is a LessonLedger (or None: lessons off). ``guests_lookup(email)`` returns an existing
         guest login with that email (or None); invites are refused while it is missing."""
@@ -209,6 +209,9 @@ class ToolService:
         # agent_ask(conversation_id, note_text, note_request_id, to) -> (made, words), with agent_ask.check(note_text,
         # to) -> None | (code, words): the front door (portal wiring, AgentAsker), or None while asking the agents is off.
         self.agent_ask = agent_ask
+        # activity_update: core.activity.writer.ActivityWriter for guild-build's update part (CoS 1.2 spec section 4.4),
+        # or None while MC's build update is off.
+        self.activity_update = activity_update
 
     def _change_gate(self, kind):
         """(standard change, None) when MC may offer this kind here, else (None, refusal). Dev: no gate. Prod: a data or
@@ -826,6 +829,66 @@ class ToolService:
                                      lambda: self.registers.save("mc", "mc", meta, card["body"], request_id=op,
                                                                  expected_revision=args["revision"],
                                                                  entry_id=args["reference"]), "withdrawn")
+
+    # ── tier 2: MC's build update for CoS (CoS 1.2 spec section 4.4) ─────────────────────────────────────────────
+    def _publish_update(self, args, caller, observation):
+        """MC's own word on the build for today: decisions needed, what's next, what's blocked and who can unblock it.
+        Written as guild-build's update part with seat "mc" set here, never by the model; read back by digest. It is
+        what CoS chases, and it grants nothing."""
+        from core import durable_files
+        from core.activity.writer import today
+        writer = self.activity_update
+        if writer is None or not self._tier2(caller):
+            return refused("tool_unavailable")
+        with self._tx() as conn:
+            b = self._bind(conn, caller)
+        detail = {"seat": "mc", "decisions_needed": args.get("decisions_needed", []), "next": args.get("next", []),
+                  "blocked": args.get("blocked", [])}
+        local_date = today()
+        canonical = {"local_date": local_date, "detail": detail}
+        op = self._operation_id(b, "guild.build.publish_update", canonical)
+        effect = lease = None
+        with self._tx() as conn:
+            b = self._bind_again(conn, caller, b)
+            if effects.receipt_exists(conn, self.principal, self.environment, op):
+                lease = effects.reconcile_effect(conn, principal=self.principal, environment=self.environment,
+                                                 operation_id=op, worker=self.worker)
+            else:
+                effect = effects.begin_standing_effect(conn, b, effects.request("guild.build.publish_update", canonical),
+                                                       operation_id=op, worker=self.worker)
+        try:
+            landed = durable_files.read_doc(writer.path(local_date))
+            # Write on the first attempt, or when reconciling an unfinished one whose write didn't land. A retry of a
+            # finished operation only reads back: it never writes twice.
+            if effect is not None or (lease is not None and (not landed or landed.get("detail") != detail)):
+                landed = writer.publish(local_date, state="partial", items=[], count=1, detail=detail,
+                                        covers_to=writer.now())
+            on_disk = durable_files.read_doc(writer.path(local_date))
+        except Exception:
+            _log.exception("mc tools: build update outcome unknown")
+            if effect is not None:
+                with self._tx() as conn:
+                    effect.unknown(conn)
+            return result("unknown", "update_unconfirmed", "MiniMoi could not confirm the build update was saved. Do "
+                          "not repeat it; tell Robert.")
+        verified = bool(on_disk) and on_disk.get("digest") == landed.get("digest") and on_disk.get("detail") == detail
+        outcome = {"state": "published" if verified else "refused", "local_date": local_date,
+                   "seq": (on_disk or {}).get("seq")}
+        with self._tx() as conn:
+            if effect is not None:
+                receipt = effect.finish(conn, "guild_build_publish_update", outcome, verified=verified)
+            elif lease is not None:
+                evidence = effects.record_evidence(conn, b.context(), op, "guild_build_publish_update", outcome)
+                effects.RECEIPTS.finish(conn, lease, "verified" if verified else "failed", evidence_refs=(evidence,))
+                receipt = effects.RECEIPTS.read(conn, self.principal, self.environment, op)
+            else:
+                receipt = effects.RECEIPTS.read(conn, self.principal, self.environment, op)
+        if not verified:
+            return result("refused", "update_not_verified", "The build update did not read back; nothing is claimed.",
+                          {"receipt_id": str(receipt["receipt_id"])})
+        return result("done", "published", f"Build update published for {local_date} (revision {on_disk['seq']}). "
+                      "CoS reads it; tell Robert in a few words what you reported.",
+                      {"local_date": local_date, "seq": on_disk["seq"], "receipt_id": str(receipt["receipt_id"])})
 
     def _register_effect(self, caller, b, op, capability, canonical, write, code):
         """Tier-2 file effect on MC's work register (§10.1): dispatched receipt first, the store's own request-id

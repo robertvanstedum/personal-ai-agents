@@ -118,3 +118,7 @@ def test_cos_voice_records_outside_data_are_backed_up_and_never_mounted_into_her
     scheduler = " ".join(str(v) for v in services["cos-scheduler"].get("volumes") or [])
     agent = " ".join(str(v) for v in services["cos-agent-a"].get("volumes") or [])
     assert "/cos_voice:/app/data/cos-voice" in scheduler and "cos_voice" not in agent
+def test_the_cos_store_and_conversation_history_are_in_the_daily_backup():
+    # CoS 1.2 spec v0.3 section 4.21: authoritative, outside data/, written only by cos-scheduler.
+    assert 'rsync_path "/opt/minimoi/cos/store/"' in LOCAL
+    assert 'rsync_path "/opt/minimoi/cos/conversations/"' in LOCAL

@@ -503,6 +503,7 @@ def agent_asker(asks):
 def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, show=None, read_shown=None,
                   read_owner_note=None, domain_health=None, registers=None, board=None, export_conversation=None, recall_source=None,
                   agent_ask=None):
+    from core.activity import config as activity_config
     from core.mc_tools.service import ToolService
     lessons = None
     if lessons_root and os.path.isabs(lessons_root) and lessons_env in ("dev", "prod"):
@@ -517,7 +518,11 @@ def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, sho
                        standard_changes=cfg["standard_changes"],
                        guests_lookup=_guests_lookup, policy=policy_source(cfg), read_owner_note=read_owner_note,
                        domain_health=domain_health, registers=registers, board=board, export_conversation=export_conversation, recall_source=recall_source,
-                       artifact_root=artifact_root(os.environ), agent_ask=agent_ask)
+                       artifact_root=artifact_root(os.environ), agent_ask=agent_ask,
+                       # MC's build update (CoS 1.2 spec section 4.4): MINIMOI_ACTIVITY_DIR names the portal's
+                       # data/activity/guild-build/ folder; off unless it and MINIMOI_ACTIVITY_ENVIRONMENT are set.
+                       activity_update=activity_config.writer_from_environ(
+                           domain="guild-build", part="update", metric="build_update", service="minimoi-portal"))
 
 
 def artifact_root(environ):

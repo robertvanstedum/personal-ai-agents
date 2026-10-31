@@ -341,6 +341,13 @@ def _save_drill_pool(pool: dict) -> None:
     pool_path.write_text(json.dumps(pool, indent=2, ensure_ascii=False))
 
 
+def _publish_activity() -> None:
+    """German's activity record for CoS (CoS 1.2 spec section 4.3), after each save. Off unless configured; never
+    fails the save it follows (domains/german/activity.py)."""
+    from domains.german import activity
+    activity.after_save()
+
+
 def _load_phrasebook() -> dict:
     data = safe_read_json(_PHRASEBOOK_FILE)
     return data if data else {"phrases": []}
@@ -1440,6 +1447,7 @@ def save_writing_entry(mode: str, text_original: str, text_corrected: str = "",
     data.setdefault("entries", []).append(entry)
     data["entries"] = data["entries"][-50:]
     safe_write_json(path, data)
+    _publish_activity()
     return entry
 
 
@@ -1509,6 +1517,7 @@ def save_drill_result(phrase_id: str, result: str, user: str = DEFAULT_USER, use
             if result == "correct" and entry.get("practice_count", 0) >= 5:
                 entry["status"] = "review_ready"
             _save_phrasebook(data)
+            _publish_activity()
             return entry
     return {}
 
@@ -2072,6 +2081,7 @@ def analyse_session(
         "session_id": session_id,
         "user_id": user_id,
         "date": date_str,
+        "created_at": ts.astimezone().isoformat(timespec="seconds"),
         "persona": persona_name,
         "scenario": scene,
         "duration_estimate_min": max(1, len(transcript) // 300),
@@ -2083,6 +2093,7 @@ def analyse_session(
     }
     session_path = _SESSIONS_DIR / f"{file_stem}.json"
     safe_write_json(session_path, session)
+    _publish_activity()
 
     update_persona_memory(
         user=str(user_id) if user_id is not None else "anonymous",
@@ -2111,12 +2122,14 @@ def save_review_session(transcript: str, persona_name: str, scene: str,
     """
     user_id = _require_numeric_user_id(user_id)
 
-    date_str = datetime.datetime.now().strftime("%Y-%m-%d")
+    now = datetime.datetime.now()
+    date_str = now.strftime("%Y-%m-%d")
     file_stem = _next_session_filename(date_str)
     session_id = f"session_{file_stem}"
     session_data = {
         "session_id": session_id,
         "date": date_str,
+        "created_at": now.astimezone().isoformat(timespec="seconds"),
         "persona": persona_name,
         "scenario": scene,
         "duration_estimate_min": max(1, len(transcript) // 300),
@@ -2129,6 +2142,7 @@ def save_review_session(transcript: str, persona_name: str, scene: str,
         "user_id": user_id,
     }
     safe_write_json(_SESSIONS_DIR / f"{file_stem}.json", session_data)
+    _publish_activity()
     return session_id
 
 

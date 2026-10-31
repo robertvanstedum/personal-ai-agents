@@ -208,6 +208,7 @@ def _pt_save_writing_entry(user_id, mode: str, text_original: str,
     data["entries"] = data["entries"][-50:]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    _publish_activity()
     return entry
 
 
@@ -245,6 +246,14 @@ def _pt_save_conversas_session(user_id, session_data: dict) -> None:
     data["sessions"] = data["sessions"][-100:]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    _publish_activity()
+
+
+def _publish_activity() -> None:
+    """Portuguese's activity record for CoS (CoS 1.2 spec section 4.3), after each save. Off unless configured;
+    never fails the save it follows (domains/portuguese/activity.py)."""
+    from domains.portuguese import activity
+    activity.after_save()
 
 
 def _pt_get_conversas_sessions(user_id, limit: int = 10) -> list:

@@ -1,0 +1,17 @@
+{
+  "description": "Spec v0.3 section 4.1: data_scope against the names existing systems already use. Used only through adapters; no new record writes a legacy name in place of data_scope.",
+  "mappings": [
+    {
+      "data_scope": "personal",
+      "vault_scope": "robert",
+      "harness_principal_id": "robert",
+      "rooms_database": "the personal Rooms database (records.sqlite3 of this deployment)"
+    }
+  ],
+  "sources": {
+    "vault_scope": "core/memory_shelf/record.py:22 (robert or mandate:<id>)",
+    "harness_scope": "core/mc_delegation_runner/envelope.py:19 (execution scope, a different meaning)",
+    "harness_principal_id": "MINIMOI_MC_DELEGATION_PRINCIPAL=robert, docker-compose.prod.yml:302"
+  },
+  "deferred": "Cross-deployment disclosure. Rooms' disclosure_grants work within one Rooms database only."
+}

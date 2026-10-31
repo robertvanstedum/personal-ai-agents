@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:cos:seat-binding",
+  "title": "Seat binding on every CoS tool call",
+  "description": "Spec v0.3 section 4.14 and N10. Reuses the shape of MC's mc-actions binding (docker/cos-agent-a/plugins/mc-actions/index.mjs: session_key, run_id, dispatch_id, generation, context_reference, token from a file). The server maps the session to its seat; the model never names one. tool_arguments is what the model may supply and can never carry authority.",
+  "oneOf": [
+    { "$ref": "#/$defs/binding" },
+    { "$ref": "#/$defs/tool_arguments" }
+  ],
+  "$defs": {
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "session_key", "run_id", "dispatch_id", "generation", "context_reference", "seat", "actor", "origin"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.seat_binding/1" },
+        "session_key": { "type": "string", "minLength": 8, "maxLength": 256 },
+        "run_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+        "dispatch_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+        "generation": { "type": "integer", "minimum": 0 },
+        "context_reference": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "seat": { "$ref": "urn:minimoi:contract:cos:common#/$defs/seat" },
+        "actor": { "$ref": "urn:minimoi:contract:cos:common#/$defs/actor" },
+        "origin": { "$ref": "urn:minimoi:contract:cos:common#/$defs/origin" },
+        "grant_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/nullable_typed_ref" }
+      }
+    },
+    "tool_arguments": {
+      "description": "A CoS tool call's model-supplied arguments, wrapped. Any authority-bearing key is refused here, whatever the tool.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "tool", "arguments"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.tool_arguments/1" },
+        "tool": { "type": "string", "pattern": "^cos\\.[a-z_]+(\\.[a-z_]+)*$" },
+        "arguments": {
+          "type": "object",
+          "propertyNames": {
+            "not": {
+              "enum": [
+                "seat", "actor", "origin", "grant_ref", "session_key", "data_scope", "environment",
+                "principal", "owner", "executor", "operation_id", "command_id", "expected_revision",
+                "provenance", "approval", "tier", "basis_ref"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

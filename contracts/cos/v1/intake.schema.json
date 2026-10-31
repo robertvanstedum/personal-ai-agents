@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:cos:intake",
+  "title": "intake.submit_v1: one intake operation",
+  "description": "Spec v0.3 section 4.18. Backed by the Guild Build Queue's existing writer (domains/guild/queue_store.py, unplanned idea). Intake and admission stay apart: a harness item later records intake_id, and the queue item records admitted_as. No cutover in 1.2, no dual-write, and no raw idea turned into an executable job.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "intake_id", "data_scope", "environment", "from_seat", "title", "words_ref", "kind"],
+  "properties": {
+    "schema": { "const": "minimoi.cos.intake_submit/1" },
+    "intake_id": { "type": "string", "pattern": "^INT-[A-Za-z0-9_-]{1,64}$" },
+    "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
+    "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" },
+    "from_seat": { "$ref": "urn:minimoi:contract:cos:common#/$defs/seat" },
+    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "words_ref": {
+      "description": "Where the idea was said: Robert's turn, or the seat's own turn.",
+      "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref"
+    },
+    "kind": { "enum": ["idea", "request", "investigation"] },
+    "admitted_as": {
+      "description": "Set later, by the queue's writer, when the idea is admitted as harness work. Never set at submit.",
+      "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref"
+    }
+  },
+  "not": {
+    "anyOf": [
+      { "required": ["admitted_as"] },
+      { "required": ["route"] },
+      { "required": ["worker"] },
+      { "required": ["budget"] }
+    ]
+  }
+}

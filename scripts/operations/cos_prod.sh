@@ -37,6 +37,10 @@ prepare() {
   # Written by CoS's runtime.
   install -d -m 0750 -o 1000 -g 1000 "$COS/outbox" "$COS/planning-studio"
   install -d -m 0750 -o root -g 1000 "$KEY_DIR"
+  # CoS 1.2 (spec v0.3 sections 4.5, 4.19): the store and the canonical history, written only by cos-scheduler (root)
+  # and read by CoS's runtime through group 1000. The setgid bit makes every file and folder the writer creates
+  # inherit group 1000 (domains/cos/store/fsio.py keeps it on new folders); files are 0640, folders 0750.
+  install -d -m 2750 -o root -g 1000 "$COS/store" "$COS/conversations/history"
   # Planning Studio working copy, seeded once from MC's read-only repo clone (refreshed nightly by MC's cron).
   if [[ -d "$ROOT/mc/repo/planning-studio" && -z "$(ls -A "$COS/planning-studio")" ]]; then
     cp -R "$ROOT/mc/repo/planning-studio/." "$COS/planning-studio/"

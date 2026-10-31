@@ -1,0 +1,40 @@
+{
+  "schema": "minimoi.activity.v2",
+  "data_scope": "personal",
+  "environment": "prod",
+  "domain": "german",
+  "part": "main",
+  "local_date": "2026-10-30",
+  "tz": "America/Chicago",
+  "generation": "8f0c2a91",
+  "seq": 5,
+  "digest": "sha256:c3f8f15ea1564a90a3f5756c16625a668a9159b9d7257d34a1f00fa775154db4",
+  "producer": {
+    "host": "prod-ec2-1",
+    "service": "minimoi-german",
+    "image_tag": "1.2.0",
+    "commit": "4f531c6f"
+  },
+  "metric": "sessions_completed",
+  "observation": {
+    "state": "complete",
+    "covers": {
+      "from": "2026-10-30T00:00:00-05:00",
+      "to": "2026-10-30T23:59:59-05:00"
+    },
+    "source_checked_at": "2026-10-31T00:20:00-05:00",
+    "final": true
+  },
+  "published_at": "2026-10-31T00:20:01-05:00",
+  "count": 0,
+  "items": [],
+  "items_total": 0,
+  "items_truncated": false,
+  "withdrawn": [
+    "german-sess-2026-10-30_001"
+  ],
+  "health": {
+    "writer_last_ok": "2026-10-31T00:20:01-05:00",
+    "last_error": null
+  }
+}

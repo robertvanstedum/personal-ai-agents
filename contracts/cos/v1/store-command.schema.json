@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:cos:store-command",
+  "title": "CoS store command and result",
+  "description": "Spec v0.3 section 4.5. The only way to change the CoS store. Sent by the agent, Telegram's in-process CoS and the scheduler's jobs to the CoS backend's internal command API. A repeated command_id with the same payload_digest returns the first receipt; the same id with a different digest is refused (code command_id_reused). Saved means accepted after read-back.",
+  "oneOf": [
+    { "$ref": "#/$defs/command" },
+    { "$ref": "#/$defs/result" }
+  ],
+  "$defs": {
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "command_id", "kind", "target", "expected_revision", "actor", "seat", "origin", "basis_ref", "payload", "payload_digest", "data_scope", "environment"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.store_command/1" },
+        "command_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+        "kind": {
+          "enum": [
+            "goal.put", "plan.put", "obligation.define", "obligation.event", "episode.event",
+            "decision.record", "correction.record", "meeting.link", "commitment.open",
+            "fact.record"
+          ]
+        },
+        "target": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
+        "expected_revision": {
+          "description": "The revision the sender read. null only when creating. Append-only kinds (events, decisions, corrections) carry the stream's revision.",
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "actor": { "$ref": "urn:minimoi:contract:cos:common#/$defs/actor" },
+        "seat": {
+          "description": "From the server session (section 4.14). null for Robert acting directly and for scheduler housekeeping.",
+          "oneOf": [{ "$ref": "urn:minimoi:contract:cos:common#/$defs/seat" }, { "type": "null" }]
+        },
+        "origin": { "$ref": "urn:minimoi:contract:cos:common#/$defs/origin" },
+        "basis_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/nullable_typed_ref" },
+        "payload": { "type": "object" },
+        "payload_digest": { "$ref": "urn:minimoi:contract:cos:common#/$defs/digest" },
+        "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
+        "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "goal.put" } } }, "then": { "properties": { "target": { "properties": { "type": { "const": "cos.goal" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/goal" } } } },
+        { "if": { "properties": { "kind": { "const": "plan.put" } } }, "then": { "properties": { "target": { "properties": { "type": { "const": "cos.plan" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/plan" } } } },
+        { "if": { "properties": { "kind": { "const": "obligation.define" } } }, "then": { "properties": { "target": { "properties": { "type": { "const": "cos.obligation" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/obligation_definition" } } } },
+        { "if": { "properties": { "kind": { "const": "obligation.event" } } }, "then": { "properties": { "target": { "properties": { "type": { "const": "cos.occurrence" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/obligation_event" } } } },
+        { "if": { "properties": { "kind": { "const": "episode.event" } } }, "then": { "properties": { "target": { "properties": { "type": { "const": "cos.episode" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/episode_event" } } } },
+        { "if": { "properties": { "kind": { "const": "decision.record" } } }, "then": { "required": ["basis_ref"], "properties": { "basis_ref": { "type": "object" }, "target": { "properties": { "type": { "const": "cos.decision" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/decision" } } } },
+        { "if": { "properties": { "kind": { "const": "correction.record" } } }, "then": { "properties": { "target": { "properties": { "type": { "const": "cos.correction" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/correction" } } } },
+        { "if": { "properties": { "kind": { "const": "fact.record" } } }, "then": { "properties": { "target": { "properties": { "type": { "const": "cos.fact" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/standing_fact" } } } },
+        { "if": { "properties": { "kind": { "const": "meeting.link" } } }, "then": { "properties": { "target": { "properties": { "type": { "const": "cos.meeting" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/meeting_link" } } } },
+        {
+          "if": { "properties": { "kind": { "const": "commitment.open" } } },
+          "then": {
+            "description": "N1: the commitment behind 'I'll follow up'. A once obligation owed by CoS, based on Robert's turn. Only after accepted does the reply carry the platform's fixed promise line.",
+            "properties": {
+              "origin": { "const": "owner_turn" },
+              "seat": { "const": "cos" },
+              "basis_ref": { "type": "object", "properties": { "type": { "enum": ["cos.turn", "telegram.message"] } } },
+              "target": { "properties": { "type": { "const": "cos.obligation" } } },
+              "payload": {
+                "$ref": "urn:minimoi:contract:cos:store-records#/$defs/obligation_definition",
+                "properties": {
+                  "who": { "const": "cos" },
+                  "recurrence": { "properties": { "kind": { "const": "once" } } },
+                  "practice_period": { "const": "until_due" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "origin": { "const": "owner_turn" } } },
+          "then": { "required": ["basis_ref"], "properties": { "basis_ref": { "type": "object" } } }
+        }
+      ]
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "command_id", "outcome"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.store_result/1" },
+        "command_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+        "outcome": { "enum": ["accepted", "conflict", "refused", "failed"] },
+        "revision": { "$ref": "urn:minimoi:contract:cos:common#/$defs/revision" },
+        "receipt_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+        "replayed": {
+          "description": "true when a repeated command_id with the same digest returned the first receipt.",
+          "type": "boolean"
+        },
+        "current_revision": { "$ref": "urn:minimoi:contract:cos:common#/$defs/revision" },
+        "code": {
+          "description": "Fixed codes: command_id_reused, transition_not_allowed, wrong_scope, wrong_environment, not_authorized, payload_invalid, robert_source_unverified, store_unavailable, read_back_mismatch.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "outcome": { "const": "accepted" } } }, "then": { "required": ["revision", "receipt_id", "replayed"], "not": { "required": ["code"] } } },
+        { "if": { "properties": { "outcome": { "const": "conflict" } } }, "then": { "required": ["current_revision"] } },
+        { "if": { "properties": { "outcome": { "enum": ["refused", "failed"] } } }, "then": { "required": ["code"], "not": { "required": ["receipt_id"] } } }
+      ]
+    }
+  }
+}

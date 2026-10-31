@@ -1,0 +1,21 @@
+{
+  "description": "Spec v0.3 section 4.6, confirmed against domains/cos/chief_of_staff.py at origin/main 4f531c6f (scheduler jobs :1841-1894, loop state :887-897). One owner per reminder. The spec's table named B, C, H and reminders; the code also runs D, F, G, I and R, listed here.",
+  "loops": [
+    { "id": "loop_a", "name": "career_focus_scout", "schedule": "disabled since 2026-09-01 (:1871-1878)", "becomes": "unchanged (disabled)" },
+    { "id": "loop_b", "name": "german_watch", "schedule": "cron Sunday 09:00 (:1879-1883)", "becomes": "stops when B3 takes over; its session reader moves into the German activity writer, reading the session's own date, not file mtime" },
+    { "id": "loop_c", "name": "curator_scout", "schedule": "cron Sunday 10:00 (:1884-1888)", "becomes": "stops when B3 takes over" },
+    { "id": "loop_d", "name": "novelty_watch", "schedule": "cron 1st and 15th, 08:00 (:1889-1893)", "becomes": "unchanged; not a reminder" },
+    { "id": "loop_f", "name": "build_discipline_check", "schedule": "cron daily 07:30 (:1841-1845)", "becomes": "unchanged in 1.2: it flags stale guild.design_log items, a different record from MC's update. Its output stays in cos_agenda and the picture may read it." },
+    { "id": "loop_g", "name": "guest_nudge_check", "schedule": "interval hourly (:1846-1850)", "becomes": "unchanged; not a CoS reminder" },
+    { "id": "loop_h", "name": "ec2_health_check", "schedule": "interval 30 min, production only (:1851-1855)", "becomes": "raises E1 incidents through raise_incident (section 4.10); its in-memory one-hour cooldown (:436-447) goes, replaced by the incident dedup_key" },
+    { "id": "loop_i", "name": "model_gateway_cost_check", "schedule": "cron daily 07:45 (:1859)", "becomes": "raises E3 incidents when spend passes the caps; otherwise unchanged" },
+    { "id": "loop_r", "name": "reminder_delivery", "schedule": "interval 1 min", "becomes": "migrates with domains/cos/reminders.py into obligations (recurrence once); one owner for every reminder" }
+  ],
+  "processes": [
+    { "process": "minimoi-cos-scheduler", "starts_loops": "yes: it is the CoS backend", "becomes": "the one process that runs the loops" },
+    { "process": "minimoi-cos-bot", "starts_loops": "hypothesis, from the code; no log confirms it: core/telegram/telegram_cos_bot.py:51,:143 imports domains.cos.chief_of_staff, whose _start_cos() runs at import (:1766, :1906) and starts the scheduler and a Telegram poll thread; the cos-bot image copies domains/cos (docker/Dockerfile.cos-bot) and compose sets neither COS_BACKGROUND_JOBS nor DISABLE_TELEGRAM_POLL (docker-compose.prod.yml:372-392), though /opt/minimoi/.env could. Only loop_r has a guard against a second copy (the reminder store lock).", "becomes": "imports nothing from chief_of_staff; it reaches CoS through the store client (domains/cos/store/client.py) and the backend's API, so exactly one scheduler process remains. Confirmed or refuted by the cos-bot startup log in the V-1 host visit." }
+  ],
+  "stores": [
+    { "id": "guild.cos_agenda", "becomes": "the loops' recommendation queue until B and C stop, then read-only history; the ledger points at its rows" }
+  ]
+}

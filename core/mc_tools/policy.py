@@ -73,6 +73,10 @@ HANDLERS = {
                                         "none"),
     "gap_record_v1": Handler("minimoi_record_gap", "work.record_gap", frozenset({2}), "register_readback_v1", "none",
                              "register_withdraw_v1"),
+    # MC's build update for CoS (CoS 1.2 spec section 4.4): the chased part of guild-build's activity record, written
+    # by code as MC's seat, read back by digest. Private, no egress, nothing granted by it.
+    "publish_update_v1": Handler("minimoi_publish_update", "guild.build.publish_update", frozenset({2}),
+                                 "activity_readback_v1", "none"),
     "gap_withdraw_v1": Handler("minimoi_withdraw_gap", "work.withdraw_gap", frozenset({2}), "register_readback_v1",
                                "none"),
     "github_read_v1": Handler("minimoi_github_issues", "github.issues.read", frozenset({1}), None, "github_read"),

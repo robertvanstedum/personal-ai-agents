@@ -91,6 +91,11 @@ rsync_path "/opt/minimoi/cos_reminders/"        "cos_reminders/"
 # Chief of Staff's voice records (Spec 165 §6.5; domains/cos/voice_store.py), beside cos_memory.md for the same
 # reason: cos-agent-a mounts data/ read-write and must not reach them.
 rsync_path "/opt/minimoi/cos_voice/"            "cos_voice/"
+# CoS 1.2 (spec v0.3 section 4.21): the CoS store and the canonical conversation history, both written only by
+# cos-scheduler outside data/. A copy taken mid-write is safe: the writers quarantine a torn last line on start and
+# resolve the journal. The store's derived/ is rebuilt after a restore, but is small enough to copy too.
+rsync_path "/opt/minimoi/cos/store/"            "cos-store/"
+rsync_path "/opt/minimoi/cos/conversations/"    "cos-conversations/"
 
 log "=== Local backup complete: ${LOCAL_BACKUP} ==="
 

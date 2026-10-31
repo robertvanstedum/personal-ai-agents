@@ -486,6 +486,9 @@ def record_feedback(
     print(f"   Style: {', '.join(metadata.get('style', []))}")
     if metadata.get('themes'):
         print(f"   Themes: {', '.join(metadata['themes'])}")
+    # Curator's activity record for CoS (CoS 1.2 spec section 4.3): off unless configured, never fails this save.
+    from domains.curator import activity
+    activity.after_save()
     return {"entry": feedback_entry, "duplicate": False}
 
 def update_learned_patterns(prefs, metadata, feedback_type):

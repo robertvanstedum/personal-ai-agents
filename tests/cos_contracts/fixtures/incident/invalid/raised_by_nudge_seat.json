@@ -1,0 +1,13 @@
+{
+  "schema": "minimoi.cos.incident_raise/1",
+  "class": "E1",
+  "dedup_key": "E1:prod-portal-down",
+  "evidence_ref": {
+    "type": "supervision.checkin",
+    "id": "chk-1"
+  },
+  "raised_by_seat": "scheduler",
+  "data_scope": "personal",
+  "environment": "prod",
+  "one_line": "Production portal not answering"
+}
