@@ -351,7 +351,7 @@ await check('B7 an answer lost on the way back is asked again as the same call a
   await r.s.start('openai');
   r.c.utter('Save a note: the kiln is hot');
   await r.s.check(); await flush();
-  assert.equal(r.c.instructions.at(-1), say('Saved.'));
+  assert.equal(r.c.instructions.at(-1), D.answerLine('Saved.'));                       // a consult's own words: data (S1)
   const ids = r.posts('/consult').map((p) => p.body.call_id);
   assert.equal(ids.length, 2); assert.equal(ids[0], ids[1]);
 });

@@ -412,9 +412,11 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False):
 
     Who asks for the confirmation differs by plumbing only, never by what he says (review v3 S6). ``page_asks`` (the
     bootstrap's page_responses: OpenAI, where the page creates every response): the page's own asking line is the
-    question, so the model never asks one itself; a request the app did not hear gets "I can't do that here", never a
-    question whose yes would reach nothing. Otherwise (xAI answers by itself, live probes) the model's own reply to a
-    request is the question: it asks briefly and naturally."""
+    question, and the model is told never to ask one itself; a request the app did not hear should get "I can't do that
+    here", never a question whose yes would reach nothing. Told is not kept: the v3 live check (31 Oct, fault 2) found
+    OpenAI asking anyway (4 of 4), so the page also sends CHAT_LINE beside such a response, and a yes after any voice
+    question with nothing waiting is told so on every provider (_stray). Otherwise (xAI answers by itself, live probes)
+    the model's own reply to a request is the question: it asks briefly and naturally."""
     name, short = person["name"], person["short"]
     request = f"When {owner} asks for a note, a post-it, or something only {short} can do (current facts, project state, " \
               "files, jobs, any work), "
