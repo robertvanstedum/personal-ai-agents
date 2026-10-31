@@ -91,6 +91,9 @@ model_list:
   # Dev choice, Robert 1 Nov 2026: active roles use OpenAI or Grok. Legacy
   # alias/receipt IDs remain stable; usage records report the actual provider/model.
   # ── Roles: the names callers ask for. To switch one, change its `<<:` line. ──
+  # Grok paused (#466, 31 Oct 2026): no role points at an xai-* tier. The route
+  # names keep their history (`-xai-fast`, `cos-xai-*` ids) so callers, fallbacks
+  # and receipts stay continuous; the merge line is what serves them.
   # A role sets only what is its own: timeout, effort where it must differ from
   # its tier (the latency routes run without reasoning), and its receipt
   # identity (model_info.id, fallback_position), which stays put across switches.
@@ -99,7 +102,7 @@ model_list:
     model_info: {id: cos-xai-grok43-primary, mode: chat, supports_function_calling: true, fallback_position: 0}
 
   - model_name: minimoi-cos-agent-xai-fast
-    litellm_params: {<<: *xai-low, timeout: 120, reasoning_effort: none}
+    litellm_params: {<<: *openai-low, timeout: 120, reasoning_effort: none}
     model_info: {id: cos-xai-fast, mode: chat, supports_function_calling: true, fallback_position: 1}
 
   - model_name: minimoi-cos-web-search

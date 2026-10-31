@@ -157,9 +157,10 @@ class ChallengerService:
             challenge_vars = {**context, "first_pass": first_pass}
             challenger_prompt = self._get_prompt(challenger_prompt_key, challenge_vars)
 
-            result.challenge_raw = self._call_xai(
-                result.challenger_model, challenger_prompt
-            )
+            # A claude-* challenger uses the same Anthropic call as round 3
+            # (Grok paused, #466); a grok-* model still goes to xAI.
+            call = self._call_anthropic if result.challenger_model.startswith("claude-") else self._call_xai
+            result.challenge_raw = call(result.challenger_model, challenger_prompt)
             result.challenge_points = self._parse_challenge_points(result.challenge_raw)
             result.challenged_count = len(result.challenge_points)
 

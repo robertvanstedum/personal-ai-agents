@@ -41,8 +41,8 @@ def test_curator_xai_cost_uses_current_grok_43_rates():
     assert calculate_xai_cost(65_000, 4_096) == pytest.approx(0.09149)
 
 
-def test_curator_haiku_cost_uses_current_45_rates():
-    assert calculate_haiku_cost(1_000_000, 1_000_000) == pytest.approx(6.00)
+def test_curator_haiku_cost_uses_current_55_rates():
+    assert calculate_haiku_cost(1_000_000, 1_000_000) == pytest.approx(0.60)
 
 
 def test_curator_xai_key_uses_shared_platform_secret_helper(monkeypatch):

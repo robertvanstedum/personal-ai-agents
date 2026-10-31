@@ -79,7 +79,7 @@ DEFAULT_WATCH_EXCLUDE_DIRS = (
     "tour-capture", "guild-prototype-evidence", "dist", "build",
 )
 DEFAULT_DEBOUNCE_SECONDS = 10
-DEFAULT_CLASSIFY_MODEL = "grok-4.3"
+DEFAULT_CLASSIFY_MODEL = "claude-haiku-5-5"  # Grok paused (#466, 31 Oct 2026)
 DEFAULT_CLASSIFY_REASONING_EFFORT = "none"   # Spec 159 economy tier: grok-4.3, effort none
 DEFAULT_MODEL_CALLS_PER_MINUTE = 6
 DEFAULT_MODEL_CALLS_PER_DAY = 60
@@ -520,9 +520,12 @@ def _call_classify_model(file_path: str, content: str) -> dict | None:
     model = cfg("classify_model", DEFAULT_CLASSIFY_MODEL)
     effort = cfg("classify_reasoning_effort", DEFAULT_CLASSIFY_REASONING_EFFORT)
     try:
+        # Claude through Anthropic's OpenAI-compatible endpoint; a grok-* model
+        # in devagent_config.json goes to xAI as before.
+        xai = model.startswith("grok-")
         client = OpenAI(
-            api_key=keyring.get_password("xai", "api_key"),
-            base_url="https://api.x.ai/v1",
+            api_key=keyring.get_password("xai" if xai else "anthropic", "api_key"),
+            base_url="https://api.x.ai/v1" if xai else "https://api.anthropic.com/v1/",
         )
     except Exception as e:
         log.debug("LLM client unavailable (%s) — using filename heuristic", e)
@@ -564,7 +567,8 @@ def _call_classify_model(file_path: str, content: str) -> dict | None:
                 f"Content preview:\n{content[:3000]}"
             )}],
             max_tokens=300,
-            temperature=0.1,
+            # Haiku 5.5 refuses `temperature`; Grok keeps its low setting.
+            **({"temperature": 0.1} if xai else {}),
         )
         raw = (resp.choices[0].message.content or "") if resp.choices else "{}"
         if "```" in raw:

@@ -175,8 +175,9 @@ def test_spec_md_makes_one_call_with_default_cheap_model(agent):
     assert cl["doc_type"] == "spec"
     assert _calls(agent) == 1
     kwargs = agent.client.chat.completions.create.call_args.kwargs
-    assert kwargs["model"] == "grok-4.3"
+    assert kwargs["model"] == "claude-haiku-5-5"  # Grok paused (#466)
     assert kwargs["reasoning_effort"] == "none"
+    assert "temperature" not in kwargs  # Haiku 5.5 refuses it
     # Queue behaviour for spec docs is unchanged: logged and notified.
     dev_agent.log_to_db.assert_called_once()
     assert dev_agent.log_to_db.call_args.kwargs["build_status"] == "spec_ready"
@@ -358,7 +359,7 @@ def test_receipt_line_written_without_content(agent):
     assert res["kind"] == "reservation" and res["path"] == "_working/spec_receipt.md"
     assert rec["kind"] == "outcome" and rec["reservation_id"] == res["id"]
     assert rec["path"] == "_working/spec_receipt.md"
-    assert rec["model"] == "grok-4.3"
+    assert rec["model"] == "claude-haiku-5-5"
     assert rec["reasoning_effort"] == "none"
     assert (rec["input_tokens"], rec["output_tokens"]) == (412, 37)
     assert rec["outcome"] == "ok"

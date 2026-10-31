@@ -101,7 +101,7 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
         'mechanical': 'mechanical (keyword)',
         'xai': xai_ranking_model,
         'grok-4.3': xai_ranking_model,
-        'haiku': 'claude-haiku-4-5',
+        'haiku': 'claude-haiku-5-5',
         'sonnet': 'claude-sonnet-4-5',
     }
     model_display = _escape(str(model_display_map.get(model, model)))

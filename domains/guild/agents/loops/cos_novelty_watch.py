@@ -28,9 +28,14 @@ def _load_context() -> dict:
         return json.load(f)
 
 
-def _grok_client() -> OpenAI:
-    api_key = keyring.get_password("xai", "api_key")
-    return OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
+# Grok is paused (#466, 31 Oct 2026): the scout asks Claude Haiku 5.5 through
+# Anthropic's OpenAI-compatible endpoint. Haiku 5.5 refuses `temperature`.
+_SCOUT_MODEL = "claude-haiku-5-5"
+
+
+def _scout_client() -> OpenAI:
+    api_key = keyring.get_password("anthropic", "api_key")
+    return OpenAI(api_key=api_key, base_url="https://api.anthropic.com/v1/")
 
 
 def _send_telegram(msg: str) -> None:
@@ -122,7 +127,7 @@ def run_novelty_watch() -> dict:
         for i, r in enumerate(results[:20])  # cap at 20 for prompt size
     ])
 
-    client = _grok_client()
+    client = _scout_client()
     prompt = (
         "Robert van Stedum has built mini-moi: a personal, local-first, model-agnostic "
         "AI agent platform with Curator (daily intelligence briefing), Mein Deutsch "
@@ -142,9 +147,8 @@ def run_novelty_watch() -> dict:
 
     try:
         resp = client.chat.completions.create(
-            model="grok-4.3",
+            model=_SCOUT_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
         )
         raw = resp.choices[0].message.content.strip()
         if "```" in raw:
