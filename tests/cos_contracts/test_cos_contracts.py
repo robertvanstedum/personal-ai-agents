@@ -160,9 +160,12 @@ def test_access_matrix_one_store_writer_and_agent_read_only():
     for svc, a in rows:
         if a["host_path"].startswith("data/activity/") and a["mode"] == "rw":
             writers.setdefault(a["host_path"], set()).add(svc)
-    assert writers.pop("data/activity/guild-build/") == {"supervisor", "portal"}
+    # S8: every activity folder has exactly one writer; guild-build's parts are separate folders.
     assert all(len(v) == 1 for v in writers.values()) and set(writers) == {
-        "data/activity/german/", "data/activity/portuguese/", "data/activity/curator/"}
+        "data/activity/german/", "data/activity/portuguese/", "data/activity/curator/",
+        "data/activity/guild-build/facts/", "data/activity/guild-build/update/"}
+    assert writers["data/activity/guild-build/facts/"] == {"supervisor"}
+    assert writers["data/activity/guild-build/update/"] == {"portal"}
 
 
 def test_capabilities_cost_nothing_and_issue_create_is_exact():
@@ -205,3 +208,20 @@ def test_legacy_mapping_and_loop_inventory_cover_the_spec():
     assert {"loop_b", "loop_c", "loop_h", "loop_r"} <= loops
     # One owner per loop: every process that imports chief_of_staff is named, so B1a/B3 can leave exactly one.
     assert {row["process"] for row in inventory["processes"]} == {"minimoi-cos-scheduler", "minimoi-cos-bot"}
+
+
+def test_issue_comment_and_close_stay_exact_until_the_charter():
+    # S6: section 9 item 6 is still Robert's.
+    by = {c["id"]: c for c in _load(CONTRACTS / "capabilities.json")["capabilities"]}
+    for cap in ("cos.issue.comment", "cos.issue.close"):
+        assert by[cap]["tier"] == "exact" and "charter" in by[cap]["becomes_standing_on"]
+
+
+def test_every_api_caller_has_its_own_token_and_actors():
+    # S4: one token file per calling service.
+    matrix = _load(CONTRACTS / "access-matrix.json")
+    callers = {s["service"] for s in matrix["services"]
+               if any(a.get("api", "").startswith("internal command") and a.get("mode") == "call" for a in s["access"])}
+    with_token = {s["service"] for s in matrix["services"]
+                  if any("store-token" in a.get("secret_file", "") for a in s["access"])}
+    assert callers <= with_token
