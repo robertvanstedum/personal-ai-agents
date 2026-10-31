@@ -568,6 +568,7 @@ function stopVoice(reason){
 function updateVoiceAvailability(){
   adoptDirect();
   const availability=conferVoiceAvailability({legacyReady,realtimeReady:Boolean(mode),mode});
+  if(window.cosVoiceConversationAllowed===false){button.disabled=true;dictation.setAvailable(availability.dictationReady);return;}
   if(direct){dictation.setAvailable(availability.dictationReady);direct.paint();return;}
   if(directRefusal){button.disabled=false;dictation.setAvailable(availability.dictationReady);provider.textContent='Voice unavailable · typing still works';return;}
   button.disabled=!availability.voiceReady||Boolean(stopping)||voiceRestartBlocked;
