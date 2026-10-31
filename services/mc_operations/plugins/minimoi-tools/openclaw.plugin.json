@@ -39,7 +39,8 @@
       "minimoi_agent_watch",
       "minimoi_agent_ask",
       "minimoi_career_trial",
-      "minimoi_recall"
+      "minimoi_recall",
+      "minimoi_publish_update"
     ]
   },
   "configSchema": {
