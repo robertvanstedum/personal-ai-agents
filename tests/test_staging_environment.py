@@ -490,14 +490,14 @@ def test_staging_gateway_keeps_production_names_and_settings():
     assert staged == {k: v for k, v in prod["litellm_settings"].items() if k != "callbacks"}
 
 
-def test_staging_cos_agent_route_matches_production_grok_and_other_routes_stay_stable():
+def test_staging_cos_agent_route_matches_production_and_other_routes_stay_stable():
     staging, prod, dev = _routes(GATEWAY_STAGING), _routes(GATEWAY_PROD), _routes(GATEWAY_DEV)
     agent = staging["minimoi-cos-agent"]
-    model = "xai/grok-4.3"  # D27 readiness: match the tested production model.
-    assert agent["litellm_params"]["model"] == model
+    # D27 readiness: staging serves CoS with production's model and effort, whichever tier that is (#458).
+    for key in ("model", "reasoning_effort"):
+        assert agent["litellm_params"][key] == prod["minimoi-cos-agent"]["litellm_params"][key], key
     # Gateway-only provider key names on staging (the pass-through gap; MC stage C).
-    assert agent["litellm_params"]["api_key"] == "os.environ/GATEWAY_XAI_API_KEY"
-    assert agent["litellm_params"]["reasoning_effort"] == "low"
+    assert agent["litellm_params"]["api_key"].startswith("os.environ/GATEWAY_")
     assert agent["model_info"]["id"] == "cos-xai-grok43-primary"
     assert set(agent["model_info"]) == set(prod["minimoi-cos-agent"]["model_info"])
     assert agent["model_info"]["fallback_position"] == 0

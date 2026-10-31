@@ -54,9 +54,10 @@ def test_gateway_has_one_logical_primary_and_ordered_fallbacks():
         f"minimoi-{provider}-{tier}": model for (provider, tier), model in TIERS.items()
     }
     assert {name: model for name, model in deployments.items() if name.startswith("minimoi-cos")} == {
-        "minimoi-cos-agent": "xai/grok-4.3",
-        "minimoi-cos-agent-xai-fast": "xai/grok-4.3",
-        "minimoi-cos-web-search": "xai/grok-4.3",
+        # Grok paused (#466): CoS on Haiku 5.5, its first fallback and web search on GPT-6 Luna.
+        "minimoi-cos-agent": "anthropic/claude-haiku-5-5",
+        "minimoi-cos-agent-xai-fast": "openai/gpt-6-luna",
+        "minimoi-cos-web-search": "openai/gpt-6-luna",
         "minimoi-cos-agent-anthropic": "anthropic/claude-sonnet-5-5",
         "minimoi-cos-agent-local": "ollama_chat/qwen3:4b",
     }
@@ -136,7 +137,7 @@ def test_bounded_search_uses_gateway_credential_boundary():
         / "docker/cos-agent-a/plugins/cos-bounded-search/index.ts"
     ).read_text()
 
-    assert search_route["litellm_params"]["model"] == "xai/grok-4.3"
+    assert search_route["litellm_params"]["model"] == "openai/gpt-6-luna"  # Grok paused (#466)
     assert search_route["model_info"]["supports_web_search"] is True
     assert '"provider": "minimoi"' in agent_config
     assert "minimoi-cos-web-search" in plugin

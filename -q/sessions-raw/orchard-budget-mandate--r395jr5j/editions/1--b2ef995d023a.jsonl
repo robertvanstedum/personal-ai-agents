@@ -1,0 +1,3 @@
+{"format": "minimoi-session-turns/1", "identity": "source", "malformed_lines": 0, "omitted": {}, "provider": "grok", "redacted_turns": 0, "source_bytes": 1000, "source_id": "synthetic-private-mandate", "source_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}
+{"basis": "export", "line": 1, "ordinal": 1, "sha256": "37bd835ae2d4db57bf2185d6ed0ef8ac35b5bae2c7f8c413a6e0bbef3b96947d", "speaker": "human", "text": "Mandate-scoped note: the orchard budget is forty dollars."}
+{"basis": "export", "line": 2, "ordinal": 2, "sha256": "2a68e6cd8f89610675108006bb43212b0f785a3eb157fd8526caa552e76c9e96", "speaker": "assistant", "text": "Understood; the orchard budget stays inside the mandate."}

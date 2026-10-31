@@ -1,0 +1,3 @@
+{"format": "minimoi-session-turns/1", "identity": "source", "malformed_lines": 0, "omitted": {}, "provider": "claude-ai", "redacted_turns": 0, "source_bytes": 1000, "source_id": "synthetic-export-1", "source_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}
+{"basis": "export", "line": 1, "ordinal": 1, "sha256": "e4318cbb40bc65ce9e7e65a666bcb9725ea620a3f4a14caf6b714c72119d6e8d", "speaker": "human", "text": "What should I name the compost heap? The word zymurgy keeps coming to mind."}
+{"basis": "export", "line": 2, "ordinal": 2, "sha256": "da7d63811c06dc067d3c1a74f2fa91fccba237e21c248459bb077f0d8b35ed16", "speaker": "assistant", "text": "Call it the Heap of Many Thanks."}

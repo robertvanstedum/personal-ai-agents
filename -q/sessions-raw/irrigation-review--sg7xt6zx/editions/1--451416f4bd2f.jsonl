@@ -1,0 +1,4 @@
+{"format": "minimoi-session-turns/1", "identity": "source", "malformed_lines": 0, "omitted": {}, "provider": "codex", "redacted_turns": 0, "source_bytes": 1000, "source_id": "synthetic-review", "source_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
+{"basis": "event_msg", "line": 1, "ordinal": 1, "sha256": "cbaae5d7eaf6c522aff6d4882e48051102e8a07cff3511276f0e2f4dc741d0b9", "speaker": "human", "text": "Review the irrigation schedule for the north bed."}
+{"basis": "event_msg", "line": 2, "ordinal": 2, "sha256": "349f91b1b921711f97f65bbfddada0b8aa345b13c8883aade43c4ac3e7bcf7cf", "speaker": "assistant", "text": "The schedule waters twice daily; once at dawn is enough in October."}
+{"attrs": {"class": "handoff"}, "basis": "handoff", "line": 3, "ordinal": 3, "sha256": "d614daaf97a94f53770bccbef7e4c7971054849bd8adad14d543667907f475dd", "speaker": "coordination", "text": "handoff to claude-code: apply the dawn-only schedule"}

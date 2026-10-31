@@ -20,14 +20,17 @@ Each tier is also a route that can be called by name, for example to measure a m
 
 ## The roles and where they point now
 
+**Grok is paused (#466, from 31 Oct 2026): no role points at an `xai-*` tier.** The xAI tiers stay configured, so
+resuming Grok is the same one-line switch.
+
 | Role | Caller | Tier | Own settings |
 |---|---|---|---|
-| `minimoi-cos-agent` | CoS (Agent A) | `xai-low` | fallback position 0 |
-| `minimoi-cos-agent-xai-fast` | CoS's first fallback | `xai-low` | effort `none` |
+| `minimoi-cos-agent` | CoS (Agent A) | `anthropic-low` (was `xai-low`) | fallback position 0 |
+| `minimoi-cos-agent-xai-fast` | CoS's first fallback (name kept for continuity) | `openai-low` | effort `none` |
 | `minimoi-cos-agent-anthropic` | CoS's second fallback | `anthropic-mid` | |
-| `minimoi-cos-web-search` | CoS's bounded search (`/v1/responses`) | `xai-low` | |
-| `minimoi-mc-agent` (staging only) | MC's provider route | `xai-low` | |
-| `minimoi-voice-summary`, `minimoi-voice-intent` (staging host, voice line) | voice | `xai-low` | effort `none` |
+| `minimoi-cos-web-search` | CoS's bounded search (`/v1/responses`) | `openai-low`: about $0.011 a search, against about $0.0005 on Grok | |
+| `minimoi-mc-agent` (staging only) | MC's provider route | `anthropic-low` | |
+| `minimoi-voice-summary`, `minimoi-voice-intent` (staging host, voice line) | voice | `anthropic-low` | effort `none` |
 
 **Not covered by the gateway:**
 - **Master Craftsman's own model:** set in its OpenClaw config (`docker/mc-agent-container/openclaw.json`), shipped by

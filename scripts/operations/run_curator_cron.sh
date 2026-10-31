@@ -5,7 +5,7 @@
 # (issue #35 investigation, 2026-08-07) lived. The old native-venv version of
 # this script had real Keychain access and never hit that bug at all — it
 # only validated the idempotency-check fix, not the crash itself.
-# Model: xAI grok-4.3 (--model=grok-4.3), typically ~$0.07-$0.09/day;
+# Model: Claude Haiku 5.5 (--model=haiku; Grok paused, #466), about $0.01/day;
 # fallback to mechanical scoring if the API is unavailable.
 # Runs hourly via the existing launchd job (com.vanstedum.curator, StartInterval=3600).
 #
@@ -58,9 +58,9 @@ echo "🚀 Starting curator briefing (docker) at $(date -u)"
 echo "🔖 Pulling new X bookmarks..."
 python -m scripts.x.x_pull_incremental 2>&1 || echo "⚠️  scripts.x.x_pull_incremental failed — continuing with existing signals"
 
-echo "🔖 Running RSS curation (grok-4.3)..."
+echo "🔖 Running RSS curation (haiku; Grok paused, #466)..."
 docker exec -e MINIMOI_ROLE=production minimoi-curator python domains/curator/curator_rss_v2.py \
-    --model=grok-4.3 --fallback --temperature=0.7
+    --model=haiku --fallback --temperature=0.7
 
 echo "📤 Sending Telegram briefing (system bot)..."
 docker exec -e MINIMOI_ROLE=production -e TELEGRAM_CHAT_ID=8379221702 minimoi-curator python core/telegram/telegram_bot.py --send

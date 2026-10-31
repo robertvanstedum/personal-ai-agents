@@ -26,9 +26,10 @@ def test_production_gateway_omits_development_only_ollama():
     }
 
     assert {name: model for name, model in deployments.items() if name.startswith("minimoi-cos")} == {
-        "minimoi-cos-agent": "xai/grok-4.3",
-        "minimoi-cos-agent-xai-fast": "xai/grok-4.3",
-        "minimoi-cos-web-search": "xai/grok-4.3",
+        # Grok paused (#466): CoS on Haiku 5.5, its first fallback and web search on GPT-6 Luna.
+        "minimoi-cos-agent": "anthropic/claude-haiku-5-5",
+        "minimoi-cos-agent-xai-fast": "openai/gpt-6-luna",
+        "minimoi-cos-web-search": "openai/gpt-6-luna",
         "minimoi-cos-agent-anthropic": "anthropic/claude-sonnet-5-5",
     }
     assert config["router_settings"]["fallbacks"] == [{
