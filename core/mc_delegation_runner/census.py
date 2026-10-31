@@ -1,0 +1,1007 @@
+"""The agent census (host runtime spec v0.5 §6.6, R6.6-a to R6.6-g; Robert, 28 Oct: "I'd like to see all of them").
+
+One record per agent instance: each child the runtime starts, each session a front-door connection or the fallback
+door starts, each queued turn of the Codex desktop app (F1), and every subagent a source exposes. Each is a row in a
+tree (``parent_id``), with where it runs, the work item it serves, its times, its state, and its usage as reported.
+
+* **File first** (R6.6-c). Every source appends events to ``artifact_root/census/<day>.jsonl`` on its host (the UTC day
+  of the event), fsynced, one ``event_id`` per line, under an exclusive ``flock`` on ``census/.lock`` (the runtime,
+  ``fakework``, the connections, the desktop queue and the Claude Code hook are separate processes). Each line carries
+  the SHA-256 of its own canonical form, as the pending records do. A line that does not check is counted as damaged,
+  shown, and never sent; the rest of the file stays readable. A torn last line is sealed with a newline before the
+  next append, so it never swallows the next event.
+* **Nothing waits on the census** (CEN-6, R6.6-e). The lock is only ever tried, never waited on without a bound: a
+  writer frozen while it holds it (the runtime freezes its child's whole group, and the child is a writer) stalls no
+  one. Readers take no lock: a day file only grows by whole lines, and a last line still being written is read once it
+  is whole. A write that cannot take the lock in time either fails (a child's: it goes on without that event, as a
+  vendor's failed hook would) or, for the runtime, is spilled to its own file (``census/deferred.<pid>.jsonl``,
+  fsynced, written by that process alone, so no lock is needed), sent with the next heartbeat all the same, and merged
+  into its day file once the lock is free (``append(defer=True)``, ``flush``), byte for byte and once: a restart merges
+  a dead process's spill the same way. Only when the spill cannot be written either is an event held in memory alone,
+  and the runtime records which (``memory_only``), so a crash leaves its gap named. An event too large for the census
+  is summarised by field (the names it drops are counted in ``launch.names_truncated``), never refused.
+* **Versioned** (R7.6-d). Every event carries ``schema`` (``CENSUS_SCHEMA``). An event of another version (an older
+  writer installed apart from the runtime: a connection, the bridge, the hook) is never read as this one: the host
+  flags it by its version (``foreign``) and sends it as written, and the authority refuses it naming its version
+  (``census_schema_unsupported:<schema>``). Version 1 was S1-F's first shape (no ``schema`` field, no
+  ``launch.names_truncated``); version 2 is this one.
+* **Sent with the heartbeat** (R3.2-a). The runtime sends unsent events in bounded batches, state changes first (a
+  capture gap, an end, a state other than running: so a backlog never leaves a frozen agent looking alive at the
+  authority), then the rest, oldest first, in bounded batches
+  (``BATCH_MAX_EVENTS``, ``BATCH_MAX_BYTES``; the door's body limit holds both with room for the facts), each exactly
+  as written (byte-faithful replay). The authority applies each once into ``guild.mc_delegation_events`` (no other
+  table) and answers per event; the answer is appended as an ``ack`` line in the event's own day file. An event the
+  authority rejects is acknowledged as rejected and never resent; a transport failure leaves every event unsent.
+* **Events, never inferences** (R6.6-a). ``census.start``, ``census.update`` (activity or a state change),
+  ``census.end``, and ``census.gap`` (the host's capture was interrupted: a runtime restart, or a wake from sleep).
+  ``started_at``, ``last_activity_at`` and ``ended_at`` are event times. Usage is what the vendor reported, with
+  ``complete``; unknown stays ``null``, never zero. No event carries content (prompts, completions, tool input),
+  an environment value or a secret: every field is a checked name, id, digest, path, number or fixed word.
+* **Derived at read time** (R6.6-b; ``Fold.rows``), in this order:
+    an agent's own end                                   as recorded (``done``/``failed`` with ``ended_at``;
+                                                         ``unknown`` with ``ended_at`` null: its end was not seen)
+    an ended parent (or ancestor), no end of its own     ``unknown: end_unobserved``, ``ended_at`` null
+    a parent whose process could not be verified          ``unknown: parent_unverified``
+    a row with no start seen, or whose parent's row is    ``unknown: parent_unknown``, never ``running``
+    not known
+    its host not reachable                               ``unknown: host_unreachable`` (``host_stopped`` when the
+                                                         host announced a stop), never ``running``
+    frozen (it, or the runtime child it runs inside,     ``idle: frozen``
+    was frozen after the latest gap)
+    no event since its host's latest capture gap         ``unknown: capture_gap``, until its next event
+    otherwise                                            its latest reported state
+  A wake gap covers every agent of the host (the whole host was suspended). A restart gap covers the agents the
+  runtime itself captures (its children and their subagents): the other sources write the file themselves and were
+  not interrupted by the runtime's restart.
+* **Seeing grants nothing** (R6.6-e): nothing here admits, claims, resumes or stops work, and no census answer is an
+  authority transition. **Swarms are recorded, never limited** (R6.6-f). **No model is called** (R6.6-g).
+* **Retention** (N3): an agent tree whose agents have all ended (their own end, or ``end_unobserved``) is dropped
+  ``RETENTION_DAYS`` after its last end. Only census events and census files are ever dropped; the authority's own
+  audit is never touched (``grant.step_bound`` rows enforce one grant operation per card step).
+* **Honest children** (R6.6-c): a source that exposes no subagent events says ``children: not_exposed``, never "no
+  children".
+
+Stdlib only; Python 3.9-compatible. ``fakework`` and the Claude Code hook load this file by its path, so it
+imports nothing from the package and uses no dataclass (a module loaded by path is not in ``sys.modules`` first).
+"""
+from __future__ import annotations
+
+import errno
+import fcntl
+import hashlib
+import json
+import math
+import os
+import re
+import threading
+import time
+import uuid
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+LINE_SCHEMA = 1                         # the line's envelope (type, v, sum)
+CENSUS_SCHEMA = "minimoi.census.v2"     # the event's shape; v1 was S1-F's first (no schema, no names_truncated)
+_SPILL = re.compile(r"^deferred\.(\d{1,10})\.jsonl$")
+_SCHEMA = re.compile(r"^[a-z][a-z0-9_.-]{0,40}$")
+KINDS = ("census.start", "census.update", "census.end", "census.gap")
+STATES = ("running", "idle", "done", "failed", "unknown")
+START_STATES = ("running", "idle", "unknown")
+END_STATES = ("done", "failed", "unknown")
+CHILDREN = ("exposed", "not_exposed")
+START_PATHS = ("runtime", "connection", "fallback")
+PROFILES = ("unattended", "supervised", "desktop_app")
+GAP_CAUSES = ("restart", "wake")
+UNITS = ("usd", "usd_notional", "minutes", "test_units")
+RETENTION_DAYS = 30                     # N3: census_retention_days, for ended agents
+BATCH_MAX_EVENTS = 200                  # one heartbeat's census batch (R3.2-a)
+BATCH_MAX_BYTES = 96 * 1024             # its serialized size; the door's body limit (160 KiB) keeps room for the facts
+EVENT_MAX_BYTES = 8 * 1024              # one event, as sent
+NAMES_MAX = 128                         # environment names kept in a launch summary, per list
+NAMES_BYTES_MAX = 1536                  # and at most this many bytes of them, as sent; the rest are counted, not kept
+READ_CHUNK = 4 * 1024 * 1024            # a day file is read this much at a time (no size limit: nothing is skipped)
+WRITE_WAIT_S = 2.0                      # a child's writer tries the lock this long, then goes on without the event
+RUNTIME_SOURCE = "runtime.child"        # the runtime's own capture: a restart gap covers these trees
+_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+_AT = re.compile(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})$")
+_AGENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,159}$")
+_WORD = re.compile(r"^[a-z][a-z0-9_.:-]{0,63}$")
+_VENDOR = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
+_MODEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$")
+_ROLE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$")
+_ROUTE = re.compile(r"^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*)*$")
+_LABEL = re.compile(r"^(subscription|test|api:[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*)*)$")
+_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}$")
+_SHA = re.compile(r"^sha256:[0-9a-f]{64}$")
+_PATH = re.compile(r"^(/|~/)[^\x00-\x1f\x7f]{0,1022}$")
+_DAY = re.compile(r"^(\d{4})-(\d{2})-(\d{2})\.jsonl$")
+START_KEYS = ("agent_id", "parent_id", "vendor", "model", "role", "item_id", "state", "reason", "usage", "source",
+              "verified", "children", "start_path", "route", "launch", "transcript_ref")
+UPDATE_KEYS = ("agent_id", "state", "reason", "usage", "model", "source")
+END_KEYS = ("agent_id", "state", "reason", "usage", "source")
+GAP_KEYS = ("cause", "from", "to")
+USAGE_KEYS = ("input_tokens", "output_tokens", "cost", "unit", "complete")
+LAUNCH_KEYS = ("launch_id", "tool", "profile", "route", "binary", "policy_sha256", "env_names", "removed", "governed",
+               "names_truncated")
+MERGED = ("parent_id", "vendor", "model", "role", "item_id", "source", "verified", "children", "start_path", "route",
+          "launch", "transcript_ref")
+
+
+class CensusRefused(ValueError):
+    """An event the census will not record or apply: a fixed code, never the event's content."""
+
+
+class CensusBusy(OSError):
+    """The census lock was not free within the writer's bound (another writer holds it, perhaps frozen)."""
+
+
+def _need(ok, code):
+    if not ok:
+        raise CensusRefused(code)
+
+
+# ── time ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+def parse_at(value) -> datetime:
+    """An event time: ISO 8601 with seconds and a zone, up to six fraction digits (the store's own rule, parsed here
+    rather than by datetime.fromisoformat, whose rules differ between Python 3.9 and later)."""
+    m = _AT.match(value) if type(value) is str and len(value) <= 40 else None
+    _need(m is not None, "census_at_invalid")
+    year, month, day, hour, minute, second, fraction, zone = m.groups()
+    try:
+        tz = timezone.utc if zone == "Z" else timezone(
+            (1 if zone[0] == "+" else -1) * timedelta(hours=int(zone[1:3]), minutes=int(zone[4:6])))
+        return datetime(int(year), int(month), int(day), int(hour), int(minute), int(second),
+                        int((fraction or "0").ljust(6, "0")), tzinfo=tz)
+    except ValueError:
+        raise CensusRefused("census_at_invalid") from None
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def iso(value):
+    return None if value is None else value.astimezone(timezone.utc).isoformat()
+
+
+# ── the event shapes (the authority checks with these too) ────────────────────────────────────────────────────────
+def _opt(value, check) -> bool:
+    return value is None or check(value)
+
+
+def _s(rx):
+    return lambda v: type(v) is str and rx.match(v) is not None
+
+
+def check_usage(u):
+    """{input_tokens, output_tokens, cost, unit, complete}, each null when not reported (never read as zero)."""
+    if u is None:
+        return None
+    _need(type(u) is dict and set(u) == set(USAGE_KEYS), "census_usage_invalid")
+    for k in ("input_tokens", "output_tokens"):
+        _need(u[k] is None or (type(u[k]) is int and 0 <= u[k] < 10 ** 12), "census_usage_invalid")
+    c = u["cost"]
+    _need(c is None or (type(c) in (int, float) and math.isfinite(c) and 0 <= c <= 10 ** 9), "census_usage_invalid")
+    _need(u["unit"] is None or u["unit"] in UNITS, "census_usage_invalid")
+    _need(c is None or u["unit"] is not None, "census_usage_unit_missing")       # a cost always says its unit
+    _need(u["complete"] is None or type(u["complete"]) is bool, "census_usage_invalid")
+    return u
+
+
+def check_launch(rec):
+    """The launch record's census form (R6.6-a ``launch``): names, digests and references only, never a value."""
+    if rec is None:
+        return None
+    _need(type(rec) is dict and set(rec) == set(LAUNCH_KEYS), "census_launch_invalid")
+    _need(_opt(rec["launch_id"], _s(_UUID)) and type(rec["tool"]) is str and _VENDOR.match(rec["tool"])
+          and rec["profile"] in PROFILES and _opt(rec["route"], _s(_ROUTE)) and type(rec["governed"]) is bool
+          and _opt(rec["policy_sha256"], _s(_SHA)), "census_launch_invalid")
+    b = rec["binary"]
+    _need(type(b) is dict and set(b) == {"path", "sha256", "pinned_by"} and _opt(b["path"], _s(_PATH))
+          and _opt(b["sha256"], _s(_SHA)) and type(b["pinned_by"]) is str and _WORD.match(b["pinned_by"]),
+          "census_launch_invalid")
+    for k in ("env_names", "removed"):
+        _need(type(rec[k]) is list and len(rec[k]) <= NAMES_MAX and all(type(n) is str and _NAME.match(n)
+                                                                        for n in rec[k])
+              and len(json.dumps(rec[k])) <= NAMES_BYTES_MAX, "census_launch_invalid")
+    _need(type(rec["names_truncated"]) is int and rec["names_truncated"] >= 0, "census_launch_invalid")
+    _need(not (rec["profile"] == "desktop_app" and rec["governed"]), "census_launch_desktop_governed")
+    return rec
+
+
+def check_transcript(t):
+    """Where the session's own transcript is kept ({kept: true, session_id, path}), or {kept: false, reason}."""
+    if t is None:
+        return None
+    _need(type(t) is dict and type(t.get("kept")) is bool, "census_transcript_invalid")
+    if t["kept"]:
+        _need(set(t) == {"kept", "session_id", "path"} and _s(_AGENT)(t["session_id"]) and _s(_PATH)(t["path"]),
+              "census_transcript_invalid")
+    else:
+        _need(set(t) == {"kept", "reason"} and _s(_WORD)(t["reason"]), "census_transcript_invalid")
+    return t
+
+
+def _check_body(kind, b):
+    if kind == "census.gap":
+        _need(type(b) is dict and set(b) == set(GAP_KEYS) and b["cause"] in GAP_CAUSES, "census_body_invalid")
+        if b["from"] is not None:
+            parse_at(b["from"])
+        parse_at(b["to"])
+        return
+    keys = {"census.start": START_KEYS, "census.update": UPDATE_KEYS, "census.end": END_KEYS}[kind]
+    _need(type(b) is dict and set(b) == set(keys), "census_body_invalid")
+    _need(_s(_AGENT)(b["agent_id"]) and _s(_WORD)(b["source"]) and _opt(b["reason"], _s(_WORD)), "census_body_invalid")
+    check_usage(b["usage"])
+    if kind == "census.start":
+        _need(b["state"] in START_STATES and _opt(b["parent_id"], _s(_AGENT)) and b["parent_id"] != b["agent_id"]
+              and _opt(b["vendor"], _s(_VENDOR)) and _opt(b["model"], _s(_MODEL)) and _opt(b["role"], _s(_ROLE))
+              and _opt(b["item_id"], _s(_UUID)) and type(b["verified"]) is bool and b["children"] in CHILDREN
+              and _opt(b["start_path"], lambda v: v in START_PATHS) and _opt(b["route"], _s(_LABEL)),
+              "census_body_invalid")
+        check_launch(b["launch"])
+        check_transcript(b["transcript_ref"])
+    elif kind == "census.update":
+        _need(_opt(b["state"], lambda v: v in START_STATES) and _opt(b["model"], _s(_MODEL)), "census_body_invalid")
+    else:
+        _need(b["state"] in END_STATES, "census_body_invalid")
+    _need(b["state"] != "unknown" or b["reason"] is not None, "census_unknown_without_reason")
+
+
+def event_schema(ev) -> str | None:
+    """The version an event says it is: its ``schema``, or version 1 for S1-F's first shape (which had none)."""
+    if type(ev) is not dict:
+        return None
+    if "schema" not in ev:
+        return "minimoi.census.v1" if set(ev) == {"event_id", "at", "kind", "body"} else None
+    return ev["schema"] if type(ev["schema"]) is str and _SCHEMA.match(ev["schema"]) else None
+
+
+def check_event(ev) -> dict:
+    """One census event as written and as sent: {event_id, at, kind, schema, body}, strictly; CensusRefused otherwise.
+    Another version is refused by its name (census_schema_unsupported:<schema>), never read as this one."""
+    version = event_schema(ev)
+    _need(version is not None, "census_event_invalid")
+    _need(version == CENSUS_SCHEMA, "census_schema_unsupported:" + version)
+    _need(set(ev) == {"event_id", "at", "kind", "schema", "body"}, "census_event_invalid")
+    _need(_s(_UUID)(ev["event_id"]) and ev["kind"] in KINDS, "census_event_invalid")
+    parse_at(ev["at"])
+    _check_body(ev["kind"], ev["body"])
+    try:
+        size = len(json.dumps(ev, separators=(",", ":")))
+    except (TypeError, ValueError):
+        raise CensusRefused("census_event_invalid") from None
+    _need(size <= EVENT_MAX_BYTES, "census_event_too_large")
+    return ev
+
+
+# ── builders (every source writes through these) ──────────────────────────────────────────────────────────────────
+def usage(*, input_tokens=None, output_tokens=None, cost=None, unit=None, complete=None) -> dict:
+    return {"input_tokens": input_tokens, "output_tokens": output_tokens, "cost": cost, "unit": unit,
+            "complete": complete}
+
+
+def start(agent_id, *, source, verified, children, parent_id=None, vendor=None, model=None, role=None, item_id=None,
+          state="running", reason=None, usage=None, start_path=None, route=None, launch=None,
+          transcript_ref=None) -> dict:
+    return {"agent_id": agent_id, "parent_id": parent_id, "vendor": vendor, "model": model, "role": role,
+            "item_id": item_id, "state": state, "reason": reason, "usage": usage, "source": source,
+            "verified": verified, "children": children, "start_path": start_path, "route": route, "launch": launch,
+            "transcript_ref": transcript_ref}
+
+
+def update(agent_id, *, source, state=None, reason=None, usage=None, model=None) -> dict:
+    return {"agent_id": agent_id, "state": state, "reason": reason, "usage": usage, "model": model, "source": source}
+
+
+def end(agent_id, *, source, state, reason=None, usage=None) -> dict:
+    return {"agent_id": agent_id, "state": state, "reason": reason, "usage": usage, "source": source}
+
+
+def gap(cause, to, frm=None) -> dict:
+    return {"cause": cause, "from": frm, "to": to}
+
+
+def kept(session_id, path) -> dict:
+    return {"kept": True, "session_id": session_id, "path": path}
+
+
+def not_kept(reason) -> dict:
+    return {"kept": False, "reason": reason}
+
+
+def route_label(name, entry) -> str | None:
+    """R6.6-a ``route``: ``subscription``, ``api:<route>`` or ``test``, from the launch policy's entry for the route the
+    item names (the exact route name stays in ``launch.route``)."""
+    if not isinstance(entry, dict):
+        return None
+    if entry.get("test") or entry.get("kind") == "test":
+        return "test"
+    if entry.get("kind") == "api":
+        return "api:" + name
+    return "subscription" if entry.get("kind") == "subscription" else None
+
+
+def names(given) -> tuple:
+    """(names kept, names dropped): sorted, at most NAMES_MAX of them and NAMES_BYTES_MAX bytes as sent. The dropped
+    ones are counted in the summary's ``names_truncated``, never dropped silently; the full lists stay in the launch
+    record on the host (``<task>.launch.json``, ``launch.jsonl``)."""
+    given = set(given)
+    every = sorted(n for n in given if isinstance(n, str) and _NAME.match(n))     # anything else is never a name
+    kept, size = [], 2
+    for n in every:
+        if len(kept) >= NAMES_MAX or size + len(n) + 4 > NAMES_BYTES_MAX:
+            break
+        kept.append(n)
+        size += len(n) + 4
+    return kept, len(given) - len(kept)
+
+
+def launch_summary(rec, *, governed=True) -> dict:
+    """A ``minimoi.launch.v1`` record (launch.record) in the census's form: the profile, the binary's digest, the
+    policy's digest, the names given and the names removed. Never a value."""
+    b = rec.get("binary") or {}
+    given, dropped_given = names(rec.get("env_names") or [])
+    removed, dropped_removed = names(rec.get("removed") or [])
+    return {"launch_id": rec.get("launch_id"), "tool": rec.get("tool"), "profile": rec.get("profile"),
+            "route": rec.get("route"), "binary": {"path": b.get("path"), "sha256": b.get("sha256"),
+                                                  "pinned_by": b.get("pinned_by") or "unknown"},
+            "policy_sha256": (rec.get("policy") or {}).get("sha256"), "env_names": given, "removed": removed,
+            "governed": governed, "names_truncated": dropped_given + dropped_removed}
+
+
+def fit(kind, body) -> dict:
+    """A start too large for one event, summarised by field instead of refused (the census never stops work): its
+    launch's name lists go first (counted in ``names_truncated``), then its long paths (the binary's path left null;
+    the transcript's, ``not_kept: path_too_long_for_census``). The launch record on the host keeps everything."""
+    if kind != "census.start" or not isinstance(body, dict):
+        return body
+
+    def size(b):
+        return len(json.dumps({"event_id": "0" * 36, "at": "0" * 32, "kind": kind, "schema": CENSUS_SCHEMA,
+                               "body": b}, separators=(",", ":")))
+    out = dict(body)
+    if isinstance(out.get("launch"), dict):                 # the name lists within their caps, the rest counted
+        lr = dict(out["launch"])
+        for k in ("env_names", "removed"):
+            if isinstance(lr.get(k), list):
+                kept, dropped = names(lr[k])
+                lr[k] = kept
+                if isinstance(lr.get("names_truncated"), int):
+                    lr["names_truncated"] += dropped
+        out["launch"] = lr
+    if size(out) <= EVENT_MAX_BYTES:
+        return out
+    if isinstance(out.get("launch"), dict):
+        lr = dict(out["launch"])
+        lr["names_truncated"] = int(lr.get("names_truncated") or 0) + len(lr.get("env_names") or []) + \
+            len(lr.get("removed") or [])
+        lr["env_names"], lr["removed"] = [], []
+        out["launch"] = lr
+        if size(out) > EVENT_MAX_BYTES:
+            lr["binary"] = {**(lr.get("binary") or {}), "path": None}
+    if size(out) > EVENT_MAX_BYTES and isinstance(out.get("transcript_ref"), dict) and out["transcript_ref"].get("kept"):
+        out["transcript_ref"] = not_kept("path_too_long_for_census")
+    return out
+
+
+# ── hook payloads (Claude Code's hooks; fakework's spawn writes the same shapes) ─────────────────────────────────────
+# SessionStart, PreToolUse and Stop are consumed in the repo already (spec R6.6-c): verified. These are not (N4).
+SUBAGENT_HOOKS = ("SubagentStart", "SubagentStop")
+
+
+def hook_events(payload, *, source, verified, subagents, vendor, start_path=None, route=None,
+                subagent_verified=False) -> list:
+    """The census events one hook payload means, as (kind, body). Only ids, the event's name and a transcript path
+    are read; everything else in the payload (prompts, tool input, messages) is never looked at. ``subagents`` is
+    False until a source's subagent events are confirmed against the installed version (N4): then a session says
+    ``children: not_exposed`` and subagent payloads write nothing. ``verified`` is whether this source's session events
+    are verified for the installed version; ``subagent_verified`` is the same for its subagent events (False for every
+    vendor until confirmed; True only for the runtime's own instrument, fakework)."""
+    if not isinstance(payload, dict):
+        return []
+    name, session = payload.get("hook_event_name"), payload.get("session_id")
+    if not (type(session) is str and _AGENT.match(session)):
+        return []
+    if name == "SessionStart":
+        path = payload.get("transcript_path")
+        ref = kept(session, path) if type(path) is str and _PATH.match(path) else None
+        return [("census.start", start(session, source=source, verified=verified, vendor=vendor, role="session",
+                                       children="exposed" if subagents else "not_exposed", start_path=start_path,
+                                       route=route, transcript_ref=ref))]
+    if name == "PreToolUse":
+        return [("census.update", update(session, source=source, state="running"))]
+    if name == "Stop":
+        return [("census.update", update(session, source=source, state="idle", reason="turn_ended"))]
+    if name in SUBAGENT_HOOKS and subagents:
+        agent = payload.get("agent_id")
+        if not (type(agent) is str and _AGENT.match(agent)) or agent == session:
+            return []
+        if name == "SubagentStart":
+            role = payload.get("agent_type")
+            return [("census.start", start(agent, parent_id=session, source=source, verified=subagent_verified,
+                                           vendor=vendor, role=role if type(role) is str and _ROLE.match(role) else None,
+                                           children="not_exposed"))]
+        return [("census.end", end(agent, source=source, state="done", reason="stop_observed"))]
+    return []
+
+
+# ── the day files ─────────────────────────────────────────────────────────────────────────────────────────────────
+def _canon(doc) -> bytes:
+    return json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def _sum(doc) -> str:
+    return hashlib.sha256(_canon({k: v for k, v in doc.items() if k != "sum"})).hexdigest()
+
+
+def _line(doc) -> bytes:
+    doc = {**doc, "v": LINE_SCHEMA}
+    doc["sum"] = _sum(doc)
+    return _canon(doc) + b"\n"
+
+
+def _wire(doc) -> dict:
+    """The event as written, without the line's envelope: exactly the keys its writer gave (any version)."""
+    return {k: v for k, v in doc.items() if k not in ("type", "v", "sum")}
+
+
+def _day_of(at) -> str:
+    return parse_at(at).astimezone(timezone.utc).date().isoformat()
+
+
+class CensusFile:
+    """The census folder of one host: its writers append, the runtime reads it incrementally (only bytes it has not
+    read, with no lock), keeps the fold and the unsent events, and writes the authority's answers back as ack lines.
+
+    The lock is only ever tried (``wait_s`` bounds the retries; 0 is one try). With ``defer=True`` (the runtime's own
+    writes) an event that cannot be written now is spilled to this process's own file, ``deferred.<pid>.jsonl`` (no
+    lock: one writer), fsynced: it is in the fold and in the next batch at once, and ``flush`` merges it into its day
+    file, with its answer if one came meanwhile, when the lock is free, then removes the spill. A spill left by a
+    process that died is read and merged the same way, each event once. ``problem`` says why the last write could not
+    be made (``deferred: lock_busy``, or ``unwritable`` with the error's code), until a flush leaves nothing waiting;
+    ``memory_only`` names the events not even the spill could keep."""
+
+    def __init__(self, root, *, clock=now_iso):
+        self.root = Path(root)
+        self._clock = clock
+        self._mu = threading.RLock()
+        self._offsets = {}            # file name -> bytes read (complete lines only)
+        self._unsent = {}             # event_id -> wire event not yet answered, in the order first seen
+        self._file_of = {}            # event_id -> file name, or None while it waits in memory (deferred)
+        self._deferred = {}           # event_id -> wire event not yet written to a file
+        self._answers = {}            # event_id -> an answer not yet written as an ack line
+        self._agents_in = {}          # file name -> agent ids with an event in it
+        self._files_of = {}           # agent id -> file names holding its events
+        self._gaps_in = {}            # file name -> gap event ids in it
+        self.damaged = {}             # file name -> lines that did not check (never sent)
+        self.problem = None           # {status, reason, since} while a write waits or failed; None when all is written
+        self.memory_only = {}         # event_id -> agent id (None for a gap): deferred, and not even spilled
+        self.foreign = {}             # schema -> lines of another census version (flagged, sent as written, refused)
+        self.fold = Fold()
+
+    # the lock: tried, never waited on without a bound
+    def _try_lock(self, wait_s):
+        self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        fd = os.open(self.root / ".lock", os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        deadline = time.monotonic() + max(0.0, wait_s)
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return fd
+            except OSError as exc:
+                if exc.errno not in (errno.EWOULDBLOCK, errno.EAGAIN, errno.EACCES) or time.monotonic() >= deadline:
+                    os.close(fd)
+                    if exc.errno in (errno.EWOULDBLOCK, errno.EAGAIN, errno.EACCES):
+                        raise CensusBusy(errno.EWOULDBLOCK, "census_lock_busy") from None
+                    raise
+                time.sleep(0.01)
+
+    def _append_line(self, name, line):
+        path = self.root / name
+        new = not path.exists()
+        fd = os.open(path, os.O_RDWR | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            size = os.fstat(fd).st_size
+            if size and os.pread(fd, 1, size - 1) != b"\n":
+                line = b"\n" + line                     # seal a torn last line: it never swallows this one
+            os.write(fd, line)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        if new:
+            dfd = os.open(self.root, os.O_RDONLY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
+
+    def _note(self, status, reason):
+        if self.problem is None or self.problem["status"] != status or self.problem["reason"] != reason:
+            self.problem = {"status": status, "reason": reason, "since": self._clock()}
+
+    def append(self, kind, body, *, at=None, event_id=None, wait_s=WRITE_WAIT_S, defer=False) -> dict:
+        """Write one event, checked (a start too large is summarised by field, never refused), fsynced. Without the
+        lock in ``wait_s``, or on a write error: raise (CensusBusy, OSError), or with ``defer``, keep it in memory to
+        send and write later. Returns it as it will be sent. CensusRefused only for a shape no writer of ours makes."""
+        ev = check_event({"event_id": event_id or str(uuid.uuid4()), "at": at or self._clock(), "kind": kind,
+                          "schema": CENSUS_SCHEMA, "body": fit(kind, body)})
+        line, name = _line({"type": "event", **ev}), _day_of(ev["at"]) + ".jsonl"
+        try:
+            fd = self._try_lock(wait_s)
+            try:
+                self._append_line(name, line)
+            finally:
+                os.close(fd)
+            with self._mu:
+                if not self._deferred and not self._answers:
+                    self.problem = None                   # a clean write with nothing waiting: no problem stands
+        except OSError as exc:
+            if not defer:
+                raise
+            with self._mu:
+                self._take_event(None, ev)
+                self._deferred[ev["event_id"]] = ev
+                try:
+                    self._spill(line)                     # durable without the lock: this process's own file
+                except OSError as spill_exc:
+                    self.memory_only[ev["event_id"]] = ev["body"].get("agent_id")
+                    exc = spill_exc
+            self._note(*(("deferred", "lock_busy") if isinstance(exc, CensusBusy) else
+                         ("unwritable", "os_error_%s" % (exc.errno or 0))))
+        return ev
+
+    def _spill_name(self) -> str:
+        return "deferred.%d.jsonl" % os.getpid()
+
+    def _spill(self, line):
+        """Append one event line to this process's spill file, fsynced (its name too, when new). One writer, no lock."""
+        self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path = self.root / self._spill_name()
+        new = not path.exists()
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            os.write(fd, line)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        if new:
+            dfd = os.open(self.root, os.O_RDONLY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
+
+    def flush(self, *, wait_s=0.0) -> bool:
+        """Write what waits in memory: deferred events (each followed by its answer when one came) and answers. True
+        when nothing waits any more. Never waits on the lock longer than ``wait_s``."""
+        with self._mu:
+            if not self._deferred and not self._answers and not self._spills():
+                return True
+        try:
+            fd = self._try_lock(wait_s)
+        except OSError as exc:
+            self._note(*(("deferred", "lock_busy") if isinstance(exc, CensusBusy) else
+                         ("unwritable", "os_error_%s" % (exc.errno or 0))))
+            return False
+        try:
+            with self._mu:
+                spills = self._spills()
+                for name in spills:                       # a dead process's spill, read whole before it goes
+                    self._scan_file(name)
+                for eid, ev in list(self._deferred.items()):
+                    name = _day_of(ev["at"]) + ".jsonl"
+                    self._append_line(name, _line({"type": "event", **ev}))
+                    del self._deferred[eid]
+                    self.memory_only.pop(eid, None)
+                    self._file_of[eid] = name
+                    self._book(name, ev)
+                for name in spills:
+                    os.unlink(self.root / name)           # every event of it is in its day file now
+                    self._offsets.pop(name, None)
+                for eid, ans in list(self._answers.items()):
+                    name = self._file_of.get(eid)
+                    if name is not None:
+                        self._append_line(name, _line({"type": "ack", "event_id": eid, "answer": ans}))
+                    del self._answers[eid]
+                self.problem = None
+                return True
+        except OSError as exc:
+            self._note("unwritable", "os_error_%s" % (exc.errno or 0))
+            return False
+        finally:
+            os.close(fd)
+
+    def acknowledge(self, answers, *, wait_s=0.0) -> int:
+        """The authority's answer for each sent event: ``applied`` and ``already_applied`` stop its sending, and so does
+        ``rejected`` (with its code; the same bytes would get the same answer). Anything else leaves it unsent. The
+        answer stops the sending at once; its ack line is written now if the lock is free, else by a later flush."""
+        done = 0
+        self.scan()
+        with self._mu:
+            for a in answers or []:
+                if not isinstance(a, dict) or a.get("state") not in ("applied", "already_applied", "rejected"):
+                    continue
+                eid = a.get("event_id")
+                if eid not in self._unsent:
+                    continue
+                ans = {"state": a["state"]}
+                if a["state"] == "rejected":
+                    code = a.get("code")
+                    ans["code"] = code if type(code) is str and _WORD.match(code) else "census_rejected"
+                del self._unsent[eid]
+                self._answers[eid] = ans
+                done += 1
+        self.flush(wait_s=wait_s)
+        return done
+
+    # reading: no lock (a day file only grows by whole lines; a last line still being written is read when whole)
+    def _files(self) -> list:
+        try:
+            return sorted(n for n in os.listdir(self.root) if _DAY.match(n))
+        except (FileNotFoundError, NotADirectoryError):
+            return []
+
+    def _spills(self) -> list:
+        try:
+            return sorted(n for n in os.listdir(self.root) if _SPILL.match(n) and os.path.isfile(self.root / n))
+        except (FileNotFoundError, NotADirectoryError):
+            return []
+
+    def scan(self) -> int:
+        """Read what was appended since the last scan (complete lines only): the day files, then the spill files (an
+        event already in a day file is not taken again). Returns the number of new lines."""
+        if not self.root.is_dir():
+            return 0
+        with self._mu:
+            return sum(self._scan_file(name) for name in self._files() + self._spills())
+
+    def _scan_file(self, name) -> int:
+        path, n = self.root / name, 0
+        try:
+            fh = open(path, "rb")
+        except OSError:                                   # gone, or not a readable file: nothing to read now
+            return 0
+        with fh:
+            while True:
+                start = self._offsets.get(name, 0)
+                fh.seek(start)
+                raw = fh.read(READ_CHUNK)
+                end = raw.rfind(b"\n")
+                if end < 0:
+                    if len(raw) < READ_CHUNK:
+                        return n                          # a line still being written: read it once it is whole
+                    end = len(raw) - 1                    # a line longer than a chunk: damage, skipped whole
+                    self.damaged[name] = self.damaged.get(name, 0) + 1
+                    self._offsets[name] = start + end + 1
+                    continue
+                self._offsets[name] = start + end + 1
+                for line in raw[:end].split(b"\n"):
+                    n += 1
+                    self._take(name, line)
+
+    def _book(self, name, ev):
+        aid = ev["body"].get("agent_id")
+        if aid is not None:
+            self._agents_in.setdefault(name, set()).add(aid)
+            self._files_of.setdefault(aid, set()).add(name)
+        else:
+            self._gaps_in.setdefault(name, set()).add(ev["event_id"])
+
+    def _take_event(self, name, ev):
+        """An event seen for the first time (in a day file, in a spill, or kept in memory): folded, and unsent until
+        answered. Seen again in a day file after its spill or memory, it is booked there, never taken twice."""
+        eid = ev["event_id"]
+        if eid in self._file_of:
+            if name is not None and self._file_of[eid] is None:
+                self._file_of[eid] = name                  # now in a day file: no longer deferred
+                self._deferred.pop(eid, None)
+                self.memory_only.pop(eid, None)
+                self._book(name, ev)
+            return
+        self._file_of[eid] = name
+        self._unsent[eid] = ev
+        self.fold.apply(ev, None)
+        if name is not None:
+            self._book(name, ev)
+
+    def _take(self, name, line):
+        try:
+            doc = json.loads(line.decode("utf-8"))
+            ok = type(doc) is dict and doc.get("v") == LINE_SCHEMA and doc.get("sum") == _sum(doc)
+        except (ValueError, UnicodeDecodeError):
+            ok = False
+        if ok and doc.get("type") == "event":
+            spill = _SPILL.match(name) is not None
+            wire = _wire(doc)
+            try:
+                ev = check_event(wire)
+            except CensusRefused as exc:
+                version = event_schema(wire)
+                if str(exc).startswith("census_schema_unsupported") and _s(_UUID)(wire.get("event_id")) \
+                        and type(wire.get("kind")) is str and not spill:
+                    # Another census version: never read as this one. Flagged by its name here; sent as written, so
+                    # the authority refuses it by its name too; never folded.
+                    self.foreign[version] = self.foreign.get(version, 0) + 1
+                    if wire["event_id"] not in self._file_of:
+                        self._file_of[wire["event_id"]] = name
+                        self._unsent[wire["event_id"]] = wire
+                    return
+                ok = False
+            else:
+                if spill:
+                    if ev["event_id"] not in self._file_of:
+                        self._take_event(None, ev)
+                        self._deferred[ev["event_id"]] = ev       # to be merged into its day file
+                else:
+                    self._take_event(name, ev)
+                return
+        if ok and doc.get("type") == "ack" and set(doc) == {"v", "sum", "type", "event_id", "answer"}:
+            self._unsent.pop(doc["event_id"], None)
+            return
+        if line.strip():
+            self.damaged[name] = self.damaged.get(name, 0) + 1
+
+    def batch(self, *, max_events=BATCH_MAX_EVENTS, max_bytes=BATCH_MAX_BYTES) -> list:
+        """Unsent events, exactly as written (or as kept in memory), within both bounds: state changes first (a
+        capture gap, an end, a state other than running), then the rest, each in the order first seen. Always at
+        least one when any is unsent (one event is at most EVENT_MAX_BYTES)."""
+        self.scan()
+        out, size = [], 2
+        with self._mu:
+            evs = list(self._unsent.values())
+        for ev in [e for e in evs if _urgent(e)] + [e for e in evs if not _urgent(e)]:
+            n = len(json.dumps(ev)) + 2
+            if out and (len(out) >= max_events or size + n > max_bytes):
+                break
+            out.append(ev)
+            size += n
+        return out
+
+    def unsent(self) -> list:
+        self.scan()
+        with self._mu:
+            return list(self._unsent.values())
+
+    def waiting(self) -> int:
+        """Events and answers kept in memory, not yet in a file."""
+        with self._mu:
+            return len(self._deferred) + len(self._answers)
+
+    def rows(self, *, host_id, environment, reachable=True) -> list:
+        """This host's own view of its census (R6.6-b), rebuilt from its file (after a restart, from the start)."""
+        self.scan()
+        with self._mu:
+            return self.fold.rows(reachability={None: "reachable" if reachable else "unreachable"},
+                                  environment=environment, host_override=host_id)
+
+    def retain(self, *, now=None, days=RETENTION_DAYS) -> list:
+        """N3 on the host: a day file older than ``days`` goes when nothing in it is unsent or unanswered on file, it
+        holds no host's latest capture gap, and every agent with an event in it belongs to a tree that ended more than
+        ``days`` ago, whose other files go with it. Returns the files removed; nothing when the lock is not free now.
+        Only census files are ever removed."""
+        now = parse_at(now) if isinstance(now, str) else (now or datetime.now(timezone.utc))
+        cutoff = now - timedelta(days=days)
+        try:
+            fd = self._try_lock(0.0)
+        except OSError:
+            return []
+        try:
+            with self._mu:
+                for name in self._files():
+                    self._scan_file(name)
+                closed = self.fold.closed_trees(cutoff)
+                latest = set(self.fold.gap_events.values())
+                busy = {self._file_of.get(e) for e in list(self._unsent) + list(self._answers)}
+                cand = {n for n in self._files()
+                        if datetime(*map(int, _DAY.match(n).groups()), tzinfo=timezone.utc) + timedelta(days=1) <= cutoff
+                        and n not in busy and not (self._gaps_in.get(n, set()) & latest)
+                        and self._agents_in.get(n, set()) <= closed and not self.damaged.get(n)}
+                changed = True
+                while changed:                               # a tree's files go together, or none of them
+                    changed = False
+                    for n in sorted(cand):
+                        if any(not self._files_of.get(a, set()) <= cand for a in self._agents_in.get(n, set())):
+                            cand.discard(n)
+                            changed = True
+                for n in sorted(cand):
+                    os.unlink(self.root / n)
+                gone = set().union(*(self._agents_in.get(n, set()) for n in cand)) if cand else set()
+                self.fold.forget(gone)
+                for n in cand:
+                    for d in (self._offsets, self._agents_in, self._gaps_in):
+                        d.pop(n, None)
+                for a in gone:
+                    self._files_of.pop(a, None)
+                self._file_of = {e: n for e, n in self._file_of.items() if n not in cand}
+                return sorted(cand)
+        finally:
+            os.close(fd)
+
+
+def _urgent(ev) -> bool:
+    """A state change the authority must not see late: a capture gap, an end, or a state other than running."""
+    if ev.get("kind") in ("census.gap", "census.end"):
+        return True
+    body = ev.get("body") if isinstance(ev.get("body"), dict) else {}
+    return ev.get("kind") == "census.update" and body.get("state") not in (None, "running")
+
+
+# ── the fold: events to rows, and the derived state ───────────────────────────────────────────────────────────────
+def host_reachability(seen_at, announced, now, timeout_s) -> str:
+    """R5.1-a at read time: ``reachable`` when the last contact is at most ``timeout_s`` old; ``stopping``/``stopped``
+    when that contact announced it; otherwise ``unreachable``. ``unknown`` without a contact or a timeout."""
+    if seen_at is None or timeout_s is None or now is None:
+        return "unknown"
+    if announced in ("stopping", "stopped"):
+        return announced
+    return "reachable" if (now - seen_at).total_seconds() <= timeout_s else "unreachable"
+
+
+def _new(agent_id, host_id):
+    return {"agent_id": agent_id, "parent_id": None, "vendor": None, "model": None, "role": None, "item_id": None,
+            "source": None, "verified": None, "children": None, "start_path": None, "route": None, "launch": None,
+            "transcript_ref": None, "usage": None, "host_id": host_id, "started_at": None, "last_activity_at": None,
+            "ended_at": None, "state": None, "reason": None, "state_at": None, "usage_at": None, "placeholder": False,
+            "started": False}
+
+
+class Fold:
+    """Census events folded into one record per agent (each ``agent_id`` once, however many events), in any order:
+    each value is the one from its latest event by event time. ``rows`` derives the state shown (R6.6-b)."""
+
+    def __init__(self):
+        self.agents = {}
+        self.gaps = {}                 # (host_id, cause) -> latest gap end (host time)
+        self.gap_events = {}           # (host_id, cause) -> the event id of that latest gap
+
+    def apply(self, ev, host_id):
+        at, kind, b = parse_at(ev["at"]), ev["kind"], ev["body"]
+        if kind == "census.gap":
+            key = (host_id, b["cause"])
+            to = parse_at(b["to"])
+            if key not in self.gaps or to >= self.gaps[key]:
+                self.gaps[key], self.gap_events[key] = to, ev["event_id"]
+            return
+        rec = self.agents.get(b["agent_id"])
+        if rec is None:
+            rec = self.agents[b["agent_id"]] = _new(b["agent_id"], host_id)
+        if rec["host_id"] is None:
+            rec["host_id"] = host_id
+        rec["last_activity_at"] = at if rec["last_activity_at"] is None else max(rec["last_activity_at"], at)
+        if kind == "census.start":
+            for k in MERGED:
+                if b[k] is not None:
+                    rec[k] = b[k]
+            rec["started_at"] = at if rec["started_at"] is None else min(rec["started_at"], at)
+            rec["started"] = True
+        elif rec["source"] is None:
+            rec["source"] = b["source"]
+        if kind == "census.update" and b["model"] is not None:
+            rec["model"] = b["model"]
+        if b.get("usage") is not None and (rec["usage_at"] is None or at >= rec["usage_at"]):
+            rec["usage"], rec["usage_at"] = b["usage"], at
+        if rec["state_at"] is not None and at < rec["state_at"]:
+            return                                             # an older state never overwrites a newer one
+        if kind == "census.update":
+            if b["state"] is None:
+                return                                         # activity only: the state stands
+            rec["state"], rec["reason"], rec["ended_at"] = b["state"], b["reason"], None
+        elif kind == "census.end":
+            rec["state"], rec["reason"], rec["ended_at"] = b["state"], b["reason"], at
+        else:
+            rec["state"], rec["reason"], rec["ended_at"] = b["state"], b["reason"], None
+        rec["state_at"] = at
+
+    def forget(self, agent_ids):
+        for a in agent_ids:
+            self.agents.pop(a, None)
+
+    # derivation
+    def _all(self) -> dict:
+        """The agents, plus a placeholder for each parent named but never recorded (so every link resolves)."""
+        out = dict(self.agents)
+        for rec in self.agents.values():
+            p = rec["parent_id"]
+            if p is not None and p not in out:
+                ph = _new(p, rec["host_id"])
+                ph.update(state="unknown", reason="not_captured", placeholder=True, source="census.parent_only")
+                out[p] = ph
+        return out
+
+    def _chain(self, agents, aid):
+        """The agent and its ancestors, nearest first; a cycle in bad data stops the walk."""
+        seen, out = set(), []
+        while aid is not None and aid in agents and aid not in seen:
+            seen.add(aid)
+            out.append(agents[aid])
+            aid = agents[aid]["parent_id"]
+        return out
+
+    def _closing(self, agents, aid):
+        """When the agent's life closed: its own end, or the nearest ended ancestor's (end_unobserved); else None."""
+        for rec in self._chain(agents, aid):
+            if rec["ended_at"] is not None:
+                return rec["ended_at"]
+        return None
+
+    def _gap(self, rec, root, host):
+        g = [self.gaps.get((host, "wake"))]
+        if root is not None and root["source"] == RUNTIME_SOURCE:
+            g.append(self.gaps.get((host, "restart")))
+        g = [x for x in g if x is not None]
+        return max(g) if g else None
+
+    def derive(self, agents, aid, reachability, host_override=None) -> tuple:
+        rec = agents[aid]
+        if rec["placeholder"]:
+            return "unknown", "not_captured"
+        if rec["ended_at"] is not None:
+            return rec["state"], rec["reason"]
+        chain = self._chain(agents, aid)
+        if any(r["ended_at"] is not None for r in chain[1:]):
+            return "unknown", "end_unobserved"
+        if any(r["state"] == "unknown" and r["reason"] == "process_unverified" for r in chain[1:]):
+            return "unknown", "parent_unverified"           # its process may run or not: nothing below is known
+        if not rec["started"] or any(r["placeholder"] for r in chain[1:]):
+            # Its start was never seen (so neither was its parent), or its parent's row is not known: whatever it last
+            # said, nothing closes it when its parent ends, so it is never shown running (CEN-3, CEN-4).
+            return "unknown", "parent_unknown"
+        host = rec["host_id"] if host_override is None else None
+        reach = reachability.get(host, "unknown")
+        if reach != "reachable":
+            return "unknown", "host_stopped" if reach in ("stopping", "stopped") else "host_unreachable"
+        root = chain[-1]
+        for r in chain:                                      # frozen: it, or the runtime child it runs inside
+            if r["placeholder"] or r["host_id"] != rec["host_id"]:
+                break
+            g = self._gap(r, root, r["host_id"])
+            if r["state"] == "idle" and r["reason"] == "frozen" and (g is None or r["state_at"] >= g):
+                return "idle", "frozen"
+        g = self._gap(rec, root, rec["host_id"])
+        if g is not None and (rec["last_activity_at"] is None or rec["last_activity_at"] < g):
+            return "unknown", "capture_gap"
+        if rec["state"] is None:
+            return "unknown", "state_not_reported"
+        return rec["state"], rec["reason"]
+
+    def rows(self, *, reachability, environment, host_override=None) -> list:
+        """The census as R7.6-b's ``agents`` (every R6.6-a field): one row per agent, the state derived now.
+        ``reachability`` maps host_id to R5.1-a's word; ``host_override`` names the host for a host's own view."""
+        agents = self._all()
+        out = []
+        for aid in sorted(agents, key=lambda a: (iso(agents[a]["started_at"] or agents[a]["last_activity_at"]) or "",
+                                                 a)):
+            rec = agents[aid]
+            state, reason = self.derive(agents, aid, reachability, host_override)
+            chain = self._chain(agents, aid)
+            root = chain[-1]
+
+            def inherited(key):
+                return next((r[key] for r in chain if r[key] is not None), None)
+            ended = rec["ended_at"] if state in ("done", "failed") else None    # an unseen end has no time
+            u = rec["usage"] or usage()
+            out.append({
+                "agent_id": aid, "parent_id": rec["parent_id"], "vendor": rec["vendor"], "model": rec["model"],
+                "role": rec["role"], "host_id": host_override if host_override is not None else rec["host_id"],
+                "environment": environment, "item_id": inherited("item_id"),
+                "started_at": iso(rec["started_at"]), "last_activity_at": iso(rec["last_activity_at"]),
+                "ended_at": iso(ended), "state": state, "reason": reason, "usage": dict(u),
+                "source": rec["source"], "verified": rec["verified"], "children": rec["children"],
+                "start_path": root["start_path"] if rec["parent_id"] is not None else rec["start_path"],
+                "route": rec["route"] if rec["route"] is not None else root["route"],
+                "launch": rec["launch"], "transcript_ref": rec["transcript_ref"]})
+        return out
+
+    def closed_trees(self, cutoff) -> set:
+        """The agent ids of every tree whose agents have all closed (their own end, or end_unobserved), the last of
+        them before ``cutoff``: what retention may drop. A tree with any open agent is kept whole."""
+        agents = self._all()
+        trees = {}
+        for aid in self.agents:
+            trees.setdefault(self._chain(agents, aid)[-1]["agent_id"], []).append(aid)
+        out = set()
+        for members in trees.values():
+            closes = [self._closing(agents, a) for a in members]
+            if all(c is not None for c in closes) and max(closes) < cutoff:
+                out.update(members)
+        return out

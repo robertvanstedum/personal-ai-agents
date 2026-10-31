@@ -14,7 +14,7 @@ import time
 
 import pytest
 
-from agent_fakes import fake_controls, given_environments
+from agent_fakes import fake_controls, given_environments, pin_of, signed_in
 from core import agent_requests as ar
 from core.agent_requests.connection import (ConnectionManager, Delivery, Probe, Provider, RESTART_BACKOFF_S, run_forever)
 from test_codex_provider import FAKE_SERVER, THREAD, wait_for
@@ -126,6 +126,7 @@ def _env(tmp_path, **extra):
     fake_controls(tmp_path, **controls)
     env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path / "home")}
     env.update({k: v for k, v in extra.items() if not k.startswith("FAKE_")})
+    signed_in(tmp_path / "home")                                           # the plan sign-ins the launch contract checks before every start
     return env
 
 
@@ -138,8 +139,8 @@ def test_the_claude_cli_runs_a_persistent_session_restarts_it_when_it_dies_and_r
     fake = _wrapper(tmp_path, "claude", FAKE_CLAUDE)
     work = tmp_path / "work"
     work.mkdir()
-    args = ["--root", root, "--agent", "claude-code", "--provider", "claude-stream", "--session-id", SID, "--claude-bin", fake, "--cwd", str(work),
-            "--allowed-tools", "Read,Grep", "--interval", "0.2"]
+    args = ["--root", root, "--agent", "claude-code", "--provider", "claude-stream", "--session-id", SID, "--claude-bin", fake, "--claude-bin-sha256", pin_of(fake),
+            "--cwd", str(work), "--allowed-tools", "Read,Grep", "--interval", "0.2"]
     a = _ask(root, "a", "claude-code")
     proc = _spawn(args + ["run", "--start"], _env(tmp_path))
     try:
@@ -166,7 +167,8 @@ def test_the_codex_cli_creates_once_resumes_after_a_restart_and_refuses_a_second
     fake = _wrapper(tmp_path, "codex", FAKE_SERVER)
     work = tmp_path / "work"
     work.mkdir()
-    base = ["--root", root, "--agent", "codex", "--provider", "codex-app-server", "--codex-bin", fake, "--cwd", str(work), "--interval", "0.2"]
+    base = ["--root", root, "--agent", "codex", "--provider", "codex-app-server", "--codex-bin", fake, "--codex-bin-sha256", pin_of(fake), "--cwd", str(work),
+            "--interval", "0.2"]
     env = _env(tmp_path, FAKE_LOG=str(log))
     assert subprocess.run([sys.executable, CLI, *base], capture_output=True, text=True, env=env).returncode == 2        # no thread and no --create: refused
     a = _ask(root, "a", "codex")
@@ -206,12 +208,12 @@ def test_keys_and_tokens_in_the_connections_own_environment_never_reach_the_agen
     given = tmp_path / "given-env.jsonl"
     if agent == "claude-code":
         fake = _wrapper(tmp_path, "claude", FAKE_CLAUDE)
-        args = ["--root", root, "--agent", "claude-code", "--provider", "claude-stream", "--session-id", SID, "--claude-bin", fake, "--cwd", str(work),
-                "--allowed-tools", "Read", "--interval", "0.2", "run", "--start"]
+        args = ["--root", root, "--agent", "claude-code", "--provider", "claude-stream", "--session-id", SID, "--claude-bin", fake, "--claude-bin-sha256", pin_of(fake),
+                "--cwd", str(work), "--allowed-tools", "Read", "--interval", "0.2", "run", "--start"]
     else:
         fake = _wrapper(tmp_path, "codex", FAKE_SERVER)
-        args = ["--root", root, "--agent", "codex", "--provider", "codex-app-server", "--codex-bin", fake, "--cwd", str(work), "--interval", "0.2",
-                "--create", "run", "--start"]
+        args = ["--root", root, "--agent", "codex", "--provider", "codex-app-server", "--codex-bin", fake, "--codex-bin-sha256", pin_of(fake), "--cwd", str(work),
+                "--interval", "0.2", "--create", "run", "--start"]
     env = _env(tmp_path, FAKE_ENV_OUT=str(given), MINIMOI_AGENT_REQUESTS_DIR=str(tmp_path / "the-global-default"), NOT_ON_THE_LIST="harmless",
                **{name: "sk-test-not-real" for name in PARENT_SECRETS})
     a = _ask(root, "a", agent)
@@ -237,7 +239,8 @@ def test_the_launchd_plist_is_valid_keeps_the_manager_alive_with_throttling_and_
     before = os.path.exists(real_path)
     before_mtime = os.stat(real_path).st_mtime_ns if before else 0
     out = subprocess.run([sys.executable, CLI, "--root", root, "--agent", "claude-code", "--provider", "claude-stream", "--session-id", SID, "--claude-bin", fake,
-                          "--cwd", str(tmp_path), "--allowed-tools", "Read", "print-launchd"], capture_output=True, text=True, timeout=30)
+                          "--claude-bin-sha256", pin_of(fake), "--cwd", str(tmp_path), "--allowed-tools", "Read", "print-launchd"], capture_output=True, text=True, timeout=30,
+                         env=_env(tmp_path))                                                       # the full pre-start check reads the test's own HOME, never the Mac's
     assert out.returncode == 0, out.stderr
     plist = plistlib.loads(out.stdout.encode())
     assert plist["Label"] == "ai.minimoi.connection.claude-code" and plist["KeepAlive"] is True and plist["RunAtLoad"] is True and plist["ThrottleInterval"] == 10
@@ -324,13 +327,14 @@ def test_an_offline_or_unknown_or_mismatched_provider_clears_the_marker(root):
 def test_the_codex_plist_is_resume_only_it_never_keeps_create_and_needs_a_recorded_thread(tmp_path):
     root = str(tmp_path / "ledger")
     fake = _wrapper(tmp_path, "codex", FAKE_SERVER)
-    base = ["--root", root, "--agent", "codex", "--provider", "codex-app-server", "--codex-bin", fake, "--cwd", str(tmp_path)]
-    no = subprocess.run([sys.executable, CLI, *base, "--thread-id", THREAD, "print-launchd"], capture_output=True, text=True, timeout=30)
+    base = ["--root", root, "--agent", "codex", "--provider", "codex-app-server", "--codex-bin", fake, "--codex-bin-sha256", pin_of(fake), "--cwd", str(tmp_path)]
+    env = _env(tmp_path)                                                                                   # the full pre-start check reads the test's own HOME
+    no = subprocess.run([sys.executable, CLI, *base, "--thread-id", THREAD, "print-launchd"], capture_output=True, text=True, timeout=30, env=env)
     assert no.returncode == 2 and "create it once" in no.stderr                                            # no thread recorded in the ledger yet: no resume-only plist
     seed = ConnectionManager(root, "codex", Dead(), session_id=THREAD)
     seed.mark_created()
     seed.close()
-    out = subprocess.run([sys.executable, CLI, *base, "print-launchd"], capture_output=True, text=True, timeout=30)
+    out = subprocess.run([sys.executable, CLI, *base, "print-launchd"], capture_output=True, text=True, timeout=30, env=env)
     assert out.returncode == 0, out.stderr
     args = plistlib.loads(out.stdout.encode())["ProgramArguments"]
     assert "--create" not in args and args[-2:] == ["run", "--start"]
@@ -387,8 +391,8 @@ def test_a_claude_session_is_marked_created_only_after_its_first_accepted_turn_s
     fake = _wrapper(tmp_path, "claude", FAKE_CLAUDE)
     work = tmp_path / "work"
     work.mkdir()
-    args = ["--root", root, "--agent", "claude-code", "--provider", "claude-stream", "--session-id", SID, "--claude-bin", fake, "--cwd", str(work),
-            "--allowed-tools", "Read", "--interval", "0.2"]
+    args = ["--root", root, "--agent", "claude-code", "--provider", "claude-stream", "--session-id", SID, "--claude-bin", fake, "--claude-bin-sha256", pin_of(fake),
+            "--cwd", str(work), "--allowed-tools", "Read", "--interval", "0.2"]
     proc = _spawn(args + ["run", "--start"], _env(tmp_path))
     try:
         assert wait_for(lambda: os.path.exists(os.path.join(root, "connection", "claude-code", "identity.json")), 15)

@@ -20,8 +20,10 @@ from . import ledger as L
 from . import claude_send_guard as G
 from . import claude_jsonl_observer as N
 from . import handoff_payload as H
+from core.mc_delegation_runner import launch, launch_env
 
 TRANSPORT='claude-fixed-owner-handoff-v1'
+ROUTE='claude-code.subscription'   # the launch contract (spec v0.5 R6.7-d): plan sign-in, unattended profile, its own record
 
 
 def now_iso():return datetime.now(timezone.utc).isoformat()
@@ -55,7 +57,30 @@ def preflight(enrolled,target):
     need(enrolled['model']=='claude-haiku-4-5' and enrolled['budget_usd']==0.10,'sender_budget_unreviewed')
     # Native listing is a reviewed exact name/ref mapping, never a model target.
     need(type(enrolled['native_target']) is str and enrolled['native_target'].endswith(']'))
+    contract_checks(enrolled,target)
     return identity
+
+
+def contract_checks(enrolled,target):
+    """Launch contract step 3 for the probe: the plan sign-in under the enrolled HOME, and no key setting in the user,
+    managed or project configuration Claude Code would read there. Names only; refuses with the contract's code."""
+    try:return launch.check_tool('claude-code',route_kind='subscription',home=enrolled['home'],project=target.cwd)
+    except launch.LaunchRefused as exc:raise Refused(exc.code) from None
+
+
+def sender_env(enrolled):
+    """The probe's fixed environment, built through the one launch policy: HOME (the enrolled one), PATH and LANG only,
+    never copied from this process."""
+    return launch_env.child_env({'LANG':'en_US.UTF-8'},environ={'HOME':enrolled['home'],'PATH':'/usr/bin:/bin'})
+
+
+def launch_record(env,session_id):
+    """The probe's launch record (contract step 4): its pinned binary (in code, checked by preflight), the policy's
+    digest and the names it gives and removes. Never a value."""
+    return launch.record(start_path='probe',tool='claude-code',profile='unattended',route_name=ROUTE,binary_path=G.BINARY,
+        binary_digest='sha256:'+G.BINARY_SHA256,pinned_by='code',env_names=list(env),parent_names=list(os.environ),
+        checks={'preflight':'passed (binary, python, hook, configuration, sign-in, key settings)'},at=now_iso(),
+        session_ref=session_id)
 
 
 def normalize_result(event,tool_id):
@@ -125,6 +150,8 @@ class ClaudeOutbox(Outbox):
             need(confirmation.get('admitted') is True and confirmation.get('expires_at')==self.expires_at,'live_confirmation_refused')
             remaining=min(remaining,self.expires_at-time.time()-8)
             if remaining<1:return dict(current,state='not_started',reason='claim_budget_exhausted')
+            # The launch record before the intent: a record that cannot be written refuses with nothing sent.
+            _publish(folder/'launch.json',launch_record(sender_env(self.native_enrollment),session))
             _publish(folder/'intent.json',{'v':1,'at':time.time(),'transport':TRANSPORT,
                 'target_sha256':_hash(binding['target']),'correlation':binding['correlation']})
             # No daemon: this call owns launch, deadline, termination and reap.
@@ -142,7 +169,7 @@ class ClaudeOutbox(Outbox):
             '--strict-mcp-config','--mcp-config',str(folder/'sender-mcp.json'),'--settings',str(folder/'sender-settings.json')]
         # Normal HOME + project cwd preserve managed/user/project denies. No
         # setting-sources/restricted/bypass flags; no executor/provider env copied.
-        env={'HOME':e['home'],'PATH':'/usr/bin:/bin','LANG':'en_US.UTF-8'}
+        env=sender_env(e)
         process=None;selector=None;state='unknown';mid='';total=0;buffer=b'';tool_id=None
         deadline=min(time.monotonic()+budget,time.monotonic()+max(0,self.expires_at-time.time()-8))
         dispatch_at=now_iso()

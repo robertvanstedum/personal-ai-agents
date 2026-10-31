@@ -20,7 +20,9 @@ DELEGATE_AGENTS = ("claude-code", "codex")
 CODEX_SCOPES, CODEX_DEADLINE_S = ("research",), 30 * 60
 _MAP = {"queued": "running", "claimed": "running", "running": "running", "completed": "completed",
         "cancelled": "stopped", "failed": "failed", "refused": "failed", "timed_out": "failed",
-        "output_limit": "failed", "interrupted": "failed"}
+        "output_limit": "failed", "interrupted": "failed",
+        # Version 2's: an item waiting on a decision, lapsed, paused or unknown is never shown as running (spec §5.1).
+        "proposed": "unknown", "lapsed": "unknown", "paused": "unknown", "unknown": "unknown", "expired": "failed"}
 
 
 class DelegationRelay:
@@ -62,13 +64,17 @@ class DelegationRelay:
         if row is None:
             return "not_found", None
         lapsed = row["lease_until"] is not None and (row["now"] - row["lease_until"]).total_seconds() > LEASE_SECONDS
-        if row["state"] in ("claimed", "running") and lapsed:     # only then: no write on an ordinary poll
+        # Only then, and only where no sweeper runs: where one does, it writes lapse transitions instead (spec R3.3).
+        if row["state"] in ("claimed", "running") and lapsed and not self.store.sweeps:
             try:
                 if self.store.reap_lapsed(job_id):     # the runner died mid-job: say so instead of "running" forever
                     row = self.store.by_job(job_id)
             except Exception:
                 _log.warning("delegation %s: lapsed claim could not be ended", job_id)
         state = _MAP[row["state"]]
+        if (self.store.sweeps and row["state"] in ("claimed", "running") and row["lease_until"] is not None
+                and row["lease_until"] <= row["now"]):
+            state = "unknown"            # lapsed: derived here, never written, never shown as running (E11)
         error = None
         if row["state"] == "queued" and row["deadline"] <= row["now"]:
             state, error = "failed", "not_picked_up"

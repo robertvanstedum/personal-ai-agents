@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from agent_fakes import CONTROLS_PRELUDE, fake_controls, given_environments
+from agent_fakes import CONTROLS_PRELUDE, fake_controls, given_environments, pin_of, signed_in
 from core import agent_requests as ar
 from core.agent_requests.codex_app_server import CodexAppServerProvider
 from core.agent_requests.connection import ConnectionManager
@@ -111,12 +111,14 @@ def fake_codex(tmp_path, monkeypatch):
     fake_controls(tmp_path, FAKE_LOG=str(tmp_path / "wire.jsonl"))
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.delenv("MINIMOI_AGENT_REQUESTS_DIR", raising=False)
+    signed_in(tmp_path / "home", "codex")                                  # the launch contract checks the ChatGPT sign-in under the child's HOME
     return str(wrapper)
 
 
 def provider(fake, tmp_path, root, **kw):
     work = tmp_path / "work"
     work.mkdir(exist_ok=True)
+    kw.setdefault("binary_sha256", pin_of(fake))                           # every start is pinned (launch contract)
     return CodexAppServerProvider(codex_bin=fake, cwd=str(work), ledger_root=root, request_timeout=kw.pop("request_timeout", 5), **kw)
 
 
@@ -428,7 +430,7 @@ def test_the_provider_is_busy_from_the_moment_it_sends_not_from_the_moment_the_s
 
 # ── the environment the app-server is given (operations brief, 28 Oct) ───────
 
-def _env_given_to_codex(tmp_path, root):
+def _env_given_to_codex(tmp_path, root, monkeypatch):
     from test_connection import EnvSpy
     seen = {}
     work = tmp_path / "work"
@@ -436,8 +438,10 @@ def _env_given_to_codex(tmp_path, root):
     fake = tmp_path / "codex"
     fake.write_text("#!/bin/sh\nexit 0\n")
     fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))                                             # the launch contract reads the sign-in here, never the Mac's
+    signed_in(tmp_path / "home", "codex")
     p = CodexAppServerProvider(codex_bin=str(fake), cwd=str(work), ledger_root=root, thread_id=THREAD, request_timeout=0.2,
-                               popen=lambda *a, **k: EnvSpy(seen, *a, **k))
+                               popen=lambda *a, **k: EnvSpy(seen, *a, **k), binary_sha256=pin_of(fake))
     with pytest.raises(TimeoutError):                                                              # the stand-in never answers initialize; only its environment matters here
         p.start()
     return seen["env"]
@@ -449,7 +453,7 @@ def test_provider_keys_and_tokens_in_the_managers_environment_never_reach_the_co
         monkeypatch.setenv(name, FAKE_VALUE)
     monkeypatch.setenv("MINIMOI_AGENT_REQUESTS_DIR", str(tmp_path / "the-global-default"))
     monkeypatch.setenv("NOT_ON_THE_LIST", "harmless")
-    env = _env_given_to_codex(tmp_path, root)
+    env = _env_given_to_codex(tmp_path, root, monkeypatch)
     assert not set(PARENT_SECRETS) & set(env) and FAKE_VALUE not in env.values()
     assert env["MINIMOI_AGENT_REQUESTS_DIR"] == root                                               # the connection's own ledger, never the global default
     assert set(env) <= {"PATH", "HOME", "LANG", "LC_ALL", "TERM", "TMPDIR", "USER", "SHELL", "MINIMOI_AGENT_REQUESTS_DIR"}
@@ -460,7 +464,7 @@ def test_the_codex_app_server_keeps_a_utf8_locale_without_one_in_the_manager(tmp
     monkeypatch.delenv("LANG", raising=False)
     monkeypatch.delenv("LC_ALL", raising=False)
     monkeypatch.setenv("LC_CTYPE", "C.UTF-8")                                                      # what PEP 538 coercion leaves in the manager
-    env = _env_given_to_codex(tmp_path, root)
+    env = _env_given_to_codex(tmp_path, root, monkeypatch)
     assert env["LANG"] == "en_US.UTF-8" and "LC_CTYPE" not in env                                  # its zsh, sed and awk read text as UTF-8
 
 
@@ -468,4 +472,4 @@ def test_the_codex_app_servers_own_extras_go_through_the_policys_refusal(tmp_pat
     from core.mc_delegation_runner import launch_env
     monkeypatch.setattr(launch_env, "DENY_OVERRIDES", frozenset())                                 # without its review, the ledger name matches ^MINIMOI_ and is refused
     with pytest.raises(launch_env.EnvRefused, match="MINIMOI_AGENT_REQUESTS_DIR"):
-        _env_given_to_codex(tmp_path, root)
+        _env_given_to_codex(tmp_path, root, monkeypatch)

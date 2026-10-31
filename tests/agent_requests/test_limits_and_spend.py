@@ -14,6 +14,7 @@ from core import agent_requests as ar
 from core.agent_requests.claude_stream import ClaudeStreamProvider
 from core.limits import AUDIT, DEFINITIONS, FILE, Limits
 
+from agent_fakes import pin_of
 from test_connection import CONV, Clock, Fake, SID, ask, deliveries, fake_cli, mgr, root, wait_for  # noqa: F401  (fixtures and helpers)
 
 
@@ -115,6 +116,7 @@ def build(fake_cli, tmp_path, cap, procs, **kw):
         p = Proc(*a, **k)
         procs.append(p)
         return p
+    kw.setdefault("binary_sha256", pin_of(fake_cli))                       # every start is pinned (launch contract)
     return ClaudeStreamProvider(claude_bin=fake_cli, session_id=SID, cwd=str(tmp_path), allowed_tools=["Read"], ledger_root=str(tmp_path / "ledger"),
                                 max_budget_usd=cap, popen=popen, **kw)
 

@@ -4,6 +4,22 @@ A trusted operator must establish the existing app routing and native return
 channel before setting either admission boolean. This module cannot prove those
 facts from a UUID or CLI success. It sends text only, using the existing outbox.
 The current candidate has no enrollment, API route, daemon, or live activation.
+
+The census (host runtime spec v0.5 §6.6, F1; Robert, 28 Oct: "cover F1"): given
+the host runtime's census folder, every queued turn first writes a root row for
+the thread (agent_id = its session id, vendor openai, route subscription,
+start_path connection, transcript_ref the desktop session's store). The turn
+itself runs inside the Codex desktop app, in that app's environment, which no
+launch contract shapes: its launch record holds the names the ``codex queue``
+child gets and is profile ``desktop_app``, governed false, never claimed as
+governed. The turn's progress and end are not observed here, so the row says
+``unknown: turn_not_observed``. The census never gates the turn (CEN-6, R6.6-e):
+a row that cannot be written leaves the turn sent as it would be, and the gap
+recorded (``census_gaps``, and one fixed line on stderr, the bridge's log).
+The writer is built and tested here; the live bridge passes ``census_dir`` only
+from its reinstall (scripts/mc_host/agent_worker.py), and only the dev bridge,
+with the dev runtime's folder: a row takes the environment of the runtime that
+sends it.
 """
 from __future__ import annotations
 
@@ -16,6 +32,7 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+import uuid
 
 from core.agent_requests import ledger as L
 from core.agent_requests.direct_contact import Delivery, Refused, Target
@@ -87,12 +104,34 @@ def message_for(target, request, correlation):
                      ensure_ascii=False, separators=(',', ':'))
 
 
+def census_row(target, native_home, child_env):
+    """The thread's census row for one queued turn (F1): names, ids and a path only, never the message."""
+    from core.mc_delegation_runner import census as C
+    given = sorted(child_env) if child_env is not None else sorted(os.environ)   # None: the child inherits them all
+    launch = {'launch_id': str(uuid.uuid4()), 'tool': 'codex', 'profile': 'desktop_app', 'route': 'codex.subscription',
+              'binary': {'path': BUNDLED_BINARY, 'sha256': None, 'pinned_by': 'metadata_identity'},
+              'policy_sha256': None, 'env_names': C.names(given)[0],
+              'removed': C.names(set(os.environ) - set(given))[0], 'governed': False,
+              'names_truncated': C.names(given)[1] + C.names(set(os.environ) - set(given))[1]}
+    store = (native_home or '~/.codex') + '/sessions'
+    return C.start(target.session_id, source='codex.desktop_queue', verified=True, children='not_exposed',
+                   vendor='openai', role='session', state='unknown', reason='turn_not_observed',
+                   start_path='connection', route='subscription', launch=launch,
+                   transcript_ref=C.kept(target.session_id, store))
+
+
 class CodexDesktopQueue:
     name = TRANSPORT
 
-    def __init__(self, enrollment, *, run=subprocess.run, native_home=None):
+    def __init__(self, enrollment, *, run=subprocess.run, native_home=None, census_dir=None):
         _need(isinstance(enrollment, QueueEnrollment), 'enrollment_required')
         self.enrollment, self._run = enrollment, run
+        _need(census_dir is None or (type(census_dir) is str and census_dir.startswith('/')
+                                     and '..' not in Path(census_dir).parts), 'invalid_census_dir')
+        from core.mc_delegation_runner.census import CensusFile
+        # The host runtime's census folder, or None: no row (today's behaviour, until the bridge's reinstall names it).
+        self.census = None if census_dir is None else CensusFile(census_dir)
+        self.census_gaps = []         # {session_id, reason} for each queued turn whose row could not be written
         if native_home is not None:
             _need(type(native_home) is str and native_home.startswith('/') and '..' not in Path(native_home).parts,
                   'invalid_native_home')
@@ -135,6 +174,15 @@ class CodexDesktopQueue:
         environment = {} if self.native_home is None else {'env': {
             'HOME':str(Path(self.native_home).parent),'CODEX_HOME':self.native_home,
             'PATH':'/usr/bin:/bin','LANG':'en_US.UTF-8'}}
+        if self.census is not None:
+            try:
+                self.census.append('census.start', census_row(target, self.native_home, environment.get('env')),
+                                   wait_s=0.5)
+            except Exception as exc:   # never gates the turn: the gap is recorded, the turn goes as it would
+                reason = 'lock_busy' if type(exc).__name__ == 'CensusBusy' else type(exc).__name__.lower()
+                self.census_gaps.append({'session_id': target.session_id, 'reason': reason})
+                import sys
+                sys.stderr.write(f'census: unwritable ({reason}) for a queued turn; sent all the same\n')
         try:
             result = self._run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                stderr=subprocess.DEVNULL, timeout=timeout, check=False,

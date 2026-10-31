@@ -316,18 +316,26 @@ GUILD_LOCAL_TOOLS = frozenset({"scripts/agent_connection.py", "scripts/agent_req
 # The MC delegation runner (core/mc_delegation_runner/). Its one production consumer is the portal image, through:
 # - the delegation dispatcher the portal runs (core/mc_delegation_dispatcher: store.py reads envelope.py, door.py reads
 #   dispatcher_adapter.py), and
-# - the front-door connections' code in core/agent_requests/ (portal-owned above), which reads launch_env.py, the one
-#   environment policy for agent processes.
+# - the front-door connections' code in core/agent_requests/ (portal-owned above), which reads the launch contract:
+#   launch_policy.json (the one policy data file), launch_env.py (its reader) and launch.py (pins, checks, records);
+# - census.py, the agent census (spec v0.5 §6.6): the dispatcher applies and reads census events with it, and the
+#   connections and the Codex desktop queue write their root rows with it.
 # Importing any of them runs the package's __init__.py. The Mac runner and the Mac connections use them too, from their
 # own installed copies. The rest runs only in the Mac runner's own bundle (scripts/mc_host/install_delegation_runner.sh);
 # no service image imports it. Exact files: a new module here keeps the conservative core/ fallback, and
 # tests/test_release_classifier.py fails if another production consumer appears or the portal side reaches a
 # runner-only file.
 MC_RUNNER_PORTAL_FILES = frozenset({"core/mc_delegation_runner/__init__.py", "core/mc_delegation_runner/envelope.py",
-                                    "core/mc_delegation_runner/dispatcher_adapter.py", "core/mc_delegation_runner/launch_env.py"})
+                                    "core/mc_delegation_runner/dispatcher_adapter.py", "core/mc_delegation_runner/launch_env.py",
+                                    "core/mc_delegation_runner/launch.py", "core/mc_delegation_runner/launch_policy.json",
+                                    "core/mc_delegation_runner/census.py"})
 MC_RUNNER_LOCAL_FILES = frozenset({"core/mc_delegation_runner/cli.py", "core/mc_delegation_runner/runner.py",
                                    "core/mc_delegation_runner/commands.py", "core/mc_delegation_runner/cost.py",
-                                   "core/mc_delegation_runner/workspace.py"})
+                                   "core/mc_delegation_runner/workspace.py", "core/mc_delegation_runner/host.py",
+                                   "core/mc_delegation_runner/journal.py", "core/mc_delegation_runner/fakework.py",
+                                   # The census's OTLP/JSON writer and the Claude Code hook (built, never installed):
+                                   # the runtime's bundle only.
+                                   "core/mc_delegation_runner/otel.py", "core/mc_delegation_runner/claude_hook.py"})
 
 
 def _is_staging_only(path: str) -> bool:

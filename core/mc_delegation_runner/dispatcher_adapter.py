@@ -36,6 +36,46 @@ class StoreDispatcher:
                                  detail=detail, output_text=text)
 
 
+class StoreDispatcherV2:
+    """Version 2 of the runner protocol (spec v0.5 R3.2-a) over an in-process DispatcherStore built with the
+    authority's configuration (the Mac-only interim reaches it by DSN, R2.4-a). Every owner call carries the host's
+    runner id; ``at`` and the bodies are passed exactly as the runner's pending record holds them, so a replay is
+    byte-faithful. The production configuration never builds this: it speaks version 1 (StoreDispatcher)."""
+    protocol = 2
+
+    def __init__(self, store):
+        self.store = store
+
+    def heartbeat(self, runner_id, state, capabilities, facts, census=None):
+        extra = {} if census is None else {"census": census}
+        return self.store.heartbeat(runner_id, state, capabilities, protocol=2, facts=facts, **extra)
+
+    def claim(self, runner_id, capabilities):
+        return self.store.claim(runner_id, capabilities, protocol=2)
+
+    def progress(self, request_id, generation, *, runner_id, event_id, at, phase, checkpoint):
+        return self.store.progress(request_id, generation, phase, protocol=2, runner_id=runner_id, event_id=event_id,
+                                   at=at, checkpoint=checkpoint)
+
+    def cancel_requested(self, request_id, generation):
+        return self.store.cancel_requested(request_id, generation, protocol=2)
+
+    def renew(self, request_id, generation, *, runner_id):
+        return self.store.renew(request_id, generation, protocol=2, runner_id=runner_id)
+
+    def result(self, request_id, generation, *, runner_id, event_id, at, status, artifacts, detail, output_text, route,
+               usage):
+        return self.store.result(request_id, generation, event_id=event_id, status=status, artifacts=artifacts,
+                                 detail=detail, output_text=output_text, protocol=2, runner_id=runner_id, at=at,
+                                 route=route, usage=usage)
+
+    def reconcile(self, runner_id, request_id, generation, stage, open_operations):
+        return self.store.reconcile(runner_id, request_id, generation, stage, open_operations, protocol=2)
+
+    def effect(self, runner_id, request_id, generation, effect):
+        return self.store.effect(runner_id, request_id, generation, effect, protocol=2)
+
+
 def output_of(artifact_root: Path, artifacts):
     """(text the owner reads, cost the delegate reports) from the job's output artifact, or (None, None)."""
     text, cost = None, None
