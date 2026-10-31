@@ -285,6 +285,9 @@ def test_founders_page_serves_shared_style_and_canonical_history_client(cos):
     html = response.get_data(as_text=True)
     assert 'cos-history-ui.js' in html and 'founders-ui/founders.css' in html
     assert 'data-tab="rooms"' in html and 'data-tab="records"' in html
+    import re
+    revision = re.search(r'founders.css\?v=([a-f0-9]{16})',html).group(1)
+    assert f'cos-history-ui.js?v={revision}' in html
     assert 'data-mc-panel' in html  # This page owns its MC controls; no second floating shell.
     assert client.get('/founders-ui/founders.css').status_code == 200
     assert client.get('/static/cos-history-ui.js').status_code == 200
