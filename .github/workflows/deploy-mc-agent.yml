@@ -44,7 +44,7 @@ jobs:
         run: |
           grep -q '^FROM ghcr.io/openclaw/openclaw:[0-9.]*@sha256:' docker/mc-agent-container/Dockerfile
           bash -n scripts/operations/deploy_mc_container_ec2.sh
-          python3 -c "import json; m=json.load(open('services/mc_operations/personas/mc-chat/releases/0.1.17/manifest.json')); assert m"
+          python3 -c "import json; m=json.load(open('services/mc_operations/personas/mc-chat/releases/0.1.23/manifest.json')); assert m"
 
       - name: Build the MC image
         run: |
@@ -57,6 +57,16 @@ jobs:
           docker run --rm -e ANTHROPIC_API_KEY=synthetic mc-agent-local > /tmp/key.out 2>&1; code=$?
           set -e
           test "$code" = 78 && grep -q "REFUSED: provider key ANTHROPIC_API_KEY" /tmp/key.out
+
+      - name: The image lays out the persona with the handbook in its policy (start.sh steps 1-2, run in the image)
+        run: |
+          docker run --rm --entrypoint /bin/sh -e OPENCLAW_STATE_DIR=/tmp/mc-state mc-agent-local -c \
+            'sed "/^# 3\. Config/,\$d" /opt/minimoi/mc-agent/start.sh > /tmp/steps.sh && sh /tmp/steps.sh &&
+             grep -cx "BEGIN_MINIMOI_MC_HANDBOOK 0.1.1" /tmp/mc-state/workspace-mc/AGENTS.md' > /tmp/steps.out 2>&1 \
+            || { cat /tmp/steps.out; exit 1; }
+          cat /tmp/steps.out
+          grep -q "handbook 0.1.1 loaded" /tmp/steps.out && grep -q "persona 0.1.23 laid out" /tmp/steps.out
+          test "$(tail -n 1 /tmp/steps.out)" = 1
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4

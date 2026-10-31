@@ -3,7 +3,8 @@
 # 1. Refuse to start if the container holds a provider API key or the config names a non-plan Anthropic route
 #    (spec_provider_access: agents use plan routes only; no metered fallback).
 # 2. Lay out the pinned persona release into the workspace, refusing on any hash mismatch with the release manifest or
-#    an AGENTS header version that differs from the release folder (the 0.1.6-label defect cannot recur).
+#    an AGENTS header version that differs from the release folder (the 0.1.6-label defect cannot recur). Load the
+#    handbook the release pins (its manifest hash) into the same projection, counted in the same budget.
 # 3. Install the image's config, validate it with OpenClaw's own validator, then run the gateway.
 set -eu
 
@@ -33,10 +34,21 @@ const head=fs.readFileSync(p+"/AGENTS.md","utf8").split("\n")[0];
 if (!head.endsWith("persona "+m.version)) { console.error("AGENTS header \""+head+"\" != release "+m.version); process.exit(1); }
 ' "$PERSONA" || die "persona release failed verification"
 mkdir -p "$WORKSPACE"
+# 2b. Handbook: the release names the handbook it loads by version and manifest hash. handbook.mjs checks the image's
+#     copy against that pin and its manifest, lays it out under the workspace, and prints the block that ends AGENTS.md.
+hb=$(node -e '
+const h=require(process.argv[1]).handbook||{};
+if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(h.version||"")||!/^[0-9a-f]{64}$/.test(h.manifest_sha256||"")) process.exit(1);
+console.log(h.version+" "+h.manifest_sha256);
+' "$PERSONA/manifest.json") || die "persona release names no handbook (manifest.json handbook.version, handbook.manifest_sha256)"
+# The block is held in memory, not a file MC could replace. $(...) drops its final newline; printf puts it back.
+# shellcheck disable=SC2086
+block=$(node "$IMAGE_DIR/handbook.mjs" "$IMAGE_DIR/handbook" "$WORKSPACE" $hb) || die "handbook ${hb%% *} failed verification"
 cp "$PERSONA/SOUL.md" "$WORKSPACE/SOUL.md"
-{ cat "$PERSONA/AGENTS.md"; printf '\n'; cat "$PERSONA/RUNTIME.openclaw.md"; } > "$WORKSPACE/AGENTS.md"
+{ cat "$PERSONA/AGENTS.md"; printf '\n'; cat "$PERSONA/RUNTIME.openclaw.md"; printf '\n%s\n' "$block"; } > "$WORKSPACE/AGENTS.md"
 chars=$(node -e 'console.log([...require("fs").readFileSync(process.argv[1],"utf8")].length)' "$WORKSPACE/AGENTS.md")
 [ "$chars" -le 16000 ] || die "projected AGENTS.md is $chars characters (budget 16000)"
+log "handbook ${hb%% *} loaded (manifest ${hb#* }) into $WORKSPACE/handbook"
 log "persona $(node -e 'console.log(require(process.argv[1]).version)' "$PERSONA/manifest.json") laid out ($chars chars)"
 
 # 3. Config: merge the image's policy into the live config, refuse a metered route, validate.

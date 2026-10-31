@@ -7,7 +7,7 @@ It runs **alongside** native MC. The portal still talks to native MC until the t
 
 | Container | Role |
 |---|---|
-| `minimoi-dev-mc-agent` | OpenClaw 2026.9.6 + Claude Code 2.1.308 (pinned, no self-update); persona 0.1.12 (capture included); Opus 5 on the **claude-cli** route (Robert's plan); 1 GB memory cap |
+| `minimoi-dev-mc-agent` | OpenClaw 2026.9.6 + Claude Code 2.1.308 (pinned, no self-update); persona 0.1.23 with MC handbook 0.1.1 loaded at start (`start.sh` step 2b, `handbook.mjs`); Opus 5 on the **claude-cli** route (Robert's plan); 1 GB memory cap |
 | `minimoi-dev-mc-egress` | MC's only way out: a CONNECT proxy to model-provider hosts only (Anthropic, xAI, OpenAI) |
 
 - **Network:** `minimoi-dev-mc-internal` (internal, no route out) plus the proxy.

@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import subprocess
 
 TARGETS = {
@@ -150,6 +151,21 @@ def _():
         f.write("# MC conversation contract — persona 0.1.12\nTampered.\n")
     code, out = oneoff(env={"OPENCLAW_GATEWAY_TOKEN": "t"}, mounts=[f"{p}:/opt/minimoi/mc-agent/persona/AGENTS.md:ro"])
     return code == 78 and "persona release failed verification" in out, f"exit {code}: {out.splitlines()[-1] if out else ''}"
+
+
+@check("6c", "start refuses a handbook that differs from the persona's pin (manifest hash)")
+def _():
+    import tempfile, os
+    base = os.path.expanduser(T["tmp"])
+    os.makedirs(base, mode=0o700, exist_ok=True)
+    d = tempfile.mkdtemp(dir=base)
+    p = os.path.join(d, "manifest.json")
+    with open(p, "w") as f:
+        f.write('{"format": "minimoi-mc-handbook/1", "files": {}}\n')
+    code, out = oneoff(env={"OPENCLAW_GATEWAY_TOKEN": "t"}, mounts=[f"{p}:/opt/minimoi/mc-agent/handbook/manifest.json:ro"])
+    refused = re.search(r"REFUSED: handbook [0-9.]+ failed verification", out)
+    return code == 78 and bool(refused) and "the persona pins" in out, \
+        f"exit {code}: {out.splitlines()[-1] if out else ''}"
 
 
 PENDING = [
