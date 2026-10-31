@@ -566,27 +566,29 @@ def boot_on(h, monkeypatch, provider):
 
 
 @pytest.mark.parametrize("provider", ["openai", "xai"])
-def test_s6_r1_a_bare_yes_right_after_a_voice_question_is_a_stray_yes_only_where_the_voice_asks(host, monkeypatch,
-                                                                                               provider):
-    """S6, as the re-check's R1 narrows it: on xAI the voice's own reply is the question, so a yes right after its
-    question, with nothing waiting, is a stray yes: told so, reaching nothing. On OpenAI the page's line is the question
-    and the model never asks one itself, so a voice's question is conversation and "Sure." answers it (chat). On both,
-    a yes soon after an action was dropped is still the stray yes; after a reply that asked nothing, or with his own
-    words between, a yes is conversation."""
+def test_s6_a_bare_yes_right_after_a_voice_question_is_a_stray_yes_on_every_provider(host, monkeypatch, provider):
+    """S6, on every provider again (the v3 live check, 31 Oct, fault 2, reverses the re-check's R1): a yes right after a
+    question the voice asked, with nothing waiting, is a stray yes, told so and reaching nothing. R1 had made it chat on
+    OpenAI, on the premise that the model there never asks one itself; live, OpenAI asked "Shall I go ahead?" by itself
+    for a request the app did not hear (4 of 4), and told his "Yes." the app would handle it. The cost, kept knowingly
+    (Robert, option c): "Sure." to a conversational question gets the line too. On both, a yes soon after an action was
+    dropped is still the stray yes; after a reply that asked nothing, or with his own words between, a yes is chat."""
     h = host
     sid, _session = boot_on(h, monkeypatch, provider)
     assert utter(h, sid, "t0", "Could you check what is stuck on the board?").get_json()["decision"] == "chat"
-    assert post(h, sid, [h.event("assistant", "t1", "Want to hear more about the glaze?")]).status_code == 200
-    answer = utter(h, sid, "t2", "Sure.").get_json()
-    assert answer["decision"] == ("nothing_waiting" if provider == "xai" else "chat") and h.effects() == 0
-    post(h, sid, [h.event("assistant", "t3", "It is in build.")])
-    assert utter(h, sid, "t4", "yes").get_json()["decision"] == "chat"
-    post(h, sid, [h.event("assistant", "t5", "Anything else?")])
-    utter(h, sid, "t6", "Tell me about kilns.")
-    assert utter(h, sid, "t7", "okay").get_json()["decision"] == "chat" and h.effects() == 0
-    ask = utter(h, sid, "t8", REQUEST[h.kind]).get_json()                   # the 2-minute rule holds on both
-    utter(h, sid, "t10", "Tell me a joke about kilns.")
-    assert ask["decision"] == "ask" and utter(h, sid, "t12", "yes").get_json()["decision"] == "nothing_waiting"
+    assert post(h, sid, [h.event("assistant", "t1", "Shall I go ahead?")]).status_code == 200      # fault 2's own words
+    answer = utter(h, sid, "t2", "Yes.").get_json()
+    assert answer["decision"] == "nothing_waiting" and h.effects() == 0
+    assert post(h, sid, [h.event("assistant", "t3", "Want to hear more about the glaze?")]).status_code == 200
+    assert utter(h, sid, "t4", "Sure.").get_json()["decision"] == "nothing_waiting" and h.effects() == 0   # R1's case
+    post(h, sid, [h.event("assistant", "t5", "It is in build.")])
+    assert utter(h, sid, "t6", "yes").get_json()["decision"] == "chat"
+    post(h, sid, [h.event("assistant", "t7", "Anything else?")])
+    utter(h, sid, "t8", "Tell me about kilns.")
+    assert utter(h, sid, "t9", "okay").get_json()["decision"] == "chat" and h.effects() == 0
+    ask = utter(h, sid, "t10", REQUEST[h.kind]).get_json()                  # the 2-minute rule holds on both
+    utter(h, sid, "t12", "Tell me a joke about kilns.")
+    assert ask["decision"] == "ask" and utter(h, sid, "t14", "yes").get_json()["decision"] == "nothing_waiting"
     assert h.effects() == 0
 
 

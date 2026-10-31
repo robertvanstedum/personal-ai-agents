@@ -1230,15 +1230,14 @@ class DirectSessions(ConsultLedger):
         """Whether a yes with nothing waiting is a stray yes (NOTHING_WAITING), not conversation: soon after an action
         expired or was dropped (_let_go), on every provider; or (review v3 S6) right after a turn of the voice's that asked
         a question, with no owner item of his between them: he answered a question the app never asked, so his yes reaches
-        nothing, and he is told so. That second rule holds only where the voice's own reply is the question (xAI answers by
-        itself). Where the page creates every response (OpenAI, capabilities.page_responses) its asking line is the
-        question and the model never asks one itself, so a voice's question there is conversation, and "Sure." answers it
-        (the fix round's re-check, R1)."""
-        from core.realtime_voice.capabilities import page_responses
+        nothing, and he is told so. Both rules hold on every provider. R1 (the fix round's re-check) had kept the second
+        to xAI, on the premise that where the page creates every response (OpenAI) the model never asks a question itself;
+        the live check (LIVE_CHECK_V3_RESULT.md, 31 Oct, fault 2) found OpenAI asking "Shall I go ahead?" by itself for
+        a request the app did not hear (4 of 4), and then telling his "Yes." the app would handle it, with nothing
+        waiting. So a yes after any voice question with nothing waiting is told so again (Robert, 31 Oct: option c); the
+        cost, kept knowingly, is R1's case: "Sure." to a conversational question gets the line too."""
         if now < meta.get("stray_until", 0):
             return True
-        if page_responses(meta.get("provider")):
-            return False
         place, question = meta.get("voice_said") or (-1, False)
         return question and meta["last_place"] < place < item_place(item)
 
