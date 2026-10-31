@@ -1,0 +1,21 @@
+{
+  "schema": "minimoi.cos.episode_event/1",
+  "data_scope": "personal",
+  "environment": "prod",
+  "event_id": "ev-0100",
+  "type": "closed",
+  "episode_id": "EP-mc-update@2026-10-30",
+  "publisher": "mc",
+  "part": "update",
+  "at": "2026-10-30T14:12:05-05:00",
+  "closed_by": {
+    "domain": "guild-build",
+    "part": "facts",
+    "local_date": "2026-10-30",
+    "generation": "8f0c2a91",
+    "seq": 1,
+    "data_scope": "personal",
+    "environment": "prod"
+  },
+  "revision_before": 7
+}

@@ -1,0 +1,23 @@
+{
+  "schema": "minimoi.cos.participant_event/1",
+  "event_id": "pe-0a1b2c3d4e5f",
+  "conversation_id": "cosc-0a1b2c3d4e5f",
+  "participant": "mc",
+  "at": "2026-10-31T10:12:00-05:00",
+  "data_scope": "personal",
+  "environment": "prod",
+  "state": "joined",
+  "room_ref": {
+    "type": "rooms.room",
+    "id": "room-standing"
+  },
+  "shared_context": {
+    "from_turn_id": "t-0a1b2c3d4e5f6a",
+    "record_ref": {
+      "type": "cos.plan",
+      "id": "PLAN-german-b1",
+      "revision": 3,
+      "title": "German to B1"
+    }
+  }
+}

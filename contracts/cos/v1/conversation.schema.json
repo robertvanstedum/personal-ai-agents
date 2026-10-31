@@ -7,7 +7,8 @@
     { "$ref": "#/$defs/conversation" },
     { "$ref": "#/$defs/turn" },
     { "$ref": "#/$defs/send" },
-    { "$ref": "#/$defs/stream_note" }
+    { "$ref": "#/$defs/stream_note" },
+    { "$ref": "#/$defs/participant_event" }
   ],
   "$defs": {
     "conversation_id": { "type": "string", "pattern": "^cosc-[0-9a-f]{12,32}$|^cos-before-1-2$" },
@@ -43,7 +44,8 @@
         "turn_id": { "type": "string", "pattern": "^t-[0-9a-f]{12,32}$" },
         "text": { "type": "string", "minLength": 1, "maxLength": 20000 },
         "channel": { "enum": ["web", "voice", "telegram"] },
-        "attachments": { "type": "array", "maxItems": 10, "items": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" } }
+        "attachments": { "type": "array", "maxItems": 10, "items": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" } },
+        "context_ref": {"description": "The record Robert is discussing (\"Discussing: German to B1 · version 3\"): the exact record and revision, attached by the page, never copied into the text.", "$ref": "#/$defs/record_ref"}
       }
     },
     "turn": {
@@ -74,11 +76,16 @@
           "maxItems": 10,
           "items": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" }
         },
-        "failure_code": { "type": ["string", "null"], "pattern": "^[a-z][a-z0-9_]{0,63}$" }
+        "failure_code": { "type": ["string", "null"], "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+        "channel": { "enum": ["web", "voice", "telegram"] },
+        "audience": {"description": "cos_and_mc while MC is in the conversation (a participant_event joined, not yet left); the turn then belongs to the Room record too.", "enum": ["cos", "cos_and_mc"]},
+        "context_ref": { "$ref": "#/$defs/record_ref" }
       },
       "allOf": [
         { "if": { "properties": { "status": { "const": "answered" } } }, "then": { "properties": { "reply_text": { "type": "string" }, "answered_at": { "type": "string" }, "durable_ack_at": { "type": "string" } } } },
-        { "if": { "properties": { "status": { "const": "failed" } } }, "then": { "required": ["failure_code"], "properties": { "failure_code": { "type": "string" } } } }
+        { "if": { "properties": { "status": { "const": "failed" } } }, "then": { "required": ["failure_code"], "properties": { "failure_code": { "type": "string" } } } },
+        { "if": { "properties": { "status": { "const": "recovered" } } }, "then": { "required": ["reply_text"], "properties": { "reply_text": { "type": "string" } } } },
+        { "if": { "properties": { "status": { "const": "pending" } } }, "then": { "properties": { "reply_text": { "type": "null" } } } }
       ]
     },
     "stream_note": {
@@ -105,7 +112,45 @@
           "if": { "properties": { "kind": { "const": "incident" } } },
           "then": { "required": ["actions"], "properties": { "actions": { "contains": { "const": "acknowledge" } }, "note_id": { "pattern": "^incident:" } } }
         },
-        { "if": { "properties": { "kind": { "const": "briefing" } } }, "then": { "properties": { "note_id": { "pattern": "^briefing:[0-9]{4}-[0-9]{2}-[0-9]{2}:[0-9]+$" } } } }
+        { "if": { "properties": { "kind": { "const": "briefing" } } }, "then": { "properties": { "note_id": { "pattern": "^briefing:[0-9]{4}-[0-9]{2}-[0-9]{2}:[0-9]+$" } } } },
+        {"description": "N3: the note id's prefix is its kind.", "if": {"properties": {"kind": {"enum": ["nudge", "consult", "commitment"]}}}, "then": {"properties": {"note_id": {"pattern": "^(nudge|consult|commitment):"}}}}
+      ]
+    },
+    "record_ref": {
+      "description": "A record in the CoS store, a Room record or a Build Log item, with the exact revision being discussed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "revision"],
+      "properties": {
+        "type": {"enum": ["cos.plan", "cos.goal", "cos.obligation", "cos.briefing", "rooms.minutes", "rooms.room", "guild.work_item", "guild.review", "github.issue"]},
+        "id": {"$ref": "urn:minimoi:contract:cos:common#/$defs/id"},
+        "revision": {"type": "integer", "minimum": 1},
+        "title": {"type": "string", "minLength": 1, "maxLength": 160}
+      }
+    },
+    "participant_event": {
+      "description": "The Room transition (Review 05, MC joins in place; spec sections 4.13 and 4.20). Written by the CoS backend into the conversation's history. asking: the page asked MC to join. joined: MC answered; a Room was created or resumed (room_ref) and is canonical for everything said from here; MC receives only the shared context below, never the earlier private CoS history. unavailable: MC did not answer; nothing is shared. left: MC left; the exchange stays in both the conversation and the Room record. Presence is shown only on joined, never on asking.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "event_id", "conversation_id", "participant", "state", "at", "data_scope", "environment"],
+      "properties": {
+        "schema": {"const": "minimoi.cos.participant_event/1"},
+        "event_id": {"type": "string", "pattern": "^pe-[0-9a-f]{12,32}$"},
+        "conversation_id": {"$ref": "#/$defs/conversation_id"},
+        "participant": {"enum": ["mc"]},
+        "state": {"enum": ["asking", "joined", "unavailable", "left"]},
+        "at": {"$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp"},
+        "room_ref": {"description": "The standing Room, or a Room created for this discussion. Stable: rejoining resumes it.", "type": "object", "additionalProperties": false, "required": ["type", "id"], "properties": {"type": {"const": "rooms.room"}, "id": {"$ref": "urn:minimoi:contract:cos:common#/$defs/id"}}},
+        "shared_context": {"description": "What MC is given, labelled as context, never as instructions: the conversation from one turn on (Robert's question that led here), and the record being discussed, if any. Earlier turns stay private to CoS.", "type": "object", "additionalProperties": false, "required": ["from_turn_id"], "properties": {"from_turn_id": {"type": "string", "pattern": "^t-[0-9a-f]{12,32}$"}, "record_ref": {"$ref": "#/$defs/record_ref"}}},
+        "reason": {"description": "unavailable only: a fixed code.", "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+        "data_scope": {"$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope"},
+        "environment": {"$ref": "urn:minimoi:contract:cos:common#/$defs/environment"}
+      },
+      "allOf": [
+        {"if": {"properties": {"state": {"enum": ["joined", "left"]}}}, "then": {"required": ["room_ref"]}},
+        {"if": {"properties": {"state": {"const": "joined"}}}, "then": {"required": ["shared_context"]}},
+        {"if": {"properties": {"state": {"const": "unavailable"}}}, "then": {"required": ["reason"], "not": {"required": ["room_ref"]}}},
+        {"if": {"properties": {"state": {"const": "asking"}}}, "then": {"not": {"anyOf": [{"required": ["room_ref"]}, {"required": ["shared_context"]}]}}}
       ]
     }
   }

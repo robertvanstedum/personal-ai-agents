@@ -1,0 +1,23 @@
+{
+  "schema": "minimoi.cos.standing_fact/1",
+  "data_scope": "personal",
+  "environment": "prod",
+  "id": "FACT-0a1b2c3d4e5f6a7b",
+  "at": "2026-07-11T00:00:00+00:00",
+  "section": "General",
+  "entry": {
+    "text": "x",
+    "provenance": "approved",
+    "ref": {
+      "type": "cos.memory_note",
+      "id": "op-x"
+    }
+  },
+  "source": {
+    "kind": "memory_tool",
+    "tag": "note",
+    "entry_date": "2026-10-31",
+    "operation_id": "op-x"
+  },
+  "state": "active"
+}

@@ -33,19 +33,9 @@
       "properties": {
         "schema": { "const": "minimoi.cos.tool_arguments/1" },
         "tool": { "type": "string", "pattern": "^cos\\.[a-z_]+(\\.[a-z_]+)*$" },
-        "arguments": {
-          "type": "object",
-          "propertyNames": {
-            "not": {
-              "enum": [
-                "seat", "actor", "origin", "grant_ref", "session_key", "data_scope", "environment",
-                "principal", "owner", "executor", "operation_id", "command_id", "expected_revision",
-                "provenance", "approval", "tier", "basis_ref"
-              ]
-            }
-          }
-        }
+        "arguments": { "$ref": "#/$defs/no_authority" }
       }
-    }
+    },
+    "no_authority": {"description": "S3: no authority-bearing key anywhere, at any depth; the server sets seat, actor, origin and provenance from the binding.", "anyOf": [{"type": "object", "propertyNames": {"not": {"enum": ["seat", "actor", "origin", "grant_ref", "session_key", "data_scope", "environment", "principal", "owner", "executor", "operation_id", "command_id", "expected_revision", "provenance", "approval", "tier", "basis_ref"]}}, "additionalProperties": {"$ref": "#/$defs/no_authority"}}, {"type": "array", "items": {"$ref": "#/$defs/no_authority"}}, {"type": ["string", "number", "integer", "boolean", "null"]}]}
   }
 }

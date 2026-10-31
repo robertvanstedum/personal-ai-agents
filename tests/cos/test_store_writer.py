@@ -290,7 +290,8 @@ def test_one_ask_one_escalation_and_closing_by_a_full_record_key(store):
     assert send(ep_event("x6", "escalation_claimed", 0, claim_id="z1"))["outcome"] == "accepted"
     assert send(ep_event("x7", "escalated", 0, claim_id="z1"))["outcome"] == "accepted"
     assert send(ep_event("x8", "escalation_claimed", 0, claim_id="z2"))["code"] == "transition_not_allowed"
-    key = {"domain": "guild-build", "part": "update", "local_date": "2026-10-30", "generation": "8f0c2a91", "seq": 1}
+    key = {"data_scope": "personal", "environment": ENV, "domain": "guild-build", "part": "update", "local_date": "2026-10-30",
+           "generation": "8f0c2a91", "seq": 1}
     assert send(ep_event("x9", "closed", 0, closed_by=key))["outcome"] == "accepted"
     ep = store.episode("EP-mc-update@2026-10-30")
     assert ep.state == "closed" and ep.closed_by == key

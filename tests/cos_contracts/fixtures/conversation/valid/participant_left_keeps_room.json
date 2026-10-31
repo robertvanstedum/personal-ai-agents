@@ -1,0 +1,14 @@
+{
+  "schema": "minimoi.cos.participant_event/1",
+  "event_id": "pe-0a1b2c3d4e61",
+  "conversation_id": "cosc-0a1b2c3d4e5f",
+  "participant": "mc",
+  "at": "2026-10-31T10:12:00-05:00",
+  "data_scope": "personal",
+  "environment": "prod",
+  "state": "left",
+  "room_ref": {
+    "type": "rooms.room",
+    "id": "room-standing"
+  }
+}

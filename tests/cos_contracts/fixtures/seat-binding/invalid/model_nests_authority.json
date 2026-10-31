@@ -1,0 +1,14 @@
+{
+  "schema": "minimoi.cos.tool_arguments/1",
+  "tool": "cos.commitment.open",
+  "arguments": {
+    "goal": {
+      "owner_words": [
+        {
+          "text": "x",
+          "provenance": "robert_source"
+        }
+      ]
+    }
+  }
+}
