@@ -136,3 +136,22 @@ def test_local_fallback_declares_tool_capability_and_realistic_token_budget():
     assert local["model_info"]["supports_function_calling"] is True
     assert local["model_info"]["max_output_tokens"] >= 500
     assert local["litellm_params"]["think"] is True
+
+
+def test_no_route_switches_a_shared_chat_backend_to_responses_mode():
+    """LiteLLM 1.93 keys a deployment's mode by its backend model (e.g. xai/grok-4.3) and never downgrades it.
+
+    One route marked `mode: responses` therefore sends every chat route on the same backend through the Responses
+    bridge, which drops the system message for xAI (measured on staging, 30 Oct 2026: persona, policy and handbook never
+    reached Grok). Every gateway config is checked, production's included.
+    """
+    for path in sorted((REPO_ROOT / "services" / "model_gateway").glob("litellm*.yaml")):
+        model_list = yaml.safe_load(path.read_text())["model_list"]
+        chat_backends = {
+            item["litellm_params"]["model"]
+            for item in model_list
+            if (item.get("model_info") or {}).get("mode", "chat") == "chat"
+        }
+        for item in model_list:
+            if (item.get("model_info") or {}).get("mode") == "responses":
+                assert item["litellm_params"]["model"] not in chat_backends, (path.name, item["model_name"])

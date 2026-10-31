@@ -37,7 +37,9 @@ model_list:
     model_info:
       id: cos-xai-bounded-web-search
       base_model: xai/grok-4.3
-      mode: responses
+      # No `mode: responses`: LiteLLM records a deployment's mode on the shared backend key (xai/grok-4.3) and
+      # never downgrades it, so this one line sent every Grok chat route through its Responses bridge, which drops
+      # the system message for xAI. Callers reach this route on /v1/responses, which needs no mode.
       supports_web_search: true
 
   - model_name: minimoi-cos-agent-anthropic
