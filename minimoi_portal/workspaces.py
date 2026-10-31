@@ -15,7 +15,7 @@ WORKSPACES = (
         "path": "/app/curator",
         "eyebrow": "Research and decisions",
         "summary": "Daily briefings, scans, deeper dives, and continuing research.",
-        "image": "/static/tour/curator-landing.jpg",
+        "image": "/static/preview/assets/curator_landing-daily.jpg",
         "public_visible": True,
     },
     {
@@ -42,7 +42,7 @@ WORKSPACES = (
         "path": "/guild",
         "eyebrow": "Build and operations",
         "summary": "Specs, build work, operating status, and the next iteration.",
-        "image": "/static/tour/guild-catalog-desktop.jpg?v=20261014-g8-review1",
+        "image": "/static/guild/guild-build.webp",
         "public_visible": True,
     },
     {

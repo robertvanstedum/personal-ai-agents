@@ -502,10 +502,16 @@ body.about-page {
   gap: 0.65rem;
 }
 
-.tour-domain-card-guild .tour-domain-card-image img {
-  object-fit: contain;
-  object-position: center;
-  background: var(--front-paper);
+/* Individual tile artwork fills the landing cards at every viewport size. */
+.tour-domain-card-guild .tour-domain-card-image img,
+.dashboard-workspace-guild .dashboard-card-visual img {
+  object-fit: cover;
+  object-position: center 54%;
+}
+.tour-domain-card-curator .tour-domain-card-image img,
+.dashboard-workspace-curator .dashboard-card-visual img {
+  object-fit: cover;
+  object-position: center 68%;
 }
 
 .tour-shot-guild-landing .tour-shot-link {
