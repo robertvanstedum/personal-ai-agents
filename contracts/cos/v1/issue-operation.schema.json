@@ -78,6 +78,11 @@
       "then": { "properties": { "approval": { "required": ["grant_ref"] } } }
     },
     {
+      "description": "S6: only comments and closes can ever be standing; label and reopen are always exact.",
+      "if": { "properties": { "op": { "enum": ["create", "label", "reopen"] } } },
+      "then": { "properties": { "approval": { "properties": { "tier": { "const": "exact" } } } } }
+    },
+    {
       "if": { "properties": { "retry_allowed": { "const": true } }, "required": ["retry_allowed"] },
       "then": {
         "required": ["reconciliation"],

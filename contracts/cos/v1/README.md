@@ -132,6 +132,49 @@ Each change is additive, and comes with fixtures. Revise any of them with a chan
 |---|---|---|
 | 31 Oct, B1a | `store-records` gains `standing_fact` (`facts.jsonl`); `store-command` gains `fact.record` (target `cos.fact`). | Section 4.5 moves `cos_memory.md` into the store "with its real provenance" but B0 froze no record for it. Model-written lines are `agent_draft`. An explicit note with its operation marker is `approved`, citing `cos.memory_note:<operation>`, because it is Robert's note but no turn exists to verify. Nothing imported is `robert_source`. Then `cos_memory.md` becomes the store's projection (`domains/cos/store/memory.py`). |
 | 31 Oct, B1a | `loop-inventory.json` gains `processes`. | The card build's finding that `cos-bot` may start a second copy of every loop. |
+| 31 Oct, contracts r1 (Design) | **The Room transition:** `conversation.schema.json` gains `participant_event` (asking, joined, unavailable, left) and `record_ref`; sends and turns may carry `context_ref` (the record being discussed) and turns `audience` and `channel`. | Review 05, approved by Robert: MC joins the CoS conversation in place. See "The Room transition" below. |
+| 31 Oct, contracts r1 | **S8:** guild-build's two parts live in `data/activity/guild-build/facts/` and `…/update/`, each rw for its one writer; nobody mounts `guild-build/` itself. | Mounts, not file modes, keep the writers apart (every service runs as uid 0). Spec 4.3's path for guild-build becomes `…/guild-build/<part>/<local_date>.<part>.json`. B2's writers need only their `MINIMOI_ACTIVITY_DIR` pointed at the subfolder. |
+| 31 Oct, contracts r1 | **S6:** `cos.issue.comment` and `cos.issue.close` are `exact` with `becomes_standing_on` the charter; in issue operations, `label` and `reopen` are always exact. | Section 9 item 6 is still Robert's. |
+| 31 Oct, contracts r1 | **S4, S7:** one token file per calling service; the API maps token to allowed actors; `commitment.open` stays actor `cos`. The matrix names the token and secret files, the scheduler's `raise_incident()` grant and the three database roles. | A caller can't claim to be Robert. |
+| 31 Oct, contracts r1 | **S1:** an episode closes only on MC's update record (`guild-build`/`update`); `record_key` carries all five key fields. **S2:** a memory-tool fact is always `agent_draft`; `approved` needs an explicit or imported note; never `domain_fact` or `robert_source`. **S3:** the authority-key rule applies at every depth (`no_authority`). **S5:** evidence and correction refs are typed; `local_date` has `format: date`. | The B0 review's should-fixes. |
+| 31 Oct, contracts r1 | **N3:** a recovered turn carries its reply; a pending one carries none; a note's id prefix matches its kind. | The B0 review's notes. |
+
+## The Room transition (MC joins the CoS conversation in place)
+
+Review 05, approved 31 Oct. Spec sections 4.13 (the standing Room) and 4.20 (one MC conversation).
+
+1. Robert presses MC on the CoS page. The backend writes `participant_event` **asking**; the page shows "Asking MC to
+   join…". Presence is never shown on asking.
+2. If MC answers within the backend's timeout, it writes **joined** with `room_ref` (the standing Room, or a Room for
+   this discussion; rejoining resumes the same one) and `shared_context`:
+   - `from_turn_id`: the turn where sharing starts (Robert's question that led here). **Earlier turns stay private to
+     CoS**; MC never receives the whole CoS history.
+   - `record_ref`: the record being discussed, with its revision, if one is open ("Discussing: German to B1 · version 3").
+   MC gets this as labelled context, never as instructions.
+3. While MC is in, each turn carries `audience: cos_and_mc` and is written to the Room record too; **the Room record is
+   canonical** for what was said there. CoS and MC both answer in the same conversation.
+4. If MC doesn't answer: **unavailable** with a fixed `reason`; nothing is shared; the page says "MC isn't answering
+   right now".
+5. **left:** the exchange stays in the conversation and in the Room; the page shows "MC left · the room's record".
+
+The portal calls the internal API for this with its own token (actor `mc`); Rooms (B5a) owns the Room record.
+
+## More rules a schema can't hold (contracts r1)
+
+- **S4, who may claim what:** the internal API authenticates each caller by its own token file and allows only its
+  actors: agent → `cos`; cos-bot → `telegram`, `cos`; scheduler jobs → `scheduler`; portal → `mc`; supervisor →
+  `scheduler`. Any other actor is refused `not_authorized`. The server sets seat, actor, origin and provenance from the
+  binding; model arguments never carry them (S3).
+- **S5, activity records:** writers and readers test these: `final: true` only when `covers.to` is 23:59:59 of the
+  local day; `covers.from` before `covers.to`; `count` equals the counted items when the list isn't truncated;
+  `items_truncated` is true exactly when `items_total` exceeds the items listed; dates are real dates. Install
+  `rfc3339-validator` beside `jsonschema` wherever `format: date-time` must be checked; without it the format check is
+  skipped silently.
+- **S9, changing a contract safely:** every record is closed-world, and the scheduler validates at runtime. So:
+  (a) a reader ships before any writer change, always; (b) a reader in another container than the writer validates
+  with an open profile: unknown fields ignored, an unknown enum value read as "other", the record never refused whole
+  for it; (c) when a domain's writer copies `contracts/cos`, the release classifier maps `contracts/cos/` to that
+  service as well.
 
 ## Where the canonical history lives (section 4.19, B1a)
 

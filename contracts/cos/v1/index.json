@@ -30,6 +30,7 @@
     "minimoi.cos.turn/1": "conversation.schema.json",
     "minimoi.cos.send/1": "conversation.schema.json",
     "minimoi.cos.stream_note/1": "conversation.schema.json",
+    "minimoi.cos.participant_event/1": "conversation.schema.json",
     "minimoi.cos.seat_binding/1": "seat-binding.schema.json",
     "minimoi.cos.tool_arguments/1": "seat-binding.schema.json"
   },

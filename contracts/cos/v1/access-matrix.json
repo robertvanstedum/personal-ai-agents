@@ -13,7 +13,9 @@
         { "host_path": "cos/conversations/", "container_path": "/app/data/cos-conversations", "mode": "rw", "note": "canonical history writer (section 4.19); mount exists today, docker-compose.prod.yml:448" },
         { "host_path": "data/activity/", "container_path": "/app/data/activity", "mode": "ro" },
         { "api": "domain detail readers", "mode": "read" },
-        { "api": "internal command and read API", "mode": "serve", "note": "compose network only; service token as a file" }
+        { "api": "internal command and read API", "mode": "serve", "note": "compose network only. One token file per calling service (S4): the API derives the allowed actors from the token and refuses any other actor with not_authorized." },
+        { "secret_file": "cos/store-tokens/", "container_path": "/run/cos-store-tokens", "mode": "ro", "note": "one token per calling service: agent, cos-bot, scheduler-jobs, portal; the API reads them to authenticate callers" },
+        { "db": "raise_incident()", "mode": "execute", "note": "S7: loops H and I raise E1 and E3 from here (section 4.10); role minimoi_cos_scheduler" }
       ]
     },
     {
@@ -24,7 +26,9 @@
         { "host_path": "cos/store/", "container_path": "/minimoi/cos/store", "mode": "ro" },
         { "host_path": "cos/conversations/", "container_path": "/minimoi/cos/conversations", "mode": "ro", "note": "mount exists today, docker-compose.prod.yml:102" },
         { "host_path": "data/", "container_path": "/minimoi/data", "mode": "ro", "note": "R-1. Today rw (docker-compose.prod.yml:88). Narrowed only after the write inventory (section 4.7)." },
-        { "api": "internal command API", "mode": "call", "note": "every store change is a command" }
+        { "api": "internal command API", "mode": "call", "note": "every store change is a command; its token allows actor cos only" },
+        { "secret_file": "cos/store-tokens/agent", "container_path": "/run/cos-store-token", "mode": "ro" },
+        { "secret_file": "cos/agent-key/key", "container_path": "/run/cos-key", "mode": "ro", "note": "CoS's capped gateway key (cos_prod.sh key)" }
       ]
     },
     {
@@ -32,7 +36,8 @@
       "container": "minimoi-cos-bot",
       "runs_as": "uid 0 (no USER in docker/Dockerfile.cos-bot)",
       "access": [
-        { "api": "internal command and read API", "mode": "call", "note": "N7: no store mount" },
+        { "api": "internal command and read API", "mode": "call", "note": "N7: no store mount; its token allows actors telegram and cos" },
+        { "secret_file": "cos/store-tokens/cos-bot", "container_path": "/run/cos-store-token", "mode": "ro" },
         { "host_path": "cos_reminders/", "container_path": "/app/data/cos_reminders", "mode": "rw", "note": "retires when reminders migrate into obligations (B3); docker-compose.prod.yml:390" }
       ]
     },
@@ -65,7 +70,11 @@
       "container": "minimoi-supervisor",
       "runs_as": "confirm at B6a (read-only container, compose profile supervisor)",
       "access": [
-        { "host_path": "data/activity/guild-build/", "container_path": "/app/data/activity/guild-build", "mode": "rw", "note": "facts part only (section 4.4)" },
+        { "host_path": "data/activity/guild-build/facts/", "container_path": "/app/data/activity/guild-build/facts", "mode": "rw", "note": "S8: the facts part only, its own folder (section 4.4)" },
+        { "host_path": "data/guild/build_queue.json", "container_path": "/app/data/guild/build_queue.json", "mode": "ro", "note": "the facts job reads the queue (B2)" },
+        { "api": "internal command and read API", "mode": "call", "note": "S7: posts the incident's chat note (section 4.10); its token allows actor scheduler" },
+        { "secret_file": "cos/store-tokens/supervisor", "container_path": "/run/cos-store-token", "mode": "ro" },
+        { "secret_file": "supervisor/zoho-smtp", "container_path": "/run/secrets/supervisor/zoho-smtp", "mode": "ro", "note": "S7: the incident e-mail transport (B6b), projected from SSM" },
         { "db": "incident tables", "mode": "owner", "note": "needs a dedicated role (e.g. minimoi_supervisor) granted the incident tables and its existing guild.supervision_* tables only, its URL projected as a file like its token. Today the supervisor has no role of its own: it connects with the portal's DATABASE_URL (docker-compose.prod.yml:479, services/supervisor/main.py:141) and core/supervision/sql/ creates no role or grant. A new production credential: Robert's yes at B6a." }
       ]
     },
@@ -74,14 +83,18 @@
       "container": "minimoi-portal",
       "runs_as": "uid 0, read_only root filesystem",
       "access": [
-        { "host_path": "data/activity/guild-build/", "container_path": "/app/data/activity/guild-build", "mode": "rw", "note": "update part only, through publish_update_v1" },
-        { "db": "raise_incident()", "mode": "execute" }
+        { "host_path": "data/activity/guild-build/update/", "container_path": "/app/data/activity/guild-build/update", "mode": "rw", "note": "S8: the update part only, its own folder, through publish_update_v1" },
+        { "db": "raise_incident()", "mode": "execute", "note": "role: the portal's own" },
+        { "api": "internal command and read API", "mode": "call", "note": "the Room transition (MC joins in place) and consultations; its token allows actor mc" },
+        { "secret_file": "cos/store-tokens/portal", "container_path": "/run/cos-store-token", "mode": "ro" }
       ]
     }
   ],
   "invariants": [
     "cos/store/ is rw for cos-scheduler only.",
-    "Every data/activity/<domain>/ folder is rw for exactly one service, except guild-build, where the two parts (facts, update) are separate files with separate writers.",
+    "Every data/activity/<domain>/ folder is rw for exactly one service. guild-build has two subfolders, facts/ and update/, each rw for its one writer (S8); no service mounts guild-build/ itself.",
+    "Each service that calls the internal API has its own token file; the API maps token to allowed actors: agent → cos; cos-bot → telegram, cos; scheduler jobs → scheduler; portal → mc; supervisor → scheduler. A command whose actor is not allowed for its token is refused not_authorized (S4).",
+    "Database roles (S7, created at B6a on Robert's yes): minimoi_supervisor (incident tables, guild.supervision_*), minimoi_cos_scheduler (execute raise_incident()), the portal's existing role (execute raise_incident()).",
     "cos-agent-a has no rw path into cos/store/, cos/conversations/ or data/activity/.",
     "cos-bot has no store mount."
   ]

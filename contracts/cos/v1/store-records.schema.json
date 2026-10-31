@@ -184,7 +184,11 @@
         "actor": { "$ref": "urn:minimoi:contract:cos:common#/$defs/actor" },
         "seat": { "oneOf": [{ "$ref": "urn:minimoi:contract:cos:common#/$defs/seat" }, { "type": "null" }] },
         "basis_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
-        "evidence_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
+        "evidence_ref": {
+          "description": "S5: only an activity item, a Room event, an issue state, or Robert's recorded word counts as evidence.",
+          "allOf": [{ "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" }],
+          "properties": { "type": { "enum": ["activity.item", "rooms.event", "github.issue_state", "cos.turn", "telegram.message"] } }
+        },
         "revision_before": { "$ref": "urn:minimoi:contract:cos:common#/$defs/revision" },
         "claim_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" }
       },
@@ -220,7 +224,11 @@
         "at": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" },
         "claim_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
         "consultation_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
-        "closed_by": { "$ref": "#/$defs/record_key" },
+        "closed_by": {
+          "description": "S1: only MC's own update closes a reporting episode; fresh facts never do (spec section 4.4, harder case 6).",
+          "allOf": [{ "$ref": "#/$defs/record_key" }],
+          "properties": { "domain": { "const": "guild-build" }, "part": { "const": "update" } }
+        },
         "basis_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
         "revision_before": { "$ref": "urn:minimoi:contract:cos:common#/$defs/revision" }
       },
@@ -235,8 +243,10 @@
       "description": "A full activity-record reference: key, generation and seq.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["domain", "part", "local_date", "generation", "seq"],
+      "required": ["data_scope", "environment", "domain", "part", "local_date", "generation", "seq"],
       "properties": {
+        "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
+        "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" },
         "domain": { "$ref": "urn:minimoi:contract:cos:common#/$defs/domain" },
         "part": { "enum": ["main", "facts", "update"] },
         "local_date": { "$ref": "urn:minimoi:contract:cos:common#/$defs/local_date" },
@@ -287,7 +297,11 @@
         "should-have": { "type": "string", "minLength": 1, "maxLength": 1000 },
         "tag": { "enum": ["scope", "role", "authorization", "priority", "evidence", "effort"] },
         "source": { "type": "string", "minLength": 1, "maxLength": 300 },
-        "owner_turn_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" }
+        "owner_turn_ref": {
+          "description": "S5: the correction cites Robert's own turn.",
+          "allOf": [{ "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" }],
+          "properties": { "type": { "enum": ["cos.turn", "telegram.message", "rooms.event"] } }
+        }
       }
     },
     "meeting_link": {
@@ -329,7 +343,9 @@
       },
       "allOf": [
         {"if": {"properties": {"source": {"properties": {"kind": {"enum": ["cos_memory_md", "memory_tool"]}, "tag": {"enum": ["chat", "action", "distilled"]}}}}}, "then": {"properties": {"entry": {"properties": {"provenance": {"const": "agent_draft"}}}}}},
-        {"if": {"properties": {"entry": {"properties": {"provenance": {"const": "approved"}}}}}, "then": {"properties": {"source": {"required": ["operation_id"], "properties": {"tag": {"const": "note"}}}, "entry": {"properties": {"ref": {"properties": {"type": {"const": "cos.memory_note"}}}}}}}}
+        {"if": {"properties": {"entry": {"properties": {"provenance": {"const": "approved"}}}}}, "then": {"properties": {"source": {"required": ["operation_id"], "properties": {"tag": {"const": "note"}, "kind": {"enum": ["explicit_note", "cos_memory_md"]}}}, "entry": {"properties": {"ref": {"properties": {"type": {"const": "cos.memory_note"}}}}}}}},
+        {"description": "S2: anything the model wrote is agent_draft, whatever its tag.", "if": {"properties": {"source": {"properties": {"kind": {"const": "memory_tool"}}}}}, "then": {"properties": {"entry": {"properties": {"provenance": {"const": "agent_draft"}}}}}},
+        {"description": "S2: a fact is never a domain fact, and never Robert's verified words (no turn exists for these lines).", "properties": {"entry": {"properties": {"provenance": {"enum": ["agent_draft", "approved"]}}}}}
       ]
     }
   }
