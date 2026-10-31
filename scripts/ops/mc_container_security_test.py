@@ -152,6 +152,20 @@ def _():
     return code == 78 and "persona release failed verification" in out, f"exit {code}: {out.splitlines()[-1] if out else ''}"
 
 
+@check("6c", "start refuses a handbook that differs from the persona's pin (manifest hash)")
+def _():
+    import tempfile, os
+    base = os.path.expanduser(T["tmp"])
+    os.makedirs(base, mode=0o700, exist_ok=True)
+    d = tempfile.mkdtemp(dir=base)
+    p = os.path.join(d, "manifest.json")
+    with open(p, "w") as f:
+        f.write('{"format": "minimoi-mc-handbook/1", "files": {}}\n')
+    code, out = oneoff(env={"OPENCLAW_GATEWAY_TOKEN": "t"}, mounts=[f"{p}:/opt/minimoi/mc-agent/handbook/manifest.json:ro"])
+    return code == 78 and "failed verification" in out and "handbook" in out, \
+        f"exit {code}: {out.splitlines()[-1] if out else ''}"
+
+
 PENDING = [
     ("4", "search cannot reach an arbitrary URL; a query with a planted secret is refused (needs Grok sign-in)"),
     ("5", "instructions inside fetched/uploaded content stay data (needs a model sign-in)"),

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "persona": "mc-chat",
+  "version": "0.1.18",
+  "base": "0.1.16 + voice card",
+  "spec": "spec_mc_agent_container v0.2",
+  "status": "candidate",
+  "target": "mc-agent container",
+  "files": {
+    "SOUL.md": "3f79bf7edf148b8971f9707e67e334266027c0d12cecb5e18c1513f5996bd671",
+    "AGENTS.md": "96ea412383433d913f2c79dbd186f9718ded880b35098e5968eb53bc3ef082e1",
+    "RUNTIME.openclaw.md": "2b2428ccded1174e6a9857bd17f1ccfa2b2b0f860c786649bfe39a2dbfdb7197",
+    "CHANGES.md": "dcbf941d4ad108249842ee741e0d1cfebe699fb6f3fd44c431a796cd20ce48ca",
+    "voice.json": "0969852f9d68e0a3db4674e15c411f1acc0f6151b6e9b685657232eaaf764637"
+  },
+  "projection": "SOUL verbatim; AGENTS + runtime binding",
+  "projection_budget_chars": 16000,
+  "config_change": true
+}
