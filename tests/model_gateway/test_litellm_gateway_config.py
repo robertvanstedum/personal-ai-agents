@@ -50,8 +50,14 @@ def test_gateway_has_one_logical_primary_and_ordered_fallbacks():
         for item in config["model_list"]
     }
 
-    assert {name: model for name, model in deployments.items() if not name.startswith("minimoi-cos")} == {
+    assert {name: model for name, model in deployments.items()
+            if not name.startswith(("minimoi-cos", "minimoi-voice"))} == {
         f"minimoi-{provider}-{tier}": model for (provider, tier), model in TIERS.items()
+    }
+    # Voice's own routes (Spec 165 §5.4; confirm by voice v3): reached only with the capped voice keys, never a fallback.
+    assert {name: model for name, model in deployments.items() if name.startswith("minimoi-voice")} == {
+        "minimoi-voice-summary": "xai/grok-4.3",
+        "minimoi-voice-intent": "xai/grok-4.3",
     }
     assert {name: model for name, model in deployments.items() if name.startswith("minimoi-cos")} == {
         "minimoi-cos-agent": "xai/grok-4.3",

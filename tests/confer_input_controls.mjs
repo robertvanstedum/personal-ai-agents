@@ -56,7 +56,10 @@ function rig({beforeStart=async()=>{}}={}){
   const r=rig();await r.click();const m=r.instances[0];let stopping;
   if(state==='finalizing')stopping=r.binding.stop();
   let fetches=0;
-  const sandbox={sendInput:r.input,btnSend:r.send,fetch:()=>{fetches++;},crypto:{randomUUID:()=> 'synthetic'},appendMsg:()=>assert.fail('must not send'),appendThinking:()=>assert.fail('must not send'),setInputDisabled:()=>{}};
+  // The slice reaches past sendMessage to the Files from CoS wiring (c13e0fba), which looks its toggle up by id at load:
+  // a page node that takes listeners is all it needs (Spec 165 §12.1's missing DOM mock).
+  const sandbox={sendInput:r.input,btnSend:r.send,fetch:()=>{fetches++;},crypto:{randomUUID:()=> 'synthetic'},appendMsg:()=>assert.fail('must not send'),appendThinking:()=>assert.fail('must not send'),setInputDisabled:()=>{},
+   document:{getElementById:()=>({addEventListener(){}})}};
   vm.createContext(sandbox);vm.runInContext(handler,sandbox);await sandbox.sendMessage();
   assert.equal(fetches,0);assert.equal(r.input.value,'Existing draft');
   if(!stopping)stopping=r.binding.stop();m.finish.resolve();await stopping;

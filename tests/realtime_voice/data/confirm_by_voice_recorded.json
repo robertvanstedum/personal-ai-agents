@@ -1,0 +1,378 @@
+{
+ "about": "Confirm by voice, v3, the fix round's integrated cases (REVIEW_v3_build.md S8): the real server's decisions and the\nadapters' real result shapes, recorded for the real page. Each scenario runs through MC's real adapter on the synthetic\nGuild mount and Chief of Staff's real adapter and file store (test_direct_contract's driver), with exactly the requests\nthe page makes in tests/realtime_voice/test_confirm_by_voice.mjs's S8 cases (the same owner item ids, the\nquestion's after_item, the confirmation's fields); the answers are kept, normalized, in\ntests/realtime_voice/data/confirm_by_voice_recorded.json, which that page rig replays through the real page, controller\nand adapters on both providers. This test fails when the server's answers no longer match the recording (a server\nchange the page has not been run against): regenerate it with VOICE_RECORD=1 and run the page rig again.",
+ "scenarios": [
+  {
+   "host": "MC",
+   "scenario": "m1_natural_note_is_his_typed_turn",
+   "effects": 1,
+   "steps": [
+    {
+     "route": "utterance",
+     "request": {
+      "owner_item_id": "t0",
+      "text": "Could you jot down that the glaze needs a second firing?"
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "decision": "ask",
+      "heard": "note",
+      "kind": "consult",
+      "ok": true,
+      "owner_item_id": "t0",
+      "proposing": false,
+      "text_sha256": "ca3849f7f1de840a7be14116508258e8f452bb5867e114881d4fe05845a788e8"
+     }
+    },
+    {
+     "route": "asked",
+     "request": {
+      "action_id": "action-1",
+      "after_item": "t0"
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "expires_in": 30,
+      "ok": true,
+      "state": "asked"
+     }
+    },
+    {
+     "route": "utterance",
+     "request": {
+      "owner_item_id": "t2",
+      "text": "Yes."
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "confirm_item_id": "t2",
+      "decision": "confirm",
+      "heard": "yes",
+      "kind": "consult",
+      "ok": true,
+      "owner_item_id": "t0",
+      "proposing": false,
+      "text_sha256": "ca3849f7f1de840a7be14116508258e8f452bb5867e114881d4fe05845a788e8"
+     }
+    },
+    {
+     "route": "consult",
+     "request": {
+      "session_id": "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f",
+      "call_id": "confirm-action-1",
+      "action_id": "action-1",
+      "confirm_item_id": "t2",
+      "owner_item_id": "t0",
+      "text_sha256": "ca3849f7f1de840a7be14116508258e8f452bb5867e114881d4fe05845a788e8"
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "answered": true,
+      "call_id": "confirm-action-1",
+      "kind": "consult",
+      "note_request_id": "vc-7c1d2e3f4a5b4c6d8e9f0a1b2c3d4e5f-t0",
+      "ok": true,
+      "outcome": "done",
+      "owner_item_id": "t0",
+      "receipt": "reply-1",
+      "receipt_kind": "reply",
+      "spoken": "Item 12 is in build."
+     }
+    }
+   ]
+  },
+  {
+   "host": "MC",
+   "scenario": "s3_second_yes_after_a_lost_answer",
+   "effects": 1,
+   "steps": [
+    {
+     "route": "utterance",
+     "request": {
+      "owner_item_id": "t0",
+      "text": "make a note that the kiln is hot"
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "decision": "ask",
+      "heard": "note",
+      "kind": "note",
+      "ok": true,
+      "owner_item_id": "t0",
+      "proposing": false,
+      "text_sha256": "da40e3837bb7b7cf032d38a95451410a8030441f7fc449cc1e6748322da82124"
+     }
+    },
+    {
+     "route": "asked",
+     "request": {
+      "action_id": "action-1",
+      "after_item": "t0"
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "expires_in": 30,
+      "ok": true,
+      "state": "asked"
+     }
+    },
+    {
+     "route": "utterance",
+     "request": {
+      "owner_item_id": "t2",
+      "text": "Yes."
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "confirm_item_id": "t2",
+      "decision": "confirm",
+      "heard": "yes",
+      "kind": "note",
+      "ok": true,
+      "owner_item_id": "t0",
+      "proposing": false,
+      "text_sha256": "da40e3837bb7b7cf032d38a95451410a8030441f7fc449cc1e6748322da82124"
+     },
+     "lost": true
+    },
+    {
+     "route": "utterance",
+     "request": {
+      "owner_item_id": "t4",
+      "text": "Yes."
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "again": true,
+      "confirm_item_id": "t2",
+      "decision": "confirm",
+      "heard": "yes",
+      "kind": "note",
+      "ok": true,
+      "owner_item_id": "t0",
+      "proposing": false,
+      "text_sha256": "da40e3837bb7b7cf032d38a95451410a8030441f7fc449cc1e6748322da82124"
+     }
+    },
+    {
+     "route": "consult",
+     "request": {
+      "session_id": "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f",
+      "call_id": "confirm-action-1",
+      "action_id": "action-1",
+      "confirm_item_id": "t2",
+      "owner_item_id": "t0",
+      "text_sha256": "da40e3837bb7b7cf032d38a95451410a8030441f7fc449cc1e6748322da82124"
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "answered": true,
+      "call_id": "confirm-action-1",
+      "kind": "note",
+      "note_request_id": "vc-7c1d2e3f4a5b4c6d8e9f0a1b2c3d4e5f-t0",
+      "ok": true,
+      "outcome": "done",
+      "owner_item_id": "t0",
+      "receipt": "id-1",
+      "saved": true,
+      "spoken": "Saved."
+     }
+    }
+   ]
+  },
+  {
+   "host": "CoS",
+   "scenario": "m1_natural_note_is_his_typed_turn",
+   "effects": 1,
+   "steps": [
+    {
+     "route": "utterance",
+     "request": {
+      "owner_item_id": "t0",
+      "text": "Could you jot down that the glaze needs a second firing?"
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "decision": "ask",
+      "heard": "note",
+      "kind": "consult",
+      "ok": true,
+      "owner_item_id": "t0",
+      "proposing": false,
+      "text_sha256": "ca3849f7f1de840a7be14116508258e8f452bb5867e114881d4fe05845a788e8"
+     }
+    },
+    {
+     "route": "asked",
+     "request": {
+      "action_id": "action-1",
+      "after_item": "t0"
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "expires_in": 30,
+      "ok": true,
+      "state": "asked"
+     }
+    },
+    {
+     "route": "utterance",
+     "request": {
+      "owner_item_id": "t2",
+      "text": "Yes."
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "confirm_item_id": "t2",
+      "decision": "confirm",
+      "heard": "yes",
+      "kind": "consult",
+      "ok": true,
+      "owner_item_id": "t0",
+      "proposing": false,
+      "text_sha256": "ca3849f7f1de840a7be14116508258e8f452bb5867e114881d4fe05845a788e8"
+     }
+    },
+    {
+     "route": "consult",
+     "request": {
+      "session_id": "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f",
+      "call_id": "confirm-action-1",
+      "action_id": "action-1",
+      "confirm_item_id": "t2",
+      "owner_item_id": "t0",
+      "text_sha256": "ca3849f7f1de840a7be14116508258e8f452bb5867e114881d4fe05845a788e8"
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "answered": true,
+      "call_id": "confirm-action-1",
+      "kind": "consult",
+      "ok": true,
+      "outcome": "done",
+      "owner_item_id": "t0",
+      "receipt": "id-1",
+      "receipt_kind": "turn",
+      "spoken": "Two items are stuck on 12."
+     }
+    }
+   ]
+  },
+  {
+   "host": "CoS",
+   "scenario": "s3_second_yes_after_a_lost_answer",
+   "effects": 1,
+   "steps": [
+    {
+     "route": "utterance",
+     "request": {
+      "owner_item_id": "t0",
+      "text": "save a note that the kiln is hot"
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "decision": "ask",
+      "heard": "note",
+      "kind": "note",
+      "ok": true,
+      "owner_item_id": "t0",
+      "proposing": false,
+      "text_sha256": "cd2b6d2ad55192e048d5c148465d6884228710d54dc35c15c1a47a04357c3c67"
+     }
+    },
+    {
+     "route": "asked",
+     "request": {
+      "action_id": "action-1",
+      "after_item": "t0"
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "expires_in": 30,
+      "ok": true,
+      "state": "asked"
+     }
+    },
+    {
+     "route": "utterance",
+     "request": {
+      "owner_item_id": "t2",
+      "text": "Yes."
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "confirm_item_id": "t2",
+      "decision": "confirm",
+      "heard": "yes",
+      "kind": "note",
+      "ok": true,
+      "owner_item_id": "t0",
+      "proposing": false,
+      "text_sha256": "cd2b6d2ad55192e048d5c148465d6884228710d54dc35c15c1a47a04357c3c67"
+     },
+     "lost": true
+    },
+    {
+     "route": "utterance",
+     "request": {
+      "owner_item_id": "t4",
+      "text": "Yes."
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "again": true,
+      "confirm_item_id": "t2",
+      "decision": "confirm",
+      "heard": "yes",
+      "kind": "note",
+      "ok": true,
+      "owner_item_id": "t0",
+      "proposing": false,
+      "text_sha256": "cd2b6d2ad55192e048d5c148465d6884228710d54dc35c15c1a47a04357c3c67"
+     }
+    },
+    {
+     "route": "consult",
+     "request": {
+      "session_id": "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f",
+      "call_id": "confirm-action-1",
+      "action_id": "action-1",
+      "confirm_item_id": "t2",
+      "owner_item_id": "t0",
+      "text_sha256": "cd2b6d2ad55192e048d5c148465d6884228710d54dc35c15c1a47a04357c3c67"
+     },
+     "status": 200,
+     "response": {
+      "action_id": "action-1",
+      "answered": true,
+      "call_id": "confirm-action-1",
+      "kind": "note",
+      "ok": true,
+      "outcome": "done",
+      "owner_item_id": "t0",
+      "receipt": "id-1",
+      "receipt_kind": "operation",
+      "saved": true,
+      "spoken": "Saved."
+     }
+    }
+   ]
+  }
+ ]
+}

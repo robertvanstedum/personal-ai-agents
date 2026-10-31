@@ -675,7 +675,7 @@ class ToolService:
         receipt = effect.finish(conn, kind + "_proposal", {"proposal_id": proposal_id, "code": code}, verified=True)
         conn.commit()                     # prepared: on record, never approvable until its note is read back
         try:
-            posted = bool(self.show(b.conversation_id, key, card))
+            posted = bool(self._show(b.conversation_id, key, card, owner_turn=b.note_request_id))
         except Exception:
             _log.exception("mc tools: proposal %s could not be posted", code)
             posted = False
@@ -1121,20 +1121,28 @@ class ToolService:
         # successful retry, including a crash after the write but before its notice.
         # The stable note key prevents duplication; only exact platform read-back
         # permits a claim that the notice was recorded in the conversation.
-        shown = self._preference_notice(b.conversation_id, f"mc-preference-{op}", card)
+        shown = self._preference_notice(b.conversation_id, f"mc-preference-{op}", card,
+                                        owner_turn=b.note_request_id)
         data["display"] = "recorded" if shown else "unconfirmed"
         message += (" MiniMoi recorded the preference notice in this conversation." if shown else
                     " The lesson change is verified, but MiniMoi could not confirm its notice in the conversation. "
                     "Tell Robert the result and how to undo it; do not repeat the change to repair the notice.")
         return result("done", "kept" if action == "keep" else "revoked", message, data)
 
-    def _preference_notice(self, conversation_id, key, text):
+    def _show(self, conversation_id, key, text, *, owner_turn=None):
+        """The platform note, through the host's shower. A shower that says it takes the binding's owner note
+        (``show.owner_turn``) is given it, so the host can tie the note to that turn (the Guild: its voice session)."""
+        if owner_turn is not None and getattr(self.show, "owner_turn", False) is True:
+            return self.show(conversation_id, key, text, owner_turn=owner_turn)
+        return self.show(conversation_id, key, text)
+
+    def _preference_notice(self, conversation_id, key, text, *, owner_turn=None):
         if self.show is None or self.read_shown is None:
             return False
         try:
             note = self.read_shown(conversation_id, key)
             if note is None:
-                self.show(conversation_id, key, text)
+                self._show(conversation_id, key, text, owner_turn=owner_turn)
                 note = self.read_shown(conversation_id, key)
             return isinstance(note, dict) and note.get("who") == "guild_platform" and note.get("text") == text
         except Exception:

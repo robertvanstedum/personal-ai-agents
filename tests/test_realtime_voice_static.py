@@ -3,6 +3,21 @@ tests/test_realtime_voice_static.py — both domains serve the shared
 realtime-voice JS from one source of truth (core/realtime_voice/static/),
 not a per-domain copy.
 """
+import shutil
+import subprocess
+
+import pytest
+
+
+def test_playback_event_is_wired_once():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    done = subprocess.run(
+        [node, "--test", "tests/realtime_voice/test_playback_event.mjs"],
+        capture_output=True, text=True, timeout=20,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
 
 
 def test_german_serves_shared_controller_js(german_client):
@@ -76,12 +91,20 @@ def test_shared_controller_starts_with_persona_and_optional_live_transcript(germ
 
     assert "one short, natural greeting" in source
     assert "Do not give directions" in source
-    assert "sendContinuationInstruction(this._openingInstruction)" in source
+    # Since V R2-M1 the opening instruction goes through the controller's request recorder; the adapter receives the same
+    # one-argument call (pinned by tests/realtime_voice/test_controller_no_change.mjs).
+    assert "this._instruct(this._openingInstruction, tag)" in source
     assert 'this._onInputState("speech_started")' in source
     assert "this._onTranscriptUpdate = onTranscriptUpdate || (() => {});" in source
     assert "this._onTranscriptUpdate([...this._items.values()]" in source
-    assert "openai-webrtc-adapter.js?v=20261015-managed-end1" in source
-    assert "xai-websocket-adapter.js?v=20260725-transcript1" in source
+    # Bumped in Spec 165 A1: both adapters changed (the playback event), so browsers fetch them afresh.
+    # Again for the playback outcome (v0.3, G3), and again for the page's own responses (the C2 binding pass: each response's
+    # end, and a response created for a committed item), and again for the live probes (LV1, LV2); xAI's again for a
+    # microphone granted after the start ended (Gate 2 V S2).
+    # And for the v3 fix round: both report each response's first audio (audio_started, review M2).
+    # And for the v3 live check (31 Oct): OpenAI's sends the direct page's lines as system items (fault 1).
+    assert "openai-webrtc-adapter.js?v=20261031-live1" in source
+    assert "xai-websocket-adapter.js?v=20261031-live1" in source
 
 
 def test_xai_adapter_handles_current_audio_delta_and_connection_failures(german_client):

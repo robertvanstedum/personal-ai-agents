@@ -92,7 +92,12 @@ def module_preloads() -> list:
         return []
     if not reserve_pages_enabled():
         names = [n for n in names if n != "bench.js"]
+    if not _mc_voice_direct_installed():
+        names = [n for n in names if n != DIRECT_VOICE_JS]
     return [url_for(".asset", filename=f"js/{n}") for n in names]
+
+
+DIRECT_VOICE_JS = "mc_voice_direct.js"       # MC voice on the direct path: listed and served only while that path is installed
 
 
 def _urls(c) -> dict:
@@ -165,7 +170,8 @@ def _context(page_id: str, area: str, context_item: str, *, conversation_id=None
                 user=c["current_user"](), page_json=page, urls=urls, phone_numbers=phone_numbers,
                 filing_off=FILING_OFF, invite_off=INVITE_OFF, rules_label=RULES_LABEL,
                 hhmm=hhmm, age=age, badge=badge, statuses=STATUSES, conversation=conversation,
-                conv_notice=conv_notice, mc_voice_on=_mc_voice_on(), dictation_on=_dictation_on(), **extra)
+                conv_notice=conv_notice, mc_voice_on=_mc_voice_on(), mc_voice_direct_on=_mc_voice_direct_on(),
+                dictation_on=_dictation_on(), **extra)
 
 
 def _mc_queue_on(c) -> bool:
@@ -179,6 +185,19 @@ def _mc_queue_on(c) -> bool:
 def _mc_voice_on() -> bool:
     from . import mc_voice
     return mc_voice.enabled()
+
+
+def _mc_voice_direct_on() -> bool:
+    """MC voice on the direct path: the voice switch, and the direct routes installed and admitted on this mount
+    (mc_voice_direct). The live bar is shown only then."""
+    return _mc_voice_on() and bool(cfg().get("mc_direct_voice"))
+
+
+def _mc_voice_direct_installed() -> bool:
+    """The direct routes installed on this mount, admitted or not (Spec 165 §11.1 S1, S3): the thread's script
+    (DIRECT_VOICE_JS) is listed and served, so an earlier session's proposal can still be decided."""
+    c = cfg()
+    return _mc_voice_on() and bool(c.get("mc_direct_voice_records") or c.get("mc_direct_voice"))
 
 
 def _dictation_on() -> bool:

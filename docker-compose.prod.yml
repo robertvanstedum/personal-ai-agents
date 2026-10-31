@@ -243,6 +243,9 @@ services:
       - MINIMOI_GUILD_VOICE_PRODUCTION=1
       - MINIMOI_MC_VOICE=1
       - MINIMOI_DICTATION=1
+      # MC's direct voice (Spec 165 §11.1; minimoi_portal/guild_mounts.py production_environ): MINIMOI_MC_VOICE_DIRECT
+      # installs it (its routes, record routes included) and MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION admits starts; both
+      # come from env_file and default off.
       # Explicit controls; activation follows reviewed production schema/runtime checks.
       - MINIMOI_ROLE=production
       - MINIMOI_MC_BOARD_OUTCOMES=${MINIMOI_MC_BOARD_OUTCOMES:-0}
@@ -433,6 +436,11 @@ services:
       - COS_AGENT_INBOX=/minimoi/cos/inbox
       - COS_AGENT_OUTBOX=/minimoi/cos/outbox
       - COS_AGENT_CONVERSATIONS=/minimoi/cos/conversations
+      # Her direct voice (Spec 165 §6.5, §6.8; domains/cos/direct_voice.py): its voice store's folder, mounted below, and her
+      # capped summary key (empty until operations provisions it: the summary then reads "unavailable", nothing fails).
+      # The switches MINIMOI_COS_VOICE_DIRECT and MINIMOI_COS_DIRECT_VOICE_PRODUCTION default off.
+      - COS_VOICE_DIR=/app/data/cos-voice
+      - MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS=${MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS:-}
     volumes:
       # Same owner limit registry as the portal, including next-day limits.
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/limits:/app/runtime/guild/limits:ro
@@ -447,6 +455,9 @@ services:
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos/inbox:/app/data/cos-files/inbox
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos/outbox:/app/data/cos-files/outbox:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos/conversations:/app/data/cos-conversations
+      # Her voice store (Spec 165 §6.5, D5 (b)): beside cos_reminders, outside data/ and cos/, and never mounted into
+      # cos-agent-a, so her runtime cannot read a live session. Operations creates it 0700 before her voice is on.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos_voice:/app/data/cos-voice
     ports:
       - "127.0.0.1:8769:8769"
     # Vault retrieval for MC/CoS turns (owner decisions 17 Oct 2026). Off until the Vault

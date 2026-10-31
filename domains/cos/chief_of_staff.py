@@ -79,6 +79,7 @@ _routing_receipts = RoutingReceiptStore(MODEL_GATEWAY_RECEIPT_FILE)
 # (domains/cos/conversation_log.py); each None (off) until its folders are configured.
 _cos_files = cos_files.from_environ(os.environ)
 _conversations_dir = conversation_log.folder(os.environ)
+_cos_direct_voice = None        # CoS's direct-voice metadata once installed (domains/cos/direct_voice.py), else None
 
 
 def _workspace_note() -> str | None:
@@ -86,7 +87,8 @@ def _workspace_note() -> str | None:
     if _cos_files is not None:
         notes.append(_cos_files.system_note())
     if _conversations_dir is not None:
-        notes.append(conversation_log.system_note(os.environ.get("COS_AGENT_CONVERSATIONS") or str(_conversations_dir)))
+        notes.append(conversation_log.system_note(os.environ.get("COS_AGENT_CONVERSATIONS") or str(_conversations_dir),
+                                                  voice=_cos_direct_voice is not None))
     return " ".join(notes) or None
 
 # ── DB (optional — degrades gracefully if Docker is down) ────────────────────
@@ -611,7 +613,9 @@ def _check_ec2_health() -> dict:
     return {"status": status, "issues": issues}
 
 
-def _build_system_prompt() -> str:
+def _build_system_prompt(memory: str | None = None) -> str:
+    """Her briefing. ``memory``: the memory text to put in it instead of reading cos_memory.md (her direct voice, which
+    must cut it to a bound: domains/cos/direct_voice.py)."""
     try:
         raw_context = json.loads(COS_CONTEXT_FILE.read_text())
         soul_enabled = raw_context.get("cos_soul_enabled", True)
@@ -625,7 +629,7 @@ def _build_system_prompt() -> str:
     except Exception:
         cos_soul = ""
 
-    cos_memory = _read_memory()
+    cos_memory = _read_memory() if memory is None else memory
 
     try:
         ops = requests.get("http://localhost:8768/status", timeout=3).json()
@@ -814,7 +818,10 @@ def _process_confer_turn(
     channel: str = "api_text",
     conversation_id: str = "owner",
     request_id: str | None = None,
+    on_dispatch=None,
 ):
+    """One Confer turn through the canonical turn service. ``on_dispatch`` (CoS's direct voice only): called at the
+    dispatch boundary (ConferTurnRequest.on_dispatch); None for every other caller."""
     receipt_resolver = (
         _get_routing_receipt
         if getattr(_backend, "supports_routing_receipts", False)
@@ -836,6 +843,7 @@ def _process_confer_turn(
         channel=channel,
         conversation_id=conversation_id,
         request_id=request_id,
+        on_dispatch=on_dispatch,
     ))
 
 
@@ -1252,6 +1260,11 @@ app.register_blueprint(create_confer_voice_blueprint(
 from domains.cos.managed_realtime import install as _install_managed_realtime
 _cos_managed_realtime_ready = _install_managed_realtime(app, environ=os.environ,
     process_turn=_process_confer_turn, instructions=_build_cos_voice_instructions)
+# Her direct voice (Spec 165 v0.3 §6): routes only with MINIMOI_COS_VOICE_DIRECT=1; starts in production also need
+# MINIMOI_COS_DIRECT_VOICE_PRODUCTION=1 (domains/cos/direct_voice.py). Off: nothing is registered and Confer is as before.
+from domains.cos.direct_voice import install as _install_direct_voice
+_cos_direct_voice = _install_direct_voice(app, environ=os.environ, process_turn=_process_confer_turn,
+    briefing=_build_system_prompt, memory=_read_memory, files=lambda: _cos_files, recall=_conversations_dir)
 
 
 

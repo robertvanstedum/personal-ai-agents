@@ -57,7 +57,8 @@ def _entry(row):
     return session, match['speaker'], stamp.isoformat(), part, total, match['partial'], text[match.end():]
 
 
-def render(floor, *, before=None, max_pages=MAX_PAGES, max_bytes=MAX_BYTES, scrub=lambda text: text):
+def render(floor, *, before=None, max_pages=MAX_PAGES, max_bytes=MAX_BYTES, scrub=lambda text: text,
+           withheld=lambda session: False):
     """Read <=20 pages/4000 notes, emit <=1MiB UTF8, with an older-page cursor.
 
     Each returned segment is in stable ascending note-ID chronology. Reads use
@@ -93,6 +94,8 @@ def render(floor, *, before=None, max_pages=MAX_PAGES, max_bytes=MAX_BYTES, scru
             except ExportUnavailable:
                 invalid += 1
                 parsed = None
+            if parsed is not None and withheld(parsed[0]):
+                parsed = None                     # a live or recovering voice session (mc_voice_reveal): not yet
             if parsed is not None:
                 session, speaker, stamp, part, total, partial, text = parsed
                 try:

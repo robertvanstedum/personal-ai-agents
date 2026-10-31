@@ -88,6 +88,9 @@ rsync_path "${AUTH_DIR}/"                        "auth/"
 # mounts data/ read-write) cannot edit them, so they are named here explicitly.
 rsync_path "/opt/minimoi/cos_memory.md"         "cos_memory.md"
 rsync_path "/opt/minimoi/cos_reminders/"        "cos_reminders/"
+# Chief of Staff's voice records (Spec 165 §6.5; domains/cos/voice_store.py), beside cos_memory.md for the same
+# reason: cos-agent-a mounts data/ read-write and must not reach them.
+rsync_path "/opt/minimoi/cos_voice/"            "cos_voice/"
 
 log "=== Local backup complete: ${LOCAL_BACKUP} ==="
 

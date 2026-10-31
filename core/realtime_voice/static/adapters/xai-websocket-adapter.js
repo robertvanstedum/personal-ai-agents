@@ -34,6 +34,7 @@ export class XAIWebSocketAdapter {
     this._micReady = false;
     this._connectedEmitted = false;
     this._playbackSources = new Set();
+    this._responses = new Map();     // response id -> {sources, done, audio, status}: which response each chunk of audio belongs to
   }
 
   on(eventName, handler) {
@@ -53,6 +54,8 @@ export class XAIWebSocketAdapter {
     // bootstrap response. Browsers cannot set WebSocket headers, so the
     // token travels as a Sec-WebSocket-Protocol entry
     // ("xai-client-secret." prefix), per xAI's documented browser pattern.
+    // A host that may end a start before the microphone is granted says so (isCurrent: the direct page only; Gate 2 V S2).
+    this._isCurrent = typeof credentials.isCurrent === "function" ? credentials.isCurrent : null;
     let micError = null;
     const micPromise = this._startMicCapture().catch((err) => {
       micError = err;
@@ -116,6 +119,11 @@ export class XAIWebSocketAdapter {
     } catch (err) {
       throw new Error(`microphone_denied: ${err}`);
     }
+    if (this._isCurrent && !this._isCurrent()) {       // ended while the permission prompt was open: release it at once
+      for (const track of this._micStream.getTracks()) track.stop();
+      this._micStream = null;
+      throw new Error("ended_before_capture");
+    }
 
     this._audioContext = new AudioContext({ sampleRate: 24000 });
     await this._audioContext.resume();
@@ -170,12 +178,48 @@ export class XAIWebSocketAdapter {
     this._audioContext = null;
   }
 
+  // Spec 165 §5.3: playback_drained {response_id, outcome} once a response is done and every chunk of its audio has played
+  // out (or was stopped at barge-in); a response with no audio drains at its end. The outcome names how it ended (v0.3, G3):
+  // drained (completed, and its audio played to the end), barged_in (stopped at his speech), cancelled (the provider
+  // cancelled it, or ended it incomplete or failed), no_audio; or none claimed (null) when xAI gave no status.
+  // Nothing listens unless a host passes onPlaybackDrained to the controller; German and Portuguese do not.
+  _response(id) {
+    const key = id || this._responseId || null;
+    if (!this._responses.has(key)) this._responses.set(key, { sources: 0, done: false, audio: false, status: null });
+    return [key, this._responses.get(key)];
+  }
+
+  _drainedIf(key, outcome = null) {
+    const r = this._responses.get(key);
+    if (r && r.done && r.sources <= 0) {
+      this._responses.delete(key);
+      const cut = ["cancelled", "incomplete", "failed"].includes(r.status);
+      this._emit("playback_drained", { response_id: key,
+        outcome: outcome || (cut ? "cancelled" : !r.audio ? "no_audio" : r.status === "completed" ? "drained" : null) });
+    }
+  }
+
   sendContinuationInstruction(text) {
     this._ws?.send(JSON.stringify({
       type: "conversation.item.create",
       item: { type: "message", role: "user", content: [{ type: "input_text", text }] },
     }));
     this._ws?.send(JSON.stringify({ type: "response.create" }));
+  }
+
+  // Spec 165 §5.1 as amended (C2 by construction): a response the page asks for itself. xAI is not eligible for the page's
+  // own responses until A4 shows it names the committed item and creates none of its own; nothing calls this until then.
+  createResponse() {
+    this._ws?.send(JSON.stringify({ type: "response.create" }));
+  }
+
+  // Spec 165 §5.1 (C2 by construction; review B S3): a function output that asks for no response, for a call that may not
+  // act. Only a host that asks for its own responses calls it; German never does.
+  sendFunctionOutput(callId, output) {
+    this._ws?.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: { type: "function_call_output", call_id: callId, output: typeof output === "string" ? output : JSON.stringify(output) },
+    }));
   }
 
   sendFunctionResult(callId, output) {
@@ -209,19 +253,45 @@ export class XAIWebSocketAdapter {
       case "input_audio_buffer.speech_stopped":
         this._emit("speech_stopped", {});
         break;
+      case "response.created":
+        this._responseId = event.response?.id || null;
+        this._emit("response_started", { response_id: this._responseId });
+        break;
+      // Spec 165 §5.1: the owner input item a response answers (if xAI sends this OpenAI-shaped event; not verified).
+      case "input_audio_buffer.committed":
+        this._emit("input_item", { item_id: event.item_id || null });
+        break;
       case "response.output_audio.delta":
-        this._playAudioChunk(event.delta || event.audio);
+        // The v3 fix round (review M2): each response's first audio, for a host that counts a question from it. Nothing
+        // listens unless a host passes onAudioStarted to the controller; German and Portuguese do not.
+        if (event.response_id && event.response_id !== this._sounding) {
+          this._sounding = event.response_id;
+          this._emit("audio_started", { response_id: event.response_id });
+        }
+        this._playAudioChunk(event.delta || event.audio, event.response_id);
         this._emit("assistant_started", {});
         break;
       case "response.done":
+        // Spec 165 §5.1 (C2 by construction): the response's end and how it ended, before its function calls are passed on.
+        this._emit("response_done", { response_id: event.response?.id || this._responseId || null, status: event.response?.status || null });
         for (const item of event.response?.output || []) {
           if (item.type === "function_call") {
             this._emit("function_call", {
               call_id: item.call_id,
               name: item.name,
               arguments: item.arguments,
+              response_id: event.response?.id || this._responseId || null,
             });
           }
+        }
+        {
+          const [key, r] = this._response(event.response?.id);
+          r.done = true;
+          // Cut short: cancelled, incomplete or failed is never heard to the end (review L N9). Only a response whose status
+          // says completed is drained once its audio has played; with no status (xAI's status field is not verified) no
+          // outcome is claimed (review W N1).
+          r.status = event.response?.status || null;
+          this._drainedIf(key);
         }
         this._emit("assistant_stopped", { usage: event.response?.usage || event.usage });
         if (event.response?.usage || event.usage) {
@@ -237,9 +307,11 @@ export class XAIWebSocketAdapter {
         });
         break;
       case "conversation.item.input_audio_transcription.completed":
+        // LV2 (live probes): xAI sends its interim transcripts as .completed with status "in_progress" (2 to 5 an utterance),
+        // then the final one with status "completed". The status is passed on; only a host on the direct path reads it.
         this._emit("input_transcript", {
           item_id: event.item_id, text: event.transcript, is_delta: false,
-          completed: true, provider_event_id: event.event_id,
+          completed: true, provider_event_id: event.event_id, status: event.status || null,
         });
         break;
       case "response.output_audio_transcript.delta":
@@ -269,7 +341,7 @@ export class XAIWebSocketAdapter {
     }
   }
 
-  _playAudioChunk(base64Audio) {
+  _playAudioChunk(base64Audio, responseId) {
     if (!this._audioContext || !base64Audio) return;
     const float32 = _base64PCM16ToFloat32(base64Audio);
     const buffer = this._audioContext.createBuffer(1, float32.length, 24000);
@@ -278,18 +350,30 @@ export class XAIWebSocketAdapter {
     source.buffer = buffer;
     source.connect(this._audioContext.destination);
     this._playbackSources.add(source);
-    source.addEventListener("ended", () => this._playbackSources.delete(source), { once: true });
+    if (this._playbackSources.size === 1) this._emit("playback_started", {});
+    const [key, owner] = this._response(responseId);
+    owner.sources += 1;
+    owner.audio = true;
+    source.addEventListener("ended", () => {
+      this._playbackSources.delete(source);
+      if (owner.sources > 0) { owner.sources -= 1; this._drainedIf(key); }
+    }, { once: true });
     const startAt = Math.max(this._audioContext.currentTime, this._playbackQueueTime);
     source.start(startAt);
     this._playbackQueueTime = startAt + buffer.duration;
   }
 
   _stopPlayback() {
+    const cut = [...this._responses].filter(([, r]) => r.sources > 0).map(([key]) => key);
     for (const source of this._playbackSources) {
       try { source.stop(); } catch (_) {}
     }
     this._playbackSources.clear();
     this._playbackQueueTime = this._audioContext?.currentTime || 0;
+    for (const key of cut) {                                // stopped at barge-in: what was queued is not going to play
+      const r = this._responses.get(key);
+      if (r) { r.sources = 0; r.done = true; this._drainedIf(key, "barged_in"); }
+    }
   }
 }
 

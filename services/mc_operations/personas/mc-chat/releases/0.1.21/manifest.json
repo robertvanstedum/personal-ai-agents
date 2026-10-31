@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "persona": "mc-chat",
+  "version": "0.1.21",
+  "base": "0.1.20 + OpenAI voice ballad (Robert's pick)",
+  "spec": "spec_mc_agent_container v0.2",
+  "status": "candidate",
+  "target": "mc-agent container",
+  "files": {
+    "SOUL.md": "3f79bf7edf148b8971f9707e67e334266027c0d12cecb5e18c1513f5996bd671",
+    "AGENTS.md": "cdf2d735ba15308120f70aa101ffa06a67ee2842af4d62a06d30632f46da124d",
+    "RUNTIME.openclaw.md": "2b2428ccded1174e6a9857bd17f1ccfa2b2b0f860c786649bfe39a2dbfdb7197",
+    "CHANGES.md": "6334e25d8a9b82e1742a127137dc5e2f715835bd76eabec978948512afda3328",
+    "voice.json": "dcf56ce5b849923e877cddc1095764ef7fac0d41f2215184fcb8ceba85a3fa07"
+  },
+  "projection": "SOUL verbatim; AGENTS + runtime binding",
+  "projection_budget_chars": 16000,
+  "config_change": true
+}

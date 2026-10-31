@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "persona": "mc-chat",
+  "version": "0.1.22",
+  "base": "0.1.21 + OpenAI voice marin (Robert's mixed-voice direction)",
+  "spec": "spec_mc_agent_container v0.2",
+  "status": "candidate",
+  "target": "mc-agent container",
+  "files": {
+    "SOUL.md": "3f79bf7edf148b8971f9707e67e334266027c0d12cecb5e18c1513f5996bd671",
+    "AGENTS.md": "9a2524c1591cad63a5b26e5b371e7e229bc3f190122f88d2bbdfded8962e354a",
+    "RUNTIME.openclaw.md": "2b2428ccded1174e6a9857bd17f1ccfa2b2b0f860c786649bfe39a2dbfdb7197",
+    "CHANGES.md": "f65fb644e2bb96f51aedce4b214a010e28661de409a427936951711a03eb07d1",
+    "voice.json": "aa6d8b1fde0b53bd53eb8db96bc0ecedb2b51992073e4710b162087b75487c63"
+  },
+  "projection": "SOUL verbatim; AGENTS + runtime binding",
+  "projection_budget_chars": 16000,
+  "config_change": true
+}

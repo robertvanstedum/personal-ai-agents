@@ -113,5 +113,5 @@ def test_query_string_override_rejected_in_production(monkeypatch):
     assert result == "openai"
 
 
-def test_locale_allow_list_covers_both_domains():
-    assert ALLOWED_LOCALES == frozenset({"de-AT", "pt-BR"})
+def test_locale_allow_list_covers_both_domains_and_mc():
+    assert ALLOWED_LOCALES == frozenset({"de-AT", "pt-BR", "en-US"})     # en-US: MC's direct path (Spec 164 §2)

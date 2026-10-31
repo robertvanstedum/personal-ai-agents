@@ -483,14 +483,31 @@ def notes_list():
     conv, refusal = _conversation(request.args.get("conversation"))
     if refusal is not None:
         return refusal
-    res = _conv_floor(conv).list_notes(before=before, limit=max(1, min(limit or 50, 200)))
-    data = res.data if res.ok else {}
+    floor = _conv_floor(conv)
+    res = floor.list_notes(before=before, limit=max(1, min(limit or 50, 200)))
+    data = dict(res.data) if res.ok else {}
+    voice = []
     if res.ok:
+        # A live or recovering voice session's records are withheld here, in every view (Spec 164 §6).
+        from . import mc_voice_reveal
+        data["notes"], voice = mc_voice_reveal.view(floor, data.get("notes"), **_voice_view())
         turn_log_of(cfg()["services"]).annotate(data.get("notes"))
         with_html(data.get("notes"))
     return jsonify({**_source(res), "notes": data.get("notes") if res.ok else None,
-                    "more": data.get("more") if res.ok else None,
+                    "more": data.get("more") if res.ok else None, "voice_sessions": voice,
                     "message": None if res.ok else floor_state.notes_zone(res)["text"]})
+
+
+def _voice_live():
+    """Which direct-path voice sessions this process holds live (mc_voice_direct); none when it is not installed."""
+    return cfg().get("mc_direct_voice_live") or (lambda _sid: False)
+
+
+def _voice_view():
+    """What mc_voice_reveal.view needs from this process (mc_voice_direct): which sessions are live, and which notes a
+    consult tagged with its session; nothing when it is not installed."""
+    from .mc_voice_reveal import process_view
+    return process_view(cfg())
 
 
 @owner_api
@@ -895,8 +912,9 @@ def _delivery_requested(note):
     return feature_environ().get(mc_deliveries.FLAG) == "1" and mc_deliveries.requested(note.get("text"))
 
 
-def _answer_turn(found, turn):
-    """/mc/turns after its guards and ledger claim (also a dispatched waiting turn, P2)."""
+def _answer_turn(found, turn, host_channel=None):
+    """/mc/turns after its guards and ledger claim (also a dispatched waiting turn, P2). ``host_channel`` is a
+    server-held marker only (a direct-path voice consult: mc.openclaw.VOICE_MARKER), never request data."""
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
     phase = "before"
     try:
@@ -913,7 +931,8 @@ def _answer_turn(found, turn):
         phase = "model"
         answer, status = run_mc_turn(services, conversations=_conversations(), floor=floor, conv=conv,
                                      principal=principal, note=note, note_id=note_id, request_id=request_id,
-                                     attachment_ids=attachment_ids, ledger_turn=turn)
+                                     attachment_ids=attachment_ids, ledger_turn=turn,
+                                     **({"host_channel": host_channel} if host_channel is not None else {}))
         if turn is not None:
             turn.finish_model(answer, status)
         return jsonify(answer), status
@@ -1044,7 +1063,9 @@ def _owner_action_command(found):
     """Owner notes and reminders from the kept owner text, before any model (owner_actions).
 
     Never falls through to the model with attached files or topic context: that
-    text would reach CoS with context appended, so it is refused instead."""
+    text would reach CoS with context appended, so it is refused instead. The
+    operation is the Chief of Staff's whichever runtime MC chats through
+    (owner_actions.cos_for, A4-3), typed and spoken alike."""
     from datetime import datetime
     from . import owner_actions
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
@@ -1060,7 +1081,7 @@ def _owner_action_command(found):
     if attachment_ids or getattr(g, "topic_context", None):
         return jsonify(status='answered', backend_kind='platform', reply_note=None, message=owner_actions.WITH_CONTEXT,
                        operation={'type': op_type, 'saved': False}, history_saved=False), 200
-    result = owner_actions.execute(text, cos=services.mc, conversation=floor, principal=principal,
+    result = owner_actions.execute(text, cos=owner_actions.cos_for(services), conversation=floor, principal=principal,
                                    turn_key=note_id, now=kept_at)
     return jsonify(status='answered', backend_kind='platform', reply_note=result.get('reply_note'),
                    message=result['reply'], operation=result['operation'],
@@ -1164,6 +1185,28 @@ class PlatformOutcome:
         return self.verdict() != "DONE" and bool(self._CLAIMS.search(text or ""))
 
 
+# A direct-path voice consult (mc_voice_direct) runs the typed turn on words the voice model chose to send, perhaps
+# Robert's answer to its own question, and he never sees what a bare yes would confirm. There, a waiting proposal is
+# confirmed or cancelled only by name ("yes P-7K3M") and a job is stopped only by "stop the job" (review B #1).
+VOICE_NAME_PROPOSAL = "Say which: 'yes P-' and the code. Nothing was done."
+VOICE_IN_WRITING = "In voice, confirm or cancel that in writing, in the chat. Nothing was done."
+VOICE_NAME_JOB = "Say 'stop the job' to stop it. Nothing was stopped."
+VOICE_NO_SUCH_PROPOSAL = "I heard {code}, and no proposal {code} is waiting here. Nothing was done."
+
+
+def _voice_named_only() -> bool:
+    """True only inside a direct-path voice consult, set server side by mc_voice_direct; typed turns never set it."""
+    from flask import has_request_context
+    return has_request_context() and getattr(g, "mc_voice_named_only", False) is True
+
+
+def _voice_name_it(op_type, words):
+    """The platform's answer to a bare confirm, cancel or stop in voice: a clarification; nothing was done."""
+    return jsonify(status="answered", backend_kind="platform", reply_note=None, message=words,
+                   operation={"type": op_type, "state": "clarify", "reason": "name_required", "saved": False},
+                   history_saved=False), 200
+
+
 def _platform_outcome(floor, note_key, result, *, area):
     from . import feature_environ
     outcome = PlatformOutcome(floor, note_key, result, area)
@@ -1239,6 +1282,8 @@ def _owner_lesson_command(found):
             return None
         if not pending:
             return None                       # an ordinary "confirm"/"cancel": not ours, the model answers
+        if _voice_named_only():
+            return _voice_name_it("lesson", VOICE_IN_WRITING)
     try:
         result = handler.handle(command, conversation=conv["id"], turn_key=note_id)
     except Exception:
@@ -1276,6 +1321,8 @@ def _owner_guest_command(found):
             return None
         if not pending:
             return None                       # an ordinary "confirm"/"cancel": not ours, the model answers
+        if _voice_named_only():
+            return _voice_name_it("guest_action", VOICE_IN_WRITING)
     try:
         result = commands.handle(command, conversation=conv["id"], turn_key=note_id)
     except Exception:
@@ -1297,8 +1344,10 @@ def _owner_tool_proposal_command(found):
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
     if cfg is None or principal != cfg["principal"] or attachment_ids or getattr(g, "topic_context", None):
         return None
-    from core.mc_tools.proposals import parse
-    parsed = parse(note.get("text"))
+    from core.mc_tools.proposals import parse, spoken_named
+    voice = _voice_named_only()
+    # In voice, a code is read as speech recognition writes it ("yes P 7K3M"); a typed note is parsed exactly as typed.
+    parsed = parse(spoken_named(note.get("text")) if voice else note.get("text"))
     if parsed is None:
         return None
     kind, code = parsed
@@ -1309,7 +1358,12 @@ def _owner_tool_proposal_command(found):
     try:
         if not handler.has_pending(conv["id"], note_id):
             return None                       # an ordinary "confirm"/"cancel": not ours, the model answers
+        if code is None and voice:
+            return _voice_name_it("mc_tool_proposal", VOICE_NAME_PROPOSAL)
         result = handler.handle(kind, conversation=conv["id"], turn_key=note_id, code=code)
+        if voice and code is not None and (result.get("operation") or {}).get("state") == "nothing_pending":
+            # A heard code that names no waiting proposal: nothing was done, and the answer says which code was heard.
+            result = {**result, "reply": VOICE_NO_SUCH_PROPOSAL.format(code=code)}
     except Exception:
         _mc_log().exception("tool proposal command could not be completed")
         result = {"reply": "I could not complete that, and I cannot confirm its outcome. Do not repeat it yet; "
@@ -2211,8 +2265,10 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             except Exception:
                 _mc_log().warning("mc turn %s: Board proposal preparation unavailable", turn_id)
         from .mc.cos import MANAGED_VOICE_CHANNEL
+        from .mc.openclaw import VOICE_MARKER
         context_text = _with_context(_with_agent(_with_files(sent_text, files), agent_state), sent_text, conv, principal,
-                                     current_voice=host_channel is MANAGED_VOICE_CHANNEL)
+                                     current_voice=host_channel is MANAGED_VOICE_CHANNEL,
+                                     direct_voice=host_channel is VOICE_MARKER)
         if board_plan is not None:
             context_text += "\n\n" + board_plan.contract()
         if delivery:
@@ -2222,6 +2278,8 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         from .mc.cos import MANAGED_VOICE_CHANNEL
         if services.mc.kind == "cos" and host_channel is MANAGED_VOICE_CHANNEL:
             turn_context["host_channel"] = MANAGED_VOICE_CHANNEL
+        elif services.mc.kind == "openclaw" and host_channel is VOICE_MARKER:
+            turn_context["host_channel"] = VOICE_MARKER          # the OpenClaw adapter translates it (Spec 164 §9)
         req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=context_text,
                           note_request_id=note_id, correlation_id=turn_id, context=turn_context)
         _mc_log().info("mc turn %s start backend=%s files=%d", turn_id, services.mc.kind, len(files.report) if files else 0)
@@ -2479,12 +2537,12 @@ def _with_agent(text: str, state) -> str:
     return f"{text}\n\n{state.text}" if state is not None else text
 
 
-def _with_context(text: str, owner_text: str, conv, principal: str, *, current_voice=False) -> str:
+def _with_context(text: str, owner_text: str, conv, principal: str, *, current_voice=False, direct_voice=False) -> str:
     """Then, as more marked DATA, what a quick question needs in the SAME turn (#298): the GitHub items the owner's words point at, and the true state of this
     conversation's jobs, plus explicitly referenced Board notes. Board read failure is explicit DATA; it never becomes completion. Never reached by a Private turn."""
     from . import mc_context
     from .mc_voice_transcripts import input_context
-    extra = [input_context(current_voice=current_voice)]
+    extra = [input_context(current_voice=current_voice, direct_voice=direct_voice)]
     from . import release_context
     release = release_context.block(owner_text)
     if release:

@@ -105,11 +105,18 @@ ERROR_WORDS = {"relay_unreachable": "the relay could not be reached", "relay_los
 # ── the owner's words: commands and proposals, decided by the server ──────────────────────────────
 
 _STOP_WORDS = {"stop", "stop the job", "stop job", "stop it", "cancel the job", "cancel job", "cancel it", "stop the running job"}
+# The ones that name the job: in voice only these stop it ("stop" alone may answer the voice model, review B #1).
+_NAMED_STOP_WORDS = {"stop the job", "stop job", "cancel the job", "cancel job", "stop the running job"}
 _FORCE = re.compile(r"\brun (?:this|it|that) as a job\b")
 
 
 def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[.!?\"'`]+", " ", (text or "").lower())).strip()
+
+
+def names_the_job(text: str) -> bool:
+    """A stop request that says "job" ("stop the job"), not a bare "stop" or "stop it"."""
+    return _norm(text) in _NAMED_STOP_WORDS
 
 
 def interpret(text: str) -> str | None:
@@ -578,6 +585,13 @@ class JobManager:
         note = self._note(job)
         ctx = (note or {}).get("context") or {}
         floor = self._floor(job)
+        # A job started from a voice consult: its result is that voice session's record, tagged before it is written,
+        # so it is withheld while the session is live and revealed with it (mc_voice_reveal.tag_for_turn).
+        try:
+            from .mc_voice_reveal import tag_for_turn
+            tag_for_turn(floor, job.get("note_id"), result_request_id(jid))
+        except Exception:
+            log.exception("job %s: voice session tag not kept; the result is still posted", jid)
         kept = floor.add_note(result_request_id(jid), job["result_pending"], MASTER_CRAFTSMAN, area=ctx.get("area"),   # 2: posted once
                               item_ref=ctx.get("item_ref"), page=ctx.get("page"))
         if getattr(kept, "outcome", None) != "kept" or not getattr(kept, "value", None):

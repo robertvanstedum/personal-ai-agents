@@ -184,3 +184,14 @@ def test_deploy_snapshots_agent_a_volumes_before_recreating_it():
     # backup_local.sh prunes only dated folders (20*-*-*) under backups/, and
     # the S3/Dropbox syncs read only those, so this folder is left alone.
     assert "-name '20*-*-*'" in (ROOT / "scripts/backup_local.sh").read_text()
+
+
+def test_production_gateway_has_the_voice_routes_and_never_falls_back_to_them():
+    """Spec 165 §5.4 (D22 (a)) and confirm by voice v3: the summary's and the understanding call's routes, reached only with
+    the capped voice-summary keys, and never a fallback of CoS's agent routes."""
+    config = yaml.safe_load(PROD_GATEWAY_CONFIG.read_text())
+    deployments = {item["model_name"]: item["litellm_params"]["model"] for item in config["model_list"]}
+    assert deployments["minimoi-voice-summary"] == "xai/grok-4.3"
+    assert deployments["minimoi-voice-intent"] == "xai/grok-4.3"
+    fallbacks = str(config["router_settings"]["fallbacks"])
+    assert "minimoi-voice" not in fallbacks

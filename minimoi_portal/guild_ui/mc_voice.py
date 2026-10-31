@@ -20,15 +20,17 @@ import re
 from flask import Response, jsonify, request, send_from_directory, stream_with_context
 
 from core.realtime_voice import budget
+# MC's reply as plain speech, cut at SPEECH_MAX_CHARS with a spoken pointer to the chat: the direct path's too (Spec 165 §4.2).
+from core.realtime_voice.direct_host import SPEECH_MAX_CHARS, speakable as _speakable  # noqa: F401
 
 from . import cfg, feature_enabled, voice_release
 from .security import check_write, json_error
 
 ENV = "MINIMOI_MC_VOICE"
-SPEECH_MAX_CHARS = 3500                                # a longer reply is read in part and the page says so aloud
 _NOTE_ID = re.compile(r"[A-Za-z0-9_-]{8,64}")
 _STATIC_OK = ("realtime-confer-controller.js", "adapters/openai-transcription-webrtc-adapter.js")
 _MANAGED_STATIC = ("realtime-voice-controller.js","adapters/openai-webrtc-adapter.js","adapters/xai-websocket-adapter.js")
+_DIRECT_STATIC = ("direct-voice-session.js",)          # the direct path's browser session module (Spec 165 §4.3)
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "core", "realtime_voice", "static")
 # A hint to the transcriber about the setting. The enforcement that no provider answer exists is the transcription-only session type, not this wording.
 TRANSCRIBE_ONLY_PROMPT = "Transcribe the speaker's words for a conversation with Master Craftsman, the MiniMoi build partner. Keep names and product terms as spoken."
@@ -43,8 +45,16 @@ def enabled(environ=None) -> bool:
 
 
 def csp_connect_extra(environ=None) -> str:
-    """What the page's connect-src may also reach while voice is on: the provider's session endpoint, for the browser-to-provider audio session."""
-    return " https://api.openai.com" if enabled(environ) else ""
+    """What the page's connect-src may also reach while voice is on: the provider's session endpoint, for the browser-to-provider audio session.
+    With MC's direct path offering Grok on this mount, also xAI's realtime socket (the browser opens wss://api.x.ai itself)."""
+    if not enabled(environ):
+        return ""
+    try:
+        direct = cfg().get("mc_direct_voice") if environ is None else None
+    except RuntimeError:                                   # no mount bound (a probe): the OpenAI origin only, as before
+        direct = None
+    xai = bool(direct) and any(p.get("provider") == "xai" for p in direct.get("providers") or ())
+    return " https://api.openai.com" + (" wss://api.x.ai" if xai else "")
 
 
 def _off():
@@ -67,7 +77,12 @@ def capabilities():
         mode, default, listed = _providers()
     except ProviderUnavailableError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 503
-    return jsonify({"ok": True, "mode": mode, "default_provider": default.provider, "providers": [p.public_dict() for p in listed], "budget": budget.public_status(), "managed_realtime": cfg().get("mc_managed_realtime")})
+    direct, records = cfg().get("mc_direct_voice"), cfg().get("mc_direct_voice_records")
+    # direct_voice: MC's direct path admitted here (mc_voice_direct.install). direct_records: installed, not admitted (Spec 165
+    # §11.1 S1, S3): its record routes' metadata, so the page paints the thread and earlier proposals can be decided, while
+    # Voice keeps today's path. Not installed: neither, as before.
+    return jsonify({"ok": True, "mode": mode, "default_provider": default.provider, "providers": [p.public_dict() for p in listed], "budget": budget.public_status(), "managed_realtime": cfg().get("mc_managed_realtime"),
+                    "direct_voice": direct, **({"direct_records": records} if records and not direct else {})})
 
 
 def _budget_refusal(exc):
@@ -107,21 +122,6 @@ def bootstrap():
     except openai_realtime.OpenAIRealtimeError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 502
     return jsonify({"ok": True, **credential, "warning_minutes": guard.warning_minutes, "max_minutes": guard.max_minutes})
-
-
-def _speakable(text: str) -> str:
-    """MC's reply as plain speech: the markdown marks removed, a long reply cut at a sentence with a spoken pointer to the chat."""
-    t = re.sub(r"```.*?```", " (a code block, shown in the chat) ", text or "", flags=re.S)
-    t = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", t)
-    t = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", t)
-    t = re.sub(r"[`*_#>]+", "", t)
-    t = re.sub(r"\n{2,}", ". ", t)
-    t = re.sub(r"\s+", " ", t).strip()
-    if len(t) > SPEECH_MAX_CHARS:
-        cut = t[:SPEECH_MAX_CHARS]
-        stop = max(cut.rfind(". "), cut.rfind("? "), cut.rfind("! "))
-        t = (cut[:stop + 1] if stop > SPEECH_MAX_CHARS // 2 else cut).rstrip() + " The rest is in the chat."
-    return t
 
 
 def speech(note_request_id):
@@ -168,10 +168,15 @@ def speech(note_request_id):
 
 
 def static_file(name):
-    """The shared controller and its transport adapter, served from the one shared copy (never a second copy), only while voice is on."""
+    """The shared controller and its transport adapter, served from the one shared copy (never a second copy), only while voice is on.
+    The direct path's controller only while it is admitted here; its session module while it is installed, admitted or not
+    (Spec 165 §11.1 S1, S3: the thread posts its decisions through the module's jsonPost)."""
     if not enabled():
         return _off()
-    if name not in _STATIC_OK and not (cfg().get("mc_managed_realtime") and name in _MANAGED_STATIC):
+    direct = bool(cfg().get("mc_direct_voice"))
+    installed = direct or bool(cfg().get("mc_direct_voice_records"))
+    if (name not in _STATIC_OK and not ((cfg().get("mc_managed_realtime") or direct) and name in _MANAGED_STATIC)
+            and not (installed and name in _DIRECT_STATIC)):
         return json_error("not_found", "No such file.", 404)
     return send_from_directory(_STATIC_DIR, name, mimetype="text/javascript")
 

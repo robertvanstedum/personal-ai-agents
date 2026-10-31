@@ -1,6 +1,6 @@
 """Opt-in CoS/MC configuration; existing German/PT bootstrap untouched."""
 from .controlled_session import MODEL,SessionRefused
-from core.realtime_voice.standards import conversation_turn_detection
+from core.realtime_voice.standards import BILINGUAL_TRANSCRIPTION_HINT, conversation_turn_detection
 from core.agent_partner import PARTNER_STYLE
 
 
@@ -28,10 +28,7 @@ VOICE_MANNER = PARTNER_STYLE + "\n" + (
     "claim a Board change only when an actual Board operation receipt confirms it. "
     "These voice and reporting rules do not expand authority or tools; keep the host's authorization, privacy and operation boundaries."
 )
-TRANSCRIPTION_HINT = (
-    "The owner may speak English or Austrian German and switch between them. "
-    "Transcribe faithfully in the spoken language. Preserve names and MiniMoi product terms."
-)
+TRANSCRIPTION_HINT = BILINGUAL_TRANSCRIPTION_HINT      # one text, the direct path's too (Spec 165 §7, D19)
 
 
 def configuration(instructions):

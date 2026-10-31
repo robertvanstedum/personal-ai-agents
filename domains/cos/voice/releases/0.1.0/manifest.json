@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "card": "chief-of-staff voice",
+  "version": "0.1.0",
+  "status": "candidate",
+  "spec": "Spec 165 v0.3 \u00a76.1, \u00a76.2 (the draft card; final after the audition, A4)",
+  "persona": {
+    "source": "MASTER_CRAFTSMAN_PERSONA.md",
+    "version": "1.1",
+    "sha256": "f07078f5c913323f1098381faf44d38f77223258e48498ddd0552f53042c4f1b"
+  },
+  "files": {
+    "voice.json": "aac1080e83d1a9f9813028b3aaa7f7ee30c3d2117cdd1b9f60dd1a5d5feaea64"
+  }
+}

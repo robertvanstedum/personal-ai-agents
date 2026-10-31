@@ -35,6 +35,15 @@ partner comes only from ``MINIMOI_GUILD_CHAT`` (``cos``, or ``mc`` toward the
 exact MC container relay; see ``production_environ``). Otherwise the chat shows
 an honest "not connected" and never a stub. Everything below still applies.
 
+MC's direct voice there (Spec 165 §11.1): installing it is separate from
+admission. ``MINIMOI_MC_VOICE_DIRECT`` installs its routes (record routes
+included) where MC voice is admitted (``MINIMOI_GUILD_VOICE_PRODUCTION`` and a
+chat partner); starting sessions also needs
+``MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION``, decided only by
+``production_environ`` through the derived key
+``DIRECT_VOICE_ADMITTED``. Both default off. Staging and the Mac never
+reach ``production_environ``: there installing allows starts, as before.
+
 Both mounts use the portal's real owner guard. A mount that is switched on but
 fails to register never falls back to anything: its prefix answers 503 (JSON
 under /api/, a short page otherwise), still behind the owner guard, so an
@@ -126,17 +135,22 @@ def mount_guild_next(app, *, environ, owner_guard, current_user, queue_path, ope
     try:
         from minimoi_portal.guild_ui import register_guild_ui
         from minimoi_portal.guild_ui.mc import backend_from_env, stream_enabled, turns_enabled
+        from minimoi_portal.guild_ui.mc.cos import operations_from_env
         from minimoi_portal.guild_ui.services import build_services
         # MINIMOI_GUILD_MC (off | stub | openclaw | grok); never raises, and an
         # MC problem never fails this mount (it shows "unavailable").
         mc = backend_from_env(environ)
+        # Owner notes and reminders are the Chief of Staff's whichever runtime MC chats through (A4-3): her operation
+        # client from this mount's COS_BACKEND, None without it. On the production mount that is production_environ's
+        # environment, so the "mc" chat gets it only where CoS is configured.
+        cos_operations = operations_from_env(environ)
         mc_turns = turns_enabled(environ)
         mc_stream = stream_enabled(environ)
         log.info("guild mount: Master Craftsman backend %s, turns %s, streaming %s", mc.kind,
                  "on" if mc_turns else "off", "on" if mc_stream and mc.supports_streaming else "off")
         services = build_services(queue_path=queue_path, operations_status_url=operations_status_url,
                                   records_db=records_db, database_url=database_url, audit=audit, mc=mc,
-                                  mc_turns=mc_turns, mc_stream=mc_stream)
+                                  mc_turns=mc_turns, mc_stream=mc_stream, cos_operations=cos_operations)
         register_guild_ui(app, owner_guard=owner_guard, current_user=current_user, url_prefix=NEXT_PREFIX,
                           blueprint_name=NEXT_NAME, services=services, base_url=base_url, feature_environ=environ)
         log.info("guild mount: /guild-next registered")
@@ -215,11 +229,19 @@ PRODUCTION_FLAG = "MINIMOI_GUILD_PRODUCTION"
 # The local MC relay/files and the new speech features await their own production
 # review. Remove them before binding the mount; raw shared-container flags must
 # not activate any of these paths. This filtered snapshot changes on restart.
+# MINIMOI_MC_VOICE_DIRECT stays listed: production_environ lets it through only
+# where MC voice is admitted, and admission to start is its own switch below.
 PRODUCTION_COS_FILES = ("MINIMOI_MC_COS_FILES_DIR", "MINIMOI_MC_COS_FILES_AGENT_DIR",
                         "MINIMOI_MC_COS_FILES_UID", "MINIMOI_MC_COS_FILES_GID")
 PRODUCTION_HELD_OFF = ("MINIMOI_GUILD_MC", "MINIMOI_GUILD_MC_TURNS", "MINIMOI_GUILD_MC_STREAM",
                        "MINIMOI_MC_VOICE", "MINIMOI_DICTATION", "MINIMOI_MC_FILES_HOST_ROOT",
-                       "MINIMOI_MC_MANAGED_REALTIME")
+                       "MINIMOI_MC_MANAGED_REALTIME", "MINIMOI_MC_VOICE_DIRECT")
+# Spec 165 §11.1: starts on MC's installed direct path in production (S2); off, it is S1 or S3.
+DIRECT_VOICE_PRODUCTION_FLAG = "MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION"
+# The derived key production_environ always writes from it ("1" admitted, "0" not); mc_voice_direct.may_start reads it.
+# Named here, not there, so reading production's environment never imports the voice host: a voice import that fails
+# leaves the mount's own 503 to answer, never the portal unable to start.
+DIRECT_VOICE_ADMITTED = "MINIMOI_MC_VOICE_DIRECT_ADMITTED"
 
 
 def origin_host(base_url) -> str:
@@ -276,7 +298,14 @@ def production_environ(environ) -> dict:
     """The environment the production mount reads. Every MINIMOI_GUILD_MC* setting is removed; the conversation partner is
     switched on only by the explicit MINIMOI_GUILD_CHAT: =cos is the existing Chief of Staff (COS_BACKEND, the address the
     portal already proxies /app/cos to); =mc is Master Craftsman's own container, admitted only toward
-    PRODUCTION_MC_RELAY_URL with a caller token. The four shared-agent attachment settings are admitted only for that selection and valid paths/UID/GID. Anything else leaves the chat honestly "off"."""
+    PRODUCTION_MC_RELAY_URL with a caller token. The four shared-agent attachment settings are admitted only for that selection and valid paths/UID/GID. Anything else leaves the chat honestly "off".
+
+    MC's direct voice (Spec 165 §11.1): MINIMOI_MC_VOICE_DIRECT passes where MC voice does, which installs its routes
+    (record routes included); whether it may start sessions is decided here alone. The derived key DIRECT_VOICE_ADMITTED
+    is always written: "1" only where MC voice is admitted and DIRECT_VOICE_PRODUCTION_FLAG is on, else "0". The raw
+    environment's copy of that key is overwritten, never trusted (the portal decides production by BASE_URL, and staging
+    runs the production compose, so this mount is the only place that knows). Like everything here, a per-process
+    snapshot: a change takes a restart."""
     held_off = set(PRODUCTION_HELD_OFF) | set(PRODUCTION_COS_FILES)
     chat = _production_chat(environ)
     # The existing explicit CoS selection is the authority; file paths and runtime
@@ -285,13 +314,17 @@ def production_environ(environ) -> dict:
         from .guild_ui.mc_files import cos_dirs
         if cos_dirs(environ) is not None:
             held_off.difference_update(PRODUCTION_COS_FILES)
-    if flag_on(environ, "MINIMOI_GUILD_VOICE_PRODUCTION") and chat in ("cos", "mc"):
+    voice = flag_on(environ, "MINIMOI_GUILD_VOICE_PRODUCTION") and chat in ("cos", "mc")
+    if voice:
         held_off.difference_update({"MINIMOI_MC_VOICE", "MINIMOI_DICTATION"})
         # Separate production admission: ordinary speech opt-in alone must not
         # enable controlled sessions. Schema/runtime checks remain in install().
         if flag_on(environ, "MINIMOI_GUILD_MANAGED_VOICE_PRODUCTION"):
             held_off.discard("MINIMOI_MC_MANAGED_REALTIME")
+        # Installing MC's direct path is allowed where MC voice is (S1); its starts are DIRECT_VOICE_ADMITTED's, below.
+        held_off.discard("MINIMOI_MC_VOICE_DIRECT")
     env = {k: v for k, v in dict(environ).items() if k not in held_off}
+    env[DIRECT_VOICE_ADMITTED] = "1" if voice and flag_on(environ, DIRECT_VOICE_PRODUCTION_FLAG) else "0"
     if chat == "cos":
         env["MINIMOI_GUILD_MC"] = "cos"
         env["MINIMOI_GUILD_MC_TURNS"] = "1"

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "card": "chief-of-staff voice",
+  "version": "0.1.2",
+  "status": "candidate",
+  "spec": "Spec 165 v0.3 §6.1, §6.2: Robert's audition picks of 29 Oct, final: shimmer on OpenAI with British English (marin was 'too teachery'), ara on Grok; Austrian German; MiniMoi said the French way; the P2 German passage; adopted after A4",
+  "persona": {
+    "source": "MASTER_CRAFTSMAN_PERSONA.md",
+    "version": "1.1",
+    "sha256": "f07078f5c913323f1098381faf44d38f77223258e48498ddd0552f53042c4f1b"
+  },
+  "files": {
+    "voice.json": "3304b2907414e6b4d12e9abf17b5205ee0eb8efacc2a40ef00a89edea2b4506c"
+  }
+}

@@ -17,6 +17,7 @@ from core.realtime_voice.timing import VoiceTiming
 from domains.cos.claim_truth import enforce as enforce_claim_truth
 from domains.cos.reminders import MAX_TEXT_CHARS as MAX_REMINDER_TEXT_CHARS
 from domains.cos.reminders import ReminderRefused
+from domains.cos.owner_words import not_his_note, without_question_mark
 
 
 ALLOWED_CHANNELS = frozenset({
@@ -28,23 +29,48 @@ ALLOWED_CHANNELS = frozenset({
 })
 MAX_EXPLICIT_NOTE_CHARS = 1_000
 _SAVE_NOTE_PREFIX = re.compile(
-    r"^(?:(?:okay|ok)\s*,?\s+)?(?:please\s+)?"
+    r"^(?:(?:okay|ok)(?:\s*,\s+|\s+))?(?:please\s+)?"
     r"save\s+(?:a|this)\s+note\s*:",
     re.IGNORECASE,
 )
 _SLASH_NOTE_PREFIX = re.compile(r"^/note(?:\s+|$)", re.IGNORECASE)
 # Natural spoken and typed forms. Each is start-anchored and needs an explicit
-# separator ("that ", "saying ", a colon or a dash) before the note text, so
-# "make a note of that" or "can you make a note?" stay ordinary chat. "Write"
-# and "create" a note are drafting requests ("write a note saying thank you to
-# the team"), not something to keep, so they go to the model.
+# separator ("that ", "saying ", "called ", a colon or a dash) before the note
+# text, so "make a note of that" or "can you make a note?" stay ordinary chat.
+# "Write" and "create" a note are drafting requests ("write a note saying thank
+# you to the team"), not something to keep, so they go to the model.
+# A4-1 (29 Oct, Robert on dev: "Make a note called Test." was refused): "make a
+# note called X" is his too. A bare "(please) note that X" is not a request for a
+# note (review M-1): it is how a statement, a notice or a forwarded text opens
+# ("Please note that the deploy failed, so fix it"), so it stays chat on every
+# channel, as "did you make a note?" and "I noted that" do.
+# A4-2's own words, "save a note test" (29 Oct): spoken, the separator is a pause
+# or nothing. So "save a note X" with no separator, "make/save a note, X" with a
+# comma (and the "that"/"saying" a pause may sit before), and "make a note called
+# X" are notes too: the loose forms. What follows them passes one stop rule,
+# owner_words.not_his_note (review M-2, S-1), shared with the Board's referent
+# check: nothing, a question, a pointer, a refusal ("never mind"), a request
+# ("could you?"), an acknowledgement or a name he addresses ("MC") is chat, never
+# a note. One content word is a note ("save a note test" keeps "test"). A request
+# asked as a question ("Can you save a note test?") keeps its words without the
+# question's mark.
 _NATURAL_NOTE_PREFIX = re.compile(
-    r"^(?:(?:okay|ok)\s*,?\s+)?"
+    r"^(?:(?:okay|ok)(?:\s*,\s+|\s+))?"
     r"(?:please\s+|(?:can|could|would)\s+you\s+(?:please\s+)?)?"
     r"(?:"
     r"(?:make|take|save|add|jot\s+down)\s+(?:me\s+)?(?:a\s+)?"
     r"note\s*(?::|-(?=\s|$)|[–—]|that(?=\s|$)|saying(?=\s|$))"
     r"|note\s+to\s+self\s*(?::|[-–—]|,)"
+    r")",
+    re.IGNORECASE,
+)
+_LOOSE_NOTE_PREFIX = re.compile(
+    r"^(?:(?:okay|ok)(?:\s*,\s+|\s+))?"
+    r"(?:please\s+|(?P<asked>(?:can|could|would|will)\s+you\s+(?:please\s+)?))?"
+    r"(?:"
+    r"(?:make|take|save|add|jot\s+down)\s+(?:me\s+)?(?:a\s+)?note\s+(?P<called>called)(?=\s|$)"
+    r"|(?:make|save)\s+(?:me\s+)?a\s+note\s*,\s*(?:(?:that|saying)\s+)?(?=\S)"
+    r"|save\s+a\s+note\s+(?=\S)"
     r")",
     re.IGNORECASE,
 )
@@ -79,6 +105,11 @@ class ConferTurnRequest:
     channel: str
     conversation_id: str = "owner"
     request_id: str | None = None
+    # Optional (Spec 165 v0.3 §6.4: outcomes follow the dispatch boundary): called with "reset", "note", "reminder" or
+    # "runtime" just before the turn hands its work to that operation, so a caller knows whether anything was
+    # dispatched when the turn raises. It may raise to stop the turn there, before anything is dispatched. None (every
+    # caller but CoS's voice): nothing changes.
+    on_dispatch: Callable[[str], None] | None = None
 
 
 @dataclass(frozen=True)
@@ -132,16 +163,28 @@ def parse_explicit_note(text: str) -> str | None:
 
     This is the one note grammar shared by COS, the MC portal and the voice
     tool gate: ``/note …``, ``Save a note: …`` and the natural forms such as
-    ``Make a note that …`` or ``Note to self: …``.
+    ``Make a note that …``, ``Make a note called …`` (A4-1), ``Note to self: …``, ``Save a note …`` with no separator and
+    ``Make a note, …`` / ``Save a note, …`` with a comma (A4-2).
     """
     slash_match = _SLASH_NOTE_PREFIX.match(text)
     if slash_match is not None:
         note_text = text[slash_match.end():]
     else:
         match = _SAVE_NOTE_PREFIX.match(text) or _NATURAL_NOTE_PREFIX.match(text)
-        if match is None:
-            return None
-        note_text = text[match.end():]
+        if match is not None:
+            note_text = text[match.end():]
+        else:
+            loose = _LOOSE_NOTE_PREFIX.match(text)
+            if loose is None:
+                return None
+            note_text = text[loose.end():]
+            if loose.group("asked"):              # "Can you save a note test?": the request's own question mark
+                note_text = without_question_mark(note_text)
+            if not note_text.strip():
+                if not loose.group("called"):     # "make a note called" asks for the words; a bare pause is chat
+                    return None
+            elif not_his_note(note_text):
+                return None
 
     # Store a single inert text line so newlines cannot create memory markup.
     note_text = " ".join(note_text.split())
@@ -183,6 +226,21 @@ def parse_explicit_reminder(text: str) -> tuple[datetime, str] | None:
             f"Reminder text must be {MAX_REMINDER_TEXT_CHARS} characters or fewer."
         )
     return due, reminder_text
+
+
+def slash_command(text: str) -> str | None:
+    """The command ``text`` is to this service, read as handle() reads it (stripped): "new" (it resets the agent runtime's
+    session), "note" (/note), "remind" (/remind), or "slash" for any other text beginning with "/"; None for ordinary words
+    (including the spoken note forms, "save a note that …"). CoS's voice refuses every one of them before dispatch: "Do that
+    in writing." (Spec 165 v0.3 §6.4)."""
+    stripped = text.strip() if isinstance(text, str) else ""
+    if stripped.casefold() == "/new":
+        return "new"
+    if _SLASH_NOTE_PREFIX.match(stripped) is not None:
+        return "note"
+    if _SLASH_REMIND_PREFIX.match(stripped) is not None:
+        return "remind"
+    return "slash" if stripped.startswith("/") else None
 
 
 def normalize_request_id(request_id: str | None) -> str:
@@ -231,9 +289,11 @@ class ConferTurnService:
             raise InvalidConferTurn(f"Unknown Confer channel: {request.channel!r}")
 
         conversation_id = request.conversation_id.strip() or "owner"
+        crossing = request.on_dispatch or (lambda _operation: None)
         if text.casefold() == "/new":
             if self._reset_conversation is None:
                 raise ConferOperationFailed("COS session reset is unavailable.")
+            crossing("reset")
             if not self._reset_conversation(conversation_id):
                 raise ConferOperationFailed("COS session was not reset.")
             self._increment_chat()
@@ -259,6 +319,7 @@ class ConferTurnService:
             if self._save_note is None:
                 raise ConferOperationFailed("COS note saving is unavailable.")
             operation_id = normalize_request_id(request.request_id)
+            crossing("note")
             outcome = self._save_note(note_text, operation_id)
             if not outcome.get("saved"):
                 raise ConferOperationFailed("COS note was not saved.")
@@ -288,6 +349,7 @@ class ConferTurnService:
                 raise ConferOperationFailed("COS reminders are unavailable.")
             due, reminder_text = reminder
             operation_id = normalize_request_id(request.request_id)
+            crossing("reminder")
             try:
                 outcome = self._save_reminder(due, reminder_text, operation_id)
             except ReminderRefused as exc:
@@ -366,6 +428,7 @@ class ConferTurnService:
             ).strip()
         tool_policy = {"observation": True, "mutation": False}
         timing.emit("native_start")
+        crossing("runtime")
         try:
             reply = self._call_backend(text, context, tool_policy)
         except Exception:
