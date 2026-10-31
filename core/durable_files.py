@@ -1,4 +1,5 @@
-"""Durable file primitives shared by the CoS store and the canonical CoS history (spec v0.3 sections 4.5, 4.19).
+"""Durable file primitives for records other containers read: the CoS store and history (spec v0.3 sections 4.5,
+4.19) and the domain activity records (section 4.3).
 
 Atomic documents (temp file + fsync + rename + directory fsync), fsynced appended lines that never leave a partial
 line of their own behind, torn-tail quarantine, and readers that never treat a torn last line as a record. Files are

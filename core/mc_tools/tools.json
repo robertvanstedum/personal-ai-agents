@@ -1129,6 +1129,99 @@
           }
         }
       }
+    },
+    {
+      "name": "minimoi_publish_update",
+      "capability": "guild.build.publish_update",
+      "label": "Publish the build update for CoS",
+      "description": "Your own word on the build, for today, as the guild-build update CoS reads and chases: decisions you need from Robert, what is next, and what is blocked with who can unblock it. Report only what the Build Log and the Board show; it replaces today's earlier update. It grants nothing, opens nothing and schedules nothing. Call it when Robert asks for the build update or CoS asks you for it.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decisions_needed",
+          "next",
+          "blocked"
+        ],
+        "properties": {
+          "decisions_needed": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "one_line"
+              ],
+              "properties": {
+                "one_line": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "ref": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "id"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+                    },
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "next": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "blocked": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "one_line",
+                "who_can_unblock"
+              ],
+              "properties": {
+                "one_line": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "who_can_unblock": {
+                  "type": "string",
+                  "enum": [
+                    "robert",
+                    "cos",
+                    "mc",
+                    "german",
+                    "portuguese",
+                    "curator",
+                    "guild-build"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }

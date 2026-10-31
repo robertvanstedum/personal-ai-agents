@@ -39,6 +39,7 @@ def snapshot(service, policy_tools, offered_tools):
         "minimoi_record_gap": [(service.registers is not None, "work_register_unavailable"),
                                (service.read_owner_note is not None, "owner_note_reader_unavailable")],
         "minimoi_withdraw_gap": [(service.registers is not None, "work_register_unavailable")],
+        "minimoi_publish_update": [(getattr(service, "activity_update", None) is not None, "activity_unavailable")],
         "minimoi_delegate_research": [(service.delegation, "delegation_off")],
         "minimoi_delegate_build": [(service.delegation, "delegation_off")],
         "minimoi_access_invite": [(service.invites, "invites_off"),
