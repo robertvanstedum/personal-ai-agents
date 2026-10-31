@@ -98,16 +98,34 @@ def test_gateway_is_internal_token_authenticated_and_not_model_hardcoded():
     assert gateway_provider["models"][0]["id"] == "minimoi-cos-agent"
 
 
-def test_owner_full_access_experiment_keeps_authenticated_runtime_and_idle_jobs():
+# Robert, 30 October 2026: CoS keeps only the tools her role uses. The full profile sent 49 tool
+# definitions (about 89,000 characters) with every turn, including shell, secrets and automation tools.
+ROLE_TOOLS = ["read", "ls", "write", "edit", "exec", "web_search", "web_fetch",
+              "memory_search", "memory_get", "pdf", "view_image"]
+
+
+def test_owner_access_is_narrowed_to_the_role_tools_with_idle_jobs():
     config = _config()
     agent = _agent(config)
     assert "channels" not in config
     assert agent["skills"] == []
     assert agent["heartbeat"]["every"] == "0m"
-    assert config["tools"]["profile"] == agent["tools"]["profile"] == "full"
+    assert config["tools"]["profile"] == agent["tools"]["profile"] == "minimal"
+    assert agent["tools"]["alsoAllow"] == ROLE_TOOLS
+    assert agent["tools"]["deny"] == ["gateway"]
+    assert not agent["tools"].get("allow")
+    assert agent["tools"]["elevated"] == {"enabled": False}
     assert config["tools"]["exec"] == {"mode": "full"}
-    assert not agent["tools"].get("allow") and not agent["tools"].get("deny")
     assert config["gateway"]["auth"]["mode"] == "token"
+
+
+def test_policy_names_the_same_tools_as_the_config():
+    policy = (REPO_ROOT / "docker/cos-agent-a/AGENTS.md").read_text()
+    assert "full OpenClaw tool access" not in policy
+    assert "Full tool access" not in policy
+    named = policy.split("Your tools are those this role uses:", 1)[1].split("(Robert, 30 October)", 1)[0]
+    for tool in ROLE_TOOLS:
+        assert tool in named
 
 
 def test_search_is_bounded_and_does_not_receive_provider_credentials():
@@ -129,8 +147,8 @@ def test_search_is_bounded_and_does_not_receive_provider_credentials():
         "/opt/minimoi/openclaw-plugins/cos-bounded-search",
         "/opt/minimoi/openclaw-plugins/mc-cutoff-delivery",
     ]
-    assert agent["tools"]["profile"] == "full"
-    assert not agent["tools"].get("deny")
+    assert "web_search" in agent["tools"]["alsoAllow"]
+    assert "web_search" not in agent["tools"]["deny"]
 
     text = CONFIG_PATH.read_text()
     assert "XAI_API_KEY" not in text
