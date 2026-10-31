@@ -96,9 +96,8 @@
             <div class="gesprache-model-row" style="margin-bottom:0.75rem">
               <label class="gesprache-model-label">Textmodell</label>
               <select id="gesprache-model" class="gesprache-model-select">
-                <option value="grok" selected>Grok</option>
+                <option value="claude" selected>Claude</option>
                 <option value="openai">OpenAI</option>
-                <option value="claude">Claude</option>
               </select>
             </div>
             <div class="prompt-actions">
@@ -1219,7 +1218,7 @@ document.body.classList.add('parch-mode');
         turns: sessionTurns,
         durationMs: sessionStartTime ? Date.now() - sessionStartTime : 0,
         transcript: sessionTranscript.join('\n'),
-        model: document.getElementById('gesprache-model')?.value || 'grok',
+        model: document.getElementById('gesprache-model')?.value || 'claude',
         feedbackData: null,
       };
       savedSessions.push(session);
@@ -1499,7 +1498,7 @@ document.body.classList.add('parch-mode');
     const p = personas[selectedIdx];
     const personaName = p ? p.name : '';
     const scene = selectedSceneKey ? selectedSceneKey.replace(/_/g, ' ') : '';
-    const model = document.getElementById('gesprache-model')?.value || 'grok';
+    const model = document.getElementById('gesprache-model')?.value || 'claude';
 
     btn.disabled = true;
     btn.textContent = 'Analysiere…';

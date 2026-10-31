@@ -603,7 +603,7 @@ def api_transcribe():
 def api_review():
     body = request.get_json(force=True)
     transcript  = body.get("transcript", "").strip()
-    model       = body.get("model", "grok").strip()
+    model       = body.get("model", "claude").strip()
     persona_name = body.get("persona_name", "").strip()
     scene       = body.get("scene", "").strip()
     source      = body.get("source", "ki_sitzung").strip()
@@ -662,7 +662,7 @@ def gesprache_ai_turn():
     history   = data.get("history", [])
     persona   = data.get("persona", "").strip()
     scene     = data.get("scene", "").strip()
-    model     = data.get("model", "grok").strip()
+    model     = data.get("model", "claude").strip()
     user_turn = data.get("user_turn", "")
     if not persona:
         return jsonify({"ok": False, "error": "persona required"}), 400

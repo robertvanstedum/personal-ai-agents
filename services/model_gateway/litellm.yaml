@@ -69,15 +69,18 @@ model_list:
     model_info: {id: tier-xai-low, mode: chat, supports_function_calling: true}
 
   # ── Roles: the names callers ask for. To switch one, change its `<<:` line. ──
+  # Grok paused (#466, 31 Oct 2026): no role points at an xai-* tier. The route
+  # names keep their history (`-xai-fast`, `cos-xai-*` ids) so callers, fallbacks
+  # and receipts stay continuous; the merge line is what serves them.
   # A role sets only what is its own: timeout, effort where it must differ from
   # its tier (the latency routes run without reasoning), and its receipt
   # identity (model_info.id, fallback_position), which stays put across switches.
   - model_name: minimoi-cos-agent
-    litellm_params: {<<: *xai-low, timeout: 120}
+    litellm_params: {<<: *anthropic-low, timeout: 120}
     model_info: {id: cos-xai-primary, mode: chat, supports_function_calling: true, fallback_position: 0}
 
   - model_name: minimoi-cos-agent-xai-fast
-    litellm_params: {<<: *xai-low, timeout: 120, reasoning_effort: none}
+    litellm_params: {<<: *openai-low, timeout: 120, reasoning_effort: none}
     model_info: {id: cos-xai-fast, mode: chat, supports_function_calling: true, fallback_position: 1}
 
   - model_name: minimoi-cos-web-search
@@ -86,7 +89,7 @@ model_list:
     # on the shared backend key and never downgrades it, which sent every Grok
     # chat route through the Responses bridge and dropped the system message
     # (#454, #455).
-    litellm_params: {<<: *xai-low, timeout: 60}
+    litellm_params: {<<: *openai-low, timeout: 60}
     model_info: {id: cos-xai-bounded-web-search, supports_web_search: true}
 
   - model_name: minimoi-cos-agent-anthropic

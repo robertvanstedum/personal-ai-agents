@@ -28,9 +28,14 @@ def _load_context() -> dict:
         return json.load(f)
 
 
-def _grok_client() -> OpenAI:
-    api_key = keyring.get_password("xai", "api_key")
-    return OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
+# Grok is paused (#466, 31 Oct 2026): the scout asks Claude Haiku 5.5 through
+# Anthropic's OpenAI-compatible endpoint. Haiku 5.5 refuses `temperature`.
+_SCOUT_MODEL = "claude-haiku-5-5"
+
+
+def _scout_client() -> OpenAI:
+    api_key = keyring.get_password("anthropic", "api_key")
+    return OpenAI(api_key=api_key, base_url="https://api.anthropic.com/v1/")
 
 
 def _write_agenda(item: dict) -> None:
@@ -92,7 +97,7 @@ def run_curator_scout() -> dict:
     scout_terms_raw = ctx.get("curator", {}).get("scout_for", "")
     scout_terms = [t.strip() for t in scout_terms_raw.split(",") if t.strip()]
 
-    client = _grok_client()
+    client = _scout_client()
     agenda_items_written = 0
     results_total = 0
 
@@ -115,9 +120,8 @@ def run_curator_scout() -> dict:
             )
             try:
                 resp = client.chat.completions.create(
-                    model="grok-4.3",
+                    model=_SCOUT_MODEL,
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.2,
                 )
                 raw = resp.choices[0].message.content.strip()
                 if "```" in raw:

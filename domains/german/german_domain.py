@@ -115,9 +115,9 @@ _SPOKEN_NUMBERS = {
 # ─── LLM provider list ────────────────────────────────────────────────────────
 
 _LLM_PROVIDERS = [
-    # grok-4.3: current xAI model used for translation, writing correction, and
-    # phrase handling. The older Grok 4.1 Fast alias was retired by xAI.
-    {"name": "grok-fast",    "type": "xai",       "model": "grok-4.3"},
+    # Grok is paused (#466, 31 Oct 2026): translation, writing correction and
+    # phrase handling start with Claude Haiku. To resume Grok, put back
+    # {"name": "grok-fast", "type": "xai", "model": "grok-4.3"} first.
     {"name": "claude-haiku", "type": "anthropic",  "model": "claude-haiku-4-5-20251001"},
     {"name": "ollama-gemma", "type": "ollama",     "model": "gemma3:1b"},
 ]

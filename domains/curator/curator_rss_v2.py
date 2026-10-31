@@ -13,8 +13,8 @@ CHANGES from V1:
 MODES:
 - ollama: Local scoring (no per-token API charge)
 - xai: Single-stage Grok 4.3 scoring (production default)
-- haiku: Single-stage Claude Haiku 4.5 scoring
-- sonnet: Haiku 4.5 pre-filter → Sonnet 4.5 ranking
+- haiku: Single-stage Claude Haiku 5.5 scoring
+- sonnet: Haiku 5.5 pre-filter → Sonnet 4.5 ranking
 
 COST NOTES:
 - ollama has no per-token API charge; host compute is not included
@@ -28,7 +28,7 @@ USAGE:
     --model=ollama       Use the configured local Ollama model
     --model=xai          Use xAI Grok 4.3 (production default)
     --model=grok-4.3     Explicit alias for the production xAI model
-    --model=haiku        Use Anthropic Claude Haiku 4.5
+    --model=haiku        Use Anthropic Claude Haiku 5.5
     --model=sonnet       Use Anthropic Claude Sonnet 4.5
     
     --dry-run            Preview without saving (output to curator_preview.html)
@@ -101,8 +101,8 @@ _COST_LOG = REPO_ROOT / 'curator_costs.json'
 XAI_RANKING_MODEL = "grok-4.3"
 XAI_INPUT_USD_PER_MILLION = 1.25
 XAI_OUTPUT_USD_PER_MILLION = 2.50
-HAIKU_INPUT_USD_PER_MILLION = 1.00
-HAIKU_OUTPUT_USD_PER_MILLION = 5.00
+HAIKU_INPUT_USD_PER_MILLION = 0.10
+HAIKU_OUTPUT_USD_PER_MILLION = 0.50
 
 SCORING_MODE_MAP = {
     'ollama': 'mechanical',
@@ -121,8 +121,13 @@ def calculate_xai_cost(input_tokens: int, output_tokens: int) -> float:
     )
 
 
+def _response_text(response) -> str:
+    """The text of a Claude reply. Haiku 5.5 may put a thinking block first."""
+    return "".join(block.text for block in response.content if getattr(block, "type", "") == "text")
+
+
 def calculate_haiku_cost(input_tokens: int, output_tokens: int) -> float:
-    """Return Claude Haiku 4.5 cost at current standard token rates."""
+    """Return Claude Haiku 5.5 cost at current standard token rates."""
     return (
         input_tokens * HAIKU_INPUT_USD_PER_MILLION / 1_000_000
         + output_tokens * HAIKU_OUTPUT_USD_PER_MILLION / 1_000_000
@@ -616,12 +621,18 @@ ARTICLES:
     
     try:
         response = client.messages.create(
-            model="claude-haiku-4-5",
-            max_tokens=4096,
+            model="claude-haiku-5-5",
+            # One output line (about 6 tokens) per article: ~1,100 articles a day
+            # need about 7,000 tokens, so 4,096 left half the list unscored.
+            # No thinking: a score list needs none, and Haiku 5.5's adaptive
+            # thinking would spend the output budget (Haiku accepts "disabled";
+            # Opus and Sonnet 5.5 do not).
+            max_tokens=16000,
+            thinking={"type": "disabled"},
             messages=[{"role": "user", "content": prompt}]
         )
         
-        output = response.content[0].text.strip()
+        output = _response_text(response).strip()
         
         # Parse output: "0|geo_major|8"
         scores = {}
@@ -658,7 +669,7 @@ ARTICLES:
         input_tokens = response.usage.input_tokens
         output_tokens = response.usage.output_tokens
         
-        # Claude Haiku 4.5 standard pricing, reviewed 2026-08-17.
+        # Claude Haiku 5.5 standard pricing, reviewed 2026-10-31.
         cost = calculate_haiku_cost(input_tokens, output_tokens)
         print(f"   💰 Haiku cost: ${cost:.4f} ({input_tokens:,} in + {output_tokens:,} out tokens)")
         log_curator_cost('claude-haiku', 'curator', input_tokens, output_tokens, cost)
@@ -807,12 +818,12 @@ ARTICLES:
     
     try:
         response = client.messages.create(
-            model="claude-haiku-4-5",
+            model="claude-haiku-5-5",
             max_tokens=2048,
             messages=[{"role": "user", "content": prompt}]
         )
         
-        output = response.content[0].text.strip()
+        output = _response_text(response).strip()
         
         # Parse output
         scores = {}
@@ -940,7 +951,7 @@ ARTICLES:
             messages=[{"role": "user", "content": prompt}]
         )
         
-        output = response.content[0].text.strip()
+        output = _response_text(response).strip()
         
         # Parse output
         scores = {}
@@ -2142,7 +2153,7 @@ def format_html(entries: List[Dict], model: str = "xai", run_mode: str = "produc
         'ollama': 'ollama/phi',
         'xai': XAI_RANKING_MODEL,
         'grok-4.3': XAI_RANKING_MODEL,
-        'haiku': 'claude-haiku-4-5',
+        'haiku': 'claude-haiku-5-5',
         'sonnet': 'claude-sonnet-4-5',
     }
     model_display = model_display_map.get(model, model)
