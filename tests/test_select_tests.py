@@ -183,13 +183,13 @@ def test_the_workflow_runs_the_focused_set_only_when_told_and_the_whole_suite_ot
     assert classify_job.count('echo "test_scope=full"') == 2                 # manual runs and rewritten history
     test_job = workflow[workflow.index("  test:"):workflow.index("  build-push:")]
     assert 'if [ "$TEST_SCOPE" = "focused" ] && [ -n "$TEST_TARGETS" ]; then' in test_job
-    assert "pytest tests/ -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke" in test_job.split("else", 1)[1]
+    assert "pytest tests/ prototype-lab/projects/project-records-room-poc/tests/ -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke" in test_job.split("else", 1)[1]
 
 
 def test_the_nightly_run_takes_the_whole_suite_on_main_and_deploys_nothing():
     nightly = (ROOT / ".github/workflows/nightly-tests.yml").read_text()
     assert "schedule:" in nightly and "workflow_dispatch:" in nightly and "ref: main" in nightly
-    assert "pytest tests/ -v" in nightly and "file_defect.py" in nightly
+    assert "pytest tests/ prototype-lab/projects/project-records-room-poc/tests/ -v" in nightly and "file_defect.py" in nightly
     for deploying in ("aws", "ssm", "docker", "secrets.EC2"):
         assert deploying not in nightly
 
@@ -226,3 +226,16 @@ def test_mixed_directory_and_file_targets_keep_nested_fixtures_available(tmp_pat
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert "3 passed" in completed.stdout
+
+
+def test_records_changes_include_retained_acceptance_suite_even_for_full_release():
+    for path in ("domains/records/store.py", "services/records_runtime.py",
+                 "prototype-lab/projects/project-records-room-poc/app.py",
+                 "docker/Dockerfile.records", "scripts/staging/records.sh"):
+        result = select([path], "full")
+        assert result["test_targets"] == [
+            "prototype-lab/projects/project-records-room-poc/tests/", "tests/"]
+
+
+def test_unrelated_full_release_does_not_add_prototype_suites():
+    assert select(["domains/german/app.py"], "full")["test_targets"] == ["tests/"]

@@ -6,9 +6,9 @@ import threading
 
 import pytest
 from test_transcript_snapshot import source
-from store import Problem
-from transcript_publish import publish, recover, cleanup_scratch
-from transcript_worker import cycle, run
+from domains.records.store import Problem
+from domains.records.transcript_publish import publish, recover, cleanup_scratch
+from domains.records.transcript_worker import cycle, run
 
 
 def test_cycle_stable_then_changed_and_closed(source):
@@ -57,7 +57,7 @@ def test_unknown_scratch_and_symlink_untouched(source, tmp_path):
 
 
 def test_failure_does_not_block_other_session_or_leak_error(source, monkeypatch):
-    import transcript_worker
+    from domains.records import transcript_worker
     store, room = source
     other = store.create_room("robert", "other", dict(title="Other", purpose="Synthetic", mode="meeting", recording_acknowledged=True))["result"]["id"]
     real = transcript_worker.publish

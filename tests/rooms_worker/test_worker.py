@@ -21,6 +21,8 @@ from uuid import uuid4
 
 import pytest
 
+from domains.records import meetings
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tests" / "guild" / "shop_floor"))
 from rooms_helpers import RECORDS_DIR, records_app  # noqa: E402
@@ -150,7 +152,7 @@ def test_busy_relay_retries_inside_the_same_reservation(env):
     assert len(env.relay.calls) == 3 and env.clock.slept == 10
     assert env.turns()[0]["state"] == "committed"
     with env.store.connect() as d:
-        assert d.execute("SELECT remaining FROM meetings WHERE room=?", (env.room,)).fetchone()[0] == __import__('meetings').DEFAULT_MAX_TURNS - 1
+        assert d.execute("SELECT remaining FROM meetings WHERE room=?", (env.room,)).fetchone()[0] == meetings.DEFAULT_MAX_TURNS - 1
 
 
 def test_pause_during_a_busy_wait_stops_dispatch(env):

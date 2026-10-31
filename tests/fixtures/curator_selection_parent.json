@@ -1,0 +1,6479 @@
+{
+  "parent": "8a6276b65736c96d32b4a63d925bb507d73f9f69",
+  "cases": [
+    {
+      "input": [],
+      "args": {
+        "top_n": 20,
+        "diversity_weight": 0,
+        "serendipity_reserve": 0.6,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 1
+      },
+      "selected": [],
+      "pool": [],
+      "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "logs": [
+        "\n\ud83c\udfb2 Serendipity reserve: 12/20 articles (60%) from outside learned patterns",
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "A",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a5",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a6",
+          "source": "A",
+          "category": "other",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        }
+      ],
+      "args": {
+        "top_n": 20,
+        "diversity_weight": 0.3,
+        "serendipity_reserve": 0.2,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 1
+      },
+      "selected": [
+        "a6"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -5.5,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a1",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -8.5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -4.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a3",
+          "source": "A",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 1.0,
+          "interest_boosted": true,
+          "interest_modifier": -0.4,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -1.0,
+          "interest_boosted": true,
+          "interest_modifier": -1.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a5",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 5.5,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a6",
+          "source": "A",
+          "category": "other",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 15.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        }
+      ],
+      "trace_sha256": "bdeae9e95d88212c16e5e87314e11ed0970d6dcd4e4e10a1aa3221fd6613aa37",
+      "logs": [
+        "\n\ud83c\udfb2 Serendipity reserve: 4/20 articles (20%) from outside learned patterns",
+        "   Selecting 4 serendipity articles from 6 remaining candidates...",
+        "   \u2705 Added 0 serendipity articles",
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   A: 1 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   other: 1 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a1",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a3",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a5",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a6",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a7",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a8",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a9",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 1,
+        "diversity_weight": 0,
+        "serendipity_reserve": 1,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 0
+      },
+      "selected": [
+        "a0"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0,
+          "final_score": 5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a1",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0,
+          "final_score": 5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0,
+          "final_score": 5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a3",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0,
+          "final_score": 5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0,
+          "final_score": 5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a5",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0,
+          "final_score": 5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a6",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0,
+          "final_score": 5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a7",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0,
+          "final_score": 5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a8",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0,
+          "final_score": 5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a9",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0,
+          "final_score": 5,
+          "serendipity_pick": true
+        }
+      ],
+      "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "logs": [
+        "\n\ud83c\udfb2 Serendipity reserve: 1/1 articles (100%) from outside learned patterns",
+        "   Selecting 1 serendipity articles from 10 remaining candidates...",
+        "   \u2705 Added 1 serendipity articles",
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   A: 1 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   other: 1 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a1",
+          "source": "A",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a4",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a5",
+          "source": "A",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a6",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a7",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a8",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a9",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a10",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a11",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        }
+      ],
+      "args": {
+        "top_n": 20,
+        "diversity_weight": 0.3,
+        "serendipity_reserve": 0.6,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 1
+      },
+      "selected": [
+        "a10",
+        "a2",
+        "a11",
+        "a6",
+        "a0",
+        "a8",
+        "a1",
+        "a9",
+        "a5"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -12.5,
+          "interest_boosted": true,
+          "interest_modifier": 2.0
+        },
+        {
+          "id": "a1",
+          "source": "A",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -146.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 10.0
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -49.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a4",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -251.5,
+          "interest_boosted": true,
+          "interest_modifier": -0.4,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a5",
+          "source": "A",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -385.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a6",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -3.2,
+          "interest_boosted": true,
+          "interest_modifier": -0.4,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        },
+        {
+          "id": "a7",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -536.5,
+          "interest_boosted": true,
+          "interest_modifier": 0.8,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a8",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -66.5,
+          "interest_boosted": true,
+          "interest_modifier": 2.0
+        },
+        {
+          "id": "a9",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -251.5
+        },
+        {
+          "id": "a10",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 12.0,
+          "interest_boosted": true,
+          "interest_modifier": -1.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a11",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 1.7000000000000002,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        }
+      ],
+      "trace_sha256": "2c4139c32c8573cb8f1c524355e3cfceedf96885acd708e9415e9bcb77f0ebc2",
+      "logs": [
+        "\n\ud83c\udfb2 Serendipity reserve: 12/20 articles (60%) from outside learned patterns",
+        "   Selecting 12 serendipity articles from 4 remaining candidates...",
+        "   \u2705 Added 1 serendipity articles",
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   A: 6 articles",
+        "   C: 2 articles",
+        "   B: 1 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   fiscal: 7 articles",
+        "   other: 2 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a4",
+          "source": "B",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a5",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a6",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a7",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a8",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a9",
+          "source": "B",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a10",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a11",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 5,
+        "diversity_weight": 0,
+        "serendipity_reserve": 0.2,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 0
+      },
+      "selected": [
+        "a4",
+        "a2",
+        "a9",
+        "a0",
+        "a6"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 7.0,
+          "interest_boosted": true,
+          "interest_modifier": 0.8,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 5,
+          "interest_boosted": true,
+          "interest_modifier": -0.4,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 8.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 2,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a4",
+          "source": "B",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 9.6,
+          "interest_boosted": true,
+          "interest_modifier": -0.4
+        },
+        {
+          "id": "a5",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 5,
+          "interest_boosted": true,
+          "interest_modifier": 0.8,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a6",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 5,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a7",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 5,
+          "interest_boosted": true,
+          "interest_modifier": 0.8,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a8",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 8,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a9",
+          "source": "B",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 8.0
+        },
+        {
+          "id": "a10",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 5,
+          "interest_boosted": true,
+          "interest_modifier": -0.4,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a11",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 5,
+          "serendipity_pick": true
+        }
+      ],
+      "trace_sha256": "e3ea179beaf64461c909a32551a23b18c69cf4a28891283b4cc504c7641dff45",
+      "logs": [
+        "\n\ud83c\udfb2 Serendipity reserve: 1/5 articles (20%) from outside learned patterns",
+        "   Selecting 1 serendipity articles from 8 remaining candidates...",
+        "   \u2705 Added 1 serendipity articles",
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   B: 3 articles",
+        "   C: 2 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   fiscal: 3 articles",
+        "   other: 2 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "B",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a4",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a5",
+          "source": "B",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a6",
+          "source": "A",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a7",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a8",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a9",
+          "source": "C",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a10",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a11",
+          "source": "B",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        }
+      ],
+      "args": {
+        "top_n": 20,
+        "diversity_weight": 0.3,
+        "serendipity_reserve": 0.6,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 0
+      },
+      "selected": [
+        "a6",
+        "a11",
+        "a9",
+        "a5",
+        "a8",
+        "a3",
+        "a4",
+        "a2"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "B",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -293.5,
+          "interest_boosted": true,
+          "interest_modifier": -1.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -30.5,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -191.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -72.5,
+          "interest_boosted": true,
+          "interest_modifier": -1.0
+        },
+        {
+          "id": "a4",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -124.7,
+          "interest_boosted": true,
+          "interest_modifier": -0.4,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        },
+        {
+          "id": "a5",
+          "source": "B",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -13.7,
+          "interest_boosted": true,
+          "interest_modifier": -0.4,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        },
+        {
+          "id": "a6",
+          "source": "A",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 15.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a7",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -251.5,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a8",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -39.5,
+          "interest_boosted": true,
+          "interest_modifier": 0.8,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        },
+        {
+          "id": "a9",
+          "source": "C",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 7.5,
+          "interest_boosted": true,
+          "interest_modifier": 2.0
+        },
+        {
+          "id": "a10",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -296.5,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a11",
+          "source": "B",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 13.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        }
+      ],
+      "trace_sha256": "659aac127b48eda56cbb0a7189435311896ea54a27b4f2b6624786d98922dd5a",
+      "logs": [
+        "\n\ud83c\udfb2 Serendipity reserve: 12/20 articles (60%) from outside learned patterns",
+        "   Selecting 12 serendipity articles from 4 remaining candidates...",
+        "   \u2705 Added 0 serendipity articles",
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   A: 3 articles",
+        "   B: 3 articles",
+        "   C: 2 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   fiscal: 7 articles",
+        "   other: 1 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "B",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a5",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a6",
+          "source": "B",
+          "category": "other",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a7",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        }
+      ],
+      "args": {
+        "top_n": 5,
+        "diversity_weight": 1,
+        "serendipity_reserve": 0,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 1
+      },
+      "selected": [
+        "a6",
+        "a0",
+        "a7",
+        "a4",
+        "a3"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 12.0,
+          "interest_boosted": true,
+          "interest_modifier": 0.8,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        },
+        {
+          "id": "a1",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -173.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0
+        },
+        {
+          "id": "a2",
+          "source": "B",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -86.0,
+          "interest_boosted": true,
+          "interest_modifier": 0.8,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        },
+        {
+          "id": "a3",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -83.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -40.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a5",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -85.0
+        },
+        {
+          "id": "a6",
+          "source": "B",
+          "category": "other",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 15.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a7",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -5.0,
+          "interest_boosted": true,
+          "interest_modifier": 0.8,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        }
+      ],
+      "trace_sha256": "0ae16c3555643404443ca9729105495aef72364a746fbc92ebf0eb89ccc3f3e9",
+      "logs": [
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   B: 2 articles",
+        "   A: 2 articles",
+        "   C: 1 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   other: 3 articles",
+        "   fiscal: 2 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a3",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a5",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a6",
+          "source": "B",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a7",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a8",
+          "source": "C",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 5,
+        "diversity_weight": 1,
+        "serendipity_reserve": 0.2,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 0
+      },
+      "selected": [
+        "a5",
+        "a6",
+        "a8",
+        "a0"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -69.2,
+          "interest_boosted": true,
+          "interest_modifier": 0.8
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -85,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -325,
+          "interest_boosted": true,
+          "interest_modifier": -1.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a3",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -55,
+          "interest_boosted": true,
+          "interest_modifier": -0.4,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -52,
+          "interest_boosted": true,
+          "interest_modifier": -0.4,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a5",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 15.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a6",
+          "source": "B",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 9.0,
+          "interest_boosted": true,
+          "interest_modifier": -1.0
+        },
+        {
+          "id": "a7",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -55,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a8",
+          "source": "C",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -23.0,
+          "interest_boosted": true,
+          "interest_modifier": -1.0
+        }
+      ],
+      "trace_sha256": "ed89e29dce6afc87fc3ad2d491996e6aec504552b3a27e3e7f207b15723b73c9",
+      "logs": [
+        "\n\ud83c\udfb2 Serendipity reserve: 1/5 articles (20%) from outside learned patterns",
+        "   Selecting 1 serendipity articles from 5 remaining candidates...",
+        "   \u2705 Added 0 serendipity articles",
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   C: 3 articles",
+        "   B: 1 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   other: 2 articles",
+        "   fiscal: 2 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "B",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a2",
+          "source": "B",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 5,
+        "diversity_weight": 0.3,
+        "serendipity_reserve": 1,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 3
+      },
+      "selected": [
+        "a3",
+        "a0",
+        "a2",
+        "a1"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "B",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3,
+          "final_score": 8.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3,
+          "final_score": -35.5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a2",
+          "source": "B",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3,
+          "final_score": -5.5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "final_score": 10.0,
+          "serendipity_pick": true
+        }
+      ],
+      "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "logs": [
+        "\n\ud83c\udfb2 Serendipity reserve: 5/5 articles (100%) from outside learned patterns",
+        "   Selecting 5 serendipity articles from 4 remaining candidates...",
+        "   \u2705 Added 4 serendipity articles",
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   B: 3 articles",
+        "   C: 1 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   fiscal: 2 articles",
+        "   other: 2 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a4",
+          "source": "C",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a5",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 5,
+        "diversity_weight": 0.3,
+        "serendipity_reserve": 0.6,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 3
+      },
+      "selected": [
+        "a0",
+        "a4",
+        "a5",
+        "a3",
+        "a2"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 11.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -52.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -49.0,
+          "interest_boosted": true,
+          "interest_modifier": -0.4,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -11.5,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a4",
+          "source": "C",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 7.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a5",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -5.5,
+          "interest_boosted": true,
+          "interest_modifier": -0.4,
+          "serendipity_pick": true
+        }
+      ],
+      "trace_sha256": "4d131e8b79054eebbf0f8f84a251f9c51752f5a779494c1ba2b5ec83f9b8d7fd",
+      "logs": [
+        "\n\ud83c\udfb2 Serendipity reserve: 3/5 articles (60%) from outside learned patterns",
+        "   Selecting 3 serendipity articles from 4 remaining candidates...",
+        "   \u2705 Added 3 serendipity articles",
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   C: 3 articles",
+        "   A: 2 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   fiscal: 3 articles",
+        "   other: 2 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a1",
+          "source": "A",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 1,
+        "diversity_weight": 1,
+        "serendipity_reserve": 1,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 0
+      },
+      "selected": [
+        "a0"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0,
+          "final_score": 5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a1",
+          "source": "A",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0,
+          "final_score": 8,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0,
+          "final_score": 8,
+          "serendipity_pick": true
+        }
+      ],
+      "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "logs": [
+        "\n\ud83c\udfb2 Serendipity reserve: 1/1 articles (100%) from outside learned patterns",
+        "   Selecting 1 serendipity articles from 3 remaining candidates...",
+        "   \u2705 Added 1 serendipity articles",
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   A: 1 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   fiscal: 1 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "B",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a3",
+          "source": "B",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 5,
+        "diversity_weight": 0.3,
+        "serendipity_reserve": 0.6,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 3
+      },
+      "selected": [
+        "a2",
+        "a4",
+        "a3",
+        "a0",
+        "a1"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -8.5,
+          "interest_boosted": true,
+          "interest_modifier": -0.4,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -49.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a2",
+          "source": "B",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 10.0
+        },
+        {
+          "id": "a3",
+          "source": "B",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -3.5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 2.8,
+          "interest_boosted": true,
+          "interest_modifier": 0.8
+        }
+      ],
+      "trace_sha256": "29b786394523e818635d4962e824381e016956ae48347ee987a823bf09a6b6db",
+      "logs": [
+        "\n\ud83c\udfb2 Serendipity reserve: 3/5 articles (60%) from outside learned patterns",
+        "   Selecting 3 serendipity articles from 3 remaining candidates...",
+        "   \u2705 Added 3 serendipity articles",
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   B: 3 articles",
+        "   A: 2 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   other: 3 articles",
+        "   fiscal: 2 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a5",
+          "source": "B",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 0,
+        "diversity_weight": 1,
+        "serendipity_reserve": 0.6,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 1
+      },
+      "selected": [],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a5",
+          "source": "B",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        }
+      ],
+      "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "logs": [
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a5",
+          "source": "B",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a6",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a7",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3
+        }
+      ],
+      "args": {
+        "top_n": 0,
+        "diversity_weight": 0.3,
+        "serendipity_reserve": 0.6,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 1
+      },
+      "selected": [],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a5",
+          "source": "B",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a6",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a7",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3
+        }
+      ],
+      "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "logs": [
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a3",
+          "source": "A",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a4",
+          "source": "B",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 5,
+        "diversity_weight": 0.3,
+        "serendipity_reserve": 1,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 1
+      },
+      "selected": [
+        "a0",
+        "a1",
+        "a3",
+        "a2"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "final_score": 10.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0,
+          "final_score": 2.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "final_score": -35.5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a3",
+          "source": "A",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "final_score": -5.5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a4",
+          "source": "B",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0,
+          "final_score": -16.0,
+          "serendipity_pick": true
+        }
+      ],
+      "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "logs": [
+        "\n\ud83c\udfb2 Serendipity reserve: 5/5 articles (100%) from outside learned patterns",
+        "   Selecting 5 serendipity articles from 5 remaining candidates...",
+        "   \u2705 Added 4 serendipity articles",
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   A: 3 articles",
+        "   C: 1 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   fiscal: 2 articles",
+        "   other: 2 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a4",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a5",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a6",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a7",
+          "source": "C",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 0,
+        "diversity_weight": 0,
+        "serendipity_reserve": 0,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 3
+      },
+      "selected": [],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a4",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a5",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a6",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a7",
+          "source": "C",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        }
+      ],
+      "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "logs": [
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a1",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a5",
+          "source": "A",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a6",
+          "source": "B",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 0,
+        "diversity_weight": 0.3,
+        "serendipity_reserve": 0.2,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 0
+      },
+      "selected": [],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a1",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a5",
+          "source": "A",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a6",
+          "source": "B",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        }
+      ],
+      "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "logs": [
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "B",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "B",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 20,
+        "diversity_weight": 0,
+        "serendipity_reserve": 0.6,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 3
+      },
+      "selected": [
+        "a2",
+        "a3",
+        "a4",
+        "a1",
+        "a0"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 4.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 4.6,
+          "interest_boosted": true,
+          "interest_modifier": -0.4
+        },
+        {
+          "id": "a2",
+          "source": "B",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 15.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a3",
+          "source": "B",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 13.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 7.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0
+        }
+      ],
+      "trace_sha256": "e2281b6f35fdb954b655bb1860ba205c56aa2bcf6b7de28e257c0cb3a1f2b9ea",
+      "logs": [
+        "\n\ud83c\udfb2 Serendipity reserve: 12/20 articles (60%) from outside learned patterns",
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   B: 3 articles",
+        "   A: 1 articles",
+        "   C: 1 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   fiscal: 4 articles",
+        "   other: 1 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a3",
+          "source": "A",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a5",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a6",
+          "source": "C",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a7",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a8",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a9",
+          "source": "C",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a10",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a11",
+          "source": "B",
+          "category": "other",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        }
+      ],
+      "args": {
+        "top_n": 1,
+        "diversity_weight": 1,
+        "serendipity_reserve": 0.2,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 0
+      },
+      "selected": [
+        "a6"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 12.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 8.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 9.0,
+          "interest_boosted": true,
+          "interest_modifier": -1.0
+        },
+        {
+          "id": "a3",
+          "source": "A",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 2.8,
+          "interest_boosted": true,
+          "interest_modifier": 0.8
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 7.6,
+          "interest_boosted": true,
+          "interest_modifier": -0.4
+        },
+        {
+          "id": "a5",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 5.0
+        },
+        {
+          "id": "a6",
+          "source": "C",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 12.0,
+          "interest_boosted": true,
+          "interest_modifier": 0.8,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        },
+        {
+          "id": "a7",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 4.6,
+          "interest_boosted": true,
+          "interest_modifier": -0.4
+        },
+        {
+          "id": "a8",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 7.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0
+        },
+        {
+          "id": "a9",
+          "source": "C",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 4.0,
+          "interest_boosted": true,
+          "interest_modifier": -1.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a10",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 7.6,
+          "interest_boosted": true,
+          "interest_modifier": -0.4
+        },
+        {
+          "id": "a11",
+          "source": "B",
+          "category": "other",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 10.8,
+          "interest_boosted": true,
+          "interest_modifier": -0.4,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        }
+      ],
+      "trace_sha256": "a47b78958a02eaaf39d3b07c558d53a9a799ced85c0b86537d366d56c2e392f2",
+      "logs": [
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   C: 1 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   fiscal: 1 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 20,
+        "diversity_weight": 0,
+        "serendipity_reserve": 1,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 3
+      },
+      "selected": [
+        "a0",
+        "a1",
+        "a2"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3,
+          "final_score": 5,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0,
+          "final_score": 2,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "final_score": 2,
+          "serendipity_pick": true
+        }
+      ],
+      "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "logs": [
+        "\n\ud83c\udfb2 Serendipity reserve: 20/20 articles (100%) from outside learned patterns",
+        "   Selecting 20 serendipity articles from 3 remaining candidates...",
+        "   \u2705 Added 3 serendipity articles",
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   A: 2 articles",
+        "   B: 1 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   fiscal: 2 articles",
+        "   other: 1 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "B",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a4",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a5",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a6",
+          "source": "A",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a7",
+          "source": "A",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a8",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a9",
+          "source": "B",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 20,
+        "diversity_weight": 1,
+        "serendipity_reserve": 0,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 3
+      },
+      "selected": [
+        "a9",
+        "a7",
+        "a0",
+        "a4",
+        "a6",
+        "a2",
+        "a5",
+        "a1",
+        "a8",
+        "a3"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -6.0,
+          "interest_boosted": true,
+          "interest_modifier": -1.0
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -252.2,
+          "interest_boosted": true,
+          "interest_modifier": 0.8
+        },
+        {
+          "id": "a2",
+          "source": "B",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -80.0
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -505.0
+        },
+        {
+          "id": "a4",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -25.0
+        },
+        {
+          "id": "a5",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -191.0,
+          "interest_boosted": true,
+          "interest_modifier": -1.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a6",
+          "source": "A",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": -73.4,
+          "interest_boosted": true,
+          "interest_modifier": -0.4
+        },
+        {
+          "id": "a7",
+          "source": "A",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 7.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a8",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": -503.0,
+          "interest_boosted": true,
+          "interest_modifier": -1.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a9",
+          "source": "B",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 10.8,
+          "interest_boosted": true,
+          "interest_modifier": 0.8
+        }
+      ],
+      "trace_sha256": "e6e3d30d13d06621a6bd07785a213068ffa9af75f27512258b9066b127eb209d",
+      "logs": [
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   B: 4 articles",
+        "   C: 4 articles",
+        "   A: 2 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   fiscal: 5 articles",
+        "   other: 5 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "B",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a4",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a5",
+          "source": "B",
+          "category": "other",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a6",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 20,
+        "diversity_weight": 0,
+        "serendipity_reserve": 0,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 0
+      },
+      "selected": [
+        "a0",
+        "a2",
+        "a1",
+        "a6"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 12.0,
+          "interest_boosted": true,
+          "interest_modifier": 0.8,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 8.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 8.8,
+          "interest_boosted": true,
+          "interest_modifier": -0.4,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        },
+        {
+          "id": "a3",
+          "source": "B",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 5.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a4",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 13.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a5",
+          "source": "B",
+          "category": "other",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 13.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a6",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 4.6,
+          "interest_boosted": true,
+          "interest_modifier": -0.4
+        }
+      ],
+      "trace_sha256": "e5af24bd0efe5bead5db9155feb1a204c5349c7c4ebae481641fc6e66c5dcd45",
+      "logs": [
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   C: 2 articles",
+        "   B: 2 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   other: 2 articles",
+        "   fiscal: 2 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "B",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a5",
+          "source": "B",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a6",
+          "source": "A",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a7",
+          "source": "B",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a8",
+          "source": "A",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a9",
+          "source": "B",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a10",
+          "source": "B",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a11",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 1,
+        "diversity_weight": 0.3,
+        "serendipity_reserve": 1,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 0
+      },
+      "selected": [
+        "a9"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0,
+          "final_score": 5.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a1",
+          "source": "B",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "final_score": 8.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a2",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3,
+          "final_score": 5.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a3",
+          "source": "B",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3,
+          "final_score": 2.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3,
+          "final_score": 5.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a5",
+          "source": "B",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "final_score": 2.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a6",
+          "source": "A",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0,
+          "final_score": 8.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a7",
+          "source": "B",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "final_score": 2.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a8",
+          "source": "A",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "final_score": 10.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a9",
+          "source": "B",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3,
+          "final_score": 10.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a10",
+          "source": "B",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3,
+          "final_score": 2.0,
+          "serendipity_pick": true
+        },
+        {
+          "id": "a11",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "final_score": 5.0,
+          "serendipity_pick": true
+        }
+      ],
+      "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "logs": [
+        "\n\ud83c\udfb2 Serendipity reserve: 1/1 articles (100%) from outside learned patterns",
+        "   Selecting 1 serendipity articles from 12 remaining candidates...",
+        "   \u2705 Added 1 serendipity articles",
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   B: 1 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   other: 1 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a2",
+          "source": "B",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a5",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a6",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a7",
+          "source": "A",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a8",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a9",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a10",
+          "source": "A",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a11",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 1,
+        "diversity_weight": 1,
+        "serendipity_reserve": 0.6,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 3
+      },
+      "selected": [
+        "a3"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "B",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 7.0,
+          "interest_boosted": true,
+          "interest_modifier": 0.8,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 11.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a2",
+          "source": "B",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 2.8,
+          "interest_boosted": true,
+          "interest_modifier": 0.8
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 15.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 13.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a5",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 13.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a6",
+          "source": "C",
+          "category": "other",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 6.2,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        },
+        {
+          "id": "a7",
+          "source": "A",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 1.0,
+          "interest_boosted": true,
+          "interest_modifier": -1.0
+        },
+        {
+          "id": "a8",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 7.0,
+          "interest_boosted": true,
+          "interest_modifier": -1.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a9",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 8.0
+        },
+        {
+          "id": "a10",
+          "source": "A",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 9.6,
+          "interest_boosted": true,
+          "interest_modifier": -0.4
+        },
+        {
+          "id": "a11",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 5.0
+        }
+      ],
+      "trace_sha256": "8d897cd96fc13e6d40a046d456694e37fefddb69659e6e1b01fab101b4c0411d",
+      "logs": [
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   C: 1 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   other: 1 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a5",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a6",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 0,
+        "diversity_weight": 0.3,
+        "serendipity_reserve": 0.6,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 1
+      },
+      "selected": [],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "other",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a5",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a6",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        }
+      ],
+      "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "logs": [
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "A",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a3",
+          "source": "B",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a4",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a5",
+          "source": "B",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a6",
+          "source": "B",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a7",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a8",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a9",
+          "source": "C",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a10",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        }
+      ],
+      "args": {
+        "top_n": 1,
+        "diversity_weight": 1,
+        "serendipity_reserve": 0.6,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 0
+      },
+      "selected": [
+        "a3"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 5.8,
+          "interest_boosted": true,
+          "interest_modifier": -0.4,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        },
+        {
+          "id": "a1",
+          "source": "A",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 1.0,
+          "interest_boosted": true,
+          "interest_modifier": -1.0
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 8.0
+        },
+        {
+          "id": "a3",
+          "source": "B",
+          "category": "fiscal",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": -1,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 10.0,
+          "interest_boosted": true,
+          "interest_modifier": -1.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a4",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 5.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a5",
+          "source": "B",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 10.0
+        },
+        {
+          "id": "a6",
+          "source": "B",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 10.8,
+          "interest_boosted": true,
+          "interest_modifier": 0.8
+        },
+        {
+          "id": "a7",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 8.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a8",
+          "source": "A",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 8.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a9",
+          "source": "C",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 4.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0
+        },
+        {
+          "id": "a10",
+          "source": "B",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 4.6,
+          "interest_boosted": true,
+          "interest_modifier": -0.4
+        }
+      ],
+      "trace_sha256": "0653b3fb97be2299f9983ffdde6b90a83f07d2ed55a39e6045dcf633208433a9",
+      "logs": [
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   B: 1 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   fiscal: 1 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0
+        },
+        {
+          "id": "a2",
+          "source": "B",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "other",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0
+        },
+        {
+          "id": "a5",
+          "source": "B",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0
+        },
+        {
+          "id": "a6",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        }
+      ],
+      "args": {
+        "top_n": 1,
+        "diversity_weight": 0,
+        "serendipity_reserve": 0,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 3
+      },
+      "selected": [
+        "a3"
+      ],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "A",
+          "category": "other",
+          "score": 8,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 13.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "other",
+          "score": 2,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 4.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0
+        },
+        {
+          "id": "a2",
+          "source": "B",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 8.8,
+          "interest_boosted": true,
+          "interest_modifier": -0.4,
+          "priorities_boosted": true,
+          "priorities_modifier": 1.2000000000000002
+        },
+        {
+          "id": "a3",
+          "source": "C",
+          "category": "fiscal",
+          "score": 10,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 15.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        },
+        {
+          "id": "a4",
+          "source": "A",
+          "category": "other",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "x_bookmark",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 10.0
+        },
+        {
+          "id": "a5",
+          "source": "B",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": -1,
+          "pb": 0,
+          "priority_checked": true,
+          "final_score": 1.6,
+          "interest_boosted": true,
+          "interest_modifier": -0.4
+        },
+        {
+          "id": "a6",
+          "source": "C",
+          "category": "other",
+          "score": 10,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3,
+          "priority_checked": true,
+          "final_score": 15.0,
+          "interest_boosted": true,
+          "interest_modifier": 2.0,
+          "priorities_boosted": true,
+          "priorities_modifier": 3.0
+        }
+      ],
+      "trace_sha256": "f780e2ece8c3aa634836f13b1dd1047f00022d20e92d56511608f7fe3a3c3b52",
+      "logs": [
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "   C: 1 articles",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:",
+        "   fiscal: 1 articles"
+      ]
+    },
+    {
+      "input": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        }
+      ],
+      "args": {
+        "top_n": 0,
+        "diversity_weight": 0.3,
+        "serendipity_reserve": 0.6,
+        "active_interests": {
+          "fiscal": []
+        },
+        "active_priorities": [],
+        "_source_trust": {
+          "trusted.example": "trusted"
+        },
+        "X_POST_CAP": 3
+      },
+      "selected": [],
+      "pool": [
+        {
+          "id": "a0",
+          "source": "C",
+          "category": "fiscal",
+          "score": 5,
+          "link": "https://neutral.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 2,
+          "pb": 3
+        },
+        {
+          "id": "a1",
+          "source": "C",
+          "category": "other",
+          "score": 8,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 0.4,
+          "ib": 0,
+          "pb": 3
+        },
+        {
+          "id": "a2",
+          "source": "A",
+          "category": "fiscal",
+          "score": 2,
+          "link": "https://trusted.example/a",
+          "content_type": "rss",
+          "age_multiplier": 1.0,
+          "ib": 0,
+          "pb": 3
+        }
+      ],
+      "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "logs": [
+        "\n\ud83d\udcca Source distribution in top 20:",
+        "\n\ud83c\udff7\ufe0f  Category distribution in top 20:"
+      ]
+    }
+  ],
+  "routes": [
+    [
+      "/feedback",
+      "feedback",
+      [
+        "GET",
+        "POST"
+      ]
+    ],
+    [
+      "/deepdive",
+      "deepdive",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/library",
+      "api_library",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/priority",
+      "api_add_priority",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/priorities",
+      "api_list_priorities",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/priority/<string:priority_id>",
+      "api_delete_priority",
+      [
+        "DELETE"
+      ]
+    ],
+    [
+      "/api/priority/<string:priority_id>",
+      "api_edit_priority",
+      [
+        "PATCH"
+      ]
+    ],
+    [
+      "/api/priority/<string:priority_id>/feed",
+      "api_priority_feed",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/priority/<string:priority_id>/refresh",
+      "api_priority_refresh",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/priority-feed/save",
+      "api_priority_feed_save",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/priority-feed/feedback",
+      "api_priority_feed_feedback",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/api/check-url",
+      "api_check_url",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/intelligence/latest",
+      "api_intelligence_latest",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/intelligence/respond",
+      "api_intelligence_respond",
+      [
+        "POST"
+      ]
+    ],
+    [
+      "/",
+      "index",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/landing",
+      "index",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/briefing",
+      "briefing",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/curator_library.html",
+      "library_page",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/reading-room",
+      "library_page",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/archive",
+      "archive_page",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/scans-dives",
+      "scans_dives_page",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/curator_briefing.html",
+      "briefing_page",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/api/briefing",
+      "api_briefing",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/curator_latest.html",
+      "latest_page",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/curator_index.html",
+      "index_page",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/language",
+      "language_coming",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/jobs",
+      "career_focus_redirect",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/interests/2026/scans/<path:filename>",
+      "redirect_old_scan",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/interests/<path:filepath>",
+      "serve_interests",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/curator_archive/<path:filename>",
+      "serve_archive",
+      [
+        "GET"
+      ]
+    ],
+    [
+      "/health",
+      "health",
+      [
+        "GET"
+      ]
+    ]
+  ]
+}

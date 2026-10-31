@@ -1069,3 +1069,9 @@ def test_p1as_production_compose_layer_is_an_operator_file_and_production_compos
     rendered = json.loads(json.dumps(yaml.safe_load((root / "docker-compose.prod.yml").read_text())["services"],
                                      sort_keys=True, default=str))
     assert rendered == golden
+
+
+def test_canonical_records_changes_keep_conservative_full_release():
+    for path in ("domains/records/app.py", "domains/records/store.py",
+                 "domains/records/static/style.css"):
+        assert classify([path]) == ("full", ALL_SERVICES)

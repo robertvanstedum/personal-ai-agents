@@ -2,8 +2,8 @@
 from datetime import datetime,timedelta,timezone
 from uuid import uuid4
 import pytest
-import archive as module
-from store import Store,Problem
+from domains.records import archive as module
+from domains.records.store import Store, Problem
 NOW=datetime(2026,10,14,8,tzinfo=timezone.utc)
 
 def proof(room):return {'kind':'portal_locked_archive_v1','room':room,'state':'clear','checked_at':NOW.isoformat(),
@@ -26,7 +26,7 @@ def test_regular_interactive_proof_unchanged():
     assert module.portal_proof(data,room)==data
 
 def test_deadline_checked_inside_write_transaction(tmp_path):
-    from app import create_app
+    from domains.records.app import create_app
     store=create_app(tmp_path/'private',testing=True).extensions['records_store'];room=store.create_room('robert','create',dict(title='Synthetic',purpose='Synthetic',recording_acknowledged=True))['result']['id']
     with store.connect() as db:db.execute('UPDATE rooms SET updated=? WHERE id=?',((NOW-timedelta(days=31)).isoformat(),room))
     store.archive.clock=lambda:NOW
@@ -66,8 +66,8 @@ def configured(tmp_path):
     return SimpleNamespace(caller=caller,access=access,policy=policy,binding=binding,key=key,calls=calls,users=users,clock=clock)
 
 def test_real_pair_hmac_http_and_real_ledger_archive(configured,tmp_path,monkeypatch):
-    import portal_identity,archive
-    from app import create_app
+    from domains.records import portal_identity; from domains.records import archive
+    from domains.records.app import create_app
     r=configured;monkeypatch.setattr(portal_identity.time,'time',lambda:NOW.timestamp())
     app=create_app(tmp_path/'records',testing=True,portal_key=('synthetic',b's'*48))
     store=app.extensions['records_store'];store.archive.clock=lambda:NOW

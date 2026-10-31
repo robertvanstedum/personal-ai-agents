@@ -97,7 +97,8 @@ from utils.role import is_production as _is_production
 
 # Curator user data directory — same convention as curator_server.py and curator_feedback.py.
 # Override with CURATOR_DATA_DIR env var on EC2.
-_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(REPO_ROOT / "data" / "curator")))
+from domains.curator.data_paths import data_directory
+_DATA_DIR = data_directory(REPO_ROOT)
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
@@ -1285,135 +1286,12 @@ def curate(top_n: int = 20, diversity_weight: float = 0.3, mode: str = 'mechanic
     except Exception:
         pass  # Use default if file not found
     
-    # Calculate split between personalized and serendipity articles
-    serendipity_count = int(top_n * serendipity_reserve)
-    personalized_count = top_n - serendipity_count
-    
-    if serendipity_count > 0:
-        print(f"\n🎲 Serendipity reserve: {serendipity_count}/{top_n} articles ({int(serendipity_reserve*100)}%) from outside learned patterns")
-    
-    # Apply diversity-aware selection
-    selected = []
-    source_counts = {}
-    category_counts = {}  # Track category distribution
-    x_post_count = 0      # Hard cap on X bookmark posts across both selection phases
-    candidates = all_entries.copy()
-    
-    # PHASE 1: Select personalized articles (with interest/priority boosts)
-    while len(selected) < personalized_count and candidates:
-        # Recalculate final scores based on current distribution
-        for entry in candidates:
-            source = entry["source"]
-            category = entry.get("category", "other")
-            
-            source_count = source_counts.get(source, 0)
-            category_count = category_counts.get(category, 0)
-            
-            # Source diversity penalty (existing logic; halved for trusted-tier sources)
-            domain = _domain_from_url(entry.get('link', ''))
-            trust = _source_trust.get(domain, 'neutral') if _source_trust else 'neutral'
-            discount = 0.5 if trust == 'trusted' else 1.0
-            source_penalty = (source_count ** 2) * 30 * diversity_weight * discount
-            
-            # Category diversity penalty (NEW: avoid topic echo chambers)
-            # Less aggressive than source penalty (we want some depth per topic)
-            category_penalty = (category_count ** 2) * 15 * diversity_weight
-            
-            # Apply interest-based boosting
-            interest_boost = apply_interest_boost(entry, active_interests)
-
-            # Apply priorities-based boosting
-            priorities_boost = apply_priorities_boost(entry, active_priorities)
-
-            # Scale boosts by age multiplier so old articles don't get amplified
-            # by historical interest. A 13d FAST article gets 65% of its boost;
-            # a 1d article gets 100%. SLOW sources at <30d retain full boost.
-            # This makes fresh content win when Grok scores are similar.
-            age_mult = entry.get('age_multiplier', 1.0)
-            scaled_interest = interest_boost * age_mult
-            scaled_priorities = priorities_boost * age_mult
-
-            entry["final_score"] = entry["score"] - source_penalty - category_penalty + scaled_interest + scaled_priorities
-            if interest_boost != 0:
-                entry["interest_boosted"] = True
-                entry["interest_modifier"] = scaled_interest
-            if priorities_boost > 0:
-                entry["priorities_boosted"] = True
-                entry["priorities_modifier"] = scaled_priorities
-        
-        # Pick the highest-scoring candidate (respecting X post hard cap)
-        candidates.sort(key=lambda x: x["final_score"], reverse=True)
-        best = None
-        for _i, _cand in enumerate(candidates):
-            if _cand.get('content_type') == 'x_bookmark' and x_post_count >= X_POST_CAP:
-                continue  # Skip X posts once cap is reached
-            best = candidates.pop(_i)
-            break
-        if best is None:
-            break  # All remaining candidates are X posts at cap limit
-
-        selected.append(best)
-
-        source = best["source"]
-        category = best.get("category", "other")
-        if best.get('content_type') == 'x_bookmark':
-            x_post_count += 1
-        source_counts[source] = source_counts.get(source, 0) + 1
-        category_counts[category] = category_counts.get(category, 0) + 1
-
-    # PHASE 2: Select serendipity articles (NO interest/priority boosts, only base score + diversity)
-    if serendipity_count > 0 and candidates:
-        print(f"   Selecting {serendipity_count} serendipity articles from {len(candidates)} remaining candidates...")
-        serendipity_selected = []
-        
-        while len(serendipity_selected) < serendipity_count and candidates:
-            # Recalculate scores WITHOUT personalization boosts
-            for entry in candidates:
-                source = entry["source"]
-                category = entry.get("category", "other")
-                
-                source_count = source_counts.get(source, 0)
-                category_count = category_counts.get(category, 0)
-                
-                source_penalty = (source_count ** 2) * 30 * diversity_weight
-                category_penalty = (category_count ** 2) * 15 * diversity_weight
-                
-                # Serendipity score = base score + diversity penalties ONLY (no boosts)
-                entry["final_score"] = entry["score"] - source_penalty - category_penalty
-                entry["serendipity_pick"] = True
-            
-            # Pick highest base-scoring candidate (respecting X post hard cap)
-            candidates.sort(key=lambda x: x["final_score"], reverse=True)
-            best = None
-            for _i, _cand in enumerate(candidates):
-                if _cand.get('content_type') == 'x_bookmark' and x_post_count >= X_POST_CAP:
-                    continue  # Skip X posts once cap is reached
-                best = candidates.pop(_i)
-                break
-            if best is None:
-                break  # All remaining candidates are X posts at cap limit
-
-            serendipity_selected.append(best)
-
-            source = best["source"]
-            category = best.get("category", "other")
-            if best.get('content_type') == 'x_bookmark':
-                x_post_count += 1
-            source_counts[source] = source_counts.get(source, 0) + 1
-            category_counts[category] = category_counts.get(category, 0) + 1
-        
-        # Merge serendipity articles into main selection
-        selected.extend(serendipity_selected)
-        print(f"   ✅ Added {len(serendipity_selected)} serendipity articles")
-    
-    # Report distributions
-    print("\n📊 Source distribution in top 20:")
-    for source, count in sorted(source_counts.items(), key=lambda x: x[1], reverse=True):
-        print(f"   {source}: {count} articles")
-    
-    print("\n🏷️  Category distribution in top 20:")
-    for category, count in sorted(category_counts.items(), key=lambda x: x[1], reverse=True):
-        print(f"   {category}: {count} articles")
+    from domains.curator.selection_rules import select_articles
+    selected = select_articles(all_entries, top_n, diversity_weight, serendipity_reserve,
+                               active_interests=active_interests, active_priorities=active_priorities,
+                               source_trust=_source_trust, x_post_cap=X_POST_CAP,
+                               domain_from_url=_domain_from_url, interest_boost_fn=apply_interest_boost,
+                               priorities_boost_fn=apply_priorities_boost, report=print)
 
     if return_pool:
         return selected, all_entries

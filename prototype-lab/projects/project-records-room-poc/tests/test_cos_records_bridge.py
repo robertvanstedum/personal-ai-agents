@@ -6,9 +6,9 @@ from uuid import uuid4
 
 import pytest
 
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"integration"))
-from cos_records_bridge import RoomBridgeError,RoomClient,dispatch,parse_command
-from app import create_app
+sys.path.insert(0,str(Path(__file__).resolve().parents[4]))
+from domains.records.integration.cos_records_bridge import RoomBridgeError, RoomClient, dispatch, parse_command
+from domains.records.app import create_app
 
 
 class LocalSession:
@@ -140,7 +140,7 @@ def test_staged_hook_owner_gate_and_ordinary_passthrough(monkeypatch):
     from datetime import datetime,timezone
     from types import ModuleType,SimpleNamespace
     from flask import Flask,request
-    import cos_records_bridge
+    from domains.records.integration import cos_records_bridge
     patch=(Path(__file__).resolve().parents[1]/"integration"/"dev_cos_hook.patch").read_text()
     added="\n".join(line[1:] for line in patch.splitlines() if line.startswith("+") and not line.startswith("+++"))
     source="def hook(text, request_id=None, conversation_id='owner', channel='html_text'):\n"+added+"\n    return 'ordinary'\n"

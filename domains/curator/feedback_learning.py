@@ -19,6 +19,23 @@ def deterministic_metadata(article):
     }
 
 
+def valid_metadata(metadata):
+    """Validate provider-derived shapes before any preference mutation."""
+    return (
+        isinstance(metadata, dict)
+        and all(isinstance(metadata.get(key, []), list)
+                and all(isinstance(item, str) for item in metadata.get(key, []))
+                for key in ('content_type', 'themes', 'signals', 'appeal', 'style'))
+        and all(metadata.get(key) is None or isinstance(metadata[key], str)
+                for key in ('source', 'url', 'depth'))
+    )
+
+
+def metadata_for_feedback(metadata, article):
+    """Keep valid model metadata; otherwise learn only known article facts."""
+    return dict(metadata) if valid_metadata(metadata) else deterministic_metadata(article)
+
+
 def update_patterns(prefs, metadata, feedback_type, *, now, classify_url):
     """Update aggregate patterns based on new feedback.
 
@@ -28,6 +45,8 @@ def update_patterns(prefs, metadata, feedback_type, *, now, classify_url):
       disliked = -1 (clear negative)
     Save is closer to a bookmark than an endorsement — like is the real curation signal.
     """
+    if not valid_metadata(metadata):
+        raise ValueError('Invalid feedback metadata')
     patterns = prefs['learned_patterns']
     weight_map = {'liked': 2, 'saved': 1, 'disliked': -1}
     weight = weight_map.get(feedback_type, 1)

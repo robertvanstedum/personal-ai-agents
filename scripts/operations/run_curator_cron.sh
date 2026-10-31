@@ -35,50 +35,78 @@ if [ "$HOUR" -lt 22 ]; then
     exit 0
 fi
 
-# ── Idempotency: skip if briefing already ran today (fixed check — #35) ──────
+LOG_PREFIX="[curator-dev-cron]"
+# ── Today's state: delivery ledger first, then generation (#305) ─────────────
+# Generation and delivery are tracked separately. curator_rss_v2.py writes
+# briefing_date into curator_latest.json when it generates; telegram_bot.py
+# --send writes data/curator/telegram_delivery/<UTC date>.json. The ledger rules
+# live in core/telegram/delivery_ledger.py, shared with the sender, so only an
+# exactly valid record for today proves delivery. Prints one of:
+#   delivered   today's record is a valid "acknowledged"   -> nothing to do
+#   resolved    an operator resolved a held day as delivered or skipped
+#                                                         -> nothing to do
+#   hold        started/partial/uncertain, or any malformed or wrong-day record
+#                                                         -> never resend; inspect
+#   generated   generated today, not delivered            -> deliver only (no paid rescoring)
+#   none        not generated today                       -> generate, then deliver
 TODAY=$(date -u +%Y-%m-%d)
-FILE_DATE=$(docker exec minimoi-curator python3 -c "
-import json
-try:
-    d = json.load(open('data/curator/curator_latest.json'))
-    print(d[0].get('briefing_date', '')[:10])
-except Exception:
-    print('')
-" 2>/dev/null || true)
-
-if [ "$FILE_DATE" = "$TODAY" ]; then
-    echo "✅ Briefing already ran today ($TODAY) — skipping"
-    exit 0
+STATE=$(docker exec minimoi-curator python3 -c "from core.telegram.delivery_ledger import cron_state; print(cron_state())" 2>/dev/null)
+if [ $? -ne 0 ]; then
+  echo "$LOG_PREFIX ERROR: briefing state lookup failed — not running"
+  exit 1
 fi
 
-echo "🚀 Starting curator briefing (docker) at $(date -u)"
+case "$STATE" in
+  delivered)
+    echo "$LOG_PREFIX Briefing already delivered today ($TODAY) — skipping"
+    exit 0 ;;
+  resolved)
+    echo "$LOG_PREFIX Today's held delivery ($TODAY) was resolved by an operator — nothing to send"
+    exit 0 ;;
+  hold)
+    echo "$LOG_PREFIX HOLD: today's delivery ($TODAY) is started, partial, uncertain or its record is malformed — not resending. Inspect with: python3 -m core.telegram.delivery_hold status $TODAY"
+    exit 1 ;;
+  generated)
+    echo "$LOG_PREFIX Briefing generated today but not delivered — retrying delivery only" ;;
+  none)
+    echo "$LOG_PREFIX Starting briefing at $(date -u)"
 
-# Phase 3C.7: Pull new X bookmarks before curating.
-# Failure is isolated — log and continue, never block the briefing.
-echo "🔖 Pulling new X bookmarks..."
-python -m scripts.x.x_pull_incremental 2>&1 || echo "⚠️  scripts.x.x_pull_incremental failed — continuing with existing signals"
+    # ── Pull new X bookmarks ──────────────────────────────────────────────────
+    echo "$LOG_PREFIX Pulling X bookmarks..."
+    python -m scripts.x.x_pull_incremental 2>&1 || \
+      echo "$LOG_PREFIX scripts.x.x_pull_incremental failed — continuing with existing signals"
 
-echo "🔖 Running RSS curation (grok-4.3)..."
-docker exec -e MINIMOI_ROLE=production minimoi-curator python domains/curator/curator_rss_v2.py \
-    --model=grok-4.3 --fallback --temperature=0.7
+    # ── Run curator pipeline ──────────────────────────────────────────────────
+    echo "$LOG_PREFIX Running RSS curation (grok-4.3)..."
+    docker exec -e MINIMOI_ROLE=production minimoi-curator python domains/curator/curator_rss_v2.py \
+      --model=grok-4.3 --fallback --temperature=0.7
+    RSS_STATUS=$?
 
-echo "📤 Sending Telegram briefing (system bot)..."
+    # Fail closed: a failed curation never reaches Telegram. Nothing marks the
+    # day generated, so the next hourly run in the window retries generation.
+    if [ $RSS_STATUS -ne 0 ]; then
+      echo "$LOG_PREFIX ERROR: curator_rss_v2.py exited with status $RSS_STATUS — not sending Telegram; the next hourly run in the window retries"
+      exit 1
+    fi ;;
+  *)
+    echo "$LOG_PREFIX ERROR: could not read today's briefing state — not running"
+    exit 1 ;;
+esac
+
+# ── Deliver (strict; telegram_bot.py writes the delivery ledger) ─────────────
+echo "$LOG_PREFIX Sending Telegram briefing (system bot)..."
 docker exec -e MINIMOI_ROLE=production -e TELEGRAM_CHAT_ID=8379221702 minimoi-curator python core/telegram/telegram_bot.py --send
-
 STATUS=$?
 
-if [ $STATUS -eq 0 ]; then
-    docker exec minimoi-curator python3 -c "
-import json, datetime
-with open('data/curator/curator_latest.json') as f:
-    data = json.load(f)
-data[0]['briefing_date'] = datetime.date.today().isoformat()
-with open('data/curator/curator_latest.json', 'w') as f:
-    json.dump(data, f)
-" 2>/dev/null || true
-    echo "✅ Curator briefing generated and sent successfully at $(date -u)"
-    exit 0
-else
-    echo "❌ ERROR: telegram_bot.py --send exited with status $STATUS"
-    exit 1
-fi
+# STATUS is telegram_bot.py --send's exit code: 0 acknowledged, 1 definitely not
+# sent (the next run retries delivery), 4 another delivery holds today's lock,
+# anything else held for inspection.
+case $STATUS in
+  0) echo "$LOG_PREFIX Briefing complete at $(date -u)" ;;
+  1) echo "$LOG_PREFIX ERROR: briefing not delivered (telegram_bot.py --send exited 1) — the next hourly run retries delivery"
+     exit 1 ;;
+  4) echo "$LOG_PREFIX BUSY: another delivery for $TODAY holds the lock — this run sent nothing"
+     exit 1 ;;
+  *) echo "$LOG_PREFIX HOLD: telegram_bot.py --send exited $STATUS — delivery uncertain or partial; not resending. Inspect with: python3 -m core.telegram.delivery_hold status $TODAY"
+     exit 1 ;;
+esac

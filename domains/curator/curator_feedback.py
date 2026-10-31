@@ -40,7 +40,8 @@ _RESEARCH_DATA = research_paths().data
 CURATOR_OUTPUT = Path(os.environ.get("CURATOR_OUTPUT_PATH") or REPO_ROOT / "curator_output.txt")
 # Canonical preferences location — shared with curator_server.py and curator_rss_v2.py.
 # Defaults to data/curator/ in the repo; override with CURATOR_DATA_DIR env var on EC2.
-_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(REPO_ROOT / "data" / "curator")))
+from domains.curator.data_paths import data_directory
+_DATA_DIR = data_directory(REPO_ROOT)
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
 PREFERENCES_FILE = _DATA_DIR / "curator_preferences.json"
 _FEEDBACK_LOCK = threading.RLock()
@@ -363,8 +364,7 @@ def extract_metadata(article, user_words, feedback_type):
         return metadata
     except (json.JSONDecodeError, IndexError, AttributeError) as e:
         # Fallback if parsing fails
-        print(f"⚠️  Metadata extraction failed: {e}")
-        print(f"   Response was: {response.content[0].text[:200] if response.content else 'empty'}")
+        print(f"⚠️  Metadata extraction failed ({type(e).__name__}); using fallback")
         return {
             "content_type": ["unknown"],
             "appeal": [],
@@ -410,6 +410,9 @@ def record_feedback(
         metadata = extract_metadata(article, user_words, feedback_type)
     else:
         metadata = _deterministic_metadata(article)
+
+    from domains.curator.feedback_learning import metadata_for_feedback
+    metadata = metadata_for_feedback(metadata, article)
 
     # Inject source and URL into metadata so update_learned_patterns can track them
     if article.get('source'):

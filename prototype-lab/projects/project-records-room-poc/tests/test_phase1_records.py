@@ -5,8 +5,8 @@ from uuid import uuid4
 
 import pytest
 
-from app import create_app
-from store import Store, Problem
+from domains.records.app import create_app
+from domains.records.store import Store, Problem
 
 
 @pytest.fixture
@@ -88,7 +88,7 @@ def test_v3_migration_atomic_and_legacy_receipts_preserved(setup,monkeypatch):
     # Reconstruct v3's actual shape and historical receipt (which had no origin).
     saved['result'].pop('origin')
     with store.connect() as db:
-        from conftest import remove_v5_shape
+        from records_fixture_helpers import remove_v5_shape
         remove_v5_shape(db)
         db.execute('DROP TABLE notes')
         db.execute('ALTER TABLE events DROP COLUMN origin')

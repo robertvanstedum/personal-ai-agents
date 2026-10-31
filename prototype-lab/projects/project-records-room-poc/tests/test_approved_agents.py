@@ -1,6 +1,6 @@
 """Approval changes must fence both credentials and already claimed work."""
 from test_rooms_r1 import env
-from store import Store
+from domains.records.store import Store
 
 
 def activate(e):
@@ -38,7 +38,7 @@ def test_approval_restart_off_on_fences_running_answer(env):
 
 
 def test_lost_issue_rotates_pending_credentials_stale_ack_denied(env):
-    from platform_access import AccessError
+    from domains.records.platform_access import AccessError
     import pytest
     a=env.store.approved_agents
     p=a.change('robert','mc',True)
@@ -94,8 +94,8 @@ def test_installer_crash_recovery_verifies_files_before_ack(env, tmp_path):
 
 
 def test_installer_api_is_private_and_ack_is_generation_bound(tmp_path):
-    from app import create_app
-    from manage import provision_rooms
+    from domains.records.app import create_app
+    from domains.records.manage import provision_rooms
     app=create_app(tmp_path/'records',testing=True,installer_key='x'*40)
     store=app.extensions['records_store']
     provision_rooms(store,'mc','Master Craftsman',tmp_path/'tokens')
@@ -123,8 +123,8 @@ def test_approved_member_cannot_use_coordination_or_import(env):
     assert e.call('GET',{'Authorization':'Bearer café'},'/agent-installer/pending').status_code==401
 
 
-def test_installer_to_live_http_client_rotation_and_reply(env,tmp_path):
-    from app import create_app
+def test_installer_to_live_http_client_rotation_and_reply(env,tmp_path,monkeypatch):
+    from domains.records.app import create_app
     from services.agent_installer.installer import Installer, FILES
     from services.rooms_worker.clients import Records,read_secret
     from werkzeug.serving import make_server, WSGIRequestHandler
@@ -134,6 +134,11 @@ def test_installer_to_live_http_client_rotation_and_reply(env,tmp_path):
         def log_request(self,*a,**kw): pass
     server=make_server('127.0.0.1',0,lambda e,s: [],request_handler=Quiet)
     server.app=create_app(e.store.root,port=server.server_port,testing=True,installer_key='y'*40)
+    # Production/dev endpoint policy stays exact; admit only this disposable
+    # loopback server for the integration test's client construction.
+    from services.rooms_worker import transport_profile
+    monkeypatch.setattr(transport_profile, 'DEV_ENDPOINTS',
+                        (*transport_profile.DEV_ENDPOINTS, f'http://127.0.0.1:{server.server_port}'))
     thread=Thread(target=server.serve_forever,daemon=True);thread.start()
     try:
         key=tmp_path/'install.key';key.write_text('y'*40);key.chmod(0o600)
@@ -155,7 +160,7 @@ def test_installer_to_live_http_client_rotation_and_reply(env,tmp_path):
         a.change('robert','mc',True)
         assert installer.once()
         assert member.call('GET','/me')[0]==200
-        from manage import provision_rooms
+        from domains.records.manage import provision_rooms
         from services.rooms_connector.connector import build
         for agent in ('claude-code','codex'):
             provision_rooms(e.store,agent,agent,tmp_path/('legacy-'+agent),worker='legacy-worker-'+agent)
@@ -186,7 +191,7 @@ def test_agent_reply_does_not_spawn_turn_and_agent_cap_is_enforced(env):
 
 
 def test_brief_edit_preserves_credentials_and_manual_keys_stay_revoked(env,tmp_path):
-    from manage import provision_rooms
+    from domains.records.manage import provision_rooms
     from services.rooms_worker.adapter import messages
     e=env
     provision_rooms(e.store,'mc','MC',tmp_path/'manual',manual=True)
@@ -208,7 +213,7 @@ def test_brief_edit_preserves_credentials_and_manual_keys_stay_revoked(env,tmp_p
 
 def test_pending_brief_edit_refused_without_invalidating_installation(env):
     import pytest
-    from platform_access import AccessError
+    from domains.records.platform_access import AccessError
     a=env.store.approved_agents
     pending=a.change('robert','mc',True,'Initial brief')
     with pytest.raises(AccessError,match='Wait for installation'):

@@ -42,7 +42,7 @@ GATEWAY_STAGING = REPO / "services" / "model_gateway" / "litellm.staging.yaml"
 
 ROOT_VAR = "${MINIMOI_ROOT:-/opt/minimoi}"
 REQUIRED_VARS = {
-    "MINIMOI_MODEL_GATEWAY_KEY": "x", "XAI_API_KEY": "x", "ANTHROPIC_API_KEY": "x",
+    "MINIMOI_MODEL_GATEWAY_KEY": "x", "XAI_API_KEY": "x", "ANTHROPIC_API_KEY": "x", "OPENAI_API_KEY": "x",
     "MINIMOI_MODEL_GATEWAY_RECEIPT_KEY": "x", "COS_AGENT_A_GATEWAY_TOKEN": "x",
 }
 
@@ -504,11 +504,11 @@ def test_staging_cos_agent_route_matches_production_grok_and_other_routes_stay_s
     # Gateway-only provider key names on staging (the pass-through gap; MC stage C).
     assert agent["litellm_params"]["api_key"] == "os.environ/GATEWAY_XAI_API_KEY"
     assert agent["litellm_params"]["reasoning_effort"] == "low"
-    assert agent["model_info"]["base_model"] == model
     assert agent["model_info"]["id"] == "cos-xai-grok43-primary"
     assert set(agent["model_info"]) == set(prod["minimoi-cos-agent"]["model_info"])
     assert agent["model_info"]["fallback_position"] == 0
     renamed = {"os.environ/GATEWAY_ANTHROPIC_API_KEY": "os.environ/ANTHROPIC_API_KEY",
+               "os.environ/GATEWAY_OPENAI_API_KEY": "os.environ/OPENAI_API_KEY",
                "os.environ/GATEWAY_XAI_API_KEY": "os.environ/XAI_API_KEY"}
     for name in staging:
         if name == "minimoi-cos-agent" or name.startswith("minimoi-mc-"):

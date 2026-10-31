@@ -33,6 +33,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -49,7 +50,7 @@ jobs:
       - name: Run the whole regression suite
         env:
           MC_BINDING_TEST_DSN: host=127.0.0.1 port=5432 dbname=mc12_test_ci user=postgres
-        run: pytest tests/ -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke
+        run: pytest tests/ prototype-lab/projects/project-records-room-poc/tests/ -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke
 
       - name: Check docs/specs naming/duplicates/supersession
         if: always()

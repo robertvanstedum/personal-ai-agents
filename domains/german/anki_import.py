@@ -57,12 +57,22 @@ def ankiconnect(url: str, action: str, **params) -> dict:
         raise SystemExit(1)
 
 
+class IncompleteImport(ValueError):
+    """The provider did not acknowledge every submitted note."""
+
+
 def add_notes(notes: list[dict], *, ankiconnect) -> tuple[int, int]:
     resp = ankiconnect("addNotes", notes=notes)
-    ids = resp.get("result") or []
-    added = sum(1 for x in ids if x is not None)
-    dupes = sum(1 for x in ids if x is None)
-    return added, dupes
+    if not isinstance(resp, dict) or "error" not in resp or resp["error"] is not None:
+        raise IncompleteImport("invalid or unsuccessful response envelope")
+    ids = resp.get("result")
+    if not isinstance(ids, list) or len(ids) != len(notes):
+        raise IncompleteImport("result count does not match submitted notes")
+    # null means creation failed; it does not prove an existing duplicate.
+    # Keep the file pending for reconciliation, without retrying in this run.
+    if any(type(note_id) is not int or note_id <= 0 for note_id in ids):
+        raise IncompleteImport("one or more notes have no confirmed identifier")
+    return len(ids), 0
 
 
 def run(anki_dir: Path, *, load_tracker, parse_csv, add_notes, mark_imported) -> None:
@@ -80,7 +90,11 @@ def run(anki_dir: Path, *, load_tracker, parse_csv, add_notes, mark_imported) ->
         if not notes:
             print(f"  ⚠️  {csv_path.name}: no valid rows — skipping")
             continue
-        added, dupes = add_notes(notes)
+        try:
+            added, dupes = add_notes(notes)
+        except IncompleteImport as exc:
+            print(f"  ❌ {csv_path.name}: {exc}. Not marked as imported. Inspect Anki before retrying; some notes may exist.")
+            continue
         if added == 0 and dupes == 0:
             print(f"  ❌ {csv_path.name}: AnkiConnect returned no results — deck may not exist. Not marked as imported.")
             continue

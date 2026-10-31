@@ -6,9 +6,9 @@ from uuid import uuid4
 import pytest
 
 from test_cos_records_bridge import bridge
-from cos_records_bridge import RoomBridgeError
-from cos_room_responder import TurnJournal
-from cos_agent_responder import OpenClawMeetingModel, SyntheticSessionPolicy, respond
+from domains.records.integration.cos_records_bridge import RoomBridgeError
+from domains.records.integration.cos_room_responder import TurnJournal
+from domains.records.integration.cos_agent_responder import OpenClawMeetingModel, SyntheticSessionPolicy, respond
 
 
 @pytest.fixture

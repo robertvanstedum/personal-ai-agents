@@ -13,22 +13,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import urlsplit
 
-RECORDS_DIR = Path(__file__).resolve().parents[3] / "prototype-lab" / "projects" / "project-records-room-poc"
+RECORDS_DIR = Path(__file__).resolve().parents[3] / "domains" / "records"
 BACKEND = "http://minimoi-records:18880"
 DEV = "https://dev.minimoi.ai"
 
 
 def records_module():
-    if str(RECORDS_DIR) not in sys.path:
-        sys.path.append(str(RECORDS_DIR))         # after everything else: its bare module names never shadow ours
-    name = "records_poc_app_for_tests"
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, RECORDS_DIR / "app.py")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
+    from domains.records import app
+    return app
 
 
 def records_app(data_dir: Path, *, hosts=("minimoi-records:18880",), port=18880, portal_key=None):

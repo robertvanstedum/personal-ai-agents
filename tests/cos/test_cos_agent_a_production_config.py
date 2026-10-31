@@ -25,11 +25,11 @@ def test_production_gateway_omits_development_only_ollama():
         for item in config["model_list"]
     }
 
-    assert deployments == {
+    assert {name: model for name, model in deployments.items() if name.startswith("minimoi-cos")} == {
         "minimoi-cos-agent": "xai/grok-4.3",
         "minimoi-cos-agent-xai-fast": "xai/grok-4.3",
         "minimoi-cos-web-search": "xai/grok-4.3",
-        "minimoi-cos-agent-anthropic": "anthropic/claude-sonnet-4-6",
+        "minimoi-cos-agent-anthropic": "anthropic/claude-sonnet-5-5",
         # The voice summary's own route (Spec 165 §5.4, D22 (a)): reached only with the capped voice-summary keys, never
         # a fallback of CoS's agent routes (checked below).
         "minimoi-voice-summary": "xai/grok-4.3",

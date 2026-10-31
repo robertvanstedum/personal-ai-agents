@@ -1,8 +1,8 @@
 import json
 import pytest
 from test_transcript_snapshot import source
-from store import Store, Problem
-from transcript_publish import publish, recover, verify
+from domains.records.store import Store, Problem
+from domains.records.transcript_publish import publish, recover, verify
 
 
 def test_publication_idempotent_private_and_final(source):

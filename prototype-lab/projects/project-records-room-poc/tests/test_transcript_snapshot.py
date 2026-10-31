@@ -1,9 +1,9 @@
 import json
 from uuid import uuid4
 import pytest
-from store import Store, Problem
-from transcript_snapshot import capture
-from transcript_format import render
+from domains.records.store import Store, Problem
+from domains.records.transcript_snapshot import capture
+from domains.records.transcript_format import render
 
 
 @pytest.fixture

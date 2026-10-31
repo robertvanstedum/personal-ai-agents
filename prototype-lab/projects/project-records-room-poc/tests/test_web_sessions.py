@@ -12,7 +12,7 @@ from uuid import uuid4
 
 import pytest
 
-from app import create_app
+from domains.records.app import create_app
 
 
 @pytest.fixture

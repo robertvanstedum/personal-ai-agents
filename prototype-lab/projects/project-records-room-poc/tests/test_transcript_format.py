@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 from jsonschema import ValidationError, Draft202012Validator
-from transcript_format import SCHEMA, VERSION, render, validate
+from domains.records.transcript_format import SCHEMA, VERSION, render, validate
 
 
 STAMP = "2026-09-19T20:00:00Z"

@@ -9,8 +9,8 @@ from uuid import uuid4
 
 import pytest
 
-import portal_identity as pi
-from app import create_app
+from domains.records import portal_identity as pi
+from domains.records.app import create_app
 
 KEY = ("k1", "s" * 40)
 OTHER_KEY = ("k1", "t" * 40)

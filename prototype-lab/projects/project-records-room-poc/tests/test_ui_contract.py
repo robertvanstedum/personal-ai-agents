@@ -15,8 +15,8 @@ import pytest
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app import create_app
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+from domains.records.app import create_app
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS = ROOT / "contracts"

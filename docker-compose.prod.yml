@@ -39,6 +39,7 @@ services:
       - LITELLM_MASTER_KEY=${MINIMOI_MODEL_GATEWAY_KEY:?set MINIMOI_MODEL_GATEWAY_KEY in /opt/minimoi/.env}
       - XAI_API_KEY=${XAI_API_KEY:?set XAI_API_KEY in /opt/minimoi/.env}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in /opt/minimoi/.env}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?set OPENAI_API_KEY in /opt/minimoi/.env}
       - MINIMOI_RECEIPT_ENDPOINT=http://cos-scheduler:8769/internal/model-gateway/receipt
       - MINIMOI_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}
     # The gateway's own key database (litellm_keys, its own role, in the existing Postgres) holds the per-agent capped

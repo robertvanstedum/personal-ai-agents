@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 from flask import Flask
-from dev_portal_entry import enable_records
+from domains.records.dev_portal_entry import enable_records
 
 
 def portal():
