@@ -30,10 +30,11 @@ const CONTROLLER = [
   // The v3 fix round (REVIEW_v3_build M2): the controller's opt-in onAudioStarted option and its audio_started listener,
   // and the adapters' new cache keys, taken out first (back to v3's file); German and Portuguese pass no such option.
   [`// an interim transcript's status, LV2), and xAI's for a microphone granted after the start ended (Gate 2 V S2), and both
-// for each response's first audio (audio_started; the v3 fix round, review M2): new keys so browsers fetch them (Spec 165
-// §4.3, §5.1, §5.3; review FR N3, V R2-M1; v0.3 G3; the C2 binding pass).
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261029-v3fix";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261029-v3fix";
+// for each response's first audio (audio_started; the v3 fix round, review M2), and OpenAI's for the page's lines as system
+// items (the v3 live check, fault 1): new keys so browsers fetch them (Spec 165 §4.3, §5.1, §5.3; review FR N3, V R2-M1;
+// v0.3 G3; the C2 binding pass).
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261031-live1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261031-live1";
 `,
    `// an interim transcript's status, LV2), and xAI's for a microphone granted after the start ended (Gate 2 V S2): new keys
 // so browsers fetch them (Spec 165 §4.3, §5.1, §5.3; review FR N3, V R2-M1; v0.3 G3; the C2 binding pass).
@@ -450,8 +451,12 @@ const LATE_DONE = "That earlier check has finished; its answer is in the convers
     return entry;
   }
 
+  // Where the page creates every response (OpenAI's direct path), its lines go as system items: sent as his words, the
+  // model could not tell the app's "Saved." from a claim he asked it to make, and refused it (the v3 live check, 31 Oct,
+  // fault 1: 2 of 2; as system items, "Saved."). Everywhere else the bytes are as before.
   _instruct(text, tag) {
-    if (tag) this._adapter.sendContinuationInstruction(text, tag); else this._adapter.sendContinuationInstruction(text);
+    if (this._owned) this._adapter.sendContinuationInstruction(text, tag, "system");
+    else if (tag) this._adapter.sendContinuationInstruction(text, tag); else this._adapter.sendContinuationInstruction(text);
   }
 
   // A function result: its follow-up is owned by the item of the call it continues (V R2-M1, R2-S1).
@@ -847,11 +852,15 @@ const ADAPTERS = {
     this._played = new Set();        // responses whose playback end was reported: each once (LV1)
 `,
    ``],
-  [`  sendContinuationInstruction(text, tag) {
+  [`  sendContinuationInstruction(text, tag, role) {
 `,
    `  sendContinuationInstruction(text) {
 `],
-  [`      item: { type: "message", role: "user", content: [{ type: "input_text", text }] },
+  [`    // role "system": the direct page's own lines (the controller's _instruct where the page creates every response; the
+    // v3 live check, fault 1). Any other value, or none, is "user", the bytes as before (German and Portuguese).
+`,
+   ``],
+  [`      item: { type: "message", role: role === "system" ? "system" : "user", content: [{ type: "input_text", text }] },
     }));
     this._dc?.send(JSON.stringify(_responseCreate(tag)));
   }

@@ -102,8 +102,9 @@ def test_shared_controller_starts_with_persona_and_optional_live_transcript(germ
     # end, and a response created for a committed item), and again for the live probes (LV1, LV2); xAI's again for a
     # microphone granted after the start ended (Gate 2 V S2).
     # And for the v3 fix round: both report each response's first audio (audio_started, review M2).
-    assert "openai-webrtc-adapter.js?v=20261029-v3fix" in source
-    assert "xai-websocket-adapter.js?v=20261029-v3fix" in source
+    # And for the v3 live check (31 Oct): OpenAI's sends the direct page's lines as system items (fault 1).
+    assert "openai-webrtc-adapter.js?v=20261031-live1" in source
+    assert "xai-websocket-adapter.js?v=20261031-live1" in source
 
 
 def test_xai_adapter_handles_current_audio_delta_and_connection_failures(german_client):

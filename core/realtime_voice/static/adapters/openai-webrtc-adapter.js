@@ -154,13 +154,15 @@ export class OpenAIWebRTCAdapter {
     this._emit("closed", { reason });
   }
 
-  sendContinuationInstruction(text, tag) {
+  sendContinuationInstruction(text, tag, role) {
     // Text-only continuation (Section 9's idle re-engagement) -- per
     // OpenAI docs: conversation.item.create with input_text, then
     // response.create with output_modalities restricted appropriately.
+    // role "system": the direct page's own lines (the controller's _instruct where the page creates every response; the
+    // v3 live check, fault 1). Any other value, or none, is "user", the bytes as before (German and Portuguese).
     this._dc?.send(JSON.stringify({
       type: "conversation.item.create",
-      item: { type: "message", role: "user", content: [{ type: "input_text", text }] },
+      item: { type: "message", role: role === "system" ? "system" : "user", content: [{ type: "input_text", text }] },
     }));
     this._dc?.send(JSON.stringify(_responseCreate(tag)));
   }

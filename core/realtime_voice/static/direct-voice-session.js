@@ -71,6 +71,14 @@ export const NOT_HEARD = "I didn't catch that; say it again.";
 export const ASK_LINE = 'Ask him briefly, in your own natural words, to confirm before anything is done, for example "Sure, ' +
   'just confirm for me" or "Shall I go ahead?". Do not repeat, quote or describe what he asked, and do not say it is done.';
 export const END_LINE = 'Answer only: "Shall I sum up?"';
+// OpenAI only (the page creates every response): the word on his item when nothing from it waits for his yes (chat, a
+// lost decision, other words that let a waiting action go, or a refused fold). The live check (LIVE_CHECK_V3_RESULT.md,
+// 31 Oct, fault 2) found a plain response there asking "Shall I go ahead?" by itself (4 of 4), a question the app never
+// asked; this reminder is sent beside it as a system item (Robert, 31 Oct: option c, with the stray-yes line on every
+// provider). At the hold's bound the decision is not known yet, so that response stays plain; the stray-yes line covers it.
+export const CHAT_LINE = 'Nothing from his last words is waiting to be done: answer them as conversation. Do not ask him to ' +
+  'confirm anything, and do not say anything is or will be done. If he did ask for something, say briefly that it did not ' +
+  'come through and that he can say it again.';
 export const SAY = 'Say this briefly, adding nothing: ';
 export const SAVED = 'Saved.';
 export const POSTED = 'Post-it added.';              // the fix round's own words (b337f1cd), kept (coordinator addition 2)
@@ -731,8 +739,8 @@ export function directVoice(d) {
       case 'read_back': return { instruction: readBackLine(x.text) };
       case 'nothing_waiting': return { instruction: SAY + NOTHING_WAITING };
       case 'summary_later': return { instruction: SAY + SUMMARY_LATER };
-      case 'dropped': return x.reason === 'no' ? { instruction: SAY + ALL_RIGHT } : null;
-      default: return null;                                // chat: a normal response
+      case 'dropped': return { instruction: x.reason === 'no' ? SAY + ALL_RIGHT : CHAT_LINE };
+      default: return { instruction: CHAT_LINE };          // chat: answered as conversation, never asked (fault 2)
     }
   }
   function answerCommit(i, x) {
@@ -761,10 +769,10 @@ export function directVoice(d) {
         decisions.get(place).then((x) => {
           if (commits.get(pid) !== waits) return;
           // Decided before this commit: what follow() has already said is not said twice (only an ask still needs the
-          // item's own response as its question; a chat gets a normal one).
+          // item's own response as its question; a chat gets its conversational one, with CHAT_LINE).
           const followed = x.followed === true && x.decision !== 'ask';
           x.via = 'response';
-          waits(followed ? (x.decision === 'chat' ? null : { skip: true }) : wordFor(x));
+          waits(followed ? (x.decision === 'chat' ? { instruction: CHAT_LINE } : { skip: true }) : wordFor(x));
         });
       }
     });
