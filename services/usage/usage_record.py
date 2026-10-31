@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import queue
 import re
@@ -76,6 +77,15 @@ def _check_text(name: str, value, secrets: set[str], required: bool) -> str | No
     return value.strip()
 
 
+def _finite_nonnegative(value) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return value >= 0 and math.isfinite(value)
+    except OverflowError:
+        return False
+
+
 def validate(payload: dict) -> dict:
     """A normalized v1 record, or ValueError. Never echoes a refused value."""
     if not isinstance(payload, dict):
@@ -100,8 +110,8 @@ def validate(payload: dict) -> dict:
         raise ValueError(f"usage record cost_source must be one of {COST_SOURCES}")
     for name in NUMBERS:
         value = payload.get(name)
-        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0):
-            raise ValueError(f"usage record {name} must be a non-negative number or null")
+        if value is not None and not _finite_nonnegative(value):
+            raise ValueError(f"usage record {name} must be a finite non-negative number or null")
         out[name] = round(float(value), 9) if value is not None else None
     for name in COUNTS:
         value = payload.get(name)
@@ -111,9 +121,8 @@ def validate(payload: dict) -> dict:
     units = payload.get("units")
     if units is not None:
         if not isinstance(units, dict) or len(units) > 4 or not all(
-                isinstance(k, str) and re.fullmatch(r"[a-z_]{1,24}", k) and isinstance(v, (int, float))
-                and not isinstance(v, bool) and v >= 0 for k, v in units.items()):
-            raise ValueError("usage record units must be a small {name: non-negative number} map")
+                isinstance(k, str) and re.fullmatch(r"[a-z_]{1,24}", k) and _finite_nonnegative(v) for k, v in units.items()):
+            raise ValueError("usage record units must be a small {name: finite non-negative number} map")
     out["units"] = units
     line = json.dumps(out, sort_keys=True, separators=(",", ":"))
     if len(line.encode("utf-8")) > MAX_LINE_BYTES:

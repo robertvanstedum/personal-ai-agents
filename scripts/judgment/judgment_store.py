@@ -104,7 +104,7 @@ def locked(store: Path):
 def open_ro(db: Path) -> sqlite3.Connection:
     if not db.exists():
         raise SystemExit(f"refused: session database not found: {db}")
-    return sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    return sqlite3.connect(f"{db.absolute().as_uri()}?mode=ro", uri=True)
 
 
 def text_of(message: dict) -> str:
@@ -149,11 +149,10 @@ def collect(db: Path, store: Path, apply: bool, exclude: list[str] | None = None
     state = load_state(store)
     seen = set(state.get("event_ids", []))
     excluded = set(state.get("excluded_sessions", [])) | set(exclude or [])      # test sessions: never collected, recorded in state
-    con = open_ro(db)
-    conv = dict(con.execute("select session_id, conversation_id from session_conversations").fetchall())
-    rows = con.execute("select rowid, session_id, seq, event_json from transcript_events where rowid > ? order by rowid",
-                       (state["last_rowid"],)).fetchall()
-    con.close()
+    with contextlib.closing(open_ro(db)) as con:
+        conv = dict(con.execute("select session_id, conversation_id from session_conversations").fetchall())
+        rows = con.execute("select rowid, session_id, seq, event_json from transcript_events where rowid > ? order by rowid",
+                           (state["last_rowid"],)).fetchall()
     registry = load_registry(store)
     out = {"scanned": len(rows), "pairs": [], "failures": [], "defects": [], "cards_seen": [], "watermark": state["last_rowid"]}
     for rowid, session, seq, raw in rows:
@@ -215,17 +214,16 @@ def collect(db: Path, store: Path, apply: bool, exclude: list[str] | None = None
 # ── freeze ───────────────────────────────────────────────────────────────────
 
 def freeze(db: Path, store: Path, conversation: str | None, session: str | None, label: str, apply: bool) -> dict:
-    con = open_ro(db)
-    if conversation:
-        sessions = [r[0] for r in con.execute("select session_id from session_conversations where conversation_id = ?", (conversation,))]
-    else:
-        sessions = [session]
-    if not sessions or sessions == [None]:
-        raise SystemExit("refused: no session found for that conversation")
-    rows = []
-    for s in sessions:
-        rows += con.execute("select session_id, seq, event_json, created_at from transcript_events where session_id = ? order by seq", (s,)).fetchall()
-    con.close()
+    with contextlib.closing(open_ro(db)) as con:
+        if conversation:
+            sessions = [r[0] for r in con.execute("select session_id from session_conversations where conversation_id = ?", (conversation,))]
+        else:
+            sessions = [session]
+        if not sessions or sessions == [None]:
+            raise SystemExit("refused: no session found for that conversation")
+        rows = []
+        for s in sessions:
+            rows += con.execute("select session_id, seq, event_json, created_at from transcript_events where session_id = ? order by seq", (s,)).fetchall()
     if not rows:
         raise SystemExit("refused: no records for that conversation/session")
     lines = "".join(json.dumps({"session_id": s, "seq": q, "created_at": c, "event": json.loads(e)}, ensure_ascii=False, sort_keys=True) + "\n"

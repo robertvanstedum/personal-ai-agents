@@ -53,7 +53,10 @@ class Identity:
 
 
 def normalize(vec: list[float]) -> list[float]:
-    norm = math.sqrt(sum(x * x for x in vec))
+    try:
+        norm = math.sqrt(sum(x * x for x in vec))
+    except OverflowError:
+        raise EmbedderUnavailable("embedder returned a zero or invalid vector") from None
     if not norm or not math.isfinite(norm):
         raise EmbedderUnavailable("embedder returned a zero or invalid vector")
     return [x / norm for x in vec]
@@ -99,13 +102,18 @@ class OllamaEmbedder(Embedder):
                                      method="GET" if doc is None else "POST")
         try:
             with urllib.request.urlopen(req, timeout=self.timeout if cleanup else batch_window.remaining(self.timeout)) as resp:
-                return json.loads(resp.read())
+                value = json.loads(resp.read())
+                if not isinstance(value, dict):
+                    raise EmbedderUnavailable("embedder answered with a non-object response")
+                return value
         except (urllib.error.URLError, OSError, ValueError):
             raise EmbedderUnavailable("embedder not reachable") from None
 
     def identity(self) -> Identity:
         if self._ident is None:
             tags = self._post("/api/tags", None).get("models") or []
+            if not isinstance(tags, list) or any(not isinstance(model, dict) for model in tags):
+                raise EmbedderUnavailable("embedder answered with an invalid model list")
             found = next((m for m in tags if m.get("name") == self.model or m.get("model") == self.model), None)
             if not found or not isinstance(found.get("digest"), str):
                 raise EmbedderUnavailable("embedder model not installed")
@@ -117,7 +125,14 @@ class OllamaEmbedder(Embedder):
         doc = self._post("/api/embed", {"model": self.model, "input": texts, "truncate": True,
                                         "keep_alive": RUN_KEEP_ALIVE})
         vecs = doc.get("embeddings")
-        if not isinstance(vecs, list) or len(vecs) != len(texts) or any(len(v) != DIMS for v in vecs):
+        try:
+            valid = (isinstance(vecs, list) and len(vecs) == len(texts)
+                     and all(isinstance(v, list) and len(v) == DIMS
+                             and all(type(n) in (int, float) and math.isfinite(n) for n in v)
+                             for v in vecs))
+        except OverflowError:  # JSON integers can exceed the finite float range.
+            valid = False
+        if not valid:
             raise EmbedderUnavailable("embedder answered with the wrong shape")
         return vecs
 

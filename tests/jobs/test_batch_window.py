@@ -1,13 +1,7 @@
-import importlib.util
-import sys
-from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import pytest
-ROOT=Path(__file__).resolve().parents[2]
-def load(name, path):
- s=importlib.util.spec_from_file_location(name, ROOT/path);m=importlib.util.module_from_spec(s);sys.modules[name]=m;s.loader.exec_module(m);return m
-W=load('core.jobs.batch_window', 'core/jobs/batch_window.py')
+from core.jobs import batch_window as W
 D=datetime(2026,10,14,6,tzinfo=ZoneInfo('America/Chicago')).timestamp()
 def test_unchanged_without_deadline():
  assert W.remaining(120,environ={},clock=lambda:D+100)==120

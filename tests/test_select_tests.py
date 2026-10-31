@@ -199,3 +199,30 @@ def test_a_conftest_outside_tests_is_never_selected(tmp_path):
     files = {"core/shared.py": "", "prototype-lab/p/tests/conftest.py": "import core.shared\n",
              "tests/test_shared.py": "import core.shared\n", **FILLER}
     assert _targets(tmp_path, files, ["core/shared.py"]) == {"tests/test_shared.py"}
+
+
+def test_mixed_directory_and_file_targets_keep_nested_fixtures_available(tmp_path):
+    """Run the selected synthetic tree, including a parent fixture across siblings."""
+    import os
+    import subprocess
+    import sys
+
+    files = {
+        "tests/z/conftest.py": "import pytest\n@pytest.fixture\ndef local_value():return 42\n",
+        "tests/z/sub/conftest.py": "# changed nested fixture configuration\n",
+        "tests/z/sub/test_child.py": "def test_child(local_value):assert local_value==42\n",
+        "tests/z/test_parent.py": "def test_parent(local_value):assert local_value==42\n",
+        "tests/test_root.py": "def test_root():assert True\n",
+        **FILLER,
+    }
+    result = select(["tests/z/sub/conftest.py", "tests/test_root.py", "tests/z/test_parent.py"],
+                    "domain", repo=_repo(tmp_path, files))
+    assert result["test_scope"] == "focused"
+    assert set(result["test_targets"]) == {"tests/z/sub/", "tests/z/test_parent.py", "tests/test_root.py"}
+    completed = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *result["test_targets"]],
+        cwd=tmp_path, env={**os.environ, "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1", "PYTHONDONTWRITEBYTECODE": "1"},
+        capture_output=True, text=True, timeout=30,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "3 passed" in completed.stdout

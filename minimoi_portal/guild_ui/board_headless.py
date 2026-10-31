@@ -12,7 +12,7 @@ from core.domain_api.flask_adapter import verify_request
 from core.domain_api.protocol import response_signature
 from domains.guild.board_operations import operations, LABELS
 from .board_actions import BoardActions, BoardContext, BoardRefused
-from .board_text import TextRefused
+from domains.guild.board_text import TextRefused, LIMIT, CONVENTION
 from .stores import FloorStoreUnavailable
 
 
@@ -63,7 +63,7 @@ def create_app(*, store, owner, environment, cursor_key, registry, item_allowed=
                         result = service.undo(context, admitted.operation_id, refs["operation_id"], body["expected_revision"])
                     else:
                         result = {"version": 1, "capabilities": sorted(admitted.profile.capabilities & all_caps),
-                                  "labels": list(LABELS), "text_limit": 280, "count_convention": "unicode_scalar_lf_v1"}
+                                  "labels": list(LABELS), "text_limit": LIMIT, "count_convention": CONVENTION}
                     require(not list(Draft202012Validator(op.result).iter_errors(result)), "result_unconfirmed", 503)
                     if result.get("state") == "not_applied":
                         code = result["code"]

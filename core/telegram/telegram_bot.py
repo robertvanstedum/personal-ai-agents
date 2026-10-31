@@ -71,6 +71,7 @@ from german_domain import (
     # Group C — async-free resolvers with callback pattern
     _resolve_verb, _resolve_phrases, _resolve_drill_verb,
 )
+from domains.german.session_files import session_sort_key
 
 BASE_DIR = Path(__file__).parent
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -1020,7 +1021,7 @@ async def _handle_german_command(update: Update, text: str):
         if inboxfiles:
             lines.append(f"Last inbox file: {inboxfiles[-1].name}")
         sessions_dir = GERMAN_STATE_DIR / "sessions"
-        sessions = sorted(sessions_dir.glob("*.json")) if sessions_dir.exists() else []
+        sessions = sorted(sessions_dir.glob("*.json"), key=session_sort_key) if sessions_dir.exists() else []
         if sessions:
             data = json.loads(sessions[-1].read_text())
             lines.append(f"Last session: {sessions[-1].name}")
