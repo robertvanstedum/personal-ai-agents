@@ -67,8 +67,10 @@ def test_the_import_keeps_the_original_and_is_safe_to_rerun(writer, memory_file)
     (original,) = (writer.root / "imports").glob("cos_memory.md.*.orig")
     assert original.read_text() == FILE
     assert memory.imported(writer)
-    again = memory.import_file(writer, memory_file)
-    assert again["accepted"] == 0 and again["replayed"] == 4
+    # Once done, a second import is refused rather than replayed (review M1); an interrupted run still replays,
+    # see test_a_rerun_later_replays_even_for_undated_lines.
+    with pytest.raises(memory.ImportRefused):
+        memory.import_file(writer, memory_file)
     assert len(writer.rows("cos.fact")) == 4
 
 
@@ -124,3 +126,48 @@ def test_the_command_line_imports_and_projects(tmp_path, memory_file, capsys):
     out = json.loads(capsys.readouterr().out)
     assert out["accepted"] == 4 and out["projected"] is True
     assert memory_file.read_text().startswith(memory.PROJECTION_HEADER)
+
+
+# ---- review M1 and S2 (#462) ---------------------------------------------------------------------------------------
+
+UNDATED = """## Enduring facts and decisions
+- An undated distilled line.
+[chat] 2026-07-11: A dated line.
+"""
+
+
+def test_a_rerun_later_replays_even_for_undated_lines(writer, tmp_path, monkeypatch):
+    path = tmp_path / "undated.md"
+    path.write_text(UNDATED)
+    first = memory.import_file(writer, path)
+    (writer.root / memory.DONE_MARKER).unlink()           # as if the first run was interrupted before the marker
+    monkeypatch.setattr(memory, "_now", lambda: "2031-01-01T00:00:00+00:00")   # a later clock
+    again = memory.import_file(writer, path)
+    assert first["accepted"] == 2 and again == {"entries": 2, "accepted": 0, "replayed": 2, "approved_notes": 0}
+    assert len(writer.rows("cos.fact")) == 2
+
+
+def test_the_import_refuses_after_it_is_done_or_on_the_projection(writer, memory_file):
+    memory.import_file(writer, memory_file)
+    with pytest.raises(memory.ImportRefused):
+        memory.import_file(writer, memory_file)
+    (writer.root / memory.DONE_MARKER).unlink()
+    memory.write_projection(writer, memory_file)
+    with pytest.raises(memory.ImportRefused):
+        memory.import_file(writer, memory_file)
+    assert len(writer.rows("cos.fact")) == 4
+
+
+def test_the_command_line_refuses_a_second_import(tmp_path, memory_file, capsys):
+    args = ["--store", str(tmp_path / "store"), "--environment", ENV, "--memory", str(memory_file), "--project"]
+    assert memory.main(args) == 0
+    capsys.readouterr()
+    assert memory.main(args) == 2 and "refused" in capsys.readouterr().out
+
+
+def test_the_model_saving_the_same_line_twice_in_a_day_is_kept_once(writer, memory_file):
+    memory.import_file(writer, memory_file)
+    clock = iter(["2026-10-31T09:00:00+00:00", "2026-10-31T15:30:00+00:00"])
+    first = memory.remember(writer, memory_file, "Same line", kind="memory_tool", clock=lambda: next(clock))
+    again = memory.remember(writer, memory_file, "Same line", kind="memory_tool", clock=lambda: next(clock))
+    assert first == {"saved": True, "deduplicated": False} and again == {"saved": True, "deduplicated": True}

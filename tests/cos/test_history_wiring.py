@@ -190,3 +190,33 @@ def test_after_the_memory_import_a_note_goes_to_the_store_and_the_file_is_its_pr
         assert cos._save_explicit_note("Synthetic note after import", "op-after")["deduplicated"] is True
     finally:
         sys.modules.pop("domains.cos.chief_of_staff", None)
+
+
+def test_a_turn_never_stays_pending_when_its_reply_cannot_be_saved(cos, monkeypatch):
+    # Review S1 (#462): if the reply can't be put on the turn, the turn is failed, not left pending.
+    def broken(*args, **kwargs):
+        raise OSError("disk full")
+    monkeypatch.setattr(cos._history, "answer", broken)
+    r = _send(cos.app.test_client())
+    assert r.json["history"]["status"] == "failed" and r.json["history"]["reply_saved"] is False
+    assert cos._history.turn(DEFAULT_CONVERSATION_ID, TURN_ID)["failure_code"] == "reply_not_saved"
+
+
+def test_a_failure_after_the_backend_still_fails_the_turn(cos, monkeypatch):
+    # Review S1 (#462): anything between begin and answer that raises marks the turn failed.
+    from domains.cos import confer_service
+    monkeypatch.setattr(confer_service.ConferTurnResult, "public_dict", lambda self: (_ for _ in ()).throw(RuntimeError("x")))
+    r = _send(cos.app.test_client())
+    assert r.status_code == 500
+    assert cos._history.turn(DEFAULT_CONVERSATION_ID, TURN_ID)["status"] == "failed"
+
+
+def test_without_the_store_a_note_is_refused_when_the_file_is_the_projection(cos_off, monkeypatch, tmp_path):
+    # Review M2 (#462): cos-bot has no store writer; appending to the projection would be erased by the next rewrite.
+    from domains.cos.store import memory
+    memory_file = tmp_path / "cos_memory.md"
+    memory_file.write_text(memory.PROJECTION_HEADER + "\n\n## Recent\n[note] 2026-10-31: kept in the store\n")
+    monkeypatch.setattr(cos_off, "COS_MEMORY_FILE", memory_file)
+    out = cos_off._save_explicit_note("A Telegram note", "op-tg-1")
+    assert out["saved"] is False and out["code"] == "memory_needs_store"
+    assert "A Telegram note" not in memory_file.read_text()

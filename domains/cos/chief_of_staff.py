@@ -178,6 +178,11 @@ def _append_memory_entry(
         current = _read_memory()
         if current == "(no memory yet)":
             current = ""
+        if current.lstrip().startswith(cos_memory_store.PROJECTION_HEADER):
+            # cos_memory.md is the store's projection (review M2). This process has no store writer (cos-bot), so an
+            # append here would be erased by the next projection. Refuse, so CoS says it couldn't save.
+            _log_file("memory_write_refused", "cos_memory.md is the store's projection; no store writer here")
+            return {"saved": False, "deduplicated": False, "code": "memory_needs_store"}
         marker = f"<!-- cos-operation:{operation_id} -->" if operation_id else None
         if marker and marker in current:
             return {"saved": True, "deduplicated": True}
@@ -1491,6 +1496,8 @@ def _ui_turn(body: dict) -> tuple[dict, int]:
             if early is not None:
                 return early
         before = _cos_files.snapshot() if _cos_files is not None else None
+        # From begin to answer, one guard: if anything fails before the reply is on the turn, the turn is marked
+        # failed, never left pending (review S1).
         try:
             result = _process_confer_turn(
                 text,
@@ -1500,21 +1507,21 @@ def _ui_turn(body: dict) -> tuple[dict, int]:
                 request_id=body.get("request_id"),
                 turn_id=_receipt_turn_id(kept["turn_id"]) if kept else None,
             )
+            payload = result.public_dict()
+            if before is not None:
+                delivered = _cos_files.delivered_since(before)
+                if delivered:
+                    payload["files"] = delivered
+                else:
+                    # No file reached the outbox: a sentence claiming a saved or downloadable file is untrue (claim_truth).
+                    payload["reply"], _ = enforce_file_claims(payload["reply"])
+            if kept:
+                payload["history"] = _history_answer(kept, payload, channel, owner_text, attachment_names)
         except BaseException as exc:
             if kept:
                 _history_fail(kept, exc)
             raise
-        payload = result.public_dict()
-        if before is not None:
-            delivered = _cos_files.delivered_since(before)
-            if delivered:
-                payload["files"] = delivered
-            else:
-                # No file reached the outbox: a sentence claiming a saved or downloadable file is untrue (claim_truth).
-                payload["reply"], _ = enforce_file_claims(payload["reply"])
-        if kept:
-            payload["history"] = _history_answer(kept, payload, channel, owner_text, attachment_names)
-        elif not payload.get("operation"):     # notes, reminders and /new keep their own records
+        if not kept and not payload.get("operation"):     # notes, reminders and /new keep their own records
             conversation_log.append(_conversations_dir, conversation_id=result.conversation_id, turn_id=result.turn_id,
                                     channel=channel, owner_text=owner_text, attachments=attachment_names,
                                     reply=payload["reply"], files=payload.get("files"))
@@ -1630,11 +1637,20 @@ def _history_fail(kept: dict, exc: BaseException) -> None:
 
 def _history_answer(kept: dict, payload: dict, channel: str, owner_text: str, attachment_names: list) -> dict:
     """Put the reply on its own turn, then write the recall log as the history's projection."""
-    try:
-        turn = _history.answer(kept["conversation_id"], kept["turn_id"], payload["reply"])
-    except (cos_history.HistoryRefused, OSError):
+    turn = None
+    for _ in range(2):
+        try:
+            turn = _history.answer(kept["conversation_id"], kept["turn_id"], payload["reply"])
+            break
+        except (cos_history.HistoryRefused, OSError):
+            continue
+    if turn is None:
         _log_file("history_answer_unrecorded", f"turn {kept['turn_id']} answered but the reply was not saved")
-        return {"conversation_id": kept["conversation_id"], "turn_id": kept["turn_id"], "status": "pending",
+        try:
+            _history.fail(kept["conversation_id"], kept["turn_id"], "reply_not_saved")
+        except (cos_history.HistoryRefused, OSError):
+            pass
+        return {"conversation_id": kept["conversation_id"], "turn_id": kept["turn_id"], "status": "failed",
                 "saved": True, "reply_saved": False}
     conversation_log.append(_conversations_dir, conversation_id=turn["conversation_id"], turn_id=turn["turn_id"],
                             channel=channel, owner_text=owner_text, attachments=attachment_names,
