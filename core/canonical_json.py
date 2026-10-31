@@ -1,4 +1,4 @@
-"""Canonical JSON and its digest (contracts/cos/v1/README.md, "Canonical digest").
+"""Canonical JSON and its digest (contracts/cos/v1/README.md, "Canonical digest"): one rule for every MiniMoi record.
 
 Sorted keys, separators (",", ":"), UTF-8, ensure_ascii False. The same rule is used for command payloads, stored
 records and activity records, so a digest computed anywhere in the platform compares equal.

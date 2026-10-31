@@ -30,8 +30,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterator
 
-from domains.cos.store import contracts, fsio
-from domains.cos.store.canonical import digest
+from core import durable_files as fsio
+from domains.cos.store import contracts
+from core.canonical_json import digest
 from domains.cos.store.fold import (
     Episode,
     Occurrence,

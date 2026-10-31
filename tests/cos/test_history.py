@@ -22,7 +22,7 @@ from domains.cos.history import (
 )
 from domains.cos.store import StoreWriter
 from domains.cos.store import contracts
-from domains.cos.store.canonical import digest
+from core.canonical_json import digest
 
 ENV = "dev"
 WORDS = "Nag me on doing a german one everyday since I said I want to learn german."
@@ -324,7 +324,7 @@ def test_the_history_is_off_unless_the_folder_and_environment_are_set(tmp_path):
 
 
 def test_new_folders_keep_the_setgid_bit_so_files_stay_in_the_reader_group(tmp_path):
-    from domains.cos.store import fsio
+    from core import durable_files as fsio
     root = tmp_path / "conversations"
     root.mkdir()
     (root / "history").mkdir()

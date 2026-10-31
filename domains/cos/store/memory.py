@@ -32,8 +32,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from domains.cos.store import fsio
-from domains.cos.store.canonical import digest
+from core import durable_files as fsio
+from core.canonical_json import digest
 from domains.cos.store.writer import StoreWriter
 
 MEMORY_CAP = 7_500

@@ -46,8 +46,9 @@ from pathlib import Path
 from typing import Callable, Mapping
 from uuid import UUID
 
-from domains.cos.store import contracts, fsio
-from domains.cos.store.canonical import digest
+from core import durable_files as fsio
+from domains.cos.store import contracts
+from core.canonical_json import digest
 
 BEFORE_1_2 = "cos-before-1-2"
 # The conversation Confer has always used ("owner") becomes the first canonical conversation, titled "CoS". Its id is

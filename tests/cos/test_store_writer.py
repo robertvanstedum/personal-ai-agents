@@ -17,7 +17,7 @@ import pytest
 
 from domains.cos.store import StoreWriter
 from domains.cos.store import contracts
-from domains.cos.store.canonical import digest
+from core.canonical_json import digest
 
 ENV = "dev"
 SCOPE = {"data_scope": "personal", "environment": ENV}
