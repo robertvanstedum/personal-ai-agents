@@ -649,6 +649,24 @@
       "undo": null,
       "egress": "none",
       "max_operations_per_turn": 10
+    },
+    {
+      "capability": "guild.build.publish_update",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "publish_update_v1",
+      "verify": "activity_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 1
     }
   ]
 }

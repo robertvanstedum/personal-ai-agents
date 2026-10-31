@@ -12,7 +12,7 @@ from flask import Flask
 
 from domains.cos.store import contracts
 from domains.cos.store.api import PREFIX, install
-from domains.cos.store.canonical import digest
+from core.canonical_json import digest
 from domains.cos.store.client import StoreClient
 
 SCOPE = {"data_scope": "personal", "environment": "dev"}
