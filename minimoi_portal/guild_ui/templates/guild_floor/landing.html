@@ -16,12 +16,13 @@
   <link rel="stylesheet" href="{{ url_for('.asset', filename='tokens.css') }}">
   <link rel="stylesheet" href="{{ url_for('.asset', filename='components.css') }}">
   <link rel="stylesheet" href="{{ url_for('.asset', filename='css/landing.css') }}">
+  <link rel="stylesheet" href="/founders-ui/founders.css?v={{ founders_ui_version }}">
   <script type="module" src="{{ url_for('.asset', filename='js/nav.js') }}"></script>
 </head>
 <body class="gu gl" data-page="home" data-area="Guild">
 <a class="gu-skip" href="#main">Skip to content</a>
 {{ portal_nav_html(user, '/guild') | safe }}
-<nav class="guild-nav" aria-label="Guild sections">
+<nav class="guild-nav" aria-label="Workshop">
   {% include 'guild_floor/_section_subnav.html' %}
 </nav>
 <main id="main" class="gl-site" tabindex="-1">

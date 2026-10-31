@@ -95,7 +95,7 @@ def test_no_tunnel_photo_and_no_square_tiles(staging):
     assert "tunnel" not in page and "square" not in page
     assert page.count('class="gl-drawer"') == 4
     images = re.findall(r'<img src="([^"]+)"', page)
-    assert sorted(images) == sorted(d[2] for d in DOORS)          # only the four original paintings
+    assert sorted(images) == sorted([d[2] for d in DOORS] + ["/static/guild/guild-build.webp"])          # four paintings plus the workshop navigation mark
     css = LANDING_CSS.read_text()
     assert "aspect-ratio: 210 / 136" in css                         # Curator's rectangular drawer image
     assert not re.search(r"aspect-ratio:\s*1\s*(/\s*1)?\s*;", css)

@@ -70,11 +70,12 @@ def test_hero_has_no_secondary_actions_but_context_remains_accessible(staging):
     assert "data-linked-work" not in page and "data-conv-files" in page          # Linked work left the page (11 Oct); the files stay
 
 
-def test_build_art_is_reused_only_by_the_approved_chat_rail_and_landing():
+def test_workshop_art_is_used_by_navigation_and_landing_cards():
     hits = sorted(str(p.relative_to(REPO)) for p in (REPO / "minimoi_portal").rglob("*")
                   if p.suffix in (".html", ".py", ".js", ".css") and "guild-build.webp" in p.read_text(errors="ignore"))
-    assert hits == ["minimoi_portal/guild_ui/templates/guild_floor/floor.html",
-                    "minimoi_portal/templates/guild/_build_card.html"], hits
+    assert hits == ["minimoi_portal/guild_ui/templates/guild_floor/_section_subnav.html",
+                    "minimoi_portal/templates/guild/_build_card.html",
+                    "minimoi_portal/workspaces.py"], hits
     card = (REPO / "minimoi_portal/templates/guild/_build_card.html").read_text()
     assert card.count("guild-build.webp") == 1
 
@@ -128,6 +129,6 @@ def test_the_wall_has_continue_filters_and_room_for_cards(staging):
 def test_chat_v2_art_is_served_without_changing_the_original_asset(staging):
     page = _floor(staging)
     assert 'class="hero-art" src="/static/guild/guild-workshop-team.webp"' in page
-    assert 'class="fc-art" src="/static/guild/guild-build.webp"' in page
+    assert 'class="fc-art" src="/static/guild/guild-craftsman.webp"' in page
     for asset in ("guild-workshop-team.webp", "guild-build.webp", "guild-chat-hero.webp"):
         assert staging.owner().get("/static/guild/" + asset).status_code == 200

@@ -62,3 +62,19 @@
 .founders-cos #send-input,.founders-cos #btn-send,.founders-cos #btn-attach,.founders-cos #btn-voice{font-family:system-ui,-apple-system,sans-serif}
 
 @media(max-width:1100px){.founders-cos.both-open #btn-dictate{display:none}}
+
+/* One workshop row beneath the shared mini-moi strip, on every Guild page. */
+.gu .guild-nav{background:var(--paper);color:var(--ink);border-bottom:1px solid var(--line);flex:none;position:relative;z-index:40}
+.workshop-row{display:flex;align-items:center;gap:18px;padding:0 20px;min-height:54px;white-space:nowrap}
+.workshop-name{display:flex;align-items:center;gap:9px;font:20px Georgia,serif;color:var(--ink);text-decoration:none;flex:none}
+.workshop-name img{width:28px;height:28px;object-fit:cover;object-position:50% 54%;border-radius:5px}
+.workshop-primary,.workshop-other{display:flex;align-items:center;gap:18px}
+.workshop-other{border-left:1px solid var(--line);padding-left:18px}
+.workshop-row a.subnav-link,.workshop-other a,.workshop-more a{color:var(--soft);font:14px system-ui,sans-serif;text-decoration:none;padding:17px 0 15px;border:0;border-bottom:2px solid transparent;background:none}
+.workshop-row a[aria-current=page]{color:var(--ink);border-bottom-color:var(--accent)}
+.workshop-more{display:none}
+.workshop-team{border-top:1px solid var(--line);margin-top:28px;padding:24px 0;scroll-margin-top:16px}
+.workshop-team h2{font:26px Georgia,serif}.workshop-team h3{font:600 15px system-ui;margin-top:20px}
+@media(max-width:900px){.workshop-row{gap:14px;padding:0 12px;overflow-x:auto}.workshop-name{font-size:18px}.workshop-primary{gap:14px}.workshop-other{display:none}.workshop-more{display:block;flex:none}.workshop-more summary{cursor:pointer;color:var(--soft);font:14px system-ui;padding:17px 0;list-style:none}.workshop-more[open]>div{position:fixed;right:12px;top:calc(var(--gu-nav-stack-h,54px) + 36px);display:flex;flex-direction:column;background:var(--paper);border:1px solid var(--line);padding:4px 18px;box-shadow:0 5px 15px #0002}.workshop-more a{display:block}}
+.gu .guild-nav{z-index:70}
+@media(max-width:900px){.workshop-name{position:sticky;left:0;z-index:2;background:var(--paper);padding-right:8px}.workshop-more[open]>div{z-index:80;top:calc(var(--gu-portal-h,38px) + var(--gu-nav-stack-h,54px))}}

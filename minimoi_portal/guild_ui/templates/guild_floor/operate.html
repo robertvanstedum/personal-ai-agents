@@ -72,5 +72,14 @@
 {% set preview_text = "Domain health, recent activity and the few things that need attention. This dashboard is still being designed." %}
 {% set construction_text = "Operate is being redesigned. The status checks above work today. The dashboard shown by the artwork is a concept, not live telemetry." %}
 {% include 'guild_floor/_area_preview.html' %}
+<section class="workshop-team" id="team" aria-labelledby="team-title">
+  <h2 id="team-title">Team</h2>
+  <h3>Master Craftsman</h3>
+  <p data-role-adoption>Starting role approved.</p>
+  <ul>{% for doc in role_documents %}<li>{% if doc.available %}<a href="{{ doc.href }}">{{ doc.label }}</a>{% else %}{{ doc.label }} <span class="small">— unavailable in this deployment</span>{% endif %}</li>{% endfor %}</ul>
+  <h3>Agents</h3>
+  <p>Agent access and status — under construction.</p>
+  <p><a href="{{ urls.workshop }}">Workshop Log materials</a></p>
+</section>
 </div>
 {% endblock %}

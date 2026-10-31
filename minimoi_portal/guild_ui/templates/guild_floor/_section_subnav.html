@@ -1,21 +1,18 @@
-{% set section = 'admin' if page_id == 'admin' else 'operate' if page_id.startswith('operate') else 'improve' if page_id == 'improve' else 'experiment' if page_id in ('experiment', 'labs') else 'build' %}
-<div class="gu-section-band" aria-label="Sections">
-<details class="gu-section-picker"><summary>{{ 'Prototype Lab' if section == 'experiment' else section|title }} · {{ 'design → build → ship' if section == 'build' else 'monitor → maintain' if section == 'operate' else 'review → analyze → improve' if section == 'improve' else 'roles and settings' if section == 'admin' else 'try → prove → keep' }}</summary><div>
-{% for id,label,href in [('build','Build',urls.floor),('operate','Operate',urls.operate),('improve','Improve',urls.improve),('experiment','Prototype Lab',urls.experiment),('admin','Admin',urls.admin)] %}<a href="{{ href }}">{{ label }}</a>{% endfor %}</div></details>
-{% for id, label, href in [('build','Build',urls.floor),('operate','Operate',urls.operate),('improve','Improve',urls.improve),('experiment','Prototype Lab',urls.experiment),('admin','Admin',urls.admin)] %}
-<a href="{{ href }}"{% if section == id %} aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}
-
+{% set section = 'operate' if page_id.startswith('operate') else 'improve' if page_id == 'improve' else 'experiment' if page_id in ('experiment', 'labs') else 'build' %}
+<div class="workshop-row">
+  <a class="workshop-name" href="{{ urls.floor }}"><img src="/static/guild/guild-build.webp" alt="" width="28" height="28"><span>The Workshop</span></a>
+  <div class="workshop-primary">
+    {% for id,label,href,ids in [('chat','Work',urls.floor,('floor',)),('board','Board',urls.board,('board','bench','postits')),('build-log','Build Log',urls.build_log,('build_log','queue','item')),('rooms','Rooms',urls.rooms,('rooms',))] %}
+    <a href="{{ href }}" class="subnav-link{% if page_id in ids %} subnav-active{% endif %}" data-section="{{ id }}"{% if page_id in ids %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </div>
+  <div class="workshop-other">
+    {% for id,label,href in [('operate','Operate',urls.operate),('improve','Improve',urls.improve),('experiment','Lab',urls.experiment)] %}
+    <a href="{{ href }}"{% if section == id %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </div>
+  <details class="workshop-more" data-subnav-more>
+    <summary>More</summary>
+    <div>{% for id,label,href in [('operate','Operate',urls.operate),('improve','Improve',urls.improve),('experiment','Lab',urls.experiment)] %}<a href="{{ href }}"{% if section == id %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</div>
+  </details>
 </div>
-{% if section == 'build' %}
-<div class="guild-subnav guild-sections">
-{% if section == 'build' %}
-{# Build is Chat · Board · Build Log · Rooms; Admin is Guild-level (19 Oct) (11 Oct, Robert: the original Craftsman Chat is the Build landing again; Workshop Log keeps its existing route and topic work, linked from Admin). No More menu (5 Oct): repository and spec links open on GitHub from where they are relevant. #}
-{% for id,label,href,ids in [('chat','Chat',urls.floor,('floor',)),('board','Board',urls.board,('board','bench','postits')),('build-log','Build Log',urls.build_log,('build_log','queue','item')),('rooms','Rooms',urls.rooms,('rooms',))] %}
-<a href="{{ href }}" class="subnav-link{% if page_id in ids %} subnav-active{% endif %}" data-section="{{ id }}"{% if page_id in ids %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
-{% endif %}
-</div>
-{% elif section == 'operate' and page_id != 'operate' %}
-{# Operate is under construction (10 Oct, Robert): its provisional sub-tabs are gone, so no information architecture is presented as settled. The working
-   tools are reached from the quiet links in Operate's body; a tool's page has one plain way back. #}
-<div class="guild-subnav guild-crumb"><a class="subnav-link" href="{{ urls.operate }}" data-operate-back>‹ Operate</a></div>
-{% endif %}

@@ -499,7 +499,7 @@ def operate():
     except Exception:
         claude_status = None
     return render_template("guild_floor/operate.html", memory_capture=memory_overview(), scheduled_jobs=overview(), selected_tile=selected, tile_lights=lights,
-                           usage_limits=limits_view.overview(agent_status=claude_status), **ctx)
+                           usage_limits=limits_view.overview(agent_status=claude_status), role_documents=_role_documents(), **ctx)
 
 
 def _board_payload():
@@ -608,17 +608,19 @@ ROLE_DOCUMENTS = (
 )
 
 
-@owner_page
-def admin():
+def _role_documents():
     from .references import resolve
     roles = []
     for label, name in ROLE_DOCUMENTS:
         reference = ROLE_DOCUMENT_HOME + name
         roles.append({"label": label, "available": resolve(reference) is not None,
                       "href": url_for(".document", ref=reference)})
-    return render_template("guild_floor/admin.html", role_documents=roles,
-                           agents_href=url_for(".operate_view", view="agents"),
-                           **_context("admin", "Admin", "Guild Admin", page_open=True))
+    return roles
+
+
+@owner_page
+def admin():
+    return redirect(url_for(".operate") + "#team")
 
 
 @owner_page

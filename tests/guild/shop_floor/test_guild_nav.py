@@ -1,5 +1,4 @@
-"""Build navigation has four owner-approved tabs: Chat, Board, Build Log and Rooms. Admin is Guild-level.
-Workshop remains available through Admin and its retained route, outside the main tabs."""
+"""One Workshop row on every Guild page; Team lives within Operate."""
 from __future__ import annotations
 
 import re
@@ -9,7 +8,7 @@ import pytest
 from floor_helpers import load_portal, staging  # noqa: F401  (pytest fixtures)
 
 DOCS = "https://github.com/robertvanstedum/personal-ai-agents/tree/main/docs"
-DAILY = [("chat", "Chat", "/guild-next/guild/build"), ("board", "Board", "/guild-next/guild/board"),
+DAILY = [("chat", "Work", "/guild-next/guild/build"), ("board", "Board", "/guild-next/guild/board"),
          ("build-log", "Build Log", "/guild-next/guild/build/log"),
          ("rooms", "Rooms", "/guild-next/guild/rooms")]
 MORE = [("workshop", "Workshop", "/guild-next/guild/workshop"), ("media", "Media library", "/guild-next/guild/media"),
@@ -24,18 +23,21 @@ PAGES = {"/guild-next/": None, "/guild-next/guild/build": "chat", "/guild-next/g
 
 
 def _nav(page):
-    start = page.index('<div class="guild-subnav guild-sections">')
+    start = page.index('<div class="workshop-row">')
     return page[start:page.index("</nav>", start)]
 
 
 @pytest.mark.parametrize("path", sorted(PAGES))
-def test_every_build_page_has_four_tabs_and_no_more_menu(staging, path):
+def test_every_build_page_has_work_tabs_and_phone_more(staging, path):
     r = staging.owner().get(path)
     assert r.status_code == 200, (path, r.status_code)
     nav = _nav(r.get_data(as_text=True))
     tabs = re.findall(r'<a href="([^"]+)" class="subnav-link[^"]*" data-section="([a-z-]+)"[^>]*>([^<]+)</a>', nav)
     assert [(s, label, href) for href, s, label in tabs] == DAILY, path
-    assert "More ▾" not in nav and "subnav-more" not in nav and "data-more=" not in nav      # retired 5 Oct
+    assert "data-subnav-more" in nav
+    assert "/static/guild/guild-build.webp" in nav
+    assert ">Admin</a>" not in nav
+    assert "gu-section-band" not in nav
     for word in ("Shop floor", "Wall", "Prototype Lab</a>", "Planning Studio</a>", "subnav-dot"):
         assert word not in nav, (path, word)                   # the old strip is gone
     active = re.findall(r'class="subnav-link subnav-active" data-section="([a-z-]+)"', nav)
@@ -79,3 +81,14 @@ def test_the_labs_entry_points_stay_truthful(staging):
     assert "neither is served on dev yet" in body and 'id="planning-studio"' in body
     assert "planning-studio/" in body and "prototype-lab/" in body
     assert staging.guest().get("/guild-next/guild/labs").status_code in (302, 403)
+
+@pytest.mark.parametrize('path', ['/guild-next/guild/operate', '/guild-next/guild/improve', '/guild-next/guild/experiment'])
+def test_other_areas_share_one_workshop_row(staging, path):
+    response = staging.owner().get(path)
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    nav = _nav(html)
+    assert html.count('class="workshop-row"') == 1
+    assert 'gu-section-band' not in html and 'guild-subnav' not in html
+    assert 'guild-build.webp' in nav and '>Admin</a>' not in nav
+    assert nav.count('aria-current="page"') == 2  # desktop link and phone More equivalent
