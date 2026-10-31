@@ -1,0 +1,25 @@
+{
+  "schema": "minimoi.cos.plan/1",
+  "data_scope": "personal",
+  "environment": "prod",
+  "id": "PLAN-german-b1",
+  "revision": 2,
+  "title": "B1 plan v1",
+  "kind": "personal",
+  "goal_ref": {
+    "type": "cos.goal",
+    "id": "GOAL-german-b1"
+  },
+  "milestones": [
+    {
+      "id": "m1",
+      "text": {
+        "text": "Persona redesign session with Robert",
+        "provenance": "agent_draft"
+      },
+      "state": "planned",
+      "target_date": "2026-11-07"
+    }
+  ],
+  "as_of": "2026-10-30T14:12:05-05:00"
+}

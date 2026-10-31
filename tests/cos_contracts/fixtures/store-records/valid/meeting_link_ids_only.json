@@ -1,0 +1,12 @@
+{
+  "schema": "minimoi.cos.meeting_link/1",
+  "data_scope": "personal",
+  "environment": "prod",
+  "occurrence_id": "OBL-standup@2026-10-31",
+  "room_id": "standup-2026-10-31",
+  "session_id": "standup-2026-10-31",
+  "event_ids": [
+    "e-01",
+    "e-02"
+  ]
+}

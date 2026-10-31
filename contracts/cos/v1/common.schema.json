@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:cos:common",
+  "title": "Shared definitions for the CoS-first 1.2 contracts",
+  "description": "B0 of spec v0.3 (planning-studio INIT-2026-0007, 15_SPEC_1_2_COS_FIRST_v0.3), section 4.1 and 4.2. Every other schema in this folder references these definitions.",
+  "$defs": {
+    "timestamp": {
+      "description": "ISO 8601 with an explicit offset. Naive local times are never written: the writer knows its zone.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "nullable_timestamp": {
+      "oneOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }]
+    },
+    "local_date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "local_time": {
+      "type": "string",
+      "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+    },
+    "tz": {
+      "description": "An IANA zone. 1.2 writes America/Chicago; the field stays so a reader never guesses.",
+      "type": "string",
+      "pattern": "^[A-Za-z_]+(/[A-Za-z0-9_+-]+)+$"
+    },
+    "data_scope": {
+      "description": "Section 4.1. Whose data. In 1.2 the only value written is personal. company:<id> and client:<id> are reserved names: a 1.2 writer refuses them and a reader refuses a record carrying them.",
+      "const": "personal"
+    },
+    "data_scope_reserved": {
+      "description": "The reserved names, for documentation and for readers' refusal messages. Never written in 1.2.",
+      "type": "string",
+      "pattern": "^(company|client):[a-z0-9][a-z0-9_-]{0,62}$"
+    },
+    "environment": {
+      "description": "Section 4.1. Which deployment. Kept apart from data_scope and from a credential's permissions.",
+      "enum": ["dev", "staging", "prod"]
+    },
+    "id": {
+      "description": "A stable identifier: letters, digits, and . _ : @ - only (@ joins an obligation or episode id to its date).",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "digest": {
+      "description": "sha256 over canonical JSON: sorted keys, separators (',', ':'), UTF-8, ensure_ascii false.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "typed_ref": {
+      "description": "Section 4.1. A typed canonical reference: what kind of record, which one, which revision of it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+        },
+        "id": { "$ref": "#/$defs/id" },
+        "revision": { "$ref": "#/$defs/revision" }
+      }
+    },
+    "nullable_typed_ref": {
+      "oneOf": [{ "$ref": "#/$defs/typed_ref" }, { "type": "null" }]
+    },
+    "source_instance": {
+      "description": "Section 4.1. Which host and service wrote the record.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "service"],
+      "properties": {
+        "host": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "service": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+        "image_tag": { "type": "string", "maxLength": 128 },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" }
+      }
+    },
+    "provenance": {
+      "description": "Section 4.2, R-7. Rooms' CONTEXT_CLASSES (rooms/store.py:34) plus domain_fact and approved. One vocabulary for Rooms and the CoS store.",
+      "enum": [
+        "robert_source",
+        "domain_fact",
+        "agent_draft",
+        "approved",
+        "external_source",
+        "coauthored_output"
+      ]
+    },
+    "attributed_text": {
+      "description": "Section 4.2. Text with its provenance. robert_source needs the verbatim turn it came from; domain_fact needs its canonical record; approved needs where Robert accepted it. The server sets robert_source, never the model.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "provenance"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "provenance": { "$ref": "#/$defs/provenance" },
+        "turn_ref": { "$ref": "#/$defs/typed_ref" },
+        "ref": { "$ref": "#/$defs/typed_ref" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "provenance": { "const": "robert_source" } } },
+          "then": {
+            "required": ["turn_ref"],
+            "properties": { "turn_ref": { "properties": { "type": { "enum": ["cos.turn", "rooms.event", "mc.turn", "telegram.message"] } } } }
+          }
+        },
+        {
+          "if": { "properties": { "provenance": { "enum": ["domain_fact", "approved"] } } },
+          "then": { "required": ["ref"] }
+        }
+      ]
+    },
+    "seat": {
+      "description": "Section 4.14. Bound server-side from the session, never named by the model.",
+      "enum": ["cos", "mc"]
+    },
+    "actor": {
+      "description": "Section 4.5. Who sent a command.",
+      "enum": ["robert", "cos", "mc", "scheduler", "telegram"]
+    },
+    "origin": {
+      "description": "Section 4.14. Why the action happened. scheduled is lane one only; lane two needs its harness trigger.",
+      "enum": ["owner_turn", "scheduled", "consultation", "import"]
+    },
+    "who": {
+      "description": "Section 4.6. Who owes an obligation. A domain name stands for that domain's owner.",
+      "type": "string",
+      "pattern": "^(robert|cos|mc|german|portuguese|curator|guild-build)$"
+    },
+    "domain": {
+      "enum": ["german", "portuguese", "curator", "guild-build"]
+    },
+    "reader_state": {
+      "description": "Section 4.7. Every reader answers one of these. stale carries the last good value and its as_of.",
+      "enum": ["ok", "stale", "unavailable"]
+    },
+    "envelope": {
+      "description": "Section 4.1. The identity every stored record carries.",
+      "type": "object",
+      "required": ["schema", "data_scope", "environment"],
+      "properties": {
+        "schema": { "type": "string", "pattern": "^minimoi\\.[a-z_]+(\\.[a-z_]+)*(/[0-9]+|\\.v[0-9]+)$" },
+        "data_scope": { "$ref": "#/$defs/data_scope" },
+        "environment": { "$ref": "#/$defs/environment" }
+      }
+    }
+  }
+}

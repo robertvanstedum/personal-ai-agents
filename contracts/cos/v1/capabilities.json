@@ -1,0 +1,21 @@
+{
+  "description": "Spec v0.3 section 4.14: the CoS capability catalogue, modelled on core/mc_tools/effects.py. Every capability is bound to seat cos server-side. Standing means zero spend and no per-call approval, still verified; exact means Robert approves each call. Model-readable content never grants a write. MC's floors (core/mc_tools/policy.py) are unchanged.",
+  "seat": "cos",
+  "capabilities": [
+    { "id": "cos.store.command", "tier": "standing", "spend": 0, "origins": ["owner_turn", "scheduled", "consultation"], "resource": "the CoS store, within its transition rules", "note": "includes commitment.open (N1)" },
+    { "id": "cos.rooms.turn", "tier": "standing", "spend": 0, "origins": ["owner_turn", "scheduled"], "resource": "Rooms where CoS is a member, as CoS's principal", "note": "B5a; needs the Rooms amendment" },
+    { "id": "cos.consult.mc", "tier": "standing", "spend": 0, "origins": ["owner_turn", "scheduled"], "resource": "consult_v1; MC's turn is reserved on MC's route", "note": "no ping-pong" },
+    { "id": "cos.issue.comment", "tier": "standing", "spend": 0, "origins": ["owner_turn", "scheduled"], "resource": "issues CoS created, labelled cos, in robertvanstedum/mini-moi-private", "note": "standing once the charter is accepted (section 9, item 6); exact until then" },
+    { "id": "cos.issue.close", "tier": "standing", "spend": 0, "origins": ["owner_turn", "scheduled"], "resource": "issues CoS created, labelled cos, in robertvanstedum/mini-moi-private", "note": "as cos.issue.comment" },
+    { "id": "cos.issue.create", "tier": "exact", "spend": 0, "origins": ["owner_turn", "scheduled"], "resource": "robertvanstedum/mini-moi-private", "note": "Robert approves each" },
+    { "id": "cos.intake.submit", "tier": "standing", "spend": 0, "origins": ["owner_turn"], "resource": "intake.submit_v1 into the Guild Build Queue", "note": "proposes; never admits" },
+    { "id": "cos.incident.raise", "tier": "standing", "spend": 0, "origins": ["owner_turn", "scheduled"], "resource": "raise_incident(), classes E1-E4 only", "note": "a routine nudge has no path here" },
+    { "id": "cos.outside_scope", "tier": "exact", "spend": 0, "origins": ["owner_turn"], "resource": "anything outside data_scope personal", "note": "never in 1.2" }
+  ],
+  "not_granted": [
+    "writing any domain's data",
+    "admitting harness work",
+    "lane-two judgment without its harness trigger (section 4.15)",
+    "granting authority without a supervision decision"
+  ]
+}

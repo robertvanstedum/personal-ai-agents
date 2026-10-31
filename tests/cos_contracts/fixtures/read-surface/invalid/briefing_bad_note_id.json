@@ -1,0 +1,50 @@
+{
+  "schema": "minimoi.cos.briefing/1",
+  "data_scope": "personal",
+  "environment": "prod",
+  "local_date": "2026-10-31",
+  "version": 1,
+  "built_at": "2026-10-31T05:10:00-05:00",
+  "note_id": "briefing-today",
+  "picture_revision": "sha256:afbf9d0f3560b0fd7795e81c42a0a79ee6b6fc67e064f77826aee642cad28d91",
+  "sources": [
+    {
+      "input": "activity:german",
+      "state": "ok",
+      "as_of": "2026-10-30T14:12:05-05:00",
+      "revision": "8f0c2a91:4"
+    },
+    {
+      "input": "activity:curator",
+      "state": "stale",
+      "as_of": "2026-10-29T23:59:00-05:00",
+      "plain": "Curator unreachable since yesterday"
+    },
+    {
+      "input": "issues",
+      "state": "unavailable",
+      "as_of": null,
+      "plain": "issues unavailable"
+    },
+    {
+      "input": "harness_snapshot",
+      "state": "not_available_here",
+      "as_of": null,
+      "plain": "not available here"
+    }
+  ],
+  "sections": [
+    {
+      "title": "Today",
+      "lines": [
+        "Standup at 09:00",
+        "German: session yesterday"
+      ]
+    }
+  ],
+  "model_call": {
+    "reservation_id": "res-0001",
+    "max_tokens": 1200
+  },
+  "markdown_digest": "sha256:0bc159e1370748789c2e2c6cd4d4d48feb323119457ca339c2b225ac877ca123"
+}

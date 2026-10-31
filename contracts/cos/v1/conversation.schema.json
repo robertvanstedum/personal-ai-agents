@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:cos:conversation",
+  "title": "CoS canonical conversation history",
+  "description": "Spec v0.3 section 4.19 (C5, U6). Written by the CoS backend under /opt/minimoi/cos/conversations/. The existing monthly recall log (domains/cos/conversation_log.py) becomes a projection. 'Saved' is shown only after a durable acknowledgment. Late replies land in their original conversation. Private conversations get no proactive notes and are not shelf-ingested.",
+  "oneOf": [
+    { "$ref": "#/$defs/conversation" },
+    { "$ref": "#/$defs/turn" },
+    { "$ref": "#/$defs/send" },
+    { "$ref": "#/$defs/stream_note" }
+  ],
+  "$defs": {
+    "conversation_id": { "type": "string", "pattern": "^cosc-[0-9a-f]{12,32}$|^cos-before-1-2$" },
+    "conversation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "conversation_id", "title", "private", "created_at", "read_only", "data_scope", "environment"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.conversation/1" },
+        "conversation_id": { "$ref": "#/$defs/conversation_id" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "private": { "type": "boolean" },
+        "created_at": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" },
+        "read_only": {
+          "description": "true only for the imported 'Before 1.2' conversation built from the monthly logs.",
+          "type": "boolean"
+        },
+        "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
+        "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" }
+      },
+      "allOf": [
+        { "if": { "properties": { "conversation_id": { "const": "cos-before-1-2" } } }, "then": { "properties": { "read_only": { "const": true } } } }
+      ]
+    },
+    "send": {
+      "description": "A send is idempotent by the client's turn_id. The same turn_id with different text is refused.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "conversation_id", "turn_id", "text", "channel"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.send/1" },
+        "conversation_id": { "$ref": "#/$defs/conversation_id" },
+        "turn_id": { "type": "string", "pattern": "^t-[0-9a-f]{12,32}$" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 20000 },
+        "channel": { "enum": ["web", "voice", "telegram"] },
+        "attachments": { "type": "array", "maxItems": 10, "items": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" } }
+      }
+    },
+    "turn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "conversation_id", "turn_id", "seq", "status", "user_text", "created_at", "durable_ack_at"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.turn/1" },
+        "conversation_id": { "$ref": "#/$defs/conversation_id" },
+        "turn_id": { "type": "string", "pattern": "^t-[0-9a-f]{12,32}$" },
+        "seq": { "type": "integer", "minimum": 1 },
+        "status": { "enum": ["pending", "answered", "failed", "recovered"] },
+        "user_text": { "type": "string", "minLength": 1, "maxLength": 20000 },
+        "reply_text": { "type": ["string", "null"], "maxLength": 40000 },
+        "created_at": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" },
+        "durable_ack_at": {
+          "description": "When the user text was durably saved. The UI shows 'saved' only once this is set.",
+          "$ref": "urn:minimoi:contract:cos:common#/$defs/nullable_timestamp"
+        },
+        "answered_at": { "$ref": "urn:minimoi:contract:cos:common#/$defs/nullable_timestamp" },
+        "picture_revision": {
+          "description": "Which picture digest the turn used (section 4.8).",
+          "oneOf": [{ "$ref": "urn:minimoi:contract:cos:common#/$defs/digest" }, { "type": "null" }]
+        },
+        "commitment_receipts": {
+          "description": "N1: receipts of commitments opened in this turn. claim_truth lets a follow-up promise stand only with a matching receipt here.",
+          "type": "array",
+          "maxItems": 10,
+          "items": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" }
+        },
+        "failure_code": { "type": ["string", "null"], "pattern": "^[a-z][a-z0-9_]{0,63}$" }
+      },
+      "allOf": [
+        { "if": { "properties": { "status": { "const": "answered" } } }, "then": { "properties": { "reply_text": { "type": "string" }, "answered_at": { "type": "string" }, "durable_ack_at": { "type": "string" } } } },
+        { "if": { "properties": { "status": { "const": "failed" } } }, "then": { "required": ["failure_code"], "properties": { "failure_code": { "type": "string" } } } }
+      ]
+    },
+    "stream_note": {
+      "description": "A proactive note in the conversation stream (briefing, nudge, incident, consultation result). The note_id is deterministic, so a reload never inserts it twice. Never written into a Private conversation.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "note_id", "conversation_id", "kind", "created_at", "text"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.stream_note/1" },
+        "note_id": { "type": "string", "pattern": "^(briefing|nudge|incident|consult|commitment):[A-Za-z0-9._:@-]{1,160}$" },
+        "conversation_id": { "$ref": "#/$defs/conversation_id" },
+        "kind": { "enum": ["briefing", "nudge", "incident", "consult", "commitment"] },
+        "created_at": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 8000 },
+        "ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
+        "actions": {
+          "type": "array",
+          "maxItems": 3,
+          "items": { "enum": ["acknowledge", "open_briefing", "open_room"] }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "incident" } } },
+          "then": { "required": ["actions"], "properties": { "actions": { "contains": { "const": "acknowledge" } }, "note_id": { "pattern": "^incident:" } } }
+        },
+        { "if": { "properties": { "kind": { "const": "briefing" } } }, "then": { "properties": { "note_id": { "pattern": "^briefing:[0-9]{4}-[0-9]{2}-[0-9]{2}:[0-9]+$" } } } }
+      ]
+    }
+  }
+}

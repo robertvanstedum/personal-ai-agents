@@ -1,0 +1,75 @@
+{
+  "schema": "minimoi.cos.picture/1",
+  "data_scope": "personal",
+  "environment": "prod",
+  "built_at": "2026-10-30T14:12:05-05:00",
+  "revision_vector": "sha256:afbf9d0f3560b0fd7795e81c42a0a79ee6b6fc67e064f77826aee642cad28d91",
+  "inputs": [
+    {
+      "input": "activity:german",
+      "state": "ok",
+      "as_of": "2026-10-30T14:12:05-05:00",
+      "revision": "8f0c2a91:4"
+    },
+    {
+      "input": "activity:curator",
+      "state": "stale",
+      "as_of": "2026-10-29T23:59:00-05:00",
+      "plain": "Curator unreachable since yesterday"
+    },
+    {
+      "input": "issues",
+      "state": "unavailable",
+      "as_of": null,
+      "plain": "issues unavailable"
+    },
+    {
+      "input": "harness_snapshot",
+      "state": "not_available_here",
+      "as_of": null,
+      "plain": "not available here"
+    }
+  ],
+  "domains": [
+    {
+      "domain": "german",
+      "state": "ok",
+      "metric": "sessions_completed",
+      "goal_gated": true,
+      "last_event": {
+        "when": "2026-10-30",
+        "one_line": "Gespräche · Dativ",
+        "ref": {
+          "type": "german.session",
+          "id": "2026-10-30_001"
+        }
+      }
+    },
+    {
+      "domain": "portuguese",
+      "state": "ok",
+      "metric": "sessions_completed",
+      "goal_gated": false,
+      "last_event": null
+    }
+  ],
+  "goals": [
+    {
+      "type": "cos.goal",
+      "id": "GOAL-german-b1"
+    }
+  ],
+  "commitments": [
+    {
+      "ref": {
+        "type": "cos.obligation",
+        "id": "OBL-cos-followup-0001"
+      },
+      "who": "cos",
+      "what": "Ask MC where the ideas go",
+      "due": "2026-10-30T18:00:00-05:00",
+      "state": "open"
+    }
+  ],
+  "facts_vs_inferences": []
+}

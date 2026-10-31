@@ -1,0 +1,6 @@
+{
+  "schema": "minimoi.cos.store_result/1",
+  "command_id": "cmd-0003",
+  "outcome": "conflict",
+  "current_revision": 4
+}

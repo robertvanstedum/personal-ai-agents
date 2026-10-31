@@ -1,0 +1,6 @@
+{
+  "schema": "minimoi.cos.store_result/1",
+  "command_id": "cmd-0002",
+  "outcome": "refused",
+  "code": "command_id_reused"
+}

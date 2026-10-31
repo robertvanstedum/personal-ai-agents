@@ -88,6 +88,20 @@ rsync_path "${AUTH_DIR}/"                        "auth/"
 # mounts data/ read-write) cannot edit them, so they are named here explicitly.
 rsync_path "/opt/minimoi/cos_memory.md"         "cos_memory.md"
 rsync_path "/opt/minimoi/cos_reminders/"        "cos_reminders/"
+# CoS 1.2 (spec v0.3 section 4.21): the CoS store and the canonical conversation history, both written only by
+# cos-scheduler outside data/. The history's torn last line is quarantined on start; the store is copied under its
+# writer's lock (below). The store's derived/ is rebuilt after a restore, but is small enough to copy too.
+# The store is copied under the writer's own lock, so the copy's journal never runs ahead of its records (review S5).
+if [ -e "/opt/minimoi/cos/store/journal/.lock" ] && command -v flock >/dev/null 2>&1; then
+    exec 9<>"/opt/minimoi/cos/store/journal/.lock"
+    flock 9
+    rsync_path "/opt/minimoi/cos/store/"            "cos-store/"
+    flock -u 9
+    exec 9>&-
+else
+    rsync_path "/opt/minimoi/cos/store/"            "cos-store/"
+fi
+rsync_path "/opt/minimoi/cos/conversations/"    "cos-conversations/"
 
 log "=== Local backup complete: ${LOCAL_BACKUP} ==="
 

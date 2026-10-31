@@ -1,0 +1,56 @@
+{
+  "schema": "minimoi.cos.consult_request/1",
+  "request_id": "cons-0001",
+  "from_seat": "cos",
+  "to_seat": "mc",
+  "kind": "question",
+  "cos_conversation_ref": {
+    "type": "cos.conversation",
+    "id": "cosc-0a1b2c3d4e5f"
+  },
+  "question": "Where should the three new feature ideas go?",
+  "context_refs": [
+    {
+      "type": "cos.goal",
+      "id": "GOAL-0"
+    },
+    {
+      "type": "cos.goal",
+      "id": "GOAL-1"
+    },
+    {
+      "type": "cos.goal",
+      "id": "GOAL-2"
+    },
+    {
+      "type": "cos.goal",
+      "id": "GOAL-3"
+    },
+    {
+      "type": "cos.goal",
+      "id": "GOAL-4"
+    },
+    {
+      "type": "cos.goal",
+      "id": "GOAL-5"
+    },
+    {
+      "type": "cos.goal",
+      "id": "GOAL-6"
+    },
+    {
+      "type": "cos.goal",
+      "id": "GOAL-7"
+    },
+    {
+      "type": "cos.goal",
+      "id": "GOAL-8"
+    }
+  ],
+  "deadline_s": 90,
+  "turn_budget": {
+    "max_tokens": 800
+  },
+  "data_scope": "personal",
+  "environment": "prod"
+}

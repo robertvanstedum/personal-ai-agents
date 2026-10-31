@@ -1,0 +1,16 @@
+{
+  "schema": "minimoi.cos.obligation_event/1",
+  "data_scope": "personal",
+  "environment": "prod",
+  "event_id": "ev-0001",
+  "type": "satisfied",
+  "occurrence_id": "OBL-german-daily@2026-10-30",
+  "at": "2026-10-30T14:12:05-05:00",
+  "actor": "scheduler",
+  "seat": null,
+  "evidence_ref": {
+    "type": "activity.item",
+    "id": "german-sess-2026-10-30_001"
+  },
+  "revision_before": 3
+}

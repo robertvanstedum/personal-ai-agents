@@ -1,0 +1,17 @@
+{
+  "schema": "minimoi.cos.consult_status/1",
+  "request_id": "cons-0001",
+  "state": "answered",
+  "updated_at": "2026-10-30T14:12:05-05:00",
+  "elapsed_ms": 10,
+  "answer": {
+    "text": "x",
+    "seat": "cos",
+    "provenance": "agent_draft",
+    "evidence_refs": [],
+    "mc_conversation_ref": {
+      "type": "mc.conversation",
+      "id": "c"
+    }
+  }
+}

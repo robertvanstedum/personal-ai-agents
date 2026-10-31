@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:cos:read-surface",
+  "title": "CoS readers, the picture and the briefing",
+  "description": "Spec v0.3 sections 4.7, 4.8, 4.9. Readers are bounded and grant nothing. The picture and briefings are derived and rebuildable. Ages are computed at read time from as_of; no stored living number.",
+  "oneOf": [
+    { "$ref": "#/$defs/reader_response" },
+    { "$ref": "#/$defs/picture" },
+    { "$ref": "#/$defs/picture_digest" },
+    { "$ref": "#/$defs/briefing" }
+  ],
+  "$defs": {
+    "reader_name": {
+      "enum": ["store", "activity", "domain_detail", "board", "build_log", "rooms", "supervision_decisions", "memory_ask", "harness_snapshot", "issues"]
+    },
+    "reader_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "reader", "state", "as_of", "data_scope", "environment"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.reader_response/1" },
+        "reader": { "$ref": "#/$defs/reader_name" },
+        "state": { "$ref": "urn:minimoi:contract:cos:common#/$defs/reader_state" },
+        "as_of": {
+          "description": "When the value was true. For stale, the last good read.",
+          "$ref": "urn:minimoi:contract:cos:common#/$defs/nullable_timestamp"
+        },
+        "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
+        "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" },
+        "reason": {
+          "description": "A fixed code for stale or unavailable: timeout, not_granted, source_unreadable, not_available_here, too_large.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_items": { "type": "integer", "minimum": 1, "maximum": 200 },
+            "max_bytes": { "type": "integer", "minimum": 1, "maximum": 262144 },
+            "timeout_ms": { "type": "integer", "minimum": 1, "maximum": 10000 }
+          }
+        },
+        "truncated": { "type": "boolean" },
+        "value": {}
+      },
+      "allOf": [
+        { "if": { "properties": { "state": { "const": "ok" } } }, "then": { "required": ["value"], "properties": { "as_of": { "type": "string" } } } },
+        { "if": { "properties": { "state": { "const": "stale" } } }, "then": { "required": ["value", "reason"], "properties": { "as_of": { "type": "string" } } } },
+        { "if": { "properties": { "state": { "const": "unavailable" } } }, "then": { "required": ["reason"], "not": { "required": ["value"] } } }
+      ]
+    },
+    "input_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "state", "as_of"],
+      "properties": {
+        "input": { "type": "string", "pattern": "^[a-z][a-z0-9_.:-]{0,63}$" },
+        "state": { "enum": ["ok", "stale", "unavailable", "not_available_here"] },
+        "as_of": { "$ref": "urn:minimoi:contract:cos:common#/$defs/nullable_timestamp" },
+        "revision": {
+          "description": "The input's revision: an activity key's generation:seq, a store revision, or a source's own version.",
+          "type": "string",
+          "maxLength": 128
+        },
+        "plain": {
+          "description": "The plain words the UI shows for a degraded input, e.g. 'issues unavailable'. Internal codes are never shown.",
+          "type": "string",
+          "maxLength": 120
+        }
+      }
+    },
+    "picture": {
+      "description": "derived/picture.json. Partial by design: a failed input is an entry, never a gap.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "data_scope", "environment", "built_at", "revision_vector", "inputs", "domains", "goals", "commitments", "facts_vs_inferences"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.picture/1" },
+        "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
+        "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" },
+        "built_at": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" },
+        "revision_vector": { "$ref": "urn:minimoi:contract:cos:common#/$defs/digest" },
+        "inputs": { "type": "array", "maxItems": 40, "items": { "$ref": "#/$defs/input_entry" } },
+        "domains": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["domain", "state", "metric", "last_event", "goal_gated"],
+            "properties": {
+              "domain": { "$ref": "urn:minimoi:contract:cos:common#/$defs/domain" },
+              "state": { "enum": ["ok", "stale", "unavailable"] },
+              "metric": { "type": "string", "maxLength": 40 },
+              "last_event": {
+                "oneOf": [
+                  { "type": "null" },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["when", "one_line", "ref"],
+                    "properties": {
+                      "when": { "type": "string", "maxLength": 32 },
+                      "one_line": { "type": "string", "maxLength": 160 },
+                      "ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" }
+                    }
+                  }
+                ]
+              },
+              "goal_gated": {
+                "description": "true when an active goal holding Robert's words names this domain, so quiet-day observations may run (N3).",
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "goals": { "type": "array", "maxItems": 30, "items": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" } },
+        "commitments": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ref", "who", "what", "state"],
+            "properties": {
+              "ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
+              "who": { "$ref": "urn:minimoi:contract:cos:common#/$defs/who" },
+              "what": { "type": "string", "maxLength": 300 },
+              "due": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" },
+              "state": { "enum": ["open", "nudged", "acknowledged", "overdue"] }
+            }
+          }
+        },
+        "facts_vs_inferences": {
+          "description": "Inferences (e.g. three quiet days) are kept apart from facts, each citing the records it rests on.",
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "text", "cites"],
+            "properties": {
+              "kind": { "enum": ["quiet_days", "episode_open", "episode_escalated", "missed_cycles"] },
+              "text": { "type": "string", "maxLength": 200 },
+              "cites": { "type": "array", "minItems": 1, "maxItems": 10, "items": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/record_key" } }
+            }
+          }
+        }
+      }
+    },
+    "picture_digest": {
+      "description": "The bounded digest injected into every CoS conversation at its start and refreshed on the next turn after revision_vector changes. Delivered on V-1's channel (system message, or the labelled platform-data block). An unreachable picture is injected with state unavailable, never as empty.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "state", "revision_vector", "text"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.picture_digest/1" },
+        "state": { "enum": ["ok", "stale", "unavailable"] },
+        "revision_vector": { "oneOf": [{ "$ref": "urn:minimoi:contract:cos:common#/$defs/digest" }, { "type": "null" }] },
+        "supersedes": { "oneOf": [{ "$ref": "urn:minimoi:contract:cos:common#/$defs/digest" }, { "type": "null" }] },
+        "text": { "type": "string", "maxLength": 6000 }
+      },
+      "allOf": [
+        { "if": { "properties": { "state": { "const": "unavailable" } } }, "then": { "properties": { "revision_vector": { "type": "null" } } } }
+      ]
+    },
+    "briefing": {
+      "description": "derived/briefings/<date>.json, paired with <date>.md under one version. Shown as a stream note with id briefing:<date>:<version>; a Private conversation never receives it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "data_scope", "environment", "local_date", "version", "built_at", "note_id", "picture_revision", "sources", "sections", "markdown_digest"],
+      "properties": {
+        "schema": { "const": "minimoi.cos.briefing/1" },
+        "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
+        "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" },
+        "local_date": { "$ref": "urn:minimoi:contract:cos:common#/$defs/local_date" },
+        "version": { "type": "integer", "minimum": 1 },
+        "built_at": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" },
+        "note_id": { "type": "string", "pattern": "^briefing:[0-9]{4}-[0-9]{2}-[0-9]{2}:[0-9]+$" },
+        "picture_revision": { "$ref": "urn:minimoi:contract:cos:common#/$defs/digest" },
+        "sources": { "type": "array", "maxItems": 40, "items": { "$ref": "#/$defs/input_entry" } },
+        "sections": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["title", "lines"],
+            "properties": {
+              "title": { "type": "string", "maxLength": 80 },
+              "lines": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 300 } }
+            }
+          }
+        },
+        "model_call": {
+          "description": "The one reserved narrative call, or null when the briefing used fixed wording only.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["reservation_id", "max_tokens"],
+              "properties": {
+                "reservation_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+                "max_tokens": { "type": "integer", "minimum": 1, "maximum": 4000 },
+                "receipt_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" }
+              }
+            }
+          ]
+        },
+        "markdown_digest": { "$ref": "urn:minimoi:contract:cos:common#/$defs/digest" }
+      }
+    }
+  }
+}

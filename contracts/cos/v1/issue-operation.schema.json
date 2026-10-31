@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:cos:issue-operation",
+  "title": "Actions as issues in mini-moi-private: one operation and its receipt",
+  "description": "Spec v0.3 section 4.12. Extends the existing operation identity and github_receipt_v1. The operation id and payload digest are persisted (prepared) before dispatch. Unknown stays unknown unless a complete, authenticated listing proves absence; an empty result or a timeout is never permission to create again.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "operation_id", "op", "repo", "payload_digest", "state", "prepared_at", "seat", "approval", "data_scope", "environment"],
+  "properties": {
+    "schema": { "const": "minimoi.cos.issue_operation/1" },
+    "operation_id": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" },
+    "op": { "enum": ["create", "comment", "close", "reopen", "label"] },
+    "repo": {
+      "description": "Bound to the approved request and set by configuration. In 1.2 the only repository is mini-moi-private.",
+      "const": "robertvanstedum/mini-moi-private"
+    },
+    "issue_number": { "type": ["integer", "null"], "minimum": 1 },
+    "payload_digest": { "$ref": "urn:minimoi:contract:cos:common#/$defs/digest" },
+    "state": {
+      "description": "pending_approval, pending_dispatch and unknown are distinct, each shown to Robert.",
+      "enum": ["pending_approval", "prepared", "dispatched", "verified", "refused", "unknown"]
+    },
+    "prepared_at": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" },
+    "seat": { "const": "cos" },
+    "approval": {
+      "description": "create is exact: Robert approves each. Comments, closes and labels on issues CoS created with the cos label are standing once the charter is accepted (spec section 9, item 6); until then they are exact too.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tier"],
+      "properties": {
+        "tier": { "enum": ["exact", "standing"] },
+        "decision_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
+        "grant_ref": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" }
+      }
+    },
+    "reconciliation": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["at", "listing_complete", "pages", "matched"],
+          "properties": {
+            "at": { "$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp" },
+            "listing_complete": { "type": "boolean" },
+            "pages": { "type": "integer", "minimum": 0 },
+            "matched": { "type": "boolean" },
+            "matched_issue": { "type": ["integer", "null"], "minimum": 1 }
+          }
+        }
+      ]
+    },
+    "retry_allowed": {
+      "description": "true only after a complete listing found no match.",
+      "type": "boolean"
+    },
+    "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
+    "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "op": { "const": "create" } } },
+      "then": { "properties": { "approval": { "properties": { "tier": { "const": "exact" } } } } }
+    },
+    {
+      "if": { "properties": { "op": { "enum": ["comment", "close", "reopen", "label"] } } },
+      "then": { "required": ["issue_number"], "properties": { "issue_number": { "type": "integer" } } }
+    },
+    {
+      "if": { "properties": { "approval": { "properties": { "tier": { "const": "exact" } } } } },
+      "then": {
+        "if": { "properties": { "state": { "not": { "const": "pending_approval" } } } },
+        "then": { "properties": { "approval": { "required": ["decision_ref"] } } }
+      }
+    },
+    {
+      "if": { "properties": { "approval": { "properties": { "tier": { "const": "standing" } } } } },
+      "then": { "properties": { "approval": { "required": ["grant_ref"] } } }
+    },
+    {
+      "if": { "properties": { "retry_allowed": { "const": true } }, "required": ["retry_allowed"] },
+      "then": {
+        "required": ["reconciliation"],
+        "properties": {
+          "state": { "const": "unknown" },
+          "reconciliation": { "type": "object", "properties": { "listing_complete": { "const": true }, "matched": { "const": false } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "state": { "const": "verified" } } },
+      "then": { "properties": { "issue_number": { "type": "integer" } } }
+    }
+  ]
+}
