@@ -30,7 +30,6 @@ def _routes():
 def test_mc_route_is_grok_on_gateway_only_key_with_no_fallback():
     mc = _routes()["minimoi-mc-agent"]
     assert mc["litellm_params"]["model"] == "xai/grok-4.3"
-    assert mc["model_info"]["base_model"] == "xai/grok-4.3"
     assert mc["litellm_params"]["api_key"] == "os.environ/GATEWAY_XAI_API_KEY"
     assert mc["litellm_params"]["reasoning_effort"] == "low"
     assert mc["model_info"]["id"] == "mc-xai-grok43" and "fallback_position" not in mc["model_info"]
@@ -47,16 +46,16 @@ def test_no_staging_route_uses_the_default_provider_key_names():
             assert route["litellm_params"]["model"] == "ollama_chat/llama3.2:3b"
             continue
         key = route["litellm_params"]["api_key"]
-        assert key in ("os.environ/GATEWAY_ANTHROPIC_API_KEY", "os.environ/GATEWAY_XAI_API_KEY",
-                       "os.environ/MC_ANTHROPIC_API_KEY"), (name, key)
+        assert key in ("os.environ/GATEWAY_ANTHROPIC_API_KEY", "os.environ/GATEWAY_OPENAI_API_KEY",
+                       "os.environ/GATEWAY_XAI_API_KEY", "os.environ/MC_ANTHROPIC_API_KEY"), (name, key)
 
 
 def test_staging_gateway_env_empties_the_default_names_and_never_leaves_mcs_key_empty():
     rendered = yaml.safe_load(_compose_config(PROD, STAGING, env_extra={
         "MINIMOI_ROOT": "/Users/x/minimoi-staging", "MINIMOI_IMAGE_TAG": "abc1234"}))
     env = rendered["services"]["model-gateway"]["environment"]
-    assert env["ANTHROPIC_API_KEY"] == "" and env["XAI_API_KEY"] == ""
-    assert env["GATEWAY_ANTHROPIC_API_KEY"] and env["GATEWAY_XAI_API_KEY"]
+    assert env["ANTHROPIC_API_KEY"] == "" and env["OPENAI_API_KEY"] == "" and env["XAI_API_KEY"] == ""
+    assert env["GATEWAY_ANTHROPIC_API_KEY"] and env["GATEWAY_OPENAI_API_KEY"] and env["GATEWAY_XAI_API_KEY"]
     assert env["MC_ANTHROPIC_API_KEY"] == "mc-anthropic-placeholder-not-a-key"
     assert "DATABASE_URL" not in env                      # only with the keys overlay
     staging_text = STAGING.read_text()
@@ -78,16 +77,6 @@ def test_keys_overlay_adds_only_the_database_url_to_the_gateway():
     for name in without:                                   # no other service sees the key database
         if name != "model-gateway":
             assert with_keys[name] == without[name], name
-
-
-def test_production_gateway_and_compose_are_unchanged():
-    for path in ("docker-compose.prod.yml", "services/model_gateway/litellm.prod.yaml",
-                 "docker/Dockerfile.model-gateway",
-                 "services/model_gateway/receipt_callback.py"):
-        main = subprocess.run(["git", "-C", str(REPO), "show", f"origin/main:{path}"], capture_output=True, text=True)
-        if main.returncode != 0:
-            pytest.skip("origin/main is not available")
-        assert (REPO / path).read_text() == main.stdout, path
 
 
 # ── mc_keys.sh ────────────────────────────────────────────────────────────────

@@ -1,18 +1,13 @@
-# MinimoI shared model gateway — STAGING routes (dev.minimoi.ai on the Mac)
+# MinimoI shared model gateway — STAGING routes (dev.minimoi.ai, the AWS staging host)
 #
 # Mounted over the image's baked /app/config.yaml by docker-compose.staging.yml
 # (scripts/staging/build.sh copies it to $MINIMOI_ROOT/config/). Production
 # never reads this file: the model-gateway image bakes litellm.prod.yaml.
 #
-# Same logical model names, router_settings, litellm_settings and
+# Same tiers, role routes, router_settings, litellm_settings and
 # general_settings as litellm.prod.yaml, so callers (Agent A, cos-bot,
-# cos-scheduler) cannot tell the difference. Only concrete models differ:
-#
-#   minimoi-cos-agent            xai/grok-4.3, reasoning low, matching production
-#                                (Robert D27: model-agnostic readiness; Oct 19 tests)
-#   minimoi-cos-agent-xai-fast   same as prod and the dev gateway on main
-#   minimoi-cos-web-search       same as prod and the dev gateway on main
-#   minimoi-cos-agent-anthropic  same as prod and the dev gateway on main
+# cos-scheduler) cannot tell the difference; a role switch is proved here
+# before production takes it (docs/runbooks/model_tiers.md).
 #
 # Production routes/fallbacks remain unchanged. Two explicit staging-only
 # routes support MC and the approved local-model regression:
@@ -21,7 +16,8 @@
 #   only. It is never in a fallback chain and is absent from production.
 #
 # Provider keys use gateway-only names (GATEWAY_ANTHROPIC_API_KEY,
-# GATEWAY_XAI_API_KEY), and the gateway's ANTHROPIC_API_KEY / XAI_API_KEY are
+# GATEWAY_OPENAI_API_KEY, GATEWAY_XAI_API_KEY), and the gateway's default
+# names (ANTHROPIC_API_KEY / OPENAI_API_KEY / XAI_API_KEY) are
 # empty: LiteLLM's pass-through routes (/anthropic/*, and the provider
 # factory routes) sign upstream calls with those default names, so with them
 # empty a pass-through call carries no provider key and cannot spend on CoS's
@@ -30,67 +26,99 @@
 # tests/test_staging_environment.py enforces this shape.
 
 model_list:
-  - model_name: minimoi-cos-agent
-    litellm_params:
+  # ── Tiers (#458): three providers × strong / mid / low ────────────────────────
+  # Each tier is a route callable by name and a YAML anchor (`&<provider>-<tier>`).
+  # Role routes below take their model and effort from a tier with one merge line,
+  # `<<: *<provider>-<tier>`, so moving a role to another model is that one line,
+  # then a gateway restart (docs/runbooks/model_tiers.md). Effort is explicit on
+  # every tier: Opus 5.5 would otherwise default to medium. These are role
+  # equivalents in our routing, not claims of matched performance.
+  - model_name: minimoi-anthropic-strong
+    litellm_params: &anthropic-strong
+      model: anthropic/claude-opus-5-5
+      api_key: os.environ/GATEWAY_ANTHROPIC_API_KEY
+      reasoning_effort: high
+    model_info: {id: tier-anthropic-strong, mode: chat, supports_function_calling: true}
+  - model_name: minimoi-anthropic-mid
+    litellm_params: &anthropic-mid
+      model: anthropic/claude-sonnet-5-5
+      api_key: os.environ/GATEWAY_ANTHROPIC_API_KEY
+      reasoning_effort: medium
+    model_info: {id: tier-anthropic-mid, mode: chat, supports_function_calling: true}
+  - model_name: minimoi-anthropic-low
+    litellm_params: &anthropic-low
+      model: anthropic/claude-haiku-5-5
+      api_key: os.environ/GATEWAY_ANTHROPIC_API_KEY
+      reasoning_effort: low
+    model_info: {id: tier-anthropic-low, mode: chat, supports_function_calling: true}
+  - model_name: minimoi-openai-strong
+    litellm_params: &openai-strong
+      model: openai/gpt-6-astra
+      api_key: os.environ/GATEWAY_OPENAI_API_KEY
+      reasoning_effort: high
+    model_info: {id: tier-openai-strong, mode: chat, supports_function_calling: true}
+  - model_name: minimoi-openai-mid
+    litellm_params: &openai-mid
+      model: openai/gpt-6.1-sol
+      api_key: os.environ/GATEWAY_OPENAI_API_KEY
+      reasoning_effort: medium
+    model_info: {id: tier-openai-mid, mode: chat, supports_function_calling: true}
+  - model_name: minimoi-openai-low
+    litellm_params: &openai-low
+      model: openai/gpt-6-luna
+      api_key: os.environ/GATEWAY_OPENAI_API_KEY
+      reasoning_effort: low
+    model_info: {id: tier-openai-low, mode: chat, supports_function_calling: true}
+  - model_name: minimoi-xai-strong
+    litellm_params: &xai-strong
+      model: xai/grok-4.7
+      api_key: os.environ/GATEWAY_XAI_API_KEY
+      reasoning_effort: high
+    model_info: {id: tier-xai-strong, mode: chat, supports_function_calling: true}
+  - model_name: minimoi-xai-mid
+    litellm_params: &xai-mid
+      model: xai/grok-4.6
+      api_key: os.environ/GATEWAY_XAI_API_KEY
+      reasoning_effort: medium
+    model_info: {id: tier-xai-mid, mode: chat, supports_function_calling: true}
+  - model_name: minimoi-xai-low
+    litellm_params: &xai-low
       model: xai/grok-4.3
       api_key: os.environ/GATEWAY_XAI_API_KEY
-      timeout: 120
       reasoning_effort: low
-    model_info:
-      id: cos-xai-grok43-primary
-      base_model: xai/grok-4.3
-      mode: chat
-      supports_function_calling: true
-      fallback_position: 0
+    model_info: {id: tier-xai-low, mode: chat, supports_function_calling: true}
+
+  # ── Roles: the names callers ask for. To switch one, change its `<<:` line. ──
+  # A role sets only what is its own: timeout, effort where it must differ from
+  # its tier (the latency routes run without reasoning), and its receipt
+  # identity (model_info.id, fallback_position), which stays put across switches.
+  - model_name: minimoi-cos-agent
+    litellm_params: {<<: *xai-low, timeout: 120}
+    model_info: {id: cos-xai-grok43-primary, mode: chat, supports_function_calling: true, fallback_position: 0}
 
   - model_name: minimoi-cos-agent-xai-fast
-    litellm_params:
-      model: xai/grok-4.3
-      api_key: os.environ/GATEWAY_XAI_API_KEY
-      timeout: 120
-      reasoning_effort: none
-    model_info:
-      id: cos-xai-fast
-      base_model: xai/grok-4.3
-      mode: chat
-      supports_function_calling: true
-      fallback_position: 1
+    litellm_params: {<<: *xai-low, timeout: 120, reasoning_effort: none}
+    model_info: {id: cos-xai-fast, mode: chat, supports_function_calling: true, fallback_position: 1}
 
   - model_name: minimoi-cos-web-search
-    litellm_params:
-      model: xai/grok-4.3
-      api_key: os.environ/GATEWAY_XAI_API_KEY
-      timeout: 60
-      reasoning_effort: low
-    model_info:
-      id: cos-xai-bounded-web-search
-      base_model: xai/grok-4.3
-      mode: responses
-      supports_web_search: true
+    # Stable search route used by the bounded OpenClaw provider; callers reach it
+    # on /v1/responses. No `mode: responses`: LiteLLM records a deployment's mode
+    # on the shared backend key and never downgrades it, which sent every Grok
+    # chat route through the Responses bridge and dropped the system message
+    # (#454, #455).
+    litellm_params: {<<: *xai-low, timeout: 60}
+    model_info: {id: cos-xai-bounded-web-search, supports_web_search: true}
 
   - model_name: minimoi-cos-agent-anthropic
-    litellm_params:
-      model: anthropic/claude-sonnet-4-6
-      api_key: os.environ/GATEWAY_ANTHROPIC_API_KEY
-      timeout: 120
-    model_info:
-      id: cos-anthropic-secondary
-      base_model: anthropic/claude-sonnet-4-6
-      mode: chat
-      supports_function_calling: true
-      fallback_position: 2
+    litellm_params: {<<: *anthropic-mid, timeout: 120}
+    model_info: {id: cos-anthropic-secondary, mode: chat, supports_function_calling: true, fallback_position: 2}
 
   - model_name: minimoi-mc-agent
-    litellm_params:
-      model: xai/grok-4.3
-      api_key: os.environ/GATEWAY_XAI_API_KEY
-      timeout: 120
-      reasoning_effort: low
-    model_info:
-      id: mc-xai-grok43
-      base_model: xai/grok-4.3
-      mode: chat
-      supports_function_calling: true
+    # Staging only (MC spec v0.9 stage C). MC's capped virtual key remains the
+    # admission boundary. No fallback.
+    litellm_params: {<<: *xai-low, timeout: 120}
+    model_info: {id: mc-xai-grok43, mode: chat, supports_function_calling: true}
+
 
   # Explicit local regression route; never an automatic cloud fallback.
   - model_name: minimoi-cos-agent-local
