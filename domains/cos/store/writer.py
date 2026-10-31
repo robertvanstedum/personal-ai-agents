@@ -19,12 +19,10 @@ is abandoned. Files are 0640 and folders 0750, so the agent's group can read and
 """
 from __future__ import annotations
 
-import errno
 import fcntl
 import json
 import os
 import secrets
-import tempfile
 import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -32,7 +30,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterator
 
-from domains.cos.store import contracts
+from domains.cos.store import contracts, fsio
 from domains.cos.store.canonical import digest
 from domains.cos.store.fold import (
     Episode,
@@ -43,7 +41,7 @@ from domains.cos.store.fold import (
     occurrence_refusal,
 )
 
-FILE_MODE, DIR_MODE = 0o640, 0o750
+FILE_MODE, DIR_MODE = fsio.FILE_MODE, fsio.DIR_MODE
 MAX_COMMAND_BYTES = 256 * 1024
 
 # kind -> (layout, target type, record definition in store-records)
@@ -91,28 +89,6 @@ class _Plan:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
-def write_all(fd: int, data: bytes) -> None:
-    """A short write is progress, not completion; zero progress is an error. (The Vault's fsio does the same; the
-    store keeps its own copy so the CoS images take no dependency on the Vault runtime.)"""
-    remaining = memoryview(data)
-    while remaining:
-        try:
-            written = os.write(fd, remaining)
-        except InterruptedError:
-            continue
-        if written <= 0:
-            raise OSError(errno.EIO, "write made no progress")
-        remaining = remaining[written:]
-
-
-def fsync_dir(path: Path) -> None:
-    fd = os.open(path, os.O_RDONLY)
-    try:
-        os.fsync(fd)
-    finally:
-        os.close(fd)
 
 
 def _robert_source_spans(node: object) -> Iterator[dict]:
@@ -382,23 +358,7 @@ class StoreWriter:
         return counts
 
     def _quarantine_torn_tail(self, path: Path) -> int:
-        try:
-            data = path.read_bytes()
-        except FileNotFoundError:
-            return 0
-        if not data or data.endswith(b"\n"):
-            return 0
-        cut = data.rfind(b"\n") + 1
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-        quarantine = self.root / "journal" / f"quarantine-{stamp}-{path.name}.bin"
-        self._write_bytes(quarantine, data[cut:])
-        fd = os.open(path, os.O_RDWR)
-        try:
-            os.ftruncate(fd, cut)
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-        return 1
+        return fsio.quarantine_torn_tail(path, self.root / "journal")
 
     # ---- files ---------------------------------------------------------------------------------------------------
 
@@ -418,76 +378,11 @@ class StoreWriter:
         finally:
             os.close(fd)
 
-    def _ensure_dir(self, folder: Path) -> None:
-        missing, probe = [], folder
-        while not probe.exists() and probe != probe.parent:
-            missing.append(probe)
-            probe = probe.parent
-        for item in reversed(missing):
-            try:
-                os.mkdir(item, DIR_MODE)
-            except FileExistsError:
-                pass
-            os.chmod(item, DIR_MODE)
-
-    def _write_bytes(self, path: Path, data: bytes) -> None:
-        self._ensure_dir(path.parent)
-        fd, name = tempfile.mkstemp(prefix=f".{path.name}.tmp-", dir=path.parent)
-        tmp = Path(name)
-        try:
-            try:
-                write_all(fd, data)
-                os.fchmod(fd, FILE_MODE)
-                os.fsync(fd)
-            finally:
-                os.close(fd)
-            os.replace(tmp, path)
-        finally:
-            tmp.unlink(missing_ok=True)
-        fsync_dir(path.parent)
-
-    def _write_doc(self, path: Path, record: dict) -> None:
-        self._write_bytes(path, (json.dumps(record, ensure_ascii=False, sort_keys=True, indent=1) + "\n").encode("utf-8"))
-
-    def _append_line(self, path: Path, row: dict) -> None:
-        self._ensure_dir(path.parent)
-        data = (json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0), FILE_MODE)
-        try:
-            size = os.fstat(fd).st_size
-            try:
-                write_all(fd, data)
-                os.fsync(fd)
-            except OSError:
-                os.ftruncate(fd, size)     # never leave our own partial line behind
-                os.fsync(fd)
-                raise
-        finally:
-            os.close(fd)
-        fsync_dir(path.parent)
+    _ensure_dir = staticmethod(fsio.ensure_dir)
+    _write_doc = staticmethod(fsio.write_doc)
+    _append_line = staticmethod(fsio.append_line)
+    _read_doc = staticmethod(fsio.read_doc)
+    _read_stream = staticmethod(fsio.read_stream)
 
     def _journal(self, row: dict) -> None:
         self._append_line(self.root / _JOURNAL, row)
-
-    @staticmethod
-    def _read_doc(path: Path) -> dict | None:
-        try:
-            doc = json.loads(path.read_text("utf-8"))
-        except FileNotFoundError:
-            return None
-        except (OSError, ValueError) as exc:
-            raise OSError("store document unreadable") from exc
-        return doc if isinstance(doc, dict) else None
-
-    @staticmethod
-    def _read_stream(path: Path) -> list[dict]:
-        rows = []
-        try:
-            with open(path, "rb") as handle:
-                for line in handle:
-                    if not line.endswith(b"\n"):
-                        break                       # a torn tail is never read as a record
-                    rows.append(json.loads(line))
-        except FileNotFoundError:
-            return []
-        return rows

@@ -79,6 +79,8 @@ class ConferTurnRequest:
     channel: str
     conversation_id: str = "owner"
     request_id: str | None = None
+    # The canonical history's turn, as a UUID string, so the routing receipt and the history name the same turn.
+    turn_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -327,7 +329,7 @@ class ConferTurnService:
                 },
             )
 
-        turn_id = str(uuid4())
+        turn_id = request.turn_id or str(uuid4())
         timing = VoiceTiming(correlation=turn_id,parent=request.request_id)
         timing.emit("context_start")
         try:
