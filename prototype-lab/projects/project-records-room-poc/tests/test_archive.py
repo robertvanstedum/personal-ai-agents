@@ -2,9 +2,9 @@
 from datetime import datetime, timezone, timedelta
 import pytest
 
-import archive as module
-from app import create_app
-from store import Store, Problem
+from domains.records import archive as module
+from domains.records.app import create_app
+from domains.records.store import Store, Problem
 
 NOW=datetime(2026,10,14,12,tzinfo=timezone.utc)
 OLD=(NOW-timedelta(days=31)).isoformat()

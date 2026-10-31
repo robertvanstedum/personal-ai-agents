@@ -40,7 +40,8 @@ _RESEARCH_DATA = research_paths().data
 CURATOR_OUTPUT = Path(os.environ.get("CURATOR_OUTPUT_PATH") or REPO_ROOT / "curator_output.txt")
 # Canonical preferences location — shared with curator_server.py and curator_rss_v2.py.
 # Defaults to data/curator/ in the repo; override with CURATOR_DATA_DIR env var on EC2.
-_DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(REPO_ROOT / "data" / "curator")))
+from domains.curator.data_paths import data_directory
+_DATA_DIR = data_directory(REPO_ROOT)
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
 PREFERENCES_FILE = _DATA_DIR / "curator_preferences.json"
 _FEEDBACK_LOCK = threading.RLock()
@@ -80,66 +81,13 @@ def save_preferences(prefs):
 
 
 def parse_curator_output():
-    """Parse curator_output.txt to extract article details"""
+    """Read the current briefing, preserving the CLI missing-file contract."""
     if not CURATOR_OUTPUT.exists():
         print(f"❌ Error: {CURATOR_OUTPUT} not found. Run curator first.")
         sys.exit(1)
-    
-    articles = {}
-    current_article = None
-    
-    with open(CURATOR_OUTPUT, 'r') as f:
-        content = f.read()
-    
-    # Find the articles section
-    lines = content.split('\n')
-    in_articles = False
-    
-    for line in lines:
-        # Detect start of articles list
-        if 'TOP 20 CURATED ARTICLES' in line or 'TOP 15 CURATED ARTICLES' in line:
-            in_articles = True
-            continue
-        
-        # Parse article entries
-        if in_articles and line.startswith('#'):
-            # Extract rank and source
-            match = re.match(r'#(\d+)\s+\[([^\]]+)\].*?🏷️\s+(\w+)', line)
-            if match:
-                rank = int(match.group(1))
-                source = match.group(2)
-                category = match.group(3)
-                current_article = rank
-                articles[rank] = {
-                    'rank': rank,
-                    'source': source,
-                    'category': category,
-                    'title': None,
-                    'url': None,
-                    'scores': None,
-                    'hash_id': None
-                }
-        
-        # Extract hash_id
-        elif current_article and line.strip().startswith('ID:'):
-            articles[current_article]['hash_id'] = line.split('ID:')[1].strip()
-        
-        # Extract title (next non-empty line after rank)
-        elif current_article and articles[current_article]['title'] is None:
-            title = line.strip()
-            if title and not title.startswith('http') and not title.startswith('Published') and not title.startswith('ID:'):
-                articles[current_article]['title'] = title
-        
-        # Extract URL
-        elif current_article and line.strip().startswith('http'):
-            articles[current_article]['url'] = line.strip()
-        
-        # Extract scores
-        elif current_article and 'Scores:' in line:
-            articles[current_article]['scores'] = line.strip()
-            current_article = None  # Done with this article
-    
-    return articles
+    from domains.curator.feedback_articles import parse_briefing
+    with open(CURATOR_OUTPUT, 'r') as stream:
+        return parse_briefing(stream.read())
 
 def resolve_article_reference(ref):
     """
@@ -355,843 +303,26 @@ Write directly - no preamble."""
         return None, None, None
 
 def regenerate_scans_index():
-    """Regenerate scans/index.html after creating a new Scan (formerly regenerate_scans_index)"""
+    """Publish the legacy Scan index using explicit catalog/render boundaries."""
     from datetime import datetime
+    from domains.curator.research.scan_catalog import collect_catalog
+    from domains.curator.research.scan_index_render import render_catalog
     scans_dir = REPO_ROOT / "interests" / "2026" / "scans"
-
     if not scans_dir.exists():
         return
-
-    # ── Collect Scans (article-level analyses) ───────────────────────────────
-    scans = []
-    for md_file in scans_dir.glob("*.md"):
-        with open(md_file, 'r') as f:
-            content = f.read()
-
-        title_match  = re.search(r'^# (.+)$', content, re.MULTILINE)
-        source_match = re.search(r'\*\*Source:\*\* (.+)$', content, re.MULTILINE)
-        date_match   = re.search(r'\*\*Date:\*\* (.+)$', content, re.MULTILINE)
-
-        if title_match and source_match and date_match:
-            title    = title_match.group(1).strip()
-            source   = source_match.group(1).strip()
-            date_str = date_match.group(1).strip()
-            hash_id  = md_file.stem[:5]
-            try:
-                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-            except Exception:
-                date_obj = datetime.now()
-
-            scans.append({
-                'title':   title,
-                'source':  source,
-                'date':    date_obj,
-                'hash_id': hash_id,
-            })
-
-    scans.sort(key=lambda x: x['date'], reverse=True)
-
-    # ── Collect Dives (thread-level analyses) ────────────────────────────────
-    research_dd_dir = _RESEARCH_DATA / "dives"
-    dives = []
-
-    if research_dd_dir.exists():
-        for md_file in research_dd_dir.glob("*.md"):
-            with open(md_file, 'r') as f:
-                content = f.read()
-
-            title_m    = re.search(r'^#\s+DEEPER DIVE:\s+(.+)$', content, re.MULTILINE)
-            date_m     = re.search(r'Generated:\s*(\d{4}-\d{2}-\d{2})', content)
-            sessions_m = re.search(r'(\d+)\s+sessions?', content)
-            sources_m  = re.search(r'(\d+)\s+sources?', content)
-            cost_m     = re.search(r'Est\.\s*cost:\s*\$([0-9.]+)', content)
-
-            if not (title_m and date_m):
-                continue
-
-            topic    = title_m.group(1).strip()
-            date_str = date_m.group(1).strip()
-            sessions = sessions_m.group(1) if sessions_m else '?'
-            sources  = sources_m.group(1)  if sources_m  else '?'
-            cost     = f'${cost_m.group(1)}' if cost_m else ''
-            stem     = md_file.stem
-
-            try:
-                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-            except Exception:
-                date_obj = datetime.now()
-
-            # Extract first sentence from Revised Framing section
-            excerpt = ''
-            framing_m = re.search(
-                r'##\s+[0-9.]*\s*REVISED FRAMING[^\n]*\n+(.*?)(?=\n##|\Z)',
-                content, re.DOTALL | re.IGNORECASE
-            )
-            if framing_m:
-                raw = framing_m.group(1).strip()
-                # Strip markdown bold/italic markers
-                raw = re.sub(r'\*\*(.+?)\*\*', r'\1', raw)
-                raw = re.sub(r'\*(.+?)\*', r'\1', raw)
-                raw = re.sub(r'^#+\s+', '', raw, flags=re.MULTILINE)
-                # Take first non-empty line
-                for line in raw.splitlines():
-                    line = line.strip()
-                    if line:
-                        excerpt = line[:160] + ('…' if len(line) > 160 else '')
-                        break
-
-            stats_parts = [f'{sessions} sessions', f'{sources} sources']
-            if cost:
-                stats_parts.append(cost)
-            stats = ' · '.join(stats_parts)
-
-            dives.append({
-                'topic':   topic,
-                'stem':    stem,
-                'date':    date_obj,
-                'stats':   stats,
-                'excerpt': excerpt,
-            })
-
-    dives.sort(key=lambda x: x['date'], reverse=True)
-
-    # ── Build rows (new layout: collapsed sections, hover-reveal actions) ────────
-
-    THREAD_LIMIT  = 3
-    ARTICLE_LIMIT = 5
-
-    # Thread rows
-    thread_rows_html = ''
-    for i, dd in enumerate(dives):
-        formatted_date = dd['date'].strftime("%b %-d, %Y")
-        url = f'/research/dive-result/{dd["stem"]}'
-        excerpt_html = f'<span class="row-excerpt">{dd["excerpt"]}</span>' if dd['excerpt'] else ''
-        hidden_cls = ' row-hidden' if i >= THREAD_LIMIT else ''
-        thread_rows_html += f'        <a class="row row-thread{hidden_cls}" href="{url}"><span class="row-badge">Thread</span><span class="row-main"><span class="row-title">{dd["topic"]}</span>{excerpt_html}</span><span class="row-meta">{dd["stats"]}</span><span class="row-date">{formatted_date}</span><span class="row-action">Read &#8594;</span></a>\n'
-
-    thread_more = len(dives) - THREAD_LIMIT
-    thread_toggle_style = ' style="display:none"' if len(dives) <= THREAD_LIMIT else ''
-    thread_footer_html = ''
-    if thread_more > 0:
-        label = f'+ {thread_more} more thread{"s" if thread_more != 1 else ""}'
-        thread_footer_html = f'        <div class="expand-footer" onclick="expandSection(\'section-threads\')">{label}</div>\n'
-
-    # Article rows
-    article_rows_html = ''
-    for i, dive in enumerate(scans):
-        formatted_date = dive['date'].strftime("%b %-d, %Y")
-        url = f'/research/scan/{dive["hash_id"]}'
-        hidden_cls = ' row-hidden' if i >= ARTICLE_LIMIT else ''
-        article_rows_html += f'        <a class="row row-article{hidden_cls}" href="{url}"><span class="row-date-col">{formatted_date}</span><span class="row-source">{dive["source"]}</span><span class="row-title">{dive["title"]}</span><span class="row-action">Read analysis &#8594;</span></a>\n'
-
-    if not article_rows_html:
-        article_rows_html = '        <div class="row-empty">No scans yet. Like or save an article, then click 🔭 Scan!</div>\n'
-
-    article_more = len(scans) - ARTICLE_LIMIT
-    article_toggle_style = ' style="display:none"' if len(scans) <= ARTICLE_LIMIT else ''
-    article_footer_html = ''
-    if article_more > 0:
-        label = f'+ {article_more} more scan{"s" if article_more != 1 else ""}'
-        article_footer_html = f'        <div class="expand-footer" onclick="expandSection(\'section-articles\')">{label}</div>\n'
-
-    # Count line
-    count_parts = []
-    if dives:
-        count_parts.append(f'{len(dives)} dive{"s" if len(dives) != 1 else ""}')
-    count_parts.append(f'{len(scans)} scan{"s" if len(scans) != 1 else ""}')
-    count_label = ' · '.join(count_parts)
-
-    # Deeper Dives section block (only if entries exist)
-    threads_section_html = ''
-    if dives:
-        threads_section_html = f'''    <div class="section" id="section-threads">
-      <div class="section-hdr">
-        <span class="section-name">Dives <span class="section-count">{len(dives)}</span></span>
-        <button class="toggle-btn"{thread_toggle_style} onclick="toggleSection(\'section-threads\', this)">show all</button>
-      </div>
-      <div class="section-body">
-{thread_rows_html}{thread_footer_html}      </div>
-    </div>
-'''
-
-    html = f'''<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-    <title>Scans &amp; Dives</title>
-    <style>
-        :root {{
-            --bg: #f5f0e8;
-            --bg-texture: #ede8df;
-            --surface: #faf7f2;
-            --surface2: #f0ebe0;
-            --border: #ddd6c8;
-            --text: #2a2418;
-            --text-muted: #6b5f4e;
-            --text-dim: #9e9080;
-            --accent: #8b5e2a;
-            --accent-dim: rgba(139,94,42,0.08);
-            --shadow: rgba(42,36,24,0.08);
-        }}
-
-        *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
-
-        body {{
-            font-family: 'Source Sans 3', sans-serif;
-            background: var(--bg);
-            background-image:
-                radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
-                radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
-            color: var(--text);
-            min-height: 100vh;
-            font-size: 14px;
-            line-height: 1.5;
-        }}
-
-        header {{
-            border-bottom: 0.5px solid var(--border);
-            padding: 0 32px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            height: 60px;
-            position: sticky;
-            top: 0;
-            background: rgba(245,240,232,0.95);
-            backdrop-filter: blur(12px);
-            z-index: 100;
-        }}
-
-        .header-left {{ display: flex; align-items: baseline; gap: 16px; }}
-
-        .logo {{
-            font-family: 'Playfair Display', serif;
-            font-size: 20px;
-            color: var(--accent);
-            letter-spacing: -0.02em;
-            text-decoration: none;
-        }}
-
-        .logo-sub {{
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
-            color: var(--text-dim);
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-        }}
-
-        .header-nav {{ display: flex; gap: 4px; }}
-
-        .nav-link {{
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
-            color: var(--text-muted);
-            text-decoration: none;
-            padding: 6px 14px;
-            border-radius: 6px;
-            letter-spacing: 0.05em;
-            transition: all 0.15s;
-            border: 1px solid transparent;
-        }}
-
-        .nav-link:hover {{ color: var(--text); background: var(--surface2); }}
-
-        .nav-link.active {{
-            color: var(--accent);
-            background: var(--accent-dim);
-            border-color: rgba(139,94,42,0.2);
-        }}
-
-        main {{
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 36px 32px 60px;
-        }}
-
-        .page-header {{ margin-bottom: 36px; }}
-
-        .page-title {{
-            font-family: 'Playfair Display', serif;
-            font-size: 28px;
-            font-weight: 400;
-            color: var(--text);
-            letter-spacing: -0.03em;
-            line-height: 1.1;
-            margin-bottom: 6px;
-        }}
-
-        .page-meta {{
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
-            color: var(--text-dim);
-            letter-spacing: 0.04em;
-        }}
-
-        /* ── Section ── */
-        .section {{
-            margin-bottom: 36px;
-        }}
-
-        .section-hdr {{
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-            padding-bottom: 9px;
-            border-bottom: 0.5px solid var(--border);
-            margin-bottom: 0;
-        }}
-
-        .section-name {{
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: var(--text-dim);
-        }}
-
-        .section-count {{
-            font-family: 'DM Mono', monospace;
-            font-size: 10px;
-            color: var(--text-dim);
-            opacity: 0.6;
-            margin-left: 6px;
-        }}
-
-        .toggle-btn {{
-            font-family: 'DM Mono', monospace;
-            font-size: 10px;
-            letter-spacing: 0.06em;
-            color: var(--accent);
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 0;
-        }}
-
-        .toggle-btn:hover {{ text-decoration: underline; }}
-
-        /* ── Rows ── */
-        .row {{
-            display: flex;
-            align-items: baseline;
-            gap: 14px;
-            padding: 11px 6px;
-            border-bottom: 0.5px solid var(--border);
-            text-decoration: none;
-            color: inherit;
-            transition: background 0.1s;
-        }}
-
-        .row:last-of-type {{ border-bottom: none; }}
-        .row:hover {{ background: rgba(139,94,42,0.04); }}
-        .row-hidden {{ display: none !important; }}
-
-        /* Thread row parts */
-        .row-badge {{
-            font-family: 'DM Mono', monospace;
-            font-size: 10px;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            background: #fef3c7;
-            color: #92400e;
-            border: 0.5px solid #f59e0b;
-            border-radius: 3px;
-            padding: 2px 6px;
-            white-space: nowrap;
-            flex-shrink: 0;
-        }}
-
-        .row-main {{
-            flex: 1;
-            min-width: 0;
-        }}
-
-        .row-title {{
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text);
-            display: block;
-            line-height: 1.4;
-        }}
-
-        .row:hover .row-title {{ color: var(--accent); }}
-
-        .row-excerpt {{
-            font-size: 12px;
-            color: var(--text-dim);
-            font-style: italic;
-            display: block;
-            margin-top: 2px;
-            line-height: 1.4;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 520px;
-        }}
-
-        .row-meta {{
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
-            color: var(--text-dim);
-            white-space: nowrap;
-            flex-shrink: 0;
-        }}
-
-        /* Article row parts */
-        .row-date-col {{
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
-            color: var(--text-dim);
-            white-space: nowrap;
-            flex-shrink: 0;
-            width: 88px;
-        }}
-
-        .row-source {{
-            font-size: 12px;
-            color: var(--text-muted);
-            font-weight: 500;
-            white-space: nowrap;
-            flex-shrink: 0;
-            width: 150px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }}
-
-        /* Date on thread rows */
-        .row-thread .row-date {{
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
-            color: var(--text-dim);
-            white-space: nowrap;
-            flex-shrink: 0;
-        }}
-
-        /* Hover-reveal action */
-        .row-action {{
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
-            color: var(--accent);
-            white-space: nowrap;
-            flex-shrink: 0;
-            opacity: 0;
-            transition: opacity 0.15s;
-            font-weight: 500;
-        }}
-
-        .row:hover .row-action {{ opacity: 1; }}
-
-        /* Expand footer */
-        .expand-footer {{
-            padding: 10px 6px;
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
-            color: var(--accent);
-            cursor: pointer;
-            border-top: 0.5px solid var(--border);
-            transition: color 0.1s;
-        }}
-
-        .expand-footer:hover {{ color: var(--text); }}
-
-        .section-body.expanded .expand-footer {{ display: none; }}
-        .section-body.expanded .row-hidden {{ display: flex !important; }}
-
-        .row-empty {{
-            padding: 20px 6px;
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
-            color: var(--text-dim);
-        }}
-    </style>
-</head>
-<body>
-<header>
-  <div class="header-left">
-    <a href="../../../" class="logo">📚 Curator</a>
-    <span class="logo-sub">Scans &amp; Dives</span>
-  </div>
-  <nav class="header-nav">
-    <a href="../../../" class="nav-link">Daily</a>
-    <a href="../../../curator_library.html" class="nav-link">Library</a>
-    <a href="../../../interests/2026/scans/index.html" class="nav-link active">Scans &amp; Dives</a>
-    <a href="../../../curator_priorities.html" class="nav-link">Priorities</a>
-    <a href="../../../curator_intelligence.html" class="nav-link">AI Observations</a>
-  </nav>
-</header>
-
-<main>
-    <div class="page-header">
-        <h1 class="page-title">Scans &amp; Dives</h1>
-        <p class="page-meta">{count_label}</p>
-    </div>
-
-{threads_section_html}
-    <div class="section" id="section-articles">
-      <div class="section-hdr">
-        <span class="section-name">Scans <span class="section-count">{len(scans)}</span></span>
-        <button class="toggle-btn"{article_toggle_style} onclick="toggleSection(\'section-articles\', this)">show all</button>
-      </div>
-      <div class="section-body">
-{article_rows_html}{article_footer_html}      </div>
-    </div>
-</main>
-
-<script>
-function toggleSection(sectionId, btn) {{
-    const body = document.getElementById(sectionId).querySelector('.section-body');
-    const expanded = body.classList.toggle('expanded');
-    btn.textContent = expanded ? 'collapse' : 'show all';
-}}
-function expandSection(sectionId) {{
-    const body = document.getElementById(sectionId).querySelector('.section-body');
-    const btn  = document.getElementById(sectionId).querySelector('.toggle-btn');
-    body.classList.add('expanded');
-    if (btn) btn.textContent = 'collapse';
-}}
-</script>
-</body>
-</html>'''
-
-    index_file = scans_dir / "index.html"
-    with open(index_file, 'w') as f:
-        f.write(html)
-
+    scans, dives = collect_catalog(scans_dir, _RESEARCH_DATA / "dives", now=datetime.now)
+    html = render_catalog(scans, dives)
+    with open(scans_dir / "index.html", 'w') as stream:
+        stream.write(html)
     total = len(dives) + len(scans)
     print(f"📑 Scans & Dives index updated ({len(dives)} dives + {len(scans)} scans = {total} total)")
 
 def generate_scan_html(hash_id, article_data, initial_interest, dive_focus, analysis_content, cost, input_tokens, output_tokens):
-    """Generate HTML version of a Scan (formerly generate_deep_dive_html)"""
     from datetime import datetime
-    
-    today = datetime.now().strftime("%Y-%m-%d")
-    
-    html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
-    <title>{article_data['title']} - Scan</title>
-    <style>
-        :root {{
-            --bg: #f5f0e8;
-            --bg-texture: #ede8df;
-            --surface: #faf7f2;
-            --surface2: #f0ebe0;
-            --border: #ddd6c8;
-            --border2: #c8bfaf;
-            --text: #2a2418;
-            --text-muted: #6b5f4e;
-            --text-dim: #9e9080;
-            --accent: #8b5e2a;
-            --accent-dim: rgba(139,94,42,0.08);
-            --accent-glow: rgba(139,94,42,0.18);
-            --shadow: rgba(42,36,24,0.08);
-        }}
-
-        *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
-
-        body {{
-            font-family: 'Source Sans 3', sans-serif;
-            background: var(--bg);
-            background-image:
-                radial-gradient(ellipse at 20% 0%, rgba(210,190,160,0.4) 0%, transparent 60%),
-                radial-gradient(ellipse at 80% 100%, rgba(200,180,150,0.3) 0%, transparent 50%);
-            color: var(--text);
-            min-height: 100vh;
-            font-size: 15px;
-            line-height: 1.6;
-        }}
-
-        /* ── Header ── */
-        header {{
-            border-bottom: 1px solid var(--border);
-            padding: 0 32px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            height: 60px;
-            position: sticky;
-            top: 0;
-            background: rgba(245,240,232,0.94);
-            backdrop-filter: blur(12px);
-            z-index: 100;
-            box-shadow: 0 1px 0 var(--border), 0 2px 8px var(--shadow);
-        }}
-
-        .header-left {{
-            display: flex;
-            align-items: baseline;
-            gap: 16px;
-        }}
-
-        .logo {{
-            font-family: 'Playfair Display', serif;
-            font-size: 20px;
-            color: var(--accent);
-            letter-spacing: -0.02em;
-            text-decoration: none;
-        }}
-
-        .logo-sub {{
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
-            color: var(--text-dim);
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-        }}
-
-        .header-nav {{
-            display: flex;
-            gap: 4px;
-        }}
-
-        .nav-link {{
-            font-family: 'DM Mono', monospace;
-            font-size: 11px;
-            color: var(--text-muted);
-            text-decoration: none;
-            padding: 6px 14px;
-            border-radius: 6px;
-            letter-spacing: 0.05em;
-            transition: all 0.15s;
-            border: 1px solid transparent;
-        }}
-
-        .nav-link:hover {{
-            color: var(--text);
-            background: var(--surface2);
-        }}
-
-        .nav-link.active {{
-            color: var(--accent);
-            background: var(--accent-dim);
-            border-color: rgba(139,94,42,0.2);
-        }}
-        .container {{
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 32px;
-            background: var(--surface);
-            border-radius: 12px;
-            box-shadow: 0 2px 12px var(--shadow);
-        }}
-        h1 {{
-            font-family: 'Playfair Display', serif;
-            color: var(--text);
-            font-size: 2em;
-            font-weight: 400;
-            border-bottom: 2px solid var(--border);
-            padding-bottom: 12px;
-            margin-bottom: 24px;
-            letter-spacing: -0.02em;
-        }}
-        .meta {{
-            background: #ecf0f1;
-            padding: 15px;
-            border-radius: 4px;
-            margin: 20px 0;
-            font-size: 0.95em;
-        }}
-        .meta strong {{
-            color: #2c3e50;
-        }}
-        .interest-box {{
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 12px 15px;
-            margin: 15px 0;
-            font-size: 0.9em;
-        }}
-        .interest-box h2 {{
-            margin-top: 0;
-            margin-bottom: 8px;
-            color: #856404;
-            font-size: 1.1em;
-        }}
-        .interest-box p {{
-            margin: 6px 0;
-        }}
-        .analysis {{
-            margin-top: 30px;
-        }}
-        .analysis h2 {{
-            color: #2c3e50;
-            font-size: 1.4em;
-            margin-top: 30px;
-            border-bottom: 2px solid #ecf0f1;
-            padding-bottom: 8px;
-        }}
-        .analysis h3 {{
-            color: #34495e;
-            font-size: 1.15em;
-            margin-top: 20px;
-        }}
-        .bibliography {{
-            background: #f8f9fa;
-            border-left: 4px solid #6c757d;
-            padding: 20px;
-            margin: 30px 0;
-            border-radius: 4px;
-        }}
-        .bibliography h2 {{
-            margin-top: 0;
-            color: #495057;
-            font-size: 1.3em;
-        }}
-        .bibliography ul {{
-            margin-top: 15px;
-            list-style-type: none;
-            padding-left: 0;
-        }}
-        .bibliography li {{
-            margin-bottom: 15px;
-            line-height: 1.6;
-            padding-left: 20px;
-            text-indent: -20px;
-        }}
-        .bibliography a {{
-            color: #0066cc;
-            word-break: break-all;
-        }}
-        .bibliography code {{
-            background: #e9ecef;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 0.9em;
-        }}
-        .footer {{
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #ecf0f1;
-            font-size: 0.9em;
-            color: #7f8c8d;
-            text-align: center;
-        }}
-        a {{
-            color: var(--accent);
-            text-decoration: none;
-        }}
-        a:hover {{
-            text-decoration: underline;
-        }}
-    </style>
-</head>
-<body>
-<header>
-  <div class="header-left">
-    <a href="../../../" class="logo">📚 Curator</a>
-    <span class="logo-sub">Scan</span>
-  </div>
-  <nav class="header-nav">
-    <a href="../../../" class="nav-link">Daily</a>
-    <a href="../../../curator_library.html" class="nav-link">Library</a>
-    <a href="../../../interests/2026/scans/index.html" class="nav-link active">Scans &amp; Dives</a>
-    <a href="../../../curator_priorities.html" class="nav-link">Priorities</a>
-    <a href="../../../curator_intelligence.html" class="nav-link">AI Observations</a>
-  </nav>
-</header>
-<div style="padding: 32px;">
-    <div class="container">
-        
-        <h1>{article_data['title']}</h1>
-        
-        <div class="meta">
-            <strong>Source:</strong> {article_data['source']}<br>
-            <strong>URL:</strong> <a href="{article_data['url']}" target="_blank">{article_data['url']}</a><br>
-            <strong>Date:</strong> {today}<br>
-            <strong>Hash ID:</strong> {hash_id}
-        </div>
-        
-        <div class="interest-box">
-            <h2>Your Interest</h2>
-            <p>{initial_interest}</p>
-"""
-    
-    if dive_focus:
-        html += f"            <p><strong>Focus:</strong> {dive_focus}</p>\n"
-    
-    html += """        </div>
-        
-        <div class="analysis">
-            <h2>Scan Analysis</h2>
-"""
-    
-    # Convert markdown analysis to basic HTML
-    # Simple conversion: h2, h3, bold, lists
-    
-    # Strip ALL "Deep Dive Analysis" headings from AI output (we add it in template)
-    # Run twice to handle duplicate headings that sometimes appear
-    analysis_content = re.sub(r'^##\s+(Deep Dive|Scan) Analysis\s*\n', '', analysis_content, flags=re.IGNORECASE | re.MULTILINE)
-    analysis_content = re.sub(r'^##\s+(Deep Dive|Scan) Analysis\s*\n', '', analysis_content, flags=re.IGNORECASE | re.MULTILINE)
-    
-    # Check if there's a Sources/Bibliography section
-    has_sources = bool(re.search(r'^## (Sources|Bibliography|Further Reading|References)', analysis_content, flags=re.MULTILINE))
-    
-    if has_sources:
-        # Split at Sources section
-        parts = re.split(r'(^## (?:Sources|Bibliography|Further Reading|References)[^\n]*\n)', analysis_content, maxsplit=1, flags=re.MULTILINE)
-        main_content = parts[0] if len(parts) > 0 else analysis_content
-        sources_heading = parts[1] if len(parts) > 1 else ''
-        sources_content = parts[2] if len(parts) > 2 else ''
-    else:
-        main_content = analysis_content
-        sources_heading = ''
-        sources_content = ''
-    
-    # Convert main content
-    analysis_html = re.sub(r'^## (.+)$', '<h2>\\1</h2>', main_content, flags=re.MULTILINE)
-    analysis_html = re.sub(r'^### (.+)$', '<h3>\\1</h3>', analysis_html, flags=re.MULTILINE)
-    analysis_html = re.sub(r'\*\*(.+?)\*\*', '<strong>\\1</strong>', analysis_html)
-    analysis_html = re.sub(r'^- (.+)$', '<li>\\1</li>', analysis_html, flags=re.MULTILINE)
-    analysis_html = re.sub(r'(<li>.*</li>)', '<ul>\\1</ul>', analysis_html, flags=re.DOTALL)
-    
-    # Paragraphs
-    paragraphs = analysis_html.split('\n\n')
-    analysis_html = '\n'.join([f'<p>{p}</p>' if not p.startswith('<') else p for p in paragraphs if p.strip()])
-    
-    html += analysis_html
-    
-    # Add sources section if present
-    if has_sources and sources_content.strip():
-        sources_html = re.sub(r'\*\*(.+?)\*\*', '<strong>\\1</strong>', sources_content)
-        sources_html = re.sub(r'^- (.+)$', '<li>\\1</li>', sources_html, flags=re.MULTILINE)
-        sources_html = re.sub(r'(<li>.*</li>)', '<ul>\\1</ul>', sources_html, flags=re.DOTALL)
-        
-        # Extract title from heading
-        sources_title = re.search(r'## (.+)', sources_heading)
-        title = sources_title.group(1) if sources_title else 'Sources & Further Reading'
-        
-        html += f"""
-        </div>
-        
-        <div class="bibliography">
-            <h2>📚 {title}</h2>
-{sources_html}
-        </div>
-        
-        <div class="analysis">
-"""
-    
-    html += f"""
-        </div>
-        
-        <div class="footer">
-            Generated by Claude Sonnet<br>
-            {input_tokens} input + {output_tokens} output tokens • ${cost:.4f}
-        </div>
-    </div>
-</div>
-</body>
-</html>
-"""
-    
-    return html
+    from domains.curator.research.legacy_scan_render import render_scan
+    return render_scan(hash_id, article_data, initial_interest, dive_focus,
+                       analysis_content, cost, input_tokens, output_tokens,
+                       today=datetime.now().strftime("%Y-%m-%d"))
 
 def extract_metadata(article, user_words, feedback_type):
     """Use Claude to extract metadata from user feedback"""
@@ -1209,27 +340,8 @@ def extract_metadata(article, user_words, feedback_type):
     
     client = Anthropic(api_key=api_key)
     
-    prompt = f"""Analyze this user feedback about an article and extract structured metadata.
-
-Article:
-- Title: {article['title']}
-- Source: {article['source']}
-- Category: {article['category']}
-
-User feedback ({feedback_type}):
-"{user_words}"
-
-Extract and return ONLY a JSON object with these fields:
-{{
-  "content_type": ["list of content types: argumentative, analytical, descriptive, statistical, narrative, investigative"],
-  "appeal": ["what appealed or didn't: evidence_based, institutional_tension, contrarian, depth, clarity, originality"],
-  "style": ["writing style: challenge_not_summary, data_driven, opinion_based, technical, accessible"],
-  "themes": ["themes: fiscal_policy, monetary_policy, geopolitics, institutional_debates, market_analysis"],
-  "depth": "one of: surface_summary, moderate_analysis, deep_dive, original_research",
-  "signals": ["positive signals if liked, negative if disliked"]
-}}
-
-Return ONLY valid JSON, no explanation."""
+    from domains.curator.feedback_prompts import metadata_prompt
+    prompt = metadata_prompt(article, user_words, feedback_type)
 
     response = client.messages.create(
         model="claude-sonnet-4-5",
@@ -1252,8 +364,7 @@ Return ONLY valid JSON, no explanation."""
         return metadata
     except (json.JSONDecodeError, IndexError, AttributeError) as e:
         # Fallback if parsing fails
-        print(f"⚠️  Metadata extraction failed: {e}")
-        print(f"   Response was: {response.content[0].text[:200] if response.content else 'empty'}")
+        print(f"⚠️  Metadata extraction failed ({type(e).__name__}); using fallback")
         return {
             "content_type": ["unknown"],
             "appeal": [],
@@ -1264,22 +375,8 @@ Return ONLY valid JSON, no explanation."""
         }
 
 def _deterministic_metadata(article):
-    """Metadata available without an LLM call.
-
-    Web buttons provide only a generic action, not an explanation to interpret.
-    Source/domain learning remains useful, while content/style inference is
-    intentionally left empty until the user supplies actual written feedback.
-    """
-    return {
-        "content_type": [],
-        "appeal": [],
-        "style": [],
-        "themes": [],
-        "depth": "unknown",
-        "signals": [],
-        "source": article.get("source", ""),
-        "url": article.get("url", ""),
-    }
+    from domains.curator.feedback_learning import deterministic_metadata
+    return deterministic_metadata(article)
 
 
 def record_feedback(
@@ -1313,6 +410,9 @@ def record_feedback(
         metadata = extract_metadata(article, user_words, feedback_type)
     else:
         metadata = _deterministic_metadata(article)
+
+    from domains.curator.feedback_learning import metadata_for_feedback
+    metadata = metadata_for_feedback(metadata, article)
 
     # Inject source and URL into metadata so update_learned_patterns can track them
     if article.get('source'):
@@ -1389,58 +489,13 @@ def record_feedback(
     return {"entry": feedback_entry, "duplicate": False}
 
 def update_learned_patterns(prefs, metadata, feedback_type):
-    """Update aggregate patterns based on new feedback.
-
-    Weights (confirmed 2026-02-26):
-      liked   = +2  (strong quality signal: 'this was genuinely good')
-      saved   = +1  (weak/uncertain signal: 'interesting, want to revisit')
-      disliked = -1 (clear negative)
-    Save is closer to a bookmark than an endorsement — like is the real curation signal.
-    """
-    patterns = prefs['learned_patterns']
-    weight_map = {'liked': 2, 'saved': 1, 'disliked': -1}
-    weight = weight_map.get(feedback_type, 1)
-
-    # Update content types
-    for ct in metadata.get('content_type', []):
-        patterns['preferred_content_types'][ct] = patterns['preferred_content_types'].get(ct, 0) + weight
-
-    # Update themes
-    for theme in metadata.get('themes', []):
-        patterns['preferred_themes'][theme] = patterns['preferred_themes'].get(theme, 0) + weight
-
-    # Update sources
-    source = metadata.get('source')
-    if source:
-        patterns['preferred_sources'][source] = patterns['preferred_sources'].get(source, 0) + weight
-
-    # Update avoid patterns if disliked (format/quality signals)
-    if feedback_type == 'disliked':
-        for signal in metadata.get('signals', []):
-            patterns['avoid_patterns'][signal] = patterns['avoid_patterns'].get(signal, 0) + 1
-
-    # Update content domains and source types from article URL
-    url = metadata.get('url', '')
-    if url:
-        try:
-            from curator_utils import extract_domain, classify_source_type
-            domain      = extract_domain(url)
-            source_type = classify_source_type(url)
-            action_key  = {'liked': 'like', 'saved': 'save', 'disliked': 'dislike'}.get(feedback_type, 'save')
-            if domain:
-                cd = patterns.setdefault('content_domains', {})
-                cd.setdefault(domain, {'like': 0, 'save': 0, 'dislike': 0})
-                cd[domain][action_key] = cd[domain].get(action_key, 0) + 1
-            if source_type:
-                st = patterns.setdefault('source_types', {})
-                st.setdefault(source_type, {'like': 0, 'save': 0, 'dislike': 0})
-                st[source_type][action_key] = st[source_type].get(action_key, 0) + 1
-        except Exception:
-            pass
-
-    # Update metadata
-    patterns['last_updated'] = datetime.now().isoformat()
-    patterns['sample_size'] = patterns.get('sample_size', 0) + 1
+    """Apply learning inside the caller's existing preference transaction."""
+    from domains.curator.feedback_learning import update_patterns
+    def classify_url(url):
+        from curator_utils import extract_domain, classify_source_type
+        return extract_domain(url), classify_source_type(url)
+    return update_patterns(prefs, metadata, feedback_type,
+                           now=datetime.now, classify_url=classify_url)
 
 def show_recent_feedback():
     """Show recent feedback summary"""
@@ -1645,7 +700,16 @@ def main():
         sys.exit(1)
     
     article = articles[rank]
-    
+    # A Telegram rank is meaningful only for the article shown in that message.
+    # Compare exact URLs without redirects/normalization and use this same
+    # parsed object for persistence, so a new briefing cannot retarget feedback.
+    if '--expected-url' in sys.argv:
+        expected_idx = sys.argv.index('--expected-url') + 1
+        expected = sys.argv[expected_idx] if expected_idx < len(sys.argv) else None
+        if not expected or article.get('url') != expected:
+            print("Article changed or identity is unavailable; request a fresh briefing")
+            sys.exit(2)
+
     # Show article details
     print(f"\n📰 Article #{rank}")
     print(f"   Title: {article['title']}")

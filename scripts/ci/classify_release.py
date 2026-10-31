@@ -350,6 +350,8 @@ def classify(paths: list[str],
         # profile reuses the portal image as its code consumer. Until the actual
         # production service/deploy closure is installed, retain full fallback
         # rather than inventing a deployable Records service in ALL_SERVICES.
+        if path.startswith("domains/records/"):
+            return "full", ALL_SERVICES
         prefix = "prototype-lab/projects/project-records-room-poc/"
         relative = path.removeprefix(prefix)
         if (path.startswith(prefix) and not relative.startswith(("tests/", "docs/"))

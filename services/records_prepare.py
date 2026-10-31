@@ -8,14 +8,12 @@ from __future__ import annotations
 import argparse
 from contextlib import closing
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
 import re
 import sqlite3
 import stat
-import sys
 from services import records_runtime as runtime
 
 FIELDS = {'destination', 'runtime_data_dir', 'owner_key_file', 'session_key_file', 'portal_key_file', 'key_sha256'}
@@ -92,21 +90,18 @@ def sync_directory(path):
 
 def store_type():
     app = runtime.APP_DIR
-    # Existing Store uses local module imports. This is a one-shot operator process,
-    # not Flask startup and not a second schema implementation.
+    # Preparation owns initialization; importing the canonical package alone
+    # never constructs a store, migrates a schema or provisions credentials.
     need(app.is_dir(), 'reviewed_records_source_required')
-    sys.path.insert(0, str(app))
-    spec = importlib.util.spec_from_file_location('records_empty_preparer_store', app / 'store.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    from domains.records import store as module
     def initialize(root):
         store = module.Store(root)
         # Same non-request initializers as create_app; never load CoS config or
         # construct Flask, call an agent, issue a credential or admit a session.
-        from web_sessions import WebSessions
-        import portal_identity
-        from cos_requests import CoSRequests
-        from coordination import Coordination
+        from domains.records.web_sessions import WebSessions
+        from domains.records import portal_identity
+        from domains.records.cos_requests import CoSRequests
+        from domains.records.coordination import Coordination
         WebSessions(store.connect)
         with store.connect() as db:
             db.executescript(portal_identity.SCHEMA)

@@ -4,9 +4,9 @@ import sqlite3
 from uuid import uuid4
 
 import pytest
-from app import create_app
-from store import Store, Problem
-from conftest import remove_v5_shape
+from domains.records.app import create_app
+from domains.records.store import Store, Problem
+from records_fixture_helpers import remove_v5_shape
 
 
 def payload(title="Synthetic meeting"):

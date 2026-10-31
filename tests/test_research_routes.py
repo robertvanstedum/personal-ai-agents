@@ -200,8 +200,11 @@ def test_dive_status_surfaces_logged_failure(curator_client, tmp_path, monkeypat
     assert not state_path.exists()
 
 
-def test_scan_page_waits_for_dive_and_opens_result():
-    source = (ROOT / "domains" / "curator" / "research_routes.py").read_text()
+def test_scan_page_waits_for_dive_and_opens_result(tmp_path, monkeypatch):
+    (tmp_path / "abc12-synthetic.md").write_text("# Synthetic Scan\n")
+    monkeypatch.setattr(research_routes, "SCANS_DIR", tmp_path)
+    source, status, _ = research_routes.research_scan_view("abc12")
+    assert status == 200
 
     assert "await fetch('/api/research/generate-dive/status')" in source
     assert "window.location.href = result.view_url" in source

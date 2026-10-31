@@ -1,6 +1,6 @@
 from uuid import uuid4
 import pytest
-from store import Problem
+from domains.records.store import Problem
 from test_transcript_snapshot import source
 
 
@@ -29,7 +29,7 @@ def test_strict_decision_rejects_stale_guard_and_replays_committed_receipt(sourc
 
 
 def test_http_route_cannot_omit_strict_guard(source):
-    from app import create_app
+    from domains.records.app import create_app
     store,room=source
     client=create_app(store.root,testing=True).test_client()
     response=client.post(f"/api/v1/rooms/{room}/events",json=dict(kind="task",body="Synthetic",target="robert"),
@@ -38,7 +38,7 @@ def test_http_route_cannot_omit_strict_guard(source):
 
 
 def test_seed_utility_supplies_guards_and_replays_safely(source):
-    from manage import seed
+    from domains.records.manage import seed
     store,_=source
     result=seed(store)
     assert seed(store)==result

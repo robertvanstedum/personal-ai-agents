@@ -215,7 +215,7 @@ def test_a_second_person_bound_to_their_own_principal_sees_only_their_rooms(brid
 
 def test_the_portal_signs_what_records_verifies(tmp_path):
     from minimoi_portal import rooms_identity as RI
-    import portal_identity as PI                                                     # Records' side, imported from prototype-lab
+    from domains.records import portal_identity as PI
     body = b'{"a":1}'
     target = RI.canonical_target("/api/v1/rooms", "z=1&a=2&a=1")
     header = RI.sign(KEY, principal="robert", method="post", target=target, body=body, env="dev")
@@ -395,7 +395,7 @@ def test_the_records_container_never_ships_in_production():
     for path in ("docker/Dockerfile.records", "docker/requirements.records.txt", "docker-compose.records.yml",
                  "scripts/staging/records.sh"):
         assert classify([path]) == ("documents", ()), path
-    repo = RECORDS_DIR.parents[2]
+    repo = RECORDS_DIR.parents[1]
     prod = (repo / "docker-compose.prod.yml").read_text()
     assert "records" not in prod.lower() and "RECORDS_BACKEND" not in prod
     staging = (repo / "docker-compose.staging.yml").read_text()

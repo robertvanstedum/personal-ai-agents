@@ -13,8 +13,8 @@ import pytest
 from playwright.sync_api import sync_playwright, expect
 from werkzeug.serving import make_server
 
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from app import create_app
+sys.path.insert(0,str(Path(__file__).resolve().parents[4]))
+from domains.records.app import create_app
 
 
 @pytest.fixture
@@ -384,9 +384,9 @@ def test_brief_discloses_earlier_records(live):
 
 def test_agent_contribution_readable_safe_and_receipt_linked(live, tmp_path):
     import requests
-    from integration.cos_records_bridge import RoomClient
-    from integration.cos_agent_responder import respond, SyntheticSessionPolicy
-    from integration.cos_room_responder import TurnJournal
+    from domains.records.integration.cos_records_bridge import RoomClient
+    from domains.records.integration.cos_agent_responder import respond, SyntheticSessionPolicy
+    from domains.records.integration.cos_room_responder import TurnJournal
     page, store, url, room, _, _ = live
     token = store.add_principal('robert', 'agent-ui', dict(id='cos-dev', label='Development CoS'))['access_token']
     store.membership('robert', 'agent-invite', room, dict(actor='cos-dev', role='contributor'))
@@ -441,7 +441,7 @@ def test_imported_speaker_is_untrusted_text_not_identity(live):
 def test_dev_portal_prefix_real_proxy_roundtrip(tmp_path):
     from flask import Flask,session,redirect
     from functools import wraps
-    from dev_portal_bridge import install
+    from domains.records.dev_portal_bridge import install
     servers=[];threads=[]
     for _ in range(2):
         server=make_server('127.0.0.1',0,lambda env,start: [],threaded=True)
@@ -491,9 +491,9 @@ def test_dev_portal_prefix_real_proxy_roundtrip(tmp_path):
 
 def test_owner_requests_cos_and_reply_appears_end_to_end(live,tmp_path):
     from test_cos_records_bridge import LocalSession
-    from integration.cos_records_bridge import RoomClient
-    from integration.cos_agent_responder import respond,SyntheticSessionPolicy
-    from integration.cos_room_responder import TurnJournal
+    from domains.records.integration.cos_records_bridge import RoomClient
+    from domains.records.integration.cos_agent_responder import respond, SyntheticSessionPolicy
+    from domains.records.integration.cos_room_responder import TurnJournal
     page,store,url,room,_,_=live
     token=store.add_principal('robert','cos-browser-client',dict(id='cos-dev',label='Chief of Staff'))['access_token']
     store.membership('robert','cos-browser-invite',room,dict(actor='cos-dev',role='contributor'))

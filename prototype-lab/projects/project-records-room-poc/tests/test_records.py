@@ -9,11 +9,11 @@ import sys
 from uuid import uuid4
 
 import pytest
-from conftest import remove_v5_shape
+from records_fixture_helpers import remove_v5_shape
 
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from app import create_app
-from store import Problem, Store
+sys.path.insert(0,str(Path(__file__).resolve().parents[4]))
+from domains.records.app import create_app
+from domains.records.store import Problem, Store
 
 
 @pytest.fixture

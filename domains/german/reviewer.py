@@ -39,8 +39,22 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from german_domain import GERMAN_DIR, GERMAN_STATE_DIR
+from domains.german.session_files import session_sort_key, validate_session_date
 
-ERROR_TYPES = ["gender", "word_order", "missing_article", "verb_conjugation", "vocabulary", "register"]
+from domains.german.review_output import (
+    ERROR_TYPES,
+    empty_reviewer_output as _empty_reviewer_output,
+    strip_llm_fences as _strip_llm_fences,
+    parse_llm_response as _parse_llm_response,
+)
+
+from domains.german.lesson_rules import (
+    ANCHOR_PERSONA,
+    pick_next_persona as _pick_next_persona,
+    pick_next_scenario as _pick_next_scenario,
+    top_error_type as _top_error_type,
+    carry_forward_errors as _carry_forward_errors,
+)
 
 SYSTEM_PROMPT = """\
 You are a German language tutor reviewing a voice practice session between a learner and an AI persona.
@@ -119,44 +133,6 @@ def _call_claude(session: dict, model: str) -> str:
 
 
 # ── Step 2: Parse & save reviewer output ─────────────────────────────────────
-
-def _empty_reviewer_output() -> dict:
-    return {
-        "overall_summary": "Review parse failed — see reviewer_raw_output in session file.",
-        "errors": [],
-        "error_type_counts": {t: 0 for t in ERROR_TYPES},
-        "vocabulary_highlights": [],
-        "strengths": [],
-        "next_focus": "",
-    }
-
-
-def _strip_llm_fences(text: str) -> str:
-    """Strip markdown code fences (```json ... ``` or ``` ... ```) from LLM output."""
-    raw = text.strip()
-    if raw.startswith("```"):
-        raw = re.sub(r'^```[a-z]*\n?', '', raw)
-        raw = re.sub(r'\n?```$', '', raw)
-    return raw.strip()
-
-
-def _parse_llm_response(text: str) -> tuple[dict, bool]:
-    """Return (parsed_dict, success). On failure returns fallback struct."""
-    try:
-        return json.loads(_strip_llm_fences(text)), True
-    except json.JSONDecodeError:
-        pass
-    # Greedy match — .*? would stop at first } and miss nested structures
-    m = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.DOTALL)
-    if m:
-        try:
-            return json.loads(m.group(1)), True
-        except json.JSONDecodeError:
-            pass
-    print(f"⚠️  LLM response parse failed. Storing raw output for debugging.", file=sys.stderr)
-    print(f"   Raw (first 300 chars): {text[:300]}", file=sys.stderr)
-    return _empty_reviewer_output(), False
-
 
 def _save_reviewer_output(session: dict, session_path: Path, reviewer_output: dict,
                            raw_text: str, parse_ok: bool):
@@ -245,7 +221,7 @@ def _scaffold_analysis(session: dict, session_path: Path, sessions_dir: Path,
     persona = session.get("persona", "")
     threshold = domain_cfg.get("drill", {}).get("promotion_threshold", 2)
 
-    prior = sorted(sessions_dir.glob("*.json"), reverse=True)
+    prior = sorted(sessions_dir.glob("*.json"), key=session_sort_key, reverse=True)
     streak = []
     for p in prior:
         if p == session_path:
@@ -329,50 +305,13 @@ def _generate_anki_csv(reviewer_output: dict, session: dict,
 
 # ── Step 3b: Generate lesson plan ────────────────────────────────────────────
 
-ANCHOR_PERSONA = "Frau Berger"
-
-
-def _pick_next_persona(personas: list, progress: dict) -> dict:
-    anchor = next((p for p in personas if p["name"] == ANCHOR_PERSONA), None)
-    recent = progress.get("personas_practiced", [])[-2:]
-    # Non-anchor candidates: avoid last 2 used
-    non_anchor = [p for p in personas if p["name"] != ANCHOR_PERSONA and p["name"] not in recent]
-    if not non_anchor:
-        non_anchor = [p for p in personas if p["name"] != ANCHOR_PERSONA]
-    # Prefer non-anchor personas not yet practiced at all
-    not_yet = [p for p in non_anchor if p["name"] not in progress.get("personas_practiced", [])]
-    pool = not_yet if not_yet else non_anchor
-    # Anchor is always eligible — return it if it's the only option or pool is empty
-    return pool[0] if pool else anchor
-
-
-def _pick_next_scenario(persona: dict, progress: dict) -> str:
-    covered = set(progress.get("scenarios_covered", []))
-    for s in persona["scenarios"]:
-        if s not in covered:
-            return s
-    return persona["scenarios"][0]  # all covered — cycle from start
-
-
-def _top_error_type(progress: dict) -> str:
-    counts = progress.get("cumulative_error_counts", {})
-    if not any(counts.values()):
-        return "gender"  # default for first session
-    return max(counts, key=lambda k: counts[k])
-
-
-def _carry_forward_errors(reviewer_output: dict, top_type: str, date_str: str) -> list:
-    errors = [e for e in reviewer_output.get("errors", []) if e.get("type") == top_type]
-    result = []
-    for e in errors[:2]:
-        result.append(f"{e['correction']} (was: {e['original']}) — session {date_str}")
-    return result
-
-
 def _generate_lesson_plan(reviewer_output: dict, session: dict, domain_cfg: dict,
-                           personas: list, progress: dict, lessons_dir: Path):
+                           personas: list, progress: dict, lessons_dir: Path, *, lesson_date: str | None = None):
+    # Reviews plan for today; skip commands pass the date they already resolved.
+    next_date = validate_session_date(
+        lesson_date if lesson_date is not None else datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    )
     lesson_number = domain_cfg.get("current_lesson_number", 1)
-    next_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     next_persona = _pick_next_persona(personas, progress)
     next_scenario = _pick_next_scenario(next_persona, progress)
@@ -468,7 +407,7 @@ def _update_progress(progress: dict, session: dict, reviewer_output: dict,
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def _find_latest_unreviewed(sessions_dir: Path) -> Path:
-    sessions = sorted(sessions_dir.glob("*.json"), reverse=True)
+    sessions = sorted(sessions_dir.glob("*.json"), key=session_sort_key, reverse=True)
     for p in sessions:
         data = json.loads(p.read_text())
         if data.get("reviewer_output") is None:

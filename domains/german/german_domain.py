@@ -10,7 +10,6 @@ Group C: resolver functions — sync, with optional progress_cb for mid-executio
 """
 
 import fcntl
-import hashlib
 import html
 import os
 import re
@@ -19,8 +18,8 @@ import random
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
+
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 
@@ -30,6 +29,13 @@ _REPO_ROOT  = _BASE_DIR.parent.parent        # repo root
 import sys as _sys
 _sys.path.insert(0, str(_REPO_ROOT))
 from core.get_secret import get_secret as _get_secret
+from domains.german.transcript_text import parse_review_turns as _parse_transcript_turns
+from domains.german.session_files import next_session_id as _next_session_id, session_sort_key
+from domains.german.reading_rules import (
+    normalize_url as _normalize_lesen_url,
+    article_id as _lesen_article_id,
+    apply_source_cap as _apply_source_cap,
+)
 GERMAN_BASE = _BASE_DIR                      # domains/german/ (scripts run here)
 GERMAN_DIR  = _BASE_DIR / "data"             # domains/german/data/ (bundled app config: prompts, personas, source lists -- ships with the reviewed code)
 
@@ -122,29 +128,29 @@ _LLM_PROVIDERS = [
     {"name": "ollama-gemma", "type": "ollama",     "model": "gemma3:1b"},
 ]
 
-# ─── German contraction expansion ────────────────────────────────────────────
-
-_DE_CONTRACTIONS = {
-    "beim": "bei dem",
-    "im":   "in dem",
-    "am":   "an dem",
-    "vom":  "von dem",
-    "zum":  "zu dem",
-    "zur":  "zu der",
-    "ans":  "an das",
-    "ins":  "in das",
-    "aufs": "auf das",
-    "ums":  "um das",
-}
-_DE_CONTRACTION_RE = re.compile(
-    r'\b(' + '|'.join(re.escape(k) for k in _DE_CONTRACTIONS) + r')\b', re.IGNORECASE
+# Answer text and drill rules have independent, import-safe module homes.
+from domains.german.answer_text import (
+    DE_CONTRACTIONS as _DE_CONTRACTIONS,
+    DE_CONTRACTION_RE as _DE_CONTRACTION_RE,
+    expand_contractions as _expand_contractions,
+    normalize_answer as _normalize_answer,
+    spell_feedback as _spell_feedback,
 )
 
 # ─── Drill constants ──────────────────────────────────────────────────────────
 
-_DRILL_PERSONS   = ["ich", "du", "er", "wir", "ihr", "sie"]
-_PERSONS_DISPLAY = ["ich", "du", "er/sie/es", "wir", "ihr", "sie/Sie"]
-_PERSONS_POOL    = ["ich", "du", "er",         "wir", "ihr", "sie"]
+from domains.german.drills import (
+    DRILL_PERSONS as _DRILL_PERSONS,
+    PERSONS_DISPLAY as _PERSONS_DISPLAY,
+    PERSONS_POOL as _PERSONS_POOL,
+    item_tag as _item_tag,
+    drill_prompt as _drill_prompt,
+    l2_prompt as _l2_prompt,
+    start_drill_state as _start_drill_state,
+    record_l2_item as _record_l2_item,
+    record_l1_person as _record_l1_person,
+    finalize_l1_items as _finalize_l1_items,
+)
 
 # ─── Pure functions ───────────────────────────────────────────────────────────
 
@@ -190,123 +196,8 @@ def _lookup_verb(pool: dict, verb_lower: str) -> dict | None:
     return next((v for v in _all_verb_entries(pool) if v["verb"].lower() == verb_lower), None)
 
 
-def _expand_contractions(text: str) -> str:
-    """Expand German preposition+article contractions to canonical long form."""
-    return _DE_CONTRACTION_RE.sub(lambda m: _DE_CONTRACTIONS[m.group(0).lower()], text)
 
 
-def _normalize_answer(text: str) -> str:
-    """Lowercase, strip punctuation, expand contractions, collapse whitespace."""
-    text = text.lower().strip()
-    text = re.sub(r'[^\w\s]', ' ', text)
-    text = _expand_contractions(text)
-    return " ".join(text.split())
-
-
-def _spell_feedback(normalized_answer: str, expected: str = "") -> str | None:
-    """Return feedback for misspelled German words. Input must already be normalized (no punctuation, lowercase).
-    If expected is given, only suggest corrections that appear in the expected answer."""
-    try:
-        from spellchecker import SpellChecker
-        from difflib import SequenceMatcher
-        checker = SpellChecker(language="de")
-        expected_words = set(expected.split()) if expected else set()
-        words = [w for w in normalized_answer.split() if len(w) >= 3]
-        unknown = checker.unknown(words)
-        if not unknown:
-            return None
-        parts = []
-        for w in unknown:
-            candidates = checker.candidates(w) or set()
-            best = max(candidates, key=lambda c: SequenceMatcher(None, w, c).ratio(), default=None)
-            if not best or SequenceMatcher(None, w, best).ratio() < 0.80:
-                continue
-            if expected_words and best not in expected_words:
-                continue
-            parts.append(f"'{w}' → '{best}'?")
-        return ("Check spelling: " + ", ".join(parts)) if parts else None
-    except Exception:
-        return None
-
-
-def _item_tag(wrong_count: int, hint_used: bool, auto_revealed: bool) -> str:
-    if auto_revealed or hint_used or wrong_count >= 2:
-        return "needs-practice"
-    if wrong_count == 1:
-        return "drill-reinforced"
-    return "drill-clean"
-
-
-def _drill_prompt(state: dict) -> str:
-    """Level 1 prompt: person fill-in."""
-    person = state["current"]
-    verb = state["verb"]
-    english = state["english"]
-    total = len(state["queue"])
-    return f"{verb} ({english}) — {state['pos']+1}/{total}\n\n{person} ___?"
-
-
-def _l2_prompt(state: dict) -> str:
-    """Level 2 prompt: translate this phrase."""
-    idx = state["queue"][state["pos"]]
-    phrase = state["phrases"][idx]
-    total = len(state["queue"])
-    return f"{state['pos']+1}/{total}\n\nHow do you say:\n\"{phrase['english']}\""
-
-
-def _start_drill_state(entry: dict) -> dict:
-    queue = random.sample(_DRILL_PERSONS, len(_DRILL_PERSONS))
-    return {
-        "verb":             entry["verb"],
-        "english":          entry.get("english", ""),
-        "conjugations":     entry.get("conjugations", {}),
-        "queue":            queue,
-        "pos":              0,
-        "current":          queue[0],
-        "score":            0,
-        "total":            0,
-        "retry":            False,
-        "items":            [],
-        "hint_used_current": False,
-        "l1_worst_tag":     "drill-clean",
-    }
-
-
-def _record_l2_item(state: dict, phrase: dict, wrong_count: int, auto_revealed: bool) -> None:
-    tag = _item_tag(wrong_count, state.get("hint_used_current", False), auto_revealed)
-    state["items"].append({
-        "front":  phrase["english"],
-        "back":   phrase["german"],
-        "result": tag,
-        "tags":   f"{tag} Vienna phrase {state['verb']}",
-    })
-    state["hint_used_current"] = False
-
-
-def _record_l1_person(state: dict, wrong_count: int, auto_revealed: bool) -> None:
-    tag = _item_tag(wrong_count, state.get("hint_used_current", False), auto_revealed)
-    priority = {"drill-clean": 0, "drill-reinforced": 1, "needs-practice": 2}
-    if priority.get(tag, 0) > priority.get(state.get("l1_worst_tag", "drill-clean"), 0):
-        state["l1_worst_tag"] = tag
-    state["hint_used_current"] = False
-
-
-def _finalize_l1_items(state: dict) -> None:
-    """Convert l1_worst_tag into one Anki item if any friction occurred."""
-    tag = state.get("l1_worst_tag", "drill-clean")
-    if tag == "drill-clean":
-        return
-    conj = state.get("conjugations", {})
-    table = " / ".join(
-        f"{dp} {conj.get(pp, '?')}"
-        for dp, pp in zip(_PERSONS_DISPLAY, _PERSONS_POOL)
-    )
-    state["items"].append({
-        "front":  f"{state['verb']} — {state.get('english', '')}",
-        "back":   table,
-        "result": tag,
-        "tags":   f"{tag} Vienna conjugation",
-    })
 
 
 # ─── Domain I/O — file loaders and savers ────────────────────────────────────
@@ -396,7 +287,7 @@ def _last_session_persona() -> str | None:
     sessions_dir = GERMAN_STATE_DIR / "sessions"
     if not sessions_dir.exists():
         return None
-    sessions = sorted(sessions_dir.glob("*.json"))
+    sessions = sorted(sessions_dir.glob("*.json"), key=session_sort_key)
     if not sessions:
         return None
     try:
@@ -792,30 +683,6 @@ def _load_lesen_selection_config() -> dict:
         return {}
 
 
-def _apply_source_cap(articles: list, config: dict) -> list:
-    """Cap articles per source per category. Applied at display time, not ingestion."""
-    max_per_cat = config.get("max_per_category", 10)
-    max_per_src = config.get("max_per_source_per_category", 3)
-    min_per_cat = config.get("min_per_category", 3)
-    source_counts: dict[str, int] = {}
-    selected = []
-    for article in articles:
-        src = article.get("source", "")
-        if source_counts.get(src, 0) < max_per_src:
-            selected.append(article)
-            source_counts[src] = source_counts.get(src, 0) + 1
-        if len(selected) >= max_per_cat:
-            break
-    if len(selected) < min_per_cat:
-        already = set(id(a) for a in selected)
-        for article in articles:
-            if id(article) not in already:
-                selected.append(article)
-                if len(selected) >= min_per_cat:
-                    break
-    return selected
-
-
 def _load_lesen_blocked_keywords() -> list:
     try:
         data = json.loads(_LESEN_FILTERS_FILE.read_text())
@@ -899,48 +766,6 @@ def _save_lesen_articles(data: dict) -> None:
     """Compatibility wrapper for a coordinated atomic article-store mutation."""
     with _lesen_lock(_LESEN_MUTATION_LOCK_FILE):
         _atomic_write_lesen_articles(data)
-
-
-def _normalize_lesen_url(url: str) -> str:
-    """Return a stable canonical URL for deduplication and forward-only IDs."""
-    try:
-        parts = urlsplit((url or "").strip())
-        scheme = parts.scheme.lower()
-        hostname = (parts.hostname or "").lower()
-        port = parts.port
-    except ValueError:
-        return ""
-    if not scheme or not hostname:
-        return ""
-    default_port = (scheme == "http" and port == 80) or (
-        scheme == "https" and port == 443
-    )
-    netloc = hostname if port is None or default_port else f"{hostname}:{port}"
-    path = re.sub(r"/{2,}", "/", parts.path or "")
-    if path == "/":
-        path = ""
-    elif path.endswith("/"):
-        path = path[:-1]
-    query = urlencode(
-        sorted(
-            (key, value)
-            for key, value in parse_qsl(parts.query, keep_blank_values=True)
-            if not key.lower().startswith("utm_")
-            and key.lower() not in {"fbclid", "gclid"}
-        ),
-        doseq=True,
-    )
-    return urlunsplit((scheme, netloc, path, query, ""))
-
-
-def _lesen_article_id(normalized_url: str, date_fetched: str | None = None) -> str:
-    """Return a stable ID derived only from the canonical URL.
-
-    ``date_fetched`` remains an accepted argument for compatibility with the
-    old call shape, but it deliberately does not affect identity.
-    """
-    digest = hashlib.sha256(normalized_url.encode("utf-8")).hexdigest()[:24]
-    return f"art_url_{digest}"
 
 
 def _strip_html(raw: str) -> str:
@@ -2100,7 +1925,7 @@ def get_last_human_session_suggestion() -> str:
         return ""
 
     # Collect all session JSON files, newest first
-    session_files = sorted(sessions_dir.glob("*.json"), reverse=True)
+    session_files = sorted(sessions_dir.glob("*.json"), key=session_sort_key, reverse=True)
     for sf in session_files:
         try:
             data = safe_read_json(sf)
@@ -2174,39 +1999,10 @@ def build_review_system_prompt(learner_name: str) -> str:
     return _REVIEW_SYSTEM_PROMPT.replace("LEARNER_NAME", learner_name)
 
 
-def _parse_transcript_turns(text: str) -> list:
-    """Parse raw transcript into list of {speaker, text} dicts."""
-    turns = []
-    for line in text.strip().splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        if ':' in line:
-            speaker, _, body = line.partition(':')
-            speaker = speaker.strip()
-            body = body.strip()
-            if speaker and body and len(speaker) < 40:
-                turns.append({"speaker": speaker, "text": body})
-                continue
-        if turns:
-            turns[-1]["text"] += " " + line
-        else:
-            turns.append({"speaker": "Transcript", "text": line})
-    return turns or [{"speaker": "Transcript", "text": text.strip()}]
-
-
 def _next_session_filename(date_str: str) -> str:
-    """Return next available session filename for date (matching parse_transcript.py convention)."""
+    """Return the next session name; this caller owns directory creation."""
     _SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
-    existing = sorted(_SESSIONS_DIR.glob(f"{date_str}_*.json"))
-    if not existing:
-        return f"{date_str}_001"
-    last = existing[-1].stem
-    try:
-        n = int(last.split("_")[-1]) + 1
-    except ValueError:
-        n = len(existing) + 1
-    return f"{date_str}_{n:03d}"
+    return _next_session_id(date_str, _SESSIONS_DIR)
 
 
 def analyse_session(
@@ -2344,7 +2140,7 @@ def get_gesprache_sessions(limit: int = 5, user_id=None) -> list:
     a permanent read-side bypass."""
     if not _SESSIONS_DIR.exists() or user_id is None:
         return []
-    paths = sorted(_SESSIONS_DIR.glob("*.json"), reverse=True)
+    paths = sorted(_SESSIONS_DIR.glob("*.json"), key=session_sort_key, reverse=True)
     result = []
     for path in paths:
         try:

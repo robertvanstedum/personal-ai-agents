@@ -9,9 +9,9 @@ import pytest
 import requests
 
 from test_cos_records_bridge import bridge  # shared isolated actual Flask store
-from cos_records_bridge import RoomBridgeError, dispatch, parse_command
-from cos_room_responder import GatewayModel, TurnJournal, respond, snapshot
-from store import Problem
+from domains.records.integration.cos_records_bridge import RoomBridgeError, dispatch, parse_command
+from domains.records.integration.cos_room_responder import GatewayModel, TurnJournal, respond, snapshot
+from domains.records.store import Problem
 
 
 @pytest.fixture

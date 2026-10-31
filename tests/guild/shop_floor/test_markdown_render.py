@@ -4,6 +4,8 @@ with an allow-list, the stored text unchanged."""
 from __future__ import annotations
 
 import re
+import statistics
+import time
 
 import pytest
 
@@ -100,11 +102,27 @@ def test_only_absolute_http_https_or_mailto_links_keep_their_href(href):
     assert "x" in html
 
 
-def test_the_render_is_linear_on_pathological_input_at_the_maximum_size():
-    """#261 review finding 1: Python-Markdown took 17.5 s on 2,000 backticks.
-    Every input here, at the maximum rendered size, must stay well under a
-    second (target about 200 ms on the workshop Mac)."""
-    import time
+def _assert_render_cpu_budget(renderer, cases, *, clock=time.process_time, samples=3, budget=0.5):
+    """Bound CPU work, not scheduler delay; repeated cold samples reduce noise.
+
+    This is an absolute-work guard, not a proof of asymptotic linearity. It
+    retains the original half-second budget and catches the historical
+    multi-second Python-Markdown CPU regression without charging descheduling.
+    """
+    measurements = {}
+    for name, text in cases.items():
+        values = []
+        for _ in range(samples):
+            start = clock()
+            renderer(text)
+            values.append(clock() - start)
+        measurements[name] = values
+    slow = {name: values for name, values in measurements.items() if statistics.median(values) > budget}
+    assert not slow, slow
+    return measurements
+
+
+def test_render_cpu_work_is_bounded_on_pathological_input_at_the_maximum_size():
     from minimoi_portal.guild_ui.markdown_render import MAX_CHARS
     n = MAX_CHARS
     cases = {
@@ -114,15 +132,24 @@ def test_the_render_is_linear_on_pathological_input_at_the_maximum_size():
         "bold a": "**a" * (n // 3), "table": "|a" * (n // 2) + "\n" + "|-" * (n // 2), "mixed": "[`*_" * (n // 4),
         "angle a": "<a" * (n // 2), "entities": "&#" * (n // 2),
     }
-    slow = {}
-    for name, text in cases.items():
+    def cold_render(text):
         render_markdown.cache_clear()
-        t0 = time.perf_counter()
-        render_markdown(text + " ")
-        took = time.perf_counter() - t0
-        if took > 0.5:
-            slow[name] = round(took, 3)
-    assert not slow, slow
+        return render_markdown(text + " ")
+    _assert_render_cpu_budget(cold_render, cases)
+
+
+def test_cpu_guard_rejects_consistently_expensive_work():
+    ticks = iter([0.0, 0.6, 1.0, 1.6, 2.0, 2.6])
+    with pytest.raises(AssertionError, match="slow"):
+        _assert_render_cpu_budget(lambda text: None, {"slow": "synthetic"}, clock=lambda: next(ticks))
+
+
+def test_cpu_guard_takes_independent_samples_not_cached_success():
+    calls = []
+    ticks = iter([0.0, 0.1, 1.0, 1.1, 2.0, 2.1])
+    measured = _assert_render_cpu_budget(calls.append, {"input": "synthetic"}, clock=lambda: next(ticks))
+    assert calls == ["synthetic"] * 3
+    assert measured["input"] == pytest.approx([0.1, 0.1, 0.1])
 
 
 def test_a_long_reply_says_what_was_not_shown():

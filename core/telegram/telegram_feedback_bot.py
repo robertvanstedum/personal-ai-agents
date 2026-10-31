@@ -16,8 +16,19 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes
 import keyring
 
-# Track processed callbacks to prevent duplicates
-processed_callbacks = set()  # stores "message_id:action:rank"
+# Support the documented direct-script entrypoint as well as package imports.
+import sys
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+from core.telegram.owner_policy import owner_only
+from utils.telegram import get_chat_id
+
+from core.telegram.feedback_handlers import polling_feedback
+from core.telegram.feedback_state import FeedbackTracker
+from core.telegram.feedback_writer import write_feedback
+
+processed_callbacks = FeedbackTracker()
 
 def get_telegram_token():
     """Get Telegram bot token from keychain or env"""
@@ -30,90 +41,16 @@ def get_telegram_token():
     
     return os.environ.get('TELEGRAM_BOT_TOKEN')
 
+@owner_only(lambda: get_chat_id())
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle inline button presses"""
-    query = update.callback_query
-    
-    # Parse callback data: "action:rank" (e.g., "like:3")
-    try:
-        action, rank = query.data.split(':')
-    except ValueError:
-        await query.answer("❌ Invalid button data", show_alert=True)
-        return
-    
-    # Check if already processed (prevent double-clicks)
-    callback_id = f"{query.message.message_id}:{action}:{rank}"
-    if callback_id in processed_callbacks:
-        await query.answer("Already recorded!", show_alert=True)
-        return
-    
-    # Mark as being processed
-    processed_callbacks.add(callback_id)
-    
-    # Immediate acknowledgment to user
-    await query.answer(f"⏳ Recording {action}...")
-    
-    print(f"\n📥 Telegram feedback: {action} for article #{rank}")
-    
-    # Call curator_feedback.py
-    result = record_feedback(action, rank)
-    
-    # Update the message to show feedback was recorded
-    if result['success']:
-        # Edit message to add confirmation
-        original_text = query.message.text
-        confirmation = f"\n\n✅ {action.capitalize()}d!"
-        
-        # Remove old confirmation if exists
-        if "✅" in original_text:
-            original_text = original_text.split('\n✅')[0]
-        
-        await query.edit_message_text(
-            text=original_text + confirmation,
-            reply_markup=query.message.reply_markup
-        )
-        print(f"✅ Feedback recorded successfully")
-    else:
-        await query.answer(f"❌ Error: {result['message']}", show_alert=True)
-        print(f"❌ Error: {result['message']}")
+    await polling_feedback(update.callback_query, processed_callbacks,
+                           lambda action, rank, url: record_feedback(action, rank, expected_url=url))
 
-def record_feedback(action, rank):
-    """Call curator_feedback.py to record feedback"""
-    try:
-        # Build command
-        if action == 'like':
-            cmd = ['python', 'domains/curator/curator_feedback.py', 'like', rank]
-        elif action == 'dislike':
-            cmd = ['python', 'domains/curator/curator_feedback.py', 'dislike', rank]
-        elif action == 'save':
-            cmd = ['python', 'domains/curator/curator_feedback.py', 'save', rank]
-        else:
-            return {'success': False, 'message': f'Unknown action: {action}'}
-        
-        # Use venv python
-        _repo_root = Path(__file__).parent.parent.parent
-        venv_python = _repo_root / 'venv' / 'bin' / 'python'
-        if venv_python.exists():
-            cmd[0] = str(venv_python)
 
-        # Execute with auto-response
-        reason = f"{action}d from Telegram"
-        result = subprocess.run(
-            cmd,
-            input=reason.encode(),
-            capture_output=True,
-            cwd=_repo_root,
-            timeout=30
-        )
-        
-        if result.returncode == 0:
-            return {'success': True, 'message': f'Article #{rank} {action}d'}
-        else:
-            error = result.stderr.decode()
-            return {'success': False, 'message': error[:100]}
-    
-    except Exception as e:
-        return {'success': False, 'message': str(e)}
+def record_feedback(action, rank, *, expected_url=None):
+    """Compatibility adapter; old unbound calls refuse without writing."""
+    return write_feedback(action, int(rank), expected_url, root=_REPO_ROOT)
+
 
 def main():
     """Start the Telegram bot"""

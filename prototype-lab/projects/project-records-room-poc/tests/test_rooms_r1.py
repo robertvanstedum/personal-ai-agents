@@ -6,7 +6,7 @@ membership-scoped credential. No model is called; the "worker" here is the
 test, speaking the same HTTP contract the real worker uses.
 """
 from datetime import datetime, timedelta, timezone
-from meetings import DEFAULT_MAX_TURNS
+from domains.records.meetings import DEFAULT_MAX_TURNS
 import importlib.util
 import json
 import subprocess
@@ -17,8 +17,8 @@ from uuid import uuid4
 
 import pytest
 
-from app import create_app
-from manage import provision_rooms
+from domains.records.app import create_app
+from domains.records.manage import provision_rooms
 
 
 def past(seconds=5):
@@ -119,7 +119,7 @@ def event_count(e, room=None):
 # ── schema, rollback compatibility ──────────────────────────────────────────
 
 def test_migration_is_idempotent_and_keeps_schema_version(env):
-    from store import Store
+    from domains.records.store import Store
     Store(env.store.root)
     Store(env.store.root)
     with env.db() as d:
@@ -137,13 +137,21 @@ def _baseline_module_dir(tmp_path):
     root = Path(__file__).resolve().parents[1]
     target = tmp_path / "baseline"
     target.mkdir()
-    for name in ("store.py", "platform_access.py", "coordination.py", "contribution_view.py", "transcript_format.py"):
-        try:
-            text = subprocess.run(["git", "show", f"a7e2e6d:prototype-lab/projects/project-records-room-poc/{name}"],
-                                  cwd=root, capture_output=True, text=True, check=True).stdout
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            pytest.skip("baseline revision a7e2e6d not available in this checkout")
-        (target / name).write_text(text)
+    prefix = "prototype-lab/projects/project-records-room-poc/"
+    try:
+        names = subprocess.check_output(
+            ["git", "ls-tree", "-r", "--full-tree", "--name-only", "a7e2e6d", prefix], cwd=root, text=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pytest.skip("baseline revision a7e2e6d not available in this checkout")
+    # Keep the historical runtime dependency closure together. In particular,
+    # contribution_view imports the historical integration evidence validator.
+    for name in names.splitlines():
+        relative = name.removeprefix(prefix)
+        if not relative.endswith(".py") or relative.startswith("tests/"):
+            continue
+        destination = target / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(subprocess.check_output(["git", "show", f"a7e2e6d:{name}"], cwd=root))
     return target
 
 
@@ -171,7 +179,7 @@ print(json.dumps([e['actor'] for e in old['events']]))
     assert out.returncode == 0, out.stderr
     assert "mc" in json.loads(out.stdout.strip().splitlines()[-1])
     # Forward again: the new code still opens it and the fence still holds.
-    from store import Store
+    from domains.records.store import Store
     again = Store(env.store.root)
     assert again.room("robert", env.room)["events"][-1]["actor"] == "mc"
 
@@ -289,7 +297,7 @@ def test_work_credential_reads_no_room_and_owner_cannot_use_worker_routes(env):
 
 def test_worker_cannot_claim_unbound_or_touch_another_installations_claim(env):
     env.prove(); env.join(); env.say("Q")
-    from store import now
+    from domains.records.store import now
     with env.db() as d:
         d.execute("INSERT INTO principals VALUES('other-worker','Other','service','h-other',?)", (now(),))
     other = env.store.platform_access.issue("robert", dict(principal="other-worker", label="o", scope="work",
@@ -658,8 +666,8 @@ def test_provisioning_refuses_to_overwrite_token_files(env):
 def test_export_maps_a_committed_turn_and_keeps_history_and_legacy_valid(env):
     from copy import deepcopy
     from jsonschema import ValidationError
-    from transcript_snapshot import capture
-    from transcript_format import VERSION, VERSION_1_1, render, validate
+    from domains.records.transcript_snapshot import capture
+    from domains.records.transcript_format import VERSION, VERSION_1_1, render, validate
     env.prove(); env.join(); env.say("Q")
     t = env.claim(); env.start(t)
     reply = env.reply(t, "MC's exact\nwords", usage_evidence={"status": "none"}).json["result"]
@@ -690,7 +698,7 @@ def test_export_maps_a_committed_turn_and_keeps_history_and_legacy_valid(env):
 
 
 def test_published_manifest_identity_matches_its_snapshot(env):
-    from transcript_publish import publish, verify
+    from domains.records.transcript_publish import publish, verify
     env.prove(); env.join(); env.say("Q")
     t = env.claim(); env.start(t); env.reply(t)
     bundle = publish(env.store, "robert", env.room)
@@ -805,7 +813,7 @@ def test_retry_accepts_only_reconciled_uncertain_turns(env, disposition):
 
 def test_mc_is_the_facilitator_whatever_the_invitation_order(env):
     """Rooms R2: inviting another teammate first must not make it the facilitator."""
-    from store import now
+    from domains.records.store import now
     env.prove()
     with env.db() as d:
         d.execute("INSERT INTO principals VALUES('claude-code','Claude Code','agent','h-cc',?)", (now(),))

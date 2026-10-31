@@ -77,22 +77,28 @@ def connect(path: str | Path, *, create: bool = False, readonly: bool = False, k
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     if sqlite_vec is None and not readonly and not keyword_only:
         raise IndexIncompatible("vector extension unavailable: an index can only be opened read-only here")
-    uri = f"file:{path}?mode={'ro' if readonly else 'rwc'}"
+    # Encode path punctuation as a filename, not SQLite URI query/fragment syntax.
+    # Only an explicit create may recreate a file that vanished after the check.
+    mode = "ro" if readonly else "rwc" if create else "rw"
+    uri = f"{path.absolute().as_uri()}?mode={mode}"
     con = sqlite3.connect(uri, uri=True, timeout=30)
-    if sqlite_vec is not None and not keyword_only:
-        con.enable_load_extension(True)
-        sqlite_vec.load(con)
-        con.enable_load_extension(False)
-    if create and not con.execute("SELECT 1 FROM sqlite_master WHERE name='meta'").fetchone():
-        con.executescript(KEYWORD_SCHEMA if keyword_only else SCHEMA)
-        con.execute("INSERT INTO meta VALUES('schema_version', ?)", (str(SCHEMA_VERSION),))
-        if keyword_only:
-            con.execute("INSERT INTO meta VALUES('keyword_only', '1')")
-        con.commit()
-        os.chmod(path, 0o600)
-    if not readonly and is_keyword_only(con) != keyword_only:
+    try:
+        if sqlite_vec is not None and not keyword_only:
+            con.enable_load_extension(True)
+            sqlite_vec.load(con)
+            con.enable_load_extension(False)
+        if create and not con.execute("SELECT 1 FROM sqlite_master WHERE name='meta'").fetchone():
+            con.executescript(KEYWORD_SCHEMA if keyword_only else SCHEMA)
+            con.execute("INSERT INTO meta VALUES('schema_version', ?)", (str(SCHEMA_VERSION),))
+            if keyword_only:
+                con.execute("INSERT INTO meta VALUES('keyword_only', '1')")
+            con.commit()
+            os.chmod(path, 0o600)
+        if not readonly and is_keyword_only(con) != keyword_only:
+            raise IndexIncompatible("keyword-only and vector indexes are never written as each other")
+    except BaseException:
         con.close()
-        raise IndexIncompatible("keyword-only and vector indexes are never written as each other")
+        raise
     return con
 
 

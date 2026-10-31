@@ -4,7 +4,7 @@ This performs text canonicalization only, never ownership or link admission.
 """
 import hashlib
 import json
-from minimoi_portal.guild_ui.board_text import clean
+from domains.guild.board_text import clean
 
 
 def payload(capability, body, target=None):
