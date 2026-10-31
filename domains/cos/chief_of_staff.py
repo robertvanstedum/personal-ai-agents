@@ -56,6 +56,7 @@ from domains.cos.confer_service import (
 from domains.cos.cost_checkpoint import run_cost_checkpoint
 from domains.cos import conversation_log
 from domains.cos import history as cos_history
+from domains.cos.store import memory as cos_memory_store
 from domains.cos.claim_truth import enforce_file_claims
 from domains.cos import files as cos_files
 from domains.cos import reminders
@@ -164,6 +165,15 @@ def _append_memory_entry(
     operation_id: str | None = None,
 ) -> dict:
     """Write one platform memory entry with optional durable deduplication."""
+    if _cos_store_writer is not None and cos_memory_store.imported(_cos_store_writer):
+        # After the import (CoS 1.2 spec section 4.5), the store is canonical and cos_memory.md is its projection.
+        try:
+            return cos_memory_store.remember(
+                _cos_store_writer, COS_MEMORY_FILE, entry,
+                kind="explicit_note" if entry_type == "note" else "memory_tool", operation_id=operation_id)
+        except (OSError, ValueError) as e:
+            _log_file("memory_write_error", str(e))
+            return {"saved": False, "deduplicated": False}
     try:
         current = _read_memory()
         if current == "(no memory yet)":

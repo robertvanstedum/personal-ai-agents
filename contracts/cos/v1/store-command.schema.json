@@ -18,7 +18,8 @@
         "kind": {
           "enum": [
             "goal.put", "plan.put", "obligation.define", "obligation.event", "episode.event",
-            "decision.record", "correction.record", "meeting.link", "commitment.open"
+            "decision.record", "correction.record", "meeting.link", "commitment.open",
+            "fact.record"
           ]
         },
         "target": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
@@ -47,6 +48,7 @@
         { "if": { "properties": { "kind": { "const": "episode.event" } } }, "then": { "properties": { "target": { "properties": { "type": { "const": "cos.episode" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/episode_event" } } } },
         { "if": { "properties": { "kind": { "const": "decision.record" } } }, "then": { "required": ["basis_ref"], "properties": { "basis_ref": { "type": "object" }, "target": { "properties": { "type": { "const": "cos.decision" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/decision" } } } },
         { "if": { "properties": { "kind": { "const": "correction.record" } } }, "then": { "properties": { "target": { "properties": { "type": { "const": "cos.correction" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/correction" } } } },
+        { "if": { "properties": { "kind": { "const": "fact.record" } } }, "then": { "properties": { "target": { "properties": { "type": { "const": "cos.fact" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/standing_fact" } } } },
         { "if": { "properties": { "kind": { "const": "meeting.link" } } }, "then": { "properties": { "target": { "properties": { "type": { "const": "cos.meeting" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/meeting_link" } } } },
         {
           "if": { "properties": { "kind": { "const": "commitment.open" } } },

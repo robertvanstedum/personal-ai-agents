@@ -16,7 +16,7 @@ REQUEST_ID = "aaaaaaaa-0000-4000-8000-000000000001"
 TURN_ID = "t-aaaaaaaa000040008000000000000001"
 
 
-def _load(monkeypatch, tmp_path, *, history_on: bool):
+def _load(monkeypatch, tmp_path, *, history_on: bool, store_on: bool = False):
     for name in ("apscheduler", "apscheduler.schedulers", "apscheduler.schedulers.background",
                  "apscheduler.triggers", "apscheduler.triggers.cron", "apscheduler.triggers.interval"):
         monkeypatch.setitem(sys.modules, name, MagicMock())
@@ -34,6 +34,10 @@ def _load(monkeypatch, tmp_path, *, history_on: bool):
         monkeypatch.setenv("COS_STORE_ENVIRONMENT", "dev")
     else:
         monkeypatch.delenv("COS_STORE_ENVIRONMENT", raising=False)
+    if store_on:
+        (tmp_path / "token").write_text("synthetic-token")
+        monkeypatch.setenv("COS_STORE_DIR", str(tmp_path / "store"))
+        monkeypatch.setenv("COS_STORE_TOKEN_FILE", str(tmp_path / "token"))
     sys.modules.pop("domains.cos.chief_of_staff", None)
     import domains.cos.chief_of_staff as module
 
@@ -162,3 +166,27 @@ def test_with_the_switch_off_nothing_changes(cos_off):
     (log,) = cos_off._conversations_dir.glob("*.jsonl")
     assert "projection" not in json.loads(log.read_text().splitlines()[-1])
     assert cos_off.app.test_client().get("/ui/history/conversations").status_code == 404
+
+
+def test_after_the_memory_import_a_note_goes_to_the_store_and_the_file_is_its_projection(monkeypatch, tmp_path):
+    from domains.cos.store import memory
+    cos = _load(monkeypatch, tmp_path, history_on=True, store_on=True)
+    try:
+        memory_file = tmp_path / "cos_memory.md"
+        memory_file.write_text("## Active agenda\n[chat] 2026-07-11: Synthetic line.\n")
+        monkeypatch.setattr(cos, "COS_MEMORY_FILE", memory_file)
+        writer = cos._cos_store_writer
+        assert writer is not None and writer._verify == cos._history.verify_robert_source
+        before = cos._save_explicit_note("Synthetic note before import", "op-before")
+        assert before["saved"] is True and "store" not in str(writer.rows("cos.fact"))
+        assert "Synthetic note before import" in memory_file.read_text()        # the file writer, as today
+        memory.import_file(writer, memory_file)
+        after = cos._save_explicit_note("Synthetic note after import", "op-after")
+        assert after == {"saved": True, "deduplicated": False}
+        assert writer.rows("cos.fact")[-1]["entry"] == {"text": "Synthetic note after import",
+                                                         "provenance": "approved",
+                                                         "ref": {"type": "cos.memory_note", "id": "op-after"}}
+        assert memory_file.read_text().startswith(memory.PROJECTION_HEADER)
+        assert cos._save_explicit_note("Synthetic note after import", "op-after")["deduplicated"] is True
+    finally:
+        sys.modules.pop("domains.cos.chief_of_staff", None)

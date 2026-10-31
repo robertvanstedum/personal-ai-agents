@@ -1,0 +1,23 @@
+{
+  "schema": "minimoi.cos.standing_fact/1",
+  "data_scope": "personal",
+  "environment": "prod",
+  "id": "FACT-1a1b2c3d4e5f6a7b",
+  "at": "2026-10-20T00:00:00+00:00",
+  "section": "General",
+  "entry": {
+    "text": "Call the dentist before Friday.",
+    "provenance": "approved",
+    "ref": {
+      "type": "cos.memory_note",
+      "id": "6f1c2b9e-1111-4222-8333-944455556666"
+    }
+  },
+  "source": {
+    "kind": "cos_memory_md",
+    "tag": "note",
+    "entry_date": "2026-10-20",
+    "operation_id": "6f1c2b9e-1111-4222-8333-944455556666"
+  },
+  "state": "active"
+}

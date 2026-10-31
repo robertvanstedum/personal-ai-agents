@@ -11,7 +11,8 @@
     { "$ref": "#/$defs/episode_event" },
     { "$ref": "#/$defs/decision" },
     { "$ref": "#/$defs/correction" },
-    { "$ref": "#/$defs/meeting_link" }
+    { "$ref": "#/$defs/meeting_link" },
+    { "$ref": "#/$defs/standing_fact" }
   ],
   "$defs": {
     "base": {
@@ -309,6 +310,27 @@
           "items": { "$ref": "urn:minimoi:contract:cos:common#/$defs/id" }
         }
       }
+    },
+    "standing_fact": {
+      "description": "One line of facts.jsonl (section 4.5, memory layers): a standing fact CoS keeps about Robert's context. cos_memory.md migrates here with its real provenance (section 4.2) and then becomes a derived projection of these lines. Model-written lines are agent_draft; an explicit note Robert asked to save is approved, citing the note's own operation; robert_source needs a verified turn, as everywhere.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "data_scope", "environment", "id", "at", "section", "entry", "source", "state"],
+      "properties": {
+        "schema": {"const": "minimoi.cos.standing_fact/1"},
+        "data_scope": {"$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope"},
+        "environment": {"$ref": "urn:minimoi:contract:cos:common#/$defs/environment"},
+        "id": {"type": "string", "pattern": "^FACT-[0-9a-f]{12,32}$"},
+        "at": {"$ref": "urn:minimoi:contract:cos:common#/$defs/timestamp"},
+        "section": {"type": "string", "minLength": 1, "maxLength": 120},
+        "entry": {"$ref": "urn:minimoi:contract:cos:common#/$defs/attributed_text"},
+        "source": {"type": "object", "additionalProperties": false, "required": ["kind", "tag", "entry_date"], "properties": {"kind": {"enum": ["cos_memory_md", "memory_tool", "explicit_note"], "description": "cos_memory_md: imported from the file; memory_tool: the model's write_memory call; explicit_note: Robert's /note or 'Save a note:'."}, "tag": {"enum": ["chat", "note", "action", "distilled"], "description": "The file's [tag], or distilled for untagged lines under a section."}, "entry_date": {"oneOf": [{"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}, {"type": "null"}]}, "operation_id": {"$ref": "urn:minimoi:contract:cos:common#/$defs/id"}, "line_digest": {"$ref": "urn:minimoi:contract:cos:common#/$defs/digest"}}},
+        "state": {"enum": ["active"]}
+      },
+      "allOf": [
+        {"if": {"properties": {"source": {"properties": {"kind": {"enum": ["cos_memory_md", "memory_tool"]}, "tag": {"enum": ["chat", "action", "distilled"]}}}}}, "then": {"properties": {"entry": {"properties": {"provenance": {"const": "agent_draft"}}}}}},
+        {"if": {"properties": {"entry": {"properties": {"provenance": {"const": "approved"}}}}}, "then": {"properties": {"source": {"required": ["operation_id"], "properties": {"tag": {"const": "note"}}}, "entry": {"properties": {"ref": {"properties": {"type": {"const": "cos.memory_note"}}}}}}}}
+      ]
     }
   }
 }

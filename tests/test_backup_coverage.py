@@ -108,3 +108,9 @@ def test_cos_platform_notes_and_reminders_outside_data_are_backed_up():
     assert "cos_reminders" not in agent and "cos_memory.md" not in agent
     bot = " ".join(str(v) for v in services["cos-bot"].get("volumes") or [])
     assert "/cos_reminders:/app/data/cos_reminders" in bot          # Telegram /remind, same store
+
+
+def test_the_cos_store_and_conversation_history_are_in_the_daily_backup():
+    # CoS 1.2 spec v0.3 section 4.21: authoritative, outside data/, written only by cos-scheduler.
+    assert 'rsync_path "/opt/minimoi/cos/store/"' in LOCAL
+    assert 'rsync_path "/opt/minimoi/cos/conversations/"' in LOCAL

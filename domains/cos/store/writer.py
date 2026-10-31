@@ -55,10 +55,11 @@ _KINDS = {
     "episode.event": ("stream", "cos.episode", "episode_event"),
     "decision.record": ("stream", "cos.decision", "decision"),
     "correction.record": ("stream", "cos.correction", "correction"),
+    "fact.record": ("stream", "cos.fact", "standing_fact"),
 }
 _DOC_DIRS = {"cos.goal": "goals", "cos.plan": "plans", "cos.obligation": "obligations/definitions", "cos.meeting": "meetings"}
 _STREAMS = {"cos.occurrence": "obligations/events.jsonl", "cos.episode": "obligations/events.jsonl",
-            "cos.decision": "decisions.jsonl", "cos.correction": "corrections.jsonl"}
+            "cos.decision": "decisions.jsonl", "cos.correction": "corrections.jsonl", "cos.fact": "facts.jsonl"}
 _STREAM_FILES = sorted(set(_STREAMS.values()))
 _JOURNAL = "journal/journal.jsonl"
 _LOCK = "journal/.lock"

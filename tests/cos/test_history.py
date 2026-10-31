@@ -321,3 +321,18 @@ def test_the_history_is_off_unless_the_folder_and_environment_are_set(tmp_path):
                                         "COS_STORE_ENVIRONMENT": "dev"}) is None
     on = history_module.from_environ({"COS_CONVERSATIONS_DIR": str(tmp_path), "COS_STORE_ENVIRONMENT": "staging"})
     assert isinstance(on, History) and on.environment == "staging"
+
+
+def test_new_folders_keep_the_setgid_bit_so_files_stay_in_the_reader_group(tmp_path):
+    from domains.cos.store import fsio
+    root = tmp_path / "conversations"
+    root.mkdir()
+    (root / "history").mkdir()
+    (root / "history").chmod(0o2750)                    # what cos_prod.sh prepare sets, as root:1000
+    History(root, ENV, clock=Clock()).ensure_default()
+    assert stat.S_IMODE((root / "history" / "conversations").stat().st_mode) == 0o2750
+    fsio.ensure_dir(root / "history" / "a" / "b")
+    assert stat.S_IMODE((root / "history" / "a" / "b").stat().st_mode) == 0o2750
+    plain = tmp_path / "plain"
+    fsio.ensure_dir(plain / "x")
+    assert stat.S_IMODE((plain / "x").stat().st_mode) == 0o750

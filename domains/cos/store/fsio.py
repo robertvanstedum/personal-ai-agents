@@ -11,6 +11,7 @@ from __future__ import annotations
 import errno
 import json
 import os
+import stat
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,6 +41,9 @@ def fsync_dir(path: Path) -> None:
 
 
 def ensure_dir(folder: Path) -> None:
+    """Create missing folders 0750. A folder whose parent has the setgid bit keeps it, so files deep inside still
+    inherit the reader group the deploy set on the root (scripts/operations/cos_prod.sh prepare); a plain chmod to
+    0750 would clear it and leave new files in root's group, unreadable to the agent."""
     missing, probe = [], folder
     while not probe.exists() and probe != probe.parent:
         missing.append(probe)
@@ -49,7 +53,7 @@ def ensure_dir(folder: Path) -> None:
             os.mkdir(item, DIR_MODE)
         except FileExistsError:
             pass
-        os.chmod(item, DIR_MODE)
+        os.chmod(item, DIR_MODE | (os.stat(item.parent).st_mode & stat.S_ISGID))
 
 
 def write_bytes(path: Path, data: bytes) -> None:

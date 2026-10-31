@@ -9,6 +9,7 @@
     "minimoi.cos.obligation_event/1": "store-records.schema.json",
     "minimoi.cos.episode_event/1": "store-records.schema.json",
     "minimoi.cos.decision/1": "store-records.schema.json",
+    "minimoi.cos.standing_fact/1": "store-records.schema.json",
     "minimoi.cos.correction/1": "store-records.schema.json",
     "minimoi.cos.meeting_link/1": "store-records.schema.json",
     "minimoi.cos.store_command/1": "store-command.schema.json",

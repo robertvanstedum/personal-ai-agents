@@ -67,12 +67,12 @@ These are lookups and one verification, not decisions. They were made on `origin
 |---|---|
 | **German time fields** | Gespräche sessions record **`date` only** (`YYYY-MM-DD`), with no time of day (`domains/german/german_domain.py:2278`, `:2323`). Writing entries record `timestamp`, a naive ISO datetime (`:1612`). Drills keep only `last_practiced` per phrase, overwritten on each drill, so there's no drill history (`:1683`). **So:** items carry `time_precision`, which is `day` for sessions and `second` for writing; drills are counted only when `last_practiced` falls inside the covered interval. |
 | **Container time zones** | `minimoi-german` sets no `TZ` (`docker-compose.prod.yml`; only cos-agent-a `:83` and the supervisor `:483` set one), so German's naive timestamps are container local time, which is **UTC**. The writer converts them explicitly to `America/Chicago`. No naive time reaches a record: the schema refuses them. |
-| **Users, groups and modes** | The Python service images have no `USER` line and run as uid 0. `cos-agent-a` runs as the OpenClaw image's `node` user. Files are therefore `0640` with group gid 1000, so the agent can read and not write (`access-matrix.json`). **To confirm on the host at B1a deploy:** node's uid and gid, and the supervisor's user. |
+| **Users, groups and modes** | The Python service images have no `USER` line and run as uid 0. `cos-agent-a` runs as the OpenClaw image's `node` user. Files are therefore `0640` with group gid 1000, so the agent can read and not write (`access-matrix.json`). **To confirm on the host at B1a deploy:** node's uid and gid, and the supervisor's user. | **Observed 31 Oct:** `minimoi-cos-agent-a` runs as `uid=1000(node) gid=1000(node)`. On the host: `cos/` and `cos/conversations/` are `0:0 0755`; `cos_memory.md` is `1000:1000 0644`; `cos_reminders/` is `0:0 0700`; `data/` is `1000:1000 0755`; the receipts file is `0:0 0644`. B1a's deploy sets `cos/store/` and `cos/conversations/history/` to `0:1000`, with folders 0750 and files 0640.
 | **Loop inventory** | Confirmed against `chief_of_staff.py:1841-1894`. The code also runs loops D, F, G, I and R, which the spec's table didn't list. F, G and D stay. I raises E3. R migrates with reminders (`loop-inventory.json`). |
 | **Production backend** | The scheduler and `cos-bot` default to `COS_BACKEND_TYPE=openclaw` (`docker-compose.prod.yml:379`, `:414`); the code's own default is `grok` (`chief_of_staff.py:861`). Which one serves production **today** is a live fact, checked at B1a deploy with the capped key (`COS_AGENT_MASTER_KEY` empty, `/run/cos-key` present). |
-| **V-1, the OpenClaw context refresh** | **Not run.** It reads production's routing receipts and one OpenClaw session store on the EC2 host, which holds personal text, so it waits for Robert's word. B1b can't choose the injection channel until V-1 has a result; the permanent fallback is written in spec 4.8, and `channel` already carries both answers. The method and the exact read-only commands are below. |
+| **V-1, the OpenClaw context refresh** | **Run 31 Oct on production, read-only, on Robert's yes; it passes on thin evidence.** (1) The Confer log holds 1 conversation and 2 turns; both turns, including the 1 later turn, have their own routing receipt (150 receipt ids in all). (2) The agent's session store (`openclaw-agent.sqlite`, 31 session windows, 416 JSON events and 60 compressed ones) stores **no system-role event in any session**: user 98, assistant 159, toolResult 12. The system message is sent with each request and never kept as history, so a refreshed one applies on the next turn. **B1b uses the system-message channel.** Re-check once the history is on, when there are ten or more later turns. The fallback in 4.8 stays in the contract. |
 | **The supervisor's database role** | **None of its own.** The supervisor connects with the portal's `DATABASE_URL` (`docker-compose.prod.yml:479`, `services/supervisor/main.py:141`), and `core/supervision/sql/` creates no role and grants nothing. Spec 4.10's "the incident tables and nothing wider" therefore needs a new role at B6a, with its URL projected as a file like the token. That is a new production credential and needs Robert's yes (`access-matrix.json`). |
-| **Loops may run twice in production** | **A hypothesis from the code; no log confirms it.** `cos-bot` imports `domains.cos.chief_of_staff` (`core/telegram/telegram_cos_bot.py:51`, `:143`), whose `_start_cos()` runs at import (`chief_of_staff.py:1766`, `:1906`) and starts the scheduler and a Telegram poll thread. The cos-bot image copies `domains/cos`, and its compose block sets neither `COS_BACKGROUND_JOBS` nor `DISABLE_TELEGRAM_POLL` (`/opt/minimoi/.env` could). Only loop R is guarded against a second copy, by the reminder store lock. If the cos-bot startup log confirms it, B1a/B3 leave exactly one scheduler process: cos-bot reaches CoS through the store client and the backend's API and imports nothing from `chief_of_staff` (`loop-inventory.json`, `processes`). |
+| **Loops may run twice in production** | **A hypothesis from the code, still open after the 31 Oct read.** Since `minimoi-cos-bot` started (29 Oct 01:40 UTC), its log shows no CoS startup line and no scheduler, so nothing has imported `chief_of_staff` there yet: that happens only on the first Telegram CoS chat. `/opt/minimoi/.env` sets neither `COS_BACKGROUND_JOBS` nor `DISABLE_TELEGRAM_POLL`. The scheduler's own `DISABLE_TELEGRAM_POLL` comes from compose. `cos-bot` imports `domains.cos.chief_of_staff` (`core/telegram/telegram_cos_bot.py:51`, `:143`), whose `_start_cos()` runs at import (`chief_of_staff.py:1766`, `:1906`) and starts the scheduler and a Telegram poll thread. The cos-bot image copies `domains/cos`, and its compose block sets neither `COS_BACKGROUND_JOBS` nor `DISABLE_TELEGRAM_POLL` (`/opt/minimoi/.env` could). Only loop R is guarded against a second copy, by the reminder store lock. If the cos-bot startup log confirms it, B1a/B3 leave exactly one scheduler process: cos-bot reaches CoS through the store client and the backend's API and imports nothing from `chief_of_staff` (`loop-inventory.json`, `processes`). |
 
 ### V-1: the method and the read-only commands
 
@@ -105,7 +105,7 @@ sudo /opt/minimoi/scripts/operations/cos_prod.sh audit
 sudo grep -E '^(COS_BACKEND_TYPE|COS_BACKGROUND_JOBS|DISABLE_TELEGRAM_POLL)=' /opt/minimoi/.env | cut -d= -f1,2 || echo "no override"
 docker logs minimoi-cos-scheduler 2>&1 | grep -E 'Backend initialized|Scheduler:|Telegram poll' | tail -3
 docker logs minimoi-cos-bot 2>&1 | grep -E 'Backend initialized|Scheduler:|Telegram poll' | tail -3
-docker exec cos-agent-a id
+docker exec minimoi-cos-agent-a id
 ```
 
 The session-store path follows the one the judgment store reads for MC (`scripts/judgment/judgment_store.py:42`) and is
@@ -122,3 +122,22 @@ Nothing here changes a decision. Where the spec left a shape open, this is the s
 - Rooms event ids are the text `events.id`, not the integer `seq` (`rooms/store.py:108`);
 - the `cos-before-1-2` id for the imported, read-only legacy conversation;
 - stream note ids are `briefing:`, `nudge:`, `incident:`, `consult:` or `commitment:`.
+- a `cos.turn` ref's id is `<conversation_id>:<turn_id>`, which is what the `robert_source` verifier resolves.
+
+## Changes since the freeze
+
+Each change is additive, and comes with fixtures. Revise any of them with a change.
+
+| When | Change | Why |
+|---|---|---|
+| 31 Oct, B1a | `store-records` gains `standing_fact` (`facts.jsonl`); `store-command` gains `fact.record` (target `cos.fact`). | Section 4.5 moves `cos_memory.md` into the store "with its real provenance" but B0 froze no record for it. Model-written lines are `agent_draft`. An explicit note with its operation marker is `approved`, citing `cos.memory_note:<operation>`, because it is Robert's note but no turn exists to verify. Nothing imported is `robert_source`. Then `cos_memory.md` becomes the store's projection (`domains/cos/store/memory.py`). |
+| 31 Oct, B1a | `loop-inventory.json` gains `processes`. | The card build's finding that `cos-bot` may start a second copy of every loop. |
+
+## Where the canonical history lives (section 4.19, B1a)
+
+`domains/cos/history.py` writes `<COS_CONVERSATIONS_DIR>/history/`, on production `/opt/minimoi/cos/conversations/history/`:
+`conversations/<id>.json` (written once), `turns/<id>.jsonl` (every state appended; a turn is its last line),
+`notes/<id>.jsonl` (one per `note_id`), `selection/<owner>.<device>.json`. The monthly `<YYYY-MM>.jsonl` recall log
+beside it becomes the history's projection, its lines marked `"projection": true`. The first conversation, "CoS", has
+a fixed id and keeps the backend session `owner`. The history is on only when `COS_STORE_ENVIRONMENT` is set, the same
+switch as the store.
