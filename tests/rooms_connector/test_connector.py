@@ -245,7 +245,7 @@ def test_prove_then_answer_attributed_to_claude_code(env):
     events = env.call("GET", f"/rooms/{env.room}")[1]["events"]
     reply = [e for e in events if e["actor"] == "claude-code" and e["kind"] == "message"][-1]
     assert reply["origin"]["agent_id"] == "claude-code" and reply["origin"]["runtime"] == "Claude Code CLI 2.1.76"
-    from transcript_snapshot import capture
+    from domains.records.transcript_snapshot import capture
     data, _ = capture(env.store, "robert", env.room)
     rec = [r for r in data["raw_transcript"] if r["record_id"] == reply["id"]][0]
     assert rec["agent_id"] == "claude-code" and rec["speaker_id"] == "claude-code"
