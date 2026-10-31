@@ -19,13 +19,13 @@ from core.activity.writer import ActivityWriter
 _ID = re.compile(r"[^A-Za-z0-9._:@-]+")
 
 
-def writer_from_environ(*, domain: str, metric: str, service: str,
+def writer_from_environ(*, domain: str, metric: str, service: str, part: str = "main",
                         environ: Mapping[str, str] = os.environ) -> ActivityWriter | None:
     folder = (environ.get("MINIMOI_ACTIVITY_DIR") or "").strip()
     environment = (environ.get("MINIMOI_ACTIVITY_ENVIRONMENT") or "").strip()
     if not folder or not os.path.isabs(folder) or environment not in ("dev", "staging", "prod"):
         return None
-    return ActivityWriter(folder, domain=domain, metric=metric, environment=environment, service=service)
+    return ActivityWriter(folder, domain=domain, metric=metric, environment=environment, service=service, part=part)
 
 
 def owner_id(environ: Mapping[str, str] = os.environ) -> int | None:

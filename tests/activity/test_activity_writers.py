@@ -217,3 +217,42 @@ def test_curator_with_no_feedback_publishes_an_honest_zero_and_unreadable_as_nul
     record = valid(curator.publish("2026-10-29", final=True, preferences_file=bad, environ=env))
     assert record["count"] is None and record["health"]["last_error"] == "preferences_unreadable"
     assert os.path.exists(tmp_path / "activity" / "curator" / "2026-10-29.main.json")
+
+
+# ---- guild-build facts ------------------------------------------------------------------------------------------
+
+def test_guild_build_facts_count_checkins_and_the_queue_and_never_chase(tmp_path):
+    from services.supervisor import activity_facts
+    queue = tmp_path / "build_queue.json"
+    queue.write_text(json.dumps({"items": [
+        {"id": 1, "spec_title": "a", "status": "in_build", "last_transition_at": "2026-10-29T10:00:00-05:00"},
+        {"id": 2, "spec_title": "b", "status": "blocked", "blocked_reason": "x",
+         "last_transition_at": "2026-10-30T10:00:00-05:00"},
+        {"id": 3, "spec_title": "c", "status": "done", "last_transition_at": "2026-10-30T16:00:00-05:00"},
+        {"id": 4, "spec_title": "d", "status": "done", "last_transition_at": "2026-10-29T16:00:00-05:00"}]}))
+    seen = []
+
+    def checkins(start, end):
+        seen.append((start.isoformat(), end.isoformat()))
+        return {"count": 40, "last_at": datetime(2026, 10, 30, 19, 0, tzinfo=ZoneInfo("UTC"))}
+    env = {"MINIMOI_ACTIVITY_DIR": str(tmp_path / "activity" / "guild-build"), "MINIMOI_ACTIVITY_ENVIRONMENT": "dev"}
+    detail, whole = activity_facts.observe(DAY, checkins_between=checkins,
+                                           queue_items=lambda: json.loads(queue.read_text())["items"])
+    assert whole and detail["build_log"] == {"state": "ok", "in_build": 1, "blocked": 1, "done_today": 1}
+    assert detail["checkins"] == {"state": "ok", "count": 40, "last_at": "2026-10-30T14:00:00-05:00"}
+    assert seen == [("2026-10-30T00:00:00-05:00", "2026-10-30T23:59:59-05:00")]
+    record = valid(activity_facts.publish(DAY, final=True, checkins_between=checkins, queue_path=None, environ=env))
+    # No queue path: build_log is unavailable, so the day is partial, never a confident zero.
+    assert record["observation"]["state"] == "partial" and record["detail"]["build_log"]["state"] == "unavailable"
+    assert record["part"] == "facts" and record["detail"]["snapshot"] == {"state": "not_available_here"}
+    assert (tmp_path / "activity" / "guild-build" / f"{DAY}.facts.json").exists()
+
+
+def test_guild_build_facts_with_no_source_readable_is_unreadable(tmp_path):
+    from services.supervisor import activity_facts
+
+    def broken(start, end):
+        raise OSError("db down")
+    env = {"MINIMOI_ACTIVITY_DIR": str(tmp_path / "gb"), "MINIMOI_ACTIVITY_ENVIRONMENT": "dev"}
+    record = valid(activity_facts.publish(DAY, final=True, checkins_between=broken, queue_path=None, environ=env))
+    assert record["count"] is None and record["health"]["last_error"] == "build_sources_unreadable"
