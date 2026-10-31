@@ -9,8 +9,9 @@ The store is canonical for what CoS keeps about Robert's context. Each line of c
   citing that operation. Without the marker the line can't be traced, so it stays ``agent_draft``.
 - No line becomes ``robert_source``: the file holds no turn the server can verify.
 
-The import is one fact.record command per line, each with a receipt. Command ids are derived from the line, so a re-run
-replays the first receipts and writes nothing twice. The original file is kept byte for byte at
+The import is one fact.record command per line, each with a receipt. Command ids are derived from the line and a
+manifest fixes the import timestamp, so an interrupted import can resume without writing twice. Completed imports
+and projection files are refused. The original file is kept byte for byte at
 ``imports/cos_memory.md.<digest>.orig`` and ``imports/cos_memory.done`` marks the import complete.
 
 After that, cos_memory.md is a derived projection of the facts, rewritten **in place** after every new fact: it is a
@@ -23,6 +24,7 @@ stay in the store and are ignored until the next import.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -43,6 +45,7 @@ NEW_SECTION = "Recent"
 PROJECTION_HEADER = ("# CoS Memory (a projection of the CoS store's standing facts; it is rewritten from the store, "
                      "so change it through CoS, not here)")
 DONE_MARKER = "imports/cos_memory.done"
+IMPORT_MANIFEST = "imports/cos_memory.manifest.json"
 
 _TAGGED = re.compile(r"^\[([a-z_]+)\] (?:([0-9]{4}-[0-9]{2}-[0-9]{2}): )?(.*)$")
 _PLACEHOLDER = re.compile(r"^\[[^\]]*\]$")
@@ -125,16 +128,51 @@ def imported(writer: StoreWriter) -> bool:
 
 
 def import_file(writer: StoreWriter, memory_file: Path | str) -> dict:
-    """Move cos_memory.md into the store. Stops at the first fact not accepted, and marks done only when all are."""
+    """Resume an interrupted import of the same bytes; never import a completed projection.
+
+    Stop legacy memory writers before migration. The import lock serializes importers,
+    while each store command still takes the writer's own journal lock.
+    """
+    folder = writer.root / "imports"
+    fsio.ensure_dir(folder)
+    fd = os.open(folder / ".memory-import.lock", os.O_RDWR | os.O_CREAT |
+                 getattr(os, "O_NOFOLLOW", 0), fsio.FILE_MODE)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        return _import_file_locked(writer, memory_file)
+    finally:
+        os.close(fd)
+
+
+def _import_file_locked(writer: StoreWriter, memory_file: Path | str) -> dict:
+    def refused(code):
+        return {"accepted": 0, "stopped": {"outcome": "refused", "code": code}}
+
+    if imported(writer):
+        return refused("memory_import_already_complete")
     path = Path(memory_file)
     raw = path.read_bytes()
-    original = writer.root / "imports" / f"cos_memory.md.{hashlib.sha256(raw).hexdigest()[:16]}.orig"
+    text = raw.decode("utf-8")
+    if text.startswith(PROJECTION_HEADER):
+        return refused("memory_projection_not_importable")
+    source_digest = hashlib.sha256(raw).hexdigest()
+    manifest_path = writer.root / IMPORT_MANIFEST
+    if manifest_path.exists():
+        manifest = fsio.read_doc(manifest_path)
+        if (not manifest or manifest.get("source_digest") != source_digest or
+                not isinstance(manifest.get("at"), str) or not manifest["at"]):
+            return refused("memory_import_source_changed")
+    else:
+        manifest = {"source_digest": source_digest, "at": _now()}
+        fsio.write_doc(manifest_path, manifest)
+    original = writer.root / "imports" / f"cos_memory.md.{source_digest[:16]}.orig"
     if not original.exists():
         fsio.write_bytes(original, raw)
-    entries = parse(raw.decode("utf-8"))
+    entries = parse(text)
     counts = {"entries": len(entries), "accepted": 0, "replayed": 0, "approved_notes": 0}
     for entry in entries:
-        fact = fact_for(entry, writer.environment)
+        fact = fact_for(entry, writer.environment,
+                        at=None if entry.get("entry_date") else manifest["at"])
         result = record(writer, fact, origin="import", actor="scheduler")
         if result["outcome"] != "accepted":
             counts["stopped"] = {"fact": fact["id"], "outcome": result["outcome"],
@@ -206,9 +244,13 @@ def remember(writer: StoreWriter, memory_file: Path | str, text: str, *, kind: s
     fact = fact_for(entry, writer.environment, kind=kind, at=when)
     if operation_id:
         fact["id"] = "FACT-" + hashlib.sha256(f"{kind}:{operation_id}".encode("utf-8")).hexdigest()[:24]
-        existing = next((f for f in writer.rows("cos.fact") if f["id"] == fact["id"]), None)
-        if existing is not None:
-            return {"saved": True, "deduplicated": True}
+    existing = next((f for f in writer.rows("cos.fact") if f["id"] == fact["id"]), None)
+    if existing is not None:
+        if existing["entry"] != fact["entry"] or existing["source"]["kind"] != kind:
+            return {"saved": False, "deduplicated": False, "code": "command_id_reused"}
+        # A previous save may have succeeded before projection failed. Repair it on retry.
+        write_projection(writer, memory_file)
+        return {"saved": True, "deduplicated": True}
     # Both happen inside a turn Robert started. The note cites its own operation; the model's write cites itself,
     # because the Grok backend's write_memory call carries no turn id.
     basis = ({"type": "cos.memory_note", "id": operation_id} if kind == "explicit_note"
@@ -225,11 +267,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--store", required=True, help="the CoS store folder (production: /opt/minimoi/cos/store)")
     parser.add_argument("--environment", required=True, choices=["dev", "staging", "prod"])
     parser.add_argument("--memory", required=True, help="cos_memory.md")
-    parser.add_argument("--project", action="store_true", help="after a complete import, rewrite the file as the projection")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--project", action="store_true", help="after a complete import, rewrite the file as the projection")
+    modes.add_argument("--project-only", action="store_true", help="repair the projection after a completed import; do not import the file")
     args = parser.parse_args(argv)
     writer = StoreWriter(args.store, args.environment)
-    counts = import_file(writer, args.memory)
-    if "stopped" not in counts and args.project:
+    if args.project_only:
+        counts = ({"accepted": 0} if imported(writer) else
+                  {"stopped": {"outcome": "refused", "code": "memory_import_not_complete"}})
+    else:
+        counts = import_file(writer, args.memory)
+    if "stopped" not in counts and (args.project or args.project_only):
         write_projection(writer, args.memory)
         counts["projected"] = True
     print(json.dumps(counts))

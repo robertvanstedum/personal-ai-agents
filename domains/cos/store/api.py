@@ -20,6 +20,8 @@ from flask import Blueprint, Flask, jsonify, request
 from domains.cos.store.writer import MAX_COMMAND_BYTES, StoreRefused, StoreWriter
 
 from domains.cos.store.protocol import PREFIX  # noqa: E402,F401  (re-exported for callers)
+_SERVICE_ACTORS = {"agent": {"cos"}, "cos-bot": {"telegram", "cos"},
+                   "scheduler-jobs": {"scheduler"}, "supervisor": {"scheduler"}, "portal": {"mc"}}
 _READ_TYPES = {"cos.goal", "cos.plan", "cos.obligation", "cos.meeting"}
 
 
@@ -30,13 +32,32 @@ def _token(path: str) -> str:
         return ""
 
 
-def create_blueprint(writer: StoreWriter, token_file: str) -> Blueprint:
+def create_blueprint(writer: StoreWriter, token_file: str = "", *, token_dir: str = "") -> Blueprint:
     bp = Blueprint("cos_store", __name__)
 
+    def allowed_actors() -> set[str]:
+        supplied = request.headers.get("Authorization", "")
+        if not supplied.startswith("Bearer "):
+            return set()
+        supplied = supplied[7:].strip()
+        if not supplied:
+            return set()
+        # Ambiguous/duplicate credentials are refused, never unioned into wider authority.
+        matches = []
+        if token_dir:
+            for service, actors in _SERVICE_ACTORS.items():
+                expected = _token(str(Path(token_dir) / service))
+                if expected and hmac.compare_digest(expected.encode(), supplied.encode()):
+                    matches.append(actors)
+        elif token_file:
+            # Legacy single-token configuration is only the CoS agent grant.
+            expected = _token(token_file)
+            if expected and hmac.compare_digest(expected.encode(), supplied.encode()):
+                matches.append({"cos"})
+        return matches[0] if len(matches) == 1 else set()
+
     def authorized() -> bool:
-        expected = _token(token_file)
-        supplied = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-        return bool(expected) and bool(supplied) and hmac.compare_digest(expected, supplied)
+        return bool(allowed_actors())
 
     def reader(state: str, *, value: dict | None = None, reason: str | None = None):
         """A reader_response (contracts/cos/v1/read-surface.schema.json). as_of is when the record was true."""
@@ -60,6 +81,18 @@ def create_blueprint(writer: StoreWriter, token_file: str) -> Blueprint:
         command = request.get_json(silent=True)
         if not isinstance(command, dict):
             return jsonify({"error": "json_object_required"}), 400
+        actor = command.get("actor")
+        seats = {"cos": {"cos", None}, "telegram": {"cos", None}, "mc": {"mc", None}, "scheduler": {None}}
+        origins = {"cos": {"owner_turn", "consultation"}, "telegram": {"owner_turn"},
+                   "mc": {"consultation", "owner_turn"}, "scheduler": {"scheduled", "import"}}
+        if (not isinstance(actor, str) or actor not in allowed_actors()
+                or not (command.get("seat") is None or isinstance(command.get("seat"), str))
+                or command.get("seat") not in seats.get(actor, set())
+                or not isinstance(command.get("origin"), str)
+                or command.get("origin") not in origins.get(actor, set())):
+            return jsonify({"schema": "minimoi.cos.store_result/1",
+                            "command_id": command.get("command_id", "unknown"),
+                            "outcome": "refused", "code": "not_authorized"}), 403
         # The outcome (accepted, conflict, refused, failed) is in the body; the transport succeeded either way.
         return jsonify(writer.submit(command))
 
@@ -99,8 +132,10 @@ def install(app: Flask, *, environ: Mapping[str, str],
     root = environ.get("COS_STORE_DIR", "").strip()
     environment = environ.get("COS_STORE_ENVIRONMENT", "").strip()
     token_file = environ.get("COS_STORE_TOKEN_FILE", "").strip()
-    if not root or environment not in ("dev", "staging", "prod") or not token_file or not _token(token_file):
+    token_dir = environ.get("COS_STORE_TOKEN_DIR", "").strip()
+    configured = any(_token(str(Path(token_dir) / name)) for name in _SERVICE_ACTORS) if token_dir else bool(token_file and _token(token_file))
+    if not root or environment not in ("dev", "staging", "prod") or not configured:
         return None
     writer = StoreWriter(root, environment, verify_robert_source=verify_robert_source)
-    app.register_blueprint(create_blueprint(writer, token_file))
+    app.register_blueprint(create_blueprint(writer, token_file, token_dir=token_dir))
     return writer

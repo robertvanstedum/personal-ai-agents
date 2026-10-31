@@ -5,24 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chief of Staff</title>
   <link rel="stylesheet" href="/static/cos.css?v=20261028-voice1">
+  <link rel="stylesheet" href="/founders-ui/founders.css?v=12">
 </head>
-<body>
+<body class="founders-cos" data-picture="shown">
 
-  <!-- ── Sticky dark header ── -->
-  <header class="cos-header">
-    <div class="header-nav">
-      <a href="/ui" class="brand">Chief of Staff</a>
-      <nav class="tab-nav">
-        <button class="tab-btn" data-tab="confer">Confer</button>
-        <button class="tab-btn" data-tab="record">Record</button>
-        <button class="tab-btn" data-tab="track">Track</button>
-        <button class="tab-btn" data-tab="store">Store</button>
-      </nav>
-      <span class="dev-badge">IN BUILD</span>
-      <div class="backend-badge" id="backend-badge">···</div>
-    </div>
-  </header>
-
+  <header class="cos-header"><div class="header-nav">
+    <nav class="tab-nav" aria-label="Chief of Staff"><button class="tab-btn" data-tab="confer">Chat</button><button class="tab-btn" data-tab="rooms">Rooms</button><button class="tab-btn" data-tab="records">Records</button></nav>
+    <button id="history-open" type="button">History</button><button id="files-open" type="button">Files</button>
+    <a class="founder-link" id="mc-page" href="#">MC ↗</a><button id="both-open" type="button" aria-pressed="false">Both</button><button id="picture-mode" type="button" aria-label="Change picture appearance">◐</button><button id="popout" type="button" aria-label="Open conversation in a window">⧉</button>
+  </div></header>
+  <dialog id="history-sheet"><header><h2>History</h2><button type="button" data-close-sheet>Close</button></header><button id="history-new" type="button">+ New conversation</button><div id="history-list"></div><button id="history-more" hidden>More conversations</button></dialog>
+  <dialog id="files-sheet"><header><h2>Files</h2><button type="button" data-close-sheet>Close</button></header><div id="files-sheet-content"></div></dialog>
   <!-- ── Two-column split: content left, photo right ── -->
   <div class="tab-layout-split">
 
@@ -31,22 +24,20 @@
 
       <!-- Confer -->
       <div id="tab-confer" class="tab-panel">
-        <div class="tab-split-header">
-          <div class="tab-hero-label">[CHICAGO]</div>
-          <h1>Confer</h1>
-        </div>
-        <div id="chat-log"></div>
+        <div id="chat-log" aria-live="polite"><div id="cos-greeting"><h1>Hello, Robert.</h1><p>Your conversations, kept here.</p></div></div>
+        <button id="history-earlier" type="button" hidden>Earlier messages</button>
         <div id="attach-tray" aria-live="polite"></div>
         <div class="input-row">
           <input id="attach-input" type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json,.html,.htm,.png,.jpg,.jpeg,.gif,.webp">
           <button id="btn-attach" type="button" title="Attach a file" aria-label="Attach a file">📎</button>
-          <input id="send-input" type="text" placeholder="Message CoS…" autocomplete="off" autofocus>
+          <textarea id="send-input" rows="2" placeholder="Message CoS…" autocomplete="off" autofocus></textarea>
           <button id="btn-voice" title="Start voice conversation" aria-label="Start voice conversation">🎤</button>
           <button id="btn-dictate" type="button" disabled aria-label="Dictate into the message draft">Dictate</button>
           <button id="btn-send">Send</button>
         </div>
         {# Her direct voice (Spec 165 v0.3 §6.6): filled only when the capabilities read offers it; empty and hidden otherwise. #}
         <div id="voice-live" class="voice-live" role="group" aria-label="Voice conversation" hidden></div>
+        <div id="save-state" role="status">Loading your conversation…</div>
         <div class="talk-meta">
           <span id="voice-status"></span>
           <span id="voice-provider"></span>
@@ -65,6 +56,8 @@
         <div id="voice-sessions" class="voice-sessions" aria-label="Voice sessions to look at" hidden></div>
       </div>
 
+      <section id="tab-rooms" class="tab-panel"><h1>Rooms</h1><p>In construction</p><a id="existing-rooms" href="#">Open existing Rooms ↗</a></section>
+      <section id="tab-records" class="tab-panel"><h1>Records</h1><p>In construction</p><p>Your saved conversations are available in History.</p></section>
       <!-- Record -->
       <div id="tab-record" class="tab-panel">
         <div class="tab-split-header">
@@ -95,6 +88,7 @@
     </div><!-- .tab-content -->
 
     <!-- ── Right: sidebar photos (all pre-loaded, JS shows active) ── -->
+    <iframe id="mc-both" title="Master Craftsman conversation" hidden></iframe>
     <div class="tab-panel-photo">
       <img src="/static/photos/cos_discuss_private.png?v=1" class="tab-photo" data-tab="confer" style="object-position:center 30%" alt="">
       <img src="/static/photos/cos_notes.jpg"      class="tab-photo" data-tab="record"  style="object-position:center center" alt="">
@@ -105,13 +99,15 @@
   </div><!-- .tab-layout-split -->
 
 <script>
+window.cosVoiceConversationAllowed = false;
+document.getElementById("btn-voice").addEventListener("click", e => { if (!window.cosVoiceConversationAllowed) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
 const INITIAL_TAB = '{{ initial_tab }}';
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
 const tabBtns   = document.querySelectorAll('.tab-btn');
 const tabPanels = document.querySelectorAll('.tab-panel');
 const tabPhotos = document.querySelectorAll('.tab-photo');
-const tabLoaded = { confer: true, record: false, track: false, store: false };
+const tabLoaded = { confer: true, rooms: true, records: true, record: false, track: false, store: false };
 
 function activateTab(tab, pushState) {
   tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
@@ -129,18 +125,6 @@ window.addEventListener('popstate', e => {
   const tab = (e.state && e.state.tab) || 'confer';
   activateTab(tab, false);
 });
-
-// ── Backend badge ─────────────────────────────────────────────────────────────
-async function loadBackendBadge() {
-  try {
-    const d = await fetch('/status').then(r => r.json());
-    const badge = document.getElementById('backend-badge');
-    const bl = d.backend_label || '';
-    const ml = d.model_label   || '';
-    badge.textContent = ml ? `${bl} · ${ml}` : bl || '···';
-  } catch(_) {}
-}
-loadBackendBadge();
 
 // ── Chat (Discuss tab) ────────────────────────────────────────────────────────
 const chatLog   = document.getElementById('chat-log');
@@ -220,6 +204,7 @@ function fmtBytes(n) {
 }
 
 function renderTray() {
+  window.cosHistory?.persistDraft();
   attachTray.textContent = '';
   for (const a of attached) {
     const chip = document.createElement('span');
@@ -292,8 +277,12 @@ async function sendMessage() {
   const text = sendInput.value.trim();
   if (!text && !attached.length) return;
   const files = attached;
-  const requestId = crypto.randomUUID();
+  if (!window.cosHistory?.ready) return;
+  const conversationId = window.cosHistory.conversationId;
+  const requestId = window.cosHistory.requestId(text, files);
+  if (!requestId) return;
   sendInput.value = '';
+  window.cosHistory.persistDraft();
   attached = []; renderTray();
   setInputDisabled(true);
   appendMsg('user', [text, ...files.map(f => '📎 ' + f.name)].filter(Boolean).join('\n'));
@@ -301,17 +290,20 @@ async function sendMessage() {
   const restore = () => {
     if (!sendInput.value.trim()) sendInput.value = text;
     if (!attached.length) { attached = files; renderTray(); }
+    window.cosHistory.persistDraft();
   };
   try {
     const { resp, data } = await runTurn({
       text,
       channel: 'html_text',
-      conversation_id: 'owner',
+      conversation_id: conversationId,
+      device: window.cosHistory.device,
       request_id: requestId,
       attachments: files.map(f => f.file_id),
     }, thinking);
     thinking.remove();
     if (!resp.ok || !data || typeof data !== 'object' || Array.isArray(data) || typeof data.reply !== 'string' || !data.reply.trim()) {
+      window.cosHistory.uncertain(data?.history);
       restore();
       const confirmedRefusal = resp.status === 403 && data?.error === 'csrf';
       appendMsg('cos', confirmedRefusal
@@ -321,10 +313,12 @@ async function sendMessage() {
           : 'Delivery is unconfirmed. Your draft is preserved; check the record before retrying.');
       return;
     }
-    appendMsg('cos', data.reply, data.files);
+    window.cosHistory.confirm(data.history, data.operation);
+    if (window.cosHistory.conversationId === conversationId) appendMsg('cos', data.reply, data.files);
     if (Array.isArray(data.files) && data.files.length) loadCosFiles();
   } catch(err) {
     thinking.remove();
+    window.cosHistory.uncertain();
     restore();
     appendMsg('cos', 'Delivery is unconfirmed. Your draft is preserved; check the record before retrying.');
   } finally {
@@ -487,7 +481,7 @@ function esc(s) {
 }
 
 // ── Initialise on load ───────────────────────────────────────────────────────
-activateTab(INITIAL_TAB, false);
+activateTab('confer', false);
 if (INITIAL_TAB !== 'confer') loadTab(INITIAL_TAB);
 </script>
 <script type="module">
@@ -673,5 +667,6 @@ async function readDirect(){
 }
 void readDirect();
 </script>
+<script src="/static/cos-history-ui.js?v=12"></script>
 </body>
 </html>

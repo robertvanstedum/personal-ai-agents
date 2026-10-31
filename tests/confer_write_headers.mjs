@@ -6,13 +6,14 @@ const helper=html.slice(html.indexOf('function cosWriteHeaders() {'),html.indexO
 const send=html.slice(html.indexOf('async function sendMessage() {'),html.indexOf('function setInputDisabled('));
 // The page's nodes as its attachment and Files from CoS wiring (c13e0fba) looks them up at load: they take listeners, text
 // and children, nothing more (Spec 165 §12.1's missing DOM mock). The token is read through querySelector, as the page does.
+const historyWindow=()=>({cosHistory:{ready:true,conversationId:'cosc-synthetic',device:'synthetic',requestId:()=> 'synthetic-request',persistDraft(){},confirm(){},uncertain(){}}});
 const pageDocument=(token)=>({querySelector:()=>({content:token()}),
  getElementById:()=>({textContent:'',value:'',files:[],addEventListener(){},appendChild(){},click(){}})});
 // Actual typed handler must send the current portal token and preserve a rejected draft without retry.
 {
  let token='synthetic-token-1',status=403;const sent=[],messages=[];
  const input={value:'Retain this dictated draft',disabled:false,readOnly:false,focus(){}};
- const sandbox={sendInput:input,document:pageDocument(()=>token),crypto:{randomUUID:()=> 'synthetic-request'},
+ const sandbox={window:historyWindow(),sendInput:input,document:pageDocument(()=>token),crypto:{randomUUID:()=> 'synthetic-request'},
    setInputDisabled:value=>{input.disabled=value},appendMsg:(role,text)=>messages.push([role,text]),appendThinking:()=>({remove(){}}),
    fetch:async(url,options)=>{sent.push({url,options});return {status,ok:status===200,json:async()=>status===200?{reply:'Actual accepted response'}:{error:'csrf',message:'Request refused'}}}};
  vm.createContext(sandbox);vm.runInContext(helper+send,sandbox);
@@ -36,7 +37,7 @@ const pageDocument=(token)=>({querySelector:()=>({content:token()}),
 // Non-JSON and uncertain network failures preserve the draft, without redispatch.
 for(const fail of ['html403','network','html200','null200','array200','empty200','number200','missing200']) {
  let calls=0;const messages=[],input={value:'Do not lose this draft',disabled:false,readOnly:false,focus(){}};
- const sandbox={sendInput:input,document:pageDocument(()=>'synthetic'),crypto:{randomUUID:()=> 'synthetic'},
+ const sandbox={window:historyWindow(),sendInput:input,document:pageDocument(()=>'synthetic'),crypto:{randomUUID:()=> 'synthetic'},
    setInputDisabled:v=>{input.disabled=v},appendMsg:(role,text)=>messages.push(text),appendThinking:()=>({remove(){}}),
    fetch:async()=>{calls++;if(fail==='network')throw Error('network unavailable');const accepted=fail.endsWith('200');return{status:accepted?200:403,ok:accepted,json:async()=>{if(fail.startsWith('html'))throw Error('HTML response');return {null200:null,array200:[],empty200:{reply:'  '},number200:{reply:42},missing200:{}}[fail]}}}};
  vm.createContext(sandbox);vm.runInContext(helper+send,sandbox);await sandbox.sendMessage();

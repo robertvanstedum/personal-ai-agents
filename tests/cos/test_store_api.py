@@ -145,3 +145,37 @@ def test_the_client_never_claims_a_save_it_did_not_get(tmp_path, configured):
     assert down.get("cos.goal", "GOAL-x")["state"] == "unavailable"
     no_token = StoreClient("http://cos-scheduler:8769", str(tmp_path / "missing"), session=_Broken())
     assert no_token.submit(commitment_command())["code"] == "store_unavailable"
+
+@pytest.mark.parametrize('actor', ['robert', 'mc', 'scheduler', 'telegram', [], None])
+def test_legacy_agent_token_cannot_impersonate_other_actors(configured, actor):
+    app, writer, _ = configured
+    command = commitment_command()
+    command['actor'] = actor
+    response = app.test_client().post(f'{PREFIX}/commands', json=command, headers=AUTH)
+    assert response.status_code == 403
+    assert response.get_json()['code'] == 'not_authorized'
+    assert writer.get('cos.obligation', 'OBL-cos-followup-0001') is None
+
+
+def test_service_credentials_bind_actors_and_duplicate_tokens_fail_closed(tmp_path):
+    tokens = tmp_path / 'tokens'; tokens.mkdir()
+    (tokens / 'agent').write_text('agent-secret')
+    (tokens / 'portal').write_text('portal-secret')
+    app = Flask(__name__)
+    writer = install(app, environ={'COS_STORE_DIR':str(tmp_path/'store'), 'COS_STORE_ENVIRONMENT':'dev',
+                                  'COS_STORE_TOKEN_DIR':str(tokens)})
+    client = app.test_client()
+    assert client.post(f'{PREFIX}/commands',json=commitment_command(),headers={'Authorization':'Bearer portal-secret'}).status_code == 403
+    assert client.post(f'{PREFIX}/commands',json=commitment_command(),headers={'Authorization':'Bearer agent-secret'}).get_json()['outcome'] == 'accepted'
+    (tokens / 'portal').write_text('agent-secret')
+    assert client.post(f'{PREFIX}/commands',json=commitment_command('other'),headers={'Authorization':'Bearer agent-secret'}).status_code == 401
+
+
+def test_scheduler_credential_cannot_claim_owner_authority(tmp_path):
+    tokens = tmp_path/'tokens';tokens.mkdir();(tokens/'scheduler-jobs').write_text('scheduler-secret')
+    app = Flask(__name__)
+    install(app,environ={'COS_STORE_DIR':str(tmp_path/'store'),'COS_STORE_ENVIRONMENT':'dev','COS_STORE_TOKEN_DIR':str(tokens)})
+    command=commitment_command();command['actor']='scheduler'
+    response=app.test_client().post(f'{PREFIX}/commands',json=command,headers={'Authorization':'Bearer scheduler-secret'})
+    assert response.status_code == 403
+    assert response.get_json()['code']=='not_authorized'

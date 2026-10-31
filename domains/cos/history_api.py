@@ -68,7 +68,8 @@ def create_blueprint(history: History, *, resolve_owner: Callable) -> Blueprint:
             return refused(HistoryRefused("identity_required"))
         try:
             cid = history.selected(owner, request.args.get("device"))
-            return jsonify({"conversation_id": cid, "conversation": history.conversation(cid)})
+            return jsonify({"conversation_id": cid, "conversation": history.conversation(cid),
+                            "voice_conversation_id": history.ensure_default()["conversation_id"]})
         except OSError:
             return unavailable()
 
@@ -80,6 +81,31 @@ def create_blueprint(history: History, *, resolve_owner: Callable) -> Blueprint:
                                           str(body.get("conversation_id") or "")))
         except HistoryRefused as exc:
             return refused(exc)
+        except OSError:
+            return unavailable()
+
+    @bp.route("/ui/history/preferences", methods=["GET", "POST"])
+    def preferences():
+        import hashlib
+        from core import durable_files as fsio
+        owner = resolve_owner(request)
+        if owner is None:
+            return refused(HistoryRefused("identity_required"))
+        body = request.get_json(silent=True) if request.method == "POST" else request.args
+        if not isinstance(body, dict) and request.method == "POST":
+            return jsonify({"error": "json_object_required"}), 400
+        device = str(body.get("device", "browser"))[:128]
+        key = hashlib.sha256((str(owner) + ":" + device).encode()).hexdigest()
+        path = history.root / "preferences" / (key + ".json")
+        try:
+            with history._locked():
+                value = fsio.read_doc(path) or {"picture": "shown"}
+                if request.method == "POST":
+                    if body.get("picture") not in ("shown", "faded", "hidden"):
+                        return jsonify({"error": "invalid_picture"}), 400
+                    value = {"picture": body["picture"]}
+                    fsio.write_doc(path, value)
+            return jsonify(value)
         except OSError:
             return unavailable()
 

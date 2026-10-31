@@ -22,8 +22,9 @@ def test_every_cos_dependency_is_pinned_exactly_to_the_measured_production_set()
     pins = _pins()
     # The measured 51-package baseline plus the reviewed server-sideband and register YAML extras, plus the
     # Confer attachment reader's three (pypdf, beautifulsoup4, soupsieve; same pins as the portal), plus the
-    # store writer's contract validation (jsonschema and its four dependencies; CoS 1.2 spec v0.3 section 4.5).
-    assert len(pins) == 61
+    # store writer's contract validation and explicit RFC3339 date-time validator (CoS contracts r1).
+    assert len(pins) == 62
+    assert pins["rfc3339-validator"] == "0.1.4"
     assert {k: pins[k] for k in ("jsonschema", "referencing", "rpds-py", "attrs", "jsonschema-specifications")} == {
         "jsonschema": "4.26.0", "referencing": "0.37.0", "rpds-py": "2026.9.1", "attrs": "26.1.0",
         "jsonschema-specifications": "2025.9.1"}

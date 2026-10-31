@@ -62,14 +62,92 @@ def test_the_import_keeps_real_provenance_and_never_claims_roberts_words(writer,
     assert not any(f["entry"]["provenance"] == "robert_source" for f in facts)
 
 
-def test_the_import_keeps_the_original_and_is_safe_to_rerun(writer, memory_file):
+def test_the_import_keeps_the_original_and_refuses_completed_import(writer, memory_file):
     memory.import_file(writer, memory_file)
     (original,) = (writer.root / "imports").glob("cos_memory.md.*.orig")
     assert original.read_text() == FILE
     assert memory.imported(writer)
     again = memory.import_file(writer, memory_file)
-    assert again["accepted"] == 0 and again["replayed"] == 4
+    assert again["accepted"] == 0 and again["stopped"]["code"] == "memory_import_already_complete"
     assert len(writer.rows("cos.fact")) == 4
+
+
+def test_interrupted_import_resumes_after_restart_at_a_later_time(writer, memory_file, monkeypatch):
+    monkeypatch.setattr(memory, "_now", lambda: "2026-10-31T10:00:00+00:00")
+    original_submit = writer.submit
+    calls = 0
+
+    def interrupted(command):
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise OSError("synthetic interruption")
+        return original_submit(command)
+
+    monkeypatch.setattr(writer, "submit", interrupted)
+    with pytest.raises(OSError):
+        memory.import_file(writer, memory_file)
+    assert not memory.imported(writer)
+    assert len(writer.rows("cos.fact")) == 2
+    monkeypatch.setattr(memory, "_now", lambda: "2026-11-01T11:00:00+00:00")
+    restarted = StoreWriter(writer.root, ENV)
+    result = memory.import_file(restarted, memory_file)
+    assert result["accepted"] == 2 and result["replayed"] == 2
+    assert len(restarted.rows("cos.fact")) == 4
+    assert restarted.rows("cos.fact")[0]["at"] == "2026-10-31T10:00:00+00:00"
+
+
+def test_incomplete_import_cannot_resume_with_different_source(writer, memory_file, monkeypatch):
+    original_submit = writer.submit
+    monkeypatch.setattr(writer, "submit", lambda command: {"outcome": "refused", "code": "unavailable"})
+    assert "stopped" in memory.import_file(writer, memory_file)
+    memory_file.write_text(FILE + "\nChanged source\n")
+    monkeypatch.setattr(writer, "submit", original_submit)
+    result = memory.import_file(writer, memory_file)
+    assert result["stopped"]["code"] == "memory_import_source_changed"
+    assert writer.rows("cos.fact") == []
+
+
+def test_projection_is_refused_even_without_done_marker(writer, memory_file):
+    memory.import_file(writer, memory_file)
+    memory.write_projection(writer, memory_file)
+    (writer.root / memory.DONE_MARKER).unlink()
+    result = memory.import_file(writer, memory_file)
+    assert result["stopped"]["code"] == "memory_projection_not_importable"
+    assert len(writer.rows("cos.fact")) == 4
+
+
+def test_repeated_model_memory_same_day_is_saved_and_repairs_projection(writer, memory_file, monkeypatch):
+    memory.import_file(writer, memory_file)
+    original_project = memory.write_projection
+    monkeypatch.setattr(memory, "write_projection", lambda *a: (_ for _ in ()).throw(OSError("disk")))
+    with pytest.raises(OSError):
+        memory.remember(writer, memory_file, "A synthetic preference", kind="memory_tool",
+                        clock=lambda: "2026-10-31T10:00:00+00:00")
+    monkeypatch.setattr(memory, "write_projection", original_project)
+    result = memory.remember(writer, memory_file, "A synthetic preference", kind="memory_tool",
+                             clock=lambda: "2026-10-31T11:00:00+00:00")
+    assert result == {"saved": True, "deduplicated": True}
+    assert len(writer.rows("cos.fact")) == 5
+    assert "A synthetic preference" in memory_file.read_text()
+
+
+def test_note_operation_reuse_with_changed_text_is_refused(writer, memory_file):
+    memory.import_file(writer, memory_file)
+    assert memory.remember(writer, memory_file, "Original", kind="explicit_note", operation_id=OP)["saved"]
+    result = memory.remember(writer, memory_file, "Different", kind="explicit_note", operation_id=OP)
+    assert not result["saved"] and result["code"] == "command_id_reused"
+
+
+def test_cli_repeat_after_projection_fails_without_importing_projection(tmp_path, memory_file, capsys):
+    args = ["--store", str(tmp_path / "store"), "--environment", ENV, "--memory", str(memory_file), "--project"]
+    assert memory.main(args) == 0
+    capsys.readouterr()
+    before = memory_file.read_bytes()
+    assert memory.main(args) == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["stopped"]["code"] == "memory_import_already_complete"
+    assert memory_file.read_bytes() == before
 
 
 def test_nothing_writes_the_file_before_the_import_is_done(writer, memory_file):
@@ -124,3 +202,32 @@ def test_the_command_line_imports_and_projects(tmp_path, memory_file, capsys):
     out = json.loads(capsys.readouterr().out)
     assert out["accepted"] == 4 and out["projected"] is True
     assert memory_file.read_text().startswith(memory.PROJECTION_HEADER)
+
+
+@pytest.mark.parametrize("interrupt", [False, True])
+def test_cli_projection_recovery_after_completed_import(tmp_path, memory_file, monkeypatch, capsys, interrupt):
+    args = ["--store", str(tmp_path / "store"), "--environment", ENV, "--memory", str(memory_file)]
+    project = memory.write_projection
+    if interrupt:
+        def broken_projection(*args):
+            memory_file.write_text("")
+            raise OSError("interrupted")
+        monkeypatch.setattr(memory, "write_projection", broken_projection)
+        with pytest.raises(OSError):
+            memory.main(args + ["--project"])
+        monkeypatch.setattr(memory, "write_projection", project)
+    else:
+        assert memory.main(args) == 0
+    capsys.readouterr()
+    assert memory.main(args + ["--project-only"]) == 0
+    assert json.loads(capsys.readouterr().out)["projected"] is True
+    assert memory_file.read_text().startswith(memory.PROJECTION_HEADER)
+    assert len(StoreWriter(tmp_path / "store", ENV).rows("cos.fact")) == 4
+
+
+def test_cli_projection_repair_requires_completed_import(tmp_path, memory_file, capsys):
+    before = memory_file.read_bytes()
+    assert memory.main(["--store", str(tmp_path / "store"), "--environment", ENV,
+                        "--memory", str(memory_file), "--project-only"]) == 1
+    assert json.loads(capsys.readouterr().out)["stopped"]["code"] == "memory_import_not_complete"
+    assert memory_file.read_bytes() == before

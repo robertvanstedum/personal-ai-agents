@@ -65,7 +65,7 @@
   <summary class="floor-context-sum">Files in this conversation</summary>
   <div class="fc-body">
     {# The artwork leads the rail, as Robert likes it (6 Oct); the files kept with this conversation sit under it. (Linked work was taken off the page on 11 Oct: "we have chat". The API stays.) #}
-    <img class="fc-art" src="/static/guild/guild-build.webp" alt="Craftspeople working together at a workshop bench" width="784" height="1168">
+    <img class="fc-art" src="/static/guild/guild-craftsman.webp" alt="Master and Apprentice" width="784" height="1168">
     {# Only when a read failed: the honest "unknown", never a generic status paragraph. #}
     <p class="fc-empty" data-needs-summary{% if state.needs.status == "ok" %} hidden{% endif %}>{{ state.needs.text }}</p>
     {% if topic_link %}<p class="fc-topic small" data-topic-materials><a href="{{ topic_link.href }}">Workshop Log materials for this conversation →</a>{% if topic_link.cards %} <span>({{ topic_link.cards }} document{{ '' if topic_link.cards == 1 else 's' }})</span>{% endif %}</p>{% endif %}

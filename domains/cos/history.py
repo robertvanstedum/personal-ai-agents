@@ -177,7 +177,7 @@ class History:
                 raise HistoryRefused("read_only")
             existing = self._find_locked(tid)
             if existing is not None:
-                if existing["conversation_id"] != cid or existing["user_text"] != send["text"]:
+                if existing["conversation_id"] != cid or existing["user_text"] != send["text"] or existing.get("context_ref") != send.get("context_ref"):
                     raise HistoryRefused("turn_id_reused")
                 return existing, True
             turns = _fold(fsio.read_stream(self._turns_path(cid)))
@@ -186,6 +186,7 @@ class History:
                     "status": "pending", "user_text": send["text"], "reply_text": None, "created_at": now,
                     "durable_ack_at": now, "answered_at": None, "picture_revision": None,
                     "commitment_receipts": [], "failure_code": None}
+            turn.update({k: send[k] for k in ("channel", "context_ref") if k in send})
             return self._append_turn_locked(turn), False
 
     def answer(self, conversation_id: str, turn_id: str, reply: str, *, picture_revision: str | None = None,

@@ -52,6 +52,8 @@ app = Flask(
     static_folder=str(BASE_DIR / "static"),
 )
 CORS(app)
+from core.founders_ui import install as _install_founders_ui
+_install_founders_ui(app)
 
 @app.after_request
 def _no_cache_html(response):

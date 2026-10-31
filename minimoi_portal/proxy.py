@@ -261,7 +261,7 @@ def _internal_domain_api_path(path: str) -> bool:
     if '//' in decoded or any(part in {'.', '..'} for part in decoded.split('/')):
         return True
     normalized = posixpath.normpath('/' + decoded.lstrip('/'))
-    return normalized == '/internal/domain-api' or normalized.startswith('/internal/domain-api/')
+    return normalized == '/internal' or normalized.startswith('/internal/')
 
 
 def proxy_to(backend_url: str, path: str, portal_prefix: str,

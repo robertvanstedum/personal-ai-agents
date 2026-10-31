@@ -178,6 +178,11 @@ def _append_memory_entry(
             return {"saved": False, "deduplicated": False}
     try:
         current = _read_memory()
+        if current.startswith(cos_memory_store.PROJECTION_HEADER):
+            # Writer-less processes (including cos-bot) must not append to a derived
+            # projection: the next store write would erase the supposedly saved note.
+            _log_file("memory_write_blocked", "Canonical memory store is unavailable")
+            return {"saved": False, "deduplicated": False, "code": "memory_store_unavailable"}
         if current == "(no memory yet)":
             current = ""
         marker = f"<!-- cos-operation:{operation_id} -->" if operation_id else None
@@ -1270,6 +1275,9 @@ def _telegram_poll_loop():
 # ── Flask app ─────────────────────────────────────────────────────────────────
 
 app = Flask(__name__)
+from core.founders_ui import install as _install_founders_ui
+_install_founders_ui(app)
+
 app.register_blueprint(create_confer_voice_blueprint(
     build_voice_instructions=_build_cos_voice_instructions,
 ))
@@ -1453,7 +1461,7 @@ _VALID_TABS = {"confer", "record", "track", "store"}
 
 @app.route("/ui")
 def ui():
-    return render_template("cos_landing.html")
+    return redirect("/ui/confer")
 
 
 @app.route("/ui/<tab>")
@@ -1503,8 +1511,8 @@ def _ui_turn(body: dict) -> tuple[dict, int]:
             kept, early = _history_begin(body, owner_text, attachment_names, channel)
             if early is not None:
                 return early
-        before = _cos_files.snapshot() if _cos_files is not None else None
         try:
+            before = _cos_files.snapshot() if _cos_files is not None else None
             result = _process_confer_turn(
                 text,
                 channel=channel,
@@ -1513,21 +1521,21 @@ def _ui_turn(body: dict) -> tuple[dict, int]:
                 request_id=body.get("request_id"),
                 turn_id=_receipt_turn_id(kept["turn_id"]) if kept else None,
             )
+            payload = result.public_dict()
+            if before is not None:
+                delivered = _cos_files.delivered_since(before)
+                if delivered:
+                    payload["files"] = delivered
+                else:
+                    # No file reached the outbox: a sentence claiming a saved or downloadable file is untrue (claim_truth).
+                    payload["reply"], _ = enforce_file_claims(payload["reply"])
+            if kept:
+                payload["history"] = _history_answer(kept, payload, channel, owner_text, attachment_names)
         except BaseException as exc:
             if kept:
                 _history_fail(kept, exc)
             raise
-        payload = result.public_dict()
-        if before is not None:
-            delivered = _cos_files.delivered_since(before)
-            if delivered:
-                payload["files"] = delivered
-            else:
-                # No file reached the outbox: a sentence claiming a saved or downloadable file is untrue (claim_truth).
-                payload["reply"], _ = enforce_file_claims(payload["reply"])
-        if kept:
-            payload["history"] = _history_answer(kept, payload, channel, owner_text, attachment_names)
-        elif not payload.get("operation"):     # notes, reminders and /new keep their own records
+        if not kept and not payload.get("operation"):     # notes, reminders and /new keep their own records
             conversation_log.append(_conversations_dir, conversation_id=result.conversation_id, turn_id=result.turn_id,
                                     channel=channel, owner_text=owner_text, attachments=attachment_names,
                                     reply=payload["reply"], files=payload.get("files"))
@@ -1611,6 +1619,8 @@ def _history_begin(body: dict, owner_text: str, attachment_names: list, channel:
         send = {"schema": "minimoi.cos.send/1", "conversation_id": cid,
                 "turn_id": cos_history.turn_id_for(body.get("turn_id") or body.get("request_id")),
                 "text": words, "channel": "voice" if channel == "html_voice" else "web"}
+        if body.get("context_ref") is not None:
+            send["context_ref"] = body["context_ref"]
         turn, replayed = _history.begin(send)
     except cos_history.HistoryRefused as e:
         return None, ({"reply": f"Not sent: {e.code.replace('_', ' ')}. Your draft is preserved.",
@@ -1644,11 +1654,24 @@ def _history_fail(kept: dict, exc: BaseException) -> None:
 def _history_answer(kept: dict, payload: dict, channel: str, owner_text: str, attachment_names: list) -> dict:
     """Put the reply on its own turn, then write the recall log as the history's projection."""
     try:
-        turn = _history.answer(kept["conversation_id"], kept["turn_id"], payload["reply"])
+        try:
+            turn = _history.answer(kept["conversation_id"], kept["turn_id"], payload["reply"])
+        except OSError:
+            # An append may have reached disk before the acknowledgement failed.
+            # answer is idempotent: retry saving this reply, never rerun the model.
+            turn = _history.answer(kept["conversation_id"], kept["turn_id"], payload["reply"])
     except (cos_history.HistoryRefused, OSError):
-        _log_file("history_answer_unrecorded", f"turn {kept['turn_id']} answered but the reply was not saved")
-        return {"conversation_id": kept["conversation_id"], "turn_id": kept["turn_id"], "status": "pending",
-                "saved": True, "reply_saved": False}
+        _log_file("history_answer_unrecorded", f"turn {kept['turn_id']} reply save acknowledgement failed")
+        try:
+            turn = _history.turn(kept["conversation_id"], kept["turn_id"])
+            if turn and turn["status"] == "pending":
+                turn = _history.fail(kept["conversation_id"], kept["turn_id"], "history_answer_unavailable")
+        except (cos_history.HistoryRefused, OSError):
+            turn = None
+        if not (turn and turn.get("reply_text") == payload["reply"]):
+            return {"conversation_id": kept["conversation_id"], "turn_id": kept["turn_id"],
+                    "status": turn["status"] if turn else "pending", "saved": True, "reply_saved": False}
+        # A confirmed saved answer still needs its recall projection below.
     conversation_log.append(_conversations_dir, conversation_id=turn["conversation_id"], turn_id=turn["turn_id"],
                             channel=channel, owner_text=owner_text, attachments=attachment_names,
                             reply=payload["reply"], files=payload.get("files"), projection=True)
