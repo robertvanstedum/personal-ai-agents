@@ -125,7 +125,7 @@ def _standard_change_words(sc):
 
 
 _PUBLIC_TEXT_RULES = {
-    "non_ascii_in_public_text": "It has a character outside plain ASCII (curly quotes, accents, dashes, ellipsis)",
+    "non_ascii_in_public_text": "It has an unsupported character outside plain ASCII or the supported punctuation",
     "email_in_public_text": "It has an email address (an @)",
     "name_in_public_text": "It names someone who asked for or holds guest access",
 }
@@ -448,13 +448,16 @@ class ToolService:
 
     def _public_text_refusal(self, conn, text):
         """The reason this text must not go to the public repository, or None (review P2-4):
-        - plain ASCII only after NFKC, so no look-alike letters (Cyrillic "А" in "Ana") slip past; line breaks and
-          tabs are allowed, since issue bodies and comments are paragraphs;
+        - ASCII letters after NFKC, with a narrow punctuation mapping for screening only; look-alike letters
+          (Cyrillic "А" in "Ana") still refuse. The proposed public text is never rewritten here;
         - no email address;
         - no name or email name of anyone who asked for guest access or holds a guest login, matched as a word, also
           when its letters are spaced apart. Records are named by ref only. Robert also sees the exact text (P1-1)."""
         import unicodedata
-        folded = unicodedata.normalize("NFKC", text)
+        folded = unicodedata.normalize("NFKC", text).translate(str.maketrans({
+            "‘": "'", "’": "'", "“": "'", "”": "'", "–": "-", "—": "-", "…": "...",
+            "→": "-", "←": "-", "↔": "-", "•": "*",
+        }))
         if any(not (" " <= c <= "~" or c in "\n\t") for c in folded):
             return "non_ascii_in_public_text"
         if "@" in folded:
@@ -466,6 +469,9 @@ class ToolService:
         lowered = folded.lower()
         candidates = lowered + " " + " ".join(re.sub(r"[^a-z]", "", m.group(0)) for m in _SPACED.finditer(lowered))
         for person in people:
+            # Login display names can themselves be emails. Retain the local identity,
+            # but never treat shared mail domains (gmail, com) as a person's name.
+            person = re.sub(r"([^\s@]+)@[^\s@]+", r"\1", person)
             for word in re.findall(r"[^\W\d_]{3,}", unicodedata.normalize("NFKC", person).lower()):
                 if word in _GENERIC_WORDS:
                     continue
