@@ -839,6 +839,7 @@ def _process_confer_turn(
     request_id: str | None = None,
     on_dispatch=None,
     turn_id: str | None = None,
+    meeting_context: str | None = None,
 ):
     """One Confer turn through the canonical turn service. ``on_dispatch`` (CoS's direct voice only): called at the
     dispatch boundary (ConferTurnRequest.on_dispatch); None for every other caller."""
@@ -865,6 +866,7 @@ def _process_confer_turn(
         request_id=request_id,
         on_dispatch=on_dispatch,
         turn_id=turn_id,
+        meeting_context=meeting_context,
     ))
 
 
@@ -1954,6 +1956,14 @@ def _start_cos():
         print(f"   Backend: {_backend.backend_label} initialized ✅")
     except Exception as e:
         print(f"   ⚠️  Backend init failed: {e} — chat will fail")
+
+    if os.environ.get('MINIMOI_GUILDHALL_COS') == '1':
+        if os.environ.get('COS_STORE_ENVIRONMENT') != 'dev':
+            raise RuntimeError('Guildhall CoS requires explicit dev environment')
+        from domains.cos.guildhall import install as install_guildhall
+        install_guildhall(app, token_file=os.environ['COS_GUILDHALL_TOKEN_FILE'],
+                         data_dir=os.environ['COS_GUILDHALL_DIR'], run_turn=_process_confer_turn,
+                         is_ready=lambda: _backend is not None)
 
     # Isolated dev proving uses the real chat route without periodic work.
     from domains.cos.runtime_policy import background_jobs_enabled

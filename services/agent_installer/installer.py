@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 import requests
 
-FILES={'mc':('mc.token','rooms-worker.token'),
+FILES={'cos':('cos.token','rooms-worker-cos.token'), 'mc':('mc.token','rooms-worker.token'),
        'claude-code':('claude-code.token','rooms-connector-mac.token'),
        'codex':('codex.token','rooms-connector-codex.token')}
 

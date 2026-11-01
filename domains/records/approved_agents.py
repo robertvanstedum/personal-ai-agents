@@ -9,7 +9,7 @@ import secrets
 from uuid import uuid4
 from domains.records.platform_access import PlatformAccess, AccessError, hashed, stamp
 
-AGENTS = {'mc': 'Master Craftsman', 'claude-code': 'Claude Code', 'codex': 'Codex'}
+AGENTS = {'cos': 'Chief of Staff', 'mc': 'Master Craftsman', 'claude-code': 'Claude Code', 'codex': 'Codex'}
 OPERATIONS = ['read', 'post', 'receipt', 'upload', 'link', 'rsvp']
 
 
@@ -48,7 +48,7 @@ class ApprovedAgents:
     @staticmethod
     def validate(agent):
         if agent not in AGENTS:
-            raise AccessError('Choose MC, Claude Code or Codex', 422)
+            raise AccessError('Choose CoS, MC, Claude Code or Codex', 422)
 
     @staticmethod
     def audit(db, agent, generation, action, actor):

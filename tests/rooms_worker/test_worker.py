@@ -350,3 +350,23 @@ def test_the_prompt_keeps_earlier_round_replies_apart_from_the_history():
     assert payload["history_before_the_message"]["through_seq"] == 4
     assert [r["text"] for r in payload["earlier_in_this_round"]["records"]] == ["MC's answer"]
     assert question == {"role": "user", "content": "@everyone go"} and "@everyone go" not in data["content"]
+
+
+def test_stop_without_runtime_confirmation_stays_uncertain(env, monkeypatch):
+    monkeypatch.setattr(worker_module, 'HEARTBEAT_S', 0.05)
+    env.prove(); env.join(); env.say('Q')
+    env.relay.stop_guaranteed = False
+    def running_tool(relay, messages):
+        env.call('POST', f'/rooms/{env.room}/stop', {})
+        assert relay.wait_for_stop(5)
+        return {'outcome': 'done', 'text': 'Tool may have finished.'}
+    env.relay.script = [running_tool]
+    env.worker.run_once()
+    t = env.turns()[0]
+    assert t['state'] == 'uncertain'
+    assert t['disposition'] == 'stop_unconfirmed'
+    assert not t['stop_ack']
+    env.worker.run_once()
+    assert len(env.relay.calls) == 1
+    assert env.turns()[0]['disposition'] == 'stop_unconfirmed'
+    assert not any(e['actor'] == 'mc' and e['kind'] == 'message' for e in env.events())

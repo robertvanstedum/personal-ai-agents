@@ -226,6 +226,9 @@ class Worker:
                 log(event="dispatch_refused", turn=turn["id"], state=result.get("state"))
                 return None
             if watcher.cancelled:
+                if getattr(self.relay, 'stop_guaranteed', True) is False:
+                    self.fail(turn, turn['claim_id'], 'uncertain', 'stop_unconfirmed')
+                    return None
                 if result["text"]:
                     self.journal.generated(journal_key(turn["id"]),
                                            {"late_output_discarded": True, "chars": len(result["text"])})

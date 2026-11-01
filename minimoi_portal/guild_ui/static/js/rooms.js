@@ -667,6 +667,7 @@ const SIGN_IN = {
 
 // Why a teammate did not answer, said plainly with what to do next.
 function failureText(who, reason, principal) {
+  if (reason === 'stop_unconfirmed') return `${who}: stop requested; tool activity could not be confirmed stopped. Check the outcome before retrying.`;
   const signIn = SIGN_IN[principal] || 'sign it in again';
   switch (reason) {
     case 'signed_out': return `${who} is signed out (its sign-in was rejected). To fix: ${signIn}, then Retry.`;
@@ -693,6 +694,7 @@ function turnLine(t) {
     case 'claimed': case 'running': case 'recovering': return { text: `${who} is answering…`, wait: true };
     case 'cancel_requested': return { text: `Stopping ${who}'s reply…`, wait: true };
     case 'uncertain':
+      if (t.disposition === 'stop_unconfirmed') return { text: failureText(who, t.disposition, t.addressee), actions: ['continue'] };
       if (t.disposition === 'confirmed_absent') return { text: `Not answered: ${who}'s worker stopped before answering.`, actions: ['retry', 'continue'] };
       if (['unresolved_started', 'signed_out_after_start'].includes(t.disposition)) return { text: failureText(who, t.disposition, t.addressee), actions: ['attempt', 'continue'] };
       return { text: `Checking whether ${who}'s reply was saved…`, actions: ['continue'] };
@@ -950,10 +952,10 @@ async function openNew() {
   if (createdMeeting) { window.location.search = `?room=${encodeURIComponent(createdMeeting)}`; return; }
   await loadCards();
   const box = $('[data-rm-new-cards]');
-  box.replaceChildren(...cards.filter((c) => c.principal === 'mc' && c.connected).map((c) => {
+  box.replaceChildren(...cards.filter((c) => ['mc','cos'].includes(c.principal)).map((c) => {
     const label = el('label', { class: 'rm-new-card' });
-    label.append(el('input', { type: 'checkbox', value: c.principal, 'data-rm-new-card': c.principal, checked: '' }),
-      el('span', {}, ` ${c.label} · ${c.proven_at ? 'proven' : 'not yet proven (Prove from Invite)'}`));
+    label.append(el('input', { type: 'checkbox', value: c.principal, 'data-rm-new-card': c.principal, checked: '', hidden: '' }),
+      el('span', {}, ` ${c.label} · ${c.connected && c.proven_at ? 'available' : 'connection pending'}`));
     return label;
   }));
   if (!box.children.length) box.append(el('p', { class: 'small' }, 'No teammate is connected yet; you can still record a conversation.'));

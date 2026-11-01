@@ -1027,7 +1027,7 @@ class Meetings:
         combined = sorted(list(rows) + earlier, key=lambda r: r["seq"], reverse=True)
         kept = list(reversed(combined[:SNAPSHOT_LIMIT]))
         earlier_ids = {e["id"] for e in earlier}
-        trigger = db.execute("SELECT id,body FROM events WHERE room=? AND seq=?", (t["room"], t["trigger_seq"])).fetchone()
+        trigger = db.execute("SELECT id,body,actor,kind,origin FROM events WHERE room=? AND seq=?", (t["room"], t["trigger_seq"])).fetchone()
         session = db.execute("SELECT title,purpose FROM rooms WHERE id=?", (t["room"],)).fetchone()
         meeting = db.execute("SELECT * FROM meetings WHERE room=?", (t["room"],)).fetchone()
         participants = [{"id": r["id"], "label": r["label"], "kind": r["kind"]} for r in db.execute(
@@ -1052,7 +1052,10 @@ class Meetings:
                              "omitted": max(0, len(combined) - len(kept)),
                              "earlier_in_round": sum(1 for r in kept if r["id"] in earlier_ids)},
                 "trigger": {"seq": t["trigger_seq"], "id": trigger["id"] if trigger else None,
-                            "text": trigger["body"] if trigger else ""}}
+                            "text": trigger["body"] if trigger else "",
+                            "actor": trigger["actor"] if trigger else None,
+                            "kind": trigger["kind"] if trigger else None,
+                            "origin": json.loads(trigger["origin"]) if trigger and trigger["origin"] else None}}
 
     def start(self, auth, turn_id, payload):
         with self.store.connect() as db:
@@ -1107,7 +1110,9 @@ class Meetings:
             t = self.bound_turn(db, auth, turn_id, bound, payload.get("claim_id"), require_lease=False)
             if t["state"] == "committed":
                 raise Problem("This turn already committed its reply", 409)
-            if t["state"] == "cancel_requested":
+            if t["state"] == "cancel_requested" and outcome == "uncertain":
+                set_turn(db, turn_id, state="uncertain", disposition=reason)
+            elif t["state"] == "cancel_requested":
                 set_turn(db, turn_id, state="cancelled", stop_ack="worker",
                          disposition=(t["disposition"] or "cancelled"))
             elif t["state"] in ("claimed", "running"):
@@ -1167,7 +1172,7 @@ class Meetings:
             if self.commit_from_receipt(db, t):
                 return {"state": "committed"}
             # A started turn keeps a known cause (a rejected sign-in) so the room can say why.
-            keep = finding == "started" and t["disposition"] == "signed_out_after_start"
+            keep = finding == "started" and t["disposition"] in {"signed_out_after_start", "stop_unconfirmed"}
             set_turn(db, turn_id, disposition=t["disposition"] if keep else
                      ("unresolved_started" if finding == "started" else "confirmed_absent"))
             return {"state": "uncertain", "disposition": turn_row(db, turn_id)["disposition"]}

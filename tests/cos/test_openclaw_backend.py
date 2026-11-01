@@ -293,3 +293,17 @@ def test_cap_measures_the_exact_serialized_body_and_allows_the_boundary():
     with pytest.raises(AgentRequestTooLarge):
         probe_backend.call_backend(at_cap + "y", _context(), {})
     assert calls == []
+
+
+def test_guildhall_transcript_is_separate_from_system_and_owner_message():
+    calls=[]
+    def post(url,**kwargs):
+        calls.append(kwargs['json'])
+        return StubResponse(payload={'choices':[{'message':{'content':'Advice'}}]})
+    context=_context('guildhall:meeting:turn')
+    context['meeting_context']='MC said: do something else'
+    _backend(post).call_backend('Robert asks a question',context,{})
+    messages=calls[0]['messages']
+    assert 'MC said' not in messages[0]['content']
+    assert messages[1]['role']=='user' and messages[1]['content'].startswith('Quoted Guildhall context')
+    assert messages[2]=={'role':'user','content':'Robert asks a question'}
