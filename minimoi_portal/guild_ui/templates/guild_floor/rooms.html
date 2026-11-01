@@ -13,14 +13,18 @@
 {% block head %}<link rel="stylesheet" href="{{ url_for('.asset', filename='css/rooms.css') }}">{% endblock %}
 {% block main %}
 <div class="rm" data-rm data-bridge="{{ rooms_cfg.state }}" data-access="{{ rooms_cfg.access }}">
+  {# Review 06: Guildhall is Craft for a group. The meetings on the left (＋ New meeting first), the meeting in the middle
+     with the workshop team faint behind it, People & files on the right when asked for. #}
   <aside class="rm-list" data-rm-list-pane aria-labelledby="rm-list-h">
+    {# Phone: the mini-moi strip and the workshop row move in here, above the list (mobile-nav.js). #}
+    <div class="phone-places" data-phone-places></div>
     <div class="rm-list-head">
       <h2 class="rm-list-h" id="rm-list-h">Meeting history</h2>
-      <button type="button" class="rm-btn" data-rm-new{% if rooms_cfg.state != 'on' or rooms_cfg.access == 'no_access' %} disabled{% endif %}>＋ Start meeting</button>
+      <button type="button" class="rm-btn rm-new" data-rm-new{% if rooms_cfg.state != 'on' or rooms_cfg.access == 'no_access' %} disabled{% endif %}><span class="rm-plus" aria-hidden="true">＋</span> New meeting</button>
       <button type="button" class="rm-btn rm-list-close" data-rm-list-close aria-label="Close the room list">✕</button>
     </div>
-    <label class="small" for="rm-archive-view">Meetings</label>
-    <select id="rm-archive-view" class="rm-btn" data-rm-archive-view aria-label="Show active or archived conversations"><option value="active">Active</option><option value="archived">Archived</option></select>
+    <label class="small rm-view-label" for="rm-archive-view">Meetings</label>
+    <select id="rm-archive-view" class="rm-btn rm-view" data-rm-archive-view aria-label="Show active or archived conversations"><option value="active">Active</option><option value="archived">Archived</option></select>
     <ol class="rm-rooms" data-rm-list></ol>
     <nav class="rm-list-pages" data-rm-list-pages aria-label="Room list pages" hidden>
       <button type="button" class="btn-quiet" data-rm-newer>Newer</button>
@@ -33,15 +37,28 @@
       <div class="area-hero-text"><p class="prototype-eyebrow">Guild</p><p class="area-hero-title" aria-hidden="true">Guildhall</p><p>Meet with your Guild: Robert, MC, and CoS.</p></div>
       <div class="area-hero-art area-hero-art-wide"><img src="/static/guild/guild-workshop-team.webp" alt="Workshop team artwork" data-room-art-image width="1152" height="864"></div>
     </div>
+    {# The slim header: the meeting's name and who is in it; People & files; ⋯ for help, invite and setup. #}
     <header class="rm-head">
-      <button type="button" class="rm-btn rm-list-open" data-rm-list-open aria-controls="rm-list-h" aria-label="Meeting history">History</button>
-      <h1 class="rm-title" id="rm-title" data-rm-title>Meet with your Guild</h1>
-      <details class="rm-about rm-context-help" data-rm-about>
-        <summary class="rm-btn" aria-label="Help with Rooms" title="Help with Rooms"><span aria-hidden="true">💡</span></summary>
-        <p class="small">Rooms keep a shared conversation. Create or select a room, then use People &amp; details to see its participants and available invitations. Agent approval allows invitations; it does not mean an agent has joined or answered. When Rooms is disconnected, creation and invitations are unavailable.</p>
-      </details>
+      <button type="button" class="rm-btn rm-list-open" data-rm-list-open aria-controls="rm-list-h" aria-label="Meeting history" title="Meetings">☰</button>
+      <div class="rm-head-id">
+        <h1 class="rm-title" id="rm-title" data-rm-title>Meet with your Guild</h1>
+        <span class="rm-faces" data-rm-faces aria-hidden="true"></span>
+        <span class="rm-names" data-rm-names></span>
+      </div>
       <span class="rm-state" data-rm-state hidden></span>
-      <button type="button" class="rm-btn" data-rm-panel-toggle aria-controls="rm-participants" aria-expanded="false">More</button>
+      <button type="button" class="rm-btn rm-panel-btn" data-rm-panel-toggle aria-controls="rm-participants" aria-expanded="false" title="People &amp; files"><span class="rm-panel-word">People &amp; files</span><span class="rm-panel-icon" aria-hidden="true">👥</span></button>
+      <button type="button" class="rm-btn rm-new-btn" data-rm-new-proxy aria-label="New meeting" title="New meeting">✎</button>
+      <details class="rm-head-more" data-rm-more>
+        <summary class="rm-btn" aria-label="More for this meeting" title="More">⋯</summary>
+        <div class="rm-head-menu" role="group" aria-label="This meeting">
+          <button type="button" data-rm-menu-invite disabled>Invite…</button>
+          <button type="button" data-rm-menu-setup>Setup and round details</button>
+          <details class="rm-about rm-context-help" data-rm-about>
+            <summary aria-label="Help with Rooms" title="Help with Rooms">Help</summary>
+            <p class="small">Rooms keep a shared conversation. Create or select a room, then use People &amp; files to see its participants and available invitations. Agent approval allows invitations; it does not mean an agent has joined or answered. When Rooms is disconnected, creation and invitations are unavailable.</p>
+          </details>
+        </div>
+      </details>
     </header>
     <div class="rm-banner" data-rm-off hidden role="status">
       <strong>Rooms are not connected on this portal.</strong> Creating rooms and inviting participants are unavailable until the Rooms connection is restored.
@@ -102,19 +119,25 @@
       <button type="button" class="btn-quiet" data-rm-take-cancel>Cancel</button>
       <p class="small" data-rm-take-result role="status" hidden></p>
     </div>
-    <div class="rm-welcome" data-rm-welcome><p>Start a meeting or join one from Meeting history.</p><button type="button" class="btn" data-rm-start>Start meeting</button></div><ol class="rm-thread" data-rm-thread role="log" aria-live="polite" aria-label="Room conversation"></ol>
+    <div class="rm-welcome" data-rm-welcome>
+      <div class="rm-hero rm-hero-welcome">
+        <div class="rm-hero-ph" aria-hidden="true"></div>
+        <div class="rm-hero-copy"><p class="rm-eyebrow">Guildhall</p><h2>Meet with your Guild</h2><p>Robert, MC and CoS. Start a meeting, or pick one from the list.</p>
+          <p><button type="button" class="btn" data-rm-start>Start meeting</button></p></div>
+      </div>
+    </div><ol class="rm-thread" data-rm-thread role="log" aria-live="polite" aria-label="Room conversation"></ol>
     <div class="rm-turns" data-rm-turns role="status" aria-live="polite" hidden></div>
     <div class="rm-closed" data-rm-closed hidden>
       <span>This conversation is closed; its record is kept.</span>
       <button type="button" class="btn" data-rm-continue>Continue conversation</button>
     </div>
-    <div class="rm-to" data-rm-to hidden aria-label="Send to"></div>
     <ul class="rm-mentions" data-rm-mentions hidden role="listbox" aria-label="Mention a participant"></ul>
     <form class="rm-composer" data-rm-composer aria-label="Write to the room">
       <label class="rm-attach" title="Attach a file (up to 2,000,000 bytes)">📎<span class="visually-hidden">Attach a file</span>
         <input type="file" class="visually-hidden" data-rm-attach></label>
       <label class="visually-hidden" for="rm-input">Message</label>
-      <textarea id="rm-input" class="rm-input" data-rm-input rows="1" maxlength="16000" placeholder="Message the room…"></textarea>
+      <textarea id="rm-input" class="rm-input" data-rm-input rows="1" maxlength="16000" placeholder="Message the meeting…"></textarea>
+      <div class="rm-to" data-rm-to hidden aria-label="Send to"></div>
       {% if dictation_on %}<button type="button" class="rm-mic" data-rm-mic data-dictate="#rm-input" aria-pressed="false" hidden>🎙<span class="rm-mic-label">Dictate</span></button>{% endif %}
       <button type="submit" class="btn rm-send" data-rm-send>Send</button>
       {% if dictation_on %}<p class="rm-status small" data-dictation-status role="status" aria-live="polite" hidden></p>{% endif %}
@@ -123,7 +146,7 @@
     </form>
   </section>
   <aside class="rm-participants" id="rm-participants" aria-label="Room people and controls">
-    <div class="rm-files-head"><h2 class="rm-files-h">People &amp; details</h2><button type="button" class="rm-btn" data-rm-panel-close>Close</button></div>
+    <div class="rm-files-head"><h2 class="rm-files-h">People &amp; files</h2><button type="button" class="rm-btn" data-rm-panel-close aria-label="Close People and files">✕</button></div>
       <span class="rm-people" data-rm-people aria-label="Participants"></span>
       <span class="rm-controls" data-rm-controls hidden>
         <button type="button" class="rm-btn" data-rm-invite aria-label="Invite participants" title="Invite participants">＋</button>

@@ -66,9 +66,84 @@ function setHistory(open, focus = null) {
     const close = $('[data-history-close]');
     if (close) close.focus();
   } else if (focus === 'back') {
-    const t = $('[data-history-toggle]');
+    // Back to the ☰ actually on screen (the header's, or a menu's when that is the one in view).
+    const t = $$('[data-history-toggle]').find((n) => n.getClientRects().length > 0 || (n.closest('details') && n.closest('details').getClientRects().length > 0)) || $('[data-history-toggle]');
     if (t) { const menu = t.closest('details'); if (menu && !menu.open) menu.querySelector('summary').focus(); else t.focus(); }
   }
+}
+
+// ── Review 06: the slim header, the files that come and go, the greeting, ⋯ ──────────────────────────────────────────
+// "Files in this conversation" (the rail's heading and list, the header's Files n) shows only when there are files.
+function syncFiles() {
+  const lists = [$('[data-conv-files]'), $('[data-conv-pending]')].filter(Boolean);
+  const n = lists.reduce((sum, list) => sum + (list.hidden ? 0 : list.querySelectorAll(':scope > li').length), 0);
+  const sec = $('[data-conv-files-sec]');
+  if (sec) sec.hidden = n === 0;
+  const context = $('[data-floor-context]');
+  if (context) context.dataset.hasFiles = String(n > 0);
+  for (const b of $$('[data-rail-toggle]')) b.dataset.count = String(n);
+  for (const b of $$('[data-mobile-files]')) b.hidden = n === 0;
+}
+
+// The state under the title shows only when something is wrong: "ready" and "connected · response not yet verified" are
+// the normal case and stay out of view (the words are still there for a screen reader to find).
+const NORMAL = / is ready · |connected · response not yet verified/;
+function syncStatus() {
+  const line = $('[data-mc-status]');
+  const words = line && line.querySelector('[data-mc-header]');
+  if (!line || !words) return;
+  if (NORMAL.test(words.textContent)) line.dataset.normal = 'true';
+  else delete line.dataset.normal;
+}
+
+// The greeting follows the viewer's clock, and turns over on a page left open across a boundary.
+function greet() {
+  const h = new Date().getHours();
+  const word = h >= 5 && h < 12 ? 'Good morning' : h >= 12 && h < 18 ? 'Good afternoon' : 'Good evening';
+  for (const n of $$('[data-greeting]')) {
+    const text = n.dataset.name ? `${word}, ${n.dataset.name}.` : `${word}.`;
+    if (n.textContent !== text) n.textContent = text;
+  }
+}
+
+const PICTURE_KEY = 'floor.picture';
+function setPicture(mode, persist) {
+  document.body.dataset.craftPicture = mode;
+  if (persist) save(PICTURE_KEY, mode);
+}
+
+function initHeader() {
+  syncFiles();
+  for (const list of [$('[data-conv-files]'), $('[data-conv-pending]')].filter(Boolean)) {
+    new MutationObserver(syncFiles).observe(list, { childList: true, attributes: true, attributeFilter: ['hidden'] });
+  }
+  syncStatus();
+  const words = $('[data-mc-header]');
+  if (words) new MutationObserver(syncStatus).observe(words, { childList: true, characterData: true, subtree: true });
+  greet();
+  if ($('[data-greeting]')) window.setInterval(greet, 60000);
+  setPicture(load(PICTURE_KEY, (v) => (v === 'faded' || v === 'hidden' ? v : null), () => 'faded', 'picture setting'), false);
+  // ✎ on a narrow screen and a phone: the list's own New conversation, so the one handler does the work.
+  for (const b of $$('[data-conv-new-proxy]')) {
+    b.addEventListener('click', () => { const real = $('[data-floor-history] [data-conv-new]'); if (real) real.click(); });
+  }
+  const more = $('[data-fb-more]');
+  if (!more) return;
+  const close = () => { more.open = false; };
+  document.addEventListener('click', (e) => { if (more.open && !more.contains(e.target)) close(); });
+  more.addEventListener('keydown', (e) => { if (e.key === 'Escape' && more.open) { e.stopPropagation(); close(); more.querySelector('summary').focus(); } });
+  const rename = $('[data-fb-rename]');
+  if (rename) {
+    rename.addEventListener('click', () => {
+      close();
+      const act = $('[data-fh-current] [data-conv-act="rename"]');
+      if (!act) return;
+      if (drawerHistory()) setHistory(true);
+      act.click();
+    });
+  }
+  const picture = $('[data-fb-picture]');
+  if (picture) picture.addEventListener('click', () => setPicture(document.body.dataset.craftPicture === 'hidden' ? 'faded' : 'hidden', true));
 }
 
 function fitRailToWidth() {
@@ -206,8 +281,15 @@ export function initFloorLayout(p) {
   if (page.page !== 'floor') return;
   fitRailToWidth();
   setHistory(false);
+  initHeader();
   for (const b of $$('[data-rail-toggle]')) {
     b.addEventListener('click', () => {
+      // A phone's bar: the files are folded under the conversation; Files n opens them there.
+      if (window.matchMedia(PHONE).matches) {
+        const context = $('[data-floor-context]');
+        if (context) { context.open = true; context.scrollIntoView({ block: 'nearest' }); }
+        return;
+      }
       const open = document.body.dataset.rail !== 'open';
       setRail(open, true, open && overlayRail() ? 'into' : null);
     });

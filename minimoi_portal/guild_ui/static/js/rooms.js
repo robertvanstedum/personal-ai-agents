@@ -55,6 +55,22 @@ const draftKey = () => `${page.storage_ns}.rooms.draft.${current || 'none'}`;
 const signedOutDraftKey = () => `${page.storage_ns}.rooms.draft.none`;
 const when = (iso) => { const t = Date.parse(iso); return Number.isNaN(t) ? '' : new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
 const initial = (label) => (label || '?').trim().slice(0, 2).toUpperCase();
+// Review 06: a row's or a message's time, short: the time today, the day otherwise.
+const shortWhen = (iso) => {
+  const t = Date.parse(iso); if (Number.isNaN(t)) return '';
+  const d = new Date(t), now = new Date();
+  return d.toDateString() === now.toDateString() ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+};
+// Who is who, at a glance: MC's portrait, CoS's mark, everyone else their initials; MC and CoS by their short names.
+const FACES = { mc: '/static/guild/guild-mc-portrait.jpg', cos: '/static/guild/cos-mark-96.webp' };
+const faceKey = (id, label) => (id === 'mc' || /^Master Craftsman/.test(label || '') ? 'mc' : id === 'cos' || /^Chief of Staff/.test(label || '') ? 'cos' : null);
+const shortName = (id, label) => ({ mc: 'MC', cos: 'CoS' }[faceKey(id, label)] || (label || id || '').trim().split(/\s+/)[0]);
+function face(id, label, kind) {
+  const key = faceKey(id, label);
+  if (key) return el('img', { class: 'rm-face', src: FACES[key], alt: '', 'data-face': key });
+  return el('span', { class: 'rm-face rm-face-initials', 'data-kind': kind || 'human' }, initial(label));
+}
 
 async function records(path, { method = 'GET', body, key } = {}) {
   const headers = { Accept: 'application/json' };
@@ -127,8 +143,10 @@ function renderList() {
   listPage = Math.min(listPage, Math.max(0, Math.ceil(rooms.length / ROOMS_PER_PAGE) - 1));
   const start = listPage * ROOMS_PER_PAGE;
   list.replaceChildren(...rooms.slice(start, start + ROOMS_PER_PAGE).map((r) => {
-    const a = el('a', { href: `?view=${archiveView}&room=${encodeURIComponent(r.id)}`, 'data-rm-room': r.id });
-    a.append(el('span', {}, r.title), el('b', {class:'rm-join'}, r.state === 'active' ? 'Join' : 'View'), el('small', {}, `${r.archived_at ? 'archived' : r.state === 'active' ? 'recording' : r.state} · ${when(r.updated)}`));
+    const a = el('a', { href: `?view=${archiveView}&room=${encodeURIComponent(r.id)}`, 'data-rm-room': r.id,
+      title: `${r.state === 'active' ? 'Join' : 'View'} · ${r.archived_at ? 'archived' : r.state === 'active' ? 'recording' : r.state} · ${when(r.updated)}` });
+    // Review 06: the row is the title and its time; a meeting that is not recording says so in the time's place.
+    a.append(el('span', { class: 'rm-row-t' }, r.title), el('small', { class: 'rm-row-w' }, r.archived_at ? 'archived' : r.state === 'active' ? shortWhen(r.updated) : r.state));
     if (r.id === current) a.setAttribute('aria-current', 'true');
     return h('li', {}, a);
   }));
@@ -143,14 +161,38 @@ function renderList() {
 const KIND_TAG = { proposal: 'proposal', decision: 'decision', task: 'task', task_update: 'task update', checkpoint: 'checkpoint' };
 const SYSTEM = ['session_opened', 'state_change', 'membership', 'moderator', 'artifact_link', 'note_filed'];
 
-function eventLine(e) {
-  if (SYSTEM.includes(e.kind)) {
-    return el('li', { class: 'rm-sys', 'data-rm-event': e.id, 'data-kind': e.kind }, `${e.actor_label} · ${e.body} · ${when(e.created)}`);
+// Invitations, joins and the session's own notices are one quiet centred line (Review 06), never a message. A run of them
+// in a row is said once: "Robert: Recorded working session opened · MC invited as contributor · MC accepted · 8:10".
+function systemPart(e, prev) {
+  const m = e.kind === 'membership' && /^([^:]+):\s*(.*)$/.exec(e.body || '');
+  const said = m ? `${shortName(m[1], labelOf(m[1]))} ${m[2]}` : e.body;
+  return prev && prev.actor === e.actor ? said : `${e.actor_label}: ${said}`;
+}
+function systemLine(run) {
+  const last = run[run.length - 1];
+  const text = run.map((e, i) => systemPart(e, run[i - 1])).join(' · ');
+  return el('li', { class: 'rm-sys', 'data-rm-event': run[0].id, 'data-rm-events': run.map((e) => e.id).join(' '), 'data-kind': run[0].kind,
+    title: run.map((e) => `${e.actor_label} · ${e.body} · ${when(e.created)}`).join('\n') }, `${text} · ${shortWhen(last.created)}`);
+}
+function threadLines(events) {
+  const out = [];
+  let run = [];
+  for (const e of events) {
+    if (SYSTEM.includes(e.kind)) { run.push(e); continue; }
+    if (run.length) { out.push(systemLine(run)); run = []; }
+    out.push(eventLine(e));
   }
+  if (run.length) out.push(systemLine(run));
+  return out;
+}
+
+function eventLine(e) {
+  if (SYSTEM.includes(e.kind)) return systemLine([e]);
   const li = el('li', { class: 'rm-msg', 'data-rm-event': e.id, 'data-kind': e.kind, 'data-actor': e.actor, 'data-actor-kind': e.actor_kind });
   li.append(el('span', { class: 'rm-av', 'data-kind': e.actor_kind, 'aria-hidden': 'true' }, initial(e.actor_label)));
   const card = el('div', { class: 'rm-card' });
-  const meta = h('p', { class: 'rm-meta' }, el('b', { 'data-rm-actor': e.actor }, e.actor_label), el('span', {}, when(e.created)));
+  const meta = h('p', { class: 'rm-meta' }, face(e.actor, e.actor_label, e.actor_kind), el('b', { 'data-rm-actor': e.actor }, e.actor_label), el('span', { class: 'rm-when', title: when(e.created) }, shortWhen(e.created)));
+  if (e.actor === 'robert' && typeof e.target === 'string' && e.target) meta.append(el('span', { class: 'rm-to-chip', 'data-rm-sent-to': e.target }, `to ${shortName(e.target, labelOf(e.target))}`));
   if (e.actor_kind === 'agent') meta.append(el('span', { class: 'rm-tag', 'data-tag': 'agent', title: 'An agent, posting with its own Records key. No live presence is implied.' }, 'agent'));
   if (KIND_TAG[e.kind]) meta.append(el('span', { class: 'rm-tag', 'data-tag': e.kind }, KIND_TAG[e.kind]));
   if (e.origin && e.origin.source_application === 'guild-chat' && e.actor_kind !== 'agent') meta.append(el('span', { class: 'rm-tag', 'data-tag': 'chat' }, 'from Guild Chat'));
@@ -190,7 +232,9 @@ function renderRoom() {
   files.disabled = false;
   files.textContent = `Files · ${(room.documents || []).length}`;
   const stick = thread.scrollTop + thread.clientHeight >= thread.scrollHeight - 40;
-  thread.replaceChildren(...room.events.map(eventLine));
+  // A new meeting (nothing said yet) opens on the workshop team's card; it stays at the top for this visit and scrolls away.
+  if (!room.events.some((e) => !SYSTEM.includes(e.kind))) heroFor = room.id;
+  thread.replaceChildren(...(heroFor === room.id ? [meetingHero()] : []), ...threadLines(room.events));
   if (stick) thread.scrollTop = thread.scrollHeight;
   const writable = room.state === 'active' && !signedOut;
   $('[data-rm-send]').disabled = !writable;
@@ -203,6 +247,33 @@ function renderRoom() {
   else if (/^(Paused|Closed):/.test($('[data-rm-status]').textContent)) status('');
   renderDetails();
   if (!$('[data-rm-files]').hidden) renderFiles();
+}
+
+let heroFor = null;
+function meetingPeople() {
+  return meeting && meeting.room === current ? meeting.participants.filter((p) => !p.teammate || p.rsvp === 'accepted' || p.rsvp === 'invited')
+    : (room?.members || []);
+}
+function namesOf(people) {
+  const names = people.map((p) => shortName(p.id, p.label));
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names.join('');
+}
+function meetingHero() {
+  const people = meetingPeople();
+  const faces = el('span', { class: 'rm-faces', 'aria-hidden': 'true' });
+  faces.append(...people.slice(0, 6).map((p) => face(p.id, p.label, p.kind)));
+  const copy = h('div', { class: 'rm-hero-copy' }, el('p', { class: 'rm-eyebrow' }, 'Guildhall'), el('h2', {}, room.title),
+    h('p', { class: 'rm-hero-who' }, faces, el('span', {}, people.length ? `With ${namesOf(people)}.` : '')),
+    el('p', { class: 'rm-hero-line' }, 'Everyone hears you unless you pick one below.'));
+  return h('li', { class: 'rm-hero', 'data-rm-hero': room.id }, el('div', { class: 'rm-hero-ph', 'aria-hidden': 'true' }), copy);
+}
+// The header: the faces of who is in the meeting, and their names.
+function renderFaces() {
+  const faces = $('[data-rm-faces]');
+  const names = $('[data-rm-names]');
+  const people = room ? meetingPeople() : [];
+  faces.replaceChildren(...people.slice(0, 6).map((p) => face(p.id, p.label, p.kind)));
+  names.textContent = people.map((p) => shortName(p.id, p.label)).join(', ');
 }
 
 function renderDetails() {
@@ -556,6 +627,19 @@ function bind() {
     if (!note) { status('Add a short note for the record first.'); return; }
     if (await setState(b.dataset.rmSetState, note)) $('[data-rm-details]').open = false;
   });
+  // Review 06: ✎ is the list's New meeting; ⋯ holds help, Invite (the panel's own button) and setup (the panel).
+  $('[data-rm-new-proxy]')?.addEventListener('click', () => $('[data-rm-new]').click());
+  const more = $('[data-rm-more]');
+  $('[data-rm-menu-invite]')?.addEventListener('click', () => { more.open = false; $('[data-rm-invite]').click(); });
+  $('[data-rm-menu-setup]')?.addEventListener('click', () => { more.open = false; setRoomPanel(true); $('[data-rm-panel-close]').focus(); });
+  document.addEventListener('click', (e) => {
+    if (!e.target.isConnected) return;                 // a pick inside To ▾ redraws it; that click was inside, it stays open
+    for (const m of $$('[data-rm-more], [data-rm-to-menu]')) if (m.open && !m.contains(e.target)) m.open = false;
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    for (const m of $$('[data-rm-more], [data-rm-to-menu]')) if (m.open) { m.open = false; m.querySelector('summary').focus(); }
+  });
   $('[data-rm-list-open]').addEventListener('click', () => { $('[data-rm]').dataset.list = 'open'; });
   $('[data-rm-list-close]').addEventListener('click', () => { $('[data-rm]').dataset.list = 'closed'; });
   $('[data-rm-take-send]').addEventListener('click', sendTake);
@@ -651,12 +735,14 @@ function renderPeople() {
     const why = reach.state === 'away' && reach.reason ? `away: ${reach.reason}` : REACH[reach.state] || reach.state;
     const chip = el('span', { class: 'rm-person', 'data-person': p.id, 'data-reach': reach.state, 'data-rsvp': p.rsvp,
       title: `${p.label} · ${why}${p.rsvp && p.rsvp !== 'accepted' ? ` · ${p.rsvp.replace('_', ' ')}` : ''}` });
-    chip.append(el('span', { class: 'rm-av', 'data-kind': p.kind, 'aria-hidden': 'true' }, initial(p.label)),
+    const key = faceKey(p.id, p.label);
+    chip.append(key ? el('img', { class: 'rm-av rm-av-face', src: FACES[key], alt: '', 'aria-hidden': 'true' }) : el('span', { class: 'rm-av', 'data-kind': p.kind, 'aria-hidden': 'true' }, initial(p.label)),
       el('span', { class: 'rm-dot', 'aria-hidden': 'true' }), el('span', { class: 'rm-pname' }, p.label));
     if (p.rsvp && p.rsvp !== 'accepted') chip.append(el('span', { class: 'rm-rsvp' }, p.rsvp === 'no_response' ? 'no response' : p.rsvp));
     chip.append(el('span', { class: 'visually-hidden' }, `: ${why}`));
     return chip;
   }));
+  renderFaces();
 }
 
 // How each hosted teammate signs in again (R2 v0.4 §3.6.6).
@@ -788,6 +874,9 @@ async function turnAction(button) {
   await loadMeeting();
 }
 
+// Who hears you (Review 06): one "To: Everyone ▾" in the composer, in place of the row of buttons. It holds exactly the
+// buttons it replaces, so a send is unchanged: Everyone picks every teammate (each is addressed, by @-prefix); one name picks
+// that one (the message's target); none means the facilitator answers and everyone hears it. Several can be picked.
 function renderTo() {
   const box = $('[data-rm-to]');
   const mates = (meeting?.room === current ? meeting.participants : []).filter((p) => p.teammate && p.rsvp === 'accepted');
@@ -795,16 +884,18 @@ function renderTo() {
   const selected = mates.filter((p) => targets.has(p.id));
   box.hidden = !mates.length || !room || room.state === 'closed';
   const wasOpen = box.querySelector('[data-rm-picker]')?.open;
+  const menuWasOpen = box.querySelector('[data-rm-to-menu]')?.open;
   const priorSearch = box.querySelector('[data-rm-to-search]');
   const searchFocused = priorSearch && document.activeElement === priorSearch;
   const selection = searchFocused ? [priorSearch.selectionStart, priorSearch.selectionEnd] : null;
   const chips = mates.map((p) => el('button', {
     type: 'button', class: 'rm-chip', 'data-rm-to-chip': p.id, 'aria-pressed': String(targets.has(p.id)),
     title: `${targets.has(p.id) ? 'Remove' : 'Add'} ${p.label}` }, p.label));
-  const controls = [el('span', { class: 'small' }, 'To:'),
-    el('button', { type: 'button', class: 'rm-chip', 'data-rm-to-all': true,
-      'aria-pressed': String(mates.length > 0 && selected.length === mates.length) }, 'Everyone'),
-    el('button', { type: 'button', class: 'rm-btn', 'data-rm-to-clear': true }, 'Clear')];
+  const all = mates.length > 0 && selected.length === mates.length;
+  const said = !selected.length ? 'Everyone' : all ? (mates.length > 1 ? 'Everyone, each answers' : shortName(mates[0].id, mates[0].label))
+    : selected.map((p) => shortName(p.id, p.label)).join(', ');
+  const controls = [el('button', { type: 'button', class: 'rm-chip rm-to-all', 'data-rm-to-all': true,
+      'aria-pressed': String(all) }, 'Everyone')];
   if (mates.length > 5) {
     const picker = el('details', { 'data-rm-picker': true, class: 'rm-picker' });
     picker.open = !!wasOpen;
@@ -816,10 +907,18 @@ function renderTo() {
     picker.append(search, list);
     controls.push(picker);
   } else controls.push(...chips);
+  controls.push(el('button', { type: 'button', class: 'rm-btn rm-to-clear', 'data-rm-to-clear': true }, 'Clear'));
   controls.push(el('span', { class: 'small rm-to-hint', 'aria-live': 'polite' }, selected.length
-    ? `${selected.length === mates.length ? 'Everyone' : selected.map((p) => p.label).join(', ')} will be addressed. Mentions in your message also add recipients.`
+    ? `${all ? 'Everyone' : selected.map((p) => p.label).join(', ')} will be addressed. Mentions in your message also add recipients.`
     : `No selection: ${facilitator() ? labelOf(facilitator()) : 'nobody'} answers unless you mention someone.`));
-  box.replaceChildren(...controls);
+  const menu = el('details', { class: 'rm-to-menu', 'data-rm-to-menu': true });
+  menu.open = !!menuWasOpen;
+  const sum = el('summary', { class: 'rm-to-sum', 'aria-label': `Send to: ${said}`, title: 'Who hears you' });
+  sum.append(el('span', { class: 'rm-to-word' }, 'To:'), ' ', el('b', { 'data-rm-to-said': true }, said), el('span', { 'aria-hidden': 'true' }, ' ▾'));
+  const body = el('div', { class: 'rm-to-body', role: 'group', 'aria-label': 'Send to' });
+  body.append(...controls);
+  menu.append(sum, body);
+  box.replaceChildren(menu);
   filterRecipients();
   if (searchFocused) {
     const search = box.querySelector('[data-rm-to-search]');
@@ -835,6 +934,8 @@ function filterRecipients() {
 function renderControls() {
   const box = $('[data-rm-controls]');
   box.hidden = !room || signedOut || room.state === 'closed' || cfg.state !== 'on';
+  const invite = $('[data-rm-menu-invite]');
+  if (invite) invite.disabled = box.hidden;
   if (!room) return;
   $('[data-rm-pause]').textContent = room.state === 'paused' ? 'Resume' : 'Pause';
   $('[data-rm-stop]').disabled = room.state !== 'active';

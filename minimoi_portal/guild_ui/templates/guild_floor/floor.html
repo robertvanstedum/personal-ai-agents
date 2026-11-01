@@ -11,11 +11,13 @@
 
 {% block before_main %}
 <aside class="floor-history" id="floor-history" aria-labelledby="fh-h" data-floor-history>
+  {# Phone (Review 06): the mini-moi strip and the workshop row move in here, above the list (mobile-nav.js). #}
+  <div class="phone-places" data-phone-places></div>
   <div class="fh-head">
     <h2 class="fh-h" id="fh-h">{{ 'Archive' if conv_view == 'archived' else 'Conversations' }}</h2>
     <button type="button" class="fb-btn fh-close" data-history-close aria-label="Close conversations">✕</button>
   </div>
-  {% if conv_view == 'active' %}<button type="button" class="fh-new" data-conv-new>＋ New conversation</button>{% endif %}
+  {% if conv_view == 'active' %}<button type="button" class="fh-new" data-conv-new><span class="fh-plus" aria-hidden="true">＋</span> New conversation</button>{% endif %}
   {# Server-owned, file-first (conversations.py): newest first, pinned on top. Housekeeping never calls a model. #}
   {% if conv_list.state != 'ok' %}
   <p class="fh-unavailable small" data-conv-unavailable>Conversations unavailable — treat as unknown.</p>
@@ -26,8 +28,8 @@
     <li class="fh-row" data-conv="{{ cv.id }}" data-pinned="{{ 'true' if cv.pinned else 'false' }}"{% if on %} aria-current="true" data-fh-current{% endif %}>
       <a class="fh-link" href="{{ urls.floor }}?c={{ cv.id }}" data-conv-link>
         <span class="fh-title" data-conv-title>{% if cv.pinned %}<span class="fh-pin" aria-label="Pinned">📌 </span>{% endif %}{{ cv.title }}</span>
-        {% if on %}<span class="fh-meta small" data-fh-count data-more="{{ 'true' if state.notes.more else 'false' }}">{% if state.notes.state == 'ok' %}{{ state.notes.recent|length }}{% if state.notes.more %}+{% endif %} kept{% else %}notes unavailable{% endif %}</span>
-        {% else %}<span class="fh-meta small"><span data-iso="{{ cv.updated_at }}">{{ hhmm(cv.updated_at) }}</span></span>{% endif %}
+        <span class="fh-meta small"><span data-iso="{{ cv.updated_at }}">{{ hhmm(cv.updated_at) }}</span></span>
+        {% if on %}<span class="fh-count visually-hidden" data-fh-count data-more="{{ 'true' if state.notes.more else 'false' }}">{% if state.notes.state == 'ok' %}{{ state.notes.recent|length }}{% if state.notes.more %}+{% endif %} kept{% else %}notes unavailable{% endif %}</span>{% endif %}
       </a>
       <button type="button" class="fh-more" data-conv-menu aria-haspopup="true" aria-expanded="false" aria-label="Actions for {{ cv.title }}">⋯</button>
       <div class="fh-menu" data-conv-actions role="menu" hidden>
@@ -61,7 +63,10 @@
    js/attachments.js writes only through the API. #}
 {% set files = (conversation.attachments or []) if conversation else [] %}
 {% set docs = (conversation.documents or []) if conversation else [] %}
-<details class="floor-context" data-floor-context>
+{% set pending = (conversation.release_pending or []) if conversation else [] %}
+{% set file_count = files|length + docs|length + pending|length %}
+{# Review 06: "Files in this conversation" shows only when there are files (floorlayout.js keeps it true as files come and go). #}
+<details class="floor-context" data-floor-context data-has-files="{{ 'true' if file_count else 'false' }}">
   <summary class="floor-context-sum">Files in this conversation</summary>
   <div class="fc-body">
     {# The artwork leads the rail, as Robert likes it (6 Oct); the files kept with this conversation sit under it. (Linked work was taken off the page on 11 Oct: "we have chat". The API stays.) #}
@@ -69,7 +74,7 @@
     {# Only when a read failed: the honest "unknown", never a generic status paragraph. #}
     <p class="fc-empty" data-needs-summary{% if state.needs.status == "ok" %} hidden{% endif %}>{{ state.needs.text }}</p>
     {% if topic_link %}<p class="fc-topic small" data-topic-materials><a href="{{ topic_link.href }}">Workshop Log materials for this conversation →</a>{% if topic_link.cards %} <span>({{ topic_link.cards }} document{{ '' if topic_link.cards == 1 else 's' }})</span>{% endif %}</p>{% endif %}
-    <section class="fc-sec" data-conv-files-sec aria-labelledby="fc-files-h">
+    <section class="fc-sec" data-conv-files-sec aria-labelledby="fc-files-h"{% if not file_count %} hidden{% endif %}>
       <h2 class="fc-h" id="fc-files-h">Files in this conversation</h2>
       <ul class="fc-files" data-conv-files>
         {% for f in files %}

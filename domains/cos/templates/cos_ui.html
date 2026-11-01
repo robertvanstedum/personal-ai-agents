@@ -66,6 +66,8 @@
                 <button id="popout" type="button" aria-label="Open conversation in a window">Open in its own window</button>
                 <div class="conv-menu-rule"></div>
                 <button type="button" data-voice-start>Talk with CoS (voice)</button>
+                {# The direct-voice provider choice (confer-voice.js writes it here); shown only when her direct voice is admitted. #}
+                <span id="voice-provider" class="conv-menu-provider"></span>
                 <p class="conv-menu-note">Voice is AI-generated.</p>
               </div>
             </details>
@@ -85,11 +87,10 @@
         {# Her direct voice (Spec 165 v0.3 §6.6): filled only when the capabilities read offers it; empty and hidden otherwise. #}
         <div id="voice-live" class="voice-live" role="group" aria-label="Voice conversation" hidden></div>
         <div id="save-state" role="status">Loading your conversation…</div>
-        {# The voice line under the composer is gone (Robert, 1 Nov: "completely unneeded"); voice starts from ⋯. These
-           two stay for the voice code that writes them. #}
+        {# The voice line under the composer is gone (Robert, 1 Nov: "completely unneeded"); voice starts from ⋯, where the
+           provider choice now sits. The status stays for the voice code that writes it. #}
         <div class="talk-meta" hidden>
           <span id="voice-status"></span>
-          <span id="voice-provider"></span>
         </div>
         <details id="cos-files">
           <summary>Files from CoS</summary>

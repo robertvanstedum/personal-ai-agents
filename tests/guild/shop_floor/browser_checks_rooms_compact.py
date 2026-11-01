@@ -100,22 +100,27 @@ def test_operate_warning_summary_stays_emphasized_while_collapsed(browser, serve
 
 
 def test_mobile_craft_identity_more_and_desktop_restore(browser, server, floor):
+    # Review 06: on a phone the chat's own header is the one bar (☰, the Master Craftsman and the conversation, CoS, ✎, ⋯);
+    # the mini-moi strip and the workshop row ride at the top of ☰'s list, and come back to their row on a wide screen.
     ctx, page = _context(browser, server, 390, 844)
     go(page, server['url'] + '/guild-next/guild/build')
     expect(page.locator('.mobile-identity')).to_have_text('MC')
     expect(page.locator('.workshop-primary')).to_contain_text('Craft')
     expect(page.locator('.workshop-name')).to_be_hidden()
-    expect(page.locator('[data-floorbar]')).to_be_hidden()
-    page.locator('.workshop-more > summary').click()
-    page.locator('[data-mobile-menu] [data-history-toggle]').click()
+    bar = page.locator('[data-floorbar]')
+    expect(bar).to_be_visible()
+    expect(bar.locator('.hero-name')).to_contain_text('Master Craftsman')
+    expect(page.locator('#portal-nav-bar')).to_be_hidden()
+    bar.locator('[data-history-toggle]').click()
     expect(page.locator('body')).to_have_attribute('data-history', 'open')
+    expect(page.locator('[data-floor-history] #portal-nav-bar')).to_be_visible()
+    expect(page.locator('[data-floor-history] .workshop-primary [data-section="rooms"]')).to_be_visible()
     page.locator('[data-history-close]').click()
-    expect(page.locator('.workshop-more > summary')).to_be_focused()
-    page.locator('.workshop-more > summary').click()
-    page.locator('[data-mobile-files]').click()
-    expect(page.locator('[data-floor-context]')).to_have_attribute('open', '')
-    _no_page_overflow(page)
+    expect(bar.locator('[data-history-toggle]')).to_be_focused()
+    expect(bar.locator('[data-rail-toggle]')).to_be_hidden()                  # no files: no Files
+    assert _no_page_overflow(page)
     page.set_viewport_size({'width':1440,'height':900})
     expect(page.locator('.workshop-primary [data-section="rooms"]')).to_be_visible()
     expect(page.locator('.workshop-primary [data-section="rooms"]')).to_have_text('Guildhall')
+    expect(page.locator('body > .guild-nav .workshop-cos')).to_have_attribute('href', '/app/cos/ui/confer')
     ctx.close()

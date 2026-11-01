@@ -235,3 +235,187 @@ body.gu[data-page="rooms"] .mc-pill, body.gu[data-page="rooms"] .mc-phone-bar { 
 .rm-welcome{padding:24px}.rm-join{float:right;margin-left:12px}
 @media(min-width:761px){.rm-list,.rm-participants{resize:horizontal;min-width:240px;max-width:45vw}}
 @media(max-width:760px){.rm-dialog{box-sizing:border-box;width:100%;max-width:100%;margin:0;padding:20px}.rm-head{gap:8px}.rm-head .rm-title{font-size:20px}.rm-input{font-size:16px}}
+
+/* ── Review 06 (Option A, slice 2): Guildhall is Craft for a group. The meetings on the left; a slim header with the
+   meeting's name and faces; the workshop team faint behind the meeting (Robert reversed Review 05's "no art in a room"),
+   and a card of it across the top of a new meeting that scrolls away; invitations and joins as one quiet line; the same
+   messages and one rounded composer with "To: Everyone ▾". The palette tokens (--r6-*) are founders.css's. ── */
+body.gu[data-page=rooms]{background:var(--r6-paper);color:var(--r6-ink)}
+body.gu[data-page=rooms] .rm,body.gu[data-page=rooms] .rm[data-files=open]{grid-template-columns:248px minmax(0,1fr);font-family:var(--r6-sans);background:var(--r6-paper)}
+body.gu[data-page=rooms] .rm .rm-art{display:none}
+
+/* The list, like Craft's: ＋ New meeting, then the rows (title and time). */
+body.gu[data-page=rooms] .rm .rm-list{display:flex;flex-direction:column;gap:0;min-width:0;max-width:none;resize:none;padding:12px 8px;border-right:1px solid var(--r6-line);background:var(--r6-paper-mid);box-shadow:none}
+body.gu[data-page=rooms] .rm-list-head{flex-wrap:nowrap;gap:8px;padding:0 4px}
+body.gu[data-page=rooms] .rm-list-h{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+body.gu[data-page=rooms] .rm-new{flex:1;display:flex;align-items:center;gap:8px;height:34px;min-height:34px;padding:0 12px;border:1px solid var(--r6-line-strong);border-radius:8px;background:var(--r6-card);color:var(--r6-ink);font:600 14px var(--r6-sans);text-align:left}
+body.gu[data-page=rooms] .rm-new:hover:not(:disabled){background:#fff}
+body.gu[data-page=rooms] .rm-plus{color:var(--r6-accent);font-size:17px}
+body.gu[data-page=rooms] .rm .rm-list-close{display:none}
+body.gu[data-page=rooms] .rm-view-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+body.gu[data-page=rooms] .rm-view{align-self:flex-start;min-height:30px;height:30px;margin:10px 6px 4px;padding:0 6px;border:1px solid var(--r6-line);border-radius:7px;background:var(--r6-card);color:var(--r6-soft);font:13px var(--r6-sans)}
+body.gu[data-page=rooms] .rm-rooms{gap:1px;margin:6px 0;padding:0;list-style:none}
+body.gu[data-page=rooms] .rm-rooms a{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:7px;color:var(--r6-soft);font:14px var(--r6-sans);white-space:nowrap}
+body.gu[data-page=rooms] .rm-rooms a:hover{background:rgba(251,247,240,.7)}
+body.gu[data-page=rooms] .rm-row-t{min-width:0;overflow:hidden;text-overflow:ellipsis}
+body.gu[data-page=rooms] .rm-rooms a small.rm-row-w{display:inline;flex:none;color:var(--r6-mute);font-size:12.5px}
+body.gu[data-page=rooms] .rm-rooms a[aria-current=true]{background:var(--r6-card);color:var(--r6-ink);font-weight:600;box-shadow:inset 2px 0 0 var(--r6-accent)}
+body.gu[data-page=rooms] .rm-rooms .small{padding:8px 10px;color:var(--r6-mute)}
+body.gu[data-page=rooms] .rm-list-pages{padding:0 4px}
+body.gu[data-page=rooms] .rm-list .phone-places{display:none}
+
+/* The meeting, with the workshop team faint behind it. */
+body.gu[data-page=rooms] .rm-main{position:relative;isolation:isolate;background:transparent}
+body.gu[data-page=rooms] .rm-main::before{content:"";position:absolute;inset:0;z-index:-1;background:url('/static/guild/guild-workshop-team.webp') 74% 60%/cover no-repeat;opacity:.1;filter:blur(1px) saturate(.8);pointer-events:none}
+
+/* The slim header, 46 px. */
+body.gu[data-page=rooms] .rm-head{flex:none;height:46px;min-height:46px;gap:8px;padding:0 14px 0 20px;border-bottom:1px solid var(--r6-line);background:var(--r6-paper)}
+body.gu[data-page=rooms] .rm-head .rm-btn,body.gu[data-page=rooms] .rm-head-more>summary{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;min-height:30px;min-width:30px;padding:0 10px;border:1px solid var(--r6-line);border-radius:7px;background:none;color:var(--r6-soft);font:14px var(--r6-sans);cursor:pointer}
+body.gu[data-page=rooms] .rm-head .rm-btn:hover,body.gu[data-page=rooms] .rm-head-more>summary:hover,body.gu[data-page=rooms] .rm-head-more[open]>summary{background:var(--r6-card);color:var(--r6-ink)}
+body.gu[data-page=rooms] .rm .rm-list-open,body.gu[data-page=rooms] .rm-head .rm-new-btn{display:none}
+body.gu[data-page=rooms] .rm-head-id{flex:1;min-width:0;display:flex;align-items:center;gap:10px}
+body.gu[data-page=rooms] .rm-head .rm-title{flex:0 1 auto;min-width:0;margin:0;font:600 15px/1.3 var(--r6-sans);color:var(--r6-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.gu[data-page=rooms] .rm-faces{display:inline-flex;flex:none;align-items:center;padding-left:6px}
+body.gu[data-page=rooms] .rm-face{display:inline-grid;place-items:center;flex:none;width:24px;height:24px;margin-left:-6px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 2px var(--r6-paper);background:var(--r6-green);color:#fff;font:600 10px/1 var(--r6-sans)}
+body.gu[data-page=rooms] .rm-names{flex:none;color:var(--r6-mute);font-size:13.5px;white-space:nowrap}
+body.gu[data-page=rooms] .rm-names:empty,body.gu[data-page=rooms] .rm-faces:empty{display:none}
+body.gu[data-page=rooms] .rm-panel-icon{display:none}
+body.gu[data-page=rooms] .rm-head-more{position:relative;flex:none}
+body.gu[data-page=rooms] .rm-head-more>summary{list-style:none;border-color:transparent;padding:0;font-size:18px;line-height:1;user-select:none}
+body.gu[data-page=rooms] .rm-head-more>summary::-webkit-details-marker{display:none}
+body.gu[data-page=rooms] .rm-head-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:60;display:flex;flex-direction:column;width:300px;padding:6px;background:var(--r6-field);border:1px solid var(--r6-line-strong);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.14)}
+body.gu[data-page=rooms] .rm-head-menu>button,body.gu[data-page=rooms] .rm-head-menu .rm-about>summary{display:flex;align-items:center;width:100%;min-height:34px;padding:7px 10px;border:0;border-radius:6px;background:none;color:var(--r6-ink);font:14.5px var(--r6-sans);text-align:left;cursor:pointer}
+body.gu[data-page=rooms] .rm-head-menu>button:hover:not(:disabled),body.gu[data-page=rooms] .rm-head-menu .rm-about>summary:hover{background:var(--r6-paper-mid)}
+body.gu[data-page=rooms] .rm-head-menu>button:disabled{color:var(--r6-mute);cursor:default}
+body.gu[data-page=rooms] .rm-head-menu .rm-about{margin:0;border-top:1px solid var(--r6-line);padding-top:4px;margin-top:4px}
+body.gu[data-page=rooms] .rm-head-menu .rm-about>p{position:static;width:auto;margin:2px 10px 8px;padding:0;border:0;box-shadow:none;background:none;color:var(--r6-soft);font-size:13px;line-height:1.45}
+
+/* The stream: a 760 px column, a paper wash behind the words. */
+body.gu[data-page=rooms] .rm-thread{gap:16px;padding:18px 24px 12px;align-items:stretch;background:linear-gradient(90deg,rgba(247,240,228,0),rgba(247,240,228,.55) 18%,rgba(247,240,228,.55) 82%,rgba(247,240,228,0))}
+body.gu[data-page=rooms] .rm-thread>li{flex:none;align-self:center;width:min(760px,100%);max-width:none;margin:0}
+body.gu[data-page=rooms] .rm-thread>.rm-sys{width:auto;max-width:min(760px,100%);color:var(--r6-mute);font-size:12.5px;line-height:1.45;text-align:center}
+body.gu[data-page=rooms] .rm-msg{display:block}
+body.gu[data-page=rooms] .rm-msg>.rm-av{display:none}
+body.gu[data-page=rooms] .rm-card{padding:0;border:0;border-radius:0;background:none}
+body.gu[data-page=rooms] .rm-meta{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;margin:0 0 3px;font-size:12.5px;color:var(--r6-mute)}
+body.gu[data-page=rooms] .rm-meta b{font:600 13px var(--r6-sans);color:var(--r6-soft)}
+body.gu[data-page=rooms] .rm-meta .rm-face{width:22px;height:22px;margin:0;box-shadow:0 0 0 1px var(--r6-line);font-size:9px}
+body.gu[data-page=rooms] .rm-tag{font:600 10.5px var(--r6-sans)}
+body.gu[data-page=rooms] .rm-to-chip{padding:1px 8px;border:1px solid var(--r6-line);border-radius:999px;background:var(--r6-card);color:var(--r6-soft);font:600 12px var(--r6-sans)}
+body.gu[data-page=rooms] .rm-body{margin:0;font:16px/1.55 var(--r6-sans);color:var(--r6-ink)}
+/* Robert's own: right-aligned in the paper bubble. "Hand to agents…" waits under it until hovered or focused. */
+body.gu[data-page=rooms] .rm-msg[data-actor=robert]{align-self:flex-end;width:auto;max-width:min(600px,78%);margin-right:max(0px,calc((100% - 760px) / 2))}
+body.gu[data-page=rooms] .rm-msg[data-actor=robert] .rm-card{padding:9px 14px;background:var(--r6-paper-deep);border-radius:14px 14px 4px 14px}
+body.gu[data-page=rooms] .rm-msg[data-actor=robert] .rm-meta{flex-direction:row-reverse;justify-content:flex-start}
+body.gu[data-page=rooms] .rm-msg[data-actor=robert] .rm-meta .rm-face{display:none}
+body.gu[data-page=rooms] .rm-msg[data-actor=robert]{position:relative}
+body.gu[data-page=rooms] .rm-handoff-open{position:absolute;right:4px;top:100%;margin:1px 0 0;padding:0;min-height:0;border:0;background:none;color:var(--r6-mute);font-size:12px;opacity:0;transition:opacity .15s}
+body.gu[data-page=rooms] .rm-msg:hover .rm-handoff-open,body.gu[data-page=rooms] .rm-msg:focus-within .rm-handoff-open{opacity:1}
+body.gu[data-page=rooms] .rm-file{background:var(--r6-card);border-color:var(--r6-line)}
+
+/* A new meeting's card: the workshop team (framed on the open doors and the men at the bench), the meeting's name, who is in
+   it, and who hears you. The welcome (no meeting open) is the same card. */
+body.gu[data-page=rooms] .rm-thread>.rm-hero{width:min(640px,100%);margin:8px 0}
+body.gu[data-page=rooms] .rm-hero{list-style:none;border-radius:16px;overflow:hidden;background:var(--r6-card);box-shadow:0 0 0 1px var(--r6-line),0 8px 30px rgba(18,59,48,.08)}
+body.gu[data-page=rooms] .rm-hero-ph{height:200px;background:#e6dfce url('/static/guild/guild-workshop-team.webp') 74% 60%/175% no-repeat}
+body.gu[data-page=rooms] .rm-hero-copy{display:flex;flex-direction:column;gap:6px;padding:20px 22px 20px}
+body.gu[data-page=rooms] .rm-hero-copy p{margin:0;color:var(--r6-soft);font-size:15.5px;line-height:1.45}
+body.gu[data-page=rooms] .rm-eyebrow{font:600 12px var(--r6-sans)!important;letter-spacing:.16em;text-transform:uppercase;color:var(--r6-accent)!important}
+body.gu[data-page=rooms] .rm-hero h2{margin:0;font:500 32px/1.12 var(--r6-serif);color:var(--r6-green)}
+body.gu[data-page=rooms] .rm-hero-who{display:flex;align-items:center;gap:8px}
+body.gu[data-page=rooms] .rm-hero-who .rm-faces{padding-left:6px}
+body.gu[data-page=rooms] .rm-hero-copy .btn{min-height:34px;padding:0 16px;border-radius:999px;background:var(--r6-green);color:#fff;border:0;font:600 14px var(--r6-sans)}
+body.gu[data-page=rooms] .rm-welcome{padding:24px}
+body.gu[data-page=rooms] .rm-welcome .rm-hero{width:min(640px,100%);margin:8px auto 0}
+
+/* One rounded composer: the words; ＋, To ▾, then 🎙 and Send. The round's lines and a closed meeting sit just above it. */
+body.gu[data-page=rooms] .rm-turns,body.gu[data-page=rooms] .rm-closed,body.gu[data-page=rooms] .rm-mentions{width:min(760px,calc(100% - 48px));margin:0 auto 6px}
+body.gu[data-page=rooms] .rm-turn{background:rgba(251,247,240,.85);border-color:var(--r6-line);border-radius:8px;font-size:13.5px}
+body.gu[data-page=rooms] .rm-composer{width:min(760px,calc(100% - 48px));margin:0 auto 12px;align-items:center;gap:6px;padding:10px 10px 8px 14px;background:var(--r6-field);border:1px solid var(--r6-line-strong);border-radius:16px;box-shadow:0 2px 10px rgba(18,59,48,.06)}
+body.gu[data-page=rooms] .rm-composer:focus-within{border-color:rgba(18,59,48,.45)}
+body.gu[data-page=rooms] .rm-composer .rm-input{order:-1;flex:1 0 100%;min-height:26px;padding:0;font:16px/1.5 var(--r6-sans);color:var(--r6-ink)}
+body.gu[data-page=rooms] .rm-composer .rm-attach{order:0;width:34px;height:34px;min-height:34px;border:0;border-radius:50%;font-size:0;color:var(--r6-soft)}
+body.gu[data-page=rooms] .rm-composer .rm-attach::before{content:"＋";font-size:20px;line-height:1}
+body.gu[data-page=rooms] .rm-composer .rm-attach:hover{background:var(--r6-paper-mid)}
+body.gu[data-page=rooms] .rm-composer:has(.rm-to[hidden]) .rm-attach{margin-right:auto}
+body.gu[data-page=rooms] .rm-composer .rm-to{order:1;margin:0 auto 0 2px;position:relative;flex:0 1 auto;min-width:0}
+body.gu[data-page=rooms] .rm-composer .rm-mic{order:2;width:34px;height:34px;min-height:34px;padding:0;justify-content:center;border:0;border-radius:50%;color:var(--r6-soft);font-size:17px}
+body.gu[data-page=rooms] .rm-composer .rm-mic[aria-pressed=true]{background:#8a3020;color:#fff}
+body.gu[data-page=rooms] .rm-composer .rm-mic-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+body.gu[data-page=rooms] .rm-composer .rm-send{order:3;height:34px;min-height:34px;padding:0 16px;border:0;border-radius:999px;background:var(--r6-green);color:#fff;font:600 14px var(--r6-sans)}
+body.gu[data-page=rooms] .rm-composer .rm-status,body.gu[data-page=rooms] .rm-composer .rm-banner{order:9;flex:1 0 100%;margin:2px 0 0}
+/* To: Everyone ▾ */
+body.gu[data-page=rooms] .rm-to-menu{position:relative}
+body.gu[data-page=rooms] .rm-to-sum{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;border:1px solid var(--r6-line);border-radius:999px;background:var(--r6-card);color:var(--r6-soft);font:13.5px var(--r6-sans);white-space:nowrap;list-style:none;cursor:pointer;user-select:none}
+body.gu[data-page=rooms] .rm-to-sum::-webkit-details-marker{display:none}
+body.gu[data-page=rooms] .rm-to-sum b{font-weight:600;color:var(--r6-ink);max-width:220px;overflow:hidden;text-overflow:ellipsis}
+body.gu[data-page=rooms] .rm-to-menu[open]>.rm-to-sum,body.gu[data-page=rooms] .rm-to-sum:hover{background:#fff}
+body.gu[data-page=rooms] .rm-to-body{position:absolute;left:0;bottom:calc(100% + 8px);z-index:40;display:flex;flex-direction:column;gap:1px;width:290px;max-width:calc(100vw - 32px);padding:6px;background:var(--r6-field);border:1px solid var(--r6-line-strong);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.14)}
+body.gu[data-page=rooms] .rm-to-body .rm-chip,body.gu[data-page=rooms] .rm-to-body .rm-to-clear{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:34px;padding:6px 10px;border:0;border-radius:6px;background:none;color:var(--r6-ink);font:14.5px var(--r6-sans);text-align:left}
+body.gu[data-page=rooms] .rm-to-body .rm-chip:hover,body.gu[data-page=rooms] .rm-to-body .rm-to-clear:hover{background:var(--r6-paper-mid)}
+body.gu[data-page=rooms] .rm-to-body .rm-chip[aria-pressed=true]{font-weight:600;color:var(--r6-green);background:none}
+body.gu[data-page=rooms] .rm-to-body .rm-chip[aria-pressed=true]::after{content:"✓";color:var(--r6-accent)}
+body.gu[data-page=rooms] .rm-to-body .rm-to-all{border-bottom:1px solid var(--r6-line);border-radius:6px 6px 0 0}
+body.gu[data-page=rooms] .rm-to-body .rm-to-clear{color:var(--r6-soft);font-size:13.5px;border-top:1px solid var(--r6-line);border-radius:0 0 6px 6px}
+body.gu[data-page=rooms] .rm-to-body .rm-chip[hidden]{display:none}
+body.gu[data-page=rooms] .rm-to-hint{padding:6px 10px 2px;color:var(--r6-mute);font-size:12.5px;line-height:1.4}
+body.gu[data-page=rooms] .rm-to-body .rm-picker summary{padding:6px 10px;font-size:13.5px}
+
+/* People & files: the right panel, 300 px, beside the meeting when wide; a sheet over it otherwise. */
+body.gu[data-page=rooms] .rm-participants{background:var(--r6-paper-mid);border-left:1px solid var(--r6-line);font-family:var(--r6-sans);gap:14px}
+body.gu[data-page=rooms] .rm-participants .rm-files-h{font:600 15px var(--r6-sans)}
+body.gu[data-page=rooms] .rm-participants .rm-btn,body.gu[data-page=rooms] .rm-participants .rm-manage>summary{align-self:flex-start;min-height:32px;padding:4px 12px;border:1px solid var(--r6-line);border-radius:7px;background:var(--r6-card);color:var(--r6-soft);font:13.5px var(--r6-sans)}
+body.gu[data-page=rooms] .rm-participants .rm-stop{color:#8a3020;border-color:rgba(138,48,32,.4)}
+body.gu[data-page=rooms] .rm-participants .rm-more>summary{display:inline-flex;align-items:center}
+body.gu[data-page=rooms] .rm-person{max-width:100%;padding:3px 10px 3px 3px;background:var(--r6-card);box-shadow:0 0 0 1px var(--r6-line);font-size:13.5px}
+body.gu[data-page=rooms] .rm-person .rm-av{width:24px;height:24px;border-radius:50%;object-fit:cover;background:var(--r6-green)}
+body.gu[data-page=rooms] .rm-participants .rm-files-head .rm-btn{min-height:30px;height:30px;min-width:30px;padding:0;border:0;background:none}
+@media(min-width:1200px){
+  body.gu[data-page=rooms] .rm[data-panel=open],body.gu[data-page=rooms] .rm[data-panel=open][data-files=open]{grid-template-columns:248px minmax(0,1fr) 300px}
+  body.gu[data-page=rooms] .rm[data-panel=open] .rm-participants{position:static;width:auto;max-width:none;min-width:0;resize:none;box-shadow:none;z-index:auto}
+}
+
+/* A narrower window: the list opens over the meeting from ☰; ✎ starts one. */
+@media(max-width:899px){
+  body.gu[data-page=rooms] .rm,body.gu[data-page=rooms] .rm[data-files=open],body.gu[data-page=rooms] .rm[data-panel=open]{grid-template-columns:minmax(0,1fr)}
+  body.gu[data-page=rooms] .rm .rm-list{display:none}
+  body.gu[data-page=rooms] .rm[data-list=open] .rm-list{display:flex;position:fixed;top:0;bottom:0;left:0;z-index:85;width:min(320px,88vw);box-shadow:10px 0 30px rgba(0,0,0,.2);overflow-y:auto}
+  body.gu[data-page=rooms] .rm .rm-list-open,body.gu[data-page=rooms] .rm-head .rm-new-btn{display:inline-flex}
+  body.gu[data-page=rooms] .rm[data-list=open] .rm-list-close{display:inline-flex;align-items:center;justify-content:center;min-height:34px;height:34px;width:34px;padding:0;border:0;background:none}
+  body.gu[data-page=rooms] .rm-head{padding-left:10px}
+  body.gu[data-page=rooms] .rm-head .rm-new-btn{color:var(--r6-accent);font-size:16px;padding:0}
+  body.gu[data-page=rooms] .rm-names{display:none}
+}
+
+/* Phone (< 640 px): the header is the one bar; the strip and the workshop row ride in ☰'s list. */
+@media(max-width:639px){
+  body.gu[data-page=rooms]>#portal-nav-bar,body.gu[data-page=rooms]>.guild-nav{display:none}
+  body.gu[data-page=rooms] .rm{height:var(--app-h,100dvh);min-height:0}
+  body.gu[data-page=rooms] .rm-head{height:52px;min-height:52px;gap:2px;padding:0 6px 0 4px}
+  body.gu[data-page=rooms] .rm-head .rm-btn,body.gu[data-page=rooms] .rm-head-more>summary{min-width:36px;height:36px;min-height:36px;padding:0 6px;border-color:transparent;font-size:17px}
+  body.gu[data-page=rooms] .rm-head-id{display:block;padding-left:4px}
+  body.gu[data-page=rooms] .rm-head .rm-title{display:block;font:600 16px/1.15 var(--r6-serif);color:var(--r6-green)}
+  body.gu[data-page=rooms] .rm-faces{display:none}
+  body.gu[data-page=rooms] .rm-names{display:block;font-size:12.5px;line-height:1.25;overflow:hidden;text-overflow:ellipsis}
+  body.gu[data-page=rooms] .rm-panel-word{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  body.gu[data-page=rooms] .rm-panel-icon{display:inline}
+  body.gu[data-page=rooms] .rm-head-menu{right:-2px;width:min(300px,calc(100vw - 16px))}
+  body.gu[data-page=rooms] .rm-head-menu>button,body.gu[data-page=rooms] .rm-head-menu .rm-about>summary{min-height:44px}
+  body.gu[data-page=rooms] .rm-thread{padding:12px 14px 10px;gap:14px}
+  body.gu[data-page=rooms] .rm-msg[data-actor=robert]{max-width:86%;margin-right:0}
+  body.gu[data-page=rooms] .rm-thread>.rm-hero{width:100%}
+  body.gu[data-page=rooms] .rm-hero-ph{height:150px;background-size:260%}
+  body.gu[data-page=rooms] .rm-hero h2{font-size:26px}
+  body.gu[data-page=rooms] .rm-welcome{padding:12px}
+  body.gu[data-page=rooms] .rm-turns,body.gu[data-page=rooms] .rm-closed,body.gu[data-page=rooms] .rm-mentions,body.gu[data-page=rooms] .rm-composer{width:calc(100% - 20px)}
+  body.gu[data-page=rooms] .rm-composer{margin:0 auto max(8px,env(safe-area-inset-bottom));padding:8px 8px 6px 12px}
+  body.gu[data-page=rooms] .rm-composer .rm-attach,body.gu[data-page=rooms] .rm-composer .rm-mic,body.gu[data-page=rooms] .rm-composer .rm-send{height:40px;min-height:40px}
+  body.gu[data-page=rooms] .rm-composer .rm-attach,body.gu[data-page=rooms] .rm-composer .rm-mic{width:40px}
+  body.gu[data-page=rooms] .rm-to-sum{height:34px}
+  body.gu[data-page=rooms] .rm-to-body .rm-chip,body.gu[data-page=rooms] .rm-to-body .rm-to-clear{min-height:44px}
+  body.gu[data-page=rooms] .rm .rm-list .phone-places{display:block;margin:-12px -8px 10px;border-bottom:1px solid var(--r6-line)}
+  body.gu[data-page=rooms] .rm-participants{width:100vw}
+}
+body.gu[data-page=rooms] .rm-head-menu .rm-about>summary{justify-content:flex-start;list-style:none}
+body.gu[data-page=rooms] .rm-head-menu .rm-about>summary::-webkit-details-marker{display:none}
+body.gu[data-page=rooms] .rm-welcome{background:transparent}

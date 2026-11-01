@@ -466,8 +466,8 @@ def test_w4_opening_an_item_sets_continue_and_the_phone_shows_it(browser, server
 
     phone, ppage = _context(browser, server, **PHONE)     # another session and viewport, same owner
     go(ppage, f"{server['url']}/guild-next/guild/build")
-    ppage.click("[data-floor-context] > summary")                 # the context, folded below the chat: no Continue line (5 Oct)
-    expect(ppage.locator("[data-rail-continue]")).to_have_count(0)
+    expect(ppage.locator("[data-floor-context]")).to_be_hidden()  # Review 06: no files, nothing folded below the chat
+    expect(ppage.locator("[data-rail-continue]")).to_have_count(0)   # and no Continue line (5 Oct)
     go(ppage, f"{server['url']}/guild-next/guild/build/queue")
     expect(ppage.locator(".ps-continue [data-continue-link]")).to_have_text("#12 Floor API")
     phone.close()
@@ -2132,6 +2132,9 @@ def test_fix_the_rail_toggle_moves_focus_in_and_back(browser, server, floor):
     ctx, page = _context(browser, server, 1100, 800)
     go(page, f"{server['url']}/guild-next/guild/build")
     toggle = page.locator("[data-rail-toggle]")
+    expect(toggle).to_be_hidden()                                                   # Review 06: Files n only when there are files
+    page.evaluate("document.querySelector('[data-conv-files]').insertAdjacentHTML('beforeend', '<li class=\"fc-file\"><span class=\"fc-file-name\">plan.md</span></li>')")
+    expect(toggle).to_have_attribute("data-count", "1")
     toggle.click()
     expect(page.locator("#main")).to_be_visible()
     assert page.evaluate("document.querySelector('#main').contains(document.activeElement)")
@@ -2152,6 +2155,8 @@ def test_fix_rotating_a_phone_to_landscape_keeps_the_context_reachable(browser, 
     assert page.locator("[data-floor-context]").get_attribute("open") is None
     page.set_viewport_size({"width": 844, "height": 390})
     expect(page.locator("[data-floor-context]")).to_have_attribute("open", "")
+    expect(page.locator("[data-rail-toggle]")).to_be_hidden()                      # Review 06: no files, no Files button
+    page.evaluate("document.querySelector('[data-conv-files]').insertAdjacentHTML('beforeend', '<li class=\"fc-file\"><span class=\"fc-file-name\">plan.md</span></li>')")
     page.click("[data-rail-toggle]")
     expect(page.locator("[data-conv-files-sec]")).to_be_visible()                  # the rail (Files) stays reachable
     ctx.close()
@@ -4281,7 +4286,9 @@ def test_b16_on_a_phone_the_fold_is_named_for_what_is_in_it_files_come_before_th
     errors = _errors(page)
     _fresh_conversation(page, server)
     expect(page.locator(".floor-context-sum")).to_have_text("Files in this conversation")
-    page.click(".floor-context-sum")
+    expect(page.locator("[data-floor-context]")).to_be_hidden()                          # Review 06: no files, no fold
+    page.evaluate("document.querySelector('[data-conv-files]').insertAdjacentHTML('beforeend', '<li class=\"fc-file\"><span class=\"fc-file-name\">plan.md</span></li>')")
+    page.click(".floor-context-sum")                                                     # a file arrives: the fold is there
     art = page.locator(".fc-art").bounding_box()["y"]
     assert page.locator("[data-conv-files-sec]").bounding_box()["y"] < art               # files above the picture
     assert page.locator(".fc-art").is_visible()                                          # the picture is still there

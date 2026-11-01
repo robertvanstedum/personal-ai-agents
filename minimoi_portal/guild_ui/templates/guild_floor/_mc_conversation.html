@@ -38,7 +38,7 @@
 {% macro note_row(n) -%}
 {% if n.voice and n.voice.kind in ('owner_turn', 'assistant_turn', 'consult_receipt', 'consult_reply', 'consult_note', 'consult_request') %}{{ voice_row(n) }}{% else -%}
 <li class="msg {{ 'msg-platform' if n.author_kind == 'platform' else 'msg-note' }}" data-kind="{{ 'platform' if n.author_kind == 'platform' else 'note' }}" data-author-kind="{{ n.author_kind }}" data-note="{{ n.id }}"{% if n.request_id %} data-note-request="{{ n.request_id }}"{% endif %}{% if n.voice %} data-voice-kind="{{ n.voice.kind }}" data-voice-session="{{ n.voice.session_id }}"{% endif %}>
-  <p class="msg-meta"><span class="msg-label">{{ n.author_label }}</span> · <span data-iso="{{ n.created_at }}">{{ hhmm(n.created_at) }}</span><span class="msg-extra">{% if n.context.area %} · {{ n.context.area }}{% endif %}{% if n.context.item_ref %} · #{{ n.context.item_ref }}{% endif %}{% if n.author_kind != 'platform' %} · kept as a note{% endif %}</span></p>
+  <p class="msg-meta"{% if n.author_kind != 'platform' %} title="Kept as a note{% if n.context.area %} · {{ n.context.area }}{% endif %}{% if n.context.item_ref %} · #{{ n.context.item_ref }}{% endif %}"{% endif %}><span class="msg-label">{{ n.author_label }}</span> · <span data-iso="{{ n.created_at }}">{{ hhmm(n.created_at) }}</span><span class="msg-extra">{% if n.context.area %} · {{ n.context.area }}{% endif %}{% if n.context.item_ref %} · #{{ n.context.item_ref }}{% endif %}{% if n.author_kind != 'platform' %} · kept as a note{% endif %}</span></p>
   {%- if n.html %}
   <div class="msg-text msg-md">{{ n.html|safe }}</div>{# sanitised server-side (markdown_render.py) #}
   {%- else %}
@@ -74,17 +74,33 @@
      design: no hero chooser): Master Craftsman's portrait and state, the
      conversation, the one place Needs you appears, the record chip, and the
      rail toggle. The image is decoration (CSS); the words carry the meaning. #}
+  {# Review 06: the slim header (46 px, no card): the conversation's title on the left; "Files n" only when it has files,
+     and ⋯ on the right. The hero's hooks stay: the name is there for screen readers, the portrait and banner art only on
+     a phone's bar and nowhere else. The state line shows only when something is wrong (floorlayout.js). #}
+  {% set fb_conv = conversation if conversation is defined and conversation else none %}
+  {% set fb_files = ((fb_conv.attachments or [])|length + (fb_conv.documents or [])|length + (fb_conv.release_pending or [])|length) if fb_conv else 0 %}
+  {% set fb_normal = state.mc_state == 'live' or 'response not yet verified' in (state.mc_header or '') %}
   <div class="mc-floorbar mc-hero" data-floorbar data-chat-hero>
     <div class="mc-banner-art"><img class="hero-art" src="/static/guild/guild-workshop-team.webp" alt="" aria-hidden="true"></div>
     <button type="button" class="fb-btn fb-history" data-history-toggle aria-expanded="false" aria-controls="floor-history">☰<span class="visually-hidden"> Conversations</span></button>
     {% if not embedded %}<span class="hero-portrait" aria-hidden="true"></span>{% endif %}
     <div class="hero-text">
       <h1 class="hero-name">{% if not embedded %}{{ mc_name }}<span class="visually-hidden"> · </span>{% endif %} <span class="fb-title" data-conv-current-title>{{ conversation.title if conversation else 'Shop floor thread' }}</span></h1>
-      <p class="hero-sub"><span class="hero-dot" aria-hidden="true"></span><span data-mc-header>{{ state.mc_header }}</span></p>
+      <p class="hero-sub" data-mc-status{% if fb_normal %} data-normal="true"{% endif %}><span class="hero-dot" aria-hidden="true"></span><span data-mc-header>{{ state.mc_header }}</span></p>
     </div>
-    {# Opens the files rail over the chat on a medium screen only; beside the chat (wide) it is always open and on a phone it is folded below. #}
-    <button type="button" class="fb-btn fb-rail" data-rail-toggle aria-expanded="true" aria-controls="main">Files</button>
-
+    {# Opens the files rail over the chat on a medium screen only; beside the chat (wide) it is always open and on a phone it is folded below. Shown only when there are files. #}
+    <button type="button" class="fb-btn fb-rail" data-rail-toggle aria-expanded="true" aria-controls="main" data-count="{{ fb_files }}">Files</button>
+    {% if not embedded %}<a class="fb-cos" href="/app/cos/ui/confer" title="Chief of Staff" aria-label="Chief of Staff"><img src="/static/guild/cos-mark-96.webp" alt="" width="26" height="26"></a>
+    <button type="button" class="fb-btn fb-new" data-conv-new-proxy aria-label="New conversation" title="New conversation">✎</button>
+    <details class="fb-more" data-fb-more>
+      <summary class="fb-btn" aria-label="More for this conversation" title="More">⋯</summary>
+      <div class="fb-menu" role="group" aria-label="This conversation">
+        <button type="button" data-fb-rename>Rename</button>
+        <button type="button" data-fb-picture aria-label="Change the picture behind the conversation">Picture <span class="fb-seg"><span data-picture-opt="faded">Faded</span><span data-picture-opt="hidden">Hidden</span></span></button>
+        <a href="{{ urls.floor }}?view=archived">Archive</a>
+        <a href="/app/cos/ui/confer">Chief of Staff ↗</a>
+      </div>
+    </details>{% endif %}
   </div>
   {% else %}
   <nav class="mc-current small" aria-label="Conversation history">
@@ -103,6 +119,12 @@
       <p class="msg-text">{{ state.notes.text }}</p>
     </li>
     {% else %}
+    {% if page_id == 'floor' and not embedded and not state.notes.recent %}{# Review 06: a new, empty conversation opens on the workshop's card; it is the first thing in the thread and scrolls away with it. The greeting follows the viewer's clock (floorlayout.js). #}
+    <li class="craft-hero" data-craft-hero>
+      <div class="craft-hero-copy"><p class="craft-eyebrow">The Workshop</p><h2 data-greeting data-name="{{ (user.display_name if user and user.display_name else '') }}">Hello{{ (', ' ~ user.display_name) if user and user.display_name else '' }}.</h2><p>Ask, plan or build with the {{ mc_name }}.</p></div>
+      <div class="craft-hero-ph" aria-hidden="true"></div>
+    </li>
+    {% endif %}
     {% if state.notes.more %}<li class="msg msg-platform" data-kind="platform" data-notes-earlier><p class="msg-text small">Earlier notes are kept; the latest {{ state.notes.recent|length }} are shown.</p></li>{% endif %}
     {% for n in state.notes.recent %}{{ note_row(n) }}{% endfor %}
     {% endif %}
@@ -191,7 +213,7 @@
 </template>
 <template id="tpl-note">
   <li class="msg msg-note" data-kind="note">
-    <p class="msg-meta"><span class="msg-label" data-slot="label"></span> · <span data-slot="when"></span><span class="msg-extra"><span data-slot="context"></span> · kept as a note</span></p>
+    <p class="msg-meta" title="Kept as a note"><span class="msg-label" data-slot="label"></span> · <span data-slot="when"></span><span class="msg-extra"><span data-slot="context"></span> · kept as a note</span></p>
     <div class="msg-text msg-md" data-slot="text"></div>
   </li>
 </template>

@@ -1,6 +1,9 @@
 {% set section = 'operate' if page_id.startswith('operate') else 'improve' if page_id == 'improve' else 'experiment' if page_id in ('experiment', 'labs') else 'build' %}
+{# Review 06: one app row, like Confer's. The workshop mark and "Guild", the four tabs, Operate · Improve · Lab after a
+   hairline, and CoS ↗ on the right. On a phone the Craft and Guildhall pages carry this row in their list drawer
+   (mobile-nav.js); every other page keeps its More menu. #}
 <div class="workshop-row">
-  <a class="workshop-name" aria-label="Guild" href="{{ urls.floor }}"><img src="/static/guild/guild-build.webp" alt="" width="28" height="28"></a>
+  <a class="workshop-name" aria-label="Guild" href="{{ urls.floor }}"><img src="/static/guild/guild-build.webp" alt="" width="28" height="28"><span class="workshop-word" aria-hidden="true">Guild</span></a>
   <span class="mobile-only mobile-identity">{{ "MC" if page_id == "floor" else "Guild" }}</span><div class="workshop-primary">
     {% for id,label,href,ids in [('chat','Craft',urls.floor,('floor',)),('board','Board',urls.board,('board','bench','postits')),('build-log','Build Log',urls.build_log,('build_log','queue','item')),('rooms','Guildhall',urls.rooms,('rooms',))] %}
     <a href="{{ href }}" class="subnav-link{% if page_id in ids %} subnav-active{% endif %}" data-section="{{ id }}"{% if page_id in ids %} aria-current="page"{% endif %}>{{ label }}</a>
@@ -11,6 +14,8 @@
     <a href="{{ href }}"{% if section == id %} aria-current="page"{% endif %}>{{ label }}</a>
     {% endfor %}
   </div>
+  <span class="workshop-gap" aria-hidden="true"></span>
+  <a class="workshop-cos" href="/app/cos/ui/confer" title="Chief of Staff"><img src="/static/guild/cos-mark-96.webp" alt="" width="22" height="22"><span>CoS ↗</span></a>
   <details class="workshop-more" data-subnav-more>
     <summary>More</summary>
     <div data-mobile-menu>{% if page_id == 'floor' %}<button type="button" class="mobile-only" data-history-toggle aria-expanded="false" aria-controls="floor-history">History</button><button type="button" class="mobile-only" data-mobile-files>Files</button>{% endif %}{% for id,label,href in [('operate','Operate',urls.operate),('improve','Improve',urls.improve),('experiment','Lab',urls.experiment)] %}<a href="{{ href }}"{% if section == id %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</div>

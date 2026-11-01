@@ -31,7 +31,16 @@ if (cos) {
   if (places && nav) keepInPlace([nav, guildhall].filter(Boolean), places, phone);
   if (bar && tools) keepInPlace([tools], bar, phone, () => { if (more) more.open = false; });
 } else {
-  const phone = matchMedia('(max-width: 700px)');
+  // Craft and Guildhall (Review 06): below 640 px the page's own header is the one bar; the mini-moi strip and the
+  // workshop row ride at the top of ☰'s list. Between 640 and 700 px, and on every other Guild page, the More menu below.
+  const places = document.querySelector('[data-phone-places]');
+  const onePhone = matchMedia('(max-width: 639px)');
+  if (places) {
+    const strip = document.querySelector('body > #portal-nav-bar');
+    const row = document.querySelector('body > .guild-nav');
+    keepInPlace([strip, row].filter(Boolean), places, onePhone);
+  }
+  const phone = matchMedia(places ? '(min-width: 640px) and (max-width: 700px)' : '(max-width: 700px)');
   const menu = document.querySelector('[data-mobile-menu]');
   const more = menu?.closest('details');
   if (menu && more) {

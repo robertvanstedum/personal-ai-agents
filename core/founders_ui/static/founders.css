@@ -138,6 +138,12 @@
 .founders-cos #both-open[aria-pressed=true]{font-weight:600}
 .founders-cos .conv-menu-rule{height:1px;margin:5px 4px;background:var(--line)}
 .founders-cos .conv-menu-note{margin:0 10px 4px;color:var(--mute);font-size:12px}
+/* The direct-voice provider choice sits under "Talk with CoS (voice)", only when her direct voice is admitted (the choice
+   is there); the words confer-voice.js otherwise writes in its place stay out of the menu. */
+.founders-cos .conv-menu-provider{display:none}
+.founders-cos .conv-menu-provider:has(select){display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:34px;padding:2px 10px 4px;color:var(--soft);font-size:14px}
+.founders-cos .conv-menu-provider:has(select)::before{content:"Voice";color:var(--mute);font-size:13.5px}
+.founders-cos .conv-menu-provider select{height:30px;padding:0 6px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--ink);font:14px var(--sans)}
 .founders-cos .picture-seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;font-size:12.5px}
 .founders-cos .picture-seg span{padding:1px 8px;color:var(--soft)}
 .founders-cos[data-picture=shown] [data-picture-opt=shown],.founders-cos[data-picture=faded] [data-picture-opt=faded],.founders-cos[data-picture=hidden] [data-picture-opt=hidden]{background:var(--green);color:#fff}
@@ -271,4 +277,228 @@
   .founders-cos.both-open .tab-layout-split{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
   .founders-cos.both-open #mc-both{grid-column:1;grid-row:2}
   .founders-cos.both-open .tab-content,.founders-cos.both-open #mc-both{min-width:0;max-width:100%}
+}
+
+/* ── Guild (Review 06, Option A, slice 2): the app row on every Guild page, then Craft (the MC chat) in Confer's shape.
+   Same palette and pieces as Confer: the list on the left, a slim header, the stream with the workshop faint behind it,
+   one rounded composer; the Master and Apprentice in the right column. Guildhall's rules are in css/rooms.css. ── */
+.gu{--accent:#a94714;--r6-green:#123b30;--r6-green-deep:#0b2c24;--r6-accent:#a94714;--r6-paper:#f7f0e4;--r6-paper-mid:#f1e8da;--r6-paper-deep:#ede1cf;--r6-card:#fbf7f0;--r6-field:#fffdf8;--r6-line:rgba(18,59,48,.16);--r6-line-strong:rgba(18,59,48,.28);--r6-ink:#1d1c18;--r6-soft:#4a4840;--r6-mute:#6e6b61;--r6-serif:'Playfair Display',Georgia,serif;--r6-sans:'Source Sans 3',system-ui,-apple-system,sans-serif}
+
+/* The app row, 46 px: a 28 px round workshop mark and "Guild" in serif, the tabs underlined in the accent, Operate ·
+   Improve · Lab quieter after a hairline, CoS ↗ on the right. */
+.gu .guild-nav{background:var(--r6-paper);border-bottom:1px solid var(--r6-line)}
+.gu .workshop-row{min-height:46px;height:46px;gap:22px;padding:0 18px}
+.gu .workshop-name{gap:9px;font:600 17px/1 var(--r6-serif);color:var(--r6-green)}
+.gu .workshop-name img{width:28px;height:28px;border-radius:50%;object-position:50% 40%;box-shadow:0 0 0 1px var(--r6-line)}
+.gu .workshop-word{white-space:nowrap}
+.gu .workshop-primary,.gu .workshop-other{gap:22px}
+.gu .workshop-other{border-left:1px solid var(--r6-line);padding-left:22px}
+.gu .workshop-row a.subnav-link{color:var(--r6-soft);font:15px var(--r6-sans);padding:14px 0 12px}
+.gu .workshop-other a{color:var(--r6-mute);font:14.5px var(--r6-sans);padding:14px 0 12px}
+.gu .workshop-row a[aria-current=page]{color:var(--r6-ink);font-weight:600;border-bottom-color:var(--r6-accent)}
+.gu .workshop-row a:hover{color:var(--r6-ink)}
+.gu .workshop-gap{flex:1}
+.gu .workshop-cos{display:inline-flex;align-items:center;gap:7px;flex:none;color:var(--r6-soft);font:15px var(--r6-sans);text-decoration:none;white-space:nowrap}
+.gu .workshop-cos img{width:22px;height:22px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px var(--r6-line)}
+.gu .workshop-cos:hover{color:var(--r6-ink)}
+@media(max-width:900px){.gu .workshop-row{gap:14px;padding:0 12px}.gu .workshop-word{display:none}.gu .workshop-primary{gap:14px}}
+@media(max-width:700px){.gu .workshop-cos span{display:none}.gu .workshop-gap{display:none}}
+
+/* Craft: list · conversation · the picture column. */
+body.gu[data-page=floor]{background:var(--r6-paper);color:var(--r6-ink);font-family:var(--r6-sans)}
+body.gu[data-page=floor] .gu-layout{gap:0;padding:0;grid-template-columns:248px minmax(0,1fr) 300px;background:var(--r6-paper)}
+body.gu[data-page=floor][data-rail=closed] .gu-layout{grid-template-columns:248px minmax(0,1fr)}
+@media(max-width:1199px){body.gu[data-page=floor] .gu-layout,body.gu[data-page=floor][data-rail=closed] .gu-layout{grid-template-columns:248px minmax(0,1fr)}}
+@media(max-width:899px){body.gu[data-page=floor] .gu-layout,body.gu[data-page=floor][data-rail=closed] .gu-layout{grid-template-columns:minmax(0,1fr)}}
+
+/* The conversation list, like Confer's: ＋ New conversation, then the rows (title and time). */
+body.gu[data-page=floor] .floor-history{padding:12px 8px;border-right:1px solid var(--r6-line);background:var(--r6-paper-mid)}
+body.gu[data-page=floor] .fh-head{padding:0 4px}
+body.gu[data-page=floor] .fh-h{font:600 11px var(--r6-sans);letter-spacing:.1em;text-transform:uppercase;color:var(--r6-mute);margin:4px 0 8px}
+@media(min-width:900px){body.gu[data-page=floor] .fh-head{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}
+body.gu[data-page=floor] .fh-new{display:flex;align-items:center;gap:8px;height:34px;min-height:34px;margin:0 4px 12px;width:calc(100% - 8px);padding:0 12px;border:1px solid var(--r6-line-strong);border-radius:8px;background:var(--r6-card);color:var(--r6-ink);font:600 14px var(--r6-sans)}
+body.gu[data-page=floor] .fh-new:hover{background:#fff}
+body.gu[data-page=floor] .fh-plus{color:var(--r6-accent);font-size:17px}
+body.gu[data-page=floor] .fh-list{gap:1px}
+body.gu[data-page=floor] .fh-row{border-radius:7px}
+body.gu[data-page=floor] .fh-link{flex-direction:row;align-items:baseline;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:7px;color:var(--r6-soft);font:14px var(--r6-sans)}
+body.gu[data-page=floor] .fh-link:hover{background:rgba(251,247,240,.7)}
+body.gu[data-page=floor] .fh-title{min-width:0;font:inherit;font-weight:400}
+body.gu[data-page=floor] .fh-meta{flex:none;color:var(--r6-mute);font-size:12.5px}
+body.gu[data-page=floor] .fh-row[aria-current=true]{background:var(--r6-card);box-shadow:inset 2px 0 0 var(--r6-accent)}
+body.gu[data-page=floor] .fh-row[aria-current=true] .fh-link{color:var(--r6-ink)}
+body.gu[data-page=floor] .fh-row[aria-current=true] .fh-title{font-weight:600}
+body.gu[data-page=floor] .fh-more{opacity:0;color:var(--r6-mute)}
+body.gu[data-page=floor] .fh-row:hover .fh-more,body.gu[data-page=floor] .fh-row:focus-within .fh-more,body.gu[data-page=floor] .fh-more[aria-expanded=true]{opacity:1}
+body.gu[data-page=floor] .fh-view{margin:10px 10px 0;font-size:13px}
+body.gu[data-page=floor] .fh-view a{color:var(--r6-soft)}
+body.gu[data-page=floor] .phone-places{display:none}
+
+/* The conversation: no card; the workshop scene faint behind it (⋯ → Picture: Faded, the default, or Hidden). */
+body.gu[data-page=floor] .mc-panel[data-mode=inpage]{position:relative;isolation:isolate;gap:0;padding:0;border:0;border-radius:0;background:transparent}
+body.gu[data-page=floor] .mc-panel[data-mode=inpage]::before{content:"";position:absolute;inset:0;z-index:-1;background:url('/static/guild/guild-build.webp') 50% 50%/cover no-repeat;opacity:.1;filter:blur(1px) saturate(.8);pointer-events:none}
+body.gu[data-page=floor][data-craft-picture=hidden] .mc-panel[data-mode=inpage]::before{display:none}
+
+/* The slim header, 46 px: the title; the state only when something is wrong; Files n when there are files; ⋯. */
+body.gu[data-page=floor] .mc-floorbar.mc-hero{flex:none;width:100%;max-width:none;height:46px;min-height:46px;margin:0;padding:0 14px 0 20px;gap:8px;border:0;border-bottom:1px solid var(--r6-line);border-radius:0;overflow:visible;background:var(--r6-paper);color:var(--r6-ink);filter:none}
+body.gu[data-page=floor] .mc-floorbar.mc-hero::before{display:none}
+body.gu[data-page=floor] .mc-banner-art,body.gu[data-page=floor] .hero-portrait{display:none}
+body.gu[data-page=floor] .hero-text{flex:1;min-width:0;flex-direction:row;align-items:center;gap:12px}
+body.gu[data-page=floor] .hero-name{display:flex;min-width:0;margin:0;font-size:0;line-height:1;color:var(--r6-ink)}
+body.gu[data-page=floor] .hero-name .fb-title{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 15px/1.3 var(--r6-sans);color:var(--r6-ink)}
+body.gu[data-page=floor] .hero-sub{flex:0 1 auto;min-width:0;gap:6px;font:13px var(--r6-sans);color:#8a3020}
+body.gu[data-page=floor] .hero-sub[data-normal]{display:none}
+body.gu[data-page=floor] .hero-dot{border-color:#8a3020}
+body.gu[data-page=floor] .mc-floorbar .fb-btn,body.gu[data-page=floor] .fb-more>summary{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;min-height:30px;min-width:30px;padding:0 10px;border:1px solid var(--r6-line);border-radius:7px;background:none;color:var(--r6-soft);font:14px var(--r6-sans);cursor:pointer}
+body.gu[data-page=floor] .mc-floorbar .fb-btn:hover,body.gu[data-page=floor] .fb-more>summary:hover,body.gu[data-page=floor] .fb-more[open]>summary{background:var(--r6-card);color:var(--r6-ink)}
+body.gu[data-page=floor] .mc-floorbar .fb-history{display:none}
+body.gu[data-page=floor] .mc-floorbar .fb-rail[data-count="0"]{display:none}
+body.gu[data-page=floor] .mc-floorbar .fb-rail::after{content:attr(data-count);font-size:12px;background:var(--r6-paper-deep);color:var(--r6-soft);border-radius:999px;padding:0 6px}
+@media(min-width:1200px){body.gu[data-page=floor] .mc-floorbar .fb-rail{display:none}}
+body.gu[data-page=floor] .fb-cos{display:none}
+body.gu[data-page=floor] .mc-floorbar .fb-new{display:none;color:var(--r6-accent);font-size:16px;padding:0}
+body.gu[data-page=floor] .fb-more{position:relative;flex:none}
+body.gu[data-page=floor] .fb-more>summary{list-style:none;border-color:transparent;padding:0;font-size:18px;line-height:1;user-select:none}
+body.gu[data-page=floor] .fb-more>summary::-webkit-details-marker{display:none}
+body.gu[data-page=floor] .fb-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:60;display:flex;flex-direction:column;min-width:240px;padding:6px;background:var(--r6-field);border:1px solid var(--r6-line-strong);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.14)}
+body.gu[data-page=floor] .fb-menu>button,body.gu[data-page=floor] .fb-menu>a{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:34px;padding:7px 10px;border:0;border-radius:6px;background:none;color:var(--r6-ink);font:14.5px var(--r6-sans);text-align:left;text-decoration:none;cursor:pointer;white-space:nowrap}
+body.gu[data-page=floor] .fb-menu>button:hover,body.gu[data-page=floor] .fb-menu>a:hover{background:var(--r6-paper-mid)}
+body.gu[data-page=floor] .fb-seg{display:inline-flex;border:1px solid var(--r6-line);border-radius:999px;overflow:hidden;font-size:12.5px}
+body.gu[data-page=floor] .fb-seg span{padding:1px 8px;color:var(--r6-soft)}
+body.gu[data-page=floor]:not([data-craft-picture=hidden]) .fb-seg [data-picture-opt=faded],body.gu[data-page=floor][data-craft-picture=hidden] .fb-seg [data-picture-opt=hidden]{background:var(--r6-green);color:#fff}
+
+/* The stream: a 760 px column, with a paper wash behind the words. */
+body.gu[data-page=floor] .mc-panel[data-mode=inpage] .mc-thread{flex:1 1 auto;width:100%;max-width:none;min-height:0;margin:0;padding:18px 24px 12px;gap:16px;align-items:stretch;background:linear-gradient(90deg,rgba(247,240,228,0),rgba(247,240,228,.55) 18%,rgba(247,240,228,.55) 82%,rgba(247,240,228,0))}
+body.gu[data-page=floor] .mc-thread>li{flex:none;align-self:center;width:min(760px,100%);max-width:none;margin:0}
+body.gu[data-page=floor] .mc-thread .msg{padding:0;border:0;border-radius:0;background:none;box-shadow:none;color:var(--r6-ink);line-height:1.55}
+body.gu[data-page=floor] .mc-thread .msg-meta{display:flex;align-items:center;gap:8px;margin:0 0 3px;font-size:0;color:var(--r6-soft)}
+body.gu[data-page=floor] .mc-thread .msg-meta .msg-label{font:600 13px var(--r6-sans);font-style:normal;letter-spacing:0;text-transform:none;color:var(--r6-soft)}
+body.gu[data-page=floor] .mc-thread .msg-meta [data-iso],body.gu[data-page=floor] .mc-thread .msg-meta [data-slot=when]{font:12.5px var(--r6-sans);color:var(--r6-mute)}
+body.gu[data-page=floor] .mc-thread .msg-meta>*:not(.msg-label):not([data-iso]):not([data-slot=when]):not(.msg-extra){font-size:12.5px}
+body.gu[data-page=floor] .mc-thread .msg-extra{display:none}
+body.gu[data-page=floor] .mc-thread .msg-text{font:16px/1.55 var(--r6-sans);color:var(--r6-ink);overflow-wrap:anywhere}
+body.gu[data-page=floor] .mc-thread .msg[data-author-kind=agent] .msg-meta::before{content:"";flex:none;width:22px;height:22px;border-radius:50%;background:var(--r6-card) url('/static/guild/guild-mc-portrait.jpg') center/cover no-repeat;box-shadow:0 0 0 1px var(--r6-line)}
+/* Robert's own: right-aligned in the paper bubble; the name and time stay for a screen reader and on hover. */
+body.gu[data-page=floor] .mc-thread .msg[data-author-kind=owner]{align-self:flex-end;width:auto;max-width:min(600px,78%);margin-right:max(0px,calc((100% - 760px) / 2));padding:9px 14px;background:var(--r6-paper-deep);border-radius:14px 14px 4px 14px}
+body.gu[data-page=floor] .mc-thread .msg[data-author-kind=owner] .msg-meta{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+body.gu[data-page=floor] .mc-thread .msg-platform{padding:8px 12px;border:1px solid var(--r6-line);border-radius:10px;background:rgba(251,247,240,.8);font-size:14px}
+body.gu[data-page=floor] .mc-thread .msg-foot{margin-top:4px;font-size:12.5px;color:var(--r6-mute)}
+
+/* A new conversation: the workshop's card (the original hero, H1), first in the thread; it scrolls away with it. */
+body.gu[data-page=floor] .mc-thread>.craft-hero{width:min(1040px,100%);margin:8px 0}
+body.gu[data-page=floor] .craft-hero{position:relative;display:grid;grid-template-columns:1fr 1.05fr;min-height:340px;border-radius:16px;overflow:hidden;background:var(--r6-card);box-shadow:0 0 0 1px var(--r6-line);list-style:none}
+body.gu[data-page=floor] .craft-hero-copy{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:34px 34px 28px}
+body.gu[data-page=floor] .craft-eyebrow{margin:0;font:600 12px var(--r6-sans);letter-spacing:.16em;text-transform:uppercase;color:var(--r6-accent)}
+body.gu[data-page=floor] .craft-hero h2{margin:0;font:500 44px/1.08 var(--r6-serif);color:var(--r6-green)}
+body.gu[data-page=floor] .craft-hero p{margin:0;color:var(--r6-soft);font-size:16.5px;line-height:1.5}
+/* The picture is a background, so the thread holds no image of its own (the thread's markdown checks count <img>). */
+body.gu[data-page=floor] .craft-hero-ph{position:relative;min-height:220px;overflow:hidden;background:var(--r6-paper-deep) url('/static/guild/guild-craftsman.webp') 50% 44%/cover no-repeat}
+body.gu[data-page=floor] .craft-hero-ph::before{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,var(--r6-card),rgba(251,247,240,0) 38%)}
+
+/* One rounded composer: the words on top; ＋, the options and Voice and Send under them. */
+body.gu[data-page=floor] .mc-dock-bottom{flex:none;width:min(760px,calc(100% - 48px));max-width:none;margin:0 auto 12px;padding:0;border:0;background:none}
+body.gu[data-page=floor] .mc-composer{flex-wrap:wrap;align-items:center;gap:6px;margin:0;padding:10px 10px 8px 14px;background:var(--r6-field);border:1px solid var(--r6-line-strong);border-radius:16px;box-shadow:0 2px 10px rgba(18,59,48,.06)}
+body.gu[data-page=floor] .mc-composer:focus-within{border-color:rgba(18,59,48,.45)}
+body.gu[data-page=floor] .mc-composer .mc-row{display:contents}
+body.gu[data-page=floor] .mc-composer .mc-tray{order:-2;flex:1 0 100%}
+body.gu[data-page=floor] .mc-panel[data-mode=inpage] .mc-composer .mc-input{order:-1;flex:1 0 100%;min-height:26px;max-height:30vh;padding:0;border:0;border-radius:0;outline:none;background:none;box-shadow:none;color:var(--r6-ink);font:16px/1.5 var(--r6-sans)}
+body.gu[data-page=floor] .mc-composer .mc-attach{order:0;width:34px;height:34px;min-height:34px;border:0;border-radius:50%;background:none;color:var(--r6-soft);font-size:0}
+body.gu[data-page=floor] .mc-composer .mc-attach::before{content:"＋";font-size:20px;line-height:1}
+body.gu[data-page=floor] .mc-composer .mc-attach:hover:not(:disabled){background:var(--r6-paper-mid)}
+body.gu[data-page=floor] .mc-composer .mc-tools{order:1;flex:0 1 auto;width:auto;margin-right:auto;align-items:center;gap:6px}
+body.gu[data-page=floor] .mc-composer .mc-voice{order:2;width:34px;height:34px;min-width:34px;min-height:34px;padding:0;border:0;border-radius:50%;background:none;color:var(--r6-soft)}
+body.gu[data-page=floor] .mc-composer .mc-voice [data-voice-label]{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+body.gu[data-page=floor] .mc-composer .mc-voice:hover:not(:disabled){background:var(--r6-paper-mid)}
+body.gu[data-page=floor] .mc-composer [data-mc-send]{order:3;height:34px;min-height:34px;padding:0 16px;border:0;border-radius:999px;background:var(--r6-green);color:#fff;font:600 14px var(--r6-sans)}
+body.gu[data-page=floor] .mc-composer [data-mc-send]:hover:not(:disabled){background:var(--r6-green-deep)}
+body.gu[data-page=floor] .mc-composer>p,body.gu[data-page=floor] .mc-composer>span.visually-hidden{order:5;flex:1 0 100%;margin:0}
+body.gu[data-page=floor] .mc-composer .mc-options>summary{width:34px;height:34px;min-height:34px;border-radius:50%;color:var(--r6-mute);font-size:13px;letter-spacing:1px;white-space:nowrap}
+body.gu[data-page=floor] .mc-composer .mc-options>summary:hover,body.gu[data-page=floor] .mc-composer .mc-options[open]>summary{background:var(--r6-paper-mid)}
+body.gu[data-page=floor] .mc-composer .mc-options-body{position:absolute;left:0;bottom:calc(100% + 8px);z-index:40;min-width:220px;margin:0;padding:8px 10px;background:var(--r6-field);border:1px solid var(--r6-line-strong);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.14)}
+body.gu[data-page=floor] .mc-blocker,body.gu[data-page=floor] .mc-queue-bar{margin:0 0 6px;font-size:13.5px}
+
+/* The picture column: the Master and Apprentice, with the bench under them; Files only when there are files. */
+body.gu[data-page=floor] .gu-main{padding:0;gap:0;border-left:1px solid var(--r6-line);background:var(--r6-paper-mid)}
+body.gu[data-page=floor] .fc-body{gap:0}
+body.gu[data-page=floor] .fc-art{display:block;width:100%;height:min(440px,58vh);max-height:none;aspect-ratio:auto;margin:0;object-fit:cover;object-position:50% 44%;border-radius:0}
+body.gu[data-page=floor] .fc-sec{padding:16px}
+body.gu[data-page=floor] .fc-h{font:600 11px var(--r6-sans);letter-spacing:.1em;text-transform:uppercase;color:var(--r6-mute)}
+body.gu[data-page=floor] .fc-sec[hidden]{display:none}
+body.gu[data-page=floor] .fc-empty,body.gu[data-page=floor] .fc-topic{padding:12px 16px 0;margin:0}
+
+/* The status lights stay, as one quiet line under the page. */
+body.gu[data-page=floor] .floor-strip{margin:0;padding:4px 16px;border:0;border-top:1px solid var(--r6-line);border-radius:0;background:var(--r6-paper-mid)}
+
+/* A narrower window: the list opens over the chat from ☰; ✎ starts a new conversation. */
+@media(max-width:899px){
+  body.gu[data-page=floor] .mc-floorbar .fb-history,body.gu[data-page=floor] .mc-floorbar .fb-new{display:inline-flex}
+  body.gu[data-page=floor] .mc-floorbar.mc-hero{padding-left:10px}
+  body.gu[data-page=floor] .craft-hero{grid-template-columns:1fr;min-height:0}
+  body.gu[data-page=floor] .craft-hero-ph{order:-1;height:200px}
+  body.gu[data-page=floor] .craft-hero-ph::before{background:linear-gradient(0deg,var(--r6-card),rgba(251,247,240,0) 40%)}
+  body.gu[data-page=floor] .craft-hero h2{font-size:32px}
+}
+
+/* Phone (< 640 px): one bar. ☰ · the Master Craftsman with the conversation's title · Files · CoS · ✎ · ⋯. The mini-moi
+   strip and the workshop row ride in ☰'s drawer, above the list. */
+@media(max-width:639px){
+  body.gu[data-page=floor]>#portal-nav-bar,body.gu[data-page=floor]>.guild-nav{display:none}
+  body.gu[data-page=floor]:not([data-mc-embed]) .mc-floorbar.mc-hero{display:flex;position:sticky;top:0;z-index:50;height:52px;min-height:52px;padding:0 6px 0 4px;gap:2px}
+  body.gu[data-page=floor] .mc-floorbar .fb-btn,body.gu[data-page=floor] .fb-more>summary{min-width:36px;height:36px;min-height:36px;padding:0 6px;border-color:transparent;font-size:17px}
+  body.gu[data-page=floor] .hero-portrait{display:block;flex:none;width:30px;height:30px;margin:0 6px 0 2px;border:0;box-shadow:0 0 0 1px var(--r6-line)}
+  body.gu[data-page=floor] .hero-text{display:block}
+  body.gu[data-page=floor] .hero-name{display:block;font:600 16px/1.15 var(--r6-serif);color:var(--r6-green);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  body.gu[data-page=floor] .hero-name .fb-title{font:12.5px/1.25 var(--r6-sans);color:var(--r6-mute)}
+  body.gu[data-page=floor] .hero-sub{display:none}
+  body.gu[data-page=floor] .mc-floorbar .fb-rail{display:inline-flex;font-size:13px}
+  body.gu[data-page=floor] .mc-floorbar .fb-rail[data-count="0"]{display:none}
+  body.gu[data-page=floor] .fb-cos{display:inline-grid;place-items:center;flex:none;width:36px;height:36px}
+  body.gu[data-page=floor] .fb-cos img{width:26px;height:26px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px var(--r6-line)}
+  body.gu[data-page=floor] .fb-menu{right:-2px;min-width:0;width:min(280px,calc(100vw - 16px))}
+  body.gu[data-page=floor] .fb-menu>button,body.gu[data-page=floor] .fb-menu>a{min-height:44px}
+  body.gu[data-page=floor] .mc-panel[data-mode=inpage] .mc-thread{height:var(--gu-thread-max,calc(100dvh - 400px));padding:12px 14px 10px;gap:14px}
+  body.gu[data-page=floor] .mc-thread .msg[data-author-kind=owner]{max-width:86%;margin-right:0}
+  body.gu[data-page=floor] .mc-thread>.craft-hero{width:calc(100% + 28px);margin:-12px -14px 4px;border-radius:0;box-shadow:none;background:none}
+  body.gu[data-page=floor] .craft-hero-ph{height:160px;min-height:0}
+  body.gu[data-page=floor] .craft-hero-ph::before{background:linear-gradient(0deg,var(--r6-paper),rgba(247,240,228,0) 45%)}
+  body.gu[data-page=floor] .craft-hero-copy{padding:12px 16px 4px;gap:6px}
+  body.gu[data-page=floor] .craft-hero h2{font-size:27px;line-height:1.1}
+  body.gu[data-page=floor] .craft-hero p{font-size:15px}
+  body.gu[data-page=floor] .mc-dock-bottom{width:calc(100% - 20px);margin:0 auto;background:var(--r6-paper);padding:6px 0 max(6px,env(safe-area-inset-bottom))}
+  body.gu[data-page=floor] .mc-composer{padding:8px 8px 6px 12px}
+  body.gu[data-page=floor] .mc-composer .mc-attach,body.gu[data-page=floor] .mc-composer .mc-voice,body.gu[data-page=floor] .mc-composer [data-mc-send]{min-height:40px;height:40px}
+  body.gu[data-page=floor] .mc-composer .mc-attach,body.gu[data-page=floor] .mc-composer .mc-voice{width:40px;min-width:40px}
+  body.gu[data-page=floor] .floor-context[data-has-files=false]{display:none}
+  body.gu[data-page=floor] .gu-main{border-left:0;background:none}
+  body.gu[data-page=floor] .phone-places{display:block;margin:-12px -8px 10px;border-bottom:1px solid var(--r6-line)}
+}
+
+/* The places in ☰'s drawer on a phone (Craft and Guildhall): the strip, then the workshop row, wrapping. */
+.gu .phone-places #portal-nav-bar{height:auto;min-height:40px;flex-wrap:wrap;gap:6px 14px;padding:8px 14px;overflow:visible}
+.gu .phone-places #portal-nav-workspaces{flex-wrap:wrap;overflow:visible;white-space:normal}
+.gu .phone-places .guild-nav{border-bottom:0}
+.gu .phone-places .workshop-row{height:auto;min-height:0;flex-wrap:wrap;gap:4px 16px;padding:8px 14px;overflow:visible}
+.gu .phone-places .workshop-name,.gu .phone-places .workshop-primary,.gu .phone-places .workshop-other{display:flex;flex-wrap:wrap}
+.gu .phone-places .workshop-other{border-left:0;padding-left:0;flex-basis:100%;gap:16px}
+.gu .phone-places .workshop-name{flex-basis:100%;padding:4px 0}
+.gu .phone-places .workshop-word{display:inline}
+.gu .phone-places .workshop-row a.subnav-link,.gu .phone-places .workshop-other a{padding:10px 0 8px}
+.gu .phone-places .workshop-more,.gu .phone-places .mobile-identity,.gu .phone-places .workshop-gap{display:none!important}
+.gu .phone-places .workshop-cos span{display:inline}
+.founders-cos #voice-provider.conv-menu-provider{border-right:0;padding-right:10px}
+/* Confer's phone bar at narrow widths (live check of slice 1): the identity shrinks cleanly with an ellipsis, and below
+   360 px MC is its face only and Files an icon with its count, so the name keeps its room. */
+@media(max-width:639px){
+  .founders-cos .cos-mark{min-width:0;overflow:hidden}
+  .founders-cos .cos-mark-words{min-width:0;overflow:hidden}
+  .founders-cos .cos-mark-name,.founders-cos .cos-mark-words .cos-mark-title{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+@media(max-width:359px){
+  .founders-cos #mc-page.no-face .mc-page-words{display:none}
+  .founders-cos #mc-page.no-face{width:34px}
+  .founders-cos #mc-page.no-face::before{content:"MC";font:600 13px var(--sans);color:var(--soft)}
+  .founders-cos .phone-tools #files-open{font-size:0;gap:3px;padding:0 5px}
+  .founders-cos .phone-tools #files-open::before{content:"📄";font-size:14px}
+  .founders-cos .phone-tools #files-open .conv-count{font-size:12px}
+  .founders-cos .header-nav{gap:2px}
 }
