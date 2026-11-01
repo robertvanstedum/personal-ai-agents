@@ -102,27 +102,44 @@ def test_only_absolute_http_https_or_mailto_links_keep_their_href(href):
 
 def test_the_render_is_linear_on_pathological_input_at_the_maximum_size():
     """#261 review finding 1: Python-Markdown took 17.5 s on 2,000 backticks.
-    Every input here, at the maximum rendered size, must stay well under a
-    second (target about 200 ms on the workshop Mac)."""
+    The check is relative, so a slow or busy CI runner cannot fail it (it did,
+    twice, on 31 Oct 2026, at 0.56 s against a fixed 0.5 s bound): each input is
+    timed at a quarter of the maximum size and at the maximum, best of three.
+    Linear work grows about 4x; quadratic grows about 16x; the bound is 8x. A
+    loose absolute bound still catches the original multi-second blow-up."""
     import time
     from minimoi_portal.guild_ui.markdown_render import MAX_CHARS
-    n = MAX_CHARS
-    cases = {
-        "backticks": "`" * n, "open brackets": "[" * n, "tick a": "`a " * (n // 3), "link opens": "[a](" * (n // 4),
-        "brackets then closes": "[" * (n // 8) + "](x)" * (n // 8), "stars": "*" * n, "underscore a": "_a" * (n // 2),
-        "quotes": "> " * (n // 2), "list markers": "1. " * (n // 3), "image opens": "![x](" * (n // 5),
-        "bold a": "**a" * (n // 3), "table": "|a" * (n // 2) + "\n" + "|-" * (n // 2), "mixed": "[`*_" * (n // 4),
-        "angle a": "<a" * (n // 2), "entities": "&#" * (n // 2),
-    }
-    slow = {}
-    for name, text in cases.items():
-        render_markdown.cache_clear()
-        t0 = time.perf_counter()
-        render_markdown(text + " ")
-        took = time.perf_counter() - t0
-        if took > 0.5:
-            slow[name] = round(took, 3)
-    assert not slow, slow
+
+    def cases(n):
+        return {
+            "backticks": "`" * n, "open brackets": "[" * n, "tick a": "`a " * (n // 3), "link opens": "[a](" * (n // 4),
+            "brackets then closes": "[" * (n // 8) + "](x)" * (n // 8), "stars": "*" * n, "underscore a": "_a" * (n // 2),
+            "quotes": "> " * (n // 2), "list markers": "1. " * (n // 3), "image opens": "![x](" * (n // 5),
+            "bold a": "**a" * (n // 3), "table": "|a" * (n // 2) + "\n" + "|-" * (n // 2), "mixed": "[`*_" * (n // 4),
+            "angle a": "<a" * (n // 2), "entities": "&#" * (n // 2),
+        }
+
+    def best_of_three(text):
+        best = float("inf")
+        for _ in range(3):
+            render_markdown.cache_clear()
+            t0 = time.perf_counter()
+            render_markdown(text + " ")
+            best = min(best, time.perf_counter() - t0)
+        return best
+
+    small, full = cases(MAX_CHARS // 4), cases(MAX_CHARS)
+    floor = 0.01      # below this a timing is noise, so it is not used as the divisor
+    superlinear, too_slow = {}, {}
+    for name in full:
+        t_small, t_full = best_of_three(small[name]), best_of_three(full[name])
+        ratio = t_full / max(t_small, floor)
+        if ratio > 8:
+            superlinear[name] = round(ratio, 1)
+        if t_full > 5:
+            too_slow[name] = round(t_full, 2)
+    assert not too_slow, too_slow
+    assert not superlinear, superlinear
 
 
 def test_a_long_reply_says_what_was_not_shown():
