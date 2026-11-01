@@ -325,6 +325,15 @@ const PROCESS_STATE = Symbol.for('minimoi-tools/process-state/v1');
 globalThis[PROCESS_STATE] ??= Object.freeze({instance: randomBytes(16).toString('hex'), sealKey: randomBytes(32)});
 export const INSTANCE = globalThis[PROCESS_STATE].instance;
 const ANNOUNCERS = new Map();                      // one state/loop per endpoint, credential and instance
+// Why a call was refused before it was sent, by what the announcement met. Each tells MC which side to report.
+const ANNOUNCE_REFUSALS = Object.freeze({
+  unreachable: () => text("MiniMoi's tool service did not answer, so nothing was sent. Its tools may be switched off or down on this host; tell Robert.",
+                          {status: 'refused', code: 'tool_service_unreachable'}),
+  refused: () => text('MiniMoi refused this runtime, so nothing was sent. Tell Robert; retrying will not help.',
+                      {status: 'refused', code: 'instance_refused'}),
+  unrecorded: () => text('MiniMoi has not recorded this runtime yet, so nothing was sent.',
+                         {status: 'refused', code: 'instance_unrecorded'}),
+});
 
 export function announcer({url, token, instance = INSTANCE, fetchImpl = fetch, schedule = setTimeout}) {
   const target = new URL('/internal/mc/v1/instance', url);
@@ -341,9 +350,15 @@ export function announcer({url, token, instance = INSTANCE, fetchImpl = fetch, s
           // Authentication/configuration refusals and retired instances must not
           // become an endless background retry or a way to reclaim an old identity.
           terminal = r.status >= 400 && r.status < 500 && ![408, 429].includes(r.status);
+          announce.failure = r.status === 200 ? null : terminal ? 'refused' : 'unrecorded';
           await r.body?.cancel().catch(() => {});
           return r.status === 200;
-        } catch { return false; }
+        } catch {
+          // Nothing answered: MiniMoi's tool service is off or down on this host (dev, 1 Nov: the listener was never
+          // switched on, and the refusal blamed the runtime). Say which side failed.
+          announce.failure = 'unreachable';
+          return false;
+        }
       })();
       sent.then(ok => { if (!ok && !terminal) sent = null; });
     }
@@ -436,10 +451,7 @@ export function toolFactory({endpoint, token, tokenFile, agents, tools, diskPath
           if (spec.name === 'minimoi_host_health') body.observation = await observeHost(host);
         } catch { return text('The host could not be measured, so nothing is reported.', {status: 'refused', code: 'observation_failed'}); }
         if (signal?.aborted) return text(NOT_SENT, {status: 'refused', code: 'not_sent'});
-        if (!(await announce())) {
-          return text('MiniMoi has not recorded this runtime yet, so nothing was sent.',
-                      {status: 'refused', code: 'instance_unrecorded'});
-        }
+        if (!(await announce())) return (ANNOUNCE_REFUSALS[announce.failure] ?? ANNOUNCE_REFUSALS.unrecorded)();
         let response;
         try {
           const abort = signal ? AbortSignal.any([AbortSignal.timeout(25000), signal]) : AbortSignal.timeout(25000);

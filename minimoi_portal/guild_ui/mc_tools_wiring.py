@@ -529,10 +529,31 @@ def board_adapter(app, environ, services, cfg):
                         item_allowed=item_allowed)
 
 
+def off_reason(environ) -> str | None:
+    """The first switch that keeps the tool listener off, by name only (never a value); None when settings() is on."""
+    environ = environ or {}
+    if environ.get(FLAG) != "1":
+        return f"{FLAG} is not 1"
+    if environ.get("MINIMOI_MC_TOOLS_ENV") not in ("dev", "prod"):
+        return "MINIMOI_MC_TOOLS_ENV is not dev or prod"
+    if not (environ.get("MINIMOI_MC_TOOLS_PRINCIPAL") or "").strip():
+        return "MINIMOI_MC_TOOLS_PRINCIPAL is empty"
+    if not os.environ.get("DATABASE_URL"):
+        return "DATABASE_URL is not set"
+    if environ.get("MINIMOI_MC_TURN_LEDGER") != "1":
+        return "MINIMOI_MC_TURN_LEDGER is not 1"
+    return None
+
+
 def attach(app, blueprint_name, services):
     """Start the tool listener for this mount (once per process). Nothing happens while tools are off."""
     environ = app.extensions[blueprint_name].get("feature_environ") or {}
     cfg = settings(environ)
+    if cfg is None and environ.get("MINIMOI_GUILD_MC") == "openclaw":
+        # MC answers on its runtime, but every MiniMoi tool it calls will be refused before it is sent. Dev ran like
+        # this unnoticed from 30 Oct to 1 Nov (DIAG_MC_TOOLS_RUNTIME_NOT_RECORDED_2026-11-01): say so at start.
+        _log.warning("mc tools: MC chat is on but its tools are off (%s); every MiniMoi tool MC calls is refused",
+                     off_reason(environ))
     if cfg is None or app.extensions.get("mc_tools_listener"):
         return None
     import re

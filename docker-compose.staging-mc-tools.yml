@@ -1,0 +1,19 @@
+# Staging-only: MC's governed tools on dev (the AWS staging host), named as dev.
+#
+# Production's compose file fixes MC's tool, Board, lessons and delegation environments as "prod" and leaves the
+# switches (MINIMOI_MC_TOOLS, MINIMOI_MC_TOOLS_TOKEN_SHA256) to the host's env files. Dev's database holds MC's policy,
+# runtime history and Board as "dev", and the Board requires MINIMOI_BOARD_ENV to equal the tools' environment
+# (mc_tools_wiring.board_adapter), so dev must say dev everywhere at once. The switches themselves are written only by
+# scripts/staging/aws_mc_tools.sh (on/off), after Robert's approval of the policy (approve-policy).
+#
+# Dev ran from 30 Oct to 1 Nov with MC chat on and these tools off, unnoticed: see
+# planning-studio/operations/threads/DIAG_MC_TOOLS_RUNTIME_NOT_RECORDED_2026-11-01.md.
+# Production is unchanged (docker-compose.prod.yml never includes this file).
+
+services:
+  portal:
+    environment:
+      - MINIMOI_MC_TOOLS_ENV=dev
+      - MINIMOI_BOARD_ENV=dev
+      - MINIMOI_MC_LESSONS_ENV=dev
+      - MINIMOI_MC_DELEGATION_ENV=dev

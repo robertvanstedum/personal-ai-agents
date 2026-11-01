@@ -32,6 +32,27 @@ class WiringTests(unittest.TestCase):
             self.assertIsNone(w.settings({k: v for k, v in ON.items() if k != missing}), missing)
         self.assertIsNone(w.settings(dict(ON, MINIMOI_MC_TOOLS_ENV="staging")))
 
+    def test_off_reason_names_the_first_missing_switch_and_no_value(self):
+        self.assertIsNone(w.off_reason(ON))
+        self.assertEqual(w.off_reason({}), "MINIMOI_MC_TOOLS is not 1")
+        self.assertEqual(w.off_reason(dict(ON, MINIMOI_MC_TOOLS="0")), "MINIMOI_MC_TOOLS is not 1")
+        self.assertEqual(w.off_reason(dict(ON, MINIMOI_MC_TOOLS_ENV="staging")), "MINIMOI_MC_TOOLS_ENV is not dev or prod")
+        self.assertEqual(w.off_reason(dict(ON, MINIMOI_MC_TURN_LEDGER="0")), "MINIMOI_MC_TURN_LEDGER is not 1")
+        for missing in ("MINIMOI_MC_TOOLS", "MINIMOI_MC_TOOLS_ENV", "MINIMOI_MC_TOOLS_PRINCIPAL", "MINIMOI_MC_TURN_LEDGER"):
+            self.assertIsNotNone(w.off_reason({k: v for k, v in ON.items() if k != missing}), missing)
+
+    def test_mc_chat_on_with_tools_off_warns_at_start(self):
+        def attach(environ):
+            app = SimpleNamespace(extensions={"guild": {"feature_environ": environ}})
+            with mock.patch.object(w._log, "warning") as warn:
+                self.assertIsNone(w.attach(app, "guild", self.services))
+            return warn
+        warn = attach({"MINIMOI_GUILD_MC": "openclaw", "MINIMOI_MC_TOOLS": "0", "MINIMOI_MC_TOOLS_ENV": "prod"})
+        warn.assert_called_once()
+        self.assertIn("MINIMOI_MC_TOOLS is not 1", warn.call_args.args)
+        attach({"MINIMOI_GUILD_MC": "cos"}).assert_not_called()       # MC chat off: nothing to warn about
+        attach({}).assert_not_called()
+
     def test_standard_changes_parse_strictly(self):
         self.assertEqual(w._standard_changes("guest_reject=SC-3@371, access_invite=SC-4@372"),
                          {"guest_reject": {"id": "SC-3", "ticket": 371}, "access_invite": {"id": "SC-4", "ticket": 372}})

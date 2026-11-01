@@ -217,6 +217,8 @@ STAGING_ONLY_FILES = frozenset({
     "docker-compose.staging-cos-turns.yml",
     "docker-compose.staging-jobs.yml",
     "docker-compose.staging-mc-turns.yml",
+    # MC's governed tools named dev on the AWS staging host (scripts/staging/aws_mc_tools.sh), staging only.
+    "docker-compose.staging-mc-tools.yml",
     # Records (Rooms)' own Compose project (Guild 1.1 slice 4), staging only.
     "docker-compose.records.yml",
     "services/model_gateway/litellm.staging.yaml",

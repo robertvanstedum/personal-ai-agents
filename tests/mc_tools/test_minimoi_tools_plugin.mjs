@@ -388,6 +388,31 @@ test('the gateway process announces itself once, before its first call, and noth
   assert.equal(calls.length, 1);
 });
 
+test('a refusal before sending says which side failed: the tool service unreachable, the runtime refused, or not yet recorded', async () => {
+  // Dev, 1 Nov: the portal's tool listener was off, and every tool told MC the runtime was not recorded.
+  for (const [instanceAnswer, code, words] of [
+    [() => { throw new TypeError('fetch failed'); }, 'tool_service_unreachable', /did not answer.*switched off or down/],
+    [() => json(401, {error: 'tool_unauthorized'}), 'instance_refused', /refused this runtime/],
+    [() => json(409, {error: 'tool_instance_retired'}), 'instance_refused', /refused this runtime/],
+    [() => json(503, {error: 'instance_unrecorded'}), 'instance_unrecorded', /has not recorded this runtime/],
+  ]) {
+    const calls = [];
+    const fetchImpl = async (url) => {
+      if (url.endsWith('/instance')) return instanceAnswer();
+      calls.push(url); return json(200, {status: 'done', code: 'listed', message: 'ok', data: {}});
+    };
+    const sealer = runSealer();
+    const make = toolFactory({endpoint: 'http://127.0.0.1:5011/internal/mc/v1/tools', token: TOKEN, tokenFile: '/secure/mc/token',
+      agents: ['mc-chat'], tools: ['minimoi_guest_requests'], fetchImpl, sealer, instance: code.length.toString(16).padStart(32, 'e')});
+    const g = make({agentId: 'mc-chat', sessionKey: SESSION, fsPolicy: {workspaceOnly: true}, workspaceDir: '/ws/mc-chat'})[0];
+    const r = await g.execute('e1', sealer.seal({}, {runId: RUN, toolCallId: 'e1', agentId: 'mc-chat', sessionKey: SESSION}));
+    assert.deepEqual(r.details, {status: 'refused', code}, code);
+    assert.match(r.content[0].text, words);
+    assert.match(r.content[0].text, /nothing was sent/);
+    assert.equal(calls.length, 0);
+  }
+});
+
 
 test('Board schema accepts whole Unicode text and atomic boolean patches, rejecting authority fields', () => {
   const schema = {type:'object', additionalProperties:false, required:['text'], properties:{
