@@ -172,6 +172,17 @@
 .founders-cos .cos-hero-ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 29%}
 .founders-cos .cos-hero-ph::before{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,var(--card),rgba(251,247,240,0) 38%)}
 
+/* On a wide Craft page the picture already has its own column. Keep the welcome
+   as a modest introduction, not a second competing picture card. Closed rails and
+   phone layouts retain their existing hero picture. */
+@media(min-width:1200px){
+  body.gu[data-page=floor]:not([data-rail=closed]) .craft-hero{display:block;min-height:0;border-radius:0;background:none;box-shadow:none}
+  body.gu[data-page=floor]:not([data-rail=closed]) .craft-hero-ph{display:none}
+  body.gu[data-page=floor]:not([data-rail=closed]) .craft-hero-copy{padding:24px 12px 20px;gap:10px}
+  body.gu[data-page=floor]:not([data-rail=closed]) .craft-hero h2{font-size:32px;line-height:1.2;text-wrap:balance}
+  body.gu[data-page=floor]:not([data-rail=closed]) .craft-hero p{font-size:16px;line-height:1.5}
+}
+
 /* One rounded composer: the words, then ＋ on the left and 🎙 and Send on the right; under it only the save state. */
 .founders-cos #attach-tray,.founders-cos .input-row,.founders-cos #voice-live,.founders-cos #save-state,.founders-cos #voice-transcript,.founders-cos #voice-sessions{width:min(760px,calc(100% - 48px));margin-left:auto;margin-right:auto}
 .founders-cos #attach-tray{margin-bottom:6px}
