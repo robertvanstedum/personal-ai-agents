@@ -618,3 +618,18 @@ body.gu[data-page=floor] .floor-strip{margin:0;padding:4px 16px;border:0;border-
   .founders-cos.show-cos-board .cos-mark-title::after{content:"Board";font-size:12.5px}
   .founders-cos.show-cos-flight .cos-mark-title::after{content:"In flight";font-size:12.5px}
 }
+
+/* The mark returns home without replacing the mounted conversation or its draft. */
+.founders-cos button.cos-mark{border:0;background:none;padding:0;text-align:left;cursor:pointer}
+.founders-cos button.cos-mark:focus-visible{outline:2px solid var(--green);outline-offset:4px}
+.founders-cos.show-cos-home[data-picture] .tab-layout-split{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+.founders-cos.show-cos-home[data-picture] .tab-content{grid-column:1;grid-row:1}
+.founders-cos.show-cos-home .tab-panel-photo,.founders-cos.show-cos-home #mc-both{display:none!important}
+.founders-cos #tab-home .cos-hero{max-width:1040px;margin:0 auto}
+.founders-cos .cos-resume{display:block;margin:24px auto;padding:12px 22px;border:0;border-radius:24px;background:var(--green);color:#fff;font:600 16px var(--sans);cursor:pointer}
+@media(max-width:639px){
+  .founders-cos.show-cos-home .cos-mark-title{font-size:0}
+  .founders-cos.show-cos-home .cos-mark-title::after{content:"Welcome";font-size:12.5px}
+  .founders-cos.show-cos-home .phone-tools{display:none}
+  .founders-cos #tab-home{padding:16px}
+}

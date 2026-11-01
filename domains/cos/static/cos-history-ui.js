@@ -4,7 +4,7 @@
   const state = document.getElementById('save-state');
   const hero = document.getElementById('cos-greeting');   // the greeting card, shown again whenever a chat is empty
   const greeting = () => { const h = new Date().getHours(); return h >= 5 && h < 12 ? 'Good morning' : h >= 12 && h < 18 ? 'Good afternoon' : 'Good evening'; };
-  function greet() { for (const el of hero.querySelectorAll('[data-greeting]')) { const text = greeting() + ', Robert.'; if (el.textContent !== text) el.textContent = text; } }
+  function greet() { for (const el of new Set([...document.querySelectorAll('[data-greeting]'), ...hero.querySelectorAll('[data-greeting]')])) { const text = greeting() + ', Robert.'; if (el.textContent !== text) el.textContent = text; } }
   greet(); setInterval(greet, 60000);   // a page left open across 12:00, 18:00 or 5:00 follows the clock
   hero.remove();   // it comes back after the first read, and only if the chat is empty
   const base = location.pathname.replace(/\/ui(?:\/[^/]*)?\/?$/, '') + '/ui/';
@@ -91,7 +91,7 @@
   async function list(more = false) {
     const d = await api('history/conversations?limit=50' + (more && next ? '&cursor=' + encodeURIComponent(next) : ''));
     const el = document.getElementById('history-list'); if (!more) el.replaceChildren();
-    for (const c of d.items) { const b = document.createElement('button'); b.type='button'; b.className='history-row'; b.textContent=(c.title || 'Conversation') + (c.private ? ' · Private' : ''); b.onclick=async()=>{try { await select(c.conversation_id,c); document.getElementById('history-sheet').close(); } catch (_) { state.textContent='Could not open that conversation.'; }}; el.append(b); }
+    for (const c of d.items) { const b = document.createElement('button'); b.type='button'; b.className='history-row'; b.textContent=(c.title || 'Conversation') + (c.private ? ' · Private' : ''); b.onclick=async()=>{try { await select(c.conversation_id,c); activateTab('confer',true); document.getElementById('history-sheet').close(); } catch (_) { state.textContent='Could not open that conversation.'; }}; el.append(b); }
     next=d.next; document.getElementById('history-more').hidden=!next;
   }
   window.cosHistory = {ready:false, device, conversationId:null, persistDraft,
@@ -170,7 +170,7 @@
       const t = document.createElement('span'); t.className = 't'; t.textContent = titleOf(c) + (c.private ? ' · Private' : '');
       const w = document.createElement('span'); w.className = 'w'; w.textContent = when(c.last_activity_at || c.created_at);
       b.append(t, w); b.title = t.textContent;
-      b.onclick = async () => { try { await select(c.conversation_id, c); closeDrawer(); } catch (_) { state.textContent = 'Could not open that conversation.'; } };
+      b.onclick = async () => { try { await select(c.conversation_id, c); activateTab('confer',true); closeDrawer(); } catch (_) { state.textContent = 'Could not open that conversation.'; } };
       rows.append(b);
     }
     if (!shown.length) { const p = document.createElement('p'); p.className = 'cos-list-empty'; p.textContent = q ? 'No chat matches.' : 'No chats yet.'; rows.append(p); }
@@ -204,7 +204,7 @@
   fold.addEventListener('click', () => { if (body.dataset.drawer) closeDrawer(); else { local('cos-list-folded', '1'); paintFold(); } });
   scrim.addEventListener('click', closeDrawer);
   document.querySelectorAll('[data-new-conversation]').forEach(b => b.addEventListener('click', closeDrawer));
-  document.querySelectorAll('.tab-btn[data-tab]').forEach(b => b.addEventListener('click', closeDrawer));
+  document.querySelectorAll('.tab-btn[data-tab], #cos-home, #cos-resume').forEach(b => b.addEventListener('click', closeDrawer));
   wide.addEventListener('change', closeDrawer);
   paintFold();
   // ⋯ holds History, Picture, Side by side, its own window and voice; a choice closes it.

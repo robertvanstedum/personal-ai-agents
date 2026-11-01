@@ -17,7 +17,7 @@
   <header class="cos-header"><div class="header-nav">
     <button class="phone-only cos-bar-btn" type="button" data-list-open aria-label="Open the conversation list" title="Conversations">☰</button>
     {# CoS's mark: the Marcus Aurelius bust. srcset is relative (the portal rewrites src, not srcset), like the voice imports. #}
-    <span class="cos-mark"><img src="/static/photos/cos-mark-96.webp" srcset="../static/photos/cos-mark-96.webp 96w, ../static/photos/cos-mark-256.webp 256w" sizes="30px" width="28" height="28" alt=""><span class="cos-mark-words"><span class="cos-mark-name">Chief of Staff</span><span class="phone-only cos-mark-title" data-conv-title-short>New chat</span></span></span>
+    <button type="button" class="cos-mark" id="cos-home" aria-label="Chief of Staff home" title="Return to the welcome page"><img src="/static/photos/cos-mark-96.webp" srcset="../static/photos/cos-mark-96.webp 96w, ../static/photos/cos-mark-256.webp 256w" sizes="30px" width="28" height="28" alt=""><span class="cos-mark-words"><span class="cos-mark-name">Chief of Staff</span><span class="phone-only cos-mark-title" data-conv-title-short>New chat</span></span></button>
     <nav class="tab-nav" aria-label="Chief of Staff"><button class="tab-btn" data-tab="confer">Confer</button><button class="tab-btn" data-tab="records">Board</button><button class="tab-btn" data-tab="flight">In flight</button></nav>
     <span class="header-gap"></span>
     <a class="founder-link" data-portal-link href="/guild-next/guild/rooms">Guildhall ↗</a>
@@ -48,6 +48,14 @@
 
     <!-- ── Left: tab content panels ── -->
     <div class="tab-content">
+
+      <section id="tab-home" class="tab-panel" aria-label="Chief of Staff welcome">
+        <div class="cos-hero">
+          <div class="cos-hero-copy"><div class="cos-eyebrow">Chief of Staff</div><h1 data-greeting>Hello, Robert.</h1><p>Your conversations, kept here.</p></div>
+          <div class="cos-hero-ph"><img src="/static/photos/cos_discuss_private.png?v=1" alt="Friends gathered around a table"></div>
+        </div>
+        <button id="cos-resume" class="cos-resume" type="button">Return to conversation</button>
+      </section>
 
       <!-- Confer -->
       <div id="tab-confer" class="tab-panel">
@@ -180,6 +188,8 @@ const tabPhotos = document.querySelectorAll('.tab-photo');
 const tabLoaded = { confer: true, rooms: true, records: true, record: false, track: false, store: false };
 
 function activateTab(tab, pushState) {
+  document.body.classList.toggle('show-cos-home', tab === 'home');
+  document.getElementById('cos-home').setAttribute('aria-current', tab === 'home' ? 'page' : 'false');
   document.body.classList.toggle('show-cos-board', tab === 'records');
   const board = document.getElementById('cos-board');
   if (tab === 'records' && !board.getAttribute('src')) board.src = board.dataset.boardSrc;
@@ -190,12 +200,21 @@ function activateTab(tab, pushState) {
   if (!tabLoaded[tab]) { tabLoaded[tab] = true; loadTab(tab); }
 }
 
+document.getElementById('cos-home').addEventListener('click', () => {
+  activateTab('home', true);
+  document.getElementById('cos-resume').focus({preventScroll:true});
+});
+document.getElementById('cos-resume').addEventListener('click', () => {
+  activateTab('confer', true);
+  document.getElementById('send-input').focus({preventScroll:true});
+});
+
 tabBtns.forEach(btn => {
   btn.addEventListener('click', () => activateTab(btn.dataset.tab, true));
 });
 
 window.addEventListener('popstate', e => {
-  const tab = (e.state && e.state.tab) || 'confer';
+  const tab = (e.state && e.state.tab) || INITIAL_TAB;
   activateTab(tab, false);
 });
 
@@ -555,7 +574,7 @@ function esc(s) {
 }
 
 // ── Initialise on load ───────────────────────────────────────────────────────
-activateTab(INITIAL_TAB === 'records' ? 'records' : 'confer', false);   // /ui/records opens the Board
+activateTab(['home', 'records', 'flight'].includes(INITIAL_TAB) ? INITIAL_TAB : 'confer', false);
 if (INITIAL_TAB !== 'confer' && INITIAL_TAB !== 'records') loadTab(INITIAL_TAB);
 </script>
 <script type="module">

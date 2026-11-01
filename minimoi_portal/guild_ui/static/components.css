@@ -1487,3 +1487,12 @@ body.gu[data-mc-embed] [data-mc-provider-control],
 body.gu .mc-panel:is([data-mode="floating"], [data-mode="docked"]) [data-mc-provider-control],
 body.gu[data-mc-embed] [data-mc-record][data-private-off],
 body.gu .mc-panel:is([data-mode="floating"], [data-mode="docked"]) [data-mc-record][data-private-off] { display: none !important; }
+
+/* Keep the Lab inventor's face in frame instead of cropping the picture at chest height. */
+.prototype-lab .area-hero:has(.area-hero-art-wide){grid-template-columns:minmax(0,1fr) min(48%,480px);height:160px}
+.prototype-lab .area-hero-art.area-hero-art-wide{height:160px}
+.prototype-lab .area-hero-art.area-hero-art-wide img{object-position:50% 0%}
+@media(max-width:640px){
+  .prototype-lab .area-hero:has(.area-hero-art-wide){height:112px;grid-template-columns:minmax(0,1fr) 42%}
+  .prototype-lab .area-hero-art.area-hero-art-wide{height:112px}
+}

@@ -46,19 +46,8 @@
         <span class="rm-names" data-rm-names></span>
       </div>
       <span class="rm-state" data-rm-state hidden></span>
-      <button type="button" class="rm-btn rm-panel-btn" data-rm-panel-toggle aria-controls="rm-participants" aria-expanded="false" title="People &amp; files"><span class="rm-panel-word">People &amp; files</span><span class="rm-panel-icon" aria-hidden="true">👥</span></button>
+      <button type="button" class="rm-btn rm-panel-btn" data-rm-panel-toggle aria-controls="rm-participants" aria-expanded="false" title="Meeting" aria-label="Meeting"><span class="rm-panel-word">Meeting</span><span class="rm-panel-icon" aria-hidden="true">👥</span></button>
       <button type="button" class="rm-btn rm-new-btn" data-rm-new-proxy aria-label="New meeting" title="New meeting">✎</button>
-      <details class="rm-head-more" data-rm-more>
-        <summary class="rm-btn" aria-label="More for this meeting" title="More">⋯</summary>
-        <div class="rm-head-menu" role="group" aria-label="This meeting">
-          <button type="button" data-rm-menu-invite disabled>Invite…</button>
-          <button type="button" data-rm-menu-setup>Setup and round details</button>
-          <details class="rm-about rm-context-help" data-rm-about>
-            <summary aria-label="Help with Rooms" title="Help with Rooms">Help</summary>
-            <p class="small">Rooms keep a shared conversation. Create or select a room, then use People &amp; files to see its participants and available invitations. Agent approval allows invitations; it does not mean an agent has joined or answered. When Rooms is disconnected, creation and invitations are unavailable.</p>
-          </details>
-        </div>
-      </details>
     </header>
     <div class="rm-banner" data-rm-off hidden role="status">
       <strong>Rooms are not connected on this portal.</strong> Creating rooms and inviting participants are unavailable until the Rooms connection is restored.
@@ -78,7 +67,7 @@
     <dialog class="rm-dialog" data-rm-invite-dialog aria-labelledby="rm-invite-h">
       <h2 id="rm-invite-h">Invite to this meeting</h2>
       <ul class="rm-cards" data-rm-cards></ul>
-      <p class="small rm-humans">Other people: coming with the invitation slice (A0).</p>
+      <p class="small rm-humans">Inviting other people is not available yet.</p>
       <p class="small" data-rm-invite-status role="status"></p>
       <button type="button" class="rm-btn" data-rm-dialog-close>Close</button>
     </dialog>
@@ -146,11 +135,11 @@
     </form>
   </section>
   <aside class="rm-participants" id="rm-participants" aria-label="Room people and controls">
-    <div class="rm-files-head"><h2 class="rm-files-h">People &amp; files</h2><button type="button" class="rm-btn" data-rm-panel-close aria-label="Close People and files">✕</button></div>
+    <div class="rm-files-head"><h2 class="rm-files-h">Meeting</h2><button type="button" class="rm-btn" data-rm-panel-close aria-label="Close meeting panel">✕</button></div>
       <span class="rm-people" data-rm-people aria-label="Participants"></span>
       <span class="rm-controls" data-rm-controls hidden>
-        <button type="button" class="rm-btn" data-rm-invite aria-label="Invite participants" title="Invite participants">＋</button>
-        <details class="rm-session-menu"><summary class="rm-btn" aria-label="Conversation controls" title="Conversation controls">⋯</summary><div>
+        <button type="button" class="rm-btn" data-rm-invite aria-label="Invite participants" title="Invite participants">Invite</button>
+        <details class="rm-session-menu"><summary class="rm-btn" aria-label="Conversation controls" title="Conversation controls">Meeting controls</summary><div>
         <button type="button" class="rm-btn" data-rm-pause>Pause</button>
         <button type="button" class="rm-btn" data-rm-end>End</button>
         </div></details>
@@ -179,6 +168,10 @@
       <details class="rm-more" data-rm-details>
         <summary class="rm-btn" aria-label="Room details">Room details</summary>
         <div class="rm-more-body" data-rm-details-body></div>
+      </details>
+      <details class="rm-about" data-rm-about>
+        <summary class="rm-btn">Help</summary>
+        <p class="small">This meeting keeps a shared record. Invite adds a participant; Invited means they have not joined yet. Use To to choose who should answer your next message.</p>
       </details>
   </aside>
   <aside class="rm-files" id="rm-files" data-rm-files hidden aria-label="Files in this room">

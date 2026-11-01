@@ -23,10 +23,11 @@ class Element {
   setSelectionRange(start,end) { this.selectionStart=start; this.selectionEnd=end; }
 }
 const nodes = new Map();
+const storage = new Map();
 const $ = s => { if (!nodes.has(s)) nodes.set(s, new Element('div')); return nodes.get(s); };
 const $$ = s => $('[data-rm-to]').find(s);
-const context = vm.createContext({ $, $$, el: (t,a,v) => new Element(t,a,v), assert, console, URLSearchParams,
-  window: { location: { search: "" }, setInterval(){}, clearInterval(){}, clearTimeout(){}, sessionStorage: {getItem(){},setItem(){},removeItem(){}} },
+const context = vm.createContext({ $, $$, el: (t,a,v) => new Element(t,a,v), assert, console, URLSearchParams, announce(){},
+  window: { location: { search: "" }, setInterval(){}, clearInterval(){}, clearTimeout(){}, sessionStorage: {getItem(k){return storage.get(k)},setItem(k,v){storage.set(k,v)},removeItem(k){storage.delete(k)}} },
   document: { addEventListener(){} }, newKey: () => 'test-key' });
 const source = fs.readFileSync(process.argv[1], 'utf8').replace(/^import .*;$/mg,'').replace(/^export /mg,'');
 vm.runInContext(source, context);
@@ -73,6 +74,37 @@ vm.runInContext(String.raw`
   assert.equal($('[data-rm-turns]').find('[data-rm-turn-action]').length,0);
   meeting.turns = Array.from({length:20},(_,i)=>({...meeting.turns[0],id:String(i),round:{round_id:'r2',position:i}}));
   assert.ok(roundLine().text.includes('earlier turns may be omitted'));
+  // Continue without is a recipient decision, not just a disappearing warning.
+  meeting.participants = ['mc','cos'].map(id=>({id,label:id,teammate:true,rsvp:'accepted'}));
+  meeting.turns = [
+    {id:'mc-new',addressee:'mc',state:'uncertain'},
+    {id:'mc-old',addressee:'mc',state:'uncertain',disposition:'unresolved_started'},
+    {id:'cos-old',addressee:'cos',state:'failed'}];
+  targets.clear(); dismissed.clear();
+  const proceed = id => turnAction(el('button',{'data-turn':id,'data-rm-turn-action':'continue'}));
+  sent = null; await proceed('mc-new');
+  assert.equal(sent,null); // no retry, provider call or new meeting
+  assert.deepEqual([...targets],['cos']);
+  assert.ok(dismissed.has('mc-new') && dismissed.has('mc-old'));
+  assert.ok(!dismissed.has('cos-old'));
+  targets.clear(); dismissed.clear(); skippedRecipients.clear(); requireRecipient=false;
+  restoreRecovery(); // same choices after reload
+  assert.deepEqual([...targets],['cos']);
+  assert.ok(dismissed.has('mc-old') && requireRecipient);
+  $('[data-rm-input]').value='Can you help me, CoS?'; await send();
+  assert.equal(sent.body.target,'cos');
+  await proceed('cos-old');
+  assert.equal(targets.size,0); // never loop back to the previously skipped MC
+  sent=null; $('[data-rm-input]').value='Keep this draft'; await send();
+  assert.equal(sent,null); assert.equal($('[data-rm-input]').value,'Keep this draft');
+  current='another-room'; restoreRecovery(); assert.equal(dismissed.size,0); assert.equal(requireRecipient,false);
+  current='room-a'; restoreRecovery(); assert.ok(requireRecipient);
+  click({'data-rm-to-chip':'cos'}); assert.equal(requireRecipient,false);
+  $('[data-rm-input]').value='Try CoS again'; await send(); assert.equal(sent.body.target,'cos');
+  meeting.turns=[{id:'active',addressee:'mc',state:'running'}];
+  const before=[...targets]; records=async()=>({status:503,body:{}});
+  await proceed('active'); assert.deepEqual([...targets],before); assert.ok(!dismissed.has('active'));
+
 })().catch(e=>{console.error(e);process.exitCode=1;});
 `, vm.createContext(Object.assign(context, {process})));
 """

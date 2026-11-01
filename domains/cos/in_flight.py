@@ -27,7 +27,7 @@ from flask import Blueprint, jsonify, request
 
 from core.canonical_json import digest
 
-NOT_CONFIGURED = "In flight isn't recorded on this host yet."
+NOT_CONFIGURED = "In flight isn't available yet."
 _OPS = ("open", "update", "comment", "close")
 _OP_ID = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 _ITEM_ID = re.compile(r"^IF-[A-Za-z0-9_-]{1,64}$")

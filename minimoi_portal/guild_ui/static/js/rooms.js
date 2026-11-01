@@ -40,6 +40,8 @@ let fast = null;              // the quick poll while a turn is in flight
 let here = null;              // the presence heartbeat
 let pendingAct = null;        // 'paused' or 'closed', waiting for its note
 const dismissed = new Set();  // turns Robert chose to continue without
+const skippedRecipients = new Set();
+let requireRecipient = false; // Continue without must not fall back to the same facilitator
 const ACTIVE = ['queued', 'claimed', 'running', 'recovering', 'cancel_requested'];
 const keys = new Map();
 const IMAGE = /\.(png|jpe?g|gif|webp)$/i;
@@ -51,6 +53,21 @@ const store = {
   get(k) { try { return window.sessionStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { if (v) window.sessionStorage.setItem(k, v); else window.sessionStorage.removeItem(k); } catch (e) { /* the draft then lives in the page only */ } },
 };
+const recoveryKey = () => `${page.storage_ns}.rooms.recovery.${current}`;
+function saveRecovery() {
+  store.set(recoveryKey(), JSON.stringify({ targets: [...targets], dismissed: [...dismissed], skipped: [...skippedRecipients], requireRecipient }));
+}
+function restoreRecovery() {
+  targets.clear(); dismissed.clear(); skippedRecipients.clear(); requireRecipient = false;
+  try {
+    const saved = JSON.parse(store.get(recoveryKey()) || 'null');
+    if (!saved || !Array.isArray(saved.targets) || !Array.isArray(saved.dismissed)) return;
+    saved.targets.filter(x => typeof x === 'string').forEach(x => targets.add(x));
+    saved.dismissed.filter(x => typeof x === 'string').forEach(x => dismissed.add(x));
+    (Array.isArray(saved.skipped) ? saved.skipped : []).filter(x => typeof x === 'string').forEach(x => skippedRecipients.add(x));
+    requireRecipient = saved.requireRecipient === true;
+  } catch (_) { /* Malformed device state never changes the meeting record. */ }
+}
 const draftKey = () => `${page.storage_ns}.rooms.draft.${current || 'none'}`;
 const signedOutDraftKey = () => `${page.storage_ns}.rooms.draft.none`;
 const when = (iso) => { const t = Date.parse(iso); return Number.isNaN(t) ? '' : new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
@@ -232,9 +249,8 @@ function renderRoom() {
   files.disabled = false;
   files.textContent = `Files · ${(room.documents || []).length}`;
   const stick = thread.scrollTop + thread.clientHeight >= thread.scrollHeight - 40;
-  // A new meeting (nothing said yet) opens on the workshop team's card; it stays at the top for this visit and scrolls away.
-  if (!room.events.some((e) => !SYSTEM.includes(e.kind))) heroFor = room.id;
-  thread.replaceChildren(...(heroFor === room.id ? [meetingHero()] : []), ...threadLines(room.events));
+  // Artwork belongs on the welcome page, leaving the meeting itself for conversation.
+  thread.replaceChildren(...threadLines(room.events));
   if (stick) thread.scrollTop = thread.scrollHeight;
   const writable = room.state === 'active' && !signedOut;
   $('[data-rm-send]').disabled = !writable;
@@ -249,7 +265,6 @@ function renderRoom() {
   if (!$('[data-rm-files]').hidden) renderFiles();
 }
 
-let heroFor = null;
 function meetingPeople() {
   return meeting && meeting.room === current ? meeting.participants.filter((p) => !p.teammate || p.rsvp === 'accepted' || p.rsvp === 'invited')
     : (room?.members || []);
@@ -257,15 +272,6 @@ function meetingPeople() {
 function namesOf(people) {
   const names = people.map((p) => shortName(p.id, p.label));
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names.join('');
-}
-function meetingHero() {
-  const people = meetingPeople();
-  const faces = el('span', { class: 'rm-faces', 'aria-hidden': 'true' });
-  faces.append(...people.slice(0, 6).map((p) => face(p.id, p.label, p.kind)));
-  const copy = h('div', { class: 'rm-hero-copy' }, el('p', { class: 'rm-eyebrow' }, 'Guildhall'), el('h2', {}, room.title),
-    h('p', { class: 'rm-hero-who' }, faces, el('span', {}, people.length ? `With ${namesOf(people)}.` : '')),
-    el('p', { class: 'rm-hero-line' }, 'Everyone hears you unless you pick one below.'));
-  return h('li', { class: 'rm-hero', 'data-rm-hero': room.id }, el('div', { class: 'rm-hero-ph', 'aria-hidden': 'true' }), copy);
 }
 // The header: the faces of who is in the meeting, and their names.
 function renderFaces() {
@@ -302,7 +308,7 @@ function renderDetails() {
 async function loadRoom(id) {
   const r = await records(`/v1/rooms/${encodeURIComponent(id)}`);
   if (id !== current) return false;
-  if (r.status === 200) { const changed = room?.id !== r.body.id; if (changed) { targets.clear(); recipientFilter = ''; } room = r.body; archiveSnapshot = null; error(''); renderRoom();
+  if (r.status === 200) { const changed = room?.id !== r.body.id; if (changed) { restoreRecovery(); recipientFilter = ''; } room = r.body; archiveSnapshot = null; error(''); renderRoom();
     const snapshot = await records(`/v1/rooms/${encodeURIComponent(id)}/archive-check`);
     if (id !== current) return false;
     if (snapshot.status === 200 && snapshot.body.room === id) { archiveSnapshot = snapshot.body; renderDetails(); } loadMeeting(); if (changed) { heartbeat(); reportHandoffs(id); } return true; }
@@ -349,6 +355,7 @@ async function send() {
   const text = input.value.trim();
   if (!text || !current) return;
   const selected = (meeting?.participants || []).filter((p) => p.teammate && p.rsvp === 'accepted' && targets.has(p.id));
+  if (requireRecipient && !selected.length) { status('Choose who should answer in To before sending. Your draft is kept.'); return; }
   // Reuse Records' mention contract; addressing remains visible in exports.
   const body = { body: text, kind: 'message' };
   if (selected.length === 1) body.target = selected[0].id;
@@ -629,9 +636,6 @@ function bind() {
   });
   // Review 06: ✎ is the list's New meeting; ⋯ holds help, Invite (the panel's own button) and setup (the panel).
   $('[data-rm-new-proxy]')?.addEventListener('click', () => $('[data-rm-new]').click());
-  const more = $('[data-rm-more]');
-  $('[data-rm-menu-invite]')?.addEventListener('click', () => { more.open = false; $('[data-rm-invite]').click(); });
-  $('[data-rm-menu-setup]')?.addEventListener('click', () => { more.open = false; setRoomPanel(true); $('[data-rm-panel-close]').focus(); });
   document.addEventListener('click', (e) => {
     if (!e.target.isConnected) return;                 // a pick inside To ▾ redraws it; that click was inside, it stays open
     for (const m of $$('[data-rm-more], [data-rm-to-menu]')) if (m.open && !m.contains(e.target)) m.open = false;
@@ -856,11 +860,26 @@ async function turnAction(button) {
   }
   if (action === 'continue') {
     const t = meeting.turns.find((x) => x.id === id);
-    if (t && ['queued', 'claimed', 'running', 'recovering'].includes(t.state)) {
-      await records(`/v1/rooms/${encodeURIComponent(current)}/turns/${encodeURIComponent(id)}/cancel`, { method: 'POST', body: {}, key: keyFor(`cancel:${id}`) });
+    if (!t) return;
+    const roomId = current;
+    button.disabled = true;
+    if (['queued', 'claimed', 'running', 'recovering'].includes(t.state)) {
+      const r = await records(`/v1/rooms/${encodeURIComponent(roomId)}/turns/${encodeURIComponent(id)}/cancel`, { method: 'POST', body: {}, key: keyFor(`cancel:${id}`) });
+      if (current !== roomId) return;
+      if (![200, 201].includes(r.status)) { button.disabled = false; status('Could not confirm the request to stop. Your draft is kept.'); return; }
     }
+    // Acknowledge the displayed failures for this teammate together, but keep their records intact.
+    for (const prior of meeting.turns) if (prior.addressee === t.addressee &&
+        ['uncertain', 'failed', 'expired', 'cancelled'].includes(prior.state)) dismissed.add(prior.id);
     dismissed.add(id);
-    renderTurns();
+    skippedRecipients.add(t.addressee);
+    const others = meeting.participants.filter(p => p.teammate && p.rsvp === 'accepted' && !skippedRecipients.has(p.id));
+    targets.delete(t.addressee);
+    if (!targets.size) others.forEach(p => targets.add(p.id));
+    requireRecipient = true;
+    saveRecovery(); renderTo(); renderTurns();
+    status(`Continuing without ${labelOf(t.addressee)}. Earlier attempts stay in the record. ` +
+      (targets.size ? 'The To menu shows who will answer next; mentions can add recipients.' : 'Choose another person in To before sending.'));
     return;
   }
   // Retry / a new attempt may use a second turn: one more click confirms it.
@@ -892,7 +911,7 @@ function renderTo() {
     type: 'button', class: 'rm-chip', 'data-rm-to-chip': p.id, 'aria-pressed': String(targets.has(p.id)),
     title: `${targets.has(p.id) ? 'Remove' : 'Add'} ${p.label}` }, p.label));
   const all = mates.length > 0 && selected.length === mates.length;
-  const said = !selected.length ? 'Everyone' : all ? (mates.length > 1 ? 'Everyone, each answers' : shortName(mates[0].id, mates[0].label))
+  const said = !selected.length ? (requireRecipient ? 'Choose recipient' : (facilitator() ? shortName(facilitator(), labelOf(facilitator())) : 'No recipient')) : all ? (mates.length > 1 ? 'Everyone, each answers' : shortName(mates[0].id, mates[0].label))
     : selected.map((p) => shortName(p.id, p.label)).join(', ');
   const controls = [el('button', { type: 'button', class: 'rm-chip rm-to-all', 'data-rm-to-all': true,
       'aria-pressed': String(all) }, 'Everyone')];
@@ -910,7 +929,7 @@ function renderTo() {
   controls.push(el('button', { type: 'button', class: 'rm-btn rm-to-clear', 'data-rm-to-clear': true }, 'Clear'));
   controls.push(el('span', { class: 'small rm-to-hint', 'aria-live': 'polite' }, selected.length
     ? `${all ? 'Everyone' : selected.map((p) => p.label).join(', ')} will be addressed. Mentions in your message also add recipients.`
-    : `No selection: ${facilitator() ? labelOf(facilitator()) : 'nobody'} answers unless you mention someone.`));
+    : requireRecipient ? 'Choose who should answer before sending. Your draft is kept.' : `No selection: ${facilitator() ? labelOf(facilitator()) : 'nobody'} answers unless you mention someone.`));
   const menu = el('details', { class: 'rm-to-menu', 'data-rm-to-menu': true });
   menu.open = !!menuWasOpen;
   const sum = el('summary', { class: 'rm-to-sum', 'aria-label': `Send to: ${said}`, title: 'Who hears you' });
@@ -1178,6 +1197,8 @@ function bindMeeting() {
     } else if (b.hasAttribute('data-rm-to-clear')) targets.clear();
     else if (targets.has(b.dataset.rmToChip)) targets.delete(b.dataset.rmToChip);
     else targets.add(b.dataset.rmToChip);
+    // An explicit recipient choice replaces the local continue-without preference.
+    requireRecipient = false; skippedRecipients.clear(); saveRecovery();
     const id = b.dataset.rmToChip;
     const attr = b.hasAttribute('data-rm-to-all') ? 'data-rm-to-all' : 'data-rm-to-clear';
     renderTo();
