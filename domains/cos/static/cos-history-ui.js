@@ -87,7 +87,16 @@
   document.getElementById('history-open').onclick=()=>{document.getElementById('history-sheet').showModal();list().catch(()=>state.textContent='History is unavailable.');};
   document.getElementById('history-more').onclick=()=>list(true).catch(()=>state.textContent='Could not load more history.');
   document.getElementById('history-earlier').onclick=()=>{if(viewingEarlier){viewingEarlier=false;signature='';document.getElementById('history-earlier').textContent='Earlier messages';reload().catch(()=>state.textContent='Could not load messages.');}else{reload(true).then(()=>{document.getElementById('history-earlier').hidden=false;document.getElementById('history-earlier').textContent='Return to latest';}).catch(()=>state.textContent='Could not load earlier messages.');}};
-  document.getElementById('history-new').onclick=async()=>{if(input.disabled||uploading){state.textContent='Wait for the current message or upload.';return;}try{const c=await api('history/conversations',{title:'New conversation'});await select(c.conversation_id,c);document.getElementById('history-sheet').close();}catch(_){state.textContent='Could not create a conversation.';}};
+  let creatingConversation = false;
+  document.querySelectorAll('[data-new-conversation]').forEach(button => { button.onclick=async()=>{
+    if(creatingConversation)return;
+    if(input.disabled||uploading){state.textContent='Wait for the current message or upload.';return;}
+    creatingConversation=true;
+    const controls=[...document.querySelectorAll('[data-new-conversation]')];controls.forEach(b=>b.disabled=true);
+    try{const c=await api('history/conversations',{title:'New conversation'});await select(c.conversation_id,c);document.getElementById('history-sheet').close();if(!document.getElementById('tab-confer').classList.contains('active'))document.querySelector('.tab-btn[data-tab="confer"]').click();input.focus();}
+    catch(_){state.textContent='Could not create a conversation.';}
+    finally{creatingConversation=false;controls.forEach(b=>b.disabled=false);}
+  };});
   document.getElementById('mc-page').href=location.origin + '/guild-next/guild/build';
   document.getElementById('existing-rooms').href=location.origin + '/guild-next/guild/rooms';
   document.getElementById('both-open').onclick=async()=>{

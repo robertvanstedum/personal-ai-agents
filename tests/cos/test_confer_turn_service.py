@@ -864,3 +864,24 @@ def test_only_the_claim_sentences_go_and_paragraphs_stay():
     reply = "Yes, it shipped in PR 323. I've set a reminder for 9 tomorrow.\n\n- The cron still needs the script."
     assert _reply_for("status?", reply) == (
         "Yes, it shipped in PR 323.\n\n- The cron still needs the script.\n\n" + NOTICE)
+
+
+def test_greeting_prefixed_note_request_saves_with_receipt_without_model():
+    calls, increments, notes = [], [], []
+    service = _service(calls, increments, note_writes=notes)
+    result = service.handle(ConferTurnRequest(
+        text="Hi, can you take a note that there's no place to start a new session",
+        channel='html_text',request_id=str(uuid4())))
+    assert notes[0][0] == "there's no place to start a new session"
+    assert result.operation['status'] == 'saved'
+    assert not calls
+
+
+@pytest.mark.parametrize('text', [
+    'Hi, can you take a note?',
+    'Hi, do not save a note: this is only an example',
+    'Hi, she said "save a note: example"',
+    'Hi, please note that this is a question, not a save request',
+])
+def test_greeting_does_not_turn_chat_or_quoted_requests_into_notes(text):
+    assert parse_explicit_note(text) is None

@@ -170,6 +170,8 @@ def parse_explicit_note(text: str) -> str | None:
     ``Make a note that …``, ``Make a note called …`` (A4-1), ``Note to self: …``, ``Save a note …`` with no separator and
     ``Make a note, …`` / ``Save a note, …`` with a comma (A4-2).
     """
+    # A greeting does not change an otherwise explicit owner request.
+    text = re.sub(r"^(?:hi|hello|hey)(?:\s+cos)?[,!:]\s+", "", text.strip(), count=1, flags=re.IGNORECASE)
     slash_match = _SLASH_NOTE_PREFIX.match(text)
     if slash_match is not None:
         note_text = text[slash_match.end():]
