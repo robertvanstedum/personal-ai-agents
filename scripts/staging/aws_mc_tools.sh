@@ -39,9 +39,10 @@ portal_env() { docker exec minimoi-portal printenv "$1" 2>/dev/null || true; }
 psql_value() { docker exec postgres-ai-agents psql -U postgres -d "$DB" -Atc "$1" 2>/dev/null || true; }
 
 listener_health() {
-  # From MC's side, the way the plugin reaches it (the tools door forwards 5011 to the portal). Prints the status only.
+  # From MC's side, at the address MC's plugin uses (loopback 5011, forwarded to the portal by the tools door). The door's
+  # own name does not answer from inside MC (1 Nov: it read "down" while the plugin's calls were recorded). Status only.
   docker exec minimoi-mc-agent node -e \
-    "fetch('http://minimoi-mc-tools-door:5011/healthz').then(r=>console.log(r.status)).catch(()=>console.log('down'))" \
+    "fetch('http://127.0.0.1:5011/healthz').then(r=>console.log(r.status)).catch(()=>console.log('down'))" \
     2>/dev/null || echo down
 }
 
@@ -131,7 +132,7 @@ switch_on() {
   for _ in $(seq 1 18); do
     health=$(listener_health); [[ "$health" == 200 ]] && break; sleep 5
   done
-  [[ "$health" == 200 ]] || { docker logs --since 3m minimoi-portal 2>&1 | grep -E "mc tools:" | tail -5; die "the tool listener did not come up"; }
+  [[ "$health" == 200 ]] || { docker logs --since 3m minimoi-portal 2>&1 | grep -E "mc tools:" | tail -5 || true; die "the tool listener did not come up"; }
   # The plugin retries its announcement with a back-off of at most 60 s; no MC restart is needed.
   for _ in $(seq 1 24); do
     recorded=$(recorded_since_start); [[ "$recorded" == yes ]] && break; sleep 5

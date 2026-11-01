@@ -187,3 +187,9 @@ def test_issues_on_refuses_a_classic_or_missing_token(host):
         assert r.returncode == 2, value
         assert not (root / "mc" / "portal" / "github-issues-token").exists()
         assert "TICKETS" not in (root / "mc-portal.env").read_text()
+
+
+def test_listener_health_is_read_where_mc_plugin_calls_it():
+    # 1 Nov on dev: the door's container name read "down" from inside MC while MC's own calls were recorded.
+    text = SCRIPT.read_text()
+    assert "http://127.0.0.1:5011/healthz" in text and "minimoi-mc-tools-door:5011" not in text
