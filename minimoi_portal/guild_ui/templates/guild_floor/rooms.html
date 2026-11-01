@@ -9,17 +9,17 @@
   mini-moi session ended (sign in to mini-moi), no Rooms access (ask the
   owner), Rooms unavailable or not set up (a connection problem). Drawn by js/rooms.js. No model call; no live presence is implied.
 #}
-{% block title %}Rooms · Guild{% endblock %}
+{% block title %}Guildhall · Guild{% endblock %}
 {% block head %}<link rel="stylesheet" href="{{ url_for('.asset', filename='css/rooms.css') }}">{% endblock %}
 {% block main %}
 <div class="rm" data-rm data-bridge="{{ rooms_cfg.state }}" data-access="{{ rooms_cfg.access }}">
   <aside class="rm-list" data-rm-list-pane aria-labelledby="rm-list-h">
     <div class="rm-list-head">
-      <h2 class="rm-list-h" id="rm-list-h">Rooms</h2>
-      <button type="button" class="rm-btn" data-rm-new{% if rooms_cfg.state != 'on' or rooms_cfg.access == 'no_access' %} disabled{% endif %}>＋ New conversation</button>
+      <h2 class="rm-list-h" id="rm-list-h">Meeting history</h2>
+      <button type="button" class="rm-btn" data-rm-new{% if rooms_cfg.state != 'on' or rooms_cfg.access == 'no_access' %} disabled{% endif %}>＋ Start meeting</button>
       <button type="button" class="rm-btn rm-list-close" data-rm-list-close aria-label="Close the room list">✕</button>
     </div>
-    <label class="small" for="rm-archive-view">Show conversations</label>
+    <label class="small" for="rm-archive-view">Meetings</label>
     <select id="rm-archive-view" class="rm-btn" data-rm-archive-view aria-label="Show active or archived conversations"><option value="active">Active</option><option value="archived">Archived</option></select>
     <ol class="rm-rooms" data-rm-list></ol>
     <nav class="rm-list-pages" data-rm-list-pages aria-label="Room list pages" hidden>
@@ -30,18 +30,18 @@
   </aside>
   <section class="rm-main" aria-labelledby="rm-title">
     <div class="rm-art area-hero" data-room-art>
-      <div class="area-hero-text"><p class="prototype-eyebrow">Guild</p><p class="area-hero-title" aria-hidden="true">Rooms</p><p>Grab a room and think out loud, with people and agents.</p></div>
+      <div class="area-hero-text"><p class="prototype-eyebrow">Guild</p><p class="area-hero-title" aria-hidden="true">Guildhall</p><p>Meet with your Guild: Robert, MC, and CoS.</p></div>
       <div class="area-hero-art area-hero-art-wide"><img src="/static/guild/guild-workshop-team.webp" alt="Workshop team artwork" data-room-art-image width="1152" height="864"></div>
     </div>
     <header class="rm-head">
-      <button type="button" class="rm-btn rm-list-open" data-rm-list-open aria-controls="rm-list-h" aria-label="Show the rooms">☰</button>
-      <h1 class="rm-title" id="rm-title" data-rm-title>Rooms</h1>
+      <button type="button" class="rm-btn rm-list-open" data-rm-list-open aria-controls="rm-list-h" aria-label="Meeting history">History</button>
+      <h1 class="rm-title" id="rm-title" data-rm-title>Meet with your Guild</h1>
       <details class="rm-about rm-context-help" data-rm-about>
         <summary class="rm-btn" aria-label="Help with Rooms" title="Help with Rooms"><span aria-hidden="true">💡</span></summary>
         <p class="small">Rooms keep a shared conversation. Create or select a room, then use People &amp; details to see its participants and available invitations. Agent approval allows invitations; it does not mean an agent has joined or answered. When Rooms is disconnected, creation and invitations are unavailable.</p>
       </details>
       <span class="rm-state" data-rm-state hidden></span>
-      <button type="button" class="rm-btn" data-rm-panel-toggle aria-controls="rm-participants" aria-expanded="false">People &amp; details</button>
+      <button type="button" class="rm-btn" data-rm-panel-toggle aria-controls="rm-participants" aria-expanded="false">More</button>
     </header>
     <div class="rm-banner" data-rm-off hidden role="status">
       <strong>Rooms are not connected on this portal.</strong> Creating rooms and inviting participants are unavailable until the Rooms connection is restored.
@@ -83,13 +83,13 @@
     </dialog>
     <dialog class="rm-dialog" data-rm-new-dialog aria-labelledby="rm-new-h">
       <form data-rm-new-form method="dialog">
-        <h2 id="rm-new-h">New conversation</h2>
-        <label>Title <input name="title" data-rm-new-title maxlength="160" required></label>
-        <label>Purpose <textarea name="purpose" data-rm-new-purpose maxlength="2400" rows="2" required></textarea></label>
-        <fieldset><legend>Teammates</legend><div data-rm-new-cards></div></fieldset>
-        <p class="small">Master Craftsman facilitates: it answers messages addressed to nobody. The conversation is recorded from the start.</p>
+        <h2 id="rm-new-h">Start meeting</h2>
+        <label>Title <input name="title" data-rm-new-title maxlength="160" placeholder="Optional topic"></label>
+        <details><summary>Meeting details</summary><label>Purpose <textarea name="purpose" data-rm-new-purpose maxlength="2400" rows="2"></textarea></label>
+        <fieldset><legend>Guild members</legend><div data-rm-new-cards></div></fieldset></details>
+        <p class="small">Meetings are recorded. MC availability is shown when you join. CoS is not connected to meetings yet.</p>
         <p class="small" data-rm-new-status role="status"></p>
-        <button type="submit" class="btn" data-rm-new-create>Start</button>
+        <button type="submit" class="btn" data-rm-new-create>Join</button>
         <button type="button" class="btn-quiet" data-rm-new-cancel>Cancel</button>
       </form>
     </dialog>
@@ -102,7 +102,7 @@
       <button type="button" class="btn-quiet" data-rm-take-cancel>Cancel</button>
       <p class="small" data-rm-take-result role="status" hidden></p>
     </div>
-    <ol class="rm-thread" data-rm-thread role="log" aria-live="polite" aria-label="Room conversation"></ol>
+    <div class="rm-welcome" data-rm-welcome><p>Start a meeting or join one from Meeting history.</p><button type="button" class="btn" data-rm-start>Start meeting</button></div><ol class="rm-thread" data-rm-thread role="log" aria-live="polite" aria-label="Room conversation"></ol>
     <div class="rm-turns" data-rm-turns role="status" aria-live="polite" hidden></div>
     <div class="rm-closed" data-rm-closed hidden>
       <span>This conversation is closed; its record is kept.</span>

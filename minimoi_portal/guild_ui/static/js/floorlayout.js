@@ -47,7 +47,7 @@ function setRail(open, persist, focus = null) {
     else { const rail = $('#main'); if (rail) { rail.setAttribute('tabindex', '-1'); rail.focus(); } }       // nothing to press yet (no files): focus the rail itself
   } else if (focus === 'back') {
     const t = $('[data-rail-toggle]');
-    if (t) t.focus();
+    if (t) { const menu = t.closest('details'); if (menu && !menu.open) menu.querySelector('summary').focus(); else t.focus(); }
   }
 }
 
@@ -67,7 +67,7 @@ function setHistory(open, focus = null) {
     if (close) close.focus();
   } else if (focus === 'back') {
     const t = $('[data-history-toggle]');
-    if (t) t.focus();
+    if (t) { const menu = t.closest('details'); if (menu && !menu.open) menu.querySelector('summary').focus(); else t.focus(); }
   }
 }
 

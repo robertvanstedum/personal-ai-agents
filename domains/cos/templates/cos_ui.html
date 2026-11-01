@@ -6,13 +6,15 @@
   <title>Chief of Staff</title>
   <link rel="stylesheet" href="/static/cos.css?v=20261028-voice1">
   <link rel="stylesheet" href="/founders-ui/founders.css?v={{ founders_ui_version }}">
+  <script type="module" src="/founders-ui/mobile-nav.js?v={{ founders_ui_version }}"></script>
 </head>
 <body class="founders-cos" data-picture="shown" data-mc-panel>
 
   <header class="cos-header"><div class="header-nav">
-    <nav class="tab-nav" aria-label="Chief of Staff"><button class="tab-btn" data-tab="confer">Chat</button><button class="tab-btn" data-tab="rooms">Rooms</button><button class="tab-btn" data-tab="records">Records</button></nav>
+    <span class="mobile-only mobile-identity">CoS</span><nav class="tab-nav" aria-label="Chief of Staff"><button class="tab-btn" data-tab="confer">Confer</button><a class="tab-btn" href="/guild-next/guild/rooms">Guildhall</a><button class="tab-btn" data-tab="records">Records</button></nav>
     <button id="history-open" type="button">History</button><button id="files-open" type="button">Files</button>
     <a class="founder-link" id="mc-page" href="#">MC ↗</a><button id="both-open" type="button" aria-pressed="false">Both</button><button id="picture-mode" type="button" aria-label="Change picture appearance">◐</button><button id="popout" type="button" aria-label="Open conversation in a window">⧉</button>
+    <details class="mobile-work-more" data-mobile-more><summary>More</summary><div class="mobile-work-menu" data-mobile-menu></div></details>
   </div></header>
   <dialog id="history-sheet"><header><h2>History</h2><button type="button" data-close-sheet>Close</button></header><button id="history-new" type="button">+ New conversation</button><div id="history-list"></div><button id="history-more" hidden>More conversations</button></dialog>
   <dialog id="files-sheet"><header><h2>Files</h2><button type="button" data-close-sheet>Close</button></header><div id="files-sheet-content"></div></dialog>
@@ -56,7 +58,7 @@
         <div id="voice-sessions" class="voice-sessions" aria-label="Voice sessions to look at" hidden></div>
       </div>
 
-      <section id="tab-rooms" class="tab-panel"><h1>Rooms</h1><p>In construction</p><a id="existing-rooms" href="#">Open existing Rooms ↗</a></section>
+      <section id="tab-rooms" class="tab-panel"><h1>Guildhall</h1><p>Meet with your Guild.</p><a id="existing-rooms" href="#">Join a meeting ↗</a></section>
       <section id="tab-records" class="tab-panel"><h1>Records</h1><p>In construction</p><p>Your saved conversations are available in History.</p></section>
       <!-- Record -->
       <div id="tab-record" class="tab-panel">
@@ -104,7 +106,7 @@ document.getElementById("btn-voice").addEventListener("click", e => { if (!windo
 const INITIAL_TAB = '{{ initial_tab }}';
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
-const tabBtns   = document.querySelectorAll('.tab-btn');
+const tabBtns   = document.querySelectorAll('.tab-btn[data-tab]');
 const tabPanels = document.querySelectorAll('.tab-panel');
 const tabPhotos = document.querySelectorAll('.tab-photo');
 const tabLoaded = { confer: true, rooms: true, records: true, record: false, track: false, store: false };

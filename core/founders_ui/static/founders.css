@@ -78,3 +78,39 @@
 @media(max-width:900px){.workshop-row{gap:14px;padding:0 12px;overflow-x:auto}.workshop-name{font-size:18px}.workshop-primary{gap:14px}.workshop-other{display:none}.workshop-more{display:block;flex:none}.workshop-more summary{cursor:pointer;color:var(--soft);font:14px system-ui;padding:17px 0;list-style:none}.workshop-more[open]>div{position:fixed;right:12px;top:calc(var(--gu-nav-stack-h,54px) + 36px);display:flex;flex-direction:column;background:var(--paper);border:1px solid var(--line);padding:4px 18px;box-shadow:0 5px 15px #0002}.workshop-more a{display:block}}
 .gu .guild-nav{z-index:70}
 @media(max-width:900px){.workshop-name{position:sticky;left:0;z-index:2;background:var(--paper);padding-right:8px}.workshop-more[open]>div{z-index:80;top:calc(var(--gu-portal-h,38px) + var(--gu-nav-stack-h,54px))}}
+
+/* Mobile: one Work / More row. Sheets and composer stay inside the viewport. */
+.mobile-work-more,.mobile-only{display:none}
+.founders-cos,.founders-cos *{box-sizing:border-box}
+.founders-cos .msg-text{overflow-wrap:anywhere}
+@media(max-width:700px){
+  .founders-cos{width:100%;max-width:100%;overflow-x:hidden}
+  .founders-cos .header-nav{display:flex;justify-content:space-between;height:48px;min-width:0;padding:0 14px;overflow:visible}
+  .founders-cos .tab-nav{min-width:0;flex:none;overflow:visible}
+  .founders-cos .tab-btn{height:48px;padding:0 10px;font-size:15px}
+  .mobile-work-more,.mobile-only{display:block}
+  .mobile-work-more summary,.workshop-more summary{list-style:none;cursor:pointer;padding:14px 8px;font:15px system-ui;color:var(--ink)}
+  .mobile-work-more summary::-webkit-details-marker,.workshop-more summary::-webkit-details-marker{display:none}
+  .founders-cos .cos-header{z-index:80;flex:none}
+  .mobile-work-more[open] .mobile-work-menu,.workshop-more[open]>div{position:absolute;top:100%;right:10px;width:min(260px,calc(100vw - 20px));max-height:65dvh;overflow:auto;background:var(--paper);border:1px solid var(--line);box-shadow:0 5px 18px #0002;padding:8px;z-index:90}
+  .mobile-work-menu button,.mobile-work-menu a,.workshop-more div button,.workshop-more div a{display:block;width:100%;height:auto;min-height:44px;margin:0;padding:12px;text-align:left;font:15px system-ui;color:var(--ink);background:none;border:0;border-radius:0;text-decoration:none;white-space:normal}
+  .founders-cos .mobile-work-menu .tab-btn{height:auto;text-align:left}
+  .workshop-row{justify-content:space-between;min-height:48px;overflow:visible;padding:0 14px}
+  .workshop-name,.workshop-other{display:none}
+  .workshop-primary{gap:0}.workshop-primary .subnav-link{font-size:15px;padding:14px 10px 12px}
+  .gu[data-page=floor]:not([data-mc-embed]) .mc-floorbar{display:none}
+  .gu[data-page=floor][data-history=open] .floor-history{top:calc(var(--gu-portal-h,38px) + var(--gu-nav-stack-h,48px))}
+  .founders-cos dialog{inset:0;width:100%;max-width:100%;height:100dvh;max-height:100dvh;margin:0;border:0;padding:20px max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom));overflow:auto}
+  .founders-cos dialog header{gap:12px}.founders-cos dialog h2{min-width:0;overflow-wrap:anywhere}.founders-cos dialog header button{flex:none;min-height:44px}
+  .founders-cos .input-row{width:100%;min-width:0;gap:4px;padding:8px}
+  .founders-cos #send-input{width:0;min-width:0;font-size:16px}
+  .founders-cos .input-row button{flex:none;min-width:32px}
+  .founders-cos #btn-send{padding:10px}
+  .founders-cos .talk-meta{min-width:0;white-space:normal;overflow-wrap:anywhere}
+  .founders-cos .talk-meta>*{max-width:100%}
+  .founders-cos.both-open .tab-content,.founders-cos.both-open #mc-both{min-width:0;max-width:100%}
+}
+
+@media(max-width:700px){.mobile-identity{font-weight:700;font-size:15px;white-space:nowrap}.founders-cos .tab-nav,.workshop-primary{margin-right:auto}.workshop-row{gap:10px}.mobile-work-more{position:static}}
+
+.founders-cos a.tab-btn{display:inline-flex;align-items:center;text-decoration:none}

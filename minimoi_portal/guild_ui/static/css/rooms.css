@@ -223,3 +223,15 @@ body.gu[data-page="rooms"] .mc-pill, body.gu[data-page="rooms"] .mc-phone-bar { 
 .rm-context-help > summary::-webkit-details-marker { display: none; }
 .rm-context-help > p { position: absolute; right: 8px; top: 100%; z-index: 50; width: min(300px, calc(100vw - 32px)); padding: var(--gu-s3); background: var(--gu-surface); border: 1px solid var(--gu-border); border-radius: var(--gu-radius); box-shadow: var(--gu-shadow-float); }
 .rm-manage > summary { margin-top: var(--gu-s2); }
+
+/* Guildhall keeps the meeting central and opens supporting panels on demand. */
+.rm,.rm[data-panel="open"],.rm[data-files="open"],.rm[data-panel="open"][data-files="open"]{grid-template-columns:minmax(0,1fr)}
+.rm .rm-list{display:none}
+.rm[data-list="open"] .rm-list{display:block;position:fixed;top:0;bottom:0;left:0;width:min(340px,90vw);z-index:85;box-shadow:var(--gu-shadow-float)}
+.rm .rm-list-open,.rm .rm-list-close{display:inline-block}
+.rm-participants{position:fixed;top:0;right:0;bottom:0;width:min(360px,90vw);z-index:85;box-shadow:var(--gu-shadow-float)}
+.rm[data-meeting="open"] .rm-art{display:none}
+.rm:not([data-meeting="open"]) .rm-composer{display:none}
+.rm-welcome{padding:24px}.rm-join{float:right;margin-left:12px}
+@media(min-width:761px){.rm-list,.rm-participants{resize:horizontal;min-width:240px;max-width:45vw}}
+@media(max-width:760px){.rm-dialog{box-sizing:border-box;width:100%;max-width:100%;margin:0;padding:20px}.rm-head{gap:8px}.rm-head .rm-title{font-size:20px}.rm-input{font-size:16px}}

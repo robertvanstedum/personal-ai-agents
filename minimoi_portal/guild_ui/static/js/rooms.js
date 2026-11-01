@@ -31,6 +31,8 @@ let signedOut = false;
 let takeNote = null;          // { id, text, ... } from the Guild API
 let poll = null;
 let meeting = null;           // Records' /turns view: participants, turns, routing notes (Rooms R1)
+let createdMeeting = null;
+let creatingMeeting = false;
 let cards = [];               // teammate cards (owner)
 const targets = new Set();    // recipients for the next message
 let recipientFilter = '';
@@ -126,7 +128,7 @@ function renderList() {
   const start = listPage * ROOMS_PER_PAGE;
   list.replaceChildren(...rooms.slice(start, start + ROOMS_PER_PAGE).map((r) => {
     const a = el('a', { href: `?view=${archiveView}&room=${encodeURIComponent(r.id)}`, 'data-rm-room': r.id });
-    a.append(el('span', {}, r.title), el('small', {}, `${r.archived_at ? 'archived' : r.state === 'active' ? 'recording' : r.state} · ${when(r.updated)}`));
+    a.append(el('span', {}, r.title), el('b', {class:'rm-join'}, r.state === 'active' ? 'Join' : 'View'), el('small', {}, `${r.archived_at ? 'archived' : r.state === 'active' ? 'recording' : r.state} · ${when(r.updated)}`));
     if (r.id === current) a.setAttribute('aria-current', 'true');
     return h('li', {}, a);
   }));
@@ -177,6 +179,8 @@ function eventLine(e) {
 function renderRoom() {
   const thread = $('[data-rm-thread]');
   if (!room) { thread.replaceChildren(); return; }
+  $('[data-rm]').dataset.meeting = 'open';
+  $('[data-rm-welcome]').hidden = true;
   $('[data-rm-title]').textContent = room.title;
   const st = $('[data-rm-state]');
   st.hidden = room.state === 'active';
@@ -248,8 +252,8 @@ async function loadAll({keepCurrent=false}={}) {
   signedOut = false;
   $('[data-rm-blocked]').hidden = true;
   rooms = r.body.rooms || [];
-  const wanted = new URLSearchParams(window.location.search).get('room') || store.get(`${page.storage_ns}.rooms.last`);
-  current = keepCurrent && current ? current : wanted || (rooms[0] && rooms[0].id) || null;
+  const wanted = new URLSearchParams(window.location.search).get('room');
+  current = keepCurrent && current ? current : wanted || null;
   listPage = Math.floor(Math.max(0, rooms.findIndex((r) => r.id === current)) / ROOMS_PER_PAGE);
   renderList();
   if (current) {
@@ -262,7 +266,7 @@ async function loadAll({keepCurrent=false}={}) {
     if (early) { store.set(draftKey(), draft); store.set(signedOutDraftKey(), ''); }
     await loadRoom(current);
   } else {
-    $('[data-rm-title]').textContent = 'Rooms';
+    $('[data-rm-title]').textContent = 'Meet with your Guild';
     $('[data-rm-send]').disabled = true;
   }
   if (cfg.take) await prepareTake();
@@ -514,7 +518,7 @@ function bind() {
     roomPanel.dataset.panel = open ? 'open' : 'closed';
     roomPanelToggle.setAttribute('aria-expanded', String(open));
   };
-  setRoomPanel(window.matchMedia('(min-width: 1101px)').matches);
+  setRoomPanel(false);
   roomPanelToggle.addEventListener('click', () => {
     const open = roomPanel.dataset.panel !== 'open';
     setRoomPanel(open);
@@ -943,9 +947,10 @@ async function prove(button) {
 // ── New conversation and Continue conversation ──────────────────────────────
 async function openNew() {
   if (cfg.state !== 'on' || cfg.access === 'no_access' || signedOut) { status('Room creation is unavailable on this portal.'); return; }
+  if (createdMeeting) { window.location.search = `?room=${encodeURIComponent(createdMeeting)}`; return; }
   await loadCards();
   const box = $('[data-rm-new-cards]');
-  box.replaceChildren(...cards.filter((c) => c.connected).map((c) => {
+  box.replaceChildren(...cards.filter((c) => c.principal === 'mc' && c.connected).map((c) => {
     const label = el('label', { class: 'rm-new-card' });
     label.append(el('input', { type: 'checkbox', value: c.principal, 'data-rm-new-card': c.principal, checked: '' }),
       el('span', {}, ` ${c.label} · ${c.proven_at ? 'proven' : 'not yet proven (Prove from Invite)'}`));
@@ -953,25 +958,45 @@ async function openNew() {
   }));
   if (!box.children.length) box.append(el('p', { class: 'small' }, 'No teammate is connected yet; you can still record a conversation.'));
   $('[data-rm-new-status]').textContent = '';
+  $('[data-rm-new-create]').disabled = false;
   $('[data-rm-new-dialog]').showModal();
   $('[data-rm-new-title]').focus();
 }
 
 async function createNew() {
+  if (creatingMeeting) return;
+  if (createdMeeting) { window.location.search = `?room=${encodeURIComponent(createdMeeting)}`; return; }
+  creatingMeeting = true;
+  $('[data-rm-new-create]').disabled = true;
+  try { await createMeeting(); }
+  finally { creatingMeeting = false; $('[data-rm-new-create]').disabled = Boolean(createdMeeting); }
+}
+
+async function createMeeting() {
   if (cfg.state !== 'on' || cfg.access === 'no_access' || signedOut) { $('[data-rm-new-status]').textContent = 'Room creation is unavailable on this portal. Your draft is kept.'; return; }
-  const title = $('[data-rm-new-title]').value.trim();
-  const purpose = $('[data-rm-new-purpose]').value.trim();
+  const title = $('[data-rm-new-title]').value.trim() || `Guild meeting · ${new Date().toLocaleDateString()}`;
+  const purpose = $('[data-rm-new-purpose]').value.trim() || 'Guild sync';
   const out = $('[data-rm-new-status]');
   if (!title || !purpose) { out.textContent = 'A title and a purpose are needed: both go on the record.'; return; }
   const name = `new:${title}:${purpose}`;
   const r = await records('/v1/rooms', { method: 'POST', body: { title, purpose, mode: 'meeting', recording_acknowledged: true }, key: keyFor(name) });
   if (r.status !== 201 && r.status !== 200) { out.textContent = `Not started: ${r.body.message || r.body.error || 'Rooms could not create the conversation. Your draft is kept'}.`; return; }
   const id = r.body.result.id;
+  createdMeeting = id;
+  const invitations = [];
   for (const box of $$('[data-rm-new-card]')) {
     if (!box.checked) continue;
-    await records(`/v1/rooms/${encodeURIComponent(id)}/invite`, { method: 'POST', body: { actor: box.value }, key: keyFor(`invite:${id}:${box.value}`) });
+    const invitation = await records(`/v1/rooms/${encodeURIComponent(id)}/invite`, { method: 'POST', body: { actor: box.value }, key: keyFor(`invite:${id}:${box.value}`) });
+    if (![200, 201].includes(invitation.status)) invitations.push(`${box.value}: ${invitation.body.error || 'connection unavailable'}`);
   }
   keys.delete(name);
+  if (invitations.length) {
+    out.textContent = `Meeting created. Member connection needs attention: ${invitations.join('; ')}.`;
+    const join = el('a', {href:`?room=${encodeURIComponent(id)}`,class:'btn'}, 'Open meeting');
+    out.append(join);
+    $('[data-rm-new-create]').disabled = true;
+    return;
+  }
   window.location.search = `?room=${encodeURIComponent(id)}`;
 }
 
@@ -1019,6 +1044,7 @@ function heartbeat() {
 function bindMeeting() {
   $('[data-rm-new]').addEventListener('click', openNew);
   $('[data-rm-new-cancel]').addEventListener('click', () => $('[data-rm-new-dialog]').close());
+  $('[data-rm-start]').addEventListener('click', openNew);
   $('[data-rm-new-form]').addEventListener('submit', (e) => { e.preventDefault(); createNew(); });
   $('[data-rm-invite]').addEventListener('click', openInvite);
   $('[data-rm-dialog-close]').addEventListener('click', () => $('[data-rm-invite-dialog]').close());

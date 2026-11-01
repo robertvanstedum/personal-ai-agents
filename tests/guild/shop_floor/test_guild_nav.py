@@ -8,9 +8,9 @@ import pytest
 from floor_helpers import load_portal, staging  # noqa: F401  (pytest fixtures)
 
 DOCS = "https://github.com/robertvanstedum/personal-ai-agents/tree/main/docs"
-DAILY = [("chat", "Work", "/guild-next/guild/build"), ("board", "Board", "/guild-next/guild/board"),
+DAILY = [("chat", "Craft", "/guild-next/guild/build"), ("board", "Board", "/guild-next/guild/board"),
          ("build-log", "Build Log", "/guild-next/guild/build/log"),
-         ("rooms", "Rooms", "/guild-next/guild/rooms")]
+         ("rooms", "Guildhall", "/guild-next/guild/rooms")]
 MORE = [("workshop", "Workshop", "/guild-next/guild/workshop"), ("media", "Media library", "/guild-next/guild/media"),
         ("home", "Guild home", "/guild-next/"),
         ("operate", "Operate", "/guild-next/guild/operate"), ("labs", "Labs", "/guild-next/guild/labs"),

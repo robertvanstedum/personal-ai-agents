@@ -89,7 +89,7 @@
   document.getElementById('history-earlier').onclick=()=>{if(viewingEarlier){viewingEarlier=false;signature='';document.getElementById('history-earlier').textContent='Earlier messages';reload().catch(()=>state.textContent='Could not load messages.');}else{reload(true).then(()=>{document.getElementById('history-earlier').hidden=false;document.getElementById('history-earlier').textContent='Return to latest';}).catch(()=>state.textContent='Could not load earlier messages.');}};
   document.getElementById('history-new').onclick=async()=>{if(input.disabled||uploading){state.textContent='Wait for the current message or upload.';return;}try{const c=await api('history/conversations',{title:'New conversation'});await select(c.conversation_id,c);document.getElementById('history-sheet').close();}catch(_){state.textContent='Could not create a conversation.';}};
   document.getElementById('mc-page').href=location.origin + '/guild-next/guild/build';
-  document.getElementById('existing-rooms').href=location.origin + '/app/records/';
+  document.getElementById('existing-rooms').href=location.origin + '/guild-next/guild/rooms';
   document.getElementById('both-open').onclick=async()=>{
     const frame=document.getElementById('mc-both'), button=document.getElementById('both-open'), open=frame.hidden;
     button.disabled=true;

@@ -32,7 +32,7 @@ def test_room_list_is_ten_at_a_time_and_keeps_selected_room_visible(browser, ser
     if page.locator('[data-rm-list-close]').is_visible():
         page.click('[data-rm-list-close]')
     expect(page.locator('[data-room-art-select]')).to_have_count(0)
-    expect(page.locator('[data-room-art-image]')).to_be_visible()
+    expect(page.locator('[data-room-art-image]')).to_be_hidden()
     if not page.locator('[data-rm-details]').is_visible():
         page.click('[data-rm-panel-toggle]')
     expect(page.locator('[data-rm-details]')).to_be_visible()
@@ -96,4 +96,26 @@ def test_operate_warning_summary_stays_emphasized_while_collapsed(browser, serve
     expect(row.locator('summary')).to_contain_text('Synthetic review warning')
     expect(row.locator('summary h2')).to_have_text('Usage & limits')
     assert row.locator('summary').evaluate('(e) => getComputedStyle(e).borderLeftWidth') == '4px'
+    ctx.close()
+
+
+def test_mobile_craft_identity_more_and_desktop_restore(browser, server, floor):
+    ctx, page = _context(browser, server, 390, 844)
+    go(page, server['url'] + '/guild-next/guild/build')
+    expect(page.locator('.mobile-identity')).to_have_text('MC')
+    expect(page.locator('.workshop-primary')).to_contain_text('Craft')
+    expect(page.locator('.workshop-name')).to_be_hidden()
+    expect(page.locator('[data-floorbar]')).to_be_hidden()
+    page.locator('.workshop-more > summary').click()
+    page.locator('[data-mobile-menu] [data-history-toggle]').click()
+    expect(page.locator('body')).to_have_attribute('data-history', 'open')
+    page.locator('[data-history-close]').click()
+    expect(page.locator('.workshop-more > summary')).to_be_focused()
+    page.locator('.workshop-more > summary').click()
+    page.locator('[data-mobile-files]').click()
+    expect(page.locator('[data-floor-context]')).to_have_attribute('open', '')
+    _no_page_overflow(page)
+    page.set_viewport_size({'width':1440,'height':900})
+    expect(page.locator('.workshop-primary [data-section="rooms"]')).to_be_visible()
+    expect(page.locator('.workshop-primary [data-section="rooms"]')).to_have_text('Guildhall')
     ctx.close()

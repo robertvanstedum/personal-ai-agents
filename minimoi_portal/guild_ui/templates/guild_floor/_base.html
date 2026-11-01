@@ -12,6 +12,7 @@
   {% if embedded %}<link rel="stylesheet" href="{{ url_for('.asset', filename='companion_embed.css') }}">{% endif %}
   <link rel="stylesheet" href="/founders-ui/founders.css?v={{ founders_ui_version }}">
   {% block head %}{% endblock %}
+<script type="module" src="/founders-ui/mobile-nav.js?v={{ founders_ui_version }}"></script>
 </head>
 <body {% if embedded %}data-mc-embed="true"{% endif %} class="gu" data-page="{{ page_id }}" data-area="{{ area }}" data-context-item="{{ context_item }}" data-mc-state="{{ state.mc_state }}" data-mc-turns="{{ 'true' if state.mc and state.mc.turns else 'false' }}" data-mc-stream="{{ 'true' if state.mc and state.mc.stream else 'false' }}" data-mc-name="{{ state.mc.name if state.mc and state.mc.name else 'Master Craftsman' }}" data-mc-private="{{ 'false' if (state.mc and state.mc.private is false) or (page_json and page_json.mc_queue) else 'true' }}" data-mc-files="{{ 'false' if state.mc and state.mc.files is false else 'true' }}"{% if mc_voice_on %} data-mc-voice="true"{% endif %}{% if dictation_on %} data-dictation="true"{% endif %}{% if page_open %} data-page-open="true"{% endif %}>
 <a class="gu-skip" href="{{ '#mc-input' if page_id == 'floor' else '#main' }}">{{ 'Skip to the chat' if page_id == 'floor' else 'Skip to content' }}</a>

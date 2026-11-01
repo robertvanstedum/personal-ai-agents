@@ -1,8 +1,8 @@
 {% set section = 'operate' if page_id.startswith('operate') else 'improve' if page_id == 'improve' else 'experiment' if page_id in ('experiment', 'labs') else 'build' %}
 <div class="workshop-row">
-  <a class="workshop-name" href="{{ urls.floor }}"><img src="/static/guild/guild-build.webp" alt="" width="28" height="28"><span>The Workshop</span></a>
-  <div class="workshop-primary">
-    {% for id,label,href,ids in [('chat','Work',urls.floor,('floor',)),('board','Board',urls.board,('board','bench','postits')),('build-log','Build Log',urls.build_log,('build_log','queue','item')),('rooms','Rooms',urls.rooms,('rooms',))] %}
+  <a class="workshop-name" aria-label="Guild" href="{{ urls.floor }}"><img src="/static/guild/guild-build.webp" alt="" width="28" height="28"></a>
+  <span class="mobile-only mobile-identity">{{ "MC" if page_id == "floor" else "Guild" }}</span><div class="workshop-primary">
+    {% for id,label,href,ids in [('chat','Craft',urls.floor,('floor',)),('board','Board',urls.board,('board','bench','postits')),('build-log','Build Log',urls.build_log,('build_log','queue','item')),('rooms','Guildhall',urls.rooms,('rooms',))] %}
     <a href="{{ href }}" class="subnav-link{% if page_id in ids %} subnav-active{% endif %}" data-section="{{ id }}"{% if page_id in ids %} aria-current="page"{% endif %}>{{ label }}</a>
     {% endfor %}
   </div>
@@ -13,6 +13,6 @@
   </div>
   <details class="workshop-more" data-subnav-more>
     <summary>More</summary>
-    <div>{% for id,label,href in [('operate','Operate',urls.operate),('improve','Improve',urls.improve),('experiment','Lab',urls.experiment)] %}<a href="{{ href }}"{% if section == id %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</div>
+    <div data-mobile-menu>{% if page_id == 'floor' %}<button type="button" class="mobile-only" data-history-toggle aria-expanded="false" aria-controls="floor-history">History</button><button type="button" class="mobile-only" data-mobile-files>Files</button>{% endif %}{% for id,label,href in [('operate','Operate',urls.operate),('improve','Improve',urls.improve),('experiment','Lab',urls.experiment)] %}<a href="{{ href }}"{% if section == id %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</div>
   </details>
 </div>
