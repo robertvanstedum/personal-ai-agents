@@ -50,7 +50,15 @@
     for (const note of d.notes || []) frag.append(row('CoS', note.text || note.body || 'Saved update'));
     const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
     if (earlier) { viewingEarlier = true; const h = log.scrollHeight; log.prepend(frag); log.scrollTop += log.scrollHeight - h; }
-    else { log.replaceChildren(frag); if (!d.items.length && !(d.notes || []).length) { greet(); log.append(hero); } if (atBottom) log.scrollTop = log.scrollHeight; }
+    else {
+      // The greeting stays at the top of a chat that started empty in this view, so it scrolls away instead of vanishing
+      // on the next refresh; a chat opened with turns already in it never shows it.
+      const keepHero = hero.isConnected && hero.dataset.conversation === (cid || '');
+      log.replaceChildren(frag);
+      if (keepHero) log.prepend(hero);
+      else if (!d.items.length && !(d.notes || []).length) { greet(); hero.dataset.conversation = cid || ''; log.append(hero); }
+      if (atBottom) log.scrollTop = log.scrollHeight;
+    }
     document.getElementById('history-earlier').hidden = !before;
   }
   async function releaseVoice() {
