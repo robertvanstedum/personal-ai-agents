@@ -153,6 +153,8 @@ def mount_guild_next(app, *, environ, owner_guard, current_user, queue_path, ope
                                   mc_turns=mc_turns, mc_stream=mc_stream, cos_operations=cos_operations)
         register_guild_ui(app, owner_guard=owner_guard, current_user=current_user, url_prefix=NEXT_PREFIX,
                           blueprint_name=NEXT_NAME, services=services, base_url=base_url, feature_environ=environ)
+        from .guild_ui.cos_board import mount as mount_cos_board
+        mount_cos_board(app, app.extensions[NEXT_NAME])
         log.info("guild mount: /guild-next registered")
     except Exception:
         log.exception("guild mount: /guild-next failed to register; answering 503 there")

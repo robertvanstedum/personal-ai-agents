@@ -459,7 +459,7 @@ function popOut() {
   const url = `${page.urls.board}/popout`.replace('//', '/');
   const small = window.matchMedia('(max-width: 640px)').matches;              // a phone opens it as a tab
   let w = null;
-  try { w = window.open(url, 'guild-board-popout', small ? '' : 'popup=yes,width=440,height=720,left=40,top=60'); } catch (e) { w = null; }
+  try { w = window.open(url, page.storage_ns === 'cos.board' ? 'cos-board-popout' : 'guild-board-popout', small ? '' : 'popup=yes,width=440,height=720,left=40,top=60'); } catch (e) { w = null; }
   const out = $('[data-bd-result]');
   if (!w) {
     out.hidden = false; out.dataset.kind = 'warn';

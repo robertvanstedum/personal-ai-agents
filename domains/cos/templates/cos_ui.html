@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chief of Staff</title>
-  <link rel="stylesheet" href="/static/cos.css?v=20261028-voice1">
+  <link rel="stylesheet" href="/static/cos.css?v=20261101-board1">
   <link rel="stylesheet" href="/founders-ui/founders.css?v={{ founders_ui_version }}">
   <script type="module" src="/founders-ui/mobile-nav.js?v={{ founders_ui_version }}"></script>
 </head>
@@ -59,7 +59,7 @@
       </div>
 
       <section id="tab-rooms" class="tab-panel"><h1>Guildhall</h1><p>Meet with your Guild.</p><a id="existing-rooms" href="#">Join a meeting ↗</a></section>
-      <section id="tab-records" class="tab-panel"><h1>Records</h1><p>In construction</p><p>Your saved conversations are available in History.</p></section>
+      <section id="tab-records" class="tab-panel"><iframe id="cos-board" title="CoS Board" data-board-src="/guild-next/cos-board"></iframe></section>
       <!-- Record -->
       <div id="tab-record" class="tab-panel">
         <div class="tab-split-header">
@@ -112,6 +112,9 @@ const tabPhotos = document.querySelectorAll('.tab-photo');
 const tabLoaded = { confer: true, rooms: true, records: true, record: false, track: false, store: false };
 
 function activateTab(tab, pushState) {
+  document.body.classList.toggle('show-cos-board', tab === 'records');
+  const board = document.getElementById('cos-board');
+  if (tab === 'records' && !board.getAttribute('src')) board.src = board.dataset.boardSrc;
   tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   tabPanels.forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
   tabPhotos.forEach(img => img.classList.toggle('active', img.dataset.tab === tab));

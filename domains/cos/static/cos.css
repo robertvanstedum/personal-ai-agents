@@ -655,3 +655,9 @@ body.landing-mode .cos-header { position: sticky; top: 0; }
 @media (max-width: 600px) {
   .voice-act, .voice-provider-choice { min-height: 44px; }
 }
+
+/* Records reuses the Guild Board with its own CoS notes. */
+body.show-cos-board .tab-layout-split { display: block; }
+body.show-cos-board .tab-panel-photo, body.show-cos-board #mc-both { display: none; }
+body.show-cos-board .tab-content { width: 100%; padding: 0; }
+#cos-board { display: block; width: 100%; height: calc(100dvh - 150px); min-height: 420px; border: 0; }

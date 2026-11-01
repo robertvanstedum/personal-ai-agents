@@ -1,0 +1,10 @@
+import { configure, live, setOff } from './state.js';
+import { configureApi } from './api.js';
+import { initBoard } from './board.js';
+const page = JSON.parse(document.getElementById('guild-page').textContent);
+configure(page.storage_ns);
+configureApi(page);
+const confirm = document.getElementById('board-record-mode');
+confirm.hidden = live.known && !live.off;
+confirm.addEventListener('click', () => { setOff(false); confirm.hidden = true; });
+initBoard(page);

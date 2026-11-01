@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Board · CoS</title><link rel="icon" href="data:,">
+{% for file in ['tokens.css', 'components.css', 'css/board.css', 'css/board_popout.css'] %}
+<link rel="stylesheet" href="{{ url_for('.asset', filename=file) }}">{% endfor %}
+</head><body class="gu" data-page="board_popout" data-page-open="true">
+<main class="gu-main"><p class="gu-notice" data-notice role="status" hidden></p>
+{% include 'guild_floor/_board_view.html' %}
+<button type="button" id="board-record-mode" hidden>Confirm on the record</button>
+</main>
+<script type="application/json" id="guild-page">{{ page_json|tojson }}</script>
+<script type="module" src="{{ url_for('.asset', filename='js/cos_board.js') }}"></script>
+</body></html>
