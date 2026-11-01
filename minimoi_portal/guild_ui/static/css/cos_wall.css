@@ -1,0 +1,129 @@
+/* CoS's Board as a wall (Review 06, Option A, slice 3). Loaded by the CoS Board's page only (guild_floor/cos_board.html),
+   and every rule is scoped to body[data-floor="cos-board"], so Guild's Board looks exactly as before.
+   A light whiteboard with a soft vignette and a faint frame. Notes are drawn by their label, with no label words:
+   idea and remember (and a note with none) a yellow sticky in handwriting; blocked a red one; an FYI with a link a pinned
+   clipping; decide and follow-up a sticky with a small marker underline; a photo a Polaroid. The grid only (no free
+   placement in this batch); one column on a phone. A note opens on the right, full screen on a phone with "← Board". */
+[data-floor="cos-board"] {
+  --wall-bg: #f4f2ee; --wall-edge: #d9d5cc; --wall-frame: #e6e2da;
+  --wall-sticky: #fbeea6; --wall-worry: #f6c9c2; --wall-paper: #fff; --wall-polaroid: #fff;
+  --wall-ink: #2a2a24; --wall-mute: #6e6b61; --wall-pin: #c0443a; --wall-marker: #2b4a8a;
+  --wall-green: #123b30; --wall-accent: #a94714; --wall-line: rgba(18, 59, 48, .16); --wall-line-strong: rgba(18, 59, 48, .28);
+  --wall-hand: 'Caveat', var(--gu-font-hand);
+  --wall-sans: 'Source Sans 3', system-ui, -apple-system, sans-serif;
+  --wall-sheet-w: 400px;
+}
+body.gu[data-floor="cos-board"], body.gu[data-floor="cos-board"] .gu-main { background: #f7f0e4; }
+[data-floor="cos-board"] .gu-main { padding: 12px 18px 40px; font-family: var(--wall-sans); }
+body[data-floor="cos-board"][data-wall-open] .gu-main { margin-right: var(--wall-sheet-w); }
+
+/* the toolbar: ＋ Note · ＋ Photo · search … Taken down (n) · ⧉ */
+[data-floor="cos-board"] .wall-tool { gap: 8px 10px; margin-bottom: 12px; }
+[data-floor="cos-board"] .wall-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--wall-line);
+  border-radius: 8px; background: #fbf7f0; color: #4a4840; font: 14px var(--wall-sans); cursor: pointer; white-space: nowrap; }
+[data-floor="cos-board"] .wall-btn:hover:not(:disabled), [data-floor="cos-board"] .wall-btn:focus-visible { border-color: var(--wall-line-strong); color: var(--wall-ink); }
+[data-floor="cos-board"] .wall-btn:disabled { opacity: .55; cursor: default; }
+[data-floor="cos-board"] .wall-add span { color: var(--wall-accent); font-weight: 600; }
+[data-floor="cos-board"] .wall-tool input[type="search"] { width: min(220px, 100%); height: 32px; padding: 0 10px; border: 1px solid var(--wall-line);
+  border-radius: 8px; background: #fbf7f0; color: var(--wall-ink); font: 14px var(--wall-sans); }
+[data-floor="cos-board"] .wall-tool .bd-counts { gap: 14px; }
+[data-floor="cos-board"] .wall-tool .bd-counts button { font: 14px var(--wall-sans); }
+[data-floor="cos-board"] .wall-tool .bd-counts button[aria-pressed="true"] { border-bottom-color: var(--wall-accent); }
+body[data-floor="cos-board"][data-wall-show="active"] .wall-tool .bd-counts,
+body[data-floor="cos-board"]:not([data-wall-show]) .wall-tool .bd-counts { display: none; }
+body[data-floor="cos-board"]:not([data-wall-show="active"])[data-wall-show] .wall-taken { display: none; }
+[data-floor="cos-board"] .wall-tool .bd-icon { border-color: var(--wall-line); }
+[data-floor="cos-board"] .bd-sync, [data-floor="cos-board"] .bd-state-note { font-family: var(--wall-sans); }
+
+/* the whiteboard */
+[data-floor="cos-board"] .bd-cork { border-radius: 12px; padding: 26px 24px 30px; min-height: calc(100dvh - 120px);
+  background: radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, .9), rgba(255, 255, 255, 0) 60%),
+              radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0) 62%, rgba(60, 50, 30, .07) 100%), var(--wall-bg);
+  border: 1px solid var(--wall-edge); box-shadow: inset 0 0 0 6px var(--wall-frame); }
+[data-floor="cos-board"] .bd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 30px 26px; align-items: start; }
+[data-floor="cos-board"] .bd-grid > .bd-note, [data-floor="cos-board"] .bd-grid > .bd-note[data-size],
+[data-floor="cos-board"] .bd-grid > .bd-note.bd-new, [data-floor="cos-board"] .bd-grid > .bd-note.bd-photo { width: auto; max-width: none; }
+[data-floor="cos-board"] .bd-grid > .bd-note[data-size="l"] { grid-column: span 2; }
+[data-floor="cos-board"] .bd-note { color: var(--wall-ink); cursor: pointer; padding: 18px 16px 16px; min-height: 120px; border-radius: 2px 2px 10px 2px;
+  box-shadow: 2px 4px 10px rgba(42, 31, 20, .16); background: var(--wall-sticky); }
+[data-floor="cos-board"] .bd-note::before { display: none; }                 /* no tape on the wall */
+[data-floor="cos-board"] .bd-note:nth-child(4n+1) { transform: rotate(-1.4deg); }
+[data-floor="cos-board"] .bd-note:nth-child(4n+2) { transform: rotate(1deg); }
+[data-floor="cos-board"] .bd-note:nth-child(4n+3) { transform: rotate(-.6deg); }
+[data-floor="cos-board"] .bd-note:nth-child(4n) { transform: rotate(1.5deg); }
+[data-floor="cos-board"] .bd-note:hover { box-shadow: 3px 7px 16px rgba(42, 31, 20, .22); }
+[data-floor="cos-board"] .bd-text { font: 500 22px/1.2 var(--wall-hand); -webkit-line-clamp: 6; }
+[data-floor="cos-board"] .bd-meta { display: none; }                        /* who and when show when a note is opened */
+[data-floor="cos-board"] .bd-acts { top: 3px; right: 4px; }
+[data-floor="cos-board"] .bd-edit-text { font: 500 21px/1.25 var(--wall-hand); }
+[data-floor="cos-board"] .bd-more { font-family: var(--wall-sans); }
+
+/* a worry */
+[data-floor="cos-board"] .bd-note[data-look="worry"] { background: var(--wall-worry); }
+/* a decision or a follow-up: a small marker underline */
+[data-floor="cos-board"] .bd-note[data-look="marked"] { padding-bottom: 24px; }
+[data-floor="cos-board"] .bd-note[data-look="marked"]::after { content: ""; position: absolute; left: 16px; bottom: 12px; width: 64px; height: 4px;
+  border-radius: 3px; background: var(--wall-marker); opacity: .75; transform: rotate(-2deg); }
+/* a pinned clipping: white paper, a red pin, a bold title and where it's from */
+[data-floor="cos-board"] .bd-note[data-look="clipping"] { background: var(--wall-paper); border-top: 3px solid #d8d2c4; border-radius: 2px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .12); padding: 16px 14px 12px; min-height: 0; }
+[data-floor="cos-board"] .bd-note[data-look="clipping"]::before { display: block; content: ""; position: absolute; top: -7px; left: 50%; width: 12px; height: 12px;
+  margin-left: -6px; border-radius: 50%; background: var(--wall-pin); box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transform: none; }
+[data-floor="cos-board"] .bd-note[data-look="clipping"] .bd-text { font: 700 15px/1.35 var(--wall-sans); }
+[data-floor="cos-board"] .wall-source { margin: 4px 0 0; font: 12.5px/1.3 var(--wall-sans); color: var(--wall-mute); overflow-wrap: anywhere; }
+[data-floor="cos-board"] .wall-source a { color: inherit; }
+/* a Polaroid with a handwritten caption */
+[data-floor="cos-board"] .bd-note[data-look="polaroid"] { background: var(--wall-polaroid); padding: 9px 9px 8px; border-radius: 1px; box-shadow: 0 3px 10px rgba(0, 0, 0, .18); }
+[data-floor="cos-board"] .bd-note[data-look="polaroid"] > img:not(.wall-mark) { aspect-ratio: 4 / 3; object-fit: cover; background: #ece8df; }
+[data-floor="cos-board"] .bd-note[data-look="polaroid"] .bd-text { font: 500 22px/1.15 var(--wall-hand); color: var(--wall-marker); text-align: center; padding-top: 6px; -webkit-line-clamp: 2; }
+/* what CoS put up: its small mark */
+[data-floor="cos-board"] .bd-note > img.wall-mark { position: absolute; right: 8px; bottom: 8px; width: 22px; height: 22px; aspect-ratio: auto; padding: 0;
+  border-radius: 50%; object-fit: cover; background: #fff; box-shadow: 0 0 0 1px rgba(18, 59, 48, .2); }
+[data-floor="cos-board"] .bd-note[data-author="cos"] .bd-text { padding-right: 18px; }
+/* the example on an empty wall, and a note being typed */
+[data-floor="cos-board"] .bd-example { grid-column: 1 / -1; }
+[data-floor="cos-board"] .bd-example-note .bd-kicker { font-family: var(--wall-sans); }
+[data-floor="cos-board"] .bd-new { cursor: text; transform: none; }
+
+/* a note, up close: on the right (full screen on a phone, with "← Board"). The card itself sits in the sheet, so it edits as it does on the wall. */
+[data-floor="cos-board"] .wall-sheet { position: fixed; top: 0; right: 0; bottom: 0; z-index: 60; width: var(--wall-sheet-w); display: flex; flex-direction: column; gap: 14px;
+  padding: 0 22px 22px; overflow: auto; background: #f7f0e4; border-left: 1px solid var(--wall-line); box-shadow: -10px 0 30px rgba(0, 0, 0, .08); list-style: none;
+  font-family: var(--wall-sans); cursor: default; }
+[data-floor="cos-board"] .wall-sheet-bar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 10px; margin: 0 -22px; padding: 12px 18px 10px;
+  background: #f7f0e4; border-bottom: 1px solid var(--wall-line); }
+[data-floor="cos-board"] .wall-sheet-title { flex: 1; font: 600 15px var(--wall-sans); color: var(--wall-ink); }
+[data-floor="cos-board"] .wall-back { display: none; }
+[data-floor="cos-board"] .wall-back, [data-floor="cos-board"] .wall-x { height: 32px; min-width: 32px; padding: 0 8px; border: 0; border-radius: 7px; background: none;
+  color: #4a4840; font: 15px var(--wall-sans); cursor: pointer; }
+[data-floor="cos-board"] .wall-back:hover, [data-floor="cos-board"] .wall-x:hover { background: #fbf7f0; }
+[data-floor="cos-board"] .wall-sheet-note { list-style: none; margin: 10px 4px 0; padding: 0; }
+[data-floor="cos-board"] .wall-sheet-note > .bd-note { width: auto; max-width: none; min-height: 160px; transform: rotate(-1deg); cursor: default; }
+[data-floor="cos-board"] .wall-sheet-note > .bd-note .bd-text { display: block; -webkit-line-clamp: unset; overflow: visible; font-size: 25px; }
+[data-floor="cos-board"] .wall-sheet-note > .bd-note[data-look="clipping"] .bd-text { font-size: 17px; }
+[data-floor="cos-board"] .wall-sheet-note > .bd-note .bd-more { display: none; }
+[data-floor="cos-board"] .wall-sheet-note > .bd-note[data-look="polaroid"] > img:not(.wall-mark) { aspect-ratio: auto; max-height: 50vh; object-fit: contain; }
+[data-floor="cos-board"] .wall-sheet-h { margin: 6px 0 6px; font: 600 14.5px var(--wall-sans); color: var(--wall-ink); }
+[data-floor="cos-board"] .wall-trail { margin: 0 0 6px; color: #4a4840; font-size: 14.5px; }
+[data-floor="cos-board"] .wall-trail span { display: inline-block; min-width: 92px; color: var(--wall-mute); font-size: 13px; }
+[data-floor="cos-board"] .wall-sheet-later { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 0; }
+[data-floor="cos-board"] .wall-later { font: 600 11px var(--wall-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--wall-mute); }
+
+@media (max-width: 640px) {
+  [data-floor="cos-board"] .gu-main { padding: 8px 10px 40px; }
+  body[data-floor="cos-board"][data-wall-open] .gu-main { margin-right: 0; }
+  [data-floor="cos-board"] .wall-tool input[type="search"] { flex: 1 1 140px; width: auto; height: 44px; }
+  [data-floor="cos-board"] .wall-btn { height: 44px; }
+  [data-floor="cos-board"] .bd-cork { padding: 16px 12px 20px; }
+  [data-floor="cos-board"] .bd-grid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  [data-floor="cos-board"] .bd-grid > .bd-note[data-size="l"] { grid-column: auto; }
+  [data-floor="cos-board"] .bd-note:nth-child(n) { transform: none; }
+  [data-floor="cos-board"] .wall-sheet { left: 0; width: auto; padding: 0 16px max(16px, env(safe-area-inset-bottom)); border-left: 0; box-shadow: none; }
+  [data-floor="cos-board"] .wall-sheet-bar { margin: 0 -16px; padding: 6px 10px; }
+  [data-floor="cos-board"] .wall-back { display: inline-flex; align-items: center; height: 44px; }
+  [data-floor="cos-board"] .wall-x { display: none; }
+  [data-floor="cos-board"] .wall-sheet-title { text-align: right; color: var(--wall-mute); font-weight: 400; font-size: 13.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-floor="cos-board"] .bd-note:nth-child(n), [data-floor="cos-board"] .wall-sheet-note > .bd-note { transform: none; }
+}
+[data-floor="cos-board"] .wall-sheet-note > .bd-note .bd-text { padding-right: 28px; }

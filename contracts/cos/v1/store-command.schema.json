@@ -19,7 +19,8 @@
           "enum": [
             "goal.put", "plan.put", "obligation.define", "obligation.event", "episode.event",
             "decision.record", "correction.record", "meeting.link", "commitment.open",
-            "fact.record"
+            "fact.record",
+            "in_flight.open", "in_flight.update", "in_flight.comment", "in_flight.close"
           ]
         },
         "target": { "$ref": "urn:minimoi:contract:cos:common#/$defs/typed_ref" },
@@ -70,6 +71,10 @@
             }
           }
         },
+        { "if": { "properties": { "kind": { "const": "in_flight.open" } } }, "then": { "properties": { "target": { "properties": { "type": { "const": "cos.in_flight" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/in_flight_open" } } } },
+        { "if": { "properties": { "kind": { "const": "in_flight.update" } } }, "then": { "properties": { "target": { "properties": { "type": { "const": "cos.in_flight" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/in_flight_update" } } } },
+        { "if": { "properties": { "kind": { "const": "in_flight.comment" } } }, "then": { "properties": { "target": { "properties": { "type": { "const": "cos.in_flight" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/in_flight_comment" } } } },
+        { "if": { "properties": { "kind": { "const": "in_flight.close" } } }, "then": { "properties": { "target": { "properties": { "type": { "const": "cos.in_flight" } } }, "payload": { "$ref": "urn:minimoi:contract:cos:store-records#/$defs/in_flight_close" } } } },
         {
           "if": { "properties": { "origin": { "const": "owner_turn" } } },
           "then": { "required": ["basis_ref"], "properties": { "basis_ref": { "type": "object" } } }

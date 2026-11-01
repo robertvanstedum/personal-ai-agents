@@ -22,7 +22,7 @@ from domains.cos.store.writer import MAX_COMMAND_BYTES, StoreRefused, StoreWrite
 from domains.cos.store.protocol import PREFIX  # noqa: E402,F401  (re-exported for callers)
 _SERVICE_ACTORS = {"agent": {"cos"}, "cos-bot": {"telegram", "cos"},
                    "scheduler-jobs": {"scheduler"}, "supervisor": {"scheduler"}, "portal": {"mc"}}
-_READ_TYPES = {"cos.goal", "cos.plan", "cos.obligation", "cos.meeting"}
+_READ_TYPES = {"cos.goal", "cos.plan", "cos.obligation", "cos.meeting", "cos.in_flight"}
 
 
 def _token(path: str) -> str:

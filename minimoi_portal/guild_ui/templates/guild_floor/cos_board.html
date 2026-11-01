@@ -1,9 +1,11 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Board · CoS</title><link rel="icon" href="data:,">
-{% for file in ['tokens.css', 'components.css', 'css/board.css', 'css/board_popout.css'] %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&display=swap" rel="stylesheet">
+{% for file in ['tokens.css', 'components.css', 'css/board.css', 'css/board_popout.css', 'css/cos_wall.css'] %}
 <link rel="stylesheet" href="{{ url_for('.asset', filename=file) }}">{% endfor %}
-</head><body class="gu" data-page="board_popout" data-page-open="true">
+</head><body class="gu" data-page="board_popout" data-page-open="true" data-floor="cos-board">
 <main class="gu-main"><p class="gu-notice" data-notice role="status" hidden></p>
 {% include 'guild_floor/_board_view.html' %}
 <button type="button" id="board-record-mode" hidden>Confirm on the record</button>

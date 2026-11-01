@@ -772,13 +772,15 @@ def cos_proxy(path):
     direct_voice = path.strip("/").startswith(COS_DIRECT_VOICE_PREFIX)
     if request.method != "GET":
         managed_voice = path.strip("/").startswith("api/realtime-voice/managed/")
-        refused = _cos_write_refused(path) if (_cos_write_guard_on() or managed_voice or direct_voice) else None
+        in_flight = path.strip("/").startswith("ui/api/in-flight/")      # In flight's writes reach the CoS store
+        refused = (_cos_write_refused(path)
+                   if (_cos_write_guard_on() or managed_voice or direct_voice or in_flight) else None)
         if refused is not None:
             return refused
         # Marker is derived after the authenticated owner and CSRF gates. Proxy
         # forwarding strips every browser-supplied X-Minimoi-* value first.
         answer = _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user,
-                                 verified_cos_voice_write=managed_voice or direct_voice)
+                                 verified_cos_voice_write=managed_voice or direct_voice or in_flight)
         return _private(answer) if direct_voice else answer
     answer = _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user, head_meta=_cos_page_meta())
     return _private(answer) if direct_voice else answer

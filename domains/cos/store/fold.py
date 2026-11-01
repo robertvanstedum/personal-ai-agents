@@ -142,3 +142,55 @@ def apply_episode(ep: Episode, event: dict) -> None:
     if kind == "reopened":
         ep.closed_by = None
     ep.events += 1
+
+
+# ---- In flight rows ---------------------------------------------------------------------------------------------------
+# CoS's working table (the UI note of 1 Nov): one record type, cos.in_flight, one document per row. Each in_flight.*
+# command is folded onto the row by the writer, which stores the folded row; the table reads rows as they are.
+
+IN_FLIGHT_KINDS = ("in_flight.open", "in_flight.update", "in_flight.comment", "in_flight.close")
+
+
+def in_flight_refusal(row: dict | None, kind: str, event: dict) -> str | None:
+    """None when the command may follow, else a fixed code: open only a new row, change and close only an open one.
+    A closed row still takes comments (its thread stays readable and answerable in Earlier)."""
+    if kind == "in_flight.open":
+        return "row_exists" if row is not None else None
+    if row is None:
+        return "no_row"
+    if kind in ("in_flight.update", "in_flight.close") and row.get("closed_at") is not None:
+        return "row_closed"
+    return None
+
+
+def apply_in_flight(row: dict | None, kind: str, event: dict) -> dict:
+    """The row after the command (a new dict; the revision is the writer's). ``at`` is the command's time."""
+    at = event["at"]
+    if kind == "in_flight.open":
+        return {"schema": "minimoi.cos.in_flight/1", "data_scope": event["data_scope"],
+                "environment": event["environment"], "item_id": event["item_id"], "kind": event["kind"],
+                "title": event["title"], "title_provenance": event["provenance"], "priority": event["priority"],
+                "status": event["status"], "with": event["with"], "opened_at": at, "last_moved_at": at,
+                "closed_at": None, "outcome": None, "source": event.get("source"), "comments": [],
+                "opened_by": event["by"]}
+    out = dict(row, comments=list(row["comments"]))
+    if kind == "in_flight.update":
+        for key in ("title", "priority", "status", "with"):
+            if key in event:
+                out[key] = event[key]
+        if "title" in event:
+            out["title_provenance"] = event["provenance"]
+        out["last_moved_at"] = at
+    elif kind == "in_flight.comment":
+        comment = {"at": at, "author": event["author"], "text": event["text"], "provenance": event["provenance"]}
+        for key in ("turn_ref", "ref"):
+            if key in event:
+                comment[key] = event[key]
+        out["comments"].append(comment)
+        out["last_moved_at"] = at
+    elif kind == "in_flight.close":
+        out.update(closed_at=at, last_moved_at=at, outcome=event["outcome"],
+                   status="done" if event["outcome"] == "done" else out["status"])
+        if event.get("note"):
+            out["close_note"] = event["note"]
+    return out

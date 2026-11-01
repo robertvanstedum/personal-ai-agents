@@ -502,3 +502,108 @@ body.gu[data-page=floor] .floor-strip{margin:0;padding:4px 16px;border:0;border-
   .founders-cos .phone-tools #files-open .conv-count{font-size:12px}
   .founders-cos .header-nav{gap:2px}
 }
+
+/* ── CoS · In flight (Review 06, Option A, slice 3): a working table in Confer's palette. Like the Board, it fills the space
+   under the app row with no page art and the list folded to the rail; a row opens on the right (full screen on a phone,
+   with "← In flight"); each row is a card on a phone. ── */
+.founders-cos.show-cos-flight .cos-list{display:none}
+.founders-cos.show-cos-flight .cos-rail{display:flex}
+.founders-cos.show-cos-flight[data-drawer=open] .cos-list{display:flex;position:absolute;top:0;bottom:0;left:0;z-index:21;width:min(300px,86%);box-shadow:10px 0 30px rgba(0,0,0,.2)}
+.founders-cos.show-cos-flight .tab-layout-split{display:block}
+.founders-cos.show-cos-flight .tab-panel-photo,.founders-cos.show-cos-flight #mc-both{display:none!important}
+.founders-cos.show-cos-flight .tab-content{width:100%;height:100%;padding:0;background:var(--paper)}
+.founders-cos #tab-flight.active{display:flex;height:100%;padding:0;overflow:hidden}
+.founders-cos .fl-main{flex:1;min-width:0;height:100%;overflow:auto;padding:14px 28px 40px}
+.founders-cos .fl-tool{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;max-width:1120px;margin:0 0 12px}
+.founders-cos .fl-views{display:flex;gap:16px}
+.founders-cos .fl-views button{height:34px;padding:0;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;color:var(--soft);font:14.5px var(--sans)}
+.founders-cos .fl-views button[aria-pressed=true]{color:var(--ink);font-weight:600;border-bottom-color:var(--accent)}
+.founders-cos .fl-sp{flex:1}
+.founders-cos .fl-tool input[type=search]{width:220px;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:14px var(--sans);outline:none}
+.founders-cos .fl-tool input[type=search]:focus{border-color:var(--line-strong)}
+.founders-cos .fl-btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--soft);font:14px var(--sans);white-space:nowrap}
+.founders-cos .fl-btn:hover:not(:disabled){border-color:var(--line-strong);color:var(--ink)}
+.founders-cos .fl-btn.fl-done{background:var(--green);border-color:var(--green);color:#fff;font-weight:600}
+.founders-cos .fl-btn.fl-done:hover{background:var(--green-deep);color:#fff}
+.founders-cos .fl-say{max-width:1120px;margin:0 0 8px;color:#8a3020;font-size:13.5px}
+.founders-cos .fl-state{max-width:640px;margin:40px auto;padding:22px 24px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--soft);font-size:16px;text-align:center}
+.founders-cos #tab-flight:not([data-fl-mode=ok]) .fl-earlier,.founders-cos #tab-flight:not([data-fl-mode=ok]) [data-fl-download],
+.founders-cos #tab-flight:not([data-fl-mode=ok]) .fl-views,.founders-cos #tab-flight:not([data-fl-mode=ok]) [data-fl-search]{display:none}
+.founders-cos .fl-body{max-width:1120px}
+.founders-cos .fl-table{width:100%;border-collapse:collapse;font-size:14.5px;background:rgba(255,253,248,.7)}
+.founders-cos .fl-table th{padding:0;border-bottom:1px solid var(--line-strong);text-align:left}
+.founders-cos .fl-table th button{width:100%;padding:8px 10px;border:0;background:none;color:var(--mute);font:600 12px var(--sans);letter-spacing:.06em;text-transform:uppercase;text-align:left;white-space:nowrap}
+.founders-cos .fl-table th button:hover{color:var(--ink)}
+.founders-cos .fl-table td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.founders-cos .fl-table tbody tr[data-fl-row]{cursor:pointer}
+.founders-cos .fl-table tbody tr[data-fl-row]:hover td{background:rgba(251,247,240,.9)}
+.founders-cos .fl-table tr.sel td{background:var(--card)}
+.founders-cos .fl-table tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.founders-cos .fl-table .ti{color:var(--ink);font-weight:500}
+.founders-cos .fl-table .mu{color:var(--soft);white-space:nowrap}
+.founders-cos .fl-table .cm{color:var(--soft);font-size:13.5px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.founders-cos .fl-table .add,.founders-cos .fl-card-cm.add{color:var(--mute)}
+.founders-cos .fl-newrow td{border-bottom:0}
+.founders-cos .fl-new-input{width:100%;height:32px;padding:0 4px;border:0;border-bottom:1px dashed transparent;background:none;color:var(--ink);font:14px var(--sans);outline:none}
+.founders-cos .fl-new-input::placeholder{color:var(--mute)}
+.founders-cos .fl-new-input:focus{border-bottom-color:var(--line-strong)}
+.founders-cos .fl-pri{display:inline-block;min-width:30px;padding:1px 7px;border:0;border-radius:5px;font:600 12px var(--sans);cursor:pointer}
+.founders-cos .fl-pri:disabled{cursor:default;opacity:1}
+.founders-cos .fl-pri.p1{background:#f2cfc7;color:#8a2a1a}.founders-cos .fl-pri.p2{background:#f6e3c4;color:#7a4a10}.founders-cos .fl-pri.p3{background:#e4e8dc;color:#4b5a3a}
+.founders-cos .fl-st,.founders-cos .fl-with{height:26px;padding:0 6px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink);font:12.5px var(--sans);cursor:pointer}
+.founders-cos .fl-st.doing{background:#dcebc9}.founders-cos .fl-st.waiting{background:#e8e1f2}.founders-cos .fl-st.done{background:#eee;color:var(--mute)}
+.founders-cos .fl-st:disabled,.founders-cos .fl-with:disabled{cursor:default;opacity:.8}
+.founders-cos .fl-earlier{max-width:1120px;margin-top:28px}
+.founders-cos .fl-earlier-h{margin:0 0 6px;font:600 13px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.founders-cos .fl-week{border-bottom:1px solid var(--line);padding:9px 4px}
+.founders-cos .fl-week>summary{cursor:pointer;color:var(--soft);font:600 15px var(--sans)}
+.founders-cos .fl-week>summary span{margin-left:8px;color:var(--mute);font-weight:400;font-size:13px}
+.founders-cos .fl-done-row{display:flex;gap:10px;align-items:baseline;width:100%;padding:5px 0 5px 18px;border:0;background:none;color:var(--soft);font:14.5px var(--sans);text-align:left}
+.founders-cos .fl-done-row:hover .fl-done-ti{color:var(--ink);text-decoration:underline}
+.founders-cos .fl-tick{color:#5b7a4a}
+.founders-cos .fl-done-row em{margin-left:auto;font-style:normal;color:var(--mute);font-size:12.5px;white-space:nowrap}
+.founders-cos .fl-quiet{color:var(--mute);font-size:14px}
+.founders-cos .fl-panel{flex:0 0 400px;height:100%;overflow:auto;border-left:1px solid var(--line);background:var(--paper-mid)}
+.founders-cos .fl-ph{position:sticky;top:0;display:flex;align-items:center;gap:8px;padding:10px 12px 10px 18px;background:var(--paper-mid);border-bottom:1px solid var(--line);font:600 14.5px var(--sans)}
+.founders-cos .fl-ph-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.founders-cos .fl-back{display:none}
+.founders-cos .fl-back,.founders-cos .fl-x{height:32px;min-width:32px;padding:0 8px;border:0;border-radius:7px;background:none;color:var(--soft);font:15px var(--sans)}
+.founders-cos .fl-x:hover,.founders-cos .fl-back:hover{background:var(--card)}
+.founders-cos .fl-doc{padding:16px 20px 24px}
+.founders-cos .fl-doc-ti{margin:0 0 4px;font:500 21px/1.25 var(--serif);color:var(--green)}
+.founders-cos .fl-since{margin:0 0 12px;color:var(--mute);font-size:13px}
+.founders-cos .fl-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 14px}
+.founders-cos .fl-h{margin:12px 0 6px;font-weight:600}
+.founders-cos .fl-trail{margin:0 0 7px;color:var(--soft);font-size:14.5px;line-height:1.45}
+.founders-cos .fl-trail span{display:inline-block;min-width:64px;color:var(--mute);font-size:12.5px}
+.founders-cos .fl-trail b{color:var(--ink);font-weight:600}
+.founders-cos .fl-comment-box{width:100%;margin-top:6px;padding:8px 10px;border:1px solid var(--line-strong);border-radius:8px;background:#fffdf8;color:var(--ink);font:15px/1.45 var(--sans);resize:vertical}
+.founders-cos .fl-acts{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}
+.founders-cos .fl-cards{display:flex;flex-direction:column}
+.founders-cos .fl-card{padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.founders-cos .fl-card.sel{background:var(--card)}
+.founders-cos .fl-card-top{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.founders-cos .fl-card-kind{margin-left:auto;color:var(--mute);font-size:12.5px}
+.founders-cos .fl-card-ti{color:var(--ink);font-size:15.5px;font-weight:500;line-height:1.35}
+.founders-cos .fl-card-cm{margin-top:4px;color:var(--soft);font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.founders-cos .fl-card-new{padding:10px 4px}
+@media(max-width:1100px){.founders-cos .fl-panel{flex-basis:360px}.founders-cos .fl-table .cm{max-width:180px}}
+@media(max-width:639px){
+  .founders-cos .fl-main{padding:8px 12px 32px}
+  .founders-cos .fl-tool{gap:6px 12px}
+  .founders-cos .fl-tool input[type=search]{flex:1 1 140px;width:auto;height:40px}
+  .founders-cos [data-fl-download]{display:none}
+  .founders-cos .fl-pri{min-height:30px;min-width:38px}
+  .founders-cos .fl-st{height:30px}
+  .founders-cos .fl-new-input{height:44px;font-size:16px}
+  .founders-cos .fl-panel{position:absolute;inset:0;z-index:5;flex:none;border:0}
+  .founders-cos .fl-back{display:inline-flex;align-items:center;height:44px}
+  .founders-cos .fl-x{display:none}
+  .founders-cos .fl-ph{padding:4px 10px}
+  .founders-cos .fl-ph-t{text-align:right;color:var(--mute);font-weight:400;font-size:13px}
+  .founders-cos .fl-comment-box{font-size:16px}
+  /* The bar's second line names the page on the Board and In flight (the chat's title stays in the markup). */
+  .founders-cos.show-cos-board .cos-mark-title,.founders-cos.show-cos-flight .cos-mark-title{font-size:0}
+  .founders-cos.show-cos-board .cos-mark-title::after{content:"Board";font-size:12.5px}
+  .founders-cos.show-cos-flight .cos-mark-title::after{content:"In flight";font-size:12.5px}
+}

@@ -18,7 +18,7 @@
     <button class="phone-only cos-bar-btn" type="button" data-list-open aria-label="Open the conversation list" title="Conversations">☰</button>
     {# CoS's mark: the Marcus Aurelius bust. srcset is relative (the portal rewrites src, not srcset), like the voice imports. #}
     <span class="cos-mark"><img src="/static/photos/cos-mark-96.webp" srcset="../static/photos/cos-mark-96.webp 96w, ../static/photos/cos-mark-256.webp 256w" sizes="30px" width="28" height="28" alt=""><span class="cos-mark-words"><span class="cos-mark-name">Chief of Staff</span><span class="phone-only cos-mark-title" data-conv-title-short>New chat</span></span></span>
-    <nav class="tab-nav" aria-label="Chief of Staff"><button class="tab-btn" data-tab="confer">Confer</button><button class="tab-btn" data-tab="records">Board</button></nav>
+    <nav class="tab-nav" aria-label="Chief of Staff"><button class="tab-btn" data-tab="confer">Confer</button><button class="tab-btn" data-tab="records">Board</button><button class="tab-btn" data-tab="flight">In flight</button></nav>
     <span class="header-gap"></span>
     <a class="founder-link" data-portal-link href="/guild-next/guild/rooms">Guildhall ↗</a>
     <a class="founder-link" id="mc-page" href="#" aria-label="MC ↗"><img class="mc-face" data-mc-face alt=""><span class="mc-page-words">MC ↗</span></a>
@@ -106,6 +106,27 @@
 
       <section id="tab-rooms" class="tab-panel"><h1>Guildhall</h1><p>Meet with your Guild.</p><a id="existing-rooms" href="#">Join a meeting ↗</a></section>
       <section id="tab-records" class="tab-panel"><iframe id="cos-board" title="CoS Board" data-board-src="/guild-next/cos-board"></iframe></section>
+      {# In flight (Review 06): CoS's working table, from the CoS store (cos-in-flight.js). Rows are drawn only from what the
+         store gives; without the store the page says so. A row opens on the right (full screen on a phone). #}
+      <section id="tab-flight" class="tab-panel" aria-label="In flight" data-fl-mode="loading">
+        <div class="fl-main">
+          <div class="fl-tool">
+            <span class="fl-views" role="group" aria-label="Show">
+              <button type="button" data-fl-view="open" aria-pressed="true">Open</button>
+              <button type="button" data-fl-view="mine" aria-pressed="false">Mine</button>
+              <button type="button" data-fl-view="waiting" aria-pressed="false">Waiting</button>
+            </span>
+            <span class="fl-sp"></span>
+            <input type="search" data-fl-search placeholder="Search" aria-label="Search In flight" autocomplete="off">
+            <button type="button" class="fl-btn" data-fl-download title="Saves what's shown as a .csv file, which Excel opens">Download for Excel</button>
+          </div>
+          <p class="fl-say" data-fl-say role="status" hidden></p>
+          <p class="fl-state" data-fl-state role="status" hidden></p>
+          <div class="fl-body" data-fl-body></div>
+          <section class="fl-earlier" aria-label="Earlier"><h2 class="fl-earlier-h">Earlier</h2><div data-fl-weeks></div></section>
+        </div>
+        <aside class="fl-panel" data-fl-panel aria-label="A row of In flight" hidden></aside>
+      </section>
       <!-- Record -->
       <div id="tab-record" class="tab-panel">
         <div class="tab-split-header">
@@ -722,5 +743,6 @@ async function readDirect(){
 void readDirect();
 </script>
 <script src="/static/cos-history-ui.js?v={{ founders_ui_version }}"></script>
+<script type="module" src="/static/cos-in-flight.js?v={{ founders_ui_version }}"></script>
 </body>
 </html>

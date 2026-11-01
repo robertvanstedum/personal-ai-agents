@@ -1,6 +1,24 @@
 {# The Board's toolbar, forms and grid: shared by the Board page and its pop-out window. Drawn by js/board.js from the
    answer GET /api/v1/board gives (embedded at the end). `popout` is true in the pop-out window. #}
-<div class="bd-tool" role="toolbar" aria-label="Board controls">
+{% if wall %}{# CoS's wall (Review 06): ＋ Note, ＋ Photo, search and "Taken down (n)" (Done and Bin). The label filter stays in the
+   page for board.js, hidden: the wall shows no labels. #}
+<div class="bd-tool wall-tool" role="toolbar" aria-label="Wall controls">
+  <h1 class="page-title visually-hidden">Board</h1>
+  <button class="wall-btn wall-add" type="button" data-bd-new aria-label="New note" title="New note: type or paste straight into it"><span aria-hidden="true">＋</span> Note</button>
+  <button class="wall-btn" type="button" data-bd-open="photo" aria-label="Add a photo" title="Add a photo"><span aria-hidden="true">＋</span> Photo</button>
+  <input type="search" data-bd-search placeholder="Search the wall" aria-label="Search the Board">
+  <label class="visually-hidden" for="bd-label">Label</label>
+  <select id="bd-label" data-bd-label-filter hidden><option value="">All labels</option></select>
+  <span class="bd-sp"></span>
+  <span class="bd-counts" data-bd-counts role="group" aria-label="Show notes" aria-live="polite" aria-atomic="true">
+    <button type="button" data-bd-view="active" aria-pressed="true">← The wall</button>
+    <button type="button" data-bd-view="done" aria-pressed="false">Done</button>
+    <button type="button" data-bd-view="trash" aria-pressed="false">Bin</button>
+  </span>
+  <button class="wall-btn wall-taken" type="button" data-wall-taken title="What came off the wall: done, and the bin">Taken down <span data-wall-taken-count></span></button>
+  {% if not popout %}<button class="bd-icon" type="button" data-bd-popout aria-describedby="bd-popout-help" aria-label="Pop out the Board in its own window" title="Pop out: the same Board in its own window, to keep open or bookmark while you work">⧉</button>{% endif %}
+</div>
+{% else %}<div class="bd-tool" role="toolbar" aria-label="Board controls">
   <h1 class="page-title">Board</h1>
   <span class="bd-counts" data-bd-counts role="group" aria-label="Show notes" aria-live="polite" aria-atomic="true">
     <button type="button" data-bd-view="active" aria-pressed="true">Active</button>
@@ -16,7 +34,7 @@
   {% if not popout %}<button class="bd-icon" type="button" data-bd-popout aria-describedby="bd-popout-help" aria-label="Pop out the Board in its own window" title="Pop out: the same Board in its own window, to keep open or bookmark while you work">⧉</button>{% endif %}
   <button class="bd-icon" type="button" data-bd-open="photo" aria-label="Add a photo" title="Add a photo">📷</button>
 </div>
-<form class="bd-panel" data-bd-photo-form hidden aria-label="New photo">
+{% endif %}<form class="bd-panel" data-bd-photo-form hidden aria-label="New photo">
   <label for="bd-photo-file">Picture</label>
   <input id="bd-photo-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-bd-photo-file>
   <label for="bd-photo-caption">Caption</label>

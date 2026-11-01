@@ -32,6 +32,28 @@ const SETTLED = ['added', 'done', 'undone', 'labelled', 'linked', 'moved', 'empt
 const OK = ['added', 'done', 'undone', 'labelled', 'linked', 'binned', 'restored', 'moved', 'emptied', 'edited', 'unchanged'];
 const LABEL_NAMES = { decide: 'Decide', blocked: 'Blocked', remember: 'Remember', followup: 'Follow-up', idea: 'Idea', fyi: 'FYI' };
 
+// ── CoS's wall (Review 06, slice 3): the CoS Board only (page.wall). The same notes and every hook, drawn as a whiteboard:
+// stickies by their label (no label words), a pinned clipping for an FYI with a link, a Polaroid for a photo, CoS's mark on
+// what CoS put up; the grid only (no free placement); a note opens on the right. Guild's Board never sets page.wall.
+let wallOpen = null;              // the note opened on the right, on the wall
+const wall = () => !!(page && page.wall);
+const URL_RE = /\bhttps?:\/\/[^\s<>"']+/i;
+function wallLook(p) {
+  if (p.kind === 'photo') return 'polaroid';
+  if (p.label === 'blocked') return 'worry';
+  if (p.label === 'fyi' && (p.item_ref || URL_RE.test(p.text))) return 'clipping';
+  if (p.label === 'decide' || p.label === 'followup') return 'marked';
+  return 'sticky';
+}
+const COS_NAME = /^(cos|chief[ _]of[ _]staff)$/i;
+const fromCos = (p) => p.author_kind === 'agent' && (COS_NAME.test(String(p.author || '')) || COS_NAME.test(String(p.author_label || '')));
+function wallSource(p) {
+  if (p.item_ref) return `from the Build Log · #${p.item_ref}${p.item && p.item.title ? ` ${p.item.title}` : ''}`;
+  const m = URL_RE.exec(p.text);
+  if (!m) return '';
+  try { return new URL(m[0]).hostname.replace(/^www\./, ''); } catch (e) { return 'a link'; }
+}
+
 function h(tag, attrs, ...kids) { const n = el(tag, attrs); n.append(...kids); return n; }
 function keyFor(name) { if (!keys.has(name)) keys.set(name, newKey()); return keys.get(name); }
 function settle(name, code) { if (SETTLED.includes(code)) keys.delete(name); }
@@ -243,7 +265,7 @@ const anyPlaced = () => list('active').some((p) => Number.isInteger(p.pos_x) && 
 function corkWidth() { const c = $('.bd-cork'); return c ? c.clientWidth : 0; }
 
 function freeWanted() {
-  return !!(data && data.status === 'ok' && ui.show === 'active' && !filtersOn() && corkWidth() >= FREE_MIN_PX);
+  return !wall() && !!(data && data.status === 'ok' && ui.show === 'active' && !filtersOn() && corkWidth() >= FREE_MIN_PX);
 }
 
 function applyFree(grid, items) {
@@ -276,7 +298,11 @@ function card(p, n, shown) {
   if (p.size_w != null) { li.dataset.resized = "true"; li.style.setProperty("--card-w", `${p.size_w}px`); li.style.setProperty("--card-h", `${p.size_h}px`); }
   const reorderable = ui.show === 'active' && !filtersOn() && !free && !anyPlaced();       // list order is changed by dragging only while no note has been placed on the board
   if (reorderable) li.draggable = true;
-  if (!photo) li.append(el('p', { class: 'bd-kicker' }, p.label ? (LABEL_NAMES[p.label] || p.label) : ''));
+  if (!photo && !wall()) li.append(el('p', { class: 'bd-kicker' }, p.label ? (LABEL_NAMES[p.label] || p.label) : ''));
+  if (wall()) {
+    li.dataset.look = wallLook(p);
+    if (fromCos(p)) { li.dataset.author = 'cos'; li.append(el('img', { class: 'wall-mark', src: page.urls.cos_mark, alt: 'Put up by CoS', title: 'Put up by CoS', draggable: 'false' })); }
+  }
   if (photo) {
     // The picture moves with its card; the browser's native image drag would cancel our pointer gesture.
     li.append(el('img', { src: p.thumb_url, alt: p.text === 'Photo' ? 'A photo on the Board' : p.text, loading: 'lazy', draggable: 'false' }));
@@ -295,8 +321,18 @@ function card(p, n, shown) {
     li.append(el('button', { type: 'button', class: 'bd-more', 'data-bd-more': p.id, 'aria-expanded': String(open), hidden: !open },
       open ? 'Less' : 'More'));
   }
-  const link = linkLine(p);
+  const link = wall() ? null : linkLine(p);
   if (link) li.append(link);
+  if (wall() && li.dataset.look === 'clipping') {
+    const t = li.querySelector('.bd-text:not([data-bd-edit-field])');
+    const title = p.text.replace(URL_RE, '').replace(/[\s:·-]+$/, '').trim();
+    if (t && title && !(editing && editing.id === p.id)) t.textContent = title;    // the clipping's title; the link is its source line
+    const src = wallSource(p);
+    const line = el('p', { class: 'wall-source' });
+    if (p.item_ref) line.append(el('a', { href: `${page.urls.build_log}?item=${p.item_ref}`, 'data-bd-item': p.item_ref, target: '_top' }, src));
+    else { const m = URL_RE.exec(p.text); line.append(m && /^https?:/i.test(m[0]) ? el('a', { href: m[0], target: '_blank', rel: 'noopener noreferrer' }, src) : src); }
+    li.append(line);
+  }
   const when = ui.show === 'trash' ? p.binned_at : (ui.show === 'done' ? p.done_at : p.created_at);
   li.append(el('p', { class: 'bd-meta' }, `${p.author_label} · ${ui.show === 'trash' ? 'binned ' : ui.show === 'done' ? 'done ' : ''}${localTime(when)}`));
   const acts = el('div', { class: 'bd-acts' });
@@ -328,6 +364,66 @@ window.addEventListener('resize', () => {
   fitTimer = window.requestAnimationFrame(fitMore);
 });
 
+// A note opened on the wall: the same card (so editing, ⋯ and every hook work as they do on the wall), held in a sheet on the
+// right (full screen on a phone, with "← Board"), with when it went up and who put it up.
+function wallSheet(p, li) {
+  li.dataset.wallOpen = 'true';
+  li.removeAttribute('draggable');
+  const sheet = el('li', { class: 'wall-sheet', 'data-wall-sheet': p.id, role: 'dialog', 'aria-label': 'A note, up close' });
+  const bar = el('div', { class: 'wall-sheet-bar' });
+  bar.append(el('button', { type: 'button', class: 'wall-back', 'data-wall-close': '' }, '← Board'),
+    el('span', { class: 'wall-sheet-title' }, ui.show === 'active' ? 'On the wall' : ui.show === 'done' ? 'Taken down: done' : 'Taken down: in the bin'),
+    el('button', { type: 'button', class: 'wall-x', 'data-wall-close': '', 'aria-label': 'Close' }, '✕'));
+  const held = el('ol', { class: 'wall-sheet-note' });
+  held.append(li);
+  const since = el('div', { class: 'wall-sheet-since' });
+  since.append(el('p', { class: 'wall-sheet-h' }, 'Since then'));
+  const trail = (when, words) => { const t = el('p', { class: 'wall-trail' }); t.append(el('span', {}, localTime(when)), ` ${words}`); since.append(t); };
+  trail(p.created_at, `Put up by ${fromCos(p) ? 'CoS' : (p.author_label || 'you')}.`);
+  if (p.restored_at) trail(p.restored_at, 'Put back on the wall.');
+  if (p.done_at) trail(p.done_at, 'Taken down: done.');
+  if (p.binned_at) trail(p.binned_at, 'Taken down to the bin.');
+  const later = el('p', { class: 'wall-sheet-later' });
+  later.append(el('button', { type: 'button', class: 'wall-btn', disabled: true, title: 'later' }, 'Talk it over with CoS'), el('span', { class: 'wall-later' }, 'later'));
+  sheet.append(bar, held, since, later);
+  return sheet;
+}
+
+function closeWallNote() {
+  if (wallOpen === null) return;
+  const id = wallOpen;
+  wallOpen = null;
+  render();
+  const again = $(`[data-bd-note="${id}"]`);
+  if (again) again.focus({ preventScroll: false });
+}
+
+function bindWall(grid) {
+  const interactive = (t) => t.closest('button, a, summary, details, textarea, input, select, [data-bd-edit-text-active]');
+  grid.addEventListener('click', (e) => {               // capture: a note on the wall opens first; inside the sheet it edits as before
+    if (e.target.closest('[data-wall-close]')) { e.stopPropagation(); closeWallNote(); return; }
+    const li = e.target.closest('[data-bd-note]');
+    if (!li || li.dataset.wallOpen === 'true' || interactive(e.target)) return;
+    e.stopPropagation();
+    wallOpen = Number(li.dataset.bdNote);
+    render();
+    const sheet = $('[data-wall-sheet]');
+    if (sheet) sheet.querySelector('[data-wall-close]').focus({ preventScroll: true });
+  }, true);
+  grid.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.altKey || !e.target.matches('[data-bd-note]') || e.target.dataset.wallOpen === 'true') return;
+    e.preventDefault();
+    wallOpen = Number(e.target.dataset.bdNote);
+    render();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || wallOpen === null || editing || creating || e.target.closest('textarea') || $$('.bd-edit[open]').length) return;
+    closeWallNote();
+  }, true);
+  const taken = $('[data-wall-taken]');
+  if (taken) taken.addEventListener('click', () => { ui.show = ui.show === 'active' ? 'done' : 'active'; wallOpen = null; render(); });
+}
+
 function render() {
   const act = document.activeElement;                  // keep the person's place in a note they are typing in across a redraw
   let keep = null;
@@ -346,12 +442,18 @@ function drawBoard() {
   const counts = (data && data.counts) || {};
   for (const button of $$('[data-bd-view]')) {
     const view = button.dataset.bdView;
-    const label = { active: 'Active', done: 'Done', trash: 'Bin' }[view];
+    const label = (wall() ? { active: '← The wall', done: 'Done', trash: 'Bin' } : { active: 'Active', done: 'Done', trash: 'Bin' })[view];
     button.textContent = `${label} ${known ? counts[view] : '?'}`;
     button.setAttribute('aria-pressed', String(ui.show === view));
   }
   const unk = $('[data-bd-unknown]'); if (unk) unk.hidden = known;
+  if (wall()) {
+    const taken = $('[data-wall-taken-count]');
+    if (taken) taken.textContent = known ? `(${(counts.done || 0) + (counts.trash || 0)})` : '';
+    document.body.dataset.wallShow = ui.show;
+  }
   let shown = list(ui.show).filter(matches);
+  if (wallOpen !== null && !shown.some((p) => p.id === wallOpen)) wallOpen = null;     // the opened note left this view
   if (editing && !shown.some((p) => p.id === editing.id)) editing = null;     // the edited note is no longer on screen
   const grid = $('[data-bd-grid]');
   const surface = freeWanted();
@@ -372,11 +474,16 @@ function drawBoard() {
     if (fresh) placeAt(fresh, layout.get(0));
     cards.sort((a, b) => (layout.get(Number(a.dataset.bdNote)).y - layout.get(Number(b.dataset.bdNote)).y) || (layout.get(Number(a.dataset.bdNote)).x - layout.get(Number(b.dataset.bdNote)).x));
   }
+  if (wall()) {
+    document.body.toggleAttribute('data-wall-open', wallOpen !== null);
+    const at = shown.findIndex((p) => p.id === wallOpen);
+    if (at >= 0) cards[at] = wallSheet(shown[at], cards[at]);
+  }
   grid.replaceChildren(...(fresh ? [fresh] : []), ...cards);
   fitMore();
   const note = $('[data-bd-state-note]');
   if (!known) note.textContent = '';
-  else if (ui.show === 'active') note.textContent = filtersOn() ? 'Clear the label and search to change the order.' : surface ? 'Drag a note anywhere there is room, or use the arrow keys on a selected note.' : anyPlaced() ? 'The notes keep the places you gave them on a wider screen; here they are listed in that order.' : 'Drag a note to change the order.';
+  else if (ui.show === 'active') note.textContent = wall() ? '' : filtersOn() ? 'Clear the label and search to change the order.' : surface ? 'Drag a note anywhere there is room, or use the arrow keys on a selected note.' : anyPlaced() ? 'The notes keep the places you gave them on a wider screen; here they are listed in that order.' : 'Drag a note to change the order.';
   else if (ui.show === 'done') note.textContent = 'Done notes have left Active. Undone puts one back.';
   else note.textContent = 'Discarded notes stay here until you empty the Trash. Restore puts one back as it was. Emptying never changes linked work or library images.';
   if (known && !shown.length && !creating) {
@@ -829,6 +936,7 @@ function bind() {
     if (code === 'added') announceChange();
   });
   const grid = $('[data-bd-grid]');
+  if (wall()) bindWall(grid);
   grid.addEventListener('click', (e) => {
     const t = e.target.closest('[data-bd-edit-text]');
     if (t && !e.target.closest('textarea')) startEditing(Number(t.dataset.bdEditText));

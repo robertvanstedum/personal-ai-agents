@@ -302,7 +302,7 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
     fwd_headers = _forward_headers(user, strip_header_prefixes)
     if (verified_cos_voice_write is True and portal_prefix == "/app/cos" and
             request.method == "POST" and user and user.get("tier") == "owner" and
-            path.strip("/").startswith(_COS_VOICE_WRITES)):
+            path.strip("/").startswith(_COS_VOICE_WRITES + _COS_OWNER_WRITES)):
         fwd_headers["X-Minimoi-Voice-Write-Verified"] = "1"
 
     try:
@@ -499,6 +499,9 @@ ROUTE_TIMEOUT_PATTERNS = (
 )
 # The POSTs the portal marks verified for cos-scheduler once its owner and CSRF gates have passed (app.cos_proxy).
 _COS_VOICE_WRITES = ("api/realtime-voice/managed/", "api/realtime-voice/direct/")
+# In flight's writes (Review 06) get the same marker, after the same owner and CSRF gates: the CoS app's table writes to
+# the CoS store in Robert's name. The header keeps its first name (X-Minimoi-Voice-Write-Verified).
+_COS_OWNER_WRITES = ("ui/api/in-flight/",)
 
 
 def _route_timeout(portal_prefix: str, path: str, method: str):

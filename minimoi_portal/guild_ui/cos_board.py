@@ -1,12 +1,14 @@
 """CoS's own Board: shared Board implementation, separate floor and API scope."""
 from dataclasses import replace
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, url_for
 from . import cfg, owner_page, asset, _headers, _api_error, _asset_url_defaults
 from . import api, pages
 from .security import csrf_token, OFF_RECORD_TEXT
 
 PREFIX = "/guild-next/cos-board"
 NAME = "cos_board"
+FONT_CSS = "https://fonts.googleapis.com"
+FONT_FILES = "https://fonts.gstatic.com"
 
 @owner_page
 def view():
@@ -14,11 +16,13 @@ def view():
     res, data = pages._board_payload()
     urls = {"api": PREFIX + "/api/v1", "board": PREFIX,
             "home": "/app/cos/ui/records", "media": "/guild-next/guild/media",
-            "build_log": "/guild-next/guild/build/log"}
-    page = {"urls": urls, "storage_ns": c["storage_ns"],
+            "build_log": "/guild-next/guild/build/log",
+            "cos_mark": url_for(".asset", filename="img/cos-mark-96.webp")}
+    # wall: Review 06 draws CoS's Board as a whiteboard (board.js and css/cos_wall.css); Guild's Board never sets it.
+    page = {"urls": urls, "storage_ns": c["storage_ns"], "wall": True,
             "csrf_token": csrf_token(), "off_record_text": OFF_RECORD_TEXT}
     return render_template("guild_floor/cos_board.html", res=res, board_data=data,
-                           urls=urls, page_json=page)
+                           urls=urls, page_json=page, wall=True)
 
 def mount(app, source):
     # No second chat backend, jobs, or agent tools are installed here.
@@ -29,7 +33,11 @@ def mount(app, source):
     @bp.after_request
     def headers(response):
         response = _headers(response)
-        response.headers["Content-Security-Policy"] = response.headers["Content-Security-Policy"].replace("frame-ancestors 'none'", "frame-ancestors 'self'")
+        # The wall's handwriting (Caveat) comes from Google Fonts, as the CoS page's own type does; on this Board only.
+        response.headers["Content-Security-Policy"] = (response.headers["Content-Security-Policy"]
+            .replace("frame-ancestors 'none'", "frame-ancestors 'self'")
+            .replace("style-src 'self'", f"style-src 'self' {FONT_CSS}")
+            .replace("font-src 'self'", f"font-src 'self' {FONT_FILES}"))
         return response
     bp.register_error_handler(Exception, _api_error)
     bp.url_defaults(_asset_url_defaults)

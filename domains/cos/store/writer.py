@@ -34,11 +34,14 @@ from core import durable_files as fsio
 from domains.cos.store import contracts
 from core.canonical_json import digest
 from domains.cos.store.fold import (
+    IN_FLIGHT_KINDS,
     Episode,
     Occurrence,
     apply_episode,
+    apply_in_flight,
     apply_occurrence,
     episode_refusal,
+    in_flight_refusal,
     occurrence_refusal,
 )
 
@@ -57,8 +60,14 @@ _KINDS = {
     "decision.record": ("stream", "cos.decision", "decision"),
     "correction.record": ("stream", "cos.correction", "correction"),
     "fact.record": ("stream", "cos.fact", "standing_fact"),
+    # CoS's In flight table: one row per document, folded from these commands (fold.apply_in_flight).
+    "in_flight.open": ("doc", "cos.in_flight", "in_flight_open"),
+    "in_flight.update": ("doc", "cos.in_flight", "in_flight_update"),
+    "in_flight.comment": ("doc", "cos.in_flight", "in_flight_comment"),
+    "in_flight.close": ("doc", "cos.in_flight", "in_flight_close"),
 }
-_DOC_DIRS = {"cos.goal": "goals", "cos.plan": "plans", "cos.obligation": "obligations/definitions", "cos.meeting": "meetings"}
+_DOC_DIRS = {"cos.goal": "goals", "cos.plan": "plans", "cos.obligation": "obligations/definitions", "cos.meeting": "meetings",
+             "cos.in_flight": "in_flight"}
 _STREAMS = {"cos.occurrence": "obligations/events.jsonl", "cos.episode": "obligations/events.jsonl",
             "cos.decision": "decisions.jsonl", "cos.correction": "corrections.jsonl", "cos.fact": "facts.jsonl"}
 _STREAM_FILES = sorted(set(_STREAMS.values()))
@@ -158,6 +167,14 @@ class StoreWriter:
         path = self._doc_path(target_type, target_id)
         return self._read_doc(path)
 
+    def docs(self, target_type: str) -> list[dict]:
+        """Every document of one type (In flight's rows), unordered. A folder not made yet is empty."""
+        folder = self.root / _DOC_DIRS[target_type]
+        if not folder.is_dir():
+            return []
+        found = (self._read_doc(path) for path in sorted(folder.glob("*.json")))
+        return [doc for doc in found if doc is not None]
+
     def rows(self, stream_type: str) -> list[dict]:
         return self._read_stream(self.root / _STREAMS[stream_type])
 
@@ -239,6 +256,8 @@ class StoreWriter:
         for span in _robert_source_spans(payload):
             if self._verify is None or not self._verify(span["turn_ref"], span["text"]):
                 raise StoreRefused("robert_source_unverified")
+        if kind in IN_FLIGHT_KINDS:
+            return self._plan_in_flight(command)
         if layout == "doc":
             return self._plan_doc(command, target_type)
         return self._plan_stream(command, target_type)
@@ -269,6 +288,36 @@ class StoreWriter:
             raise _Conflict(current_rev)
         revision = (current_rev or 0) + 1
         return _Plan("doc", path, dict(payload, revision=revision), revision)
+
+    def _plan_in_flight(self, command: dict) -> _Plan:
+        """An In flight row: the command is folded onto the stored row, and the folded row is written whole."""
+        payload = command["payload"]
+        kind = command["kind"]
+        if command["target"]["id"] != payload["item_id"]:
+            raise StoreRefused("payload_invalid", "target_id")
+        if payload["provenance"] == "robert_source":
+            # Robert's words, verified against his turn: the title, the comment or the closing note. A change that
+            # carries no words (a status or a priority alone) can't be robert_source.
+            words = payload.get("text") or payload.get("title") or payload.get("note")
+            if not words or self._verify is None or not self._verify(payload["turn_ref"], words):
+                raise StoreRefused("robert_source_unverified")
+        path = self._doc_path("cos.in_flight", payload["item_id"])
+        current = self._read_doc(path)
+        current_rev = None if current is None else int(current.get("revision", 0))
+        expected = command["expected_revision"]
+        code = in_flight_refusal(current, kind, payload)
+        if code:
+            raise StoreRefused("transition_not_allowed", code)
+        if current_rev is None and expected is not None:
+            raise _Conflict(0)
+        if current_rev is not None and expected != current_rev:
+            raise _Conflict(current_rev)
+        revision = (current_rev or 0) + 1
+        row = apply_in_flight(current, kind, payload)
+        row["revision"] = revision
+        if contracts.errors("store-records", "in_flight", row):
+            raise StoreRefused("payload_invalid", "row")
+        return _Plan("doc", path, row, revision)
 
     def _plan_stream(self, command: dict, target_type: str) -> _Plan:
         payload = command["payload"]

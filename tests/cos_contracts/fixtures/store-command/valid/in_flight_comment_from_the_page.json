@@ -1,0 +1,34 @@
+{
+  "schema": "minimoi.cos.store_command/1",
+  "command_id": "cmd-if-comment-op-7f3a9c2e1b",
+  "kind": "in_flight.comment",
+  "target": {
+    "type": "cos.in_flight",
+    "id": "IF-op-1a2b3c4d5e"
+  },
+  "expected_revision": 2,
+  "actor": "robert",
+  "seat": null,
+  "origin": "owner_turn",
+  "basis_ref": {
+    "type": "cos.owner_ui",
+    "id": "op-7f3a9c2e1b"
+  },
+  "payload": {
+    "schema": "minimoi.cos.in_flight_comment/1",
+    "data_scope": "personal",
+    "environment": "prod",
+    "item_id": "IF-op-1a2b3c4d5e",
+    "at": "2026-10-31T09:40:00+00:00",
+    "provenance": "approved",
+    "ref": {
+      "type": "cos.owner_ui",
+      "id": "op-7f3a9c2e1b"
+    },
+    "author": "robert",
+    "text": "Look at the per-seat ones first."
+  },
+  "payload_digest": "sha256:31e6ce933ed8fb7f5a9f48e25bb55c0cedeb711d43fd418c6eb2c405d0b184c0",
+  "data_scope": "personal",
+  "environment": "prod"
+}
