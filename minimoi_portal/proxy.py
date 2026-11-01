@@ -349,6 +349,11 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
         for tag in soup.find_all(True):
             for attr in ("href", "src", "action", "data-src", "data-url"):
                 val = tag.get(attr, "")
+                # Explicit cross-domain navigation belongs to the portal, not
+                # the proxied backend. Keep backend assets/API URLs prefixed.
+                if (attr == "href" and tag.name == "a" and tag.has_attr("data-portal-link")
+                        and (val == "/guild-next" or val.startswith("/guild-next/"))):
+                    continue
                 if (val and val.startswith("/") and not val.startswith("//")
                         and not _already_prefixed(val, portal_prefix)):
                     tag[attr] = f"{portal_prefix}{val}"
