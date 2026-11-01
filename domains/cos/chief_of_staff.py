@@ -1459,7 +1459,7 @@ def _get_agent_log_listing() -> list:
 
 # ── Web UI (v3: landing + four-tab SPA with sidebar photos) ───────────────────
 
-_VALID_TABS = {"confer", "record", "track", "store"}
+_VALID_TABS = {"confer", "records", "record", "track", "store"}   # records: the CoS Board
 
 @app.route("/ui")
 def ui():

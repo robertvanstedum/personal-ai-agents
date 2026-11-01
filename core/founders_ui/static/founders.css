@@ -1,50 +1,6 @@
 :root{--ink:#1d1c18;--soft:#4a4840;--mute:#6e6b61;--paper:#f7f4ec;--line:#e4ded1;--accent:#b5703a;--green:#34493b;--gu-bg:var(--paper);--gu-surface:var(--paper);--gu-zone-conv:var(--paper);--gu-border:var(--line);--gu-ink:var(--ink);--gu-muted:var(--mute)}
-.founders-cos,.gu{font-family:system-ui,-apple-system,sans-serif;font-size:15px;color:var(--ink);background:var(--paper)}
-.founders-cos{height:100dvh;min-height:0;overflow:hidden;display:flex;flex-direction:column}
-.founders-cos h1,.founders-cos h2{font-family:Georgia,serif;font-weight:400;letter-spacing:0;text-transform:none}
-.founders-cos button,.founders-cos textarea{font:inherit}
-.founders-cos button{cursor:pointer;color:var(--ink)}
-.founders-cos button:disabled{cursor:default;opacity:.6}
-.founders-cos .cos-header{background:var(--paper);position:relative;z-index:3;border-bottom:1px solid var(--line)}
-.founders-cos .header-nav{height:56px;gap:14px;padding:0 24px}
-.founders-cos .header-nav>button{background:none;border:0;font-size:14px;padding:8px 0}
-.founders-cos .tab-btn{font:inherit;color:var(--soft);height:56px;letter-spacing:0;padding:0 15px}
-.founders-cos .tab-btn.active{color:var(--ink);border-color:var(--accent)}
+.gu{font-family:system-ui,-apple-system,sans-serif;font-size:15px;color:var(--ink);background:var(--paper)}
 .founder-link{color:var(--soft);text-decoration:none;white-space:nowrap}
-.founders-cos .tab-layout-split{position:relative;display:grid;grid-template-columns:56% 44%;flex:1;min-height:0;height:auto;overflow:hidden}
-.founders-cos .tab-content{height:100%;min-height:0;min-width:0;padding:0;overflow:hidden;background:var(--paper)}
-.founders-cos .tab-panel{height:100%;min-height:0;padding:28px 32px;overflow:auto}
-.founders-cos #tab-confer.active{display:flex;flex-direction:column;padding:0 32px 18px}
-.founders-cos #chat-log{flex:1;min-height:0;overflow:auto;padding:32px 0 20px;margin:0;border:0;background:none}
-.founders-cos #cos-greeting h1,.founders-cos #chat-log h1{font-size:32px;margin:12px 0}
-.founders-cos #chat-log p{color:var(--soft)}
-.founders-cos .msg{margin:0;padding:20px 0;border:0;border-bottom:1px solid var(--line);background:transparent;border-radius:0;max-width:none}
-.founders-cos .msg-label{font:600 12px system-ui;color:var(--soft);margin-bottom:8px;letter-spacing:0;text-transform:none}
-.founders-cos .msg-text{font:15px/1.65 system-ui;white-space:pre-wrap;color:var(--ink)}
-.founders-cos .input-row{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;background:#fffdf7;padding:10px;margin:0}
-.founders-cos #send-input{flex:1;min-width:0;resize:none;border:0;outline:none;background:none;color:var(--ink);padding:5px;line-height:1.5}
-.founders-cos .input-row button{background:none;border:0;min-width:34px;min-height:38px;padding:6px}
-.founders-cos #btn-send{background:var(--green);color:white;border-radius:7px;padding:10px 15px}
-.founders-cos #btn-dictate{font-size:12px}
-.founders-cos #save-state{font-size:12px;color:var(--mute);padding:7px 0;min-height:28px}
-.founders-cos .talk-meta{font:12px system-ui;color:var(--mute);gap:8px;flex-wrap:wrap}
-.founders-cos .talk-meta a{color:var(--soft)}
-.founders-cos .tab-panel-photo{position:relative;top:0;display:block;width:auto;min-height:0;height:100%;overflow:hidden}
-.founders-cos .tab-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 29%!important}
-.founders-cos .tab-photo[data-tab=confer]{display:block;opacity:1}
-.founders-cos .tab-photo:not([data-tab=confer]){display:none!important}
-.founders-cos[data-picture=hidden] .tab-layout-split{grid-template-columns:1fr}
-.founders-cos[data-picture=hidden] .tab-panel-photo{display:none}
-.founders-cos[data-picture=faded] .tab-layout-split{grid-template-columns:1fr}
-.founders-cos[data-picture=faded] .tab-panel-photo{position:absolute;inset:0;opacity:.15;filter:blur(2px);pointer-events:none}
-.founders-cos[data-picture=faded] .tab-content{z-index:1;background:#f7f4ecba}
-.founders-cos dialog{position:fixed;inset:0 0 0 auto;margin:0;width:min(440px,100%);height:100dvh;max-height:none;border:0;border-left:1px solid var(--line);padding:24px;background:var(--paper);color:var(--ink)}
-.founders-cos dialog::backdrop{background:#1d1c1844}
-.founders-cos dialog header{display:flex;align-items:center;justify-content:space-between}
-.founders-cos dialog button{background:none;border:1px solid var(--line);padding:10px;border-radius:5px}
-.founders-cos .history-row{display:block;text-align:left;width:100%;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:18px 0}
-.founders-cos #cos-files summary{display:none}
-.founders-cos #cos-files{border:0;padding:0;background:none}
 .gu{--gu-ink:#1d1c18;--gu-muted:#6e6b61;--gu-text:#1d1c18;--gu-soft:#4a4840;--gu-surface-2:#f7f4ec;--gu-border:#e4ded1;--gu-row-rule:#e4ded1}
 .gu[data-page=floor] .mc-banner-art,.gu[data-page=floor] .hero-portrait{display:none}
 .gu[data-page=floor] .mc-hero{background:var(--paper);color:var(--ink);min-height:90px;border-bottom:1px solid var(--line)}
@@ -54,14 +10,7 @@
 .gu[data-page=floor] .floor-context,.gu[data-page=floor] .floor-history,.gu[data-page=floor] .mc-panel{background:var(--paper);box-shadow:none;border-color:var(--line)}
 .gu[data-page=floor] .msg{background:none;border-radius:0;box-shadow:none;border-bottom:1px solid var(--line)}
 .gu[data-page=floor] .msg-text{color:var(--ink);font-size:15px;line-height:1.65}
-@media(max-width:700px){.founders-cos .header-nav{gap:10px;padding:0 10px}.founders-cos .tab-btn{padding:0 9px}.founders-cos .header-nav>button,.founder-link{font-size:12px}.founders-cos .tab-layout-split{grid-template-columns:1fr;grid-template-rows:160px minmax(0,1fr)}.founders-cos .tab-panel-photo{grid-row:1}.founders-cos .tab-content{grid-row:2}.founders-cos #tab-confer.active{padding:0 14px max(8px,env(safe-area-inset-bottom))}.founders-cos #chat-log{padding-top:14px}.founders-cos[data-picture=hidden] .tab-layout-split,.founders-cos[data-picture=faded] .tab-layout-split{grid-template-rows:1fr}.founders-cos[data-picture=hidden] .tab-content,.founders-cos[data-picture=faded] .tab-content{grid-row:1}.founders-cos #btn-dictate{display:none}.gu[data-page=floor] .fc-art{height:160px;object-position:50% 44%}}
-
-#mc-both{width:100%;height:100%;border:0;border-left:1px solid var(--line);grid-column:2;grid-row:1}.founders-cos.both-open .tab-panel-photo{display:none!important}.founders-cos.both-open .tab-layout-split{grid-template-columns:1fr 1fr;grid-template-rows:1fr}.founders-cos.both-open .tab-content{grid-column:1;grid-row:1}.founders-cos [hidden]{display:none!important}
-@media(max-width:700px){.founders-cos.both-open .tab-layout-split{grid-template-columns:1fr;grid-template-rows:1fr 1fr}.founders-cos.both-open #mc-both{grid-column:1;grid-row:2}.founders-cos .input-row{gap:4px}.founders-cos .header-nav{gap:8px}.founders-cos .tab-btn{padding:0 5px}}
-
-.founders-cos #send-input,.founders-cos #btn-send,.founders-cos #btn-attach,.founders-cos #btn-voice{font-family:system-ui,-apple-system,sans-serif}
-
-@media(max-width:1100px){.founders-cos.both-open #btn-dictate{display:none}}
+@media(max-width:700px){.gu[data-page=floor] .fc-art{height:160px;object-position:50% 44%}}
 
 /* One workshop row beneath the shared mini-moi strip, on every Guild page. */
 .gu .guild-nav{background:var(--paper);color:var(--ink);border-bottom:1px solid var(--line);flex:none;position:relative;z-index:40}
@@ -81,36 +30,245 @@
 
 /* Mobile: one Work / More row. Sheets and composer stay inside the viewport. */
 .mobile-work-more,.mobile-only{display:none}
-.founders-cos,.founders-cos *{box-sizing:border-box}
-.founders-cos .msg-text{overflow-wrap:anywhere}
 @media(max-width:700px){
-  .founders-cos{width:100%;max-width:100%;overflow-x:hidden}
-  .founders-cos .header-nav{display:flex;justify-content:space-between;height:48px;min-width:0;padding:0 14px;overflow:visible}
-  .founders-cos .tab-nav{min-width:0;flex:none;overflow:visible}
-  .founders-cos .tab-btn{height:48px;padding:0 10px;font-size:15px}
   .mobile-work-more,.mobile-only{display:block}
   .mobile-work-more summary,.workshop-more summary{list-style:none;cursor:pointer;padding:14px 8px;font:15px system-ui;color:var(--ink)}
   .mobile-work-more summary::-webkit-details-marker,.workshop-more summary::-webkit-details-marker{display:none}
-  .founders-cos .cos-header{z-index:80;flex:none}
   .mobile-work-more[open] .mobile-work-menu,.workshop-more[open]>div{position:absolute;top:100%;right:10px;width:min(260px,calc(100vw - 20px));max-height:65dvh;overflow:auto;background:var(--paper);border:1px solid var(--line);box-shadow:0 5px 18px #0002;padding:8px;z-index:90}
   .mobile-work-menu button,.mobile-work-menu a,.workshop-more div button,.workshop-more div a{display:block;width:100%;height:auto;min-height:44px;margin:0;padding:12px;text-align:left;font:15px system-ui;color:var(--ink);background:none;border:0;border-radius:0;text-decoration:none;white-space:normal}
-  .founders-cos .mobile-work-menu .tab-btn{height:auto;text-align:left}
   .workshop-row{justify-content:space-between;min-height:48px;overflow:visible;padding:0 14px}
   .workshop-name,.workshop-other{display:none}
   .workshop-primary{gap:0}.workshop-primary .subnav-link{font-size:15px;padding:14px 10px 12px}
   .gu[data-page=floor]:not([data-mc-embed]) .mc-floorbar{display:none}
   .gu[data-page=floor][data-history=open] .floor-history{top:calc(var(--gu-portal-h,38px) + var(--gu-nav-stack-h,48px))}
-  .founders-cos dialog{inset:0;width:100%;max-width:100%;height:100dvh;max-height:100dvh;margin:0;border:0;padding:20px max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom));overflow:auto}
-  .founders-cos dialog header{gap:12px}.founders-cos dialog h2{min-width:0;overflow-wrap:anywhere}.founders-cos dialog header button{flex:none;min-height:44px}
-  .founders-cos .input-row{width:100%;min-width:0;gap:4px;padding:8px}
-  .founders-cos #send-input{width:0;min-width:0;font-size:16px}
-  .founders-cos .input-row button{flex:none;min-width:32px}
-  .founders-cos #btn-send{padding:10px}
-  .founders-cos .talk-meta{min-width:0;white-space:normal;overflow-wrap:anywhere}
-  .founders-cos .talk-meta>*{max-width:100%}
-  .founders-cos.both-open .tab-content,.founders-cos.both-open #mc-both{min-width:0;max-width:100%}
 }
 
-@media(max-width:700px){.mobile-identity{font-weight:700;font-size:15px;white-space:nowrap}.founders-cos .tab-nav,.workshop-primary{margin-right:auto}.workshop-row{gap:10px}.mobile-work-more{position:static}}
+@media(max-width:700px){.mobile-identity{font-weight:700;font-size:15px;white-space:nowrap}.workshop-primary{margin-right:auto}.workshop-row{gap:10px}.mobile-work-more{position:static}}
 
-.founders-cos a.tab-btn{display:inline-flex;align-items:center;text-decoration:none}
+/* ── Chief of Staff · Confer (Review 06, Option A): the dashboard's palette and type; one app row, the conversation
+   list on the left, a slim header, the stream with the faint picture behind it, one rounded composer. Phone (< 640 px):
+   one bar; the list is a drawer. ── */
+.founders-cos{--green:#123b30;--green-deep:#0b2c24;--accent:#a94714;--accent-soft:#c76736;--paper:#f7f0e4;--paper-mid:#f1e8da;--paper-deep:#ede1cf;--card:#fbf7f0;--line:rgba(18,59,48,.16);--line-strong:rgba(18,59,48,.28);--ink:#1d1c18;--soft:#4a4840;--mute:#6e6b61;--serif:'Playfair Display',Georgia,serif;--sans:'Source Sans 3',system-ui,-apple-system,sans-serif}
+.founders-cos{font-family:var(--sans);font-size:15px;color:var(--ink);background:var(--paper);height:var(--app-h,100dvh);min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.founders-cos,.founders-cos *{box-sizing:border-box}
+.founders-cos [hidden]{display:none!important}
+.founders-cos h1,.founders-cos h2{font-weight:400;letter-spacing:0;text-transform:none}
+.founders-cos button,.founders-cos textarea,.founders-cos input{font:inherit}
+.founders-cos button{cursor:pointer;color:var(--ink)}
+.founders-cos button:disabled{cursor:default;opacity:.6}
+.founders-cos .phone-only{display:none}
+
+/* The app row, 46 px: the mark, the tabs, then Guildhall ↗ and MC ↗. */
+.founders-cos .cos-header{position:relative;top:auto;z-index:30;flex:none;max-width:none;overflow:visible;background:var(--paper);border-bottom:1px solid var(--line)}
+.founders-cos .header-nav{height:46px;display:flex;align-items:center;gap:22px;padding:0 18px;min-width:0;max-width:none;overflow:visible}
+.founders-cos .cos-mark{display:flex;align-items:center;gap:9px;min-width:0;flex:none;color:var(--green);font:600 17px/1 var(--serif);white-space:nowrap}
+.founders-cos .cos-mark img{width:28px;height:28px;border-radius:50%;object-fit:cover;object-position:50% 50%;background:#fff;box-shadow:0 0 0 1px rgba(18,59,48,.16);flex:none}
+.founders-cos .cos-mark-words{display:flex;flex-direction:column;gap:2px;min-width:0}
+.founders-cos .tab-nav{display:flex;align-items:center;gap:22px;flex:none}
+.founders-cos .tab-btn{height:46px;padding:0;background:none;border:0;border-bottom:2px solid transparent;border-radius:0;color:var(--soft);font:15px var(--sans);letter-spacing:0}
+.founders-cos .tab-btn:hover{color:var(--ink)}
+.founders-cos .tab-btn.active{color:var(--ink);font-weight:600;border-bottom-color:var(--accent)}
+.founders-cos .header-gap{flex:1}
+.founders-cos .founder-link{display:inline-flex;align-items:center;gap:6px;color:var(--soft);font:15px var(--sans);text-decoration:none;white-space:nowrap}
+.founders-cos .founder-link:hover{color:var(--ink)}
+.founders-cos .mc-face{display:none;width:26px;height:26px;border-radius:50%;object-fit:cover}
+.founders-cos .phone-tools{display:none}
+
+/* The body: rail · list · conversation (with the picture column when Shown, or MC side by side). */
+.founders-cos .cos-body{flex:1;min-height:0;display:flex;position:relative}
+.founders-cos .cos-rail{flex:0 0 52px;display:none;flex-direction:column;align-items:center;gap:6px;padding-top:10px;border-right:1px solid var(--line);background:var(--paper-mid)}
+.founders-cos .cos-rail-btn{width:32px;height:32px;display:inline-grid;place-items:center;padding:0;border:1px solid var(--line);border-radius:8px;background:none;color:var(--soft);font-size:16px}
+.founders-cos .cos-rail-new{color:var(--accent);font-size:18px}
+.founders-cos .cos-list{flex:0 0 248px;width:248px;display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line);background:var(--paper-mid)}
+.founders-cos .cos-places{display:none}
+.founders-cos .cos-list-top{display:flex;align-items:center;gap:8px;padding:12px 12px 8px}
+.founders-cos #conversation-new{flex:1;display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;border:1px solid var(--line-strong);border-radius:8px;background:var(--card);color:var(--ink);font:600 14px var(--sans);text-align:left}
+.founders-cos #conversation-new span{color:var(--accent);font-size:17px;font-weight:600}
+.founders-cos .cos-list-fold{width:30px;height:30px;flex:none;display:inline-grid;place-items:center;padding:0;border:0;border-radius:7px;background:none;color:var(--soft);font-size:17px}
+.founders-cos .cos-list-fold:hover,.founders-cos .cos-rail-btn:hover{background:var(--card)}
+.founders-cos .cos-list-search{margin:0 12px 8px;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:14px var(--sans);outline:none}
+.founders-cos .cos-list-search:focus{border-color:var(--line-strong)}
+.founders-cos .cos-list-rows{flex:1;min-height:0;overflow:auto;padding:0 8px 12px}
+.founders-cos .cos-list-group{font:600 11px var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--mute);margin:12px 8px 4px}
+.founders-cos .cos-list-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;width:100%;padding:7px 10px;border:0;border-radius:7px;background:none;color:var(--soft);font:14px var(--sans);text-align:left;white-space:nowrap}
+.founders-cos .cos-list-row:hover{background:rgba(251,247,240,.7)}
+.founders-cos .cos-list-row .t{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.founders-cos .cos-list-row .w{flex:none;color:var(--mute);font-size:12.5px;font-weight:400}
+.founders-cos .cos-list-row[aria-current=true]{background:var(--card);color:var(--ink);font-weight:600;box-shadow:inset 2px 0 0 var(--accent)}
+.founders-cos .cos-list-empty{margin:12px 10px;color:var(--mute);font-size:13.5px}
+.founders-cos .cos-list-more{margin:0 12px 12px;padding:6px;border:0;background:none;color:var(--soft);font-size:13.5px;text-align:left}
+.founders-cos[data-drawer=open] .cos-list-fold{font-size:0}
+.founders-cos[data-drawer=open] .cos-list-fold::before{content:"✕";font-size:15px}
+.founders-cos .cos-scrim{position:absolute;inset:0;z-index:20;background:rgba(11,44,36,.28)}
+.founders-cos[data-list=folded] .cos-list,.founders-cos.show-cos-board .cos-list{display:none}
+.founders-cos[data-list=folded] .cos-rail,.founders-cos.show-cos-board .cos-rail{display:flex}
+/* The list as a drawer over the chat: on the Board, and below 900 px. */
+.founders-cos.show-cos-board[data-drawer=open] .cos-list{display:flex;position:absolute;top:0;bottom:0;left:0;z-index:21;width:min(300px,86%);box-shadow:10px 0 30px rgba(0,0,0,.2)}
+
+.founders-cos .tab-layout-split{position:relative;flex:1;min-width:0;display:grid;grid-template-columns:56% 44%;min-height:0;height:auto;overflow:hidden;background:var(--paper)}
+.founders-cos .tab-content{position:relative;z-index:1;height:100%;min-height:0;min-width:0;padding:0;overflow:hidden;background:var(--paper)}
+.founders-cos .tab-panel{height:100%;min-height:0;padding:28px 32px;overflow:auto}
+.founders-cos .tab-panel-photo{position:relative;top:0;display:block;width:auto;min-height:0;height:100%;overflow:hidden}
+.founders-cos .tab-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 29%!important}
+.founders-cos .tab-photo[data-tab=confer]{display:block;opacity:1}
+.founders-cos .tab-photo:not([data-tab=confer]){display:none!important}
+/* Picture: Hidden — none. Faded (the default) — CoS's table, faint and soft behind the conversation, with a paper wash
+   behind the words. Shown — today's picture column. */
+.founders-cos[data-picture=hidden] .tab-layout-split,.founders-cos[data-picture=faded] .tab-layout-split{grid-template-columns:minmax(0,1fr)}
+.founders-cos[data-picture=hidden] .tab-panel-photo{display:none}
+.founders-cos[data-picture=faded] .tab-panel-photo{position:absolute;inset:0;opacity:.1;filter:blur(1px) saturate(.8);pointer-events:none}
+.founders-cos[data-picture=faded] .tab-content{background:linear-gradient(90deg,rgba(247,240,228,0),rgba(247,240,228,.55) 18%,rgba(247,240,228,.55) 82%,rgba(247,240,228,0))}
+
+/* Confer: header, stream, composer. */
+.founders-cos #tab-confer.active{display:flex;flex-direction:column;padding:0 0 10px}
+.founders-cos .conv-head{flex:0 0 46px;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid var(--line)}
+.founders-cos .conv-title{flex:1;min-width:0;margin:0;font:600 15px var(--sans);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.founders-cos .conv-tools{display:flex;align-items:center;gap:8px;flex:none}
+.founders-cos #files-open{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:1px solid var(--line);border-radius:7px;background:none;color:var(--soft);font:14px var(--sans)}
+.founders-cos #files-open[hidden]{display:none}
+.founders-cos .conv-count{font-size:12px;background:var(--paper-deep);color:var(--soft);border-radius:999px;padding:0 6px}
+.founders-cos .conv-more{position:relative}
+.founders-cos .conv-more>summary{width:30px;height:30px;display:grid;place-items:center;border-radius:7px;color:var(--soft);font-size:18px;line-height:1;list-style:none;cursor:pointer;user-select:none}
+.founders-cos .conv-more>summary::-webkit-details-marker{display:none}
+.founders-cos .conv-more>summary:hover,.founders-cos .conv-more[open]>summary{background:var(--card)}
+.founders-cos .conv-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:flex;flex-direction:column;min-width:270px;padding:6px;background:#fffdf8;border:1px solid var(--line-strong);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.14)}
+.founders-cos .conv-menu>button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:34px;padding:7px 10px;border:0;border-radius:6px;background:none;color:var(--ink);font:14.5px var(--sans);text-align:left;white-space:nowrap}
+.founders-cos .conv-menu>button:hover{background:var(--paper-mid)}
+.founders-cos .conv-menu kbd{font:13px var(--sans);color:var(--mute)}
+.founders-cos #both-open[aria-pressed=true]{font-weight:600}
+.founders-cos .conv-menu-rule{height:1px;margin:5px 4px;background:var(--line)}
+.founders-cos .conv-menu-note{margin:0 10px 4px;color:var(--mute);font-size:12px}
+.founders-cos .picture-seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;font-size:12.5px}
+.founders-cos .picture-seg span{padding:1px 8px;color:var(--soft)}
+.founders-cos[data-picture=shown] [data-picture-opt=shown],.founders-cos[data-picture=faded] [data-picture-opt=faded],.founders-cos[data-picture=hidden] [data-picture-opt=hidden]{background:var(--green);color:#fff}
+
+.founders-cos #chat-log{flex:1;min-height:0;height:auto;overflow:auto;display:flex;flex-direction:column;align-items:center;gap:16px;margin:0;padding:18px 24px 12px;border:0;border-radius:0;background:none;scroll-behavior:auto}
+.founders-cos #chat-log>*{flex:none;width:min(760px,100%);margin:0}
+.founders-cos .msg{padding:0;border:0;border-radius:0;background:none;max-width:none;font-size:16px;line-height:1.55;color:var(--ink)}
+.founders-cos .msg-label{display:flex;align-items:center;gap:8px;margin:0 0 3px;font:600 13px var(--sans);letter-spacing:0;text-transform:none;color:var(--soft)}
+.founders-cos .msg-label[data-time]::after{content:attr(data-time);font-weight:400;color:var(--mute)}
+.founders-cos .msg-text{font:16px/1.55 var(--sans);white-space:pre-wrap;color:var(--ink);overflow-wrap:anywhere}
+.founders-cos .msg-user{display:flex;flex-direction:column;align-items:flex-end}
+.founders-cos .msg-user .msg-label{display:none}
+.founders-cos .msg-user .msg-text{max-width:78%;padding:9px 14px;background:#ede1cf;border-radius:14px 14px 4px 14px}
+.founders-cos .msg-thinking{color:var(--mute);font-style:italic;font-size:14.5px}
+.founders-cos .msg-files{margin-top:6px}
+.founders-cos #history-earlier{align-self:center;margin:0 auto 4px;padding:4px 12px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--soft);font-size:13px}
+
+/* The hero (H1, the original): only in an empty chat, the first thing in the stream; it scrolls away with it. */
+.founders-cos #chat-log>.cos-hero{width:min(1040px,100%);margin:8px 0 8px}
+.founders-cos .cos-hero{position:relative;display:grid;grid-template-columns:1fr 1.05fr;min-height:360px;border-radius:16px;overflow:hidden;background:var(--card);box-shadow:0 0 0 1px var(--line)}
+.founders-cos .cos-hero-copy{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:34px 34px 28px}
+.founders-cos .cos-eyebrow{font:600 12px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+.founders-cos .cos-hero h1{margin:0;font:500 46px/1.08 var(--serif);color:var(--green)}
+.founders-cos .cos-hero p{margin:0;color:var(--soft);font-size:16.5px;line-height:1.5}
+.founders-cos .cos-hero-ph{position:relative;min-height:220px;overflow:hidden}
+.founders-cos .cos-hero-ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 29%}
+.founders-cos .cos-hero-ph::before{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,var(--card),rgba(251,247,240,0) 38%)}
+
+/* One rounded composer: the words, then ＋ on the left and 🎙 and Send on the right; under it only the save state. */
+.founders-cos #attach-tray,.founders-cos .input-row,.founders-cos #voice-live,.founders-cos #save-state,.founders-cos #voice-transcript,.founders-cos #voice-sessions{width:min(760px,calc(100% - 48px));margin-left:auto;margin-right:auto}
+.founders-cos #attach-tray{margin-bottom:6px}
+.founders-cos .input-row{position:relative;flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:10px 10px 8px 14px;background:#fffdf8;border:1px solid var(--line-strong);border-radius:16px;box-shadow:0 2px 10px rgba(18,59,48,.06)}
+.founders-cos #send-input{order:-1;flex:1 0 100%;min-width:0;min-height:26px;max-height:30vh;height:auto;field-sizing:content;padding:0;border:0;border-radius:0;outline:none;background:none;color:var(--ink);font:16px/1.5 var(--sans);resize:none}
+.founders-cos .input-row>button{flex:none;width:34px;height:34px;min-width:0;min-height:0;display:inline-grid;place-items:center;padding:0;border:0;border-radius:50%;background:none;color:var(--soft);font:17px/1 var(--sans)}
+.founders-cos .input-row>button:hover:not(:disabled){background:var(--paper-mid)}
+.founders-cos #btn-attach,.founders-cos #btn-dictate,.founders-cos #btn-voice{width:34px;height:34px;min-height:0;padding:0;border:0;border-radius:50%;background:none;color:var(--soft)}
+.founders-cos #btn-attach{margin-right:auto;font-size:20px}
+.founders-cos #btn-dictate{font-size:0}
+.founders-cos #btn-dictate::before{content:"🎙";font-size:17px}
+.founders-cos #btn-dictate[aria-pressed=true]{background:#8a3020;color:#fff}
+.founders-cos #btn-dictate[aria-pressed=true]::before{content:"■";font-size:13px}
+.founders-cos .input-row>#btn-send{width:auto;padding:0 16px;border-radius:999px;background:var(--green);color:#fff;font:600 14px var(--sans)}
+.founders-cos .input-row>#btn-send:hover:not(:disabled){background:var(--green-deep)}
+/* Voice starts from ⋯; its button stays in the composer (its handlers live there) and shows only while a session runs. */
+.founders-cos .input-row>#btn-voice:not([aria-pressed=true]){position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.founders-cos .input-row>#btn-voice[aria-pressed=true]{background:#8a3020;color:#fff;font-size:13px}
+.founders-cos #save-state{min-height:22px;padding:5px 4px 0;color:var(--mute);font-size:12.5px}
+.founders-cos .talk-meta{display:none}
+.founders-cos #voice-live:not([hidden]){margin-top:6px}
+.founders-cos dialog{position:fixed;inset:0 0 0 auto;margin:0;width:min(440px,100%);height:100dvh;max-height:none;border:0;border-left:1px solid var(--line);padding:24px;background:var(--paper);color:var(--ink)}
+.founders-cos dialog::backdrop{background:#1d1c1844}
+.founders-cos dialog header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.founders-cos dialog h2{font:600 20px var(--serif);color:var(--green)}
+.founders-cos dialog button{background:none;border:1px solid var(--line);padding:8px 12px;border-radius:7px}
+.founders-cos .history-row{display:block;text-align:left;width:100%;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:14px 0}
+.founders-cos #cos-files summary{display:none}
+.founders-cos #cos-files{border:0;padding:0;background:none}
+
+/* Side by side with MC. */
+#mc-both{width:100%;height:100%;border:0;border-left:1px solid var(--line);grid-column:2;grid-row:1}
+.founders-cos.both-open .tab-panel-photo{display:none!important}
+.founders-cos.both-open .tab-layout-split{grid-template-columns:1fr 1fr;grid-template-rows:1fr}
+.founders-cos.both-open .tab-content{grid-column:1;grid-row:1}
+
+/* The Board fills the space under the app row. */
+.founders-cos.show-cos-board .tab-content,.founders-cos.show-cos-board #tab-records.active{height:100%;padding:0}
+.founders-cos #cos-board{height:100%;min-height:0}
+
+/* Narrow (< 900 px): the list is the rail; ☰ opens it over the chat. */
+@media(max-width:899px){
+  .founders-cos .cos-rail{display:flex}
+  .founders-cos .cos-list,.founders-cos[data-list] .cos-list{display:none;position:absolute;top:0;bottom:0;left:0;z-index:21;width:min(300px,86%);box-shadow:10px 0 30px rgba(0,0,0,.2)}
+  .founders-cos[data-drawer=open] .cos-list{display:flex}
+  .founders-cos .cos-hero{grid-template-columns:1fr;min-height:0}
+  .founders-cos .cos-hero-ph{order:-1;height:220px}
+  .founders-cos .cos-hero-ph::before{background:linear-gradient(0deg,var(--card),rgba(251,247,240,0) 40%)}
+  .founders-cos .cos-hero h1{font-size:34px}
+}
+@media(max-width:1100px){.founders-cos.both-open #btn-dictate{display:none}}
+
+/* Phone (< 640 px): one bar — ☰, the mark with the chat's title, MC's face, ✎, then Files and ⋯. */
+@media(max-width:639px){
+  .founders-cos{width:100%;max-width:100%;overflow-x:hidden}
+  .founders-cos .phone-only{display:inline-grid}
+  .founders-cos .header-nav{height:52px;gap:4px;padding:0 6px 0 8px}
+  .founders-cos .cos-bar-btn{width:34px;height:34px;flex:none;place-items:center;padding:0;border:0;border-radius:8px;background:none;color:var(--soft);font-size:17px}
+  .founders-cos .cos-bar-new{color:var(--accent);font-size:19px}
+  .founders-cos .cos-mark{flex:1;gap:8px;margin-left:2px}
+  .founders-cos .cos-mark img{width:30px;height:30px}
+  .founders-cos .cos-mark-name{font:600 16px/1.1 var(--serif)}
+  .founders-cos .cos-mark-words .cos-mark-title{display:block;font:12.5px/1.2 var(--sans);color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .founders-cos .header-gap{display:none}
+  .founders-cos .mc-page-words{display:none}
+  .founders-cos .mc-face{display:block}
+  .founders-cos #mc-page.no-face{width:auto}.founders-cos #mc-page.no-face .mc-face{display:none}.founders-cos #mc-page.no-face .mc-page-words{display:inline;font-size:14px}
+  .founders-cos #mc-page{width:34px;height:34px;justify-content:center;flex:none}
+  .founders-cos .phone-tools{display:flex;align-items:center;flex:none}
+  .founders-cos .phone-tools .conv-tools{gap:2px}
+  .founders-cos .phone-tools #files-open{height:30px;padding:0 7px;font-size:13px}
+  .founders-cos .phone-tools .conv-more>summary{width:32px;height:32px}
+  .founders-cos .phone-tools .conv-menu{right:-4px;min-width:0;width:min(300px,calc(100vw - 16px))}
+  .founders-cos .phone-tools .conv-menu>button{min-height:44px;white-space:normal}
+  .founders-cos .conv-head{display:none}
+  .founders-cos .cos-rail{display:none!important}
+  .founders-cos .cos-list,.founders-cos[data-list] .cos-list{width:86%}
+  .founders-cos .cos-places{display:block;padding:12px 14px 4px;border-bottom:1px solid var(--line)}
+  .founders-cos .cos-places [data-mobile-menu]{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px}
+  .founders-cos .cos-places .tab-nav{gap:18px}
+  .founders-cos .cos-places .tab-btn{height:36px;font-size:15px}
+  .founders-cos .cos-places .founder-link{height:36px}
+  .founders-cos .cos-list-row{min-height:40px;align-items:center}
+  .founders-cos .tab-layout-split,.founders-cos[data-picture] .tab-layout-split{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+  .founders-cos[data-picture=shown] .tab-layout-split{grid-template-rows:160px minmax(0,1fr)}
+  .founders-cos[data-picture=shown] .tab-panel-photo{position:relative;opacity:1;filter:none;grid-row:1}
+  .founders-cos[data-picture=shown] .tab-content{grid-row:2}
+  .founders-cos #chat-log{padding:0 14px 10px;gap:14px}
+  .founders-cos #attach-tray,.founders-cos .input-row,.founders-cos #voice-live,.founders-cos #save-state,.founders-cos #voice-transcript,.founders-cos #voice-sessions{width:calc(100% - 20px)}
+  .founders-cos #tab-confer.active{padding:0 0 max(4px,env(safe-area-inset-bottom))}
+  .founders-cos .input-row{padding:8px 8px 6px 12px}
+  .founders-cos #send-input{font-size:16px}
+  .founders-cos .msg-user .msg-text{max-width:86%}
+  /* A new chat: a 160 px band of the table, then the greeting. */
+  .founders-cos #chat-log>.cos-hero{width:calc(100% + 28px);margin:0 -14px 4px;border-radius:0;box-shadow:none;background:none}
+  .founders-cos .cos-hero-ph{height:160px;min-height:0}
+  .founders-cos .cos-hero-ph::before{background:linear-gradient(0deg,var(--paper),rgba(247,240,228,0) 45%)}
+  .founders-cos .cos-hero-copy{padding:12px 16px 4px;gap:6px}
+  .founders-cos .cos-hero h1{font-size:27px;line-height:1.1}
+  .founders-cos .cos-hero p{font-size:15px}
+  .founders-cos dialog{inset:0;width:100%;max-width:100%;height:100dvh;max-height:100dvh;margin:0;border:0;padding:20px max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom));overflow:auto}
+  .founders-cos dialog h2{min-width:0;overflow-wrap:anywhere}.founders-cos dialog header button{flex:none;min-height:44px}
+  .founders-cos.both-open .tab-layout-split{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+  .founders-cos.both-open #mc-both{grid-column:1;grid-row:2}
+  .founders-cos.both-open .tab-content,.founders-cos.both-open #mc-both{min-width:0;max-width:100%}
+}

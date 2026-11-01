@@ -273,7 +273,7 @@ def test_picture_preference_is_owner_device_scoped_and_validated(cos):
     client = cos.app.test_client()
     assert client.post('/ui/history/preferences', json={'device':'desk','picture':'faded'}, headers=OWNER).get_json() == {'picture':'faded'}
     assert client.get('/ui/history/preferences?device=desk', headers=OWNER).get_json() == {'picture':'faded'}
-    assert client.get('/ui/history/preferences?device=phone', headers=OWNER).get_json() == {'picture':'shown'}
+    assert client.get('/ui/history/preferences?device=phone', headers=OWNER).get_json() == {'picture':'faded'}  # unsaved: the default (Review 06)
     assert client.post('/ui/history/preferences', json={'picture':'<script>'}, headers=OWNER).status_code == 400
     assert client.post('/ui/history/preferences', json={'picture':'hidden'}).status_code == 401
 
@@ -291,3 +291,10 @@ def test_founders_page_serves_shared_style_and_canonical_history_client(cos):
     assert 'data-mc-panel' in html  # This page owns its MC controls; no second floating shell.
     assert client.get('/founders-ui/founders.css').status_code == 200
     assert client.get('/static/cos-history-ui.js').status_code == 200
+
+
+def test_board_tab_has_its_own_address(cos):
+    # Review 06: the Board tab pushes /ui/records; reloading it opens the Board instead of redirecting to Confer.
+    response = cos.app.test_client().get('/ui/records', headers=OWNER)
+    assert response.status_code == 200
+    assert "const INITIAL_TAB = 'records';" in response.get_data(as_text=True)

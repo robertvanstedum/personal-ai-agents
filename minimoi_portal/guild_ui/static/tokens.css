@@ -29,14 +29,17 @@
   --gu-on-dark-fill: rgba(255, 255, 255, 0.18);
   --gu-msg-own-bg: #e8dcc6;
   --gu-input-bg: #ffffff;
-  --gu-portal-ink: #e8e8e8;
-  --gu-portal-dim: rgba(255, 255, 255, 0.55);
+  --gu-portal-ink: rgba(247, 240, 228, 0.8);
+  --gu-portal-dim: rgba(247, 240, 228, 0.55);
   --gu-portal-active: #ffffff;
   --gu-nav-sep: rgba(198, 138, 94, 0.3);
   --gu-shadow-door: 0 1px 4px rgba(42, 26, 14, 0.07);
   /* chrome */
-  --gu-portal-bg: #12122a;
-  --gu-portal-link: #c68a5e;
+  /* the dashboard's strip (Review 06): deep green, italic orange brand, light links, orange underline */
+  --gu-portal-bg: #0b2c24;
+  --gu-portal-link: rgba(247, 240, 228, 0.8);
+  --gu-portal-brand: #c76736;
+  --gu-portal-underline: #c76736;
   --gu-nav-bg: #2a1f14;
   --gu-nav-link: #c9ab85;
   --gu-nav-active: #f5ede0;

@@ -99,7 +99,7 @@ def create_blueprint(history: History, *, resolve_owner: Callable) -> Blueprint:
         path = history.root / "preferences" / (key + ".json")
         try:
             with history._locked():
-                value = fsio.read_doc(path) or {"picture": "shown"}
+                value = fsio.read_doc(path) or {"picture": "faded"}   # Review 06: the faint picture is the default
                 if request.method == "POST":
                     if body.get("picture") not in ("shown", "faded", "hidden"):
                         return jsonify({"error": "invalid_picture"}), 400

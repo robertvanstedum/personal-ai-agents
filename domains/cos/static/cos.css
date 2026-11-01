@@ -661,3 +661,11 @@ body.show-cos-board .tab-layout-split { display: block; }
 body.show-cos-board .tab-panel-photo, body.show-cos-board #mc-both { display: none; }
 body.show-cos-board .tab-content { width: 100%; padding: 0; }
 #cos-board { display: block; width: 100%; height: calc(100dvh - 150px); min-height: 420px; border: 0; }
+
+/* Review 06: CoS's mark (the Marcus Aurelius bust) beside each reply's name. A relative url, so it resolves directly and through the portal. */
+.founders-cos .msg-cos .msg-label::before {
+  content: ""; width: 22px; height: 22px; flex: none; border-radius: 50%;
+  background: #fff url(photos/cos-mark-96.webp) 50% 50% / cover no-repeat;
+  background-image: image-set(url(photos/cos-mark-96.webp) 1x, url(photos/cos-mark-256.webp) 3x);
+  box-shadow: 0 0 0 1px rgba(18, 59, 48, .16);
+}

@@ -2,22 +2,47 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>Chief of Staff</title>
-  <link rel="stylesheet" href="/static/cos.css?v=20261101-board1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/cos.css?v=20261101-review06b">
   <link rel="stylesheet" href="/founders-ui/founders.css?v={{ founders_ui_version }}">
   <script type="module" src="/founders-ui/mobile-nav.js?v={{ founders_ui_version }}"></script>
 </head>
-<body class="founders-cos" data-picture="shown" data-mc-panel>
+<body class="founders-cos" data-picture="faded" data-mc-panel data-list="open">
 
+  {# Review 06 (Option A): one app row under the strip. On a phone it is the one bar: ☰, the mark with the chat's title,
+     MC's face and ✎; the tabs and Guildhall move into ☰'s list (mobile-nav.js), ⋯ joins the bar. #}
   <header class="cos-header"><div class="header-nav">
-    <span class="mobile-only mobile-identity">CoS</span><nav class="tab-nav" aria-label="Chief of Staff"><button class="tab-btn" data-tab="confer">Confer</button><button id="conversation-new" type="button" data-new-conversation aria-label="New conversation" title="Start a new conversation">+ New</button><a class="tab-btn" data-portal-link href="/guild-next/guild/rooms">Guildhall</a><button class="tab-btn" data-tab="records">Records</button></nav>
-    <button id="history-open" type="button">History</button><button id="files-open" type="button">Files</button>
-    <a class="founder-link" id="mc-page" href="#">MC ↗</a><button id="both-open" type="button" aria-pressed="false">Both</button><button id="picture-mode" type="button" aria-label="Change picture appearance">◐</button><button id="popout" type="button" aria-label="Open conversation in a window">⧉</button>
-    <details class="mobile-work-more" data-mobile-more><summary>More</summary><div class="mobile-work-menu" data-mobile-menu></div></details>
+    <button class="phone-only cos-bar-btn" type="button" data-list-open aria-label="Open the conversation list" title="Conversations">☰</button>
+    {# CoS's mark: the Marcus Aurelius bust. srcset is relative (the portal rewrites src, not srcset), like the voice imports. #}
+    <span class="cos-mark"><img src="/static/photos/cos-mark-96.webp" srcset="../static/photos/cos-mark-96.webp 96w, ../static/photos/cos-mark-256.webp 256w" sizes="30px" width="28" height="28" alt=""><span class="cos-mark-words"><span class="cos-mark-name">Chief of Staff</span><span class="phone-only cos-mark-title" data-conv-title-short>New chat</span></span></span>
+    <nav class="tab-nav" aria-label="Chief of Staff"><button class="tab-btn" data-tab="confer">Confer</button><button class="tab-btn" data-tab="records">Board</button></nav>
+    <span class="header-gap"></span>
+    <a class="founder-link" data-portal-link href="/guild-next/guild/rooms">Guildhall ↗</a>
+    <a class="founder-link" id="mc-page" href="#" aria-label="MC ↗"><img class="mc-face" data-mc-face alt=""><span class="mc-page-words">MC ↗</span></a>
+    <button class="phone-only cos-bar-btn cos-bar-new" type="button" data-new-conversation aria-label="New chat" title="New chat">✎</button>
+    <span class="phone-tools" data-phone-tools></span>
   </div></header>
   <dialog id="history-sheet"><header><h2>History</h2><button type="button" data-close-sheet>Close</button></header><button id="history-new" type="button" data-new-conversation>+ New conversation</button><div id="history-list"></div><button id="history-more" hidden>More conversations</button></dialog>
   <dialog id="files-sheet"><header><h2>Files</h2><button type="button" data-close-sheet>Close</button></header><div id="files-sheet-content"></div></dialog>
+  <div class="cos-body">
+  {# The conversation list (the canonical history). ‹ folds it to the rail; below 900 px the rail stays and ☰ opens the list
+     over the chat. #}
+  <nav class="cos-rail" aria-label="Conversations">
+    <button class="cos-rail-btn" type="button" data-list-open aria-label="Open the conversation list" title="Conversations">☰</button>
+    <button class="cos-rail-btn cos-rail-new" type="button" data-new-conversation aria-label="New chat" title="New chat">＋</button>
+    <button class="cos-rail-btn" type="button" data-list-search aria-label="Search conversations" title="Search">⌕</button>
+  </nav>
+  <div class="cos-scrim" data-list-close hidden></div>
+  <aside class="cos-list" aria-label="Conversations">
+    <div class="cos-places" data-mobile-more><div data-mobile-menu></div></div>
+    <div class="cos-list-top"><button id="conversation-new" type="button" data-new-conversation aria-label="New chat" title="Start a new chat"><span aria-hidden="true">＋</span> New chat</button><button class="cos-list-fold" type="button" data-list-fold aria-label="Fold the list" title="Fold the list">‹</button></div>
+    <input class="cos-list-search" type="search" data-list-filter placeholder="Search" aria-label="Search conversations" autocomplete="off">
+    <div class="cos-list-rows" data-conv-list></div>
+    <button class="cos-list-more" type="button" data-conv-list-more hidden>More conversations</button>
+  </aside>
   <!-- ── Two-column split: content left, photo right ── -->
   <div class="tab-layout-split">
 
@@ -26,25 +51,45 @@
 
       <!-- Confer -->
       <div id="tab-confer" class="tab-panel">
-        <div id="chat-log" aria-live="polite"><div id="cos-greeting"><h1>Hello, Robert.</h1><p>Your conversations, kept here.</p></div></div>
+        {# The slim conversation header: the chat's title; Files only when there are files; everything secondary in ⋯. #}
+        <div class="conv-head">
+          <h2 class="conv-title" data-conv-title>New chat</h2>
+          <span class="conv-tools" data-conv-tools>
+            <button id="files-open" type="button" hidden>Files <span class="conv-count" data-files-count></span></button>
+            <details class="conv-more" data-conv-more>
+              <summary aria-label="More for this chat" title="More">⋯</summary>
+              <div class="conv-menu" data-conv-menu>
+                <button id="history-open" type="button">History</button>
+                <div class="conv-menu-rule"></div>
+                <button id="picture-mode" type="button" aria-label="Change picture appearance">Picture <span class="picture-seg"><span data-picture-opt="shown">Shown</span><span data-picture-opt="faded">Faded</span><span data-picture-opt="hidden">Hidden</span></span></button>
+                <button id="both-open" type="button" aria-pressed="false">Side by side with MC <kbd>Ctrl `</kbd></button>
+                <button id="popout" type="button" aria-label="Open conversation in a window">Open in its own window</button>
+                <div class="conv-menu-rule"></div>
+                <button type="button" data-voice-start>Talk with CoS (voice)</button>
+                <p class="conv-menu-note">Voice is AI-generated.</p>
+              </div>
+            </details>
+          </span>
+        </div>
+        <div id="chat-log" aria-live="polite"><div id="cos-greeting" class="cos-hero"><div class="cos-hero-copy"><div class="cos-eyebrow">Chief of Staff</div><h1 data-greeting>Hello, Robert.</h1><p>Your conversations, kept here.</p></div><div class="cos-hero-ph"><img src="/static/photos/cos_discuss_private.png?v=1" alt=""></div></div></div>
         <button id="history-earlier" type="button" hidden>Earlier messages</button>
         <div id="attach-tray" aria-live="polite"></div>
         <div class="input-row">
           <input id="attach-input" type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json,.html,.htm,.png,.jpg,.jpeg,.gif,.webp">
-          <button id="btn-attach" type="button" title="Attach a file" aria-label="Attach a file">📎</button>
+          <button id="btn-attach" type="button" title="Add a file or picture" aria-label="Attach a file">＋</button>
           <textarea id="send-input" rows="2" placeholder="Message CoS…" autocomplete="off" autofocus></textarea>
           <button id="btn-voice" title="Start voice conversation" aria-label="Start voice conversation">🎤</button>
-          <button id="btn-dictate" type="button" disabled aria-label="Dictate into the message draft">Dictate</button>
+          <button id="btn-dictate" type="button" disabled title="Dictate" aria-label="Dictate into the message draft">Dictate</button>
           <button id="btn-send">Send</button>
         </div>
         {# Her direct voice (Spec 165 v0.3 §6.6): filled only when the capabilities read offers it; empty and hidden otherwise. #}
         <div id="voice-live" class="voice-live" role="group" aria-label="Voice conversation" hidden></div>
         <div id="save-state" role="status">Loading your conversation…</div>
-        <div class="talk-meta">
+        {# The voice line under the composer is gone (Robert, 1 Nov: "completely unneeded"); voice starts from ⋯. These
+           two stay for the voice code that writes them. #}
+        <div class="talk-meta" hidden>
           <span id="voice-status"></span>
           <span id="voice-provider"></span>
-          <span>Voice is AI-generated.</span>
-          <a href="/ui/memory" target="_blank">memory ↗</a>
         </div>
         <details id="cos-files">
           <summary>Files from CoS</summary>
@@ -99,6 +144,7 @@
     </div>
 
   </div><!-- .tab-layout-split -->
+  </div><!-- .cos-body -->
 
 <script>
 window.cosVoiceConversationAllowed = false;
@@ -148,7 +194,8 @@ function appendMsg(role, text, files) {
   wrap.className = 'msg msg-' + role;
   const label = document.createElement('div');
   label.className = 'msg-label';
-  label.textContent = role === 'user' ? 'You' : 'CoS';
+  label.textContent = role === 'user' ? 'You' : 'Chief of Staff';
+  label.dataset.time = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const body  = document.createElement('div');
   body.className = 'msg-text';
   body.textContent = text;
@@ -486,8 +533,8 @@ function esc(s) {
 }
 
 // ── Initialise on load ───────────────────────────────────────────────────────
-activateTab('confer', false);
-if (INITIAL_TAB !== 'confer') loadTab(INITIAL_TAB);
+activateTab(INITIAL_TAB === 'records' ? 'records' : 'confer', false);   // /ui/records opens the Board
+if (INITIAL_TAB !== 'confer' && INITIAL_TAB !== 'records') loadTab(INITIAL_TAB);
 </script>
 <script type="module">
 import { ConferVoiceController } from "../static/realtime-voice/realtime-confer-controller.js?v=20261015-token1";

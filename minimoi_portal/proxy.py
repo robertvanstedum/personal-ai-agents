@@ -119,27 +119,27 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
     """
     display_name = user.get("display_name", user.get("username", "")) if user else ""
 
-    curator_active    = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/curator"    else ""
-    german_active     = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/german"     else ""
-    portuguese_active = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/portuguese" else ""
-    guild_active      = "color:#ffffff;font-weight:600;" if portal_prefix == "/guild"          else ""
-    cos_active        = "color:#ffffff;font-weight:600;" if portal_prefix == "/app/cos"        else ""
-
-    active_styles = {
-        "curator": curator_active,
-        "german": german_active,
-        "portuguese": portuguese_active,
-        "guild": guild_active,
-        "cos": cos_active,
+    # The dashboard's palette (Review 06): deep green strip, italic orange brand, light workspace links; the active
+    # one white with a 2 px orange underline. Guild pages (inline styles blocked by their CSP) take the same look from
+    # the --gu-portal-* tokens and the is-active class.
+    prefixes = {
+        "curator": "/app/curator",
+        "german": "/app/german",
+        "portuguese": "/app/portuguese",
+        "guild": "/guild",
+        "cos": "/app/cos",
     }
     nav_links = []
     for workspace in workspace_navigation(user):
         label = workspace.get("short_label", workspace["label"])
+        active = prefixes.get(workspace["key"]) == portal_prefix
         nav_links.append(
             f'<a href="{workspace["path"]}" '
-            f'class="portal-workspace-link" '
-            f'style="color:#C68A5E;text-decoration:none;'
-            f'{active_styles[workspace["key"]]}">{label}</a>'
+            f'class="portal-workspace-link{" is-active" if active else ""}" '
+            f'style="color:{"#ffffff" if active else "rgba(247,240,228,.8)"};text-decoration:none;'
+            f'display:inline-flex;align-items:center;height:100%;padding-top:2px;'
+            f'border-bottom:2px solid {"#c76736" if active else "transparent"};'
+            f'{"font-weight:600;" if active else ""}">{label}</a>'
         )
     workspace_links = "".join(nav_links)
 
@@ -168,7 +168,7 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
   #portal-nav-bar, #portal-nav-bar * {{ box-sizing:border-box; }}
   #portal-nav-workspaces {{
     min-width:0;display:flex;align-items:center;gap:14px;
-    white-space:nowrap;
+    white-space:nowrap;align-self:stretch;
   }}
   @media (max-width:768px) {{
     #portal-nav-bar {{ padding:0 10px!important; }}
@@ -191,17 +191,17 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
 </style>
 <div id="portal-nav-bar" style="
   position:fixed;top:0;left:0;right:0;z-index:999999;
-  height:38px;background:#12122a;color:#e8e8e8;
+  height:38px;background:#0b2c24;color:rgba(247,240,228,.8);
   display:flex;align-items:center;padding:0 16px;gap:0;
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  font-size:13px;border-bottom:1px solid rgba(255,255,255,0.12);
+  font-size:13px;border-bottom:1px solid rgba(255,255,255,0.08);
   box-shadow:0 1px 8px rgba(0,0,0,0.4);
 ">
-  <a id="portal-nav-brand" href="/dashboard" style="color:#C68A5E;font-weight:700;text-decoration:none;letter-spacing:-0.3px;margin-right:16px;">mini-moi</a>
-  <span id="portal-nav-divider" style="color:rgba(255,255,255,0.2);margin-right:16px;">|</span>
+  <a id="portal-nav-brand" href="/dashboard" style="color:#c76736;font-family:'Playfair Display',Georgia,serif;font-style:italic;font-weight:600;font-size:17px;line-height:1;text-decoration:none;margin-right:16px;">mini-moi</a>
+  <span id="portal-nav-divider" style="color:rgba(247,240,228,0.25);margin-right:16px;">|</span>
   <span id="portal-nav-workspaces">{workspace_links}</span>
-  <a class="portal-nav-account" href="/account/password" style="color:rgba(255,255,255,0.45);text-decoration:none;margin-left:auto;margin-right:12px;">{display_name}</a>
-  <a class="portal-nav-signout" href="/logout" style="color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;">Sign out</a>
+  <a class="portal-nav-account" href="/account/password" style="color:rgba(247,240,228,0.55);text-decoration:none;margin-left:auto;margin-right:12px;">{display_name}</a>
+  <a class="portal-nav-signout" href="/logout" style="color:rgba(247,240,228,0.7);text-decoration:none;font-size:12px;">Sign out</a>
 </div>
 """
 

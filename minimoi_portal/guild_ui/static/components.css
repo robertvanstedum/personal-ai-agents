@@ -26,11 +26,11 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 
 /* portal bar (the portal's own bar) */
 #portal-nav-bar { height: var(--gu-portal-h); background: var(--gu-portal-bg); color: var(--gu-portal-ink); display: flex; align-items: center; padding: 0 var(--gu-s4); font-size: 13px; gap: var(--gu-s3); overflow: hidden; }
-#portal-nav-brand { color: var(--gu-portal-link); font-weight: 700; white-space: nowrap; flex: none; }
+#portal-nav-brand { color: var(--gu-portal-brand); font: italic 600 17px/1 'Playfair Display', Georgia, serif; white-space: nowrap; flex: none; }
 #portal-nav-divider { color: var(--gu-portal-dim); }
-#portal-nav-workspaces { display: flex; gap: 14px; min-width: 0; overflow: hidden; white-space: nowrap; }
-.portal-workspace-link { color: var(--gu-portal-link); text-decoration: none; }
-.portal-workspace-link.is-active { color: var(--gu-portal-active); font-weight: 600; }
+#portal-nav-workspaces { display: flex; gap: 14px; min-width: 0; overflow: hidden; white-space: nowrap; align-self: stretch; }
+.portal-workspace-link { color: var(--gu-portal-link); text-decoration: none; display: inline-flex; align-items: center; padding-top: 2px; border-bottom: 2px solid transparent; }
+.portal-workspace-link.is-active { color: var(--gu-portal-active); font-weight: 600; border-bottom-color: var(--gu-portal-underline); }
 .portal-workspace-link.is-off { opacity: 0.7; }
 .portal-nav-account { margin-left: auto; color: var(--gu-portal-dim); }
 .portal-nav-signout { white-space: nowrap; flex: none; }
