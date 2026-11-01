@@ -15,11 +15,9 @@ OPENCLAW="node /app/openclaw.mjs"
 log() { echo "mc-agent[start]: $*" >&2; }
 die() { log "REFUSED: $*"; exit 78; }
 
-# 1. No provider keys, ever.
-for v in ANTHROPIC_API_KEY OPENAI_API_KEY XAI_API_KEY MC_ANTHROPIC_API_KEY MC_MODEL_GATEWAY_KEY; do
-  eval "val=\${$v:-}"
-  [ -z "$val" ] || die "provider key $v is set in the container environment"
-done
+# 1. Provider credentials remain forbidden. Explicit dev gateway mode accepts only
+# MC's separately capped virtual key; plan mode still refuses it.
+node "$IMAGE_DIR/model-access.cjs" || die "model access policy refused"
 
 # 2. Persona: verify the release against its manifest, then lay it out.
 node -e '
@@ -48,12 +46,15 @@ log "persona $(node -e 'console.log(require(process.argv[1]).version)' "$PERSONA
 mkdir -p "$STATE"
 [ -f "$STATE/openclaw.json" ] || cp "$IMAGE_DIR/openclaw.json" "$STATE/openclaw.json"
 node -e '
-const fs=require("fs"),[img,live]=process.argv.slice(1);
+const fs=require("fs"),[img,live,policyFile]=process.argv.slice(1);
+const policy=require(policyFile);
 const PLUGINS_PERMITTED=new Set(["memory-core","anthropic","xai","openai","codex","minimoi-tools","mc-bounded-search"]);
-const I=JSON.parse(fs.readFileSync(img)),L=JSON.parse(fs.readFileSync(live));
+const base=JSON.parse(fs.readFileSync(img)),L=JSON.parse(fs.readFileSync(live));
 const isObj=v=>v&&typeof v==="object"&&!Array.isArray(v);
 const merge=(i,l)=>{if(!isObj(i)||!isObj(l))return i;const o={...l};for(const k of Object.keys(i))o[k]=merge(i[k],l[k]);return o;};
+const I=merge(policy.overlay(process.env),base);
 const out=merge(I,L);
+policy.validate(out,process.env);
 const allow=[...new Set([...(I.plugins?.allow||[]),...(L.plugins?.allow||[])])];
 const bad=allow.filter(p=>!PLUGINS_PERMITTED.has(p));
 if(bad.length){console.error("plugins not permitted: "+bad.join(","));process.exit(1);}
@@ -66,7 +67,7 @@ const patch={...I,plugins:{...I.plugins,allow}};
 fs.writeFileSync("/tmp/mc-config.patch.json",JSON.stringify(patch));
 console.error(changed?"config differs from image policy: patching":"config unchanged");
 process.exit(changed?10:0);
-' "$IMAGE_DIR/openclaw.json" "$STATE/openclaw.json" && rc=0 || rc=$?
+' "$IMAGE_DIR/openclaw.json" "$STATE/openclaw.json" "$IMAGE_DIR/model-access.cjs" && rc=0 || rc=$?
 case "$rc" in
   0) ;;
   10) OPENCLAW_CONFIG_PATH="$STATE/openclaw.json" $OPENCLAW config patch --file /tmp/mc-config.patch.json >/tmp/patch.out 2>&1 \
@@ -74,6 +75,8 @@ case "$rc" in
       log "config patched to image policy (openclaw config patch)" ;;
   *) die "config merge refused" ;;
 esac
+node -e 'require(process.argv[2]).validate(JSON.parse(require("fs").readFileSync(process.argv[1])),process.env)' \
+  "$STATE/openclaw.json" "$IMAGE_DIR/model-access.cjs" || die "installed model access policy refused"
 node -e '
 const c=JSON.parse(require("fs").readFileSync(process.argv[1]));
 const prof=((c.auth||{}).profiles)||{};

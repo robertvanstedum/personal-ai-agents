@@ -21,7 +21,7 @@ ENV DISABLE_AUTOUPDATER=1 \
     NODE_USE_ENV_PROXY=1
 
 # Root-owned, read-only to the node user. start.sh verifies the persona against its manifest on every start.
-COPY --chown=root:root docker/mc-agent-container/openclaw.json docker/mc-agent-container/start.sh docker/mc-agent-container/egress-proxy.mjs /opt/minimoi/mc-agent/
+COPY --chown=root:root docker/mc-agent-container/openclaw.json docker/mc-agent-container/start.sh docker/mc-agent-container/model-access.cjs docker/mc-agent-container/egress-proxy.mjs /opt/minimoi/mc-agent/
 # The reviewed portal relay (relay v2; byte-identical to the pinned native relay source). Runs as the mc-relay service.
 COPY --chown=root:root docker/mc-agent/relay_v2.mjs /opt/minimoi/mc-agent/relay_v2.mjs
 COPY --chown=root:root services/mc_operations/personas/mc-chat/releases/0.1.17/ /opt/minimoi/mc-agent/persona/
