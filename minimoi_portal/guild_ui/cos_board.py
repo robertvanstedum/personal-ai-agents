@@ -18,11 +18,11 @@ def view():
             "home": "/app/cos/ui/records", "media": "/guild-next/guild/media",
             "build_log": "/guild-next/guild/build/log",
             "cos_mark": url_for(".asset", filename="img/cos-mark-96.webp")}
-    # wall: Review 06 draws CoS's Board as a whiteboard (board.js and css/cos_wall.css); Guild's Board never sets it.
-    page = {"urls": urls, "storage_ns": c["storage_ns"], "wall": True,
+    # Reuse Guild Board interactions; the cos-board floor below keeps records separate.
+    page = {"urls": urls, "storage_ns": c["storage_ns"], "wall": False,
             "csrf_token": csrf_token(), "off_record_text": OFF_RECORD_TEXT}
     return render_template("guild_floor/cos_board.html", res=res, board_data=data,
-                           urls=urls, page_json=page, wall=True)
+                           urls=urls, page_json=page, wall=False)
 
 def mount(app, source):
     # No second chat backend, jobs, or agent tools are installed here.

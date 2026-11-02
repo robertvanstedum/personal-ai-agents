@@ -11,6 +11,7 @@
   {% endfor %}<script type="module" src="{{ url_for('.asset', filename='js/main.js') }}"></script>
   {% if embedded %}<link rel="stylesheet" href="{{ url_for('.asset', filename='companion_embed.css') }}">{% endif %}
   <link rel="stylesheet" href="/founders-ui/founders.css?v={{ founders_ui_version }}">
+  {% if page_id == 'floor' and not embedded %}<link rel="stylesheet" href="{{ url_for('.asset', filename='css/calm-craft.css') }}">{% endif %}
   {% block head %}{% endblock %}
 <script type="module" src="/founders-ui/mobile-nav.js?v={{ founders_ui_version }}"></script>
 </head>

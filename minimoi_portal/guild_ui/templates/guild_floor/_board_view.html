@@ -36,7 +36,8 @@
 </div>
 {% endif %}<form class="bd-panel" data-bd-photo-form hidden aria-label="New photo">
   <label for="bd-photo-file">Picture</label>
-  <input id="bd-photo-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-bd-photo-file>
+  <input id="bd-photo-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-bd-photo-file aria-describedby="bd-photo-format">
+  <p id="bd-photo-format" class="small">JPEG, PNG, WebP or GIF. For an iPhone HEIC photo, export a JPEG from Photos first.</p>
   <label for="bd-photo-caption">Caption</label>
   <input id="bd-photo-caption" data-bd-photo-caption maxlength="140" placeholder="optional">
   <button type="submit" class="btn" data-bd-photo-add disabled>Add image</button>

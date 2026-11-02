@@ -92,11 +92,12 @@
     <button type="button" class="fb-btn fb-rail" data-rail-toggle aria-expanded="true" aria-controls="main" data-count="{{ fb_files }}">Files</button>
     {% if not embedded %}<a class="fb-cos" href="/app/cos/ui/confer" title="Chief of Staff" aria-label="Chief of Staff"><img src="/static/guild/cos-mark-96.webp" alt="" width="26" height="26"></a>
     <button type="button" class="fb-btn fb-new" data-conv-new-proxy aria-label="New conversation" title="New conversation">✎</button>
+    <button type="button" class="fb-btn" data-craft-picture-toggle aria-pressed="true" aria-label="Hide picture">Picture</button>
     <details class="fb-more" data-fb-more>
       <summary class="fb-btn" aria-label="More for this conversation" title="More">⋯</summary>
       <div class="fb-menu" role="group" aria-label="This conversation">
         <button type="button" data-fb-rename>Rename</button>
-        <button type="button" data-fb-picture aria-label="Change the picture behind the conversation">Picture <span class="fb-seg"><span data-picture-opt="faded">Faded</span><span data-picture-opt="hidden">Hidden</span></span></button>
+
         <a href="{{ urls.floor }}?view=archived">Archive</a>
         <a href="/app/cos/ui/confer">Chief of Staff ↗</a>
       </div>
@@ -112,6 +113,7 @@
     <span class="visually-hidden" data-conv-current-title>{{ conversation.title if conversation else '' }}</span>
   </nav>
   {% endif %}
+  {% if page_id == 'floor' and not embedded %}<div class="calm-craft-workspace"><div class="calm-craft-chat">{% endif %}
   <ol class="mc-thread" data-mc-thread role="log" aria-live="polite" aria-label="Conversation thread">
     {% if state.notes.state != 'ok' %}
     <li class="msg msg-platform" data-kind="platform" data-notes-unavailable>
@@ -203,6 +205,7 @@
     <button type="button" class="btn mc-type" data-mc-type aria-controls="mc-input">Ask {{ mc_name }}</button>
   </div>{% endif %}
   </div>
+  {% if page_id == 'floor' and not embedded %}</div><aside class="calm-craft-picture" aria-label="Workshop picture"><a href="/static/guild/guild-craftsman.webp" target="_blank" rel="noopener" title="View full picture"><img src="/static/guild/guild-craftsman.webp" alt="Master and apprentice at the workshop bench"><span>View full picture ↗</span></a></aside></div>{% endif %}
 </aside>
 
 <template id="tpl-platform">

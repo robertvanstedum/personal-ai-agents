@@ -1,0 +1,8 @@
+/* Shared Board controls and behavior, with Confer's lighter workspace. */
+body.gu[data-floor="cos-board"]{background:#fcfbf8;color:#252a23;font:16px/1.5 'Source Sans 3',sans-serif;--gu-font-body:'Source Sans 3',sans-serif;--gu-font-hand:'Caveat',cursive;--gu-font-display:'Playfair Display',Georgia,serif}
+[data-floor="cos-board"] .gu-main{padding:18px 22px;background:#fcfbf8}
+[data-floor="cos-board"] .page-title{font:400 28px 'Playfair Display',Georgia,serif;color:#123b30}
+[data-floor="cos-board"] .bd-cork{background:#f0eadc;border:1px solid #d6cfbf;border-radius:12px;min-height:calc(100dvh - 120px)}
+[data-floor="cos-board"] .bd-photo>img{object-fit:contain}
+[data-floor="cos-board"] button,[data-floor="cos-board"] input,[data-floor="cos-board"] select{font-family:'Source Sans 3',sans-serif}
+@media(max-width:639px){[data-floor="cos-board"] .gu-main{padding:12px 10px}}

@@ -11,7 +11,7 @@ const PHONE = window.matchMedia('(max-width: 639px)');
 const KIND = { 'follow-up': 'Follow-up', research: 'Research', decision: 'Decision', risk: 'Risk' };
 const WITH = { robert: 'you', cos: 'CoS', mc: 'MC' };
 const WHO = { robert: 'You', cos: 'CoS', mc: 'MC' };
-const STATUS = { open: 'Open', doing: 'Doing', waiting: 'Waiting', done: 'Done' };
+const STATUS = { open: 'Open', doing: 'Working', waiting: 'Waiting', done: 'Done' };
 const COLUMNS = [['priority', 'P'], ['title', 'Item'], ['kind', 'Kind'], ['with', 'With'], ['status', 'Status'], ['moved', 'Moved'], ['comment', 'Latest comment']];
 
 const state = { loaded: false, data: null, view: 'open', q: '', sort: 'priority', dir: 1, open: null, busy: false, draft: '' };
@@ -62,7 +62,7 @@ async function load() {
   } catch (e) { body = null; }
   state.loaded = true;
   state.data = body && typeof body.state === 'string' ? body
-    : { state: 'unavailable', message: "In flight couldn't be read just now. Nothing is lost; try again." };
+    : { state: 'unavailable', message: "Underway couldn't be read just now. Nothing is lost; try again." };
   if (state.open && !rowById(state.open)) state.open = null;
   render();
 }
@@ -74,7 +74,7 @@ async function send(op, fields) {
     try {
       const r = await fetch(`${API}/${op}`, { method: 'POST', credentials: 'same-origin', headers: writeHeaders(), body: JSON.stringify(body) });
       answer = await r.json().catch(() => ({ outcome: 'failed', message: "The answer couldn't be read. Nothing is claimed; reload to check." }));
-    } catch (e) { answer = tries ? { outcome: 'failed', message: "In flight couldn't be reached. Nothing is claimed; try again." } : null; }
+    } catch (e) { answer = tries ? { outcome: 'failed', message: "Underway couldn't be reached. Nothing is claimed; try again." } : null; }
   }
   if (answer.outcome !== 'accepted') say(answer.message || "That change wasn't saved.", 'warn');
   else say('');
@@ -96,7 +96,7 @@ const rowById = (id) => openRows().concat(earlierRows()).find((r) => r.item_id =
 
 function shown() {
   let rows = openRows();
-  if (state.view === 'mine') rows = rows.filter((r) => r.with === 'robert');
+  if (state.view === 'mine') rows = rows.filter((r) => r.with === 'cos');
   if (state.view === 'waiting') rows = rows.filter((r) => r.status === 'waiting');
   if (state.q) {
     const q = state.q.toLowerCase();
@@ -140,14 +140,14 @@ function latest(row) {
 
 function newRowInput() {
   const input = h('input', { type: 'text', class: 'fl-new-input', 'data-fl-new': '', maxlength: '200', autocomplete: 'off',
-    placeholder: '＋ New row (type and press Enter)', 'aria-label': 'New row: type what it is and press Enter' });
+    placeholder: '＋ Add work for CoS (press Enter)', 'aria-label': 'Add work for CoS: type what it is and press Enter' });
   input.value = state.draft;
   input.addEventListener('input', () => { state.draft = input.value; });
   input.addEventListener('keydown', async (e) => {
     if (e.key !== 'Enter' || e.isComposing || !input.value.trim() || state.busy) return;
     e.preventDefault();
     state.busy = true;
-    const answer = await send('open', { title: input.value.trim(), priority: 2, status: 'open', kind: 'follow-up', with: 'robert' });
+    const answer = await send('open', { title: input.value.trim(), priority: 2, status: 'open', kind: 'follow-up', with: 'cos' });
     state.busy = false;
     if (answer.outcome === 'accepted') { state.draft = ''; render(); const again = $('[data-fl-new]'); if (again) again.focus(); }
   });
@@ -221,12 +221,12 @@ function sidePanel() {
   box.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); addComment(); } });
   aside.replaceChildren(
     h('div', { class: 'fl-ph' },
-      h('button', { type: 'button', class: 'fl-back', 'data-fl-close': '', onclick: closeRow }, '← In flight'),
+      h('button', { type: 'button', class: 'fl-back', 'data-fl-close': '', onclick: closeRow }, '← Underway'),
       h('span', { class: 'fl-ph-t' }, `P${r.priority} · ${KIND[r.kind]} · with ${WITH[r.with]}`),
       h('button', { type: 'button', class: 'fl-x', 'data-fl-close': '', 'aria-label': 'Close', onclick: closeRow }, '✕')),
     h('div', { class: 'fl-doc' },
       h('h3', { class: 'fl-doc-ti' }, r.title),
-      h('p', { class: 'fl-since' }, `${KIND[r.kind]} · since ${since(r.opened_at)}${closed ? ` · ${r.outcome === 'dropped' ? 'dropped' : 'done'} ${moved(r.closed_at)}` : ''}`),
+      h('p', { class: 'fl-since' }, `${KIND[r.kind]} · since ${since(r.opened_at)}${closed ? ` · ${r.outcome === 'dropped' ? 'cancelled' : 'done'} ${moved(r.closed_at)}` : ''}`),
       h('p', { class: 'fl-ctl' }, statusSelect(r, closed), priorityChip(r, closed), withSel),
       h('p', { class: 'fl-h' }, 'Comments'),
       h('div', { class: 'fl-thread', 'data-fl-thread': '' }, ...(r.comments.length ? r.comments.map((c) =>
@@ -236,8 +236,9 @@ function sidePanel() {
       box,
       h('p', { class: 'fl-acts' },
         h('button', { type: 'button', class: 'fl-btn', 'data-fl-add-comment': '', onclick: addComment }, 'Add comment'),
+        closed ? null : h('button', { type: 'button', class: 'fl-btn', 'data-fl-cancel': r.item_id, onclick: () => send('close', { item_id: r.item_id, outcome: 'dropped' }) }, 'Cancel work'),
         closed ? null : h('button', { type: 'button', class: 'fl-btn fl-done', 'data-fl-done': r.item_id, onclick: () => send('close', { item_id: r.item_id, outcome: 'done' }) }, 'Done'),
-        h('button', { type: 'button', class: 'fl-btn', disabled: true, title: 'later' }, 'Back to the wall'),
+        h('button', { type: 'button', class: 'fl-btn', disabled: true, title: 'later' }, 'Back to the Board'),
         h('button', { type: 'button', class: 'fl-btn', disabled: true, title: 'later' }, 'Talk it over'))));
 }
 
@@ -247,7 +248,7 @@ function csv() {
   const lines = [['Priority', 'Item', 'Kind', 'With', 'Status', 'Moved', 'Latest comment'].map(cell).join(',')];
   for (const r of shown()) lines.push([`P${r.priority}`, r.title, KIND[r.kind], WITH[r.with], STATUS[r.status], r.last_moved_at.slice(0, 10), latest(r)].map(cell).join(','));
   const blob = new Blob(['﻿' + lines.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
-  const a = h('a', { href: URL.createObjectURL(blob), download: `in-flight-${new Date().toISOString().slice(0, 10)}.csv` });
+  const a = h('a', { href: URL.createObjectURL(blob), download: `underway-${new Date().toISOString().slice(0, 10)}.csv` });
   document.body.append(a);
   a.click();
   a.remove();
@@ -260,7 +261,11 @@ function render() {
   const ok = state.data && state.data.state === 'ok';
   const note = $('[data-fl-state]');
   note.hidden = ok || !state.loaded;
-  note.textContent = state.loaded && !ok ? state.data.message : '';
+  const outline = $('[data-fl-outline]');
+  outline.hidden = !!ok;
+  outline.querySelector('.underway-badge').textContent = state.loaded && state.data.state === 'not_configured' ? 'In construction' : 'Status unavailable';
+  outline.querySelector('.underway-limit').textContent = !state.loaded ? 'Checking the work record…' : state.data.state === 'not_configured' ? 'Tracking is not connected here yet. No work is being shown or saved on this page.' : 'The work record could not be read. Existing work may still be there; check again before making changes.';
+  note.textContent = ''; note.hidden = true;
   PANEL.dataset.flMode = state.loaded ? state.data.state : 'loading';
   for (const b of PANEL.querySelectorAll('[data-fl-view]')) {
     b.setAttribute('aria-pressed', String(b.dataset.flView === state.view));
@@ -274,6 +279,7 @@ function render() {
 }
 
 function bind() {
+  $('[data-fl-retry]').addEventListener('click', load);
   for (const b of PANEL.querySelectorAll('[data-fl-view]')) b.addEventListener('click', () => { state.view = b.dataset.flView; render(); });
   $('[data-fl-search]').addEventListener('input', (e) => { state.q = e.target.value.trim(); render(); });
   $('[data-fl-download]').addEventListener('click', csv);

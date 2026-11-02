@@ -23,7 +23,7 @@ function railPref() {
   return load(KEY, (v) => (v === 'open' || v === 'closed' ? v : null), () => 'open', 'rail setting');
 }
 
-const overlayRail = () => !window.matchMedia(WIDE).matches && !window.matchMedia(PHONE).matches;
+const overlayRail = () => !!$('.calm-craft-workspace') || (!window.matchMedia(WIDE).matches && !window.matchMedia(PHONE).matches);
 const drawerHistory = () => window.matchMedia('(max-width: 899px)').matches;
 
 function syncScrim() {
@@ -83,6 +83,11 @@ function syncFiles() {
   if (context) context.dataset.hasFiles = String(n > 0);
   for (const b of $$('[data-rail-toggle]')) b.dataset.count = String(n);
   for (const b of $$('[data-mobile-files]')) b.hidden = n === 0;
+  if (n === 0 && $('.calm-craft-workspace') && document.body.dataset.rail === 'open') {
+    const restore = $('#main')?.contains(document.activeElement);
+    setRail(false, false);
+    if (restore) $('[data-craft-picture-toggle]')?.focus();
+  }
 }
 
 // The state under the title shows only when something is wrong: "ready" and "connected · response not yet verified" are
@@ -109,7 +114,12 @@ function greet() {
 const PICTURE_KEY = 'floor.picture';
 function setPicture(mode, persist) {
   document.body.dataset.craftPicture = mode;
+  for (const b of $$('[data-craft-picture-toggle]')) {
+    b.setAttribute('aria-pressed', String(mode !== 'hidden'));
+    b.setAttribute('aria-label', mode === 'hidden' ? 'Show picture' : 'Hide picture');
+  }
   if (persist) save(PICTURE_KEY, mode);
+  requestAnimationFrame(fitThread);
 }
 
 function initHeader() {
@@ -127,6 +137,7 @@ function initHeader() {
   for (const b of $$('[data-conv-new-proxy]')) {
     b.addEventListener('click', () => { const real = $('[data-floor-history] [data-conv-new]'); if (real) real.click(); });
   }
+  for (const b of $$('[data-craft-picture-toggle]')) b.addEventListener('click', () => setPicture(document.body.dataset.craftPicture === 'hidden' ? 'faded' : 'hidden', true));
   const more = $('[data-fb-more]');
   if (!more) return;
   const close = () => { more.open = false; };
@@ -152,6 +163,7 @@ function fitRailToWidth() {
   const context = $('[data-floor-context]');
   const phone = window.matchMedia(PHONE).matches;
   if (context) context.open = !phone;
+  if ($('.calm-craft-workspace')) { if (context) context.open = true; setRail(false, false); return; }
   if (phone) { setRail(true, false); return; }
   setRail(window.matchMedia(WIDE).matches, false);                       // beside the chat when wide, closed (a Files button opens it) when medium
 }
@@ -285,7 +297,7 @@ export function initFloorLayout(p) {
   for (const b of $$('[data-rail-toggle]')) {
     b.addEventListener('click', () => {
       // A phone's bar: the files are folded under the conversation; Files n opens them there.
-      if (window.matchMedia(PHONE).matches) {
+      if (window.matchMedia(PHONE).matches && !$('.calm-craft-workspace')) {
         const context = $('[data-floor-context]');
         if (context) { context.open = true; context.scrollIntoView({ block: 'nearest' }); }
         return;

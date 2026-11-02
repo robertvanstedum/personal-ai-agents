@@ -68,3 +68,22 @@
  .founders-cos[data-cos-tab=confer] .input-row{padding:8px 10px}
  .founders-cos[data-cos-tab=confer].both-open .tab-layout-split{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(320px,1fr) minmax(320px,1fr);overflow:auto}
 }
+
+/* The workspace pages use the same paper and type as Confer. */
+.founders-cos.show-cos-flight .tab-content,.founders-cos #tab-flight{background:#fcfbf8}
+.founders-cos .underway-intro{max-width:1120px;margin:12px 0 26px}
+.founders-cos .underway-intro h1{margin:0 0 8px;font:400 30px/1.2 var(--serif);color:var(--green)}
+.founders-cos .underway-intro p{margin:0;color:var(--soft);font:16px/1.5 var(--sans)}
+.founders-cos .underway-outline{max-width:1000px;padding:28px;border:1px solid var(--line);border-radius:14px;background:#fff}
+.founders-cos .underway-outline[hidden]{display:none}
+.founders-cos .underway-outline h2{font:600 20px var(--sans);margin:16px 0 8px}
+.founders-cos .underway-outline p{font:16px/1.5 var(--sans);color:var(--soft)}
+.founders-cos .underway-badge{font:600 12px var(--sans);color:#824411;background:#f7ecd8;border-radius:6px;padding:5px 9px}
+.founders-cos .underway-stages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:24px 0}
+.founders-cos .underway-stages section{padding:16px;border:1px solid #dbe2d7;border-radius:10px;background:#f6f7f3}
+.founders-cos .underway-stages h3{margin:0;font:600 16px var(--sans)}
+.founders-cos .underway-stages p{margin:8px 0 0;font-size:14px}
+.founders-cos .underway-limit{border-top:1px solid var(--line);padding-top:18px}
+@media(max-width:639px){.founders-cos .underway-stages{grid-template-columns:1fr}.founders-cos .underway-outline{padding:18px}}
+
+@media(max-width:640px){.founders-cos.show-cos-flight .cos-mark-title::after{content:"Underway"}}
