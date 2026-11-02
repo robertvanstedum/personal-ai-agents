@@ -30,6 +30,7 @@
     const who = document.createElement('div'); who.className = 'msg-label'; who.textContent = mine ? label : 'Chief of Staff';
     const time = clock(at); if (time) who.dataset.time = time;
     const words = document.createElement('div'); words.className = 'msg-text'; words.textContent = text;
+    if (!mine) window.MiniMoiMessageText?.render(words, text);
     item.append(who, words); return item;
   }
   async function reload(earlier = false) {
@@ -45,7 +46,7 @@
       if (turn.reply_text) frag.append(row('CoS', turn.reply_text, turn.turn_id, turn.answered_at || turn.created_at));
       else frag.append(row('CoS', turn.status === 'pending' ? 'Working on it' : 'This reply was interrupted. Your message is saved.', turn.turn_id, turn.created_at));
       const p = pending();
-      if (p && turn.turn_id === 't-' + p.id.replaceAll('-', '')) { state.textContent = 'Saved'; if (turn.status !== 'pending') { if (input.value === JSON.parse(p.key)[0]) { input.value=''; persistDraft(); } const sentIds=new Set((p.files||[]).map(f=>f.file_id)); attached=attached.filter(f=>!sentIds.has(f.file_id));renderTray();clearPending(); } }
+      if (p && turn.turn_id === 't-' + p.id.replaceAll('-', '')) { state.textContent = 'Saved'; if (turn.status !== 'pending') { if (input.value === JSON.parse(p.key)[0]) { input.value=''; persistDraft(); } const sentIds=new Set((p.files||[]).map(f=>f.file_id)); attached=attached.filter(f=>!sentIds.has(f.file_id));renderTray();window.MiniMoiNotices?.clear('cos-chat:' + cid + ':' + p.id);clearPending(); } }
     }
     for (const note of d.notes || []) frag.append(row('CoS', note.text || note.body || 'Saved update'));
     const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
@@ -190,7 +191,10 @@
   }
   async function loadList(more = false) {
     const d = await api('history/conversations?limit=50' + (more && listNext ? '&cursor=' + encodeURIComponent(listNext) : ''));
-    conversations = more ? conversations.concat(d.items) : d.items; listNext = d.next; paintList();
+    conversations = more ? conversations.concat(d.items) : d.items; listNext = d.next;
+    const selected = conversations.find(c => c.conversation_id === cid);
+    if (selected) { conversation = selected; showTitle(selected); }
+    paintList();
   }
   function refreshList() {   // one read at a time; a request while one runs is folded into it
     if (listing) return listing;

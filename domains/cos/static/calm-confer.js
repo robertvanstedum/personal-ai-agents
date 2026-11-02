@@ -17,6 +17,7 @@
     document.body.dataset.picture = shown ? 'shown' : 'hidden';
     button.setAttribute('aria-pressed', String(shown));
     button.setAttribute('aria-label', shown ? 'Hide picture' : 'Show picture');
+    button.title = shown ? 'Hide picture' : 'Show picture';
     label.textContent = shown ? 'Hide picture' : 'Picture';
   }
   async function preference(value) {

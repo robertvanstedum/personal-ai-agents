@@ -424,6 +424,12 @@ export function conferVoice(d) {
 
   function say(text, { error = false, transient = false } = {}) {
     if (clearing) { cancel(clearing); clearing = null; }
+    const notices = globalThis.window?.MiniMoiNotices;
+    if (notices) {
+      if (error && text) notices.show('cos-voice', text, { title: 'Voice needs attention' });
+      else notices.clear('cos-voice');
+      if (error) { els.line.textContent = ''; return; }
+    }
     els.line.textContent = text || '';
     els.line.classList?.toggle('voice-error', Boolean(error && text));
     if (transient && text) clearing = later(() => { clearing = null; if (els.line.textContent === text) els.line.textContent = ''; }, STATUS_CLEAR_MS);

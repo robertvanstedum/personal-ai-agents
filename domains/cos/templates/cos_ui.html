@@ -8,8 +8,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/cos.css?v=20261101-review06b">
   <link rel="stylesheet" href="/founders-ui/founders.css?v={{ founders_ui_version }}">
-  <link rel="stylesheet" href="/static/calm-confer.css?v=20261102-actions1">
+  <link rel="stylesheet" href="/static/calm-confer.css?v=20261102-notices1">
   <script type="module" src="/founders-ui/mobile-nav.js?v={{ founders_ui_version }}"></script>
+  <script defer src="/founders-ui/notices.js?v={{ founders_ui_version }}"></script>
+  <script defer src="/founders-ui/message-text.js?v=20261102-1"></script>
 </head>
 <body class="founders-cos" data-picture="shown" data-mc-panel data-list="open">
 
@@ -63,9 +65,9 @@
         {# The slim conversation header: the chat's title; Files only when there are files; everything secondary in ⋯. #}
         <div class="conv-head">
           <h2 class="conv-title" data-conv-title>New chat</h2>
-          <button id="confer-welcome" type="button">Welcome</button>
+          <button id="confer-welcome" type="button" aria-label="Welcome" title="Welcome"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10H3zM9 20v-7h6v7"/></svg></button>
           <span class="conv-tools" data-conv-tools>
-            <button id="picture-mode" type="button" disabled aria-label="Hide picture" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m3 17 6-5 4 3 4-5 4 5"/></svg><span data-picture-label>Hide picture</span></button>
+            <button id="picture-mode" type="button" disabled aria-label="Hide picture" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m3 17 6-5 4 3 4-5 4 5"/></svg><span data-picture-label class="calm-sr-only">Hide picture</span></button>
             <button id="files-open" type="button" hidden>Files <span class="conv-count" data-files-count></span></button>
             <details class="conv-more" data-conv-more>
               <summary aria-label="More for this chat" title="More">⋯</summary>
@@ -264,6 +266,7 @@ function appendMsg(role, text, files) {
   const body  = document.createElement('div');
   body.className = 'msg-text';
   body.textContent = text;
+  if (role !== 'user') window.MiniMoiMessageText?.render(body, text);
   wrap.appendChild(label);
   wrap.appendChild(body);
   if (Array.isArray(files) && files.length) {
@@ -423,7 +426,7 @@ async function sendMessage() {
       window.cosHistory.uncertain(data?.history);
       restore();
       const confirmedRefusal = resp.status === 403 && data?.error === 'csrf';
-      appendMsg('cos', confirmedRefusal
+      window.MiniMoiNotices?.show('cos-chat:' + conversationId + ':' + requestId, confirmedRefusal
         ? 'Message was not sent: request verification failed. Your draft is preserved.'
         : (resp.status === 400 && typeof data?.reply === 'string' && data.reply.trim())
           ? data.reply + ' Your draft is preserved.'
@@ -431,13 +434,14 @@ async function sendMessage() {
       return;
     }
     window.cosHistory.confirm(data.history, data.operation);
+    window.MiniMoiNotices?.clear('cos-chat:' + conversationId + ':' + requestId);
     if (window.cosHistory.conversationId === conversationId) appendMsg('cos', data.reply, data.files);
     if (Array.isArray(data.files) && data.files.length) loadCosFiles();
   } catch(err) {
     thinking.remove();
     window.cosHistory.uncertain();
     restore();
-    appendMsg('cos', 'Delivery is unconfirmed. Your draft is preserved; check the record before retrying.');
+    window.MiniMoiNotices?.show('cos-chat:' + conversationId + ':' + requestId, 'Delivery is unconfirmed. Your draft is preserved; check the record before retrying.');
   } finally {
     setInputDisabled(false);
     sendInput.focus();
@@ -733,7 +737,7 @@ void refreshLegacyAvailability();
 // (her routes not installed, or admission off): Confer is exactly as it was. Not while a voice session of today's modes
 // runs: the path changes once it has ended.
 const DIRECT_CAPABILITIES='../api/realtime-voice/direct/api/realtime-voice/capabilities';
-const DIRECT_KEY='20261102-conversation1';   // v3's live check (31 Oct) changed the session module, the controller and an adapter
+const DIRECT_KEY='20261102-notices1';   // v3's live check (31 Oct) changed the session module, the controller and an adapter
 // Not while a session of today's modes runs, nor while an earlier one's end is unconfirmed (its restart block, Gate 2 Q N10).
 // Admitted and refused (Q S2): the button says why, and no other mode is offered.
 function adoptDirect(){
@@ -788,7 +792,7 @@ async function readDirect(){
 document.addEventListener('cos:conversation-selected',()=>{updateVoiceAvailability();void voiceRecords?.refresh();});
 void readDirect();
 </script>
-<script src="/static/cos-history-ui.js?v=20261102-voice1"></script>
+<script src="/static/cos-history-ui.js?v=20261102-notices1"></script>
 <script src="/static/calm-confer.js?v=20261102-1"></script>
 <script type="module" src="/static/cos-in-flight.js?v=20261102-actions1"></script>
 </body>

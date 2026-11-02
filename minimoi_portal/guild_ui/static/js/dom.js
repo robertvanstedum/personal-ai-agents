@@ -52,6 +52,10 @@ export function announce(text) {
 }
 
 export function notice(text) {
+  if (window.MiniMoiNotices) {
+    window.MiniMoiNotices.show('guild-service:' + text, text);
+    return;
+  }
   const box = document.querySelector('[data-notice]');
   if (!box) return;
   box.textContent = box.hidden ? text : `${box.textContent} ${text}`;

@@ -181,6 +181,9 @@ class History:
                     raise HistoryRefused("turn_id_reused")
                 return existing, True
             turns = _fold(fsio.read_stream(self._turns_path(cid)))
+            if not turns and conversation.get("title") in ("New conversation", "New chat") and send["text"].strip():
+                conversation["title"] = " ".join(send["text"].split())[:120]
+                fsio.write_doc(self._conversation_path(cid), conversation)
             now = self._clock()
             turn = {"schema": "minimoi.cos.turn/1", "conversation_id": cid, "turn_id": tid, "seq": len(turns) + 1,
                     "status": "pending", "user_text": send["text"], "reply_text": None, "created_at": now,

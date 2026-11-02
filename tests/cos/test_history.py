@@ -336,3 +336,14 @@ def test_new_folders_keep_the_setgid_bit_so_files_stay_in_the_reader_group(tmp_p
     plain = tmp_path / "plain"
     fsio.ensure_dir(plain / "x")
     assert stat.S_IMODE((plain / "x").stat().st_mode) == 0o750
+
+
+def test_first_message_titles_only_an_unnamed_chat(hist):
+    cid = hist.create("")["conversation_id"]
+    hist.begin(send(cid, text="  Plan   German practice\nthis week "))
+    assert hist.conversation(cid)["title"] == "Plan German practice this week"
+    hist.begin(send(cid, "t-000000000002", text="Another thought"))
+    assert hist.conversation(cid)["title"] == "Plan German practice this week"
+    named = hist.create("My chosen title")["conversation_id"]
+    hist.begin(send(named, "t-000000000003", text="Do not rename this"))
+    assert hist.conversation(named)["title"] == "My chosen title"

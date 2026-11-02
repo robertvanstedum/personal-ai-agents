@@ -60,6 +60,10 @@ export function initMcVoice(page) {
   let clearing = null;
   const say = (text, { loud = false, error = false, transient = false } = {}) => {
     showingError = error; status.textContent = text; status.hidden = !text; draw(); if (loud && text) announce(text);
+    if (window.MiniMoiNotices) {
+      if (error && text) { window.MiniMoiNotices.show('mc-voice', text, { title: 'Voice needs attention' }); status.textContent = ''; status.hidden = true; }
+      else window.MiniMoiNotices.clear('mc-voice');
+    }
     if (clearing) window.clearTimeout?.(clearing);
     clearing = null;
     // An ended line is a passing note (#420); an error stays until the next action.
@@ -408,7 +412,7 @@ export function initMcVoice(page) {
   });
   button.addEventListener('click', () => { if (busy()) stop('user_ended'); else start(); });
   // #420: the next send clears the voice status line, an ended note or an error alike (an error stays until an action).
-  $('[data-mc-composer]')?.addEventListener?.('submit', () => { if (!busy() && status.textContent) say(''); });
+  $('[data-mc-composer]')?.addEventListener?.('submit', () => { if (!busy() && (status.textContent || showingError)) say(''); });
   document.addEventListener('guild:mic-claim', (e) => { if (e.detail?.who !== 'voice' && busy()) stop('user_ended', { quiet: true }); });
   onChange(() => { if (live.off || !live.known) {transcriptEpoch++;transcriptCancel?.();transcriptCancel=null;transcriptReveal=null;transcriptPaint=null;if(busy())stop(live.off?'private':'record_unknown');const box=$('[data-mc-voice-transcript]');if(box)box.hidden=true;const text=$('[data-mc-voice-transcript-text]');if(text)text.textContent='';} });
   new MutationObserver(() => { if (busy() && panelMode() === 'pill') stop('minimized'); }).observe(document.body, { attributes: true, attributeFilter: ['data-mc-mode'] });

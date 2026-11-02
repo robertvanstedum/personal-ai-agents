@@ -112,6 +112,11 @@ def effective_cap_usd(environ=None) -> float:
 
 
 SCHEMA = (
+    """CREATE TABLE IF NOT EXISTS voice_budget_topup (
+        approval TEXT PRIMARY KEY,
+        day TEXT NOT NULL,
+        micro BIGINT NOT NULL CHECK (micro > 0),
+        created_at TEXT NOT NULL)""",
     """CREATE TABLE IF NOT EXISTS voice_budget_day (
         day TEXT PRIMARY KEY,
         cap_micro BIGINT NOT NULL CHECK (cap_micro >= 0),
@@ -235,6 +240,22 @@ class VoiceBudget:
                 run(statement)
 
     # ── admission ──
+    def grant_today(self, *, day: str, amount_micro: int, approval: str) -> None:
+        """Operator-only, dated and idempotent. Never exposed through a browser route.
+
+        The approval identifies the owner's authorization, not a fresh retry ID.
+        Existing reservations and the configured everyday cap remain unchanged.
+        """
+        now = self._clock()
+        if day != chicago_day(now) or not isinstance(approval, str) or not approval.strip() or type(amount_micro) is not int or not 0 < amount_micro <= micro(100):
+            raise ValueError("a top-up needs today's Chicago date, an approval and $0–100")
+        with self._tx() as run:
+            run("INSERT INTO voice_budget_topup (approval, day, micro, created_at) VALUES (?, ?, ?, ?) ON CONFLICT (approval) DO NOTHING",
+                (approval, day, amount_micro, now.astimezone(timezone.utc).isoformat()))
+            row = run("SELECT day, micro FROM voice_budget_topup WHERE approval = ?", (approval,)).fetchone()
+        if tuple(row) != (day, amount_micro):
+            raise ValueError("approval already used for a different top-up")
+
     def reserve(self, *, kind: str, domain: str, principal: str, amount_micro: int) -> Reservation:
         if amount_micro <= 0:
             raise ValueError("a reservation needs a positive amount")
@@ -251,11 +272,12 @@ class VoiceBudget:
             # apply tomorrow. Admission compares against the row itself so a
             # concurrent PostgreSQL writer cannot leave us using a stale cap.
             run("UPDATE voice_budget_day SET cap_micro = ? WHERE day = ? AND cap_micro > ?", (cap_now, day, cap_now))
-            took = run("UPDATE voice_budget_day SET reserved_micro = reserved_micro + ? WHERE day = ? AND reserved_micro + ? <= cap_micro",
-                       (amount_micro, day, amount_micro))
+            took = run("UPDATE voice_budget_day SET reserved_micro = reserved_micro + ? WHERE day = ? AND reserved_micro + ? <= cap_micro + (SELECT COALESCE(SUM(micro), 0) FROM voice_budget_topup WHERE day = ?)",
+                       (amount_micro, day, amount_micro, day))
             if took.rowcount != 1:
                 cap, reserved = run("SELECT cap_micro, reserved_micro FROM voice_budget_day WHERE day = ?", (day,)).fetchone()
-                refused = BudgetExhausted(day, int(reserved), int(cap), amount_micro)
+                extra = run("SELECT COALESCE(SUM(micro), 0) FROM voice_budget_topup WHERE day = ?", (day,)).fetchone()[0]
+                refused = BudgetExhausted(day, int(reserved), int(cap) + int(extra), amount_micro)
             else:
                 run("INSERT INTO voice_budget_entry (id, day, at, domain, kind, who, micro, state) VALUES (?, ?, ?, ?, ?, ?, ?, 'reserved')",
                     (rid, day, now.astimezone(timezone.utc).isoformat(), str(domain)[:40], str(kind)[:40], who, amount_micro))
@@ -279,7 +301,8 @@ class VoiceBudget:
         cap_now = micro(self._cap_usd())
         with self._tx() as run:
             row = run("SELECT cap_micro, reserved_micro FROM voice_budget_day WHERE day = ?", (day,)).fetchone()
-        cap = min(int(row[0]), cap_now) if row else cap_now
+            extra = int(run("SELECT COALESCE(SUM(micro), 0) FROM voice_budget_topup WHERE day = ?", (day,)).fetchone()[0])
+        cap = (min(int(row[0]), cap_now) if row else cap_now) + extra
         reserved = int(row[1]) if row else 0
         return {"day": day, "timezone": "America/Chicago", "cap_usd": cap / MICRO, "reserved_usd": reserved / MICRO,
                 "remaining_usd": max(0, cap - reserved) / MICRO, "label": LABEL}

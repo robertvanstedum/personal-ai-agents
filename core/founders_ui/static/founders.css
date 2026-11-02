@@ -633,3 +633,11 @@ body.gu[data-page=floor] .floor-strip{margin:0;padding:4px 16px;border:0;border-
   .founders-cos.show-cos-home .phone-tools{display:none}
   .founders-cos #tab-home{padding:16px}
 }
+
+/* Shared service notices: no permanent warning furniture; narrow screens keep the composer clear. */
+.minimoi-notices{position:fixed;z-index:1500;top:calc(env(safe-area-inset-top,0px) + 12px);right:16px;width:min(380px,calc(100vw - 32px));max-height:45dvh;overflow:auto;display:grid;gap:8px;font:400 16px/1.45 'Source Sans 3',sans-serif;pointer-events:none}
+.minimoi-notices[hidden]{display:none}
+.minimoi-notice{position:relative;padding:16px 44px 16px 18px;border:1px solid #d6c6aa;border-left:3px solid #b65020;border-radius:12px;background:#fffefa;color:#252b27;box-shadow:0 6px 24px #142b2326;pointer-events:auto}
+.minimoi-notice strong{font-weight:600}.minimoi-notice p{margin:5px 0 0}
+.minimoi-notice button{position:absolute;right:4px;top:4px;width:36px;height:36px;border:0;background:transparent;color:inherit;font:24px 'Source Sans 3',sans-serif;cursor:pointer}
+.minimoi-notice button:focus-visible{outline:2px solid #153e33;outline-offset:-3px}

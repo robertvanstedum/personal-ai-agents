@@ -55,7 +55,7 @@ def ledger(request, tmp_path):
     b = make_ledger(dsn)
     if request.param == "postgres":
         with b._tx() as run:
-            run("DELETE FROM voice_budget_entry"); run("DELETE FROM voice_budget_day")
+            run("DELETE FROM voice_budget_entry"); run("DELETE FROM voice_budget_day"); run("DELETE FROM voice_budget_topup")
     b.backend = request.param
     return b
 
@@ -342,3 +342,28 @@ def test_postgres_admission_uses_a_cap_lowered_after_the_call_started(ledger):
         thread.join(4)
     assert not thread.is_alive() and result==['refused']
     assert low.status()['reserved_usd']==9.0 and low.status()['cap_usd']==10.0
+
+
+def test_dated_topup_keeps_usage_is_idempotent_and_expires(ledger):
+    take(ledger, 15.1)
+    day = ledger.status()["day"]
+    for _ in range(2):
+        ledger.grant_today(day=day, amount_micro=B.micro(20), approval="owner-today-20")
+    assert ledger.status()["cap_usd"] == 40
+    assert ledger.status()["reserved_usd"] == 15.1
+    take(ledger, 24.9)
+    with pytest.raises(B.BudgetExhausted):
+        take(ledger, .01)
+    ledger.clock.now += timedelta(days=1)
+    assert ledger.status()["cap_usd"] == 20
+    assert ledger.status()["reserved_usd"] == 0
+    with pytest.raises(ValueError):
+        ledger.grant_today(day=day, amount_micro=B.micro(20), approval="stale")
+
+
+def test_topup_approval_cannot_be_reused_with_different_amount(ledger):
+    day = ledger.status()["day"]
+    ledger.grant_today(day=day, amount_micro=B.micro(20), approval="one-owner-approval")
+    with pytest.raises(ValueError):
+        ledger.grant_today(day=day, amount_micro=B.micro(10), approval="one-owner-approval")
+    assert ledger.status()["cap_usd"] == 40
