@@ -175,7 +175,7 @@ def apply_in_flight(row: dict | None, kind: str, event: dict) -> dict:
                 "opened_by": event["by"]}
     out = dict(row, comments=list(row["comments"]))
     if kind == "in_flight.update":
-        for key in ("title", "priority", "status", "with"):
+        for key in ("title", "kind", "priority", "status", "with"):
             if key in event:
                 out[key] = event[key]
         if "title" in event:

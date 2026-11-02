@@ -1,0 +1,17 @@
+{
+  "id": "cos-actions",
+  "name": "CoS Actions",
+  "description": "Read and keep CoS Actions records. No external execution.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "cos_actions"
+    ]
+  }
+}

@@ -56,12 +56,14 @@
       "xai",
       "openai",
       "cos-bounded-search",
-      "mc-cutoff-delivery"
+      "mc-cutoff-delivery",
+      "cos-actions"
     ],
     "load": {
       "paths": [
         "/opt/minimoi/openclaw-plugins/cos-bounded-search",
-        "/opt/minimoi/openclaw-plugins/mc-cutoff-delivery"
+        "/opt/minimoi/openclaw-plugins/mc-cutoff-delivery",
+        "/opt/minimoi/openclaw-plugins/cos-actions"
       ]
     },
     "entries": {
@@ -76,6 +78,9 @@
         }
       },
       "mc-cutoff-delivery": {
+        "enabled": true
+      },
+      "cos-actions": {
         "enabled": true
       }
     }
@@ -155,7 +160,8 @@
             "memory_search",
             "memory_get",
             "pdf",
-            "view_image"
+            "view_image",
+            "cos_actions"
           ],
           "deny": [
             "gateway"

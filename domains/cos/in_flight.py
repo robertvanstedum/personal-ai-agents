@@ -27,12 +27,12 @@ from flask import Blueprint, jsonify, request
 
 from core.canonical_json import digest
 
-NOT_CONFIGURED = "In flight isn't available yet."
+NOT_CONFIGURED = "Actions isn't available yet."
 _OPS = ("open", "update", "comment", "close")
 _OP_ID = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 _ITEM_ID = re.compile(r"^IF-[A-Za-z0-9_-]{1,64}$")
 _TZ = ZoneInfo("America/Chicago")
-_KINDS = ("follow-up", "research", "decision", "risk")
+_KINDS = ("action", "briefing", "follow-up", "research", "decision", "risk")
 _STATUSES = ("open", "doing", "waiting", "done")
 _WITH = ("robert", "cos", "mc")
 _MESSAGES = {
@@ -95,6 +95,11 @@ def _refuse(status: int, code: str, message: str):
 
 def _event(op: str, body: dict, item_id: str, op_id: str, at: str, environment: str) -> tuple[dict | None, str]:
     """The command's payload for one page action, or (None, why) when the page sent something the table can't hold."""
+    for key, limit in (("title", 200), ("text", 4000), ("note", 2000)):
+        if key in body and (not isinstance(body[key], str) or len(body[key]) > limit):
+            return None, f"{key.capitalize()} must be text of at most {limit} characters. Nothing was saved."
+    if body.get("status") == "done":
+        return None, "Use Done to complete the record and keep it in Completed."
     action = {"type": "cos.owner_ui", "id": op_id}
     event = {"schema": f"minimoi.cos.in_flight_{op}/1", "data_scope": "personal", "environment": environment,
              "item_id": item_id, "at": at, "provenance": "approved", "ref": action}
@@ -107,7 +112,7 @@ def _event(op: str, body: dict, item_id: str, op_id: str, at: str, environment: 
                      status=body.get("status") or "open", by="robert", source=None)
         event["with"] = body.get("with") or "robert"
     elif op == "update":
-        for key in ("priority", "status", "with"):
+        for key in ("kind", "priority", "status", "with"):
             if key in body:
                 event[key] = body[key]
         if "title" in body:
@@ -115,7 +120,7 @@ def _event(op: str, body: dict, item_id: str, op_id: str, at: str, environment: 
             if not title:
                 return None, "A row needs a few words. Nothing was changed."
             event["title"] = title
-        if not any(k in event for k in ("title", "priority", "status", "with")):
+        if not any(k in event for k in ("title", "kind", "priority", "status", "with")):
             return None, "Nothing to change."
         event["by"] = "robert"
     elif op == "comment":
@@ -144,7 +149,7 @@ def create_blueprint(get_writer: Callable[[], object], *, is_owner: Callable[[],
     @bp.get("/ui/api/in-flight")
     def read():
         if not is_owner():
-            return jsonify({"state": "not_allowed", "message": "In flight is the owner's."}), 403
+            return jsonify({"state": "not_allowed", "message": "Actions is the owner's."}), 403
         writer = get_writer()
         if writer is None:
             return jsonify({"state": "not_configured", "message": NOT_CONFIGURED})
@@ -152,7 +157,7 @@ def create_blueprint(get_writer: Callable[[], object], *, is_owner: Callable[[],
             body = rows_payload(writer, clock())
         except OSError:
             return jsonify({"state": "unavailable",
-                            "message": "In flight couldn't be read just now. Nothing is lost; try again."}), 503
+                            "message": "Actions couldn't be read just now. Check again before making changes."}), 503
         response = jsonify(body)
         response.headers["Cache-Control"] = "no-store, private"
         return response
@@ -162,7 +167,7 @@ def create_blueprint(get_writer: Callable[[], object], *, is_owner: Callable[[],
         if op not in _OPS:
             return _refuse(404, "not_found", "Unknown change.")
         if not is_owner():
-            return _refuse(403, "not_allowed", "In flight is the owner's.")
+            return _refuse(403, "not_allowed", "Actions is the owner's.")
         if not write_verified():
             return _refuse(403, "csrf", "This page is out of date. Reload it and try again.")
         writer = get_writer()

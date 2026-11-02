@@ -86,7 +86,7 @@
 .founders-cos .underway-limit{border-top:1px solid var(--line);padding-top:18px}
 @media(max-width:639px){.founders-cos .underway-stages{grid-template-columns:1fr}.founders-cos .underway-outline{padding:18px}}
 
-@media(max-width:640px){.founders-cos.show-cos-flight .cos-mark-title::after{content:"Underway"}}
+@media(max-width:640px){.founders-cos.show-cos-flight .cos-mark-title::after{content:"Actions"}}
 
 /* Conversation is the primary microphone action; dictation is a separate menu choice. */
 .founders-cos[data-cos-tab=confer] .input-row>#btn-voice:not([aria-pressed=true]),
@@ -95,3 +95,30 @@
 .founders-cos[data-cos-tab=confer] .input-row>#btn-voice[aria-pressed=true]::after{content:"End voice"}
 .founders-cos[data-cos-tab=confer] .conv-menu>#btn-dictate{display:block;position:static;width:100%;height:auto;border-radius:0;padding:9px 12px;text-align:left;font:14px var(--sans)}
 .founders-cos[data-cos-tab=confer] .conv-menu>#btn-dictate::before{display:none}
+
+/* Actions uses the Build Log's compact filter-and-table pattern. */
+.founders-cos.show-cos-flight .fl-main{padding:22px 24px 40px;background:#fbfaf7}
+.founders-cos.show-cos-flight .underway-intro{margin:0 0 18px}
+.founders-cos.show-cos-flight .underway-outline{max-width:none;display:flex;align-items:center;gap:14px;padding:12px 16px;margin:0 0 18px;background:#f7f1e5;border-radius:10px}
+.founders-cos.show-cos-flight .underway-outline[hidden]{display:none}
+.founders-cos.show-cos-flight .underway-limit{flex:1;border:0;margin:0;padding:0;font-size:14px}
+.founders-cos.show-cos-flight .fl-tool,.founders-cos.show-cos-flight .fl-body{max-width:none}
+.founders-cos #tab-flight:not([data-fl-mode=ok]) .fl-views{display:flex}
+.founders-cos #tab-flight:not([data-fl-mode=ok]) [data-fl-search],.founders-cos #tab-flight:not([data-fl-mode=ok]) [data-fl-download]{display:inline-block}
+.founders-cos .fl-views{flex-wrap:wrap;gap:4px;padding:4px;border:1px solid var(--line);border-radius:12px;background:#f3eee5}
+.founders-cos .fl-views button{padding:0 12px;border:0;border-radius:8px}
+.founders-cos .fl-views button[aria-pressed=true]{background:#fff;box-shadow:0 1px 4px #0001}
+.founders-cos .fl-table{background:#fff;border:1px solid var(--line)}
+.founders-cos .fl-table th{background:#f3eee5}
+.founders-cos .fl-empty-table{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.founders-cos .fl-empty-head{display:grid;grid-template-columns:50px 2fr 1fr 1fr 1fr 1fr 2fr;gap:12px;padding:15px;background:#f3eee5;color:var(--soft);font:600 12px var(--sans);text-transform:uppercase}
+.founders-cos .fl-empty{padding:40px 20px;text-align:center;color:var(--soft);font:16px/1.5 var(--sans)}
+.founders-cos .fl-briefing-body{padding:8px 20px 20px;background:white;max-width:850px}
+.founders-cos .fl-outcome{font:600 13px var(--sans)}
+@media(max-width:639px){.founders-cos.show-cos-flight .fl-main{padding:16px 12px}.founders-cos.show-cos-flight .underway-outline{flex-wrap:wrap}.founders-cos .fl-empty-head{grid-template-columns:1fr 2fr}.founders-cos .fl-empty-head span:nth-child(n+3){display:none}.founders-cos .fl-views{width:100%}.founders-cos .fl-views button{padding:0 9px}}
+
+.show-cos-flight .fl-filter{display:flex;align-items:center;gap:8px;font-size:14px;white-space:nowrap}
+.show-cos-flight .fl-filter select,.show-cos-flight .fl-add-record select,.show-cos-flight .fl-ctl select{font:inherit;border:1px solid #ccd4cc;background:#fff;border-radius:8px;padding:8px;color:#28322c}
+.show-cos-flight .fl-add-record{display:flex;gap:12px;align-items:center;padding:10px 0}
+.show-cos-flight .fl-add-record input{min-width:0;flex:1}
+.show-cos-flight .fl-tool{flex-wrap:wrap}

@@ -1,4 +1,4 @@
-// In flight: CoS's working table (Review 06, Option A, slice 3). One row per thing in motion, from the CoS store through
+// Actions: CoS's working table (Review 06, Option A, slice 3). One row per thing in motion, from the CoS store through
 // the CoS app (GET /ui/api/in-flight, POST /ui/api/in-flight/<op>); nothing here reaches the store directly, and nothing
 // is shown that the store didn't give. Columns: P (click to change), Item, Kind, With, Status, Moved, Latest comment.
 // Sorted by priority, then last moved; a header sorts by its column. The last row adds one. Views: Open, Mine, Waiting.
@@ -8,13 +8,13 @@ const PANEL = document.getElementById('tab-flight');
 const BASE = location.pathname.replace(/\/ui(\/[^/]*)?\/?$/, '') + '/ui/';
 const API = BASE + 'api/in-flight';
 const PHONE = window.matchMedia('(max-width: 639px)');
-const KIND = { 'follow-up': 'Follow-up', research: 'Research', decision: 'Decision', risk: 'Risk' };
+const KIND = { action: 'Action', briefing: 'Briefing', 'follow-up': 'Follow-up', research: 'Research', decision: 'Decision', risk: 'Risk' };
 const WITH = { robert: 'you', cos: 'CoS', mc: 'MC' };
 const WHO = { robert: 'You', cos: 'CoS', mc: 'MC' };
-const STATUS = { open: 'Open', doing: 'Working', waiting: 'Waiting', done: 'Done' };
-const COLUMNS = [['priority', 'P'], ['title', 'Item'], ['kind', 'Kind'], ['with', 'With'], ['status', 'Status'], ['moved', 'Moved'], ['comment', 'Latest comment']];
+const STATUS = { open: 'Open', doing: 'Working', waiting: 'Waiting', done: 'Completed' };
+const COLUMNS = [['priority', 'Priority'], ['title', 'Item'], ['kind', 'Type'], ['with', 'Assigned to'], ['status', 'Status'], ['moved', 'Updated'], ['comment', 'Latest comment']];
 
-const state = { loaded: false, data: null, view: 'open', q: '', sort: 'priority', dir: 1, open: null, busy: false, draft: '' };
+const state = { loaded: false, data: null, view: 'all', type: '', priority: '', newType: 'action', q: '', sort: 'priority', dir: 1, open: null, busy: false, draft: '' };
 const $ = (sel, root = PANEL) => root.querySelector(sel);
 
 function h(tag, attrs = {}, ...kids) {
@@ -62,7 +62,7 @@ async function load() {
   } catch (e) { body = null; }
   state.loaded = true;
   state.data = body && typeof body.state === 'string' ? body
-    : { state: 'unavailable', message: "Underway couldn't be read just now. Nothing is lost; try again." };
+    : { state: 'unavailable', message: "Actions couldn't be read just now. Nothing is lost; try again." };
   if (state.open && !rowById(state.open)) state.open = null;
   render();
 }
@@ -74,7 +74,7 @@ async function send(op, fields) {
     try {
       const r = await fetch(`${API}/${op}`, { method: 'POST', credentials: 'same-origin', headers: writeHeaders(), body: JSON.stringify(body) });
       answer = await r.json().catch(() => ({ outcome: 'failed', message: "The answer couldn't be read. Nothing is claimed; reload to check." }));
-    } catch (e) { answer = tries ? { outcome: 'failed', message: "Underway couldn't be reached. Nothing is claimed; try again." } : null; }
+    } catch (e) { answer = tries ? { outcome: 'failed', message: "Actions couldn't be reached. Nothing is claimed; try again." } : null; }
   }
   if (answer.outcome !== 'accepted') say(answer.message || "That change wasn't saved.", 'warn');
   else say('');
@@ -95,16 +95,20 @@ const earlierRows = () => (state.data && state.data.state === 'ok' ? state.data.
 const rowById = (id) => openRows().concat(earlierRows()).find((r) => r.item_id === id);
 
 function shown() {
-  let rows = openRows();
+  let rows = ['completed', 'cancelled'].includes(state.view) ? earlierRows().filter(r => r.outcome === (state.view === 'completed' ? 'done' : 'dropped')) : state.view === 'all' ? openRows().concat(earlierRows()) : openRows();
+  if (state.view === 'doing') rows = rows.filter(r => r.status === 'doing');
   if (state.view === 'mine') rows = rows.filter((r) => r.with === 'cos');
   if (state.view === 'waiting') rows = rows.filter((r) => r.status === 'waiting');
+  if (state.view === 'open') rows = rows.filter(r => r.status === 'open');
+  if (state.type) rows = rows.filter(r => r.kind === state.type);
+  if (state.priority) rows = rows.filter(r => r.priority === Number(state.priority));
   if (state.q) {
     const q = state.q.toLowerCase();
     rows = rows.filter((r) => `${r.title} ${KIND[r.kind]} ${WITH[r.with]} ${r.comments.map((c) => c.text).join(' ')}`.toLowerCase().includes(q));
   }
   const key = {
     priority: (r) => [r.priority, -Date.parse(r.last_moved_at)], title: (r) => [r.title.toLowerCase()], kind: (r) => [r.kind],
-    with: (r) => [r.with], status: (r) => [['open', 'doing', 'waiting', 'done'].indexOf(r.status)],
+    with: (r) => [r.with], status: (r) => [r.closed_at ? (r.outcome === 'dropped' ? 4 : 3) : ['open', 'doing', 'waiting', 'done'].indexOf(r.status)],
     moved: (r) => [-Date.parse(r.last_moved_at)], comment: (r) => [-(r.latest_comment ? Date.parse(r.latest_comment.at) : 0)],
   }[state.sort];
   return [...rows].sort((a, b) => {
@@ -115,13 +119,14 @@ function shown() {
 }
 
 // ── controls ───────────────────────────────────────────────────────────────
-function priorityChip(row, closed) {
+function priorityChip(row, closed = row.closed_at != null) {
   return h('button', { type: 'button', class: `fl-pri p${row.priority}`, 'data-fl-priority': row.item_id, disabled: closed,
     title: closed ? `Priority ${row.priority}` : `Priority ${row.priority}: click to change`, 'aria-label': `Priority ${row.priority}${closed ? '' : ', click to change'}`,
     onclick: (e) => { e.stopPropagation(); send('update', { item_id: row.item_id, priority: row.priority % 3 + 1 }); } }, `P${row.priority}`);
 }
 
-function statusSelect(row, closed) {
+function statusSelect(row, closed = row.closed_at != null) {
+  if (closed) return h('span', { class: 'fl-outcome' }, row.outcome === 'dropped' ? 'Cancelled' : 'Completed');
   const sel = h('select', { class: `fl-st ${row.status}`, 'data-fl-status': row.item_id, 'aria-label': `Status of ${row.title}`, disabled: closed,
     onclick: (e) => e.stopPropagation(),
     onchange: (e) => {
@@ -133,6 +138,11 @@ function statusSelect(row, closed) {
   return sel;
 }
 
+function typeSelect(row, closed) {
+  return h('select', {'aria-label':'Record type', disabled:closed, onchange:e=>send('update',{item_id:row.item_id,kind:e.target.value})},
+    ...Object.entries(KIND).map(([value,label])=>h('option',{value,selected:value===row.kind},label)));
+}
+
 function latest(row) {
   const c = row.latest_comment;
   return c ? `${WHO[c.author]}: ${c.text}` : '';
@@ -140,18 +150,19 @@ function latest(row) {
 
 function newRowInput() {
   const input = h('input', { type: 'text', class: 'fl-new-input', 'data-fl-new': '', maxlength: '200', autocomplete: 'off',
-    placeholder: '＋ Add work for CoS (press Enter)', 'aria-label': 'Add work for CoS: type what it is and press Enter' });
+    placeholder: 'Add a record for CoS (press Enter)', 'aria-label': 'Add work for CoS: type what it is and press Enter' });
   input.value = state.draft;
   input.addEventListener('input', () => { state.draft = input.value; });
   input.addEventListener('keydown', async (e) => {
     if (e.key !== 'Enter' || e.isComposing || !input.value.trim() || state.busy) return;
     e.preventDefault();
     state.busy = true;
-    const answer = await send('open', { title: input.value.trim(), priority: 2, status: 'open', kind: 'follow-up', with: 'cos' });
+    const answer = await send('open', { title: input.value.trim(), priority: 2, status: 'open', kind: state.newType, with: 'cos' });
     state.busy = false;
     if (answer.outcome === 'accepted') { state.draft = ''; render(); const again = $('[data-fl-new]'); if (again) again.focus(); }
   });
-  return input;
+  const type = h('select', { 'aria-label': 'Type of new record', onchange: e => {state.newType=e.target.value;} }, ...Object.entries(KIND).map(([value,label]) => h('option', {value, selected:value===state.newType}, label)));
+  return h('div', {class:'fl-add-record'}, type, input);
 }
 
 function table(rows) {
@@ -164,7 +175,7 @@ function table(rows) {
     h('td', {}, statusSelect(r)), h('td', { class: 'mu' }, moved(r.last_moved_at)),
     h('td', { class: 'cm' }, latest(r) || h('span', { class: 'add' }, '＋ comment'))));
   const add = h('tr', { class: 'fl-newrow' }, h('td'), h('td', { colspan: '6' }, newRowInput()));
-  return h('table', { class: 'fl-table', 'data-fl-table': '' }, h('thead', {}, head), h('tbody', {}, ...body, add));
+  return h('table', { class: 'fl-table', 'data-fl-table': '' }, h('thead', {}, head), h('tbody', {}, ...body, ...(!rows.length ? [h('tr', {}, h('td', { colspan: '7', class: 'fl-empty' }, 'No records match this view.'))] : []), ...(['completed','cancelled'].includes(state.view) ? [] : [add])));
 }
 
 function cards(rows) {
@@ -174,18 +185,8 @@ function cards(rows) {
       h('div', { class: 'fl-card-top' }, priorityChip(r), statusSelect(r), h('span', { class: 'fl-card-kind' }, `${KIND[r.kind]} · ${WITH[r.with]}`)),
       h('div', { class: 'fl-card-ti' }, r.title),
       h('div', { class: `fl-card-cm${r.latest_comment ? '' : ' add'}` }, '💬 ', latest(r) || 'Add a comment'))),
-    h('div', { class: 'fl-card-new' }, newRowInput()));
-}
-
-function earlier() {
-  const weeks = state.data.earlier;
-  if (!weeks.length) return h('p', { class: 'fl-quiet' }, 'Nothing closed yet.');
-  return h('div', {}, ...weeks.map((w, i) => h('details', { class: 'fl-week', 'data-fl-week': w.week_start, open: i === 0 && state.weekOpen !== false ? true : false,
-      ontoggle: (e) => { if (i === 0) state.weekOpen = e.target.open; } },
-    h('summary', {}, w.label, h('span', {}, `${w.count} closed`)),
-    ...w.rows.map((r) => h('button', { type: 'button', class: 'fl-done-row', 'data-fl-row': r.item_id, onclick: () => openRow(r.item_id) },
-      h('span', { class: 'fl-tick', 'aria-hidden': 'true' }, r.outcome === 'dropped' ? '–' : '✓'), h('span', { class: 'fl-done-ti' }, r.title),
-      h('em', {}, moved(r.closed_at)))))));
+    ...(!rows.length ? [h('p', {class:'fl-empty'}, 'No records match this view.')] : []),
+    ...(['completed','cancelled'].includes(state.view) ? [] : [h('div', { class: 'fl-card-new' }, newRowInput())]));
 }
 
 // ── a row, opened on the right ─────────────────────────────────────────────
@@ -208,7 +209,7 @@ function sidePanel() {
   const withSel = h('select', { class: 'fl-with', 'data-fl-with': r.item_id, disabled: closed, 'aria-label': 'With',
     onchange: (e) => send('update', { item_id: r.item_id, with: e.target.value }) },
   ...Object.entries(WITH).map(([v, label]) => h('option', { value: v, selected: v === r.with }, `with ${label}`)));
-  const box = h('textarea', { class: 'fl-comment-box', 'data-fl-comment': '', rows: '3', placeholder: 'Add a comment…', 'aria-label': 'Add a comment' });
+  const box = h('textarea', { class: 'fl-comment-box', 'data-fl-comment': '', rows: '3', maxlength: '4000', placeholder: 'Add a comment…', 'aria-label': 'Add a comment' });
   const addComment = async () => {
     const text = box.value.trim();
     if (!text || state.busy) return;
@@ -221,13 +222,13 @@ function sidePanel() {
   box.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); addComment(); } });
   aside.replaceChildren(
     h('div', { class: 'fl-ph' },
-      h('button', { type: 'button', class: 'fl-back', 'data-fl-close': '', onclick: closeRow }, '← Underway'),
+      h('button', { type: 'button', class: 'fl-back', 'data-fl-close': '', onclick: closeRow }, '← Actions'),
       h('span', { class: 'fl-ph-t' }, `P${r.priority} · ${KIND[r.kind]} · with ${WITH[r.with]}`),
       h('button', { type: 'button', class: 'fl-x', 'data-fl-close': '', 'aria-label': 'Close', onclick: closeRow }, '✕')),
     h('div', { class: 'fl-doc' },
       h('h3', { class: 'fl-doc-ti' }, r.title),
       h('p', { class: 'fl-since' }, `${KIND[r.kind]} · since ${since(r.opened_at)}${closed ? ` · ${r.outcome === 'dropped' ? 'cancelled' : 'done'} ${moved(r.closed_at)}` : ''}`),
-      h('p', { class: 'fl-ctl' }, statusSelect(r, closed), priorityChip(r, closed), withSel),
+      h('p', { class: 'fl-ctl' }, typeSelect(r, closed), statusSelect(r, closed), priorityChip(r, closed), withSel),
       h('p', { class: 'fl-h' }, 'Comments'),
       h('div', { class: 'fl-thread', 'data-fl-thread': '' }, ...(r.comments.length ? r.comments.map((c) =>
         h('p', { class: 'fl-trail' }, h('span', {}, moved(c.at)), h('b', {}, WHO[c.author]), ': ', c.text))
@@ -244,11 +245,11 @@ function sidePanel() {
 
 // ── the page ───────────────────────────────────────────────────────────────
 function csv() {
-  const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const lines = [['Priority', 'Item', 'Kind', 'With', 'Status', 'Moved', 'Latest comment'].map(cell).join(',')];
-  for (const r of shown()) lines.push([`P${r.priority}`, r.title, KIND[r.kind], WITH[r.with], STATUS[r.status], r.last_moved_at.slice(0, 10), latest(r)].map(cell).join(','));
+  const cell = (v) => `"${String(/^[=+@\-\t\r\n]/.test(String(v ?? '')) ? "'" + v : v ?? '').replace(/"/g, '""')}"`;
+  const lines = [['Priority', 'Item', 'Type', 'Assigned to', 'Status', 'Updated', 'Latest comment'].map(cell).join(',')];
+  for (const r of shown()) lines.push([`P${r.priority}`, r.title, KIND[r.kind], WITH[r.with], r.closed_at ? (r.outcome === 'dropped' ? 'Cancelled' : 'Completed') : STATUS[r.status], r.last_moved_at.slice(0, 10), latest(r)].map(cell).join(','));
   const blob = new Blob(['﻿' + lines.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
-  const a = h('a', { href: URL.createObjectURL(blob), download: `underway-${new Date().toISOString().slice(0, 10)}.csv` });
+  const a = h('a', { href: URL.createObjectURL(blob), download: `actions-${new Date().toISOString().slice(0, 10)}.csv` });
   document.body.append(a);
   a.click();
   a.remove();
@@ -269,19 +270,27 @@ function render() {
   PANEL.dataset.flMode = state.loaded ? state.data.state : 'loading';
   for (const b of PANEL.querySelectorAll('[data-fl-view]')) {
     b.setAttribute('aria-pressed', String(b.dataset.flView === state.view));
-    if (b.dataset.flView === 'open') b.textContent = ok ? `Open (${openRows().length})` : 'Open';
+    const v = b.dataset.flView;
+    const labels = {all:'All',open:'Open',doing:'Working',waiting:'Waiting',completed:'Completed',cancelled:'Cancelled'};
+    const count = v === 'all' ? openRows().length+earlierRows().length : ['completed','cancelled'].includes(v) ? earlierRows().filter(r => r.outcome === (v === 'completed' ? 'done' : 'dropped')).length : openRows().filter(r => r.status === v).length;
+    b.textContent = labels[v] + (ok ? ` (${count})` : '');
   }
   const rows = ok ? shown() : [];
-  $('[data-fl-body]').replaceChildren(...(ok ? [PHONE.matches ? cards(rows) : table(rows)] : []));
-  $('[data-fl-weeks]').replaceChildren(...(ok ? [earlier()] : []));
+  const empty = h('div', {class:'fl-empty-table'}, h('div', {class:'fl-empty-head'}, ...COLUMNS.map(c => h('span', {}, c[1]))), h('p', {class:'fl-empty'}, 'The record is unavailable. No action counts are claimed.'));
+  $('[data-fl-body]').replaceChildren(ok ? (PHONE.matches ? cards(rows) : table(rows)) : empty);
+  $('[data-fl-download]').disabled = !ok;
+  $('[data-fl-search]').disabled = !ok;
+  $('[data-fl-weeks]').replaceChildren();
   sidePanel();
   if (keep) { const f = $(keep.sel); if (f) { if (keep.sel === '[data-fl-comment]') f.value = keep.value; f.focus(); } }
 }
 
 function bind() {
   $('[data-fl-retry]').addEventListener('click', load);
-  for (const b of PANEL.querySelectorAll('[data-fl-view]')) b.addEventListener('click', () => { state.view = b.dataset.flView; render(); });
+  for (const b of PANEL.querySelectorAll('[data-fl-view]')) b.addEventListener('click', () => { state.view = b.dataset.flView; state.open = null; render(); });
   $('[data-fl-search]').addEventListener('input', (e) => { state.q = e.target.value.trim(); render(); });
+  $('[data-fl-type]').addEventListener('change', e => {state.type=e.target.value; render();});
+  $('[data-fl-priority-filter]').addEventListener('change', e => {state.priority=e.target.value; render();});
   $('[data-fl-download]').addEventListener('click', csv);
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && state.open && PANEL.classList.contains('active') && !e.target.closest('textarea, input, select')) closeRow();

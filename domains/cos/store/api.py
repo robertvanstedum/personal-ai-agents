@@ -133,9 +133,14 @@ def install(app: Flask, *, environ: Mapping[str, str],
     environment = environ.get("COS_STORE_ENVIRONMENT", "").strip()
     token_file = environ.get("COS_STORE_TOKEN_FILE", "").strip()
     token_dir = environ.get("COS_STORE_TOKEN_DIR", "").strip()
+    actions_token = environ.get("COS_ACTIONS_TOKEN_FILE", "").strip()
     configured = any(_token(str(Path(token_dir) / name)) for name in _SERVICE_ACTORS) if token_dir else bool(token_file and _token(token_file))
-    if not root or environment not in ("dev", "staging", "prod") or not configured:
+    if not root or environment not in ("dev", "staging", "prod") or not (configured or (actions_token and _token(actions_token))):
         return None
     writer = StoreWriter(root, environment, verify_robert_source=verify_robert_source)
-    app.register_blueprint(create_blueprint(writer, token_file, token_dir=token_dir))
+    if configured:
+        app.register_blueprint(create_blueprint(writer, token_file, token_dir=token_dir))
+    if actions_token and _token(actions_token):
+        from domains.cos.store.actions_api import create_blueprint as actions_blueprint
+        app.register_blueprint(actions_blueprint(writer, actions_token))
     return writer

@@ -135,3 +135,42 @@ def test_the_portal_guards_and_marks_in_flight_writes():
     assert 'in_flight = path.strip("/").startswith("ui/api/in-flight/")' in app
     assert "managed_voice or direct_voice or in_flight" in app
     assert '_COS_OWNER_WRITES = ("ui/api/in-flight/",)' in (ROOT / "minimoi_portal/proxy.py").read_text()
+
+
+@pytest.mark.parametrize('record_type', ['action', 'briefing', 'follow-up', 'research', 'decision', 'risk'])
+def test_types_share_priority_status_and_persistent_history(client, writer, record_type):
+    created = post(client, 'open', 100, title='A shared record', kind=record_type, priority=1, status='open', **{'with':'cos'})
+    assert created.status_code == 200
+    item = created.json['row']['item_id']
+    changed = post(client, 'update', 101, item_id=item, status='doing', priority=3)
+    assert changed.json['row']['kind'] == record_type
+    assert (changed.json['row']['status'], changed.json['row']['priority']) == ('doing', 3)
+    assert post(client, 'comment', 102, item_id=item, text='Record content and next step').status_code == 200
+    assert post(client, 'update', 103, item_id=item, status='waiting').status_code == 200
+    assert post(client, 'close', 104, item_id=item, outcome='done').status_code == 200
+    # New writer over the SAME store proves records survive a service restart.
+    restored = _app(StoreWriter(writer.root, 'dev')).get('/ui/api/in-flight', headers=OWNER).json
+    row = restored['earlier'][0]['rows'][0]
+    assert row['kind'] == record_type and row['outcome'] == 'done' and row['priority'] == 3
+    assert row['comments'][0]['text'] == 'Record content and next step'
+
+
+def test_type_change_does_not_change_status_or_priority_and_cancel_keeps_record(client, writer):
+    row = post(client, 'open', 110, title='Daily review', kind='action', priority=2).json['row']
+    item = row['item_id']
+    updated = post(client, 'update', 111, item_id=item, kind='briefing')
+    assert updated.status_code == 200
+    assert (updated.json['row']['kind'], updated.json['row']['status'], updated.json['row']['priority']) == ('briefing', 'open', 2)
+    assert post(client, 'update', 112, item_id=item, kind='unknown').status_code == 422
+    assert post(client, 'close', 113, item_id=item, outcome='dropped').status_code == 200
+    table = client.get('/ui/api/in-flight', headers=OWNER).json
+    assert table['open'] == []
+    assert table['earlier'][0]['rows'][0]['outcome'] == 'dropped'
+    assert post(client, 'update', 114, item_id=item, kind='action').status_code == 409
+
+
+def test_page_refuses_silent_truncation_and_completion_without_close(client):
+    assert post(client, 'open', 201, title='x'*201).status_code == 422
+    assert post(client, 'open', 202, title='Bad completed state', status='done').status_code == 422
+    row = post(client, 'open', 203, title='Briefing', kind='briefing').json['row']
+    assert post(client, 'comment', 204, item_id=row['item_id'], text='x'*4001).status_code == 422
