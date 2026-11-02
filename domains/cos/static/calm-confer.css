@@ -87,3 +87,11 @@
 @media(max-width:639px){.founders-cos .underway-stages{grid-template-columns:1fr}.founders-cos .underway-outline{padding:18px}}
 
 @media(max-width:640px){.founders-cos.show-cos-flight .cos-mark-title::after{content:"Underway"}}
+
+/* Conversation is the primary microphone action; dictation is a separate menu choice. */
+.founders-cos[data-cos-tab=confer] .input-row>#btn-voice:not([aria-pressed=true]),
+.founders-cos[data-cos-tab=confer] .input-row>#btn-voice[aria-pressed=true]{position:static;clip:auto;overflow:visible;width:auto;height:38px;min-width:64px;padding:0 12px;margin:0;border:1px solid #cbd4c8;border-radius:999px;font-size:0;white-space:nowrap}
+.founders-cos[data-cos-tab=confer] .input-row>#btn-voice::after{content:"Voice";font:600 14px var(--sans)}
+.founders-cos[data-cos-tab=confer] .input-row>#btn-voice[aria-pressed=true]::after{content:"End voice"}
+.founders-cos[data-cos-tab=confer] .conv-menu>#btn-dictate{display:block;position:static;width:100%;height:auto;border-radius:0;padding:9px 12px;text-align:left;font:14px var(--sans)}
+.founders-cos[data-cos-tab=confer] .conv-menu>#btn-dictate::before{display:none}

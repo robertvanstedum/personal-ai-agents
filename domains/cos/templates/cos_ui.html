@@ -8,7 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/cos.css?v=20261101-review06b">
   <link rel="stylesheet" href="/founders-ui/founders.css?v={{ founders_ui_version }}">
-  <link rel="stylesheet" href="/static/calm-confer.css?v=20261102-1">
+  <link rel="stylesheet" href="/static/calm-confer.css?v=20261102-voice2">
   <script type="module" src="/founders-ui/mobile-nav.js?v={{ founders_ui_version }}"></script>
 </head>
 <body class="founders-cos" data-picture="shown" data-mc-panel data-list="open">
@@ -76,6 +76,7 @@
                 <button id="popout" type="button" aria-label="Open conversation in a window">Open in its own window</button>
                 <div class="conv-menu-rule"></div>
                 <button type="button" data-voice-start>Talk with CoS (voice)</button>
+                <button id="btn-dictate" type="button" disabled title="Dictate" aria-label="Dictate into the message draft">Dictate</button>
                 {# The direct-voice provider choice (confer-voice.js writes it here); shown only when her direct voice is admitted. #}
                 <span id="voice-provider" class="conv-menu-provider"></span>
                 <p class="conv-menu-note">Voice is AI-generated.</p>
@@ -92,7 +93,6 @@
           <button id="btn-attach" type="button" title="Add a file or picture" aria-label="Attach a file">＋</button>
           <textarea id="send-input" rows="2" placeholder="Message CoS…" autocomplete="off" autofocus></textarea>
           <button id="btn-voice" title="Start voice conversation" aria-label="Start voice conversation">🎤</button>
-          <button id="btn-dictate" type="button" disabled title="Dictate" aria-label="Dictate into the message draft">Dictate</button>
           <button id="btn-send">Send</button>
         </div>
         {# Her direct voice (Spec 165 v0.3 §6.6): filled only when the capabilities read offers it; empty and hidden otherwise. #}
