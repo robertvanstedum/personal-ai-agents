@@ -132,7 +132,7 @@
   const files=document.getElementById('cos-files'); document.getElementById('files-sheet-content').append(files); files.open=true;
   document.getElementById('files-open').onclick=()=>{document.getElementById('files-sheet').showModal();loadCosFiles();};
   document.getElementById('popout').onclick=()=>window.open(location.href, '_blank', 'popup,width=1000,height=850');
-  document.getElementById('picture-mode').onclick=async()=>{const modes=['shown','faded','hidden'];const value=modes[(modes.indexOf(document.body.dataset.picture)+1)%3];try{await api('history/preferences',{device,picture:value});document.body.dataset.picture=value;}catch(_){state.textContent='Picture preference was not saved.';}};
+
   // ── Review 06: the conversation list, the slim header, ⋯, and the phone bar. Presentation only: rows select with the
   // same calls as the History sheet; every control below hands its click to the control that already owned it. ──
   const body = document.body, wide = matchMedia('(min-width: 900px)');
@@ -235,6 +235,6 @@
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshList(); });
   refreshList();
-  (async()=>{try{const d=await api('history/selection?device='+encodeURIComponent(device)); voiceConversation=d.voice_conversation_id; await select(d.conversation_id,d.conversation);window.cosHistory.ready=true;const p=await api('history/preferences?device='+encodeURIComponent(device));document.body.dataset.picture=p.picture;}catch(_){state.textContent='History is unavailable. Nothing will be sent until it returns.';}})();
+  (async()=>{try{const d=await api('history/selection?device='+encodeURIComponent(device)); voiceConversation=d.voice_conversation_id; await select(d.conversation_id,d.conversation);window.cosHistory.ready=true;}catch(_){state.textContent='History is unavailable. Nothing will be sent until it returns.';}})();
   setInterval(()=>{if(!document.hidden)reload().catch(()=>{state.textContent='History could not be refreshed.';});},5000);
 })();

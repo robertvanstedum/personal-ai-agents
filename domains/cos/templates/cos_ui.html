@@ -8,9 +8,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/cos.css?v=20261101-review06b">
   <link rel="stylesheet" href="/founders-ui/founders.css?v={{ founders_ui_version }}">
+  <link rel="stylesheet" href="/static/calm-confer.css?v=20261102-1">
   <script type="module" src="/founders-ui/mobile-nav.js?v={{ founders_ui_version }}"></script>
 </head>
-<body class="founders-cos" data-picture="faded" data-mc-panel data-list="open">
+<body class="founders-cos" data-picture="shown" data-mc-panel data-list="open">
 
   {# Review 06 (Option A): one app row under the strip. On a phone it is the one bar: ☰, the mark with the chat's title,
      MC's face and ✎; the tabs and Guildhall move into ☰'s list (mobile-nav.js), ⋯ joins the bar. #}
@@ -62,14 +63,15 @@
         {# The slim conversation header: the chat's title; Files only when there are files; everything secondary in ⋯. #}
         <div class="conv-head">
           <h2 class="conv-title" data-conv-title>New chat</h2>
+          <button id="confer-welcome" type="button">Welcome</button>
           <span class="conv-tools" data-conv-tools>
+            <button id="picture-mode" type="button" disabled aria-label="Hide picture" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m3 17 6-5 4 3 4-5 4 5"/></svg><span data-picture-label>Hide picture</span></button>
             <button id="files-open" type="button" hidden>Files <span class="conv-count" data-files-count></span></button>
             <details class="conv-more" data-conv-more>
               <summary aria-label="More for this chat" title="More">⋯</summary>
               <div class="conv-menu" data-conv-menu>
                 <button id="history-open" type="button">History</button>
                 <div class="conv-menu-rule"></div>
-                <button id="picture-mode" type="button" aria-label="Change picture appearance">Picture <span class="picture-seg"><span data-picture-opt="shown">Shown</span><span data-picture-opt="faded">Faded</span><span data-picture-opt="hidden">Hidden</span></span></button>
                 <button id="both-open" type="button" aria-pressed="false">Side by side with MC <kbd>Ctrl `</kbd></button>
                 <button id="popout" type="button" aria-label="Open conversation in a window">Open in its own window</button>
                 <div class="conv-menu-rule"></div>
@@ -81,7 +83,8 @@
             </details>
           </span>
         </div>
-        <div id="chat-log" aria-live="polite"><div id="cos-greeting" class="cos-hero"><div class="cos-hero-copy"><div class="cos-eyebrow">Chief of Staff</div><h1 data-greeting>Hello, Robert.</h1><p>Your conversations, kept here.</p></div><div class="cos-hero-ph"><img src="/static/photos/cos_discuss_private.png?v=1" alt=""></div></div></div>
+        <div class="confer-workspace"><div class="confer-chat">
+        <div id="chat-log" aria-live="polite"><div id="cos-greeting" class="cos-hero"><div class="cos-hero-copy"><div class="cos-eyebrow">Chief of Staff</div><h1 data-greeting>Hello, Robert.</h1><p>Your conversations, kept here.</p></div></div></div>
         <button id="history-earlier" type="button" hidden>Earlier messages</button>
         <div id="attach-tray" aria-live="polite"></div>
         <div class="input-row">
@@ -110,6 +113,10 @@
         {% endif %}
         <div id="voice-transcript" aria-live="polite"></div>
         <div id="voice-sessions" class="voice-sessions" aria-label="Voice sessions to look at" hidden></div>
+        </div><aside class="confer-picture" aria-label="Friends at the table">
+          <button class="confer-picture-open" type="button" aria-label="View full picture"><img src="/static/photos/cos_discuss_private.png?v=1" alt="Friends gathered around a table"></button>
+          <button class="confer-picture-link" type="button" data-full-picture>View full picture ↗</button>
+        </aside></div>
       </div>
 
       <section id="tab-rooms" class="tab-panel"><h1>Guildhall</h1><p>Meet with your Guild.</p><a id="existing-rooms" href="#">Join a meeting ↗</a></section>
@@ -175,6 +182,10 @@
 
   </div><!-- .tab-layout-split -->
   </div><!-- .cos-body -->
+  <dialog id="confer-picture-dialog" aria-label="Friends at the table">
+    <header><span>Friends at the table</span><button id="confer-picture-close" type="button">Close</button></header>
+    <img src="/static/photos/cos_discuss_private.png?v=1" alt="Friends gathered around a table">
+  </dialog>
 
 <script>
 window.cosVoiceConversationAllowed = false;
@@ -188,6 +199,7 @@ const tabPhotos = document.querySelectorAll('.tab-photo');
 const tabLoaded = { confer: true, rooms: true, records: true, record: false, track: false, store: false };
 
 function activateTab(tab, pushState) {
+  document.body.dataset.cosTab = tab;
   document.body.classList.toggle('show-cos-home', tab === 'home');
   document.getElementById('cos-home').setAttribute('aria-current', tab === 'home' ? 'page' : 'false');
   document.body.classList.toggle('show-cos-board', tab === 'records');
@@ -204,6 +216,7 @@ document.getElementById('cos-home').addEventListener('click', () => {
   activateTab('home', true);
   document.getElementById('cos-resume').focus({preventScroll:true});
 });
+document.getElementById('confer-welcome').addEventListener('click', () => document.getElementById('cos-home').click());
 document.getElementById('cos-resume').addEventListener('click', () => {
   activateTab('confer', true);
   document.getElementById('send-input').focus({preventScroll:true});
@@ -761,7 +774,8 @@ async function readDirect(){
 }
 void readDirect();
 </script>
-<script src="/static/cos-history-ui.js?v={{ founders_ui_version }}"></script>
+<script src="/static/cos-history-ui.js?v=20261102-calm1"></script>
+<script src="/static/calm-confer.js?v=20261102-1"></script>
 <script type="module" src="/static/cos-in-flight.js?v={{ founders_ui_version }}"></script>
 </body>
 </html>
