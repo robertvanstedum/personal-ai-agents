@@ -2178,7 +2178,7 @@ def session_view(adapter, sessions, handle, sid):
         ("summary_unavailable", summary == "unavailable"), ("unknown_consult", bool(unknown)),
         ("pending_consult", st != "live" and bool(pending)), ("late_result", bool(late))) if holds]
     dismissed = facts.get("dismissed") is True
-    view = {"session_id": sid, "state": st, "started_at": start.get("started_at"),
+    view = {"session_id": sid, "conversation_id": start.get("conversation_id"), "state": st, "started_at": start.get("started_at"),
             "ended_at": end.get("ended_at") if end else None, "capture": capture, "summary": summary,
             "consults": {"asked": len(asked), "pending": len(pending), "unknown": len(unknown)},
             "pending": pending, "late": late,
@@ -2680,7 +2680,10 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             """The owner's sessions needing attention, newest first, at most ``limit``: filtered first, then bounded
             (Gate 2 Q S1), so clean newer sessions never push an older one that needs a look off the list."""
             listed = []
+            cid = request.args.get("conversation_id")
             for handle, sid in store.sessions(who, True) or ():
+                if cid and handle != cid:
+                    continue
                 view = session_view(adapter, sessions, handle, sid)
                 if view is not None and view["needs_attention"]:
                     listed.append(view)

@@ -398,7 +398,7 @@ class FileStore(DirectVoiceStore):
             return [], True
         turns = [known.records[rid] for rid in known.order if known.records[rid].get("kind") == "turn"]
         return ([{"role": t["role"], "item_id": t.get("item_id"), "speaker": SPEAKERS[t["role"]], "text": t["text"],
-                  "partial": t["partial"], "interrupted": t["interrupted"]} for t in turns if t.get("role") in SPEAKERS],
+                  "partial": t["partial"], "interrupted": t["interrupted"], "started_at": t.get("started_at"), "ended_at": t.get("ended_at")} for t in turns if t.get("role") in SPEAKERS],
                 not known.damaged)
 
     def summary(self, handle, sid):
@@ -510,9 +510,9 @@ class FileStore(DirectVoiceStore):
             if needing_attention and (facts["dismissed"]
                                       or (facts["summary"] in ("confirmed", "edited", "declined") and not unsettled)):
                 continue
-            found.append((facts["start"].get("started_at") or "", sid))
+            found.append((facts["start"].get("started_at") or "", sid, facts["start"].get("conversation_id", HANDLE)))
         found.sort(reverse=True)
-        return [(HANDLE, sid) for _at, sid in found]
+        return [(handle, sid) for _at, sid, handle in found]
 
     # ── recall by revision (D6 (a)) ───────────────────────────────────────────────────────────────────────────────
 

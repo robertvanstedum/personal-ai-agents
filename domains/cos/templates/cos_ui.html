@@ -198,7 +198,7 @@
 
 <script>
 window.cosVoiceConversationAllowed = false;
-document.getElementById("btn-voice").addEventListener("click", e => { if (!window.cosVoiceConversationAllowed) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+document.getElementById("btn-voice").addEventListener("click", e => { if (window.cosVoiceSelecting || !window.cosVoiceConversationAllowed) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
 const INITIAL_TAB = '{{ initial_tab }}';
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
@@ -683,8 +683,9 @@ function stopVoice(reason){
 function updateVoiceAvailability(){
   adoptDirect();
   const availability=conferVoiceAvailability({legacyReady,realtimeReady:Boolean(mode),mode});
-  if(window.cosVoiceConversationAllowed===false){button.disabled=true;dictation.setAvailable(availability.dictationReady);return;}
+  if(window.cosVoiceSelecting || window.cosVoiceConversationAllowed===false){button.disabled=true;dictation.setAvailable(availability.dictationReady);return;}
   if(direct){dictation.setAvailable(availability.dictationReady);direct.paint();return;}
+  if(window.cosVoiceConversationId && window.cosVoiceConversationId!=='owner'){button.disabled=true;status.textContent='Conversational voice is unavailable here right now.';dictation.setAvailable(availability.dictationReady);return;}
   if(directRefusal){button.disabled=false;dictation.setAvailable(availability.dictationReady);provider.textContent='Voice unavailable · typing still works';return;}
   button.disabled=!availability.voiceReady||Boolean(stopping)||voiceRestartBlocked;
   if(mode)mode.disabled=active||Boolean(stopping)||voiceRestartBlocked;
@@ -730,7 +731,7 @@ void refreshLegacyAvailability();
 // (her routes not installed, or admission off): Confer is exactly as it was. Not while a voice session of today's modes
 // runs: the path changes once it has ended.
 const DIRECT_CAPABILITIES='../api/realtime-voice/direct/api/realtime-voice/capabilities';
-const DIRECT_KEY='20261031-live1';   // v3's live check (31 Oct) changed the session module, the controller and an adapter
+const DIRECT_KEY='20261102-conversation1';   // v3's live check (31 Oct) changed the session module, the controller and an adapter
 // Not while a session of today's modes runs, nor while an earlier one's end is unconfirmed (its restart block, Gate 2 Q N10).
 // Admitted and refused (Q S2): the button says why, and no other mode is offered.
 function adoptDirect(){
@@ -769,21 +770,23 @@ async function readDirect(){
     if(admitted){
       let storage=null;try{storage=window.localStorage;}catch(error){/* the provider choice is not remembered */}
       pendingDirect=page.conferVoice({doc:document,els,direct:info,session,get,post,headers,storage,...timers,
+        conversationId:()=>window.cosVoiceConversationId || 'owner',
         fetch:(...a)=>fetch(...a),warn:(...a)=>console.warn(...a),
         setInterval:(fn,ms)=>window.setInterval(fn,ms),clearInterval:t=>window.clearInterval(t),
         loadController:()=>import(`../static/realtime-voice/realtime-voice-controller.js?v=${DIRECT_KEY}`),
         beforeStart:()=>dictation.stop('voice_started')});
       voiceRecords=pendingDirect.records;
       updateVoiceAvailability();
-    }else voiceRecords=page.conferSessions({doc:document,direct:info,chat:chatLog,list:els.sessions,get,post});
+    }else voiceRecords=page.conferSessions({doc:document,direct:info,chat:chatLog,list:els.sessions,get,post,conversationId:()=>window.cosVoiceConversationId || 'owner'});
     if(caps.direct_records===true)await voiceRecords.refresh();
   }catch(error){
     if(admitted&&!direct&&!pendingDirect){pendingRefusal='Voice unavailable: the voice page could not load. Typing still works.';updateVoiceAvailability();}
   }
 }
+document.addEventListener('cos:conversation-selected',()=>{updateVoiceAvailability();void voiceRecords?.refresh();});
 void readDirect();
 </script>
-<script src="/static/cos-history-ui.js?v=20261102-calm1"></script>
+<script src="/static/cos-history-ui.js?v=20261102-voice1"></script>
 <script src="/static/calm-confer.js?v=20261102-1"></script>
 <script type="module" src="/static/cos-in-flight.js?v={{ founders_ui_version }}"></script>
 </body>

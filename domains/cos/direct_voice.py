@@ -6,7 +6,7 @@ flows, admission, the routes and the needs-attention list. This file is only wha
 * ``owner``/``guard``: the identity the portal forwards (X-Minimoi-* is stripped from the browser and recreated there), the
   owner tier; every POST also needs the portal's verified-write marker, X-Minimoi-Voice-Write-Verified: 1, which the
   portal adds only after its owner and CSRF gates (§6.7). GETs need the owner only.
-* ``conversation``: "owner" only (she has one conversation, no Private mode).
+* ``conversation``: the selected writable, non-private chat; "owner" retains the original chat.
 * ``store``: her file store (domains/cos/voice_store.py), in COS_VOICE_DIR, out of her runtime's reach (D5 (b)).
 * ``typed_turn``: the canonical Confer turn (chief_of_staff._process_confer_turn), channel html_voice, conversation owner,
   request_id = uuid5(VOICE_NS, "cos:<session>:<owner item>"), plus _ui_turn's outbox snapshot and file-claim check, under
@@ -44,7 +44,7 @@ from core.realtime_voice.direct_host import (FAILED, DirectVoiceAdapter, Receipt
 from core.realtime_voice.errors import VoiceUnavailable
 from core.realtime_voice.transcripts import SPEAKERS
 from core.realtime_voice.voice_card import load_pinned
-from domains.cos import voice_store
+from domains.cos import voice_store, history as cos_history
 from domains.cos.backends import openclaw_backend
 from domains.cos.claim_truth import enforce_file_claims
 from domains.cos.confer_service import ConferOperationFailed, InvalidConferTurn, parse_explicit_note, slash_command
@@ -220,8 +220,9 @@ class ChiefOfStaff(DirectVoiceAdapter):
              "invalid": "Voice unavailable: open Confer to talk with CoS.",
              "kept_in": "in Chief of Staff's voice records, which she can recall"}
 
-    def __init__(self, *, store, process_turn, briefing, memory, files=None, card_root=CARD_ROOT, clock=time.time):
+    def __init__(self, *, store, process_turn, briefing, memory, files=None, card_root=CARD_ROOT, clock=time.time, history=None):
         self.store, self._process, self._briefing, self._memory = store, process_turn, briefing, memory
+        self._history = history
         self._files, self._card_root, self._clock = files or (lambda: None), card_root, clock
 
     def owner(self):
@@ -246,11 +247,15 @@ class ChiefOfStaff(DirectVoiceAdapter):
         return True                          # no Private mode: what End carries is kept
 
     def conversation_ok(self, cid):
-        return cid == voice_store.HANDLE
+        return cid == voice_store.HANDLE or (isinstance(cid, str) and cid.startswith("cosc-"))
 
     def conversation(self, cid):
         if cid == voice_store.HANDLE:
             return voice_store.HANDLE, None
+        if self._history is not None and isinstance(cid, str):
+            doc = self._history.conversation(cid)
+            if doc and not doc.get("private") and not doc.get("read_only"):
+                return cid, None
         return None, refusal("not_found", "Voice unavailable: that conversation is not available.", 404)
 
     def clean(self, text, limit, what):
@@ -297,9 +302,9 @@ class ChiefOfStaff(DirectVoiceAdapter):
         built = self._briefing(token)                     # once: it reads files and asks for live status
         rules = (direct_rules(PERSON, OWNER_NAME, actions, page_asks=page_asks) + "\n\n"
                  + her_rules(actions, page_asks=page_asks))
-        return bounded(rules, card, lambda memory: built.replace(token, memory), self._memory(), self._continuity())
+        return bounded(rules, card, lambda memory: built.replace(token, memory), self._memory(), self._continuity(handle))
 
-    def _continuity(self):
+    def _continuity(self, conversation=voice_store.HANDLE):
         """His and her last turns from her latest settled sessions (never a live one), oldest first: DATA, at most
         CONTINUITY_TURNS lines and CONTINUITY_MAX_BYTES."""
         who = self.owner()
@@ -307,17 +312,37 @@ class ChiefOfStaff(DirectVoiceAdapter):
             return ""
         now = datetime.fromtimestamp(self._clock(), timezone.utc)
         names = {SPEAKERS["user"]: "Robert", SPEAKERS["assistant"]: "CoS"}
-        lines, used = [], 0
+        entries, used = [], 0
+        def timed(at, text):
+            try:
+                when = datetime.fromisoformat(str(at).replace("Z", "+00:00")).timestamp()
+            except (ValueError, TypeError):
+                when = 0
+            entries.append((when, len(entries), text))
+        if self._history is not None:
+            cid = cos_history.DEFAULT_CONVERSATION_ID if conversation == voice_store.HANDLE else conversation
+            doc = self._history.conversation(cid)
+            if doc and not doc.get("private") and not doc.get("read_only"):
+                for turn in self._history.turns(cid, limit=12)["items"]:
+                    for key, speaker in (("user_text", "Robert"), ("reply_text", "CoS")):
+                        if turn.get(key):
+                            timed(turn.get("answered_at") if key == "reply_text" else turn.get("created_at"),
+                                  f"{speaker}: {' '.join(turn[key].split())}")
         for handle, sid in self.store.sessions(who[0], needing_attention=False) or []:   # newest first
+            if handle != conversation:
+                continue
             facts = self.store.state(handle, sid) or {}
             if not facts.get("start") or core.state(facts["start"], facts.get("end"), sid, when=now) not in ("ended", "dropped"):
                 continue
-            turns = self.store.records(handle, sid)[0]
-            lines[:0] = [f"{names[s]}{' (partial)' if p else ''}: {' '.join(t.split())}" for s, t, p, _i in turns if s in names]
+            turns = self.store.turns(handle, sid)[0]
+            for turn in turns:
+                if turn["speaker"] in names:
+                    timed(turn.get("started_at") or facts["start"].get("started_at"),
+                          f"{names[turn['speaker']]}{' (partial)' if turn['partial'] else ''}: {' '.join(turn['text'].split())}")
             used += 1
-            if used >= CONTINUITY_SESSIONS or len(lines) >= CONTINUITY_TURNS:
+            if used >= CONTINUITY_SESSIONS:
                 break
-        lines = lines[-CONTINUITY_TURNS:]
+        lines = [text for _at, _order, text in sorted(entries)][-CONTINUITY_TURNS:]
         while lines and len("\n".join(lines).encode()) > CONTINUITY_MAX_BYTES:
             lines.pop(0)
         return "\n".join(lines)
@@ -337,7 +362,7 @@ class ChiefOfStaff(DirectVoiceAdapter):
 
         def work():
             try:
-                box["result"] = self._process(text, channel="html_voice", conversation_id=voice_store.HANDLE,
+                box["result"] = self._process(text, channel="html_voice", conversation_id=cos_history.backend_session(handle),
                                               request_id=request_id, on_dispatch=gate.cross)
             except BaseException as exc:          # noqa: BLE001 - classified by the boundary below, never by class
                 box["error"] = exc
@@ -396,7 +421,7 @@ class ChiefOfStaff(DirectVoiceAdapter):
 
 
 def install(app, *, environ, process_turn, briefing, memory, files=None, recall=None, budget=None,
-            clock=time.time, summary_http=None, card_root=CARD_ROOT):
+            clock=time.time, summary_http=None, card_root=CARD_ROOT, history=None):
     """Register her direct voice on cos-scheduler's app when MINIMOI_COS_VOICE_DIRECT=1: the core's routes under PREFIX,
     with this adapter. Returns the core's metadata, or None (nothing registered). ``recall``: Confer's recall folder
     (conversation_log.folder), where settled sessions are projected (D6 (a)). A start is allowed only where may_start()
@@ -408,7 +433,7 @@ def install(app, *, environ, process_turn, briefing, memory, files=None, recall=
         log.error("cos direct voice: %s is not a usable folder; voice is refused until it is", voice_store.ENV)
     adapter = ChiefOfStaff(store=voice_store.FileStore(root, recall=recall, clock=clock), process_turn=process_turn,
                            briefing=briefing, memory=memory, files=files, card_root=card_root,
-                           clock=clock)
+                           clock=clock, history=history)
 
     def admitted():
         if not may_start(environ):

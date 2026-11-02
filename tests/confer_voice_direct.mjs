@@ -170,7 +170,7 @@ function page({ caps = CAPS, path = '/ui/confer', managed = true, routes = {}, s
   const live = () => node('voice-live');
   const q = (root, sel) => root.querySelector(sel);
   return {
-    nodes: node, chat, calls, appended, today, dictation, direct, server, imports, docEvents, winEvents, store, timers,
+    nodes: node, chat, calls, appended, today, dictation, direct, server, imports, docEvents, winEvents, store, timers, window,
     get c() { return direct.instances.at(-1); },
     async click(n) { n.click(); await flush(); },
     async voice() { node('btn-voice').click(); await flush(); },
@@ -258,7 +258,7 @@ await scenario('not admitted, with sessions to look at (S3): they are listed onc
   await flush();
   assert.deepEqual(p.imports.sort(), ['confer-voice', 'session']);               // no controller: nothing can start on it
   assert.equal(p.gets('/sessions').length, 1);
-  assert.equal(p.gets('/sessions')[0].url, `${P}/sessions`);
+  assert.equal(p.gets('/sessions')[0].url, `${P}/sessions?conversation_id=owner`);
   assert.equal(textOf(p.nodes('voice-sessions').querySelector('[data-voice-reason]')), PAGE.RECOVERING);
   assert.equal(p.nodes('voice-mode').closest().hidden, false);
   assert.equal(p.nodes('voice-provider').textContent, 'Voice with Chief of Staff');
@@ -867,4 +867,22 @@ for (const provider of ['openai', 'xai']) {
   });
 }
 
+await t.check('selected chat binds voice start and records; switching locks new starts', async () => {
+  const p = page();
+  try {
+    await flush();
+    p.window.cosVoiceConversationId = 'cosc-123456789abc';
+    p.window.cosVoiceConversationAllowed = true;
+    p.window.cosVoiceSelecting = true;
+    for (const fn of p.docEvents['cos:conversation-selected'] || []) fn();
+    assert.equal(p.nodes('btn-voice').disabled, true);
+    p.window.cosVoiceSelecting = false;
+    for (const fn of p.docEvents['cos:conversation-selected'] || []) fn();
+    await flush();
+    assert.equal(p.nodes('btn-voice').disabled, false);
+    await p.voice();
+    assert.equal(p.c.args.conversation_id, 'cosc-123456789abc');
+    assert.ok(p.gets('/sessions?conversation_id=cosc-123456789abc').length);
+  } finally { p.done(); }
+});
 t.done();

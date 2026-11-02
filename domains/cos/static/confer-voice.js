@@ -111,13 +111,15 @@ export function conferSessions(d) {
   const { doc, direct } = d;
   const make = maker(doc);
   const short = direct.person?.short || 'CoS';
+  const conversation = () => d.conversationId ? d.conversationId() : 'owner';
+  const scope = view => view?.conversation_id || conversation();
   const shown = new Set();                               // sessions revealed in this page's conversation: not listed again
   const get = (url) => d.get(url, { timeoutMs: READ_WAIT_MS });
   const post = (url, body, ms) => d.post(url, body, { timeoutMs: ms });
 
-  async function detail(sid) {
+  async function detail(sid, cid = conversation()) {
     if (!direct.session_url || !sid) return null;
-    const r = await get(`${at(direct.session_url, sid)}?conversation_id=owner`);
+    const r = await get(`${at(direct.session_url, sid)}?conversation_id=${encodeURIComponent(cid)}`);
     return r.status === 200 && r.body && r.body.ok ? r.body : null;
   }
   function captureLine(view) {
@@ -154,7 +156,7 @@ export function conferSessions(d) {
     if (!direct.session_transcript_url || view.damaged || view.state === 'live') return null;
     const partial = view.capture !== 'complete' || view.complete_read === false;
     const link = make('a', { class: 'voice-download', 'data-voice-download': '', download: '',
-      href: `${at(direct.session_transcript_url, view.session_id)}?conversation_id=owner` }, DOWNLOAD + (partial ? ' (partial)' : ''));
+      href: `${at(direct.session_transcript_url, view.session_id)}?conversation_id=${encodeURIComponent(scope(view))}` }, DOWNLOAD + (partial ? ' (partial)' : ''));
     return link;
   }
 
@@ -172,17 +174,17 @@ export function conferSessions(d) {
     const actions = make('div', { class: 'voice-actions' });
     const buttons = ['Confirm', 'Edit', 'Decline'].map((label) => make('button', { type: 'button', class: 'voice-act', [`data-voice-summary-${label.toLowerCase()}`]: '' }, label));
     actions.append(...buttons);
-    const scope = make('div', { class: 'voice-card-scope' }, CONFIRM_SCOPE);
+    const scopeNote = make('div', { class: 'voice-card-scope' }, CONFIRM_SCOPE);
     const result = make('div', { class: 'voice-card-result', role: 'status', 'data-voice-summary-result': '' });
     result.hidden = true;
-    box.append(actions, scope, result);
+    box.append(actions, scopeNote, result);
     const [confirm, edit, decline] = buttons;
     const busy = (on) => { for (const b of buttons) b.disabled = on; };
     const tell = (words) => { result.textContent = words; result.hidden = !words; };
     async function decide(decision, words) {
       busy(true); tell('');
       const r = await post(at(direct.summary_decision_url, view.session_id),
-        { conversation_id: 'owner', decision, ...(decision === 'edit' ? { text: words } : {}) }, DECISION_WAIT_MS);
+        { conversation_id: scope(view), decision, ...(decision === 'edit' ? { text: words } : {}) }, DECISION_WAIT_MS);
       const b = r.body || {};
       if (r.status === 200 && b.ok) {
         actions.remove(); box.querySelector('[data-voice-summary-editor]')?.remove();
@@ -215,7 +217,7 @@ export function conferSessions(d) {
       const row2 = make('div', { class: 'voice-actions' });
       row2.append(save, back);
       form.append(area, row2);
-      box.insertBefore(form, scope);
+      box.insertBefore(form, scopeNote);
       actions.hidden = true;
       save.addEventListener('click', async () => {
         const words = String(area.value || '').trim();
@@ -240,7 +242,7 @@ export function conferSessions(d) {
     const tell = (words) => { result.textContent = words; result.hidden = !words; };
     button.addEventListener('click', async () => {
       button.disabled = true; tell('Asking…');
-      const r = await post(at(direct.summary_url, view.session_id), { conversation_id: 'owner' }, ASK_WAIT_MS);
+      const r = await post(at(direct.summary_url, view.session_id), { conversation_id: scope(view) }, ASK_WAIT_MS);
       const b = r.body || {};
       if (r.status === 200 && b.ok) { await again(); return; }
       button.disabled = false;
@@ -296,8 +298,9 @@ export function conferSessions(d) {
   }
 
   // The reveal at this page's own End: the session's records, from her store, at the end of the conversation.
-  async function reveal(sid) {
-    const view = await detail(sid);
+  async function reveal(sid, cid = conversation()) {
+    const view = await detail(sid, cid);
+    if (cid !== conversation()) return false;
     if (!view || view.state === 'live') return false;
     shown.add(sid);
     d.chat.append(render(view));
@@ -311,9 +314,11 @@ export function conferSessions(d) {
   const list = d.list;
   async function refresh() {
     if (!list || !direct.sessions_url) return;
-    const r = await get(direct.sessions_url);
+    const cid = conversation();
+    const r = await get(`${direct.sessions_url}?conversation_id=${encodeURIComponent(cid)}`);
+    if (cid !== conversation()) return;
     if (r.status !== 200 || !Array.isArray(r.body?.sessions)) return;
-    paint(r.body.sessions.filter((v) => v && typeof v.session_id === 'string' && !shown.has(v.session_id)));
+    paint(r.body.sessions.filter((v) => v && (!v.conversation_id || v.conversation_id === cid) && typeof v.session_id === 'string' && !shown.has(v.session_id)));
   }
   function paint(sessions) {
     list.textContent = '';
@@ -347,7 +352,7 @@ export function conferSessions(d) {
       });
       dismiss.addEventListener('click', async () => {
         dismiss.disabled = true;
-        const r = await post(at(direct.session_dismiss_url, view.session_id), { conversation_id: 'owner' }, DECISION_WAIT_MS);
+        const r = await post(at(direct.session_dismiss_url, view.session_id), { conversation_id: scope(view) }, DECISION_WAIT_MS);
         if (r.status === 200 && r.body?.ok) { item.remove(); if (!list.querySelector('[data-voice-attention]')) { list.textContent = ''; list.hidden = true; } return; }
         dismiss.disabled = false;
         result.textContent = r.body?.message || (r.status === 0 ? 'The server did not answer. Reload to see whether it was kept.'
@@ -370,7 +375,7 @@ export function conferVoice(d) {
   const short = person.short || 'CoS';
   const later = d.setTimeout || ((fn, ms) => setTimeout(fn, ms));
   const cancel = d.clearTimeout || ((t) => clearTimeout(t));
-  const records = conferSessions({ doc, direct, chat: els.chat, list: els.sessions, get: d.get, post: d.post });
+  const records = conferSessions({ doc, direct, chat: els.chat, list: els.sessions, get: d.get, post: d.post, conversationId: d.conversationId });
   let s = null, starting = false, live = false, ending = false, released = Promise.resolve(), release = () => {};
   let clearing = null, withdrawn = false;           // withdrawn: stopped while Dictate was still yielding, before a session
   // The status line under the composer is shared with Dictate (Gate 2 Q S4): voice clears only what it wrote itself, so
@@ -475,13 +480,15 @@ export function conferVoice(d) {
       say(unvoiced[provider] || 'Voice unavailable here right now. Typing still works.', { error: true });
       return;
     }
+    const cid = d.conversationId ? d.conversationId() : 'owner';
+    if (!cid) return;
     starting = true; withdrawn = false; paint();
     try { await d.beforeStart?.(); } catch (e) { /* Dictate stopping never blocks voice */ }
     if (withdrawn) { starting = false; withdrawn = false; paint(); return; }      // stopped meanwhile: nothing starts
     released = new Promise((resolve) => { release = resolve; });
     const mine = S.directVoice({
-      page: { conversation: { id: 'owner' } }, direct, ui, headers: d.headers, fetch: d.fetch,
-      reveal: () => records.reveal(mine.sessionId()), loadController: d.loadController, warn: d.warn,
+      page: { conversation: { id: cid } }, direct, ui, headers: d.headers, fetch: d.fetch,
+      reveal: () => records.reveal(mine.sessionId(), cid), loadController: d.loadController, warn: d.warn,
       setTimeout: later, clearTimeout: cancel, setInterval: d.setInterval, clearInterval: d.clearInterval,
     });
     s = mine; paint();

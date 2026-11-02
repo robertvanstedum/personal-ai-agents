@@ -67,8 +67,13 @@
     try { await Promise.race([Promise.all(pending),new Promise((_,reject)=>{deadline=setTimeout(()=>reject(new Error('Voice termination pending')),8000);})]); }
     finally { clearTimeout(deadline); }
   }
+  let selecting = false;
   async function select(id, doc) {
+    if (selecting) throw new Error('Wait for the conversation to open.');
     if (input.disabled || uploading) throw new Error('Wait for the current message or upload.');
+    selecting = true; window.cosVoiceSelecting = true;
+    document.getElementById('btn-voice').disabled = true;
+    try {
     if (cid && cid !== id) await releaseVoice();
     persistDraft(); await api('history/selection', {device, conversation_id:id});
     cid = id; conversation = doc; generation++; signature = ''; before = null; viewingEarlier = false;
@@ -80,13 +85,19 @@
     renderTray(); persistDraft();
     state.textContent = pending() ? 'Checking…' : 'Saved';
     window.cosHistory.conversationId = cid; showTitle(doc); markCurrent();
-    // Existing voice sessions address owner only; never leak another conversation into that context.
+    // Direct voice binds its transport and records to this selected, non-private conversation.
     document.body.dataset.historyPrivate = String(Boolean(doc?.private));
-    const voice = document.getElementById('btn-voice'); window.cosVoiceConversationAllowed = cid === voiceConversation && !doc?.private;
+    const voice = document.getElementById('btn-voice'); window.cosVoiceConversationId = cid === voiceConversation ? 'owner' : cid;
+    window.cosVoiceConversationAllowed = !doc?.private && !doc?.read_only;
     voice.disabled = !window.cosVoiceConversationAllowed;
-    if (!window.cosVoiceConversationAllowed) { voice.title = 'Voice is available in the original CoS conversation.'; document.getElementById('voice-status').textContent = 'Voice is available in the original CoS conversation.'; }
+    if (!window.cosVoiceConversationAllowed) { voice.title = 'Voice is unavailable in a private or read-only conversation.'; document.getElementById('voice-status').textContent = 'Voice is unavailable in a private or read-only conversation.'; }
     await reload();
+    document.dispatchEvent(new CustomEvent('cos:conversation-selected'));
     log.scrollTop = Number(storage('cos-scroll:' + cid) || log.scrollHeight);
+    } finally {
+      selecting = false; window.cosVoiceSelecting = false;
+      document.dispatchEvent(new CustomEvent('cos:conversation-selected'));
+    }
   }
   async function list(more = false) {
     const d = await api('history/conversations?limit=50' + (more && next ? '&cursor=' + encodeURIComponent(next) : ''));

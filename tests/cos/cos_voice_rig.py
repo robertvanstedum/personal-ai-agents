@@ -99,7 +99,7 @@ def card_root(tmp_path, voices):
 
 
 def build(monkeypatch, tmp_path, *, environ=None, voices=None, budget=None, briefing=None, memory="(no memory yet)",
-          with_store=True, files=True):
+          with_store=True, files=True, history=None):
     """Her host on a fresh app. ``voices`` None: her real card (cedar on OpenAI, no Grok voice); else a copy naming these."""
     voice, recall = tmp_path / "cos_voice", tmp_path / "conversations"
     recall.mkdir(parents=True, exist_ok=True)
@@ -158,7 +158,7 @@ def build(monkeypatch, tmp_path, *, environ=None, voices=None, budget=None, brie
         app, environ=env, process_turn=process_turn,
         briefing=briefing or (lambda memory: "--- MEMORY ---\n" + memory + "\n--- TODAY ---\nTuesday"),
         memory=lambda: memory, files=lambda: files, recall=recall, budget=budget,
-        clock=lambda: clock[0], summary_http=gateway,
+        clock=lambda: clock[0], summary_http=gateway, history=history,
         card_root=card_root(tmp_path, voices) if voices is not None else direct_voice.CARD_ROOT)
     return SimpleNamespace(app=app, client=app.test_client(), metadata=metadata, mints=mints, clock=clock, runtime=runtime,
                            notes=notes, reminders=reminders, resets=resets, turns=turns, budget=budget, gateway=gateway,

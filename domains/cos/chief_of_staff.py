@@ -1290,7 +1290,7 @@ _cos_managed_realtime_ready = _install_managed_realtime(app, environ=os.environ,
 # MINIMOI_COS_DIRECT_VOICE_PRODUCTION=1 (domains/cos/direct_voice.py). Off: nothing is registered and Confer is as before.
 from domains.cos.direct_voice import install as _install_direct_voice
 _cos_direct_voice = _install_direct_voice(app, environ=os.environ, process_turn=_process_confer_turn,
-    briefing=_build_system_prompt, memory=_read_memory, files=lambda: _cos_files, recall=_conversations_dir)
+    briefing=_build_system_prompt, memory=_read_memory, files=lambda: _cos_files, recall=_conversations_dir, history=_history)
 # The CoS store's one writer and its internal API (CoS 1.2 spec v0.3 section 4.5). Mounted only when COS_STORE_DIR,
 # COS_STORE_ENVIRONMENT and COS_STORE_TOKEN_FILE are all set; otherwise nothing changes.
 from domains.cos.store.api import install as _install_cos_store
