@@ -40,7 +40,8 @@ class Discussion:
         name = "Master Craftsman (MC)" if self.teammate == "mc" else "Chief of Staff (CoS)"
         payload = {
             "model": "minimoi-" + self.teammate + "-agent", "stream": False,
-            "max_tokens": 500, "user": user,
+            # Includes reasoning tokens as well as the brief visible answer.
+            "max_tokens": 2000, "user": user,
             "messages": [
                 {"role": "system", "content": (
                     "You are " + name + ", participating in Robert's Guildhall meeting. "
@@ -73,9 +74,21 @@ class Discussion:
             data = response.json()
             choice = data["choices"][0]
             message = choice["message"]
-            if (message.get("tool_calls") or message.get("function_call")
-                    or choice.get("finish_reason") != "stop" or not isinstance(message.get("content"), str)):
-                return {**empty, "outcome": "refused", "detail": "discussion_not_plain_text"}
+            # Completed provider responses can be unusable without being a
+            # transport refusal. Keep partial replies out of the transcript and
+            # retain a fixed diagnostic code, never provider text or tool data.
+            reason = None
+            if message.get("tool_calls") or message.get("function_call"):
+                reason = "discussion_unexpected_tools"
+            elif choice.get("finish_reason") == "length":
+                reason = "discussion_reply_limit"
+            elif choice.get("finish_reason") != "stop":
+                reason = "discussion_incomplete_reply"
+            elif not isinstance(message.get("content"), str):
+                reason = "discussion_not_plain_text"
+            if reason:
+                return {**empty, "outcome": "refused", "detail": reason,
+                        "reason": reason, "usage": data.get("usage")}
             return {"outcome": "done", "detail": "done", "text": message["content"], "usage": data.get("usage")}
         except (requests.RequestException, ValueError, KeyError, IndexError, TypeError):
             return {**empty, "outcome": "error", "detail": "discussion_unconfirmed"}

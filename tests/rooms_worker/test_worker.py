@@ -370,3 +370,13 @@ def test_stop_without_runtime_confirmation_stays_uncertain(env, monkeypatch):
     assert len(env.relay.calls) == 1
     assert env.turns()[0]['disposition'] == 'stop_unconfirmed'
     assert not any(e['actor'] == 'mc' and e['kind'] == 'message' for e in env.events())
+
+
+def test_completed_discussion_failure_preserves_reason_and_posts_no_reply(env):
+    env.prove(); env.join(); env.say("Q1")
+    env.relay.script = [{"outcome": "refused", "text": "", "reason": "discussion_reply_limit"}]
+    env.worker.run_once()
+    turn = env.turns()[0]
+    assert turn['state'] == 'failed'
+    assert turn['disposition'] == 'discussion_reply_limit'
+    assert turn.get('reply_event') is None

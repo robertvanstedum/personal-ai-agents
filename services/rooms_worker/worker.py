@@ -253,7 +253,8 @@ class Worker:
             if result["outcome"] == "done":
                 self.fail(turn, turn["claim_id"], "failed", "empty_reply")      # MC answered nothing
             elif result["outcome"] == "refused":
-                # Refused before any inference (relay 4xx; a runner's pre-spawn check).
+                # A pre-spawn refusal, or a completed tool-free discussion
+                # response that failed validation. Neither is automatically retried.
                 self.fail(turn, turn["claim_id"], "failed", result.get("reason") or "relay_refused")
             else:
                 # A transport or stream failure after sending: MC may have
