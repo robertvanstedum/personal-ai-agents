@@ -45,6 +45,7 @@ let requireRecipient = false; // Continue without must not fall back to the same
 const ACTIVE = ['queued', 'claimed', 'running', 'recovering', 'cancel_requested'];
 const keys = new Map();
 const sendingRooms = new Set();
+const expandedLearning = new Set(); // presentation only, retained across room refreshes
 const IMAGE = /\.(png|jpe?g|gif|webp)$/i;
 const TEXT = /\.(txt|md|csv|json)$/i;
 
@@ -204,6 +205,32 @@ function threadLines(events) {
   return out;
 }
 
+// Keep the original event intact. Only a complete agent capture fence is folded;
+// ordinary prose, owner messages and incomplete fences remain visible verbatim.
+function eventBody(e) {
+  const body = String(e.body || '');
+  if (e.actor_kind !== 'agent') return el('p', { class: 'rm-body' }, body);
+  const pattern = /^```capture[^\S\r\n]*\r?\n[\s\S]*?^```[^\S\r\n]*(?=\r?$)(?:\r?\n(?:\r?\n)?Captured \d+ correction pairs?[^\S\r\n]*(?=\r?$))?/gm;
+  const pieces = [...body.matchAll(pattern)];
+  if (!pieces.length) return el('p', { class: 'rm-body' }, body);
+  const content = el('div', { class: 'rm-message-content' });
+  let offset = 0;
+  for (const match of pieces) {
+    if (match.index > offset) content.append(el('p', { class: 'rm-body' }, body.slice(offset, match.index)));
+    const key = `${current}:${e.id}:${match.index}`;
+    const details = el('details', { class: 'rm-learning' });
+    details.open = expandedLearning.has(key);
+    details.append(el('summary', {}, 'Learning note'), el('p', { class: 'rm-body' }, match[0]));
+    details.addEventListener('toggle', () => {
+      if (details.open) expandedLearning.add(key); else expandedLearning.delete(key);
+    });
+    content.append(details);
+    offset = match.index + match[0].length;
+  }
+  if (offset < body.length) content.append(el('p', { class: 'rm-body' }, body.slice(offset)));
+  return content;
+}
+
 function eventLine(e) {
   if (SYSTEM.includes(e.kind)) return systemLine([e]);
   const li = el('li', { class: 'rm-msg', 'data-rm-event': e.id, 'data-kind': e.kind, 'data-actor': e.actor, 'data-actor-kind': e.actor_kind });
@@ -230,7 +257,7 @@ function eventLine(e) {
       card.append(b);
     }
   } else {
-    card.append(el('p', { class: 'rm-body' }, e.body));
+    card.append(eventBody(e));
   }
   li.append(card);
   return li;

@@ -33,6 +33,22 @@ const source = fs.readFileSync(process.argv[1], 'utf8').replace(/^import .*;$/mg
 vm.runInContext(source, context);
 vm.runInContext(String.raw`
 (async () => {
+  // Fold agent learning metadata without modifying or interpreting the record.
+  const capture='Correction received.\n\n'+'`'.repeat(3)+'capture\nowner-said: <img src=x onerror=alert(1)>\n'+'`'.repeat(3)+'\nCaptured 1 correction pairs\nMore prose';
+  const event={id:'capture-event',actor_kind:'agent',body:capture};
+  const folded=eventBody(event);
+  assert.equal(event.body,capture);
+  assert.equal(folded.children[0].textContent,'Correction received.\n\n');
+  const detail=folded.children[1]; assert.equal(detail.tag,'details'); assert.equal(detail.open,false);
+  assert.equal(detail.children[0].textContent,'Learning note');
+  assert.ok(detail.children[1].textContent.includes('<img src=x onerror=alert(1)>'));
+  assert.equal(detail.children[1].children.length,0); // text, never executable HTML
+  assert.equal(folded.children[2].textContent,'\nMore prose');
+  detail.open=true; detail.handlers.toggle(); assert.equal(eventBody(event).children[1].open,true);
+  detail.open=false; detail.handlers.toggle(); assert.equal(eventBody(event).children[1].open,false);
+  assert.equal(eventBody({...event,actor_kind:'human'}).textContent,capture);
+  const incomplete='Hello\n'+'`'.repeat(3)+'capture\nunfinished';
+  assert.equal(eventBody({...event,body:incomplete}).textContent,incomplete);
   current = 'room-a'; room = { id: current, state: 'active', events: [{actor:'robert',kind:'message',seq:20}] };
   page = { storage_ns: 'test' };
   const people = ['codex','claude-code','mc'];
