@@ -417,3 +417,12 @@ body.gu[data-page=rooms] .rm-participants .rm-files-head .rm-btn{min-height:30px
 body.gu[data-page=rooms] .rm-head-menu .rm-about>summary{justify-content:flex-start;list-style:none}
 body.gu[data-page=rooms] .rm-head-menu .rm-about>summary::-webkit-details-marker{display:none}
 body.gu[data-page=rooms] .rm-welcome{background:transparent}
+
+/* Presence and speaking eligibility stay separate from the transcript. */
+body.gu[data-page=rooms] .rm-participation,body.gu[data-page=rooms] .rm-connection{width:calc(100% - 40px);max-width:760px;margin:0 auto 6px}
+body.gu[data-page=rooms] .rm-participation{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--r6-muted,#575950)}
+body.gu[data-page=rooms] .rm-participation[hidden],body.gu[data-page=rooms] .rm-connection[hidden]{display:none}
+body.gu[data-page=rooms] .rm-participant-state{display:flex;align-items:center;gap:8px}
+body.gu[data-page=rooms] .rm-participant-state .rm-btn{padding:3px 9px;min-height:32px}
+body.gu[data-page=rooms] .rm-connection{padding:8px 12px;box-sizing:border-box;background:#fff4df;border-radius:8px;font-size:14px}
+@media(max-width:600px){body.gu[data-page=rooms] .rm-participation,body.gu[data-page=rooms] .rm-connection{width:calc(100% - 20px)}body.gu[data-page=rooms] .rm-participant-state .rm-btn{min-height:44px}}

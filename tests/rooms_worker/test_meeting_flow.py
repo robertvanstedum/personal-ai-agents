@@ -258,3 +258,37 @@ def test_wait_fences_claimed_turn_through_normal_cancel_path(pair):
         assert db.execute('SELECT state FROM turns WHERE id=?',(data['turn']['id'],)).fetchone()['state']=='cancel_requested'
     assert pair.cos.infer(data['turn']) is None
     assert not pair.cos_relay.calls
+
+
+def test_participation_controls_persist_without_dispatch_and_reject_nonowner(pair):
+    e = pair
+    path = f'/rooms/{e.room}/participation'
+    before = len(rows(e))
+    assert e.call('POST', path, {'actor':'cos','waiting':True})[0] == 200
+    assert next(p for p in e.call('GET', f'/rooms/{e.room}/turns')[1]['participants'] if p['id']=='cos')['waiting'] is True
+    assert len(rows(e)) == before
+    e.say('Any thoughts?')
+    assert [r['addressee'] for r in rows(e) if r['state']=='queued'] == ['mc']
+    before = len(rows(e))
+    assert e.call('POST', path, {'actor':'cos','waiting':False})[0] == 200
+    assert len(rows(e)) == before
+    assert next(p for p in e.call('GET', f'/rooms/{e.room}/turns')[1]['participants'] if p['id']=='cos')['waiting'] is False
+    assert not e.cos.run_once()
+    assert e.call('POST', path, {'actor':'robert','waiting':True})[0] == 404
+    assert e.call('POST', path, {'actor':'cos','waiting':'yes'})[0] == 400
+    with pytest.raises(Exception) as err:
+        e.store.meetings.participation('cos','cannot-control',e.room,{'actor':'mc','waiting':True})
+    assert getattr(err.value, 'status', None) == 403
+
+
+def test_wait_control_fences_claimed_reply_and_resume_does_not_restart_it(pair):
+    e = pair
+    e.say('MC, please check this.')
+    status, data = e.worker.work.call('POST','/turns/claim', {'addressees':['mc'],'discussion_protocol':1},key='control-claimed')
+    assert status == 200 and data['turn']
+    claim = data['turn']
+    assert e.call('POST', f'/rooms/{e.room}/participation', {'actor':'mc','waiting':True})[0] == 200
+    assert next(r for r in rows(e) if r['id']==claim['id'])['state'] == 'cancel_requested'
+    assert e.call('POST', f'/rooms/{e.room}/participation', {'actor':'mc','waiting':False})[0] == 200
+    assert next(r for r in rows(e) if r['id']==claim['id'])['state'] == 'cancel_requested'
+    assert not [r for r in rows(e) if r['state']=='queued']

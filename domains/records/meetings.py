@@ -693,9 +693,10 @@ class Meetings:
                 participants.append({"id": m["id"], "label": m["label"], "kind": m["kind"], "role": m["role"],
                                      **rsvp, "reach": self.reach(db, room, m["id"], m["kind"], record),
                                      "proven_at": record["proven_at"] if record else None,
-                                     "teammate": bool(record)})
+                                     "teammate": bool(record), "waiting": bool(db.execute(
+                                         "SELECT 1 FROM meeting_waits WHERE room=? AND actor=?", (room, m["id"])).fetchone())})
             turns = [self.public_turn(db, dict(r)) for r in db.execute(
-                """SELECT * FROM turns WHERE room=? AND (state='uncertain' OR id IN
+                """SELECT * FROM turns WHERE room=? AND (state IN ('uncertain','queued','claimed','running','recovering','cancel_requested') OR id IN
                    (SELECT id FROM turns WHERE room=? ORDER BY created DESC LIMIT 20))
                    ORDER BY created DESC""", (room, room)).fetchall()]
             notes = [dict(r) for r in db.execute(
@@ -749,6 +750,29 @@ class Meetings:
             return {"state": "away", "reason": ("last reply failed (relay busy) — Retry or Prove again" if busy
                                                 else "last reply failed — Retry or Prove again")}
         return {"state": "away", "reason": "its worker has not checked in recently"}
+
+    def participation(self, actor, key, room, payload):
+        """Owner-only, durable speaking eligibility; resume never dispatches work."""
+        self.store.owner(actor)
+        if set(payload) != {"actor", "waiting"} or type(payload["waiting"]) is not bool or not isinstance(payload["actor"], str):
+            raise Problem("Choose a teammate and whether they should wait")
+
+        def action(db):
+            current = self.store.access(db, actor, room, True)
+            if current["state"] != "active":
+                raise Problem("Resume the meeting before changing participation", 409)
+            sweep(db)
+            person = payload["actor"]
+            if not card(db, person) or not accepted_member(db, room, person):
+                raise Problem("Accepted teammate not found in this meeting", 404)
+            if payload["waiting"]:
+                for pending in db.execute("SELECT id,state FROM turns WHERE room=? AND addressee=? AND state IN ('queued','claimed','running','recovering')", (room, person)).fetchall():
+                    set_turn(db, pending['id'], state='cancelled' if pending['state'] == 'queued' else 'cancel_requested', disposition='paused_by_owner')
+                db.execute("INSERT INTO meeting_waits VALUES(?,?,?) ON CONFLICT(room,actor) DO UPDATE SET updated=excluded.updated", (room, person, now()))
+            else:
+                db.execute("DELETE FROM meeting_waits WHERE room=? AND actor=?", (room, person))
+            return {"actor": person, "waiting": payload["waiting"]}
+        return self.store.mutate(actor, key, {"op": "participation", "room": room, **payload}, action, room)
 
     def owner_cancel(self, actor, key, room, turn_id):
         self.store.owner(actor)

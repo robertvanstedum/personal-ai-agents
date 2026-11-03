@@ -33,6 +33,18 @@ const source = fs.readFileSync(process.argv[1], 'utf8').replace(/^import .*;$/mg
 vm.runInContext(source, context);
 vm.runInContext(String.raw`
 (async () => {
+  // Availability, speaking eligibility, and actual work are separate states.
+  meeting={turns:[]};
+  const participant={id:'mc',label:'Master Craftsman',rsvp:'accepted',reach:{state:'reachable'}};
+  assert.equal(participantState(participant),'Available');
+  assert.equal(participantState({...participant,waiting:true}),'Waiting');
+  meeting.turns=[{id:'working',addressee:'mc',state:'running'}];
+  assert.equal(participantState({...participant,waiting:true}),'Working');
+  assert.deepEqual([...turnLine(meeting.turns[0]).actions],['stop']);
+  meeting.turns[0].state='cancel_requested';
+  assert.equal(participantState({...participant,waiting:true}),'Stopping reply');
+  meeting.turns[0].state='recovering';
+  assert.ok(turnLine(meeting.turns[0]).text.includes('saved reply'));
   // Fold agent learning metadata without modifying or interpreting the record.
   const capture='Correction received.\n\n'+String.fromCharCode(96).repeat(3)+'capture\nowner-said: <img src=x onerror=alert(1)>\n'+String.fromCharCode(96).repeat(3)+'\nCaptured 1 correction pairs\nMore prose';
   const event={id:'capture-event',actor_kind:'agent',body:capture};
@@ -56,6 +68,31 @@ vm.runInContext(String.raw`
   page = { storage_ns: 'test' };
   const people = ['codex','claude-code','mc'];
   meeting = {room:current, participants:people.map(id=>({id,label:id,teammate:true,rsvp:'accepted'})), turns:[], routing_notes:[], meeting:{facilitator:'mc'}};
+  let resolveOld;
+  records=async()=>new Promise(resolve=>{resolveOld=resolve;});
+  const oldRead=loadMeeting(); current='room-b';
+  const newer={room:'room-b',participants:[],turns:[]}; meeting=newer;
+  resolveOld({status:200,body:{room:'room-a',participants:[],turns:[]}}); await oldRead;
+  assert.equal(meeting,newer); // a slow old room cannot replace the newly selected one
+  current='room-a'; room.id=current;
+  meeting={room:current,participants:people.map(id=>({id,label:id,teammate:true,rsvp:'accepted'})),turns:[],routing_notes:[],meeting:{facilitator:'mc'}};
+  records=async()=>({status:503,body:{}}); await loadMeeting();
+  assert.equal(meeting.room,current); assert.equal(meetingStale,true);
+  assert.equal($('[data-rm-connection]').hidden,false);
+  assert.ok($('[data-rm-participation]').find('[data-rm-participation-actor]').every(b=>b.disabled));
+  meetingStale=false;
+  let changed=0;
+  records=async()=>{changed++;return {status:200,body:{}};};
+  await changeParticipation(el('button',{'data-rm-participation-actor':'mc','data-waiting':'true','data-participation-room':'old-room'}));
+  assert.equal(changed,0); // a stale control never mutates the selected room
+  let completeFirst,completeSecond;
+  records=async()=>new Promise(resolve=>{if(!completeFirst)completeFirst=resolve;else completeSecond=resolve;});
+  const firstRead=loadMeeting(), secondRead=loadMeeting();
+  completeSecond({status:503,body:{}}); await secondRead;
+  const held=meeting;
+  completeFirst({status:200,body:{room:current,participants:[],turns:[]}}); await firstRead;
+  assert.equal(meeting,held); assert.equal(meetingStale,true);
+  meetingStale=false;
   let sent;
   records = async (url, options) => { sent = options; return {status:201,body:{}}; };
   loadRoom = async () => true;

@@ -26,7 +26,7 @@ PORTAL_HUMAN_ROUTES = frozenset({
     "cos_status","cos_request","cos_reconcile","cos_auto","acknowledge_join","principals","principal","portal_principal","membership",
     "documents","notes","artifact_link","artifact_history","document","search","export","backup",
     "meeting_invite","meeting_rsvp","meeting_presence","meeting_turns","meeting_turn_cancel","meeting_turn_retry",
-    "meeting_stop","meeting_continue","meeting_renew","teammates","teammate_card","teammate_prove","teammate_proof"})
+    "meeting_participation","meeting_stop","meeting_continue","meeting_renew","teammates","teammate_card","teammate_prove","teammate_proof"})
 
 
 def configured_hosts(value):
@@ -479,6 +479,9 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
 
     @app.post("/api/v1/rooms/<room>/turns/<turn>/retry")
     def meeting_turn_retry(room,turn): return jsonify(meetings.owner_retry(actor(),key(),room,turn,body())),201
+
+    @app.post("/api/v1/rooms/<room>/participation")
+    def meeting_participation(room): return jsonify(meetings.participation(actor(),key(),room,body()))
 
     @app.post("/api/v1/rooms/<room>/stop")
     def meeting_stop(room): return jsonify(meetings.stop(actor(),key(),room))

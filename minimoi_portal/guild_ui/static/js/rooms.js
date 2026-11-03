@@ -43,6 +43,10 @@ let pendingAct = null;        // 'paused' or 'closed', waiting for its note
 const dismissed = new Set();  // turns Robert chose to continue without
 const skippedRecipients = new Set();
 let requireRecipient = false; // Continue without must not fall back to the same facilitator
+let meetingStale = false;
+let meetingReadGeneration = 0, roomReadGeneration = 0;
+let meetingConnectionMessage = 'Connection interrupted — checking again. Agent status may be out of date; your draft is kept.';
+const participationPending = new Set();
 const ACTIVE = ['queued', 'claimed', 'running', 'recovering', 'cancel_requested'];
 const keys = new Map();
 const sendingRooms = new Set();
@@ -115,7 +119,7 @@ async function records(path, { method = 'GET', body, key } = {}) {
     res = await fetch(`${cfg.api}${path}`, { method, headers, credentials: 'same-origin', cache: 'no-store', redirect: 'manual',
       body: body === undefined ? undefined : JSON.stringify(body) });
   } catch (e) {
-    return { status: 0, body: { error: 'Rooms could not be reached. Nothing was sent; your draft is kept.' } };
+    return { status: 0, body: { error: 'Rooms could not confirm a response. Your draft is kept; check the saved state before retrying.' } };
   }
   if (res.type === 'opaqueredirect') { portalSignedOut(); return { status: 401, body: { error: 'Your mini-moi sign-in ended.' } }; }
   let data = {};
@@ -282,6 +286,7 @@ function eventLine(e) {
 }
 
 function renderRoom() {
+  renderParticipation();
   const thread = $('[data-rm-thread]');
   if (!room) { thread.replaceChildren(); return; }
   $('[data-rm]').dataset.meeting = 'open';
@@ -352,13 +357,19 @@ function renderDetails() {
 }
 
 async function loadRoom(id) {
+  const read = ++roomReadGeneration;
   const r = await records(`/v1/rooms/${encodeURIComponent(id)}`);
-  if (id !== current) return false;
+  if (id !== current || read !== roomReadGeneration) return false;
   if (r.status === 200) { const changed = room?.id !== r.body.id; if (changed) { restoreRecovery(); recipientFilter = ''; } room = r.body; archiveSnapshot = null; error(''); renderRoom();
     const snapshot = await records(`/v1/rooms/${encodeURIComponent(id)}/archive-check`);
-    if (id !== current) return false;
+    if (id !== current || read !== roomReadGeneration) return false;
     if (snapshot.status === 200 && snapshot.body.room === id) { archiveSnapshot = snapshot.body; renderDetails(); } loadMeeting(); if (changed) { heartbeat(); reportHandoffs(id); } return true; }
   if (r.status === 401) return false;
+  if (r.status === 0 || r.status >= 500) {
+    meetingStale = true; meetingConnectionMessage = 'Connection interrupted — checking again. Agent status may be out of date; your draft is kept.'; renderParticipation();
+    error('Connection interrupted. Your conversation and draft are kept; checking again automatically.');
+    return false;
+  }
   room = null;
   renderRoom();
   error(r.status === 403 ? 'You have no access to this room.' : r.status === 404 ? 'That room is not there, or you have no access to it.' : (r.body.error || 'Rooms could not be read.'));
@@ -770,12 +781,23 @@ function earlier() {
 
 async function loadMeeting() {
   if (!current || signedOut) return;
-  const r = await records(`/v1/rooms/${encodeURIComponent(current)}/turns`);
-  if (r.status !== 200) return;
+  const roomId = current, read = ++meetingReadGeneration;
+  const r = await records(`/v1/rooms/${encodeURIComponent(roomId)}/turns`);
+  if (roomId !== current || read !== meetingReadGeneration) return;
+  if (r.status !== 200) {
+    meetingStale = true;
+    meetingConnectionMessage = r.status === 403 || r.status === 404
+      ? 'Meeting access is unavailable. Agent status cannot be refreshed.'
+      : r.status === 401 ? 'Sign in again to refresh meeting status.'
+      : 'Connection interrupted — checking again. Agent status may be out of date; your draft is kept.';
+    renderParticipation(); return;
+  }
+  meetingStale = false;
   const committed = new Set((meeting?.room === current ? meeting.turns : []).filter((t) => t.state === 'committed').map((t) => t.id));
   const first = !meeting || meeting.room !== current;
   meeting = r.body;
   renderPeople();
+  renderParticipation();
   renderTurns();
   renderTo();
   renderControls();
@@ -845,13 +867,67 @@ function failureText(who, reason, principal) {
   }
 }
 
+function participantState(p) {
+  const active = (meeting?.turns || []).filter(t => t.addressee === p.id && ACTIVE.includes(t.state));
+  if (active.some(t => t.state === 'cancel_requested')) return 'Stopping reply';
+  if (active.some(t => t.state === 'recovering')) return 'Checking saved reply';
+  if (active.some(t => ['claimed','running'].includes(t.state))) return 'Working';
+  if ((meeting?.turns || []).some(t => t.addressee === p.id && t.state === 'uncertain')) return p.waiting ? 'Waiting · reply outcome unknown' : 'Reply outcome unknown';
+  if (p.waiting) return 'Waiting';
+  if (active.length) return 'Queued';
+  if (p.rsvp !== 'accepted') return p.rsvp === 'invited' ? 'Invited' : 'Not joined';
+  return ['here','reachable','answering'].includes(p.reach?.state) ? 'Available' : 'Not reachable';
+}
+
+function renderParticipation() {
+  const box = $('[data-rm-participation]'), connection = $('[data-rm-connection]');
+  const focusActor = document.activeElement?.dataset?.participationRoom === current ? document.activeElement.dataset.rmParticipationActor : null;
+  let restoreFocus;
+  const valid = meeting?.room === current && room?.id === current && !signedOut;
+  connection.hidden = !valid || !meetingStale;
+  connection.textContent = meetingConnectionMessage;
+  box.hidden = !valid || room.state === 'closed';
+  if (!valid) { box.replaceChildren(); return; }
+  box.replaceChildren(...meeting.participants.filter(p => p.teammate).map(p => {
+    const row = el('div', {class:'rm-participant-state'});
+    row.append(el('span', {}, `${shortName(p.id,p.label)} · ${participantState(p)}`));
+    if (p.rsvp === 'accepted' && room.state === 'active') {
+      const b = el('button', {type:'button',class:'rm-btn','data-rm-participation-actor':p.id,
+        'data-waiting':String(!p.waiting),'data-participation-room':current,'aria-label':`${p.waiting ? 'Resume' : 'Wait'} ${p.label}`}, p.waiting ? 'Resume' : 'Wait');
+      b.disabled = meetingStale || participationPending.has(`${current}:${p.id}`);
+      row.append(b);
+      if (p.id === focusActor && !b.disabled) restoreFocus = b;
+    }
+    return row;
+  }));
+  restoreFocus?.focus();
+}
+
+async function changeParticipation(button) {
+  const roomId = current, actor = button.dataset.rmParticipationActor;
+  const pending = `${roomId}:${actor}`;
+  if (meetingStale || signedOut || meeting?.room !== roomId || room?.id !== roomId || button.dataset.participationRoom !== roomId || participationPending.has(pending)) return;
+  participationPending.add(pending); renderParticipation();
+  try {
+    const r = await records(`/v1/rooms/${encodeURIComponent(roomId)}/participation`, {
+      method:'POST',body:{actor,waiting:button.dataset.waiting === 'true'},key:newKey()});
+    if (current !== roomId) return;
+    status(r.status === 200 ? (button.dataset.waiting === 'true'
+      ? `${labelOf(actor)} will wait. A direct request can also resume them.`
+      : `${labelOf(actor)} can answer your next request. No new reply was started.`)
+      : 'Participation change not confirmed. Checking the saved state.');
+    await loadMeeting();
+  } finally { participationPending.delete(pending); if (current === roomId) renderParticipation(); }
+}
+
 function turnLine(t) {
   const who = labelOf(t.addressee);
   const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(t.created)) / 1000));
   const elapsed = Number.isFinite(seconds) ? ` (${seconds}s since your message)` : '';
   switch (t.state) {
-    case 'queued': return { text: `${who} is queued${elapsed}…`, wait: true };
-    case 'claimed': case 'running': case 'recovering': return { text: `${who} is working${elapsed}…`, wait: true };
+    case 'queued': return { text: `${who} is queued${elapsed}…`, wait: true, actions: ['stop'] };
+    case 'claimed': case 'running': return { text: `${who} is working${elapsed}…`, wait: true, actions: ['stop'] };
+    case 'recovering': return { text: `Checking ${who}'s saved reply${elapsed}…`, wait: true, actions: ['stop'] };
     case 'cancel_requested': return { text: `Stopping ${who}'s reply…`, wait: true };
     case 'uncertain':
       if (t.disposition === 'stop_unconfirmed') return { text: failureText(who, t.disposition, t.addressee), actions: ['continue'] };
@@ -893,11 +969,11 @@ function renderTurns() {
     const latest = new Map();
     for (const t of meeting.turns) if (!latest.has(t.addressee)) latest.set(t.addressee, t);   // newest first
     // An unresolved earlier turn stays visible beside newer ones (review F9).
-    const shown = [...meeting.turns.filter((t) => ['uncertain', 'claimed', 'running', 'recovering'].includes(t.state) && latest.get(t.addressee) !== t), ...latest.values()];
+    const shown = [...meeting.turns.filter((t) => ['uncertain', 'queued', 'claimed', 'running', 'recovering', 'cancel_requested'].includes(t.state) && latest.get(t.addressee) !== t), ...latest.values()];
     for (const t of shown) {
       if (dismissed.has(t.id)) continue;
       // Round turns are summed up in the round line; only those needing an action get their own.
-      if (round && round.ids.has(t.id) && !['queued', 'claimed', 'running', 'recovering', 'uncertain', 'failed', 'expired', 'cancelled'].includes(t.state)) continue;
+      if (round && round.ids.has(t.id) && !['queued', 'claimed', 'running', 'recovering', 'uncertain', 'failed', 'expired', 'cancelled', 'cancel_requested'].includes(t.state)) continue;
       const line = turnLine(t);
       if (line) rows.push({ ...line, turn: t });
     }
@@ -909,7 +985,7 @@ function renderTurns() {
     const p = el('p', { class: 'rm-turn', 'data-rm-turn': row.turn ? row.turn.id : '', 'data-state': row.turn ? row.turn.state : (row.round ? 'round' : 'note') });
     p.append(el('span', {}, row.text));
     for (const a of row.actions || []) {
-      const label = { retry: 'Retry', attempt: 'Start a new attempt', continue: `Continue without ${labelOf(row.turn.addressee)}`, end: 'End',
+      const label = { stop: 'Stop reply', retry: 'Retry', attempt: 'Start a new attempt', continue: `Continue without ${labelOf(row.turn.addressee)}`, end: 'End',
         renew: 'Renew meeting — reset its hour and shared turn budget' }[a];
       p.append(el('button', { type: 'button', class: 'rm-btn', 'data-rm-turn-action': a, 'data-turn': row.turn.id }, label));
     }
@@ -920,6 +996,13 @@ function renderTurns() {
 async function turnAction(button) {
   const id = button.dataset.turn;
   const action = button.dataset.rmTurnAction;
+  if (action === 'stop') {
+    const roomId = current; button.disabled = true;
+    const r = await records(`/v1/rooms/${encodeURIComponent(roomId)}/turns/${encodeURIComponent(id)}/cancel`, {method:'POST',body:{},key:keyFor(`cancel:${id}`)});
+    if (roomId !== current) return;
+    status(r.status === 200 ? 'Stop requested. Any external action already started still needs its result checked.' : 'Could not confirm the stop request. Checking status; do not assume the work stopped.');
+    await loadMeeting(); return;
+  }
   if (action === 'end') { openAct('closed'); return; }
   if (action === 'renew') {
     const r = await records(`/v1/rooms/${encodeURIComponent(current)}/renew`, { method: 'POST', body: {}, key: keyFor(`renew:${id}`) });
@@ -965,8 +1048,8 @@ async function turnAction(button) {
 }
 
 // Who hears you (Review 06): one "To: Everyone ▾" in the composer, in place of the row of buttons. It holds exactly the
-// buttons it replaces, so a send is unchanged: Everyone picks every teammate (each is addressed, by @-prefix); one name picks
-// that one; no selection uses the message's addressees, or the room for an open question.
+// buttons it replaces, so a send is unchanged: Everyone picks every teammate (subject to named addressees and waiting controls); one name picks
+// that one; a named addressee narrows a group selection; no selection uses the message's addressees, or the room for an open question.
 function renderTo() {
   const box = $('[data-rm-to]');
   const mates = (meeting?.room === current ? meeting.participants : []).filter((p) => p.teammate && p.rsvp === 'accepted');
@@ -982,7 +1065,7 @@ function renderTo() {
     type: 'button', class: 'rm-chip', 'data-rm-to-chip': p.id, 'aria-pressed': String(targets.has(p.id)),
     title: `${targets.has(p.id) ? 'Remove' : 'Add'} ${p.label}` }, p.label));
   const all = mates.length > 0 && selected.length === mates.length;
-  const said = !selected.length ? (requireRecipient ? 'Choose recipient' : 'Automatic') : all ? (mates.length > 1 ? 'Everyone, each answers' : shortName(mates[0].id, mates[0].label))
+  const said = !selected.length ? (requireRecipient ? 'Choose recipient' : 'Automatic') : all ? (mates.length > 1 ? 'Everyone' : shortName(mates[0].id, mates[0].label))
     : selected.map((p) => shortName(p.id, p.label)).join(', ');
   const controls = [el('button', { type: 'button', class: 'rm-chip rm-to-all', 'data-rm-to-all': true,
       'aria-pressed': String(all) }, 'Everyone')];
@@ -999,7 +1082,7 @@ function renderTo() {
   } else controls.push(...chips);
   controls.push(el('button', { type: 'button', class: 'rm-btn rm-to-clear', 'data-rm-to-clear': true }, 'Automatic'));
   controls.push(el('span', { class: 'small rm-to-hint', 'aria-live': 'polite' }, selected.length
-    ? `${all ? 'Everyone' : selected.map((p) => p.label).join(', ')} will be addressed. This selection controls who answers.`
+    ? (all ? 'Address one teammate by name to give them the floor. Waiting teammates stay quiet on group requests.' : `${selected.map((p) => p.label).join(', ')} selected to answer.`)
     : requireRecipient ? 'Choose who should answer before sending. Your draft is kept.' : 'Address a teammate by name, or ask the room. Everyone can answer an open question.'));
   const menu = el('details', { class: 'rm-to-menu', 'data-rm-to-menu': true });
   menu.open = !!menuWasOpen;
@@ -1258,6 +1341,7 @@ function bindMeeting() {
     if (!note || !pendingAct) return;
     if (await setState(pendingAct, note)) { $('[data-rm-act]').hidden = true; $('[data-rm-act-note]').value = ''; pendingAct = null; }
   });
+  $('[data-rm-participation]').addEventListener('click', e => { const b = e.target.closest('[data-rm-participation-actor]'); if (b) changeParticipation(b); });
   $('[data-rm-turns]').addEventListener('click', (e) => { const b = e.target.closest('[data-rm-turn-action]'); if (b) turnAction(b); });
   $('[data-rm-continue]').addEventListener('click', continueConversation);
   $('[data-rm-to]').addEventListener('click', (e) => {
