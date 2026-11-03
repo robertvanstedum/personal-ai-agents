@@ -92,6 +92,19 @@ vm.runInContext(String.raw`
   const held=meeting;
   completeFirst({status:200,body:{room:current,participants:[],turns:[]}}); await firstRead;
   assert.equal(meeting,held); assert.equal(meetingStale,true);
+  // A pending newer poll must not hide a completed timeout (poll15s, timeout20s).
+  completeFirst=null; completeSecond=null;
+  const timeoutRead=loadMeeting(), pendingNewerRead=loadMeeting();
+  meetingStale=false;
+  completeFirst({status:503,body:{}}); await timeoutRead;
+  assert.equal(meetingStale,true);
+  completeSecond({status:503,body:{}}); await pendingNewerRead;
+  completeFirst=null; completeSecond=null;
+  const roomTimeout=loadRoom(current), roomPending=loadRoom(current);
+  meetingStale=false;
+  completeFirst({status:503,body:{}}); await roomTimeout;
+  assert.equal(meetingStale,true);
+  completeSecond({status:503,body:{}}); await roomPending;
   meetingStale=false;
   let sent;
   records = async (url, options) => { sent = options; return {status:201,body:{}}; };

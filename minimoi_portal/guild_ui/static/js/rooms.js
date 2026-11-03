@@ -45,6 +45,7 @@ const skippedRecipients = new Set();
 let requireRecipient = false; // Continue without must not fall back to the same facilitator
 let meetingStale = false;
 let meetingReadGeneration = 0, roomReadGeneration = 0;
+let meetingAppliedRead = 0, roomAppliedRead = 0;
 let meetingConnectionMessage = 'Connection interrupted — checking again. Agent status may be out of date; your draft is kept.';
 const participationPending = new Set();
 const ACTIVE = ['queued', 'claimed', 'running', 'recovering', 'cancel_requested'];
@@ -359,10 +360,11 @@ function renderDetails() {
 async function loadRoom(id) {
   const read = ++roomReadGeneration;
   const r = await records(`/v1/rooms/${encodeURIComponent(id)}`);
-  if (id !== current || read !== roomReadGeneration) return false;
+  if (id !== current || read < roomAppliedRead) return false;
+  roomAppliedRead = read;
   if (r.status === 200) { const changed = room?.id !== r.body.id; if (changed) { restoreRecovery(); recipientFilter = ''; } room = r.body; archiveSnapshot = null; error(''); renderRoom();
     const snapshot = await records(`/v1/rooms/${encodeURIComponent(id)}/archive-check`);
-    if (id !== current || read !== roomReadGeneration) return false;
+    if (id !== current || read !== roomAppliedRead) return false;
     if (snapshot.status === 200 && snapshot.body.room === id) { archiveSnapshot = snapshot.body; renderDetails(); } loadMeeting(); if (changed) { heartbeat(); reportHandoffs(id); } return true; }
   if (r.status === 401) return false;
   if (r.status === 0 || r.status >= 500) {
@@ -788,7 +790,8 @@ async function loadMeeting() {
   if (!current || signedOut) return;
   const roomId = current, read = ++meetingReadGeneration;
   const r = await records(`/v1/rooms/${encodeURIComponent(roomId)}/turns`);
-  if (roomId !== current || read !== meetingReadGeneration) return;
+  if (roomId !== current || read < meetingAppliedRead) return;
+  meetingAppliedRead = read;
   if (r.status !== 200) {
     meetingStale = true;
     meetingConnectionMessage = r.status === 403 || r.status === 404
