@@ -18,6 +18,7 @@ import { live, onChange, setOff } from './state.js';
 import { newKey } from './actions.js';
 
 let cfg;
+let roomSidebar;
 let page;
 let rooms = [];
 let listPage = 0;
@@ -159,9 +160,11 @@ function status(text) {
 // ── the room list ────────────────────────────────────────────────────────────
 function renderList() {
   const list = $('[data-rm-list]');
-  listPage = Math.min(listPage, Math.max(0, Math.ceil(rooms.length / ROOMS_PER_PAGE) - 1));
+  const query = $('[data-chat-filter]')?.value.trim().toLowerCase() || '';
+  const shown = rooms.filter(r => !query || String(r.title || '').toLowerCase().includes(query));
+  listPage = Math.min(listPage, Math.max(0, Math.ceil(shown.length / ROOMS_PER_PAGE) - 1));
   const start = listPage * ROOMS_PER_PAGE;
-  list.replaceChildren(...rooms.slice(start, start + ROOMS_PER_PAGE).map((r) => {
+  list.replaceChildren(...shown.slice(start, start + ROOMS_PER_PAGE).map((r) => {
     const a = el('a', { href: `?view=${archiveView}&room=${encodeURIComponent(r.id)}`, 'data-rm-room': r.id,
       title: `${r.state === 'active' ? 'Join' : 'View'} · ${r.archived_at ? 'archived' : r.state === 'active' ? 'recording' : r.state} · ${when(r.updated)}` });
     // Review 06: the row is the title and its time; a meeting that is not recording says so in the time's place.
@@ -169,11 +172,11 @@ function renderList() {
     if (r.id === current) a.setAttribute('aria-current', 'true');
     return h('li', {}, a);
   }));
-  if (!rooms.length && !signedOut) list.append(el('li', { class: 'small' }, archiveView === 'archived' ? 'No archived conversations.' : 'No rooms yet.'));
-  $('[data-rm-list-pages]').hidden = rooms.length <= ROOMS_PER_PAGE;
+  if (!shown.length && !signedOut) list.append(el('li', { class: 'small' }, query ? 'No meetings match your search.' : archiveView === 'archived' ? 'No archived meetings.' : 'No meetings yet.'));
+  $('[data-rm-list-pages]').hidden = shown.length <= ROOMS_PER_PAGE;
   $('[data-rm-newer]').disabled = listPage === 0;
-  $('[data-rm-older]').disabled = start + ROOMS_PER_PAGE >= rooms.length;
-  $('[data-rm-list-range]').textContent = `${start + 1}–${Math.min(start + ROOMS_PER_PAGE, rooms.length)}`;
+  $('[data-rm-older]').disabled = start + ROOMS_PER_PAGE >= shown.length;
+  $('[data-rm-list-range]').textContent = `${start + 1}–${Math.min(start + ROOMS_PER_PAGE, shown.length)}`;
 }
 
 // ── the conversation ─────────────────────────────────────────────────────────
@@ -690,8 +693,13 @@ function bind() {
     if (e.key !== 'Escape') return;
     for (const m of $$('[data-rm-more], [data-rm-to-menu]')) if (m.open) { m.open = false; m.querySelector('summary').focus(); }
   });
-  $('[data-rm-list-open]').addEventListener('click', () => { $('[data-rm]').dataset.list = 'open'; });
-  $('[data-rm-list-close]').addEventListener('click', () => { $('[data-rm]').dataset.list = 'closed'; });
+  roomSidebar = window.MiniMoiChatSidebar.mount({
+    key: 'guildhall-list-folded', panel: $('[data-rm-list-pane]'),
+    open: '[data-rm-list-open]', fold: '[data-rm-list-close]',
+    filter: $('[data-chat-filter]'), onFilter: () => { listPage = 0; renderList(); },
+    newButton: '[data-rm-new]', newLabel: 'New meeting',
+    render: ({drawerOpen}) => { $('[data-rm]').dataset.list = drawerOpen ? 'open' : 'closed'; }
+  });
   $('[data-rm-take-send]').addEventListener('click', sendTake);
   $('[data-rm-take-cancel]').addEventListener('click', () => { $('[data-rm-take]').hidden = true; takeNote = null; dropTakeParam(); });
   $('[data-rm-take-confirm]').addEventListener('click', () => setOff(false));
@@ -1116,6 +1124,7 @@ async function prove(button) {
 async function openNew() {
   if (cfg.state !== 'on' || cfg.access === 'no_access' || signedOut) { status('Room creation is unavailable on this portal.'); return; }
   if (createdMeeting) { window.location.search = `?room=${encodeURIComponent(createdMeeting)}`; return; }
+  roomSidebar?.closeDrawer(true);
   await loadCards();
   const box = $('[data-rm-new-cards]');
   box.replaceChildren(...cards.filter((c) => ['mc','cos'].includes(c.principal)).map((c) => {

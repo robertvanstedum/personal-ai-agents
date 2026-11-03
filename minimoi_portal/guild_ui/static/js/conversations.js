@@ -9,6 +9,7 @@ import { apiGet, apiPost, recordMode } from './api.js';
 import { newKey } from './actions.js';
 
 let page;
+const chatTitle = title => !title || title === 'New conversation' ? 'New chat' : title;
 
 function floorUrl(cid) {
   if (page.chat_scope) {
@@ -59,11 +60,11 @@ function initPicker() {
 export function applyConversation(conv) {
   if (!conv || !page || !page.conversation || conv.id !== page.conversation.id) return;
   page.conversation = conv;
-  for (const n of $$('[data-conv-current-title]')) n.textContent = conv.title;
+  for (const n of $$('[data-conv-current-title]')) n.textContent = chatTitle(conv.title);
   const row = $(`[data-conv="${conv.id}"] [data-conv-title]`);
   if (row) {
     const pin = row.querySelector('.fh-pin');
-    row.replaceChildren(...(pin ? [pin] : []), document.createTextNode(conv.title));
+    row.replaceChildren(...(pin ? [pin] : []), document.createTextNode(chatTitle(conv.title)));
   }
 }
 

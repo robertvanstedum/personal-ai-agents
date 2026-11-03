@@ -51,25 +51,10 @@ function setRail(open, persist, focus = null) {
   }
 }
 
+let historySidebar;
 function setHistory(open, focus = null) {
-  const drawer = $('[data-floor-history]');
-  if (open && drawer && drawerHistory()) {
-    // The drawer opens below the chat header, so the ☰ button stays uncovered.
-    const bar = $('[data-floorbar]');
-    const top = bar ? Math.max(0, Math.round(bar.getBoundingClientRect().bottom)) : 0;
-    drawer.style.setProperty('--gu-drawer-top', `${top}px`);
-  }
-  document.body.dataset.history = open ? 'open' : 'closed';
-  for (const b of $$('[data-history-toggle]')) b.setAttribute('aria-expanded', String(open));
-  syncScrim();
-  if (focus === 'into' && open) {
-    const close = $('[data-history-close]');
-    if (close) close.focus();
-  } else if (focus === 'back') {
-    // Back to the ☰ actually on screen (the header's, or a menu's when that is the one in view).
-    const t = $$('[data-history-toggle]').find((n) => n.getClientRects().length > 0 || (n.closest('details') && n.closest('details').getClientRects().length > 0)) || $('[data-history-toggle]');
-    if (t) { const menu = t.closest('details'); if (menu && !menu.open) menu.querySelector('summary').focus(); else t.focus(); }
-  }
+  if (open) historySidebar?.open(focus === 'into');
+  else historySidebar?.closeDrawer(focus === 'back');
 }
 
 // ── Review 06: the slim header, the files that come and go, the greeting, ⋯ ──────────────────────────────────────────
@@ -293,7 +278,13 @@ export function initFloorLayout(p) {
   page = p;
   if (page.page !== 'floor') return;
   fitRailToWidth();
-  setHistory(false);
+  const history = $('[data-floor-history]');
+  if (history) historySidebar = window.MiniMoiChatSidebar.mount({
+    key: 'craft-list-folded', panel: history, drawer: () => drawerHistory() || document.body.hasAttribute('data-mc-embed'), open: '[data-history-toggle]', fold: '[data-history-close]',
+    filter: $('[data-chat-filter]'), rows: '.fh-row', title: '.fh-title',
+    newButton: '[data-conv-new]', newLabel: 'New chat',
+    render: ({drawerOpen}) => { document.body.dataset.history = drawerOpen ? 'open' : 'closed'; syncScrim(); }
+  });
   initHeader();
   for (const b of $$('[data-rail-toggle]')) {
     b.addEventListener('click', () => {
@@ -307,13 +298,6 @@ export function initFloorLayout(p) {
       setRail(open, true, open && overlayRail() ? 'into' : null);
     });
   }
-  for (const b of $$('[data-history-toggle]')) {
-    b.addEventListener('click', () => {
-      const open = document.body.dataset.history !== 'open';
-      setHistory(open, open ? 'into' : null);
-    });
-  }
-  for (const b of $$('[data-history-close]')) b.addEventListener('click', () => setHistory(false, 'back'));
   const scrim = $('[data-floor-scrim]');
   if (scrim) {
     scrim.addEventListener('click', () => {         // a tap outside closes what is open over the chat

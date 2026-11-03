@@ -85,13 +85,13 @@
     <button type="button" class="fb-btn fb-history" data-history-toggle aria-expanded="false" aria-controls="floor-history">☰<span class="visually-hidden"> Conversations</span></button>
     {% if not embedded %}<span class="hero-portrait" aria-hidden="true"></span>{% endif %}
     <div class="hero-text">
-      <h1 class="hero-name">{% if not embedded %}{{ mc_name }}<span class="visually-hidden"> · </span>{% endif %} <span class="fb-title" data-conv-current-title>{{ conversation.title if conversation else 'Shop floor thread' }}</span></h1>
+      <h1 class="hero-name">{% if not embedded %}{{ mc_name }}<span class="visually-hidden"> · </span>{% endif %} <span class="fb-title" data-conv-current-title>{{ conversation.title if conversation and conversation.title != 'New conversation' else 'New chat' }}</span></h1>
       <p class="hero-sub" data-mc-status{% if fb_normal %} data-normal="true"{% endif %}><span class="hero-dot" aria-hidden="true"></span><span data-mc-header>{{ state.mc_header }}</span></p>
     </div>
     {# Opens the files rail over the chat on a medium screen only; beside the chat (wide) it is always open and on a phone it is folded below. Shown only when there are files. #}
     <button type="button" class="fb-btn fb-rail" data-rail-toggle aria-expanded="true" aria-controls="main" data-count="{{ fb_files }}">Files</button>
     {% if not embedded %}<a class="fb-cos" href="/app/cos/ui/confer" title="Chief of Staff" aria-label="Chief of Staff"><img src="/static/guild/cos-mark-96.webp" alt="" width="26" height="26"></a>
-    <button type="button" class="fb-btn fb-new" data-conv-new-proxy aria-label="New conversation" title="New conversation">✎</button>
+    <button type="button" class="fb-btn fb-new" data-conv-new-proxy aria-label="New chat" title="New chat">✎</button>
     <button type="button" class="fb-btn" data-craft-picture-toggle aria-pressed="true" aria-label="Hide picture" title="Hide picture"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m3 17 6-5 4 3 4-5 4 5"/></svg></button>
     <details class="fb-more" data-fb-more>
       <summary class="fb-btn" aria-label="More for this conversation" title="More">⋯</summary>

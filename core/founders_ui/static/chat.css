@@ -1,0 +1,60 @@
+/* One presentation contract for Confer, Craft and Guildhall. Load after page styles. */
+:root{--chat-sans:"Source Sans 3",sans-serif;--chat-serif:"Playfair Display",serif;--chat-paper:#fcfbf8;--chat-sidebar:#f1eadf;--chat-line:#d2d8d0;--chat-list-width:236px}
+body.founders-cos,body.gu{--r6-sans:var(--chat-sans);--r6-serif:var(--chat-serif);--gu-font-body:var(--chat-sans);font-family:var(--chat-sans)}
+body.mm-chat{--chat-column:var(--chat-list-width);font-family:var(--chat-sans)}
+body.mm-chat[data-chat-sidebar=rail],body.mm-chat[data-chat-sidebar=drawer]{--chat-column:52px}
+body.mm-chat .mm-chat-sidebar{flex:0 0 var(--chat-list-width);width:var(--chat-list-width);min-width:0;max-width:none;resize:none;background:var(--chat-sidebar);padding:12px 8px;box-sizing:border-box;overflow-y:auto;border-right:1px solid var(--chat-line)}
+body.mm-chat[data-chat-sidebar=expanded] .mm-chat-sidebar{display:flex;flex-direction:column;position:relative;inset:auto;grid-column:1;grid-row:1;box-shadow:none}
+body.mm-chat[data-chat-sidebar=rail] .mm-chat-sidebar{display:none}
+body.mm-chat[data-chat-sidebar=drawer] .mm-chat-sidebar{display:flex;flex-direction:column;position:fixed;inset:0 auto 0 0;z-index:95;width:min(320px,88vw);box-shadow:10px 0 30px #0003}
+body.mm-chat .mm-chat-rail{display:none;flex:0 0 52px;width:52px;box-sizing:border-box;grid-column:1;grid-row:1;flex-direction:column;gap:7px;align-items:center;padding:12px 5px;background:var(--chat-sidebar);border-right:1px solid var(--chat-line)}
+body.mm-chat[data-chat-sidebar=rail] .mm-chat-rail,body.mm-chat[data-chat-sidebar=drawer] .mm-chat-rail{display:flex}
+body.mm-chat .mm-chat-rail button{width:36px;height:36px;padding:0;border:1px solid var(--chat-line);border-radius:9px;background:transparent;color:#454b43;font:22px var(--chat-sans);cursor:pointer}
+.mm-chat-scrim:not([hidden]),body.mm-chat .cos-scrim:not([hidden]){display:block;position:fixed;inset:0;background:#0004;z-index:94}
+body.mm-chat :is(.fh-head,.rm-list-head,.cos-list-top){display:flex;flex-wrap:nowrap;gap:8px;align-items:center;padding:0 4px;margin:0 0 10px}
+body.mm-chat :is(.fh-new,.rm-new,#conversation-new){flex:1;min-width:0;height:36px;min-height:36px;padding:0 12px;border:1px solid #bfc8c0;border-radius:9px;background:#fcfaf5;text-align:left;font:600 14px var(--chat-sans)}
+body.mm-chat :is(.fh-close,.rm-list-close,.cos-list-fold){display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;height:36px;min-height:36px;padding:0;border:0;background:transparent;font:22px var(--chat-sans)}
+body.mm-chat :is(.mm-chat-search,.cos-list-search){box-sizing:border-box;width:100%;height:36px;min-height:36px;margin:0 0 12px;padding:6px 10px;background:#fcfaf5;border:1px solid var(--chat-line);border-radius:8px;font:14px var(--chat-sans)}
+body.mm-chat :is(.fh-link,.cos-list-row,[data-rm-room]){font:400 14px/1.4 var(--chat-sans);padding:11px 10px;min-height:46px;box-sizing:border-box}
+body.mm-chat :is(.fh-meta,.cos-list-row .w,.rm-row-w){font:400 12px/1.4 var(--chat-sans);white-space:nowrap}
+body.mm-chat :is(.fh-title,.cos-list-row .t,.rm-row-t){font-family:var(--chat-sans);font-size:14px;line-height:1.4;min-width:0}
+body.mm-chat :is(.cos-list-row[aria-current=true],.fh-row[aria-current=true] .fh-title,[data-rm-room][aria-current=true] .rm-row-t){font-weight:600}
+body.mm-chat :is(.conv-head,.mc-floorbar.mc-hero,.rm-head){height:52px;min-height:52px;box-sizing:border-box;padding:0 24px;background:var(--chat-paper)}
+body.mm-chat :is(.conv-title,.hero-name .fb-title,.rm-title){font:600 16px/1.4 var(--chat-sans)}
+body.mm-chat :is(#chat-log,.mc-thread,.rm-thread){font:400 16px/1.55 var(--chat-sans)}
+body.mm-chat :is(.msg-text,.rm-body,.bubble){font-family:var(--chat-sans);font-size:16px;line-height:1.55}
+body.mm-chat :is(.msg-meta,.rm-meta){font-family:var(--chat-sans);font-size:13px;line-height:1.4}
+body.mm-chat :is(.msg-meta time,.msg-meta [data-iso],.rm-meta time){font-size:12px}
+body.mm-chat :is(.input-row,.mc-composer,.rm-composer){background:#fff;border:1px solid #cbd4c8;border-radius:17px;padding:12px 13px 10px}
+body.mm-chat :is(.input-row textarea,.mc-composer textarea,.rm-composer textarea){font:400 16px/1.5 var(--chat-sans)}
+body.mm-chat :is(#btn-send,[data-mc-send],[data-rm-send]){height:38px;min-height:38px;padding:0 20px;font:600 16px var(--chat-sans);border-radius:24px}
+body.mm-chat :is(.craft-hero-copy .eyebrow,.confer-hello .eyebrow){font:600 12px/1.4 var(--chat-sans);letter-spacing:.16em;color:#a94316}
+body.gu.mm-chat[data-page=floor] .gu-layout{grid-template-columns:var(--chat-column) minmax(0,1fr);grid-template-areas:none}
+body.gu.mm-chat[data-page=floor] .mc-panel[data-mode=inpage]{grid-column:2;grid-row:1}
+body.gu.mm-chat[data-page=rooms] .rm{grid-template-columns:var(--chat-column) minmax(0,1fr)}
+body.gu.mm-chat[data-page=rooms] .rm-main{grid-column:2;grid-row:1;background:var(--chat-paper)}
+body.gu.mm-chat[data-page=rooms] .rm-main::before{display:none}
+body.mm-chat [hidden]{display:none!important}
+@media(min-width:1200px){body.gu.mm-chat[data-page=rooms] .rm[data-panel=open]{grid-template-columns:var(--chat-column) minmax(0,1fr) 300px}body.gu.mm-chat[data-page=rooms] .rm-participants{grid-column:3;grid-row:1}}
+@media(max-width:899px){body.gu.mm-chat[data-page=floor] [data-history-toggle],body.gu.mm-chat[data-page=rooms] .rm .rm-list-open{display:inline-flex}}
+@media(max-width:639px){
+ body.mm-chat{--chat-column:0px!important}
+ body.mm-chat .mm-chat-rail{display:none!important}
+ body.gu.mm-chat[data-page=floor] .gu-layout,body.gu.mm-chat[data-page=rooms] .rm{grid-template-columns:minmax(0,1fr)}
+ body.gu.mm-chat[data-page=floor] .mc-panel[data-mode=inpage],body.gu.mm-chat[data-page=rooms] .rm-main{grid-column:1}
+ body.mm-chat :is(.conv-head,.mc-floorbar.mc-hero,.rm-head){padding:0 10px}
+}
+
+body.mm-chat :is(.craft-hero-copy .craft-eyebrow,.craft-hero-copy>p:first-child,.cos-eyebrow){font:600 12px/1.4 var(--chat-sans);letter-spacing:.16em;color:#a94316}
+
+/* Retire legacy sidebar positioning. These selectors intentionally outrank the
+   old per-page drawer rules until the remaining page styles are migrated. */
+body.gu.mm-chat[data-page=floor] .fh-head{position:static;width:auto;height:auto;overflow:visible;clip:auto;white-space:normal}
+body.gu.mm-chat[data-page=floor] .fh-head .fh-h{display:none}
+body.gu.mm-chat[data-page=floor] .fh-head .fh-new{margin:0;width:auto;height:36px;min-height:36px}
+body.gu.mm-chat[data-page=rooms] .rm .rm-list-close{display:inline-flex;height:36px;min-height:36px;width:28px}
+body.gu.mm-chat[data-page=floor][data-chat-sidebar=drawer] .floor-history,
+body.gu.mm-chat[data-page=rooms][data-chat-sidebar=drawer] .rm[data-list=open] .rm-list,
+body.founders-cos.mm-chat[data-chat-sidebar=drawer] .cos-list{display:flex;position:fixed;inset:0 auto 0 0;z-index:95;width:min(320px,88vw);height:auto}
+body.gu.mm-chat[data-page=floor][data-chat-sidebar=rail] .floor-history,
+body.gu.mm-chat[data-page=rooms][data-chat-sidebar=rail] .rm .rm-list{display:none}

@@ -21,8 +21,9 @@
     <div class="rm-list-head">
       <h2 class="rm-list-h" id="rm-list-h">Meeting history</h2>
       <button type="button" class="rm-btn rm-new" data-rm-new{% if rooms_cfg.state != 'on' or rooms_cfg.access == 'no_access' %} disabled{% endif %}><span class="rm-plus" aria-hidden="true">＋</span> New meeting</button>
-      <button type="button" class="rm-btn rm-list-close" data-rm-list-close aria-label="Close the room list">✕</button>
+      <button type="button" class="rm-btn rm-list-close" data-rm-list-close aria-label="Collapse meeting list" title="Collapse meeting list">‹</button>
     </div>
+    <input type="search" class="mm-chat-search" data-chat-filter placeholder="Search" aria-label="Search meetings" autocomplete="off">
     <label class="small rm-view-label" for="rm-archive-view">Meetings</label>
     <select id="rm-archive-view" class="rm-btn rm-view" data-rm-archive-view aria-label="Show active or archived conversations"><option value="active">Active</option><option value="archived">Archived</option></select>
     <ol class="rm-rooms" data-rm-list></ol>

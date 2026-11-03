@@ -13,6 +13,9 @@
   <link rel="stylesheet" href="/founders-ui/founders.css?v={{ founders_ui_version }}">
   {% if page_id == 'floor' and not embedded %}<link rel="stylesheet" href="{{ url_for('.asset', filename='css/calm-craft.css') }}">{% endif %}
   {% block head %}{% endblock %}
+  <link rel="stylesheet" href="/founders-ui/fonts.css?v={{ founders_ui_version }}">
+  <link rel="stylesheet" href="/founders-ui/chat.css?v={{ founders_ui_version }}">
+  <script src="/founders-ui/chat-sidebar.js?v={{ founders_ui_version }}"></script>
 <script type="module" src="/founders-ui/mobile-nav.js?v={{ founders_ui_version }}"></script>
 <script defer src="/founders-ui/notices.js?v={{ founders_ui_version }}"></script>
 </head>

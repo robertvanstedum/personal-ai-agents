@@ -204,24 +204,18 @@
   filter.addEventListener('input', paintList);
   moreRows.onclick = () => loadList(true).catch(() => { state.textContent = 'Could not load more conversations.'; });
   // ‹ folds the list to the rail (remembered on this device); ☰ unfolds it, or opens it over the chat when there's no room.
-  const drawerMode = () => !wide.matches || body.classList.contains('show-cos-board');
-  function paintFold() { body.dataset.list = local('cos-list-folded') === '1' ? 'folded' : 'open'; }
-  function openList(focus) {
-    if (drawerMode()) { body.dataset.drawer = 'open'; scrim.hidden = false; fold.setAttribute('aria-label', 'Close the list'); }
-    else { local('cos-list-folded', '0'); paintFold(); }
-    refreshList();
-    if (focus) requestAnimationFrame(() => filter.focus());
-  }
-  function closeDrawer() { if (body.dataset.drawer) { delete body.dataset.drawer; scrim.hidden = true; fold.setAttribute('aria-label', 'Fold the list'); } }
-  document.querySelectorAll('[data-list-open]').forEach(b => b.addEventListener('click', () => openList(false)));
-  document.querySelector('[data-list-search]')?.addEventListener('click', () => openList(true));
-  const fold = document.querySelector('[data-list-fold]');
-  fold.addEventListener('click', () => { if (body.dataset.drawer) closeDrawer(); else { local('cos-list-folded', '1'); paintFold(); } });
-  scrim.addEventListener('click', closeDrawer);
-  document.querySelectorAll('[data-new-conversation]').forEach(b => b.addEventListener('click', closeDrawer));
-  document.querySelectorAll('.tab-btn[data-tab], #cos-home, #cos-resume').forEach(b => b.addEventListener('click', closeDrawer));
-  wide.addEventListener('change', closeDrawer);
-  paintFold();
+  const sidebar = window.MiniMoiChatSidebar.mount({
+    key: 'cos-list-folded', panel: document.querySelector('.cos-list'), rail: document.querySelector('.cos-rail'),
+    open: '[data-list-open]', search: '[data-list-search]', fold: '[data-list-fold]', filter,
+    scrim, onOpen: refreshList,
+    drawer: () => !wide.matches || body.classList.contains('show-cos-board') || body.classList.contains('show-cos-flight'),
+    render: ({collapsed, drawerOpen}) => {
+      body.dataset.list = collapsed ? 'folded' : 'open';
+      if (drawerOpen) body.dataset.drawer = 'open'; else delete body.dataset.drawer;
+    }
+  });
+  function closeDrawer() { sidebar.closeDrawer(); }
+  document.querySelectorAll('[data-new-conversation], .tab-btn[data-tab], #cos-home, #cos-resume').forEach(b => b.addEventListener('click', closeDrawer));
   // ⋯ holds History, Picture, Side by side, its own window and voice; a choice closes it.
   const moreMenu = document.querySelector('[data-conv-more]');
   moreMenu.querySelector('[data-conv-menu]').addEventListener('click', e => { if (e.target.closest('button')) moreMenu.open = false; });

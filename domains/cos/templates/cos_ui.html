@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>Chief of Staff</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/cos.css?v=20261101-review06b">
   <link rel="stylesheet" href="/founders-ui/founders.css?v={{ founders_ui_version }}">
   <link rel="stylesheet" href="/static/calm-confer.css?v=20261102-notices1">
+  <link rel="stylesheet" href="/founders-ui/fonts.css?v={{ founders_ui_version }}">
+  <link rel="stylesheet" href="/founders-ui/chat.css?v={{ founders_ui_version }}">
+  <script src="/founders-ui/chat-sidebar.js?v={{ founders_ui_version }}"></script>
   <script type="module" src="/founders-ui/mobile-nav.js?v={{ founders_ui_version }}"></script>
   <script defer src="/founders-ui/notices.js?v={{ founders_ui_version }}"></script>
   <script defer src="/founders-ui/message-text.js?v=20261102-1"></script>
@@ -28,7 +29,7 @@
     <button class="phone-only cos-bar-btn cos-bar-new" type="button" data-new-conversation aria-label="New chat" title="New chat">✎</button>
     <span class="phone-tools" data-phone-tools></span>
   </div></header>
-  <dialog id="history-sheet"><header><h2>History</h2><button type="button" data-close-sheet>Close</button></header><button id="history-new" type="button" data-new-conversation>+ New conversation</button><div id="history-list"></div><button id="history-more" hidden>More conversations</button></dialog>
+  <dialog id="history-sheet"><header><h2>History</h2><button type="button" data-close-sheet>Close</button></header><button id="history-new" type="button" data-new-conversation>+ New chat</button><div id="history-list"></div><button id="history-more" hidden>More conversations</button></dialog>
   <dialog id="files-sheet"><header><h2>Files</h2><button type="button" data-close-sheet>Close</button></header><div id="files-sheet-content"></div></dialog>
   <div class="cos-body">
   {# The conversation list (the canonical history). ‹ folds it to the rail; below 900 px the rail stays and ☰ opens the list
