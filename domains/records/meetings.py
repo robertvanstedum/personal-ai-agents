@@ -64,6 +64,14 @@ CREATE TABLE IF NOT EXISTS discussion_turns(
 CREATE TABLE IF NOT EXISTS round_handoffs(
     round_id TEXT PRIMARY KEY,source_turn TEXT NOT NULL,question_event TEXT NOT NULL,
     recipient TEXT NOT NULL,response_turn TEXT NOT NULL,created TEXT NOT NULL);
+-- One follow-up per recipient prevents an early courtesy question from
+-- consuming the other teammate's reply. Keep round_handoffs for rollback:
+-- older code still sees the round as used and will not create extra turns.
+CREATE TABLE IF NOT EXISTS round_peer_replies(
+    round_id TEXT NOT NULL,source_turn TEXT NOT NULL,question_event TEXT NOT NULL,
+    recipient TEXT NOT NULL,response_turn TEXT NOT NULL,created TEXT NOT NULL,
+    PRIMARY KEY(round_id,recipient));
+INSERT OR IGNORE INTO round_peer_replies SELECT * FROM round_handoffs;
 CREATE TABLE IF NOT EXISTS teammate_status(
     principal TEXT PRIMARY KEY,unready TEXT,observed_at TEXT NOT NULL);
 INSERT OR IGNORE INTO meta VALUES('rooms_r1_schema','1');
@@ -413,7 +421,7 @@ class Meetings:
         db.execute("UPDATE meetings SET cursor=MAX(cursor,?),updated=? WHERE room=?", (event["seq"], now(), room))
 
     def handoff(self, db, turn, event, recipient):
-        """One conversational follow-up per owner round, in the reply transaction.
+        """One follow-up per recipient, at most two per owner round, atomically.
 
         This cannot invite a participant, authorize work, restart an uncertain
         attempt, or outlive a newer owner message. Delivery retries replay the
@@ -429,13 +437,17 @@ class Meetings:
         order = db.execute("SELECT * FROM turn_order WHERE turn_id=?", (turn["id"],)).fetchone()
         if not order or order["position"] != 0:
             return
-        if db.execute("SELECT 1 FROM round_handoffs WHERE round_id=?", (order["round_id"],)).fetchone():
-            return
         if db.execute("SELECT 1 FROM events WHERE room=? AND seq>? AND actor='robert' AND kind='message' AND origin IS NULL",
                       (turn["room"], turn["trigger_seq"])).fetchone():
             return
         principal = self.resolve(db, turn["room"], recipient)
         if not principal or principal == turn["addressee"] or not accepted_member(db, turn["room"], principal):
+            return
+        if db.execute("SELECT 1 FROM round_peer_replies WHERE round_id=? AND recipient=?",
+                      (order["round_id"], principal)).fetchone():
+            return
+        if db.execute("SELECT count(*) FROM round_peer_replies WHERE round_id=?",
+                      (order["round_id"],)).fetchone()[0] >= 2:
             return
         # A peer may ask any accepted teammate a discussion-only question.
         # The reply cannot execute the original owner's action.
@@ -450,8 +462,9 @@ class Meetings:
         response = self.queue_turn(db, turn["room"], principal, turn["trigger_seq"], prior["attempt"] + 1 if prior else 1, supersede=False)
         db.execute("INSERT INTO turn_order VALUES(?,?,?,?,?,NULL,NULL)",
                    (response, order["round_id"], 1, dependency["id"], now() if not prior or prior["state"] == "committed" else None))
-        db.execute("INSERT INTO round_handoffs VALUES(?,?,?,?,?,?)",
-                   (order["round_id"], turn["id"], event["id"], principal, response, now()))
+        handoff = (order["round_id"], turn["id"], event["id"], principal, response, now())
+        db.execute("INSERT INTO round_peer_replies VALUES(?,?,?,?,?,?)", handoff)
+        db.execute("INSERT OR IGNORE INTO round_handoffs VALUES(?,?,?,?,?,?)", handoff)
         db.execute("INSERT INTO discussion_turns VALUES(?,?)", (response, event["id"]))
 
     def route(self, db, room, body, target, meeting):
@@ -931,7 +944,7 @@ class Meetings:
         if db.execute("SELECT 1 FROM discussion_turns WHERE turn_id=?", (t["id"],)).fetchone():
             if db.execute("SELECT 1 FROM events WHERE room=? AND seq>? AND actor='robert' AND kind='message' AND origin IS NULL", (t["room"], t["trigger_seq"])).fetchone():
                 return "newer_message"
-        if db.execute("SELECT 1 FROM round_handoffs WHERE response_turn=?", (t["id"],)).fetchone():
+        if db.execute("SELECT 1 FROM round_peer_replies WHERE response_turn=?", (t["id"],)).fetchone():
             dependency = db.execute("SELECT p.state FROM turn_order o JOIN turns p ON p.id=o.waits_for WHERE o.turn_id=?", (t["id"],)).fetchone()
             if not dependency or dependency["state"] != "committed":
                 return "discussion_predecessor_unanswered"
@@ -1053,7 +1066,7 @@ class Meetings:
         if db.execute("SELECT 1 FROM discussion_turns WHERE turn_id=?", (t["id"],)).fetchone():
             if db.execute("SELECT 1 FROM events WHERE room=? AND seq>? AND actor='robert' AND kind='message' AND origin IS NULL", (t["room"], t["trigger_seq"])).fetchone():
                 return "newer_message"
-        if db.execute("SELECT 1 FROM round_handoffs WHERE response_turn=?", (t["id"],)).fetchone():
+        if db.execute("SELECT 1 FROM round_peer_replies WHERE response_turn=?", (t["id"],)).fetchone():
             dependency = db.execute("SELECT p.state FROM turn_order o JOIN turns p ON p.id=o.waits_for WHERE o.turn_id=?", (t["id"],)).fetchone()
             if not dependency or dependency["state"] != "committed":
                 return "discussion_predecessor_unanswered"

@@ -133,3 +133,57 @@ def test_owner_correction_after_claim_prevents_obsolete_discussion_dispatch(pair
         actual = dict(db.execute('SELECT * FROM turns WHERE id=?', (turn['id'],)).fetchone())
     assert actual['state'] == 'cancelled'
     assert actual['disposition'] == 'newer_message'
+
+
+@pytest.mark.parametrize('mc_first', [True, False])
+def test_courtesy_question_cannot_steal_other_teammates_followup(pair, mc_first):
+    """Robert's live failure: MC says 'over to you?' before CoS asks MC."""
+    e = pair
+    e.cos.discussion = FakeRelay()
+    e.say('@mc @cos\nso, I see you both, so I think that means we have a meeting. '
+          'CoS can you ask a question for MC and MC answer please')
+    e.relay.script = [{'outcome': 'done', 'text': 'CoS, over to you—what would you like to ask me?'}]
+    e.cos_relay.script = [{'outcome': 'done', 'text': 'MC, what would you check before calling production healthy?'}]
+    first, second = (e.worker, e.cos) if mc_first else (e.cos, e.worker)
+    assert first.run_once()
+    assert second.run_once()
+    # Both actual questions get one distinct tool-free response. A response
+    # containing another question cannot start an autonomous ping-pong.
+    e.discussion.script = [{'outcome': 'done', 'text': 'I would verify the deployed version. CoS, what else?'}]
+    e.cos.discussion.script = [{'outcome': 'done', 'text': 'My question is already above. MC, did you see it?'}]
+    assert e.worker.run_once()
+    assert e.cos.run_once()
+    assert not e.worker.run_once()
+    assert not e.cos.run_once()
+    assert len(e.relay.calls) == len(e.cos_relay.calls) == 1
+    assert len(e.discussion.calls) == len(e.cos.discussion.calls) == 1
+    messages = [r for r in e.events() if r['actor'] in ('mc', 'cos') and r['kind'] == 'message']
+    by_id = {r['id']: r for r in messages}
+    for reply in messages[2:]:
+        question = by_id[reply['reference']]
+        assert question['actor'] != reply['actor']
+    with e.store.connect() as db:
+        assert db.execute('SELECT count(*) FROM round_peer_replies').fetchone()[0] == 2
+        assert db.execute('SELECT count(*) FROM round_handoffs').fetchone()[0] == 1
+        # Restart/migration imports the old row without duplicating either.
+        from domains.records.meetings import ensure_schema
+        ensure_schema(db)
+        assert db.execute('SELECT count(*) FROM round_peer_replies').fetchone()[0] == 2
+
+
+def test_legacy_handoff_is_imported_before_new_recipient_is_scheduled(pair):
+    e = pair
+    e.say('CoS, ask MC what to check first.')
+    e.cos_relay.script = [{'outcome': 'done', 'text': 'MC, what would you check first?'}]
+    assert e.cos.run_once()
+    from domains.records.meetings import ensure_schema
+    with e.store.connect() as db:
+        legacy = tuple(db.execute('SELECT * FROM round_handoffs').fetchone())
+        db.execute('DROP TABLE round_peer_replies')
+        ensure_schema(db)
+        assert [tuple(r) for r in db.execute('SELECT * FROM round_peer_replies')] == [legacy]
+        ensure_schema(db)
+        assert db.execute('SELECT count(*) FROM round_peer_replies').fetchone()[0] == 1
+    assert e.worker.run_once()
+    assert len(e.discussion.calls) == 1
+    assert not e.worker.run_once()

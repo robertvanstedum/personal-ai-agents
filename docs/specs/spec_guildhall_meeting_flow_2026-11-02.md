@@ -1,6 +1,6 @@
 # Guildhall Meeting Flow and Etiquette
 
-**Version:** 0.1 · **Date:** 2 November 2026 · **Decision owner:** Robert · **Author:** Codex  
+**Version:** 0.2 · **Date:** 2 November 2026 · **Decision owner:** Robert · **Author:** Codex
 **Status:** Implemented and live-tested on dev at `63e951cd`; production integration pending. The limits of the live checks are recorded below.
 
 ## Purpose
@@ -15,7 +15,7 @@ This is a standalone 1.2 work item. It governs meeting interaction, not agent in
 2. **Open questions reach the group.** Unaddressed messages use a tool-free discussion path, so an ambiguous action request cannot run twice. To execute work, Robert names or selects a teammate. For an open question to everyone, eligible participants may prepare replies independently; display completed replies as they arrive. Neither agent permanently goes first. An unavailable participant does not block the others. Agents may abstain when they have nothing useful to add.
 3. **Requested exchanges follow their actual dependencies.** “CoS, ask MC a question and MC answer” gives CoS the question turn, then gives MC her actual recorded question. This is a dependency, not a fixed script. Reverse the names and the order reverses. Each reply is produced by its named agent; nobody fabricates another participant's answer.
 4. **Keep the floor open to Robert.** Typing and sending remain available while agents answer. A newer correction supersedes unstarted work from the earlier message and prevents stale automatic follow-ups. Preserve the record and anything newly typed during a send. Label late replies as answering an earlier message. Sending a correction is not proof that an already-started external action was cancelled; report its actual outcome.
-5. **Bound automatic discussion.** First-release limit: one automatic agent-to-agent follow-up per owner message, then return the floor to Robert. Preserve original requested turns; never replace them according to connector timing. Room duration, turn and spend limits still apply. An agent may ask Robert to continue the exchange. Longer autonomous meetings are outside this slice.
+5. **Bound automatic discussion.** Limit: one automatic follow-up per recipient and at most two per owner message, then return the floor to Robert. Only an initial reply can request a follow-up; follow-up replies cannot schedule more replies. This lets a courtesy question in one direction coexist with the substantive question in the other, regardless of which connector finishes first. Preserve original requested turns; never replace them according to connector timing. Room duration, turn and spend limits still apply. An agent may ask Robert to continue the exchange. Longer autonomous meetings are outside this slice.
 6. **Discussion cannot re-authorize work.** Automatic follow-ups use an enforced discussion-only execution path, with no action tools or memory-write callbacks. Pass the attributed question as the current request; retain Robert's original message as provenance, not a repeated command. Deliberate work requests use the ordinary authorized action path and its receipts. A conversational “ask MC” must not create a second issue, document or task.
 7. **Make presence and capability truthful.** A participant replying through the room connector is already participating; it does not need to pretend to join again. Show invited, available, answering and unavailable states from actual evidence. Agents describe only access they can establish, and never invent settings pages or another agent's capabilities.
 
@@ -39,7 +39,7 @@ Keep the composer simple. The recipient selector remains an optional shortcut. �
 | The same exchange with names reversed or paraphrased | The intended dependency holds without an exact phrase template. |
 | “Actually, only discuss it; don't open an issue” while work waits | Waiting work is superseded; running work is reconciled honestly. No stale follow-up. |
 | A slow send while Robert types a correction or switches rooms | The correction and the other room's draft survive; no duplicate message. |
-| Timeout, refresh or duplicate delivery during a handoff | One recorded reply and at most one follow-up; no blind replay. |
+| Timeout, refresh or duplicate delivery during a handoff | One recorded reply per turn and at most one follow-up per recipient (two total); no blind replay. |
 | Original request includes filing an issue, followed by a teammate question | The discussion follow-up cannot execute that action again. |
 | One participant fails, or the room pauses | Other permitted replies remain usable; pause prevents new dispatch; no retry loop. |
 
@@ -59,3 +59,7 @@ Deployment order: install both workers with discussion protocol 1 and route-scop
 - [A2A Life of a Task](https://a2a-protocol.org/latest/topics/life-of-a-task/) distinguishes messages from tracked tasks and groups related interactions with a context identifier. A2A is a related interoperability standard; this spec does not claim A2A compatibility or adopt its wire protocol.
 
 The intended contribution is their application to an ongoing personal meeting: natural addressing, distinct agents, owner steering, durable context and bounded authority. Uniqueness is not established by this reference check.
+
+## 0.2 timing correction — dev acceptance in progress
+
+A fresh live run of Robert’s example found MC’s “CoS, over to you?” consuming the only round-wide slot before CoS asked MC her substantive question. Version 0.2 makes the bound per recipient, capped at two overall, while retaining tool-free transport, membership and budget checks, newer-owner-message fences and no recursive follow-ups. The new additive ledger imports existing handoffs and mirrors the first handoff into the legacy ledger so older code sees the round as already used. The downgrade fencing procedure above still applies. This correction is not yet declared live-verified.
