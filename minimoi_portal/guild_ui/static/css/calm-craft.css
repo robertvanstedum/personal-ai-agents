@@ -1,5 +1,5 @@
 /* Craft follows Confer's approved type, paper, composer and picture behavior. */
-body.gu[data-page=floor]:not([data-mc-embed]){--r6-paper:#fcfbf8;font-size:16px}
+body.gu[data-page=floor]:not([data-mc-embed]){--r6-paper:#fcfbf8;font-size:15px}
 body.gu[data-page=floor] .gu-layout,body.gu[data-page=floor][data-rail=closed] .gu-layout{grid-template-columns:236px minmax(0,1fr);position:relative}
 body.gu[data-page=floor] .mc-panel[data-mode=inpage]{background:#fcfbf8;min-width:0}
 body.gu[data-page=floor] .mc-panel[data-mode=inpage]::before{display:none}
@@ -12,17 +12,18 @@ body.gu[data-page=floor] .calm-craft-picture span{display:block;text-align:right
 body.gu[data-page=floor][data-craft-picture=hidden] .calm-craft-workspace{grid-template-columns:minmax(0,1fr)}
 body.gu[data-page=floor][data-craft-picture=hidden] .calm-craft-picture{display:none}
 body.gu[data-page=floor] .mc-floorbar.mc-hero{height:52px;min-height:52px;background:#fcfbf8;padding:0 24px}
-body.gu[data-page=floor] .hero-name .fb-title{font-size:16px}
-body.gu[data-page=floor] .mc-floorbar [data-craft-picture-toggle]{height:34px;border-radius:9px}
+body.gu[data-page=floor] .hero-name .fb-title{font:600 16px var(--r6-sans)}
+body.gu[data-page=floor] .mc-floorbar [data-craft-picture-toggle]{height:34px;min-width:40px;padding:6px 10px;border-radius:9px}
+body.gu[data-page=floor] [data-craft-picture-toggle] svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 body.gu[data-page=floor] [data-craft-picture-toggle][aria-pressed=true]{background:#edf1e8}
 body.gu[data-page=floor] .mc-panel[data-mode=inpage] .mc-thread{background:#fcfbf8;padding:22px 28px;gap:22px}
-body.gu[data-page=floor] .mc-thread .msg-text{font:16px/1.6 var(--r6-sans)}
+body.gu[data-page=floor] .mc-thread .msg-text{font:16px/1.55 var(--r6-sans)}
 body.gu[data-page=floor] .mc-thread .msg[data-author-kind=owner]{max-width:86%;background:#f0f2ed;border:1px solid #dbe2d7;padding:11px 17px}
 body.gu[data-page=floor] .mc-thread .msg-meta{margin-bottom:9px}
 body.gu[data-page=floor] .mc-thread .msg-meta [data-iso]{font-size:12px}
 body.gu[data-page=floor] .floor-history{background:#f1eadf}
-body.gu[data-page=floor] .fh-new{height:40px;font-size:16px}
-body.gu[data-page=floor] .fh-link{align-items:flex-start;white-space:normal;line-height:1.4;padding:11px 10px;font-size:16px}
+body.gu[data-page=floor] .fh-new{height:34px;font-size:14px}
+body.gu[data-page=floor] .fh-link{align-items:flex-start;white-space:normal;line-height:1.4;padding:11px 10px;min-height:46px;font-size:14px}
 body.gu[data-page=floor] .fh-title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal}
 body.gu[data-page=floor] .fh-meta{font-size:12px;padding-top:2px}
 body.gu[data-page=floor] .mc-dock-bottom{width:calc(100% - 56px);max-width:760px;background:#fcfbf8;margin-bottom:12px}

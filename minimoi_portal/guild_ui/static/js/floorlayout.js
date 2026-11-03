@@ -117,6 +117,7 @@ function setPicture(mode, persist) {
   for (const b of $$('[data-craft-picture-toggle]')) {
     b.setAttribute('aria-pressed', String(mode !== 'hidden'));
     b.setAttribute('aria-label', mode === 'hidden' ? 'Show picture' : 'Hide picture');
+    b.setAttribute('title', mode === 'hidden' ? 'Show picture' : 'Hide picture');
   }
   if (persist) save(PICTURE_KEY, mode);
   requestAnimationFrame(fitThread);
