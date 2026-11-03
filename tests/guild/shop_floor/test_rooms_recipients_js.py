@@ -65,7 +65,7 @@ vm.runInContext(String.raw`
   assert.equal(approval.children[1].tag,'a');
   assert.equal(approval.children[1].attrs.href,'https://dev.minimoi.ai/guild-next/guild/build?c=c-123');
   current = 'room-a'; room = { id: current, state: 'active', events: [{actor:'robert',kind:'message',seq:20}] };
-  page = { storage_ns: 'test' };
+  page = { storage_ns: 'test', urls:{floor:'/guild-next/guild/build'} };
   const people = ['codex','claude-code','mc'];
   meeting = {room:current, participants:people.map(id=>({id,label:id,teammate:true,rsvp:'accepted'})), turns:[], routing_notes:[], meeting:{facilitator:'mc'}};
   let resolveOld;
@@ -131,6 +131,15 @@ vm.runInContext(String.raw`
   assert.equal($('[data-rm-turns]').find('[data-rm-turn-action]').length,0);
   meeting.turns = Array.from({length:20},(_,i)=>({...meeting.turns[0],id:String(i),round:{round_id:'r2',position:i}}));
   assert.ok(roundLine().text.includes('earlier turns may be omitted'));
+  meeting.turns = [{id:'paused',addressee:'mc',state:'failed',disposition:'mc_paused'}];
+  renderTurns();
+  assert.ok(failureText('MC','mc_paused','mc').includes('earlier action is not replayed'));
+  assert.ok($('[data-rm-turns]').find('[href]').some(n=>n.attrs.href===page.urls.floor));
+  meeting.turns = [
+    {id:'retry',addressee:'mc',state:'committed',trigger_seq:20,attempt:1},
+    {id:'original',addressee:'mc',state:'failed',trigger_seq:20,attempt:0,round:{round_id:'round',position:0}}];
+  assert.ok(roundLine().text.includes('answered'));
+  assert.ok(!roundLine().text.includes('not answered'));
   // Continue without is a recipient decision, not just a disappearing warning.
   meeting.participants = ['mc','cos'].map(id=>({id,label:id,teammate:true,rsvp:'accepted'}));
   meeting.turns = [

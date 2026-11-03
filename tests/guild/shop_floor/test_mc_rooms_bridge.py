@@ -180,3 +180,14 @@ def test_listener_requires_distinct_auth_and_no_browser_origin(world):
     assert client.get(PATH,headers=auth).json=={'ready':True}
     assert client.post(PATH,json={**IDS,'prompt':'fake'},headers=auth).status_code==409
     assert client.post(PATH,json=IDS,headers=auth).json['outcome']=='done'
+
+
+def test_saved_pause_is_actionable_without_dispatch_or_replay(world):
+    from minimoi_portal.guild_ui.mc.ledger_gate import Refusal
+    def paused(*args, **kwargs):
+        raise Refusal('paused', 'An earlier action failed.', 409, ledger_id=267)
+    world.bridge.gate = paused
+    first = world.bridge.run(IDS)
+    assert first['outcome'] == 'refused' and first['reason'] == 'mc_paused'
+    assert world.bridge.run(IDS) == first
+    assert world.backend.calls == 0 and 'bind' not in world.events

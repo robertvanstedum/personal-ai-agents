@@ -772,7 +772,12 @@ function roundLine() {
   if (!inRounds.length) return null;
   const newest = inRounds.reduce((a, b) => (a.created > b.created ? a : b)).round.round_id;
   const members = inRounds.filter((t) => t.round.round_id === newest).sort((a, b) => a.round.position - b.round.position);
-  return { text: `${meeting.turns.length >= 20 ? 'Round (recent activity; earlier turns may be omitted)' : 'Round'}: ${members.map((t) => `${labelOf(t.addressee)} ${ROUND_WORD(t)}`).join(' · ')}`, ids: new Set(members.map((t) => t.id)) };
+  // A confirmed retry keeps the original trigger but is not itself a round member.
+  // Show its newest attempt instead of leaving a successful reply labelled unanswered.
+  const effective = members.map(original => (meeting.turns || []).filter(t =>
+    t.addressee === original.addressee && t.trigger_seq === original.trigger_seq
+  ).reduce((latest, t) => (t.attempt || 0) > (latest.attempt || 0) ? t : latest, original));
+  return { text: `${meeting.turns.length >= 20 ? 'Round (recent activity; earlier turns may be omitted)' : 'Round'}: ${effective.map((t) => `${labelOf(t.addressee)} ${ROUND_WORD(t)}`).join(' · ')}`, ids: new Set(members.map((t) => t.id)) };
 }
 
 function earlier() {
@@ -859,6 +864,7 @@ function failureText(who, reason, principal) {
     case 'agent_budget_limit': return `${who} hit its cost cap for this session, so it did not answer. Nothing is running. The limit is in Operate → Usage & limits; Retry after it is raised or the session restarts.`;
     case 'agent_usage_hold': return `${who} is holding new work because of its usage limits (see Operate → Usage & limits), so it did not answer. Retry once that clears.`;
     case 'agent_turn_failed': return `${who}'s own turn failed before it could answer. Nothing was received. Retry, or check its status in Operate.`;
+    case 'mc_paused': return `${who} is paused after an earlier failed or uncertain action. Review the saved result in Craft and use Continue there before retrying this message. The earlier action is not replayed.`;
     case 'relay_busy': return `${who} was busy.`;
     case 'empty_reply': return `${who} answered with nothing.`;
     case 'signed_out_after_start': return `${who}'s sign-in was rejected partway through. It may have started answering; nothing was received. To fix: ${signIn}, then Retry.`;
@@ -984,6 +990,7 @@ function renderTurns() {
   box.replaceChildren(...rows.map((row) => {
     const p = el('p', { class: 'rm-turn', 'data-rm-turn': row.turn ? row.turn.id : '', 'data-state': row.turn ? row.turn.state : (row.round ? 'round' : 'note') });
     p.append(el('span', {}, row.text));
+    if (row.turn?.disposition === 'mc_paused') p.append(el('a', {href: page.urls.floor, class: 'rm-btn'}, 'Review in Craft'));
     for (const a of row.actions || []) {
       const label = { stop: 'Stop reply', retry: 'Retry', attempt: 'Start a new attempt', continue: `Continue without ${labelOf(row.turn.addressee)}`, end: 'End',
         renew: 'Renew meeting — reset its hour and shared turn budget' }[a];

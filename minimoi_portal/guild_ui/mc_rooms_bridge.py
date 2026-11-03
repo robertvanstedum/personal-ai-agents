@@ -205,6 +205,8 @@ class Bridge:
             return output
         except ledger_gate.Refusal as exc:
             output = result('refused', exc.body['error'])
+            if exc.body['error'] == 'paused':
+                output['reason'] = 'mc_paused'
             self.journal.generated(operation, output)
             return output
         except Exception:
