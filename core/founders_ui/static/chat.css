@@ -1,5 +1,5 @@
 /* One presentation contract for Confer, Craft and Guildhall. Load after page styles. */
-:root{--chat-sans:"Source Sans 3",sans-serif;--chat-serif:"Playfair Display",serif;--chat-paper:#fcfbf8;--chat-sidebar:#f1eadf;--chat-line:#d2d8d0;--chat-list-width:236px}
+:root{--chat-sans:"Source Sans 3",sans-serif;--chat-serif:"Playfair Display",serif;--chat-paper:#fcfbf8;--chat-sidebar:#f1eadf;--chat-line:#d2d8d0;--chat-list-width:236px;--chat-header:#f7f0e4;--chat-ink:#252820;--chat-soft:#505149;--chat-accent:#a94316}
 body.founders-cos,body.gu{--r6-sans:var(--chat-sans);--r6-serif:var(--chat-serif);--gu-font-body:var(--chat-sans);font-family:var(--chat-sans)}
 body.mm-chat{--chat-column:var(--chat-list-width);font-family:var(--chat-sans)}
 body.mm-chat[data-chat-sidebar=rail],body.mm-chat[data-chat-sidebar=drawer]{--chat-column:52px}
@@ -58,3 +58,25 @@ body.gu.mm-chat[data-page=rooms][data-chat-sidebar=drawer] .rm[data-list=open] .
 body.founders-cos.mm-chat[data-chat-sidebar=drawer] .cos-list{display:flex;position:fixed;inset:0 auto 0 0;z-index:95;width:min(320px,88vw);height:auto}
 body.gu.mm-chat[data-page=floor][data-chat-sidebar=rail] .floor-history,
 body.gu.mm-chat[data-page=rooms][data-chat-sidebar=rail] .rm .rm-list{display:none}
+
+/* Domain headers share one visual contract, including non-chat pages. */
+body.founders-cos .cos-header,body.gu .guild-nav{background:var(--chat-header);border-bottom:1px solid var(--chat-line);font-family:var(--chat-sans)}
+body.founders-cos .cos-mark-name,body.gu .workshop-row .workshop-name{font:600 17px/1 var(--chat-serif);color:#153f33}
+body.founders-cos .tab-btn,body.gu .workshop-row a.subnav-link,body.gu .workshop-other>a{font-family:var(--chat-sans);font-size:15px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--chat-soft)}
+body.founders-cos .tab-btn.active,body.gu .workshop-row a.subnav-active{font-weight:600;color:var(--chat-ink);border-bottom-color:var(--chat-accent)}
+@media(min-width:701px){
+ body.founders-cos .header-nav,body.gu .workshop-row{height:46px;min-height:46px;padding:0 18px;gap:22px;box-sizing:border-box}
+ body.founders-cos .tab-nav,body.gu .workshop-primary,body.gu .workshop-other{align-items:center;gap:22px}
+ body.founders-cos .tab-btn,body.gu .workshop-row a.subnav-link,body.gu .workshop-other>a{display:inline-flex;align-items:center;height:46px;min-height:46px;box-sizing:border-box;padding:0;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;line-height:normal}
+ body.founders-cos .tab-btn.active,body.gu .workshop-row a.subnav-active{border-bottom-color:var(--chat-accent)}
+}
+/* Equal list gutters and weights; only the selected chat is emphasized. */
+body.mm-chat :is(.cos-list-rows,.fh-list,.rm-rooms){padding:0 8px 12px;margin:0;gap:0;list-style:none}
+body.mm-chat :is(.fh-title,.cos-list-row .t,.rm-row-t){font-weight:400;color:var(--chat-soft)}
+body.mm-chat :is(.cos-list-row[aria-current=true] .t,.fh-row[aria-current=true] .fh-title,[data-rm-room][aria-current=true] .rm-row-t){font-weight:600;color:var(--chat-ink)}
+/* Voice is the same visible control in either individual chat. Keep each
+   agent's existing state machine, icon and accessible name intact. */
+body.gu.mm-chat[data-page=floor] .mc-composer [data-mc-voice-btn]{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:64px;min-width:64px;height:38px;min-height:38px;padding:0 12px;border:1px solid #cbd4c8;border-radius:999px;background:transparent;color:#454b43}
+body.gu.mm-chat[data-page=floor] [data-mc-voice-btn] .mc-voice-icon{width:22px;height:22px}
+body.gu.mm-chat[data-page=floor] [data-mc-voice-btn] [data-voice-label]{display:none}
+body.gu.mm-chat[data-page=floor] [data-mc-voice-btn][aria-pressed=true]{background:#153f33;color:white}
