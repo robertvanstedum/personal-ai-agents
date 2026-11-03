@@ -160,3 +160,13 @@ def test_profile_file_changes_are_live_and_private(tmp_path):
     symlink = tmp_path / 'link'; symlink.symlink_to(path)
     with pytest.raises(OSError):
         private_bytes(symlink)
+
+
+def test_only_cos_companion_can_opt_in_to_private_network_listener():
+    from core.domain_api.contract import DomainError
+    from minimoi_portal.guild_ui.board_headless_runner import listener
+    assert listener("guild", "127.0.0.1") == "127.0.0.1"
+    assert listener("cos-board", "0.0.0.0") == "0.0.0.0"
+    for floor, bind in (("guild", "0.0.0.0"), ("cos-board", "::"), ("cos-board", "192.168.1.1")):
+        with pytest.raises(DomainError, match="board_bind_invalid"):
+            listener(floor, bind)

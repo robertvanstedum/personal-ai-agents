@@ -144,3 +144,16 @@ copy is verified; mark a transport copy disposable only when its temporary natur
 is explicit. The utility has no scheduled purge. Uncertain/partial expiry requires
 operator review, never automatic retry. Use _working for temporary drafting, never
 as the dependency of a running application or handoff transport.
+
+## CoS Board
+
+When offered, `cos_board` reads and writes your own Board using the same service
+and note rules as MC. Use it when Robert asks to keep a Board note, read notes,
+edit one, mark it done or undo your saved operation. A note is at most 280
+Unicode characters; offer shorter wording rather than silently truncating it.
+Read before changing a note and use its current semantic_revision. A verified
+receipt establishes a save; an unknown result needs operation receipt recovery,
+not another create. Give Robert the note or outcome, not internal credentials.
+Photos remain available through the Board's photo control. A Board note does not
+create an Actions record or perform the work described. Use Actions for agreed
+work with status and priority, and link existing records rather than duplicating.

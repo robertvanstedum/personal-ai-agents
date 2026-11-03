@@ -1,8 +1,10 @@
-"""One loopback-only Board API process, separately provisioned from MC.
+"""One private Board API process, separately provisioned from MC.
 
 Run explicitly: python -m minimoi_portal.guild_ui.board_headless_runner
 Requires BOARD_API_PROFILES_FILE, BOARD_API_CURSOR_KEY_FILE, BOARD_API_OWNER,
 MINIMOI_BOARD_ENV and DATABASE_URL. No secrets or identities are generated.
+Default bind is loopback. The CoS companion may explicitly bind 0.0.0.0 on
+an isolated Docker network with no published ports (operator verified).
 Key file is owner-only JSON: {"profiles": [KeyProfile fields plus secret_hex]}.
 A PostgreSQL session lock excludes concurrent workers; every request checks
 that lock connection. Startup quarantine expires all prior transport nonces.
@@ -68,14 +70,14 @@ class InstalledKeys(KeyRegistry):
 
 
 class SingleProcessLease:
-    def __init__(self, connect, *, owner, environment):
+    def __init__(self, connect, *, owner, environment, floor="guild"):
         self.conn = connect()
         self.lock = threading.Lock()
         self.conn.autocommit = True
         try:
             with self.conn.cursor() as cur:
                 cur.execute("SELECT pg_try_advisory_lock(hashtextextended(%s,0))",
-                            [json.dumps(["board-api-process-v1", owner, environment])])
+                            [json.dumps(["board-api-process-v1", owner, environment] + ([floor] if floor != "guild" else []))])
                 require(cur.fetchone()[0], "board_api_already_running", 503)
         except Exception:
             self.conn.close()
@@ -91,20 +93,28 @@ class SingleProcessLease:
         self.conn.close()
 
 
+def listener(floor, value):
+    require(value == "127.0.0.1" or (value == "0.0.0.0" and floor == "cos-board"), "board_bind_invalid")
+    return value
+
+
 def main():
     import psycopg2
     from werkzeug.serving import make_server
     env, owner = os.environ["MINIMOI_BOARD_ENV"], os.environ["BOARD_API_OWNER"]
     require(env in {"dev", "prod"}, "environment_invalid")
+    floor = os.environ.get("BOARD_API_FLOOR", "guild")
+    require(floor in {"guild", "cos-board"}, "board_floor_invalid")
+    bind = listener(floor, os.environ.get("BOARD_API_BIND", "127.0.0.1"))
     dsn = os.environ["DATABASE_URL"]
     def connect():
         return psycopg2.connect(dsn, connect_timeout=3, options="-c statement_timeout=3000 -c lock_timeout=2000")
-    lease = SingleProcessLease(connect, owner=owner, environment=env)
+    lease = SingleProcessLease(connect, owner=owner, environment=env, floor=floor)
     try:
         registry = InstalledKeys(os.environ["BOARD_API_PROFILES_FILE"], lease)
         registry.refresh()
         cursor_key = private_bytes(os.environ["BOARD_API_CURSOR_KEY_FILE"])
-        store = FloorStores(lambda: dsn, floor="guild")
+        store = FloorStores(lambda: dsn, floor=floor)
         from domains.guild.queue_store import QueueStore
         from .adapters.queue_reader import LiveBuildQueue
         queue_path = os.environ.get("BOARD_API_QUEUE_FILE")
@@ -116,8 +126,8 @@ def main():
             return value.ok and value.data is not None
         app = create_app(store=store, owner=owner, environment=env, cursor_key=cursor_key,
                          registry=registry, item_allowed=item_allowed)
-        # Fixed loopback binding; no model/config field can turn this into public ingress.
-        server = make_server("127.0.0.1", int(os.environ.get("BOARD_API_PORT", "5013")), app, threaded=True)
+        # No listener destination comes from model text. The operator verifies Docker isolation.
+        server = make_server(bind, int(os.environ.get("BOARD_API_PORT", "5013")), app, threaded=True)
         try:
             server.serve_forever()
         finally:
