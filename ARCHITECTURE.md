@@ -722,6 +722,29 @@ change the authority or review requirements attached to the role.
 
 ---
 
+## Guildhall Meeting Harness
+
+*2 November 2026 design addition; implementation and dev acceptance in progress.*
+
+Guildhall's meeting harness guides a shared conversation between the owner and
+distinct agents. It resolves natural addressing, schedules independent replies
+or explicit question-and-answer dependencies, and preserves who actually said
+what. The owner can send corrections while agents are working; pending work
+yields to the newer direction, while running actions retain their actual outcome.
+
+Meeting etiquette is backed by execution controls: bounded follow-ups, current
+membership and approval checks, durable reply identities, and duplicate prevention.
+Automatic discussion must not replay the owner's original action request or gain
+new tool authority. This interaction layer is separate from the Agent Harness
+that supervises build/runtime work.
+
+The standalone [Guildhall Meeting Flow and Etiquette specification](docs/specs/spec_guildhall_meeting_flow_2026-11-02.md)
+defines the rules, acceptance examples and remaining implementation gates. It
+references dynamic group-chat orchestration and A2A's message/task distinction;
+it does not claim protocol compatibility or production completion.
+
+---
+
 ## Open Design Questions
 
 Stated plainly rather than resolved by default:

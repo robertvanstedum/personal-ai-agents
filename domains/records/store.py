@@ -541,6 +541,12 @@ class Store:
         origin=contribution_origin(payload)
         target,reference=payload.get("target") or None,payload.get("reference") or None
         if target is not None: target=string(target,"Target",60)
+        recipients=payload.get("recipients")
+        if recipients is not None:
+            if (actor != "robert" or kind != "message" or origin is not None or target is not None
+                    or not isinstance(recipients,list) or not 1 <= len(recipients) <= 20):
+                raise Problem("Invalid message recipients")
+            recipients=list(dict.fromkeys(string(x,"Recipient",60) for x in recipients))
         if reference is not None: reference=string(reference,"Reference",100)
         expected=payload.get("expected_context")
         teammate_post="turn_id" in payload or "claim_id" in payload
@@ -564,6 +570,8 @@ class Store:
                     raise Problem("Room changed while response was prepared; review current context before a new turn",409)
             if target and not db.execute("SELECT 1 FROM members WHERE room=? AND actor=?",(room,target)).fetchone():
                 raise Problem("Target is not a participant")
+            if recipients and any(not db.execute("SELECT 1 FROM members WHERE room=? AND actor=?",(room,x)).fetchone() for x in recipients):
+                raise Problem("Recipient is not a participant")
             ref=db.execute("SELECT * FROM events WHERE id=? AND room=?",(reference,room)).fetchone() if reference else None
             if reference and not ref: raise Problem("Reference must identify an event in this room")
             if kind == "decision":
@@ -578,8 +586,9 @@ class Store:
             event=self._event(db,room,actor,kind,body,target,reference,provenance,origin)
             if turn is not None:
                 self.meetings.commit(db,turn,event,key,payload)       # the only commit of a turn (ROOMS_R1 §3.5)
+                self.meetings.handoff(db,turn,event,payload.get("reply_to_participant"))
             elif actor=="robert" and kind=="message" and origin is None:
-                self.meetings.on_human_message(db,room,event,target)
+                self.meetings.on_human_message(db,room,event,recipients or target)
             return event
         # The delivery envelope (claim id) changes on a recovery delivery; the
         # content and turn do not, so a replay matches (ROOMS_R1 §3.7).

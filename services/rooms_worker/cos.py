@@ -40,6 +40,7 @@ def main():
     from pathlib import Path
     from services.rooms_worker.clients import Records
     from services.rooms_worker.worker import Worker,log
+    from services.rooms_worker.discussion import Discussion
     from services.rooms_worker.journal import TurnJournal
     from services.rooms_worker.transport_profile import admit_runtime
     url,profile=admit_runtime(os.environ,kind='worker')
@@ -50,7 +51,8 @@ def main():
     worker=Worker(Records(url,lambda:read_secret(secrets/'rooms-worker-cos.token')),
                   Records(url,lambda:read_secret(secrets/'cos.token')),
                   CoS(secrets/'cos-service.token'),TurnJournal(root/'turns'),
-                  teammate='cos',agent_id='cos-agent-a',alive_path='/tmp/rooms-worker/alive')
+                  teammate='cos',agent_id='cos-agent-a',alive_path='/tmp/rooms-worker/alive',
+                  discussion=Discussion('cos',secrets/'discussion-gateway.token'))
     worker.start_housekeeping()
     while True:
         try:busy=worker.run_once()

@@ -15,7 +15,12 @@ ETIQUETTE = (
     "question when needed. Put substantial analysis in an artifact and introduce it with a short explanation. "
     "Be warm, curious and distinct without performing a caricature. Disagree with reasons. Leave room for the "
     "humans. Do not start research or building merely because it would help the discussion. Respect the "
-    "speaking turn, interruption, pause and end signals."
+    "speaking turn, interruption, pause and end signals. You are Master Craftsman (MC), already "
+    "participating in Guildhall. Your final reply is posted to the room under your identity by the platform; "
+    "you do not need a separate join or post tool for this reply. Speak only for yourself. Never invent "
+    "another participant's answer or write a simulated conversation. Use any earlier replies in this round "
+    "to answer a teammate's question. If their reply is not present, do not pretend it is. Check access "
+    "through the tools actually provided; do not invent settings pages or infer API access from shell tools."
 )
 
 MAX_BODY = 15000          # Records accepts up to 16,000 characters per contribution
@@ -73,7 +78,7 @@ def reply_payload(turn, text, correlation, usage, agent_id="mc-agent", runtime="
     if reported:
         evidence.update({k: usage[k] for k in ("prompt_tokens", "completion_tokens") if isinstance(usage.get(k), int)})
     return {"kind": "message", "context_class": "agent_draft", "body": text,
-            "reference": turn["trigger"].get("id"),
+            "reference": (turn.get("discussion_reply") or {}).get("question_event") or turn["trigger"].get("id"),
             "origin": {"source_application": "rooms_worker", "mode": "agent_response", "agent_id": agent_id,
                        "runtime": runtime, "execution_id": correlation},
             "usage_evidence": evidence}

@@ -44,6 +44,7 @@ const skippedRecipients = new Set();
 let requireRecipient = false; // Continue without must not fall back to the same facilitator
 const ACTIVE = ['queued', 'claimed', 'running', 'recovering', 'cancel_requested'];
 const keys = new Map();
+const sendingRooms = new Set();
 const IMAGE = /\.(png|jpe?g|gif|webp)$/i;
 const TEXT = /\.(txt|md|csv|json)$/i;
 
@@ -352,30 +353,48 @@ async function loadAll({keepCurrent=false}={}) {
 // ── writing ──────────────────────────────────────────────────────────────────
 async function send() {
   const input = $('[data-rm-input]');
-  const text = input.value.trim();
-  if (!text || !current) return;
-  const selected = (meeting?.participants || []).filter((p) => p.teammate && p.rsvp === 'accepted' && targets.has(p.id));
+  const draft = input.value;
+  const text = draft.trim();
+  const destination = current;
+  if (!text || !destination || sendingRooms.has(destination)) return;
+  const savedDraftKey = draftKey();
+  const selected = (meeting?.room === destination ? meeting.participants : []).filter((p) => p.teammate && p.rsvp === 'accepted' && targets.has(p.id));
   if (requireRecipient && !selected.length) { status('Choose who should answer in To before sending. Your draft is kept.'); return; }
-  // Reuse Records' mention contract; addressing remains visible in exports.
   const body = { body: text, kind: 'message' };
   if (selected.length === 1) body.target = selected[0].id;
-  else if (selected.length > 1) body.body = `${selected.map((p) => `@${p.id}`).join(' ')}\n${text}`;
-  const name = `msg:${current}:${JSON.stringify(body)}`;
+  else if (selected.length > 1) {
+    body.recipients = selected.map((p) => p.id);
+    body.body = `${selected.map((p) => `@${p.id}`).join(' ')}\n${text}`;
+  }
+  const name = `msg:${destination}:${JSON.stringify(body)}`;
+  sendingRooms.add(destination);
   $('[data-rm-send]').disabled = true;
-  const r = await records(`/v1/rooms/${encodeURIComponent(current)}/events`, { method: 'POST', body, key: keyFor(name) });
-  $('[data-rm-send]').disabled = signedOut;
-  if (r.status === 201 || r.status === 200) {
-    keys.delete(name);
-    input.value = '';
-    store.set(draftKey(), '');
-    status('');
-    await loadRoom(current);
-  } else if (r.status === 409) {
-    keys.delete(name);
-    status(`Not sent: ${r.body.error || 'the room is paused'}. Your draft is kept.`);
-    await loadRoom(current);
-  } else if (r.status !== 401) {
-    status(`Not sent: ${r.body.error || 'Rooms answered with an error'}. Your draft is kept; Send again to retry safely.`);
+  try {
+    const r = await records(`/v1/rooms/${encodeURIComponent(destination)}/events`, { method: 'POST', body, key: keyFor(name) });
+    if (r.status === 201 || r.status === 200) {
+      keys.delete(name);
+      // A correction typed during the POST belongs to the next message.
+      // A room switch also must not clear the newly opened room's composer.
+      if (store.get(savedDraftKey) === draft) store.set(savedDraftKey, '');
+      if (current !== destination) return;
+      if (input.value === draft) { input.value = ''; store.set(savedDraftKey, ''); }
+      else store.set(savedDraftKey, input.value);
+      status('');
+      await loadRoom(destination);
+    } else if (current === destination) {
+      if (r.status === 409) {
+        keys.delete(name);
+        status(`Not sent: ${r.body.error || 'the room is paused'}. Your draft is kept.`);
+        await loadRoom(destination);
+      } else if (r.status !== 401) {
+        status(`Not sent: ${r.body.error || 'Rooms answered with an error'}. Your draft is kept; Send again to retry safely.`);
+      }
+    }
+  } catch (error) {
+    if (current === destination) status('Not confirmed: the connection was interrupted. Your draft is kept; Send again to retry safely.');
+  } finally {
+    sendingRooms.delete(destination);
+    $('[data-rm-send]').disabled = signedOut || sendingRooms.has(current) || room?.state !== 'active';
   }
 }
 
@@ -895,7 +914,7 @@ async function turnAction(button) {
 
 // Who hears you (Review 06): one "To: Everyone ▾" in the composer, in place of the row of buttons. It holds exactly the
 // buttons it replaces, so a send is unchanged: Everyone picks every teammate (each is addressed, by @-prefix); one name picks
-// that one (the message's target); none means the facilitator answers and everyone hears it. Several can be picked.
+// that one; no selection uses the message's addressees, or the room for an open question.
 function renderTo() {
   const box = $('[data-rm-to]');
   const mates = (meeting?.room === current ? meeting.participants : []).filter((p) => p.teammate && p.rsvp === 'accepted');
@@ -911,7 +930,7 @@ function renderTo() {
     type: 'button', class: 'rm-chip', 'data-rm-to-chip': p.id, 'aria-pressed': String(targets.has(p.id)),
     title: `${targets.has(p.id) ? 'Remove' : 'Add'} ${p.label}` }, p.label));
   const all = mates.length > 0 && selected.length === mates.length;
-  const said = !selected.length ? (requireRecipient ? 'Choose recipient' : (facilitator() ? shortName(facilitator(), labelOf(facilitator())) : 'No recipient')) : all ? (mates.length > 1 ? 'Everyone, each answers' : shortName(mates[0].id, mates[0].label))
+  const said = !selected.length ? (requireRecipient ? 'Choose recipient' : 'Automatic') : all ? (mates.length > 1 ? 'Everyone, each answers' : shortName(mates[0].id, mates[0].label))
     : selected.map((p) => shortName(p.id, p.label)).join(', ');
   const controls = [el('button', { type: 'button', class: 'rm-chip rm-to-all', 'data-rm-to-all': true,
       'aria-pressed': String(all) }, 'Everyone')];
@@ -926,10 +945,10 @@ function renderTo() {
     picker.append(search, list);
     controls.push(picker);
   } else controls.push(...chips);
-  controls.push(el('button', { type: 'button', class: 'rm-btn rm-to-clear', 'data-rm-to-clear': true }, 'Clear'));
+  controls.push(el('button', { type: 'button', class: 'rm-btn rm-to-clear', 'data-rm-to-clear': true }, 'Automatic'));
   controls.push(el('span', { class: 'small rm-to-hint', 'aria-live': 'polite' }, selected.length
-    ? `${all ? 'Everyone' : selected.map((p) => p.label).join(', ')} will be addressed. Mentions in your message also add recipients.`
-    : requireRecipient ? 'Choose who should answer before sending. Your draft is kept.' : `No selection: ${facilitator() ? labelOf(facilitator()) : 'nobody'} answers unless you mention someone.`));
+    ? `${all ? 'Everyone' : selected.map((p) => p.label).join(', ')} will be addressed. This selection controls who answers.`
+    : requireRecipient ? 'Choose who should answer before sending. Your draft is kept.' : 'Address a teammate by name, or ask the room. Everyone can answer an open question.'));
   const menu = el('details', { class: 'rm-to-menu', 'data-rm-to-menu': true });
   menu.open = !!menuWasOpen;
   const sum = el('summary', { class: 'rm-to-sum', 'aria-label': `Send to: ${said}`, title: 'Who hears you' });

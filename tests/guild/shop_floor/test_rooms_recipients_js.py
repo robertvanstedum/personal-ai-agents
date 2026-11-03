@@ -48,6 +48,7 @@ vm.runInContext(String.raw`
   $('[data-rm-input]').value = 'Confirm attendance'; await send();
   assert.equal(sent.body.body,'@codex @claude-code\nConfirm attendance');
   assert.equal(sent.body.target,undefined);
+  assert.deepEqual([...sent.body.recipients],['codex','claude-code']);
   click({'data-rm-to-chip':'codex'});
   $('[data-rm-input]').value = 'Confirm attendance'; await send();
   assert.equal(sent.body.target,'claude-code');
@@ -101,6 +102,20 @@ vm.runInContext(String.raw`
   current='room-a'; restoreRecovery(); assert.ok(requireRecipient);
   click({'data-rm-to-chip':'cos'}); assert.equal(requireRecipient,false);
   $('[data-rm-input]').value='Try CoS again'; await send(); assert.equal(sent.body.target,'cos');
+  // Typing a correction during the POST must survive the first receipt.
+  let finish; let posts=0;
+  records=async()=>{posts++;return new Promise(resolve=>{finish=resolve;});};
+  $('[data-rm-input]').value='First message';
+  const pending=send();
+  $('[data-rm-input]').value='Actually, change direction';
+  await send(); assert.equal(posts,1);
+  finish({status:201,body:{}}); await pending;
+  assert.equal($('[data-rm-input]').value,'Actually, change direction');
+  // A receipt for the previous room must not clear the new room's draft.
+  $('[data-rm-input]').value='Old room message';
+  const switching=send(); current='room-b'; $('[data-rm-input]').value='New room draft';
+  finish({status:201,body:{}}); await switching;
+  assert.equal($('[data-rm-input]').value,'New room draft'); current='room-a';
   meeting.turns=[{id:'active',addressee:'mc',state:'running'}];
   const before=[...targets]; records=async()=>({status:503,body:{}});
   await proceed('active'); assert.deepEqual([...targets],before); assert.ok(!dismissed.has('active'));

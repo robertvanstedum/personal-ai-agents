@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import json
+import os
 import re
 from uuid import uuid4
 
@@ -58,6 +59,11 @@ CREATE TABLE IF NOT EXISTS turn_order(
     turn_id TEXT PRIMARY KEY,round_id TEXT NOT NULL,position INTEGER NOT NULL,waits_for TEXT,
     claimable_at TEXT,released_at TEXT,release_reason TEXT);
 CREATE INDEX IF NOT EXISTS turn_order_round ON turn_order(round_id,position);
+CREATE TABLE IF NOT EXISTS discussion_turns(
+    turn_id TEXT PRIMARY KEY,question_event TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS round_handoffs(
+    round_id TEXT PRIMARY KEY,source_turn TEXT NOT NULL,question_event TEXT NOT NULL,
+    recipient TEXT NOT NULL,response_turn TEXT NOT NULL,created TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS teammate_status(
     principal TEXT PRIMARY KEY,unready TEXT,observed_at TEXT NOT NULL);
 INSERT OR IGNORE INTO meta VALUES('rooms_r1_schema','1');
@@ -222,6 +228,24 @@ def sweep(db):
     round_progress(db, moment)
 
 
+def addressed_names(db, room, text):
+    """Conservative vocatives from the directory; explicit @names work anywhere.
+
+    Recognizes "CoS, ...", "Hello MC", "CoS please ...", and "..., MC?".
+    The absence of a confident address leaves an ordinary message to the room.
+    """
+    names = []
+    text = (text or "").strip()
+    for row in db.execute("SELECT p.id,p.label FROM principals p JOIN members m ON m.actor=p.id WHERE m.room=? AND p.id<>'robert'", (room,)):
+        for alias in {row["id"], row["label"], row["label"].replace(" ", "")}:
+            name = re.escape(alias)
+            if (re.search(r"^(?:(?:hi|hello|hey|thanks|thank you)[, ]+)?" + name + r"(?:\s*[,;:!?]|\s+(?:please|can you|could you|would you|will you|what|how|are you|do you)\b|$)", text, re.I)
+                    or re.search(r",\s*" + name + r"\s*[?!.]*$", text, re.I)):
+                names.append(row["id"])
+                break
+    return names
+
+
 def round_ready(db, turn_id):
     """R3a: may this turn be claimed as far as its round's order goes?"""
     row = db.execute("SELECT * FROM turn_order WHERE turn_id=?", (turn_id,)).fetchone()
@@ -366,30 +390,82 @@ class Meetings:
             return
         meeting = dict(meeting)
         addressees, notes = self.route(db, room, event["body"], target, meeting)
+        # Unaddressed room discussion must not duplicate an external action in
+        # two tool-enabled agents. Both may discuss; only a named/selected
+        # recipient gets an execution-capable owner turn.
+        broadcast = (meeting["kind"] != "proof" and not target
+                     and not MENTION.search(event["body"] or "")
+                     and not addressed_names(db, room, event["body"]))
         for principal, display, disposition in notes:
             db.execute("INSERT OR IGNORE INTO routing_notes VALUES(?,?,?,?,?,?)",
                        (room, event["seq"], principal, display, disposition, now()))
         # R3a: a new human message supersedes the unclaimed turns of an earlier round.
         db.execute("""UPDATE turns SET state='superseded',disposition='newer_message',updated=? WHERE room=? AND
             state='queued' AND id IN (SELECT turn_id FROM turn_order)""", (now(), room))
-        previous = None
-        for position, principal in enumerate(addressees):
-            ttl = TURN_TTL_S * (position + 1) if len(addressees) > 1 else TURN_TTL_S
-            turn = self.queue_turn(db, room, principal, event["seq"], 1, ttl=ttl)
-            if len(addressees) > 1:
-                db.execute("INSERT INTO turn_order VALUES(?,?,?,?,?,NULL,NULL)",
-                           (turn, event["id"], position, previous, now() if previous is None else None))
-            previous = turn
+        for principal in addressees:
+            turn = self.queue_turn(db, room, principal, event["seq"], 1)
+            # Each addressed participant may answer as soon as its connector is
+            # ready. Nobody is permanently first or held behind an absent peer.
+            db.execute("INSERT INTO turn_order VALUES(?,?,?,?,?,NULL,NULL)",
+                       (turn, event["id"], 0, None, now()))
+            if broadcast and os.environ.get("RECORDS_DISCUSSION_HANDOFFS") == "1":
+                db.execute("INSERT INTO discussion_turns VALUES(?,?)", (turn, event["id"]))
         db.execute("UPDATE meetings SET cursor=MAX(cursor,?),updated=? WHERE room=?", (event["seq"], now(), room))
 
+    def handoff(self, db, turn, event, recipient):
+        """One conversational follow-up per owner round, in the reply transaction.
+
+        This cannot invite a participant, authorize work, restart an uncertain
+        attempt, or outlive a newer owner message. Delivery retries replay the
+        whole append receipt, so never enqueue a second response.
+        """
+        if os.environ.get("RECORDS_DISCUSSION_HANDOFFS") != "1":
+            return
+        if not recipient and "?" in event["body"]:
+            names = addressed_names(db, turn["room"], event["body"])
+            recipient = names[0] if len(names) == 1 else None
+        if not isinstance(recipient, str) or event["kind"] != "message":
+            return
+        order = db.execute("SELECT * FROM turn_order WHERE turn_id=?", (turn["id"],)).fetchone()
+        if not order or order["position"] != 0:
+            return
+        if db.execute("SELECT 1 FROM round_handoffs WHERE round_id=?", (order["round_id"],)).fetchone():
+            return
+        if db.execute("SELECT 1 FROM events WHERE room=? AND seq>? AND actor='robert' AND kind='message' AND origin IS NULL",
+                      (turn["room"], turn["trigger_seq"])).fetchone():
+            return
+        principal = self.resolve(db, turn["room"], recipient)
+        if not principal or principal == turn["addressee"] or not accepted_member(db, turn["room"], principal):
+            return
+        # A peer may ask any accepted teammate a discussion-only question.
+        # The reply cannot execute the original owner's action.
+        prior = db.execute("SELECT t.* FROM turns t JOIN turn_order o ON o.turn_id=t.id WHERE o.round_id=? AND t.addressee=? ORDER BY t.attempt DESC LIMIT 1",
+                           (order["round_id"], principal)).fetchone()
+        if prior and prior["state"] not in ("queued", "claimed", "running", "committed"):
+            return
+        # A discussion never replaces the recipient's initial owner request.
+        # It has a distinct turn and a dependency even if the initial turn has
+        # not been claimed yet. queue_turn must not supersede that original.
+        dependency = prior or turn
+        response = self.queue_turn(db, turn["room"], principal, turn["trigger_seq"], prior["attempt"] + 1 if prior else 1, supersede=False)
+        db.execute("INSERT INTO turn_order VALUES(?,?,?,?,?,NULL,NULL)",
+                   (response, order["round_id"], 1, dependency["id"], now() if not prior or prior["state"] == "committed" else None))
+        db.execute("INSERT INTO round_handoffs VALUES(?,?,?,?,?,?)",
+                   (order["round_id"], turn["id"], event["id"], principal, response, now()))
+        db.execute("INSERT INTO discussion_turns VALUES(?,?)", (response, event["id"]))
+
     def route(self, db, room, body, target, meeting):
-        names = []
-        if target:
-            names.append(target)
-        for match in MENTION.finditer(body or ""):
-            names.append(match.group(1))
+        # A deliberate picker selection is authoritative, including when the
+        # message mentions somebody else. Plain names only route a vocative,
+        # never an incidental mention such as "MC is unavailable".
+        names = list(target) if isinstance(target, list) else [target] if target else []
         if not names:
-            names = [meeting["facilitator"]] if meeting["facilitator"] else []
+            names = [m.group(1) for m in MENTION.finditer(body or "")]
+        if not names:
+            names = addressed_names(db, room, body)
+        if not names:
+            names = (["everyone"] if meeting["kind"] != "proof" and os.environ.get("RECORDS_DISCUSSION_HANDOFFS") == "1"
+                     else [meeting["facilitator"] or "mc"])
         expanded = []
         for raw in names:
             if raw.lower() in EVERYONE:
@@ -433,10 +509,11 @@ class Meetings:
                 return row["id"]
         return None
 
-    def queue_turn(self, db, room, principal, trigger_seq, attempt, ttl=TURN_TTL_S):
+    def queue_turn(self, db, room, principal, trigger_seq, attempt, ttl=TURN_TTL_S, *, supersede=True):
         """At most one queued turn per (room, addressee): a newer one supersedes it."""
-        db.execute("UPDATE turns SET state='superseded',disposition='newer_message',updated=? "
-                   "WHERE room=? AND addressee=? AND state='queued'", (now(), room, principal))
+        if supersede:
+            db.execute("UPDATE turns SET state='superseded',disposition='newer_message',updated=? "
+                       "WHERE room=? AND addressee=? AND state='queued'", (now(), room, principal))
         turn = str(uuid4())
         db.execute("""INSERT INTO turns(id,room,generation,addressee,trigger_seq,attempt,state,created,expires,updated)
             VALUES(?,?,?,?,?,?,'queued',?,?,?)""", (turn, room, generation(db, room), principal, trigger_seq,
@@ -647,6 +724,8 @@ class Meetings:
             t = turn_row(db, turn_id)
             if t["room"] != room:
                 raise Problem("Turn not found", 404)
+            if db.execute("SELECT 1 FROM discussion_turns WHERE turn_id=?", (turn_id,)).fetchone():
+                raise Problem("Send a new message to continue this discussion; its original action cannot be retried", 409)
             if t["state"] not in ("failed", "cancelled", "expired", "uncertain"):
                 raise Problem("Only a failed, cancelled, expired or unresolved turn can be tried again", 409)
             if t["state"] == "uncertain" and t["disposition"] not in RECONCILED:
@@ -849,6 +928,13 @@ class Meetings:
 
     def admission(self, db, t):
         """Dispatch admission D (spec §3.4). The failing check's name, or None."""
+        if db.execute("SELECT 1 FROM discussion_turns WHERE turn_id=?", (t["id"],)).fetchone():
+            if db.execute("SELECT 1 FROM events WHERE room=? AND seq>? AND actor='robert' AND kind='message' AND origin IS NULL", (t["room"], t["trigger_seq"])).fetchone():
+                return "newer_message"
+        if db.execute("SELECT 1 FROM round_handoffs WHERE response_turn=?", (t["id"],)).fetchone():
+            dependency = db.execute("SELECT p.state FROM turn_order o JOIN turns p ON p.id=o.waits_for WHERE o.turn_id=?", (t["id"],)).fetchone()
+            if not dependency or dependency["state"] != "committed":
+                return "discussion_predecessor_unanswered"
         from domains.records.approved_agents import turn_allowed
         if not turn_allowed(db,t): return "not_approved"
         room = db.execute("SELECT state FROM rooms WHERE id=?", (t["room"],)).fetchone()
@@ -942,6 +1028,8 @@ class Meetings:
             for row in db.execute(f"SELECT * FROM turns WHERE state='queued' AND addressee IN ({marks}) "
                                   "ORDER BY created", names).fetchall():
                 t = dict(row)
+                if db.execute("SELECT 1 FROM discussion_turns WHERE turn_id=?", (t["id"],)).fetchone() and payload.get("discussion_protocol") != 1:
+                    continue  # older workers must never receive discussion turns
                 if db.execute(f"SELECT 1 FROM turns WHERE room=? AND addressee=? AND state IN "
                               f"({','.join('?' * len(ACTIVE))})", (t["room"], t["addressee"], *ACTIVE)).fetchone():
                     continue    # the slot is busy; this one waits
@@ -962,6 +1050,13 @@ class Meetings:
             return {"turn": None}
 
     def claim_refusal(self, db, t):
+        if db.execute("SELECT 1 FROM discussion_turns WHERE turn_id=?", (t["id"],)).fetchone():
+            if db.execute("SELECT 1 FROM events WHERE room=? AND seq>? AND actor='robert' AND kind='message' AND origin IS NULL", (t["room"], t["trigger_seq"])).fetchone():
+                return "newer_message"
+        if db.execute("SELECT 1 FROM round_handoffs WHERE response_turn=?", (t["id"],)).fetchone():
+            dependency = db.execute("SELECT p.state FROM turn_order o JOIN turns p ON p.id=o.waits_for WHERE o.turn_id=?", (t["id"],)).fetchone()
+            if not dependency or dependency["state"] != "committed":
+                return "discussion_predecessor_unanswered"
         from domains.records.approved_agents import turn_allowed
         if not turn_allowed(db,t): return "not_approved"
         room = db.execute("SELECT state FROM rooms WHERE id=?", (t["room"],)).fetchone()
@@ -1035,7 +1130,9 @@ class Meetings:
             (t["room"],)) if r["id"] in accepted]
         from domains.records.approved_agents import approval
         approved = approval(db, t["addressee"])
-        return {"standing_brief": {"text": approved["brief"], "hash": approved["brief_hash"]} if approved else None,
+        handoff = db.execute("SELECT h.question_event,e.actor,e.body FROM discussion_turns h JOIN events e ON e.id=h.question_event WHERE h.turn_id=?", (t["id"],)).fetchone()
+        return {"discussion_reply": dict(handoff) if handoff else None,
+                "standing_brief": {"text": approved["brief"], "hash": approved["brief_hash"]} if approved else None,
                 "attachment_delivery": "metadata_only",
                 "brief": {"title": session["title"], "purpose": session["purpose"],
                           "facilitator": meeting["facilitator"] if meeting else None,

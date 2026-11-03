@@ -57,10 +57,11 @@ def fingerprint(turn):
 
 class Worker:
     def __init__(self, records_work, records_mc, relay, journal, teammate="mc", alive_path=None, clock=time,
-                 agent_id="mc-agent", runtime="OpenClaw"):
+                 agent_id="mc-agent", runtime="OpenClaw", discussion=None):
         self.work = records_work
         self.mc = records_mc
         self.relay = relay
+        self.discussion = discussion
         self.journal = journal
         self.teammate = teammate
         self.alive_path = Path(alive_path) if alive_path else None
@@ -104,7 +105,7 @@ class Worker:
         if not self._housekeeper and self.clock.time() - self._last_hosted >= HOSTED_EVERY_S:
             self._last_hosted = self.clock.time()
             self.housekeeping()
-        status, data = self.work.call("POST", "/turns/claim", {"addressees": [self.teammate]}, key=str(uuid4()))
+        status, data = self.work.call("POST", "/turns/claim", {"addressees": [self.teammate], "discussion_protocol": 1}, key=str(uuid4()))
         if status != 200 or not data.get("turn"):
             return False
         turn = data["turn"]
@@ -186,6 +187,10 @@ class Worker:
 
     def infer(self, turn):
         """Run the relay turn; on success journal the generated content and return it."""
+        transport = self.discussion if turn.get("discussion_reply") else self.relay
+        if transport is None:
+            self.fail(turn, turn["claim_id"], "failed", "discussion_not_configured")
+            return None
         first = True
         while True:
             ok, state, asked_at = self.admitted(turn, first)
@@ -197,19 +202,19 @@ class Worker:
             first = False
             if time.monotonic() - asked_at >= DISPATCH_FRESH_S:
                 continue                     # the answer is too old to send on: ask again
-            if getattr(self.relay, "delivers_files", False):
+            if getattr(transport, "delivers_files", False):
                 turn["attachment_delivery"] = "verified_copies_in_request"      # a managed agent is handed verified copies of the room's files with this turn's request
-            messages = adapter.messages(turn)
+            messages = [] if turn.get("discussion_reply") else adapter.messages(turn)
             if time.monotonic() - asked_at >= DISPATCH_FRESH_S:
                 continue
             correlation = uuid4().hex
-            watcher = Watcher(self, turn, correlation)
+            watcher = Watcher(self, turn, correlation, transport)
             watcher.start()
             if time.monotonic() - asked_at >= DISPATCH_FRESH_S:
                 watcher.stop()               # the send boundary: still fresh, or ask again (review F4)
                 continue
             try:
-                result = self.relay.stream(messages, adapter.user_key(turn["room"], turn["id"]), correlation, turn=turn,
+                result = transport.stream(messages, adapter.user_key(turn["room"], turn["id"]), correlation, turn=turn,
                                            admit=lambda: self.spawn_admission(turn))
             finally:
                 watcher.stop()
@@ -226,7 +231,7 @@ class Worker:
                 log(event="dispatch_refused", turn=turn["id"], state=result.get("state"))
                 return None
             if watcher.cancelled:
-                if getattr(self.relay, 'stop_guaranteed', True) is False:
+                if getattr(transport, 'stop_guaranteed', True) is False:
                     self.fail(turn, turn['claim_id'], 'uncertain', 'stop_unconfirmed')
                     return None
                 if result["text"]:
@@ -242,7 +247,7 @@ class Worker:
                 continue
             if result["outcome"] == "done" and result["text"].strip():
                 payload = adapter.reply_payload(turn, result["text"], correlation, result["usage"],
-                                                agent_id=self.agent_id, runtime=self.runtime)
+                                                agent_id=self.agent_id, runtime=getattr(transport, "runtime", self.runtime))
                 self.journal.generated(journal_key(turn["id"]), payload)
                 return payload
             if result["outcome"] == "done":
@@ -341,9 +346,10 @@ class Watcher(threading.Thread):
     """Keeps the lease alive while a relay request is open and serves stop
     requests at once (ROOMS_R1.md §3.8). A plain heartbeat never authorizes."""
 
-    def __init__(self, worker, turn, correlation):
+    def __init__(self, worker, turn, correlation, transport=None):
         super().__init__(daemon=True)
         self.worker, self.turn, self.correlation = worker, turn, correlation
+        self.transport = transport or worker.relay
         self._halt = threading.Event()      # not "_stop": Thread.join() calls Thread._stop() (review F1)
         self.cancelled = False
 
@@ -356,12 +362,12 @@ class Watcher(threading.Thread):
                 continue
             if status in (401,403):
                 self.cancelled = True
-                self.worker.relay.stop(self.correlation)
+                self.transport.stop(self.correlation)
                 return
             state = (data or {}).get("state")
             if state == "cancel_requested" or state in ("cancelled", "uncertain", "abandoned", "expired"):
                 self.cancelled = True
-                self.worker.relay.stop(self.correlation)
+                self.transport.stop(self.correlation)
                 return
 
     def stop(self):
@@ -372,6 +378,7 @@ class Watcher(threading.Thread):
 def main():
     env = os.environ
     from .transport_profile import admit_runtime
+    from .discussion import Discussion
     records_url, profile = admit_runtime(env, kind="worker")
     journal_dir = Path(env.get("ROOMS_JOURNAL_DIR", "/journal"))
     journal_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -383,7 +390,8 @@ def main():
                     Records(records_url, lambda: read_secret(secrets / "mc.token"), profile=profile),
                     Relay(relay_url, read_secret(Path(env.get("MC_RELAY_TOKEN_FILE", str(secrets / "mc-relay.token"))))),
                     TurnJournal(journal_dir / "turns"), teammate=env.get("ROOMS_TEAMMATE", "mc"),
-                    alive_path="/tmp/rooms-worker/alive")
+                    alive_path="/tmp/rooms-worker/alive",
+                    discussion=Discussion("mc", secrets / "discussion-gateway.token"))
     log(event="started", records=records_url, relay=relay_url, teammate=worker.teammate)
     worker.start_housekeeping()
     while True:

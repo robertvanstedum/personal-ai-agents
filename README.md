@@ -403,6 +403,10 @@ refresh can be added without overwriting this one.
 
 ## More detail
 
+- [Guildhall meeting harness](ARCHITECTURE.md#guildhall-meeting-harness) describes
+  the developing interaction model for natural conversations with distinct agents:
+  addressing, turn-taking, owner corrections and bounded action authority. Its
+  standalone spec includes acceptance checks; implementation is still in progress.
 - [docs/README.md](docs/README.md) is the guide to working references and
   historical context, including the April 2026 platform vision.
 - [docs/journal/](docs/journal/) is the tracked home for the public build narrative.
