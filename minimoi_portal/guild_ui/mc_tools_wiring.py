@@ -225,7 +225,7 @@ def _github_post(cfg, path, payload, key, http_post, *, ok=201):
     from .mc_context import API
     token = _private_token(cfg["issues_token_file"])
     if token is None:
-        return "refused", None
+        return "refused_credential_unavailable", None
     send = http_post or (requests.post if ok == 201 else requests.patch)
     try:
         r = send(f"{API}/repos/{_repo(cfg)}{path}", json=payload, timeout=(5, 15), allow_redirects=False,
@@ -234,7 +234,8 @@ def _github_post(cfg, path, payload, key, http_post, *, ok=201):
     except Exception:
         return "unknown", None
     if r.status_code in (401, 403, 404, 410, 422):
-        return "refused", None
+        # Retain a bounded diagnostic, never provider response text or credentials.
+        return "refused_http_" + str(r.status_code), None
     try:
         value = r.json().get(key) if r.status_code == ok else None
     except ValueError:
@@ -250,6 +251,7 @@ def issue_filer(cfg, *, http_post=None):
     def file_issue(title, body, labels=()):
         payload = {"title": title, "body": body, **({"labels": list(labels)} if labels else {})}
         return _github_post(cfg, "/issues", payload, "number", http_post)
+    file_issue.repo = _repo(cfg)
     return file_issue
 
 

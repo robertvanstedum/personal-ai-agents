@@ -51,7 +51,7 @@ def test_open_question_is_independent_and_explicit_picker_wins(pair):
 
 def test_cos_question_does_not_replace_unclaimed_mc_turn(pair):
     e = pair
-    e.say('@mc @cos\nCoS can you ask a question for MC and MC answer please')
+    e.say('@mc @cos\nMC, please listen. CoS can you ask a question for MC and MC answer please')
     original = next(r for r in rows(e) if r['addressee']=='mc')
     e.cos_relay.script=[{'outcome':'done','text':'MC, what would you check before calling production healthy?'}]
     assert e.cos.run_once()
@@ -141,7 +141,7 @@ def test_courtesy_question_cannot_steal_other_teammates_followup(pair, mc_first)
     e = pair
     e.cos.discussion = FakeRelay()
     e.say('@mc @cos\nso, I see you both, so I think that means we have a meeting. '
-          'CoS can you ask a question for MC and MC answer please')
+          'MC, please listen. CoS can you ask a question for MC and MC answer please')
     e.relay.script = [{'outcome': 'done', 'text': 'CoS, over to you—what would you like to ask me?'}]
     e.cos_relay.script = [{'outcome': 'done', 'text': 'MC, what would you check before calling production healthy?'}]
     first, second = (e.worker, e.cos) if mc_first else (e.cos, e.worker)
@@ -187,3 +187,74 @@ def test_legacy_handoff_is_imported_before_new_recipient_is_scheduled(pair):
     assert e.worker.run_once()
     assert len(e.discussion.calls) == 1
     assert not e.worker.run_once()
+
+
+@pytest.mark.parametrize('body,target', [
+    ('Let me try this again on automatic and not everyone. MC, can you create the issue I mentioned,', None),
+    ('MC you here and working on it?', None),
+    ('@mc @cos\nMC, create an issue for me.', ['mc', 'cos']),
+    ('MC, create an issue for me.', ['mc', 'cos']),
+])
+def test_named_owner_requests_keep_tools_and_do_not_wake_other_agent(pair, body, target):
+    payload = {'body': body}
+    if target is not None: payload['recipients'] = target
+    assert pair.call('POST', f'/rooms/{pair.room}/events', payload)[0] == 201
+    queued = [r for r in rows(pair) if r['state'] == 'queued']
+    assert [r['addressee'] for r in queued] == ['mc']
+    with pair.store.connect() as db:
+        assert not db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?', (queued[0]['id'],)).fetchone()
+    assert pair.worker.run_once()
+    assert len(pair.relay.calls) == 1 and not pair.discussion.calls
+    assert not pair.cos.run_once()
+
+
+@pytest.mark.parametrize('body', ['He said "MC, create an issue."', '> MC, create an issue.', '```\nMC, create an issue.\n```', 'MC is unavailable. File an issue.'])
+def test_quoted_or_incidental_names_do_not_enable_tools(pair, body):
+    pair.say(body)
+    with pair.store.connect() as db:
+        turns = [r for r in rows(pair) if r['state'] == 'queued']
+        assert turns
+        assert all(db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?', (r['id'],)).fetchone() for r in turns)
+
+
+def test_wait_persists_for_broadcast_and_peer_then_direct_request_resumes(pair):
+    e = pair
+    assert e.call('POST', f'/rooms/{e.room}/events', {'body':'CoS, just wait, this was addressed to MC.', 'recipients':['mc','cos']})[0] == 201
+    assert not [r for r in rows(e) if r['state']=='queued']
+    e.say('Any thoughts?')
+    assert [r['addressee'] for r in rows(e) if r['state']=='queued'] == ['mc']
+    e.say('MC, what do you think?')
+    e.relay.script=[{'outcome':'done','text':'CoS, what would you check?'}]
+    assert e.worker.run_once()
+    assert not e.cos.run_once()
+    e.say('CoS, can you report now?')
+    assert [r['addressee'] for r in rows(e) if r['state']=='queued'] == ['cos']
+    assert e.cos.run_once()
+
+
+def test_explicit_mention_resumes_waiting_agent(pair):
+    pair.say('CoS, wait.')
+    pair.say('@cos investigate this')
+    assert [r['addressee'] for r in rows(pair) if r['state']=='queued'] == ['cos']
+    assert pair.cos.run_once()
+
+
+def test_proof_never_uses_discussion_transport(pair):
+    with pair.store.connect() as db:
+        db.execute("UPDATE meetings SET kind='proof' WHERE room=?", (pair.room,))
+    pair.say('Please introduce yourself.')
+    with pair.store.connect() as db:
+        queued=[r for r in rows(pair) if r['state']=='queued']
+        assert queued
+        assert not any(db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?', (r['id'],)).fetchone() for r in queued)
+
+
+def test_wait_fences_claimed_turn_through_normal_cancel_path(pair):
+    pair.say('CoS, can you check this?')
+    status,data=pair.cos.work.call('POST','/turns/claim', {'addressees':['cos'],'discussion_protocol':1},key='wait-claimed')
+    assert status==200 and data['turn']
+    pair.say('CoS, wait.')
+    with pair.store.connect() as db:
+        assert db.execute('SELECT state FROM turns WHERE id=?',(data['turn']['id'],)).fetchone()['state']=='cancel_requested'
+    assert pair.cos.infer(data['turn']) is None
+    assert not pair.cos_relay.calls

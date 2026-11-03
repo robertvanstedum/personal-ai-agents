@@ -28,7 +28,7 @@ const $ = s => { if (!nodes.has(s)) nodes.set(s, new Element('div')); return nod
 const $$ = s => $('[data-rm-to]').find(s);
 const context = vm.createContext({ $, $$, el: (t,a,v) => new Element(t,a,v), assert, console, URLSearchParams, announce(){},
   window: { location: { search: "" }, setInterval(){}, clearInterval(){}, clearTimeout(){}, sessionStorage: {getItem(k){return storage.get(k)},setItem(k,v){storage.set(k,v)},removeItem(k){storage.delete(k)}} },
-  document: { addEventListener(){} }, newKey: () => 'test-key' });
+  document: { addEventListener(){}, createTextNode(text){return new Element("#text",{},text);} }, newKey: () => 'test-key' });
 const source = fs.readFileSync(process.argv[1], 'utf8').replace(/^import .*;$/mg,'').replace(/^export /mg,'');
 vm.runInContext(source, context);
 vm.runInContext(String.raw`
@@ -49,6 +49,9 @@ vm.runInContext(String.raw`
   assert.equal(eventBody({...event,actor_kind:'human'}).textContent,capture);
   const incomplete='Hello\n'+String.fromCharCode(96).repeat(3)+'capture\nunfinished';
   assert.equal(eventBody({...event,body:incomplete}).textContent,incomplete);
+  const approval = eventBody({actor_kind:'agent',body:'Approve at https://dev.minimoi.ai/guild-next/guild/build?c=c-123'});
+  assert.equal(approval.children[1].tag,'a');
+  assert.equal(approval.children[1].attrs.href,'https://dev.minimoi.ai/guild-next/guild/build?c=c-123');
   current = 'room-a'; room = { id: current, state: 'active', events: [{actor:'robert',kind:'message',seq:20}] };
   page = { storage_ns: 'test' };
   const people = ['codex','claude-code','mc'];
@@ -62,7 +65,7 @@ vm.runInContext(String.raw`
   click({'data-rm-to-chip':'codex'}); click({'data-rm-to-chip':'claude-code'});
   assert.equal(targets.size,2);
   $('[data-rm-input]').value = 'Confirm attendance'; await send();
-  assert.equal(sent.body.body,'@codex @claude-code\nConfirm attendance');
+  assert.equal(sent.body.body,'Confirm attendance');
   assert.equal(sent.body.target,undefined);
   assert.deepEqual([...sent.body.recipients],['codex','claude-code']);
   click({'data-rm-to-chip':'codex'});

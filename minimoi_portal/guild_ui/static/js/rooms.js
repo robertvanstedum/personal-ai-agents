@@ -50,6 +50,21 @@ const expandedLearning = new Set(); // presentation only, retained across room r
 const IMAGE = /\.(png|jpe?g|gif|webp)$/i;
 const TEXT = /\.(txt|md|csv|json)$/i;
 
+function bodyParagraph(text) {
+  const p = el('p', {class:'rm-body'});
+  const links = /https:\/\/github\.com\/robertvanstedum\/personal-ai-agents\/issues\/\d+|(?:https:\/\/dev\.minimoi\.ai)?\/guild-next\/guild\/build\?c=[A-Za-z0-9_-]+/g;
+  const matches = [...text.matchAll(links)];
+  if (!matches.length) return el('p', {class:'rm-body'}, text);
+  let offset = 0;
+  for (const match of matches) {
+    p.append(document.createTextNode(text.slice(offset, match.index)));
+    p.append(el('a', {href:match[0], rel:'noopener noreferrer'}, match[0].includes('/guild-next/') ? 'Open Craft request and approval' : match[0]));
+    offset = match.index + match[0].length;
+  }
+  p.append(document.createTextNode(text.slice(offset)));
+  return p;
+}
+
 function h(tag, attrs, ...kids) { const n = el(tag, attrs); n.append(...kids); return n; }
 function keyFor(name) { if (!keys.has(name)) keys.set(name, newKey()); return keys.get(name); }
 const store = {
@@ -215,22 +230,22 @@ function eventBody(e) {
   if (e.actor_kind !== 'agent') return el('p', { class: 'rm-body' }, body);
   const pattern = /^```capture[^\S\r\n]*\r?\n[\s\S]*?^```[^\S\r\n]*(?=\r?$)(?:\r?\n(?:\r?\n)?Captured \d+ correction pairs?[^\S\r\n]*(?=\r?$))?/gm;
   const pieces = [...body.matchAll(pattern)];
-  if (!pieces.length) return el('p', { class: 'rm-body' }, body);
+  if (!pieces.length) return bodyParagraph(body);
   const content = el('div', { class: 'rm-message-content' });
   let offset = 0;
   for (const match of pieces) {
-    if (match.index > offset) content.append(el('p', { class: 'rm-body' }, body.slice(offset, match.index)));
+    if (match.index > offset) content.append(bodyParagraph(body.slice(offset, match.index)));
     const key = `${current}:${e.id}:${match.index}`;
     const details = el('details', { class: 'rm-learning' });
     details.open = expandedLearning.has(key);
-    details.append(el('summary', {}, 'Learning note'), el('p', { class: 'rm-body' }, match[0]));
+    details.append(el('summary', {}, 'Learning note'), bodyParagraph(match[0]));
     details.addEventListener('toggle', () => {
       if (details.open) expandedLearning.add(key); else expandedLearning.delete(key);
     });
     content.append(details);
     offset = match.index + match[0].length;
   }
-  if (offset < body.length) content.append(el('p', { class: 'rm-body' }, body.slice(offset)));
+  if (offset < body.length) content.append(bodyParagraph(body.slice(offset)));
   return content;
 }
 
@@ -394,7 +409,6 @@ async function send() {
   if (selected.length === 1) body.target = selected[0].id;
   else if (selected.length > 1) {
     body.recipients = selected.map((p) => p.id);
-    body.body = `${selected.map((p) => `@${p.id}`).join(' ')}\n${text}`;
   }
   const name = `msg:${destination}:${JSON.stringify(body)}`;
   sendingRooms.add(destination);
@@ -833,9 +847,11 @@ function failureText(who, reason, principal) {
 
 function turnLine(t) {
   const who = labelOf(t.addressee);
+  const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(t.created)) / 1000));
+  const elapsed = Number.isFinite(seconds) ? ` (${seconds}s since your message)` : '';
   switch (t.state) {
-    case 'queued': return { text: `${who} will answer next…`, wait: true };
-    case 'claimed': case 'running': case 'recovering': return { text: `${who} is answering…`, wait: true };
+    case 'queued': return { text: `${who} is queued${elapsed}…`, wait: true };
+    case 'claimed': case 'running': case 'recovering': return { text: `${who} is working${elapsed}…`, wait: true };
     case 'cancel_requested': return { text: `Stopping ${who}'s reply…`, wait: true };
     case 'uncertain':
       if (t.disposition === 'stop_unconfirmed') return { text: failureText(who, t.disposition, t.addressee), actions: ['continue'] };
@@ -861,6 +877,7 @@ function turnLine(t) {
 function noteLine(n) {
   const f = facilitator();
   const alt = f ? ` ${labelOf(f)} can answer — say @${handle(f)} or leave it unaddressed.` : '';
+  if (n.disposition === 'waiting_by_request') return `${n.label} is waiting as requested. Address them directly to resume.`;
   if (n.disposition === 'no_connector') return `Not sent to ${n.label}: not available in Rooms yet.${alt}`;
   if (n.disposition === 'not_proven') return `Not sent to ${n.label}: not yet proven. Use Invite → Prove first.`;
   if (n.disposition === 'not_invited') return `Not sent to ${n.label}: not invited to this meeting. Use Invite.`;
@@ -876,11 +893,11 @@ function renderTurns() {
     const latest = new Map();
     for (const t of meeting.turns) if (!latest.has(t.addressee)) latest.set(t.addressee, t);   // newest first
     // An unresolved earlier turn stays visible beside newer ones (review F9).
-    const shown = [...meeting.turns.filter((t) => t.state === 'uncertain' && latest.get(t.addressee) !== t), ...latest.values()];
+    const shown = [...meeting.turns.filter((t) => ['uncertain', 'claimed', 'running', 'recovering'].includes(t.state) && latest.get(t.addressee) !== t), ...latest.values()];
     for (const t of shown) {
       if (dismissed.has(t.id)) continue;
       // Round turns are summed up in the round line; only those needing an action get their own.
-      if (round && round.ids.has(t.id) && !['uncertain', 'failed', 'expired', 'cancelled'].includes(t.state)) continue;
+      if (round && round.ids.has(t.id) && !['queued', 'claimed', 'running', 'recovering', 'uncertain', 'failed', 'expired', 'cancelled'].includes(t.state)) continue;
       const line = turnLine(t);
       if (line) rows.push({ ...line, turn: t });
     }

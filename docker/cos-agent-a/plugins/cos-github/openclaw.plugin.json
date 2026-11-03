@@ -1,0 +1,1 @@
+{"id":"cos-github","name":"CoS GitHub issues","description":"Bounded public GitHub issue reads, no credentials or writes.","configSchema":{"type":"object","additionalProperties":false},"activation":{"onStartup":true},"contracts":{"tools":["cos_github_issues"]}}

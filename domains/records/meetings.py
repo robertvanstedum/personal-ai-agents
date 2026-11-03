@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS teammates(
     max_turn_s INTEGER NOT NULL,max_turns_per_meeting INTEGER NOT NULL,max_concurrency INTEGER NOT NULL,
     billing_route TEXT NOT NULL,auto_accept INTEGER NOT NULL,rsvp_timeout_s INTEGER NOT NULL,
     proven_at TEXT,last_failure_at TEXT,created TEXT NOT NULL,updated TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS meeting_waits(
+    room TEXT NOT NULL,actor TEXT NOT NULL,updated TEXT NOT NULL,PRIMARY KEY(room,actor));
 CREATE TABLE IF NOT EXISTS routing_notes(
     room TEXT NOT NULL,trigger_seq INTEGER NOT NULL,addressee TEXT NOT NULL,label TEXT NOT NULL,
     disposition TEXT NOT NULL,created TEXT NOT NULL,PRIMARY KEY(room,trigger_seq,addressee));
@@ -236,22 +238,52 @@ def sweep(db):
     round_progress(db, moment)
 
 
-def addressed_names(db, room, text):
-    """Conservative vocatives from the directory; explicit @names work anywhere.
+def owner_prose(text, *, strip_prefix=True):
+    """Ignore quoted/code examples and old UI-generated mention-only prefixes."""
+    text = re.sub(r"```[\s\S]*?(?:```|$)", "", text or "")
+    text = re.sub(r'`[^`]*`|"[^"\n]*"|“[^”\n]*”', "", text)
+    lines = [line for line in text.splitlines() if not line.lstrip().startswith(">")]
+    while strip_prefix and len(lines) > 1 and re.fullmatch(r"\s*(?:@[A-Za-z][A-Za-z0-9_-]*\s*)+", lines[0]):
+        lines.pop(0)
+    return "\n".join(lines).strip()
 
-    Recognizes "CoS, ...", "Hello MC", "CoS please ...", and "..., MC?".
-    The absence of a confident address leaves an ordinary message to the room.
-    """
+
+def addressed_names(db, room, text):
+    """Recognize a directory vocative at a sentence boundary, never a mention in prose."""
     names = []
-    text = (text or "").strip()
+    text = owner_prose(text)
     for row in db.execute("SELECT p.id,p.label FROM principals p JOIN members m ON m.actor=p.id WHERE m.room=? AND p.id<>'robert'", (room,)):
         for alias in {row["id"], row["label"], row["label"].replace(" ", "")}:
             name = re.escape(alias)
-            if (re.search(r"^(?:(?:hi|hello|hey|thanks|thank you)[, ]+)?" + name + r"(?:\s*[,;:!?]|\s+(?:please|can you|could you|would you|will you|what|how|are you|do you)\b|$)", text, re.I)
+            if (re.search(r"(?:^|[.!?\n]\s+)(?:(?:hi|hello|hey|thanks|thank you)[, ]+)?@?" + name + r"(?:\s*[,;:!?]|\s+(?:please|just wait|wait|pause|stop|resume|you here|you there|can you|could you|would you|will you|what|how|are you|do you)\b|$)", text, re.I)
                     or re.search(r",\s*" + name + r"\s*[?!.]*$", text, re.I)):
                 names.append(row["id"])
                 break
     return names
+
+
+def waiting_names(db, room, text):
+    text = owner_prose(text)
+    waiting = []
+    for row in db.execute("SELECT p.id,p.label FROM principals p JOIN members m ON m.actor=p.id WHERE m.room=? AND p.id<>'robert'", (room,)):
+        for alias in {row["id"], row["label"]}:
+            if re.search(r"(?:^|[.!?\n]\s+)@?" + re.escape(alias) + r"\s*[,;:]?\s*(?:please\s+)?(?:just\s+)?(?:wait|pause|stop|stay quiet|hold off)\b", text, re.I):
+                waiting.append(row["id"])
+                break
+    return waiting
+
+
+def routing_names(db, room, body, target, meeting):
+    selected = list(target) if isinstance(target, list) else [target] if target else []
+    spoken = addressed_names(db, room, body)
+    # A single deliberate selection remains authoritative. Everyone is an
+    # audience, not permission for an unaddressed teammate to interrupt.
+    specific = len(selected) == 1 and selected[0].lower() not in EVERYONE
+    explicit = selected if specific else spoken or selected or [m.group(1) for m in MENTION.finditer(owner_prose(body, strip_prefix=False))]
+    broadcast = meeting["kind"] != "proof" and not explicit
+    names = explicit or (["everyone"] if meeting["kind"] != "proof" and os.environ.get("RECORDS_DISCUSSION_HANDOFFS") == "1"
+                         else [meeting["facilitator"] or "mc"])
+    return names, broadcast
 
 
 def round_ready(db, turn_id):
@@ -401,9 +433,7 @@ class Meetings:
         # Unaddressed room discussion must not duplicate an external action in
         # two tool-enabled agents. Both may discuss; only a named/selected
         # recipient gets an execution-capable owner turn.
-        broadcast = (meeting["kind"] != "proof" and not target
-                     and not MENTION.search(event["body"] or "")
-                     and not addressed_names(db, room, event["body"]))
+        _, broadcast = routing_names(db, room, event["body"], target, meeting)
         for principal, display, disposition in notes:
             db.execute("INSERT OR IGNORE INTO routing_notes VALUES(?,?,?,?,?,?)",
                        (room, event["seq"], principal, display, disposition, now()))
@@ -443,6 +473,8 @@ class Meetings:
         principal = self.resolve(db, turn["room"], recipient)
         if not principal or principal == turn["addressee"] or not accepted_member(db, turn["room"], principal):
             return
+        if db.execute("SELECT 1 FROM meeting_waits WHERE room=? AND actor=?", (turn["room"], principal)).fetchone():
+            return
         if db.execute("SELECT 1 FROM round_peer_replies WHERE round_id=? AND recipient=?",
                       (order["round_id"], principal)).fetchone():
             return
@@ -468,17 +500,22 @@ class Meetings:
         db.execute("INSERT INTO discussion_turns VALUES(?,?)", (response, event["id"]))
 
     def route(self, db, room, body, target, meeting):
-        # A deliberate picker selection is authoritative, including when the
-        # message mentions somebody else. Plain names only route a vocative,
-        # never an incidental mention such as "MC is unavailable".
-        names = list(target) if isinstance(target, list) else [target] if target else []
-        if not names:
-            names = [m.group(1) for m in MENTION.finditer(body or "")]
-        if not names:
-            names = addressed_names(db, room, body)
-        if not names:
-            names = (["everyone"] if meeting["kind"] != "proof" and os.environ.get("RECORDS_DISCUSSION_HANDOFFS") == "1"
-                     else [meeting["facilitator"] or "mc"])
+        names, _ = routing_names(db, room, body, target, meeting)
+        waits = waiting_names(db, room, body)
+        for actor in waits:
+            for pending in db.execute("SELECT id,state FROM turns WHERE room=? AND addressee=? AND state IN ('queued','claimed','running','recovering')", (room, actor)).fetchall():
+                set_turn(db, pending['id'], state='cancelled' if pending['state'] == 'queued' else 'cancel_requested', disposition='paused_by_owner')
+            db.execute("INSERT INTO meeting_waits VALUES(?,?,?) ON CONFLICT(room,actor) DO UPDATE SET updated=excluded.updated", (room, actor, now()))
+        # A fresh direct request resumes a waiting teammate. A broadcast does not.
+        explicit = addressed_names(db, room, body) or [m.group(1) for m in MENTION.finditer(owner_prose(body))]
+        if isinstance(target, str) and target.lower() not in EVERYONE:
+            explicit = [target]
+        elif isinstance(target, list) and len(target) == 1 and target[0].lower() not in EVERYONE:
+            explicit = target
+        for raw in explicit:
+            actor = self.resolve(db, room, raw)
+            if actor not in waits:
+                db.execute("DELETE FROM meeting_waits WHERE room=? AND actor=?", (room, actor))
         expanded = []
         for raw in names:
             if raw.lower() in EVERYONE:
@@ -497,6 +534,9 @@ class Meetings:
                 continue
             seen.add(key)
             if principal == "robert":
+                continue
+            if principal and db.execute("SELECT 1 FROM meeting_waits WHERE room=? AND actor=?", (room, principal)).fetchone():
+                notes.append((principal, label_of(db, principal), "waiting_by_request"))
                 continue
             if not principal or not card(db, principal) or not hosted(db, principal):
                 notes.append((key, label_of(db, principal) if principal else raw, "no_connector"))

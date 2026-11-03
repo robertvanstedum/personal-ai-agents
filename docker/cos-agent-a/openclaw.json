@@ -58,14 +58,16 @@
       "cos-bounded-search",
       "mc-cutoff-delivery",
       "cos-actions",
-      "cos-board"
+      "cos-board",
+      "cos-github"
     ],
     "load": {
       "paths": [
         "/opt/minimoi/openclaw-plugins/cos-bounded-search",
         "/opt/minimoi/openclaw-plugins/mc-cutoff-delivery",
         "/opt/minimoi/openclaw-plugins/cos-actions",
-        "/opt/minimoi/openclaw-plugins/cos-board"
+        "/opt/minimoi/openclaw-plugins/cos-board",
+        "/opt/minimoi/openclaw-plugins/cos-github"
       ]
     },
     "entries": {
@@ -86,6 +88,9 @@
         "enabled": true
       },
       "cos-board": {
+        "enabled": true
+      },
+      "cos-github": {
         "enabled": true
       }
     }
@@ -167,7 +172,8 @@
             "pdf",
             "view_image",
             "cos_actions",
-            "cos_board"
+            "cos_board",
+            "cos_github_issues"
           ],
           "deny": [
             "gateway"

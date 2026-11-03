@@ -184,7 +184,7 @@ class IssueFilerTests(unittest.TestCase):
         self.assertEqual(url, "https://api.github.com/repos/robertvanstedum/personal-ai-agents/issues")
         self.assertEqual(kw["json"], {"title": "t", "body": "b"})
         self.assertFalse(kw["allow_redirects"])
-        self.assertEqual(self.filer(422)[0]("t", "b"), ("refused", None))
+        self.assertEqual(self.filer(422)[0]("t", "b"), ("refused_http_422", None))
         self.assertEqual(self.filer(500)[0]("t", "b"), ("unknown", None))
         self.assertEqual(self.filer(201, {"number": "123"})[0]("t", "b"), ("unknown", None))
         self.assertEqual(self.filer(0, raises=True)[0]("t", "b"), ("unknown", None))

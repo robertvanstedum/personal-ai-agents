@@ -81,6 +81,17 @@ def spoken_named(text):
     return f"{m.group('word')} P-{re.sub(r'[^a-z0-9]', '', m.group('code'), flags=re.I).upper()}"
 
 
+def github_refusal(state):
+    return {
+        "refused_http_401": " GitHub returned HTTP 401: the credential was not accepted.",
+        "refused_http_403": " GitHub returned HTTP 403: this request was forbidden; check issue-write permission and repository policy.",
+        "refused_http_404": " GitHub returned HTTP 404: the repository or issue was not visible to this credential.",
+        "refused_http_410": " GitHub returned HTTP 410: this resource is no longer available.",
+        "refused_http_422": " GitHub returned HTTP 422: the submitted issue fields were rejected.",
+        "refused_credential_unavailable": " The configured issue credential was unavailable; no request was sent.",
+    }.get(state, " The write service did not retain a more specific failure reason.")
+
+
 def issue_text(payload, operation_id):
     """A DRAFT change record (RFC) under the change-control standard §4, not a work order (review P2-6): refs, change
     and environment only; names and emails stay in the database. It authorizes nothing by itself."""
@@ -568,9 +579,12 @@ class ToolProposals:
                           "repository's issues first.", "unknown")
         receipt = self._finish(effect, "issue_create", {"state": state, "issue": number}, state == "created")
         if state != "created":
-            return _reply("GitHub refused the new issue, so nothing was opened.", "failed",
+            return _reply("The new issue was not opened." + github_refusal(state), "failed",
                           receipt_id=str(receipt["receipt_id"]))
-        return _reply(f"Issue #{number} opened: {title}", "verified", issue=number, receipt_id=str(receipt["receipt_id"]))
+        from .github import DEFAULT_REPO
+        repo = getattr(self.file_issue, 'repo', DEFAULT_REPO)
+        url = f"https://github.com/{repo}/issues/{number}"
+        return _reply(f"Issue #{number} opened: {title}\n{url}", "verified", issue=number, url=url, receipt_id=str(receipt["receipt_id"]))
 
     def _run_update(self, effect, p):
         number = p["payload"]["number"]
@@ -585,7 +599,7 @@ class ToolProposals:
                           "check the issue first.", "unknown")
         receipt = self._finish(effect, "issue_update", {"state": state, "issue": number}, state == "created")
         if state != "created":
-            return _reply(f"GitHub refused the change to issue #{number}, so nothing was changed.", "failed",
+            return _reply(f"Issue #{number} was not changed." + github_refusal(state), "failed",
                           receipt_id=str(receipt["receipt_id"]))
         return _reply(f"Issue #{number} updated.", "verified", issue=number, receipt_id=str(receipt["receipt_id"]))
 
@@ -603,7 +617,7 @@ class ToolProposals:
         receipt = self._finish(effect, "issue_comment", {"state": state, "issue": number, "comment": comment_id},
                                state == "created")
         if state != "created":
-            return _reply(f"The comment on issue #{number} could not be posted, so nothing was added.", "failed",
+            return _reply(f"The comment on issue #{number} was not posted." + github_refusal(state), "failed",
                           receipt_id=str(receipt["receipt_id"]))
         return _reply(f"Comment added to issue #{number}.", "verified", issue=number,
                       receipt_id=str(receipt["receipt_id"]))

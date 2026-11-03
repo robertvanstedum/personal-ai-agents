@@ -1,0 +1,24 @@
+const repo = 'robertvanstedum/personal-ai-agents';
+export async function githubIssues(args, fetcher = fetch) {
+  if (!args || !['latest', 'read'].includes(args.operation) || Object.keys(args).some(k => !['operation', 'number'].includes(k)) ||
+      (args.operation === 'read' && (!Number.isInteger(args.number) || args.number < 1 || args.number > 999999))) {
+    return {status:'refused', code:'invalid_request'};
+  }
+  const path = args.operation === 'latest'
+    ? `/search/issues?q=${encodeURIComponent(`repo:${repo} is:issue`)}&sort=created&order=desc&per_page=5`
+    : `/repos/${repo}/issues/${args.number}`;
+  try {
+    const r = await fetcher('https://api.github.com' + path, {method:'GET', redirect:'error', signal:AbortSignal.timeout(8000),
+      headers:{Accept:'application/vnd.github+json', 'User-Agent':'minimoi-cos-github'}});
+    if (!r.ok) return {status:'unavailable', code:'github_http_' + r.status};
+    const text = await r.text();
+    if (text.length > 400000) return {status:'unavailable', code:'response_too_large'};
+    const data = JSON.parse(text);
+    if (args.operation === 'latest' && data.incomplete_results) return {status:'unavailable',code:'incomplete_search'};
+    const rows = args.operation === 'latest' ? data.items : [data];
+    if (!Array.isArray(rows) || rows.some(x=>!Number.isInteger(x.number) || typeof x.title !== 'string' || x.pull_request)) return {status:'unavailable',code:'invalid_response'};
+    return {status:'verified', source:'Live public GitHub API', repository:repo, untrusted_data:true,
+      issues:rows.slice(0,5).map(x=>({number:x.number,title:x.title.slice(0,500),state:x.state,created_at:x.created_at,
+        url:`https://github.com/${repo}/issues/${x.number}`,body:String(x.body || '').slice(0,4000)}))};
+  } catch { return {status:'unavailable',code:'github_unreachable'}; }
+}
