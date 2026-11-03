@@ -11,22 +11,22 @@ body.mm-chat .mm-chat-rail{display:none;flex:0 0 52px;width:52px;box-sizing:bord
 body.mm-chat[data-chat-sidebar=rail] .mm-chat-rail,body.mm-chat[data-chat-sidebar=drawer] .mm-chat-rail{display:flex}
 body.mm-chat .mm-chat-rail button{width:36px;height:36px;padding:0;border:1px solid var(--chat-line);border-radius:9px;background:transparent;color:#454b43;font:22px var(--chat-sans);cursor:pointer}
 .mm-chat-scrim:not([hidden]),body.mm-chat .cos-scrim:not([hidden]){display:block;position:fixed;inset:0;background:#0004;z-index:94}
-body.mm-chat :is(.fh-head,.rm-list-head,.cos-list-top){display:flex;flex-wrap:nowrap;gap:8px;align-items:center;padding:0 4px;margin:0 0 10px}
-body.mm-chat :is(.fh-new,.rm-new,#conversation-new){flex:1;min-width:0;height:36px;min-height:36px;padding:0 12px;border:1px solid #bfc8c0;border-radius:9px;background:#fcfaf5;text-align:left;font:600 14px var(--chat-sans)}
-body.mm-chat :is(.fh-close,.rm-list-close,.cos-list-fold){display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;height:36px;min-height:36px;padding:0;border:0;background:transparent;font:22px var(--chat-sans)}
-body.mm-chat :is(.mm-chat-search,.cos-list-search){box-sizing:border-box;width:100%;height:36px;min-height:36px;margin:0 0 12px;padding:6px 10px;background:#fcfaf5;border:1px solid var(--chat-line);border-radius:8px;font:14px var(--chat-sans)}
+body.mm-chat .mm-sidebar-tools{display:flex;flex-wrap:nowrap;gap:8px;align-items:center;padding:0 4px;margin:0 0 10px}
+body.mm-chat .mm-sidebar-tools .mm-sidebar-new{display:flex;align-items:center;gap:8px;color:var(--chat-ink);flex:1;min-width:0;height:36px;min-height:36px;padding:0 12px;border:1px solid #bfc8c0;border-radius:9px;background:#fcfaf5;text-align:left;font:600 14px var(--chat-sans)}
+body.mm-chat .mm-sidebar-tools .mm-sidebar-fold{color:var(--chat-soft);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;min-width:28px;height:36px;min-height:36px;padding:0;border:0;background:transparent;font:22px var(--chat-sans)}
+body.mm-chat .mm-chat-search{box-sizing:border-box;width:100%;height:36px;min-height:36px;margin:0 0 12px;padding:6px 10px;background:#fcfaf5;border:1px solid var(--chat-line);border-radius:8px;font:14px var(--chat-sans)}
 body.mm-chat :is(.fh-link,.cos-list-row,[data-rm-room]){font:400 14px/1.4 var(--chat-sans);padding:11px 10px;min-height:46px;box-sizing:border-box}
 body.mm-chat :is(.fh-meta,.cos-list-row .w,.rm-row-w){font:400 12px/1.4 var(--chat-sans);white-space:nowrap}
 body.mm-chat :is(.fh-title,.cos-list-row .t,.rm-row-t){font-family:var(--chat-sans);font-size:14px;line-height:1.4;min-width:0}
 body.mm-chat :is(.cos-list-row[aria-current=true],.fh-row[aria-current=true] .fh-title,[data-rm-room][aria-current=true] .rm-row-t){font-weight:600}
 body.mm-chat :is(.conv-head,.mc-floorbar.mc-hero,.rm-head){height:52px;min-height:52px;box-sizing:border-box;padding:0 24px;background:var(--chat-paper)}
-body.mm-chat :is(.conv-title,.hero-name .fb-title,.rm-title){font:600 16px/1.4 var(--chat-sans)}
+body.mm-chat :is(.conv-title,.hero-name .fb-title,.rm-title),body.gu.mm-chat[data-page=floor] .hero-name .fb-title,body.gu.mm-chat[data-page=rooms] .rm-title{font:600 16px/1.4 var(--chat-sans)}
 body.mm-chat :is(#chat-log,.mc-thread,.rm-thread){font:400 16px/1.55 var(--chat-sans)}
 body.mm-chat :is(.msg-text,.rm-body,.bubble){font-family:var(--chat-sans);font-size:16px;line-height:1.55}
-body.mm-chat :is(.msg-meta,.rm-meta){font-family:var(--chat-sans);font-size:13px;line-height:1.4}
+body.mm-chat :is(.msg-meta,.rm-meta),body.gu.mm-chat[data-page=rooms] .rm-meta{font-family:var(--chat-sans);font-size:13px;line-height:1.4}
 body.mm-chat :is(.msg-meta time,.msg-meta [data-iso],.rm-meta time){font-size:12px}
 body.mm-chat :is(.input-row,.mc-composer,.rm-composer){background:#fff;border:1px solid #cbd4c8;border-radius:17px;padding:12px 13px 10px}
-body.mm-chat :is(.input-row textarea,.mc-composer textarea,.rm-composer textarea){font:400 16px/1.5 var(--chat-sans)}
+body.mm-chat :is(.input-row textarea,.mc-composer textarea,.rm-composer textarea),body.founders-cos.mm-chat #send-input{font:400 16px/1.5 var(--chat-sans)}
 body.mm-chat :is(#btn-send,[data-mc-send],[data-rm-send]){height:38px;min-height:38px;padding:0 20px;font:600 16px var(--chat-sans);border-radius:24px}
 body.mm-chat :is(.craft-hero-copy .eyebrow,.confer-hello .eyebrow){font:600 12px/1.4 var(--chat-sans);letter-spacing:.16em;color:#a94316}
 body.gu.mm-chat[data-page=floor] .gu-layout{grid-template-columns:var(--chat-column) minmax(0,1fr);grid-template-areas:none}
@@ -59,17 +59,23 @@ body.founders-cos.mm-chat[data-chat-sidebar=drawer] .cos-list{display:flex;posit
 body.gu.mm-chat[data-page=floor][data-chat-sidebar=rail] .floor-history,
 body.gu.mm-chat[data-page=rooms][data-chat-sidebar=rail] .rm .rm-list{display:none}
 
-/* Domain headers share one visual contract, including non-chat pages. */
-body.founders-cos .cos-header,body.gu .guild-nav{background:var(--chat-header);border-bottom:1px solid var(--chat-line);font-family:var(--chat-sans)}
-body.founders-cos .cos-mark-name,body.gu .workshop-row .workshop-name{font:600 17px/1 var(--chat-serif);color:#153f33}
-body.founders-cos .tab-btn,body.gu .workshop-row a.subnav-link,body.gu .workshop-other>a{font-family:var(--chat-sans);font-size:15px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--chat-soft)}
-body.founders-cos .tab-btn.active,body.gu .workshop-row a.subnav-active{font-weight:600;color:var(--chat-ink);border-bottom-color:var(--chat-accent)}
+/* Shared components own the header and controls. Legacy classes below are
+   adapters for page routing and mobile placement, not a second visual theme. */
+body:is(.founders-cos,.gu) .mm-domain-header{background:var(--chat-header);border-bottom:1px solid var(--chat-line);font-family:var(--chat-sans)}
+body:is(.founders-cos,.gu) .mm-domain-row{display:flex;align-items:center;box-sizing:border-box}
+body:is(.founders-cos,.gu) .mm-domain-tabs{align-items:center}
+body:is(.founders-cos,.gu) .mm-domain-gap{flex:1}
+body:is(.founders-cos,.gu) .mm-domain-row :is(.cos-mark-name,.workshop-name){font:600 17px/1 var(--chat-serif);color:#153f33}
+body:is(.founders-cos,.gu) .mm-domain-tabs .mm-domain-tab{font-family:var(--chat-sans);font-size:15px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--chat-soft)}
+body:is(.founders-cos,.gu) .mm-domain-tabs .mm-domain-tab.active{font-weight:600;color:var(--chat-ink);border-bottom-color:var(--chat-accent)}
 @media(min-width:701px){
- body.founders-cos .header-nav,body.gu .workshop-row{height:46px;min-height:46px;padding:0 18px;gap:22px;box-sizing:border-box}
- body.founders-cos .tab-nav,body.gu .workshop-primary,body.gu .workshop-other{align-items:center;gap:22px}
- body.founders-cos .tab-btn,body.gu .workshop-row a.subnav-link,body.gu .workshop-other>a{display:inline-flex;align-items:center;height:46px;min-height:46px;box-sizing:border-box;padding:0;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;line-height:normal}
- body.founders-cos .tab-btn.active,body.gu .workshop-row a.subnav-active{border-bottom-color:var(--chat-accent)}
+ body:is(.founders-cos,.gu) .mm-domain-row{height:46px;min-height:46px;padding:0 18px;gap:22px}
+ body:is(.founders-cos,.gu) .mm-domain-tabs{gap:22px}
+ body:is(.founders-cos,.gu) .mm-domain-tabs .mm-domain-tab{display:inline-flex;align-items:center;height:46px;min-height:46px;box-sizing:border-box;padding:0;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;line-height:normal}
+ body:is(.founders-cos,.gu) .mm-domain-tabs .mm-domain-tab.active{border-bottom-color:var(--chat-accent)}
 }
+body.mm-chat .mm-sidebar-plus{color:var(--chat-accent);font-size:22px;line-height:1;vertical-align:-1px;margin-right:0}
+body.mm-chat .mm-sidebar-heading{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 /* Equal list gutters and weights; only the selected chat is emphasized. */
 body.mm-chat :is(.cos-list-rows,.fh-list,.rm-rooms){padding:0 8px 12px;margin:0;gap:0;list-style:none}
 body.mm-chat :is(.fh-title,.cos-list-row .t,.rm-row-t){font-weight:400;color:var(--chat-soft)}
@@ -80,3 +86,9 @@ body.gu.mm-chat[data-page=floor] .mc-composer [data-mc-voice-btn]{display:inline
 body.gu.mm-chat[data-page=floor] [data-mc-voice-btn] .mc-voice-icon{width:22px;height:22px}
 body.gu.mm-chat[data-page=floor] [data-mc-voice-btn] [data-voice-label]{display:none}
 body.gu.mm-chat[data-page=floor] [data-mc-voice-btn][aria-pressed=true]{background:#153f33;color:white}
+
+body.mm-chat .mm-chat-search:focus-visible{outline:2px solid var(--chat-accent);outline-offset:2px}
+body.mm-chat .mm-sidebar-new:hover:not(:disabled){background:#fff}
+
+/* The old full-bleed welcome card must fit the shared chat column. */
+body.gu.mm-chat[data-page=floor] .mc-thread>.craft-hero{width:100%;max-width:100%;box-sizing:border-box}

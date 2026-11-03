@@ -1,0 +1,41 @@
+{# Shared presentation only. Domain adapters supply routes and existing event hooks;
+   these components never own agent requests, permissions or conversation data. #}
+{% macro assets(version) -%}
+<link rel="stylesheet" href="/founders-ui/fonts.css?v={{ version }}">
+<link rel="stylesheet" href="/founders-ui/chat.css?v={{ version }}">
+<script src="/founders-ui/chat-sidebar.js?v={{ version }}"></script>
+<script type="module" src="/founders-ui/mobile-nav.js?v={{ version }}"></script>
+<script defer src="/founders-ui/notices.js?v={{ version }}"></script>
+{%- endmacro %}
+
+{% macro tabs(items, classes, label) -%}
+<nav class="mm-domain-tabs {{ classes }}" aria-label="{{ label }}">
+  {% for item in items %}
+  {% if item.href is defined %}
+  <a href="{{ item.href }}" class="mm-domain-tab {{ item.classes|default('') }}{% if item.active %} active{% endif %}"{{ item.attrs|default({})|xmlattr }}{% if item.active %} aria-current="page"{% endif %}>{{ item.label }}</a>
+  {% else %}
+  <button type="button" class="mm-domain-tab {{ item.classes|default('') }}"{{ item.attrs|default({})|xmlattr }}>{{ item.label }}</button>
+  {% endif %}
+  {% endfor %}
+</nav>
+{%- endmacro %}
+
+{% macro domain_header(row_class, primary, primary_class, label, secondary=[]) -%}
+<div class="mm-domain-row {{ row_class }}">
+  {{ caller('brand') }}
+  {{ tabs(primary, primary_class, label) }}
+  {% if secondary %}{{ tabs(secondary, 'workshop-other mm-domain-secondary', 'More in ' ~ label) }}{% endif %}
+  <span class="mm-domain-gap {{ 'header-gap' if row_class == 'header-nav' else 'workshop-gap' }}" aria-hidden="true"></span>
+  {{ caller('tools') }}
+</div>
+{%- endmacro %}
+
+{% macro sidebar_tools(new_attrs, fold_attrs, search_attrs, head_class='', heading='', heading_id='', heading_class='', new_label='New chat', disabled=false) -%}
+<div class="mm-sidebar-tools {{ head_class }}">
+  {% if heading %}<h2 class="{{ heading_class }} mm-sidebar-heading" id="{{ heading_id }}">{{ heading }}</h2>{% endif %}
+  <button type="button" class="mm-sidebar-new {{ new_attrs.get('class','') }}"
+    {% for key,value in new_attrs.items() if key != 'class' %} {{ {key:value}|xmlattr }}{% endfor %}{% if disabled %} disabled{% endif %} aria-label="{{ new_label }}" title="{{ new_label }}"><span class="mm-sidebar-plus" aria-hidden="true">＋</span> {{ new_label }}</button>
+  <button type="button" class="mm-sidebar-fold {{ fold_attrs.get('class','') }}"{% for key,value in fold_attrs.items() if key != 'class' %}{{ {key:value}|xmlattr }}{% endfor %} aria-label="Collapse chat list" title="Collapse chat list">‹</button>
+</div>
+<input type="search" class="mm-chat-search {{ search_attrs.get('class','') }}"{% for key,value in search_attrs.items() if key != 'class' %}{{ {key:value}|xmlattr }}{% endfor %} placeholder="Search" autocomplete="off">
+{%- endmacro %}

@@ -81,13 +81,7 @@
 .founders-cos .cos-rail-new{color:var(--accent);font-size:18px}
 .founders-cos .cos-list{flex:0 0 248px;width:248px;display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line);background:var(--paper-mid)}
 .founders-cos .cos-places{display:none}
-.founders-cos .cos-list-top{display:flex;align-items:center;gap:8px;padding:12px 12px 8px}
-.founders-cos #conversation-new{flex:1;display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;border:1px solid var(--line-strong);border-radius:8px;background:var(--card);color:var(--ink);font:600 14px var(--sans);text-align:left}
-.founders-cos #conversation-new span{color:var(--accent);font-size:17px;font-weight:600}
-.founders-cos .cos-list-fold{width:30px;height:30px;flex:none;display:inline-grid;place-items:center;padding:0;border:0;border-radius:7px;background:none;color:var(--soft);font-size:17px}
 .founders-cos .cos-list-fold:hover,.founders-cos .cos-rail-btn:hover{background:var(--card)}
-.founders-cos .cos-list-search{margin:0 12px 8px;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:14px var(--sans);outline:none}
-.founders-cos .cos-list-search:focus{border-color:var(--line-strong)}
 .founders-cos .cos-list-rows{flex:1;min-height:0;overflow:auto;padding:0 8px 12px}
 .founders-cos .cos-list-group{font:600 11px var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--mute);margin:12px 8px 4px}
 .founders-cos .cos-list-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;width:100%;padding:7px 10px;border:0;border-radius:7px;background:none;color:var(--soft);font:14px var(--sans);text-align:left;white-space:nowrap}
@@ -97,8 +91,6 @@
 .founders-cos .cos-list-row[aria-current=true]{background:var(--card);color:var(--ink);font-weight:600;box-shadow:inset 2px 0 0 var(--accent)}
 .founders-cos .cos-list-empty{margin:12px 10px;color:var(--mute);font-size:13.5px}
 .founders-cos .cos-list-more{margin:0 12px 12px;padding:6px;border:0;background:none;color:var(--soft);font-size:13.5px;text-align:left}
-.founders-cos[data-drawer=open] .cos-list-fold{font-size:0}
-.founders-cos[data-drawer=open] .cos-list-fold::before{content:"✕";font-size:15px}
 .founders-cos .cos-scrim{position:absolute;inset:0;z-index:20;background:rgba(11,44,36,.28)}
 .founders-cos[data-list=folded] .cos-list,.founders-cos.show-cos-board .cos-list{display:none}
 .founders-cos[data-list=folded] .cos-rail,.founders-cos.show-cos-board .cos-rail{display:flex}
@@ -327,7 +319,6 @@ body.gu[data-page=floor] .floor-history{padding:12px 8px;border-right:1px solid 
 body.gu[data-page=floor] .fh-head{padding:0 4px}
 body.gu[data-page=floor] .fh-h{font:600 11px var(--r6-sans);letter-spacing:.1em;text-transform:uppercase;color:var(--r6-mute);margin:4px 0 8px}
 @media(min-width:900px){body.gu[data-page=floor] .fh-head{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}
-body.gu[data-page=floor] .fh-new{display:flex;align-items:center;gap:8px;height:34px;min-height:34px;margin:0 4px 12px;width:calc(100% - 8px);padding:0 12px;border:1px solid var(--r6-line-strong);border-radius:8px;background:var(--r6-card);color:var(--r6-ink);font:600 14px var(--r6-sans)}
 body.gu[data-page=floor] .fh-new:hover{background:#fff}
 body.gu[data-page=floor] .fh-plus{color:var(--r6-accent);font-size:17px}
 body.gu[data-page=floor] .fh-list{gap:1px}

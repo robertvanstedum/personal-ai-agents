@@ -1,4 +1,5 @@
 {% extends 'guild_floor/_base.html' %}
+{% from 'founders_ui/components.html' import sidebar_tools %}
 {% from 'guild_floor/_macros.html' import shape %}
 {% block title %}Chat · Guild{% endblock %}
 {#
@@ -13,12 +14,7 @@
 <aside class="floor-history" id="floor-history" aria-labelledby="fh-h" data-floor-history>
   {# Phone (Review 06): the mini-moi strip and the workshop row move in here, above the list (mobile-nav.js). #}
   <div class="phone-places" data-phone-places></div>
-  <div class="fh-head">
-    <h2 class="fh-h" id="fh-h">{{ 'Archive' if conv_view == 'archived' else 'Chats' }}</h2>
-    <button type="button" class="fh-new" data-conv-new><span class="fh-plus" aria-hidden="true">＋</span> New chat</button>
-    <button type="button" class="fb-btn fh-close" data-history-close aria-label="Collapse chat list" title="Collapse chat list">‹</button>
-  </div>
-  <input type="search" class="mm-chat-search" data-chat-filter placeholder="Search" aria-label="Search chats on this page" autocomplete="off">
+    {{ sidebar_tools({'class':'fh-new','data-conv-new':''}, {'class':'fb-btn fh-close','data-history-close':''}, {'data-chat-filter':'','aria-label':'Search chats on this page'}, head_class='fh-head', heading=('Archive' if conv_view == 'archived' else 'Chats'), heading_id='fh-h', heading_class='fh-h') }}
   {# Server-owned, file-first (conversations.py): newest first, pinned on top. Housekeeping never calls a model. #}
   {% if conv_list.state != 'ok' %}
   <p class="fh-unavailable small" data-conv-unavailable>Conversations unavailable — treat as unknown.</p>

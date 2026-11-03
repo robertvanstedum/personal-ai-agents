@@ -1,4 +1,5 @@
 {% extends 'guild_floor/_base.html' %}
+{% from 'founders_ui/components.html' import sidebar_tools %}
 {#
   Rooms (Guild 1.1 slice 4, spec §6; the v4 rooms look): group chat first,
   on Records. Every call goes to Records through the dev bridge at
@@ -18,12 +19,7 @@
   <aside class="rm-list" data-rm-list-pane aria-labelledby="rm-list-h">
     {# Phone: the mini-moi strip and the workshop row move in here, above the list (mobile-nav.js). #}
     <div class="phone-places" data-phone-places></div>
-    <div class="rm-list-head">
-      <h2 class="rm-list-h" id="rm-list-h">Meeting history</h2>
-      <button type="button" class="rm-btn rm-new" data-rm-new{% if rooms_cfg.state != 'on' or rooms_cfg.access == 'no_access' %} disabled{% endif %}><span class="rm-plus" aria-hidden="true">＋</span> New meeting</button>
-      <button type="button" class="rm-btn rm-list-close" data-rm-list-close aria-label="Collapse meeting list" title="Collapse meeting list">‹</button>
-    </div>
-    <input type="search" class="mm-chat-search" data-chat-filter placeholder="Search" aria-label="Search meetings" autocomplete="off">
+    {{ sidebar_tools({'class':'rm-btn rm-new','data-rm-new':''}, {'class':'rm-btn rm-list-close','data-rm-list-close':''}, {'data-chat-filter':'','aria-label':'Search meetings'}, head_class='rm-list-head', heading='Meeting history', heading_id='rm-list-h', heading_class='rm-list-h', new_label='New meeting', disabled=(rooms_cfg.state != 'on' or rooms_cfg.access == 'no_access')) }}
     <label class="small rm-view-label" for="rm-archive-view">Meetings</label>
     <select id="rm-archive-view" class="rm-btn rm-view" data-rm-archive-view aria-label="Show active or archived conversations"><option value="active">Active</option><option value="archived">Archived</option></select>
     <ol class="rm-rooms" data-rm-list></ol>

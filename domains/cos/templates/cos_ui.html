@@ -1,3 +1,4 @@
+{% from 'founders_ui/components.html' import domain_header, sidebar_tools %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,28 +8,32 @@
   <link rel="stylesheet" href="/static/cos.css?v=20261101-review06b">
   <link rel="stylesheet" href="/founders-ui/founders.css?v={{ founders_ui_version }}">
   <link rel="stylesheet" href="/static/calm-confer.css?v=20261102-notices1">
-  <link rel="stylesheet" href="/founders-ui/fonts.css?v={{ founders_ui_version }}">
-  <link rel="stylesheet" href="/founders-ui/chat.css?v={{ founders_ui_version }}">
-  <script src="/founders-ui/chat-sidebar.js?v={{ founders_ui_version }}"></script>
-  <script type="module" src="/founders-ui/mobile-nav.js?v={{ founders_ui_version }}"></script>
-  <script defer src="/founders-ui/notices.js?v={{ founders_ui_version }}"></script>
+  {% from 'founders_ui/components.html' import assets %}
+  {{ assets(founders_ui_version) }}
   <script defer src="/founders-ui/message-text.js?v=20261102-1"></script>
 </head>
 <body class="founders-cos" data-picture="shown" data-mc-panel data-list="open">
 
   {# Review 06 (Option A): one app row under the strip. On a phone it is the one bar: ☰, the mark with the chat's title,
      MC's face and ✎; the tabs and Guildhall move into ☰'s list (mobile-nav.js), ⋯ joins the bar. #}
-  <header class="cos-header"><div class="header-nav">
+  <header class="cos-header mm-domain-header">
+  {% call(slot) domain_header('header-nav', [
+    {'label':'Confer','classes':'tab-btn','attrs':{'data-tab':'confer'}},
+    {'label':'Board','classes':'tab-btn','attrs':{'data-tab':'records'}},
+    {'label':'Actions','classes':'tab-btn','attrs':{'data-tab':'flight'}}
+  ], 'tab-nav', 'Chief of Staff') %}
+  {% if slot == 'brand' %}
     <button class="phone-only cos-bar-btn" type="button" data-list-open aria-label="Open the conversation list" title="Conversations">☰</button>
     {# CoS's mark: the Marcus Aurelius bust. srcset is relative (the portal rewrites src, not srcset), like the voice imports. #}
     <button type="button" class="cos-mark" id="cos-home" aria-label="Chief of Staff home" title="Return to the welcome page"><img src="/static/photos/cos-mark-96.webp" srcset="../static/photos/cos-mark-96.webp 96w, ../static/photos/cos-mark-256.webp 256w" sizes="30px" width="28" height="28" alt=""><span class="cos-mark-words"><span class="cos-mark-name">Chief of Staff</span><span class="phone-only cos-mark-title" data-conv-title-short>New chat</span></span></button>
-    <nav class="tab-nav" aria-label="Chief of Staff"><button class="tab-btn" data-tab="confer">Confer</button><button class="tab-btn" data-tab="records">Board</button><button class="tab-btn" data-tab="flight">Actions</button></nav>
-    <span class="header-gap"></span>
+  {% elif slot == 'tools' %}
     <a class="founder-link" data-portal-link href="/guild-next/guild/rooms">Guildhall ↗</a>
     <a class="founder-link" id="mc-page" href="#" aria-label="MC ↗"><img class="mc-face" data-mc-face alt=""><span class="mc-page-words">MC ↗</span></a>
     <button class="phone-only cos-bar-btn cos-bar-new" type="button" data-new-conversation aria-label="New chat" title="New chat">✎</button>
     <span class="phone-tools" data-phone-tools></span>
-  </div></header>
+  {% endif %}
+  {% endcall %}
+  </header>
   <dialog id="history-sheet"><header><h2>History</h2><button type="button" data-close-sheet>Close</button></header><button id="history-new" type="button" data-new-conversation>+ New chat</button><div id="history-list"></div><button id="history-more" hidden>More conversations</button></dialog>
   <dialog id="files-sheet"><header><h2>Files</h2><button type="button" data-close-sheet>Close</button></header><div id="files-sheet-content"></div></dialog>
   <div class="cos-body">
@@ -42,8 +47,11 @@
   <div class="cos-scrim" data-list-close hidden></div>
   <aside class="cos-list" aria-label="Conversations">
     <div class="cos-places" data-mobile-more><div data-mobile-menu></div></div>
-    <div class="cos-list-top"><button id="conversation-new" type="button" data-new-conversation aria-label="New chat" title="Start a new chat"><span aria-hidden="true">＋</span> New chat</button><button class="cos-list-fold" type="button" data-list-fold aria-label="Fold the list" title="Fold the list">‹</button></div>
-    <input class="cos-list-search" type="search" data-list-filter placeholder="Search" aria-label="Search conversations" autocomplete="off">
+    {{ sidebar_tools(
+      {'id':'conversation-new','data-new-conversation':''},
+      {'class':'cos-list-fold','data-list-fold':''},
+      {'class':'cos-list-search','data-list-filter':'','aria-label':'Search conversations'},
+      head_class='cos-list-top') }}
     <div class="cos-list-rows" data-conv-list></div>
     <button class="cos-list-more" type="button" data-conv-list-more hidden>More conversations</button>
   </aside>

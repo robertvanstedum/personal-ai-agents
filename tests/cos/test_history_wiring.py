@@ -284,7 +284,8 @@ def test_founders_page_serves_shared_style_and_canonical_history_client(cos):
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert 'cos-history-ui.js' in html and 'founders-ui/founders.css' in html
-    assert 'data-tab="rooms"' in html and 'data-tab="records"' in html
+    assert all(f'data-tab="{tab}"' in html for tab in ("confer", "records", "flight"))
+    assert 'data-portal-link href="/guild-next/guild/rooms"' in html
     import re
     revision = re.search(r'founders.css\?v=([a-f0-9]{16})',html).group(1)
     assert f'cos-history-ui.js?v={revision}' in html
