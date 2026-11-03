@@ -418,17 +418,17 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False):
     question with nothing waiting is told so on every provider (_stray). Otherwise (xAI answers by itself, live probes)
     the model's own reply to a request is the question: it asks briefly and naturally."""
     name, short = person["name"], person["short"]
-    request = f"When {owner} asks for a note, a post-it, or something only {short} can do (current facts, project state, " \
+    request = f"When {owner} asks for a note, a post-it, or work that needs your runtime (current facts, project state, " \
               "files, jobs, any work), "
     ask = (request + "never ask him to confirm it yourself and never say it is done: the app hears what he asks for, and "
            "when it has heard a request its own instruction tells you to ask him; ask then, briefly and naturally, "
-           "without repeating or describing his words. Otherwise say briefly that you cannot do that yourself on this "
-           "voice. " if page_asks else
+           "without repeating or describing his words. Otherwise explain briefly that the request has not reached your work runtime yet. " if page_asks else
            request + "ask him briefly and naturally to confirm, for example \"Sure, just confirm for me\" or \"Shall I "
            "go ahead?\", without repeating or describing his words, and never say it is done. ")
-    return (f"On this voice path you cannot act, whatever any other rule here says: you have no tools, and you cannot ask "
-            f"{name}'s own turn, save a note, put up a post-it or do any work yourself. The app does that, and only after "
-            f"{owner} confirms. " + ask +
+    return (f"You are {name} ({short}) speaking by voice, not a separate companion. The realtime speech model has no "
+            "tools and must never execute work directly. The app routes a confirmed request to your work runtime, "
+            f"and only after {owner} confirms. This is an internal execution boundary: speak as {short} throughout, "
+            "including when the app returns your result. Never pretend a lookup or action happened without that result. " + ask +
             "Never repeat his words back unless he asks you to. Outcomes come from the app: say only what it gives "
             f"you, and never claim anything was checked, saved or done otherwise. When {owner} says he is done "
             f"(\"we're done\"), answer only: \"{SUMMARY_PROMPT}\" A negated or questioned one (\"we're not done\") is "
@@ -1259,7 +1259,7 @@ class DirectSessions(ConsultLedger):
     def decide(self, sid, item, text, hear, tool_of):
         """His finished owner item ``item`` (its words ``text``), decided once (a retried post gets the first answer): the
         decision dict (DECISIONS), "cap" when the session's decisions are used up, or None (no such session here).
-        ``hear(text, waiting kind)`` is the grammar fast path, then the understanding call: it runs outside the ledger's
+        ``hear(text, waiting kind, pending words)`` is the grammar fast path, then the understanding call: it runs outside the ledger's
         lock, under this session's own utterance lock, so one item is decided at a time and a Check tap is never held up.
         ``tool_of(kind, text)`` names the dispatch a new waiting action will use. An item older than one already decided
         changes nothing (chat)."""
@@ -1280,8 +1280,10 @@ class DirectSessions(ConsultLedger):
                     return dict(meta["decided"][item])
                 slot = self._live(meta, self.clock())
                 waiting = slot["kind"] if slot else None
+                pending = slot["text"] if slot else None
+                pending_id = slot["action_id"] if slot else None
             try:
-                label = hear(text, waiting)
+                label = hear(text, waiting, pending)
             except Exception:                                   # the hearing failed: chat, which acts on nothing
                 log.exception("%s direct voice: an utterance was not heard; chat", self._adapter.person["domain"])
                 label = "chat"
@@ -1289,6 +1291,14 @@ class DirectSessions(ConsultLedger):
                 meta = self._meta.get(sid)
                 if meta is None:
                     return None
+                # A slow contextual yes belongs only to the exact request it classified. A concurrent
+                # screen action/replacement must not let it confirm a different request.
+                current = self._live(meta, self.clock())
+                if label == "yes" and pending_id is not None and (current is None or current["action_id"] != pending_id):
+                    decision = {"decision": "chat", "heard": "yes", "stale": True}
+                    meta["decided"][item] = decision
+                    meta["last_place"] = item_place(item)
+                    return dict(decision)
                 decision = {**self._apply(meta, item, text, label if label in (*LABELS, "end") else "chat", tool_of),
                             "heard": label if label in (*LABELS, "end") else "chat"}
                 meta["decided"][item] = decision
@@ -2406,10 +2416,10 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
 
     grammar = consult_grammar(person)
 
-    def understand(words, waiting):
+    def understand(words, waiting, pending=None):
         """The understanding call (intent_gateway), for words the grammar did not hear: one word, never an act. A host
         with no summary key has none: chat. A post-it heard on a host with no Board is a request (review v3 M1)."""
-        label = intent_client(words, waiting) if intent_client is not None else "chat"
+        label = intent_client(words, waiting, pending=pending) if intent_client is not None else "chat"
         return "consult" if label == "postit" and not board else label
 
     def tool_of(kind, text):
@@ -2640,9 +2650,9 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             return refusal("invalid", "That utterance is not valid. Nothing was done.", 422)
         sessions.seen(sid)
 
-        def hear(words, waiting):
+        def hear(words, waiting, pending):
             label = fast_label(adapter, grammar, words, waiting)
-            return label if label is not None else understand(words, waiting)
+            return label if label is not None else understand(words, waiting, pending)
         decision = sessions.decide(sid, item, text.strip(), hear, tool_of)
         if decision is None:
             return refusal("session_ended", "That voice session has ended. Nothing was done.", 409)

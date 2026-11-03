@@ -210,6 +210,13 @@ def test_bootstrap_issues_an_owner_session_with_a_sceneless_english_persona_and_
     assert minted["transcription_language"] is None and minted["voice"] == "marin"      # bilingual (D19, review S-3)
     assert "Master Craftsman, Robert's longtime collaborator and friend in the work" in minted["instructions"]
     assert "SCENARIO FOR THIS SESSION" not in minted["instructions"]
+    # A live role question exposed an identity split: the voice called MC someone else.
+    # Check the assembled provider prompt, retaining both identity and execution boundaries.
+    assert "You are Master Craftsman (MC), Robert's MiniMoi build partner" in minted["instructions"]
+    assert "never refer to Master Craftsman as someone else or deny being MC" in minted["instructions"]
+    assert "shared CoS/MC build partner" not in minted["instructions"]
+    assert "only after Robert confirms" in minted["instructions"]
+    assert "never claim anything was checked, saved or done otherwise" in minted["instructions"]
     assert minted["tools"] is None                                   # v3: no tools on any provider (adapted)
     assert r.budget.status()["reserved_usd"] == 2.0
 

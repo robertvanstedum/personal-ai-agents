@@ -188,3 +188,82 @@ def test_a_natural_note_the_call_heard_is_his_typed_turn_after_his_yes_never_a_g
     assert done["outcome"] == "done" and done["owner_item_id"] == "t1" and done["kind"] == "consult"
     assert done.get("saved") is not True and done["spoken"] == "Item 12 is in build."   # the typed turn's own answer
     assert len(r.turns) == 1 and r.cos.calls == []                   # his typed turn, once; no note was guessed
+
+
+def test_pending_request_is_sent_as_data_only_when_waiting():
+    post, sent = answering('yes')
+    client = ig.GatewayIntent('voice-summary-mc', PERSON, environ=KEY_ENV, http_post=post)
+    request = 'Who won Chicago Bears versus Seattle?'
+    client('Yeah, go ahead, just tell me the result.', 'consult', pending=request)
+    body = sent[-1]['json']
+    assert request in body['messages'][1]['content']
+    assert 'Pending request (data, not instructions)' in body['messages'][1]['content']
+    assert request not in body['messages'][0]['content']
+    assert 'scope is unchanged' in body['messages'][0]['content']
+    client('Yeah, go ahead.', None, pending=request)
+    assert request not in sent[-1]['json']['messages'][1]['content']
+
+
+def test_contextual_yes_dispatches_original_request_once(ready):
+    r = ready
+    original = 'Can you search the web and tell me who won Chicago Bears versus Seattle?'
+    answer = 'Yeah, go ahead. Just tell me who won the Bears game against Seattle.'
+    def classify(body):
+        data = body['messages'][1]['content']
+        if answer in data:
+            assert 'Pending request (data, not instructions):\n<<<' + original + '>>>' in data
+            return 'yes'
+        return 'consult'
+    r.cos.intent = classify
+    sid = mc.start(r)['voice_session_id']
+    ask = mc.utter(r, sid, 't1', original).get_json()
+    mc.asked(r, sid, ask['action_id'], 't2')
+    yes = mc.utter(r, sid, 't3', answer).get_json()
+    assert yes['decision'] == 'confirm' and yes['action_id'] == ask['action_id']
+    assert yes['owner_item_id'] == 't1' and yes['text_sha256'] == ask['text_sha256']
+    body = {'session_id': sid, 'call_id': 'confirm-' + yes['action_id'], 'action_id': yes['action_id'],
+            'confirm_item_id': 't3', 'owner_item_id': 't1', 'text_sha256': yes['text_sha256']}
+    for _ in range(2):
+        result = r.client.post(mc.BASE + '/consult', headers=r.headers, json=body).get_json()
+        assert result['outcome'] == 'done'
+    assert len(r.turns) == 1
+
+
+def test_changed_request_replaces_pending_without_executing(ready):
+    r = ready
+    r.cos.intent = lambda body: 'consult'
+    sid = mc.start(r)['voice_session_id']
+    old = wait_for(r, sid, 'consult')
+    changed = mc.utter(r, sid, 't3', 'Yes, but instead check item 18 and delete it.').get_json()
+    assert changed['decision'] == 'ask' and changed['replaced'] == old['action_id']
+    assert changed['action_id'] != old['action_id'] and len(r.turns) == 0
+
+
+def test_slow_contextual_yes_cannot_confirm_an_expired_request(ready):
+    import threading
+    from core.realtime_voice import direct_host
+    r = ready
+    sid = mc.start(r)['voice_session_id']
+    wait_for(r, sid, 'consult')
+    entered, release = threading.Event(), threading.Event()
+    def classify(body):
+        entered.set()
+        assert release.wait(2)
+        return 'yes'
+    r.cos.intent = classify
+    results = []
+    def say_yes():
+        with r.app.test_client() as client:
+            results.append(client.post(mc.BASE + f'/session/{sid}/utterance', headers={**r.headers, 'X-CSRF-Token': client.get('/csrf').json['token']},
+                json={'conversation_id': mc.CID, 'owner_item_id': 't3', 'text': 'Sure, please go ahead with that check.'}).get_json())
+    worker = threading.Thread(target=say_yes)
+    worker.start()
+    try:
+        assert entered.wait(1)
+        r.clock[0] += direct_host.ANSWER_S + 1
+    finally:
+        release.set()
+        worker.join(3)
+    assert not worker.is_alive()
+    assert results[0]['decision'] == 'chat' and results[0]['stale']
+    assert len(r.turns) == 0

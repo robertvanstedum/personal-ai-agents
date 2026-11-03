@@ -222,8 +222,8 @@ def test_each_host_gives_the_models_tools_only_where_the_provider_is_eligible(ho
         assert body["page_responses"] is True and session["turn_detection"]["create_response"] is False
     else:
         assert "page_responses" not in body and "create_response" not in session["turn_detection"]
-    assert not session.get("tools") and "you have no tools" in session["instructions"]
-    assert f"something only {short} can do" in session["instructions"] and "press Check" not in session["instructions"]
+    assert not session.get("tools") and "realtime speech model has no tools" in session["instructions"]
+    assert f"speak as {short} throughout" in session["instructions"] and "press Check" not in session["instructions"]
     assert "your two tools" not in session["instructions"]
     check = ask(h, body["voice_session_id"], "host-1", "t0").get_json()           # Check with the person: page-initiated
     assert check["outcome"] == "done" and h.turns() == 1

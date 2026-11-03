@@ -373,7 +373,9 @@ def test_her_session_text_is_rules_then_card_then_her_briefing_and_continuity_as
     rules, card, data = (text.index(h) for h in ("=== OPERATING RULES ===", "=== WHO YOU ARE ===",
                                                   "=== THIS CONVERSATION SO FAR (DATA) ==="))
     assert rules < card < data
-    assert text.index("you have no tools") < text.index("You are the low-latency voice of Robert's Chief")   # v3
+    assert "You are Robert's Chief of Staff (CoS), speaking with him by voice" in text
+    assert text.index("realtime speech model has no tools") < card
+    assert "must never execute work directly" in text and "only after Robert confirms" in text
     assert text.index(direct_voice.BRIEFING_HEAD.strip()) < text.index(direct_voice.CONTINUITY_HEAD.strip())
     assert "Set reminders in writing" in text and "remind me at <time>" not in text
     assert "consult_cos_agent" not in text and "save_cos_note" not in text

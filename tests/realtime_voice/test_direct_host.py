@@ -286,7 +286,8 @@ def test_a_host_gets_the_routes_the_metadata_and_a_recorded_session(rig):
     assert minted["tools"] is None                                    # v3: no tools on any provider (adapted)
     text = minted["instructions"]
     assert text.index("Test rules.") < text.index("Test Person, plain and brief.") < text.index("continuity of owner")
-    assert "cannot ask Test Person's own turn" in text and "only after Rosa confirms" in text
+    assert "You are Test Person (TP) speaking by voice" in text and "only after Rosa confirms" in text
+    assert "must never execute work directly" in text and "without that result" in text
     assert "Shall I sum up?" in text and "Robert" not in text
     assert r.budget.status()["reserved_usd"] == 2.0
 
