@@ -13,6 +13,7 @@ ENV OPENCLAW_NO_AUTO_UPDATE=1
 COPY --chown=root:root docker/cos-agent-a/openclaw.json /opt/minimoi/cos-agent-a/openclaw.json
 COPY --chown=root:root docker/cos-agent-a/apply-config.sh /opt/minimoi/cos-agent-a/apply-config.sh
 COPY --chown=root:root docker/cos-agent-a/AGENTS.md /opt/minimoi/cos-agent-a/AGENTS.md
+COPY --chown=root:root docker/cos-agent-a/COS_AGENTS.md /opt/minimoi/cos-agent-a/COS_AGENTS.md
 COPY --chown=root:root docker/cos-agent-a/build-mc-soul.mjs /opt/minimoi/cos-agent-a/build-mc-soul.mjs
 COPY --chown=root:root docker/cos-agent-a/build-mc-role.mjs docker/cos-agent-a/mc-role-lock.json /opt/minimoi/cos-agent-a/
 COPY --chown=root:root planning-studio/initiatives/INIT-2026-0007-interaction-vision/documents/MASTER_CRAFTSMAN_JOB_DESCRIPTION.md /opt/minimoi/cos-agent-a/owner-role/MASTER_CRAFTSMAN_JOB_DESCRIPTION.md

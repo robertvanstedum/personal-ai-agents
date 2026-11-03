@@ -35,6 +35,13 @@ mv -f "$tmp" "$dest"
 # Existing volumes must receive the reviewed owner-directed runtime policy too.
 # Preserve adaptable SOUL/MEMORY/USER files, credentials and sessions.
 PINNED_POLICY=/opt/minimoi/cos-agent-a/AGENTS.md
+# Dev now runs distinct CoS and MC agents. Keep the legacy shared deployment
+# explicit and reversible; never load MC's compiled role into separate CoS.
+case "${COS_AGENT_ROLE:-shared}" in
+  shared) ;;
+  cos) PINNED_POLICY=/opt/minimoi/cos-agent-a/COS_AGENTS.md ;;
+  *) echo "cos-agent-a: invalid role selection; refusing to start" >&2; exit 1 ;;
+esac
 policy_dest="${OPENCLAW_AGENT_POLICY_PATH:-$(dirname "$dest")/workspace-cos-agent-a/AGENTS.md}"
 [ -f "$PINNED_POLICY" ] || { echo "cos-agent-a: managed policy missing; refusing to start" >&2; exit 1; }
 mkdir -p "$(dirname "$policy_dest")"
