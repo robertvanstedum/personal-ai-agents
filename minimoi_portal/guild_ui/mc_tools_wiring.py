@@ -638,9 +638,14 @@ def attach(app, blueprint_name, services):
     handoff_sha = (environ.get("MINIMOI_MC_HANDOFF_TOKEN_SHA256") or "").strip().lower()
     receiver = (handoff_receiver(services, cfg, app.extensions[blueprint_name].get("url_prefix", ""))
                 if re.fullmatch(r"[0-9a-f]{64}", handoff_sha) else None)
-    thread = serve(create_app(service, token_sha256=cfg["token_sha256"], handoff=receiver,
-                              handoff_token_sha256=handoff_sha if receiver else None,
-                              agent_worker_token_sha256=agent_worker_sha or None), host=host, port=cfg["port"])
+    listener = create_app(service, token_sha256=cfg["token_sha256"], handoff=receiver,
+                          handoff_token_sha256=handoff_sha if receiver else None,
+                          agent_worker_token_sha256=agent_worker_sha or None)
+    if environ.get("MINIMOI_MC_ROOMS") == "1":
+        from .mc_rooms_bridge import attach as attach_rooms
+        attach_rooms(listener, services, environ, cfg,
+                     craft_prefix=app.extensions[blueprint_name].get("url_prefix", ""))
+    thread = serve(listener, host=host, port=cfg["port"])
     app.extensions["mc_tools_listener"] = thread
     _log.info("mc tools: listener on %s:%s (agents %s)", host, cfg["port"], ",".join(cfg["agents"]))
     if agent_worker_sha and environ.get("MINIMOI_MC_WORKER_PUBLIC") == "1":

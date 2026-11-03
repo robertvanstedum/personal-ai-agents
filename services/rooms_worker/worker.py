@@ -386,11 +386,19 @@ def main():
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)        # one worker per journal
     relay_url = env.get("MC_RELAY_URL", "http://mc-relay:8790")
     secrets = Path(env.get("ROOMS_SECRETS_DIR", "/run/secrets/rooms"))
+    transport = Relay(relay_url, read_secret(Path(env.get("MC_RELAY_TOKEN_FILE", str(secrets / "mc-relay.token")))))
+    agent_id = "mc-agent"
+    if env.get("ROOMS_MC_PORTAL") == "1":
+        if profile != "dev":
+            raise ValueError("mc_portal_dev_only")
+        from .portal_mc import PortalMC
+        transport = PortalMC(secrets / "mc-service.token")
+        agent_id = "mc-chat"
     worker = Worker(Records(records_url, lambda: read_secret(secrets / "rooms-worker.token"), profile=profile),
                     Records(records_url, lambda: read_secret(secrets / "mc.token"), profile=profile),
-                    Relay(relay_url, read_secret(Path(env.get("MC_RELAY_TOKEN_FILE", str(secrets / "mc-relay.token"))))),
+                    transport,
                     TurnJournal(journal_dir / "turns"), teammate=env.get("ROOMS_TEAMMATE", "mc"),
-                    alive_path="/tmp/rooms-worker/alive",
+                    alive_path="/tmp/rooms-worker/alive", agent_id=agent_id,
                     discussion=Discussion("mc", secrets / "discussion-gateway.token"))
     log(event="started", records=records_url, relay=relay_url, teammate=worker.teammate)
     worker.start_housekeeping()

@@ -1191,6 +1191,14 @@ class Meetings:
                     set_turn(db, turn_id, state="cancel_requested", disposition=failing)
                     return {"state": "cancel_requested", "dispatch": False, "reason": failing}
                 out["dispatch"] = True
+                # A hosted coordinator may obtain the authoritative prompt at
+                # the same boundary as admission. Never echo a worker-supplied
+                # prompt or return a snapshot after admission was revoked.
+                if payload.get("snapshot") is True:
+                    out["turn"] = self.work_view(db, t, with_snapshot=True)
+                    # Authority includes every reader, independent of display RSVP.
+                    out["turn"]["room_members"] = [dict(r) for r in db.execute(
+                        "SELECT actor AS id,role FROM members WHERE room=?", (t["room"],))]
             return out
 
     def fail(self, auth, turn_id, payload):
