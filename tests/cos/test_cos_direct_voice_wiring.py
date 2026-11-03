@@ -124,6 +124,17 @@ def test_her_typed_turn_service_takes_no_dispatch_callback_unless_asked(off):
     assert result.reply == "Here is what I found." and len(off.test.sent) == 1
 
 
+def test_typed_and_voice_context_keep_cos_separate_from_mc(on):
+    """The service prompt must not undo the separate runtime's role policy."""
+    on._process_confer_turn("MC is here too; who are you?", channel="html_text")
+    typed = on.test.sent[-1][1]["system_prompt"]
+    voice = on._build_cos_voice_instructions("7")
+    for instructions in (typed, voice):
+        assert "Speak only as CoS" in instructions
+        assert "MC) is a separate participant" in instructions
+        assert "shared CoS and Master Craftsman" not in instructions
+
+
 # ── installed: a consult is her real Confer turn ──────────────────────────────────────────────────────────────────────
 
 def test_installed_her_routes_answer_and_a_consult_is_her_canonical_turn(on):

@@ -1,7 +1,7 @@
 # Guildhall Meeting Flow and Etiquette
 
 **Version:** 0.2 · **Date:** 2 November 2026 · **Decision owner:** Robert · **Author:** Codex
-**Status:** Implemented and live-tested on dev at `63e951cd`; production integration pending. The limits of the live checks are recorded below.
+**Status:** Implemented and live-tested on dev through `e866033e`, including the `ec5b7fc3` timing correction; production integration pending. The limits of the live checks are recorded below.
 
 ## Purpose
 
@@ -60,6 +60,10 @@ Deployment order: install both workers with discussion protocol 1 and route-scop
 
 The intended contribution is their application to an ongoing personal meeting: natural addressing, distinct agents, owner steering, durable context and bounded authority. Uniqueness is not established by this reference check.
 
-## 0.2 timing correction — dev acceptance in progress
+## 0.2 timing correction — dev acceptance complete within the limits below
 
-A fresh live run of Robert’s example found MC’s “CoS, over to you?” consuming the only round-wide slot before CoS asked MC her substantive question. Version 0.2 makes the bound per recipient, capped at two overall, while retaining tool-free transport, membership and budget checks, newer-owner-message fences and no recursive follow-ups. The new additive ledger imports existing handoffs and mirrors the first handoff into the legacy ledger so older code sees the round as already used. The downgrade fencing procedure above still applies. This correction is not yet declared live-verified.
+A fresh live run of Robert’s example found MC’s “CoS, over to you?” consuming the only round-wide slot before CoS asked MC her substantive question. Version 0.2 makes the bound per recipient, capped at two overall, while retaining tool-free transport, membership and budget checks, newer-owner-message fences and no recursive follow-ups. The new additive ledger imports existing handoffs and mirrors the first handoff into the legacy ledger so older code sees the round as already used. The downgrade fencing procedure above still applies.
+
+On 2 November at 21:44–21:48 America/Chicago, plain-name CoS-to-MC and reverse MC-to-CoS exchanges produced separate attributed replies and survived reload. Robert's exact `@mc @cos` example also produced CoS's question and MC's own answer. It still produced an initial MC courtesy reply as well as the answer; dependency-aware suppression of redundant initial replies remains a refinement, not a proven property. Evidence: `_working/discussion-replies-20261102/robert-example-live.jpg`, `bidirectional-live.jpg`, `live-reloaded-ax.txt` and `RESULT.json`.
+
+Workers at `e866033e` use a bounded 2000-token completion allowance for tool-free discussion and preserve fixed failure reasons and usage without raw provider output or automatic retries. This addresses incomplete-response handling; it does not establish that the earlier failed reply was caused by the old 500-token allowance. The timing correction passed 40 isolated tests; the worker change passed 45. Both source changes and their rollout operators received independent review. CoS's own GitHub/career access, audible voice/persona verification, and production acceptance remain separate gates.
