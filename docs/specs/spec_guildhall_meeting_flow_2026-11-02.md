@@ -1,7 +1,7 @@
 # Guildhall Meeting Flow and Etiquette
 
 **Version:** 0.1 · **Date:** 2 November 2026 · **Decision owner:** Robert · **Author:** Codex  
-**Status:** Direction recorded; implementation and dev acceptance in progress. Not a production readiness claim.
+**Status:** Implemented and live-tested on dev at `63e951cd`; production integration pending. The limits of the live checks are recorded below.
 
 ## Purpose
 
@@ -47,9 +47,11 @@ Completion requires isolated tests, independent diff review, and post-deployment
 
 ## Current implementation boundary
 
-The dev transcript demonstrates distinct MC and CoS replies, but also CoS simulating MC and misunderstanding its room participation. Source now separates tool-free discussion from action-capable owner turns, preserves original turns, and refuses retries that would lose discussion provenance. Unaddressed broadcasts and peer follow-ups use the same bounded discussion transport. This remains off until independent review, isolated tests and dev wiring pass.
+The original dev transcript exposed CoS simulating MC and misunderstanding room participation. At `63e951cd`, source separates tool-free discussion from action-capable owner turns, preserves original turns, and refuses retries that would lose discussion provenance. Independent diff and rollout review cleared; 33 isolated Python tests plus the executable browser-script checks passed. Both dev workers now declare discussion protocol 1 and Records has `RECORDS_DISCUSSION_HANDOFFS=1`.
 
-Deployment order: install both workers with discussion protocol 1 and route-scoped gateway credentials, verify them, then update Records and enable `RECORDS_DISCUSSION_HANDOFFS=1`. Records will not give discussion turns to a worker that lacks the protocol declaration. Before any downgrade of Records, disable creation, stop workers, and cancel/drain **every** unfinished discussion turn while the new Records code still understands its type. Verify none remain claimable or recoverable before starting older code; retain completed history. Disabling the flag alone is insufficient. Do not roll back by simply starting old workers against an active discussion queue.
+Live checks on 2 November reproduced Robert’s exact join and CoS-asks-MC examples, a plain-language version without mentions, an open question to both agents, MC-only addressing, and explicit To CoS overriding a textual mention of MC. Distinct peer replies and the bounded follow-up were observed. Typing and sending a correction remained available during a reply; the prior reply committed just before the correction was sent, so live interruption of an already-running action was **not** proved. Offline tests cover stale-follow-up fencing and draft preservation. Voice, GitHub actions and career-file access are separate acceptance gates; these meeting checks do not establish them. Evidence is retained locally in `_working/meeting-flow-deploy-20261102/`.
+
+Deployment order: install both workers with discussion protocol 1 and route-scoped gateway credentials, verify them, then update Records and enable `RECORDS_DISCUSSION_HANDOFFS=1`. Records will not give discussion turns to a worker that lacks the protocol declaration. Before any downgrade of Records, disable creation, stop workers, and fence **every** non-committed discussion turn into an old-code non-retryable state (`abandoned`) while the new Records code still understands its type. Include failed, cancelled, expired and uncertain rows: merely cancelling them leaves an old-code retry path. Verify only committed or abandoned discussion rows remain before starting older code; retain completed history. Disabling the flag alone is insufficient. Do not roll back by simply starting old workers against an active discussion queue.
 
 ## Related patterns and standards
 
