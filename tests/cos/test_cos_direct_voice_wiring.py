@@ -20,6 +20,8 @@ OWNER = {"X-Minimoi-Auth-Id": "7", "X-Minimoi-User-Tier": "owner", "X-Test-Sign-
 
 
 def load(monkeypatch, tmp_path, **env):
+    import owner_signing                                       # F3: owner writes are signed as the portal signs them
+    owner_signing.install(monkeypatch, tmp_path)
     for name in ("apscheduler", "apscheduler.schedulers", "apscheduler.schedulers.background",
                  "apscheduler.triggers", "apscheduler.triggers.cron", "apscheduler.triggers.interval"):
         monkeypatch.setitem(sys.modules, name, MagicMock())

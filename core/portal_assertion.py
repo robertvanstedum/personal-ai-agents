@@ -81,9 +81,11 @@ def sign(key, *, audience, subject, method, target, body: bytes, env, now=None, 
     return payload + "." + b64(hmac.new(secret, payload.encode("ascii"), hashlib.sha256).digest())
 
 
-def verify(header, key, *, audience, env, method, target, body: bytes, spend, now=None) -> str:
+def verify(header, key, *, audience, env, method, target, body, spend, now=None) -> str:
     """The subject the assertion names, or Refused. ``spend(nonce, expires)`` must record the nonce durably and return
-    False when it was already used (a second delivery is refused, across restarts and concurrent copies)."""
+    False when it was already used (a second delivery is refused, across restarts and concurrent copies). ``body`` is
+    the bytes or a callable returning them: a callable is read only after the MAC, claims and times have passed, so an
+    unsigned caller never makes the receiver buffer a body."""
     if key is None or spend is None:
         raise Refused("Signed owner requests are not set up here", 503)
     if not isinstance(header, str) or header.count(".") != 2 or len(header) > 4096:
@@ -104,10 +106,9 @@ def verify(header, key, *, audience, env, method, target, body: bytes, spend, no
     try:
         iat, exp = float(claims["iat"]), float(claims["exp"])
         if (claims["aud"] != audience or claims["env"] != env or claims["kid"] != kid
-                or claims["method"] != method.upper() or claims["target"] != target
-                or claims["body"] != hashlib.sha256(body or b"").hexdigest()):
+                or claims["method"] != method.upper() or claims["target"] != target):
             raise Refused("Portal assertion is not for this request")
-        sub, nonce = claims["sub"], claims["nonce"]
+        sub, nonce, body_digest = claims["sub"], claims["nonce"], claims["body"]
     except (KeyError, TypeError, ValueError):
         raise Refused("Portal assertion is malformed") from None
     if not isinstance(sub, str) or not sub or len(sub) > 80 or not isinstance(nonce, str) or not 16 <= len(nonce) <= 80:
@@ -118,6 +119,9 @@ def verify(header, key, *, audience, env, method, target, body: bytes, spend, no
         raise Refused("Portal assertion is dated in the future")
     if exp < now:
         raise Refused("Portal assertion has expired")
+    raw = body() if callable(body) else body
+    if not isinstance(body_digest, str) or not hmac.compare_digest(body_digest, hashlib.sha256(raw or b"").hexdigest()):
+        raise Refused("Portal assertion is not for this request")
     if not spend(nonce, exp + FUTURE_SKEW):
         raise Refused("Portal assertion was already used")
     return sub

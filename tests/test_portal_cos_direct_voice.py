@@ -77,7 +77,7 @@ def test_other_cos_routes_keep_their_contract(load_portal, monkeypatch):
     client = portal.owner()
     _token(client, forwarded)
     assert client.post("/app/cos/ui/send", json={"text": "x"}).status_code == 200                # legacy guard off: as before
-    assert forwarded[-1][1].get("verified_cos_voice_write") is False
+    assert forwarded[-1][1].get("verified_cos_voice_write") is True        # F3: every owner write to CoS is signed
     answer = client.get("/app/cos/ui/api/notes")
     assert answer.headers.get("Cache-Control") != "no-store, private"
 
@@ -95,7 +95,8 @@ def test_the_marker_is_only_ever_the_portals_and_only_on_her_voice_writes(tmp_pa
     cases = ((DIRECT.removeprefix("/app/cos/") + "/consult", "POST", True, True),
              (DIRECT.removeprefix("/app/cos/") + "/consult", "POST", False, False),       # not verified by the portal
              (DIRECT.removeprefix("/app/cos/") + "/sessions", "GET", True, False),        # a read is never marked
-             ("ui/send", "POST", True, False))                                            # not a voice route
+             ("ui/send", "POST", True, True),                                             # F3: every owner write
+             ("ui/send", "POST", False, False))                                           # unless the portal says not
     for path, method, verified, expected in cases:
         captured = {}
         with app.test_request_context("/app/cos/" + path, method=method, data=b'{"q":1}',

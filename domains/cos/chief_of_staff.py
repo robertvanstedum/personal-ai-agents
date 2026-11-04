@@ -1304,6 +1304,38 @@ app.register_blueprint(_in_flight_blueprint(
     is_owner=lambda: resolve_user_id(request) is not None and request.headers.get("X-Minimoi-User-Tier") == "owner",
     write_verified=lambda: (_verified_owner_write() is not None
                             and _verified_owner_write() == str(resolve_user_id(request)))))   # F3: signed, not a header
+# F3 (partnership v1.1 B0-2; spec A02): every CoS write needs the portal's signed assertion, default deny. A forwarded
+# X-Minimoi-* header alone never makes a write anyone's: the CoS agent shares this network and could set one.
+#   - /internal/...: authenticated by their own service tokens (store, cos-actions, guildhall, gateway receipt);
+#   - voice (managed, direct) and In flight: their own guards check the same assertion and answer in their own words;
+#   - /chat also admits Master Craftsman's CoS client, which the portal signs as service:mc;
+#   - /event is still unauthenticated (Guild agents' notices; their own container has no key yet): a recorded
+#     follow-up, not a decision that it is safe.
+from domains.cos.owner_assertion import SUBJECT_PREFIX as _OWNER_SUBJECT, verified_subject as _verified_subject
+_SELF_GATED_WRITES = ("/api/realtime-voice/managed/", "/api/realtime-voice/direct/", "/ui/api/in-flight/")
+_UNSIGNED_EVENT_FOLLOW_UP = "/event"
+_SERVICE_WRITES = {"/chat": {"service:mc"}}
+_WRITE_BODY_CAPS = {"/ui/upload": cos_files.MAX_UPLOAD_BYTES + 1_000_000, "/ui/transcribe": 26_000_000}
+
+
+@app.before_request
+def _signed_writes_only():
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return None
+    path = request.path
+    if (path.startswith("/internal/") or path.startswith(_SELF_GATED_WRITES)
+            or path == _UNSIGNED_EVENT_FOLLOW_UP):
+        return None
+    subject = _verified_subject(max_body=_WRITE_BODY_CAPS.get(path, 1_000_000))
+    if subject is not None and subject.startswith(_OWNER_SUBJECT):
+        header_owner = resolve_user_id(request)
+        if header_owner is None or str(header_owner) == subject[len(_OWNER_SUBJECT):]:
+            return None
+    elif subject is not None and subject in _SERVICE_WRITES.get(path, ()):
+        return None
+    return jsonify({"error": "not_allowed", "message": "This needs the owner's signed request through mini-moi."}), 403
+
+
 if _history is not None:
     from domains.cos.history_api import create_blueprint as _history_blueprint
     app.register_blueprint(_history_blueprint(_history, resolve_owner=resolve_user_id))

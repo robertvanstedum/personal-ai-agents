@@ -777,10 +777,10 @@ def cos_proxy(path):
                    if (_cos_write_guard_on() or managed_voice or direct_voice or in_flight) else None)
         if refused is not None:
             return refused
-        # Marker is derived after the authenticated owner and CSRF gates. Proxy
-        # forwarding strips every browser-supplied X-Minimoi-* value first.
-        answer = _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user,
-                                 verified_cos_voice_write=managed_voice or direct_voice or in_flight)
+        # F3: every owner write reaching CoS carries the portal's signed assertion, made here after the owner gate
+        # (and, for voice and In flight, the CSRF gate). CoS refuses any write without one (default deny).
+        # Proxy forwarding strips every browser-supplied X-Minimoi-* and X-Portal-* value first.
+        answer = _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user, verified_cos_voice_write=True)
         return _private(answer) if direct_voice else answer
     answer = _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user, head_meta=_cos_page_meta())
     return _private(answer) if direct_voice else answer

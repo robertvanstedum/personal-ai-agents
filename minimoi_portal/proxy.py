@@ -303,8 +303,7 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
     fwd_headers = _forward_headers(user, strip_header_prefixes)
     body = request.get_data()
     if (verified_cos_voice_write is True and portal_prefix == "/app/cos" and
-            request.method == "POST" and user and user.get("tier") == "owner" and
-            path.strip("/").startswith(_COS_VOICE_WRITES + _COS_OWNER_WRITES)):
+            request.method not in ("GET", "HEAD", "OPTIONS") and user and user.get("tier") == "owner"):
         assertion = _cos_owner_assertion(user, "/" + path.lstrip("/"), body)
         if assertion:                       # without a key nothing is added and CoS refuses the write (fails closed)
             fwd_headers[_COS_OWNER_HEADER] = assertion
@@ -519,6 +518,9 @@ def _cos_owner_assertion(user, backend_path, body):
     env = os.environ.get("PORTAL_COS_OWNER_ENV")
     owner = user.get("auth_id") or user.get("username")
     if key is None or not env or not owner:
+        import logging
+        logging.getLogger(__name__).warning("CoS owner write sent unsigned: PORTAL_COS_OWNER_KEY_FILE/ENV not usable; "
+                                            "CoS will refuse it")
         return None
     return PA.sign(key, audience="cos-owner", subject=f"owner:{owner}", method=request.method,
                    target=PA.canonical_target(backend_path, request.query_string), body=body, env=env)

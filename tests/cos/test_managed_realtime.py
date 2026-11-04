@@ -17,7 +17,7 @@ def setup(tmp_path):
  app=Flask('synthetic');calls=[]
  assert m.install(app,environ=ENV,process_turn=lambda *a,**kw:None,instructions=lambda p:'Synthetic persona',budget=b,provider_factory=lambda:calls.append(1) or Provider())
  return app.test_client(),calls
-@pytest.mark.parametrize('headers',[{}, {'X-Minimoi-Auth-Id':'7','X-Minimoi-User-Tier':'owner'}, {**H,'X-Minimoi-User-Tier':'guest'},{'X-Minimoi-Voice-Write-Verified':'1','X-Minimoi-User-Tier':'owner'},{'X-Minimoi-Auth-Id':'7','X-Minimoi-User-Tier':'owner','X-Minimoi-Voice-Write-Verified':'1'},{**H,'X-Test-Sign-Owner':'8'}])
+@pytest.mark.parametrize('headers',[{'X-Test-Unsigned':'1'}, {'X-Minimoi-Auth-Id':'7','X-Minimoi-User-Tier':'owner','X-Test-Unsigned':'1'}, {**H,'X-Minimoi-User-Tier':'guest'},{'X-Minimoi-Voice-Write-Verified':'1','X-Minimoi-User-Tier':'owner','X-Test-Unsigned':'1'},{'X-Minimoi-Auth-Id':'7','X-Minimoi-User-Tier':'owner','X-Minimoi-Voice-Write-Verified':'1','X-Test-Unsigned':'1'},{**H,'X-Test-Sign-Owner':'8'}])
 def test_owner_proxy_and_verified_write_required(setup,headers):
  c,calls=setup;assert c.post('/api/realtime-voice/managed/session',headers=headers,json={'provider':'openai','sdp':'offer','conversation_id':'owner'}).status_code==403;assert not calls
 @pytest.mark.parametrize('conversation',[None,'foreign','private',{},''])

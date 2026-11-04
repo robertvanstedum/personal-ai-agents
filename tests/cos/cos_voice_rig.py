@@ -26,7 +26,7 @@ from domains.cos.confer_service import ConferTurnRequest, ConferTurnService
 BASE = direct_voice.PREFIX + "/api/realtime-voice"
 OWNER = {"X-Minimoi-Auth-Id": "7", "X-Minimoi-User-Tier": "owner", "X-Minimoi-Display-Name": "Robert",
          "X-Test-Sign-Owner": "7", "Content-Type": "application/json"}
-READ = {k: v for k, v in OWNER.items() if k != "X-Test-Sign-Owner"}
+READ = {**{k: v for k, v in OWNER.items() if k != "X-Test-Sign-Owner"}, "X-Test-Unsigned": "1"}   # owner, not signed
 ALLOWANCE = "2000000"
 ENV = {"MINIMOI_COS_VOICE_DIRECT": "1", "MINIMOI_ROLE": "development", core.ALLOWANCE_ENV: ALLOWANCE,
        "MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS": "test-only-summary-key"}
@@ -101,6 +101,8 @@ def card_root(tmp_path, voices):
 def build(monkeypatch, tmp_path, *, environ=None, voices=None, budget=None, briefing=None, memory="(no memory yet)",
           with_store=True, files=True, history=None):
     """Her host on a fresh app. ``voices`` None: her real card (cedar on OpenAI, no Grok voice); else a copy naming these."""
+    import owner_signing                                       # F3: owner writes are signed as the portal signs them
+    owner_signing.install(monkeypatch, tmp_path)
     voice, recall = tmp_path / "cos_voice", tmp_path / "conversations"
     recall.mkdir(parents=True, exist_ok=True)
     if with_store:

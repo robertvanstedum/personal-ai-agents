@@ -59,6 +59,26 @@ def operations_from_env(environ, *, http_post=None):
     return ChiefOfStaffBackend(base, http_post=http_post) if base is not None else None
 
 
+def _signed_chat_headers(url: str, body: dict) -> dict:
+    """{"headers": {...}} to pass to the POST, or {} when nothing can be signed. F3: Master Craftsman's calls to CoS /chat carry a portal-signed assertion (subject service:mc) over the exact
+    bytes requests will send; CoS refuses an unsigned /chat. No key configured: no header, and CoS refuses."""
+    import os
+    from urllib.parse import urlsplit
+    from core import portal_assertion as PA
+    key = PA.load_key(os.environ.get("PORTAL_COS_OWNER_KEY_FILE"))
+    env = os.environ.get("PORTAL_COS_OWNER_ENV")
+    if key is None or not env:
+        import logging
+        logging.getLogger(__name__).warning("CoS /chat sent unsigned: PORTAL_COS_OWNER_KEY_FILE/ENV not usable; "
+                                            "CoS will refuse it")
+        return {}
+    raw = requests.Request("POST", url, json=body).prepare().body or b""
+    parts = urlsplit(url)
+    return {"headers": {"X-Portal-Owner-Assertion": PA.sign(
+        key, audience="cos-owner", subject="service:mc", method="POST",
+        target=PA.canonical_target(parts.path, parts.query), body=raw, env=env)}}
+
+
 class ChiefOfStaffBackend(MasterCraftsmanBackend):
     kind = "cos"
     display_name = "Chief of Staff"
@@ -102,7 +122,8 @@ class ChiefOfStaffBackend(MasterCraftsmanBackend):
         body = {"text": req.text, "channel": channel, "conversation_id": self._session(req.conversation_id),
                 "request_id": req.note_request_id}
         try:
-            response = self._post(f"{self.base_url}/chat", json=body, timeout=TURN_TIMEOUT_S)
+            url = f"{self.base_url}/chat"
+            response = self._post(url, json=body, timeout=TURN_TIMEOUT_S, **_signed_chat_headers(url, body))
         except requests.Timeout:
             return TurnResult("timeout_uncertain", self.kind, failure_class="local_timeout")
         except Exception:
@@ -136,7 +157,8 @@ class ChiefOfStaffBackend(MasterCraftsmanBackend):
         body = {"text": text, "channel": CHANNEL, "conversation_id": self._session(conversation_id),
                 "request_id": request_id}
         try:
-            response = self._post(f"{self.base_url}/chat", json=body, timeout=OPERATION_TIMEOUT_S)
+            url = f"{self.base_url}/chat"
+            response = self._post(url, json=body, timeout=OPERATION_TIMEOUT_S, **_signed_chat_headers(url, body))
         except requests.Timeout:
             return {"state": "uncertain"}
         except Exception:
