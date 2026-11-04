@@ -245,7 +245,7 @@ BOUNDARY = r"(?:^|[.!?;]\s+|\n[ \t]*|\band\s+)"
 LEAD = r"(?:(?:okay|ok|hey|hi|hello|so)[, \t]+)*"
 # For punctuation-free voice, require a request-shaped tail rather than
 # assuming any noun phrase after a name grants tools.
-IMPERATIVE = re.compile(r"^(?:open|create|add|help|ask|discuss|listen|answer|investigate|report|check|inspect|review|read|file|summarise|summarize|tell|show|find|explain|compare|draft|write|update|remove|delete|cancel|stop|wait|pause|resume|hold|stay|run|test|deploy|fix|build|plan|schedule|search|look|confirm|give|take|make|continue|proceed|retry|prove|send|start|end|save|record)\b", re.I)
+IMPERATIVE = re.compile(r"^(?:double[- ]?check|verify|track|register|set up|setup|handle|own|lead|follow up|look into|open|create|add|help|ask|discuss|listen|answer|investigate|report|check|inspect|review|read|file|summarise|summarize|tell|show|find|explain|compare|draft|write|update|remove|delete|cancel|stop|wait|pause|resume|hold|stay|run|test|deploy|fix|build|plan|schedule|search|look|confirm|give|take|make|continue|proceed|retry|prove|send|start|end|save|record)\b", re.I)
 QUESTION = re.compile(r"^(?:what|how|why|when|where|who|which)\b|^(?:can|could|would|will|should|did|do|have|are)\s+you\b|^you\s+(?:here|there)\b", re.I)
 COURTESY = re.compile(r"^(?:thanks|thank you|hello|hi|hey|great|well done)\b", re.I)
 
@@ -293,6 +293,33 @@ def addressed_names(db, room, text):
                     break
             if row["id"] in names:
                 break
+            # Natural speech names an agent without a comma: "MC you are the builder. Create…",
+            # "I'd like MC to double check that", "have MC open a defect", "MC should create the issue".
+            name = r"@?" + re.escape(alias)
+            third_person = re.search(
+                r"\b(?:i['’]?d like|i would like|i want|i need|please have|have|ask|let|get)[ \t]+" + name
+                + r"[ \t]+(?:to[ \t]+)?(?P<verb>\S.*)", text, re.I)
+            modal = re.search(BOUNDARY + LEAD + name
+                              + r"[ \t]+(?:should|needs? to|is to)[ \t]+(?P<verb>\S.*)", text, re.I)
+            direct = re.search(BOUNDARY + LEAD + name + r"[ \t]+you\b(?![ \t]+(?:know|see)\b)", text, re.I)
+            if direct or any(m and IMPERATIVE.match(re.sub(r"^(?:(?:please|just|also)\s+)+", "", m.group("verb"), flags=re.I))
+                             for m in (third_person, modal)):
+                names.append(row["id"])
+                break
+    # Stacked names share one request: "MC and CoS, please join", "MC, CoS: check this".
+    rows = list(db.execute("SELECT p.id,p.label FROM principals p JOIN members m ON m.actor=p.id WHERE m.room=? AND p.id<>'robert'", (room,)))
+    addressed = "|".join(re.escape(a) for r in rows if r["id"] in names for a in aliases(r))
+    if addressed:
+        for row in rows:
+            if row["id"] in names:
+                continue
+            for alias in aliases(row):
+                if re.search(BOUNDARY + LEAD + r"@?" + re.escape(alias) + r"[ \t]*(?:,[ \t]*(?:and[ \t]+)?|and[ \t]+|&[ \t]*)@?(?:"
+                             + addressed + r")(?!\w)[ \t]*[,;:—–-]", text, re.I) or re.search(
+                        BOUNDARY + LEAD + r"@?(?:" + addressed + r")[ \t]*(?:,[ \t]*(?:and[ \t]+)?|and[ \t]+|&[ \t]*)@?"
+                        + re.escape(alias) + r"(?!\w)[ \t]*[,;:—–-]", text, re.I):
+                    names.append(row["id"])
+                    break
     return names
 
 
@@ -347,9 +374,12 @@ def routing_names(db, room, body, target, meeting):
             # The sole available teammate is the chat recipient. Preserve the
             # full audience so waiting participants still get explanatory notes.
             return selected or ['everyone'], set(available)
-    # A group/Everyone is the audience, not collective action authorization.
-    names = list(dict.fromkeys(selected + spoken)) if selected else spoken or ["everyone"]
-    return names, set(spoken)
+    # Naming someone, typed or spoken, makes them the audience: the others step back rather than discuss
+    # (Robert, Dev 4 Nov: "I would need to say MC do this and you pick it up and CoS steps back").
+    if spoken:
+        return spoken, set(spoken)
+    # Everyone with nobody named is discussion: the group is the audience, not action authorization.
+    return selected or ["everyone"], set()
 
 
 def round_ready(db, turn_id):

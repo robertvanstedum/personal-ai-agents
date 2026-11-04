@@ -196,24 +196,31 @@ def test_legacy_handoff_is_imported_before_new_recipient_is_scheduled(pair):
     ('MC you here and working on it?', None),
     ('@mc @cos\nMC, create an issue for me.', ['mc', 'cos']),
     ('MC, create an issue for me.', ['mc', 'cos']),
+    # Dev 4 Nov, Robert's own words: no comma, or MC named in the third person. Both got a talk-only turn.
+    ('MC you are the builder.  Create a github issue to track the setup.', None),
+    ('MC you are the builder.  Create a github issue to track the setup.', ['mc', 'cos']),
+    ("We have a zoho email for access requests.  I'd like MC to double check that.", None),
+    ('Have MC open a defect for the flicker.', ['mc', 'cos']),
+    ('MC should create the issue.', ['mc', 'cos']),
 ])
-def test_named_owner_requests_keep_tools_and_everyone_peers_only_discuss(pair, body, target):
+def test_named_owner_requests_keep_tools_and_the_others_step_back(pair, body, target):
     payload = {'body': body}
     if target is not None: payload['recipients'] = target
     assert pair.call('POST', f'/rooms/{pair.room}/events', payload)[0] == 201
     queued = [r for r in rows(pair) if r['state'] == 'queued']
-    assert {r['addressee'] for r in queued} == ({'mc','cos'} if target else {'mc'})
+    # Robert, Dev 4 Nov: "MC do this and you pick it up and CoS steps back", whatever To says.
+    assert {r['addressee'] for r in queued} == {'mc'}
     with pair.store.connect() as db:
-        for turn in queued:
-            discussion = bool(db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?', (turn['id'],)).fetchone())
-            assert discussion == (turn['addressee']=='cos')
+        assert not db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?', (queued[0]['id'],)).fetchone()
     assert pair.worker.run_once()
     assert len(pair.relay.calls) == 1 and not pair.discussion.calls
-    assert pair.cos.run_once() == bool(target)
+    assert not pair.cos.run_once()
     assert not pair.cos_relay.calls
 
 
-@pytest.mark.parametrize('body', ['He said "MC, create an issue."', '> MC, create an issue.', '```\nMC, create an issue.\n```', 'MC is unavailable. File an issue.'])
+@pytest.mark.parametrize('body', ['He said "MC, create an issue."', '> MC, create an issue.', '```\nMC, create an issue.\n```', 'MC is unavailable. File an issue.',
+                                  'MC seems slow to join', 'I think MC is right about this.', "I'd like to discuss MC's plan.",
+                                  'MC you know what, never mind.'])
 def test_quoted_or_incidental_names_do_not_enable_tools(pair, body):
     pair.say(body)
     with pair.store.connect() as db:
@@ -225,7 +232,7 @@ def test_quoted_or_incidental_names_do_not_enable_tools(pair, body):
 def test_wait_persists_for_broadcast_and_peer_then_direct_request_resumes(pair):
     e = pair
     assert e.call('POST', f'/rooms/{e.room}/events', {'body':'CoS, just wait. This was addressed to MC.', 'recipients':['mc','cos']})[0] == 201
-    assert [r['addressee'] for r in rows(e) if r['state']=='queued']==['mc']  # Everyone's other member discusses
+    assert [r['addressee'] for r in rows(e) if r['state']=='queued']==[]  # a wait for CoS is not a request to MC
     e.say('Any thoughts?')
     assert [r['addressee'] for r in rows(e) if r['state']=='queued'] == ['mc']
     e.say('MC, what do you think?')
@@ -383,7 +390,7 @@ def test_voice_shaped_text_uses_normal_authority_rules(pair, body, actors, targe
     with pair.store.connect() as db:
         actions={r['addressee'] for r in queued if not db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?',(r['id'],)).fetchone()}
     assert actions==actors
-    assert {r['addressee'] for r in queued} == ({'mc','cos'} if target or not actors else actors)
+    assert {r['addressee'] for r in queued} == (actors or {'mc','cos'})
 
 
 @pytest.mark.parametrize('body', ['Thanks, CoS.', 'Hi CoS', 'CoS thanks', 'Thank you CoS'])
@@ -506,3 +513,13 @@ def test_unnamed_request_still_reaches_the_sole_available_teammate(pair):
     pair.say('CoS, wait.')
     pair.say('Open a defect for the flicker')
     assert pair.worker.run_once() and len(pair.relay.calls) == 1
+
+
+@pytest.mark.parametrize('body', ['MC and Cos, please join', 'CoS and MC, what do you think?', 'MC, CoS: check this'])
+def test_stacked_names_reach_every_named_teammate(pair, body):
+    """Dev 4 Nov: "MC and Cos, please join" reached only CoS, so MC looked slow to join."""
+    pair.say(body)
+    with pair.store.connect() as db:
+        queued = [r for r in rows(pair) if r['state'] == 'queued']
+        assert {r['addressee'] for r in queued} == {'mc', 'cos'}
+        assert not any(db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?', (r['id'],)).fetchone() for r in queued)
