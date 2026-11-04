@@ -251,24 +251,59 @@ class TaskFences(PostgresFixture, unittest.TestCase):
         self.assertIn("error", box, box)
         self.assertEqual(code(box["error"]), "operation_id_reused")
 
-    def test_two_drainers_sending_the_same_operation_admit_one_card_and_neither_errors(self):
-        start = threading.Barrier(2)
-        results = []
+    def wait_until_waiting(self, count):
+        deadline = time.monotonic() + 2.5
+        while time.monotonic() < deadline:
+            rows = self.sql("""SELECT count(*) AS n FROM pg_stat_activity WHERE datname=current_database()
+                AND wait_event_type='Lock'""")
+            if rows[0]["n"] >= count:
+                return
+            time.sleep(0.02)
+        self.fail(f"fewer than {count} store calls ever waited")
 
-        def drain():
-            store = self.new_store()
-            start.wait()
-            try:
-                results.append(self.send("op-1", store=store)["state"])
-            except Exception as exc:                  # noqa: BLE001
-                results.append(repr(exc))
-        threads = [threading.Thread(target=drain) for _ in range(2)]
-        for t in threads:
-            t.start()
-        for t in threads:
+    def held_fence(self):
+        """Create T-1's fence row at 0 and hold it: every admission or correction for T-1 queues behind it."""
+        self.store.set_task_fence("fence-0", task_id="T-1", fence=0, digest="d0")
+        return self.holding([("SELECT fence FROM guild.mc_task_fences WHERE task_id='T-1' FOR UPDATE", ())])
+
+    def test_two_drainers_sending_the_same_operation_admit_one_card_and_neither_errors(self):
+        conn, pid = self.held_fence()
+        try:
+            a = self.in_thread(self.send, "op-1", store=self.new_store())
+            b = self.in_thread(self.send, "op-1", store=self.new_store())
+            self.wait_until_waiting(2)                      # both drainers are inside their transactions, overlapping
+            conn.commit()
+        finally:
+            conn.close()
+        results = []
+        for t, box in (a, b):
             t.join(5)
+            results.append(box.get("value", {}).get("state") or repr(box.get("error")))
         self.assertEqual(sorted(results), ["admitted", "duplicate"], results)
         self.assertEqual(self.cards(), ["C-17"])
+
+    def test_the_real_correction_and_the_real_admission_racing_never_admit_below_the_fence(self):
+        conn, pid = self.held_fence()
+        try:
+            adm = self.in_thread(self.send, "op-1", fence=0, store=self.new_store())
+            corr = self.in_thread(self.new_store().set_task_fence, "fence-1", task_id="T-1", fence=5, digest="d1")
+            self.wait_until_waiting(2)
+            conn.commit()
+        finally:
+            conn.close()
+        for t, _ in (adm, corr):
+            t.join(5)
+        self.assertEqual(corr[1].get("value", {}).get("state"), "applied", corr[1])
+        self.assertEqual(self.sql("SELECT fence FROM guild.mc_task_fences WHERE task_id='T-1'")[0]["fence"], 5)
+        box = adm[1]
+        if "error" in box:                                   # the correction won the row: refused, nothing left behind
+            self.assertEqual(code(box["error"]), "fenced")
+            self.assertEqual(self.cards(), [])
+            self.assertIsNone(self.op("op-1"))
+        else:                                                # the admission won: it committed before the fence rose
+            self.assertEqual(box["value"]["state"], "admitted")
+            self.assertEqual(self.op("op-1")["fence"], 0)
+            self.assertEqual(self.refused(self.send, "op-2", card("C-18"), fence=0), "fenced")
 
 
 if __name__ == "__main__":

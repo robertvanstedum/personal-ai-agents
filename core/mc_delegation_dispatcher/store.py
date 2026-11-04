@@ -2018,8 +2018,8 @@ class DispatcherStore:
         - An attempt at or below one a lookup declared absent is refused attempt_declared_absent.
         - A fence below the task's current fence is refused fenced.
         - Otherwise the operation is bound to this task, fence and card once, and the card is admitted."""
-        _need(type(attempt) is int and 1 <= attempt <= 2**31 - 1 and type(fence) is int and 0 <= fence <= self._FENCE_MAX,
-              "attempt_invalid")
+        _need(type(attempt) is int and 1 <= attempt <= 2**31 - 1, "attempt_invalid")
+        _need(type(fence) is int and 0 <= fence <= self._FENCE_MAX, "fence_invalid")
         _need(type(task_id) is str and 1 <= len(task_id) <= 200, "task_id_invalid")
 
         def precheck(cur, compiled):

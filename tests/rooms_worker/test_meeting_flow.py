@@ -553,8 +553,8 @@ def test_f1_e_two_names_for_one_teammate_make_one_turn_not_an_error(pair):
     assert len([r for r in rows(e) if r['addressee'] == 'mc' and r['state'] == 'queued']) == 1
 
 
-def test_f1_d_a_platform_post_reaches_the_teammate_attributed_to_the_platform(pair, tmp_path):
-    import json as _json
+def _real_discussion(tmp_path, teammate='mc'):
+    """The real discussion transport over a fake gateway: -> (transport, sent payloads)."""
     from services.rooms_worker.discussion import Discussion
     sent = []
 
@@ -571,12 +571,40 @@ def test_f1_d_a_platform_post_reaches_the_teammate_attributed_to_the_platform(pa
                 def json():
                     return {"choices": [{"message": {"content": "My view."}, "finish_reason": "stop"}]}
             return R()
-    token = tmp_path / 'discussion.token'
+    token = tmp_path / f'discussion-{teammate}.token'
     token.write_text('test-discussion-token-0000')
+    return Discussion(teammate, token, session=Gateway()), sent
+
+
+def _speaker(payload):
+    import json as _json
+    return _json.loads(payload['messages'][-1]['content'])['speaker']
+
+
+def test_f1_d_a_platform_post_reaches_the_teammate_attributed_to_the_platform(pair, tmp_path):
     e = pair
-    e.worker.discussion = Discussion('mc', token, session=Gateway())
+    e.worker.discussion, sent = _real_discussion(tmp_path)
     _invite(e, ['mc'])
     assert e.worker.run_once()
-    assert len(sent) == 1
-    question = _json.loads(sent[0]['messages'][-1]['content'])
-    assert question['speaker'] == 'platform'
+    assert len(sent) == 1 and _speaker(sent[0]) == 'platform'
+
+
+def test_f1_d_a_teammates_question_keeps_the_teammate_as_speaker(pair, tmp_path):
+    e = pair                                                   # N1: an agent reply carries an origin too
+    e.worker.discussion, sent = _real_discussion(tmp_path)
+    e.say('@mc @cos\nMC, please listen. CoS can you ask a question for MC and MC answer please')
+    e.cos_relay.script = [{'outcome': 'done', 'text': 'MC, what would you check before calling production healthy?'}]
+    assert e.cos.run_once()
+    assert e.worker.run_once() and e.worker.run_once()
+    assert len(sent) == 1 and _speaker(sent[0]) == 'cos'
+
+
+def test_n5_an_invite_does_not_resume_a_teammate_he_asked_to_wait(pair):
+    e = pair
+    e.say('MC wait')
+    before = len([r for r in rows(e) if r['addressee'] == 'mc' and r['state'] == 'queued'])
+    _invite(e, ['mc'])
+    assert len([r for r in rows(e) if r['addressee'] == 'mc' and r['state'] == 'queued']) == before
+    with e.store.connect() as db:
+        assert db.execute("SELECT 1 FROM routing_notes WHERE room=? AND addressee='mc' AND disposition='waiting_by_request'",
+                          (e.room,)).fetchone()

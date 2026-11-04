@@ -519,6 +519,8 @@ class Meetings:
                 continue
             seen.add(key)
             refused = self.ineligible(db, room, principal)
+            if not refused and db.execute("SELECT 1 FROM meeting_waits WHERE room=? AND actor=?", (room, principal)).fetchone():
+                refused = "waiting_by_request"            # he asked this teammate to wait; an invite does not resume it
             if refused:
                 db.execute("INSERT OR IGNORE INTO routing_notes VALUES(?,?,?,?,?,?)",
                            (room, event["seq"], key, label_of(db, principal) if principal else str(name), refused, now()))
@@ -1302,8 +1304,13 @@ class Meetings:
         handoff = db.execute("SELECT h.question_event,e.actor,e.body,e.origin FROM discussion_turns h JOIN events e ON e.id=h.question_event WHERE h.turn_id=?", (t["id"],)).fetchone()
         if handoff:
             handoff = dict(handoff)
-            if handoff.pop("origin"):                       # a platform post is attributed to the platform, not Robert (F1-d)
-                handoff["actor"] = "platform"
+            origin = handoff.pop("origin")
+            try:
+                mode = json.loads(origin).get("mode") if origin else None
+            except (TypeError, ValueError, AttributeError):
+                mode = None
+            if handoff["actor"] == "robert" and mode == "platform_acknowledgement":
+                handoff["actor"] = "platform"              # a platform post in his name is the platform's, not his (F1-d)
         return {"discussion_reply": handoff,
                 "standing_brief": {"text": approved["brief"], "hash": approved["brief_hash"]} if approved else None,
                 "attachment_delivery": "metadata_only",
