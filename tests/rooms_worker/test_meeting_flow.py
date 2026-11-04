@@ -30,6 +30,8 @@ def pair(env, tmp_path, monkeypatch):
     env.cos_relay = relay
     env.discussion = FakeRelay()
     env.worker.discussion = env.discussion
+    env.cos_discussion = FakeRelay()
+    env.cos.discussion = env.cos_discussion
     return env
 
 
@@ -71,7 +73,7 @@ def test_cos_question_does_not_replace_unclaimed_mc_turn(pair):
 
 def test_new_owner_message_cancels_pending_peer_response(pair):
     e=pair
-    e.say('@mc @cos Please discuss readiness')
+    e.say('MC discuss readiness. CoS ask MC a follow-up question')
     assert e.worker.run_once()
     e.cos_relay.script=[{'outcome':'done','text':'MC, what would you check first?'}]
     assert e.cos.run_once()
@@ -83,7 +85,7 @@ def test_new_owner_message_cancels_pending_peer_response(pair):
 
 def test_plain_language_question_reaches_mc_as_discussion_only(pair):
     e=pair
-    e.say('CoS can you ask a question for MC and MC answer please')
+    e.say('CoS can you ask a question for MC')
     assert [r['addressee'] for r in rows(e)]==['cos']
     e.cos_relay.script=[{'outcome':'done','text':'MC, what would you check first?'}]
     assert e.cos.run_once()
@@ -195,17 +197,20 @@ def test_legacy_handoff_is_imported_before_new_recipient_is_scheduled(pair):
     ('@mc @cos\nMC, create an issue for me.', ['mc', 'cos']),
     ('MC, create an issue for me.', ['mc', 'cos']),
 ])
-def test_named_owner_requests_keep_tools_and_do_not_wake_other_agent(pair, body, target):
+def test_named_owner_requests_keep_tools_and_everyone_peers_only_discuss(pair, body, target):
     payload = {'body': body}
     if target is not None: payload['recipients'] = target
     assert pair.call('POST', f'/rooms/{pair.room}/events', payload)[0] == 201
     queued = [r for r in rows(pair) if r['state'] == 'queued']
-    assert [r['addressee'] for r in queued] == ['mc']
+    assert {r['addressee'] for r in queued} == ({'mc','cos'} if target else {'mc'})
     with pair.store.connect() as db:
-        assert not db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?', (queued[0]['id'],)).fetchone()
+        for turn in queued:
+            discussion = bool(db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?', (turn['id'],)).fetchone())
+            assert discussion == (turn['addressee']=='cos')
     assert pair.worker.run_once()
     assert len(pair.relay.calls) == 1 and not pair.discussion.calls
-    assert not pair.cos.run_once()
+    assert pair.cos.run_once() == bool(target)
+    assert not pair.cos_relay.calls
 
 
 @pytest.mark.parametrize('body', ['He said "MC, create an issue."', '> MC, create an issue.', '```\nMC, create an issue.\n```', 'MC is unavailable. File an issue.'])
@@ -219,8 +224,8 @@ def test_quoted_or_incidental_names_do_not_enable_tools(pair, body):
 
 def test_wait_persists_for_broadcast_and_peer_then_direct_request_resumes(pair):
     e = pair
-    assert e.call('POST', f'/rooms/{e.room}/events', {'body':'CoS, just wait, this was addressed to MC.', 'recipients':['mc','cos']})[0] == 201
-    assert not [r for r in rows(e) if r['state']=='queued']
+    assert e.call('POST', f'/rooms/{e.room}/events', {'body':'CoS, just wait. This was addressed to MC.', 'recipients':['mc','cos']})[0] == 201
+    assert [r['addressee'] for r in rows(e) if r['state']=='queued']==['mc']  # Everyone's other member discusses
     e.say('Any thoughts?')
     assert [r['addressee'] for r in rows(e) if r['state']=='queued'] == ['mc']
     e.say('MC, what do you think?')
@@ -292,3 +297,193 @@ def test_wait_control_fences_claimed_reply_and_resume_does_not_restart_it(pair):
     assert e.call('POST', f'/rooms/{e.room}/participation', {'actor':'mc','waiting':False})[0] == 200
     assert next(r for r in rows(e) if r['id']==claim['id'])['state'] == 'cancel_requested'
     assert not [r for r in rows(e) if r['state']=='queued']
+
+
+@pytest.mark.parametrize('text,actor', [
+    ('MC, wait for CI to finish and then tell me the result', 'mc'),
+    ('CoS, stop worrying about the calendar and summarise my week', 'cos'),
+    ('MC, hold off on the merge but draft the PR description', 'mc'),
+    ('MC pause the deploy job please', 'mc'),
+])
+def test_task_verbs_do_not_mute_addressed_agent(pair, text, actor):
+    pair.say(text)
+    with pair.store.connect() as db:
+        assert not db.execute('SELECT * FROM meeting_waits WHERE room=?', (pair.room,)).fetchall()
+    assert actor in [r['addressee'] for r in rows(pair) if r['state']=='queued']
+
+
+@pytest.mark.parametrize('text', ['MC, wait.', 'MC, please wait until I ask', 'MC, stay quiet'])
+def test_standalone_wait_instructions_persist(pair, text):
+    pair.say(text)
+    with pair.store.connect() as db:
+        assert db.execute('SELECT 1 FROM meeting_waits WHERE room=? AND actor=?', (pair.room,'mc')).fetchone()
+    assert not pair.worker.run_once()
+
+
+def test_retry_cannot_bypass_durable_wait(pair):
+    pair.say('MC, inspect this')
+    original=next(r for r in rows(pair) if r['addressee']=='mc')
+    pair.call('POST', f'/rooms/{pair.room}/participation', {'actor':'mc','waiting':True})
+    pair.store.meetings.owner_retry('robert','retry-while-waiting',pair.room,original['id'],{'confirm':True})
+    assert not pair.worker.run_once()
+    assert not pair.relay.calls
+    assert any(r['disposition']=='waiting_by_request' for r in rows(pair))
+
+
+def test_hard_newline_wait_then_address_other_agent(pair):
+    pair.say('MC, please wait\nCoS, what do you think?')
+    assert [r['addressee'] for r in rows(pair) if r['state']=='queued']==['cos']
+    with pair.store.connect() as db:
+        assert db.execute('SELECT 1 FROM meeting_waits WHERE room=? AND actor=?',(pair.room,'mc')).fetchone()
+
+
+@pytest.mark.parametrize('text', ['CoS, wait, this was addressed to MC', 'CoS, wait, this one is for MC'])
+def test_ambiguous_wait_withholds_turn_and_records_choice(pair, text):
+    pair.say(text)
+    assert not [r for r in rows(pair) if r['state']=='queued' and r['addressee']=='cos']
+    with pair.store.connect() as db:
+        assert db.execute("SELECT 1 FROM routing_notes WHERE room=? AND addressee='cos' AND disposition='wait_needs_choice'",(pair.room,)).fetchone()
+        assert not db.execute('SELECT 1 FROM meeting_waits WHERE room=?',(pair.room,)).fetchone()
+    assert not pair.cos.run_once()
+
+
+def test_ambiguous_wait_cannot_be_bypassed_by_peer_handoff(pair):
+    pair.say('CoS, wait, this is for MC.\nMC, review readiness')
+    pair.relay.script=[{'outcome':'done','text':'CoS, what do you think?'}]
+    assert pair.worker.run_once()
+    assert not pair.cos.run_once()
+    assert not [r for r in rows(pair) if r['addressee']=='cos']
+
+
+@pytest.mark.parametrize('body,actors', [
+    ('MC open a defect for the flicker', {'mc'}),
+    ('Okay MC open a defect', {'mc'}),
+    ('Chief of Staff add that to the board', {'cos'}),
+    ('M.C. open a defect', {'mc'}),
+    ('emcee open a defect', {'mc'}),
+    ('Cos add that to the board', {'cos'}),
+    ('C.O.S. add that to the board', {'cos'}),
+    ('MC open a defect. CoS add that to the board', {'mc','cos'}),
+    ('MC open a defect and CoS add that to the board', {'mc','cos'}),
+    ('MC is slow today', set()),
+    ('MC said that yesterday', set()),
+    ('MC can open a defect', set()),
+    ('CoS could help with the board', set()),
+    ('MC would open a defect', set()),
+    ('MC can you open a defect', {'mc'}),
+    ('MC should you open a defect', {'mc'}),
+    ('Everyone what do you think', set()),
+])
+@pytest.mark.parametrize('target', [None, ['mc','cos']])
+def test_voice_shaped_text_uses_normal_authority_rules(pair, body, actors, target):
+    payload={'body':body}
+    if target: payload['recipients']=target
+    assert pair.call('POST', f'/rooms/{pair.room}/events',payload)[0]==201
+    queued=[r for r in rows(pair) if r['state']=='queued']
+    with pair.store.connect() as db:
+        actions={r['addressee'] for r in queued if not db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?',(r['id'],)).fetchone()}
+    assert actions==actors
+    assert {r['addressee'] for r in queued} == ({'mc','cos'} if target or not actors else actors)
+
+
+@pytest.mark.parametrize('body', ['Thanks, CoS.', 'Hi CoS', 'CoS thanks', 'Thank you CoS'])
+@pytest.mark.parametrize('target',[None,'cos'])
+def test_courtesy_does_not_resume_wait(pair, body, target):
+    pair.say('CoS, wait.')
+    pair.say(body, target=target)
+    with pair.store.connect() as db:
+        assert db.execute("SELECT 1 FROM meeting_waits WHERE room=? AND actor='cos'",(pair.room,)).fetchone()
+    assert not pair.cos.run_once()
+
+
+def test_single_mention_prefix_resumes_and_routes_consistently(pair):
+    pair.say('CoS, wait.')
+    pair.say('@cos\nplease look')
+    assert pair.cos.run_once()
+    assert len(pair.cos_relay.calls)==1
+
+
+def test_named_voice_request_overrides_single_picker(pair):
+    pair.call('POST', f'/rooms/{pair.room}/events',{'body':'MC open a defect','target':'cos'})
+    assert [r['addressee'] for r in rows(pair) if r['state']=='queued']==['mc']
+
+
+def test_everyone_unnamed_cannot_gain_tools_when_handoff_flag_off(pair,monkeypatch):
+    monkeypatch.setenv('RECORDS_DISCUSSION_HANDOFFS','0')
+    pair.call('POST', f'/rooms/{pair.room}/events',{'body':'Open a defect','recipients':['mc','cos']})
+    with pair.store.connect() as db:
+        assert all(db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?',(r['id'],)).fetchone() for r in rows(pair) if r['state']=='queued')
+
+
+def test_courtesy_with_selected_recipient_does_not_resume(pair):
+    pair.say('CoS wait')
+    pair.call('POST', f'/rooms/{pair.room}/events',{'body':'Thanks, CoS.','target':'cos'})
+    assert not pair.cos.run_once()
+    with pair.store.connect() as db:
+        assert db.execute("SELECT 1 FROM meeting_waits WHERE room=? AND actor='cos'",(pair.room,)).fetchone()
+
+
+
+
+def test_aliases_are_directory_driven_and_apply_to_waits(pair, monkeypatch):
+    from domains.records import meetings
+    monkeypatch.setitem(meetings.DIRECTORY, 'mc', {'spoken_aliases':['Workshop Lead']})
+    pair.say('Workshop Lead wait')
+    assert not pair.worker.run_once()
+    pair.say('Okay Workshop Lead open a defect')
+    assert pair.worker.run_once()
+    assert len(pair.relay.calls)==1
+
+
+def test_everyone_unnamed_executes_only_discussion_transports(pair):
+    pair.call('POST',f'/rooms/{pair.room}/events',{'body':'What should we do next?','recipients':['mc','cos']})
+    assert pair.worker.run_once()
+    assert pair.cos.run_once()
+    assert not pair.relay.calls and not pair.cos_relay.calls
+    assert len(pair.discussion.calls)==1 and len(pair.cos_discussion.calls)==1
+
+
+@pytest.mark.parametrize('body', [
+    'MC, is the build green?', 'MC, did you file the issue?',
+    'MC, are the tests passing?', 'MC, have you checked CI?',
+    'MC, does the deploy look healthy?', "What's the CI status, MC?",
+    'MC is the build green?', 'MC: is the build green?', 'MC — is the build green?',
+    'Thanks, CoS. What is the CI status, MC?', 'Thanks. What is the CI status, MC?',
+])
+@pytest.mark.parametrize('target',[None,['mc','cos']])
+def test_explicit_and_voice_questions_authorize_mc(pair,body,target):
+    payload={'body':body}
+    if target: payload['recipients']=target
+    assert pair.call('POST',f'/rooms/{pair.room}/events',payload)[0]==201
+    with pair.store.connect() as db:
+        turns=[r for r in rows(pair) if r['state']=='queued']
+        assert {r['addressee'] for r in turns if not db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?',(r['id'],)).fetchone()}=={'mc'}
+
+
+@pytest.mark.parametrize('body',['MC tools look broken','CoS board is empty again',"and cos it's late",'MC is slow today','MC said that yesterday'])
+def test_noun_phrases_and_causal_cos_are_not_commands(pair,body):
+    pair.say(body)
+    with pair.store.connect() as db:
+        assert all(db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?',(r['id'],)).fetchone() for r in rows(pair) if r['state']=='queued')
+
+
+def test_single_teammate_unnamed_message_is_chat(env):
+    env.prove();env.join();env.say('Open a defect for the flicker')
+    assert env.worker.run_once()
+    assert len(env.relay.calls)==1
+
+
+def test_single_waiting_teammate_stays_waiting(env):
+    env.prove();env.join();env.say('MC wait')
+    env.say('Open a defect for the flicker')
+    assert not env.worker.run_once()
+    with env.store.connect() as db:
+        assert db.execute("SELECT 1 FROM routing_notes WHERE room=? AND disposition='waiting_by_request'",(env.room,)).fetchone()
+
+
+def test_one_available_of_two_teammates_is_chat(pair):
+    pair.say('CoS wait')
+    pair.say('Open a defect for the flicker')
+    assert pair.worker.run_once()
+    assert len(pair.relay.calls)==1 and not pair.discussion.calls
+    assert not pair.cos.run_once()

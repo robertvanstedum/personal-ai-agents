@@ -191,3 +191,17 @@ def test_saved_pause_is_actionable_without_dispatch_or_replay(world):
     assert first['outcome'] == 'refused' and first['reason'] == 'mc_paused'
     assert world.bridge.run(IDS) == first
     assert world.backend.calls == 0 and 'bind' not in world.events
+
+
+@pytest.mark.parametrize('prefix', ['/guild-next', '/production-craft'])
+def test_approval_path_uses_current_environment(world, prefix):
+    world.bridge.craft_prefix=prefix
+    requests=[]
+    original=world.backend.stream_turn
+    def capture(req, cancel=None):
+        requests.append(req)
+        return original(req, cancel=cancel)
+    world.backend.stream_turn=capture
+    assert world.bridge.run(IDS)['outcome']=='done'
+    assert requests[0].context['page']==f'{prefix}/guild/build?c=c-abc'
+    assert 'https://dev.minimoi.ai' not in requests[0].text

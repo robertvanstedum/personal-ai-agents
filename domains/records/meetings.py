@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 import json
 import os
 import re
+from pathlib import Path
 from uuid import uuid4
 
 from domains.records.store import Problem, canonical, now, string
@@ -238,52 +239,103 @@ def sweep(db):
     round_progress(db, moment)
 
 
-def owner_prose(text, *, strip_prefix=True):
-    """Ignore quoted/code examples and old UI-generated mention-only prefixes."""
+# Spoken aliases are directory data, shared by requests, waits and resolution.
+DIRECTORY = json.loads(Path(__file__).with_name("teammate_directory.json").read_text())
+BOUNDARY = r"(?:^|[.!?;]\s+|\n[ \t]*|\band\s+)"
+LEAD = r"(?:(?:okay|ok|hey|hi|hello|so)[, \t]+)*"
+# For punctuation-free voice, require a request-shaped tail rather than
+# assuming any noun phrase after a name grants tools.
+IMPERATIVE = re.compile(r"^(?:open|create|add|help|ask|discuss|listen|answer|investigate|report|check|inspect|review|read|file|summarise|summarize|tell|show|find|explain|compare|draft|write|update|remove|delete|cancel|stop|wait|pause|resume|hold|stay|run|test|deploy|fix|build|plan|schedule|search|look|confirm|give|take|make|continue|proceed|retry|prove|send|start|end|save|record)\b", re.I)
+QUESTION = re.compile(r"^(?:what|how|why|when|where|who|which)\b|^(?:can|could|would|will|should|did|do|have|are)\s+you\b|^you\s+(?:here|there)\b", re.I)
+COURTESY = re.compile(r"^(?:thanks|thank you|hello|hi|hey|great|well done)\b", re.I)
+
+
+def aliases(row):
+    return {row["id"], row["label"], row["label"].replace(" ", ""),
+            *DIRECTORY.get(row["id"], {}).get("spoken_aliases", [])}
+
+
+def owner_prose(text):
+    """Remove quoted/code evidence; retain explicit mention lines as owner text."""
     text = re.sub(r"```[\s\S]*?(?:```|$)", "", text or "")
     text = re.sub(r'`[^`]*`|"[^"\n]*"|“[^”\n]*”', "", text)
-    lines = [line for line in text.splitlines() if not line.lstrip().startswith(">")]
-    while strip_prefix and len(lines) > 1 and re.fullmatch(r"\s*(?:@[A-Za-z][A-Za-z0-9_-]*\s*)+", lines[0]):
-        lines.pop(0)
-    return "\n".join(lines).strip()
+    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith(">")).strip()
 
 
 def addressed_names(db, room, text):
-    """Recognize a directory vocative at a sentence boundary, never a mention in prose."""
-    names = []
+    """One interpretation for routing and resume, regardless of input modality."""
     text = owner_prose(text)
+    # Old UI audience prefixes must not authorize everyone when the actual
+    # message names a specific agent. A single @name line is a direct address.
+    lines = text.splitlines()
+    if len(lines) > 1 and re.fullmatch(r"(?:@[\w-]+[ \t]+)+@[\w-]+[ \t]*", lines[0]):
+        return addressed_names(db, room, "\n".join(lines[1:]))
+    names = []
     for row in db.execute("SELECT p.id,p.label FROM principals p JOIN members m ON m.actor=p.id WHERE m.room=? AND p.id<>'robert'", (room,)):
-        for alias in {row["id"], row["label"], row["label"].replace(" ", "")}:
-            name = re.escape(alias)
-            if (re.search(r"(?:^|[.!?\n]\s+)(?:(?:hi|hello|hey|thanks|thank you)[, ]+)?@?" + name + r"(?:\s*[,;:!?]|\s+(?:please|just wait|wait|pause|stop|resume|you here|you there|can you|could you|would you|will you|what|how|are you|do you)\b|$)", text, re.I)
-                    or re.search(r",\s*" + name + r"\s*[?!.]*$", text, re.I)):
+        for alias in sorted(aliases(row), key=len, reverse=True):
+            # A trailing vocative is explicit, except courtesy-only messages.
+            trailing = re.search(r",[ \t]*@?" + re.escape(alias) + r"[ \t]*[?!.]*(?=$|\n)", text, re.I)
+            preceding_clause = re.split(r"[.!?;\n]", text[:trailing.start()])[-1].strip() if trailing else ""
+            if trailing and preceding_clause and not COURTESY.match(preceding_clause):
                 names.append(row["id"])
+                break
+            pattern = BOUNDARY + LEAD + r"(?P<name>@?" + re.escape(alias) + r")(?=$|[\s,;:!?—–-]|['’]s)"
+            for match in re.finditer(pattern, text, re.I):
+                after = text[match.end():]
+                punctuated = bool(re.match(r"[ \t]*[,;:—–-]", after))
+                if match.group('name') == 'cos' and match.start('name') != 0 and not punctuated:
+                    continue  # conversational "and cos ..." is not an addressee
+                tail = after.lstrip(" \t,;:—–-\n")
+                request = re.sub(r"^(?:(?:please|just)\s+)+", "", tail, flags=re.I)
+                question = bool(re.match(r"^(?:is|did|are|have|has|does|was|were|can|could|would|will|should)\b[^.!?;\n]*\?", tail, re.I))
+                if tail and not COURTESY.match(tail) and (punctuated or question or IMPERATIVE.match(request) or QUESTION.match(request)):
+                    names.append(row["id"])
+                    break
+            if row["id"] in names:
                 break
     return names
 
 
-def waiting_names(db, room, text):
+def waiting_names(db, room, text, *, ambiguous=False):
     text = owner_prose(text)
     waiting = []
+    ending = r"[ \t]*[,;:—–-]" if ambiguous else r"[ \t]*(?=[.!?\n]|$)"
     for row in db.execute("SELECT p.id,p.label FROM principals p JOIN members m ON m.actor=p.id WHERE m.room=? AND p.id<>'robert'", (room,)):
-        for alias in {row["id"], row["label"]}:
-            if re.search(r"(?:^|[.!?\n]\s+)@?" + re.escape(alias) + r"\s*[,;:]?\s*(?:please\s+)?(?:just\s+)?(?:wait|pause|stop|stay quiet|hold off)\b", text, re.I):
+        for alias in aliases(row):
+            if re.search(BOUNDARY + LEAD + r"@?" + re.escape(alias) + r"\s*[,;:—–-]?\s*(?:please\s+)?(?:just\s+)?(?:wait|pause|stop|stay quiet|hold off)(?:[ \t]+until I ask)?(?:[ \t]+please)?" + ending, text, re.I):
                 waiting.append(row["id"])
                 break
     return waiting
 
 
 def routing_names(db, room, body, target, meeting):
+    """Return audience and the subset authorized for normal owner turns."""
     selected = list(target) if isinstance(target, list) else [target] if target else []
     spoken = addressed_names(db, room, body)
-    # A single deliberate selection remains authoritative. Everyone is an
-    # audience, not permission for an unaddressed teammate to interrupt.
+    if meeting["kind"] == "proof":
+        names = selected or spoken or [meeting["facilitator"] or "mc"]
+        return names, set(names)
     specific = len(selected) == 1 and selected[0].lower() not in EVERYONE
-    explicit = selected if specific else spoken or selected or [m.group(1) for m in MENTION.finditer(owner_prose(body, strip_prefix=False))]
-    broadcast = meeting["kind"] != "proof" and not explicit
-    names = explicit or (["everyone"] if meeting["kind"] != "proof" and os.environ.get("RECORDS_DISCUSSION_HANDOFFS") == "1"
-                         else [meeting["facilitator"] or "mc"])
-    return names, broadcast
+    if specific:
+        # A selected recipient is not permission to resume them on a courtesy.
+        courtesy_body = owner_prose(body)
+        for row in db.execute("SELECT p.id,p.label FROM principals p JOIN members m ON m.actor=p.id WHERE m.room=?", (room,)):
+            for alias in sorted(aliases(row), key=len, reverse=True):
+                courtesy_body = re.sub(r"(?<!\w)@?" + re.escape(alias) + r"(?!\w)", "", courtesy_body, flags=re.I)
+        courtesy = COURTESY.match(courtesy_body.lstrip(" ,;:—–"))
+        return spoken or selected, set(spoken or ([] if courtesy else selected))
+    if not spoken:
+        available = [row['id'] for row in db.execute(
+            "SELECT p.id FROM principals p JOIN members m ON m.actor=p.id WHERE m.room=? AND p.id<>'robert' AND m.role='contributor'", (room,))
+            if card(db, row['id']) and hosted(db, row['id']) and accepted_member(db, room, row['id'])
+            and not db.execute("SELECT 1 FROM meeting_waits WHERE room=? AND actor=?", (room,row['id'])).fetchone()]
+        if len(available) == 1:
+            # The sole available teammate is the chat recipient. Preserve the
+            # full audience so waiting participants still get explanatory notes.
+            return selected or ['everyone'], set(available)
+    # A group/Everyone is the audience, not collective action authorization.
+    names = list(dict.fromkeys(selected + spoken)) if selected else spoken or ["everyone"]
+    return names, set(spoken)
 
 
 def round_ready(db, turn_id):
@@ -433,7 +485,8 @@ class Meetings:
         # Unaddressed room discussion must not duplicate an external action in
         # two tool-enabled agents. Both may discuss; only a named/selected
         # recipient gets an execution-capable owner turn.
-        _, broadcast = routing_names(db, room, event["body"], target, meeting)
+        _, action_names = routing_names(db, room, event["body"], target, meeting)
+        action_names = {self.resolve(db, room, name) for name in action_names}
         for principal, display, disposition in notes:
             db.execute("INSERT OR IGNORE INTO routing_notes VALUES(?,?,?,?,?,?)",
                        (room, event["seq"], principal, display, disposition, now()))
@@ -446,7 +499,7 @@ class Meetings:
             # ready. Nobody is permanently first or held behind an absent peer.
             db.execute("INSERT INTO turn_order VALUES(?,?,?,?,?,NULL,NULL)",
                        (turn, event["id"], 0, None, now()))
-            if broadcast and os.environ.get("RECORDS_DISCUSSION_HANDOFFS") == "1":
+            if meeting["kind"] != "proof" and principal not in action_names:
                 db.execute("INSERT INTO discussion_turns VALUES(?,?)", (turn, event["id"]))
         db.execute("UPDATE meetings SET cursor=MAX(cursor,?),updated=? WHERE room=?", (event["seq"], now(), room))
 
@@ -475,6 +528,9 @@ class Meetings:
             return
         if db.execute("SELECT 1 FROM meeting_waits WHERE room=? AND actor=?", (turn["room"], principal)).fetchone():
             return
+        if db.execute("SELECT 1 FROM routing_notes WHERE room=? AND trigger_seq=? AND addressee=? AND disposition='wait_needs_choice'",
+                      (turn["room"], turn["trigger_seq"], principal)).fetchone():
+            return
         if db.execute("SELECT 1 FROM round_peer_replies WHERE round_id=? AND recipient=?",
                       (order["round_id"], principal)).fetchone():
             return
@@ -502,19 +558,16 @@ class Meetings:
     def route(self, db, room, body, target, meeting):
         names, _ = routing_names(db, room, body, target, meeting)
         waits = waiting_names(db, room, body)
+        ambiguous_waits = set(waiting_names(db, room, body, ambiguous=True)) - set(waits)
         for actor in waits:
             for pending in db.execute("SELECT id,state FROM turns WHERE room=? AND addressee=? AND state IN ('queued','claimed','running','recovering')", (room, actor)).fetchall():
                 set_turn(db, pending['id'], state='cancelled' if pending['state'] == 'queued' else 'cancel_requested', disposition='paused_by_owner')
             db.execute("INSERT INTO meeting_waits VALUES(?,?,?) ON CONFLICT(room,actor) DO UPDATE SET updated=excluded.updated", (room, actor, now()))
         # A fresh direct request resumes a waiting teammate. A broadcast does not.
-        explicit = addressed_names(db, room, body) or [m.group(1) for m in MENTION.finditer(owner_prose(body))]
-        if isinstance(target, str) and target.lower() not in EVERYONE:
-            explicit = [target]
-        elif isinstance(target, list) and len(target) == 1 and target[0].lower() not in EVERYONE:
-            explicit = target
+        _, explicit = routing_names(db, room, body, target, meeting)
         for raw in explicit:
             actor = self.resolve(db, room, raw)
-            if actor not in waits:
+            if actor not in waits and actor not in ambiguous_waits:
                 db.execute("DELETE FROM meeting_waits WHERE room=? AND actor=?", (room, actor))
         expanded = []
         for raw in names:
@@ -534,6 +587,9 @@ class Meetings:
                 continue
             seen.add(key)
             if principal == "robert":
+                continue
+            if principal in ambiguous_waits:
+                notes.append((principal, label_of(db, principal), "wait_needs_choice"))
                 continue
             if principal and db.execute("SELECT 1 FROM meeting_waits WHERE room=? AND actor=?", (room, principal)).fetchone():
                 notes.append((principal, label_of(db, principal), "waiting_by_request"))
@@ -557,7 +613,7 @@ class Meetings:
     def resolve(db, room, raw):
         value = raw.strip().lower()
         for row in db.execute("SELECT id,label FROM principals").fetchall():
-            labels = {row["id"].lower(), row["label"].strip().lower(), row["label"].strip().lower().replace(" ", "")}
+            labels = {alias.lower() for alias in aliases(row)}
             if value in labels or value == row["label"].split()[0].lower():
                 return row["id"]
         return None
@@ -1127,6 +1183,8 @@ class Meetings:
             return {"turn": None}
 
     def claim_refusal(self, db, t):
+        if db.execute("SELECT 1 FROM meeting_waits WHERE room=? AND actor=?", (t["room"], t["addressee"])).fetchone():
+            return "waiting_by_request"
         if db.execute("SELECT 1 FROM discussion_turns WHERE turn_id=?", (t["id"],)).fetchone():
             if db.execute("SELECT 1 FROM events WHERE room=? AND seq>? AND actor='robert' AND kind='message' AND origin IS NULL", (t["room"], t["trigger_seq"])).fetchone():
                 return "newer_message"

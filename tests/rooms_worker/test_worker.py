@@ -89,8 +89,10 @@ def env(tmp_path):
         w.housekeeping()
     e.join = join
 
-    def say(text):
-        status, body = call("POST", f"/rooms/{room}/events", {"body": text})
+    def say(text, target=None):
+        payload = {"body": text}
+        if target: payload["target"] = target
+        status, body = call("POST", f"/rooms/{room}/events", payload)
         assert status == 201, body
         return body["result"]
     e.say = say

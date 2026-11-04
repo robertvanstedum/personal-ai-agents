@@ -26,8 +26,8 @@ const nodes = new Map();
 const storage = new Map();
 const $ = s => { if (!nodes.has(s)) nodes.set(s, new Element('div')); return nodes.get(s); };
 const $$ = s => $('[data-rm-to]').find(s);
-const context = vm.createContext({ $, $$, el: (t,a,v) => new Element(t,a,v), assert, console, URLSearchParams, announce(){},
-  window: { location: { search: "" }, setInterval(){}, clearInterval(){}, clearTimeout(){}, sessionStorage: {getItem(k){return storage.get(k)},setItem(k,v){storage.set(k,v)},removeItem(k){storage.delete(k)}} },
+const context = vm.createContext({ $, $$, el: (t,a,v) => new Element(t,a,v), assert, console, URL, URLSearchParams, announce(){},
+  window: { location: { search: "", origin:"https://dev.minimoi.ai" }, setInterval(){}, clearInterval(){}, clearTimeout(){}, sessionStorage: {getItem(k){return storage.get(k)},setItem(k,v){storage.set(k,v)},removeItem(k){storage.delete(k)}} },
   document: { addEventListener(){}, createTextNode(text){return new Element("#text",{},text);} }, newKey: () => 'test-key' });
 const source = fs.readFileSync(process.argv[1], 'utf8').replace(/^import .*;$/mg,'').replace(/^export /mg,'');
 vm.runInContext(source, context);
@@ -61,13 +61,37 @@ vm.runInContext(String.raw`
   assert.equal(eventBody({...event,actor_kind:'human'}).textContent,capture);
   const incomplete='Hello\n'+String.fromCharCode(96).repeat(3)+'capture\nunfinished';
   assert.equal(eventBody({...event,body:incomplete}).textContent,incomplete);
+  page={urls:{floor:'/guild-next/guild/build'}};
   const approval = eventBody({actor_kind:'agent',body:'Approve at https://dev.minimoi.ai/guild-next/guild/build?c=c-123'});
   assert.equal(approval.children[1].tag,'a');
   assert.equal(approval.children[1].attrs.href,'https://dev.minimoi.ai/guild-next/guild/build?c=c-123');
+  window.location.origin='https://minimoi.ai';
+  page={urls:{floor:'/production-craft/guild/build'}};
+  for (const address of ['/production-craft/guild/build?c=c-123','https://minimoi.ai/production-craft/guild/build?c=c-123']) {
+    const rendered=bodyParagraph('Approve at '+address+'.');
+    assert.equal(rendered.children[1].tag,'a');
+    assert.equal(rendered.children[1].attrs.href,address);
+    assert.equal(rendered.children[2].textContent,'.');
+  }
+  assert.equal(bodyParagraph('[review](/production-craft/guild/build?c=c-123)').children[1].attrs.href,'/production-craft/guild/build?c=c-123');
+  for (const address of ['https://dev.minimoi.ai/production-craft/guild/build?c=c-123','https://evil.example/production-craft/guild/build?c=c-123','/guild-next/guild/build?c=c-123']) {
+    assert.equal(bodyParagraph('Approve at '+address).children.length,0);
+  }
   current = 'room-a'; room = { id: current, state: 'active', events: [{actor:'robert',kind:'message',seq:20}] };
   page = { storage_ns: 'test', urls:{floor:'/guild-next/guild/build'} };
   const people = ['codex','claude-code','mc'];
   meeting = {room:current, participants:people.map(id=>({id,label:id,teammate:true,rsvp:'accepted'})), turns:[], routing_notes:[], meeting:{facilitator:'mc'}};
+  meeting.routing_notes=[{trigger_seq:20,addressee:'mc',label:'Master Craftsman',disposition:'wait_needs_choice'}];
+  renderTurns();
+  const choiceRow=$('[data-rm-turns]').children.find(p=>p.children.some(c=>c.textContent?.startsWith('Not sent')));
+  assert.equal(choiceRow.children[1].textContent,'Wait Master Craftsman');
+  assert.equal(choiceRow.children[1].dataset.rmParticipationActor,'mc');
+  assert.equal(choiceRow.children[2].textContent,'Send to Master Craftsman');
+  $('[data-rm-input]').value='My unsent draft';
+  choiceRow.children[2].handlers.click();
+  assert.deepEqual([...targets],['mc']);
+  assert.equal($('[data-rm-input]').value,'My unsent draft');
+  targets.clear(); requireRecipient=false; meeting.routing_notes=[];
   let resolveOld;
   records=async()=>new Promise(resolve=>{resolveOld=resolve;});
   const oldRead=loadMeeting(); current='room-b';
@@ -125,6 +149,11 @@ vm.runInContext(String.raw`
   click({'data-rm-to-clear':true}); assert.equal(targets.size,0);
   $('[data-rm-input]').value = '@everyone hello'; await send();
   assert.equal(sent.body.body,'@everyone hello');
+  // Dictation supplies the same composer value; no To selection or synthetic mentions.
+  $('[data-rm-input]').value='Okay MC open a defect for the flicker'; await send();
+  assert.equal(sent.body.body,'Okay MC open a defect for the flicker');
+  assert.equal(sent.body.target,undefined); assert.equal(sent.body.recipients,undefined);
+
   meeting.participants.push(...['a','b','c'].map(id=>({id,label:id,teammate:true,rsvp:'accepted'})));
   renderTo(); assert.ok($('[data-rm-to]').querySelector('[data-rm-picker]'));
   recipientFilter='claude'; filterRecipients();

@@ -57,13 +57,28 @@ const TEXT = /\.(txt|md|csv|json)$/i;
 
 function bodyParagraph(text) {
   const p = el('p', {class:'rm-body'});
-  const links = /https:\/\/github\.com\/robertvanstedum\/personal-ai-agents\/issues\/\d+|(?:https:\/\/dev\.minimoi\.ai)?\/guild-next\/guild\/build\?c=[A-Za-z0-9_-]+/g;
-  const matches = [...text.matchAll(links)];
+  // Match whole URL tokens so a foreign origin cannot become a local link by suffix.
+  const links = /https?:\/\/[^\s<>"']+|\/[^\s<>"']+/g;
+  const floor = page?.urls?.floor;
+  const matches = [...text.matchAll(links)].map(match => {
+    match[0] = match[0].replace(/[.,;!)\]]*$/, '');
+    return match;
+  }).filter(match => {
+    const value = match[0];
+    if (/^https:\/\/github\.com\/robertvanstedum\/personal-ai-agents\/issues\/\d+$/.test(value)) return true;
+    if (!floor) return false;
+    try {
+      const url = new URL(value, window.location.origin);
+      const expected = new URL(floor, window.location.origin);
+      return url.origin === window.location.origin && url.pathname === expected.pathname &&
+        /^\?c=[A-Za-z0-9_-]+$/.test(url.search) && !url.hash && !url.username && !url.password;
+    } catch { return false; }
+  });
   if (!matches.length) return el('p', {class:'rm-body'}, text);
   let offset = 0;
   for (const match of matches) {
     p.append(document.createTextNode(text.slice(offset, match.index)));
-    p.append(el('a', {href:match[0], rel:'noopener noreferrer'}, match[0].includes('/guild-next/') ? 'Open Craft request and approval' : match[0]));
+    p.append(el('a', {href:match[0], rel:'noopener noreferrer'}, match[0].includes('github.com/') ? match[0] : 'Open Craft request and approval'));
     offset = match.index + match[0].length;
   }
   p.append(document.createTextNode(text.slice(offset)));
@@ -962,6 +977,7 @@ function turnLine(t) {
 function noteLine(n) {
   const f = facilitator();
   const alt = f ? ` ${labelOf(f)} can answer — say @${handle(f)} or leave it unaddressed.` : '';
+  if (n.disposition === 'wait_needs_choice') return `Not sent to ${n.label}: did you want them to wait? Choose Wait, or select Send to and write a fresh request.`;
   if (n.disposition === 'waiting_by_request') return `${n.label} is waiting as requested. Address them directly to resume.`;
   if (n.disposition === 'no_connector') return `Not sent to ${n.label}: not available in Rooms yet.${alt}`;
   if (n.disposition === 'not_proven') return `Not sent to ${n.label}: not yet proven. Use Invite → Prove first.`;
@@ -987,12 +1003,26 @@ function renderTurns() {
       if (line) rows.push({ ...line, turn: t });
     }
     const lastMine = [...(room?.events || [])].reverse().find((e) => e.actor === 'robert' && e.kind === 'message');
-    for (const n of meeting.routing_notes) if (lastMine && n.trigger_seq === lastMine.seq) rows.push({ text: noteLine(n), note: true });
+    for (const n of meeting.routing_notes) if (lastMine && n.trigger_seq === lastMine.seq) rows.push({ text: noteLine(n), note: n });
   }
   box.hidden = !rows.length;
   box.replaceChildren(...rows.map((row) => {
     const p = el('p', { class: 'rm-turn', 'data-rm-turn': row.turn ? row.turn.id : '', 'data-state': row.turn ? row.turn.state : (row.round ? 'round' : 'note') });
     p.append(el('span', {}, row.text));
+    if (row.note?.disposition === 'wait_needs_choice') {
+      const actor = row.note.addressee, roomId = current;
+      const wait = el('button', {type:'button',class:'rm-btn','data-rm-participation-actor':actor,'data-waiting':'true','data-participation-room':roomId}, `Wait ${row.note.label}`);
+      const sendTo = el('button', {type:'button',class:'rm-btn'}, `Send to ${row.note.label}`);
+      wait.disabled = sendTo.disabled = meetingStale || signedOut || room?.state !== 'active';
+      wait.addEventListener('click', () => changeParticipation(wait));
+      sendTo.addEventListener('click', () => {
+        if (current !== roomId || meetingStale || signedOut || room?.state !== 'active') return;
+        targets.clear(); targets.add(actor); requireRecipient = true;
+        saveRecovery(); renderTo(); $('[data-rm-input]').focus();
+        status(`Write a fresh request for ${row.note.label}. Nothing was resent.`);
+      });
+      p.append(wait, sendTo);
+    }
     if (row.turn?.disposition === 'mc_paused') p.append(el('a', {href: page.urls.floor, class: 'rm-btn'}, 'Review in Craft'));
     for (const a of row.actions || []) {
       const label = { stop: 'Stop reply', retry: 'Retry', attempt: 'Start a new attempt', continue: `Continue without ${labelOf(row.turn.addressee)}`, end: 'End',
@@ -1092,8 +1122,8 @@ function renderTo() {
   } else controls.push(...chips);
   controls.push(el('button', { type: 'button', class: 'rm-btn rm-to-clear', 'data-rm-to-clear': true }, 'Automatic'));
   controls.push(el('span', { class: 'small rm-to-hint', 'aria-live': 'polite' }, selected.length
-    ? (all ? 'Address one teammate by name to give them the floor. Waiting teammates stay quiet on group requests.' : `${selected.map((p) => p.label).join(', ')} selected to answer.`)
-    : requireRecipient ? 'Choose who should answer before sending. Your draft is kept.' : 'Address a teammate by name, or ask the room. Everyone can answer an open question.'));
+    ? (all ? 'Everyone discusses. Name someone — typed or spoken — to have them act.' : `${selected.map((p) => p.label).join(', ')} selected to answer.`)
+    : requireRecipient ? 'Choose who should answer before sending. Your draft is kept.' : 'Address a teammate by name, or ask the room. Everyone discusses. Name someone — typed or spoken — to have them act.'));
   const menu = el('details', { class: 'rm-to-menu', 'data-rm-to-menu': true });
   menu.open = !!menuWasOpen;
   const sum = el('summary', { class: 'rm-to-sum', 'aria-label': `Send to: ${said}`, title: 'Who hears you' });

@@ -155,7 +155,7 @@ class Bridge:
                     principal=self.principal, conversation_id=conv['id'], note_id=note_id,
                     session_conversation_id=session_id)
             parts = messages(turn)
-            review_url = f"https://dev.minimoi.ai{self.craft_prefix}/guild/build?c={conv['id']}"
+            review_url = f"{self.craft_prefix}/guild/build?c={conv['id']}"
             req = TurnRequest(conversation_id=session_id, note_request_id=note_id, correlation_id=correlation,
                 text=scrub(parts[0]['content'] + '\n\n' + parts[1]['content']
                      + '\n\nOwner message for this turn:\n' + parts[2]['content']
