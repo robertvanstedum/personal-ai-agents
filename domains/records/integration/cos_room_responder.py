@@ -58,6 +58,8 @@ def snapshot(room):
     used = 0
     for event in reversed(room["events"][-24:]):
         item = {k: event.get(k) for k in ("id", "seq", "actor", "actor_label", "kind", "context_class")}
+        if event.get("origin") is not None:                  # keep platform posts distinguishable from his own words (F1)
+            item["origin"] = event["origin"]
         item["body"] = event["body"][:1400]
         item["body_truncated"] = len(event["body"]) > 1400
         size = len(encoded(item))
@@ -231,7 +233,7 @@ def respond(selector, request_id, *, client, model, journal):
         text, model_name = generated["text"], generated["reported_model"]
         if not isinstance(text, str) or not 1 <= len(text.strip()) <= 6000:
             raise RoomBridgeError("Model output failed contribution validation.")
-        reference = next((e["id"] for e in reversed(data["records"]) if e["actor"] == "robert" and e["kind"] == "message"), None)
+        reference = next((e["id"] for e in reversed(data["records"]) if e["actor"] == "robert" and e["kind"] == "message" and e.get("origin") is None), None)
         body = (f"{RUNTIME}\nGateway-reported model: {model_name}\n"
                 f"Snapshot through record sequence {guard['last_seq']}; omitted {data['omitted_records']} earlier records.\n"
                 f"Snapshot SHA-256: {sha(encoded(data))}\n\n{text.strip()}\n\n"

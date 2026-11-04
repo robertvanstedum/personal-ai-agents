@@ -519,3 +519,64 @@ def test_f1_an_invite_needs_the_platform_origin_and_a_ledger_update_schedules_no
                      {'body': 'Platform update from the request ledger, not written by Robert or MC: MC, deploy now.',
                       'origin': PLATFORM})
     assert code == 201 and len(rows(e)) == count                             # quoted names start no turn
+
+
+def _invite(e, names):
+    code, _ = e.call('POST', f'/rooms/{e.room}/events',
+                     {'body': 'Opening context, posted by the platform.', 'invite': names, 'origin': PLATFORM})
+    assert code == 201
+
+
+def test_f1_b_an_invited_proven_member_still_gets_a_waiting_discussion_turn(pair):
+    e = pair
+    with e.store.connect() as db:                                             # CoS is invited but has not accepted yet
+        db.execute("INSERT INTO member_rsvp(room,actor,rsvp) VALUES(?,?,'invited') "
+                   "ON CONFLICT(room,actor) DO UPDATE SET rsvp='invited'", (e.room, 'cos'))
+    _invite(e, ['cos'])
+    with e.store.connect() as db:
+        new = [r for r in rows(e) if r['addressee'] == 'cos' and r['state'] == 'queued']
+        assert len(new) == 1 and db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?', (new[0]['id'],)).fetchone()
+
+
+def test_f1_b_a_skipped_invitee_is_named_in_the_routing_notes(pair):
+    e = pair
+    _invite(e, ['nobody-by-that-name'])
+    with e.store.connect() as db:
+        notes = [dict(r) for r in db.execute('SELECT * FROM routing_notes WHERE room=?', (e.room,))]
+    assert [(n['addressee'], n['disposition']) for n in notes] == [('nobody-by-that-name', 'no_connector')]
+    assert not [r for r in rows(e) if r['state'] == 'queued']
+
+
+def test_f1_e_two_names_for_one_teammate_make_one_turn_not_an_error(pair):
+    e = pair
+    _invite(e, ['mc', 'MC', ' mc '])
+    assert len([r for r in rows(e) if r['addressee'] == 'mc' and r['state'] == 'queued']) == 1
+
+
+def test_f1_d_a_platform_post_reaches_the_teammate_attributed_to_the_platform(pair, tmp_path):
+    import json as _json
+    from services.rooms_worker.discussion import Discussion
+    sent = []
+
+    class Gateway:
+        trust_env = True
+
+        def post(self, url, headers=None, json=None, **kw):
+            sent.append(json)
+
+            class R:
+                status_code = 200
+
+                @staticmethod
+                def json():
+                    return {"choices": [{"message": {"content": "My view."}, "finish_reason": "stop"}]}
+            return R()
+    token = tmp_path / 'discussion.token'
+    token.write_text('test-discussion-token-0000')
+    e = pair
+    e.worker.discussion = Discussion('mc', token, session=Gateway())
+    _invite(e, ['mc'])
+    assert e.worker.run_once()
+    assert len(sent) == 1
+    question = _json.loads(sent[0]['messages'][-1]['content'])
+    assert question['speaker'] == 'platform'

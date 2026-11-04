@@ -1985,52 +1985,61 @@ class DispatcherStore:
 
     # ---- partnership v1.1 seam (decision 6): task fence, operation ids, attempts (C06, E03) ----------------------
 
+    _FENCE_MAX = 2**63 - 1
+
     def set_task_fence(self, operation_id, *, task_id, fence, digest) -> dict:
-        """Raise the authority's fence for a task (monotonic maximum) under one operation id. The same operation with
-        the same digest answers duplicate; another digest under that id is refused operation_id_reused."""
-        _need(type(fence) is int and fence >= 0, "fence_invalid")
+        """Raise the authority's fence for a task (monotonic maximum) under one operation id. Only the task service
+        issues fences. The same operation (same task, fence and digest) answers duplicate; anything else under that id
+        is refused operation_id_reused."""
+        _need(type(fence) is int and 0 <= fence <= self._FENCE_MAX, "fence_invalid")
+        _need(type(task_id) is str and 1 <= len(task_id) <= 200, "task_id_invalid")
+        _need(type(digest) is str and 1 <= len(digest) <= 200, "digest_invalid")
         with self._tx() as cur:
-            op = self._task_operation(cur, operation_id, lock=True)
-            if op is not None:
-                _need(op["kind"] == "set_fence" and op["digest"] == digest, "operation_id_reused")
+            op, fresh = self._claim_operation(cur, operation_id, "set_fence")
+            if not fresh:
+                _need(op["kind"] == "set_fence" and op["applied"] and op["task_id"] == task_id
+                      and op["fence"] == fence and op["digest"] == digest, "operation_id_reused")
                 return {"state": "duplicate", "receipt": self._op_receipt(op)}
             cur.execute("""INSERT INTO guild.mc_task_fences (principal, environment, task_id, fence)
                 VALUES (%s,%s,%s,%s) ON CONFLICT (principal, environment, task_id)
                 DO UPDATE SET fence = GREATEST(guild.mc_task_fences.fence, EXCLUDED.fence), updated_at = clock_timestamp()""",
                         (self.principal, self.environment, task_id, fence))
-            cur.execute("""INSERT INTO guild.mc_task_operations (principal, environment, operation_id, kind, task_id,
-                digest, fence, applied) VALUES (%s,%s,%s,'set_fence',%s,%s,%s,true) RETURNING *""",
-                        (self.principal, self.environment, operation_id, task_id, digest, fence))
+            cur.execute("""UPDATE guild.mc_task_operations SET applied=true, task_id=%s, digest=%s, fence=%s
+                WHERE principal=%s AND environment=%s AND operation_id=%s RETURNING *""",
+                        (task_id, digest, fence, self.principal, self.environment, operation_id))
             return {"state": "applied", "receipt": self._op_receipt(cur.fetchone())}
 
     def admit_card_for_task(self, operation_id, card, *, task_id, fence, attempt, grant_id, owner_turn_ids,
                             proposal_id, approved_operation_id, approval_expires_at, by, note=None) -> dict:
-        """admit_card under a task-service operation id, serialized with the task fence: inside admit_card's own
-        transaction the task's fence row is locked; a fence below it is refused fenced; an attempt at or below one
-        a lookup declared absent is refused attempt_declared_absent; the operation id is bound to the card id once."""
-        _need(type(attempt) is int and attempt >= 1 and type(fence) is int and fence >= 0, "attempt_invalid")
+        """admit_card under a task-service operation id, inside admit_card's own transaction. Lock order is always
+        operation row, then fence row (as in set_task_fence), so the two never deadlock.
+        - An applied operation answers duplicate when it is the same task, card and digest (no fence check, nothing
+          rewritten); anything else under its id is refused operation_id_reused.
+        - An attempt at or below one a lookup declared absent is refused attempt_declared_absent.
+        - A fence below the task's current fence is refused fenced.
+        - Otherwise the operation is bound to this task, fence and card once, and the card is admitted."""
+        _need(type(attempt) is int and 1 <= attempt <= 2**31 - 1 and type(fence) is int and 0 <= fence <= self._FENCE_MAX,
+              "attempt_invalid")
+        _need(type(task_id) is str and 1 <= len(task_id) <= 200, "task_id_invalid")
+
         def precheck(cur, compiled):
+            op, fresh = self._claim_operation(cur, operation_id, "admit_bundle")
+            if not fresh:
+                _need(op["kind"] == "admit_bundle", "operation_id_reused")
+                if op["applied"]:
+                    _need(op["task_id"] == task_id and op["digest"] == compiled.digest
+                          and op["card_id"] == compiled.card_id, "operation_id_reused")
+                    return                                 # admit_card answers duplicate for the recorded card
+                _need(attempt > op["dead_through"], "attempt_declared_absent")
             cur.execute("""INSERT INTO guild.mc_task_fences (principal, environment, task_id, fence) VALUES (%s,%s,%s,0)
                 ON CONFLICT DO NOTHING""", (self.principal, self.environment, task_id))
             cur.execute("""SELECT fence FROM guild.mc_task_fences WHERE principal=%s AND environment=%s AND task_id=%s
                 FOR UPDATE""", (self.principal, self.environment, task_id))
             _need(fence >= cur.fetchone()["fence"], "fenced")
-            op = self._task_operation(cur, operation_id, lock=True)
-            if op is not None:
-                _need(op["kind"] == "admit_bundle", "operation_id_reused")
-                placeholder = op["digest"] == "unknown" and not op["applied"]   # only a lookup has seen this id
-                _need(placeholder or (op["digest"] == compiled.digest and op["card_id"] == compiled.card_id),
-                      "operation_id_reused")
-                _need(op["applied"] or attempt > op["dead_through"], "attempt_declared_absent")
-                cur.execute("""UPDATE guild.mc_task_operations SET applied=true, digest=%s, card_id=%s, task_id=%s,
-                    fence=%s WHERE principal=%s AND environment=%s AND operation_id=%s""",
-                            (compiled.digest, compiled.card_id, task_id, fence, self.principal, self.environment,
-                             operation_id))
-            else:
-                cur.execute("""INSERT INTO guild.mc_task_operations (principal, environment, operation_id, kind, task_id,
-                    digest, fence, card_id, applied) VALUES (%s,%s,%s,'admit_bundle',%s,%s,%s,%s,true)""",
-                            (self.principal, self.environment, operation_id, task_id, compiled.digest, fence,
-                             compiled.card_id))
+            cur.execute("""UPDATE guild.mc_task_operations SET applied=true, task_id=%s, digest=%s, fence=%s, card_id=%s
+                WHERE principal=%s AND environment=%s AND operation_id=%s""",
+                        (task_id, compiled.digest, fence, compiled.card_id, self.principal, self.environment,
+                         operation_id))
         answer = self.admit_card(card, grant_id=grant_id, owner_turn_ids=owner_turn_ids, proposal_id=proposal_id,
                                  approved_operation_id=approved_operation_id, approval_expires_at=approval_expires_at,
                                  by=by, note=note, precheck=precheck)
@@ -2038,34 +2047,44 @@ class DispatcherStore:
                                      "digest": answer["card_digest"]})
 
     def lookup_task_operation(self, operation_id, *, attempt) -> dict:
-        """E03: applied (with its receipt) or absent. Answering absent for attempt n makes every attempt <= n dead
-        for this operation, so a late send can never contradict the answer."""
-        _need(type(attempt) is int and attempt >= 1, "attempt_invalid")
+        """E03, for admissions only: applied (with its receipt) or absent. Answering absent for attempt n makes every
+        attempt <= n dead for this operation, so a late send can never contradict the answer."""
+        _need(type(attempt) is int and 1 <= attempt <= 2**31 - 1, "attempt_invalid")
         with self._tx() as cur:
-            op = self._task_operation(cur, operation_id, lock=True)
-            if op is not None and op["applied"]:
+            op, fresh = self._claim_operation(cur, operation_id, "admit_bundle", dead_through=attempt)
+            if fresh:
+                return {"state": "absent"}
+            _need(op["kind"] == "admit_bundle", "operation_id_reused")
+            if op["applied"]:
                 return {"state": "applied", "receipt": self._op_receipt(op)}
-            if op is None:
-                cur.execute("""INSERT INTO guild.mc_task_operations (principal, environment, operation_id, kind,
-                    task_id, digest, fence, dead_through) VALUES (%s,%s,%s,'admit_bundle','unknown','unknown',0,%s)""",
-                            (self.principal, self.environment, operation_id, attempt))
-            else:
-                cur.execute("""UPDATE guild.mc_task_operations SET dead_through=GREATEST(dead_through,%s)
-                    WHERE principal=%s AND environment=%s AND operation_id=%s""",
-                            (attempt, self.principal, self.environment, operation_id))
+            cur.execute("""UPDATE guild.mc_task_operations SET dead_through=GREATEST(dead_through,%s)
+                WHERE principal=%s AND environment=%s AND operation_id=%s""",
+                        (attempt, self.principal, self.environment, operation_id))
             return {"state": "absent"}
 
     def peek_task_operation(self, operation_id) -> str:
-        """Read-only status for audits: applied or absent."""
-        with self._tx() as cur:
-            op = self._task_operation(cur, operation_id, lock=False)
-            return "applied" if op is not None and op["applied"] else "absent"
-
-    def _task_operation(self, cur, operation_id, *, lock):
+        """Read-only status for audits: applied or absent. Writes nothing and kills no attempt."""
         _need(type(operation_id) is str and 4 <= len(operation_id) <= 70, "operation_id_invalid")
-        cur.execute("SELECT * FROM guild.mc_task_operations WHERE principal=%s AND environment=%s AND operation_id=%s"
-                    + (" FOR UPDATE" if lock else ""), (self.principal, self.environment, operation_id))
-        return cur.fetchone()
+        with self._tx() as cur:
+            cur.execute("SELECT applied FROM guild.mc_task_operations WHERE principal=%s AND environment=%s "
+                        "AND operation_id=%s", (self.principal, self.environment, operation_id))
+            row = cur.fetchone()
+            return "applied" if row is not None and row["applied"] else "absent"
+
+    def _claim_operation(self, cur, operation_id, kind, *, dead_through=0):
+        """Lock this operation id's row, creating an unapplied placeholder if there is none. Concurrent first uses
+        serialize on the primary key (ON CONFLICT DO NOTHING waits for the other inserter), so the loser reads the
+        winner's committed row and gets a refusal code, never a raw unique violation. -> (row, created_here)"""
+        _need(type(operation_id) is str and 4 <= len(operation_id) <= 70, "operation_id_invalid")
+        cur.execute("""INSERT INTO guild.mc_task_operations (principal, environment, operation_id, kind, dead_through)
+            VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING RETURNING *""",
+                    (self.principal, self.environment, operation_id, kind, dead_through))
+        row = cur.fetchone()
+        if row is not None:
+            return row, True
+        cur.execute("SELECT * FROM guild.mc_task_operations WHERE principal=%s AND environment=%s AND operation_id=%s "
+                    "FOR UPDATE", (self.principal, self.environment, operation_id))
+        return cur.fetchone(), False
 
     @staticmethod
     def _op_receipt(op):

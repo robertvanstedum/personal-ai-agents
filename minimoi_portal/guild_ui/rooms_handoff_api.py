@@ -101,7 +101,8 @@ def _handoff_locked():
     except RuntimeError:
         return json_error("unavailable", "Rooms could not confirm this just now. Nothing was sent; try again.", 502)
     event = next((e for e in doc.get("events") or [] if isinstance(e, dict) and e.get("seq") == seq), None)
-    if event is None or event.get("actor") != "robert" or event.get("kind") != "message":
+    if (event is None or event.get("actor") != "robert" or event.get("kind") != "message"
+            or event.get("origin") is not None):               # a platform post (meeting opening, ledger update) is never his own words (F1)
         return json_error("not_yours", "Only one of your own messages in this room can be handed over. Nothing was sent.", 422)
     approved = {r.get("agent") for r in approvals.get("agents", []) if isinstance(r, dict) and r.get("approved") is True}
     unapproved = [a for a in agents if a not in approved]

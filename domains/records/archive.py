@@ -180,7 +180,7 @@ class Archive:
             db.execute('BEGIN')
             self.store.access(db,actor,room)
             item=self._snapshot(db,room)
-            seqs=[r[0] for r in db.execute("SELECT seq FROM events WHERE room=? AND actor='robert' AND kind='message' ORDER BY seq LIMIT 1001",(room,))]
+            seqs=[r[0] for r in db.execute("SELECT seq FROM events WHERE room=? AND actor='robert' AND kind='message' AND origin IS NULL ORDER BY seq LIMIT 1001",(room,))]
             if len(seqs)>1000:raise Problem('Archive history requires bounded reconciliation',409)
             return {'room':room,'version':item['version'],'archive_version':item['archive_version'],
                     'latest_seq':item['latest_seq'],'last_activity':item['updated'],

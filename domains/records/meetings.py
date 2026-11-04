@@ -504,14 +504,24 @@ class Meetings:
         db.execute("UPDATE meetings SET cursor=MAX(cursor,?),updated=? WHERE room=?", (event["seq"], now(), room))
 
     def on_platform_invite(self, db, room, event, invitees):
-        """B0-2/F1: a platform message asks named, accepted members for their view. Discussion only: it never creates
-        an action turn, never supersedes queued turns, and is not an owner message for any later check."""
+        """B0-2/F1: a platform message asks named members for their view. Discussion only: it never creates an action
+        turn, never supersedes queued turns, and is not an owner message for any later check. Eligibility is the same
+        as owner routing (accepted, or invited and proven: the turn waits for acceptance); each skipped invitee gets a
+        routing note so status can say why. Names are de-duplicated after resolution, so two aliases make one turn."""
         meeting = db.execute("SELECT * FROM meetings WHERE room=?", (room,)).fetchone()
         if not meeting or dict(meeting)["kind"] == "proof":
             return
+        seen = set()
         for name in invitees:
             principal = self.resolve(db, room, name)
-            if not principal or not accepted_member(db, room, principal):
+            key = principal or str(name).strip().lower()
+            if key in seen or principal == "robert":
+                continue
+            seen.add(key)
+            refused = self.ineligible(db, room, principal)
+            if refused:
+                db.execute("INSERT OR IGNORE INTO routing_notes VALUES(?,?,?,?,?,?)",
+                           (room, event["seq"], key, label_of(db, principal) if principal else str(name), refused, now()))
                 continue
             turn = self.queue_turn(db, room, principal, event["seq"], 1, supersede=False)
             db.execute("INSERT INTO turn_order VALUES(?,?,?,?,?,NULL,NULL)", (turn, event["id"], 0, None, now()))
@@ -609,20 +619,27 @@ class Meetings:
             if principal and db.execute("SELECT 1 FROM meeting_waits WHERE room=? AND actor=?", (room, principal)).fetchone():
                 notes.append((principal, label_of(db, principal), "waiting_by_request"))
                 continue
-            if not principal or not card(db, principal) or not hosted(db, principal):
-                notes.append((key, label_of(db, principal) if principal else raw, "no_connector"))
-                continue
-            member = db.execute("SELECT role FROM members WHERE room=? AND actor=?", (room, principal)).fetchone()
-            rsvp = rsvp_of(db, room, principal)
-            if not member:
-                notes.append((principal, label_of(db, principal), "not_invited"))
-            elif member["role"] != "contributor" or rsvp["rsvp"] == "declined":
-                notes.append((principal, label_of(db, principal), "not_joined"))
-            elif rsvp["rsvp"] == "invited" and not proven_or_proof(db, room, principal):
-                notes.append((principal, label_of(db, principal), "not_proven"))
+            refused = self.ineligible(db, room, principal)
+            if refused:
+                notes.append((key, label_of(db, principal) if principal else raw, refused))
             else:
                 addressees.append(principal)    # accepted, or proven and about to accept: the turn waits
         return addressees, notes
+
+    @staticmethod
+    def ineligible(db, room, principal):
+        """Why a resolved principal cannot get a turn here, or None. Shared by owner routing and platform invites."""
+        if not principal or not card(db, principal) or not hosted(db, principal):
+            return "no_connector"
+        member = db.execute("SELECT role FROM members WHERE room=? AND actor=?", (room, principal)).fetchone()
+        rsvp = rsvp_of(db, room, principal)
+        if not member:
+            return "not_invited"
+        if member["role"] != "contributor" or rsvp["rsvp"] == "declined":
+            return "not_joined"
+        if rsvp["rsvp"] == "invited" and not proven_or_proof(db, room, principal):
+            return "not_proven"
+        return None
 
     @staticmethod
     def resolve(db, room, raw):
@@ -634,7 +651,9 @@ class Meetings:
         return None
 
     def queue_turn(self, db, room, principal, trigger_seq, attempt, ttl=TURN_TTL_S, *, supersede=True):
-        """At most one queued turn per (room, addressee): a newer one supersedes it."""
+        """With supersede (owner messages), at most one queued turn per (room, addressee): a newer one supersedes it.
+        Platform invites pass supersede=False, so a discussion turn can sit beside a queued owner turn; the claim
+        loop still runs one at a time per addressee."""
         if supersede:
             db.execute("UPDATE turns SET state='superseded',disposition='newer_message',updated=? "
                        "WHERE room=? AND addressee=? AND state='queued'", (now(), room, principal))
@@ -1280,8 +1299,12 @@ class Meetings:
             (t["room"],)) if r["id"] in accepted]
         from domains.records.approved_agents import approval
         approved = approval(db, t["addressee"])
-        handoff = db.execute("SELECT h.question_event,e.actor,e.body FROM discussion_turns h JOIN events e ON e.id=h.question_event WHERE h.turn_id=?", (t["id"],)).fetchone()
-        return {"discussion_reply": dict(handoff) if handoff else None,
+        handoff = db.execute("SELECT h.question_event,e.actor,e.body,e.origin FROM discussion_turns h JOIN events e ON e.id=h.question_event WHERE h.turn_id=?", (t["id"],)).fetchone()
+        if handoff:
+            handoff = dict(handoff)
+            if handoff.pop("origin"):                       # a platform post is attributed to the platform, not Robert (F1-d)
+                handoff["actor"] = "platform"
+        return {"discussion_reply": handoff,
                 "standing_brief": {"text": approved["brief"], "hash": approved["brief_hash"]} if approved else None,
                 "attachment_delivery": "metadata_only",
                 "brief": {"title": session["title"], "purpose": session["purpose"],

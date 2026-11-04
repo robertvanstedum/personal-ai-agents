@@ -29,7 +29,7 @@ class Discussion:
     def stream(self, messages, user, correlation, *, turn, admit):
         empty = {"text": "", "usage": None}
         question = turn.get("discussion_reply") or {}
-        if (turn.get("addressee") != self.teammate or question.get("actor") not in ("robert", "mc", "cos")
+        if (turn.get("addressee") != self.teammate or question.get("actor") not in ("robert", "mc", "cos", "platform")
                 or question.get("actor") == self.teammate or not question.get("question_event")
                 or not isinstance(question.get("body"), str)):
             return {**empty, "outcome": "refused", "detail": "invalid_discussion"}

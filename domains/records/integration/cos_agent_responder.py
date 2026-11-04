@@ -154,7 +154,7 @@ def respond(session_id, request_id, *, client, model, journal, policy,
         # Keep only validated contract fields; do not persist arbitrary adapter data.
         evidence = {k: result[k] for k in ("text", "coordination_request_id", "openclaw_run_id", "agent_id", "mode")}
         reference = next((e["id"] for e in reversed(data["records"])
-                          if e["actor"] == "robert" and e["kind"] == "message"), None)
+                          if e["actor"] == "robert" and e["kind"] == "message" and e.get("origin") is None), None)
         envelope = {"execution": evidence, "request_fingerprint": fingerprint,
                     "snapshot_sha256": sha(encoded(data)), "source_record_ids": [e["id"] for e in data["records"]],
                     "source_through_seq": guard["last_seq"], "omitted_records": data["omitted_records"],

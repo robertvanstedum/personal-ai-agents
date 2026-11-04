@@ -128,6 +128,14 @@ def test_only_one_of_the_owners_own_messages_can_be_handed_over(hand):
     assert all_requests(asks) == []
 
 
+def test_a_platform_post_in_his_name_is_never_handed_over_as_his_own_words(hand):
+    asks, client, token, rec = hand
+    rec.events[2]["origin"] = {"mode": "platform_acknowledgement"}   # stored with actor robert, posted by the platform
+    r = post(client, token)
+    assert r.status_code == 422 and r.get_json()["error"] == "not_yours"
+    assert all_requests(asks) == []
+
+
 def test_an_agent_that_is_not_approved_gets_nothing_and_the_whole_click_is_refused(hand):
     asks, client, token, rec = hand
     rec.approved.discard("codex")
