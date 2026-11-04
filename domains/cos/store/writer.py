@@ -134,6 +134,7 @@ class StoreWriter:
         self._index: dict[str, tuple[str, dict]] = {}
         self._recovered = False
         self._needs_recovery = True
+        self._seen_journal: tuple[int, int] | None = None   # (inode, size) after this process last read or wrote it
 
     # ---- public --------------------------------------------------------------------------------------------------
 
@@ -144,7 +145,9 @@ class StoreWriter:
             command_id = "unknown"
         with self._thread_lock, self._file_lock():
             try:
-                if self._needs_recovery:
+                if self._needs_recovery or self._journal_changed():
+                    # Another writer process (the memory CLI, a second backend) appended since we last looked:
+                    # re-read the journal under the lock so replay and reuse answers match that process (B0-1).
                     self._recover_locked()
                 return self._submit_locked(command)
             except StoreRefused as exc:
@@ -406,6 +409,7 @@ class StoreWriter:
         self._index = index
         self._recovered = True
         self._needs_recovery = False
+        self._seen_journal = self._journal_stat()
         return counts
 
     def _quarantine_torn_tail(self, path: Path) -> int:
@@ -437,3 +441,14 @@ class StoreWriter:
 
     def _journal(self, row: dict) -> None:
         self._append_line(self.root / _JOURNAL, row)
+        self._seen_journal = self._journal_stat()
+
+    def _journal_stat(self) -> tuple[int, int] | None:
+        try:
+            st = os.stat(self.root / _JOURNAL)
+        except FileNotFoundError:
+            return None
+        return (st.st_ino, st.st_size)
+
+    def _journal_changed(self) -> bool:
+        return self._journal_stat() != self._seen_journal

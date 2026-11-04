@@ -1,0 +1,208 @@
+{
+ "_note": "SYNTHETIC. Invented seats, sources and content for contract tests. Not evidence about any real environment.",
+ "source_event": {
+  "schema": "minimoi.partnership.source_event/1",
+  "source_event_id": "SE-syn-0001",
+  "revision": 1,
+  "environment": "synthetic",
+  "data_scope": "personal",
+  "created_at": "2026-11-04T15:00:01+00:00",
+  "updated_at": "2026-11-04T15:00:01+00:00",
+  "provenance": {
+   "actor_seat": "principal",
+   "origin": "owner_session",
+   "session_id": "syn-sess-1",
+   "command_id": "cmd-syn-se-0001"
+  },
+  "producer": "principal",
+  "source": {
+   "store": "records",
+   "id": "evt-syn-77",
+   "position": 77
+  },
+  "content": "Find the sales job descriptions in my target list.",
+  "correction_of": null,
+  "event_at": "2026-11-04T15:00:00+00:00"
+ },
+ "interpretation": {
+  "schema": "minimoi.partnership.interpretation/1",
+  "interpretation_id": "IN-syn-0001",
+  "revision": 1,
+  "environment": "synthetic",
+  "data_scope": "personal",
+  "created_at": "2026-11-04T15:00:02+00:00",
+  "updated_at": "2026-11-04T15:00:02+00:00",
+  "provenance": {
+   "actor_seat": "cos",
+   "origin": "agent",
+   "session_id": "syn-cos-1",
+   "command_id": "cmd-syn-in-0001"
+  },
+  "source_event_ids": [
+   "SE-syn-0001"
+  ],
+  "correction_event_ids": [],
+  "interpreter": {
+   "seat": "cos",
+   "session_id": "syn-cos-1",
+   "runtime": {
+    "kind": "model",
+    "model": "synthetic-model-a",
+    "provider": "synthetic",
+    "build": null,
+    "config_version": "cos-policy-syn-3"
+   }
+  },
+  "proposed": {
+   "outcome": "List sales roles from the target list with their JD text and coverage.",
+   "scope": "personal",
+   "recipients": [
+    "principal"
+   ],
+   "continuing": false
+  },
+  "context_refs": [
+   {
+    "store": "artifacts",
+    "id": "target-list",
+    "edition": "syn-ed-4",
+    "digest": null
+   }
+  ],
+  "disposition": "adopted",
+  "disposition_by": "cos",
+  "authority": {
+   "kind": "existing_grant",
+   "ref": {
+    "store": "grants",
+    "id": "grant-syn-lookup-personal",
+    "edition": "1",
+    "digest": null
+   }
+  },
+  "superseded_by": null
+ },
+ "request": {
+  "schema": "minimoi.partnership.request/1",
+  "request_id": "RQ-syn-0001",
+  "revision": 2,
+  "environment": "synthetic",
+  "data_scope": "personal",
+  "created_at": "2026-11-04T15:00:02+00:00",
+  "updated_at": "2026-11-04T15:00:09+00:00",
+  "provenance": {
+   "actor_seat": "cos",
+   "origin": "agent",
+   "session_id": "syn-cos-1",
+   "command_id": "cmd-syn-rq-0002"
+  },
+  "source_event_id": "SE-syn-0001",
+  "intent": {
+   "text": "Sales roles in the target list, with JD text.",
+   "revision": 1,
+   "source_event_id": "SE-syn-0001"
+  },
+  "interpretation_ref": "IN-syn-0001",
+  "responder": "cos",
+  "state": "answered",
+  "coverage": {
+   "sources": [
+    {
+     "ref": {
+      "store": "artifacts",
+      "id": "target-list",
+      "edition": "syn-ed-4",
+      "digest": null
+     },
+     "status": "searched"
+    },
+    {
+     "ref": {
+      "store": "external",
+      "id": "jd-archive",
+      "edition": null,
+      "digest": null
+     },
+     "status": "unavailable"
+    }
+   ],
+   "gaps": [
+    "Two postings have truncated JD text."
+   ]
+  },
+  "result_refs": [
+   {
+    "store": "artifacts",
+    "id": "lookup-result-syn-1",
+    "edition": "1",
+    "digest": null
+   }
+  ],
+  "refinements": [],
+  "task_ref": null,
+  "pending_operation": null,
+  "fence_generation": 0,
+  "reason": null
+ },
+ "task": {
+  "schema": "minimoi.partnership.task/1",
+  "task_id": "TK-syn-0001",
+  "revision": 1,
+  "environment": "synthetic",
+  "data_scope": "personal",
+  "created_at": "2026-11-04T15:05:00+00:00",
+  "updated_at": "2026-11-04T15:05:00+00:00",
+  "provenance": {
+   "actor_seat": "cos",
+   "origin": "agent",
+   "session_id": "syn-cos-1",
+   "command_id": "cmd-syn-pr-0001"
+  },
+  "request_ref": "RQ-syn-0001",
+  "interpretation_ref": "IN-syn-0001",
+  "lead": "mc",
+  "holder": "mc",
+  "outcome": "A reviewed design note on agent coordination.",
+  "done_when": "Lead accepts a reviewed draft.",
+  "return_window": {
+   "at": "2026-11-05T14:00:00+00:00",
+   "timezone": "America/Chicago",
+   "basis": "default_0800_next_day",
+   "basis_ref": null
+  },
+  "state": "submitted",
+  "reason": null,
+  "waiting": null,
+  "parent_ref": null,
+  "execution_refs": [],
+  "review_refs": [],
+  "assignments": [
+   {
+    "role": "lead",
+    "seat": "mc",
+    "from_revision": 1,
+    "to_revision": null,
+    "command_id": "cmd-syn-pr-0001",
+    "reason": null,
+    "effective_from_at": "2026-11-04T15:05:00+00:00",
+    "effective_to_at": null
+   },
+   {
+    "role": "holder",
+    "seat": "mc",
+    "from_revision": 1,
+    "to_revision": null,
+    "command_id": "cmd-syn-pr-0001",
+    "reason": null,
+    "effective_from_at": "2026-11-04T15:05:00+00:00",
+    "effective_to_at": null
+   }
+  ],
+  "fence_generation": 0,
+  "pending_operation": null,
+  "acceptances": [],
+  "artifact_sets": [],
+  "reviews": [],
+  "rounds": 0
+ }
+}

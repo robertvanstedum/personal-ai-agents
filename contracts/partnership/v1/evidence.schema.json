@@ -1,0 +1,504 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:partnership:evidence",
+  "title": "Journal evidence and seat bindings for the partnership task service",
+  "description": "Spec v1.1 Q01, Q05, Q06, A02. The writer's journal is the evidence: every completed line records who (from the binding), what, against which revision, from which causal parent, and chains to the line before it. There is no second audit store.",
+  "$defs": {
+    "journal_entry": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "t",
+            "seq",
+            "command_id",
+            "payload_digest",
+            "kind",
+            "writes",
+            "evidence",
+            "receipt_id",
+            "revision",
+            "recorded_at",
+            "prev_hash",
+            "hash"
+          ],
+          "properties": {
+            "seq": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "command_id": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/command_id"
+            },
+            "prev_hash": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+            },
+            "hash": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+            },
+            "recorded_at": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/timestamp"
+            },
+            "payload_digest": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+            },
+            "kind": {
+              "$ref": "urn:minimoi:contract:partnership:command#/$defs/kind"
+            },
+            "receipt_id": {
+              "type": "string",
+              "pattern": "^rcpt-[0-9a-f]{16}$"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "t": {
+              "const": "intent"
+            },
+            "writes": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "path",
+                  "before",
+                  "record"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "pattern": "^[a-z_]+/[A-Za-z0-9_-]+\\.json$"
+                  },
+                  "before": {
+                    "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_digest"
+                  },
+                  "record": {
+                    "type": "object"
+                  }
+                }
+              }
+            },
+            "evidence": {
+              "$ref": "#/$defs/evidence"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "t",
+            "seq",
+            "command_id",
+            "payload_digest",
+            "kind",
+            "receipt_id",
+            "revision",
+            "recovered",
+            "recorded_at",
+            "prev_hash",
+            "hash",
+            "actor_seat",
+            "origin",
+            "session_id",
+            "runtime",
+            "causal_parent",
+            "basis_ref",
+            "environment",
+            "data_scope",
+            "event_at",
+            "targets",
+            "links",
+            "binding_id",
+            "revisions"
+          ],
+          "properties": {
+            "seq": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "command_id": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/command_id"
+            },
+            "prev_hash": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+            },
+            "hash": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+            },
+            "recorded_at": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/timestamp"
+            },
+            "payload_digest": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+            },
+            "kind": {
+              "$ref": "urn:minimoi:contract:partnership:command#/$defs/kind"
+            },
+            "receipt_id": {
+              "type": "string",
+              "pattern": "^rcpt-[0-9a-f]{16}$"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "actor_seat": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+            },
+            "origin": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/origin"
+            },
+            "session_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 120
+            },
+            "runtime": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/runtime"
+            },
+            "causal_parent": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_ref"
+            },
+            "basis_ref": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_ref"
+            },
+            "environment": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/environment"
+            },
+            "data_scope": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/data_scope"
+            },
+            "event_at": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_timestamp"
+            },
+            "targets": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            },
+            "links": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "source_event_id",
+                "interpretation_id",
+                "request_id",
+                "task_id",
+                "authority_ref"
+              ],
+              "properties": {
+                "source_event_id": {
+                  "oneOf": [
+                    {
+                      "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "interpretation_id": {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_interpretation_id"
+                },
+                "request_id": {
+                  "oneOf": [
+                    {
+                      "$ref": "urn:minimoi:contract:partnership:common#/$defs/request_id"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "task_id": {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_task_id"
+                },
+                "authority_ref": {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_ref"
+                }
+              }
+            },
+            "binding_id": {
+              "type": "string",
+              "pattern": "^bind-[a-z0-9-]{2,60}$"
+            },
+            "t": {
+              "const": "completed"
+            },
+            "recovered": {
+              "type": "boolean"
+            },
+            "revisions": {
+              "description": "Each written document's new revision (Q01: every target, not only the first).",
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "t",
+            "seq",
+            "command_id",
+            "reason",
+            "recorded_at",
+            "prev_hash",
+            "hash"
+          ],
+          "properties": {
+            "seq": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "command_id": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/command_id"
+            },
+            "prev_hash": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+            },
+            "hash": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+            },
+            "recorded_at": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/timestamp"
+            },
+            "t": {
+              "const": "abandoned"
+            },
+            "reason": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        }
+      ]
+    },
+    "chain_head": {
+      "description": "Q06. Exported to a place the writer cannot rewrite; a later journal must reproduce it. The interval between exports is the detection window.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "store",
+        "environment",
+        "seq",
+        "hash",
+        "exported_at"
+      ],
+      "properties": {
+        "schema": {
+          "const": "minimoi.partnership.chain_head/1"
+        },
+        "store": {
+          "type": "string"
+        },
+        "environment": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/environment"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hash": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+        },
+        "exported_at": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/timestamp"
+        }
+      }
+    },
+    "seat_binding": {
+      "description": "A02. One credential's binding. Stored by token sha256, never the token. Grants operations and scopes; origin is fixed by the binding. token_sha256 is the bare hex SHA-256 of the token bytes (not a canonical-JSON digest).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binding_id",
+        "token_sha256",
+        "seat",
+        "principal",
+        "environment",
+        "origin",
+        "scopes",
+        "operations",
+        "read_scopes"
+      ],
+      "properties": {
+        "token_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "seat": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+        },
+        "principal": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+        },
+        "environment": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/environment"
+        },
+        "origin": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/origin"
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:minimoi:contract:partnership:common#/$defs/data_scope"
+          }
+        },
+        "read_scopes": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:minimoi:contract:partnership:common#/$defs/data_scope"
+          }
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:minimoi:contract:partnership:command#/$defs/kind"
+          },
+          "uniqueItems": true
+        },
+        "expires_at": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_timestamp"
+        },
+        "binding_id": {
+          "type": "string",
+          "pattern": "^bind-[a-z0-9-]{2,60}$"
+        },
+        "revoked_at": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_timestamp"
+        }
+      }
+    },
+    "evidence": {
+      "description": "Q01 fields every completed line carries, copied from the authenticated binding and the command.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_seat",
+        "origin",
+        "session_id",
+        "runtime",
+        "causal_parent",
+        "basis_ref",
+        "environment",
+        "data_scope",
+        "event_at",
+        "targets",
+        "links",
+        "binding_id",
+        "revisions"
+      ],
+      "properties": {
+        "actor_seat": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+        },
+        "origin": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/origin"
+        },
+        "session_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 120
+        },
+        "runtime": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/runtime"
+        },
+        "causal_parent": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_ref"
+        },
+        "basis_ref": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_ref"
+        },
+        "environment": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/environment"
+        },
+        "data_scope": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/data_scope"
+        },
+        "event_at": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_timestamp"
+        },
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "links": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source_event_id",
+            "interpretation_id",
+            "request_id",
+            "task_id",
+            "authority_ref"
+          ],
+          "properties": {
+            "source_event_id": {
+              "oneOf": [
+                {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "interpretation_id": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_interpretation_id"
+            },
+            "request_id": {
+              "oneOf": [
+                {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/request_id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "task_id": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_task_id"
+            },
+            "authority_ref": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_ref"
+            }
+          }
+        },
+        "binding_id": {
+          "type": "string",
+          "pattern": "^bind-[a-z0-9-]{2,60}$"
+        },
+        "revisions": {
+          "description": "Each written document's new revision (Q01: every target, not only the first).",
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  }
+}

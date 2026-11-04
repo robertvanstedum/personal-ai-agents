@@ -1,0 +1,1369 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:partnership:command",
+  "title": "Partnership task service commands, results and receipt lookups",
+  "description": "Spec v1.1 D05, E01, A02. A command never names its own actor or origin: both come from the authenticated seat binding. A repeated command_id with the same payload_digest returns the first result from any writer process; a different digest is refused (command_id_reused).",
+  "$defs": {
+    "kind": {
+      "enum": [
+        "source_event.record",
+        "interpretation.record",
+        "interpretation.dispose",
+        "request.record",
+        "request.refine",
+        "request.answer",
+        "request.set_state",
+        "request.promote",
+        "task.transition",
+        "task.assign",
+        "task.accept",
+        "task.reopen",
+        "correction.apply",
+        "task.request_admission",
+        "outbox.record",
+        "task.adopt_interpretation",
+        "task.submit_artifacts",
+        "task.record_review",
+        "task.delegate",
+        "task.lead_unavailable"
+      ]
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "command_id",
+        "kind",
+        "target",
+        "expected_revision",
+        "payload",
+        "payload_digest",
+        "environment",
+        "data_scope",
+        "basis_ref",
+        "causal_parent",
+        "session_id",
+        "runtime",
+        "event_at"
+      ],
+      "properties": {
+        "schema": {
+          "const": "minimoi.partnership.command/1"
+        },
+        "command_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/command_id"
+        },
+        "kind": {
+          "$ref": "#/$defs/kind"
+        },
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "source_event",
+                "interpretation",
+                "request",
+                "task",
+                "outbox"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^(SE|IN|RQ|TK|OB)-[A-Za-z0-9_-]{4,64}$"
+            }
+          }
+        },
+        "expected_revision": {
+          "description": "null creates; an integer must equal the current revision (stale edits are conflicts, D05).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "payload": {
+          "type": "object"
+        },
+        "payload_digest": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+        },
+        "environment": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/environment"
+        },
+        "data_scope": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/data_scope"
+        },
+        "basis_ref": {
+          "oneOf": [
+            {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "causal_parent": {
+          "description": "Q01. The command, source event or obligation occurrence this follows from; null only for a root.",
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_ref"
+        },
+        "session_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 120
+        },
+        "runtime": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/runtime"
+        },
+        "event_at": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_timestamp"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "target": {
+                "properties": {
+                  "type": {
+                    "const": "outbox"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "properties": {
+                  "id": {
+                    "pattern": "^OB-"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "target": {
+                "properties": {
+                  "type": {
+                    "const": "source_event"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "properties": {
+                  "id": {
+                    "pattern": "^SE-"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "target": {
+                "properties": {
+                  "type": {
+                    "const": "interpretation"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "properties": {
+                  "id": {
+                    "pattern": "^IN-"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "target": {
+                "properties": {
+                  "type": {
+                    "const": "request"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "properties": {
+                  "id": {
+                    "pattern": "^RQ-"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "target": {
+                "properties": {
+                  "type": {
+                    "const": "task"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "properties": {
+                  "id": {
+                    "pattern": "^TK-"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "source_event.record"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.source_event.record"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "interpretation.record"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.interpretation.record"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "interpretation.dispose"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.interpretation.dispose"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "request.record"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.request.record"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "request.refine"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.request.refine"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "request.answer"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.request.answer"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "request.set_state"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.request.set_state"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "request.promote"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.request.promote"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "task.transition"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.task.transition"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "task.assign"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.task.assign"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "task.accept"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.task.accept"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "task.reopen"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.task.reopen"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "correction.apply"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.correction.apply"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "task.request_admission"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.task.request_admission"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "outbox.record"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.outbox.record"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "task.adopt_interpretation"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.task.adopt_interpretation"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "task.submit_artifacts"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.task.submit_artifacts"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "task.record_review"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.task.record_review"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "task.delegate"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.task.delegate"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "task.lead_unavailable"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.task.lead_unavailable"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "payload.source_event.record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "content",
+        "correction_of"
+      ],
+      "properties": {
+        "source": {
+          "$ref": "urn:minimoi:contract:partnership:records#/$defs/source_event/properties/source"
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "correction_of": {
+          "oneOf": [
+            {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "payload.interpretation.record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_event_ids",
+        "correction_event_ids",
+        "proposed",
+        "context_refs",
+        "supersedes"
+      ],
+      "properties": {
+        "source_event_ids": {
+          "$ref": "urn:minimoi:contract:partnership:records#/$defs/interpretation/properties/source_event_ids"
+        },
+        "correction_event_ids": {
+          "$ref": "urn:minimoi:contract:partnership:records#/$defs/interpretation/properties/correction_event_ids"
+        },
+        "proposed": {
+          "$ref": "urn:minimoi:contract:partnership:records#/$defs/interpretation/properties/proposed"
+        },
+        "context_refs": {
+          "$ref": "urn:minimoi:contract:partnership:records#/$defs/interpretation/properties/context_refs"
+        },
+        "supersedes": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_interpretation_id"
+        }
+      }
+    },
+    "payload.interpretation.dispose": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "disposition",
+        "authority"
+      ],
+      "properties": {
+        "disposition": {
+          "enum": [
+            "adopted",
+            "corrected",
+            "rejected",
+            "unresolved"
+          ]
+        },
+        "authority": {
+          "$ref": "urn:minimoi:contract:partnership:records#/$defs/interpretation/properties/authority"
+        }
+      }
+    },
+    "payload.request.record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_event_id",
+        "intent_text",
+        "interpretation_ref",
+        "responder"
+      ],
+      "properties": {
+        "source_event_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+        },
+        "intent_text": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+        },
+        "interpretation_ref": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_interpretation_id"
+        },
+        "responder": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+        }
+      }
+    },
+    "payload.request.refine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_event_id",
+        "intent_text",
+        "interpretation_ref"
+      ],
+      "properties": {
+        "source_event_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+        },
+        "intent_text": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+        },
+        "interpretation_ref": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_interpretation_id"
+        }
+      }
+    },
+    "payload.request.answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_refs",
+        "coverage",
+        "fence_generation"
+      ],
+      "properties": {
+        "result_refs": {
+          "$ref": "urn:minimoi:contract:partnership:records#/$defs/request/properties/result_refs"
+        },
+        "coverage": {
+          "$ref": "urn:minimoi:contract:partnership:records#/$defs/coverage"
+        },
+        "fence_generation": {
+          "description": "The generation the answer was produced under; a stale one is refused.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "payload.request.promote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "lead",
+        "holder",
+        "outcome",
+        "done_when",
+        "return_window",
+        "parent_ref"
+      ],
+      "properties": {
+        "task_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/task_id"
+        },
+        "lead": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+        },
+        "holder": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+        },
+        "outcome": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+        },
+        "done_when": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+        },
+        "return_window": {
+          "oneOf": [
+            {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/return_window"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parent_ref": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_task_id"
+        }
+      }
+    },
+    "payload.task.transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "to",
+        "reason",
+        "waiting",
+        "evidence_refs",
+        "fence_generation"
+      ],
+      "properties": {
+        "to": {
+          "enum": [
+            "working",
+            "waiting",
+            "failed",
+            "canceled",
+            "rejected"
+          ]
+        },
+        "reason": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_text"
+        },
+        "waiting": {
+          "$ref": "urn:minimoi:contract:partnership:records#/$defs/task/properties/waiting"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+          }
+        },
+        "fence_generation": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "payload.task.assign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "seat",
+        "reason"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "lead",
+            "holder",
+            "delegate",
+            "verifier",
+            "duty"
+          ]
+        },
+        "seat": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+        },
+        "reason": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+        }
+      }
+    },
+    "payload.task.accept": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_set_digest",
+        "fence_generation",
+        "acknowledged_disagreements"
+      ],
+      "properties": {
+        "artifact_set_digest": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+        },
+        "fence_generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "acknowledged_disagreements": {
+          "description": "E06: the lead names every applicable dissenting review it is delivering with this acceptance; none may be left out.",
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "string",
+            "pattern": "^RV-"
+          }
+        }
+      }
+    },
+    "payload.task.reopen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason"
+      ],
+      "properties": {
+        "reason": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+        }
+      }
+    },
+    "payload.correction.apply": {
+      "description": "C06. Applies a recorded correction source event to a request (and its task, if promoted): bumps the fence generation so every stale dispatch candidate is refused, and records what changed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "correction_event_id",
+        "changes",
+        "intent_text",
+        "interpretation_ref"
+      ],
+      "properties": {
+        "correction_event_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+        },
+        "changes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "scope",
+              "outcome",
+              "recipient",
+              "cancel"
+            ]
+          }
+        },
+        "intent_text": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_text"
+        },
+        "interpretation_ref": {
+          "description": "The superseding interpretation carrying the new scope, outcome or recipients; null only for a pure cancel.",
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_interpretation_id"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "command_id",
+        "outcome"
+      ],
+      "properties": {
+        "schema": {
+          "const": "minimoi.partnership.result/1"
+        },
+        "command_id": {
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "accepted",
+            "refused",
+            "conflict",
+            "failed"
+          ]
+        },
+        "revision": {
+          "type": "integer"
+        },
+        "receipt_id": {
+          "type": "string",
+          "pattern": "^rcpt-[0-9a-f]{16}$"
+        },
+        "replayed": {
+          "type": "boolean"
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z_]{3,48}$"
+        },
+        "detail": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "current_revision": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "open_effects": {
+          "description": "E07/Q05: operations of this task whose effect may exist (attempted, unknown, conflict) when this command changed it.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "accepted"
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "required": [
+              "revision",
+              "receipt_id",
+              "replayed"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "refused",
+                  "failed"
+                ]
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "required": [
+              "code"
+            ]
+          }
+        }
+      ]
+    },
+    "receipt_lookup": {
+      "description": "The truth for one command id, read from the journal: recorded (with the first result), different (that id holds another digest), absent, or unknown (the journal cannot be read or is held).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "command_id",
+        "answer"
+      ],
+      "properties": {
+        "schema": {
+          "const": "minimoi.partnership.receipt_lookup/1"
+        },
+        "command_id": {
+          "type": "string"
+        },
+        "answer": {
+          "enum": [
+            "recorded",
+            "absent",
+            "different",
+            "unknown"
+          ]
+        },
+        "result": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/result"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "answer": {
+                "const": "recorded"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "$ref": "#/$defs/result"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "result": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "payload.request.set_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "reason"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "failed",
+            "withdrawn",
+            "active"
+          ]
+        },
+        "reason": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_text"
+        }
+      },
+      "description": "Moves a recorded request to active, or ends it as failed or withdrawn (with a reason)."
+    },
+    "payload.task.request_admission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation_id",
+        "bundle_digest",
+        "bundle_ref",
+        "fence_generation"
+      ],
+      "properties": {
+        "operation_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/operation_id"
+        },
+        "bundle_digest": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+        },
+        "bundle_ref": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+        },
+        "fence_generation": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "payload.outbox.record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observation",
+        "destination_receipt",
+        "code"
+      ],
+      "properties": {
+        "observation": {
+          "enum": [
+            "attempted",
+            "applied",
+            "refused",
+            "definitely_absent",
+            "conflict",
+            "unknown",
+            "fenced",
+            "abandoned",
+            "read"
+          ]
+        },
+        "destination_receipt": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_ref"
+        },
+        "code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-z_]{3,64}$"
+        }
+      }
+    },
+    "payload.task.adopt_interpretation": {
+      "description": "N1: the lead (or owner) moves a task onto the interpretation that superseded its current one, once that one is adopted with real authority. Fences stale execution; the task stays waiting until pickup evidence moves it to working.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "interpretation_ref",
+        "fence_generation"
+      ],
+      "properties": {
+        "interpretation_ref": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/interpretation_id"
+        },
+        "fence_generation": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "payload.task.submit_artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifacts",
+        "fence_generation"
+      ],
+      "properties": {
+        "artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "allOf": [
+              {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+              },
+              {
+                "required": [
+                  "digest"
+                ],
+                "properties": {
+                  "digest": {
+                    "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "fence_generation": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "payload.task.record_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "review_id",
+        "reviewed_set_digest",
+        "verdict",
+        "review_ref",
+        "findings_ref",
+        "input_digest"
+      ],
+      "properties": {
+        "review_id": {
+          "type": "string",
+          "pattern": "^RV-[A-Za-z0-9_-]{4,64}$"
+        },
+        "reviewed_set_digest": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+        },
+        "verdict": {
+          "enum": [
+            "approve",
+            "changes_requested",
+            "disagree"
+          ]
+        },
+        "review_ref": {
+          "allOf": [
+            {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+            },
+            {
+              "required": [
+                "digest"
+              ],
+              "properties": {
+                "digest": {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+                }
+              }
+            }
+          ]
+        },
+        "findings_ref": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_ref"
+        },
+        "input_digest": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+        }
+      }
+    },
+    "payload.task.delegate": {
+      "description": "E07: the parent's lead delegates one bounded child step. One level only; the parent lead stays the child's accountable lead.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "child_task_id",
+        "holder",
+        "outcome",
+        "done_when",
+        "return_window",
+        "fence_generation"
+      ],
+      "properties": {
+        "child_task_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/task_id"
+        },
+        "holder": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+        },
+        "outcome": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+        },
+        "done_when": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+        },
+        "return_window": {
+          "oneOf": [
+            {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/return_window"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fence_generation": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "payload.task.lead_unavailable": {
+      "description": "E08/F05: a lead checkpoint failed. Records a blocked episode; appoints no successor.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_refs",
+        "fence_generation"
+      ],
+      "properties": {
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "items": {
+            "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+          }
+        },
+        "fence_generation": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

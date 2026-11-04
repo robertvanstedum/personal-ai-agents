@@ -391,3 +391,20 @@ def test_everything_stored_validates_against_the_frozen_contracts(store):
     for row in store.rows("cos.occurrence"):
         name = "obligation_event" if row["schema"] == "minimoi.cos.obligation_event/1" else "episode_event"
         assert not contracts.errors("store-records", name, row)
+
+
+def test_a_second_writer_process_replays_and_refuses_like_the_first(tmp_path):
+    """B0-1 (partnership v1.1 closing check): the replay index is re-read under the lock when another writer
+    appended, so a second process returns the first receipt and refuses a reused id with another payload."""
+    a = StoreWriter(tmp_path, "dev", verify_robert_source=verified, clock=lambda: "2026-11-04T00:00:00+00:00")
+    b = StoreWriter(tmp_path, "dev", verify_robert_source=verified, clock=lambda: "2026-11-04T00:00:00+00:00")
+    b.recover()
+    c = command("goal.put", "cos.goal", goal()["id"], goal())
+    first = a.submit(c)
+    assert first["outcome"] == "accepted"
+    assert b.submit(c) == dict(first, replayed=True)
+    g2 = dict(goal(), title="A different goal title")
+    reused = command("goal.put", "cos.goal", g2["id"], g2, expected=1)
+    assert b.submit(reused)["code"] == "command_id_reused"
+    assert a.submit(reused)["code"] == "command_id_reused"
+    assert b.get("cos.goal", goal()["id"])["revision"] == 1

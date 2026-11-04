@@ -1,0 +1,11 @@
+{
+ "_note": "SYNTHETIC job postings for J1. Invented employers and roles; not real data.",
+ "edition": "syn-target-list-ed-7",
+ "postings": [
+  {"id": "post-syn-01", "employer": "Example Robotics", "title": "VP of Sales", "leadership": true, "jd": "Lead a 40-person sales org.", "jd_truncated": false},
+  {"id": "post-syn-02", "employer": "Sample Analytics", "title": "Sales Account Executive", "leadership": false, "jd": "Close mid-market deals.", "jd_truncated": false},
+  {"id": "post-syn-03", "employer": "Demo Health", "title": "Director, Sales Strategy", "leadership": true, "jd": "Own the sales plan...", "jd_truncated": true},
+  {"id": "post-syn-04", "employer": "Placeholder Labs", "title": "Data Engineer", "leadership": false, "jd": "Build pipelines.", "jd_truncated": false},
+  {"id": "post-syn-05", "employer": "Mock Systems", "title": "Head of Sales Operations", "leadership": true, "jd": "Run sales ops.", "jd_truncated": false}
+ ]
+}

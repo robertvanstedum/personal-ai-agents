@@ -26,7 +26,9 @@ MAX_LINE = 4096
 MAX_FILE = 4 * 1024 * 1024
 EVENT_TYPES = ("proposed", "decided", "revoked",
                # MC first light M1.3 (spec v1.2 §10.2): owner preferences kept from MC's tool, with provenance
-               "preference_kept", "preference_revoked", "suggestion_recorded")
+               "preference_kept", "preference_revoked", "suggestion_recorded",
+               # Partnership v1.1 Practice Book (L01-L04): card editions, the principal's decisions, retirement
+               "card_proposed", "card_decided", "card_retired")
 
 
 class LedgerDamaged(Exception):
@@ -38,6 +40,8 @@ class State:
     lessons: dict = field(default_factory=dict)        # no -> {text, sha256, adopted_at, revoked_at, revision, ...}
     operations: dict = field(default_factory=dict)     # operation_id -> the preference event it wrote (idempotency)
     suggestions: dict = field(default_factory=dict)    # suggestion_id -> pending/adopted clarification record
+    card_proposals: dict = field(default_factory=dict) # Practice Book: proposal_id -> card edition + decision
+    cards: dict = field(default_factory=dict)          # Practice Book: card_id -> {editions, current, history}
     proposals: dict = field(default_factory=dict)      # proposal_id -> event + {"decision": ...}
     turns: dict = field(default_factory=dict)          # turn_key -> the event that turn wrote
     next_no: int = 1
@@ -257,6 +261,29 @@ def _apply(st: State, ev: dict) -> None:
             raise LedgerDamaged("revoke_inconsistent")
         lesson["revoked_at"], lesson["revoked_by"] = ev["at"], ev["operation_id"]
         st.operations[ev["operation_id"]] = ev
+    elif kind == "card_proposed":
+        if ev["proposal_id"] in st.card_proposals or text_sha(ev["text"]) != ev["sha256"]:
+            raise LedgerDamaged("card_proposal_inconsistent")
+        st.card_proposals[ev["proposal_id"]] = {**ev, "decision": None}
+    elif kind == "card_decided":
+        p = st.card_proposals.get(ev["proposal_id"])
+        if p is None or p["decision"] is not None:
+            raise LedgerDamaged("card_decision_without_open_proposal")
+        p["decision"] = ev["outcome"]
+        if ev["outcome"] == "approved":
+            card = st.cards.setdefault(p["card_id"], {"editions": {}, "current": None, "history": []})
+            card["editions"][p["edition"]] = {k: p[k] for k in ("text", "sha256", "scope", "applicability",
+                                                                 "source_refs", "proposed_by")}
+            card["editions"][p["edition"]].update(approved_at=ev["at"], approval_ref=ev.get("approval_ref"))
+            card["history"].append({"edition": p["edition"], "event": "approved", "at": ev["at"],
+                                    "superseded": card["current"]})
+            card["current"] = p["edition"]
+    elif kind == "card_retired":
+        card = st.cards.get(ev["card_id"])
+        if card is None or card["current"] != ev["edition"]:
+            raise LedgerDamaged("card_retire_inconsistent")
+        card["history"].append({"edition": ev["edition"], "event": "retired", "at": ev["at"]})
+        card["current"] = None
     elif kind == "suggestion_recorded":
         if ev["suggestion_id"] in st.suggestions or ev["operation_id"] in st.operations:
             raise LedgerDamaged("suggestion_inconsistent")

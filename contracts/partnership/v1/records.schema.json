@@ -1,0 +1,1254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:partnership:records",
+  "title": "Stored records of the partnership task service",
+  "description": "Spec v1.1 section 3 (data contracts and lifecycle) and Q02. Every record has schema version, stable identity, environment, scope, revision, created/updated times and provenance. The writer sets revision and times; callers never do.",
+  "$defs": {
+    "provenance": {
+      "description": "Who caused this revision, from the authenticated binding (A02), not from the payload.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_seat",
+        "origin",
+        "session_id",
+        "command_id"
+      ],
+      "properties": {
+        "actor_seat": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+        },
+        "origin": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/origin"
+        },
+        "session_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 120
+        },
+        "command_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/command_id"
+        }
+      }
+    },
+    "pending_operation": {
+      "description": "E01. Set while a multi-document operation is journalled but not complete. A record carrying one is not dispatchable and its links are not presented as complete.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operation_id",
+            "kind",
+            "payload_digest",
+            "expected_request_revision",
+            "reserved_task_id"
+          ],
+          "properties": {
+            "operation_id": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/command_id"
+            },
+            "kind": {
+              "enum": [
+                "promotion"
+              ]
+            },
+            "reserved_task_id": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/task_id"
+            },
+            "payload_digest": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+            },
+            "expected_request_revision": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      ]
+    },
+    "base": {
+      "type": "object",
+      "required": [
+        "schema",
+        "revision",
+        "environment",
+        "data_scope",
+        "created_at",
+        "updated_at",
+        "provenance"
+      ],
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "environment": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/environment"
+        },
+        "data_scope": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/data_scope"
+        },
+        "created_at": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/timestamp"
+        },
+        "updated_at": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/timestamp"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      }
+    },
+    "source_event": {
+      "description": "C05. The principal's (or a producer's) words as received, saved before any interpretation. Immutable: a correction is a new source event naming its target.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        }
+      ],
+      "type": "object",
+      "unevaluatedProperties": false,
+      "required": [
+        "schema",
+        "source_event_id",
+        "producer",
+        "source",
+        "content",
+        "correction_of",
+        "event_at"
+      ],
+      "properties": {
+        "schema": {
+          "const": "minimoi.partnership.source_event/1"
+        },
+        "source_event_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+        },
+        "producer": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+        },
+        "source": {
+          "description": "Where the producer's own store keeps it, with that store's durable ordering position (Records room seq, Telegram update id). Ordering is per store.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "store",
+            "id",
+            "position"
+          ],
+          "properties": {
+            "store": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]{1,40}$"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "position": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            }
+          }
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "correction_of": {
+          "oneOf": [
+            {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "event_at": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_timestamp"
+        },
+        "revision": true,
+        "environment": true,
+        "data_scope": true,
+        "created_at": true,
+        "updated_at": true,
+        "provenance": true
+      }
+    },
+    "interpretation": {
+      "description": "Q02. One seat's reading of source events into an actionable intent. Adoption is not owner approval: authority is a separate reference to an actual owner confirmation or an existing grant.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "enum": [
+                  "adopted",
+                  "rejected",
+                  "corrected"
+                ]
+              }
+            },
+            "required": [
+              "disposition"
+            ]
+          },
+          "then": {
+            "properties": {
+              "disposition_by": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+              }
+            }
+          }
+        }
+      ],
+      "type": "object",
+      "unevaluatedProperties": false,
+      "required": [
+        "schema",
+        "interpretation_id",
+        "source_event_ids",
+        "correction_event_ids",
+        "interpreter",
+        "proposed",
+        "context_refs",
+        "disposition",
+        "disposition_by",
+        "authority",
+        "superseded_by"
+      ],
+      "properties": {
+        "schema": {
+          "const": "minimoi.partnership.interpretation/1"
+        },
+        "interpretation_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/interpretation_id"
+        },
+        "source_event_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+          }
+        },
+        "correction_event_ids": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+          }
+        },
+        "interpreter": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "seat",
+            "session_id",
+            "runtime"
+          ],
+          "properties": {
+            "seat": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+            },
+            "session_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 120
+            },
+            "runtime": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/runtime"
+            }
+          }
+        },
+        "proposed": {
+          "description": "A concise decision record, not hidden reasoning or a prompt capture.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "outcome",
+            "scope",
+            "recipients",
+            "continuing"
+          ],
+          "properties": {
+            "outcome": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+            },
+            "scope": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/data_scope"
+            },
+            "recipients": {
+              "type": "array",
+              "maxItems": 10,
+              "items": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+              }
+            },
+            "continuing": {
+              "description": "True when execution would continue beyond the current turn (D03), so a task is needed.",
+              "type": "boolean"
+            }
+          }
+        },
+        "context_refs": {
+          "type": "array",
+          "maxItems": 40,
+          "items": {
+            "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+          }
+        },
+        "disposition": {
+          "enum": [
+            "proposed",
+            "adopted",
+            "corrected",
+            "rejected",
+            "unresolved"
+          ]
+        },
+        "disposition_by": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_seat"
+        },
+        "authority": {
+          "description": "Q02. The actual authority, kept apart from adoption: none, or a reference to a real owner confirmation (Records) or an existing grant.",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "ref"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "none"
+                },
+                "ref": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "ref"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "owner_confirmation",
+                    "existing_grant"
+                  ]
+                },
+                "ref": {
+                  "allOf": [
+                    {
+                      "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+                    },
+                    {
+                      "properties": {
+                        "store": {
+                          "enum": [
+                            "records",
+                            "grants"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "superseded_by": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_interpretation_id"
+        },
+        "revision": true,
+        "environment": true,
+        "data_scope": true,
+        "created_at": true,
+        "updated_at": true,
+        "provenance": true
+      }
+    },
+    "request": {
+      "description": "D02/D03. A durable ask. Quick requests keep coverage and results in history without staying on the open list; promotion links one task and erases nothing.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "promoted"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "task_ref": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/task_id"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "failed",
+                  "withdrawn"
+                ]
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+              }
+            }
+          }
+        }
+      ],
+      "type": "object",
+      "unevaluatedProperties": false,
+      "required": [
+        "schema",
+        "request_id",
+        "source_event_id",
+        "intent",
+        "interpretation_ref",
+        "responder",
+        "state",
+        "coverage",
+        "result_refs",
+        "refinements",
+        "task_ref",
+        "pending_operation",
+        "fence_generation",
+        "reason"
+      ],
+      "properties": {
+        "schema": {
+          "const": "minimoi.partnership.request/1"
+        },
+        "request_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/request_id"
+        },
+        "source_event_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+        },
+        "intent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text",
+            "revision",
+            "source_event_id"
+          ],
+          "properties": {
+            "text": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "source_event_id": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+            }
+          },
+          "description": "The current intent edition and the source event (original, refinement or correction) it came from."
+        },
+        "interpretation_ref": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_interpretation_id"
+        },
+        "responder": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+        },
+        "state": {
+          "enum": [
+            "recorded",
+            "active",
+            "answered",
+            "failed",
+            "withdrawn",
+            "promoted"
+          ]
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage"
+        },
+        "result_refs": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+          }
+        },
+        "refinements": {
+          "description": "Every earlier intent edition, kept. Historical results stay attached to the edition they answered.",
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "intent_revision",
+              "text",
+              "source_event_id",
+              "result_refs",
+              "coverage"
+            ],
+            "properties": {
+              "intent_revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "text": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+              },
+              "source_event_id": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+              },
+              "result_refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+                }
+              },
+              "coverage": {
+                "$ref": "#/$defs/coverage"
+              }
+            }
+          }
+        },
+        "task_ref": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_task_id"
+        },
+        "pending_operation": {
+          "$ref": "#/$defs/pending_operation"
+        },
+        "fence_generation": {
+          "description": "C06. Bumped by every correction or scope/outcome/recipient/cancel change; a dispatch candidate from an older generation is stale.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "revision": true,
+        "environment": true,
+        "data_scope": true,
+        "created_at": true,
+        "updated_at": true,
+        "provenance": true,
+        "reason": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_text"
+        }
+      }
+    },
+    "coverage": {
+      "description": "J1. What was searched, what could not be, and the named gaps. Unknown coverage is stated, never implied complete.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sources",
+        "gaps"
+      ],
+      "properties": {
+        "sources": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ref",
+              "status"
+            ],
+            "properties": {
+              "ref": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+              },
+              "status": {
+                "enum": [
+                  "searched",
+                  "partial",
+                  "unavailable",
+                  "not_searched"
+                ]
+              }
+            }
+          }
+        },
+        "gaps": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+          }
+        }
+      }
+    },
+    "assignment": {
+      "description": "Q03. Effective interval in task revisions, with the command that made it. History is kept; a reassignment closes the old interval.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "seat",
+        "from_revision",
+        "to_revision",
+        "command_id",
+        "reason",
+        "effective_from_at",
+        "effective_to_at"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "lead",
+            "holder",
+            "delegate",
+            "verifier",
+            "duty"
+          ]
+        },
+        "seat": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+        },
+        "from_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "to_revision": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "command_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/command_id"
+        },
+        "reason": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_text"
+        },
+        "effective_from_at": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/timestamp"
+        },
+        "effective_to_at": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_timestamp"
+        }
+      }
+    },
+    "task": {
+      "description": "D01, D04, E07. Lead owes the outcome; holder owes the next step. Completed only with lead acceptance of an exact artifact/outcome set.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "waiting"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "waiting": {
+                "type": "object"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "waiting": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "completed"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "acceptances": {
+                "contains": {
+                  "properties": {
+                    "status": {
+                      "const": "current"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "failed",
+                  "canceled",
+                  "rejected"
+                ]
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+              }
+            }
+          }
+        }
+      ],
+      "type": "object",
+      "unevaluatedProperties": false,
+      "required": [
+        "schema",
+        "task_id",
+        "request_ref",
+        "interpretation_ref",
+        "lead",
+        "holder",
+        "outcome",
+        "done_when",
+        "return_window",
+        "state",
+        "reason",
+        "waiting",
+        "parent_ref",
+        "execution_refs",
+        "review_refs",
+        "assignments",
+        "fence_generation",
+        "pending_operation",
+        "acceptances",
+        "artifact_sets",
+        "reviews",
+        "rounds"
+      ],
+      "properties": {
+        "schema": {
+          "const": "minimoi.partnership.task/1"
+        },
+        "task_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/task_id"
+        },
+        "request_ref": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/request_id"
+        },
+        "interpretation_ref": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/interpretation_id"
+        },
+        "lead": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+        },
+        "holder": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+        },
+        "outcome": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+        },
+        "done_when": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+        },
+        "return_window": {
+          "oneOf": [
+            {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/return_window"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "enum": [
+            "submitted",
+            "working",
+            "waiting",
+            "completed",
+            "failed",
+            "canceled",
+            "rejected"
+          ]
+        },
+        "reason": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_text"
+        },
+        "waiting": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "reason",
+                "who_can_unblock"
+              ],
+              "properties": {
+                "reason": {
+                  "enum": [
+                    "input",
+                    "authorization",
+                    "dependency",
+                    "lead_unavailable"
+                  ]
+                },
+                "who_can_unblock": {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+                }
+              }
+            }
+          ]
+        },
+        "parent_ref": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_task_id"
+        },
+        "execution_refs": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+          }
+        },
+        "review_refs": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+          }
+        },
+        "assignments": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 500,
+          "items": {
+            "$ref": "#/$defs/assignment"
+          }
+        },
+        "fence_generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pending_operation": {
+          "$ref": "#/$defs/pending_operation"
+        },
+        "revision": true,
+        "environment": true,
+        "data_scope": true,
+        "created_at": true,
+        "updated_at": true,
+        "provenance": true,
+        "acceptances": {
+          "description": "Section 3, E06, E07. Every acceptance is kept; a new current artifact set needs a new acceptance and marks the old one superseded.",
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "artifact_set_digest",
+              "reviewed_set_digests",
+              "review_refs",
+              "by",
+              "task_revision",
+              "status",
+              "disagreements_delivered"
+            ],
+            "properties": {
+              "artifact_set_digest": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+              },
+              "reviewed_set_digests": {
+                "type": "array",
+                "maxItems": 20,
+                "items": {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+                }
+              },
+              "review_refs": {
+                "type": "array",
+                "maxItems": 20,
+                "items": {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+                }
+              },
+              "by": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+              },
+              "task_revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "status": {
+                "enum": [
+                  "current",
+                  "superseded"
+                ]
+              },
+              "disagreements_delivered": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^RV-"
+                }
+              }
+            }
+          }
+        },
+        "artifact_sets": {
+          "description": "E06. Every submitted artifact set, oldest first; the last is current. A worker's submission is submitted, never accepted (E07).",
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "digest",
+              "artifacts",
+              "submitted_by",
+              "task_revision",
+              "authored_by",
+              "interpretation_ref"
+            ],
+            "properties": {
+              "digest": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+              },
+              "artifacts": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 50,
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+                    },
+                    {
+                      "required": [
+                        "digest"
+                      ],
+                      "properties": {
+                        "digest": {
+                          "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "submitted_by": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+              },
+              "task_revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "authored_by": {
+                "description": "Every seat that authored this set: the submitter and the holder at submission.",
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+                }
+              },
+              "interpretation_ref": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/interpretation_id"
+              }
+            }
+          }
+        },
+        "reviews": {
+          "description": "E06. Reviews bound to the exact set they reviewed. applicable_to_current turns false when a new current set is selected; history is kept. Disagreement is kept and delivered, never folded into consensus.",
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "review_id",
+              "reviewer",
+              "reviewed_set_digest",
+              "verdict",
+              "review_ref",
+              "findings_ref",
+              "applicable_to_current",
+              "task_revision",
+              "input_digest",
+              "interpretation_ref"
+            ],
+            "properties": {
+              "review_id": {
+                "type": "string",
+                "pattern": "^RV-[A-Za-z0-9_-]{4,64}$"
+              },
+              "reviewer": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+              },
+              "reviewed_set_digest": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+              },
+              "verdict": {
+                "enum": [
+                  "approve",
+                  "changes_requested",
+                  "disagree"
+                ]
+              },
+              "review_ref": {
+                "allOf": [
+                  {
+                    "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+                  },
+                  {
+                    "required": [
+                      "digest"
+                    ],
+                    "properties": {
+                      "digest": {
+                        "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+                      }
+                    }
+                  }
+                ]
+              },
+              "findings_ref": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_ref"
+              },
+              "applicable_to_current": {
+                "type": "boolean",
+                "description": "True only while the reviewed set is the current set AND the task's interpretation is the one the review was made under."
+              },
+              "task_revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "input_digest": {
+                "description": "E06: the input the review document says it reviewed; must equal reviewed_set_digest. Asserted by the reviewer in B2B; attested by the review route in B4.",
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+              },
+              "interpretation_ref": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/interpretation_id"
+              }
+            }
+          }
+        },
+        "rounds": {
+          "description": "J3: how many times this task was reopened for revision; a child is bounded (MAX_CHILD_ROUNDS).",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "outbox": {
+      "description": "E02/E03/Q05. The task service's durable intent for one operation in another store (B2A: harness admission). Written in the same journal intent as the task change that needs it. The destination's own receipt, not the send, settles it.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        }
+      ],
+      "type": "object",
+      "unevaluatedProperties": false,
+      "required": [
+        "schema",
+        "operation_id",
+        "task_id",
+        "destination",
+        "operation",
+        "bundle_digest",
+        "bundle_ref",
+        "fence_generation",
+        "interpretation_ref",
+        "state",
+        "attempts",
+        "destination_receipt",
+        "reason",
+        "packet"
+      ],
+      "properties": {
+        "schema": {
+          "const": "minimoi.partnership.outbox/1"
+        },
+        "operation_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/operation_id"
+        },
+        "task_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/task_id"
+        },
+        "destination": {
+          "enum": [
+            "harness",
+            "notices"
+          ]
+        },
+        "operation": {
+          "enum": [
+            "admit_bundle",
+            "set_fence",
+            "notify"
+          ]
+        },
+        "bundle_digest": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+        },
+        "bundle_ref": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/ref"
+        },
+        "fence_generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "interpretation_ref": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/interpretation_id"
+        },
+        "state": {
+          "description": "pending (never sent) -> attempted (send about to happen) -> acknowledged | refused | unknown | conflict; unknown -> acknowledged | pending (destination says definitely absent) | conflict; pending -> fenced (a correction, cancel or reassignment made it stale before any send). conflict/unknown -> abandoned only by an owner decision (the effect may exist; the record says so). For notices: acknowledged means delivered by the notice channel (its receipt); read is separate evidence that the principal opened it (C04/E09).",
+          "enum": [
+            "pending",
+            "attempted",
+            "acknowledged",
+            "refused",
+            "unknown",
+            "conflict",
+            "fenced",
+            "abandoned",
+            "read"
+          ]
+        },
+        "attempts": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "attempt",
+              "observation",
+              "drainer_seat",
+              "at"
+            ],
+            "properties": {
+              "attempt": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "observation": {
+                "enum": [
+                  "attempted",
+                  "applied",
+                  "refused",
+                  "definitely_absent",
+                  "conflict",
+                  "unknown",
+                  "fenced",
+                  "abandoned",
+                  "read"
+                ]
+              },
+              "drainer_seat": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+              },
+              "at": {
+                "$ref": "urn:minimoi:contract:partnership:common#/$defs/timestamp"
+              },
+              "code": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 64
+              },
+              "method": {
+                "enum": [
+                  "destination_answer",
+                  "destination_lookup",
+                  "drainer",
+                  "owner_decision"
+                ]
+              },
+              "send_attempt": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 1
+              }
+            }
+          }
+        },
+        "destination_receipt": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_ref"
+        },
+        "reason": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_text"
+        },
+        "revision": true,
+        "environment": true,
+        "data_scope": true,
+        "created_at": true,
+        "updated_at": true,
+        "provenance": true,
+        "packet": {
+          "description": "B2D: for notices, the content delivered (return packet with accepted set, delivered disagreement and child outcomes; or a needs-owner escalation framed as choices). bundle_digest is its digest. Null for other operations.",
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

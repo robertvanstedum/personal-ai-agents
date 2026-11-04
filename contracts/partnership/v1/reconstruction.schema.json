@@ -1,0 +1,263 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:partnership:reconstruction",
+  "title": "Scoped reconstruction answer (Q07)",
+  "description": "The output of services/partnership_tasks/reconstruct.py. Pinned so non-author reviewers and B2 joins can rely on it. No store-wide position appears in a scoped answer.",
+  "$defs": {
+    "answer": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "synthetic",
+            "environment",
+            "start",
+            "at",
+            "as_of_basis",
+            "integrity",
+            "chain",
+            "as_of",
+            "assignments",
+            "execution_refs",
+            "reviews",
+            "acceptances",
+            "costs",
+            "timeline",
+            "hypotheses",
+            "coverage",
+            "gaps",
+            "scope_note",
+            "artifact_sets",
+            "notices",
+            "divergence"
+          ],
+          "properties": {
+            "schema": {
+              "const": "minimoi.partnership.reconstruction/1"
+            },
+            "synthetic": {
+              "type": "boolean"
+            },
+            "environment": {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/environment"
+            },
+            "start": {
+              "$ref": "#/$defs/start"
+            },
+            "at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "as_of_basis": {
+              "enum": [
+                "journal recorded_at",
+                null
+              ]
+            },
+            "integrity": {
+              "const": "verified"
+            },
+            "chain": {
+              "type": "object",
+              "required": [
+                "instructions",
+                "corrections",
+                "interpretations",
+                "current_interpretation",
+                "authority",
+                "request",
+                "task"
+              ]
+            },
+            "as_of": {
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "assignments": {
+              "type": "array"
+            },
+            "execution_refs": {
+              "type": "array"
+            },
+            "reviews": {
+              "type": "array"
+            },
+            "acceptances": {
+              "type": "array"
+            },
+            "costs": {
+              "type": "object",
+              "required": [
+                "status"
+              ],
+              "properties": {
+                "status": {
+                  "enum": [
+                    "no_cost_evidence",
+                    "synthetic_joined"
+                  ]
+                }
+              }
+            },
+            "timeline": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "position",
+                  "recorded_at",
+                  "command_id",
+                  "kind",
+                  "actor_seat",
+                  "origin",
+                  "runtime",
+                  "classification"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "seq"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "hash"
+                      ]
+                    }
+                  ]
+                },
+                "properties": {
+                  "position": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "classification": {
+                    "enum": [
+                      "observed_record",
+                      "actor_report"
+                    ]
+                  }
+                }
+              }
+            },
+            "hypotheses": {
+              "type": "array",
+              "maxItems": 0
+            },
+            "coverage": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "store",
+                  "status"
+                ],
+                "properties": {
+                  "store": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "verified",
+                      "not_joined",
+                      "unavailable",
+                      "synthetic_joined"
+                    ]
+                  }
+                }
+              }
+            },
+            "gaps": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "scope_note": {
+              "type": "string"
+            },
+            "artifact_sets": {
+              "type": "array"
+            },
+            "notices": {
+              "type": "array"
+            },
+            "divergence": {
+              "type": "array"
+            },
+            "effects": {
+              "type": "array"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "start",
+            "integrity",
+            "detail",
+            "chain",
+            "timeline",
+            "gaps"
+          ],
+          "properties": {
+            "schema": {
+              "const": "minimoi.partnership.reconstruction/1"
+            },
+            "start": {
+              "$ref": "#/$defs/start"
+            },
+            "integrity": {
+              "const": "damaged"
+            },
+            "detail": {
+              "type": "string"
+            },
+            "chain": {
+              "type": "null"
+            },
+            "timeline": {
+              "type": "array",
+              "maxItems": 0
+            },
+            "gaps": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "start": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "request",
+            "task"
+          ]
+        },
+        "id": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
