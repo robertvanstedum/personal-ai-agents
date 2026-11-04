@@ -67,3 +67,24 @@ def test_reads_and_internal_token_routes_are_not_gated_and_event_is_the_recorded
     assert receipt.status_code == 401 and receipt.get_json() == {"error": "unauthorized"}   # its own token check
     event = client.post("/event", json={"source": "test", "event_type": "ping"}, headers={"X-Test-Unsigned": "1"})
     assert event.status_code != 403                                   # follow-up: /event has no caller identity yet
+
+
+# Every write route on the real CoS app, and how it is authorised. A new write route fails this test until it is
+# placed here deliberately, so nothing new can slip under an exempt prefix unseen (F3 re-review N3).
+KNOWN_WRITES = {
+    "/chat": "signed: owner, or service:mc",
+    "/ui/send": "signed owner", "/ui/upload": "signed owner", "/ui/transcribe": "signed owner",
+    "/ui/history/conversations": "signed owner", "/ui/history/selection": "signed owner",
+    "/ui/history/preferences": "signed owner",
+    "/event": "OPEN: recorded follow-up (no caller identity yet)",
+    "/internal/model-gateway/receipt": "own token",
+    "/api/realtime-voice/confer/bootstrap": "signed owner",
+}
+SELF_GATED = ("/api/realtime-voice/managed/", "/api/realtime-voice/direct/", "/ui/api/in-flight/")
+
+
+def test_every_write_route_on_the_real_cos_app_is_accounted_for(cos):
+    writes = sorted({rule.rule for rule in cos.app.url_map.iter_rules()
+                     if set(rule.methods or ()) - {"GET", "HEAD", "OPTIONS"}})
+    unknown = [w for w in writes if w not in KNOWN_WRITES and not w.startswith(SELF_GATED)]
+    assert unknown == [], f"new CoS write routes need a deliberate F3 decision: {unknown}"
