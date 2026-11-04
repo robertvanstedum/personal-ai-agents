@@ -1,8 +1,10 @@
 # MiniMoi partnership and team workflow specification
 
-**Version 1.0 · 4 November 2026 · Application edition · Implementation baseline subject to closing code-feasibility review**
+**Version 1.1 · 4 November 2026 · Application edition · Implementation baseline subject to closing code-feasibility review**
 
 This specification defines the path from conversation to recorded work, bounded execution, review, acceptance and return. Its first delivery is an isolated synthetic foundation. Real unattended routes, cross-model policy activation, live migration and production rollout require their own approval and acceptance. Publication does not assert deployment or approve a resulting implementation diff.
+
+Version 1.1 adds an end-to-end accountability and incident reconstruction contract (Q01–Q08) and F13–F16 acceptance. Existing requirement IDs and authority boundaries remain unchanged.
 
 Normative requirements use MUST, MUST NOT and SHOULD. Requirement IDs bind implementation and tests. Provider protocols are optional adapters; internal state names do not assert A2A conformance.
 
@@ -12,7 +14,7 @@ Normative requirements use MUST, MUST NOT and SHOULD. Requirement IDs bind imple
 
 **P02.** Responder, accountable lead, next-step holder and executor are separate responsibilities. Leadership is chosen per item. Registered seats can be served by different model runtimes; registering a seat does not grant capabilities.
 
-**P03.** Included: conversation floor/corrections, durable requests/tasks, admission integration, review/acceptance, delivery, one-level supervision, private scope and Practice Book reuse. Excluded initially: arbitrary workflow authoring, autonomous lead replacement, graph migration, new provider transport standards and unrestricted background agents.
+**P03.** Included: conversation floor/corrections, durable requests/tasks, admission integration, review/acceptance, delivery, one-level supervision, private scope, Practice Book reuse and incident reconstruction. Excluded initially: arbitrary workflow authoring, autonomous lead replacement, graph migration, new provider transport standards and unrestricted background agents.
 
 ## 2 Authority map
 
@@ -40,7 +42,8 @@ All authoritative records have schema version, stable identity, environment/scop
 | Object | Required information |
 |---|---|
 | Source event | Authenticated producer, stable source_event_id, durable ordering position, content/ref and correction target if any |
-| Request | request_id, source_event_id, accepted intent/revision, responder, scope, provenance, disposition, coverage and result refs |
+| Request | request_id, source_event_id, accepted intent/revision, interpretation_ref, responder, scope, provenance, disposition, coverage and result refs |
+| Interpretation | interpretation_id/revision, source and correction refs, interpreting seat/session/runtime, concise proposed intent, supporting context refs/versions, disposition and authority basis; Q02 applies |
 | Task | task_id, request_ref, lead, holder, outcome/done_when, return_window with timezone/basis, state/reason, parent_ref when used, execution/review refs, acceptance and events |
 | Command | command_id, canonical payload digest, expected_revision, actor/seat, authenticated origin, basis_ref and scope |
 | Transition | operation_id, payload digest, source/destination refs, source revision, fence/grant reference, apply/ack disposition |
@@ -165,7 +168,27 @@ The diagram is a logical sequence; preparation of grant/owner confirmation occur
 
 **M04.** Pin source and recoverability without blindly publishing private development ancestry. Isolated implementation need not require a main merge. Live configuration is verified separately; Compose defaults are not live-state proof. Feature rollback retains authority closures or disables affected capabilities safely.
 
-## 8 Acceptance matrix and release slices
+## 8 Accountability and incident reconstruction
+
+The system MUST let an authorized reviewer reconstruct instruction → interpretation → authorization → assignment → attempt → effect → review/acceptance, and identify duties that were missed. This is a chain of evidence and accountability across existing authoritative stores, not a new execution controller or competing audit database. Attribution distinguishes responsibility, observed action and causal findings; an assigned lead is not automatically the cause of a failure.
+
+**Q01.** Every consequential operation MUST carry recoverable links to its initiating source or scheduled obligation occurrence, request/task when applicable, interpretation, authority basis, historical assignment, command and execution attempt. Evidence producers record stable event IDs, causal parent references, authenticated actor/seat, session/runtime identity, environment/scope, operation/target identity, revisions and event/recorded times. Runtime/model/provider/build/config versions MUST be captured where applicable; deterministic work identifies its implementation instead. Use causal links and per-store ordering rather than assuming wall clocks establish a global order. Quick actions retain this chain without requiring artificial task promotion. Child work links back to its parent and delegation authority. Runtime adapters attest observed identity and effects; model-authored identity or success claims alone are not evidence.
+
+**Q02.** Preserve original instruction editions and corrections separately from each actionable interpretation. Record the interpreting seat/session, model/provider where applicable, concise proposed outcome and scope, supporting source/context editions and relevant instruction/policy/loading references. Record whether the interpretation was adopted for execution, corrected, rejected or left unresolved and by whom. Internal adoption of an interpretation MUST NOT be represented as human approval: reference the actual owner confirmation or pre-existing grant separately. Persist the interpretation before admitting its consequential action; corrections append a revision and apply C06 fencing. A concise decision record and evidence references are required, not hidden model reasoning or indiscriminate prompt capture. A load receipt proves inclusion only, not what caused a model's answer.
+
+**Q03.** Preserve lead, holder, delegate, verifier and operational duty assignments with effective intervals, assignment source and authorized changes. A recurring operational obligation MUST identify the expected occurrence/window, schedule/threshold policy edition, responsible seat and required response/escalation. Record pickup, check time and scope, measurements, threshold evaluation, attempted remediation and notice delivery/acknowledgment, or an explicit missed/unknown state. An overdue occurrence without trustworthy check evidence MUST NOT appear healthy or fulfilled. Monitoring coverage includes its own last successful check; an unavailable monitor is a coverage gap, not evidence of health. Compare expected occurrences with receipts; this establishes missing evidence, not proof that an unobserved action never occurred. Reuse the obligation store and its recovery links; do not add a second scheduler.
+
+**Q04.** Spending evidence links individual attempts, including failures/retries, to the initiating request/task/occurrence, executing seat/runtime/provider, applicable spending grant and reservation. Distinguish authorized cap, reserved amount, reported usage, estimated cost and provider-billed charge. Retain units, currency, estimate/rate version, source/time and provider request/transaction identifiers when available. Reconcile invoice/account adjustments, credits and aggregate charges without double counting; unsupported attribution remains explicitly unallocated or uncertain. Provider totals alone MUST NOT be presented as exact per-agent charges. Synthetic tests use fixture billing records; a real billing integration and reconciliation are separately evidenced before claiming real charge attribution.
+
+**Q05.** Consequential dispatch requires durable intent, interpretation/authority references and the admitted attempt identity before the external effect. Record the exact authorized payload edition/digest and protected payload reference, destination, adapter request ID, external object/transaction ID, response/receipt and verification result as available. Verification records its actor and method; worker reports, independently observed effects and lead acceptance remain distinct. Never mark an operation successful solely because a request was sent. If post-dispatch recording fails or a response is lost, recover from the durable intent and external lookup using the same operation identity; report unknown and hold dependent work under E03. An audit failure cannot be hidden as success or authorize blind replay. Missing required pre-dispatch evidence blocks that dispatch.
+
+**Q06.** Evidence history is append-only at the application boundary: corrections and reassignments supersede with reason/actor rather than rewriting prior claims. Scope checks cover audit lookup, export and referenced payloads; keep credentials out and private context in its authorized store. Use protected immutable editions, digests, existing journal ordering and independently retained checkpoints/backups to make integrity failures detectable. B0 MUST document which threats these controls detect and what remains trusted; hashes stored beside writable records alone do not prove resistance to a privileged rewrite. Restore validates evidence/link integrity and reports gaps. Initially retain history without automatic deletion. Any later retention/redaction policy requires explicit approval, access limits and preserved non-content tombstones/gap notices; do not promise reconstruction of deleted content.
+
+**Q07.** Provide a scoped read-only reconstruction query/export, initially a CLI or API rather than a new dashboard. Starting from a request/task, external effect/charge reference or obligation occurrence, it returns the linked evidence and as-of assignments, interpretation and authority, attempts/effects, reviews, costs and outstanding gaps. Show evidence coverage and unavailable sources; distinguish observed facts, actor reports and investigative hypotheses. A non-author reviewer MUST be able to reconstruct the incident without asking the executing agent to remember. Record repair/remediation as linked new events. Audit access confers no execution authority and does not reveal the existence or contents of out-of-scope records.
+
+**Q08.** Add evidence schemas/causal IDs and interpretation recording in B1A–B1E; joins to harness attempts, obligations and synthetic cost/effect receipts in B2. Meet synthetic F13–F16, including restore/link-integrity fixtures in B2, before declaring the synthetic end-to-end chain accepted. B3 separately proves migration and backup restore rehearsal. Extend the same contract to migration/practice evidence in B3 and prove provider-specific evidence coverage in B4 before claiming real operational or charge reconstruction. B0 MUST map implemented evidence fields versus missing instrumentation; existing logs are not proof of complete coverage. This requirement is part of the foundation, not deferred analytics work. No additional model call or user approval round is required solely to write evidence.
+
+## 9 Acceptance matrix and release slices
 
 | ID | Observable journey or fault | First evidence |
 |---|---|---|
@@ -185,5 +208,9 @@ The diagram is a logical sequence; preparation of grant/owner confirmation occur
 | F10 | Practice proposed/approved/revoked/mismatched; exact context-load receipt and no new authority | Batch 3 |
 | F11 | CoS/Records outage leaves task service available within stated host limits | Batch 1/3 |
 | F12 | Per-seat voice identity, audio-floor isolation, physical barge-in and stop-vs-cancel | Separate advertised voice gate |
+| F13 | Unexpected synthetic charge: reconstruct authorized cap, failed/retried attempts, executor/provider, estimate versus billed fixture and unallocated/aggregate adjustment without invented attribution or double count | B1 evidence contract; B2 complete synthetic; B4 real coverage |
+| F14 | Missed disk check: reconstruct expected occurrence, owner at that time despite later reassignment, missing/late measurement, threshold and escalation/delivery; monitor outage and missing receipt never imply healthy | B1 evidence contract; B2 synthetic obligation adapter |
+| F15 | Wrong issue interpretation: reconstruct original instruction/correction, interpreter/context, adopted intent versus actual authority, exact synthetic payload/effect and review; show where divergence first becomes observable and test fencing before dispatch | B1 interpretation/fencing; B2 full synthetic chain |
+| F16 | Missing/corrupted evidence, denied audit access, pre-dispatch recording failure, post-effect receipt loss, restore and unavailable store: expose gaps, refuse unsupported claims, preserve uncertainty and prevent duplicate effects | B1 storage/access; B2 joined recovery and synthetic restore/link-integrity fixture; B3 migration/backup restore rehearsal |
 
 Synthetic passes MUST be labeled synthetic. No production claim, real-data completeness claim or unattended-provider promise follows from them. Final implementation approval uses actual diffs and evidence; deployment and paid-route activation remain distinct decisions.
