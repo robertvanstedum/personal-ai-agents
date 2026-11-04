@@ -10,7 +10,7 @@ Forward (``migrate``), keyed on the legacy item id only (a row's revision is an 
   reading as an interpretation, and adopts it under the cutover grant that cites the principal's approval
   (``existing_grant``). The principal's own confirmation is not claimed for agent-drafted words;
 - each comment and the close note become their own source events, with their provenance kept in the mapping;
-- the owner's session records the request and, for open/doing/waiting rows, promotes a task whose lead is the
+- the migration seat records the request; the owner's session promotes open/doing/waiting rows to a task whose lead is the
   reserved marker ``unresolved-lead`` (no binding can hold it): ``with``/``opened_by`` never establish the
   accountable lead (M03). ``with`` becomes the holder; the task waits for the principal;
 - done rows become answered requests, dropped rows withdrawn requests (history, not open work, D03);
@@ -29,6 +29,7 @@ import json
 import shutil
 from pathlib import Path
 
+from core import durable_files as fsio
 from core.canonical_json import digest
 
 RUNTIME = {"kind": "deterministic", "model": None, "provider": None, "build": "partnership_tasks.migration/2",
@@ -77,7 +78,10 @@ def _ok(res, what):
 def migrate(svc, *, migration_token: str, owner_token: str, rows: list[dict], grant_ref: dict) -> dict:
     mapping_path = svc.journal.root.parent / f"{svc.journal.root.name}-migration" / "mapping.json"
     mapping_path.parent.mkdir(parents=True, exist_ok=True)
-    mapping = json.loads(mapping_path.read_text("utf-8")) if mapping_path.exists() else {}
+    saved = fsio.read_doc(mapping_path)
+    if saved is not None and digest(saved["mapping"]) != saved["digest"]:
+        raise ValueError("mapping file does not match its digest")
+    mapping = {} if saved is None else saved["mapping"]
     problems = []
     for row in rows:
         rid = row.get("item_id", "?")
@@ -87,14 +91,16 @@ def migrate(svc, *, migration_token: str, owner_token: str, rows: list[dict], gr
                 problems.append({"item_id": rid, "code": "row_changed_since_migration",
                                  "detail": f"migrated at revision {prior['revision']}, now {row['revision']}"})
                 continue
+            if prior is not None and prior.get("complete"):
+                continue                          # already migrated: never re-pin its baseline (B3B S2-2)
             if row["with"] not in SEAT:
                 problems.append({"item_id": rid, "code": "unknown_legacy_seat", "detail": row["with"]})
                 continue
-            mapping[rid] = _migrate_row(svc, migration_token, owner_token, row, grant_ref)
+            mapping[rid] = dict(_migrate_row(svc, migration_token, owner_token, row, grant_ref), complete=True)
         except (RuntimeError, KeyError) as exc:
             problems.append({"item_id": rid, "code": "row_failed", "detail": str(exc)[:200]})
         finally:
-            mapping_path.write_text(json.dumps(mapping, sort_keys=True, indent=1))   # persisted after every row
+            fsio.write_doc(mapping_path, {"mapping": mapping, "digest": digest(mapping)})   # atomic, after every row
     return {"schema": "minimoi.partnership.migration_rehearsal/2", "rows": len(rows),
             "mapping": [mapping[k] for k in sorted(mapping)], "mapping_file": str(mapping_path),
             "problems": problems, "rehearsal": True}
@@ -202,7 +208,9 @@ def reverse(svc, owner_token: str, rows: list[dict], mapping: list[dict], out_fo
                 note = []
                 if status != row["status"]:
                     new.update(status=status, last_moved_at=at)
-                    note.append(f"status {row['status']} -> {status} after cutover ({t['state']}: {t['reason']})")
+                    note.append(f"status {row['status']} -> {status} after cutover ({t['state']}: {t['reason']})"
+                                + ("; the legacy table has no 'failed', recorded as dropped" if t["state"] == "failed"
+                                   else ""))
                     if status == "done":
                         new.update(outcome="done" if t["state"] == "completed" else "dropped", closed_at=at)
                 if t["holder"] in LEGACY and LEGACY[t["holder"]] != row["with"]:

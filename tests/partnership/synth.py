@@ -27,6 +27,7 @@ SEATS = {
     "tok-migration": ("migration", "scheduler", ["source_event.record", "interpretation.record",
                                                   "interpretation.dispose", "request.record"],
                       ["personal"], ["personal"]),
+    "tok-builder": ("claude-code", "agent", AGENT_OPS, ["shared:build"], ["shared:build"]),
     "tok-expired": ("mc", "agent", AGENT_OPS, ["personal"], ["personal"]),
     "tok-revoked": ("mc", "agent", AGENT_OPS, ["personal"], ["personal"]),
 }
@@ -50,6 +51,7 @@ def bindings(environment: str = "synthetic") -> Bindings:
 GRANTS = Grants([
     {"grant_id": "grant-syn-lookup", "seats": ["cos", "mc"], "scopes": ["personal"], "expires_at": None},
     {"grant_id": "grant-syn-migration-cutover", "seats": ["migration"], "scopes": ["personal"], "expires_at": None},
+    {"grant_id": "grant-syn-build", "seats": ["claude-code"], "scopes": ["shared:build"], "expires_at": None},
     {"grant_id": "grant-syn-expired", "seats": ["cos", "mc"], "scopes": ["personal"],
      "expires_at": "2026-11-01T00:00:00+00:00"},
 ])

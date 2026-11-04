@@ -261,7 +261,23 @@ def _apply(st: State, ev: dict) -> None:
             raise LedgerDamaged("revoke_inconsistent")
         lesson["revoked_at"], lesson["revoked_by"] = ev["at"], ev["operation_id"]
         st.operations[ev["operation_id"]] = ev
-    elif kind == "card_proposed":
+    elif kind in ("card_proposed", "card_decided", "card_retired"):
+        try:
+            _apply_card(st, kind, ev)
+        except (KeyError, TypeError) as exc:                  # a malformed card event is damage, not a crash
+            raise LedgerDamaged("card_event_malformed") from exc
+    elif kind == "suggestion_recorded":
+        if ev["suggestion_id"] in st.suggestions or ev["operation_id"] in st.operations:
+            raise LedgerDamaged("suggestion_inconsistent")
+        st.suggestions[ev["suggestion_id"]] = {**ev, "state": "pending"}
+        st.operations[ev["operation_id"]] = ev
+    if ev.get("turn_key"):
+        st.turns[ev["turn_key"]] = ev
+
+
+def _apply_card(st: State, kind: str, ev: dict) -> None:
+    """Practice Book cards (partnership v1.1 L01-L04). Written only to a practice-book ledger instance."""
+    if kind == "card_proposed":
         if ev["proposal_id"] in st.card_proposals or text_sha(ev["text"]) != ev["sha256"]:
             raise LedgerDamaged("card_proposal_inconsistent")
         st.card_proposals[ev["proposal_id"]] = {**ev, "decision": None}
@@ -272,25 +288,29 @@ def _apply(st: State, ev: dict) -> None:
         p["decision"] = ev["outcome"]
         if ev["outcome"] == "approved":
             card = st.cards.setdefault(p["card_id"], {"editions": {}, "current": None, "history": []})
+            if card["editions"] and p["edition"] < max(card["editions"]):
+                raise LedgerDamaged("card_edition_rollback")
             card["editions"][p["edition"]] = {k: p[k] for k in ("text", "sha256", "scope", "applicability",
                                                                  "source_refs", "proposed_by")}
-            card["editions"][p["edition"]].update(approved_at=ev["at"], approval_ref=ev.get("approval_ref"))
+            card["editions"][p["edition"]].update(approved_at=ev["at"], approval_ref=ev["approval_ref"],
+                                                  approved_by=ev.get("by_seat"))
             card["history"].append({"edition": p["edition"], "event": "approved", "at": ev["at"],
-                                    "superseded": card["current"]})
+                                    "superseded": card["current"], "by": ev.get("by_seat")})
             card["current"] = p["edition"]
-    elif kind == "card_retired":
+            for other in p.get("condenses", []):                # L02: one card replaces several, same scope only
+                o = st.cards.get(other)
+                if o is not None and o["current"] is not None \
+                        and o["editions"][o["current"]]["scope"] == p["scope"]:
+                    o["history"].append({"edition": o["current"], "event": "condensed_into",
+                                         "into": p["card_id"], "at": ev["at"]})
+                    o["current"] = None
+    else:
         card = st.cards.get(ev["card_id"])
         if card is None or card["current"] != ev["edition"]:
             raise LedgerDamaged("card_retire_inconsistent")
-        card["history"].append({"edition": ev["edition"], "event": "retired", "at": ev["at"]})
+        card["history"].append({"edition": ev["edition"], "event": "retired", "at": ev["at"],
+                                "by": ev.get("by_seat"), "reason": ev.get("reason")})
         card["current"] = None
-    elif kind == "suggestion_recorded":
-        if ev["suggestion_id"] in st.suggestions or ev["operation_id"] in st.operations:
-            raise LedgerDamaged("suggestion_inconsistent")
-        st.suggestions[ev["suggestion_id"]] = {**ev, "state": "pending"}
-        st.operations[ev["operation_id"]] = ev
-    if ev.get("turn_key"):
-        st.turns[ev["turn_key"]] = ev
 
 
 def _write_all(fd, data: bytes) -> None:

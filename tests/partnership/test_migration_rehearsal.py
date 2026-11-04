@@ -77,7 +77,7 @@ def test_s2_4_history_and_provenance_are_kept_and_the_principal_is_not_credited_
     assert m["IF-syn-4"]["extra_source_events"] == [{"source_event_id": "SE-mig-syn-4-close", "kind": "close_note"}]
     assert svc.get("request", m["IF-syn-5"]["request_id"], "tok-principal")["state"] == "withdrawn"   # dropped
     assert svc.get("request", m["IF-syn-4"]["request_id"], "tok-principal")["state"] == "answered"
-    saved = json.loads(open(out["mapping_file"]).read())
+    saved = json.loads(open(out["mapping_file"]).read())["mapping"]
     assert saved["IF-syn-1"]["row"]["title_provenance"] == "robert_source"                         # persisted
 
 
@@ -182,3 +182,18 @@ def test_owner_overrides_are_the_principals_only(tmp_path):
                         waiting={"reason": "input", "who_can_unblock": "principal"})["code"] == "not_authorized"
     assert f.transition(tid, "waiting", token="tok-principal",
                         waiting={"reason": "input", "who_can_unblock": "principal"})["outcome"] == "accepted"
+
+
+def test_s2_2_rerunning_migrate_after_a_post_cutover_write_never_loses_that_write(tmp_path, legacy):
+    src, snap = legacy
+    svc, out, m = run(tmp_path, snap)
+    t2 = m["IF-syn-2"]["task_id"]
+    t = svc.get("task", t2, "tok-principal")
+    Flow(svc).ok(cmd("task.transition", "task", t2, {"to": "canceled", "reason": "Dropped after cutover.",
+                                                     "waiting": None, "evidence_refs": [ref("records", "e")],
+                                                     "fence_generation": t["fence_generation"]},
+                     expected=t["revision"]), "tok-principal")
+    rerun = migrate(svc, migration_token="tok-migration", owner_token="tok-principal", rows=read_rows(snap),
+                    grant_ref=GRANT)
+    reverse(svc, "tok-principal", read_rows(snap), rerun["mapping"], tmp_path / "rolled", source_folder=src, at=AT)
+    assert json.loads((tmp_path / "rolled" / "IF-syn-2.json").read_text())["status"] == "done"
