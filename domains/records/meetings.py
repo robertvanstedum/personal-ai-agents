@@ -325,6 +325,20 @@ def routing_names(db, room, body, target, meeting):
         courtesy = COURTESY.match(courtesy_body.lstrip(" ,;:—–"))
         return spoken or selected, set(spoken or ([] if courtesy else selected))
     if not spoken:
+        # A message that names only waiting teammates ("Thanks, CoS." while CoS waits) is addressed to them,
+        # not to whoever else is available: they get their waiting note and nobody answers in their place.
+        prose = owner_prose(body)
+        named_waiting = []
+        for row in db.execute("SELECT p.id,p.label FROM principals p JOIN members m ON m.actor=p.id WHERE m.room=? AND p.id<>'robert'", (room,)):
+            if not db.execute("SELECT 1 FROM meeting_waits WHERE room=? AND actor=?", (room, row['id'])).fetchone():
+                continue
+            for alias in aliases(row):
+                hit = re.search(r"(?<!\w)@?" + re.escape(alias) + r"(?!\w)", prose, re.I)
+                if hit and not (hit.group(0) == 'cos' and hit.start() != 0):   # conversational "cos"
+                    named_waiting.append(row['id'])
+                    break
+        if named_waiting:
+            return named_waiting, set()
         available = [row['id'] for row in db.execute(
             "SELECT p.id FROM principals p JOIN members m ON m.actor=p.id WHERE m.room=? AND p.id<>'robert' AND m.role='contributor'", (room,))
             if card(db, row['id']) and hosted(db, row['id']) and accepted_member(db, room, row['id'])
@@ -1413,9 +1427,13 @@ class Meetings:
                 return {"state": "committed"}
             # A started turn keeps a known cause (a rejected sign-in) so the room can say why.
             keep = finding == "started" and t["disposition"] in {"signed_out_after_start", "stop_unconfirmed"}
-            set_turn(db, turn_id, disposition=t["disposition"] if keep else
-                     ("unresolved_started" if finding == "started" else "confirmed_absent"))
-            return {"state": "uncertain", "disposition": turn_row(db, turn_id)["disposition"]}
+            disposition = t["disposition"] if keep else ("unresolved_started" if finding == "started" else "confirmed_absent")
+            # Idempotent: a repeated report of the same finding must not touch `updated`. Workers re-report a
+            # kept cause (stop_unconfirmed) on every housekeeping pass, and bumping `updated` each time made
+            # mark_reachable's failure_since_last_commit permanent, so the teammate showed "Not reachable".
+            if disposition != t["disposition"]:
+                set_turn(db, turn_id, disposition=disposition)
+            return {"state": "uncertain", "disposition": disposition}
 
     def recover(self, auth, turn_id, payload):
         prior = payload.get("prior_claim_id")

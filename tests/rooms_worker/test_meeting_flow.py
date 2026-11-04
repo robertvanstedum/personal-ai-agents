@@ -487,3 +487,22 @@ def test_one_available_of_two_teammates_is_chat(pair):
     assert pair.worker.run_once()
     assert len(pair.relay.calls)==1 and not pair.discussion.calls
     assert not pair.cos.run_once()
+
+
+@pytest.mark.parametrize('body', ['Thanks, CoS.', 'Thank you CoS', 'CoS thanks'])
+def test_courtesy_to_a_waiting_teammate_is_not_answered_by_the_other(pair, body):
+    """Dev E2E 3 Nov: with CoS waiting, "Thanks, CoS." fell through the one-available rule and MC answered it."""
+    pair.say('CoS, wait.')
+    pair.say(body)
+    assert not [r for r in rows(pair) if r['state'] == 'queued']
+    assert not pair.worker.run_once() and not pair.cos.run_once()
+    with pair.store.connect() as db:
+        assert db.execute("SELECT 1 FROM meeting_waits WHERE room=? AND actor='cos'", (pair.room,)).fetchone()
+        assert db.execute("SELECT 1 FROM routing_notes WHERE room=? AND addressee='cos' AND disposition='waiting_by_request' "
+                          "AND trigger_seq=(SELECT MAX(trigger_seq) FROM routing_notes WHERE room=?)", (pair.room, pair.room)).fetchone()
+
+
+def test_unnamed_request_still_reaches_the_sole_available_teammate(pair):
+    pair.say('CoS, wait.')
+    pair.say('Open a defect for the flicker')
+    assert pair.worker.run_once() and len(pair.relay.calls) == 1
