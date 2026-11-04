@@ -25,8 +25,8 @@ from domains.cos.confer_service import ConferTurnRequest, ConferTurnService
 
 BASE = direct_voice.PREFIX + "/api/realtime-voice"
 OWNER = {"X-Minimoi-Auth-Id": "7", "X-Minimoi-User-Tier": "owner", "X-Minimoi-Display-Name": "Robert",
-         "X-Minimoi-Voice-Write-Verified": "1", "Content-Type": "application/json"}
-READ = {k: v for k, v in OWNER.items() if k != "X-Minimoi-Voice-Write-Verified"}
+         "X-Test-Sign-Owner": "7", "Content-Type": "application/json"}
+READ = {k: v for k, v in OWNER.items() if k != "X-Test-Sign-Owner"}
 ALLOWANCE = "2000000"
 ENV = {"MINIMOI_COS_VOICE_DIRECT": "1", "MINIMOI_ROLE": "development", core.ALLOWANCE_ENV: ALLOWANCE,
        "MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS": "test-only-summary-key"}

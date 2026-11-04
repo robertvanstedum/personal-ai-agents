@@ -46,7 +46,7 @@ def test_end_after_a_restart_closes_her_session_from_its_start_marker(monkeypatc
 def test_end_after_a_restart_refuses_a_forged_id_another_owners_session_and_no_conversation(monkeypatch, tmp_path):
     before = rig.build(monkeypatch, tmp_path)
     mine = rig.start(before)
-    theirs = rig.start(before, headers={**OWNER, "X-Minimoi-Auth-Id": "8"})               # another owner's session
+    theirs = rig.start(before, headers={**OWNER, "X-Minimoi-Auth-Id": "8", "X-Test-Sign-Owner": "8"})             # another owner's session
     after = rig.build(monkeypatch, tmp_path)
     assert end(after, str(uuid.uuid4()), conversation_id="owner").status_code == 403       # forged
     assert end(after, theirs, conversation_id="owner").status_code == 403                  # not his

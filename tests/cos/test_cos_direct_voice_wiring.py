@@ -15,7 +15,7 @@ from core.realtime_voice import direct_host as core
 from domains.cos import claim_truth
 
 PREFIX = "/api/realtime-voice/direct/api/realtime-voice"
-OWNER = {"X-Minimoi-Auth-Id": "7", "X-Minimoi-User-Tier": "owner", "X-Minimoi-Voice-Write-Verified": "1",
+OWNER = {"X-Minimoi-Auth-Id": "7", "X-Minimoi-User-Tier": "owner", "X-Test-Sign-Owner": "7",
          "Content-Type": "application/json"}
 
 
@@ -139,7 +139,7 @@ def test_typed_and_voice_context_keep_cos_separate_from_mc(on):
 
 def test_installed_her_routes_answer_and_a_consult_is_her_canonical_turn(on):
     assert on._cos_direct_voice["persona"] == "chief_of_staff" and on._cos_direct_voice["locale"] == "en-US"
-    caps = on.app.test_client().get(PREFIX + "/capabilities", headers={**OWNER, "X-Minimoi-Voice-Write-Verified": ""})
+    caps = on.app.test_client().get(PREFIX + "/capabilities", headers={**OWNER, "X-Test-Sign-Owner": ""})
     assert caps.get_json()["direct_voice"] is True and caps.headers["Cache-Control"] == "no-store"
     sid = start(on)
     answer = ask(on, sid, "What is stuck on #12?")

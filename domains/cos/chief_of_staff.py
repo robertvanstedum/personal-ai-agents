@@ -1298,11 +1298,12 @@ _cos_store_writer = _install_cos_store(app, environ=os.environ,
                                        verify_robert_source=_history.verify_robert_source if _history else None)
 # In flight (Review 06): the table's two routes, over the same writer. Without the store, the page says so plainly.
 from domains.cos.in_flight import create_blueprint as _in_flight_blueprint
-from domains.cos.direct_voice import WRITE_VERIFIED as _PORTAL_WRITE_VERIFIED
+from domains.cos.owner_assertion import verified_owner_write as _verified_owner_write
 app.register_blueprint(_in_flight_blueprint(
     lambda: _cos_store_writer,
     is_owner=lambda: resolve_user_id(request) is not None and request.headers.get("X-Minimoi-User-Tier") == "owner",
-    write_verified=lambda: request.headers.get(_PORTAL_WRITE_VERIFIED) == "1"))
+    write_verified=lambda: (_verified_owner_write() is not None
+                            and _verified_owner_write() == str(resolve_user_id(request)))))   # F3: signed, not a header
 if _history is not None:
     from domains.cos.history_api import create_blueprint as _history_blueprint
     app.register_blueprint(_history_blueprint(_history, resolve_owner=resolve_user_id))

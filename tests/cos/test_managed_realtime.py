@@ -10,14 +10,14 @@ class Provider:
  def attach(self,*a):pass
  def hangup(self,*a):pass
 ENV={'MINIMOI_COS_MANAGED_REALTIME':'1','MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO':'1000000'}
-H={'X-Minimoi-Auth-Id':'7','X-Minimoi-User-Tier':'owner','X-Minimoi-Voice-Write-Verified':'1'}
+H={'X-Minimoi-Auth-Id':'7','X-Minimoi-User-Tier':'owner','X-Test-Sign-Owner':'7'}
 @pytest.fixture
 def setup(tmp_path):
  b=VoiceBudget('sqlite:///'+str(tmp_path/'ledger'),cap_usd=lambda:20);b.ensure_schema();Journal(b._tx).init()
  app=Flask('synthetic');calls=[]
  assert m.install(app,environ=ENV,process_turn=lambda *a,**kw:None,instructions=lambda p:'Synthetic persona',budget=b,provider_factory=lambda:calls.append(1) or Provider())
  return app.test_client(),calls
-@pytest.mark.parametrize('headers',[{}, {'X-Minimoi-Auth-Id':'7','X-Minimoi-User-Tier':'owner'}, {**H,'X-Minimoi-User-Tier':'guest'},{'X-Minimoi-Voice-Write-Verified':'1','X-Minimoi-User-Tier':'owner'}])
+@pytest.mark.parametrize('headers',[{}, {'X-Minimoi-Auth-Id':'7','X-Minimoi-User-Tier':'owner'}, {**H,'X-Minimoi-User-Tier':'guest'},{'X-Minimoi-Voice-Write-Verified':'1','X-Minimoi-User-Tier':'owner'},{'X-Minimoi-Auth-Id':'7','X-Minimoi-User-Tier':'owner','X-Minimoi-Voice-Write-Verified':'1'},{**H,'X-Test-Sign-Owner':'8'}])
 def test_owner_proxy_and_verified_write_required(setup,headers):
  c,calls=setup;assert c.post('/api/realtime-voice/managed/session',headers=headers,json={'provider':'openai','sdp':'offer','conversation_id':'owner'}).status_code==403;assert not calls
 @pytest.mark.parametrize('conversation',[None,'foreign','private',{},''])

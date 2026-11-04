@@ -4,8 +4,9 @@ The core (core.realtime_voice.direct_host, §4) owns the session ledger and caps
 flows, admission, the routes and the needs-attention list. This file is only what is hers (§4.4):
 
 * ``owner``/``guard``: the identity the portal forwards (X-Minimoi-* is stripped from the browser and recreated there), the
-  owner tier; every POST also needs the portal's verified-write marker, X-Minimoi-Voice-Write-Verified: 1, which the
-  portal adds only after its owner and CSRF gates (§6.7). GETs need the owner only.
+  owner tier; every POST also needs the portal's signed owner assertion for that exact request (X-Portal-Owner-Assertion,
+  domains/cos/owner_assertion.py; partnership v1.1 F3), which the portal adds only after its owner and CSRF gates
+  (§6.7). A forwarded header alone never makes a write the owner's. GETs need the owner only.
 * ``conversation``: the selected writable, non-private chat; "owner" retains the original chat.
 * ``store``: her file store (domains/cos/voice_store.py), in COS_VOICE_DIR, out of her runtime's reach (D5 (b)).
 * ``typed_turn``: the canonical Confer turn (chief_of_staff._process_confer_turn), channel html_voice, conversation owner,
@@ -60,7 +61,6 @@ HOST = "cos"                            # the operation id's host name (core.dir
 PERSON = {"key": "chief_of_staff", "name": "Chief of Staff", "short": "CoS", "domain": "cos",
           "notes": ("save a note that …", "save a note: …")}
 OWNER_NAME = "Robert"
-WRITE_VERIFIED = "X-Minimoi-Voice-Write-Verified"
 INSTRUCTIONS_MAX_BYTES = 24_000         # §6.3, as her managed voice (controlled_config): rules and card are never cut
 # FR N5, corrected by A2-D1: her voice turn has typed Confer's own bound, her runtime call's
 # (openclaw_backend.turn_timeout_seconds: 120 s unless a caller sets it), reused, not copied, plus TURN_SLACK_S for the turn
@@ -241,12 +241,17 @@ class ChiefOfStaff(DirectVoiceAdapter):
         verified-write marker, which it adds only after its owner and CSRF gates (§6.7)."""
         if self.owner() is None:
             return refusal("not_allowed", "Voice unavailable: this needs the owner's sign-in.", 403)
-        if kind != "read" and request.headers.get(WRITE_VERIFIED) != "1":
+        if kind != "read" and not self.csrf_ok():
             return refusal("csrf", "Voice unavailable: this page is out of date. Reload it.", 403)
         return None
 
     def csrf_ok(self):
-        return request.headers.get(WRITE_VERIFIED) == "1"
+        """F3: a write is the owner's only with the portal's signed assertion for this exact request (spent once,
+        cached for the request), naming the same owner the forwarded identity names."""
+        from domains.cos.owner_assertion import verified_owner_write
+        owner = self.owner()
+        signed = verified_owner_write()
+        return owner is not None and signed is not None and signed == owner[0]
 
     def may_keep(self):
         return True                          # no Private mode: what End carries is kept

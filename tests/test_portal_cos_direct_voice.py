@@ -82,7 +82,12 @@ def test_other_cos_routes_keep_their_contract(load_portal, monkeypatch):
     assert answer.headers.get("Cache-Control") != "no-store, private"
 
 
-def test_the_marker_is_only_ever_the_portals_and_only_on_her_voice_writes():
+def test_the_marker_is_only_ever_the_portals_and_only_on_her_voice_writes(tmp_path, monkeypatch):
+    from core import portal_assertion as PA
+    key_file = tmp_path / "cos-owner.key"
+    key_file.write_text("kid1:" + "s" * 40 + "\n")
+    monkeypatch.setenv("PORTAL_COS_OWNER_KEY_FILE", str(key_file))
+    monkeypatch.setenv("PORTAL_COS_OWNER_ENV", "test")
     app = Flask(__name__)
 
     class Backend:
@@ -93,13 +98,26 @@ def test_the_marker_is_only_ever_the_portals_and_only_on_her_voice_writes():
              ("ui/send", "POST", True, False))                                            # not a voice route
     for path, method, verified, expected in cases:
         captured = {}
-        with app.test_request_context("/app/cos/" + path, method=method,
+        with app.test_request_context("/app/cos/" + path, method=method, data=b'{"q":1}',
                                       headers={"X-Minimoi-Voice-Write-Verified": "1", "X-Minimoi-Auth-Id": "999",
-                                               "X-CSRF-Token": "private-token"}), \
+                                               "X-Portal-Owner-Assertion": "forged", "X-CSRF-Token": "private-token"}), \
                 patch("minimoi_portal.proxy.requests.request", side_effect=lambda **kw: captured.update(kw) or Backend()):
             proxy.proxy_to("http://cos:8769", path, "/app/cos", user={"tier": "owner", "auth_id": 3},
                            verified_cos_voice_write=verified)
-        assert ("X-Minimoi-Voice-Write-Verified" in captured["headers"]) is expected, (path, method, verified)
+        assert "X-Minimoi-Voice-Write-Verified" not in captured["headers"]           # F3: no bare marker at all
+        assertion = captured["headers"].get("X-Portal-Owner-Assertion")
+        assert (assertion is not None) is expected and assertion != "forged", (path, method, verified)
+        if expected:                                 # CoS accepts exactly this request, for the signed-in owner, once
+            spent = set()
+            spend = lambda n, e: not (n in spent or spent.add(n))
+            check = dict(audience="cos-owner", env="test", method=method, target="/" + path, body=captured["data"], spend=spend)
+            assert PA.verify(assertion, PA.load_key(str(key_file)), **check) == "owner:3"
+            for change in ({"target": "/" + path + "x"}, {"body": b"{}"}, {"audience": "records"}):
+                try:
+                    PA.verify(assertion, PA.load_key(str(key_file)), **{**check, **change})
+                    assert False, change
+                except PA.Refused:
+                    pass
         assert captured["headers"]["X-Minimoi-Auth-Id"] == "3"                           # the browser's is stripped
         assert not any(k.lower() == "x-csrf-token" for k in captured["headers"])
     with app.test_request_context("/x", method="POST"), \
@@ -107,7 +125,7 @@ def test_the_marker_is_only_ever_the_portals_and_only_on_her_voice_writes():
         captured.clear()
         proxy.proxy_to("http://cos:8769", DIRECT.removeprefix("/app/cos/") + "/consult", "/app/cos",
                        user={"tier": "guest", "auth_id": 4}, verified_cos_voice_write=True)
-        assert "X-Minimoi-Voice-Write-Verified" not in captured["headers"]               # never for a non-owner
+        assert "X-Portal-Owner-Assertion" not in captured["headers"]                     # never for a non-owner
 
 
 def test_her_consult_and_summary_have_their_own_timeouts_and_nothing_else_changes():

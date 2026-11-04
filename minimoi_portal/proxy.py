@@ -227,6 +227,7 @@ def _forward_headers(user: dict | None, strip_header_prefixes: tuple[str, ...] =
         if k.lower() not in _HOP_BY_HOP
         and k.lower() not in _PORTAL_ONLY
         and not k.lower().startswith("x-minimoi-")
+        and not k.lower().startswith("x-portal-")         # portal-signed assertions are only ever the portal's own (F3)
         and not any(k.lower().startswith(p) for p in strip_header_prefixes)
     }
     if user:
@@ -300,17 +301,20 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
 
     # Forward request headers minus hop-by-hop; identity is the portal's own.
     fwd_headers = _forward_headers(user, strip_header_prefixes)
+    body = request.get_data()
     if (verified_cos_voice_write is True and portal_prefix == "/app/cos" and
             request.method == "POST" and user and user.get("tier") == "owner" and
             path.strip("/").startswith(_COS_VOICE_WRITES + _COS_OWNER_WRITES)):
-        fwd_headers["X-Minimoi-Voice-Write-Verified"] = "1"
+        assertion = _cos_owner_assertion(user, "/" + path.lstrip("/"), body)
+        if assertion:                       # without a key nothing is added and CoS refuses the write (fails closed)
+            fwd_headers[_COS_OWNER_HEADER] = assertion
 
     try:
         resp = requests.request(
             method=request.method,
             url=target,
             headers=fwd_headers,
-            data=request.get_data(),
+            data=body,
             allow_redirects=False,
             timeout=_route_timeout(portal_prefix, path, request.method),
         )
@@ -500,8 +504,24 @@ ROUTE_TIMEOUT_PATTERNS = (
 # The POSTs the portal marks verified for cos-scheduler once its owner and CSRF gates have passed (app.cos_proxy).
 _COS_VOICE_WRITES = ("api/realtime-voice/managed/", "api/realtime-voice/direct/")
 # In flight's writes (Review 06) get the same marker, after the same owner and CSRF gates: the CoS app's table writes to
-# the CoS store in Robert's name. The header keeps its first name (X-Minimoi-Voice-Write-Verified).
+# the CoS store in Robert's name. They carry the same signed owner assertion (F3), never a bare marker header.
 _COS_OWNER_WRITES = ("ui/api/in-flight/",)
+# F3 (partnership v1.1 B0-2): those writes carry a portal-signed assertion bound to the exact request, not a header CoS
+# would have to trust. Key: PORTAL_COS_OWNER_KEY_FILE (one line <kid>:<secret>, shared only with cos-scheduler);
+# environment name: PORTAL_COS_OWNER_ENV. Either missing: no assertion, and CoS refuses the write.
+_COS_OWNER_HEADER = "X-Portal-Owner-Assertion"
+
+
+def _cos_owner_assertion(user, backend_path, body):
+    import os
+    from core import portal_assertion as PA
+    key = PA.load_key(os.environ.get("PORTAL_COS_OWNER_KEY_FILE"))
+    env = os.environ.get("PORTAL_COS_OWNER_ENV")
+    owner = user.get("auth_id") or user.get("username")
+    if key is None or not env or not owner:
+        return None
+    return PA.sign(key, audience="cos-owner", subject=f"owner:{owner}", method=request.method,
+                   target=PA.canonical_target(backend_path, request.query_string), body=body, env=env)
 
 
 def _route_timeout(portal_prefix: str, path: str, method: str):

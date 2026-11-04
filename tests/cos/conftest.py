@@ -596,3 +596,36 @@ def uninjected(monkeypatch):
         monkeypatch.setattr(store, "_checkpoint", lambda step: None)
 
     return restore
+
+
+# ── F3 (partnership v1.1 B0-2): CoS owner writes need the portal's signed assertion ─────────────────────────────────
+# A request carrying the test-only header X-Test-Sign-Owner: <uid> is signed here exactly as the portal signs it (its
+# real method, path, query and body; audience cos-owner; a fresh nonce), so every CoS test runs the real verification.
+# Without that header nothing is signed, and a forwarded X-Minimoi-* header alone never makes a write the owner's.
+OWNER_SIGNING_KEY = ("test-kid", "test-cos-owner-secret-0123456789abcdef")
+
+
+@pytest.fixture(autouse=True)
+def portal_signs_owner_writes(monkeypatch, tmp_path_factory):
+    import io
+    from flask import Flask
+    from core import portal_assertion as PA
+    folder = tmp_path_factory.mktemp("cos-owner-assertion")
+    key_file = folder / "key"
+    key_file.write_text(":".join(OWNER_SIGNING_KEY) + "\n")
+    monkeypatch.setenv("COS_OWNER_ASSERTION_KEY_FILE", str(key_file))
+    monkeypatch.setenv("COS_OWNER_ASSERTION_ENV", "test")
+    monkeypatch.setenv("COS_OWNER_ASSERTION_NONCE_FILE", str(folder / "nonces.sqlite3"))
+    original = Flask.__call__
+
+    def signing_portal(self, environ, start_response):
+        owner = environ.pop("HTTP_X_TEST_SIGN_OWNER", "")
+        if owner:
+            body = environ["wsgi.input"].read(int(environ.get("CONTENT_LENGTH") or 0))
+            environ["wsgi.input"] = io.BytesIO(body)
+            path = environ.get("SCRIPT_NAME", "") + environ.get("PATH_INFO", "")
+            environ["HTTP_X_PORTAL_OWNER_ASSERTION"] = PA.sign(
+                OWNER_SIGNING_KEY, audience="cos-owner", subject=f"owner:{owner}", method=environ["REQUEST_METHOD"],
+                target=PA.canonical_target(path, environ.get("QUERY_STRING", "")), body=body, env="test")
+        return original(self, environ, start_response)
+    monkeypatch.setattr(Flask, "__call__", signing_portal)

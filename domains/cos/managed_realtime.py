@@ -17,10 +17,13 @@ def enabled(environ):
 
 
 def owner_guard(req):
+    # F3: the owner is the one the portal SIGNED for this exact request; a forwarded header alone is never enough.
+    from domains.cos.owner_assertion import verified_owner_write
     uid=resolve_user_id(req)
     if uid is None or req.headers.get('X-Minimoi-User-Tier')!='owner':abort(403)
-    if req.headers.get('X-Minimoi-Voice-Write-Verified')!='1':abort(403)
-    return str(uid)
+    signed=verified_owner_write()
+    if signed is None or signed!=str(uid):abort(403)
+    return signed
 
 
 def conversation(principal,requested):
