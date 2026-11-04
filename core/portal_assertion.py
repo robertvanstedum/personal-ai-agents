@@ -81,6 +81,17 @@ def sign(key, *, audience, subject, method, target, body: bytes, env, now=None, 
     return payload + "." + b64(hmac.new(secret, payload.encode("ascii"), hashlib.sha256).digest())
 
 
+def claimed_kid(header):
+    """The kid an assertion CLAIMS, read without trusting it: only to pick which configured key to verify with. The
+    MAC check that follows (verify) also requires claims["kid"] to equal that key's kid."""
+    try:
+        claims = json.loads(unb64(header.split(".")[1]).decode("utf-8"))
+        kid = claims.get("kid") if isinstance(claims, dict) else None
+        return kid if isinstance(kid, str) and 0 < len(kid) <= 80 else None
+    except Exception:
+        return None
+
+
 def verify(header, key, *, audience, env, method, target, body, spend, now=None) -> str:
     """The subject the assertion names, or Refused. ``spend(nonce, expires)`` must record the nonce durably and return
     False when it was already used (a second delivery is refused, across restarts and concurrent copies). ``body`` is

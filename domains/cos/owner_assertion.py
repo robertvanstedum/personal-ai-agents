@@ -5,10 +5,14 @@ the voice writes and In flight's writes. The assertion is bound to that exact re
 ``X-Minimoi-*`` headers are still read for display and reads, but never make a write the owner's: a container on the
 same network can set a header, not sign an assertion.
 
-Configuration (all three, or every owner write is refused):
-  COS_OWNER_ASSERTION_KEY_FILE    one line ``<kid>:<secret>``, the same key the portal signs with
-  COS_OWNER_ASSERTION_ENV         the environment name the portal signs for (dev, staging, production)
-  COS_OWNER_ASSERTION_NONCE_FILE  SQLite file for spent nonces (the CoS data volume)
+Configuration (key, environment and nonce file, or every signed write is refused):
+  COS_OWNER_ASSERTION_KEY_FILE      the portal's key, one line ``<kid>:<secret>``: may sign owner:<id> for any gated
+                                    write, and service:mc for /chat only
+  COS_TELEGRAM_ASSERTION_KEY_FILE   optional, the Telegram bot's own key: may sign service:telegram for /chat only
+  COS_OWNER_ASSERTION_ENV           the environment name both sign for (dev, staging, production)
+  COS_OWNER_ASSERTION_NONCE_FILE    SQLite file for spent nonces (the CoS data volume)
+Each key may sign only the subjects and paths mapped to it here, on the server (F2 design v0.3 D4): a valid MAC from
+the Telegram key naming owner:<id>, or any path but /chat, is refused.
 """
 from __future__ import annotations
 
@@ -26,11 +30,29 @@ SUBJECT_PREFIX = "owner:"
 SERVICE_PREFIX = "service:"
 
 
+def _portal_may(subject, path):
+    return (subject.startswith(SUBJECT_PREFIX) and len(subject) > len(SUBJECT_PREFIX)) or \
+        (subject == "service:mc" and path == "/chat")
+
+
+def _telegram_may(subject, path):
+    return subject == "service:telegram" and path == "/chat"
+
+
 def _config(environ):
-    key = PA.load_key(environ.get("COS_OWNER_ASSERTION_KEY_FILE"))
+    """({kid: (key, may)}, env, spend). Two keys with the same kid are a configuration error: neither is used."""
+    keys = {}
+    for name, may in (("COS_OWNER_ASSERTION_KEY_FILE", _portal_may), ("COS_TELEGRAM_ASSERTION_KEY_FILE", _telegram_may)):
+        key = PA.load_key(environ.get(name))
+        if key is None:
+            continue
+        if key[0] in keys:
+            _log.warning("cos signed writes refused: two assertion keys share kid %s", key[0])
+            return {}, None, None
+        keys[key[0]] = (key, may)
     env = environ.get("COS_OWNER_ASSERTION_ENV") or None
     nonce_file = environ.get("COS_OWNER_ASSERTION_NONCE_FILE")
-    return key, env, (PA.NonceFile(nonce_file) if nonce_file else None)
+    return keys, env, (PA.NonceFile(nonce_file) if nonce_file else None)
 
 
 _CACHE = "minimoi.cos_owner_assertion"
@@ -63,8 +85,8 @@ def verified_subject(environ=None, *, max_body=MAX_BODY):
     header = request.headers.get(HEADER)
     if not header:
         return None
-    key, env, spend = _config(os.environ if environ is None else environ)
-    if key is None or not env or spend is None:
+    keys, env, spend = _config(os.environ if environ is None else environ)
+    if not keys or not env or spend is None:
         _log.warning("cos owner write refused: signed owner requests are not configured (COS_OWNER_ASSERTION_*)")
         return None
     def body():                                       # read only after the MAC and claims have passed
@@ -72,6 +94,10 @@ def verified_subject(environ=None, *, max_body=MAX_BODY):
         if (length is None and request.headers.get("Transfer-Encoding")) or (length or 0) > max_body:
             raise _TooLarge()                         # an unsized or oversized body is never read for an owner write
         return request.get_data(cache=True)
+    chosen = keys.get(PA.claimed_kid(header))
+    if chosen is None:
+        return None
+    key, may = chosen
     try:
         subject = PA.verify(header, key, audience=AUDIENCE, env=env, method=request.method,
                             target=PA.canonical_target(request.path, request.query_string),
@@ -81,6 +107,8 @@ def verified_subject(environ=None, *, max_body=MAX_BODY):
     except (sqlite3.Error, OSError):
         _log.exception("cos owner write refused: the spent-nonce store failed")
         return None
-    if subject.startswith((SUBJECT_PREFIX, SERVICE_PREFIX)):
+    if may(subject, request.path):                   # this key may sign this subject for this path (server-side map)
         cache[_CACHE] = subject
+    else:
+        _log.warning("cos signed write refused: key %s may not sign %s for %s", key[0], subject, request.path)
     return cache[_CACHE]

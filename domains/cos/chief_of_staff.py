@@ -1314,7 +1314,7 @@ app.register_blueprint(_in_flight_blueprint(
 from domains.cos.owner_assertion import SUBJECT_PREFIX as _OWNER_SUBJECT, verified_subject as _verified_subject
 _SELF_GATED_WRITES = ("/api/realtime-voice/managed/", "/api/realtime-voice/direct/", "/ui/api/in-flight/")
 _UNSIGNED_EVENT_FOLLOW_UP = "/event"
-_SERVICE_WRITES = {"/chat": {"service:mc"}}
+_SERVICE_WRITES = {"/chat": {"service:mc", "service:telegram"}}   # each key may sign only its own (owner_assertion)
 _WRITE_BODY_CAPS = {"/ui/upload": cos_files.MAX_UPLOAD_BYTES + 1_000_000, "/ui/transcribe": 26_000_000}
 
 

@@ -127,3 +127,65 @@ def test_the_answer_never_outlives_its_request_even_under_an_outer_app_context()
         client = a.test_client()
         assert post(client, {"X-Test-Sign-Owner": "7"})["owner"] == "7"
         assert post(client, {"X-Test-Unsigned": "1"})["owner"] is None
+
+
+# ── F2 design v0.3 D4 (N1): each key may sign only the subjects and paths mapped to it on the server ──────────────
+TELEGRAM_KEY = ("tg-kid", "telegram-bot-secret-0123456789abcdefgh")
+
+
+def service_app():
+    a = Flask("key-map-test")
+
+    @a.route("/chat", methods=["POST"])
+    def chat():
+        return jsonify(subject=OA.verified_subject())
+
+    @a.route("/w", methods=["POST"])
+    def write():
+        return jsonify(subject=OA.verified_subject())
+    return a.test_client()
+
+
+def telegram_sign(subject, target):
+    return PA.sign(TELEGRAM_KEY, audience="cos-owner", subject=subject, method="POST", target=target,
+                   body=b'{"a":1}', env="test")
+
+
+def test_the_telegram_key_signs_only_service_telegram_on_chat(monkeypatch, tmp_path):
+    key = tmp_path / "tg.key"
+    key.write_text(":".join(TELEGRAM_KEY) + "\n")
+    monkeypatch.setenv("COS_TELEGRAM_ASSERTION_KEY_FILE", str(key))
+    client = service_app()
+
+    def subject(path, header):
+        return client.post(path, data=b'{"a":1}', headers={OA.HEADER: header, "X-Test-Unsigned": "1",
+                                                            "Content-Type": "application/json"}).get_json()["subject"]
+    assert subject("/chat", telegram_sign("service:telegram", "/chat")) == "service:telegram"
+    assert subject("/chat", telegram_sign("owner:7", "/chat")) is None            # valid MAC, not its subject
+    assert subject("/chat", telegram_sign("service:mc", "/chat")) is None
+    assert subject("/w", telegram_sign("service:telegram", "/w")) is None          # valid MAC, not its path
+
+
+def test_the_portal_key_cannot_sign_service_telegram_and_signs_mc_on_chat_only():
+    client = service_app()
+
+    def subject(path, sub):
+        header = PA.sign(OWNER_SIGNING_KEY, audience="cos-owner", subject=sub, method="POST", target=path,
+                         body=b'{"a":1}', env="test")
+        return client.post(path, data=b'{"a":1}', headers={OA.HEADER: header, "X-Test-Unsigned": "1",
+                                                            "Content-Type": "application/json"}).get_json()["subject"]
+    assert subject("/chat", "service:telegram") is None
+    assert subject("/w", "service:mc") is None
+    assert subject("/chat", "service:mc") == "service:mc"
+    assert subject("/w", "owner:7") == "owner:7"
+
+
+def test_an_unknown_kid_or_two_keys_with_one_kid_refuse(monkeypatch, tmp_path):
+    client = service_app()
+    stranger = PA.sign(("who", "s" * 40), audience="cos-owner", subject="owner:7", method="POST", target="/w",
+                       body=b'{"a":1}', env="test")
+    assert client.post("/w", data=b'{"a":1}', headers={OA.HEADER: stranger, "X-Test-Unsigned": "1"}).get_json()["subject"] is None
+    dup = tmp_path / "dup.key"
+    dup.write_text(OWNER_SIGNING_KEY[0] + ":" + "d" * 40 + "\n")
+    monkeypatch.setenv("COS_TELEGRAM_ASSERTION_KEY_FILE", str(dup))
+    assert post(app(), {"X-Test-Sign-Owner": "7"})["owner"] is None
