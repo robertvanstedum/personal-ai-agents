@@ -115,7 +115,9 @@ def execute(text, note, note_id, conv):
     elif invited:
         try:
             body=MF.opening_text(title=clean_title, owner_text=note.get('text',''), mc_last=_mc_last_answer(conv, note_id), items=_github_items(note.get('text','')), invitees=invited)
-            posted=client.call('POST',f'/rooms/{room}/events',{'kind':'message','body':'@'+' @'.join(invited)+'\n'+body},key=operation+':open')
+            # B0-2/F1: posted as the platform, never as Robert's own words; the invitees get discussion-only turns.
+            posted=client.call('POST',f'/rooms/{room}/events',{'kind':'message','body':body,'invite':invited,
+                               'origin':{'source_application':'minimoi_portal','mode':'platform_acknowledgement'}},key=operation+':open')
             seq=int((posted.get('result') or posted).get('seq') or 0)
             with MF.database(access_dir) as db:
                 db.execute('UPDATE meeting_rooms SET invitees=?, seeded=1, seed_seq=? WHERE account=? AND conversation=? AND note_id=?',

@@ -1,12 +1,42 @@
 {
- "_note": "SYNTHETIC seed templates from spec v1.1 section 6 (L04 table), proposed only. No private incident association or live adoption. The eighth seed (Claude Chat) waits on Codex.",
+ "_note": "SYNTHETIC seed templates from spec v1.1 section 6 (L04 table) plus Addendum 1 AC03 (seed 8), proposed only. No private incident association or live adoption (owner gate unchanged). Two spec wordings are refused by the shared lesson authority filter; equivalent wording is given with the original and its refusal kept as provenance.",
  "seeds": [
-  {"card_id": "PB-return-window", "text": "State the expected return or checkpoint so the principal can correct it."},
-  {"card_id": "PB-receipt-honesty", "text": "Without a verified receipt, do not claim saved. Reconcile an uncertain write before retrying."},
-  {"card_id": "PB-natural-dialogue", "text": "Ask the human clarification; do not narrate routing machinery."},
-  {"card_id": "PB-disagreement", "text": "Deliver unresolved disagreement with evidence and the decision required."},
-  {"card_id": "PB-bounded-investigation", "text": "Form one hypothesis, run one bounded test, inspect evidence before another; respect spend-stop limits."},
-  {"card_id": "PB-worker-results", "text": "Treat a worker result as submitted until accountable acceptance."},
-  {"card_id": "PB-approval-fatigue", "text": "Propose a reviewed bundle policy for repetitive approvals; never silently convert fatigue into permission."}
+  {
+   "card_id": "PB-return-window",
+   "text": "State the expected return or checkpoint so the principal can correct it."
+  },
+  {
+   "card_id": "PB-receipt-honesty",
+   "text": "Without a verified receipt, do not claim saved. Reconcile an uncertain write before retrying."
+  },
+  {
+   "card_id": "PB-natural-dialogue",
+   "text": "Ask the human clarification; do not narrate routing machinery."
+  },
+  {
+   "card_id": "PB-disagreement",
+   "text": "Deliver unresolved disagreement with evidence and the decision required."
+  },
+  {
+   "card_id": "PB-bounded-investigation",
+   "text": "Form one hypothesis, run one bounded test, and inspect the evidence before trying another; stop at the stated limit and ask.",
+   "original": "Form one hypothesis, run one bounded test, inspect evidence before another; respect spend-stop limits.",
+   "original_refused_by": "core.mc_lessons.commands.clean: authority"
+  },
+  {
+   "card_id": "PB-worker-results",
+   "text": "Treat a worker result as submitted until accountable acceptance."
+  },
+  {
+   "card_id": "PB-approval-fatigue",
+   "text": "When the same confirmation keeps recurring, propose one reviewed bundle policy instead; never treat tiredness as consent.",
+   "original": "Propose a reviewed bundle policy for repetitive approvals; never silently convert fatigue into permission.",
+   "original_refused_by": "core.mc_lessons.commands.clean: authority"
+  },
+  {
+   "card_id": "PB-what-happened",
+   "text": "Answer 'what happened' from the record; label inference as inference.",
+   "source": "Addendum 1 AC03"
+  }
  ]
 }

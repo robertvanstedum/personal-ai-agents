@@ -547,6 +547,14 @@ class Store:
                     or not isinstance(recipients,list) or not 1 <= len(recipients) <= 20):
                 raise Problem("Invalid message recipients")
             recipients=list(dict.fromkeys(string(x,"Recipient",60) for x in recipients))
+        # B0-2/F1: a platform message (origin mode platform_acknowledgement) never routes as Robert's own words. It
+        # may name invitees, who get discussion-only turns: no action turn, no supersession of queued work.
+        invite=payload.get("invite")
+        if invite is not None:
+            if (actor != "robert" or kind != "message" or origin is None or origin.get("mode") != "platform_acknowledgement"
+                    or target is not None or recipients is not None or not isinstance(invite,list) or not 1 <= len(invite) <= 20):
+                raise Problem("Invalid platform invitation")
+            invite=list(dict.fromkeys(string(x,"Invitee",60) for x in invite))
         if reference is not None: reference=string(reference,"Reference",100)
         expected=payload.get("expected_context")
         teammate_post="turn_id" in payload or "claim_id" in payload
@@ -589,6 +597,8 @@ class Store:
                 self.meetings.handoff(db,turn,event,payload.get("reply_to_participant"))
             elif actor=="robert" and kind=="message" and origin is None:
                 self.meetings.on_human_message(db,room,event,recipients or target)
+            elif invite:
+                self.meetings.on_platform_invite(db,room,event,invite)
             return event
         # The delivery envelope (claim id) changes on a recovery delivery; the
         # content and turn do not, so a replay matches (ROOMS_R1 §3.7).

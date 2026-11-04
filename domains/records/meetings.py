@@ -503,6 +503,21 @@ class Meetings:
                 db.execute("INSERT INTO discussion_turns VALUES(?,?)", (turn, event["id"]))
         db.execute("UPDATE meetings SET cursor=MAX(cursor,?),updated=? WHERE room=?", (event["seq"], now(), room))
 
+    def on_platform_invite(self, db, room, event, invitees):
+        """B0-2/F1: a platform message asks named, accepted members for their view. Discussion only: it never creates
+        an action turn, never supersedes queued turns, and is not an owner message for any later check."""
+        meeting = db.execute("SELECT * FROM meetings WHERE room=?", (room,)).fetchone()
+        if not meeting or dict(meeting)["kind"] == "proof":
+            return
+        for name in invitees:
+            principal = self.resolve(db, room, name)
+            if not principal or not accepted_member(db, room, principal):
+                continue
+            turn = self.queue_turn(db, room, principal, event["seq"], 1, supersede=False)
+            db.execute("INSERT INTO turn_order VALUES(?,?,?,?,?,NULL,NULL)", (turn, event["id"], 0, None, now()))
+            db.execute("INSERT INTO discussion_turns VALUES(?,?)", (turn, event["id"]))
+        db.execute("UPDATE meetings SET cursor=MAX(cursor,?),updated=? WHERE room=?", (event["seq"], now(), room))
+
     def handoff(self, db, turn, event, recipient):
         """One follow-up per recipient, at most two per owner round, atomically.
 

@@ -53,18 +53,14 @@ def test_s2_a_cards_live_in_their_own_ledger_never_the_live_lesson_ledger(tmp_pa
         propose(lessons, "PB-x", SEEDS[0]["text"])
 
 
-def test_seed_templates_are_proposals_and_two_collide_with_the_shared_authority_filter(book):
+def test_all_eight_seed_templates_pass_the_unchanged_filter_and_the_originals_still_refuse(book):
     ledger, _ = book
-    refused = []
     for seed in SEEDS:
-        try:
-            propose(ledger, seed["card_id"], seed["text"])
-        except CardRefused as exc:
-            refused.append((seed["card_id"], exc.code))
-    # Recorded for Robert/Codex: the spec's wording mentions spending and approvals, which the one shared filter
-    # refuses; the filter stays strict (L04) and the wording is the decision to make.
-    assert refused == [("PB-bounded-investigation", "authority"), ("PB-approval-fatigue", "authority")]
-    assert len(ledger.read().card_proposals) == 5 and ledger.read().cards == {}
+        propose(ledger, seed["card_id"], seed["text"])                       # every template is proposable
+        if "original" in seed:
+            with pytest.raises(CardRefused, match="authority"):              # the filter was not weakened
+                propose(ledger, seed["card_id"] + "-orig", seed["original"])
+    assert len(ledger.read().card_proposals) == 8 and ledger.read().cards == {}   # proposed, nothing adopted
 
 
 def test_s2_d_only_the_principals_binding_decides_and_the_decision_is_attributed(book):

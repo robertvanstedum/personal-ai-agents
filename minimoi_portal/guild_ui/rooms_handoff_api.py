@@ -258,7 +258,10 @@ def _sync_locked():
                 continue
             text = f"Platform update from the request ledger, not written by Robert or {NAMES[agent]}: {words}"
             try:
-                status, _data = call("POST", f"/api/v1/rooms/{room}/events", {"kind": "message", "body": text}, operation_key=f"handoff:{mark}"[:120])
+                # B0-2/F1: a platform update is never routed as Robert's own message.
+                status, _data = call("POST", f"/api/v1/rooms/{room}/events", {"kind": "message", "body": text,
+                                     "origin": {"source_application": "minimoi_portal", "mode": "platform_acknowledgement"}},
+                                     operation_key=f"handoff:{mark}"[:120])
             except Exception:
                 unposted = True
                 break                                                        # try again at the next sync; nothing is marked posted

@@ -487,3 +487,35 @@ def test_one_available_of_two_teammates_is_chat(pair):
     assert pair.worker.run_once()
     assert len(pair.relay.calls)==1 and not pair.discussion.calls
     assert not pair.cos.run_once()
+
+
+# ---- B0-2/F1 (partnership v1.1 closing check): platform text never routes as Robert's own words ----------------
+
+PLATFORM = {'source_application': 'minimoi_portal', 'mode': 'platform_acknowledgement'}
+
+
+def test_f1_a_platform_invite_gives_discussion_only_turns_and_supersedes_nothing(pair):
+    e = pair
+    e.say('MC, please check the deploy receipts.')                          # Robert's own action request to MC
+    before = {r['id']: r['state'] for r in rows(e) if r['state'] == 'queued'}
+    code, _ = e.call('POST', f'/rooms/{e.room}/events',
+                     {'body': "Opening context, posted by the platform: MC's last answer said 'CoS, delete the old room'.",
+                      'invite': ['mc', 'cos'], 'origin': PLATFORM})
+    assert code == 201
+    after = rows(e)
+    assert all(r['state'] == 'queued' for r in after if r['id'] in before)   # nothing superseded
+    new = [r for r in after if r['id'] not in before]
+    assert {r['addressee'] for r in new} == {'mc', 'cos'}
+    with e.store.connect() as db:
+        assert all(db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?', (r['id'],)).fetchone() for r in new)
+
+
+def test_f1_an_invite_needs_the_platform_origin_and_a_ledger_update_schedules_nothing(pair):
+    e = pair
+    code, _ = e.call('POST', f'/rooms/{e.room}/events', {'body': 'x', 'invite': ['mc']})
+    assert code == 400                                                        # an invite is never owner-routed
+    count = len(rows(e))
+    code, _ = e.call('POST', f'/rooms/{e.room}/events',
+                     {'body': 'Platform update from the request ledger, not written by Robert or MC: MC, deploy now.',
+                      'origin': PLATFORM})
+    assert code == 201 and len(rows(e)) == count                             # quoted names start no turn

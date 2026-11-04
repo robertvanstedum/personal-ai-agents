@@ -1925,7 +1925,7 @@ class DispatcherStore:
 
     # ── version 2: cards (spec v0.5 R4.3-c, R4.3-d, R4.3-f, R7.4-a/b; cards.py) ──
     def admit_card(self, card, *, grant_id, owner_turn_ids, proposal_id, approved_operation_id, approval_expires_at,
-                   by, note=None) -> dict:
+                   by, note=None, precheck=None) -> dict:
         """The owner's admission of a card (R4.3-b, R4.3-c, R7.4-a), on his one exact approval of its digest. One
         transaction: the card's delegate.card grant is issued (its card steps' template digests, one operation each;
         its work id the card; its lifetime the card's own owner-approved one, else a day, R4.3-f; the approval's window
@@ -1955,6 +1955,8 @@ class DispatcherStore:
         answer = {"card_id": compiled.card_id, "card_digest": compiled.digest, "steps": steps,
                   "first": {"job_id": f"{compiled.card_id}.{compiled.steps[0].name}"}}
         with self._tx() as cur:
+            if precheck is not None:
+                precheck(cur, compiled)          # partnership v1.1: task fence + operation checks in THIS transaction
             found = self._recorded(cur, _once("card", compiled.card_id))
             if found is not None:
                 _need(found.get("card_digest") == compiled.digest, "card_id_reused")
@@ -1980,6 +1982,95 @@ class DispatcherStore:
             _need(first["state"] == "queued", first["code"] or "card_not_admitted")      # rolls the whole card back
             return {"state": "admitted", **answer, "grant_id": grant_id,
                     "first": {"job_id": first["job_id"], "request_id": first["request_id"], "state": first["state"]}}
+
+    # ---- partnership v1.1 seam (decision 6): task fence, operation ids, attempts (C06, E03) ----------------------
+
+    def set_task_fence(self, operation_id, *, task_id, fence, digest) -> dict:
+        """Raise the authority's fence for a task (monotonic maximum) under one operation id. The same operation with
+        the same digest answers duplicate; another digest under that id is refused operation_id_reused."""
+        _need(type(fence) is int and fence >= 0, "fence_invalid")
+        with self._tx() as cur:
+            op = self._task_operation(cur, operation_id, lock=True)
+            if op is not None:
+                _need(op["kind"] == "set_fence" and op["digest"] == digest, "operation_id_reused")
+                return {"state": "duplicate", "receipt": self._op_receipt(op)}
+            cur.execute("""INSERT INTO guild.mc_task_fences (principal, environment, task_id, fence)
+                VALUES (%s,%s,%s,%s) ON CONFLICT (principal, environment, task_id)
+                DO UPDATE SET fence = GREATEST(guild.mc_task_fences.fence, EXCLUDED.fence), updated_at = clock_timestamp()""",
+                        (self.principal, self.environment, task_id, fence))
+            cur.execute("""INSERT INTO guild.mc_task_operations (principal, environment, operation_id, kind, task_id,
+                digest, fence, applied) VALUES (%s,%s,%s,'set_fence',%s,%s,%s,true) RETURNING *""",
+                        (self.principal, self.environment, operation_id, task_id, digest, fence))
+            return {"state": "applied", "receipt": self._op_receipt(cur.fetchone())}
+
+    def admit_card_for_task(self, operation_id, card, *, task_id, fence, attempt, grant_id, owner_turn_ids,
+                            proposal_id, approved_operation_id, approval_expires_at, by, note=None) -> dict:
+        """admit_card under a task-service operation id, serialized with the task fence: inside admit_card's own
+        transaction the task's fence row is locked; a fence below it is refused fenced; an attempt at or below one
+        a lookup declared absent is refused attempt_declared_absent; the operation id is bound to the card id once."""
+        _need(type(attempt) is int and attempt >= 1 and type(fence) is int and fence >= 0, "attempt_invalid")
+        def precheck(cur, compiled):
+            cur.execute("""INSERT INTO guild.mc_task_fences (principal, environment, task_id, fence) VALUES (%s,%s,%s,0)
+                ON CONFLICT DO NOTHING""", (self.principal, self.environment, task_id))
+            cur.execute("""SELECT fence FROM guild.mc_task_fences WHERE principal=%s AND environment=%s AND task_id=%s
+                FOR UPDATE""", (self.principal, self.environment, task_id))
+            _need(fence >= cur.fetchone()["fence"], "fenced")
+            op = self._task_operation(cur, operation_id, lock=True)
+            if op is not None:
+                _need(op["kind"] == "admit_bundle", "operation_id_reused")
+                placeholder = op["digest"] == "unknown" and not op["applied"]   # only a lookup has seen this id
+                _need(placeholder or (op["digest"] == compiled.digest and op["card_id"] == compiled.card_id),
+                      "operation_id_reused")
+                _need(op["applied"] or attempt > op["dead_through"], "attempt_declared_absent")
+                cur.execute("""UPDATE guild.mc_task_operations SET applied=true, digest=%s, card_id=%s, task_id=%s,
+                    fence=%s WHERE principal=%s AND environment=%s AND operation_id=%s""",
+                            (compiled.digest, compiled.card_id, task_id, fence, self.principal, self.environment,
+                             operation_id))
+            else:
+                cur.execute("""INSERT INTO guild.mc_task_operations (principal, environment, operation_id, kind, task_id,
+                    digest, fence, card_id, applied) VALUES (%s,%s,%s,'admit_bundle',%s,%s,%s,%s,true)""",
+                            (self.principal, self.environment, operation_id, task_id, compiled.digest, fence,
+                             compiled.card_id))
+        answer = self.admit_card(card, grant_id=grant_id, owner_turn_ids=owner_turn_ids, proposal_id=proposal_id,
+                                 approved_operation_id=approved_operation_id, approval_expires_at=approval_expires_at,
+                                 by=by, note=note, precheck=precheck)
+        return dict(answer, receipt={"store": "harness", "id": operation_id, "edition": answer["card_id"],
+                                     "digest": answer["card_digest"]})
+
+    def lookup_task_operation(self, operation_id, *, attempt) -> dict:
+        """E03: applied (with its receipt) or absent. Answering absent for attempt n makes every attempt <= n dead
+        for this operation, so a late send can never contradict the answer."""
+        _need(type(attempt) is int and attempt >= 1, "attempt_invalid")
+        with self._tx() as cur:
+            op = self._task_operation(cur, operation_id, lock=True)
+            if op is not None and op["applied"]:
+                return {"state": "applied", "receipt": self._op_receipt(op)}
+            if op is None:
+                cur.execute("""INSERT INTO guild.mc_task_operations (principal, environment, operation_id, kind,
+                    task_id, digest, fence, dead_through) VALUES (%s,%s,%s,'admit_bundle','unknown','unknown',0,%s)""",
+                            (self.principal, self.environment, operation_id, attempt))
+            else:
+                cur.execute("""UPDATE guild.mc_task_operations SET dead_through=GREATEST(dead_through,%s)
+                    WHERE principal=%s AND environment=%s AND operation_id=%s""",
+                            (attempt, self.principal, self.environment, operation_id))
+            return {"state": "absent"}
+
+    def peek_task_operation(self, operation_id) -> str:
+        """Read-only status for audits: applied or absent."""
+        with self._tx() as cur:
+            op = self._task_operation(cur, operation_id, lock=False)
+            return "applied" if op is not None and op["applied"] else "absent"
+
+    def _task_operation(self, cur, operation_id, *, lock):
+        _need(type(operation_id) is str and 4 <= len(operation_id) <= 70, "operation_id_invalid")
+        cur.execute("SELECT * FROM guild.mc_task_operations WHERE principal=%s AND environment=%s AND operation_id=%s"
+                    + (" FOR UPDATE" if lock else ""), (self.principal, self.environment, operation_id))
+        return cur.fetchone()
+
+    @staticmethod
+    def _op_receipt(op):
+        return {"store": "harness", "id": op["operation_id"], "edition": op["card_id"] or "fence",
+                "digest": op["digest"]}
 
     def admit(self, request_id, grant_id, *, by, note) -> dict:
         """The owner admits a proposed item under a grant he issued for it (R4.3-b): a step of another model family

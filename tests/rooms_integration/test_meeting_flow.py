@@ -46,7 +46,8 @@ class FakeRooms:
                 return 200, {"result": {"seq": next(e["seq"] for e in room["events"] if e.get("key") == operation_key)}}
             room["keys"].add(operation_key)
             seq = len(room["events"]) + 1
-            room["events"].append({"seq": seq, "actor": "robert", "kind": payload["kind"], "body": payload["body"], "key": operation_key})
+            room["events"].append({"seq": seq, "actor": "robert", "kind": payload["kind"], "body": payload["body"], "key": operation_key,
+                                   "invite": payload.get("invite"), "origin": payload.get("origin")})
             return 201, {"result": {"seq": seq}}
         if method == "GET" and parts[2:] == ["turns"]:
             return 200, {"participants": [{"id": a, "rsvp": "accepted" if a == "claude-code" else "invited", "reach": self.reach.get(a, {"state": "reachable", "reason": None})}
@@ -101,7 +102,10 @@ def test_the_room_is_named_from_the_topic_and_seeded_once_with_the_context_addre
     [room] = world.rooms.rooms.values()
     assert room["title"] == "Discuss #296 and #297" and room["purpose"].endswith("Topic: Discuss #296 and #297")
     [seed] = room["events"]
-    assert seed["body"].startswith("@mc @claude-code @codex\nOpening context, posted by the platform at Robert's request")
+    # B0-2/F1: posted as the platform (never as Robert's own words); the invitees are named for discussion-only turns.
+    assert seed["body"].startswith("Opening context, posted by the platform at Robert's request")
+    assert seed["invite"] == ["mc", "claude-code", "codex"]
+    assert seed["origin"] == {"source_application": "minimoi_portal", "mode": "platform_acknowledgement"}
     for part in ("Topic: Discuss #296 and #297", "Robert asked: Can you also open a new room", "Master Craftsman's last answer in that conversation: The two issues are about limits",
                  "#296 Operate limits (https://github.com/x/y/issues/296)", "Replies in this room do not start work"):
         assert part in seed["body"]
@@ -124,7 +128,7 @@ def test_an_agent_that_is_not_approved_is_named_and_is_not_invited_or_addressed(
     world.rooms.approved.discard("codex")
     reply = run()
     room = world.rooms.rooms["room-1"]
-    assert set(room["members"]) == {"mc", "claude-code"} and room["events"][0]["body"].startswith("@mc @claude-code\n")
+    assert set(room["members"]) == {"mc", "claude-code"} and room["events"][0]["invite"] == ["mc", "claude-code"]
     assert "Codex: not approved, so not invited" in reply
 
 
