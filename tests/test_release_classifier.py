@@ -430,7 +430,15 @@ MC_DISPATCHER_FILES = {"core/mc_delegation_runner/cli.py",
                        "core/mc_delegation_runner/host.py",     # the door's one URL allowlist (S1-D review N4)
                        # P1-a: the witness reads the snapshot through the door's read path (its client's refusal of a
                        # redirect) and the authority file's host values; the supervisor runs the authority's timers.
-                       "core/mc_delegation_runner/witness.py", "services/supervisor/main.py"}
+                       "core/mc_delegation_runner/witness.py", "services/supervisor/main.py",
+                       # Partnership v1.1 (B4 v0.6): the task service compiles a delegated card with the authority's
+                       # card catalogue (service.py, request_admission); the partnership worker admits it and reads
+                       # results (harness_port.py, runner_door.py, worker.py); MC's task tools compose cards
+                       # (core/mc_tools/tasks_adapter.py). The cos-scheduler image (task service, worker) and the
+                       # portal image both carry core/, so a dispatcher change redeploys both (the core/ fallback).
+                       "services/partnership_tasks/service.py", "services/partnership_tasks/harness_port.py",
+                       "services/partnership_tasks/runner_door.py", "services/partnership_tasks/worker.py",
+                       "core/mc_tools/tasks_adapter.py"}
 
 
 def _runner_names(rel, source):

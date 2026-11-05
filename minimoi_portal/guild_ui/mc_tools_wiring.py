@@ -534,6 +534,25 @@ def artifact_root(environ):
     return root if root and os.path.isabs(root) and os.path.normpath(root) == root else None
 
 
+def tasks_adapter(environ):
+    """Partnership v1.1 (B4 v0.6): MC's tracked-work tools, seat ``mc``. Off unless the task service URL, MC's seat
+    token file (private, held by this portal process, never by the agent), the card commit and the environment are
+    all set; then MC's policy still decides whether each tool is offered."""
+    url = str(environ.get("PARTNERSHIP_TASKS_URL", "") or "").strip()
+    token_file = str(environ.get("PARTNERSHIP_MC_TOKEN_FILE", "") or "").strip()
+    card_ref = str(environ.get("PARTNERSHIP_CARD_REF", "") or "").strip()
+    env = str(environ.get("PARTNERSHIP_ENVIRONMENT", "") or "").strip()
+    if not (url and token_file and card_ref and env):
+        return None
+    try:
+        from core.mc_tools.tasks_adapter import TasksAdapter
+        from services.partnership_tasks.client import TaskClient, read_token
+        return TasksAdapter(TaskClient(url, lambda: read_token(token_file)), environment=env, card_ref=card_ref)
+    except Exception as exc:                               # a bad configuration turns off only these tools
+        _log.warning("mc tools: tracked-work tools off (%s)", type(exc).__name__)
+        return None
+
+
 def board_adapter(app, environ, services, cfg):
     if environ.get("MINIMOI_BOARD_ACTIONS") != "1" or environ.get("MINIMOI_BOARD_ENV") != cfg["environment"]:
         return None
@@ -578,6 +597,7 @@ def attach(app, blueprint_name, services):
                             registers=_mc_registers(environ, cfg["principal"],
                                                     app.extensions[blueprint_name].get("base_url", "")),
                             agent_ask=agent_asker(app.extensions[blueprint_name].get("agent_asks")))
+    service.tasks = tasks_adapter(environ)
     agent_worker_sha = (environ.get('MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256') or '').strip().lower()
     enrollment_path = environ.get('MINIMOI_MC_AGENT_ENROLLMENT')
     if enrollment_path and re.fullmatch('[0-9a-f]{64}',agent_worker_sha):

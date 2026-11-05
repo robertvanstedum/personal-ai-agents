@@ -113,6 +113,20 @@ for _op in _board_operations():
             None if _op.effect == "read" else "board_readback_v1", "none",
             "board_conditional_undo_v1" if _op.undo else None)
 HANDLERS["action_clarify_v1"] = Handler("minimoi_clarify_action", "guild.board.clarify", frozenset({1}), None, "none")
+# Partnership v1.1 (B4 execution design v0.4-v0.6): MC leads tasks Robert confirmed. Records only: a delegated child's
+# paid work starts at its card's admission, which is Robert's own exact approval in the portal (delegate.card, tier 3,
+# re-checked by the authority), never one of these. Read-back is from the task service.
+HANDLERS.update({
+    "task_list_v1": Handler("minimoi_task_list", "partnership.task.read", frozenset({1}), None, "none"),
+    "task_delegate_v1": Handler("minimoi_task_delegate", "partnership.task.delegate_child", frozenset({2}),
+                                "task_readback_v1", "none"),
+    "task_submit_v1": Handler("minimoi_task_submit", "partnership.task.submit_parent", frozenset({2}),
+                              "task_readback_v1", "none"),
+    "task_accept_v1": Handler("minimoi_task_accept", "partnership.task.accept", frozenset({2}), "task_readback_v1",
+                              "none"),
+    "task_adopt_v1": Handler("minimoi_task_adopt", "partnership.task.adopt_interpretation", frozenset({2}),
+                             "task_readback_v1", "none"),
+})
 
 # Belt and braces: whatever HANDLERS says, these capability families never go below tier 3.
 FLOOR_3 = ("guest.reject", "guest.approve", "access.", "issue.", "delegate.", "deploy.", "repair.", "policy.")

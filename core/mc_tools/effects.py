@@ -40,7 +40,10 @@ EXACT_CAPABILITIES = ("lessons.adopt", "guest.reject_request", "issue.comment", 
 # installation policy for the current owner request; no exact approval, zero spend.
 STANDING_CAPABILITIES = ("host.career.synthetic", "agent.contact.existing", "agent.watch", "agent.ask.owner_note", "host.artifacts.create", "host.conversation.export", "lessons.keep_preference", "lessons.revoke_preference", "work.record_gap", "work.withdraw_gap",
                          "guild.build.publish_update",
-                         "guild.board.note.create", "guild.board.note.update", "guild.board.operation.undo")
+                         "guild.board.note.create", "guild.board.note.update", "guild.board.operation.undo",
+                         # Partnership v1.1: task records only; paid work is admitted by Robert's own card approval.
+                         "partnership.task.delegate_child", "partnership.task.submit_parent", "partnership.task.accept",
+                         "partnership.task.adopt_interpretation")
 CATALOGUE = {**{c: CapabilityRule(1, False, True) for c in PROPOSAL_CAPABILITIES + STANDING_CAPABILITIES},
              **{c: CapabilityRule(1, True, True) for c in EXACT_CAPABILITIES}}
 GRANTS = GrantStore(CATALOGUE)

@@ -1,6 +1,6 @@
 {
   "schema": "mc-policy/1",
-  "revision": "dev-example-1",
+  "revision": "dev-example-partnership-1",
   "rules": [
     {
       "capability": "host.health",
@@ -667,6 +667,96 @@
       "undo": null,
       "egress": "none",
       "max_operations_per_turn": 1
+    },
+    {
+      "capability": "partnership.task.read",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "task_list_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 10
+    },
+    {
+      "capability": "partnership.task.delegate_child",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "task_delegate_v1",
+      "verify": "task_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 3
+    },
+    {
+      "capability": "partnership.task.submit_parent",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "task_submit_v1",
+      "verify": "task_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 2
+    },
+    {
+      "capability": "partnership.task.accept",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "task_accept_v1",
+      "verify": "task_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 2
+    },
+    {
+      "capability": "partnership.task.adopt_interpretation",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "task_adopt_v1",
+      "verify": "task_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 5
     }
   ]
 }

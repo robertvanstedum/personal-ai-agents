@@ -29,7 +29,7 @@ def rule(doc, tool):
 class CompileTests(unittest.TestCase):
     def test_the_example_compiles_and_names_every_tool_at_its_floor(self):
         c = compiled(EXAMPLE)
-        self.assertEqual(c.version, f"mc-policy:dev-example-1:{P.digest_of(EXAMPLE)}")
+        self.assertEqual(c.version, f"mc-policy:{EXAMPLE['revision']}:{P.digest_of(EXAMPLE)}")
         self.assertEqual(set(c.tools), {h.tool for h in P.HANDLERS.values()})
         self.assertEqual(c.rule_for("minimoi_guest_request_reject").tier, 3)
         self.assertEqual(c.rule_for("minimoi_host_health").tier, 1)

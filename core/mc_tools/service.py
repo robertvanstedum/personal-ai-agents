@@ -168,7 +168,7 @@ class ToolService:
                  comments: bool = False, guest_rejects: bool = False, github=None, show=None, read_shown=None,
                  isolated_runtime: bool = False, worker: str = "mc-tools", guests_lookup=None, people=None,
                  standard_changes=None, display_tz: str = offers.DISPLAY_TZ, policy=None, read_owner_note=None,
-                 domain_health=None, registers=None, board=None, export_conversation=None, artifact_root=None, agent_contact=None, recall_source=None,
+                 domain_health=None, registers=None, board=None, tasks=None, export_conversation=None, artifact_root=None, agent_contact=None, recall_source=None,
                  agent_ask=None, activity_update=None):
         """``connect()`` returns a new psycopg2 connection to the guild database (autocommit off).
         ``lessons`` is a LessonLedger (or None: lessons off). ``guests_lookup(email)`` returns an existing
@@ -201,6 +201,7 @@ class ToolService:
         # domain_health() -> {domain_id: {"state": ok|down|unknown, "evidence", "observed_at"}}: the deployment's fixed
         # liveness probe (A09). registers: core.work_registers.RegisterStore for MC's own work register (A09b).
         self.domain_health, self.registers, self.board = domain_health, registers, board
+        self.tasks = tasks                            # core.mc_tools.tasks_adapter.TasksAdapter, or None
         from .host_artifacts import ROOT
         self.recall_source = recall_source
         self.export_conversation, self.artifact_root = export_conversation, artifact_root or ROOT
@@ -325,6 +326,9 @@ class ToolService:
                 from . import host_files
                 answer = (host_files.complete(self, args, caller, host_completion) if host_completion is not None
                           else host_files.admit(self, args, caller))
+            elif name.startswith("minimoi_task_"):
+                answer = (self.tasks.call(self, name, args, caller) if self.tasks is not None
+                          else refused("tool_unavailable"))
             elif name in board_ops or name == "minimoi_clarify_action":
                 answer = (self.board.call(self, name, args, caller) if self.board is not None
                           else refused("tool_unavailable"))

@@ -30,6 +30,9 @@ SEATS = {
                                                   "interpretation.dispose", "request.record"],
                       ["personal"], ["personal"]),
     "tok-builder": ("claude-code", "agent", AGENT_OPS, ["shared:build"], ["shared:build"]),
+    # B4 v0.6 runner seats in the personal scope (delegated children of an owner task).
+    "tok-claude-code": ("claude-code", "agent", AGENT_OPS, ["personal"], ["personal"]),
+    "tok-codex": ("codex", "agent", AGENT_OPS, ["personal"], ["personal"]),
     "tok-expired": ("mc", "agent", AGENT_OPS, ["personal"], ["personal"]),
     "tok-revoked": ("mc", "agent", AGENT_OPS, ["personal"], ["personal"]),
 }
