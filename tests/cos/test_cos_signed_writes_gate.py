@@ -72,7 +72,7 @@ def test_reads_and_internal_token_routes_are_not_gated_and_event_is_the_recorded
 # Every write route on the real CoS app, and how it is authorised. A new write route fails this test until it is
 # placed here deliberately, so nothing new can slip under an exempt prefix unseen (F3 re-review N3).
 KNOWN_WRITES = {
-    "/chat": "signed: owner, or service:mc",
+    "/chat": "signed: owner, service:mc, or service:telegram (Telegram channel + owner session only)",
     "/ui/send": "signed owner", "/ui/upload": "signed owner", "/ui/transcribe": "signed owner",
     "/ui/history/conversations": "signed owner", "/ui/history/selection": "signed owner",
     "/ui/history/preferences": "signed owner",

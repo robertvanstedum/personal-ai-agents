@@ -96,11 +96,11 @@ def test_no_verified_binding_means_unbound_but_the_turn_still_answers(store):
 def test_meeting_turns_use_cos_meeting_and_closed_rooms_are_never_bound(store):
     sent = []
     c = ctx({"origin": "meeting", "principal": "robert", "audience": "room-1", "claim_id": "c1",
-             "room_generation": 3}, scope="owner_private")
+             "room_generation": "g3"}, scope="owner_private")
     backend(store, Stream(chunks(model="openclaw/cos-meeting")), sent).call_backend("hi", c, {})
     assert sent[0]["json"]["model"] == "openclaw/cos-meeting"
     assert store.trace(c["confer"]["receipt_id"])["binding"]["scope"] == "meeting"
-    c = ctx({"origin": "meeting", "principal": "robert", "audience": "r", "claim_id": "c", "room_generation": 1},
+    c = ctx({"origin": "meeting", "principal": "robert", "audience": "r", "claim_id": "c", "room_generation": "g1"},
             scope="closed")
     backend(store, Stream(chunks(model="openclaw/cos-meeting")), sent).call_backend("hi", c, {})
     assert sent[1]["json"]["model"] == "openclaw/cos-meeting"
@@ -159,7 +159,7 @@ def test_guildhall_stop_route_revokes_with_the_service_token(tmp_path, store):
     assert r.status_code == 202 and r.json == {"state": "tools_revoked"}
     assert not store.record(turn, principal="robert", origin="meeting", scope="meeting", audience="r",
                             agent_entry="cos-meeting", session_user="u", lifetime_s=600, claim_id="c",
-                            room_generation=1)          # the Stop before the binding applies from the start
+                            room_generation="g1")          # the Stop before the binding applies from the start
     assert client.post("/internal/guildhall/turns/not-a-uuid/stop",
                        headers={"Authorization": "Bearer " + "x" * 48}).status_code == 400
 

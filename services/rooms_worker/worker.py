@@ -363,13 +363,19 @@ class Watcher(threading.Thread):
                 continue
             if status in (401,403):
                 self.cancelled = True
-                self.transport.stop(self.correlation)
+                self._stop_transport()
                 return
             state = (data or {}).get("state")
             if state == "cancel_requested" or state in ("cancelled", "uncertain", "abandoned", "expired"):
                 self.cancelled = True
-                self.transport.stop(self.correlation)
+                self._stop_transport()
                 return
+
+    def _stop_transport(self):
+        self.transport.stop(self.correlation)
+        stop_turn = getattr(self.transport, "stop_turn", None)
+        if stop_turn is not None:               # CoS: also revoke the turn's tool binding (F2 D9)
+            stop_turn(self.turn["id"])
 
     def stop(self):
         self._halt.set()

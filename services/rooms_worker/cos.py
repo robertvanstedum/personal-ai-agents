@@ -15,6 +15,15 @@ class CoS:
         try:return self.session.get(self.base+'/internal/guildhall/ready',headers=self.headers(),timeout=5).status_code==200
         except requests.RequestException:return False
     def stop(self, correlation):return 202  # request only; worker retains uncertainty
+    def stop_turn(self, turn_id):
+        """F2 D9: revoke the meeting turn's tool binding at cos-scheduler. Request only: the worker keeps its
+        uncertainty, since stopping tools is not proof that a running operation stopped."""
+        try:
+            self.session.post(f"{self.base}/internal/guildhall/turns/{turn_id}/stop",headers=self.headers(),
+                              timeout=5,allow_redirects=False)
+        except requests.RequestException:
+            pass
+        return 202
     def stream(self,messages,user,correlation,*,turn,admit,**kwargs):
         trigger=turn.get('trigger') or {}
         empty={'text':'','usage':None}
@@ -26,6 +35,7 @@ class CoS:
         try:
             # Only stable content enters the idempotent coordinator ledger.
             payload={k:turn[k] for k in ('id','room','addressee','trigger','brief','transcript','coverage')}
+            if turn.get('claim_id'):payload['claim_id']=turn['claim_id']   # F2 D5: cos-scheduler re-reads Records
             response=self.session.post(self.base+'/internal/guildhall/turn',headers=self.headers(),json=payload,timeout=(5,150),allow_redirects=False)
             data=response.json()
             if response.status_code==200 and data.get('turn_id')==turn['id'] and data.get('room')==turn['room'] and isinstance(data.get('text'),str):

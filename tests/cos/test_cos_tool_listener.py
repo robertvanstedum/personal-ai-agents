@@ -38,7 +38,7 @@ def sealed(run=1, call="call-1", session=SESSION, agent="cos-agent-a", instance=
 
 
 def live(bindings, turn="t1", run=1, scope="owner"):
-    extra = {} if scope == "owner" else {"claim_id": "c1", "room_generation": 1}
+    extra = {} if scope == "owner" else {"claim_id": "c1", "room_generation": "g1"}
     agent = "cos-agent-a" if scope == "owner" else "cos-meeting"
     assert bindings.record(turn, principal="robert", origin="owner" if scope == "owner" else "meeting", scope=scope,
                            audience="owner", agent_entry=agent, session_user=USER, lifetime_s=600,

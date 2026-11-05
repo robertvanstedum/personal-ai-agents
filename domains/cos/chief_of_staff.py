@@ -1411,13 +1411,20 @@ def chat_endpoint():
     text = (body.get("text") or "").strip()
     if not text:
         return jsonify({"reply": "Nothing to respond to."})
+    binding = _request_binding()
+    if binding is not None and binding["origin"] == "service:telegram":
+        # F2 D4: the Telegram bot's key fixes what it may ask for: a Telegram channel, in the owner conversation it
+        # has always used. It cannot pick another session, channel or supersession key.
+        if body.get("channel") not in ("telegram_text", "telegram_voice") or body.get("conversation_id") != "owner" \
+                or body.get("request_id") is not None:
+            return jsonify({"reply": "Not allowed."}), 403
     try:
         result = _process_confer_turn(
             text,
             channel=body.get("channel") or "api_text",
             conversation_id=body.get("conversation_id") or "owner",
             request_id=body.get("request_id"),
-            binding=_request_binding(),
+            binding=binding,
         )
         return jsonify(result.public_dict())
     except InvalidConferTurn as e:

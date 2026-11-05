@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS bindings(
   turn_id TEXT PRIMARY KEY, environment TEXT NOT NULL, principal TEXT NOT NULL, origin TEXT NOT NULL,
   seat TEXT NOT NULL, actor TEXT NOT NULL, agent_entry TEXT NOT NULL, session_user TEXT NOT NULL,
   scope TEXT NOT NULL, audience TEXT NOT NULL, owner_request_id TEXT, supersession_key TEXT,
-  claim_id TEXT, room_generation INTEGER, trigger_seq INTEGER, approval_generation INTEGER,
+  claim_id TEXT, room_generation TEXT, trigger_seq INTEGER, approval_generation INTEGER,
   runtime_instance TEXT NOT NULL, epoch TEXT NOT NULL, run_id TEXT UNIQUE, expires REAL NOT NULL,
   created REAL NOT NULL, revoked REAL, revoked_reason TEXT);
 CREATE INDEX IF NOT EXISTS bindings_live ON bindings(supersession_key) WHERE revoked IS NULL;
@@ -82,7 +82,7 @@ class Binding:
     run_id: str
     agent_entry: str
     claim_id: str | None = None
-    room_generation: int | None = None
+    room_generation: str | None = None
     trigger_seq: int | None = None
     approval_generation: int | None = None
 
@@ -175,7 +175,7 @@ class BindingStore:
     def record(self, turn_id: str, *, principal: str, origin: str, scope: str, audience: str, agent_entry: str,
                session_user: str, lifetime_s: float, owner_request_id: str | None = None,
                supersession_key: str | None = None, claim_id: str | None = None,
-               room_generation: int | None = None, trigger_seq: int | None = None,
+               room_generation: str | None = None, trigger_seq: int | None = None,
                approval_generation: int | None = None) -> bool:
         """The binding for a turn being handed to the agent. True when it is live; False when there is no current
         runtime instance or epoch (tools stay refused), or a Stop already reached the turn. A newer binding with the
@@ -187,7 +187,8 @@ class BindingStore:
             raise NotBound("turn_invalid")
         if (scope == "meeting") != (origin == "meeting"):
             raise NotBound("turn_invalid")
-        if scope == "meeting" and (not claim_id or type(room_generation) is not int):
+        if scope == "meeting" and (not isinstance(claim_id, str) or not claim_id
+                                   or not isinstance(room_generation, str) or not room_generation):
             raise NotBound("turn_invalid")
         with self._tx() as db:
             instance, epoch = self._state(db, "instance"), self._state(db, "epoch")

@@ -27,11 +27,16 @@ def validate(turn):
             or not isinstance(trigger.get('text'),str) or not trigger['text'].strip()):
         raise ValueError('Authenticated owner message required')
     if 'origin' not in trigger: raise ValueError('Missing event provenance')
+    if 'claim_id' in turn and not (isinstance(turn['claim_id'],str) and 0<len(turn['claim_id'])<=128):
+        raise ValueError('Invalid claim')
     return turn
 
 
-def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verify_members=None, stop_turn=None):
-    """``verify_members(turn)`` returns the room's members from Records, or None; never the request body's."""
+def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verify_members=None, stop_turn=None,
+            verifier=None):
+    """``verify_members(turn)`` returns the room's members from Records, or None; never the request body's.
+    ``verifier`` (F2 step 4, ``meeting_verifier.RecordsMeetingVerifier``) supersedes it: the turn runs only when
+    Records admits it, with the owner's text from the snapshot, the meeting binding and a once-a-second watch."""
     token=Path(token_file).read_text().strip()
     if len(token)<32:raise ValueError('Guildhall service credential required')
     root=Path(data_dir);root.mkdir(parents=True,mode=0o700,exist_ok=True)
@@ -67,9 +72,20 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
         if request.content_length is None or request.content_length>256_000:return jsonify(error='Turn too large'),413
         try:
             value=validate(request.get_json(silent=True))
-            encoded=json.dumps(value,sort_keys=True,separators=(',',':'))
+            # The claim changes when Records re-issues a claim for the same turn; the turn's identity does not.
+            encoded=json.dumps({k:v for k,v in value.items() if k!='claim_id'},sort_keys=True,separators=(',',':'))
             digest=hashlib.sha256(encoded.encode()).hexdigest()
         except (ValueError,KeyError,TypeError,AttributeError):return jsonify(error='Invalid authenticated meeting turn'),400
+        facts=None
+        if verifier is not None:
+            with db() as c:
+                old=c.execute('SELECT digest,state,result FROM turns WHERE id=?',(value['id'],)).fetchone()
+            if old is None:
+                # Records decides before anything is recorded here: a refused turn leaves no uncertain row.
+                facts=verifier.admit(value)
+                if facts is None:return jsonify(error='Records did not admit this meeting turn'),409
+                if facts['trigger_text']!=value['trigger']['text']:
+                    return jsonify(error='Turn text does not match the Records snapshot'),409
         with db() as c:
             c.execute('BEGIN IMMEDIATE')
             old=c.execute('SELECT digest,state,result FROM turns WHERE id=?',(value['id'],)).fetchone()
@@ -88,8 +104,21 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
                 result=SimpleNamespace(reply='Each Guildhall turn has its own CoS session. Start a new meeting for a fresh shared conversation; your private CoS chat is unchanged.')
             else:
                 from core.room_scope import meeting_scope
-                members=verify_members(value) if verify_members is not None else None
-                result=run_turn(value['trigger']['text'],meeting_context=prompt,channel='guildhall',conversation_id='guildhall:'+value['room']+':'+value['id'],request_id=value['id'],turn_id=value['id'],meeting_scope=meeting_scope(members))
+                if facts is not None:
+                    members=facts['members']
+                    scope=meeting_scope(members)
+                    binding=facts['binding'] if scope=='owner_private' else None
+                    text=facts['trigger_text']
+                else:
+                    members=verify_members(value) if verify_members is not None else None
+                    scope,binding,text=meeting_scope(members),None,value['trigger']['text']
+                stop_watch=(verifier.watch(value['id'],facts['claim_id'],facts['room_generation'],
+                                           (lambda turn:stop_turn(turn)) if stop_turn else (lambda turn:None))
+                            if facts is not None and binding is not None else (lambda:None))
+                try:
+                    result=run_turn(text,meeting_context=prompt,channel='guildhall',conversation_id='guildhall:'+value['room']+':'+value['id'],request_id=value['id'],turn_id=value['id'],meeting_scope=scope,binding=binding)
+                finally:
+                    stop_watch()
             answer={'text':result.reply,'turn_id':value['id'],'room':value['room']}
             if not isinstance(answer['text'],str) or not answer['text'].strip():raise ValueError('Empty reply')
             with db() as c:c.execute('UPDATE turns SET state=?,result=? WHERE id=?',('done',json.dumps(answer),value['id']))

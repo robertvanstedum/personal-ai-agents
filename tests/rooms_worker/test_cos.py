@@ -16,7 +16,8 @@ def test_owner_admission_and_stable_payload(tmp_path):
     assert c.stream([],None,None,turn=t,admit=lambda:(False,'cancel_requested'))['outcome']=='not_admitted'
     assert not session.calls
     assert c.stream([],None,None,turn=t,admit=lambda:(True,None))['outcome']=='done'
-    assert 'claim_id' not in session.calls[0]['json']
+    # F2 D5: the claim is sent so cos-scheduler can re-read Records; guildhall keeps it out of the turn's digest.
+    assert session.calls[0]['json']['claim_id']=='changing'
     assert c.stop_guaranteed is False
     t['trigger']['actor']='mc'
     assert c.stream([],None,None,turn=t,admit=lambda:(_ for _ in ()).throw(AssertionError()))['outcome']=='refused'

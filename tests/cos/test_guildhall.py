@@ -133,3 +133,12 @@ def test_closed_room_never_asks_the_vault():
     ctx=dict(ctx,meeting_scope='owner_private')
     call_with_vault(backend,'q',ctx,{},retrieve=lambda *a,**k:asked.append(1) or (_ for _ in ()).throw(ValueError()),environ=env)
     assert asked==[1]
+
+
+def test_a_reissued_claim_replays_the_same_turn(tmp_path):
+    calls=[]
+    c,h=setup(tmp_path,lambda text,**k:calls.append(1) or SimpleNamespace(reply='ok'))
+    t=turn();t['claim_id']='claim-1'
+    assert c.post('/internal/guildhall/turn',json=t,headers=h).status_code==200
+    t['claim_id']='claim-2'
+    assert c.post('/internal/guildhall/turn',json=t,headers=h).status_code==200 and calls==[1]

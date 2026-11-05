@@ -171,12 +171,12 @@ def test_meeting_binding_needs_claim_and_generation(store):
     base = dict(principal="robert", origin="meeting", scope="meeting", audience="room-1", agent_entry="cos-meeting",
                 session_user=USER, lifetime_s=600)
     assert code(lambda: store.record("m1", **base)) == "turn_invalid"
-    assert code(lambda: store.record("m1", **dict(base, origin="owner"), claim_id="c", room_generation=1)) == \
+    assert code(lambda: store.record("m1", **dict(base, origin="owner"), claim_id="c", room_generation="g1")) == \
         "turn_invalid"
-    assert store.record("m1", **base, claim_id="claim-1", room_generation=4, trigger_seq=9)
+    assert store.record("m1", **base, claim_id="claim-1", room_generation="g4", trigger_seq=9)
     store.attach_run("m1", RUN.format(7))
     b = resolve(store, run=7, agent="cos-meeting")
-    assert (b.scope, b.claim_id, b.room_generation, b.trigger_seq) == ("meeting", "claim-1", 4, 9)
+    assert (b.scope, b.claim_id, b.room_generation, b.trigger_seq) == ("meeting", "claim-1", "g4", 9)
 
 
 def test_revoke_versus_admit_is_atomic(store):
