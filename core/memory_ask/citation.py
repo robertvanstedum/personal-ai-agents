@@ -10,13 +10,18 @@ retrieval failure from a reasoning failure. A sentence is:
 * ``unsupported``: it makes a claim and cites nothing.
 
 Sentences of fewer than four words (headings, connectors) are not claims and are ``exempt``.
+
+A list after one file, ``file:51,54`` or ``file:12-14,20``, is that many citations, and every one must lie inside a returned
+passage (5 Nov 2026: the list's later lines used to go unchecked). Only an unspaced comma continues the list, so prose such
+as ``file:51, 17 sketches`` cites line 51 alone.
 """
 from __future__ import annotations
 
 import re
 
 SUPPORTED, UNSUPPORTED, INVALID, EXEMPT = "supported", "unsupported", "invalid_citation", "exempt"
-_CITE = re.compile(r"([\w./@+-]+\.md):(\d+)(?:\s*[-–]\s*(\d+))?")
+_CITE = re.compile(r"([\w./@+-]+\.md):(\d+(?:\s*[-–]\s*\d+)?(?:,\d+(?:\s*[-–]\s*\d+)?)*)")
+_RANGE = re.compile(r"(\d+)(?:\s*[-–]\s*(\d+))?")
 _SPLIT = re.compile(r"(?<=[.!?])\s+|\n+")
 MARK = " [unsupported: no file:line citation from this query]"
 MARK_INVALID = " [unsupported: citation is not a passage this query returned]"
@@ -39,9 +44,9 @@ def _inside(cite: tuple[str, int, int], passage: tuple[str, int, int]) -> bool:
 
 def _cited(sentence: str) -> list[tuple[str, int, int]]:
     out = []
-    for name, a, b in _CITE.findall(sentence):
-        a = int(a)
-        out.append((name, a, int(b) if b else a))
+    for name, spans in _CITE.findall(sentence):
+        for a, b in _RANGE.findall(spans):
+            out.append((name, int(a), int(b) if b else int(a)))
     return out
 
 

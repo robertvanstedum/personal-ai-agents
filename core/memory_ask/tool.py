@@ -21,7 +21,8 @@ from core.memory_ask.citation import check, mark_unsupported  # noqa: F401  (the
 
 TOOL_NAME = "memory_ask"
 CITATION_RULE = ("Answer only from the passages returned. Cite every claim as file:line or file:start-end of a returned "
-                 "passage. A sentence with no such citation is invalid and will be marked unsupported. If the passages do "
+                 "passage, inside the same sentence as the claim (never in a following sentence). A sentence with no such "
+                 "citation is invalid and will be marked unsupported. If the passages do "
                  "not answer the question, say so.")
 SPEC = {
     "name": TOOL_NAME,

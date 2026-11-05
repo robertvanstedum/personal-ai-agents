@@ -157,6 +157,7 @@ def test_synthesis_copies_full_retained_file_paths_and_cites_every_claim_sentenc
     assert SYNTHESIS_RULE in backend.input[1]["system_prompt"]
     assert "including its directory prefix" in SYNTHESIS_RULE
     assert "every claim sentence" in SYNTHESIS_RULE
+    assert "never the claim in one sentence" in SYNTHESIS_RULE and "b.md:51-54" in SYNTHESIS_RULE
     assert reply.count("[unsupported:") == 2
     assert f"({full_path}:10-12)." in reply
     assert "citation is not a passage this query returned" in reply

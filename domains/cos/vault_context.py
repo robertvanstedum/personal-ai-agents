@@ -16,7 +16,11 @@ SYNTHESIS_RULE = (
     "in [VAULT_SYNTHESIS]...[/VAULT_SYNTHESIS] and cite a retained file:line "
     "range for every claim sentence. Copy the retained passage file field exactly, "
     "including its directory prefix; do not shorten it to a basename. Keep "
-    "each citation in the same sentence as its claim. Keep current tool/web answers and other reasoning "
+    "each citation in the same sentence as its claim, at the end of that sentence: write "
+    "'The notebook was indigo (sessions-raw/a/b.md:51).', never the claim in one sentence and "
+    "'The source is ...' in the next; a sentence without its own citation is marked unsupported. "
+    "Cite separate lines as separate references (b.md:51 and b.md:54) or as a range (b.md:51-54). "
+    "Keep current tool/web answers and other reasoning "
     "outside this block. These markers are removed before the reply is shown."
 )
 

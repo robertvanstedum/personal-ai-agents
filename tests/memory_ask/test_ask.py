@@ -401,3 +401,25 @@ def test_mark_unsupported_marks_a_reversed_citation():
 def test_a_returned_passage_with_a_zero_line_cannot_back_a_citation_to_line_zero():
     broken = {"keyword": [{"file": "s/source.md", "lines": [0, 5]}], "meaning": [], "adjacent": {"none": "no_results"}}
     assert citation.check("This claim says something specific about it s/source.md:0-3", broken)[0]["state"] == "invalid_citation"
+
+
+@pytest.mark.parametrize("cite,state", [
+    ("s/source.md:12,15", "supported"),            # a list: every line inside the passage
+    ("s/source.md:10-12,18-20", "supported"),
+    ("s/source.md:12,54", "invalid_citation"),     # Copper Finch, 5 Nov: the 54 used to go unchecked
+    ("s/source.md:12,9", "invalid_citation"),
+])
+def test_a_citation_list_is_every_one_of_its_lines(cite, state):
+    assert citation.check(f"This claim says something specific about the passage {cite}", PASSAGE)[0]["state"] == state
+
+
+def test_a_spaced_comma_ends_the_citation_so_prose_numbers_are_not_lines():
+    text = "The notebook held sketches as recorded at s/source.md:12, 17 sketches in all"
+    assert citation.check(text, PASSAGE)[0]["state"] == "supported"
+
+
+def test_a_claim_whose_citation_sits_in_the_next_sentence_stays_unsupported():
+    """Copper Finch, 5 Nov: the checker is unchanged; the synthesis rule now asks for the citation in the claim's sentence."""
+    text = "The notebook was indigo and contained 17 sketches. The original conversation records this at s/source.md:12,15."
+    states = [c["state"] for c in citation.check(text, PASSAGE)]
+    assert states == ["unsupported", "supported"]
