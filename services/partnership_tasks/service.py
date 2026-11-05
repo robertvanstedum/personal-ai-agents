@@ -1117,10 +1117,21 @@ class _Planner:
             raise Refused("payload_invalid", "reserved_operation_id")
         if self.svc.journal.read(path_of("outbox", op)) is not None:
             raise Refused("id_taken", "operation")
+        card = self.p.get("card")
+        if card is not None:
+            # B4 v0.6: the digest Robert will approve is the authority's own compile of this exact card.
+            from core.mc_delegation_dispatcher import cards as card_mod
+            try:
+                compiled = card_mod.Catalogue.load().compile(card)
+            except card_mod.CardRefused as exc:
+                raise Refused("payload_invalid", "card_" + str(exc)[:40]) from None
+            # The harness writes bare hex; the task service's digests are "sha256:<hex>" (the worker converts back).
+            if "sha256:" + compiled.digest != self.p["bundle_digest"] or self.p["bundle_ref"]["id"] != compiled.card_id:
+                raise Refused("payload_invalid", "card_digest_mismatch")
         ob = {"schema": SCHEMAS["outbox"], "operation_id": op, "task_id": task["task_id"], "destination": "harness",
               "operation": "admit_bundle", "bundle_digest": self.p["bundle_digest"], "bundle_ref": self.p["bundle_ref"],
               "fence_generation": task["fence_generation"], "interpretation_ref": task["interpretation_ref"],
-              "state": "pending", "attempts": [], "destination_receipt": None, "reason": None, "packet": None}
+              "state": "pending", "attempts": [], "destination_receipt": None, "reason": None, "packet": card}
         ob = self.stamp(ob, None)
         ref_ = {"store": "harness", "id": op, "edition": None, "digest": self.p["bundle_digest"]}
         t2 = self.stamp(dict(task, execution_refs=task["execution_refs"] + [ref_]), task)
@@ -1199,16 +1210,17 @@ class _Planner:
         self.links.update(task_id=task["task_id"], request_id=task["request_ref"],
                           interpretation_id=ob["interpretation_ref"])
         obs, state = self.p["observation"], ob["state"]
-        if obs in ("abandoned", "read"):
+        if obs in ("abandoned", "read", "declined"):
             if not self.b.is_owner:
-                raise Refused("not_authorized", "only_the_owner_" + ("abandons" if obs == "abandoned" else "reads"))
+                raise Refused("not_authorized", "only_the_owner_" + {"abandoned": "abandons", "read": "reads",
+                                                                     "declined": "declines"}[obs])
         elif self.b.origin != "platform" or self.b.seat != DRAINER_SEAT:
             # Codex finding 2: the dedicated drainer seat, not any platform-origin binding that lists this kind.
             raise Refused("not_authorized", "only_a_drainer_records")
         moves = {"attempted": ("pending",), "applied": ("attempted", "unknown"), "refused": ("attempted",),
                  "unknown": ("attempted",), "definitely_absent": ("unknown", "attempted"),
                  "conflict": ("attempted", "unknown"), "fenced": ("pending",), "abandoned": ("unknown", "conflict"),
-                 "read": ("acknowledged",)}
+                 "read": ("acknowledged",), "declined": ("pending",)}
         if state not in moves[obs]:
             raise Refused("transition_not_allowed", f"{state}+{obs}")
         admission = ob["operation"] == "admit_bundle"
@@ -1232,13 +1244,14 @@ class _Planner:
             raise Refused("payload_invalid", "receipt_not_for_this_operation")
         new_state = {"attempted": "attempted", "applied": "acknowledged", "refused": "refused", "unknown": "unknown",
                      "definitely_absent": "pending", "conflict": "conflict", "fenced": "fenced",
-                     "abandoned": "abandoned", "read": "read"}[obs]
+                     "abandoned": "abandoned", "read": "read", "declined": "declined"}[obs]
         if obs == "definitely_absent" and admission and stale:
             new_state = "fenced"                    # never arrived, and now stale: it must not be sent later
         sends = sum(1 for a in ob["attempts"] if a["observation"] == "attempted")
         method = {"applied": "destination_answer" if state == "attempted" and self.p["code"] != "lookup"
                   else "destination_lookup", "definitely_absent": "destination_lookup",
-                  "abandoned": "owner_decision", "read": "owner_decision"}.get(obs, "drainer")
+                  "abandoned": "owner_decision", "read": "owner_decision",
+                  "declined": "owner_decision"}.get(obs, "drainer")
         row = self.attempt_row(obs, self.p["code"], method, sends + 1 if obs == "attempted" else (sends or None))
         row["attempt"] = len(ob["attempts"]) + 1
         approval = ob.get("approval")

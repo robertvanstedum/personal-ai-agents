@@ -378,3 +378,38 @@ def history(svc: TaskService, token: str, words: str) -> list[dict]:
         return svc.journal.view(read)
     except (JournalDamaged, OSError) as exc:
         raise StoreUnavailable(type(exc).__name__) from exc
+
+
+QUEUE_STATES = ("pending", "attempted", "unknown")
+
+
+def outbox_queue(svc: TaskService, token: str) -> list[dict] | None:
+    """B4 v0.6: the admissions and notices still to be sent or settled, for the drainer seat (what to work on) and the
+    principal (what waits for Robert's approval). Each entry carries its approval, whether its task has moved on
+    since it was queued (``stale``), and for admissions whether its card is held (``has_card``); the card itself is
+    read through the entry. Other seats: None."""
+    from services.partnership_tasks.service import DRAINER_SEAT
+    binding = svc.bindings.resolve(token, svc._clock())
+    if binding is None or not (binding.is_owner or (binding.origin == "platform" and binding.seat == DRAINER_SEAT)):
+        return None
+    def read():
+        out = []
+        folder = svc.journal.root / DIRS["outbox"]
+        for p in sorted(folder.glob("*.json")) if folder.is_dir() else []:
+            ob = svc.journal.read(f"{DIRS['outbox']}/{p.name}")
+            if not ob or ob["state"] not in QUEUE_STATES or ob["data_scope"] not in binding.read_scopes:
+                continue
+            task = svc.journal.read(path_of("task", ob["task_id"])) or {}
+            stale = (ob["operation"] == "admit_bundle" and (task.get("fence_generation") != ob["fence_generation"]
+                                                            or task.get("state") not in ("submitted", "working")))
+            out.append({"operation_id": ob["operation_id"], "task_id": ob["task_id"], "operation": ob["operation"],
+                        "destination": ob["destination"], "state": ob["state"], "revision": ob["revision"],
+                        "bundle_digest": ob["bundle_digest"], "bundle_ref": ob["bundle_ref"],
+                        "fence_generation": ob["fence_generation"], "approval": ob.get("approval"), "stale": stale,
+                        "has_card": ob["operation"] == "admit_bundle" and isinstance(ob.get("packet"), dict),
+                        "created_at": ob["created_at"]})
+        return out
+    try:
+        return svc.journal.view(read)
+    except (JournalDamaged, OSError) as exc:
+        raise StoreUnavailable(type(exc).__name__) from exc

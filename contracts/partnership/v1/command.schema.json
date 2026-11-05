@@ -1199,6 +1199,10 @@
         "fence_generation": {
           "type": "integer",
           "minimum": 0
+        },
+        "card": {
+          "description": "B4 v0.6: the work card itself (minimoi.card.v1). When present, the service compiles it with the authority's card catalogue and requires the compiled digest to equal bundle_digest and bundle_ref.id to equal its card_id; it is kept as the entry's packet for the worker.",
+          "type": "object"
         }
       }
     },
@@ -1221,7 +1225,8 @@
             "unknown",
             "fenced",
             "abandoned",
-            "read"
+            "read",
+            "declined"
           ]
         },
         "destination_receipt": {

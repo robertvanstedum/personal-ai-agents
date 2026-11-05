@@ -201,6 +201,15 @@ def create_app(svc: TaskService, *, owner_key=None, owner_env: str | None = None
         out = pending_proposals(svc, t)
         return _json(out) if out is not None else (jsonify(error="not_found"), 404)
 
+    @app.get("/v1/outbox/pending")
+    def outbox_pending():
+        t = authenticated()
+        if t is None:
+            return jsonify(error="not_authenticated"), 401
+        from services.partnership_tasks.reconstruct import outbox_queue
+        out = outbox_queue(svc, t)
+        return _json(out) if out is not None else (jsonify(error="not_found"), 404)
+
     @app.get("/v1/history")
     def recall():
         t = authenticated()

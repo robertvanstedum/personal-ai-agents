@@ -1200,7 +1200,7 @@
           "$ref": "urn:minimoi:contract:partnership:common#/$defs/interpretation_id"
         },
         "state": {
-          "description": "pending (never sent) -> attempted (send about to happen) -> acknowledged | refused | unknown | conflict; unknown -> acknowledged | pending (destination says definitely absent) | conflict; pending -> fenced (a correction, cancel or reassignment made it stale before any send). conflict/unknown -> abandoned only by an owner decision (the effect may exist; the record says so). For notices: acknowledged means delivered by the notice channel (its receipt); read is separate evidence that the principal opened it (C04/E09).",
+          "description": "pending (never sent) -> attempted (send about to happen) -> acknowledged | refused | unknown | conflict; unknown -> acknowledged | pending (destination says definitely absent) | conflict; pending -> fenced (a correction, cancel or reassignment made it stale before any send). conflict/unknown -> abandoned only by an owner decision (the effect may exist; the record says so). For notices: acknowledged means delivered by the notice channel (its receipt); read is separate evidence that the principal opened it (C04/E09). pending -> declined by an owner decision (Robert does not want this admission; nothing was sent).",
           "enum": [
             "pending",
             "attempted",
@@ -1210,7 +1210,8 @@
             "conflict",
             "fenced",
             "abandoned",
-            "read"
+            "read",
+            "declined"
           ]
         },
         "attempts": {
@@ -1240,7 +1241,8 @@
                   "unknown",
                   "fenced",
                   "abandoned",
-                  "read"
+                  "read",
+                  "declined"
                 ]
               },
               "drainer_seat": {
@@ -1287,7 +1289,7 @@
         "updated_at": true,
         "provenance": true,
         "packet": {
-          "description": "B2D: for notices, the content delivered (return packet with accepted set, delivered disagreement and child outcomes; or a needs-owner escalation framed as choices). bundle_digest is its digest. Null for other operations.",
+          "description": "B2D: for notices, the content delivered (return packet with accepted set, delivered disagreement and child outcomes; or a needs-owner escalation framed as choices). bundle_digest is its digest. Null for other operations. For admissions (B4 v0.6): the work card document Robert approves; bundle_digest is the authority's own compiled digest of it.",
           "type": [
             "object",
             "null"

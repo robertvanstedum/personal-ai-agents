@@ -362,3 +362,68 @@ def test_v05_an_approval_event_counts_for_one_entry_only(rig):
                          {"card_digest": ob2["bundle_digest"], "approval_event_id": "SE-syn-ok-shared"},
                          expected=ob2["revision"]), "tok-principal")
     assert res["outcome"] == "refused" and res["detail"] in ("approval_not_for_this_card", "approval_already_used")
+
+
+# ---- B4 v0.6: the card travels with its admission; the queue; Robert declines -----------------------------------
+
+def _card(card_id="C-b4-0001"):
+    return {"schema": "minimoi.card.v1", "card_id": card_id, "class": "build_only", "class_version": 1,
+            "repository": "personal-ai-agents", "ref": "a" * 40,
+            "workers": {"builder": {"actor": "fakework", "route": "fakework", "amount": "0.25", "cost_cap_usd": "1"}},
+            "briefs": {"build": "fakework/1\nresult ok"}, "attempts": 1, "step_deadline_s": 3600}
+
+
+def _admit_with_card(svc, tid, doc, op="OB-syn-card", digest_=None):
+    from core.mc_delegation_dispatcher import cards as card_mod
+    compiled = card_mod.Catalogue.load().compile(doc)
+    t = svc.get("task", tid, "tok-principal")
+    return svc.submit(cmd("task.request_admission", "task", tid,
+                          {"operation_id": op, "bundle_digest": digest_ or "sha256:" + compiled.digest,
+                           "bundle_ref": ref("harness", doc["card_id"], digest_ or "sha256:" + compiled.digest),
+                           "fence_generation": t["fence_generation"], "card": doc}, expected=t["revision"]),
+                      "tok-mc"), compiled
+
+
+def test_v06_the_card_is_kept_only_when_its_compiled_digest_is_the_one_robert_will_approve(rig):
+    svc, f, tid, h = rig
+    bad, compiled = _admit_with_card(svc, tid, _card(), digest_="sha256:" + "1" * 64)
+    assert bad["outcome"] == "refused" and bad["detail"] == "card_digest_mismatch"
+    broken = dict(_card(), workers={"builder": {"actor": "nobody", "route": "x", "amount": 1, "cost_cap_usd": 1}})
+    res, _ = (lambda d: (svc.submit(cmd("task.request_admission", "task", tid,
+              {"operation_id": "OB-syn-card", "bundle_digest": "sha256:" + "2" * 64,
+               "bundle_ref": ref("harness", "C-b4-0001", "sha256:" + "2" * 64),
+               "fence_generation": svc.get("task", tid, "tok-principal")["fence_generation"], "card": d},
+              expected=svc.get("task", tid, "tok-principal")["revision"]), "tok-mc"), None))(broken)
+    assert res["outcome"] == "refused" and res["detail"].startswith("card_")
+    ok, compiled = _admit_with_card(svc, tid, _card())
+    assert ok["outcome"] == "accepted"
+    assert outbox(svc, "OB-syn-card")["packet"] == _card() and outbox(svc, "OB-syn-card")["bundle_digest"] == "sha256:" + compiled.digest
+
+
+def test_v06_queue_is_for_the_drainer_and_robert_and_a_cancel_closes_pending_admissions(rig):
+    from services.partnership_tasks.reconstruct import outbox_queue
+    svc, f, tid, h = rig
+    request_admission(svc, tid)
+    assert outbox_queue(svc, "tok-mc") is None and outbox_queue(svc, "tok-platform-recorder") is None
+    rows = outbox_queue(svc, D)
+    assert [r["operation_id"] for r in rows] == ["OB-syn-0001"] and rows[0]["approval"] is None and not rows[0]["stale"]
+    assert [r["operation_id"] for r in outbox_queue(svc, "tok-principal")] == ["OB-syn-0001"]
+    cancel(f, tid)                                   # a cancel closes the pending admission at once (fenced)
+    assert outbox(svc)["state"] == "fenced"
+    assert [r["operation"] for r in outbox_queue(svc, D)] == ["set_fence"]     # only the fence is left to send
+    assert drain(svc, D, h, "OB-syn-0001", approve=False) == "fenced" and h.admissions() == []   # never sent
+
+
+def test_v06_robert_declines_a_pending_admission_and_nothing_is_sent(rig):
+    from services.partnership_tasks.reconstruct import outbox_queue
+    svc, f, tid, h = rig
+    request_admission(svc, tid)
+    ob = outbox(svc)
+    decline = cmd("outbox.record", "outbox", "OB-syn-0001",
+                  {"observation": "declined", "destination_receipt": None, "code": "owner_declined"},
+                  expected=ob["revision"])
+    assert svc.submit(decline, "tok-mc")["detail"] == "only_the_owner_declines"
+    assert svc.submit(decline, D)["detail"] == "only_the_owner_declines"
+    assert svc.submit(dict(decline, command_id="cmd-own-decl"), "tok-principal")["outcome"] == "accepted"
+    assert outbox(svc)["state"] == "declined" and outbox_queue(svc, D) == []
+    assert drain(svc, D, h, "OB-syn-0001") == "declined" and h.admissions() == []
