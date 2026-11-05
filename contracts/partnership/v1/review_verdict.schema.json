@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:partnership:review_verdict",
+  "title": "A reviewer's verdict on one artifact set (B4 execution design v0.5 M5, v0.6)",
+  "description": "Recorded by a cross-vendor review card's single step as an artifact of kind 'verdict'. The runner door fetches it by ref, checks its sha256, and validates it here. Absent or invalid means changes_requested, never approve. reviewed_set_digest must equal the builder child's submitted set the review card was composed from.",
+  "$defs": {
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "verdict",
+        "reviewed_set_digest",
+        "findings_digest"
+      ],
+      "properties": {
+        "schema": {
+          "const": "minimoi.partnership.review_verdict/1"
+        },
+        "verdict": {
+          "enum": [
+            "approve",
+            "changes_requested",
+            "disagree"
+          ]
+        },
+        "reviewed_set_digest": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+        },
+        "findings_digest": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+            }
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    }
+  }
+}

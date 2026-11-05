@@ -1,0 +1,49 @@
+{
+  "schema": "minimoi.partnership.executor_profiles/1",
+  "about": "B4 execution design v0.5/v0.6: everything about a delegated card except its brief comes from here, never from a model. Seats claude-code and codex only (grok-cli is not a card family). The review profile is the other family's seat. Caps are per card, in USD; the B4 Dev total is held to $10 by the worker's spend reservation.",
+  "profiles": {
+    "claude-code": {
+      "family": "anthropic",
+      "build": {
+        "class": "build_only",
+        "actor": "claude-code",
+        "route": "claude-code",
+        "amount": "1",
+        "cost_cap_usd": "2.00",
+        "attempts": 1,
+        "step_deadline_s": 3600
+      },
+      "review": {
+        "class": "review",
+        "actor": "claude-code",
+        "route": "claude-code",
+        "amount": "1",
+        "cost_cap_usd": "1.00",
+        "attempts": 1,
+        "step_deadline_s": 1800
+      }
+    },
+    "codex": {
+      "family": "openai",
+      "build": {
+        "class": "build_only",
+        "actor": "codex",
+        "route": "codex",
+        "amount": "1",
+        "cost_cap_usd": "2.00",
+        "attempts": 1,
+        "step_deadline_s": 3600
+      },
+      "review": {
+        "class": "review",
+        "actor": "codex",
+        "route": "codex",
+        "amount": "1",
+        "cost_cap_usd": "1.00",
+        "attempts": 1,
+        "step_deadline_s": 1800
+      }
+    }
+  },
+  "repository": "personal-ai-agents"
+}
