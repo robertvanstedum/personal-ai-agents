@@ -62,24 +62,28 @@ def test_a_package_is_tracked_from_assignment_to_codex_acceptance(tmp_path):
     assert out["chain"]["task"]["state"] == "completed" and out["acceptances"][-1]["by"] == "codex"
 
 
-def test_the_gate_needs_a_hash_verified_codex_acceptance_naming_the_reviewed_diff(tmp_path):
+def test_a_builder_writable_acceptance_file_never_opens_a_real_store(tmp_path):
+    """Codex finding 1: the old gate opened on a file the builder could write. Now nothing opens a real store."""
     real = service(tmp_path / "dev-store", environment="dev")
     ck = tmp_path / "CURRENT_HANDOFF.json"
     diff_sha = "a" * 64
     acc = tmp_path / "REVIEW_CODEX_TASK_STORE_ACCEPTANCE.md"
     acc.write_text(f"accepted_by: codex\nreviewed task-store diff: {diff_sha}\n")
     good = hashlib.sha256(acc.read_bytes()).hexdigest()
-    ck.write_text(json.dumps({"build_tracking": {"enabled": True, "accepted_by": "codex",
-                                                 "acceptance_ref": "anything"}}))
-    with pytest.raises(GateClosed):                                          # self-asserted fields do not open it
-        gate(real, ck, reviewed_diff_sha256=diff_sha)
     ck.write_text(json.dumps({"build_tracking": {"acceptance": {"path": str(acc), "sha256": good}}}))
-    assert gate(real, ck, reviewed_diff_sha256=diff_sha)["open"] is True
-    with pytest.raises(GateClosed, match="reviewed task-store diff"):
-        gate(real, ck, reviewed_diff_sha256="b" * 64)                         # accepted something else
-    acc.write_text(f"accepted_by: codex\nreviewed task-store diff: {diff_sha}\nedited later\n")
-    with pytest.raises(GateClosed, match="does not match its recorded hash"):
+    with pytest.raises(GateClosed, match="independently attributable"):
         gate(real, ck, reviewed_diff_sha256=diff_sha)
+    with pytest.raises(GateClosed, match="sha256"):
+        gate(real, ck, reviewed_diff_sha256="not-a-digest")
+
+
+def test_root_guard_resolves_symlinks_and_compares_components(tmp_path):
+    private = tmp_path / "private"; private.mkdir()
+    (tmp_path / "link").symlink_to(private, target_is_directory=True)
+    with pytest.raises(GateClosed):
+        gate(service(tmp_path / "link" / "tasks"), synthetic_root_guard=[private])     # through a symlink
+    near = service(tmp_path / "private-ish" / "tasks")                                 # a string prefix only
+    assert gate(near, synthetic_root_guard=[private])["open"] is True
 
 
 def test_a_synthetic_label_on_a_private_store_path_stays_closed(tmp_path):

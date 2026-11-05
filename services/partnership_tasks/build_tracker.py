@@ -9,12 +9,8 @@ Records a build package as a task in a task-service store, without ever holding 
 Artifacts, the non-author review and the lead's acceptance use the ordinary task commands from each seat's own
 binding (see tests). Nothing here launches a worker or admits work: the harness stays the admission authority.
 
-Gate (kickoff "Build as first customer"): a non-synthetic store is used only after the task store's receipt/replay/
-scope acceptance is recorded: the checkpoint's ``build_tracking.acceptance`` must name a Codex acceptance file by
-path and SHA-256, the file must hash to that value, state "accepted_by: codex" and name the reviewed task-store diff
-hash given here. Residual trust (Q06): the builder can write files, so this detects an edited or substituted file
-only together with the planning repository's history or a signature; it does not prevent a privileged forgery. The
-checkpoint (CURRENT_HANDOFF.json) stays the recovery record; a failure of this store never blocks the build.
+Gate: synthetic stores only until an independently attributable acceptance exists (see ``gate``). The checkpoint
+(CURRENT_HANDOFF.json) stays the recovery record; a failure of this store never blocks the build.
 """
 from __future__ import annotations
 
@@ -32,29 +28,30 @@ class GateClosed(Exception):
     pass
 
 
-def gate(svc, checkpoint_path, *, reviewed_diff_sha256: str | None = None, synthetic_root_guard=()) -> dict:
-    """Synthetic stores pass (unless their root is a known private store path). Any other environment needs a
-    hash-verified Codex acceptance file that names the reviewed task-store diff."""
-    if svc.environment == "synthetic":
-        root = str(Path(svc.journal.root).resolve())
-        if any(root.startswith(str(Path(g).resolve())) for g in synthetic_root_guard):
+def gate(svc, checkpoint_path=None, *, reviewed_diff_sha256: str | None = None, synthetic_root_guard=()) -> dict:
+    """Synthetic stores only, for now (Codex finding 1, 4 Nov).
+
+    The earlier gate opened a non-synthetic store on a file that said "accepted_by: codex" and named the diff. The
+    builder can write that file, so the gate proved nothing about who accepted, and it named one reviewer brand
+    although no package needs a specific reviewer's sign-off. Until an acceptance whose provenance the builder cannot
+    produce exists (for example, recorded by the reviewing seat's own binding in a store the builder cannot write),
+    every non-synthetic store stays closed. ``checkpoint_path`` and ``reviewed_diff_sha256`` are kept for that
+    mechanism and are validated strictly, but never open the gate.
+
+    A store labelled synthetic is refused when its real (symlink-resolved) root is, or is inside, a guarded private
+    path. The check compares path components, not string prefixes."""
+    if reviewed_diff_sha256 is not None and not (isinstance(reviewed_diff_sha256, str)
+                                                 and len(reviewed_diff_sha256) == 64
+                                                 and all(c in "0123456789abcdef" for c in reviewed_diff_sha256)):
+        raise GateClosed("the reviewed diff digest is not a sha256 hex digest")
+    if svc.environment != "synthetic":
+        raise GateClosed("non-synthetic stores need an independently attributable acceptance, which does not exist yet")
+    root = Path(svc.journal.root).resolve()
+    for guarded in synthetic_root_guard:
+        g = Path(guarded).resolve()
+        if root == g or root.is_relative_to(g):
             raise GateClosed("a store labelled synthetic sits under a private store path")
-        return {"open": True, "basis": "synthetic store"}
-    h = json.loads(Path(checkpoint_path).read_text("utf-8"))
-    acc = (h.get("build_tracking") or {}).get("acceptance") or {}
-    path, want = acc.get("path"), acc.get("sha256")
-    if not path or not want or not reviewed_diff_sha256:
-        raise GateClosed("no recorded acceptance of the task store")
-    try:
-        data = Path(path).read_bytes()
-    except OSError:
-        raise GateClosed("the acceptance file cannot be read") from None
-    if hashlib.sha256(data).hexdigest() != want:
-        raise GateClosed("the acceptance file does not match its recorded hash")
-    text = data.decode("utf-8", "replace")
-    if "accepted_by: codex" not in text or reviewed_diff_sha256 not in text:
-        raise GateClosed("the acceptance does not name Codex and the reviewed task-store diff")
-    return {"open": True, "basis": {"path": path, "sha256": want}}
+    return {"open": True, "basis": "synthetic store"}
 
 
 def _cmd(svc, kind, ttype, tid, payload, cid, expected=None, causal=None):
