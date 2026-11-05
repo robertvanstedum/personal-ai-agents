@@ -13,8 +13,8 @@ One process: a file lock in the store directory. The idle sleep is 5 s, with a j
 worker loop doing its job, not a monitor of anyone's work.
 
 Configuration (env): PARTNERSHIP_TASKS_URL, PARTNERSHIP_ENVIRONMENT, PARTNERSHIP_DRAINER_TOKEN_FILE,
-PARTNERSHIP_RUNNER_SEATS_FILE (JSON {seat: token_file}), DATABASE_URL (the dispatcher's database, least-privilege
-role), MINIMOI_MC_DELEGATION_ENV (dev), MINIMOI_MC_DELEGATION_PRINCIPAL, MINIMOI_MC_DELEGATION_AUTHORITY_FILE,
+PARTNERSHIP_RUNNER_SEATS_FILE (JSON {seat: token_file}), DATABASE_URL_FILE (a private file holding the dispatcher
+database URL for the least-privilege role; DATABASE_URL only for local runs), MINIMOI_MC_DELEGATION_ENV (dev), MINIMOI_MC_DELEGATION_PRINCIPAL, MINIMOI_MC_DELEGATION_AUTHORITY_FILE,
 PARTNERSHIP_NOTICES_URL + PARTNERSHIP_NOTICES_TOKEN_FILE (optional; without them notices stay pending, never
 dropped), PARTNERSHIP_WORKER_LOCK.
 """
@@ -103,7 +103,8 @@ def main() -> int:  # pragma: no cover - wiring, exercised on Dev by the package
     drainer = TaskClient(url, lambda: read_token(env["PARTNERSHIP_DRAINER_TOKEN_FILE"]))
     seats = {seat: TaskClient(url, (lambda f: (lambda: read_token(f)))(path))
              for seat, path in json.loads(open(env["PARTNERSHIP_RUNNER_SEATS_FILE"]).read()).items()}
-    dsn = env["DATABASE_URL"]
+    # The database URL (least-privilege role partnership_worker) is read from a private file, never the environment.
+    dsn = (open(env["DATABASE_URL_FILE"]).read().strip() if env.get("DATABASE_URL_FILE") else env["DATABASE_URL"])
     connect = lambda: psycopg2.connect(dsn, connect_timeout=3,  # noqa: E731
                                        options="-c statement_timeout=5000 -c lock_timeout=3000")
     principal, delegation_env = env.get("MINIMOI_MC_DELEGATION_PRINCIPAL", "robert"), env["MINIMOI_MC_DELEGATION_ENV"]
