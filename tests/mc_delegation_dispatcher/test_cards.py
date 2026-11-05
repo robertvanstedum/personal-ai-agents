@@ -54,8 +54,13 @@ def record(compiled):
 
 class Catalogue(unittest.TestCase):
     def test_the_shipped_catalogue_is_rows_and_names_the_build_class(self):
-        self.assertEqual(set(CAT.classes), {"build"})
+        # Partnership v1.1 (B4 execution design v0.5 M4): build_only and review join as rows; build is unchanged.
+        self.assertEqual(set(CAT.classes), {"build", "build_only", "review"})
         self.assertEqual([s["kind"] for s in CAT.classes["build"]["steps"]], ["build", "review", "fix"])
+        self.assertEqual([(s["kind"], s["role"], s["inputs"]) for s in CAT.classes["build_only"]["steps"]],
+                         [("build", "builder", "card")])
+        self.assertEqual([(s["kind"], s["role"], s["scope"], s["inputs"]) for s in CAT.classes["review"]["steps"]],
+                         [("review", "reviewer", "research", "card")])
         self.assertEqual(set(CAT.families) & set(S.V2_ACTORS), set(S.V2_ACTORS))
         self.assertEqual(G.CARD_CAPABILITY, C.CARD_CAPABILITY)
         rows = C.grant_rows()
