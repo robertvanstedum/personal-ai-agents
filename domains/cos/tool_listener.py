@@ -42,7 +42,7 @@ _DIGEST = re.compile(r"[0-9a-f]{64}")
 _SESSION_KEY = re.compile(r"agent:(?P<agent>[a-z][a-z0-9-]{0,63}):openai-user:(?P<user>cos-confer:[0-9a-f]{32})")
 STATUSES = ("done", "refused", "unknown")
 # Per-turn admission limits for each bound tool (MC-equivalent defaults, design v0.1 §4).
-LIMITS = {"cos_actions": 20}
+LIMITS = {"cos_actions": 20, "cos_tasks": 5}
 NATIVE_TOOLS = frozenset({"write", "edit", "exec", "apply_patch", "process"})
 _log = logging.getLogger("cos_tools")
 
@@ -80,7 +80,8 @@ def session_user(session_key, agent_id, allowed_agents) -> str:
 
 
 def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agent-a", "cos-meeting"),
-               wait_s: float | None = None) -> Flask:
+               wait_s: float | None = None, task_tools=None) -> Flask:
+    """``task_tools`` (``domains.cos.task_tools.CosTaskTools``) serves ``cos_tasks``; None: that tool is refused."""
     if type(token_sha256) is not str or not _DIGEST.fullmatch(token_sha256):
         raise ValueError("cos_tools_listener_config_invalid")
     if bindings.environment != writer.environment:
@@ -154,6 +155,8 @@ def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agen
             return jsonify(error="tool_request_invalid"), 400
         if name not in LIMITS:
             return _answer("refused", "tool_unknown", "That tool is not served here, so nothing was done.")
+        if name == "cos_tasks" and task_tools is None:
+            return _answer("refused", "tool_unavailable", "Task tracking is not connected here, so nothing was done.")
         ids = sealed()
         try:
             user = session_user(ids["session_key"], ids["agent_id"], allowed)
@@ -170,6 +173,16 @@ def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agen
         except NotBound as exc:
             _log.info("cos tool %s refused: %s", name, exc.code)
             return _answer("refused", exc.code, "This call does not belong to a live CoS turn, so nothing was done.")
+        if name == "cos_tasks":
+            try:
+                out = task_tools.serve(binding, op, args)
+            except Exception:
+                _log.exception("cos tool cos_tasks: outcome unconfirmed")
+                return _answer("unknown", "tool_outcome_unconfirmed",
+                               "CoS could not confirm what happened. Do not repeat it; tell Robert.")
+            if out["status"] == 200:
+                return _answer("done", "ok", out["body"].get("message", "Done."), out["body"])
+            return _answer("refused", str(out["body"].get("error", "refused")), "Nothing was recorded.", out["body"])
         try:
             out = actions_v2.serve(writer, bound_call, op, args)
             result = out["body"].get("result") if isinstance(out.get("body"), dict) else None

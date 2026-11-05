@@ -6,13 +6,36 @@
     "type": "object",
     "additionalProperties": false,
     "properties": {
-      "enabled": {"type": "boolean"},
-      "endpoint": {"type": "string"},
-      "tokenFile": {"type": "string"},
-      "agents": {"type": "array", "items": {"type": "string"}},
-      "acceptCredentialReadableBy": {"type": "array", "items": {"type": "string"}}
+      "enabled": {
+        "type": "boolean"
+      },
+      "endpoint": {
+        "type": "string"
+      },
+      "tokenFile": {
+        "type": "string"
+      },
+      "agents": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "acceptCredentialReadableBy": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
     }
   },
-  "activation": {"onStartup": true},
-  "contracts": {"tools": ["cos_actions"]}
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "cos_actions",
+      "cos_tasks"
+    ]
+  }
 }

@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS bindings(
   seat TEXT NOT NULL, actor TEXT NOT NULL, agent_entry TEXT NOT NULL, session_user TEXT NOT NULL,
   scope TEXT NOT NULL, audience TEXT NOT NULL, owner_request_id TEXT, supersession_key TEXT,
   claim_id TEXT, room_generation TEXT, trigger_seq INTEGER, approval_generation INTEGER,
-  runtime_instance TEXT NOT NULL, epoch TEXT NOT NULL, run_id TEXT UNIQUE, expires REAL NOT NULL,
+  source_ref TEXT, runtime_instance TEXT NOT NULL, epoch TEXT NOT NULL, run_id TEXT UNIQUE, expires REAL NOT NULL,
   created REAL NOT NULL, revoked REAL, revoked_reason TEXT);
 CREATE INDEX IF NOT EXISTS bindings_live ON bindings(supersession_key) WHERE revoked IS NULL;
 CREATE TABLE IF NOT EXISTS stops(turn_id TEXT PRIMARY KEY, at REAL NOT NULL, reason TEXT NOT NULL);
@@ -85,6 +85,8 @@ class Binding:
     room_generation: str | None = None
     trigger_seq: int | None = None
     approval_generation: int | None = None
+    # B4: the CoS history turn this owner turn was saved as ({conversation_id, turn_id}), or None.
+    source_ref: dict | None = None
 
 
 def _iso(ts: float) -> str:
@@ -176,7 +178,7 @@ class BindingStore:
                session_user: str, lifetime_s: float, owner_request_id: str | None = None,
                supersession_key: str | None = None, claim_id: str | None = None,
                room_generation: str | None = None, trigger_seq: int | None = None,
-               approval_generation: int | None = None) -> bool:
+               approval_generation: int | None = None, source_ref: dict | None = None) -> bool:
         """The binding for a turn being handed to the agent. True when it is live; False when there is no current
         runtime instance or epoch (tools stay refused), or a Stop already reached the turn. A newer binding with the
         same supersession key revokes the older ones (reason 'superseded')."""
@@ -205,11 +207,12 @@ class BindingStore:
             stop = db.execute("SELECT reason FROM stops WHERE turn_id=?", (turn_id,)).fetchone()
             db.execute("""INSERT INTO bindings(turn_id, environment, principal, origin, seat, actor, agent_entry,
                 session_user, scope, audience, owner_request_id, supersession_key, claim_id, room_generation,
-                trigger_seq, approval_generation, runtime_instance, epoch, run_id, expires, created, revoked,
-                revoked_reason) VALUES(?,?,?,?,'cos','cos',?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?)""",
+                trigger_seq, approval_generation, source_ref, runtime_instance, epoch, run_id, expires, created,
+                revoked, revoked_reason) VALUES(?,?,?,?,'cos','cos',?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?)""",
                        (turn_id, self.environment, principal, origin, agent_entry, session_user, scope, audience,
                         owner_request_id, supersession_key, claim_id, room_generation, trigger_seq,
-                        approval_generation, instance, epoch, now + lifetime_s, now,
+                        approval_generation, json.dumps(source_ref, sort_keys=True) if source_ref else None,
+                        instance, epoch, now + lifetime_s, now,
                         now if stop else None, stop["reason"] if stop else None))
             return stop is None
 
@@ -283,7 +286,8 @@ class BindingStore:
             raise NotBound("scheduler_restarted")
         return Binding(row["turn_id"], row["environment"], row["principal"], row["origin"], row["scope"],
                        row["audience"], row["owner_request_id"], row["run_id"], row["agent_entry"], row["claim_id"],
-                       row["room_generation"], row["trigger_seq"], row["approval_generation"])
+                       row["room_generation"], row["trigger_seq"], row["approval_generation"],
+                       json.loads(row["source_ref"]) if row["source_ref"] else None)
 
     def admit(self, binding: Binding, *, tool: str, tool_call_id: str, instance_id: str, session_user: str,
               limit: int) -> BoundCall:
@@ -386,7 +390,8 @@ class TurnBinder:
         try:
             live = self.store.record(turn_id, principal=principal, origin=origin, agent_entry=agent_entry,
                                      session_user=session_user, lifetime_s=self.lifetime_s,
-                                     owner_request_id=binding.get("owner_request_id"), **args)
+                                     owner_request_id=binding.get("owner_request_id"),
+                                     source_ref=binding.get("history") if origin == "owner" else None, **args)
         except NotBound:
             return None
         return turn_id if live else None

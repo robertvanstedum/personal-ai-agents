@@ -941,6 +941,23 @@ def _meeting_verifier():
                                   principal=os.environ.get("COS_OWNER_PRINCIPAL", "robert"))
 
 
+def _task_tools():
+    """B4: cos_tasks, when the task service is configured (PARTNERSHIP_TASKS_URL, the platform and cos seat token
+    files, PARTNERSHIP_ENVIRONMENT) and CoS history is on. Both tokens stay in cos-scheduler. Otherwise None, and the
+    listener refuses cos_tasks."""
+    url = os.environ.get("PARTNERSHIP_TASKS_URL", "").strip()
+    platform_file = os.environ.get("COS_TASKS_PLATFORM_TOKEN_FILE", "").strip()
+    cos_file = os.environ.get("COS_TASKS_COS_TOKEN_FILE", "").strip()
+    environment = os.environ.get("PARTNERSHIP_ENVIRONMENT", "").strip()
+    if not (url and platform_file and cos_file and environment) or _history is None:
+        return None
+    from domains.cos.task_tools import CosTaskTools
+    from services.partnership_tasks.client import TaskClient, read_token
+    return CosTaskTools(platform=TaskClient(url, lambda: read_token(platform_file)),
+                        cos=TaskClient(url, lambda: read_token(cos_file)), history=_history,
+                        environment=environment)
+
+
 def _start_tool_listener():
     """F2 step 2: the bound tool listener on its own port (COS_TOOL_LISTENER_PORT), published on the agent network
     only. Needs the binding store, the CoS store writer and COS_TOOL_LISTENER_TOKEN_SHA256. Otherwise not started,
@@ -954,7 +971,8 @@ def _start_tool_listener():
     from domains.cos.tool_listener import create_app as _tools_app
     from werkzeug.serving import make_server
     server = make_server(os.environ.get("COS_TOOL_LISTENER_HOST", "0.0.0.0"), int(port),
-                         _tools_app(bindings=_bindings, writer=_cos_store_writer, token_sha256=digest),
+                         _tools_app(bindings=_bindings, writer=_cos_store_writer, token_sha256=digest,
+                                    task_tools=_task_tools()),
                          threaded=True)
     threading.Thread(target=server.serve_forever, name="cos-tool-listener", daemon=True).start()
     print(f"   CoS tool listener: port {port} ✅")
@@ -1646,7 +1664,10 @@ def _ui_turn(body: dict, binding: dict | None = None) -> tuple[dict, int]:
                 else body.get("conversation_id") or "owner",
                 request_id=body.get("request_id"),
                 turn_id=_receipt_turn_id(kept["turn_id"]) if kept else None,
-                binding=binding,
+                # B4: an owner turn carries where its words were saved, so a task proposal cites them, not the model.
+                binding=dict(binding, history={"conversation_id": kept["conversation_id"],
+                                               "turn_id": kept["turn_id"]})
+                if binding is not None and kept else binding,
             )
             payload = result.public_dict()
             if before is not None:

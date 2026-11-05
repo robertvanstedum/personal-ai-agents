@@ -184,6 +184,7 @@
             "pdf",
             "view_image",
             "cos_actions",
+            "cos_tasks",
             "cos_board",
             "cos_github_issues"
           ],
@@ -218,7 +219,8 @@
           "profile": "minimal",
           "alsoAllow": [
             "web_search",
-            "cos_actions"
+            "cos_actions",
+            "cos_tasks"
           ],
           "deny": [
             "gateway",
@@ -276,6 +278,7 @@
             "cos_actions",
             "cos_board",
             "cos_github_issues",
+            "cos_tasks",
             "edit",
             "exec",
             "gateway",

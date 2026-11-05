@@ -18,7 +18,8 @@ export const ENDPOINT_PATH = '/internal/cos/v1';
 export const NATIVE = new Set(['write', 'edit', 'exec', 'apply_patch', 'process']);
 // Meeting entries (review S2/S3): the hook is the second gate behind the config deny list. cos-meeting may call only
 // the bound tool and bounded search; cos-closed (a room with anyone outside Robert's team) may call nothing.
-export const RESTRICTED = Object.freeze({'cos-meeting': new Set(['cos_actions', 'web_search']), 'cos-closed': new Set()});
+export const RESTRICTED = Object.freeze({'cos-meeting': new Set(['cos_actions', 'cos_tasks', 'web_search']), 'cos-closed': new Set()});
+export const BOUND = new Set(['cos_actions', 'cos_tasks']);
 const STATE = Symbol.for('cos-bound/process-state/v1');
 globalThis[STATE] ??= Object.freeze({instance: randomBytes(16).toString('hex'), sealKey: randomBytes(32)});
 export const INSTANCE = globalThis[STATE].instance;
@@ -38,6 +39,16 @@ export const ACTIONS_SPEC = {
     priority: {type: 'integer', minimum: 1, maximum: 3}, status: {type: 'string', enum: ['open', 'doing', 'waiting']},
     with: {type: 'string', enum: ['cos', 'robert', 'mc']}, text: {type: 'string', maxLength: 4000},
     note: {type: 'string', maxLength: 2000}, outcome: {type: 'string', enum: ['done', 'dropped']}}},
+};
+
+export const TASKS_SPEC = {
+  name: 'cos_tasks', label: 'CoS Tasks',
+  description: 'Propose tracked work from what Robert asked in this conversation, or check a task. propose: give the outcome, lead and holder (mc) and done_when; it records your proposal only. Nothing starts until Robert confirms it in his task view, so say exactly that and never claim the task started. One proposal per Robert message. status: give a task_id to read its state. In a meeting you can only use status.',
+  parameters: {type: 'object', additionalProperties: false, required: ['operation'], properties: {
+    operation: {type: 'string', enum: ['propose', 'status']},
+    outcome: {type: 'string', maxLength: 500}, done_when: {type: 'string', maxLength: 500},
+    lead: {type: 'string', enum: ['mc']}, holder: {type: 'string', enum: ['mc']},
+    task_id: {type: 'string', maxLength: 80}}},
 };
 
 export function endpointUrl(endpoint) {
@@ -111,7 +122,7 @@ export function toolFactory({endpoint, token, tokenFile, agents, acceptCredentia
       const ws = typeof ctx.workspaceDir === 'string' ? ctx.workspaceDir.replace(/\/+$/, '') + '/' : null;
       if (ctx.fsPolicy?.workspaceOnly !== true || !ws || tokenFile.startsWith(ws)) return null;
     }
-    return [{...ACTIONS_SPEC, execute: async (toolCallId, sealedArgs, signal) => {
+    const run = (spec) => async (toolCallId, sealedArgs, signal) => {
       const opened = typeof toolCallId === 'string' && CALL_ID.test(toolCallId)
         ? sealer.open(sealedArgs, {toolCallId, agentId, sessionKey}) : null;
       if (!opened) return text('CoS could not confirm which turn this call belongs to, so nothing was sent.',
@@ -122,7 +133,7 @@ export function toolFactory({endpoint, token, tokenFile, agents, acceptCredentia
       let response;
       try {
         const abort = signal ? AbortSignal.any([AbortSignal.timeout(15000), signal]) : AbortSignal.timeout(15000);
-        response = await fetchImpl(`${url.href}/tools/cos_actions`, {method: 'POST', redirect: 'error', signal: abort,
+        response = await fetchImpl(`${url.href}/tools/${spec.name}`, {method: 'POST', redirect: 'error', signal: abort,
           headers: headers(token, {sessionKey, agentId, run: opened.run, toolCallId, instance}),
           body: JSON.stringify({arguments: opened.args})});
       } catch { return text(UNKNOWN, {status: 'unknown', code: 'transport'}); }
@@ -133,7 +144,8 @@ export function toolFactory({endpoint, token, tokenFile, agents, acceptCredentia
       }
       return text(result.message + '\n' + JSON.stringify({status: result.status, code: result.code, data: result.data}),
                   {status: result.status, code: result.code});
-    }}];
+    };
+    return [ACTIONS_SPEC, TASKS_SPEC].map(spec => ({...spec, execute: run(spec)}));
   };
 }
 
@@ -148,7 +160,7 @@ export function hook({sealer = PROCESS_SEALER, agents, url, token, instance = IN
     if (Object.hasOwn(RESTRICTED, agentId) && !RESTRICTED[agentId].has(name)) {
       return {block: true, blockReason: 'This tool is not available in this meeting'};
     }
-    if (name === 'cos_actions') {
+    if (BOUND.has(name)) {
       if (!allowed.has(agentId)) return {block: true, blockReason: 'CoS tools are not available to this agent'};
       const params = sealer.seal(event.params, {runId, toolCallId, agentId, sessionKey});
       if (!params) return {block: true, blockReason: 'CoS could not confirm which turn this call belongs to'};
@@ -185,5 +197,5 @@ export default {id: 'cos-bound', name: 'CoS bound tools', register(api) {
   }
   api.on('before_tool_call', hook({agents, url, token}));
   announcer({url, token}).start();          // before any turn's first call (review M3)
-  api.registerTool(factory, {names: ['cos_actions']});
+  api.registerTool(factory, {names: ['cos_actions', 'cos_tasks']});
 }};

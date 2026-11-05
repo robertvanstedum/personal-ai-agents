@@ -79,7 +79,7 @@ test('a failing native log never blocks the call', () => {
 test('cos-meeting gets tools only when workspace-only with the credential outside the workspace', () => {
   assert.equal(rig({agent: 'cos-meeting', accept: []}).tools, null);
   assert.equal(rig({agent: 'cos-meeting', accept: [], ctx: {fsPolicy: {workspaceOnly: true}, workspaceDir: '/run/secrets'}}).tools, null);
-  assert.equal(rig({agent: 'cos-meeting', accept: [], ctx: {fsPolicy: {workspaceOnly: true}, workspaceDir: '/home/node/cos-meeting'}}).tools.length, 1);
+  assert.equal(rig({agent: 'cos-meeting', accept: [], ctx: {fsPolicy: {workspaceOnly: true}, workspaceDir: '/home/node/cos-meeting'}}).tools.length, 2);   // cos_actions, cos_tasks
   assert.equal(rig({agent: 'cos-agent-a', accept: []}).tools, null);    // owner exposure must be accepted explicitly
 });
 

@@ -16,7 +16,7 @@ def meeting():
 
 def test_cos_meeting_has_only_bound_tools_and_bounded_search():
     tools = meeting()["tools"]
-    assert tools["alsoAllow"] == ["web_search", "cos_actions"]
+    assert tools["alsoAllow"] == ["web_search", "cos_actions", "cos_tasks"]   # cos_tasks: status only (server)
     assert NATIVE <= set(tools["deny"]) and {"group:fs", "group:runtime", "cos_board", "cos_github_issues",
                                              "gateway"} <= set(tools["deny"])
     assert tools["fs"] == {"workspaceOnly": True} and tools["elevated"] == {"enabled": False}
@@ -82,7 +82,7 @@ def test_every_loaded_plugin_is_installed_by_the_image():
 def test_cos_closed_has_no_tools_at_all():
     closed = CONFIG["agents"]["entries"]["cos-closed"]["tools"]
     assert closed["alsoAllow"] == []
-    assert {"web_search", "cos_actions"} | NATIVE <= set(closed["deny"])
+    assert {"web_search", "cos_actions", "cos_tasks"} | NATIVE <= set(closed["deny"])
     assert "cos-closed" not in CONFIG["plugins"]["entries"]["cos-bound"]["config"]["agents"]
 
 
