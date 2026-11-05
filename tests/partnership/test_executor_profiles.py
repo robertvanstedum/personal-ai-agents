@@ -25,6 +25,26 @@ def test_profiles_name_only_card_families_and_compile_as_cards():
     assert PROFILES["profiles"]["claude-code"]["family"] != PROFILES["profiles"]["codex"]["family"]
 
 
+def test_routes_are_the_dev_authoritys_and_the_acceptance_profile_spends_nothing():
+    for seat, p in PROFILES["profiles"].items():
+        for kind in ("build", "review"):
+            assert p[kind]["route"] == f"{seat}.subscription"
+    fake = json.loads((ROOT / "config/partnership/executor_profiles.fakework.json").read_text())
+    cat = card_mod.Catalogue.load()
+    for seat, p in fake["profiles"].items():
+        assert p["family"] == PROFILES["profiles"][seat]["family"]
+        for kind in ("build", "review"):
+            assert p[kind]["actor"] == p[kind]["route"] == "fakework" and float(p[kind]["cost_cap_usd"]) <= 0.01
+            assert cat.families[p[kind]["actor"]] == "fakework"
+            w = p[kind]
+            doc = {"schema": "minimoi.card.v1", "card_id": f"C-fk-{seat}-{kind}", "class": w["class"], "class_version": 1,
+                   "repository": "personal-ai-agents", "ref": "a" * 40,
+                   "workers": {("builder" if kind == "build" else "reviewer"):
+                               {k: w[k] for k in ("actor", "route", "amount", "cost_cap_usd")}},
+                   "briefs": {kind: "x"}, "attempts": 1, "step_deadline_s": w["step_deadline_s"]}
+            assert cat.compile(doc).card_id == doc["card_id"]
+
+
 def test_a_verdict_must_be_explicit():
     ok = {"schema": "minimoi.partnership.review_verdict/1", "verdict": "approve",
           "reviewed_set_digest": "sha256:" + "a" * 64, "findings_digest": None}

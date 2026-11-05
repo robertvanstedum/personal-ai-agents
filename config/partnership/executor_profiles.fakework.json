@@ -1,0 +1,49 @@
+{
+  "schema": "minimoi.partnership.executor_profiles/1",
+  "about": "Dev acceptance only (B4 v0.5 \u00a73.4: fakework first, $0). The same seats, run by the fakework test family on the fakework route (test units, no key, no spend). Selected with PARTNERSHIP_EXECUTOR_PROFILES; never the default.",
+  "repository": "personal-ai-agents",
+  "profiles": {
+    "claude-code": {
+      "family": "anthropic",
+      "build": {
+        "class": "build_only",
+        "actor": "fakework",
+        "route": "fakework",
+        "amount": "0.5",
+        "cost_cap_usd": "0.01",
+        "attempts": 1,
+        "step_deadline_s": 900
+      },
+      "review": {
+        "class": "review",
+        "actor": "fakework",
+        "route": "fakework",
+        "amount": "0.5",
+        "cost_cap_usd": "0.01",
+        "attempts": 1,
+        "step_deadline_s": 900
+      }
+    },
+    "codex": {
+      "family": "openai",
+      "build": {
+        "class": "build_only",
+        "actor": "fakework",
+        "route": "fakework",
+        "amount": "0.5",
+        "cost_cap_usd": "0.01",
+        "attempts": 1,
+        "step_deadline_s": 900
+      },
+      "review": {
+        "class": "review",
+        "actor": "fakework",
+        "route": "fakework",
+        "amount": "0.5",
+        "cost_cap_usd": "0.01",
+        "attempts": 1,
+        "step_deadline_s": 900
+      }
+    }
+  }
+}

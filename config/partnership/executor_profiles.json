@@ -1,14 +1,14 @@
 {
   "schema": "minimoi.partnership.executor_profiles/1",
-  "about": "B4 execution design v0.5/v0.6: everything about a delegated card except its brief comes from here, never from a model. Seats claude-code and codex only (grok-cli is not a card family). The review profile is the other family's seat. Caps are per card, in USD; the B4 Dev total is held to $10 by the worker's spend reservation.",
+  "about": "B4 execution design v0.5/v0.6: everything about a delegated card except its brief comes from here, never from a model. Seats claude-code and codex only (grok-cli is not a card family). The review profile is the other family's seat. Caps are per card, in USD; the B4 Dev total is held to $10 by the worker's spend reservation. Routes and units are the Dev authority's (authority.dev.json, checked 5 Nov): claude-code.subscription in usd_notional (at most 2.0 per item), codex.subscription in minutes (at most 30 per item).",
   "profiles": {
     "claude-code": {
       "family": "anthropic",
       "build": {
         "class": "build_only",
         "actor": "claude-code",
-        "route": "claude-code",
-        "amount": "1",
+        "route": "claude-code.subscription",
+        "amount": "2.0",
         "cost_cap_usd": "2.00",
         "attempts": 1,
         "step_deadline_s": 3600
@@ -16,8 +16,8 @@
       "review": {
         "class": "review",
         "actor": "claude-code",
-        "route": "claude-code",
-        "amount": "1",
+        "route": "claude-code.subscription",
+        "amount": "1.0",
         "cost_cap_usd": "1.00",
         "attempts": 1,
         "step_deadline_s": 1800
@@ -28,8 +28,8 @@
       "build": {
         "class": "build_only",
         "actor": "codex",
-        "route": "codex",
-        "amount": "1",
+        "route": "codex.subscription",
+        "amount": "30",
         "cost_cap_usd": "2.00",
         "attempts": 1,
         "step_deadline_s": 3600
@@ -37,8 +37,8 @@
       "review": {
         "class": "review",
         "actor": "codex",
-        "route": "codex",
-        "amount": "1",
+        "route": "codex.subscription",
+        "amount": "15",
         "cost_cap_usd": "1.00",
         "attempts": 1,
         "step_deadline_s": 1800
