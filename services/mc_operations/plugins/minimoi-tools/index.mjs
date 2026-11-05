@@ -76,10 +76,10 @@ export function endpointUrl(endpoint) {
 }
 
 // ── Run identity (spec v1.2 §7.1): which OpenClaw run made this call, from the host, never the model ──
-// OpenClaw's before_tool_call hook sees the host's runId and toolCallId, and runs immediately before execute(),
-// which does not receive the runId. The hook seals both into the call's params with a key that exists only in
-// this plugin process; execute() opens the seal, strips it, and refuses any call without a valid one. The model
-// cannot forge a seal, and if the hook did not run the call fails closed.
+// OpenClaw's before_tool_call hook sees host runId/toolCallId; execute does not receive runId.
+// runSealer is the low-level crypto helper. Production runBoundSealer keeps its sealed payload
+// out of model parameters in a one-shot process registry, preserving strict post-hook schemas.
+// Missing hooks, forged identities, changed arguments and replay all fail closed.
 // One key for the whole process: OpenClaw 2026.9.4 calls register() once per registry it builds (full, discovery,
 // tool-discovery) and may take the hook from one registration and the tools from another (A05 probe, 22 Oct).
 export const SEAL = '__minimoi_run';
@@ -111,6 +111,64 @@ export function runSealer(key = randomBytes(32)) {
       const got = Buffer.from(s.mac);
       if (want.length !== got.length || !timingSafeEqual(want, got)) return null;
       return {run: s.run, args: rest};
+    },
+  });
+}
+
+/** Host-only call binding. Native runtimes validate params after hooks, so the
+ * cryptographic seal must never be added to the provider's argument schema.
+ * Tombstones prevent a delayed execute from consuming a reused call ID in a newer run.
+ * At capacity we fail closed; nothing pending or consumed is silently evicted. */
+export function runBoundSealer({key = randomBytes(32), entries = new Map(), now = Date.now,
+                                ttlMs = 300000, maxEntries = 4096} = {}) {
+  const crypto = runSealer(key);
+  const identity = ctx => JSON.stringify([ctx.agentId, ctx.sessionKey, ctx.toolName, ctx.toolCallId]);
+  function canonical(value) {
+    if (value === null || typeof value === 'boolean' || typeof value === 'string') return value;
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && Object.getPrototypeOf(value) === Object.prototype)
+      return Object.fromEntries(Object.keys(value).sort().map(k => [k, canonical(value[k])]));
+    throw Error('Not JSON');
+  }
+  function argumentsDigest(args) {
+    if (!args || Object.getPrototypeOf(args) !== Object.prototype) throw Error('Not arguments');
+    const serialized = JSON.stringify(canonical(args));
+    if (Buffer.byteLength(serialized) > MAX_BYTES) throw Error('Arguments too large');
+    return createHash('sha256').update(serialized).digest('hex');
+  }
+  const retire = row => { row.state = 'retired'; delete row.sealed; };
+  return Object.freeze({
+    seal(params, ctx) {
+      if (!ctx || typeof ctx.toolName !== 'string' || !/^minimoi_[a-z][a-z0-9_]*$/.test(ctx.toolName)) return null;
+      try {
+        if (!params || Object.getPrototypeOf(params) !== Object.prototype) return null;
+        const {[SEAL]: ignored, ...args} = params;
+        const digest = argumentsDigest(args), sealed = crypto.seal(structuredClone(args), ctx);
+        if (!sealed) return null;
+        const id = identity(ctx), existing = entries.get(id), at = now();
+        if (existing) {
+          if (existing.state === 'pending' && existing.expires > at && existing.run === ctx.runId && existing.digest === digest)
+            return structuredClone(args);
+          retire(existing); return null;
+        }
+        // Release expired payloads but retain their identities as replay tombstones.
+        for (const row of entries.values()) if (row.state === 'pending' && row.expires <= at) retire(row);
+        if (entries.size >= maxEntries) return null;
+        entries.set(id, {state: 'pending', run: ctx.runId, digest, sealed, expires: at + ttlMs});
+        return structuredClone(args);
+      } catch { return null; }
+    },
+    open(args, ctx) {
+      if (!ctx) return null;
+      const row = entries.get(identity(ctx));
+      if (!row || row.state !== 'pending') return null;
+      const sealed = row.sealed;
+      retire(row); // One-shot, synchronously before execute can perform any async operation.
+      try {
+        if (row.expires <= now() || Object.hasOwn(args, SEAL) || argumentsDigest(args) !== row.digest) return null;
+        return crypto.open(sealed, ctx);
+      } catch { return null; }
     },
   });
 }
@@ -413,7 +471,7 @@ export function toolFactory({endpoint, token, tokenFile, agents, tools, diskPath
       execute: async (toolCallId, sealedArgs, signal) => {
         // Only a call this plugin's hook sealed for exactly this call id, agent and session goes on (§7.1).
         const opened = typeof toolCallId === 'string' && CALL_ID.test(toolCallId)
-          ? sealer.open(sealedArgs, {toolCallId, agentId, sessionKey}) : null;
+          ? sealer.open(sealedArgs, {toolCallId, agentId, sessionKey, toolName: spec.name}) : null;
         if (!opened) {
           return text('MiniMoi could not confirm which turn this call belongs to, so nothing was sent.',
                       {status: 'refused', code: 'run_identity_missing'});
@@ -524,7 +582,9 @@ export function toolFactory({endpoint, token, tokenFile, agents, tools, diskPath
   };
 }
 
-const PROCESS_SEALER = runSealer(globalThis[PROCESS_STATE].sealKey);   // one key per process, like INSTANCE
+const BINDINGS = Symbol.for('minimoi-tools/run-bindings/v1');
+globalThis[BINDINGS] ??= new Map();
+const PROCESS_SEALER = runBoundSealer({key: globalThis[PROCESS_STATE].sealKey, entries: globalThis[BINDINGS]});
 
 export default {id: 'minimoi-tools', name: 'MiniMoi tools', register(api) {
   const config = api.pluginConfig || {};
@@ -564,7 +624,7 @@ export function sealHook({sealer, tools, agents}) {
     const agentId = ctx?.agentId;
     if (!allowed.has(agentId)) return {block: true, blockReason: 'MiniMoi tools are not available to this agent'};
     const params = sealer.seal(event.params, {runId: ctx?.runId ?? event?.runId, toolCallId: ctx?.toolCallId ?? event?.toolCallId,
-                                              agentId, sessionKey: ctx?.sessionKey});
+                                              agentId, sessionKey: ctx?.sessionKey, toolName: name});
     if (!params) return {block: true, blockReason: 'MiniMoi could not confirm which turn this call belongs to'};
     return {params};
   };
