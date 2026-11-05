@@ -2089,6 +2089,15 @@ class DispatcherStore:
                         (attempt, self.principal, self.environment, operation_id))
             return {"state": "absent"}
 
+    def task_cards(self, task_id) -> list:
+        """Partnership v1.1 (v0.5 S3): the admissions applied for one task, read-only: [{operation_id, card_id}]."""
+        _need(type(task_id) is str and 1 <= len(task_id) <= 200, "task_id_invalid")
+        with self._tx() as cur:
+            cur.execute("""SELECT operation_id, card_id FROM guild.mc_task_operations WHERE principal=%s AND environment=%s
+                AND task_id=%s AND kind='admit_bundle' AND applied AND card_id IS NOT NULL ORDER BY recorded_at""",
+                        (self.principal, self.environment, task_id))
+            return [dict(r) for r in cur.fetchall()]
+
     def peek_task_operation(self, operation_id) -> str:
         """Read-only status for audits: applied or absent. Writes nothing and kills no attempt."""
         _need(type(operation_id) is str and 4 <= len(operation_id) <= 70, "operation_id_invalid")

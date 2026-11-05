@@ -202,3 +202,22 @@ class RunnerDoorEndToEnd(PostgresFixture, unittest.TestCase):
         rtid, sent = self.build_then_review("LGTM, ship it")
         self.assertIn(("task.record_review:changes_requested", self.tid, "accepted"), sent)
         self.assertEqual([r["verdict"] for r in self.task()["reviews"]], ["changes_requested"])
+
+
+    def test_a_cancel_revokes_the_running_card_so_no_result_is_taken_and_the_card_ends(self):
+        self.admit()
+        env, finish = self.run_step(artifacts=[])
+        self.door.pass_once()                                                    # working
+        res = self.flow.transition(self.tid, "canceled", reason="Owner said stop.",
+                                   evidence=[{"store": "records", "id": "evt-stop", "edition": None, "digest": None}])
+        self.assertEqual(res["outcome"], "accepted", res)
+        from services.partnership_tasks.reconstruct import outbox_queue
+        fence = [r["operation_id"] for r in outbox_queue(self.svc, D) if r["operation"] == "set_fence"][0]
+        self.assertEqual(drain_once(self.svc, D, self.port, fence), "acknowledged")
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT state FROM guild.mc_delegations WHERE card_id='C-door-1'")
+            states = [r[0] for r in cur.fetchall()]
+            cur.execute("SELECT count(*) FROM guild.mc_delegation_events WHERE kind='grant.revoked'")
+            revoked = cur.fetchone()[0]
+        self.assertEqual(revoked, 1)
+        self.assertTrue(all(s in ("cancelled", "claimed") for s in states), states)

@@ -109,4 +109,19 @@ class HarnessDispatcher:
             raise HarnessRefused("entry_not_found")
         answer = self._call(lambda: self.store.set_task_fence(operation_id, task_id=task_id, fence=fence_generation,
                                                               digest=ob["bundle_digest"]))
+        self.stop_task_cards(task_id)
         return {"receipt": _receipt(answer["receipt"])}
+
+    def stop_task_cards(self, task_id):
+        """v0.5 S3: the fence stops new admissions; running work for the task stops too. Every card admitted for this
+        task has its grant (uuid5 of its operation) revoked, which cancels its open items and ends the card, so no
+        later step is written. Already revoked or ended: nothing to do. Refusals are logged, never raised: the fence
+        itself is the guarantee for new work, and a card left running is reported by the next pass."""
+        import logging
+        rows = self._call(lambda: self.store.task_cards(task_id))
+        for row in rows:
+            gid = str(uuid.uuid5(NS_GRANT, row["operation_id"]))
+            try:
+                self.store.revoke(gid, by=self.owner, note=f"partnership task {task_id} fenced (cancel or correction)")
+            except self._refused as exc:
+                logging.getLogger("partnership.harness").info("revoke %s for %s: %s", gid, task_id, exc)
