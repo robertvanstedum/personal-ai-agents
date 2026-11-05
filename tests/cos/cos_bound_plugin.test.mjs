@@ -88,3 +88,27 @@ test('endpoint is internal only', () => {
   assert.throws(() => endpointUrl('http://cos-scheduler:8771/internal/cos-actions/v1'));
   assert.ok(endpointUrl('http://127.0.0.1:8771/internal/cos/v1'));
 });
+
+test('the instance is announced at registration, retried, and stops on a refusal (review M3)', async () => {
+  const {default: plugin} = await import('../../docker/cos-agent-a/plugins/cos-bound/index.mjs');
+  const {announcer} = await import('../../docker/cos-agent-a/plugins/cos-bound/index.mjs');
+  const statuses = [503, 200];
+  const calls = [];
+  const fetchImpl = async (url) => { calls.push(url); return new Response('{}', {status: statuses.shift() ?? 200}); };
+  const timers = [];
+  const a = announcer({url: endpointUrl(ENDPOINT), token: TOKEN, instance: 'c'.repeat(32), fetchImpl,
+                       schedule: (fn) => { timers.push(fn); return null; }});
+  a.start(); a.start();                         // started once
+  await new Promise(r => setTimeout(r, 5));
+  assert.equal(calls.length, 1);
+  timers.shift()();                             // the retry
+  await new Promise(r => setTimeout(r, 5));
+  assert.equal(calls.length, 2);
+  assert.equal(await a(), true);                // recorded: later calls reuse it
+  assert.equal(calls.length, 2);
+  const refused = announcer({url: endpointUrl(ENDPOINT), token: TOKEN, instance: 'd'.repeat(32),
+                             fetchImpl: async () => new Response('{}', {status: 409}), schedule: () => assert.fail('no retry')});
+  refused.start();
+  await new Promise(r => setTimeout(r, 5));
+  assert.ok(plugin.register);
+});

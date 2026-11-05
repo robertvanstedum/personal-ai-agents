@@ -51,21 +51,46 @@ function headers(token, {sessionKey, agentId, run, toolCallId, instance}) {
           'X-CoS-Agent': agentId, 'X-CoS-Run': run, 'X-CoS-Tool-Call': toolCallId, 'X-CoS-Instance': instance};
 }
 
-export function announcer({url, token, instance = INSTANCE, fetchImpl = fetch}) {
-  let sent = null;
-  return () => {
-    sent ??= (async () => {
-      try {
-        const r = await fetchImpl(`${url.href}/instance`, {method: 'POST', redirect: 'error',
-          signal: AbortSignal.timeout(10000), headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
-          body: JSON.stringify({instance})});
-        await r.body?.cancel().catch(() => {});
-        if (r.status !== 200) sent = null;
-        return r.status === 200;
-      } catch { sent = null; return false; }
-    })();
+// One announcement state per endpoint, credential and instance, shared by every registration in this process (OpenClaw
+// may call register() more than once). Modelled on MC's minimoi-tools announcer (review M3): announce at registration,
+// retry with backoff until recorded, and stop on a 4xx (a retired instance must not keep retrying or reclaim itself).
+const ANNOUNCERS = new Map();
+
+export function announcer({url, token, instance = INSTANCE, fetchImpl = fetch, schedule = setTimeout}) {
+  const target = `${url.href}/instance`;
+  const key = `${target}\0${token.length}:${instance}`;
+  if (ANNOUNCERS.has(key)) return ANNOUNCERS.get(key);
+  let sent = null, terminal = false, started = false;
+  function announce() {
+    if (!sent) {
+      sent = (async () => {
+        try {
+          const r = await fetchImpl(target, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000),
+            headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
+            body: JSON.stringify({instance})});
+          terminal = r.status >= 400 && r.status < 500 && ![408, 429].includes(r.status);
+          await r.body?.cancel().catch(() => {});
+          return r.status === 200;
+        } catch { return false; }
+      })();
+      sent.then(ok => { if (!ok && !terminal) sent = null; });
+    }
     return sent;
+  }
+  announce.start = () => {
+    if (started) return;
+    started = true;
+    let delay = 1000;
+    const attempt = async () => {
+      if (await announce() || terminal) return;
+      const timer = schedule(() => { attempt().catch(() => {}); }, delay);
+      timer?.unref?.();
+      delay = Math.min(delay * 2, 60000);
+    };
+    attempt().catch(() => {});
   };
+  ANNOUNCERS.set(key, announce);
+  return announce;
 }
 
 /** The tool factory: cos_actions for an allowed agent whose credential exposure the operator accepted. */
@@ -153,5 +178,6 @@ export default {id: 'cos-bound', name: 'CoS bound tools', register(api) {
     return;
   }
   api.on('before_tool_call', hook({agents, url, token}));
+  announcer({url, token}).start();          // before any turn's first call (review M3)
   api.registerTool(factory, {names: ['cos_actions']});
 }};

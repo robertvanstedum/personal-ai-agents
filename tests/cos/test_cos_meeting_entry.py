@@ -66,3 +66,14 @@ def test_credential_is_outside_the_meeting_workspace_and_binding_store_outside_a
     assert "/minimoi/data" in mounts                       # the reason the store may not live under data/
     store = "/minimoi-private/cos-bindings/bindings.sqlite3"   # the path B4 provisions for cos-scheduler only
     assert not any(store == m or store.startswith(m + "/") for m in mounts)
+
+
+def test_every_loaded_plugin_is_installed_by_the_image():
+    """Review M1: a plugin the config loads must be copied into the image at that path, root-owned (the agent cannot
+    rewrite it), and no plugin is copied that the config does not load."""
+    dockerfile = (ROOT / "docker/Dockerfile.cos-agent-a").read_text()
+    copied = {path: owner for owner, path in re.findall(
+        r"^COPY --chown=(\S+) docker/cos-agent-a/plugins/\S+ (/opt/minimoi/openclaw-plugins/\S+)$", dockerfile, re.M)}
+    loaded = set(CONFIG["plugins"]["load"]["paths"])
+    assert loaded == set(copied)
+    assert copied["/opt/minimoi/openclaw-plugins/cos-bound"] == "root:root"
