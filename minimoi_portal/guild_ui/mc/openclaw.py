@@ -47,7 +47,7 @@ from urllib.parse import urlparse
 from collections import namedtuple
 
 from .backend import Health, MasterCraftsmanBackend, TurnResult
-from .stream import Failure, Limits, StreamRefused, read_stream
+from .stream import Failure, Limits, StreamRefused, read_stream, served_fields
 
 # What the header needs to remember about the last turn: its status and failure class, never its reply text, usage or trace
 # (a Private answer must not stay in this process's memory after the request ends; Codex review, 7 Oct).
@@ -91,9 +91,19 @@ KEY_REFUSED_MARKERS = ("401", "invalid api key", "authentication", "unauthorized
                        "no connected db", "no_db_connection")
 
 
+def parse_served(raw) -> dict | None:
+    """The relay's X-MC-Served header (OpenClaw's own record of the run), checked as stream.parse_relay_line checks its event."""
+    try:
+        return served_fields(json.loads(raw)) if raw else None
+    except (TypeError, ValueError):
+        return None
+
+
 def classify_failure(status: int, body: str) -> tuple[str, str]:
     """(turn status, failure class) for a non-200 answer from the runtime."""
     text = (body or "").lower()
+    if "relay_route_refused" in text:
+        return "unavailable", "route_refused"
     if status == 403 and "relay_" in text:
         return "unavailable", "caller_refused"
     if status == 408 or "upstream provider timeout" in text:
@@ -218,6 +228,9 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
         headers = {**self._auth(), "Content-Type": "application/json"}
         if req.correlation_id:
             headers["X-MC-Correlation-Id"] = req.correlation_id
+        route = req.route or {}
+        if route.get("runtime_override"):                # the route id only: the relay alone maps it to a model
+            headers["X-MC-Route"] = route["route_id"]
         return headers
 
     def stream_turn(self, req, cancel=None):
@@ -321,6 +334,9 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
         text = getattr(response, "text", "") or ""
         echoed = (getattr(response, "headers", None) or {}).get("X-MC-Correlation-Id")
         trace = {"correlation_echo": echoed, "relay_status": status}
+        served = parse_served((getattr(response, "headers", None) or {}).get("X-MC-Served"))
+        if served:
+            trace["served"] = served
         if status != 200:
             turn_status, failure = classify_failure(status, text)
             return TurnResult(turn_status, self.kind, failure_class=failure, message=f"runtime answered {status}",

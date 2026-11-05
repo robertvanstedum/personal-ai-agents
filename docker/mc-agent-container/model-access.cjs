@@ -14,22 +14,31 @@ function mode(env) {
   } else throw Error('Unknown MC model access mode');
   return selected;
 }
+// Every plan route a conversation may select, the default first. Each stays a subscription route: only these two
+// provider families, no custom providers and no API-key profiles (validate below), and no fallbacks between them.
+function planRoutes(env) {
+  const ref = env.MC_PLAN_MODEL;
+  const others = String(env.MC_PLAN_ROUTES || '').split(',').map(s => s.trim()).filter(Boolean);
+  const refs = [ref, ...others.filter(r => r !== ref)];
+  if (new Set(refs).size !== refs.length) throw Error('Duplicate plan route');
+  for (const r of refs) if (!/^(openai|anthropic)\/[a-zA-Z0-9._-]+$/.test(r)) throw Error('Invalid plan model reference');
+  return refs;
+}
 function overlay(env) {
   if (mode(env) === 'plan') {
     if (!env.MC_PLAN_MODEL) return {}; // existing Claude-plan configuration
     const ref = env.MC_PLAN_MODEL;
-    if (!/^(openai|anthropic)\/[a-zA-Z0-9._-]+$/.test(ref)) throw Error('Invalid plan model reference');
-    const provider = ref.split('/')[0];
+    const refs = planRoutes(env);
     const profile = env.MC_PLAN_AUTH_PROFILE;
-    if (provider === 'openai' && (!profile || !profile.startsWith('openai:'))) throw Error('Explicit OpenAI OAuth profile required');
+    if (refs.some(r => r.startsWith('openai/')) && (!profile || !profile.startsWith('openai:'))) throw Error('Explicit OpenAI OAuth profile required');
     const model = {primary: ref, fallbacks: []};
-    const policy = {allow: [ref]};
+    const policy = {allow: refs};
+    const models = Object.fromEntries(refs.map(r => [r, {agentRuntime: {id: r.startsWith('openai/') ? 'openclaw' : 'claude-cli'}}]));
     return {
-      ...(provider === 'openai' ? {auth: {profiles: {[profile]: {provider: 'openai', mode: 'oauth'}}, order: {openai: [profile]}}} : {}),
+      ...(refs.some(r => r.startsWith('openai/')) ? {auth: {profiles: {[profile]: {provider: 'openai', mode: 'oauth'}}, order: {openai: [profile]}}} : {}),
       agents: {
-        defaults: {model, modelPolicy: policy, utilityModel: '', decisionModel: '',
-          models: {[ref]: {agentRuntime: {id: provider === 'openai' ? 'openclaw' : 'claude-cli'}}}},
-        entries: Object.fromEntries(['mc-agent','mc-chat'].map(id => [id, {model, modelPolicy: policy, utilityModel: '', decisionModel: '', models: {[ref]: {agentRuntime: {id: provider === 'openai' ? 'openclaw' : 'claude-cli'}}}}]))
+        defaults: {model, modelPolicy: policy, utilityModel: '', decisionModel: '', models},
+        entries: Object.fromEntries(['mc-agent','mc-chat'].map(id => [id, {model, modelPolicy: policy, utilityModel: '', decisionModel: '', models}]))
       }
     };
   }
@@ -52,15 +61,16 @@ function validate(config, env) {
     if (config.agents?.defaults?.imageModel?.primary || (config.agents?.defaults?.imageModel?.fallbacks || []).length) throw Error('Separate image model forbidden in explicit plan mode');
     for (const a of [config.agents?.defaults, ...Object.values(config.agents?.entries || {})]) {
       if (a?.model?.primary !== env.MC_PLAN_MODEL || (a.model.fallbacks || []).length ||
-          !isDeepStrictEqual(a.modelPolicy?.allow, [env.MC_PLAN_MODEL]) || a.utilityModel || a.decisionModel)
+          !isDeepStrictEqual(a.modelPolicy?.allow, wanted.agents.defaults.modelPolicy.allow) || a.utilityModel || a.decisionModel)
         throw Error('Unexpected plan model route or fallback');
     }
     if (Object.keys(config.agents?.entries || {}).sort().join(',') !== 'mc-agent,mc-chat') throw Error('Unexpected MC agent entry');
-    const runtime = wanted.agents.defaults.models[env.MC_PLAN_MODEL];
-    for (const a of [config.agents.defaults, ...Object.values(config.agents.entries)]) {
-      if (!isDeepStrictEqual(a.models?.[env.MC_PLAN_MODEL], runtime)) throw Error('Unexpected subscription runtime');
+    for (const [ref, runtime] of Object.entries(wanted.agents.defaults.models)) {
+      for (const a of [config.agents.defaults, ...Object.values(config.agents.entries)]) {
+        if (!isDeepStrictEqual(a.models?.[ref], runtime)) throw Error('Unexpected subscription runtime');
+      }
     }
-    if (env.MC_PLAN_MODEL.startsWith('openai/')) {
+    if (planRoutes(env).some(r => r.startsWith('openai/'))) {
       if (!isDeepStrictEqual(config.auth?.order?.openai, [env.MC_PLAN_AUTH_PROFILE]) ||
           !isDeepStrictEqual(config.auth?.profiles?.[env.MC_PLAN_AUTH_PROFILE], {provider:'openai',mode:'oauth'}))
         throw Error('OpenAI must use only the selected subscription profile');
@@ -76,7 +86,7 @@ function validate(config, env) {
   }
   for (const p of Object.values(config.auth?.profiles || {})) if (p.mode === 'api_key') throw Error('API-key auth profile forbidden');
 }
-module.exports = {mode, overlay, validate, ROUTE};
+module.exports = {mode, overlay, validate, planRoutes, ROUTE};
 if (require.main === module) {
   try { mode(process.env); } catch (e) { console.error(e.message); process.exit(78); }
 }

@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
+from core.model_routes import role_snapshot_for
 from services.rooms_worker.journal import TurnJournal, RoomBridgeError, encoded
 
 PATH = '/internal/mc/v1/rooms'
@@ -166,7 +167,8 @@ class Bridge:
                      'Do not repeatedly search an unavailable filesystem. Host tools describe the runtime host; '
                      'never assume that host is Robert’s Mac. Ground capability claims in this turn’s actual tools. '
                      'A promised later task requires a durable tracked action; otherwise say it is not scheduled.'),
-                context={'about': 'Guildhall', 'page': review_url})
+                context={'about': 'Guildhall', 'page': review_url},
+                route=role_snapshot_for(getattr(self.services.mc, 'kind', None), 'mc-rooms'))
             bridge = self
             class BoundBackend:
                 kind = bridge.services.mc.kind

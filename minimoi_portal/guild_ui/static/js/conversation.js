@@ -20,6 +20,7 @@ import { takeTray, restoreTray, trayBusy, trayCount } from './attachments.js';
 import { initJobs } from './jobs.js';
 import { initAgentRequests } from './agent_requests.js';
 import { initQueue } from './mc_queue.js';
+import { initRoutePicker } from './route_picker.js';
 
 let page, panel, thread, pill;
 const inPage = () => document.body.dataset.page === 'floor';
@@ -1192,6 +1193,7 @@ export function initConversation(p) {
   // it only ever goes back on the record, by the owner's own click, never by itself.
   if (exit) exit.addEventListener('click', () => { if (live.off) toggleRecord(); });
   wireOptionsMenu($('[data-mc-options]'), document);
+  initRoutePicker($('[data-mc-options]'), () => page?.conversation?.id);
   const typeBtn = $('[data-mc-type]');
   if (typeBtn) typeBtn.addEventListener('click', () => {
     document.body.dataset.typing = 'true';

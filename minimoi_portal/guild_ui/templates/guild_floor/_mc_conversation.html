@@ -185,6 +185,7 @@
         <div class="mc-options-body">
           {% if dictation_on %}<button type="button" class="btn-quiet mc-dictate" data-dictate="#mc-input" aria-pressed="false" hidden>Dictate</button>{% endif %}
           {% if mc_voice_on %}<span class="mc-options-group" data-mc-managed-settings hidden><label data-mc-provider-control>Voice <select data-mc-voice-provider aria-label="Voice provider"><option value="openai">OpenAI</option><option value="xai" disabled>Grok (xAI) · not available yet</option></select></label><label><input type="checkbox" data-mc-voice-transcript-choice> Transcript</label> <a data-mc-voice-export hidden>Download transcript</a></span>{% endif %}
+          <span class="mc-options-group" data-mc-route-control hidden><label>Model <select data-mc-route aria-label="Model route for this conversation"></select></label> <small data-mc-route-status aria-live="polite"></small></span>
           <button type="button" class="mc-lock" data-mc-record aria-pressed="false" aria-label="{{ 'Go Private' if mc_private else 'Private is not available' }}" title="{{ 'Go Private: ' ~ mc_name ~ ' answers, MiniMoi keeps nothing' if mc_private else private_off_why }}"{% if not mc_private %} disabled data-private-off="{{ private_off }}" data-private-off-why="{{ private_off_why }}"{% endif %}><span aria-hidden="true">🔒</span><span class="mc-lock-text" aria-hidden="true">Private</span></button>
         </div>
       </details>

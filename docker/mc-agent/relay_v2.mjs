@@ -28,7 +28,10 @@
 //   user      must start "guild-mc:"
 //   headers   only Content-Type goes on; Authorization is replaced with MC's
 //             own OpenClaw token (MC_OPENCLAW_GATEWAY_TOKEN, held only here);
-//             every x-openclaw-* header is dropped
+//             every x-openclaw-* header is dropped. The one exception is built here:
+//             x-mc-route names a route of MC_RELAY_ROUTES (route id -> provider/model,
+//             operator config), and only that map's model goes on as x-openclaw-model.
+//             An unknown route: 409, nothing sent. OpenClaw checks its allowlist again.
 //   body      parsed (duplicate keys refused), checked, re-serialized; 256 KB
 //             cap; only model, user, messages (and stream) go on
 //   stream    (streaming spec v0.2 §3, v0.3 §2) "stream" only as a boolean
@@ -56,6 +59,7 @@ import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import zlib from "node:zlib";
 import { createHash, timingSafeEqual } from "node:crypto";
 
 let DatabaseSync = null;                       // OpenClaw's run record is read through node:sqlite when this node has it
@@ -205,8 +209,65 @@ export function authorized(req) {
   return got.length === EXPECTED.length && timingSafeEqual(got, EXPECTED);
 }
 
-async function forward(path, init) {
-  const headers = { authorization: `Bearer ${MC_TOKEN}` };
+const ROUTE_ID = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+export function parseRoutes(raw) {
+  const map = JSON.parse(raw || "{}");
+  if (!map || typeof map !== "object" || Array.isArray(map)) throw new Error("MC_RELAY_ROUTES must be an object");
+  for (const [id, ref] of Object.entries(map)) {
+    if (!ROUTE_ID.test(id) || !/^(openai|anthropic)\/[a-zA-Z0-9._-]+$/.test(String(ref))) throw new Error(`bad route ${id}`);
+  }
+  return new Map(Object.entries(map));
+}
+const ROUTES = parseRoutes(process.env.MC_RELAY_ROUTES);
+// [refused, headers for MC]. No x-mc-route: no override, the runtime's default serves, as before.
+export function routeHeaders(value, routes = ROUTES) {
+  if (value === undefined) return [false, {}];
+  const ref = routes.get(String(value));
+  return ref ? [false, { "x-openclaw-model": ref }] : [true, {}];
+}
+
+// OpenClaw's own record of who served this conversation's latest reply. Evidence only: it never decides anything, and
+// any problem reading it is "no evidence" (null), never the selected route.
+const CHAT_DB = process.env.MC_RELAY_CHAT_DB || "";
+const zstdDecompressSync = zlib.zstdDecompressSync;
+function eventOf(row) {
+  if (row.event_json) return JSON.parse(row.event_json);
+  if (row.event_zstd && zstdDecompressSync) return JSON.parse(zstdDecompressSync(row.event_zstd).toString("utf8"));
+  return null;
+}
+export function readServed(dbPath, sessionKey, since) {
+  if (!DatabaseSync || !dbPath) return null;
+  let db = null;
+  try {
+    db = new DatabaseSync(dbPath, { readOnly: true });
+    const session = db.prepare("SELECT session_id, agent_harness_id FROM session_windows WHERE session_key = ? ORDER BY updated_at DESC LIMIT 1").get(sessionKey);
+    if (!session) return null;
+    const rows = db.prepare("SELECT event_json, event_zstd FROM transcript_events WHERE session_id = ? ORDER BY seq DESC LIMIT 40").all(session.session_id);
+    for (const row of rows) {
+      const event = eventOf(row);
+      const message = event && event.type === "message" ? event.message : null;
+      if (!message || message.role !== "assistant" || !message.provider || !message.model) continue;
+      if (Date.parse(event.timestamp || "") < since) return null;       // the latest reply is older than this turn: no evidence
+      return { provider: message.provider, model: message.model, api: message.api || undefined, harness: session.agent_harness_id || undefined };
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    try { db?.close(); } catch { /* read-only */ }
+  }
+}
+async function served(body, since) {
+  const agent = String(body.model || "").split("/")[1];
+  const key = `agent:${agent}:openai-user:${body.user}`;
+  const first = readServed(CHAT_DB, key, since);
+  if (first || !CHAT_DB) return first;
+  await new Promise((resolve) => { setTimeout(resolve, 500); });      // the transcript row can land just after the stream ends: one more look
+  return readServed(CHAT_DB, key, since);
+}
+
+async function forward(path, init, extra = {}) {
+  const headers = { authorization: `Bearer ${MC_TOKEN}`, ...extra };
   if (init.body) headers["content-type"] = "application/json";
   return fetch(`${TARGET}${path}`, { ...init, headers, signal: AbortSignal.timeout(DEADLINE_MS) });
 }
@@ -266,19 +327,26 @@ const server = http.createServer(async (req, res) => {
     log({ event: "refused", reason: "body", problem, correlation });
     return reply(res, 403, "relay_body_refused", problem, echo);
   }
+  const [routeRefused, routeHeader] = routeHeaders(req.headers["x-mc-route"]);
+  if (routeRefused) {
+    log({ event: "refused", reason: "route", correlation });
+    return reply(res, 409, "relay_route_refused", "that model route is not offered here; nothing was sent", echo);
+  }
   if (inFlight) {
     log({ event: "refused", reason: "busy", correlation });
     return reply(res, 429, "relay_busy", "one Master Craftsman turn at a time", echo);
   }
   inFlight = true;
   const started = Date.now();
-  if (body.stream === true) return streamTurn(res, body, correlation, echo, started);
+  if (body.stream === true) return streamTurn(res, body, correlation, echo, started, routeHeader);
   try {
     const clean = JSON.stringify({ model: body.model, user: body.user, messages: cleanMessages(body.messages) });
-    const r = await forward("/v1/chat/completions", { method: "POST", body: clean });
+    const r = await forward("/v1/chat/completions", { method: "POST", body: clean }, routeHeader);
     const text = await r.text();
     log({ event: "turn", correlation, status: r.status, ms: Date.now() - started });
-    res.writeHead(r.status, { "content-type": "application/json", "cache-control": "no-store", ...echo });
+    const evidence = r.status === 200 ? await served(body, started) : null;
+    res.writeHead(r.status, { "content-type": "application/json", "cache-control": "no-store", ...echo,
+      ...(evidence ? { "x-mc-served": JSON.stringify(evidence) } : {}) });
     res.end(text);
   } catch (error) {
     const timeout = error?.name === "TimeoutError";
@@ -328,7 +396,7 @@ export function* sseEvents(line) {
   }
 }
 
-async function streamTurn(res, body, correlation, echo, started) {
+async function streamTurn(res, body, correlation, echo, started, routeHeader = {}) {
   const controller = new AbortController();
   let why = null;
   const abort = (reason) => { if (!why) why = reason; controller.abort(); };
@@ -346,7 +414,7 @@ async function streamTurn(res, body, correlation, echo, started) {
     const clean = JSON.stringify({ model: body.model, user: body.user, stream: true, stream_options: { include_usage: true },
       messages: cleanMessages(body.messages) });
     const r = await fetch(`${TARGET}/v1/chat/completions`, { method: "POST", body: clean, signal: controller.signal,
-      headers: { authorization: `Bearer ${MC_TOKEN}`, "content-type": "application/json" } });
+      headers: { authorization: `Bearer ${MC_TOKEN}`, "content-type": "application/json", ...routeHeader } });
     touch();
     if (r.status !== 200 || !String(r.headers.get("content-type") || "").includes("text/event-stream")) {
       const text = await r.text();
@@ -392,6 +460,10 @@ async function streamTurn(res, body, correlation, echo, started) {
     }
     if (why) { send({ t: "error", class: why }); outcome = why; }
     else if (outcome === "ended") outcome = "done";
+    if (streaming && !why) {
+      const evidence = await served(body, started);
+      if (evidence) send({ t: "served", ...evidence });
+    }
   } catch (error) {
     const reason = why || (error?.name === "TimeoutError" ? "deadline" : "upstream");
     outcome = reason;

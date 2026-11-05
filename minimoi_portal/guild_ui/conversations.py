@@ -52,10 +52,19 @@ class ConversationNotFound(LookupError):
     pass
 
 
+class RouteRevisionConflict(RuntimeError):
+    """The page chose a route from an out-of-date selection."""
+
+    def __init__(self, revision: int):
+        super().__init__(f"stored route revision is {revision}")
+        self.revision = revision
+
+
 class TooManyAttachments(RuntimeError):
     """A conversation keeps at most ATTACHMENTS_MAX files."""
 
 
+ROUTE_TURNS_KEPT = 50
 ATTACHMENTS_MAX = 50
 DOCUMENTS_MAX = 20
 ORIGINAL_READ_MAX = 5 * 1024 * 1024 + 1024   # an original is never bigger than the upload limit
@@ -308,6 +317,26 @@ class ConversationStore:
             c["archived_at"] = now_iso() if archived else None
             if archived:
                 c["pinned"] = False
+        return self._change(cid, principal, fn)
+
+    def set_route(self, cid, principal, agent: str, route_id: str, expected_revision: int) -> dict:
+        """The owner's model route for this conversation and this agent, applied from its next turn. A stale page
+        (its revision is not the stored one) changes nothing: RouteRevisionConflict."""
+        def fn(c):
+            routes = c.setdefault("routes", {})
+            current = routes.get(agent) or {}
+            revision = int(current.get("revision") or 0)
+            if expected_revision != revision:
+                raise RouteRevisionConflict(revision)
+            routes[agent] = {**current, "route_id": route_id, "revision": revision + 1, "selected_at": now_iso()}
+        return self._change(cid, principal, fn)
+
+    def record_route_turn(self, cid, principal, agent: str, receipt: dict) -> dict:
+        """What one turn was sent on and what the runtime's record showed. Never changes the selection or its revision."""
+        def fn(c):
+            selection = c.setdefault("routes", {}).setdefault(agent, {})
+            selection["last_turn"] = receipt
+            selection["turns"] = (selection.get("turns") or [])[-(ROUTE_TURNS_KEPT - 1):] + [receipt]
         return self._change(cid, principal, fn)
 
     def set_work_item(self, cid, principal, work_item: dict | None) -> dict:

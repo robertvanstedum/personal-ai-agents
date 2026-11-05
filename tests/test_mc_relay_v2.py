@@ -702,3 +702,4 @@ def test_a_shell_command_that_plainly_writes_outside_the_allowed_folders_is_flag
     done = job_with_audit(env, [("exec", {"command": f"cp a.txt {env.tmp}/elsewhere/"}), ("exec", {"command": f"echo x > {env.project}/src.py"}),
                                 ("exec", {"command": f"echo x >> {env.handoff}/ok.md"}), ("exec", {"command": "ls"})])
     assert [t.get("flag") for t in done["audit"]["tools"]] == ["write_outside_allowed_area", "write_outside_allowed_area", None, None]
+

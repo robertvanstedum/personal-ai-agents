@@ -1490,8 +1490,10 @@ def mc_private():
         return json_error("busy", MC_WORDS["busy"], 409, mc_state=shown["state"])
     turn_id = uuid.uuid4().hex
     try:
+        from core.model_routes import role_snapshot_for
         req = TurnRequest(conversation_id=f"private:{principal}:{session}", text=text, note_request_id=f"private-{turn_id}",
-                          correlation_id=turn_id, context={"mode": "private"})
+                          correlation_id=turn_id, context={"mode": "private"},
+                          route=role_snapshot_for(getattr(services.mc, "kind", None), "mc-private"))
         _mc_log().info("mc private turn %s start backend=%s", turn_id, services.mc.kind)    # no text, ever
         result = services.mc.turn(req)
         _mc_log().info("mc private turn %s end status=%s class=%s", turn_id, result.status, result.failure_class)
@@ -1645,9 +1647,12 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
     ctx = note.get("context") or {}
     sent_text = note["text"]                    # the owner's own words, as he wrote them (#406)
     agent_state = _agent_state(conv)
+    route, route_refusal = _route_snapshot(services, conv)       # fixed for this whole turn; a later change is the next turn's
+    if route_refusal is not None:
+        return "refused", {"error": route_refusal.code, "message": route_refusal.message}, 409
 
     def request_for(built):
-        return TurnRequest(conversation_id=session_conversation_id(conv, principal),
+        return TurnRequest(conversation_id=session_conversation_id(conv, principal), route=route,
                            text=_with_context(_with_agent(_with_files(sent_text, built), agent_state), sent_text, conv, principal),
                            note_request_id=note_id, correlation_id=turn_id,
                            context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
@@ -1690,6 +1695,7 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
         _mc_release(principal)
         DISPATCHED.forget(request_id)
         raise
+    events = _with_route_receipt(events, route, turn_id, _route_recorder(conversations, conv, principal))
     if observe is not None:
         events = observe(events)
     turns = turn_log_of(services)
@@ -1999,6 +2005,99 @@ def _flag(cid, change, status):
     return _conv_write(action)
 
 
+# ── model routes: one conversation, one owner choice, applied from its next turn ──────────────
+def _route_agent(services=None):
+    from core.model_routes import agent_for_backend
+    mc = getattr(services or cfg()["services"], "mc", None)
+    return agent_for_backend(getattr(mc, "kind", None))
+
+
+def _route_snapshot(services, conv):
+    """(route, refusal). The route is fixed here, at admission, once per turn. (None, None): this backend has no routes."""
+    from core.model_routes import RouteRefused, conversation_role, load_catalogue, snapshot
+    agent = _route_agent(services)
+    if agent is None:
+        return None, None
+    try:
+        return snapshot(load_catalogue(), conversation_role(agent), conv), None
+    except RouteRefused as exc:
+        return None, exc
+
+
+def _route_recorder(conversations, conv, principal):
+    """Keep what a turn was sent on and what the runtime's record showed. A failure here never touches the turn."""
+    from core.model_routes import served_receipt
+
+    def record(route, turn_id, served):
+        if route is None:
+            return
+        try:
+            receipt = {**served_receipt(route, served), "turn_id": turn_id, "at": now_iso()}
+            conversations.record_route_turn(conv["id"], principal, route["agent"], receipt)
+        except Exception:
+            _mc_log().warning("mc turn %s: route receipt not kept", turn_id)
+    return record
+
+
+def _with_route_receipt(events, route, turn_id, record):
+    """Take the runtime's evidence out of the event stream and keep it; every other event passes untouched. The
+    receipt is written when the stream ends, however it ends: no evidence stays no evidence, never the selection."""
+    from .mc.stream import Served
+    served = None
+    try:
+        for event in events:
+            if isinstance(event, Served):
+                served = event.fields
+                continue
+            yield event
+    finally:
+        record(route, turn_id, served)
+
+
+@owner_api
+def conversation_route(cid):
+    from core.model_routes import load_catalogue, view
+    from .conversations import ConversationNotFound, ConversationStoreUnavailable
+    agent = _route_agent()
+    if agent is None:
+        return json_error("not_available", "This conversation has no model routes.", 404)
+    try:
+        conv = _conversations().get(cid, _principal())
+    except ConversationNotFound:
+        return json_error("not_found", CONV_WORDS["not_found"], 404)
+    except ConversationStoreUnavailable:
+        return json_error("unavailable", CONV_WORDS["unavailable"], 503)
+    return jsonify({**view(load_catalogue(), agent, conv), "observed_at": now_iso()})
+
+
+@owner_api
+def conversation_route_select(cid):
+    """Only a catalogue route_id and the revision the page saw are read from the browser."""
+    from core.model_routes import RouteRefused, check_selectable, load_catalogue, view
+    from .conversations import RouteRevisionConflict
+    agent = _route_agent()
+    if agent is None:
+        return json_error("not_available", "This conversation has no model routes.", 404)
+    catalogue = load_catalogue()
+
+    def action(store, body):
+        expected = body.get("revision")
+        if not isinstance(expected, int) or isinstance(expected, bool):
+            return json_error("invalid", "A route change needs the revision the page saw.", 422), None
+        try:
+            route = check_selectable(catalogue, agent, body.get("route_id"))
+            return store.set_route(cid, _principal(), agent, route["route_id"], expected), "route_selected"
+        except RouteRefused as exc:
+            return json_error(exc.code, exc.message, 409), None
+        except RouteRevisionConflict as exc:
+            return json_error("route_changed", "The model route changed elsewhere. Reload to see it.", 409, revision=exc.revision), None
+    response = _conv_write(action)
+    if not isinstance(response, tuple) and getattr(response, "is_json", False) and (response.get_json() or {}).get("result") == "route_selected":
+        return jsonify({"result": "route_selected", **view(catalogue, agent, _conversations().get(cid, _principal())),
+                        "observed_at": now_iso()})
+    return response
+
+
 @owner_api
 def conversation_pin(cid):
     return _flag(cid, lambda st: st.set_pinned(cid, _principal(), True), "pinned")
@@ -2255,6 +2354,9 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
     if files is not None and files.report and not getattr(services.mc, "accepts_files", True):
         return {"error": "files_unsupported", "message": f"The {getattr(services.mc, 'display_name', 'assistant')} does not read "
                 "attached documents. Your note is kept; nothing was sent."}, 422
+    route, route_refusal = _route_snapshot(services, conv)       # fixed for this whole turn; a later change is the next turn's
+    if route_refusal is not None:
+        return {"error": route_refusal.code, "message": route_refusal.message}, 409
     if not _mc_acquire(principal):
         return {"error": "busy", "message": MC_WORDS["busy"], "mc_state": shown["state"]}, 409
     if request_id:
@@ -2304,7 +2406,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             turn_context["host_channel"] = MANAGED_VOICE_CHANNEL
         elif services.mc.kind == "openclaw" and host_channel is VOICE_MARKER:
             turn_context["host_channel"] = VOICE_MARKER          # the OpenClaw adapter translates it (Spec 164 §9)
-        req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=context_text,
+        req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=context_text, route=route,
                           note_request_id=note_id, correlation_id=turn_id, context=turn_context)
         _mc_log().info("mc turn %s start backend=%s files=%d", turn_id, services.mc.kind, len(files.report) if files else 0)
         _files_recorder(conversations, conv, principal, note_id, files)()
@@ -2320,6 +2422,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             result = collect(services.mc, req, on_run=tools.attach_run)
         else:
             result = services.mc.turn(req)
+        _route_recorder(conversations, conv, principal)(route, turn_id, (result.trace or {}).get("served"))
         duration_ms = int((time.monotonic() - started) * 1000)
         job_started = None
         if delivery and result.status == "answered" and (result.trace or {}).get("finish_reason") == "length":
@@ -2905,6 +3008,8 @@ RULES = [
     ("/workshop", "api_workshop", workshop_view_api, ["GET"]),
     ("/conversations", "api_conversation_create", conversation_create, ["POST"]),
     ("/conversations/<cid>/rename", "api_conversation_rename", conversation_rename, ["POST"]),
+    ("/conversations/<cid>/route", "api_conversation_route", conversation_route, ["GET"]),
+    ("/conversations/<cid>/route", "api_conversation_route_select", conversation_route_select, ["POST"]),
     ("/conversations/<cid>/pin", "api_conversation_pin", conversation_pin, ["POST"]),
     ("/conversations/<cid>/unpin", "api_conversation_unpin", conversation_unpin, ["POST"]),
     ("/conversations/<cid>/archive", "api_conversation_archive", conversation_archive, ["POST"]),

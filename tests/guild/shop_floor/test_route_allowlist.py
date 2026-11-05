@@ -119,6 +119,7 @@ EXPECTED = {
     "/guild-next/api/v1/conversations/<cid>/deliveries/<delivery_id>",
     "/guild-next/api/v1/workshop",
     "/guild-next/api/v1/conversations/<cid>/rename",
+    "/guild-next/api/v1/conversations/<cid>/route",
     "/guild-next/api/v1/conversations/<cid>/pin",
     "/guild-next/api/v1/conversations/<cid>/unpin",
     "/guild-next/api/v1/conversations/<cid>/archive",

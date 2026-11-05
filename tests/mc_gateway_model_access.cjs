@@ -42,3 +42,19 @@ assert.throws(()=>p.overlay({...oauth,MC_MODEL_GATEWAY_KEY:dev.MC_MODEL_GATEWAY_
 const claude={MC_RUNTIME_MODEL_ACCESS:'plan',MC_PLAN_MODEL:'anthropic/claude-opus-5-5'};
 p.validate(merge(p.overlay(claude),base),claude);
 console.log('Explicit OpenAI/Claude plan policy checks passed, with unchanged tools and no API fallback.');
+// Several plan routes for per-task selection: subscription only, the default first, no fallbacks.
+{
+  const multi={MC_RUNTIME_MODEL_ACCESS:'plan',MC_PLAN_MODEL:'openai/gpt-6-astra',MC_PLAN_AUTH_PROFILE:'openai:owner',MC_PLAN_ROUTES:'openai/gpt-6-astra,anthropic/claude-opus-5,openai/gpt-6-sol'};
+  assert.deepEqual(p.planRoutes(multi),['openai/gpt-6-astra','anthropic/claude-opus-5','openai/gpt-6-sol']);
+  const o=p.overlay(multi);
+  assert.deepEqual(o.agents.defaults.modelPolicy.allow,['openai/gpt-6-astra','anthropic/claude-opus-5','openai/gpt-6-sol']);
+  assert.deepEqual(o.agents.defaults.model,{primary:'openai/gpt-6-astra',fallbacks:[]});
+  assert.equal(o.agents.defaults.models['anthropic/claude-opus-5'].agentRuntime.id,'claude-cli');
+  assert.equal(o.agents.entries['mc-chat'].models['openai/gpt-6-sol'].agentRuntime.id,'openclaw');
+  const m=merge(o,base);p.validate(m,multi);
+  for (const bad of ['xai/grok-4.3','minimoi-gateway-mc/minimoi-mc-agent','openai/x y']) assert.throws(()=>p.overlay({...multi,MC_PLAN_ROUTES:bad}));
+  const added=structuredClone(m);added.agents.entries['mc-chat'].modelPolicy.allow.push('openai/other');assert.throws(()=>p.validate(added,multi));
+  const fallback=structuredClone(m);fallback.agents.entries['mc-chat'].model.fallbacks=['anthropic/claude-opus-5'];assert.throws(()=>p.validate(fallback,multi));
+  const metered=structuredClone(m);metered.models={...metered.models,providers:{x:{}}};assert.throws(()=>p.validate(metered,multi));
+  const keyed=structuredClone(m);keyed.auth.profiles.k={provider:'openai',mode:'api_key'};assert.throws(()=>p.validate(keyed,multi));
+}

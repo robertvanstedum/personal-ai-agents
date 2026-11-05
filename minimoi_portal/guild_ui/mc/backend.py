@@ -73,6 +73,7 @@ class TurnRequest:
     note_request_id: str
     context: dict = field(default_factory=dict)   # {about, item_ref, page}
     correlation_id: str | None = None          # the portal's turn id, echoed by the relay
+    route: dict | None = None                  # the route fixed at admission (core.model_routes.snapshot); server-owned, never browser input
 
 
 @dataclass(frozen=True)
@@ -235,6 +236,7 @@ UNAVAILABLE_WHY = {
     "health_check_failed": "its health could not be read",
     "misconfigured": "its connection settings are invalid",
     "not_verified": "connected, no answer yet",
+    "route_refused": "this conversation's model route is not offered by its runtime",
     "deadline": "the relay cancelled the run at its time limit; commands it started may still be running",
     "local_timeout": "no answer received; outcome unknown, work may still be running",
     "idle": "the relay cancelled the run after a long silence; commands it started may still be running",

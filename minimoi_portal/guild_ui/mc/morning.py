@@ -146,8 +146,10 @@ def run_once(floor, backend, *, now: datetime, reminder_id=None, record=None):
     captured = [{"id": r["id"], "version": r["version"]} for r in rows]
     receipt("attempt_started", captured,
             target["id"] if target else None)
+    from core.model_routes import role_snapshot_for
     reply = backend.turn(TurnRequest("mc-morning-" + scope, prompt, key,
-                                     context={"mode": "on_record", "page": "board"}))
+                                     context={"mode": "on_record", "page": "board"},
+                                     route=role_snapshot_for(getattr(backend, "kind", None), "mc-morning")))
     if reply.status == "timeout_uncertain":
         receipt("timeout_uncertain", captured, reminder=target["id"] if target else None)
         _fail("timeout_uncertain")

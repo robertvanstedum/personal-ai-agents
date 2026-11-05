@@ -1,0 +1,41 @@
+{
+  "revision": "2026-11-05.1",
+  "tiers": {
+    "strong": {"letter": "A", "use": "Difficult reasoning, design and review"},
+    "mid": {"letter": "B", "use": "Ordinary drafting and multi-step work"},
+    "low": {"letter": "C", "use": "Bounded classification, extraction and routine summaries"}
+  },
+  "routes": [
+    {"route_id": "plan-openai-strong", "tier": "strong", "provider": "openai", "model": "gpt-6-astra", "label": "GPT-6 Astra",
+     "reasoning_effort": "high", "billing_mode": "subscription", "runtime": "openclaw", "auth_profile_ref": "chatgpt-plan",
+     "capabilities": ["chat", "tools"],
+     "offered": {"mc": "available", "cos": "CoS is not signed in to this plan, and its tool adapter is not reviewed for it"}},
+    {"route_id": "plan-openai-mid", "tier": "mid", "provider": "openai", "model": "gpt-6-sol", "label": "GPT-6 Sol",
+     "reasoning_effort": "high", "billing_mode": "subscription", "runtime": "openclaw", "auth_profile_ref": "chatgpt-plan",
+     "capabilities": ["chat", "tools"],
+     "offered": {"mc": "Not yet proved with real tools on this plan"}},
+    {"route_id": "plan-openai-low", "tier": "low", "provider": "openai", "model": "gpt-6-luna", "label": "GPT-6 Luna",
+     "reasoning_effort": "high", "billing_mode": "subscription", "runtime": "openclaw", "auth_profile_ref": "chatgpt-plan",
+     "capabilities": ["chat", "tools"],
+     "offered": {"mc": "Not yet proved with real tools on this plan"}},
+    {"route_id": "plan-anthropic-strong", "tier": "strong", "provider": "anthropic", "model": "claude-opus-5", "label": "Claude Opus 5",
+     "reasoning_effort": "high", "billing_mode": "subscription", "runtime": "claude-cli", "auth_profile_ref": "claude-max-plan",
+     "capabilities": ["chat", "tools"],
+     "offered": {"mc": "Waiting for its swap test with real tools", "cos": "CoS is not signed in to this plan, and its tool adapter is not reviewed for it"}},
+    {"route_id": "plan-anthropic-mid", "tier": "mid", "provider": "anthropic", "model": "claude-sonnet-4-6", "label": "Claude Sonnet 4.6",
+     "reasoning_effort": "high", "billing_mode": "subscription", "runtime": "claude-cli", "auth_profile_ref": "claude-max-plan",
+     "capabilities": ["chat", "tools"],
+     "offered": {"mc": "Waiting for its swap test with real tools"}},
+    {"route_id": "gateway-cos-role", "tier": "low", "provider": "gateway", "model": "minimoi-cos-agent", "label": "CoS's gateway role",
+     "reasoning_effort": "per gateway role", "billing_mode": "metered_api", "runtime": "openclaw", "auth_profile_ref": null,
+     "capabilities": ["chat", "tools"], "runtime_override": false,
+     "offered": {"cos": "available"}}
+  ],
+  "roles": {
+    "mc-conversation": {"agent": "mc", "task": "Conversation", "route": "plan-openai-strong", "selectable": true},
+    "mc-private": {"agent": "mc", "task": "Private conversation", "route": "plan-openai-strong"},
+    "mc-rooms": {"agent": "mc", "task": "Rooms", "route": "plan-openai-strong"},
+    "mc-morning": {"agent": "mc", "task": "Morning note", "route": "plan-openai-strong"},
+    "cos-conversation": {"agent": "cos", "task": "Conversation", "route": "gateway-cos-role", "selectable": true}
+  }
+}

@@ -98,6 +98,24 @@ def _runtime_count(value) -> int | None:
     return count if count else None
 
 
+SERVED_FIELD = re.compile(r"^[A-Za-z0-9._:/-]{1,80}$")
+
+
+def served_fields(obj) -> dict | None:
+    """OpenClaw's record of who served a run, as the relay read it: known fields of a plain shape, or nothing."""
+    if not isinstance(obj, dict):
+        return None
+    fields = {k: obj[k] for k in ("provider", "model", "api", "harness")
+              if isinstance(obj.get(k), str) and SERVED_FIELD.fullmatch(obj[k])}
+    return fields if fields.get("provider") and fields.get("model") else None
+
+
+@dataclass(frozen=True)
+class Served:
+    """Evidence of the model that served this turn. Consumed by the route recorder; never sent to the browser as a claim."""
+    fields: dict
+
+
 def parse_relay_line(line: str):
     """One line of the MC relay's NDJSON -> an event, or None (dropped)."""
     try:
@@ -115,6 +133,9 @@ def parse_relay_line(line: str):
         return Finish(obj["reason"][:32])
     if kind == "usage":
         return Usage(_runtime_count(obj.get("prompt_tokens")), _runtime_count(obj.get("completion_tokens")))
+    if kind == "served":
+        fields = served_fields(obj)
+        return Served(fields) if fields else None
     if kind == "error" and isinstance(obj.get("class"), str):
         cls = obj["class"] if obj["class"] in FAILURE_CLASSES else "upstream"
         return Failure(cls)
