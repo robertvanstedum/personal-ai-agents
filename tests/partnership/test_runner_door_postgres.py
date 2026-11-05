@@ -212,7 +212,9 @@ class RunnerDoorEndToEnd(PostgresFixture, unittest.TestCase):
         self.assertIn(("task.record_review:changes_requested", self.tid, "accepted"), sent)
         self.assertIn(("task.submit_artifacts:review_output", rtid, "accepted"), sent)
         r = self.svc.get("task", rtid, "tok-principal")
-        self.assertEqual([a["id"] for a in r["artifact_sets"][-1]["artifacts"]], ["C-door-rev.output"])
+        delivered = self.task()["reviews"][-1]["review_ref"]                    # exactly the review it delivered
+        self.assertEqual([(a["id"], a["digest"]) for a in r["artifact_sets"][-1]["artifacts"]],
+                         [(delivered["id"], delivered["digest"])])
         self.assertEqual(self.door.pass_once(), [])                             # once
 
 

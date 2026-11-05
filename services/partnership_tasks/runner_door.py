@@ -196,13 +196,10 @@ class RunnerDoor:
                 f"cmd-door-rev-{item['result_event_id']}", dict(harness_ref(item), id=str(item["result_event_id"]))))
         if res is not None:
             out.append(("task.record_review:" + verdict, builder["task_id"], res.get("outcome")))
-        # The review child ends with its result either way (verdict path v0.1): the verdict artifact when there is
-        # one, else the step's own recorded outputs, so a review without a verdict no longer stays working forever.
-        if art:
-            result_set, what = [review_ref | {"edition": None}], "verdict"
-        else:
-            result_set = artifact_refs(recorded_outputs(item.get("artifacts") or [])) or [review_ref | {"edition": None}]
-            what = "review_output"
+        # The review child's result is exactly the review it delivered (the review_ref recorded on the builder), with or
+        # without a verdict (verdict path v0.1): the lead accepts it as delivered (service.delivered_review), so a
+        # review child ends instead of staying working forever.
+        result_set, what = [review_ref | {"edition": None}], ("verdict" if art else "review_output")
         current = review_task["artifact_sets"][-1]["digest"] if review_task["artifact_sets"] else None
         if set_digest(result_set) != current:
             res = self._send(review_task["holder"], self._cmd("task.submit_artifacts", review_task, {

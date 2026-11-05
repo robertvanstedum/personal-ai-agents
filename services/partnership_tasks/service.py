@@ -532,6 +532,53 @@ class _Planner:
     def authors_of(task: dict, set_digest: str) -> set:
         return {seat for s_ in task["artifact_sets"] if s_["digest"] == set_digest for seat in s_["authored_by"]}
 
+    def carried_reviews(self, task: dict, set_digest: str) -> tuple[list[dict], set]:
+        """Blue Lantern, 5 Nov 2026 (option A): a parent's set that is exactly a completed child's current accepted set
+        carries the reviews that acceptance cited (its approvals and the dissent it delivered) and the child's authors.
+        Reviews are per task, so without this the parent could never be accepted. The carried review keeps the
+        original reviewer, verdict, review_ref and interpretation; its id names the child and the original review."""
+        out, authors, seen = [], set(), set()
+        for child in self.children(task["task_id"]):
+            if child["state"] != "completed":
+                continue
+            acc = [a for a in child["acceptances"] if a["status"] == "current" and a["artifact_set_digest"] == set_digest]
+            if not acc:
+                continue
+            a = acc[-1]
+            authors |= self.authors_of(child, set_digest)
+            for r in child["reviews"]:
+                if r["reviewed_set_digest"] != set_digest:
+                    continue
+                if r["review_ref"] not in a["review_refs"] and r["review_id"] not in a["disagreements_delivered"]:
+                    continue
+                key = json.dumps(r["review_ref"], sort_keys=True)
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append({"review_id": "RV-carry-" + digest({"child": child["task_id"],
+                                                               "review": r["review_id"]})[7:47],
+                            "reviewer": r["reviewer"], "reviewed_set_digest": set_digest,
+                            "input_digest": r["input_digest"], "verdict": r["verdict"], "review_ref": r["review_ref"],
+                            "findings_ref": r["findings_ref"], "interpretation_ref": r["interpretation_ref"],
+                            "applicable_to_current": False, "task_revision": task["revision"] + 1})
+        return out, authors
+
+    def delivered_review(self, task: dict, current: dict) -> bool:
+        """A review child's set is the review it delivered: exactly one artifact, equal to a review its holder recorded
+        on a sibling (same parent). Accepting it needs no further approval: a review is never reviewed again."""
+        if task["parent_ref"] is None or len(current["artifacts"]) != 1:
+            return False
+        art = current["artifacts"][0]
+        for sib in self.children(task["parent_ref"]):
+            if sib["task_id"] == task["task_id"]:
+                continue
+            for r in sib["reviews"]:
+                ref = r["review_ref"]
+                if r["reviewer"] == task["holder"] and (ref["store"], ref["id"], ref["digest"]) == (
+                        art["store"], art["id"], art["digest"]):
+                    return True
+        return False
+
     def cascade(self, parent: dict, why: str) -> list[tuple[str, dict]]:
         """Children of a parent that ends are canceled in the same intent, their pending sends fenced. Their effects
         already admitted stay actual or unknown and are reported (open_effects), never undone here."""
@@ -892,7 +939,7 @@ class _Planner:
         authors = self.authors_of(task, current["digest"])
         approvals = [r for r in applicable if r["verdict"] == "approve" and r["reviewer"] not in authors
                      and r["reviewer"] != self.b.seat]           # the accepting lead's own approval never counts
-        if not approvals:
+        if not approvals and not self.delivered_review(task, current):
             raise Refused("transition_not_allowed", "no_non_author_approval_of_this_set")
         dissent = {r["review_id"] for r in applicable if r["verdict"] != "approve"}
         latest = {}
@@ -945,13 +992,22 @@ class _Planner:
             raise Refused("payload_invalid", "duplicate_artifact")
         arts = sorted(self.p["artifacts"], key=lambda a: (a["store"], a["id"], a.get("edition") or "", a["digest"]))
         set_digest = digest(arts)
+        carried, child_authors = self.carried_reviews(task, set_digest)
+        new = [r for r in carried if r["review_ref"] not in task["review_refs"]]
         if task["artifact_sets"] and task["artifact_sets"][-1]["digest"] == set_digest:
-            raise Refused("transition_not_allowed", "already_current")
-        sets = task["artifact_sets"] + [{"digest": set_digest, "artifacts": arts, "submitted_by": self.b.seat,
-                                         "authored_by": sorted({self.b.seat, task["holder"]}),
-                                         "interpretation_ref": task["interpretation_ref"],
-                                         "task_revision": task["revision"] + 1}]
-        t2 = dict(task, artifact_sets=sets)
+            last = task["artifact_sets"][-1]
+            if not new and child_authors <= set(last["authored_by"]):
+                raise Refused("transition_not_allowed", "already_current")
+            # The same set again only to carry a completed child's reviews it lacks (a set submitted before carrying
+            # existed): authors only grow, nothing is replaced.
+            sets = task["artifact_sets"][:-1] + [dict(last, authored_by=sorted(set(last["authored_by"]) | child_authors))]
+        else:
+            sets = task["artifact_sets"] + [{"digest": set_digest, "artifacts": arts, "submitted_by": self.b.seat,
+                                             "authored_by": sorted({self.b.seat, task["holder"]} | child_authors),
+                                             "interpretation_ref": task["interpretation_ref"],
+                                             "task_revision": task["revision"] + 1}]
+        t2 = dict(task, artifact_sets=sets, reviews=task["reviews"] + new,
+                  review_refs=task["review_refs"] + [r["review_ref"] for r in new])
         rec = self.stamp(dict(t2, reviews=self.reapply(t2)), task)
         return self.finish([(path_of("task", task["task_id"]), self.checked("task", rec))], rec["revision"])
 

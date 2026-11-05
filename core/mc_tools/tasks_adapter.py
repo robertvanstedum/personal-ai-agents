@@ -284,10 +284,16 @@ class TasksAdapter:
         capability = CAPABILITY["minimoi_task_submit"]
         op = host._operation_id(b, capability, canonical)
         key = op.replace("-", "")[:24]
+        cited = [a for a in child["acceptances"] if a["status"] == "current"
+                 and a["artifact_set_digest"] == current["digest"]][-1]["review_refs"]
+
+        def carried(p):
+            return all(ref in p["review_refs"] for ref in cited)
+
         def submit_step():
             p = self._task(parent["task_id"])
-            if p["artifact_sets"] and p["artifact_sets"][-1]["digest"] == current["digest"]:
-                return None
+            if p["artifact_sets"] and p["artifact_sets"][-1]["digest"] == current["digest"] and carried(p):
+                return None                    # already submitted, with the child's reviews carried (option A)
             return self._cmd("task.submit_artifacts", "task", p["task_id"], {
                 "artifacts": current["artifacts"], "fence_generation": p["fence_generation"]},
                 f"cmd-mc-sub-{key}", expected=p["revision"])
@@ -295,10 +301,11 @@ class TasksAdapter:
 
         def verify():
             p = self._task(parent["task_id"])
-            return bool(p and p["artifact_sets"] and p["artifact_sets"][-1]["digest"] == current["digest"])
+            return bool(p and p["artifact_sets"] and p["artifact_sets"][-1]["digest"] == current["digest"]
+                        and carried(p))
         return self._effect(host, caller, b, capability, canonical, op, steps, verify,
                             f"Submitted {child['task_id']}'s accepted set as {parent['task_id']}'s result. It needs a "
-                            "review by someone other than its authors before it can be accepted.")
+                            "review by someone other than its authors before it can be accepted: the child's accepted reviews travel with it.")
 
     def accept(self, host, args, caller):
         from services.partnership_tasks.client import TaskServiceUnavailable
