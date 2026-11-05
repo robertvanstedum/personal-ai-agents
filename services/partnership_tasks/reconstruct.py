@@ -319,6 +319,35 @@ def open_work(svc: TaskService, token: str) -> list[dict]:
         raise StoreUnavailable(type(exc).__name__) from exc
 
 
+def pending_proposals(svc: TaskService, token: str) -> list[dict] | None:
+    """B4 design v0.2 S5: the proposals waiting for the principal: proposed (not superseded) interpretations in the
+    caller's read scopes, each with its source words, the task terms and the proposal digest a confirmation must
+    name. Principal only (None for any other seat)."""
+    from core.canonical_json import digest
+    binding = svc.bindings.resolve(token, svc._clock())
+    if binding is None or not binding.is_owner:
+        return None
+    def read():
+        out = []
+        folder = svc.journal.root / DIRS["interpretation"]
+        for p in sorted(folder.glob("IN-*.json")) if folder.is_dir() else []:
+            rec = svc.journal.read(f"{DIRS['interpretation']}/{p.name}")
+            if (not rec or rec["data_scope"] not in binding.read_scopes or rec["disposition"] != "proposed"
+                    or rec.get("superseded_by")):
+                continue
+            sources = [svc.journal.read(path_of("source_event", sid)) for sid in rec["source_event_ids"]]
+            out.append({"interpretation_id": rec["interpretation_id"], "revision": rec["revision"],
+                        "proposed": rec["proposed"], "proposal_digest": digest(rec["proposed"]),
+                        "proposed_by": rec["provenance"]["actor_seat"], "created_at": rec["created_at"],
+                        "sources": [{"source_event_id": s["source_event_id"], "source": s["source"],
+                                     "content": s["content"]} for s in sources if s]})
+        return out
+    try:
+        return svc.journal.view(read)
+    except (JournalDamaged, OSError) as exc:
+        raise StoreUnavailable(type(exc).__name__) from exc
+
+
 def history(svc: TaskService, token: str, words: str) -> list[dict]:
     """J1 next-session recall: requests whose intent, any earlier edition, or source words contain all ``words``
     (case-insensitive), with the coverage and results each edition had. Scoped like every read."""

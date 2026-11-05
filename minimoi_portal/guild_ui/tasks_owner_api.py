@@ -1,0 +1,272 @@
+"""Robert's own task actions in the portal (B4 connection design v0.2 §2, §4.4, §5; v0.3 R-M1, R-S1, R-N2).
+
+Every route here is owner-only (``owner_api``) and is a direct click by the signed-in owner. Each call to the task
+service is made with the ``principal`` seat AND a per-request portal assertion over its exact bytes (audience
+``partnership-owner``), so the principal token alone never acts as Robert, and MC's tool path, which never imports
+this module, cannot produce one.
+
+- ``GET  /tasks/pending``: proposals waiting for him (the task view lists them).
+- ``POST /tasks/confirm``: {interpretation_id, proposal_digest, idempotency_key}. The digest must be the one the page
+  showed and must still be current. The portal then records the owner-action source (the exact proposal digest) and
+  sends dispose (adopted, authority = that source), request.record (responder cos) and request.promote (= the
+  confirmed terms). Ids are ``<step>-<interpretation key>``, so a retry finishes forward.
+- ``POST /tasks/decline``: {interpretation_id, proposal_digest, idempotency_key}: the source, then dispose rejected.
+- ``POST /tasks/correct``: {task_id, text, idempotency_key}: Robert's words as a correction of the task's source;
+  then CoS proposes the new reading, and he confirms it in the same view.
+- ``POST /tasks/cancel``: {task_id, text, idempotency_key}: Robert's words as a correction, then correction.apply
+  with change cancel. Open effects come back for the view to show.
+
+The page itself (the task view) is Codex's work (Robert's UI rule). This module is its backend and contract.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+
+from flask import request
+
+from .security import json_error
+
+STORE = "portal-owner-action"
+_IID = re.compile(r"IN-[A-Za-z0-9_-]{4,64}")
+_TID = re.compile(r"TK-[A-Za-z0-9_-]{4,64}")
+_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
+SCOPE = "personal"
+
+
+def _client():
+    """The principal client, signing each request for the signed-in owner. None when not configured."""
+    from core import portal_assertion as PA
+    from services.partnership_tasks.client import TaskClient, read_token
+    from services.partnership_tasks.http_api import OWNER_AUDIENCE, OWNER_HEADER
+    from . import cfg
+    url = os.environ.get("PARTNERSHIP_TASKS_URL", "").strip()
+    token_file = os.environ.get("PORTAL_PARTNERSHIP_PRINCIPAL_TOKEN_FILE", "").strip()
+    key = PA.load_key(os.environ.get("PORTAL_PARTNERSHIP_OWNER_KEY_FILE"))
+    env = os.environ.get("PORTAL_PARTNERSHIP_OWNER_ENV", "").strip()
+    user = cfg()["current_user"]() or {}
+    owner = user.get("auth_id") or user.get("username")
+    if not (url and token_file and key and env and owner):
+        return None
+
+    def sign(method, path, body):
+        p, _, q = path.partition("?")
+        return {OWNER_HEADER: PA.sign(key, audience=OWNER_AUDIENCE, subject=f"owner:{owner}", method=method,
+                                      target=PA.canonical_target(p, q), body=body, env=env)}
+    return TaskClient(url, lambda: read_token(token_file), signer=sign)
+
+
+def _environment():
+    return os.environ.get("PARTNERSHIP_ENVIRONMENT", "dev")
+
+
+def _body():
+    from . import api
+    refusal, body = api._write_body()          # size, CSRF, record mode, JSON object, idempotency key
+    return refusal, body
+
+
+def _cmd(kind, ttype, tid, payload, cid, *, expected=None, parent=None):
+    from services.partnership_tasks.client import command
+    return command(kind, ttype, tid, payload, command_id=cid, environment=_environment(), scope=SCOPE,
+                   expected_revision=expected, causal_parent=parent, session_id=None,
+                   runtime={"kind": "human", "model": None, "provider": None, "build": "portal/tasks_owner/1",
+                            "config_version": None})
+
+
+def _ref(sid):
+    return {"store": "task_service", "id": sid, "edition": None, "digest": None}
+
+
+def _send(client, cmd):
+    """Submit; an accepted or replayed result is success; anything else stops the sequence with its reason."""
+    from services.partnership_tasks.client import TaskServiceUnavailable
+    try:
+        out = client.submit(cmd)
+    except TaskServiceUnavailable as exc:
+        return None, json_error("unconfirmed", "The task service did not confirm this step; reopen the view to "
+                                "finish it.", 503) if exc.answer != "absent" else \
+            json_error("not_sent", "That step did not reach the task service; try again.", 503)
+    if out.get("outcome") != "accepted":
+        return None, json_error(out.get("code") or "refused", out.get("detail") or "The task service refused it.", 409)
+    return out, None
+
+
+def _proposal(client, iid, shown_digest):
+    current = next((p for p in client.pending() if p["interpretation_id"] == iid), None)
+    if current is None:
+        current = _already_confirmed(client, iid)          # a confirm that stopped part-way finishes forward (S6)
+    if current is None:
+        return None, json_error("not_pending", "That proposal is no longer waiting for you.", 409)
+    if current["proposal_digest"] != shown_digest:
+        return None, json_error("changed", "The proposal changed since the page showed it; reload and look again.",
+                                409)
+    return current, None
+
+
+def _already_confirmed(client, iid):
+    """The proposal as it was confirmed by THIS portal's own owner action (its authority ref is our action source),
+    so the remaining steps can be sent again under the same ids. None for anything else."""
+    from core.canonical_json import digest
+    interp = client.get("interpretation", iid)
+    want = f"SE-own-{iid[3:]}-act"[:67]
+    if not interp or interp.get("disposition") != "adopted" or (interp.get("authority") or {}).get("ref", {}) \
+            .get("id") != want:
+        return None
+    sources = [client.get("source_event", sid) for sid in interp["source_event_ids"]]
+    # The dispose is re-sent exactly as first sent: against the revision it adopted (the adoption added one).
+    return {"interpretation_id": iid, "revision": interp["revision"] - 1, "proposed": interp["proposed"],
+            "proposal_digest": digest(interp["proposed"]),
+            "sources": [{"source_event_id": x["source_event_id"]} for x in sources if x], "finishing": True}
+
+
+def pending():
+    client = _client()
+    if client is None:
+        return json_error("unavailable", "Task tracking is not connected here.", 409)
+    from flask import jsonify
+    return jsonify(proposals=client.pending())
+
+
+def _owner_action(client, key, action, content, step="act"):
+    sid = f"SE-own-{key}-{step}"[:67]
+    return sid, _cmd("source_event.record", "source_event", sid,
+                     {"source": {"store": STORE, "id": f"{action}:{key}", "position": 1},
+                      "content": json.dumps(content, sort_keys=True), "correction_of": None},
+                     f"own-{action}-{key}")
+
+
+def confirm():
+    return _decide("confirm")
+
+
+def decline():
+    return _decide("decline")
+
+
+def _decide(action):
+    refusal, body = _body()
+    if refusal is not None:
+        return refusal
+    iid, shown = body.get("interpretation_id"), body.get("proposal_digest")
+    if not isinstance(iid, str) or not _IID.fullmatch(iid) or not isinstance(shown, str) or not _DIGEST.fullmatch(shown):
+        return json_error("invalid", "Choose one proposal as the page showed it.", 422)
+    client = _client()
+    if client is None:
+        return json_error("unavailable", "Task tracking is not connected here.", 409)
+    current, refusal = _proposal(client, iid, shown)
+    if refusal is not None:
+        return refusal
+    key = iid[3:]
+    sid, src = _owner_action(client, key, action, {"action": action, "interpretation_id": iid,
+                                                   "proposal_digest": shown})
+    if action == "decline":
+        # The confirmation check reads only "confirm" actions; a decline is its own recorded owner action.
+        _, r = _send(client, src)
+        if r is not None:
+            return r
+        _, r = _send(client, _cmd("interpretation.dispose", "interpretation", iid,
+                                  {"disposition": "rejected", "authority": {"kind": "none", "ref": None}},
+                                  f"dispose-{key}", expected=current["revision"], parent=_ref(sid)))
+        from flask import jsonify
+        return r if r is not None else jsonify(state="declined", interpretation_id=iid)
+    steps = []
+    _, r = _send(client, src)
+    if r is not None:
+        return r
+    _, r = _send(client, _cmd("interpretation.dispose", "interpretation", iid,
+                              {"disposition": "adopted", "authority": {"kind": "owner_confirmation", "ref": _ref(sid)}},
+                              f"dispose-{key}", expected=current["revision"], parent=_ref(sid)))
+    if r is not None:
+        return r
+    source_id = current["sources"][0]["source_event_id"]
+    rid, tid = f"RQ-{key}"[:67], f"TK-{key}"[:67]
+    _, r = _send(client, _cmd("request.record", "request", rid,
+                              {"source_event_id": source_id, "intent_text": current["proposed"]["outcome"][:500],
+                               "interpretation_ref": iid, "responder": "cos"},
+                              f"request-{key}", parent={"store": "task_service", "id": iid, "edition": None,
+                                                        "digest": None}))
+    if r is not None:
+        return r
+    req = client.get("request", rid)
+    terms = current["proposed"]["task"]
+    _, r = _send(client, _cmd("request.promote", "request", rid, {"task_id": tid, "parent_ref": None, **terms},
+                              f"promote-{key}",
+                              # finishing forward: the promote is re-sent against the revision it first promoted
+                              expected=(req["revision"] - 1 if req.get("state") == "promoted" else req["revision"])
+                              if req else None,
+                              parent={"store": "task_service", "id": rid, "edition": None, "digest": None}))
+    if r is not None:
+        return r
+    from flask import jsonify
+    return jsonify(state="confirmed", interpretation_id=iid, request_id=rid, task_id=tid, lead=terms["lead"])
+
+
+def _task_words():
+    refusal, body = _body()
+    if refusal is not None:
+        return refusal, None, None, None
+    tid, text = body.get("task_id"), body.get("text")
+    if not isinstance(tid, str) or not _TID.fullmatch(tid) or not isinstance(text, str) or not text.strip() \
+            or len(text) > 4000:
+        return json_error("invalid", "Name the task and say what you want in your own words.", 422), None, None, None
+    client = _client()
+    if client is None:
+        return json_error("unavailable", "Task tracking is not connected here.", 409), None, None, None
+    task = client.get("task", tid)
+    if task is None:
+        return json_error("not_found", "That task is not yours to change.", 404), None, None, None
+    return None, client, task, (text.strip(), body["_key"])
+
+
+def _correction_source(client, task, text, key):
+    """Robert's own words, recorded as a correction of the task's source: the portal picks what is corrected from
+    the task it is showing, never a model (v0.2 §5)."""
+    interp = client.get("interpretation", task["interpretation_ref"])
+    corrected = interp["source_event_ids"][0]
+    sid = f"SE-cor-{key}"[:67]
+    return sid, _cmd("source_event.record", "source_event", sid,
+                     {"source": {"store": STORE, "id": f"correct:{key}", "position": 1}, "content": text,
+                      "correction_of": corrected}, f"correction-{key}")
+
+
+def correct():
+    refusal, client, task, words = _task_words()
+    if refusal is not None:
+        return refusal
+    text, key = words
+    sid, src = _correction_source(client, task, text, key)
+    _, r = _send(client, src)
+    from flask import jsonify
+    return r if r is not None else jsonify(state="correction_recorded", task_id=task["task_id"], source_event_id=sid,
+                                           next="CoS proposes the corrected reading; confirm it here.")
+
+
+def cancel():
+    refusal, client, task, words = _task_words()
+    if refusal is not None:
+        return refusal
+    text, key = words
+    sid, src = _correction_source(client, task, text, key)
+    _, r = _send(client, src)
+    if r is not None:
+        return r
+    out, r = _send(client, _cmd("correction.apply", "request", task["request_ref"],
+                                {"correction_event_id": sid, "changes": ["cancel"], "intent_text": None,
+                                 "interpretation_ref": None},
+                                f"cancel-{key}", expected=(client.get("request", task["request_ref"]) or {}).get("revision"),
+                                parent=_ref(sid)))
+    if r is not None:
+        return r
+    from flask import jsonify
+    return jsonify(state="cancel_recorded", task_id=task["task_id"], open_effects=out.get("open_effects", []))
+
+
+RULES = [
+    ("/tasks/pending", "api_tasks_pending", pending, ["GET"]),
+    ("/tasks/confirm", "api_tasks_confirm", confirm, ["POST"]),
+    ("/tasks/decline", "api_tasks_decline", decline, ["POST"]),
+    ("/tasks/correct", "api_tasks_correct", correct, ["POST"]),
+    ("/tasks/cancel", "api_tasks_cancel", cancel, ["POST"]),
+]

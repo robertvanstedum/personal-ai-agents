@@ -57,8 +57,11 @@ def command(kind: str, target_type: str, target_id: str, payload: dict, *, comma
 
 
 class TaskClient:
-    def __init__(self, base_url: str, token: str | Callable[[], str], *, session=None, timeout=(3, 15)):
+    def __init__(self, base_url: str, token: str | Callable[[], str], *, session=None, timeout=(3, 15), signer=None):
+        """``signer(method, path, body_bytes) -> {header: value}`` adds per-request headers over the exact bytes
+        sent: the portal's owner assertion for a principal client (B4 design v0.2 §2)."""
         self.base = base_url.rstrip("/")
+        self._signer = signer
         self._token = token
         self.session = session or requests.Session()
         if hasattr(self.session, "trust_env"):
@@ -70,9 +73,18 @@ class TaskClient:
         return {"Authorization": "Bearer " + token, "Content-Type": "application/json", "Accept": "application/json"}
 
     def _call(self, method: str, path: str, body=None):
-        return self.session.request(method, self.base + path, headers=self._headers(),
-                                    data=None if body is None else json.dumps(body), timeout=self.timeout,
+        data = None if body is None else json.dumps(body)
+        headers = self._headers()
+        if self._signer is not None:
+            headers.update(self._signer(method, path, (data or "").encode("utf-8")))
+        return self.session.request(method, self.base + path, headers=headers, data=data, timeout=self.timeout,
                                     allow_redirects=False)
+
+    def pending(self) -> list:
+        r = self._call("GET", "/v1/pending")
+        if r.status_code != 200:
+            raise TaskServiceUnavailable(f"pending failed: HTTP {r.status_code}")
+        return r.json()
 
     def submit(self, cmd: dict) -> dict:
         """The service's result for this command. Raises TaskServiceUnavailable when the outcome stays unknown."""

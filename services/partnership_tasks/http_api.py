@@ -8,6 +8,7 @@
     GET  /v1/tasks/<id>/release-gate[?artifact_set_digest=...]
     GET  /v1/work[?seat=...]              a seat's own work (the principal may name any seat)
     GET  /v1/open                         open work in the caller's scopes
+    GET  /v1/pending                      proposals waiting for the principal's confirmation (principal only)
     GET  /v1/history?words=...            next-session recall over requests
     GET  /healthz                         liveness only; says nothing about the store
 
@@ -27,7 +28,7 @@ import logging
 from flask import Flask, Response, jsonify, request
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from services.partnership_tasks.reconstruct import Reconstructor, history, open_work
+from services.partnership_tasks.reconstruct import Reconstructor, history, open_work, pending_proposals
 from services.partnership_tasks.service import StoreUnavailable, TaskService
 from services.partnership_tasks.views import work_for
 
@@ -191,6 +192,14 @@ def create_app(svc: TaskService, *, owner_key=None, owner_env: str | None = None
         if t is None:
             return jsonify(error="not_authenticated"), 401
         return _json(open_work(svc, t))
+
+    @app.get("/v1/pending")
+    def pending():
+        t = authenticated()
+        if t is None:
+            return jsonify(error="not_authenticated"), 401
+        out = pending_proposals(svc, t)
+        return _json(out) if out is not None else (jsonify(error="not_found"), 404)
 
     @app.get("/v1/history")
     def recall():

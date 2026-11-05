@@ -2960,6 +2960,11 @@ RULES.extend((rule, endpoint, owner_api(view), methods) for rule, endpoint, view
 from .rooms_archive_api import RULES as _ROOM_ARCHIVE_RULES
 RULES.extend((rule, endpoint, owner_api(view), methods) for rule, endpoint, view, methods in _ROOM_ARCHIVE_RULES)
 
+# B4: Robert's own task actions (confirm, decline, correct, cancel). Owner-only; each task-service call is signed for
+# the signed-in owner over its exact bytes (connection design v0.2 §2).
+from .tasks_owner_api import RULES as _TASK_OWNER_RULES
+RULES.extend((rule, endpoint, owner_api(view), methods) for rule, endpoint, view, methods in _TASK_OWNER_RULES)
+
 # Read-only retained voice export; ownership and scope checked around the read.
 from .mc_voice_export_api import download as voice_transcript_download
 RULES.append(("/conversations/<cid>/voice-transcript", "api_voice_transcript", voice_transcript_download, ["GET"]))
