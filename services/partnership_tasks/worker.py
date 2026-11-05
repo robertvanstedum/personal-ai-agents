@@ -90,7 +90,8 @@ def one_pass(*, drainer, svc, harness, notices, door, token=None,
 
 def main() -> int:  # pragma: no cover - wiring, exercised on Dev by the package probes
     import psycopg2
-    from core.mc_delegation_dispatcher.store import Authority, DispatcherStore
+    from core.mc_delegation_dispatcher import production
+    from core.mc_delegation_dispatcher.store import Authority
     from services.partnership_tasks.client import TaskClient, read_token
     from services.partnership_tasks.harness_port import HarnessDispatcher
     from services.partnership_tasks.notice_port import PortalNotices
@@ -108,8 +109,9 @@ def main() -> int:  # pragma: no cover - wiring, exercised on Dev by the package
     connect = lambda: psycopg2.connect(dsn, connect_timeout=3,  # noqa: E731
                                        options="-c statement_timeout=5000 -c lock_timeout=3000")
     principal, delegation_env = env.get("MINIMOI_MC_DELEGATION_PRINCIPAL", "robert"), env["MINIMOI_MC_DELEGATION_ENV"]
-    store = DispatcherStore(connect, principal=principal, environment=delegation_env,
-                            authority=Authority.load(env["MINIMOI_MC_DELEGATION_AUTHORITY_FILE"]))
+    # Exactly production's version-2 store: the authority plus its own grant catalogue (delegate.card and the rest).
+    store = production.store(connect, principal=principal, environment=delegation_env,
+                             authority=Authority.load(env["MINIMOI_MC_DELEGATION_AUTHORITY_FILE"]))
     harness = HarnessDispatcher(store, lambda op: drainer.get("outbox", op),
                                 unreachable=(psycopg2.OperationalError, psycopg2.InterfaceError))
     notices = None

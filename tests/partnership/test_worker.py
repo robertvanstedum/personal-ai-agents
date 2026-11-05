@@ -96,3 +96,17 @@ def test_notices_raise_once_per_operation_and_a_repeat_is_the_lookup():
         raise AssertionError("expected a conflict")
     except HarnessRefused as exc:
         assert exc.code == "operation_id_reused"
+
+
+def test_the_worker_builds_productions_version_2_store_with_its_grant_catalogue():
+    """Increment-2 package review Must 1: a version-2 authority needs the grant store, or the worker dies at start."""
+    import json
+    from pathlib import Path
+    from core.mc_delegation_dispatcher import production
+    from core.mc_delegation_dispatcher.store import Authority
+    root = Path(__file__).resolve().parents[2]
+    auth = Authority.parse(json.loads((root / "tests/mc_delegation_dispatcher/authority.test_values.json").read_text()))
+    store = production.store(lambda: None, principal="robert", environment="dev", authority=auth)
+    assert store is not None
+    source = (root / "services/partnership_tasks/worker.py").read_text()
+    assert "production.store(" in source and "DispatcherStore(" not in source
