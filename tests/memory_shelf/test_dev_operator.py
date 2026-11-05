@@ -128,3 +128,33 @@ def test_private_receipts_stay_out_of_shared_jobs(tmp_path, monkeypatch):
     dev_cycle.failed_status()
     assert json.loads((private / "dev-memory-feed.json").read_text())["state"] == "failed"
     assert json.loads((shared / "dev-memory-feed.json").read_text())["state"] == "failed"
+
+
+def test_schedule_cleanup_preserves_modified_units(tmp_path, monkeypatch):
+    from scripts.vault import dev_install
+    monkeypatch.setattr(dev_install, "UNITS", tmp_path)
+    calls = []
+    monkeypatch.setattr(dev_install, "command", lambda *args: calls.append(args))
+    files = dev_install.schedule_files({"image": "sha256:" + "a" * 64, "principal": "robert"})
+    for path, content in files.items():
+        path.write_text(content)
+    timer = tmp_path / dev_install.TIMER
+    timer.write_text("someone else's timer")
+    with pytest.raises(RuntimeError, match="uncertain"):
+        dev_install.remove_schedule(files)
+    assert not calls and timer.exists()
+    timer.write_text(files[timer])
+    dev_install.remove_schedule(files)
+    assert not any(p.exists() for p in files)
+    assert calls == [("systemctl", "disable", "--now", dev_install.TIMER), ("systemctl", "daemon-reload")]
+
+
+def test_partial_schedule_cleanup_never_disables_missing_timer(tmp_path, monkeypatch):
+    from scripts.vault import dev_install
+    monkeypatch.setattr(dev_install, "UNITS", tmp_path)
+    calls = []
+    monkeypatch.setattr(dev_install, "command", lambda *args: calls.append(args))
+    unit = tmp_path / dev_install.UNIT
+    unit.write_text("owned service")
+    dev_install.remove_schedule({unit: "owned service"})
+    assert calls == [("systemctl", "daemon-reload")]

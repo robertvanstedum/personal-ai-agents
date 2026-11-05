@@ -4,7 +4,7 @@
 Run from a private reviewed package directory containing code/ and manifest.json.
 prepare builds a local image and pins the current container inventory. apply
 checks that inventory, captures/indexes, starts authenticated Ask, probes it,
-then installs the five-minute cycle. rollback removes only this install's cron
+then installs the five-minute systemd cycle. rollback removes only this install's timer
 and container; it retains evidence and credentials. Consumer configuration is
 written as private snippets for the shared portal/CoS rollout, never printed.
 """
@@ -23,6 +23,31 @@ ROOT = Path("/opt/minimoi-staging")
 OP = ROOT / "operators/vault-dev-20261105"
 SERVICE = "minimoi-dev-vault"
 CRON = Path("/etc/cron.d/minimoi-dev-vault")
+UNITS = Path("/etc/systemd/system")
+TIMER = "minimoi-dev-vault-feed.timer"
+UNIT = "minimoi-dev-vault-feed.service"
+
+
+def schedule_files(plan):
+    cycle = OP / "code/scripts/vault/dev_cycle.py"
+    return {
+        UNITS / UNIT: ("[Unit]\nDescription=Dev Vault capture and verification\nAfter=docker.service\n"
+          "[Service]\nType=oneshot\nUser=root\nUMask=0077\nTimeoutStartSec=infinity\n"
+          f"ExecStart=/usr/bin/python3 {cycle} --image {plan['image']} --principal {plan['principal']}\n"),
+        UNITS / TIMER: ("[Unit]\nDescription=Dev Vault five-minute capture timer\n[Timer]\n"
+          "OnActiveSec=300\nOnUnitInactiveSec=300\nAccuracySec=5\n"
+          f"Unit={UNIT}\n[Install]\nWantedBy=timers.target\n")}
+
+
+def remove_schedule(files):
+    for path, content in files.items():
+        if path.exists() and path.read_text() != content:
+            raise RuntimeError("schedule_cleanup_uncertain")
+    if (UNITS / TIMER).exists():
+        command("systemctl", "disable", "--now", TIMER)
+    for path in files:
+        path.unlink(missing_ok=True)
+    command("systemctl", "daemon-reload")
 
 
 def command(*args):
@@ -67,7 +92,7 @@ def fence():
 def prepare(principal):
     if not re.fullmatch(r"[A-Za-z0-9_.@+-]{1,128}", principal):
         raise ValueError("invalid_principal")
-    if (OP / "plan.json").exists() or CRON.exists():
+    if (OP / "plan.json").exists() or CRON.exists() or any((UNITS / name).exists() for name in (UNIT, TIMER)):
         raise ValueError("existing_install")
     digest = fence()
     before = inventory()
@@ -93,7 +118,7 @@ def prepare(principal):
 
 def apply():
     plan = json.loads((OP / "plan.json").read_text())
-    if fence() != plan["manifest_sha256"] or inventory() != plan["before"] or CRON.exists():
+    if fence() != plan["manifest_sha256"] or inventory() != plan["before"] or CRON.exists() or any((UNITS / name).exists() for name in (UNIT, TIMER)):
         raise ValueError("deployment_drift")
     image, data = plan["image"], ROOT / "data"
     secrets = OP / "consumer-config"
@@ -120,7 +145,7 @@ for name in ('cos','mc'):
  if name=='cos': text+='MINIMOI_VAULT_ASK_CONVERSATIONS=cosc-,owner,guild-\n'
  path=Path('/consumer')/(name+'.env');path.write_text(text);path.chmod(0o600)
 '''
-    cron = None
+    owned_schedule = {}
     try:
         command("docker", "run", "--rm", "--network", "none", "--read-only", "--entrypoint", "python",
                 "-v", f"{ask}:/ask:rw", "-v", f"{secrets}:/consumer:rw", image, "-B", "-c", create)
@@ -152,21 +177,22 @@ for name in ('cos','mc'):
         after = inventory()
         if {k: v for k, v in after.items() if k != SERVICE} != plan["before"]:
             raise ValueError("unrelated_container_changed")
-        cron = ("SHELL=/bin/sh\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n"
-                f"*/5 * * * * root /usr/bin/python3 {cycle} --image {image} --principal {plan['principal']} >>{OP}/cycle.log 2>&1\n")
-        # Create exclusively: another operator's schedule is never overwritten.
-        with CRON.open("x") as handle:
-            handle.write(cron)
-        CRON.chmod(0o644)
+        for path, content in schedule_files(plan).items():
+            with path.open("x") as handle:
+                owned_schedule[path] = content
+                handle.write(content)
+            path.chmod(0o644)
+        command("systemctl", "daemon-reload")
+        command("systemctl", "enable", "--now", TIMER)
+        if command("systemctl", "is-active", TIMER) != "active":
+            raise RuntimeError("timer_not_active")
         write(OP / "result.json", {"state": "service_and_schedule_ready", "image": image,
               "manifest_sha256": plan["manifest_sha256"], "consumer_wiring": "pending_shared_rollout",
               "owner_chat_live_acceptance": "not_run", "container_id": after[SERVICE]["id"]})
         print('{"state":"service_and_schedule_ready","consumer_wiring":"pending"}')
     except BaseException:
-        if cron is not None and CRON.exists():
-            if CRON.read_text() != cron:
-                raise RuntimeError("cron_cleanup_uncertain")
-            CRON.unlink()
+        if owned_schedule:
+            remove_schedule(owned_schedule)
         if SERVICE in inventory():
             own = json.loads(command("docker", "inspect", SERVICE))[0]
             if own["Config"].get("Labels", {}).get("minimoi.dev-vault-install") != plan["manifest_sha256"]:
@@ -179,14 +205,12 @@ for name in ('cos','mc'):
 
 
 def rollback():
+    plan = json.loads((OP / "plan.json").read_text())
     result = json.loads((OP / "result.json").read_text())
     current = inventory().get(SERVICE)
     if current and current["id"] != result.get("container_id"):
         raise ValueError("service_drift")
-    if CRON.exists():
-        if str(OP / "code/scripts/vault/dev_cycle.py") not in CRON.read_text():
-            raise ValueError("cron_drift")
-        CRON.unlink()
+    remove_schedule(schedule_files(plan))
     with (OP / "cycle.lock").open("a") as cycle_lock:
         fcntl.flock(cycle_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if current:
