@@ -35,8 +35,10 @@ _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 SCOPE = "personal"
 
 
-def _client():
-    """The principal client, signing each request for the signed-in owner. None when not configured."""
+def _client(user=None):
+    """The principal client, signing each request for the signed-in owner. None when not configured. ``user`` is the
+    signed-in owner when the caller is outside the Guild mount (the CoS Actions routes in app.py, after their own
+    owner gate); otherwise the mount's current user."""
     from core import portal_assertion as PA
     from services.partnership_tasks.client import TaskClient, read_token
     from services.partnership_tasks.http_api import OWNER_AUDIENCE, OWNER_HEADER
@@ -45,7 +47,7 @@ def _client():
     token_file = os.environ.get("PORTAL_PARTNERSHIP_PRINCIPAL_TOKEN_FILE", "").strip()
     key = PA.load_key(os.environ.get("PORTAL_PARTNERSHIP_OWNER_KEY_FILE"))
     env = os.environ.get("PORTAL_PARTNERSHIP_OWNER_ENV", "").strip()
-    user = cfg()["current_user"]() or {}
+    user = (user if user is not None else cfg()["current_user"]()) or {}
     owner = user.get("auth_id") or user.get("username")
     if not (url and token_file and key and env and owner):
         return None
@@ -279,11 +281,11 @@ def _card_summary(card):
             "attempts": card.get("attempts"), "input_artifacts": card.get("input_artifacts") or []}
 
 
-def admissions():
+def admissions(user=None):
     """Work cards waiting for Robert's approval: pending admissions whose task has not moved on."""
     from flask import jsonify
     from services.partnership_tasks.client import TaskServiceUnavailable
-    client = _client()
+    client = _client(user)
     if client is None:
         return json_error("unavailable", "Task tracking is not connected here.", 409)
     try:
@@ -321,17 +323,24 @@ def admission_decline():
 
 
 def _admission_decision(action):
-    """One owner click on one card as the page showed it. Approve: an owner-action event naming exactly this
-    operation and card digest, then outbox.approve citing it (the authority re-checks both, within 15 minutes, once).
-    Decline: an owner-action event, then outbox.record "declined" (nothing is ever sent)."""
-    from flask import jsonify
     refusal, body = _body()
     if refusal is not None:
         return refusal
+    return decide_admission(action, body)
+
+
+def decide_admission(action, body, user=None):
+    """One owner click on one card as the page showed it. Approve: an owner-action event naming exactly this
+    operation and card digest, then outbox.approve citing it (the authority re-checks both, within 15 minutes, once).
+    Decline: an owner-action event, then outbox.record "declined" (nothing is ever sent). The caller has already
+    checked the owner and the write guard (the Guild mount's _body, or the CoS Actions route's CSRF check)."""
+    from flask import jsonify
+    if action not in ("admit", "decline_admission") or not isinstance(body, dict):
+        return json_error("invalid", "Choose one work card as the page showed it.", 422)
     op, shown = body.get("operation_id"), body.get("card_digest")
     if not isinstance(op, str) or not _OP.fullmatch(op) or not isinstance(shown, str) or not _DIGEST.fullmatch(shown):
         return json_error("invalid", "Choose one work card as the page showed it.", 422)
-    client = _client()
+    client = _client(user)
     if client is None:
         return json_error("unavailable", "Task tracking is not connected here.", 409)
     try:

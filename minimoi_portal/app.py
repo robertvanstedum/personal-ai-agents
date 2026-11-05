@@ -757,6 +757,41 @@ def _cos_write_refused(path: str):
     return jsonify({"error": "csrf", "message": message, "reply": message}), 403
 
 
+# Work cards in CoS Actions (B4, Blue Lantern 5 Nov): Robert approves or declines the work MC delegated where he works
+# with CoS, not on a separate Guild page. Served by the portal itself (never forwarded to cos-scheduler): the owner gate,
+# then for a decision the same CoS write guard as Actions (token, same origin, JSON); then the reviewed admission logic
+# (guild_ui.tasks_owner_api), which signs each task-service call for this owner over its exact bytes and approves only
+# the card digest the page showed, once, for 15 minutes. Nothing here can approve without his click.
+_WORK_CARD_DECISIONS = {"approve": "admit", "decline": "decline_admission"}
+
+
+@app.route("/app/cos/work-cards", methods=["GET"])
+@_require_owner
+def cos_work_cards():
+    from minimoi_portal.guild_ui import tasks_owner_api as _tasks_owner
+    response = make_response(_tasks_owner.admissions(user=_current_user()))
+    response.headers["Cache-Control"] = "no-store, private"
+    return response
+
+
+@app.route("/app/cos/work-cards/<decision>", methods=["POST"])
+@_require_owner
+def cos_work_card_decision(decision):
+    from minimoi_portal.guild_ui import tasks_owner_api as _tasks_owner
+    action = _WORK_CARD_DECISIONS.get(decision)
+    if action is None:
+        return jsonify({"error": "not_found", "message": "No such decision."}), 404
+    if request.content_length is None or request.content_length > 4096:
+        return jsonify({"error": "invalid", "message": "Send one work card decision."}), 413
+    refused = _cos_write_refused("work-cards")
+    if refused is not None:
+        return refused
+    body = request.get_json(silent=True)
+    response = make_response(_tasks_owner.decide_admission(action, body, user=_current_user()))
+    response.headers["Cache-Control"] = "no-store, private"
+    return response
+
+
 @app.route("/app/cos")
 @app.route("/app/cos/")
 @_require_owner

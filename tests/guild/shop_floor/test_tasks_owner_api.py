@@ -47,7 +47,7 @@ def rig(tmp_path, monkeypatch):
         p, _, q = path.partition("?")
         return {OWNER_HEADER: PA.sign(KEY, audience=OWNER_AUDIENCE, subject="owner:1", method=method,
                                       target=PA.canonical_target(p, q), body=body, env="test")}
-    monkeypatch.setattr(T, "_client", lambda: TaskClient("http://tasks:8772", "tok-principal", session=session,
+    monkeypatch.setattr(T, "_client", lambda user=None: TaskClient("http://tasks:8772", "tok-principal", session=session,
                                                          signer=sign))
     monkeypatch.setattr(T, "_environment", lambda: "synthetic")
     monkeypatch.setattr(T, "_body", lambda: (None, dict(request.get_json(), _key=request.get_json()["idempotency_key"])))

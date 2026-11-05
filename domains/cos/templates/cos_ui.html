@@ -137,6 +137,12 @@
       <section id="tab-flight" class="tab-panel" aria-label="Actions" data-fl-mode="loading">
         <div class="fl-main">
           <header class="underway-intro"><h1>Actions</h1><p>Work and records shared with CoS. Filter by type, status or priority.</p></header>
+          {# Work cards (B4): what MC delegated, waiting for Robert's approval; cos-work-cards.js, via the portal. #}
+          <section class="wc" data-wc aria-label="Work cards waiting for you">
+            <h2>Work cards waiting for you <button type="button" class="fl-btn" data-wc-refresh>Refresh</button></h2>
+            <p class="fl-say" data-wc-say role="status" hidden></p>
+            <div data-wc-list><p>Loading work cards…</p></div>
+          </section>
           <div class="underway-outline" data-fl-outline role="status">
             <span class="underway-badge">In construction</span>
             <p class="underway-limit">The shared work record is not connected yet.</p>
@@ -804,5 +810,6 @@ void readDirect();
 <script src="/static/cos-history-ui.js?v={{ founders_ui_version }}"></script>
 <script src="/static/calm-confer.js?v=20261102-1"></script>
 <script type="module" src="/static/cos-in-flight.js?v={{ founders_ui_version }}"></script>
+<script type="module" src="/static/cos-work-cards.js?v={{ founders_ui_version }}"></script>
 </body>
 </html>
