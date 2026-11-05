@@ -13,9 +13,13 @@ the turn. The browser only ever names a ``route_id``, never a model, endpoint, h
 from __future__ import annotations
 
 import json
+import logging
+import os
 from pathlib import Path
 
+log = logging.getLogger("minimoi.model_routes")
 CATALOGUE_PATH = Path(__file__).with_name("catalogue.json")
+CATALOGUE_VAR = "MINIMOI_MODEL_ROUTES_FILE"    # a host's own copy, so a one-line switch needs no image: read fresh each turn
 AGENT_BY_BACKEND = {"openclaw": "mc", "cos": "cos"}
 BILLING_WORDS = {"subscription": "Plan", "metered_api": "API"}
 AVAILABLE = "available"
@@ -29,8 +33,8 @@ class RouteRefused(ValueError):
         self.code, self.message = code, message
 
 
-def load_catalogue(path: Path | str = CATALOGUE_PATH) -> dict:
-    catalogue = json.loads(Path(path).read_text(encoding="utf-8"))
+def load_catalogue(path: Path | str | None = None) -> dict:
+    catalogue = json.loads(Path(path or os.environ.get(CATALOGUE_VAR) or CATALOGUE_PATH).read_text(encoding="utf-8"))
     ids = [r["route_id"] for r in catalogue["routes"]]
     if len(ids) != len(set(ids)):
         raise ValueError("duplicate route_id in the catalogue")
@@ -109,12 +113,20 @@ def snapshot(catalogue: dict, role_name: str, conv: dict | None = None) -> dict:
 
 
 def role_snapshot_for(kind: str | None, role_name: str) -> dict | None:
-    """A non-conversation task's route when ``kind`` is the backend that role belongs to, else None (no routes here)."""
-    catalogue = load_catalogue()
-    role = catalogue["roles"].get(role_name)
-    if role is None or agent_for_backend(kind) != role["agent"]:
+    """A non-conversation task's route when ``kind`` is the backend that role belongs to, else None. A broken catalogue
+    is also None, with a warning: no override, so the runtime's own default serves, and its allowlist holds only
+    subscription routes with no fallback, so this can never reach a metered route."""
+    if agent_for_backend(kind) is None:
         return None
-    return snapshot(catalogue, role_name)
+    try:
+        catalogue = load_catalogue()
+        role = catalogue["roles"].get(role_name)
+        if role is None or agent_for_backend(kind) != role["agent"]:
+            return None
+        return snapshot(catalogue, role_name)
+    except (OSError, ValueError, KeyError) as exc:
+        log.warning("model routes: role %s not read (%s); the runtime default serves", role_name, type(exc).__name__)
+        return None
 
 
 def served_receipt(route: dict | None, served: dict | None) -> dict | None:

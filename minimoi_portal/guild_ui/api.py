@@ -2022,6 +2022,9 @@ def _route_snapshot(services, conv):
         return snapshot(load_catalogue(), conversation_role(agent), conv), None
     except RouteRefused as exc:
         return None, exc
+    except (OSError, ValueError, KeyError):
+        _mc_log().exception("model routes: the catalogue could not be read")
+        return None, RouteRefused("route_unavailable", "The model routes could not be read. Nothing was sent.")
 
 
 def _route_recorder(conversations, conv, principal):
@@ -2067,7 +2070,11 @@ def conversation_route(cid):
         return json_error("not_found", CONV_WORDS["not_found"], 404)
     except ConversationStoreUnavailable:
         return json_error("unavailable", CONV_WORDS["unavailable"], 503)
-    return jsonify({**view(load_catalogue(), agent, conv), "observed_at": now_iso()})
+    try:
+        return jsonify({**view(load_catalogue(), agent, conv), "observed_at": now_iso()})
+    except (OSError, ValueError, KeyError):
+        _mc_log().exception("model routes: the catalogue could not be read")
+        return json_error("unavailable", "The model routes could not be read.", 503)
 
 
 @owner_api
@@ -2078,7 +2085,11 @@ def conversation_route_select(cid):
     agent = _route_agent()
     if agent is None:
         return json_error("not_available", "This conversation has no model routes.", 404)
-    catalogue = load_catalogue()
+    try:
+        catalogue = load_catalogue()
+    except (OSError, ValueError, KeyError):
+        _mc_log().exception("model routes: the catalogue could not be read")
+        return json_error("unavailable", "The model routes could not be read. Nothing changed.", 503)
 
     def action(store, body):
         expected = body.get("revision")

@@ -80,3 +80,21 @@ def test_selected_and_served_stay_separate():
     assert served_receipt(route, None)["served"] is None and served_receipt(route, None)["served_matches"] is None
     assert served_receipt(route, {"provider": "openai", "model": "gpt-6-astra"})["served_matches"] is True
     assert served_receipt(route, {"provider": "anthropic", "model": "claude-opus-5"})["served_matches"] is False
+
+
+def test_a_hosts_own_copy_is_read_fresh_so_one_line_moves_a_task(tmp_path, monkeypatch):
+    copy = json.loads(json.dumps(CAT))
+    copy["roles"]["mc-morning"]["route"] = "plan-openai-low"
+    next(r for r in copy["routes"] if r["route_id"] == "plan-openai-low")["offered"]["mc"] = "available"
+    path = tmp_path / "routes.json"
+    path.write_text(json.dumps(copy))
+    monkeypatch.setenv("MINIMOI_MODEL_ROUTES_FILE", str(path))
+    assert role_snapshot_for("openclaw", "mc-morning")["model"] == "gpt-6-luna"
+
+
+def test_a_broken_host_copy_never_reaches_a_metered_route(tmp_path, monkeypatch, caplog):
+    path = tmp_path / "routes.json"
+    path.write_text("{ not json")
+    monkeypatch.setenv("MINIMOI_MODEL_ROUTES_FILE", str(path))
+    assert role_snapshot_for("openclaw", "mc-morning") is None        # no header: the runtime's subscription-only default
+    assert "runtime default" in caplog.text

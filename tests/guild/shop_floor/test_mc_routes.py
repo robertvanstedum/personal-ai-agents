@@ -216,3 +216,17 @@ def test_the_runtimes_refusal_of_a_route_is_a_clear_stop_not_a_retry(routed):
     before = len(routed.runtime.posts)
     _stream(client, token, note["request_id"]).get_data()
     assert len([p for p in routed.runtime.posts[before:] if p["url"].endswith("/chat/completions")]) == 1
+
+
+def test_a_broken_catalogue_stops_the_conversation_turn_with_nothing_sent(routed, monkeypatch):
+    import core.model_routes as routes
+    client = routed.owner()
+    token = routed.csrf(client)
+    note = _keep(client, token, "hello")
+
+    def broken(*a, **k):
+        raise ValueError("bad")
+    monkeypatch.setattr(routes, "load_catalogue", broken)
+    before = len(routed.runtime.posts)
+    r = _stream(client, token, note["request_id"])
+    assert r.status_code == 409 and r.get_json()["error"] == "route_unavailable" and len(routed.runtime.posts) == before
