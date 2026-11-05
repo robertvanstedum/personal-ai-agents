@@ -2009,15 +2009,24 @@ class DispatcherStore:
                         (task_id, digest, fence, self.principal, self.environment, operation_id))
             return {"state": "applied", "receipt": self._op_receipt(cur.fetchone())}
 
+    APPROVAL_WINDOW = "15 minutes"
+
     def admit_card_for_task(self, operation_id, card, *, task_id, fence, attempt, grant_id, owner_turn_ids,
-                            proposal_id, approved_operation_id, approval_expires_at, by, note=None) -> dict:
+                            proposal_id, approved_operation_id, approval_expires_at, by, approval, note=None) -> dict:
         """admit_card under a task-service operation id, inside admit_card's own transaction. Lock order is always
         operation row, then fence row (as in set_task_fence), so the two never deadlock.
         - An applied operation answers duplicate when it is the same task, card and digest (no fence check, nothing
           rewritten); anything else under its id is refused operation_id_reused.
         - An attempt at or below one a lookup declared absent is refused attempt_declared_absent.
         - A fence below the task's current fence is refused fenced.
+        - Robert's approval (``approval``: {event_id, card_digest, approved_at}, read back from the task service by the
+          caller) must name exactly the compiled card's digest, be at most 15 minutes old by this database's clock,
+          and never have admitted anything before (refused approval_digest_mismatch / approval_expired /
+          approval_already_used). It is recorded with the operation, unique, in this same transaction (v0.5 M2).
         - Otherwise the operation is bound to this task, fence and card once, and the card is admitted."""
+        _need(type(approval) is dict and set(approval) >= {"event_id", "card_digest", "approved_at"}
+              and type(approval["event_id"]) is str and 1 <= len(approval["event_id"]) <= 80
+              and type(approval["card_digest"]) is str and type(approval["approved_at"]) is str, "approval_invalid")
         _need(type(attempt) is int and 1 <= attempt <= 2**31 - 1, "attempt_invalid")
         _need(type(fence) is int and 0 <= fence <= self._FENCE_MAX, "fence_invalid")
         _need(type(task_id) is str and 1 <= len(task_id) <= 200, "task_id_invalid")
@@ -2036,10 +2045,18 @@ class DispatcherStore:
             cur.execute("""SELECT fence FROM guild.mc_task_fences WHERE principal=%s AND environment=%s AND task_id=%s
                 FOR UPDATE""", (self.principal, self.environment, task_id))
             _need(fence >= cur.fetchone()["fence"], "fenced")
-            cur.execute("""UPDATE guild.mc_task_operations SET applied=true, task_id=%s, digest=%s, fence=%s, card_id=%s
+            _need(approval["card_digest"] == compiled.digest, "approval_digest_mismatch")
+            cur.execute("SELECT clock_timestamp() - %s::timestamptz BETWEEN interval '-1 minute' AND %s::interval AS ok",
+                        (approval["approved_at"], self.APPROVAL_WINDOW))
+            _need(cur.fetchone()["ok"], "approval_expired")
+            cur.execute("""SELECT 1 FROM guild.mc_task_operations WHERE principal=%s AND environment=%s
+                AND approval_event=%s""", (self.principal, self.environment, approval["event_id"]))
+            _need(cur.fetchone() is None, "approval_already_used")
+            cur.execute("""UPDATE guild.mc_task_operations SET applied=true, task_id=%s, digest=%s, fence=%s, card_id=%s,
+                approval_event=%s, approved_at=%s::timestamptz
                 WHERE principal=%s AND environment=%s AND operation_id=%s""",
-                        (task_id, compiled.digest, fence, compiled.card_id, self.principal, self.environment,
-                         operation_id))
+                        (task_id, compiled.digest, fence, compiled.card_id, approval["event_id"],
+                         approval["approved_at"], self.principal, self.environment, operation_id))
         answer = self.admit_card(card, grant_id=grant_id, owner_turn_ids=owner_turn_ids, proposal_id=proposal_id,
                                  approved_operation_id=approved_operation_id, approval_expires_at=approval_expires_at,
                                  by=by, note=note, precheck=precheck)

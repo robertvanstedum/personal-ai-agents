@@ -29,3 +29,10 @@ CREATE TABLE IF NOT EXISTS guild.mc_task_operations (
     CHECK (NOT applied OR (task_id IS NOT NULL AND digest IS NOT NULL AND fence IS NOT NULL)),
     CHECK (NOT applied OR kind <> 'admit_bundle' OR card_id IS NOT NULL)
 );
+-- B4 execution design v0.5 M2: an admission carries Robert's approval of exactly that card. The authority checks it
+-- in its own transaction (digest equals the compiled card, recorded within 15 minutes by the database clock) and
+-- keeps the approval event id here, unique: one approval admits one card, once.
+ALTER TABLE guild.mc_task_operations ADD COLUMN IF NOT EXISTS approval_event text;
+ALTER TABLE guild.mc_task_operations ADD COLUMN IF NOT EXISTS approved_at timestamptz;
+CREATE UNIQUE INDEX IF NOT EXISTS mc_task_operations_approval_event
+    ON guild.mc_task_operations (principal, environment, approval_event) WHERE approval_event IS NOT NULL;
