@@ -78,6 +78,7 @@ class Bridge:
             raise ValueError('records_admission_refused')
         turn = body.get('turn') or {}
         trigger = turn.get('trigger') or {}
+        from core.room_scope import owner_private
         people = turn.get('room_members') or []
         # Initial deployment is the owner's private three-person room only. Do
         # not leak the owner's tool output into a guest or externally shared room.
@@ -86,8 +87,7 @@ class Bridge:
                 or turn.get('state') != 'running' or turn.get('discussion_reply')
                 or trigger.get('actor') != self.principal or trigger.get('kind') != 'message'
                 or trigger.get('origin') is not None or not isinstance(trigger.get('text'), str)
-                or not trigger['text'].strip() or not people
-                or any(p.get('id') not in {self.principal, 'mc', 'cos'} for p in people)):
+                or not trigger['text'].strip() or not owner_private(people, self.principal)):
             raise ValueError('owner_room_required')
         return turn if snapshot else None
 

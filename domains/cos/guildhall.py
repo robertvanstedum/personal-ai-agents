@@ -2,8 +2,11 @@
 
 A trusted Records worker supplies authenticated event metadata, never a browser.
 The durable ledger refuses reinference after uncertainty, including a restart.
-Meeting sessions are separate from the private owner chat; the normal context
-builder and runtime retain CoS's usual memory and tools.
+Meeting sessions are separate from the private owner chat. F2 D8: CoS brings
+Robert's private context and read tools only into an owner-private room whose
+members a verifier confirmed from the authoritative Records snapshot; any other
+room, or one not verified, is closed (no tools, no owner context). Until F2 step
+4 installs the Records verifier, every room is closed.
 """
 import hashlib
 import hmac
@@ -27,7 +30,8 @@ def validate(turn):
     return turn
 
 
-def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True):
+def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verify_members=None):
+    """``verify_members(turn)`` returns the room's members from Records, or None; never the request body's."""
     token=Path(token_file).read_text().strip()
     if len(token)<32:raise ValueError('Guildhall service credential required')
     root=Path(data_dir);root.mkdir(parents=True,mode=0o700,exist_ok=True)
@@ -70,7 +74,9 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True):
                 from types import SimpleNamespace
                 result=SimpleNamespace(reply='Each Guildhall turn has its own CoS session. Start a new meeting for a fresh shared conversation; your private CoS chat is unchanged.')
             else:
-                result=run_turn(value['trigger']['text'],meeting_context=prompt,channel='guildhall',conversation_id='guildhall:'+value['room']+':'+value['id'],request_id=value['id'])
+                from core.room_scope import meeting_scope
+                members=verify_members(value) if verify_members is not None else None
+                result=run_turn(value['trigger']['text'],meeting_context=prompt,channel='guildhall',conversation_id='guildhall:'+value['room']+':'+value['id'],request_id=value['id'],meeting_scope=meeting_scope(members))
             answer={'text':result.reply,'turn_id':value['id'],'room':value['room']}
             if not isinstance(answer['text'],str) or not answer['text'].strip():raise ValueError('Empty reply')
             with db() as c:c.execute('UPDATE turns SET state=?,result=? WHERE id=?',('done',json.dumps(answer),value['id']))

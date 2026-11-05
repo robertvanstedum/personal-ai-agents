@@ -100,6 +100,11 @@ def test_all_channels_use_one_backend_contract_and_result_shape():
     assert len(calls) == len(ALLOWED_CHANNELS)
     assert len(increments) == len(ALLOWED_CHANNELS)
     for _, context, tool_policy in calls:
+        if context["confer"]["input_channel"] == "guildhall":
+            # F2 D8: a guildhall turn with no verified owner-private scope is a closed room.
+            assert context["recent_memory"] == "" and context["meeting_scope"] == "closed"
+            assert tool_policy == {"observation": False, "mutation": False, "meeting_scope": "closed"}
+            continue
         assert context["recent_memory"] == "remembered"
         if context["confer"]["input_channel"] == "html_voice":
             assert context["system_prompt"].startswith("system\n\n")

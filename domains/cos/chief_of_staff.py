@@ -840,6 +840,7 @@ def _process_confer_turn(
     on_dispatch=None,
     turn_id: str | None = None,
     meeting_context: str | None = None,
+    meeting_scope: str | None = None,
 ):
     """One Confer turn through the canonical turn service. ``on_dispatch`` (CoS's direct voice only): called at the
     dispatch boundary (ConferTurnRequest.on_dispatch); None for every other caller."""
@@ -867,6 +868,7 @@ def _process_confer_turn(
         on_dispatch=on_dispatch,
         turn_id=turn_id,
         meeting_context=meeting_context,
+        meeting_scope=meeting_scope,
     ))
 
 

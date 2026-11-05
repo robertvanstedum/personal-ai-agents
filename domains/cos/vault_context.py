@@ -42,7 +42,8 @@ def call_with_vault(backend, prompt, context, tool_policy, *, retrieve=None, env
     environ = os.environ if environ is None else environ
     configured = any(environ.get(k) for k in ("MINIMOI_VAULT_ASK_URL", "MINIMOI_VAULT_ASK_TOKEN"))
     # Private turns must not reach a service that logs retrieval queries; out-of-scope conversations never ask.
-    if not configured or context.get("record_mode") == "off_record" or not in_scope(context, environ):
+    if (not configured or context.get("record_mode") == "off_record" or context.get("meeting_scope") == "closed"
+            or not in_scope(context, environ)):
         return backend.call_backend(prompt, context, tool_policy)
 
     built = None
