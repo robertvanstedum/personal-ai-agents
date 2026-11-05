@@ -1292,6 +1292,47 @@
             "object",
             "null"
           ]
+        },
+        "approval": {
+          "description": "Robert's approval of this admission (outbox.approve). Absent or null: not approved. Spent at the first send.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "event_id",
+                "card_digest",
+                "approved_at",
+                "spent_at"
+              ],
+              "properties": {
+                "event_id": {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+                },
+                "card_digest": {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+                },
+                "approved_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "spent_at": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
         }
       }
     }

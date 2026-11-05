@@ -22,6 +22,7 @@
         "correction.apply",
         "task.request_admission",
         "outbox.record",
+        "outbox.approve",
         "task.adopt_interpretation",
         "task.submit_artifacts",
         "task.record_review",
@@ -645,6 +646,25 @@
             "properties": {
               "payload": {
                 "$ref": "#/$defs/payload.request.link_source"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "outbox.approve"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.outbox.approve"
               }
             }
           }
@@ -1393,6 +1413,23 @@
       ],
       "properties": {
         "source_event_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+        }
+      }
+    },
+    "payload.outbox.approve": {
+      "description": "B4 execution design v0.4 §2 / v0.5 M2-M3: Robert's exact approval of one work card, recorded from his own session. It names the admission operation and the card digest he saw; it is used once, expires 15 minutes after it is recorded, and is spent by the first send.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "card_digest",
+        "approval_event_id"
+      ],
+      "properties": {
+        "card_digest": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+        },
+        "approval_event_id": {
           "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
         }
       }

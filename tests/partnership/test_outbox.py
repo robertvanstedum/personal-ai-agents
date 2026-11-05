@@ -8,7 +8,7 @@ import pytest
 from core.canonical_json import digest
 from services.partnership_tasks.outbox import drain_once
 from tests.partnership.fake_harness import FakeHarness
-from tests.partnership.synth import Flow, cmd, ref, service
+from tests.partnership.synth import Flow, cmd, ref, service, drain, approve_admission
 
 BUNDLE = {"steps": ["draft", "review"], "budget_usd": 0, "expiry": "2026-11-05T14:00:00+00:00"}
 BD = digest(BUNDLE)
@@ -56,7 +56,7 @@ def test_e02_task_change_and_outbox_intent_are_one_journal_intent_and_nothing_is
 def test_happy_path_attempt_recorded_before_send_then_receipt_with_method(rig):
     svc, f, tid, h = rig
     request_admission(svc, tid)
-    assert drain_once(svc, D, h, "OB-syn-0001") == "acknowledged"
+    assert drain(svc, D, h, "OB-syn-0001") == "acknowledged"
     ob = outbox(svc)
     assert [(a["observation"], a["method"], a["send_attempt"]) for a in ob["attempts"]] == \
         [("attempted", "drainer", 1), ("applied", "destination_answer", 1)]
@@ -66,6 +66,7 @@ def test_happy_path_attempt_recorded_before_send_then_receipt_with_method(rig):
 def test_s2_3_only_a_drainer_records_and_the_receipt_must_name_this_operation(rig):
     svc, f, tid, h = rig
     request_admission(svc, tid)
+    approve_admission(svc, "OB-syn-0001")                                     # Robert's approval first
     ob = outbox(svc)
     as_lead = cmd("outbox.record", "outbox", "OB-syn-0001",
                   {"observation": "attempted", "destination_receipt": None, "code": None}, expected=ob["revision"])
@@ -83,8 +84,8 @@ def test_f02_destination_commits_but_the_answer_is_lost_then_lookup_settles_it_o
     svc, f, tid, h = rig
     request_admission(svc, tid)
     h.faults = ["lose_answer_after_commit"]
-    assert drain_once(svc, D, h, "OB-syn-0001") == "unknown"
-    assert drain_once(svc, D, h, "OB-syn-0001") == "acknowledged"
+    assert drain(svc, D, h, "OB-syn-0001") == "unknown"
+    assert drain(svc, D, h, "OB-syn-0001") == "acknowledged"
     assert outbox(svc)["attempts"][-1]["method"] == "destination_lookup"
     assert h.admissions() == ["OB-syn-0001"] and h.admits_seen == 1
 
@@ -93,9 +94,9 @@ def test_e03_failure_before_commit_then_absent_then_resent_under_the_same_id_wit
     svc, f, tid, h = rig
     request_admission(svc, tid)
     h.faults = ["fail_before_commit"]
-    assert drain_once(svc, D, h, "OB-syn-0001") == "unknown"
-    assert drain_once(svc, D, h, "OB-syn-0001") == "pending"
-    assert drain_once(svc, D, h, "OB-syn-0001") == "acknowledged"
+    assert drain(svc, D, h, "OB-syn-0001") == "unknown"
+    assert drain(svc, D, h, "OB-syn-0001") == "pending"
+    assert drain(svc, D, h, "OB-syn-0001") == "acknowledged"
     sends = [a["send_attempt"] for a in outbox(svc)["attempts"] if a["observation"] == "attempted"]
     assert sends == [1, 2] and h.admissions() == ["OB-syn-0001"]
 
@@ -103,21 +104,23 @@ def test_e03_failure_before_commit_then_absent_then_resent_under_the_same_id_wit
 def test_s2_1_a_late_send_after_lookup_said_absent_is_refused_so_the_record_stays_true(rig):
     svc, f, tid, h = rig
     request_admission(svc, tid)
+    approve_admission(svc, "OB-syn-0001")                                     # Robert's approval first
     ob = outbox(svc)
     svc.submit(cmd("outbox.record", "outbox", "OB-syn-0001",                          # drainer A records attempt 1
                    {"observation": "attempted", "destination_receipt": None, "code": None},
                    expected=ob["revision"]), D)
-    assert drain_once(svc, D, h, "OB-syn-0001") == "pending"                          # drainer B: lookup -> absent
+    assert drain(svc, D, h, "OB-syn-0001") == "pending"                          # drainer B: lookup -> absent
     from services.partnership_tasks.outbox import HarnessRefused
     with pytest.raises(HarnessRefused, match="attempt_declared_absent"):              # A's send finally arrives
         h.admit("OB-syn-0001", BD, task_id=tid, fence_generation=0, attempt=1)
-    assert drain_once(svc, D, h, "OB-syn-0001") == "acknowledged"                     # B resends as attempt 2
+    assert drain(svc, D, h, "OB-syn-0001") == "acknowledged"                     # B resends as attempt 2
     assert h.admissions() == ["OB-syn-0001"]
 
 
 def test_s1_1_fence_reaches_the_authority_first_then_a_stale_send_is_refused_there(rig):
     svc, f, tid, h = rig
     request_admission(svc, tid)
+    approve_admission(svc, "OB-syn-0001")                                     # Robert's approval first
     ob = outbox(svc)
     svc.submit(cmd("outbox.record", "outbox", "OB-syn-0001",                          # stale drainer recorded attempt
                    {"observation": "attempted", "destination_receipt": None, "code": None},
@@ -125,7 +128,7 @@ def test_s1_1_fence_reaches_the_authority_first_then_a_stale_send_is_refused_the
     res = cancel(f, tid)
     assert res["outcome"] == "accepted" and res["open_effects"] == ["OB-syn-0001"]    # E07: may already exist
     fence_op = fence_ops(svc, tid)
-    assert fence_op and drain_once(svc, D, h, fence_op[0]) == "acknowledged"          # authority's fence raised
+    assert fence_op and drain(svc, D, h, fence_op[0]) == "acknowledged"          # authority's fence raised
     from services.partnership_tasks.outbox import HarnessRefused
     with pytest.raises(HarnessRefused, match="fenced"):
         h.admit("OB-syn-0001", BD, task_id=tid, fence_generation=0, attempt=1)
@@ -142,7 +145,7 @@ def test_s1_1_cancel_inside_the_authority_commit_window_is_reported_not_hidden(r
         h.before_commit = None
         seen["cancel"] = cancel(f, tid)
     h.before_commit = cancel_mid_commit
-    assert drain_once(svc, D, h, "OB-syn-0001") == "acknowledged"
+    assert drain(svc, D, h, "OB-syn-0001") == "acknowledged"
     assert seen["cancel"]["open_effects"] == ["OB-syn-0001"]
     assert svc.get("task", tid, "tok-principal")["state"] == "canceled"
     assert h.admissions() == ["OB-syn-0001"]                                          # actual, not hidden
@@ -153,7 +156,7 @@ def test_f02_a_stale_pending_entry_after_cancel_is_closed_and_never_sent(rig):
     request_admission(svc, tid)
     cancel(f, tid)
     assert outbox(svc)["state"] == "fenced"
-    assert drain_once(svc, D, h, "OB-syn-0001") == "fenced" and h.admissions() == []
+    assert drain(svc, D, h, "OB-syn-0001") == "fenced" and h.admissions() == []
 
 
 def test_s2_2_accept_waits_for_every_admission_to_settle_and_reopen_fences_pending_sends(rig):
@@ -162,7 +165,7 @@ def test_s2_2_accept_waits_for_every_admission_to_settle_and_reopen_fences_pendi
     request_admission(svc, tid)
     current = f.ready_for_acceptance(tid)
     assert f.accept(tid, current)["detail"] == "effects_unreconciled"          # pending counts too
-    drain_once(svc, D, h, "OB-syn-0001")
+    drain(svc, D, h, "OB-syn-0001")
     assert f.accept(tid, current)["outcome"] == "accepted"
     t = svc.get("task", tid, "tok-principal")
     f.ok(cmd("task.reopen", "task", tid, {"reason": "Redo."}, expected=t["revision"]), "tok-mc")
@@ -181,7 +184,7 @@ def test_s2_2_a_conflict_ends_only_by_the_owners_decision(rig):
     fsio.write_doc(h._doc("admissions", "OB-syn-0001"), {"bundle_digest": other, "task_id": tid, "fence": 0,
                    "receipt": {"store": "harness", "id": "OB-syn-0001", "edition": "admitted", "digest": other}})
     request_admission(svc, tid)
-    assert drain_once(svc, D, h, "OB-syn-0001") == "conflict"
+    assert drain(svc, D, h, "OB-syn-0001") == "conflict"
     ob = outbox(svc)
     abandon = cmd("outbox.record", "outbox", "OB-syn-0001",
                   {"observation": "abandoned", "destination_receipt": None, "code": "owner_reviewed"},
@@ -195,9 +198,9 @@ def test_s2_4_no_new_admission_over_an_unknown_one(rig):
     svc, f, tid, h = rig
     request_admission(svc, tid)
     h.faults = ["lose_answer_after_commit"]
-    drain_once(svc, D, h, "OB-syn-0001")
+    drain(svc, D, h, "OB-syn-0001")
     h.faults = ["lookup_down"]
-    assert drain_once(svc, D, h, "OB-syn-0001") == "unknown"                          # never retried blind
+    assert drain(svc, D, h, "OB-syn-0001") == "unknown"                          # never retried blind
     assert request_admission(svc, tid, op="OB-syn-0002")["detail"] == "effects_unreconciled"
 
 
@@ -208,7 +211,7 @@ def test_e03_the_same_operation_id_with_another_digest_is_a_conflict_not_a_secon
     fsio.write_doc(h._doc("admissions", "OB-syn-0001"), {"bundle_digest": other, "task_id": tid, "fence": 0,
                    "receipt": {"store": "harness", "id": "OB-syn-0001", "edition": "admitted", "digest": other}})
     request_admission(svc, tid)
-    assert drain_once(svc, D, h, "OB-syn-0001") == "conflict"
+    assert drain(svc, D, h, "OB-syn-0001") == "conflict"
 
 
 def test_harness_to_task_direction_resends_its_persisted_command_bytes_and_replays(rig):
@@ -260,8 +263,8 @@ def test_two_fence_bumps_reach_the_authority_out_of_order_and_the_higher_wins(ri
              expected=t["revision"]), "tok-mc")
     ops = sorted(fence_ops(svc, tid), key=lambda o: outbox(svc, o)["fence_generation"])
     assert [outbox(svc, o)["fence_generation"] for o in ops] == [1, 2]
-    drain_once(svc, D, h, ops[1])
-    drain_once(svc, D, h, ops[0])                                         # the late, lower one
+    drain(svc, D, h, ops[1])
+    drain(svc, D, h, ops[0])                                         # the late, lower one
     assert h.fence(tid) == 2
 
 
@@ -280,9 +283,54 @@ def test_finding_2_another_platform_seat_with_outbox_record_cannot_record(rig, t
     """Codex finding 2: a platform-origin binding granted outbox.record is still refused unless it is the drainer."""
     svc, f, tid, h = rig
     request_admission(svc, tid)
+    approve_admission(svc, "OB-syn-0001")                                     # Robert's approval first
     ob = outbox(svc)
     record = cmd("outbox.record", "outbox", "OB-syn-0001",
                  {"observation": "attempted", "destination_receipt": None, "code": None}, expected=ob["revision"])
     refused = svc.submit(record, "tok-platform-recorder")      # platform origin, granted outbox.record, not the drainer
     assert refused["outcome"] == "refused" and refused["detail"] == "only_a_drainer_records"
     assert svc.submit(dict(record, command_id="cmd-d-ok"), D)["outcome"] == "accepted"
+
+
+# ---- B4 execution design v0.5 M2-M3: an admission is sent only on Robert's own fresh, unspent approval of that card --
+
+def test_v05_no_send_without_robert_approval_and_one_approval_is_one_send(rig):
+    svc, f, tid, h = rig
+    request_admission(svc, tid)
+    assert drain(svc, D, h, "OB-syn-0001", approve=False) == "pending" and h.admissions() == []   # nothing sent
+    assert approve_admission(svc, "OB-syn-0001")["outcome"] == "accepted"
+    again = approve_admission(svc, "OB-syn-0001", event="SE-syn-ok-second")
+    assert again["outcome"] == "refused" and again["detail"] == "already_approved"            # fresh one stands
+    h.faults = ["fail_before_commit"]
+    assert drain(svc, D, h, "OB-syn-0001", approve=False) == "unknown"
+    assert outbox(svc)["approval"]["spent_at"] is not None                                    # spent by the send
+    assert drain(svc, D, h, "OB-syn-0001", approve=False) == "pending"                        # lookup: absent
+    assert drain(svc, D, h, "OB-syn-0001", approve=False) == "pending" and h.admissions() == []  # resend needs a new one
+    assert drain(svc, D, h, "OB-syn-0001") == "acknowledged" and h.admissions() == ["OB-syn-0001"]
+
+
+def test_v05_an_approval_names_exactly_this_card_from_robert_session_and_is_used_once(rig):
+    import json as _json
+    svc, f, tid, h = rig
+    request_admission(svc, tid)
+    ob = outbox(svc)
+    def event(sid, content, token="tok-principal", store="portal-owner-action"):
+        svc.submit(cmd("source_event.record", "source_event", sid,
+                       {"source": {"store": store, "id": sid, "position": 1}, "content": content,
+                        "correction_of": None}), token)
+    def approve(sid, digest_=None, token="tok-principal"):
+        o = outbox(svc)
+        return svc.submit(cmd("outbox.approve", "outbox", "OB-syn-0001",
+                              {"card_digest": digest_ or o["bundle_digest"], "approval_event_id": sid},
+                              expected=o["revision"]), token)
+    good = _json.dumps({"action": "admit", "operation_id": "OB-syn-0001", "card_digest": ob["bundle_digest"]})
+    event("SE-syn-ok-a1", good)
+    assert approve("SE-syn-ok-a1", token="tok-mc")["detail"] == "only_the_owner_approves"       # MC cannot
+    other = "sha256:" + "0" * 64
+    assert approve("SE-syn-ok-a1", digest_=other)["detail"] == "approval_digest_mismatch"
+    event("SE-syn-ok-a2", _json.dumps({"action": "admit", "operation_id": "OB-syn-9999", "card_digest": ob["bundle_digest"]}))
+    assert approve("SE-syn-ok-a2")["detail"] == "approval_not_for_this_card"                   # another operation
+    event("SE-syn-ok-a3", good, store="records")
+    assert approve("SE-syn-ok-a3")["detail"] == "approval_not_for_this_card"                   # not an owner action
+    assert approve("SE-syn-ok-a1")["outcome"] == "accepted"
+    assert drain(svc, D, h, "OB-syn-0001", approve=False) == "acknowledged"

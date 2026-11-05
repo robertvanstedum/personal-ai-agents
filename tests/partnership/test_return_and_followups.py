@@ -8,7 +8,7 @@ from core.canonical_json import digest
 from services.partnership_tasks.outbox import drain_once
 from services.partnership_tasks.service import NOTICE_OP_PREFIX
 from tests.partnership.fake_harness import FakeHarness, FakeNotices
-from tests.partnership.synth import Flow, cmd, ref, service
+from tests.partnership.synth import Flow, cmd, ref, service, drain, approve_admission
 
 D = "tok-drainer"
 
@@ -61,9 +61,9 @@ def test_j2_return_packet_reaches_the_principal_with_the_browser_closed_and_read
     [packet] = notices_for(svc, tid, "return_packet")
     assert packet["state"] == "pending" and packet["bundle_ref"]["digest"] == v1
     n.faults = ["down"]
-    assert drain_once(svc, D, h, packet["operation_id"], notices=n) == "unknown"     # delivery down: not lost
-    assert drain_once(svc, D, h, packet["operation_id"], notices=n) == "pending"     # never arrived
-    assert drain_once(svc, D, h, packet["operation_id"], notices=n) == "acknowledged"
+    assert drain(svc, D, h, packet["operation_id"], notices=n) == "unknown"     # delivery down: not lost
+    assert drain(svc, D, h, packet["operation_id"], notices=n) == "pending"     # never arrived
+    assert drain(svc, D, h, packet["operation_id"], notices=n) == "acknowledged"
     assert n.delivered() == [packet["operation_id"]]
     ob = svc.get("outbox", packet["operation_id"], "tok-principal")
     read = cmd("outbox.record", "outbox", ob["operation_id"],
@@ -82,8 +82,8 @@ def test_e08_e09_lead_failure_gives_one_durable_needs_owner_notice_per_episode(r
     assert svc.submit(miss, "tok-scheduler")["replayed"] is True                    # same detection, same notice
     assert len(notices_for(svc, tid, "needs_owner")) == 1
     [notice] = notices_for(svc, tid, "needs_owner")
-    assert drain_once(svc, D, h, notice["operation_id"], notices=n) == "acknowledged"
-    assert drain_once(svc, D, h, notice["operation_id"], notices=n) == "acknowledged"  # no repeat sends
+    assert drain(svc, D, h, notice["operation_id"], notices=n) == "acknowledged"
+    assert drain(svc, D, h, notice["operation_id"], notices=n) == "acknowledged"  # no repeat sends
     assert len(n.delivered()) == 1
 
 
@@ -92,7 +92,7 @@ def test_a_notice_without_a_channel_stays_pending_and_is_never_dropped(rig):
     v1 = f.ready_for_acceptance(tid, tag="v1")
     f.accept(tid, v1)
     [packet] = notices_for(svc, tid, "return_packet")
-    assert drain_once(svc, D, h, packet["operation_id"]) == "pending"
+    assert drain(svc, D, h, packet["operation_id"]) == "pending"
 
 
 # ---- B2B follow-ups ---------------------------------------------------------------------------------------------
@@ -232,7 +232,7 @@ def test_reconstruction_shows_notices_with_their_delivery_state(rig):
     v1 = f.ready_for_acceptance(tid, tag="v1")
     f.accept(tid, v1)
     [packet] = notices_for(svc, tid, "return_packet")
-    drain_once(svc, D, h, packet["operation_id"], notices=n)
+    drain(svc, D, h, packet["operation_id"], notices=n)
     out = Reconstructor(svc).reconstruct("task", tid, "tok-principal")
     assert [(x["kind"], x["state"]) for x in out["notices"]] == [("return_packet", "acknowledged")]
     assert {"store": "notices", "status": "not_joined"} not in out["coverage"]
@@ -260,7 +260,7 @@ def test_f14_a_breach_with_a_delivered_escalation_notice_has_no_gap(rig):
                                                     "fence_generation": t["fence_generation"]},
              expected=t["revision"]), "tok-scheduler")
     [notice] = notices_for(svc, tid, "needs_owner")
-    drain_once(svc, D, h, notice["operation_id"], notices=n)
+    drain(svc, D, h, notice["operation_id"], notices=n)
     cos = StoreWriter(svc.journal.root.parent / "cos", ENV, verify_robert_source=verified)
     occ = "OBL-disk-weekly@2026-11-02"
     define(cos, "OBL-disk-weekly", recurrence={"kind": "weekly", "weekday": 0, "tz": "America/Chicago"},

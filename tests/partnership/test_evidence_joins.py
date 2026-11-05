@@ -16,7 +16,7 @@ from services.partnership_tasks.outbox import drain_once
 from services.partnership_tasks.service import DIRS
 from tests.cos.test_store_writer import ENV, Stream, define, event, verified
 from tests.partnership.fake_harness import FakeHarness
-from tests.partnership.synth import Flow, cmd, ref, service
+from tests.partnership.synth import Flow, cmd, ref, service, drain, approve_admission
 
 OCC = "OBL-disk-weekly@2026-11-02"
 EDITION = "OBL-disk-weekly@r1"           # the obligation definition's revision is the policy edition
@@ -212,7 +212,7 @@ def test_f15_the_joined_query_shows_divergence_payload_effect_review_and_fencing
              {"operation_id": "OB-syn-issue-1", "bundle_digest": pd, "bundle_ref": ref("artifacts", "issue", pd),
               "fence_generation": t["fence_generation"]}, expected=t["revision"]), "tok-mc")
     h = FakeHarness(tmp_path / "h")
-    assert drain_once(svc, "tok-drainer", h, "OB-syn-issue-1") == "acknowledged"     # the wrong issue was written
+    assert drain(svc, "tok-drainer", h, "OB-syn-issue-1") == "acknowledged"     # the wrong issue was written
     f.ready_for_acceptance("TK-syn-0001", tag="draft")                               # reviewed under the misreading
     f.source("SE-syn-0002", "No, the signup page.", correction_of="SE-syn-0001")
     f.interpret("IN-syn-0002", ["SE-syn-0001"], "Open an issue about the signup page.",
@@ -269,7 +269,7 @@ def test_f16_restore_names_lost_history_effects_unknown_to_it_and_never_writes_t
                                                      "fence_generation": t["fence_generation"]},
              expected=t["revision"]), "tok-mc")
     h = FakeHarness(tmp_path / "h")
-    drain_once(svc, "tok-drainer", h, "OB-syn-0001")
+    drain(svc, "tok-drainer", h, "OB-syn-0001")
     late = svc.journal.head()
     before = sorted(p.read_bytes() for p in (tmp_path / "backup").rglob("*") if p.is_file())
     out = restore_check(tmp_path / "backup", doc_dirs=DOC_DIRS, exported_heads=[early, late], harness=h)
@@ -304,7 +304,7 @@ def test_f16_an_acknowledged_effect_missing_from_the_harness_is_named(tmp_path):
                                                      "bundle_ref": ref("artifacts", "b", bd),
                                                      "fence_generation": t["fence_generation"]},
              expected=t["revision"]), "tok-mc")
-    drain_once(svc, "tok-drainer", FakeHarness(tmp_path / "h-old"), "OB-syn-0002")
+    drain(svc, "tok-drainer", FakeHarness(tmp_path / "h-old"), "OB-syn-0002")
     head = svc.journal.head()
     out = restore_check(tmp_path / "live", doc_dirs=DOC_DIRS, exported_heads=[head],
                         harness=FakeHarness(tmp_path / "h-restored-empty"))

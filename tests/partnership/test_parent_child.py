@@ -6,7 +6,7 @@ import pytest
 
 from core.canonical_json import digest
 from services.partnership_tasks.service import MAX_CHILD_ROUNDS
-from tests.partnership.synth import Flow, cmd, ref, service
+from tests.partnership.synth import Flow, cmd, ref, service, drain, approve_admission
 
 
 @pytest.fixture
@@ -88,7 +88,7 @@ def test_j3_parent_cancel_reaches_children_and_reports_their_uncertain_effects(t
              expected=t["revision"]), "tok-mc")
     h = FakeHarness(tmp_path / "h")
     h.faults = ["lose_answer_after_commit"]
-    assert drain_once(svc, "tok-drainer", h, "OB-syn-c1-1") == "unknown"
+    assert drain(svc, "tok-drainer", h, "OB-syn-c1-1") == "unknown"
     res = f.transition(tid, "canceled", reason="Owner stopped it.", evidence=[ref("records", "evt-stop")])
     assert res["outcome"] == "accepted" and res["open_effects"] == ["OB-syn-c1-1"]
     assert task(svc, c)["state"] == "canceled"

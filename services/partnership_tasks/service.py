@@ -32,6 +32,7 @@ from services.partnership_tasks.journal import Conflict, Journal, JournalDamaged
 DRAINER_SEAT = "outbox-drainer"
 # Where the portal records Robert's own signed confirm/decline/correct/cancel actions (B4 design v0.2 §2, v0.3 R-M1).
 OWNER_ACTION_STORE = "portal-owner-action"
+APPROVAL_WINDOW_S = 900          # an admission approval is good for 15 minutes from when it was recorded (v0.5 M3)
 
 class StoreUnavailable(Exception):
     """The store is held after an integrity failure (or cannot be read): never answered as "not found"."""
@@ -1126,6 +1127,58 @@ class _Planner:
         return self.finish([(path_of("task", task["task_id"]), self.checked("task", t2)),
                             (path_of("outbox", op), self.checked("outbox", ob))], t2["revision"])
 
+    def k_outbox_approve(self) -> Plan:
+        """Robert approves one admission, from his own session (B4 execution design v0.4 §2, v0.5 M2-M3).
+        - Only the owner's session binding; only a pending admit_bundle entry whose task's fence is unchanged.
+        - The approval names exactly this operation and card digest: the cited owner-action event's content must be
+          {"action": "admit", "operation_id": <this>, "card_digest": <this entry's bundle_digest>}, recorded from the
+          owner session in this store, and no other approval may cite it.
+        - A fresh unspent approval is never replaced; a spent or expired one may be (a new click, a new event).
+        The authority re-checks this record inside its own admission transaction (v0.5 M2); nothing is sent here."""
+        if not self.b.is_owner:
+            raise Refused("not_authorized", "only_the_owner_approves")
+        ob = self.target()
+        if ob is None:
+            raise Refused("not_found", "outbox")
+        self.expect(ob)
+        if ob["operation"] != "admit_bundle" or ob["state"] != "pending":
+            raise Refused("transition_not_allowed", f"{ob['operation']}:{ob['state']}")
+        task = self.load("task", ob["task_id"])
+        self.links.update(task_id=task["task_id"], request_id=task["request_ref"],
+                          interpretation_id=ob["interpretation_ref"])
+        if task["fence_generation"] != ob["fence_generation"] or task["state"] not in ("submitted", "working"):
+            raise Refused("fenced", "task_changed_since_enqueue")
+        if self.p["card_digest"] != ob["bundle_digest"]:
+            raise Refused("not_authorized", "approval_digest_mismatch")
+        current = ob.get("approval")
+        if current and current["spent_at"] is None and not self.approval_expired(current):
+            raise Refused("id_taken", "already_approved")
+        event_id = self.p["approval_event_id"]
+        ev = self.svc.journal.read(path_of("source_event", event_id))
+        if (ev is None or ev["data_scope"] != ob["data_scope"] or ev["source"]["store"] != OWNER_ACTION_STORE
+                or ev.get("provenance", {}).get("origin") != "owner_session"):
+            raise Refused("not_authorized", "approval_not_for_this_card")
+        try:
+            action = json.loads(ev["content"])
+        except ValueError:
+            action = None
+        if action != {"action": "admit", "operation_id": ob["operation_id"], "card_digest": ob["bundle_digest"]}:
+            raise Refused("not_authorized", "approval_not_for_this_card")
+        folder = self.svc.journal.root / DIRS["outbox"]
+        for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
+            other = self.svc.journal.read(f"{DIRS['outbox']}/{path.name}") or {}
+            if (other.get("approval") or {}).get("event_id") == event_id:
+                raise Refused("not_authorized", "approval_already_used")
+        rec = self.stamp(dict(ob, approval={"event_id": event_id, "card_digest": ob["bundle_digest"],
+                                            "approved_at": self.now, "spent_at": None}), ob)
+        return self.finish([(path_of("outbox", ob["operation_id"]), self.checked("outbox", rec))], rec["revision"])
+
+    def approval_expired(self, approval) -> bool:
+        from datetime import datetime
+        approved = datetime.fromisoformat(approval["approved_at"].replace("Z", "+00:00"))
+        now = datetime.fromisoformat(self.now.replace("Z", "+00:00"))
+        return (now - approved).total_seconds() > APPROVAL_WINDOW_S
+
     def k_outbox_record(self) -> Plan:
         """What a drainer is about to do or what the destination answered (E03, Q05).
         - Only a platform drainer binding records sends and answers; only the owner abandons (S2-3).
@@ -1164,6 +1217,10 @@ class _Planner:
             if stale:
                 raise Refused("fenced", "task_changed_since_enqueue")
             self.actionable(ob["interpretation_ref"], self.svc.journal.read(path_of("request", task["request_ref"])))
+            approval = ob.get("approval")
+            if not approval or approval["spent_at"] is not None or self.approval_expired(approval) \
+                    or approval["card_digest"] != ob["bundle_digest"]:
+                raise Refused("not_authorized", "admission_needs_robert_approval")   # v0.5 M3: nothing is sent
         if obs == "fenced" and not (admission and stale):
             raise Refused("transition_not_allowed", "not_stale")
         receipt = self.p["destination_receipt"]
@@ -1184,9 +1241,13 @@ class _Planner:
                   "abandoned": "owner_decision", "read": "owner_decision"}.get(obs, "drainer")
         row = self.attempt_row(obs, self.p["code"], method, sends + 1 if obs == "attempted" else (sends or None))
         row["attempt"] = len(ob["attempts"]) + 1
+        approval = ob.get("approval")
+        if obs == "attempted" and admission:
+            approval = dict(approval, spent_at=self.now)        # one approval, one send: a resend needs a new one
         rec = self.stamp(dict(ob, state=new_state, attempts=ob["attempts"] + [row],
                               destination_receipt=receipt if obs == "applied" else ob["destination_receipt"],
-                              reason=self.p["code"]), ob)
+                              reason=self.p["code"], **({"approval": approval} if "approval" in ob or approval else {})),
+                         ob)
         return self.finish([(path_of("outbox", ob["operation_id"]), self.checked("outbox", rec))], rec["revision"])
 
     # -- corrections (C06) --

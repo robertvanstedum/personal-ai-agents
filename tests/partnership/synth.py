@@ -170,3 +170,30 @@ class Flow:
         self.request(f"RQ-syn-{n}", f"SE-syn-{n}", "Design note on agent coordination.", iid=f"IN-syn-{n}")
         self.promote(f"RQ-syn-{n}", f"TK-syn-{n}", lead=lead, holder=lead)
         return f"TK-syn-{n}"
+
+
+def approve_admission(svc, op, token="tok-principal", event=None):
+    """Robert's approval of a pending admission, as the portal records it (B4 execution design v0.5 M2-M3): an owner
+    action event naming the operation and the card digest he saw, then outbox.approve citing it. Returns the
+    outbox.approve result. Refusals (a stale or non-pending entry) are returned, not raised."""
+    import json as _json
+    ob = svc.get("outbox", op, "tok-principal")
+    if ob is None or ob["operation"] != "admit_bundle" or ob["state"] != "pending":
+        return None
+    sid = event or f"SE-syn-ok-{op[3:]}-{len(ob['attempts'])}"
+    content = _json.dumps({"action": "admit", "operation_id": op, "card_digest": ob["bundle_digest"]},
+                          sort_keys=True, separators=(",", ":"))
+    svc.submit(cmd("source_event.record", "source_event", sid,
+                   {"source": {"store": "portal-owner-action", "id": sid, "position": 1}, "content": content,
+                    "correction_of": None}, scope=ob["data_scope"]), token)
+    return svc.submit(cmd("outbox.approve", "outbox", op, {"card_digest": ob["bundle_digest"], "approval_event_id": sid},
+                          expected=ob["revision"], scope=ob["data_scope"]), token)
+
+
+def drain(svc, token, harness, operation_id, notices=None, approve=True):
+    """drain_once after Robert's approval, for tests that are about draining, not approving."""
+    from services.partnership_tasks.outbox import drain_once
+    if approve:
+        approve_admission(svc, operation_id)
+    return drain_once(svc, token, harness, operation_id, notices) if notices is not None else \
+        drain_once(svc, token, harness, operation_id)
