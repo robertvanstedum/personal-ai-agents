@@ -77,3 +77,25 @@ def test_every_loaded_plugin_is_installed_by_the_image():
     loaded = set(CONFIG["plugins"]["load"]["paths"])
     assert loaded == set(copied)
     assert copied["/opt/minimoi/openclaw-plugins/cos-bound"] == "root:root"
+
+
+def test_cos_closed_has_no_tools_at_all():
+    closed = CONFIG["agents"]["entries"]["cos-closed"]["tools"]
+    assert closed["alsoAllow"] == []
+    assert {"web_search", "cos_actions"} | NATIVE <= set(closed["deny"])
+    assert "cos-closed" not in CONFIG["plugins"]["entries"]["cos-bound"]["config"]["agents"]
+
+
+def test_the_v1_actions_route_is_not_registered_when_tools_are_bound(tmp_path):
+    from flask import Flask
+    from domains.cos.store.api import install
+    token = tmp_path / "t"; token.write_text("actions-test-token-0123456789")
+    for bound, want in ((True, 404), (False, 401)):
+        app = Flask(__name__)
+        env = {"COS_STORE_DIR": str(tmp_path / f"s{bound}"), "COS_STORE_ENVIRONMENT": "dev",
+               "COS_ACTIONS_TOKEN_FILE": str(token)}
+        if bound:
+            env["COS_TOOL_BINDINGS_FILE"] = str(tmp_path / "b.sqlite3")
+        writer = install(app, environ=env)
+        assert writer is not None
+        assert app.test_client().get("/internal/cos-actions/v1/items").status_code == want

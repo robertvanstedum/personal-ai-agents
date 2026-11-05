@@ -112,3 +112,17 @@ test('the instance is announced at registration, retried, and stops on a refusal
   await new Promise(r => setTimeout(r, 5));
   assert.ok(plugin.register);
 });
+
+test('meeting entries: cos-meeting may use only bound actions and search; cos-closed nothing (review S2/S3)', () => {
+  const {h, context} = rig({agent: 'cos-meeting', accept: []});
+  const ctx = {...context, runId: RUN, toolCallId: 'm1'};
+  assert.equal(h({toolName: 'browser', params: {}}, ctx).block, true);
+  assert.equal(h({toolName: 'exec', params: {command: 'ls'}}, ctx).block, true);
+  assert.equal(h({toolName: 'web_search', params: {q: 'x'}}, ctx), undefined);
+  assert.ok(h({toolName: 'cos_actions', params: {operation: 'list'}}, ctx).params);
+  const closed = {sessionKey: SESSION.replace('cos-agent-a', 'cos-closed'), agentId: 'cos-closed', runId: RUN, toolCallId: 'c1'};
+  assert.equal(h({toolName: 'web_search', params: {}}, closed).block, true);
+  assert.equal(h({toolName: 'cos_actions', params: {}}, closed).block, true);
+  const owner = {...context, agentId: 'cos-agent-a', runId: RUN, toolCallId: 'o1'};
+  assert.equal(h({toolName: 'browser', params: {}}, owner), undefined);          // owner keeps its tools (Q1)
+});

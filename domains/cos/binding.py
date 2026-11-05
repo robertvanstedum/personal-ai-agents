@@ -380,7 +380,9 @@ class TurnBinder:
             if origin not in ("owner", "service:mc", "service:telegram"):
                 return None
             args = dict(scope="owner", audience=str(conversation_id),
-                        supersession_key=f"{self.store.environment}:{conversation_id}")
+                        # Review S6: a newer turn supersedes only an older turn from the same origin in the same
+                        # conversation, so a Telegram or MC message never cuts off a running Confer turn's tools.
+                        supersession_key=f"{self.store.environment}:{origin}:{conversation_id}")
         try:
             live = self.store.record(turn_id, principal=principal, origin=origin, agent_entry=agent_entry,
                                      session_user=session_user, lifetime_s=self.lifetime_s,

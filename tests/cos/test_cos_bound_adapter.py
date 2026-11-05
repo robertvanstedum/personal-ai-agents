@@ -102,8 +102,8 @@ def test_meeting_turns_use_cos_meeting_and_closed_rooms_are_never_bound(store):
     assert store.trace(c["confer"]["receipt_id"])["binding"]["scope"] == "meeting"
     c = ctx({"origin": "meeting", "principal": "robert", "audience": "r", "claim_id": "c", "room_generation": "g1"},
             scope="closed")
-    backend(store, Stream(chunks(model="openclaw/cos-meeting")), sent).call_backend("hi", c, {})
-    assert sent[1]["json"]["model"] == "openclaw/cos-meeting"
+    backend(store, Stream(chunks(model="openclaw/cos-closed")), sent).call_backend("hi", c, {})
+    assert sent[1]["json"]["model"] == "openclaw/cos-closed"           # review S2: no tools at all
     assert store.trace(c["confer"]["receipt_id"])["binding"] is None
     c = ctx(OWNER, scope="owner_private")          # an owner origin never binds a meeting turn
     backend(store, Stream(chunks(model="openclaw/cos-meeting")), sent).call_backend("hi", c, {})
@@ -140,7 +140,13 @@ def test_tool_call_delta_or_wrong_model_is_not_trusted(store):
 def test_supersession_a_newer_owner_turn_revokes_the_older_one(store):
     first = ctx(OWNER)
     store.record(first["confer"]["receipt_id"], principal="robert", origin="owner", scope="owner", audience="owner",
-                 agent_entry="cos-agent-a", session_user="u", lifetime_s=600, supersession_key="dev:owner")
+                 agent_entry="cos-agent-a", session_user="u", lifetime_s=600, supersession_key="dev:owner:owner")
+    confer = ctx(OWNER)
+    store.record(confer["confer"]["receipt_id"], principal="robert", origin="owner", scope="owner", audience="owner",
+                 agent_entry="cos-agent-a", session_user="u", lifetime_s=600, supersession_key="dev:owner:owner")
+    tg = ctx({"origin": "service:telegram", "principal": "robert"})
+    backend(store, Stream(chunks(run="chatcmpl_33333333-3333-4333-8333-333333333333"))).call_backend("hi", tg, {})
+    assert store.trace(confer["confer"]["receipt_id"])["binding"]["revoked"] is None    # review S6: other origin
     backend(store, Stream(chunks(run="chatcmpl_22222222-2222-4222-8222-222222222222"))).call_backend("hi", ctx(OWNER), {})
     assert store.trace(first["confer"]["receipt_id"])["binding"]["revoked_reason"] == "superseded"
 
@@ -151,7 +157,7 @@ def test_guildhall_stop_route_revokes_with_the_service_token(tmp_path, store):
     token.write_text("x" * 48)
     app = Flask(__name__)
     install(app, token_file=token, data_dir=tmp_path / "ledger", run_turn=lambda *a, **k: None,
-            stop_turn=lambda turn: store.revoke(turn, "meeting_stop"))
+            stop_turn=lambda turn, reason: store.revoke(turn, reason))
     client = app.test_client()
     turn = str(uuid4())
     assert client.post(f"/internal/guildhall/turns/{turn}/stop").status_code == 401
@@ -178,3 +184,13 @@ def test_request_binding_comes_only_from_the_signed_assertion(monkeypatch, tmp_p
             got = cos._request_binding()
         assert (got and {k: got[k] for k in ("origin", "principal")}) == want or got == want
     assert cos._request_binding() is None                 # no request: no binding
+
+
+def test_a_stream_that_never_ends_hits_the_turn_deadline(store, monkeypatch):
+    import domains.cos.backends.openclaw_backend as ob
+    clock = iter([0, 0, 1, 500, 500, 500, 500])
+    monkeypatch.setattr("time.monotonic", lambda: next(clock, 10_000))
+    c = ctx(OWNER)
+    with pytest.raises(AgentRuntimeError, match="timed out"):
+        backend(store, Stream(chunks("a|b|c|d|e"))).call_backend("hi", c, {})
+    assert store.trace(c["confer"]["receipt_id"])["binding"]["revoked_reason"] == "turn_ended"

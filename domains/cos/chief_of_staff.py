@@ -2089,7 +2089,7 @@ def _start_cos():
         install_guildhall(app, token_file=os.environ['COS_GUILDHALL_TOKEN_FILE'],
                          data_dir=os.environ['COS_GUILDHALL_DIR'], run_turn=_process_confer_turn,
                          is_ready=lambda: _backend is not None,
-                         stop_turn=lambda turn_id: _bindings is not None and _bindings.revoke(turn_id, 'meeting_stop'),
+                         stop_turn=lambda turn_id, reason='meeting_stop': _bindings is not None and _bindings.revoke(turn_id, reason),
                          verifier=_meeting_verifier())
 
     _start_tool_listener()

@@ -16,6 +16,9 @@ import {randomBytes} from 'node:crypto';
 
 export const ENDPOINT_PATH = '/internal/cos/v1';
 export const NATIVE = new Set(['write', 'edit', 'exec', 'apply_patch', 'process']);
+// Meeting entries (review S2/S3): the hook is the second gate behind the config deny list. cos-meeting may call only
+// the bound tool and bounded search; cos-closed (a room with anyone outside Robert's team) may call nothing.
+export const RESTRICTED = Object.freeze({'cos-meeting': new Set(['cos_actions', 'web_search']), 'cos-closed': new Set()});
 const STATE = Symbol.for('cos-bound/process-state/v1');
 globalThis[STATE] ??= Object.freeze({instance: randomBytes(16).toString('hex'), sealKey: randomBytes(32)});
 export const INSTANCE = globalThis[STATE].instance;
@@ -142,6 +145,9 @@ export function hook({sealer = PROCESS_SEALER, agents, url, token, instance = IN
     const name = event?.toolName;
     const agentId = ctx?.agentId, sessionKey = ctx?.sessionKey;
     const runId = ctx?.runId ?? event?.runId, toolCallId = ctx?.toolCallId ?? event?.toolCallId;
+    if (Object.hasOwn(RESTRICTED, agentId) && !RESTRICTED[agentId].has(name)) {
+      return {block: true, blockReason: 'This tool is not available in this meeting'};
+    }
     if (name === 'cos_actions') {
       if (!allowed.has(agentId)) return {block: true, blockReason: 'CoS tools are not available to this agent'};
       const params = sealer.seal(event.params, {runId, toolCallId, agentId, sessionKey});

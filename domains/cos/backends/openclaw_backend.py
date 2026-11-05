@@ -97,6 +97,7 @@ class OpenClawBackend:
         http_post=None,
         binder=None,
         meeting_agent_id: str = "cos-meeting",
+        closed_agent_id: str = "cos-closed",
     ):
         self._write_memory = write_memory
         self._dispatch_tool = dispatch_tool
@@ -127,6 +128,7 @@ class OpenClawBackend:
         # default until step 5's config), the adapter behaves exactly as before.
         self._binder = binder
         self._meeting_agent_id = meeting_agent_id
+        self._closed_agent_id = closed_agent_id
 
         parsed = urlparse(self._gateway_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -290,8 +292,14 @@ class OpenClawBackend:
         tool_calls marker, so callers refuse it exactly as before."""
         run_id = model = None
         parts, finish, tool_calls, refusal, role = [], None, False, False, None
+        # Review S4: the read timeout is per chunk once streaming; the turn as a whole gets the same limit the
+        # non-streaming read had.
+        import time as _time
+        deadline = _time.monotonic() + turn_timeout_seconds.get()
         try:
             for raw in response.iter_lines(decode_unicode=True):
+                if _time.monotonic() > deadline:
+                    raise AgentRuntimeError("COS Agent A timed out before replying.")
                 if not raw or not raw.startswith("data:"):
                     continue
                 data = raw[5:].strip()
@@ -482,7 +490,9 @@ class OpenClawBackend:
         # F2 step 3: the agent entry follows the meeting scope (cos-meeting for any guildhall turn), the binding is
         # recorded before the send, the run is attached from the opening chunk, and the binding ends in ``finally``.
         scope = context.get("meeting_scope")
-        agent = self._meeting_agent_id if scope is not None else self._agent_id
+        # Review S2: a closed room (anyone outside Robert's team) uses cos-closed, which has no tools at all.
+        agent = (self._agent_id if scope is None else self._meeting_agent_id if scope == "owner_private"
+                 else self._closed_agent_id)
         context["runtime_agent_entry"] = agent
         bound = self._binder.begin(turn_id=receipt_id or None, session_user=self._session_user(conversation_id, agent),
                                    agent_entry=agent, conversation_id=conversation_id, meeting_scope=scope,

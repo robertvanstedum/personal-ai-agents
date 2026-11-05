@@ -33,7 +33,7 @@ def _agent(config: dict | None = None) -> dict:
     config = config or _config()
     entries = config["agents"]["entries"]
     # F2 step 5: cos-meeting serves guildhall meeting turns (tests/cos/test_cos_meeting_entry.py).
-    assert list(entries) == ["cos-agent-a", "cos-meeting"]
+    assert list(entries) == ["cos-agent-a", "cos-meeting", "cos-closed"]
     return entries["cos-agent-a"]
 
 

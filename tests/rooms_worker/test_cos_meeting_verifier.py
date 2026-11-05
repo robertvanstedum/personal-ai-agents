@@ -72,13 +72,15 @@ def test_wrong_claim_room_or_missing_claim_is_not_admitted(rig):
 def test_watch_revokes_when_the_owner_cancels(rig):
     turn = running_turn(rig)
     facts = rig.verifier.admit(payload(turn, 'x'))
+    assert facts['context']['room'] == turn['room'] and 'transcript' in facts['context']   # review S5
     assert rig.verifier.still_admitted(turn['id'], turn['claim_id'], facts['room_generation'])
     lost = threading.Event()
-    stop = rig.verifier.watch(turn['id'], turn['claim_id'], facts['room_generation'], lambda t: lost.set(),
+    reasons = []
+    stop = rig.verifier.watch(turn['id'], turn['claim_id'], facts['room_generation'], lambda t, reason: reasons.append(reason) or lost.set(),
                               interval_s=0.05)
     try:
         assert rig.call('POST', f"/rooms/{rig.room}/turns/{turn['id']}/cancel", {})[0] in (200, 202)
-        assert lost.wait(3)
+        assert lost.wait(3) and reasons == ['admission_lost']   # review S8
     finally:
         stop()
 
@@ -91,7 +93,7 @@ def test_guildhall_runs_only_admitted_turns_with_the_snapshot_text_and_binding(r
     token = tmp_path / 'tok'; token.write_text('x' * 48)
     app = Flask(__name__)
     install(app, token_file=token, data_dir=tmp_path / 'ledger', verifier=rig.verifier,
-            stop_turn=lambda t: store.revoke(t, 'meeting_stop'),
+            stop_turn=lambda t, reason: store.revoke(t, reason),
             run_turn=lambda text, **kw: runs.append((text, kw)) or SimpleNamespace(reply='ok'))
     c = app.test_client(); h = {'Authorization': 'Bearer ' + 'x' * 48}
     # A body whose text differs from Records is refused before anything is recorded.

@@ -247,6 +247,58 @@
             "enabled": false
           }
         }
+      },
+      "cos-closed": {
+        "name": "COS closed meeting",
+        "workspace": "/home/node/.openclaw/workspace-cos-closed",
+        "model": {
+          "primary": "minimoi-gateway/minimoi-cos-agent",
+          "fallbacks": []
+        },
+        "modelPolicy": {
+          "allow": [
+            "minimoi-gateway/minimoi-cos-agent"
+          ]
+        },
+        "skills": [],
+        "heartbeat": {
+          "every": "0m"
+        },
+        "sandbox": {
+          "mode": "off"
+        },
+        "tools": {
+          "profile": "minimal",
+          "alsoAllow": [],
+          "deny": [
+            "apply_patch",
+            "browser",
+            "cos_actions",
+            "cos_board",
+            "cos_github_issues",
+            "edit",
+            "exec",
+            "gateway",
+            "group:fs",
+            "group:runtime",
+            "ls",
+            "memory_get",
+            "memory_search",
+            "pdf",
+            "process",
+            "read",
+            "view_image",
+            "web_fetch",
+            "web_search",
+            "write"
+          ],
+          "fs": {
+            "workspaceOnly": true
+          },
+          "elevated": {
+            "enabled": false
+          }
+        }
       }
     }
   }

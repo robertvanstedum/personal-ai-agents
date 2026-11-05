@@ -75,6 +75,9 @@ class RecordsMeetingVerifier:
                 or not trigger["text"].strip() or not isinstance(snap.get("generation"), str) or not snap["generation"]):
             return None
         return {"members": people, "owner_private": owner_private(people, self.principal),
+                # Review S5: the quoted meeting context comes from the snapshot too, never the worker's body.
+                "context": {"room": room, "brief": snap.get("brief"), "transcript": snap.get("transcript"),
+                            "coverage": snap.get("coverage")},
                 "trigger_text": trigger["text"], "claim_id": claim_id, "room_generation": snap["generation"],
                 "trigger_seq": snap.get("trigger_seq"),
                 "binding": {"origin": "meeting", "principal": self.principal, "audience": room, "claim_id": claim_id,
@@ -94,11 +97,16 @@ class RecordsMeetingVerifier:
         def loop():
             while not halt.wait(interval_s):
                 if not self.still_admitted(turn_id, claim_id, generation):
-                    _log.info("cos meeting turn %s lost admission; tools revoked", turn_id[:8])
-                    try:
-                        on_lost(turn_id)
-                    finally:
-                        return
+                    # Review S8: record the real reason, and never lose a failed revoke silently.
+                    for attempt in (1, 2):
+                        try:
+                            on_lost(turn_id, "admission_lost")
+                            _log.info("cos meeting turn %s lost admission; tools revoked", turn_id[:8])
+                            return
+                        except Exception:
+                            _log.exception("cos meeting turn %s: revoke after lost admission failed (attempt %d)",
+                                           turn_id[:8], attempt)
+                    return
         thread = threading.Thread(target=loop, name=f"cos-meeting-watch-{turn_id[:8]}", daemon=True)
         thread.start()
 

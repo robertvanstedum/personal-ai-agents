@@ -65,7 +65,7 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
             return jsonify(error='Invalid turn'),400
         if stop_turn is None:
             return jsonify(state='not_bound'),202
-        stop_turn(turn_id)
+        stop_turn(turn_id,'meeting_stop')
         return jsonify(state='tools_revoked'),202
     @bp.post('/internal/guildhall/turn')
     def turn():
@@ -96,7 +96,8 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
             c.execute('INSERT INTO turns VALUES(?,?,?,NULL)',(value['id'],digest,'started'))
         # Other members' attributed speech stays quoted context. Only the
         # authenticated owner trigger below is the current request.
-        context={k:value.get(k) for k in ('room','brief','transcript','coverage')}
+        context=(facts['context'] if facts is not None
+                 else {k:value.get(k) for k in ('room','brief','transcript','coverage')})
         prompt=json.dumps(context,ensure_ascii=False)
         try:
             if value['trigger']['text'].strip() == '/new':
@@ -113,7 +114,8 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
                     members=verify_members(value) if verify_members is not None else None
                     scope,binding,text=meeting_scope(members),None,value['trigger']['text']
                 stop_watch=(verifier.watch(value['id'],facts['claim_id'],facts['room_generation'],
-                                           (lambda turn:stop_turn(turn)) if stop_turn else (lambda turn:None))
+                                           (lambda turn,reason:stop_turn(turn,reason)) if stop_turn
+                                           else (lambda turn,reason:None))
                             if facts is not None and binding is not None else (lambda:None))
                 try:
                     result=run_turn(text,meeting_context=prompt,channel='guildhall',conversation_id='guildhall:'+value['room']+':'+value['id'],request_id=value['id'],turn_id=value['id'],meeting_scope=scope,binding=binding)

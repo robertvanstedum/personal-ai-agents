@@ -134,13 +134,17 @@ def install(app: Flask, *, environ: Mapping[str, str],
     token_file = environ.get("COS_STORE_TOKEN_FILE", "").strip()
     token_dir = environ.get("COS_STORE_TOKEN_DIR", "").strip()
     actions_token = environ.get("COS_ACTIONS_TOKEN_FILE", "").strip()
+    # F2 D1 (review S1): with the bound tool path on, the v1 static-bearer actions route is never registered; the
+    # store writer is still created for the bound listener.
+    bound = bool(environ.get("COS_TOOL_BINDINGS_FILE", "").strip())
+    legacy_actions = bool(actions_token and _token(actions_token)) and not bound
     configured = any(_token(str(Path(token_dir) / name)) for name in _SERVICE_ACTORS) if token_dir else bool(token_file and _token(token_file))
-    if not root or environment not in ("dev", "staging", "prod") or not (configured or (actions_token and _token(actions_token))):
+    if not root or environment not in ("dev", "staging", "prod") or not (configured or legacy_actions or bound):
         return None
     writer = StoreWriter(root, environment, verify_robert_source=verify_robert_source)
     if configured:
         app.register_blueprint(create_blueprint(writer, token_file, token_dir=token_dir))
-    if actions_token and _token(actions_token):
+    if legacy_actions:
         from domains.cos.store.actions_api import create_blueprint as actions_blueprint
         app.register_blueprint(actions_blueprint(writer, actions_token))
     return writer
