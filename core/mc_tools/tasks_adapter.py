@@ -156,6 +156,19 @@ class TasksAdapter:
                 "briefs": {"build" if kind == "build" else "review": brief}, "attempts": p["attempts"],
                 "step_deadline_s": p["step_deadline_s"], "input_artifacts": list(inputs)}
 
+    # The fakework test worker takes its program from the brief (core/mc_delegation_runner/fakework.py). Under a
+    # fakework profile MC's words stay on the card as comment lines, and the program does the step's simulated work:
+    # a build writes one checkpoint file (the patch), a review records clean findings (Blue Lantern, 5 Nov: a plain
+    # brief was refused fakework_program_invalid on the runner after Robert approved the card).
+    FAKEWORK_STEPS = {"build": ("checkpoint build", "result ok"), "review": ("findings none", "result ok")}
+
+    def _brief(self, kind, holder, canonical):
+        words = f"{canonical['outcome']}\nDone when: {canonical['done_when']}"
+        if self.profiles["profiles"][holder][kind]["actor"] != "fakework":
+            return words
+        comments = ["# " + ln if ln.strip() else "#" for ln in words.splitlines()]
+        return "\n".join(["fakework/1", *comments, *self.FAKEWORK_STEPS[kind]])
+
     def delegate(self, host, args, caller):
         from core.mc_delegation_dispatcher import cards as card_mod
         from services.partnership_tasks.client import TaskServiceUnavailable
@@ -192,7 +205,7 @@ class TasksAdapter:
         op = host._operation_id(b, capability, canonical)
         key = op.replace("-", "")[:24]
         child_id, ob_id = f"TK-mc-{key}", f"OB-mc-{key}"
-        brief = f"{canonical['outcome']}\nDone when: {canonical['done_when']}"
+        brief = self._brief(kind, holder, canonical)
         card = self._card(kind, holder, child_id, brief, inputs)
         compiled = card_mod.Catalogue.load().compile(card)
         digest = "sha256:" + compiled.digest
