@@ -120,6 +120,24 @@
       "status_file": "mc-github-awareness.json",
       "owner": "robert",
       "runbook": "scripts/mc/github_awareness.py"
+    },
+    {
+      "id": "dev-memory-feed",
+      "name": "Dev memory feed (Vault: CoS and MC chats into the Dev shelf and index)",
+      "host": "dev",
+      "schedule": {
+        "text": "every 5 min (systemd timer minimoi-dev-vault-feed.timer)",
+        "kind": "interval",
+        "every_s": 300
+      },
+      "expected_every_s": 300,
+      "missed_after_s": 600,
+      "stuck_after_s": 600,
+      "grace_s": 300,
+      "active_from": "2026-11-05T09:10:00Z",
+      "status_file": "dev-memory-feed.json",
+      "owner": "robert",
+      "runbook": "planning-studio/initiatives/INIT-2026-0013-partnership-and-team-workflow/handoffs/CODEX_VAULT_DEV_RELEASE_2026-11-05.md"
     }
   ]
 }
