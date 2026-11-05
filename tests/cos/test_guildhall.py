@@ -129,3 +129,7 @@ def test_closed_room_never_asks_the_vault():
     ctx={'meeting_scope':'closed','confer':{'conversation_id':'guildhall:r:t'}}
     assert call_with_vault(backend,'q',ctx,{},retrieve=lambda *a,**k:asked.append(1),environ=env)=='ok'
     assert asked==[]
+    # Control: the same turn in an owner-private room does ask, so the refusal above is the scope's doing.
+    ctx=dict(ctx,meeting_scope='owner_private')
+    call_with_vault(backend,'q',ctx,{},retrieve=lambda *a,**k:asked.append(1) or (_ for _ in ()).throw(ValueError()),environ=env)
+    assert asked==[1]
