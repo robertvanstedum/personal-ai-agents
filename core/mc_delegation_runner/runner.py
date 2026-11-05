@@ -1666,6 +1666,7 @@ class HostRuntime:
         task_dir = Path(self.cfg.workspace_root) / task
         artifacts = stage["artifacts"] if stage["stage"] == "artifacts" else \
             _collect(self.cfg, env, task, task_dir, stage["status"], stage.get("exit_code"))
+        artifacts = list(artifacts) + _verdict_artifacts(self.cfg, env, task, artifacts)
         self._record_result(claim, stage["status"], artifacts, {"exit_code": stage.get("exit_code"),
                                                                 "base_ref": e["ref"]})
 
@@ -1903,6 +1904,7 @@ class HostRuntime:
         used = self._unsettled(rid, g)
         usage = {"amount": None if used is None else float(used), "unit": claim["unit"], "children_stopped": True}
         text, _ = _output_of(self.cfg.artifact_root, artifacts)
+        text = _verdict_text(self.cfg.artifact_root, artifacts) or text      # a review's answer is its verdict
         args = {"runner_id": self.runner_id, "status": status, "artifacts": artifacts, "detail": detail,
                 "output_text": text, "route": claim["route"], "usage": usage}
         if send:
@@ -2138,6 +2140,7 @@ class HostRuntime:
         findings = cfg.artifact_root / f"{task}.findings"
         if findings.exists():
             artifacts.append(_artifact(cfg, task, "findings", findings.read_bytes(), env.actor))
+        artifacts += _verdict_artifacts(cfg, env, task, artifacts)
         return self._result(child.claim, status, artifacts, {"exit_code": rc, "base_ref": env.ref},
                             workspace_dir=child.task_dir)
 
@@ -2313,6 +2316,11 @@ class HostRuntime:
             return {"state": "recorded"}
         if kind == "findings" and _small_ok(doc, {"kind", "text"}) and isinstance(doc["text"], str):
             art = _artifact(self.cfg, task, "findings", doc["text"].encode()[:4096], child.env.actor)
+            return {"state": "recorded", "sha256": art["sha256"]}
+        if kind == "verdict" and _small_ok(doc, {"kind", "text"}) and isinstance(doc["text"], str):
+            if _verdict_doc(doc["text"]) is None:
+                return {"state": "refused", "code": "verdict_invalid"}
+            art = _artifact(self.cfg, task, "verdict", doc["text"].encode(), child.env.actor)
             return {"state": "recorded", "sha256": art["sha256"]}
         if kind in ("effect_begin", "effect_hold") and _small_ok(doc, {"kind", "key", "grant"}):
             return self._effect_begin(child, doc["key"], doc["grant"], dispatch=kind == "effect_begin")
@@ -2516,6 +2524,49 @@ def _summary(answer) -> dict:
         return {"state": None}
     return {k: v for k, v in answer.items() if k in ("state", "code", "event_id", "decision_id", "attempt",
                                                       "generation", "operation_id", "receipt_state", "recorded_as")}
+
+
+VERDICT_SCHEMA = "minimoi.partnership.review_verdict/1"
+
+
+def _verdict_doc(text):
+    """A review_verdict/1 document as one JSON object, or None. The runner checks only the shape it records; the runner
+    door validates the full contract and the reviewed set (absent or invalid means changes_requested there)."""
+    if not isinstance(text, str) or len(text.encode()) > 4096:
+        return None
+    try:
+        doc = json.loads(text)
+    except ValueError:
+        return None
+    return doc if isinstance(doc, dict) and doc.get("schema") == VERDICT_SCHEMA else None
+
+
+def _verdict_artifacts(cfg, env, task, artifacts) -> list:
+    """The step's verdict artifact (review verdict path v0.1, 5 Nov 2026): the one fakework sent over the channel
+    (``<task>.verdict``), else a real reviewer's final answer when that answer is exactly a review_verdict/1 document.
+    Recorded with exactly those bytes, so the door's sha256(output_text) check holds by construction."""
+    if any(a.get("kind") == "verdict" for a in artifacts):
+        return []
+    path = cfg.artifact_root / f"{task}.verdict"
+    if path.exists():
+        return [_artifact(cfg, task, "verdict", path.read_bytes(), env.actor)]
+    text, _ = _output_of(cfg.artifact_root, artifacts)
+    text = text.strip() if isinstance(text, str) else text
+    if _verdict_doc(text) is not None:
+        return [_artifact(cfg, task, "verdict", text.encode(), env.actor)]
+    return []
+
+
+def _verdict_text(artifact_root, artifacts):
+    for a in artifacts or []:
+        if isinstance(a, dict) and a.get("kind") == "verdict" and "/" not in str(a.get("ref", "")):
+            path = Path(artifact_root) / a["ref"]
+            try:
+                if path.is_file() and not path.is_symlink():
+                    return path.read_bytes().decode("utf-8")
+            except (OSError, UnicodeDecodeError):
+                return None
+    return None
 
 
 def _output_of(artifact_root, artifacts):

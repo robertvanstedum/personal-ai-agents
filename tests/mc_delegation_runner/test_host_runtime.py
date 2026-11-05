@@ -6,6 +6,7 @@ T4c at the host, a stale effect after a wake, and spend across resumes.
 The authority here is an in-memory stand-in with the store's idempotence rules (exact replay already_applied, any
 other body under a used event id refused, receipts with leases on a clock). Children are real fakework/1 processes,
 short-lived, in a temporary folder, always reaped. Version 1 is untouched: test_runner.py runs unchanged."""
+import hashlib
 import json
 import os
 import secrets
@@ -1774,3 +1775,51 @@ def test_gate_m_s1_a_held_lease_is_sent_only_once_the_clocks_agree_so_the_refusa
               and e["kind"] == "clock_disagrees"]
     assert notes1 and notes1[0]["why"] == "held_lease"
     assert (out["state"], out["generation"]) == ("completed", 2), out
+
+
+# ── review verdict path v0.1 (Blue Lantern, 5 Nov 2026) ─────────────────────────────────────────────────────────────
+def test_a_fakework_verdict_is_recorded_as_the_verdict_artifact_and_is_the_output_text(tmp_path, mirror):
+    fake = FakeAuthority(mirror[1])
+    rt = make_rt(tmp_path, mirror[0], fake)
+    s = "sha256:" + "5" * 64
+    rid = fake.add(program("findings none", f"verdict approve set={s}", "result ok"))
+    out = run_pass(rt)
+    assert out["state"] == "completed" and out["answer"]["state"] == "accepted"
+    arts = {a["kind"]: a for a in out["artifacts"]}
+    assert set(arts) >= {"output", "findings", "verdict"}
+    text = (tmp_path / "artifacts" / arts["verdict"]["ref"]).read_text()
+    doc = json.loads(text)
+    assert doc == {"schema": "minimoi.partnership.review_verdict/1", "verdict": "approve", "reviewed_set_digest": s,
+                   "findings_digest": "sha256:" + arts["findings"]["sha256"]}
+    assert arts["verdict"]["sha256"] == hashlib.sha256(text.encode()).hexdigest()
+    ev = next(v for v in fake.events.values() if v[0] == "result" and v[1] == rid)
+    status, artifacts, detail, output_text, route, usage = json.loads(ev[4])
+    assert output_text == text                                       # the door's sha256(output_text) check holds
+
+
+def test_a_real_reviewers_final_answer_that_is_a_verdict_is_recorded_as_one(tmp_path):
+    cfg = type("C", (), {"artifact_root": tmp_path})
+    env = type("E", (), {"actor": "claude-code"})
+    doc = {"schema": "minimoi.partnership.review_verdict/1", "verdict": "changes_requested",
+           "reviewed_set_digest": "sha256:" + "a" * 64, "findings_digest": None}
+    envelope = {"type": "result", "result": "  " + json.dumps(doc) + "\n"}
+    (tmp_path / "t1.output").write_text(json.dumps(envelope))
+    out = [{"kind": "output", "ref": "t1.output", "sha256": "x"}]
+    got = runner._verdict_artifacts(cfg, env, "t1", out)
+    assert [a["kind"] for a in got] == ["verdict"]
+    assert json.loads((tmp_path / "t1.verdict").read_text()) == doc
+    assert runner._verdict_text(tmp_path, out + got) == json.dumps(doc)
+    (tmp_path / "t2.output").write_text(json.dumps({"type": "result", "result": "Looks good. " + json.dumps(doc)}))
+    assert runner._verdict_artifacts(cfg, env, "t2", [{"kind": "output", "ref": "t2.output", "sha256": "x"}]) == []
+    assert runner._verdict_doc('{"schema": "other"}') is None and runner._verdict_doc("x" * 5000) is None
+
+
+def test_fakework_verdict_steps_parse_strictly():
+    from core.mc_delegation_runner import fakework
+    s = "sha256:" + "b" * 64
+    assert fakework.parse_program(f"fakework/1\nverdict disagree set={s}\nresult ok")[0] == (
+        "verdict", {"verdict": "disagree", "set": s})
+    for bad in ("verdict approve", f"verdict maybe set={s}", "verdict approve set=sha256:short",
+                f"verdict approve set={s} extra=1", f"verdict approve set={s}\nverdict approve set={s}"):
+        with pytest.raises(fakework.ProgramRefused):
+            fakework.parse_program("fakework/1\n" + bad)

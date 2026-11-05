@@ -17,6 +17,7 @@ from core.mc_tools.tasks_adapter import TasksAdapter  # noqa: E402
 
 FAKE = json.loads((ROOT / "config/partnership/executor_profiles.fakework.json").read_text())
 REAL = json.loads((ROOT / "config/partnership/executor_profiles.json").read_text())
+SET = "sha256:" + "5" * 64
 CANONICAL = {"outcome": "Draft a three-bullet checklist labeled “Blue Lantern 1105”.\n\nKeep it short.",
              "done_when": "Codex submits the draft, ready for Claude Code review."}
 
@@ -33,15 +34,20 @@ class FakeworkBriefTests(unittest.TestCase):
         self.assertIn("# Draft a three-bullet checklist", brief)
         self.assertIn("# Done when: Codex submits the draft", brief)
 
-    def test_a_fakework_review_brief_records_findings(self):
-        steps = parse_program(adapter(FAKE)._brief("review", "claude-code", CANONICAL))
-        self.assertEqual([s[0] for s in steps], ["findings", "result"])
+    def test_a_fakework_review_brief_records_findings_and_approves_the_exact_reviewed_set(self):
+        steps = parse_program(adapter(FAKE)._brief("review", "claude-code", CANONICAL, SET))
+        self.assertEqual([s[0] for s in steps], ["findings", "verdict", "result"])
+        self.assertEqual(steps[1][1], {"verdict": "approve", "set": SET})
+
+    def test_a_fakework_review_without_the_reviewed_set_is_refused(self):
+        with self.assertRaises(ValueError):
+            adapter(FAKE)._brief("review", "claude-code", CANONICAL)
 
     def test_the_fakework_card_compiles(self):
         a = adapter(FAKE)
         for kind, holder in (("build", "codex"), ("review", "claude-code")):
             inputs = [{"ref": "C-x.patch", "sha256": "0" * 64}] if kind == "review" else []
-            card = a._card(kind, holder, "TK-mc-" + "b" * 24, a._brief(kind, holder, CANONICAL), inputs)
+            card = a._card(kind, holder, "TK-mc-" + "b" * 24, a._brief(kind, holder, CANONICAL, SET), inputs)
             card_mod.Catalogue.load().compile(card)
 
     def test_real_profiles_keep_the_plain_words(self):

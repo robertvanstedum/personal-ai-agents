@@ -158,7 +158,7 @@ class RunnerDoorEndToEnd(PostgresFixture, unittest.TestCase):
         approve_admission(self.svc, "OB-door-rev", event="SE-door-ok-rev")
         self.assertEqual(drain_once(self.svc, D, self.port, "OB-door-rev"), "acknowledged")
 
-    def build_then_review(self, output, verdict_sha=None):
+    def build_then_review(self, output, verdict_sha=None, review_artifacts=None):
         import json as _json
         self.admit()
         patch = {"kind": "patch", "ref": "C-door-1.patch", "sha256": hashlib.sha256(b"patch").hexdigest(), "bytes": 5,
@@ -177,7 +177,8 @@ class RunnerDoorEndToEnd(PostgresFixture, unittest.TestCase):
         renv = {"request_id": got["envelope"]["request_id"], "generation": got["envelope"]["generation"]}
         self.door.pass_once()
         self.store.result(renv["request_id"], renv["generation"], event_id=str(uuid4()), status="completed",
-                          artifacts=[verdict], detail={"exit_code": 0}, output_text=text, protocol=2, runner_id="mac-a",
+                          artifacts=[verdict] if review_artifacts is None else review_artifacts,
+                          detail={"exit_code": 0}, output_text=text, protocol=2, runner_id="mac-a",
                           at=self.now().isoformat(), route="fakework",
                           usage={"amount": USED, "unit": "test_units", "children_stopped": True})
         return rtid, self.door.pass_once()
@@ -202,6 +203,17 @@ class RunnerDoorEndToEnd(PostgresFixture, unittest.TestCase):
         rtid, sent = self.build_then_review("LGTM, ship it")
         self.assertIn(("task.record_review:changes_requested", self.tid, "accepted"), sent)
         self.assertEqual([r["verdict"] for r in self.task()["reviews"]], ["changes_requested"])
+
+    def test_a_review_without_a_verdict_still_closes_its_child_with_its_own_outputs(self):
+        # Blue Lantern, 5 Nov 2026: a review that recorded only output + findings left its child working forever.
+        out = {"kind": "output", "ref": "C-door-rev.output", "sha256": hashlib.sha256(b"findings: x").hexdigest(),
+               "bytes": 11, "author": "fakework", "review_status": "unreviewed"}
+        rtid, sent = self.build_then_review("findings: x", review_artifacts=[out])
+        self.assertIn(("task.record_review:changes_requested", self.tid, "accepted"), sent)
+        self.assertIn(("task.submit_artifacts:review_output", rtid, "accepted"), sent)
+        r = self.svc.get("task", rtid, "tok-principal")
+        self.assertEqual([a["id"] for a in r["artifact_sets"][-1]["artifacts"]], ["C-door-rev.output"])
+        self.assertEqual(self.door.pass_once(), [])                             # once
 
 
     def test_a_cancel_revokes_the_running_card_so_no_result_is_taken_and_the_card_ends(self):

@@ -21,6 +21,10 @@ brief:
                                                      holds its own lease afresh and waits for no wake: the sleep it
                                                      stood for happened under an earlier generation
     findings [<word>]                                a reviewer's output, recorded as a findings artifact
+    verdict <approve|changes_requested|disagree> set=<sha256:hex>
+                                                     a reviewer's verdict on that artifact set (review_verdict/1),
+                                                     recorded by the runtime as the step's verdict artifact; its
+                                                     findings_digest is the earlier findings' sha256, else null
     resume_session <id>                              no-op: fakework keeps no sessions (the runtime refuses the
                                                      do-not-resume ids before any spawn, R6.4)
     spawn <id> [role=<r>] [hold_s=<n>] [beat_s=<n>] [long]
@@ -62,6 +66,9 @@ _NAME = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _PATH = re.compile(r"^(?!/)(?!.*(?:^|/)\.\.(?:/|$))[A-Za-z0-9._/@+-]{1,256}$")
 _WORD = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_SET = re.compile(r"^sha256:[0-9a-f]{64}$")
+VERDICTS = ("approve", "changes_requested", "disagree")
+VERDICT_SCHEMA = "minimoi.partnership.review_verdict/1"
 _SESSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,99}$")
 POLL_S = 0.02
 
@@ -149,6 +156,14 @@ def parse_program(text) -> list:
             if len(rest) > 1 or (rest and not _WORD.match(rest[0])):
                 raise ProgramRefused("fakework_findings_invalid")
             steps.append(("findings", {"word": rest[0] if rest else "none"}))
+        elif word == "verdict":
+            if len(rest) != 2 or rest[0] not in VERDICTS or ("verdict",) in names:
+                raise ProgramRefused("fakework_verdict_invalid")
+            o = _opts(rest[1:], ("set",), "fakework_verdict_invalid")
+            if not _SET.match(o.get("set", "")):
+                raise ProgramRefused("fakework_verdict_invalid")
+            names.add(("verdict",))
+            steps.append(("verdict", {"verdict": rest[0], "set": o["set"]}))
         elif word == "resume_session":
             if len(rest) != 1 or not _SESSION.match(rest[0]):
                 raise ProgramRefused("fakework_resume_invalid")
@@ -337,6 +352,7 @@ def _spawn(census, client, s):
 
 def run(steps, *, channel, sink, cap, unit, start_after=None, census=None) -> int:
     client = _Client(channel)
+    findings_sha = None
     if start_after is not None:
         names = [s["name"] for k, s in steps if k == "checkpoint"]
         if start_after not in names:
@@ -409,7 +425,15 @@ def run(steps, *, channel, sink, cap, unit, start_after=None, census=None) -> in
                 _exit("cap", f"cap reached: {cap} {unit}")
         elif kind == "findings":
             ack = client.ask({"kind": "findings", "text": f"findings {s['word']}\n"})
-            print(f"findings: {ack.get('sha256')}", flush=True)
+            findings_sha = ack.get("sha256")
+            print(f"findings: {findings_sha}", flush=True)
+        elif kind == "verdict":
+            doc = {"schema": VERDICT_SCHEMA, "verdict": s["verdict"], "reviewed_set_digest": s["set"],
+                   "findings_digest": f"sha256:{findings_sha}" if findings_sha else None}
+            ack = client.ask({"kind": "verdict", "text": json.dumps(doc, sort_keys=True, separators=(",", ":"))})
+            if ack.get("state") != "recorded":
+                _exit("channel", f"verdict not recorded: {ack.get('code')}")
+            print(f"verdict {s['verdict']}: {ack.get('sha256')}", flush=True)
         elif kind == "resume_session":
             print(f"resume_session {s['id']}: fakework keeps no sessions", flush=True)
         elif kind == "spawn":
