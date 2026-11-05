@@ -89,7 +89,7 @@ class RunnerDoor:
             return [dict(r) for r in cur.fetchall()]
 
     def admitted(self):
-        return self._rows("""SELECT operation_id, task_id, card_id, digest FROM guild.mc_task_operations
+        return self._rows("""SELECT operation_id, task_id, card_id, digest, fence FROM guild.mc_task_operations
             WHERE principal=%s AND environment=%s AND kind='admit_bundle' AND applied AND card_id IS NOT NULL
             ORDER BY recorded_at""", (self.principal, self.environment))
 
@@ -108,7 +108,9 @@ class RunnerDoor:
             its = self.items(op["card_id"])
             done = [i for i in its if i["step"] == "build" and i["state"] == "completed"]
             if done:
-                built[set_digest(artifact_refs(recorded_outputs(done[-1]["artifacts"] or [])))] = op["task_id"]
+                key = set_digest(artifact_refs(recorded_outputs(done[-1]["artifacts"] or [])))
+                # Two builders with identical outputs: the match would be a guess, so it is refused (review N2).
+                built[key] = op["task_id"] if built.get(key, op["task_id"]) == op["task_id"] else None
             op["_items"] = its
         for op in ops:
             try:
@@ -131,6 +133,10 @@ class RunnerDoor:
     def settle(self, op, built) -> list:
         task = self.reader.get("task", op["task_id"])
         if task is None or not op["_items"]:
+            return []
+        if op.get("fence") is None or op["fence"] < task["fence_generation"]:
+            # Admitted under an older fence (a correction or cancel came after): its results never reach the task,
+            # whatever the card did (review M1). Its stop is the worker's stale-card revoke.
             return []
         out = []
         its = op["_items"]

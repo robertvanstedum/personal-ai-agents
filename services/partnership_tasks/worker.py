@@ -78,6 +78,11 @@ def one_pass(*, drainer, svc, harness, notices, door, token=None,
             report["drained"].append((row["operation_id"], state))
         except Exception:
             _log.exception("partnership worker: drain failed for %s", row["operation_id"])
+    if hasattr(harness, "stop_stale_cards"):
+        try:
+            report["revoked"] = harness.stop_stale_cards()
+        except Exception:
+            _log.exception("partnership worker: stale-card revoke failed; the next pass tries again")
     if door is not None:
         report["door"] = door.pass_once()
     return report
@@ -119,7 +124,7 @@ def main() -> int:  # pragma: no cover - wiring, exercised on Dev by the package
     while True:
         try:
             report = one_pass(drainer=drainer, svc=svc, harness=harness, notices=notices, door=door)
-            if report["drained"] or report["door"]:
+            if report["drained"] or report["door"] or report.get("revoked"):
                 _log.info("pass: %s", json.dumps(report, default=str)[:2000])
             delay = 5.0
         except Exception:

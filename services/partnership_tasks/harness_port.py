@@ -109,19 +109,24 @@ class HarnessDispatcher:
             raise HarnessRefused("entry_not_found")
         answer = self._call(lambda: self.store.set_task_fence(operation_id, task_id=task_id, fence=fence_generation,
                                                               digest=ob["bundle_digest"]))
-        self.stop_task_cards(task_id)
         return {"receipt": _receipt(answer["receipt"])}
 
-    def stop_task_cards(self, task_id):
-        """v0.5 S3: the fence stops new admissions; running work for the task stops too. Every card admitted for this
-        task has its grant (uuid5 of its operation) revoked, which cancels its open items and ends the card, so no
-        later step is written. Already revoked or ended: nothing to do. Refusals are logged, never raised: the fence
-        itself is the guarantee for new work, and a card left running is reported by the next pass."""
+    def stop_stale_cards(self) -> list:
+        """v0.5 S3 and the increment-2 review S1/S2: running work admitted under an older fence stops. Every pass, each
+        card whose admission fence is below its task's current authority fence and that still has open items has its
+        grant (uuid5 of its operation) revoked: open items cancelled, the card ended, a late result not taken.
+        Idempotent (a revoked card has no open items and is not listed again), independent of how the fence send
+        ended, and never touches a card admitted under the current fence. Returns what was revoked or refused."""
         import logging
-        rows = self._call(lambda: self.store.task_cards(task_id))
-        for row in rows:
+        out = []
+        for row in self._call(self.store.stale_task_cards):
             gid = str(uuid.uuid5(NS_GRANT, row["operation_id"]))
             try:
-                self.store.revoke(gid, by=self.owner, note=f"partnership task {task_id} fenced (cancel or correction)")
-            except self._refused as exc:
-                logging.getLogger("partnership.harness").info("revoke %s for %s: %s", gid, task_id, exc)
+                self._call(lambda: self.store.revoke(gid, by=self.owner,
+                                                     note=f"partnership task {row['task_id']} fenced above "
+                                                          f"{row['fence']} (cancel or correction)"))
+                out.append((row["card_id"], "revoked"))
+            except HarnessRefused as exc:
+                logging.getLogger("partnership.harness").info("revoke %s: %s", row["card_id"], exc.code)
+                out.append((row["card_id"], "refused:" + exc.code))
+        return out

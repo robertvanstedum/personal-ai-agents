@@ -243,6 +243,14 @@ class TasksAdapter:
                             f"that, and never claim the work started.")
 
     def submit(self, host, args, caller):
+        from services.partnership_tasks.client import TaskServiceUnavailable
+        try:
+            return self._submit(host, args, caller)
+        except TaskServiceUnavailable:
+            return result("unknown", "task_unconfirmed", "The task service could not be read now. Nothing was "
+                          "changed; tell Robert.")
+
+    def _submit(self, host, args, caller):
         with host._tx() as conn:
             b = host._bind(conn, caller)
         parent, child = self._task(args.get("task_id")), self._task(args.get("child_id"))
@@ -274,6 +282,14 @@ class TasksAdapter:
                             "review by someone other than its authors before it can be accepted.")
 
     def accept(self, host, args, caller):
+        from services.partnership_tasks.client import TaskServiceUnavailable
+        try:
+            return self._accept(host, args, caller)
+        except TaskServiceUnavailable:
+            return result("unknown", "task_unconfirmed", "The task service could not be read now. Nothing was "
+                          "changed; tell Robert.")
+
+    def _accept(self, host, args, caller):
         with host._tx() as conn:
             b = host._bind(conn, caller)
         task = self._task(args.get("task_id"))
@@ -312,6 +328,14 @@ class TasksAdapter:
         return self._effect(host, caller, b, capability, canonical, op, steps, verify, words)
 
     def adopt(self, host, args, caller):
+        from services.partnership_tasks.client import TaskServiceUnavailable
+        try:
+            return self._adopt(host, args, caller)
+        except TaskServiceUnavailable:
+            return result("unknown", "task_unconfirmed", "The task service could not be read now. Nothing was "
+                          "changed; tell Robert.")
+
+    def _adopt(self, host, args, caller):
         with host._tx() as conn:
             b = host._bind(conn, caller)
         task = self._task(args.get("task_id"))

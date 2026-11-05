@@ -2089,13 +2089,22 @@ class DispatcherStore:
                         (attempt, self.principal, self.environment, operation_id))
             return {"state": "absent"}
 
-    def task_cards(self, task_id) -> list:
-        """Partnership v1.1 (v0.5 S3): the admissions applied for one task, read-only: [{operation_id, card_id}]."""
-        _need(type(task_id) is str and 1 <= len(task_id) <= 200, "task_id_invalid")
+    def stale_task_cards(self) -> list:
+        """Partnership v1.1 (v0.5 S3, increment-2 review S1/S2): cards admitted for a task under a fence lower than the
+        task's current authority fence that still have open items, read-only: [{operation_id, card_id, task_id,
+        fence}]. A card admitted under the current fence is never listed, so a late fence cannot stop the corrected
+        work Robert approved."""
+        open_states = ("proposed", "queued", "claimed", "running", "lapsed", "paused", "unknown")
         with self._tx() as cur:
-            cur.execute("""SELECT operation_id, card_id FROM guild.mc_task_operations WHERE principal=%s AND environment=%s
-                AND task_id=%s AND kind='admit_bundle' AND applied AND card_id IS NOT NULL ORDER BY recorded_at""",
-                        (self.principal, self.environment, task_id))
+            cur.execute("""SELECT o.operation_id, o.card_id, o.task_id, o.fence FROM guild.mc_task_operations o
+                JOIN guild.mc_task_fences f ON f.principal=o.principal AND f.environment=o.environment
+                    AND f.task_id=o.task_id
+                WHERE o.principal=%s AND o.environment=%s AND o.kind='admit_bundle' AND o.applied
+                  AND o.card_id IS NOT NULL AND o.fence < f.fence
+                  AND EXISTS (SELECT 1 FROM guild.mc_delegations d WHERE d.card_id=o.card_id AND d.principal_id=%s
+                              AND d.environment=%s AND d.state = ANY(%s))
+                ORDER BY o.recorded_at""",
+                        (self.principal, self.environment, self.principal, self.environment, list(open_states)))
             return [dict(r) for r in cur.fetchall()]
 
     def peek_task_operation(self, operation_id) -> str:

@@ -214,6 +214,8 @@ class RunnerDoorEndToEnd(PostgresFixture, unittest.TestCase):
         from services.partnership_tasks.reconstruct import outbox_queue
         fence = [r["operation_id"] for r in outbox_queue(self.svc, D) if r["operation"] == "set_fence"][0]
         self.assertEqual(drain_once(self.svc, D, self.port, fence), "acknowledged")
+        self.assertEqual(self.port.stop_stale_cards(), [("C-door-1", "revoked")])   # the worker's per-pass sweep
+        self.assertEqual(self.port.stop_stale_cards(), [])                           # idempotent: nothing left open
         with self.connect() as conn, conn.cursor() as cur:
             cur.execute("SELECT state FROM guild.mc_delegations WHERE card_id='C-door-1'")
             states = [r[0] for r in cur.fetchall()]
@@ -221,3 +223,37 @@ class RunnerDoorEndToEnd(PostgresFixture, unittest.TestCase):
             revoked = cur.fetchone()[0]
         self.assertEqual(revoked, 1)
         self.assertTrue(all(s in ("cancelled", "claimed") for s in states), states)
+
+
+    def test_after_a_correction_an_old_card_that_completes_writes_nothing_to_the_corrected_task(self):
+        """Increment-2 review M1: the card was admitted under fence 0; the task is corrected (fence 1) and stays working;
+        the old card then completes. Its outputs must never become the corrected task's artifact set."""
+        self.admit()
+        env, finish = self.run_step(artifacts=[{"kind": "patch", "ref": "C-door-1.patch",
+                                                "sha256": hashlib.sha256(b"old").hexdigest(), "bytes": 3,
+                                                "author": "fakework", "review_status": "unreviewed"}])
+        self.door.pass_once()                                                   # working
+        f = self.flow
+        f.source("SE-syn-0009", "Change it: a shorter note.", correction_of="SE-syn-0001")
+        f.interpret("IN-syn-0009", ["SE-syn-0001"], "A shorter note.", corrections=["SE-syn-0009"],
+                    supersedes="IN-syn-0001")
+        f.adopt("IN-syn-0009")
+        req = self.svc.get("request", "RQ-syn-0001", "tok-principal")
+        self.assertEqual(self.svc.submit(cmd("correction.apply", "request", "RQ-syn-0001", {
+            "correction_event_id": "SE-syn-0009", "interpretation_ref": "IN-syn-0009", "changes": ["outcome"],
+            "intent_text": "A shorter note."}, expected=req["revision"]), "tok-principal")["outcome"], "accepted")
+        t = self.task()
+        self.assertEqual(t["interpretation_ref"], "IN-syn-0009")               # the correction moved the task
+        if t["state"] != "working":                                             # MC re-checks and resumes (R-S3)
+            res = self.svc.submit(cmd("task.transition", "task", self.tid, {
+                "to": "working", "reason": "resumed on the corrected request", "waiting": None,
+                "evidence_refs": [{"store": "task_service", "id": "IN-syn-0009", "edition": None, "digest": None}],
+                "fence_generation": t["fence_generation"]}, expected=t["revision"]), "tok-mc")
+            self.assertEqual(res["outcome"], "accepted", res)
+        before = self.task()
+        self.assertGreater(before["fence_generation"], 0)
+        self.assertEqual(before["state"], "working")              # without the fix, the door would submit here
+        finish()                                                                # the old card completes anyway
+        self.assertEqual(self.door.pass_once(), [])                             # nothing reaches the corrected task
+        after = self.task()
+        self.assertEqual((after["artifact_sets"], after["revision"]), (before["artifact_sets"], before["revision"]))

@@ -271,9 +271,10 @@ def _card_summary(card):
     """What Robert sees before approving: who does it, where, for how much, and the words of every step."""
     if not isinstance(card, dict):
         return None
-    workers = {role: {k: w.get(k) for k in ("actor", "route", "cost_cap_usd")}
+    workers = {role: {k: w.get(k) for k in ("actor", "route", "amount", "cost_cap_usd")}
                for role, w in (card.get("workers") or {}).items() if isinstance(w, dict)}
-    return {"card_id": card.get("card_id"), "class": card.get("class"), "workers": workers,
+    return {"card_id": card.get("card_id"), "class": card.get("class"), "repository": card.get("repository"),
+            "ref": card.get("ref"), "workers": workers,
             "briefs": card.get("briefs"), "step_deadline_s": card.get("step_deadline_s"),
             "attempts": card.get("attempts"), "input_artifacts": card.get("input_artifacts") or []}
 
