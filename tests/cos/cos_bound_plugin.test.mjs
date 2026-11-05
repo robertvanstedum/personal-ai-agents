@@ -106,10 +106,15 @@ test('the instance is announced at registration, retried, and stops on a refusal
   assert.equal(calls.length, 2);
   assert.equal(await a(), true);                // recorded: later calls reuse it
   assert.equal(calls.length, 2);
+  const retries = [];
+  let refusals = 0;
   const refused = announcer({url: endpointUrl(ENDPOINT), token: TOKEN, instance: 'd'.repeat(32),
-                             fetchImpl: async () => new Response('{}', {status: 409}), schedule: () => assert.fail('no retry')});
+                             fetchImpl: async () => { refusals++; return new Response('{}', {status: 409}); },
+                             schedule: (fn) => { retries.push(fn); return null; }});
   refused.start();
   await new Promise(r => setTimeout(r, 5));
+  assert.equal(refusals, 1);
+  assert.equal(retries.length, 0);              // a 4xx refusal is terminal: no retry is scheduled
   assert.ok(plugin.register);
 });
 

@@ -142,8 +142,9 @@ def test_supersession_a_newer_owner_turn_revokes_the_older_one(store):
     store.record(first["confer"]["receipt_id"], principal="robert", origin="owner", scope="owner", audience="owner",
                  agent_entry="cos-agent-a", session_user="u", lifetime_s=600, supersession_key="dev:owner:owner")
     confer = ctx(OWNER)
-    store.record(confer["confer"]["receipt_id"], principal="robert", origin="owner", scope="owner", audience="owner",
-                 agent_entry="cos-agent-a", session_user="u", lifetime_s=600, supersession_key="dev:owner:owner")
+    # Re-review F3: the Confer binding is made by the real binder (its own key format), not seeded by hand.
+    assert TurnBinder(store).begin(turn_id=confer["confer"]["receipt_id"], session_user="u", agent_entry="cos-agent-a",
+                                   conversation_id="owner", meeting_scope=None, binding=OWNER)
     tg = ctx({"origin": "service:telegram", "principal": "robert"})
     backend(store, Stream(chunks(run="chatcmpl_33333333-3333-4333-8333-333333333333"))).call_backend("hi", tg, {})
     assert store.trace(confer["confer"]["receipt_id"])["binding"]["revoked"] is None    # review S6: other origin
