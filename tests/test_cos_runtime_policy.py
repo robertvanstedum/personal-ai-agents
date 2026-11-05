@@ -29,7 +29,8 @@ def test_real_startup_body_returns_before_threads_and_scheduler(monkeypatch):
     monkeypatch.setenv('COS_BACKGROUND_JOBS','0')
     monkeypatch.delenv('DISABLE_TELEGRAM_POLL',raising=False)
     state={};context={'BASE_DIR':Path.cwd(),'sys':__import__('sys'),'os':__import__('os'),
-      'PORT':8769,'_check_db':lambda:False,'init_backend':lambda:None,
+      'PORT':8769,'_check_db':lambda:False,'init_backend':lambda:None,'_start_tool_listener':lambda:None,
+      '_meeting_verifier':lambda:None,
       '_backend':SimpleNamespace(backend_label='test'),'_state':state,'_state_lock':threading.Lock(),
       'threading':SimpleNamespace(Thread=forbidden),'BackgroundScheduler':forbidden}
     exec(compile(ast.Module(body=[function],type_ignores=[]),'actual_startup','exec'),context)

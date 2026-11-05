@@ -104,6 +104,9 @@ def test_cos_loads_only_its_allowed_plugins_and_no_paired_node_tools():
     import json
     config = json.loads((REPO / "docker/cos-agent-a/openclaw.json").read_text())
     allow = config["plugins"]["allow"]
-    assert set(allow) == {"memory-core", "anthropic", "xai", "openai", "cos-bounded-search", "mc-cutoff-delivery"}
+    # cos-board and cos-github were added after this test; cos-bound replaces cos-actions (F2 step 5).
+    assert set(allow) == {"memory-core", "anthropic", "xai", "openai", "cos-bounded-search", "mc-cutoff-delivery",
+                          "cos-bound", "cos-board", "cos-github"}
+    assert "cos-actions" not in allow
     for stock in ("file-transfer", "device-pair", "linux-node", "browser", "canvas", "cua-computer", "github"):
         assert stock not in allow

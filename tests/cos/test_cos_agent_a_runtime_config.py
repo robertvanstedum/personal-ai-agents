@@ -32,7 +32,8 @@ def _config() -> dict:
 def _agent(config: dict | None = None) -> dict:
     config = config or _config()
     entries = config["agents"]["entries"]
-    assert list(entries) == ["cos-agent-a"]
+    # F2 step 5: cos-meeting serves guildhall meeting turns (tests/cos/test_cos_meeting_entry.py).
+    assert list(entries) == ["cos-agent-a", "cos-meeting"]
     return entries["cos-agent-a"]
 
 
@@ -102,6 +103,8 @@ def test_gateway_is_internal_token_authenticated_and_not_model_hardcoded():
 # definitions (about 89,000 characters) with every turn, including shell, secrets and automation tools.
 ROLE_TOOLS = ["read", "ls", "write", "edit", "exec", "web_search", "web_fetch",
               "memory_search", "memory_get", "pdf", "view_image"]
+# Later CoS record tools; cos_actions is served by the bound cos-bound plugin (F2 step 5).
+RECORD_TOOLS = ["cos_actions", "cos_board", "cos_github_issues"]
 
 
 def test_owner_access_is_narrowed_to_the_role_tools_with_idle_jobs():
@@ -111,7 +114,7 @@ def test_owner_access_is_narrowed_to_the_role_tools_with_idle_jobs():
     assert agent["skills"] == []
     assert agent["heartbeat"]["every"] == "0m"
     assert config["tools"]["profile"] == agent["tools"]["profile"] == "minimal"
-    assert agent["tools"]["alsoAllow"] == ROLE_TOOLS
+    assert agent["tools"]["alsoAllow"] == ROLE_TOOLS + RECORD_TOOLS
     assert agent["tools"]["deny"] == ["gateway"]
     assert not agent["tools"].get("allow")
     assert agent["tools"]["elevated"] == {"enabled": False}
@@ -146,6 +149,9 @@ def test_search_is_bounded_and_does_not_receive_provider_credentials():
     assert config["plugins"]["load"]["paths"] == [
         "/opt/minimoi/openclaw-plugins/cos-bounded-search",
         "/opt/minimoi/openclaw-plugins/mc-cutoff-delivery",
+        "/opt/minimoi/openclaw-plugins/cos-bound",
+        "/opt/minimoi/openclaw-plugins/cos-board",
+        "/opt/minimoi/openclaw-plugins/cos-github",
     ]
     assert "web_search" in agent["tools"]["alsoAllow"]
     assert "web_search" not in agent["tools"]["deny"]

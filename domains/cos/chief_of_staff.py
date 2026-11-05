@@ -928,6 +928,39 @@ def _tool_binder():
     return TurnBinder(_bindings)
 
 
+def _meeting_verifier():
+    """F2 step 4: Records admission for CoS meeting turns, with cos-scheduler's observe credential. Only when the
+    binding store is on and COS_MEETING_RECORDS_URL and COS_MEETING_OBSERVE_TOKEN_FILE are set; else None."""
+    url = os.environ.get("COS_MEETING_RECORDS_URL", "").strip()
+    token_file = os.environ.get("COS_MEETING_OBSERVE_TOKEN_FILE", "").strip()
+    if _bindings is None or not url or not token_file:
+        return None
+    from domains.cos.meeting_verifier import RecordsMeetingVerifier
+    from pathlib import Path as _Path
+    return RecordsMeetingVerifier(url, lambda: _Path(token_file).read_text().strip(),
+                                  principal=os.environ.get("COS_OWNER_PRINCIPAL", "robert"))
+
+
+def _start_tool_listener():
+    """F2 step 2: the bound tool listener on its own port (COS_TOOL_LISTENER_PORT), published on the agent network
+    only. Needs the binding store, the CoS store writer and COS_TOOL_LISTENER_TOKEN_SHA256. Otherwise not started,
+    and every cos-bound call is refused at the plugin (no listener)."""
+    port = os.environ.get("COS_TOOL_LISTENER_PORT", "").strip()
+    digest = os.environ.get("COS_TOOL_LISTENER_TOKEN_SHA256", "").strip()
+    if not port or _bindings is None or _cos_store_writer is None:
+        if port:
+            print("   ⚠️  CoS tool listener not started: binding store or CoS store is not configured")
+        return None
+    from domains.cos.tool_listener import create_app as _tools_app
+    from werkzeug.serving import make_server
+    server = make_server(os.environ.get("COS_TOOL_LISTENER_HOST", "0.0.0.0"), int(port),
+                         _tools_app(bindings=_bindings, writer=_cos_store_writer, token_sha256=digest),
+                         threaded=True)
+    threading.Thread(target=server.serve_forever, name="cos-tool-listener", daemon=True).start()
+    print(f"   CoS tool listener: port {port} ✅")
+    return server
+
+
 def init_backend():
     """Initialize the active backend. Called once from main() at startup."""
     global _backend
@@ -2056,7 +2089,10 @@ def _start_cos():
         install_guildhall(app, token_file=os.environ['COS_GUILDHALL_TOKEN_FILE'],
                          data_dir=os.environ['COS_GUILDHALL_DIR'], run_turn=_process_confer_turn,
                          is_ready=lambda: _backend is not None,
-                         stop_turn=lambda turn_id: _bindings is not None and _bindings.revoke(turn_id, 'meeting_stop'))
+                         stop_turn=lambda turn_id: _bindings is not None and _bindings.revoke(turn_id, 'meeting_stop'),
+                         verifier=_meeting_verifier())
+
+    _start_tool_listener()
 
     # Isolated dev proving uses the real chat route without periodic work.
     from domains.cos.runtime_policy import background_jobs_enabled

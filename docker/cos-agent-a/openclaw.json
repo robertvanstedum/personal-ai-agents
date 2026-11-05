@@ -57,7 +57,7 @@
       "openai",
       "cos-bounded-search",
       "mc-cutoff-delivery",
-      "cos-actions",
+      "cos-bound",
       "cos-board",
       "cos-github"
     ],
@@ -65,7 +65,7 @@
       "paths": [
         "/opt/minimoi/openclaw-plugins/cos-bounded-search",
         "/opt/minimoi/openclaw-plugins/mc-cutoff-delivery",
-        "/opt/minimoi/openclaw-plugins/cos-actions",
+        "/opt/minimoi/openclaw-plugins/cos-bound",
         "/opt/minimoi/openclaw-plugins/cos-board",
         "/opt/minimoi/openclaw-plugins/cos-github"
       ]
@@ -84,8 +84,20 @@
       "mc-cutoff-delivery": {
         "enabled": true
       },
-      "cos-actions": {
-        "enabled": true
+      "cos-bound": {
+        "enabled": true,
+        "config": {
+          "enabled": true,
+          "endpoint": "http://cos-scheduler:8771/internal/cos/v1",
+          "tokenFile": "/run/secrets/cos-bound/token",
+          "agents": [
+            "cos-agent-a",
+            "cos-meeting"
+          ],
+          "acceptCredentialReadableBy": [
+            "cos-agent-a"
+          ]
+        }
       },
       "cos-board": {
         "enabled": true
@@ -178,6 +190,59 @@
           "deny": [
             "gateway"
           ],
+          "elevated": {
+            "enabled": false
+          }
+        }
+      },
+      "cos-meeting": {
+        "name": "COS meeting",
+        "workspace": "/home/node/.openclaw/workspace-cos-meeting",
+        "model": {
+          "primary": "minimoi-gateway/minimoi-cos-agent",
+          "fallbacks": []
+        },
+        "modelPolicy": {
+          "allow": [
+            "minimoi-gateway/minimoi-cos-agent"
+          ]
+        },
+        "skills": [],
+        "heartbeat": {
+          "every": "0m"
+        },
+        "sandbox": {
+          "mode": "off"
+        },
+        "tools": {
+          "profile": "minimal",
+          "alsoAllow": [
+            "web_search",
+            "cos_actions"
+          ],
+          "deny": [
+            "gateway",
+            "group:fs",
+            "group:runtime",
+            "read",
+            "ls",
+            "write",
+            "edit",
+            "apply_patch",
+            "exec",
+            "process",
+            "web_fetch",
+            "browser",
+            "memory_search",
+            "memory_get",
+            "pdf",
+            "view_image",
+            "cos_board",
+            "cos_github_issues"
+          ],
+          "fs": {
+            "workspaceOnly": true
+          },
           "elevated": {
             "enabled": false
           }
