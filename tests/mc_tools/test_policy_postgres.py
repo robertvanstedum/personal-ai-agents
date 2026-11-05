@@ -67,6 +67,27 @@ class PolicyTests(Base, unittest.TestCase):
         self.next_turn("note-2")
         self.assertEqual(self.call("minimoi_guest_requests")["status"], "done")    # the next turn, new policy
 
+    def test_an_approved_policy_activated_at_approval_does_not_revoke_the_next_turn(self):
+        """Blue Lantern, 5 Nov 2026: the approval step swapped the files and left activation to MC's next tool call,
+        which revoked that very turn. Activated at approval, the next turn runs under the new policy untouched."""
+        import os
+        from unittest import mock
+        from minimoi_portal.guild_ui.mc_tools_wiring import activate_current_policy
+        self.assertEqual(self.call("minimoi_guest_requests")["status"], "done")
+        self.install_policy(revision="test-2")
+        environ = {"MINIMOI_MC_TOOLS": "1", "MINIMOI_MC_TOOLS_ENV": "dev", "MINIMOI_MC_TOOLS_PRINCIPAL": OWNER,
+                   "MINIMOI_MC_TURN_LEDGER": "1", "MINIMOI_MC_POLICY_FILE": self.policy.policy_path,
+                   "MINIMOI_MC_POLICY_AUTHORITY_FILE": self.policy.authority_path}
+        with mock.patch.dict(os.environ, {"DATABASE_URL": DSN}):
+            self.assertEqual(activate_current_policy(environ, connect=self.connect),
+                             {"version": self.version(), "changed": True})
+            self.assertEqual(activate_current_policy(environ, connect=self.connect)["changed"], False)
+        self.next_turn("note-2")
+        r = self.call("minimoi_guest_requests")
+        self.assertEqual(r["status"], "done", r)
+        self.assertIsNone(self.one("SELECT revoked_reason FROM guild.mc_tool_turns WHERE ledger_id=%s",
+                                   (self.ledger_id,))[0])
+
     def test_an_approval_under_a_changed_policy_is_refused_before_activation_too(self):
         code = self.call("minimoi_issue_comment", COMMENT)["data"]["code"]
         self.install_policy(revision="test-2")                                     # no tool call has activated it yet

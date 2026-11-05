@@ -797,3 +797,39 @@ def saved_artifacts(environ, principal, conversation_id):
             conn.close()
         return out
     return files
+
+
+def activate_current_policy(environ=None, *, connect=None) -> dict:
+    """Operator step run right after an approved policy is put in place (approve_partnership_policy.sh and the like):
+    make the approved policy the one in force now, as portal startup does, instead of on MC's next tool call. Lazy
+    activation on that call revokes the very turn that made it (Blue Lantern, 5 Nov 2026: turn 280 revoked at
+    14:53:16Z, ten seconds after it began). A turn genuinely in flight at approval is still revoked, as designed.
+    Returns {"version", "changed"}; raises RuntimeError when the tools or the approved policy are unavailable."""
+    from core.mc_tools.binding import activate_policy
+    cfg = settings(dict(os.environ) if environ is None else environ)
+    if cfg is None:
+        raise RuntimeError("mc tools are not configured here")
+    source = policy_source(cfg)
+    compiled, problem = source.current() if source is not None else (None, "policy_not_configured")
+    if compiled is None:
+        raise RuntimeError(f"approved policy unavailable: {problem}")
+    conn = (connect or _connect(cfg["dsn"]))()
+    try:
+        with conn:
+            changed = activate_policy(conn, environment=cfg["environment"], policy_version=compiled.version)
+    finally:
+        conn.close()
+    return {"version": compiled.version, "changed": changed}
+
+
+if __name__ == "__main__":
+    import json
+    import sys
+    if sys.argv[1:] != ["activate-policy"]:
+        print("usage: python -m minimoi_portal.guild_ui.mc_tools_wiring activate-policy", file=sys.stderr)
+        sys.exit(2)
+    try:
+        print(json.dumps(activate_current_policy()))
+    except RuntimeError as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        sys.exit(1)
