@@ -213,6 +213,8 @@ class RunnerDoorEndToEnd(PostgresFixture, unittest.TestCase):
         self.assertIn(("task.submit_artifacts:review_output", rtid, "accepted"), sent)
         r = self.svc.get("task", rtid, "tok-principal")
         delivered = self.task()["reviews"][-1]["review_ref"]                    # exactly the review it delivered
+        # A child that already held another result set (Dev, before the review_ref rule) still gets this one.
+        self.assertTrue(all(c[2] != "refused" for c in sent), sent)
         self.assertEqual([(a["id"], a["digest"]) for a in r["artifact_sets"][-1]["artifacts"]],
                          [(delivered["id"], delivered["digest"])])
         self.assertEqual(self.door.pass_once(), [])                             # once

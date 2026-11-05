@@ -204,6 +204,9 @@ class RunnerDoor:
         if set_digest(result_set) != current:
             res = self._send(review_task["holder"], self._cmd("task.submit_artifacts", review_task, {
                 "artifacts": result_set, "fence_generation": review_task["fence_generation"]},
-                f"cmd-door-vset-{item['result_event_id']}", dict(harness_ref(item), id=str(item["result_event_id"]))))
+                # Keyed on the set too: a review child that holds an earlier result set (before verdict path v0.1 its
+                # outputs) gets the delivered review under a fresh id, never a reused one (command_id_reused).
+                f"cmd-door-vset-{item['result_event_id']}-{set_digest(result_set)[7:23]}",
+                dict(harness_ref(item), id=str(item["result_event_id"]))))
             out.append(("task.submit_artifacts:" + what, review_task["task_id"], res.get("outcome")))
         return out
