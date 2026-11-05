@@ -382,3 +382,38 @@ def test_completed_discussion_failure_preserves_reason_and_posts_no_reply(env):
     assert turn['state'] == 'failed'
     assert turn['disposition'] == 'discussion_reply_limit'
     assert turn.get('reply_event') is None
+
+
+def test_repeated_reconcile_of_an_unconfirmed_stop_does_not_refresh_the_turn(env, monkeypatch):
+    """Dev E2E 3 Nov: a kept stop_unconfirmed cause was re-reported every pass and each report bumped `updated`,
+    so failure_since_last_commit never cleared and MC showed "Not reachable" indefinitely."""
+    monkeypatch.setattr(worker_module, 'HEARTBEAT_S', 0.05)
+    env.prove(); env.join(); env.say('Q')
+    env.relay.stop_guaranteed = False
+    def running_tool(relay, messages):
+        env.call('POST', f'/rooms/{env.room}/stop', {})
+        assert relay.wait_for_stop(5)
+        return {'outcome': 'done', 'text': 'Tool may have finished.'}
+    env.relay.script = [running_tool]
+    env.worker.run_once()
+    turn_id = env.turns()[0]['id']
+    def updated():
+        with env.store.connect() as d:
+            return d.execute("SELECT updated,disposition FROM turns WHERE id=?", (turn_id,)).fetchone()
+    env.worker.housekeeping()
+    before = tuple(updated())
+    for _ in range(3):
+        env.worker.housekeeping()
+    assert tuple(updated()) == before
+    assert before[1] == 'stop_unconfirmed'
+    # Once MC commits a later reply, the old unconfirmed stop no longer blocks reachability.
+    with env.store.connect() as d:
+        d.execute("UPDATE turns SET updated=? WHERE id=?", ('2000-01-01T00:00:00+00:00', turn_id))
+        d.execute("INSERT INTO turns(id,room,generation,addressee,trigger_seq,attempt,state,created,expires,updated) "
+                  "VALUES('later',?,0,'mc',999,1,'committed',?,?,?)",
+                  (env.room, datetime.now(timezone.utc).isoformat(), datetime.now(timezone.utc).isoformat(),
+                   datetime.now(timezone.utc).isoformat()))
+    env.worker.housekeeping()
+    env.worker.housekeeping()
+    mc = [p for p in env.call('GET', f'/rooms/{env.room}/turns')[1]['participants'] if p['id'] == 'mc'][0]
+    assert mc['reach']['state'] == 'reachable', mc['reach']
