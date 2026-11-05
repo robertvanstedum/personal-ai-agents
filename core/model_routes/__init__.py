@@ -33,15 +33,25 @@ class RouteRefused(ValueError):
         self.code, self.message = code, message
 
 
+def routes_enabled() -> bool:
+    """A host opts in by naming its catalogue, with its relay and runtime configured to match. Anywhere else there
+    are no routes: nothing is selected, no header is sent, and the host's runtime default serves exactly as before."""
+    return bool(os.environ.get(CATALOGUE_VAR))
+
+
 def load_catalogue(path: Path | str | None = None) -> dict:
+    """The catalogue, checked. Anything wrong with it is an OSError or a ValueError."""
     catalogue = json.loads(Path(path or os.environ.get(CATALOGUE_VAR) or CATALOGUE_PATH).read_text(encoding="utf-8"))
-    ids = [r["route_id"] for r in catalogue["routes"]]
-    if len(ids) != len(set(ids)):
-        raise ValueError("duplicate route_id in the catalogue")
-    for name, role in catalogue["roles"].items():
-        route = route_of(catalogue, role["route"])
-        if route is None or route["offered"].get(role["agent"]) != AVAILABLE:
-            raise ValueError(f"role {name} must read a route available to {role['agent']}")
+    try:
+        ids = [r["route_id"] for r in catalogue["routes"]]
+        if len(ids) != len(set(ids)):
+            raise ValueError("duplicate route_id in the catalogue")
+        for name, role in catalogue["roles"].items():
+            route = route_of(catalogue, role["route"])
+            if route is None or route["offered"].get(role["agent"]) != AVAILABLE:
+                raise ValueError(f"role {name} must read a route available to {role['agent']}")
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise ValueError("the route catalogue has the wrong shape") from exc
     return catalogue
 
 
@@ -113,20 +123,19 @@ def snapshot(catalogue: dict, role_name: str, conv: dict | None = None) -> dict:
 
 
 def role_snapshot_for(kind: str | None, role_name: str) -> dict | None:
-    """A non-conversation task's route when ``kind`` is the backend that role belongs to, else None. A broken catalogue
-    is also None, with a warning: no override, so the runtime's own default serves, and its allowlist holds only
-    subscription routes with no fallback, so this can never reach a metered route."""
-    if agent_for_backend(kind) is None:
+    """A non-conversation task's route. None only where this role has no routes (routes not enabled on this host, or
+    another backend). A catalogue that cannot be read refuses, as a conversation does: never a silent default."""
+    if not routes_enabled() or agent_for_backend(kind) is None:
         return None
     try:
         catalogue = load_catalogue()
-        role = catalogue["roles"].get(role_name)
-        if role is None or agent_for_backend(kind) != role["agent"]:
-            return None
-        return snapshot(catalogue, role_name)
-    except (OSError, ValueError, KeyError) as exc:
-        log.warning("model routes: role %s not read (%s); the runtime default serves", role_name, type(exc).__name__)
+    except (OSError, ValueError) as exc:
+        log.warning("model routes: the catalogue could not be read for %s (%s)", role_name, type(exc).__name__)
+        raise RouteRefused("route_unavailable", "The model routes could not be read. Nothing was sent.") from exc
+    role = catalogue["roles"].get(role_name)
+    if role is None or agent_for_backend(kind) != role["agent"]:
         return None
+    return snapshot(catalogue, role_name)
 
 
 def served_receipt(route: dict | None, served: dict | None) -> dict | None:

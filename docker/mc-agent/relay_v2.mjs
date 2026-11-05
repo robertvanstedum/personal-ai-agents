@@ -235,6 +235,7 @@ function eventOf(row) {
   if (row.event_zstd && zstdDecompressSync) return JSON.parse(zstdDecompressSync(row.event_zstd).toString("utf8"));
   return null;
 }
+const SERVED_FIELD = /^[A-Za-z0-9._:\/-]{1,80}$/;     // plain words only: this goes into a header and a stream line
 export function readServed(dbPath, sessionKey, since) {
   if (!DatabaseSync || !dbPath) return null;
   let db = null;
@@ -247,8 +248,9 @@ export function readServed(dbPath, sessionKey, since) {
       const event = eventOf(row);
       const message = event && event.type === "message" ? event.message : null;
       if (!message || message.role !== "assistant" || !message.provider || !message.model) continue;
-      if (Date.parse(event.timestamp || "") < since) return null;       // the latest reply is older than this turn: no evidence
-      return { provider: message.provider, model: message.model, api: message.api || undefined, harness: session.agent_harness_id || undefined };
+      if (!(Date.parse(event.timestamp || "") >= since)) return null;   // older than this turn, or no readable time: no evidence
+      const found = { provider: message.provider, model: message.model, api: message.api || undefined, harness: session.agent_harness_id || undefined };
+      return Object.values(found).every((v) => v === undefined || SERVED_FIELD.test(String(v))) ? found : null;
     }
     return null;
   } catch {

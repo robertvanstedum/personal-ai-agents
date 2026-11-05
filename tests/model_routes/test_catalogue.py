@@ -92,9 +92,15 @@ def test_a_hosts_own_copy_is_read_fresh_so_one_line_moves_a_task(tmp_path, monke
     assert role_snapshot_for("openclaw", "mc-morning")["model"] == "gpt-6-luna"
 
 
-def test_a_broken_host_copy_never_reaches_a_metered_route(tmp_path, monkeypatch, caplog):
+def test_a_broken_host_copy_refuses_a_task_rather_than_defaulting_silently(tmp_path, monkeypatch):
     path = tmp_path / "routes.json"
-    path.write_text("{ not json")
-    monkeypatch.setenv("MINIMOI_MODEL_ROUTES_FILE", str(path))
-    assert role_snapshot_for("openclaw", "mc-morning") is None        # no header: the runtime's subscription-only default
-    assert "runtime default" in caplog.text
+    for broken in ("{ not json", '{"routes": 3}', "[]"):
+        path.write_text(broken)
+        monkeypatch.setenv("MINIMOI_MODEL_ROUTES_FILE", str(path))
+        with pytest.raises(RouteRefused):
+            role_snapshot_for("openclaw", "mc-morning")
+
+
+def test_without_a_hosts_catalogue_no_task_has_a_route(monkeypatch):
+    monkeypatch.delenv("MINIMOI_MODEL_ROUTES_FILE", raising=False)
+    assert role_snapshot_for("openclaw", "mc-morning") is None

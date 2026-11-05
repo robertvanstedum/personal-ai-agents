@@ -1486,14 +1486,17 @@ def mc_private():
         # Private keeps nothing, so it cannot join the durable exclusion without retaining metadata.
         return json_error("private_unavailable", "Private is off while the turn ledger is on. Nothing was sent.", 409,
                           mc_state=shown["state"])
+    from core.model_routes import RouteRefused, role_snapshot_for
+    try:
+        route = role_snapshot_for(getattr(services.mc, "kind", None), "mc-private")
+    except RouteRefused as exc:
+        return json_error(exc.code, exc.message, 409, mc_state=shown["state"])
     if not _mc_acquire(principal):
         return json_error("busy", MC_WORDS["busy"], 409, mc_state=shown["state"])
     turn_id = uuid.uuid4().hex
     try:
-        from core.model_routes import role_snapshot_for
         req = TurnRequest(conversation_id=f"private:{principal}:{session}", text=text, note_request_id=f"private-{turn_id}",
-                          correlation_id=turn_id, context={"mode": "private"},
-                          route=role_snapshot_for(getattr(services.mc, "kind", None), "mc-private"))
+                          correlation_id=turn_id, context={"mode": "private"}, route=route)
         _mc_log().info("mc private turn %s start backend=%s", turn_id, services.mc.kind)    # no text, ever
         result = services.mc.turn(req)
         _mc_log().info("mc private turn %s end status=%s class=%s", turn_id, result.status, result.failure_class)
@@ -2007,13 +2010,16 @@ def _flag(cid, change, status):
 
 # ── model routes: one conversation, one owner choice, applied from its next turn ──────────────
 def _route_agent(services=None):
-    from core.model_routes import agent_for_backend
+    from core.model_routes import agent_for_backend, routes_enabled
+    if not routes_enabled():
+        return None
     mc = getattr(services or cfg()["services"], "mc", None)
     return agent_for_backend(getattr(mc, "kind", None))
 
 
 def _route_snapshot(services, conv):
-    """(route, refusal). The route is fixed here, at admission, once per turn. (None, None): this backend has no routes."""
+    """(route, refusal). The route is fixed here, at admission, once per turn. (None, None): no routes here. A waiting
+    message is admitted when it is sent, so it takes the conversation's choice at that moment."""
     from core.model_routes import RouteRefused, conversation_role, load_catalogue, snapshot
     agent = _route_agent(services)
     if agent is None:
@@ -2022,7 +2028,7 @@ def _route_snapshot(services, conv):
         return snapshot(load_catalogue(), conversation_role(agent), conv), None
     except RouteRefused as exc:
         return None, exc
-    except (OSError, ValueError, KeyError):
+    except (OSError, ValueError):
         _mc_log().exception("model routes: the catalogue could not be read")
         return None, RouteRefused("route_unavailable", "The model routes could not be read. Nothing was sent.")
 
@@ -2072,7 +2078,7 @@ def conversation_route(cid):
         return json_error("unavailable", CONV_WORDS["unavailable"], 503)
     try:
         return jsonify({**view(load_catalogue(), agent, conv), "observed_at": now_iso()})
-    except (OSError, ValueError, KeyError):
+    except (OSError, ValueError):
         _mc_log().exception("model routes: the catalogue could not be read")
         return json_error("unavailable", "The model routes could not be read.", 503)
 
@@ -2087,7 +2093,7 @@ def conversation_route_select(cid):
         return json_error("not_available", "This conversation has no model routes.", 404)
     try:
         catalogue = load_catalogue()
-    except (OSError, ValueError, KeyError):
+    except (OSError, ValueError):
         _mc_log().exception("model routes: the catalogue could not be read")
         return json_error("unavailable", "The model routes could not be read. Nothing changed.", 503)
 

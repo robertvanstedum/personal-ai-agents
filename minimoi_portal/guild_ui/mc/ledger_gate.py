@@ -33,7 +33,7 @@ _KINDS = ("cos", "openclaw", "grok", "platform", "stub")
 # A waiting turn refused for one of these stays first in line; any other refusal (a note, file or
 # topic item gone or not the owner's, too large, unsupported) is failed and pauses the queue.
 TRANSIENT = ("unavailable", "busy", "mc_unavailable", "mc_turns_off", "stream_off", "stream_unsupported",
-             "ledger_unavailable")
+             "ledger_unavailable", "route_unavailable")
 
 PAUSED_WORDS = ("Your earlier message's outcome is unknown: it may have run, or may still be running. "
                 "Nothing new was sent. Continue when you are ready.")

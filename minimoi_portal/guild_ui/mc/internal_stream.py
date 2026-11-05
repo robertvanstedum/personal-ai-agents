@@ -15,7 +15,7 @@ import time
 
 from .backend import TurnResult
 from .openclaw import OPENCLAW_NO_RESPONSE
-from .stream import STREAM_ANSWER_FINISH_REASONS, Delta, Failure, Finish, RunStarted, StreamRefused, Usage
+from .stream import STREAM_ANSWER_FINISH_REASONS, Delta, Failure, Finish, RunStarted, StreamRefused, Served, Usage
 
 _log = logging.getLogger("guild_ui.mc")
 
@@ -27,7 +27,7 @@ def collect(backend, req, *, on_run, record_usage=None, clock=time.monotonic) ->
         return backend.turn(req)                         # nothing was sent: the ordinary way, no run, no tools
     if record_usage is None:
         from .stream_usage import record_run as record_usage
-    started, parts, finish, usage, failure, run_seen = clock(), [], None, None, None, False
+    started, parts, finish, usage, failure, run_seen, served = clock(), [], None, None, None, False, None
     try:
         for event in events:
             if isinstance(event, RunStarted):
@@ -44,6 +44,8 @@ def collect(backend, req, *, on_run, record_usage=None, clock=time.monotonic) ->
                 finish = finish or event.reason
             elif isinstance(event, Usage):
                 usage = event
+            elif isinstance(event, Served):
+                served = event.fields
             elif isinstance(event, Failure):
                 failure = event
                 break
@@ -52,7 +54,7 @@ def collect(backend, req, *, on_run, record_usage=None, clock=time.monotonic) ->
         failure = failure or Failure("upstream")
     duration_ms = int((clock() - started) * 1000)
     text = "".join(parts)
-    trace = {"finish_reason": finish or "none", "internal_stream": True}
+    trace = {"finish_reason": finish or "none", "internal_stream": True, **({"served": served} if served else {})}
     if failure is None and not (finish in STREAM_ANSWER_FINISH_REASONS and text.strip()
                                 and text.strip() != OPENCLAW_NO_RESPONSE):
         failure = Failure("no_run_status") if finish is not None else Failure("truncated")

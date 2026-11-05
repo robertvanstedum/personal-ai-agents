@@ -99,3 +99,18 @@ def test_an_unreadable_record_is_no_evidence_and_the_answer_still_arrives(relay,
     env = relay(MC_RELAY_CHAT_DB=str(tmp_path / "missing.sqlite"))
     status, headers, _ = post(env, chat("openclaw/mc-chat", user=USER))
     assert status == 200 and "x-mc-served" not in {k.lower() for k in headers}
+
+
+@pytest.mark.parametrize("stamp", ["not a time", "2100-01-01T00:00:00Z bad"])
+def test_a_reply_with_no_readable_time_is_no_evidence(relay, tmp_path, stamp):
+    _chat_db(tmp_path / "chat.sqlite", stamp=stamp)
+    env = relay(MC_RELAY_CHAT_DB=str(tmp_path / "chat.sqlite"))
+    _, headers, _ = post(env, chat("openclaw/mc-chat", user=USER))
+    assert "x-mc-served" not in {k.lower() for k in headers}
+
+
+def test_a_strange_model_name_is_no_evidence_and_never_breaks_the_answer(relay, tmp_path):
+    _chat_db(tmp_path / "chat.sqlite", model="gpt\u00e9\u2603")
+    env = relay(MC_RELAY_CHAT_DB=str(tmp_path / "chat.sqlite"))
+    status, headers, _ = post(env, chat("openclaw/mc-chat", user=USER))
+    assert status == 200 and "x-mc-served" not in {k.lower() for k in headers}

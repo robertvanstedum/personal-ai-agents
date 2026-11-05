@@ -26,6 +26,7 @@ def catalogue(monkeypatch):
     real = json.loads(json.dumps(real))
     next(r for r in real["routes"] if r["route_id"] == SOL)["offered"]["mc"] = "available"
     monkeypatch.setattr(routes, "load_catalogue", lambda *a, **k: real)
+    monkeypatch.setenv(routes.CATALOGUE_VAR, str(routes.CATALOGUE_PATH))
     return real
 
 
@@ -230,3 +231,23 @@ def test_a_broken_catalogue_stops_the_conversation_turn_with_nothing_sent(routed
     before = len(routed.runtime.posts)
     r = _stream(client, token, note["request_id"])
     assert r.status_code == 409 and r.get_json()["error"] == "route_unavailable" and len(routed.runtime.posts) == before
+
+
+def test_a_host_that_has_not_opted_in_has_no_routes_and_sends_no_header(routed, monkeypatch):
+    import core.model_routes as routes
+    monkeypatch.delenv(routes.CATALOGUE_VAR)
+    client = routed.owner()
+    token = routed.csrf(client)
+    note = _keep(client, token, "hello")
+    cid = _conversation_of(client, note)
+    assert client.get(f"{API}/conversations/{cid}/route").status_code == 404
+    _stream(client, token, note["request_id"]).get_data()
+    assert "X-MC-Route" not in routed.runtime.posts[-1]["headers"]
+
+
+def test_a_buffered_tool_turn_keeps_the_runtimes_evidence():
+    from minimoi_portal.guild_ui.mc.internal_stream import collect
+    runtime = StreamRuntime(HAPPY + [nd({"t": "served", "provider": "openai", "model": "gpt-6-astra"})])
+    adapter = OpenClawMasterCraftsman("http://r/v1", "t" * 32, http_get=runtime.get, http_post=runtime.post)
+    result = collect(adapter, TurnRequest("c-0123456789ab", "hi", "n", correlation_id="a" * 32), on_run=lambda run: None, record_usage=lambda *a, **k: None)
+    assert result.trace["served"] == {"provider": "openai", "model": "gpt-6-astra"}
