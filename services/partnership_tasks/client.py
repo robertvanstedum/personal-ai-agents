@@ -127,6 +127,13 @@ class TaskClient:
             raise TaskServiceUnavailable(f"reconstruct failed: HTTP {r.status_code}")
         return r.json()
 
+    def outbox_pending(self) -> list:
+        """B4 v0.6: admissions and notices still to send or settle (drainer seat or principal)."""
+        r = self._call("GET", "/v1/outbox/pending")
+        if r.status_code != 200:
+            raise TaskServiceUnavailable(f"outbox read failed: HTTP {r.status_code}")
+        return r.json()
+
     def open_work(self) -> list:
         r = self._call("GET", "/v1/open")
         if r.status_code != 200:

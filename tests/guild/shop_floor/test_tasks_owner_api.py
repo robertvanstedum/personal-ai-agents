@@ -160,3 +160,54 @@ def test_a_promote_whose_reply_was_lost_finishes_forward(rig, monkeypatch):
     assert post(c, "/tasks/confirm", interpretation_id="IN-own-0001", proposal_digest=shown).status_code == 503
     again = post(c, "/tasks/confirm", interpretation_id="IN-own-0001", proposal_digest=shown)
     assert again.status_code == 200 and again.json["state"] == "confirmed", again.json
+
+
+# ---- B4 execution design v0.6: Robert approves or declines each work card from his own session -------------------
+
+def _card(card_id):
+    return {"schema": "minimoi.card.v1", "card_id": card_id, "class": "build_only", "class_version": 1,
+            "repository": "personal-ai-agents", "ref": "a" * 40,
+            "workers": {"builder": {"actor": "fakework", "route": "fakework", "amount": "0.25", "cost_cap_usd": "1"}},
+            "briefs": {"build": "fakework/1\nresult ok"}, "attempts": 1, "step_deadline_s": 3600}
+
+
+def _queued_card(svc, c, op, card_id):
+    from core.mc_delegation_dispatcher import cards as card_mod
+    shown = c.get("/tasks/pending").json["proposals"]
+    if shown:
+        post(c, "/tasks/confirm", interpretation_id="IN-own-0001", proposal_digest=shown[0]["proposal_digest"])
+    tid = "TK-own-0001"
+    doc = _card(card_id); d = "sha256:" + card_mod.Catalogue.load().compile(doc).digest
+    t = svc.get("task", tid, "tok-principal")
+    res = svc.submit(cmd("task.request_admission", "task", tid,
+                         {"operation_id": op, "bundle_digest": d,
+                          "bundle_ref": {"store": "harness", "id": card_id, "edition": None, "digest": d},
+                          "fence_generation": t["fence_generation"], "card": doc}, expected=t["revision"]), "tok-mc")
+    assert res["outcome"] == "accepted", res
+    return d
+
+
+def test_v06_robert_sees_the_card_and_approves_exactly_what_he_saw(rig):
+    svc, c = rig
+    d = _queued_card(svc, c, "OB-own-card-1", "C-own-0001")
+    rows = c.get("/tasks/admissions").json["admissions"]
+    assert [r["operation_id"] for r in rows] == ["OB-own-card-1"] and rows[0]["card_digest"] == d
+    assert rows[0]["card"]["workers"]["builder"]["actor"] == "fakework" and rows[0]["card"]["briefs"]["build"]
+    assert post(c, "/tasks/admit", operation_id="OB-own-card-1", card_digest="sha256:" + "0" * 64).status_code == 409
+    r = post(c, "/tasks/admit", operation_id="OB-own-card-1", card_digest=d)
+    assert r.status_code == 200 and r.json["state"] == "approved", r.json
+    ob = svc.get("outbox", "OB-own-card-1", "tok-principal")
+    assert ob["approval"]["card_digest"] == d and ob["approval"]["spent_at"] is None
+    ev = svc.get("source_event", ob["approval"]["event_id"], "tok-principal")
+    assert ev["source"]["store"] == "portal-owner-action" and ev["provenance"]["origin"] == "owner_session"
+    again = post(c, "/tasks/admit", operation_id="OB-own-card-1", card_digest=d)
+    assert again.status_code == 409                                    # a fresh approval stands; never a second one
+
+
+def test_v06_robert_declines_a_card_and_nothing_will_be_sent(rig):
+    svc, c = rig
+    d = _queued_card(svc, c, "OB-own-card-2", "C-own-0002")
+    r = post(c, "/tasks/admission-decline", operation_id="OB-own-card-2", card_digest=d)
+    assert r.status_code == 200 and r.json["state"] == "declined", r.json
+    assert svc.get("outbox", "OB-own-card-2", "tok-principal")["state"] == "declined"
+    assert c.get("/tasks/admissions").json["admissions"] == []

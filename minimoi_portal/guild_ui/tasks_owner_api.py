@@ -263,10 +263,112 @@ def cancel():
     return jsonify(state="cancel_recorded", task_id=task["task_id"], open_effects=out.get("open_effects", []))
 
 
+# ---- B4 execution design v0.6: Robert approves or declines each work card (the exact approval paid work needs) ----
+_OP = re.compile(r"OB-[A-Za-z0-9_-]{4,64}")
+
+
+def _card_summary(card):
+    """What Robert sees before approving: who does it, where, for how much, and the words of every step."""
+    if not isinstance(card, dict):
+        return None
+    workers = {role: {k: w.get(k) for k in ("actor", "route", "cost_cap_usd")}
+               for role, w in (card.get("workers") or {}).items() if isinstance(w, dict)}
+    return {"card_id": card.get("card_id"), "class": card.get("class"), "workers": workers,
+            "briefs": card.get("briefs"), "step_deadline_s": card.get("step_deadline_s"),
+            "attempts": card.get("attempts"), "input_artifacts": card.get("input_artifacts") or []}
+
+
+def admissions():
+    """Work cards waiting for Robert's approval: pending admissions whose task has not moved on."""
+    from flask import jsonify
+    from services.partnership_tasks.client import TaskServiceUnavailable
+    client = _client()
+    if client is None:
+        return json_error("unavailable", "Task tracking is not connected here.", 409)
+    try:
+        rows = [r for r in client.outbox_pending()
+                if r["operation"] == "admit_bundle" and r["state"] == "pending" and not r["stale"]]
+        out = []
+        for r in rows:
+            ob = client.get("outbox", r["operation_id"])
+            out.append({"operation_id": r["operation_id"], "task_id": r["task_id"], "card_digest": r["bundle_digest"],
+                        "approval": r["approval"], "card": _card_summary((ob or {}).get("packet"))})
+    except TaskServiceUnavailable:
+        return json_error("unavailable", "The task service could not confirm the current state. Try Refresh.", 503)
+    return jsonify(admissions=out)
+
+
+def _admission(client, op, shown):
+    ob = client.get("outbox", op)
+    if ob is None or ob["operation"] != "admit_bundle":
+        return None, json_error("not_found", "That work card is not available to you.", 404)
+    if ob["state"] != "pending":
+        return None, json_error("not_pending", "That work card is no longer waiting for you.", 409)
+    if ob["bundle_digest"] != shown:
+        return None, json_error("changed", "The work card changed since the page showed it; reload and look again.", 409)
+    if not isinstance(ob.get("packet"), dict):
+        return None, json_error("no_card", "This admission carries no card to approve.", 409)
+    return ob, None
+
+
+def admit():
+    return _admission_decision("admit")
+
+
+def admission_decline():
+    return _admission_decision("decline_admission")
+
+
+def _admission_decision(action):
+    """One owner click on one card as the page showed it. Approve: an owner-action event naming exactly this
+    operation and card digest, then outbox.approve citing it (the authority re-checks both, within 15 minutes, once).
+    Decline: an owner-action event, then outbox.record "declined" (nothing is ever sent)."""
+    from flask import jsonify
+    refusal, body = _body()
+    if refusal is not None:
+        return refusal
+    op, shown = body.get("operation_id"), body.get("card_digest")
+    if not isinstance(op, str) or not _OP.fullmatch(op) or not isinstance(shown, str) or not _DIGEST.fullmatch(shown):
+        return json_error("invalid", "Choose one work card as the page showed it.", 422)
+    client = _client()
+    if client is None:
+        return json_error("unavailable", "Task tracking is not connected here.", 409)
+    try:
+        ob, refusal = _admission(client, op, shown)
+    except Exception:
+        return json_error("unavailable", "The work card could not be read. Refresh before acting.", 503)
+    if refusal is not None:
+        return refusal
+    # One event per click on this revision: a re-approval after expiry or a resend is a new, separate approval.
+    key = f"{op[3:]}-r{ob['revision']}"
+    content = ({"action": "admit", "operation_id": op, "card_digest": shown} if action == "admit"
+               else {"action": "decline_admission", "operation_id": op, "card_digest": shown})
+    sid, src = _owner_action(client, key, "adm" if action == "admit" else "admdecl", content)
+    _, r = _send(client, src)
+    if r is not None:
+        return r
+    if action == "admit":
+        cmd = _cmd("outbox.approve", "outbox", op, {"card_digest": shown, "approval_event_id": sid},
+                   f"approve-{key}", expected=ob["revision"], parent=_ref(sid))
+    else:
+        cmd = _cmd("outbox.record", "outbox", op, {"observation": "declined", "destination_receipt": None,
+                                                   "code": "owner_declined"},
+                   f"admdecl-{key}", expected=ob["revision"], parent=_ref(sid))
+    _, r = _send(client, cmd)
+    if r is not None:
+        return r
+    return jsonify(state="approved" if action == "admit" else "declined", operation_id=op,
+                   note="Approved for 15 minutes; the work starts when the authority admits it." if action == "admit"
+                   else "Declined; nothing was sent.")
+
+
 RULES = [
     ("/tasks/pending", "api_tasks_pending", pending, ["GET"]),
     ("/tasks/confirm", "api_tasks_confirm", confirm, ["POST"]),
     ("/tasks/decline", "api_tasks_decline", decline, ["POST"]),
     ("/tasks/correct", "api_tasks_correct", correct, ["POST"]),
     ("/tasks/cancel", "api_tasks_cancel", cancel, ["POST"]),
+    ("/tasks/admissions", "api_tasks_admissions", admissions, ["GET"]),
+    ("/tasks/admit", "api_tasks_admit", admit, ["POST"]),
+    ("/tasks/admission-decline", "api_tasks_admission_decline", admission_decline, ["POST"]),
 ]
