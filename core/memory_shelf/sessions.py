@@ -133,7 +133,7 @@ DEFAULT_NORMALIZER = 1                      # a record or state entry written be
 # bump it when a parser change makes older editions unfit (Claude Code 2: human origin; Codex 3: approval traffic and
 # handoffs typed; Claude.ai 2: attachment text out of the dialogue). An unknown provider is not in the table: held.
 RETRIEVAL_MIN_NORMALIZER = {"claude-code": 2, "codex": 3, "claude-ai": 2, "grok": 1, "chatgpt": 1, "paste": 1, "rooms": 1, "canary": 1,
-                            "minimoi-mc": 1}
+                            "minimoi-mc": 1, "minimoi-cos": 1}
 
 
 @dataclass(frozen=True)
