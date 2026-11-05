@@ -61,7 +61,7 @@ class TaskFences(PostgresFixture, unittest.TestCase):
     def approval(self, doc=None, *, age_s=0, digest=None, event=None):
         """Robert's approval of exactly this card, as the task service records it (v0.5 M2)."""
         now = self.sql("SELECT clock_timestamp() AS now")[0]["now"]
-        return {"event_id": event or "SE-ok-" + uuid4().hex[:12],
+        return {"event_id": event or "SE-ok-" + uuid4().hex[:12], "operation_id": None,
                 "card_digest": digest or self.store._cards.compile(doc or card()).digest,
                 "approved_at": (now - timedelta(seconds=age_s)).isoformat()}
 
@@ -71,7 +71,8 @@ class TaskFences(PostgresFixture, unittest.TestCase):
             op, doc or card(), task_id=task, fence=fence, attempt=attempt, grant_id=str(uuid4()),
             owner_turn_ids=("owner-turn-1",), proposal_id=str(uuid4()), approved_operation_id=str(uuid4()),
             approval_expires_at=now + timedelta(seconds=300), by="robert", note="task admission",
-            approval=approval or self.approval(doc))
+            approval=dict(approval or self.approval(doc), **({"operation_id": op}
+                                                             if (approval or {}).get("operation_id") is None else {})))
 
     def refused(self, fn, *a, **kw):
         with self.assertRaises(AuthorityRefused) as caught:
@@ -313,36 +314,39 @@ class TaskFences(PostgresFixture, unittest.TestCase):
             self.assertEqual(self.op("op-1")["fence"], 0)
             self.assertEqual(self.refused(self.send, "op-2", card("C-18"), fence=0), "fenced")
 
+    # ---- B4 execution design v0.5 M2: the authority itself re-checks Robert's approval in the admission transaction --
+    def test_v05_an_approval_for_another_card_digest_admits_nothing(self):
+        bad = self.approval(digest="sha256:" + "0" * 64)
+        self.assertEqual(self.refused(self.send, "OB-appr-1", approval=bad), "approval_digest_mismatch")
+        self.assertEqual(self.cards(), [])
+
+    def test_v05_a_stale_approval_admits_nothing_and_slight_skew_is_tolerated(self):
+        self.assertEqual(self.refused(self.send, "OB-appr-2", approval=self.approval(age_s=16 * 60)), "approval_expired")
+        self.assertEqual(self.refused(self.send, "OB-appr-2b", approval=self.approval(age_s=-90)), "approval_expired")
+        self.assertEqual(self.cards(), [])
+        self.assertEqual(self.send("OB-appr-2c", approval=self.approval(age_s=-30))["state"], "admitted")
+
+    def test_v05_an_approval_names_its_operation(self):
+        other_op = dict(self.approval(), operation_id="OB-appr-someone-else")
+        self.assertEqual(self.refused(self.send, "OB-appr-5", approval=other_op), "approval_invalid")
+        self.assertEqual(self.cards(), [])
+
+    def test_v05_one_approval_admits_one_card_once_and_is_recorded(self):
+        ok = self.approval(event="SE-ok-once")
+        self.assertEqual(self.send("OB-appr-3", approval=ok)["state"], "admitted")
+        self.assertEqual(self.op("OB-appr-3")["approval_event"], "SE-ok-once")
+        other = card("C-appr-other")
+        reuse = dict(ok, operation_id="OB-appr-4", card_digest=self.store._cards.compile(other).digest)
+        self.assertEqual(self.refused(self.send, "OB-appr-4", other, task="T-2", approval=reuse), "approval_already_used")
+        self.assertEqual(self.cards(), ["C-17"])
+
+    def test_v05_a_retry_after_the_approval_expired_still_answers_duplicate(self):
+        ok = self.approval()
+        self.assertEqual(self.send("OB-appr-6", approval=ok)["state"], "admitted")
+        late = dict(ok, approved_at=self.approval(age_s=30 * 60)["approved_at"])
+        self.assertEqual(self.send("OB-appr-6", approval=late, attempt=2)["state"], "duplicate")
+
 
 if __name__ == "__main__":
     unittest.main()
 
-
-
-# ---- B4 execution design v0.5 M2: the authority itself re-checks Robert's approval inside the admission transaction --
-
-def _approval_for_another_digest_admits_nothing(self):
-    bad = self.approval(digest="sha256:" + "0" * 64)
-    self.assertEqual(self.refused(self.send, "OB-appr-1", approval=bad), "approval_digest_mismatch")
-    self.assertEqual(self.cards(), [])
-
-
-def _stale_approval_admits_nothing(self):
-    old = self.approval(age_s=16 * 60)
-    self.assertEqual(self.refused(self.send, "OB-appr-2", approval=old), "approval_expired")
-    self.assertEqual(self.cards(), [])
-
-
-def _one_approval_admits_one_card_once_and_is_recorded(self):
-    ok = self.approval(event="SE-ok-once")
-    self.assertEqual(self.send("OB-appr-3", approval=ok)["state"], "admitted")
-    self.assertEqual(self.op("OB-appr-3")["approval_event"], "SE-ok-once")
-    other = card("C-appr-other")
-    reuse = dict(ok, card_digest=self.store._cards.compile(other).digest)
-    self.assertEqual(self.refused(self.send, "OB-appr-4", other, task="T-2", approval=reuse), "approval_already_used")
-    self.assertEqual(self.cards(), ["C-17"])
-
-
-TaskFences.test_v05_an_approval_for_another_card_digest_admits_nothing = _approval_for_another_digest_admits_nothing
-TaskFences.test_v05_a_stale_approval_admits_nothing = _stale_approval_admits_nothing
-TaskFences.test_v05_one_approval_admits_one_card_once_and_is_recorded = _one_approval_admits_one_card_once_and_is_recorded

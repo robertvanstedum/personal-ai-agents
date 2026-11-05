@@ -2020,11 +2020,12 @@ class DispatcherStore:
         - An attempt at or below one a lookup declared absent is refused attempt_declared_absent.
         - A fence below the task's current fence is refused fenced.
         - Robert's approval (``approval``: {event_id, card_digest, approved_at}, read back from the task service by the
-          caller) must name exactly the compiled card's digest, be at most 15 minutes old by this database's clock,
+          caller) must name this operation and exactly the compiled card's digest, be at most 15 minutes old by this database's clock,
           and never have admitted anything before (refused approval_digest_mismatch / approval_expired /
           approval_already_used). It is recorded with the operation, unique, in this same transaction (v0.5 M2).
         - Otherwise the operation is bound to this task, fence and card once, and the card is admitted."""
-        _need(type(approval) is dict and set(approval) >= {"event_id", "card_digest", "approved_at"}
+        _need(type(approval) is dict and set(approval) >= {"event_id", "operation_id", "card_digest", "approved_at"}
+              and approval["operation_id"] == operation_id
               and type(approval["event_id"]) is str and 1 <= len(approval["event_id"]) <= 80
               and type(approval["card_digest"]) is str and type(approval["approved_at"]) is str, "approval_invalid")
         _need(type(attempt) is int and 1 <= attempt <= 2**31 - 1, "attempt_invalid")
@@ -2052,11 +2053,20 @@ class DispatcherStore:
             cur.execute("""SELECT 1 FROM guild.mc_task_operations WHERE principal=%s AND environment=%s
                 AND approval_event=%s""", (self.principal, self.environment, approval["event_id"]))
             _need(cur.fetchone() is None, "approval_already_used")
-            cur.execute("""UPDATE guild.mc_task_operations SET applied=true, task_id=%s, digest=%s, fence=%s, card_id=%s,
-                approval_event=%s, approved_at=%s::timestamptz
-                WHERE principal=%s AND environment=%s AND operation_id=%s""",
-                        (task_id, compiled.digest, fence, compiled.card_id, approval["event_id"],
-                         approval["approved_at"], self.principal, self.environment, operation_id))
+            try:
+                cur.execute("""UPDATE guild.mc_task_operations SET applied=true, task_id=%s, digest=%s, fence=%s,
+                    card_id=%s, approval_event=%s, approved_at=%s::timestamptz
+                    WHERE principal=%s AND environment=%s AND operation_id=%s""",
+                            (task_id, compiled.digest, fence, compiled.card_id, approval["event_id"],
+                             approval["approved_at"], self.principal, self.environment, operation_id))
+            except Exception as exc:
+                # Two operations citing one approval can both pass the read above; the partial unique index decides,
+                # and the loser is a refusal, never a raw database error (v0.5 diff check S4).
+                diag = getattr(exc, "diag", None)
+                if getattr(exc, "pgcode", None) == "23505" and getattr(diag, "constraint_name", "") == \
+                        "mc_task_operations_approval_event":
+                    raise AuthorityRefused("approval_already_used") from None
+                raise
         answer = self.admit_card(card, grant_id=grant_id, owner_turn_ids=owner_turn_ids, proposal_id=proposal_id,
                                  approved_operation_id=approved_operation_id, approval_expires_at=approval_expires_at,
                                  by=by, note=note, precheck=precheck)

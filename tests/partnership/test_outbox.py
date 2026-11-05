@@ -334,3 +334,31 @@ def test_v05_an_approval_names_exactly_this_card_from_robert_session_and_is_used
     assert approve("SE-syn-ok-a3")["detail"] == "approval_not_for_this_card"                   # not an owner action
     assert approve("SE-syn-ok-a1")["outcome"] == "accepted"
     assert drain(svc, D, h, "OB-syn-0001", approve=False) == "acknowledged"
+
+
+def test_v05_an_approval_older_than_15_minutes_sends_nothing_and_robert_can_approve_again(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    now = {"t": datetime(2026, 11, 4, 16, 0, tzinfo=timezone.utc)}
+    svc = service(tmp_path / "tasks", clock=lambda: now["t"].isoformat())
+    f = Flow(svc); tid = f.promoted_task(); h = FakeHarness(tmp_path / "harness")
+    request_admission(svc, tid)
+    assert approve_admission(svc, "OB-syn-0001", event="SE-syn-ok-first")["outcome"] == "accepted"
+    now["t"] += timedelta(minutes=15, seconds=1)
+    assert drain(svc, D, h, "OB-syn-0001", approve=False) == "pending" and h.admissions() == []   # expired: no send
+    assert outbox(svc)["approval"]["spent_at"] is None
+    again = approve_admission(svc, "OB-syn-0001", event="SE-syn-ok-second")
+    assert again["outcome"] == "accepted"                                       # an expired approval may be replaced
+    assert drain(svc, D, h, "OB-syn-0001", approve=False) == "acknowledged" and h.admissions() == ["OB-syn-0001"]
+
+
+def test_v05_an_approval_event_counts_for_one_entry_only(rig):
+    import json as _json
+    svc, f, tid, h = rig
+    request_admission(svc, tid)
+    request_admission(svc, tid, op="OB-syn-0002")
+    assert approve_admission(svc, "OB-syn-0001", event="SE-syn-ok-shared")["outcome"] == "accepted"
+    ob2 = outbox(svc, "OB-syn-0002")
+    res = svc.submit(cmd("outbox.approve", "outbox", "OB-syn-0002",
+                         {"card_digest": ob2["bundle_digest"], "approval_event_id": "SE-syn-ok-shared"},
+                         expected=ob2["revision"]), "tok-principal")
+    assert res["outcome"] == "refused" and res["detail"] in ("approval_not_for_this_card", "approval_already_used")
