@@ -42,7 +42,7 @@ def source(cid, sid):
 def rig(tmp_path):
     svc = service(tmp_path / "tasks")
     s = Session(create_app(svc))
-    return svc, s, TaskClient("http://tasks:8772", "tok-principal", session=s)
+    return svc, s, TaskClient("http://tasks:8772", "tok-cos", session=s)
 
 
 def test_accepted_and_replayed(rig):
@@ -74,7 +74,7 @@ def test_unknown_token_is_refused_and_reads_are_scoped(rig, tmp_path):
     bad = TaskClient("http://tasks:8772", "tok-nobody", session=s)
     assert bad.submit(source("cmd-c-4", "SE-cli-0004"))["code"] == "http_401"
     peer = TaskClient("http://tasks:8772", "tok-peer", session=s)
-    TaskClient("http://tasks:8772", "tok-principal", session=s).submit(source("cmd-c-5", "SE-cli-0005"))
+    TaskClient("http://tasks:8772", "tok-cos", session=s).submit(source("cmd-c-5", "SE-cli-0005"))
     assert peer.get("source_event", "SE-cli-0005") is None
 
 

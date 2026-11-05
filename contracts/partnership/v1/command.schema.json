@@ -14,6 +14,7 @@
         "request.answer",
         "request.set_state",
         "request.promote",
+        "request.link_source",
         "task.transition",
         "task.assign",
         "task.accept",
@@ -625,6 +626,25 @@
             "properties": {
               "payload": {
                 "$ref": "#/$defs/payload.task.lead_unavailable"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "request.link_source"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.request.link_source"
               }
             }
           }
@@ -1362,6 +1382,18 @@
         "fence_generation": {
           "type": "integer",
           "minimum": 0
+        }
+      }
+    },
+    "payload.request.link_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_event_id"
+      ],
+      "properties": {
+        "source_event_id": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
         }
       }
     }

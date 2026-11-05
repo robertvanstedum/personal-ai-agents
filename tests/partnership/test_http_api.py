@@ -2,14 +2,51 @@
 the body; not-found and not-yours look the same; the service's own answers pass through unchanged."""
 import json
 
-from services.partnership_tasks.http_api import create_app
+from core import portal_assertion as PA
+from services.partnership_tasks.http_api import OWNER_AUDIENCE, OWNER_HEADER, create_app
 from tests.partnership.synth import Flow, cmd, service
+
+KEY = ("owner-kid", "partnership-owner-secret-0123456789abcdef")
+
+
+class Spend:
+    def __init__(self):
+        self.seen = set()
+
+    def __call__(self, nonce, expires, now=None):
+        if nonce in self.seen:
+            return False
+        self.seen.add(nonce)
+        return True
 
 
 def rig(tmp_path):
     svc = service(tmp_path / "tasks")
     tid = Flow(svc).promoted_task()
-    return svc, tid, create_app(svc).test_client()
+    app = create_app(svc, owner_key=KEY, owner_env="test", owner_subject="owner:1", spend=Spend())
+    return svc, tid, OwnerClient(app.test_client())
+
+
+class OwnerClient:
+    """Signs owner (tok-principal) requests as the portal would; everything else passes through."""
+
+    def __init__(self, client):
+        self.c = client
+
+    def _h(self, method, path, headers, data):
+        headers = dict(headers or {})
+        if headers.get("Authorization") == "Bearer tok-principal" and not headers.pop("X-Unsigned", None):
+            body = data.encode() if isinstance(data, str) else (data or b"")
+            target = PA.canonical_target(path.split("?")[0], path.split("?")[1] if "?" in path else "")
+            headers[OWNER_HEADER] = PA.sign(KEY, audience=OWNER_AUDIENCE, subject="owner:1", method=method,
+                                            target=target, body=body, env="test")
+        return headers
+
+    def get(self, path, headers=None):
+        return self.c.get(path, headers=self._h("GET", path, headers, None))
+
+    def post(self, path, data=None, headers=None):
+        return self.c.post(path, data=data, headers=self._h("POST", path, headers, data))
 
 
 def bearer(token):
@@ -53,3 +90,38 @@ def test_bad_bodies_are_refused_before_the_service(tmp_path):
     assert c.post(f"/v1/tasks/{tid}/dispatch-check", data='{"fence_generation":"1"}', headers=h).status_code == 400
     assert c.get("/v1/history", headers=bearer("tok-cos")).status_code == 400
     assert c.get("/healthz").json["status"] == "up"
+
+
+def test_the_owner_token_alone_never_acts_as_robert(tmp_path):
+    svc, tid, c = rig(tmp_path)
+    unsigned = {**bearer("tok-principal"), "X-Unsigned": "1"}
+    assert c.get(f"/v1/records/task/{tid}", headers=unsigned).status_code == 401
+    body = json.dumps(cmd("request.link_source", "request", "RQ-syn-0001", {"source_event_id": "SE-syn-0001"}))
+    assert c.post("/v1/commands", data=body, headers={**unsigned, "Content-Type": "application/json"}).status_code == 401
+    # A signature over another body, another route or a replay does not count.
+    h = c._h("POST", "/v1/commands", {**bearer("tok-principal"), "Content-Type": "application/json"}, "{}")
+    assert c.c.post("/v1/commands", data=body, headers=h).status_code == 401
+    h = c._h("GET", f"/v1/records/task/{tid}", bearer("tok-principal"), None)
+    assert c.c.get(f"/v1/records/task/{tid}", headers=h).status_code == 200
+    assert c.c.get(f"/v1/records/task/{tid}", headers=h).status_code == 401          # nonce spent
+    other = create_app(svc, owner_key=KEY, owner_env="test", owner_subject="owner:2", spend=Spend()).test_client()
+    h = c._h("GET", "/v1/open", bearer("tok-principal"), None)
+    assert other.get("/v1/open", headers=h).status_code == 401                        # not the configured owner
+    unconfigured = create_app(svc).test_client()
+    assert unconfigured.get("/v1/open", headers=c._h("GET", "/v1/open", bearer("tok-principal"), None)).status_code == 401
+    assert unconfigured.get("/v1/work", headers=bearer("tok-mc")).status_code == 200  # agents are unaffected
+
+
+def test_every_route_but_health_requires_authentication(tmp_path):
+    """Design v0.3 R-N1: the owner rule lives in http_api, so no route may skip the token check."""
+    svc, tid, c = rig(tmp_path)
+    app = c.c.application
+    for rule in app.url_map.iter_rules():
+        if rule.endpoint in ("static", "health"):
+            continue
+        path = rule.rule.replace("<target_type>", "task").replace("<target_id>", tid).replace(
+            "<start_type>", "task").replace("<start_id>", tid).replace("<task_id>", tid)
+        method = "POST" if "POST" in rule.methods else "GET"
+        r = c.c.open(path + ("?words=x" if path.endswith("history") else ""), method=method,
+                     data="{}", content_type="application/json")
+        assert r.status_code == 401, (rule.rule, r.status_code)

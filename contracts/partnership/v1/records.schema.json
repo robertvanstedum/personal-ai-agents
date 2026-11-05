@@ -305,6 +305,42 @@
             "continuing": {
               "description": "True when execution would continue beyond the current turn (D03), so a task is needed.",
               "type": "boolean"
+            },
+            "task": {
+              "description": "B4 (connection design v0.2 §3): the task terms the owner confirms. request.promote must match them field by field when present; required for owner-confirmed promotion.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "lead",
+                "holder",
+                "outcome",
+                "done_when",
+                "return_window"
+              ],
+              "properties": {
+                "lead": {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+                },
+                "holder": {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/seat"
+                },
+                "outcome": {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+                },
+                "done_when": {
+                  "$ref": "urn:minimoi:contract:partnership:common#/$defs/short_text"
+                },
+                "return_window": {
+                  "oneOf": [
+                    {
+                      "$ref": "urn:minimoi:contract:partnership:common#/$defs/return_window"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
             }
           }
         },
@@ -328,7 +364,7 @@
           "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_seat"
         },
         "authority": {
-          "description": "Q02. The actual authority, kept apart from adoption: none, or a reference to a real owner confirmation (Records) or an existing grant.",
+          "description": "Q02. The actual authority, kept apart from adoption: none, or a reference to a real owner confirmation (Records) or an existing grant. B4 (connection design v0.3): an owner confirmation may also be a task-service source event recorded from Robert's own signed portal action (store task_service).",
           "oneOf": [
             {
               "type": "object",
@@ -370,7 +406,8 @@
                         "store": {
                           "enum": [
                             "records",
-                            "grants"
+                            "grants",
+                            "task_service"
                           ]
                         }
                       }
@@ -572,6 +609,14 @@
         "provenance": true,
         "reason": {
           "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_text"
+        },
+        "linked_sources": {
+          "description": "B4 (design v0.3 R-M2): source events the owner explicitly attached to this request (a meeting message), without changing its intent. Count toward D02's one-request-per-source rule; not part of lineage.",
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+          }
         }
       }
     },

@@ -15,6 +15,8 @@ Reads are scoped (Q07): a record outside the caller's read scopes is answered ex
 """
 from __future__ import annotations
 
+import json
+
 import copy
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +30,8 @@ from services.partnership_tasks.journal import Conflict, Journal, JournalDamaged
 
 # The one seat that records outbox sends and destination answers (E03, Q05; Codex finding 2, 4 Nov).
 DRAINER_SEAT = "outbox-drainer"
+# Where the portal records Robert's own signed confirm/decline/correct/cancel actions (B4 design v0.2 §2, v0.3 R-M1).
+OWNER_ACTION_STORE = "portal-owner-action"
 
 class StoreUnavailable(Exception):
     """The store is held after an integrity failure (or cannot be read): never answered as "not found"."""
@@ -400,6 +404,8 @@ class _Planner:
             raise Refused("fenced", "unreconciled_correction")
         if self.p["disposition"] == "adopted" or auth["kind"] != "none":
             self.check_authority(auth, cur["proposed"]["scope"])
+            if auth["kind"] == "owner_confirmation" and auth["ref"]["store"] == "task_service":
+                self.check_owner_action(auth["ref"]["id"], cur)
         self.links.update(interpretation_id=cur["interpretation_id"], source_event_id=cur["source_event_ids"][0],
                           authority_ref=auth["ref"])
         rec = self.stamp(dict(cur, disposition=self.p["disposition"], disposition_by=self.b.seat, authority=auth), cur)
@@ -490,7 +496,8 @@ class _Planner:
         folder = self.svc.journal.root / DIRS["request"]
         for path in sorted(folder.glob("RQ-*.json")) if folder.is_dir() else []:
             r = self.svc.journal.read(f"{DIRS['request']}/{path.name}")
-            if r and r["data_scope"] == self.cmd["data_scope"] and sid in lineage(r):
+            if r and r["data_scope"] == self.cmd["data_scope"] and (sid in lineage(r)
+                                                                   or sid in r.get("linked_sources", ())):
                 return r["request_id"]
         return None
 
@@ -553,6 +560,28 @@ class _Planner:
                                          lineage(request) if request else set())
         if problem:
             raise Refused("fenced" if problem == "unreconciled_correction" else "not_authorized", problem)
+
+    def check_owner_action(self, source_id: str, interp: dict) -> None:
+        """B4 design v0.3 R-S1: an owner confirmation recorded in this store counts only for the proposal it names,
+        exactly as Robert saw it, and only once. The proposal digest is computed here, never taken from the event."""
+        ev = self.svc.journal.read(path_of("source_event", source_id))
+        if (ev is None or ev["data_scope"] != interp["data_scope"] or ev["source"]["store"] != OWNER_ACTION_STORE
+                or ev.get("provenance", {}).get("origin") != "owner_session"):
+            raise Refused("not_authorized", "confirmation_not_for_this_proposal")
+        try:
+            action = json.loads(ev["content"])
+        except ValueError:
+            action = None
+        want = {"action": "confirm", "interpretation_id": interp["interpretation_id"],
+                "proposal_digest": digest(interp["proposed"])}
+        if action != want:
+            raise Refused("not_authorized", "confirmation_not_for_this_proposal")
+        folder = self.svc.journal.root / DIRS["interpretation"]
+        for path in sorted(folder.glob("IN-*.json")) if folder.is_dir() else []:
+            other = self.svc.journal.read(f"{DIRS['interpretation']}/{path.name}")
+            ref = (other or {}).get("authority", {}).get("ref") or {}
+            if other and other["interpretation_id"] != interp["interpretation_id"] and ref.get("id") == source_id:
+                raise Refused("not_authorized", "confirmation_already_used")
 
     def check_authority(self, auth: dict, scope: str) -> None:
         """Q02: adoption is recorded by whoever adopts; authority must be real. An owner confirmation is accepted only
@@ -669,6 +698,12 @@ class _Planner:
         self.actionable(req["interpretation_ref"], req)
         interp = self.load("interpretation", req["interpretation_ref"])
         self.same_scope(interp, "interpretation")
+        terms = interp["proposed"].get("task")
+        if terms is None and interp["authority"]["kind"] == "owner_confirmation":
+            raise Refused("payload_invalid", "promote_needs_proposed_task")     # B4 design v0.3 R-S2
+        if terms is not None and any(self.p[k] != terms[k] for k in ("lead", "holder", "outcome", "done_when",
+                                                                       "return_window")):
+            raise Refused("payload_invalid", "promote_not_as_confirmed")         # B4 design v0.2 §3
         tid = self.p["task_id"]
         if self.svc.journal.read(path_of("task", tid)) is not None:
             raise Refused("id_taken", "task")
@@ -689,6 +724,23 @@ class _Planner:
         task = self.stamp(task, None)
         return self.finish([(path_of("task", tid), self.checked("task", task)),
                             (path_of("request", req["request_id"]), self.checked("request", req2))], req2["revision"])
+
+    def k_request_link_source(self) -> Plan:
+        """B4 design v0.3 R-M2: the owner attaches a source event (a meeting message) to a request, explicitly. The
+        intent does not change and nothing is fenced. D02: a source belongs to at most one request."""
+        if not self.b.is_owner:
+            raise Refused("not_authorized", "only_the_owner_links_sources")
+        req = self.request_for_change()
+        se = self.load("source_event", self.p["source_event_id"])
+        self.same_scope(se, "source_event")
+        owner = self.source_owner(se["source_event_id"])
+        if owner == req["request_id"]:
+            raise Refused("transition_not_allowed", "already_linked")
+        if owner is not None:
+            raise Refused("transition_not_allowed", "source_belongs_to_another_request")
+        self.links["source_event_id"] = se["source_event_id"]
+        rec = self.stamp(dict(req, linked_sources=list(req.get("linked_sources", [])) + [se["source_event_id"]]), req)
+        return self.finish([(path_of("request", req["request_id"]), self.checked("request", rec))], rec["revision"])
 
     # -- tasks (D01, D04, E07) --
 

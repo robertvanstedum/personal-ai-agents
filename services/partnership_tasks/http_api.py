@@ -11,7 +11,9 @@
     GET  /v1/history?words=...            next-session recall over requests
     GET  /healthz                         liveness only; says nothing about the store
 
-Authentication is ``Authorization: Bearer <token>``. The token resolves to a seat binding; who acts, from which origin
+Authentication is ``Authorization: Bearer <token>``. A token whose binding is the owner's session (origin
+owner_session) also needs ``X-Portal-Owner-Assertion``: the portal's signature over this exact request, made only on
+Robert's own signed-in click, so the token alone never acts as Robert (A02; B4 design v0.2 §2). The token resolves to a seat binding; who acts, from which origin
 and in which scopes always comes from that binding, never from the body (A02). "Not found" and "not yours" answer
 the same 404 by design. A held or damaged store answers 503, never a guess. Tokens are never logged.
 
@@ -52,7 +54,17 @@ def _json(value, status=200):
                     mimetype="application/json")
 
 
-def create_app(svc: TaskService) -> Flask:
+OWNER_AUDIENCE = "partnership-owner"
+OWNER_HEADER = "X-Portal-Owner-Assertion"
+
+
+def create_app(svc: TaskService, *, owner_key=None, owner_env: str | None = None, owner_subject: str | None = None,
+               spend=None) -> Flask:
+    """``owner_key`` (kid, secret), ``owner_env``, ``owner_subject`` ("owner:<portal id>") and ``spend`` (a nonce
+    store) configure the owner rule (B4 design v0.2 §2, v0.3 R-N1/R-N3): a request made with an owner_session
+    binding is accepted only with a portal-signed assertion for this exact method, route and body, naming the
+    configured owner, used once. Unconfigured, every owner_session request is refused."""
+    from core import portal_assertion as PA
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = MAX_BODY
 
@@ -76,14 +88,29 @@ def create_app(svc: TaskService) -> Flask:
 
     def authenticated():
         t = token()
-        if t is None or svc.bindings.resolve(t, svc._clock()) is None:
+        binding = svc.bindings.resolve(t, svc._clock()) if t is not None else None
+        if binding is None:
+            return None
+        if binding.is_owner and not owner_proven():
             return None
         return t
+
+    def owner_proven() -> bool:
+        header = request.headers.get(OWNER_HEADER)
+        if not header or owner_key is None or not owner_env or not owner_subject or spend is None:
+            return False
+        try:
+            subject = PA.verify(header, owner_key, audience=OWNER_AUDIENCE, env=owner_env, method=request.method,
+                                target=PA.canonical_target(request.path, request.query_string),
+                                body=lambda: request.get_data(cache=True), spend=spend)
+        except PA.Refused:
+            return False
+        return subject == owner_subject
 
     def body():
         if request.mimetype != "application/json":
             return None
-        return _strict_json(request.get_data(cache=False))
+        return _strict_json(request.get_data(cache=True))
 
     @app.get("/healthz")
     def health():
@@ -195,8 +222,14 @@ def main(argv=None) -> int:
     grants_file = os.environ.get("PARTNERSHIP_GRANTS")
     grants = Grants(json.loads(Path(grants_file).read_text())) if grants_file else None
     svc = TaskService(root, environment, Bindings.load(os.environ["PARTNERSHIP_BINDINGS"]), grants=grants)
+    from core import portal_assertion as PA
+    nonce_file = os.environ.get("PARTNERSHIP_OWNER_NONCE_FILE")
+    app = create_app(svc, owner_key=PA.load_key(os.environ.get("PARTNERSHIP_OWNER_KEY_FILE")),
+                     owner_env=os.environ.get("PARTNERSHIP_OWNER_ENV"),
+                     owner_subject=os.environ.get("PARTNERSHIP_OWNER_SUBJECT"),
+                     spend=PA.NonceFile(nonce_file) if nonce_file else None)
     server = make_server(os.environ.get("PARTNERSHIP_HOST", "0.0.0.0"), int(os.environ.get("PARTNERSHIP_PORT", "8772")),
-                         create_app(svc), threaded=False)
+                         app, threaded=False)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     _log.info("partnership task service up (%s)", environment)
     server.serve_forever()
