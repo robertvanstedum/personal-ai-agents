@@ -1,0 +1,18 @@
+{
+  "id": "cos-bound",
+  "name": "CoS bound tools",
+  "description": "CoS tools bound to Robert's live turn by cos-scheduler. Logs native write/edit/exec calls; never blocks them.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {"type": "boolean"},
+      "endpoint": {"type": "string"},
+      "tokenFile": {"type": "string"},
+      "agents": {"type": "array", "items": {"type": "string"}},
+      "acceptCredentialReadableBy": {"type": "array", "items": {"type": "string"}}
+    }
+  },
+  "activation": {"onStartup": true},
+  "contracts": {"tools": ["cos_actions"]}
+}

@@ -1,0 +1,157 @@
+/** CoS bound tools (F2 design v0.3, step 2). The CoS counterpart of MC's minimoi-tools.
+ *
+ * Every cos_actions call carries only host context (ctx.sessionKey, ctx.agentId, and the run and tool-call ids sealed
+ * by this plugin's before_tool_call hook) plus the model's arguments. cos-scheduler's listener resolves the sealed run
+ * to the live turn's binding and refuses otherwise; who, why, where and when come from that binding, never the model.
+ *
+ * Native write, edit and exec calls (Robert, Q1): never blocked. The hook reports each one to the listener's native
+ * log, fire-and-forget, with the same sealed identity; a failed report never changes what the agent may do.
+ *
+ * Credential exposure: cos-meeting must be workspace-only with the credential outside its workspace, or no tools are
+ * offered. cos-agent-a keeps native exec in owner turns (Q1), so its exec can read the credential: the recorded
+ * residual. Its tools are offered only when the operator lists it in acceptCredentialReadableBy.
+ */
+import {runSealer, tokenFromFile, boundedJson, RUN_ID, CALL_ID} from './shared.mjs';
+import {randomBytes} from 'node:crypto';
+
+export const ENDPOINT_PATH = '/internal/cos/v1';
+export const NATIVE = new Set(['write', 'edit', 'exec', 'apply_patch', 'process']);
+const STATE = Symbol.for('cos-bound/process-state/v1');
+globalThis[STATE] ??= Object.freeze({instance: randomBytes(16).toString('hex'), sealKey: randomBytes(32)});
+export const INSTANCE = globalThis[STATE].instance;
+const PROCESS_SEALER = runSealer(globalThis[STATE].sealKey);
+const UNKNOWN = 'CoS could not confirm what happened. Do not repeat it; tell Robert.';
+const text = (s, details) => ({content: [{type: 'text', text: s}], details});
+const str = {type: 'string'};
+
+export const ACTIONS_SPEC = {
+  name: 'cos_actions', label: 'CoS Actions',
+  description: 'Use Robert’s Actions workspace to keep agreed work and archive briefings. Types and priorities are independent of status. This records work; it does not perform external actions. List/get before changing an existing item; pass its current revision. Use open for a new record (default assigned to CoS), comment for details or briefing content (up to 4000 characters; split longer content into ordered comments), update for progress, close with done or dropped for completed or cancelled. Only say saved when the status is done. On failure or timeout, do not recreate or blindly retry: list/get to reconcile first. Never claim an action was performed just because it was recorded. In a meeting you can read but not change records.',
+  parameters: {type: 'object', additionalProperties: false, required: ['operation'], properties: {
+    operation: {type: 'string', enum: ['list', 'get', 'open', 'update', 'comment', 'close']},
+    item_id: str, revision: {type: 'integer', minimum: 1}, offset: {type: 'integer', minimum: 0},
+    title: {type: 'string', maxLength: 200},
+    kind: {type: 'string', enum: ['action', 'briefing', 'follow-up', 'research', 'decision', 'risk']},
+    priority: {type: 'integer', minimum: 1, maximum: 3}, status: {type: 'string', enum: ['open', 'doing', 'waiting']},
+    with: {type: 'string', enum: ['cos', 'robert', 'mc']}, text: {type: 'string', maxLength: 4000},
+    note: {type: 'string', maxLength: 2000}, outcome: {type: 'string', enum: ['done', 'dropped']}}},
+};
+
+export function endpointUrl(endpoint) {
+  const url = new URL(endpoint);
+  const internal = url.protocol === 'http:' && url.hostname === 'cos-scheduler' && url.port !== '';
+  const loopback = url.protocol === 'http:' && url.hostname === '127.0.0.1' && url.port !== '';
+  if ((!internal && !loopback) || url.username || url.password || url.search || url.hash
+      || url.pathname !== ENDPOINT_PATH) throw new Error('CoS tool endpoint invalid');
+  return url;
+}
+
+function headers(token, {sessionKey, agentId, run, toolCallId, instance}) {
+  return {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json', 'X-CoS-Session': sessionKey,
+          'X-CoS-Agent': agentId, 'X-CoS-Run': run, 'X-CoS-Tool-Call': toolCallId, 'X-CoS-Instance': instance};
+}
+
+export function announcer({url, token, instance = INSTANCE, fetchImpl = fetch}) {
+  let sent = null;
+  return () => {
+    sent ??= (async () => {
+      try {
+        const r = await fetchImpl(`${url.href}/instance`, {method: 'POST', redirect: 'error',
+          signal: AbortSignal.timeout(10000), headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
+          body: JSON.stringify({instance})});
+        await r.body?.cancel().catch(() => {});
+        if (r.status !== 200) sent = null;
+        return r.status === 200;
+      } catch { sent = null; return false; }
+    })();
+    return sent;
+  };
+}
+
+/** The tool factory: cos_actions for an allowed agent whose credential exposure the operator accepted. */
+export function toolFactory({endpoint, token, tokenFile, agents, acceptCredentialReadableBy = [], sealer = PROCESS_SEALER,
+                             instance = INSTANCE, fetchImpl = fetch}) {
+  const url = endpointUrl(endpoint);
+  if (!/^[A-Za-z0-9_-]{32,256}$/.test(token) || !Array.isArray(agents) || !agents.length) {
+    throw new Error('CoS tool configuration invalid');
+  }
+  const announce = announcer({url, token, instance, fetchImpl});
+  return function create(ctx) {
+    const sessionKey = ctx?.sessionKey, agentId = ctx?.agentId;
+    if (typeof sessionKey !== 'string' || !sessionKey || sessionKey.length > 200 || !agents.includes(agentId)) return null;
+    if (!acceptCredentialReadableBy.includes(agentId)) {
+      const ws = typeof ctx.workspaceDir === 'string' ? ctx.workspaceDir.replace(/\/+$/, '') + '/' : null;
+      if (ctx.fsPolicy?.workspaceOnly !== true || !ws || tokenFile.startsWith(ws)) return null;
+    }
+    return [{...ACTIONS_SPEC, execute: async (toolCallId, sealedArgs, signal) => {
+      const opened = typeof toolCallId === 'string' && CALL_ID.test(toolCallId)
+        ? sealer.open(sealedArgs, {toolCallId, agentId, sessionKey}) : null;
+      if (!opened) return text('CoS could not confirm which turn this call belongs to, so nothing was sent.',
+                               {status: 'refused', code: 'run_identity_missing'});
+      if (signal?.aborted) return text('CoS did not send this call, so nothing was done.', {status: 'refused', code: 'not_sent'});
+      if (!(await announce())) return text('CoS has not recorded this runtime yet, so nothing was sent.',
+                                           {status: 'refused', code: 'instance_unrecorded'});
+      let response;
+      try {
+        const abort = signal ? AbortSignal.any([AbortSignal.timeout(15000), signal]) : AbortSignal.timeout(15000);
+        response = await fetchImpl(`${url.href}/tools/cos_actions`, {method: 'POST', redirect: 'error', signal: abort,
+          headers: headers(token, {sessionKey, agentId, run: opened.run, toolCallId, instance}),
+          body: JSON.stringify({arguments: opened.args})});
+      } catch { return text(UNKNOWN, {status: 'unknown', code: 'transport'}); }
+      const result = await boundedJson(response);
+      if (response.status !== 200 || !result || Object.keys(result).sort().join() !== 'code,data,message,status'
+          || !['done', 'refused', 'unknown'].includes(result.status) || JSON.stringify(result).includes(token)) {
+        return text(UNKNOWN, {status: 'unknown', code: 'http_' + response.status});
+      }
+      return text(result.message + '\n' + JSON.stringify({status: result.status, code: result.code, data: result.data}),
+                  {status: result.status, code: result.code});
+    }}];
+  };
+}
+
+/** before_tool_call: seal cos_actions calls (or block them without a complete host identity); report native calls to
+ *  the log and let them run. Any other tool passes untouched. */
+export function hook({sealer = PROCESS_SEALER, agents, url, token, instance = INSTANCE, fetchImpl = fetch}) {
+  const allowed = new Set(agents);
+  return (event, ctx) => {
+    const name = event?.toolName;
+    const agentId = ctx?.agentId, sessionKey = ctx?.sessionKey;
+    const runId = ctx?.runId ?? event?.runId, toolCallId = ctx?.toolCallId ?? event?.toolCallId;
+    if (name === 'cos_actions') {
+      if (!allowed.has(agentId)) return {block: true, blockReason: 'CoS tools are not available to this agent'};
+      const params = sealer.seal(event.params, {runId, toolCallId, agentId, sessionKey});
+      if (!params) return {block: true, blockReason: 'CoS could not confirm which turn this call belongs to'};
+      return {params};
+    }
+    if (NATIVE.has(name) && allowed.has(agentId) && url) {
+      const p = event?.params || {};
+      const target = typeof p.command === 'string' ? p.command : typeof p.path === 'string' ? p.path
+        : typeof p.file_path === 'string' ? p.file_path : null;
+      const run = typeof runId === 'string' && RUN_ID.test(runId) ? runId : '';
+      const call = typeof toolCallId === 'string' && CALL_ID.test(toolCallId) ? toolCallId : '';
+      fetchImpl(`${url.href}/native`, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000),
+        headers: headers(token, {sessionKey: sessionKey || '', agentId: agentId || '', run, toolCallId: call, instance}),
+        body: JSON.stringify({tool: name, target: target === null ? null : String(target).slice(0, 500)})})
+        .then(r => r.body?.cancel().catch(() => {}), () => {});
+    }
+    return undefined;                                  // never blocks a native call (Q1)
+  };
+}
+
+export default {id: 'cos-bound', name: 'CoS bound tools', register(api) {
+  const config = api.pluginConfig || {};
+  if (config.enabled !== true) return;
+  let factory, url, token, agents;
+  try {
+    agents = config.agents || ['cos-agent-a', 'cos-meeting'];
+    token = tokenFromFile(config.tokenFile);
+    url = endpointUrl(config.endpoint);
+    factory = toolFactory({endpoint: config.endpoint, token, tokenFile: config.tokenFile, agents,
+                           acceptCredentialReadableBy: config.acceptCredentialReadableBy || []});
+  } catch {
+    (api.logger?.warn ?? console.warn).call(api.logger ?? console, 'cos-bound: not registered (credential or configuration unavailable)');
+    return;
+  }
+  api.on('before_tool_call', hook({agents, url, token}));
+  api.registerTool(factory, {names: ['cos_actions']});
+}};

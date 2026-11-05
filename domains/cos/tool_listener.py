@@ -1,0 +1,187 @@
+"""The bound CoS tool listener the agent's sealed plugin calls (F2 design v0.2 D3, v0.3; step 2).
+
+    POST /internal/cos/v1/tools/<tool>
+    Authorization: Bearer <listener credential>     the listener keeps only its SHA-256
+    X-CoS-Session:   <ctx.sessionKey>                host context, never a model argument
+    X-CoS-Agent:     <ctx.agentId>
+    X-CoS-Run:       <OpenClaw run id>               sealed by the plugin's before_tool_call hook
+    X-CoS-Tool-Call: <host tool-call id>             likewise
+    X-CoS-Instance:  <the plugin's gateway-process id>
+    body: {"arguments": {...}}
+
+    POST /internal/cos/v1/instance                   the plugin announces its gateway process
+    body: {"instance": "<32 hex>"}
+
+    POST /internal/cos/v1/native                     the plugin's hook reports one native write/edit/exec call in an
+    body: {"tool": "...", "target": "..."}           owner turn, with the same sealed headers. Logged, never refused
+                                                     (Robert, Q1); the answer never changes what the agent may do.
+
+The listener credential authenticates the plugin, not a turn: identity comes only from resolving the sealed run and
+call ids to a live binding (``domains/cos/binding.py``). Writes go to the actions tool v2 (``actions_v2.serve``),
+which takes who, why, where and when from that binding; the store receipt is linked back to the call.
+
+It runs inside cos-scheduler on its own port, published only on the agent network, never through the portal.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import logging
+import re
+import secrets
+
+from flask import Flask, Response, jsonify, request
+from werkzeug.exceptions import RequestEntityTooLarge
+
+from domains.cos.binding import NotBound
+from domains.cos.store import actions_v2
+
+PREFIX = "/internal/cos/v1"
+MAX_BODY = 16 * 1024
+_DIGEST = re.compile(r"[0-9a-f]{64}")
+_SESSION_KEY = re.compile(r"agent:(?P<agent>[a-z][a-z0-9-]{0,63}):openai-user:(?P<user>cos-confer:[0-9a-f]{32})")
+STATUSES = ("done", "refused", "unknown")
+# Per-turn admission limits for each bound tool (MC-equivalent defaults, design v0.1 §4).
+LIMITS = {"cos_actions": 20}
+NATIVE_TOOLS = frozenset({"write", "edit", "exec", "apply_patch", "process"})
+_log = logging.getLogger("cos_tools")
+
+
+def _answer(status, code, message, data=None, http=200):
+    body = {"status": status, "code": code, "message": message, "data": data or {}}
+    encoded = json.dumps(body, ensure_ascii=False, separators=(",", ":"), default=str)
+    if len(encoded.encode("utf-8")) > 64 * 1024:
+        return jsonify(error="tool_result_too_large"), 500
+    return Response(encoded, status=http, mimetype="application/json")
+
+
+def _strict_json(raw: bytes):
+    def pairs(items):
+        out = {}
+        for key, value in items:
+            if key in out:
+                raise ValueError("duplicate key")
+            out[key] = value
+        return out
+    try:
+        return json.loads(raw.decode("utf-8"), object_pairs_hook=pairs)
+    except (ValueError, UnicodeError, RecursionError):
+        return None
+
+
+def session_user(session_key, agent_id, allowed_agents) -> str:
+    """The adapter's session user from the host-supplied session key, or NotBound."""
+    if not isinstance(session_key, str) or not isinstance(agent_id, str) or len(session_key) > 200:
+        raise NotBound("session_invalid")
+    m = _SESSION_KEY.fullmatch(session_key)
+    if m is None or m.group("agent") != agent_id or agent_id not in allowed_agents:
+        raise NotBound("session_invalid")
+    return m.group("user")
+
+
+def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agent-a", "cos-meeting"),
+               wait_s: float | None = None) -> Flask:
+    if type(token_sha256) is not str or not _DIGEST.fullmatch(token_sha256):
+        raise ValueError("cos_tools_listener_config_invalid")
+    if bindings.environment != writer.environment:
+        raise ValueError("cos_tools_listener_environment_mismatch")
+    allowed = tuple(allowed_agents)
+    app = Flask(__name__)
+    app.config["MAX_CONTENT_LENGTH"] = MAX_BODY
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def too_large(_error):
+        return jsonify(error="tool_request_too_large"), 413
+
+    def authorized():
+        header = request.headers.get("Authorization", "")
+        presented = header[7:] if header.startswith("Bearer ") else ""
+        return 32 <= len(presented) <= 256 and secrets.compare_digest(
+            hashlib.sha256(presented.encode("utf-8")).hexdigest(), token_sha256)
+
+    def sealed():
+        h = request.headers
+        return dict(session_key=h.get("X-CoS-Session", ""), agent_id=h.get("X-CoS-Agent", ""),
+                    run_id=h.get("X-CoS-Run") or None, tool_call_id=h.get("X-CoS-Tool-Call") or None,
+                    instance_id=h.get("X-CoS-Instance") or None)
+
+    def preflight():
+        if not authorized():
+            return None, (jsonify(error="tool_unauthorized"), 401)
+        if request.mimetype != "application/json":
+            return None, (jsonify(error="json_required"), 415)
+        body = _strict_json(request.get_data(cache=False))
+        if type(body) is not dict:
+            return None, (jsonify(error="tool_request_invalid"), 400)
+        return body, None
+
+    @app.post(PREFIX + "/instance")
+    def instance():
+        body, refused = preflight()
+        if refused:
+            return refused
+        if set(body) != {"instance"} or type(body["instance"]) is not str:
+            return jsonify(error="tool_request_invalid"), 400
+        try:
+            bindings.register_instance(body["instance"])
+        except NotBound as exc:
+            return jsonify(error=exc.code), 409
+        return jsonify(status="recorded")
+
+    @app.post(PREFIX + "/native")
+    def native():
+        body, refused = preflight()
+        if refused:
+            return refused
+        if set(body) - {"tool", "target"} or type(body.get("tool")) is not str:
+            return jsonify(error="tool_request_invalid"), 400
+        ids = sealed()
+        try:
+            bound = bindings.log_native(run_id=ids["run_id"], tool_call_id=ids["tool_call_id"],
+                                        tool=body["tool"] if body["tool"] in NATIVE_TOOLS else "other:" + body["tool"][:48],
+                                        target=body.get("target") if isinstance(body.get("target"), str) else None)
+        except Exception:
+            _log.exception("cos native call: not logged")
+            return jsonify(status="not_logged"), 503
+        return jsonify(status="logged", bound=bound)
+
+    @app.post(PREFIX + "/tools/<name>")
+    def call(name):
+        body, refused = preflight()
+        if refused:
+            return refused
+        if set(body) != {"arguments"} or type(body["arguments"]) is not dict:
+            return jsonify(error="tool_request_invalid"), 400
+        if name not in LIMITS:
+            return _answer("refused", "tool_unknown", "That tool is not served here, so nothing was done.")
+        ids = sealed()
+        try:
+            user = session_user(ids["session_key"], ids["agent_id"], allowed)
+            kwargs = {} if wait_s is None else {"wait_s": wait_s}
+            binding = bindings.resolve(run_id=ids["run_id"], tool_call_id=ids["tool_call_id"],
+                                       instance_id=ids["instance_id"], agent_id=ids["agent_id"],
+                                       session_user=user, **kwargs)
+            args = dict(body["arguments"])
+            op = args.pop("operation", None)
+            if not isinstance(op, str):
+                return _answer("refused", "arguments_invalid", "Name the operation, so nothing was done.")
+            bound_call = bindings.admit(binding, tool=name, tool_call_id=ids["tool_call_id"],
+                                        instance_id=ids["instance_id"], session_user=user, limit=LIMITS[name])
+        except NotBound as exc:
+            _log.info("cos tool %s refused: %s", name, exc.code)
+            return _answer("refused", exc.code, "This call does not belong to a live CoS turn, so nothing was done.")
+        try:
+            out = actions_v2.serve(writer, bound_call, op, args)
+            result = out["body"].get("result") if isinstance(out.get("body"), dict) else None
+            if result and result.get("receipt_id"):
+                bindings.record_receipt(binding, ids["tool_call_id"], command_id=result["command_id"],
+                                        receipt_id=result["receipt_id"])
+        except Exception:
+            _log.exception("cos tool %s: outcome unconfirmed", name)
+            return _answer("unknown", "tool_outcome_unconfirmed",
+                           "CoS could not confirm what happened. Do not repeat it; tell Robert.")
+        if out["status"] == 200:
+            return _answer("done", "ok", "Done.", out["body"])
+        return _answer("refused", str(out["body"].get("error", "refused")), "Nothing was saved.", out["body"])
+
+    return app
