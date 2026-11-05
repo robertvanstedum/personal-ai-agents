@@ -107,7 +107,7 @@ class PlatformAccess:
             raise AccessError('Credential expired or revoked', 401)
         if auth['legacy']:
             return
-        if auth['scope'] == 'work':
+        if auth['scope'] in ('work', 'observe'):
             raise AccessError('A worker credential does not read or write rooms directly', 403)
         if auth['scope'] == 'membership':
             # Spec 157 §8 second strategy: current membership decides, at request time.
@@ -172,6 +172,18 @@ class PlatformAccess:
                 kind = db.execute('SELECT kind FROM principals WHERE id=?',(principal,)).fetchone()
                 if not kind or kind['kind'] != 'service': raise AccessError('A work credential belongs to a service principal')
                 grants, operations = None, ['work']
+            elif scope == 'observe':
+                # F2 D5: a second credential on an existing worker installation that may only heartbeat a turn the
+                # worker already holds (renew its lease, re-check admission, read the authoritative snapshot). It
+                # cannot claim, start, fail, cancel, recover or reconcile a turn, or read or write rooms.
+                kind = db.execute('SELECT kind FROM principals WHERE id=?',(principal,)).fetchone()
+                if not kind or kind['kind'] != 'service': raise AccessError('An observe credential belongs to a service principal')
+                if not payload.get('installation_id'): raise AccessError('An observe credential joins an existing worker installation')
+                if not db.execute('SELECT 1 FROM hosted_teammates WHERE installation_id=?',(payload['installation_id'],)).fetchone():
+                    raise AccessError('An observe credential joins an existing worker installation')
+                if payload.get('grants') is not None or payload.get('operations') is not None:
+                    raise AccessError('An observe credential takes no grants or operations')
+                grants, operations = None, ['observe']
             else:
                 raise AccessError('Unknown credential scope')
             installation = payload.get('installation_id')

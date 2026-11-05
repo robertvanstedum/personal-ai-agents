@@ -284,7 +284,7 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
         if g.actor.get("scope")=="portal":
             pass        # the owner sees every room; anyone else only rooms they belong to (store.rooms)
         elif not g.actor["legacy"]:
-            if g.actor.get("scope")=="work": raise Problem("A worker credential does not list rooms",403)
+            if g.actor.get("scope") in ("work","observe"): raise Problem("A worker credential does not list rooms",403)
             if g.actor.get("scope")=="membership":
                 from domains.records.meetings import rsvp_of
                 with store.connect() as db:

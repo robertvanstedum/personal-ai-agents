@@ -1072,12 +1072,13 @@ class Meetings:
 
     # ── worker routes (work-scoped credential; spec §3.4) ────────────────────
     @staticmethod
-    def require_work(db, auth):
+    def require_work(db, auth, *, observe=False):
+        """``observe=True`` only on heartbeat: an observe credential (F2 D5) may heartbeat, nothing else."""
         from domains.records.platform_access import PlatformAccess
         if not PlatformAccess.lookup(db, credential_id=auth.get("credential_id")):
             raise Problem("Worker credential expired or revoked", 401)
         scope = scope_of(db, auth.get("credential_id"))
-        if not scope or scope["scope"] != "work":
+        if not scope or scope["scope"] not in ({"work", "observe"} if observe else {"work"}):
             raise Problem("This route needs a work-scoped worker credential", 403)
         return [r["principal"] for r in db.execute(
             "SELECT principal FROM hosted_teammates WHERE installation_id=?", (auth["installation_id"],)).fetchall()]
@@ -1355,8 +1356,10 @@ class Meetings:
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             sweep(db)
-            bound = self.require_work(db, auth)
+            bound = self.require_work(db, auth, observe=True)
             t = self.bound_turn(db, auth, turn_id, bound, payload.get("claim_id"), require_lease=False)
+            if t["claimed_by"] != auth["installation_id"]:
+                raise Problem("Turn not found", 404)   # an observer never sees an unclaimed turn
             if t["state"] in TERMINAL or t["state"] == "uncertain":
                 return {"state": t["state"], "dispatch": False}
             if not t["lease_until"] or t["lease_until"] <= now():
