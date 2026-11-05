@@ -113,7 +113,7 @@ def _urls(c) -> dict:
         "api": f"{c['url_prefix']}/api/v1",
         "legacy_build": "/guild/build", "labs": url_for(".labs") if reserve_pages_enabled() else url_for(".experiment"),
         "admin": url_for(".admin"), "workshop": url_for(".workshop"), "build_host": url_for(".operate_view", view="build-host"),
-        "build_log": url_for(".build_log"), "rooms": url_for(".rooms"),
+        "build_log": url_for(".build_log"), "rooms": url_for(".rooms"), "tasks": url_for(".tasks"),
         "board": url_for(".board"), "media": url_for(".media_library"),
         "improve": url_for(".improve"), "experiment": url_for(".experiment"), "docs": DOCS_URL,
         "item_spec": url_for(".item_spec", item_id=987654321).replace("987654321", "__ID__"),

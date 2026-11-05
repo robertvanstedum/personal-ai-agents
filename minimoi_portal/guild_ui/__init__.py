@@ -177,7 +177,7 @@ def _asset_url_defaults(endpoint, values):
 
 
 def _make_blueprint(name: str, routes) -> Blueprint:
-    from . import api, board_api, pages
+    from . import api, board_api, pages, task_view
 
     bp = Blueprint(name, __name__, template_folder=str(PACKAGE / "templates"))
     bp.after_request(_headers)
@@ -189,7 +189,8 @@ def _make_blueprint(name: str, routes) -> Blueprint:
                   ("/guild/companion/<domain>", "companion", pages.companion),
                   # The mount's own root is the Guild home, paired with Curator
                   # (Guild 1.1 slice 1); it used to redirect to the Shop floor.
-                  ("/", "home", pages.home), ("/guild", "guild_home", pages.home)],
+                  ("/", "home", pages.home), ("/guild", "guild_home", pages.home),
+                  ("/guild/tasks", "tasks", task_view.page)],
         "bench": [("/guild/build/bench", "bench", pages.bench)],
         "labs": [("/guild/labs", "labs", pages.labs)],
         "workshop": [("/guild/workshop", "workshop", pages.workshop)],

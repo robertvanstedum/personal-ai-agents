@@ -1,0 +1,15 @@
+.task-view {max-width: 60rem; margin: 0 auto; padding: 1rem;}
+.task-heading {display:flex; align-items:start; justify-content:space-between; gap:1rem;}
+.task-heading p {max-width:42rem; line-height:1.5;}
+.task-card {border:1px solid var(--border, #d5d5d0); border-radius:.6rem; padding:1.1rem; margin:1rem 0;}
+.task-card h3 {margin:0 0 .7rem;}
+.task-card p, .task-card blockquote {white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.5;}
+.task-card blockquote {margin:1rem 0; padding:.7rem 1rem; border-left:3px solid var(--border, #d5d5d0);}
+.task-card dl {display:grid; grid-template-columns:7rem 1fr; gap:.4rem;}
+.task-card dt {font-weight:600;}.task-card dd {margin:0; overflow-wrap:anywhere;}
+.task-actions {display:flex; flex-wrap:wrap; gap:.7rem; margin-top:1rem;}
+.task-card textarea {box-sizing:border-box; width:100%; min-height:6rem; margin:.5rem 0; padding:.6rem;}
+.task-card button, .task-heading button {min-height:2.6rem; cursor:pointer;}
+.task-card button:disabled {cursor:wait; opacity:.6;}
+.task-card details {margin-top:1rem; font-size:.88rem; overflow-wrap:anywhere;}
+@media(max-width:600px){.task-view{padding:.6rem}.task-heading{flex-wrap:wrap}.task-card dl{grid-template-columns:1fr}.task-card dd{margin-bottom:.4rem}}

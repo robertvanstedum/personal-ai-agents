@@ -1,0 +1,17 @@
+{% extends 'guild_floor/_base.html' %}
+{% block title %}Tracked work · Guild{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('.asset', filename='css/tasks.css') }}">{% endblock %}
+{% block main %}
+<section class="task-view" data-task-view>
+  <header class="task-heading"><div><h1 class="page-title">Tracked work</h1>
+    <p>Review what was proposed, follow the work, and record a correction or cancellation.</p></div>
+    <button type="button" data-task-refresh>Refresh</button></header>
+  <p role="status" aria-live="polite" data-task-status>Loading current work…</p>
+  <section aria-labelledby="task-proposals-heading"><h2 id="task-proposals-heading">Needs your decision</h2>
+    <div data-task-proposals></div></section>
+  <section aria-labelledby="task-open-heading"><h2 id="task-open-heading">In progress</h2>
+    <div data-task-open></div></section>
+  <section aria-labelledby="task-detail-heading" data-task-detail hidden><h2 id="task-detail-heading">Task details</h2>
+    <div data-task-record></div></section>
+</section>
+{% endblock %}

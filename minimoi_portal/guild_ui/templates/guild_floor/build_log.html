@@ -15,6 +15,7 @@
 {% block main %}
 <div class="bl-tool" role="toolbar" aria-label="Build Log controls">
   <h1 class="page-title bl-title">Build Log</h1>
+  <a href="{{ urls.tasks }}">Tracked work</a>
   <span class="bl-views" role="group" aria-label="Saved views" data-bl-views>
     {% for key, label, help in [
       ('next', 'Ranked', 'All ranked items, grouped by rank; ties are allowed'),

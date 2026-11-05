@@ -44,6 +44,7 @@ initWorkshopTopics(page);
 if ($('[data-bench]')) import('./bench.js').then((m) => m.initBench(page));
 if (page.page === 'queue' || page.page === 'item') initQueue(page);
 if (page.page === 'build_log') initBuildLog(page);
+if (page.page === 'tasks') import('./tasks.js').then((m) => m.initTasks(page));
 if (page.page === 'board' || page.page === 'board_popout') initBoard(page);
 if (page.page === 'media') initMedia(page);
 if (page.page === 'rooms') { initRooms(page); initRoomsArt(page); }
