@@ -266,6 +266,10 @@ body.gu[data-mc-mode="floating"] .mc-pill, body.gu[data-mc-mode="docked"] .mc-pi
 .mc-options-group[hidden], .mc-options-body .mc-dictate[hidden] { display: none; }
 .mc-options-body label { display: inline-flex; align-items: center; gap: 6px; }
 .mc-options-body select { font: inherit; max-width: 100%; }
+.mc-options-group[data-mc-route-control] { width: 100%; }
+[data-mc-route-control] label { width: 100%; white-space: nowrap; }
+[data-mc-route-control] select { flex: 1 1 auto; width: 0; min-width: 0; }
+[data-mc-route-control] small { flex-basis: 100%; }
 .mc-options-body .mc-lock { gap: 4px; grid-auto-flow: column; }
 .mc-lock-text { font-size: var(--gu-size-xs); }
 @media (max-width: 640px) {
