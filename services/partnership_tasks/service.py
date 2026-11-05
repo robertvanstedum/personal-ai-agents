@@ -26,6 +26,9 @@ from services.partnership_tasks.auth import Binding, Bindings, Grants
 from services.partnership_tasks.journal import Conflict, Journal, JournalDamaged, Plan, Refused, Write
 
 
+# The one seat that records outbox sends and destination answers (E03, Q05; Codex finding 2, 4 Nov).
+DRAINER_SEAT = "outbox-drainer"
+
 class StoreUnavailable(Exception):
     """The store is held after an integrity failure (or cannot be read): never answered as "not found"."""
 
@@ -1094,7 +1097,8 @@ class _Planner:
         if obs in ("abandoned", "read"):
             if not self.b.is_owner:
                 raise Refused("not_authorized", "only_the_owner_" + ("abandons" if obs == "abandoned" else "reads"))
-        elif self.b.origin != "platform":
+        elif self.b.origin != "platform" or self.b.seat != DRAINER_SEAT:
+            # Codex finding 2: the dedicated drainer seat, not any platform-origin binding that lists this kind.
             raise Refused("not_authorized", "only_a_drainer_records")
         moves = {"attempted": ("pending",), "applied": ("attempted", "unknown"), "refused": ("attempted",),
                  "unknown": ("attempted",), "definitely_absent": ("unknown", "attempted"),

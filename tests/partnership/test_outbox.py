@@ -274,3 +274,15 @@ def test_b1_a_correction_must_be_in_the_requests_scope(tmp_path):
                 {"source": {"store": "records", "id": "e2", "position": 2}, "content": "Cancel.",
                  "correction_of": "SE-syn-0001"}, scope="shared:build")
     assert svc.submit(cross, "tok-mc")["detail"] == "source_event"            # cannot even be recorded
+
+
+def test_finding_2_another_platform_seat_with_outbox_record_cannot_record(rig, tmp_path):
+    """Codex finding 2: a platform-origin binding granted outbox.record is still refused unless it is the drainer."""
+    svc, f, tid, h = rig
+    request_admission(svc, tid)
+    ob = outbox(svc)
+    record = cmd("outbox.record", "outbox", "OB-syn-0001",
+                 {"observation": "attempted", "destination_receipt": None, "code": None}, expected=ob["revision"])
+    refused = svc.submit(record, "tok-platform-recorder")      # platform origin, granted outbox.record, not the drainer
+    assert refused["outcome"] == "refused" and refused["detail"] == "only_a_drainer_records"
+    assert svc.submit(dict(record, command_id="cmd-d-ok"), D)["outcome"] == "accepted"

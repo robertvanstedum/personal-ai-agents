@@ -24,6 +24,8 @@ SEATS = {
     "tok-peer": ("codex", "peer", AGENT_OPS, ["shared:build"], ["shared:build"]),
     "tok-reader": ("auditor", "agent", AGENT_OPS, ["shared:build"], ["personal", "shared:build"]),
     "tok-drainer": ("outbox-drainer", "platform", ["outbox.record"], ["personal"], ["personal"]),
+    # Codex finding 2: a platform seat granted outbox.record that is not the drainer (must be refused).
+    "tok-platform-recorder": ("notice-relay", "platform", ["outbox.record"], ["personal"], ["personal"]),
     "tok-migration": ("migration", "scheduler", ["source_event.record", "interpretation.record",
                                                   "interpretation.dispose", "request.record"],
                       ["personal"], ["personal"]),
