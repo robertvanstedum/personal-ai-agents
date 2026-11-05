@@ -211,3 +211,33 @@ def test_v06_robert_declines_a_card_and_nothing_will_be_sent(rig):
     assert r.status_code == 200 and r.json["state"] == "declined", r.json
     assert svc.get("outbox", "OB-own-card-2", "tok-principal")["state"] == "declined"
     assert c.get("/tasks/admissions").json["admissions"] == []
+
+
+def test_blue_lantern_an_approval_the_binding_refuses_says_so_and_one_click_finishes_it_once_fixed(rig, monkeypatch):
+    """Dev, 5 Nov: the principal binding lacked outbox.approve. The owner event was recorded, the approval refused before
+    anything was journalled for it, and the page showed only "operation". Now the page says what happened in words, and
+    after the binding is put right one more click on the same card approves it, citing the same owner event."""
+    import dataclasses
+    svc, c = rig
+    d = _queued_card(svc, c, "OB-own-card-3", "C-own-0003")
+    real = svc.bindings.resolve
+
+    def without_approve(token, now):
+        b = real(token, now)
+        return dataclasses.replace(b, operations=b.operations - {"outbox.approve"}) if b and b.seat == "principal" else b
+    monkeypatch.setattr(svc.bindings, "resolve", without_approve)
+    r = post(c, "/tasks/admit", operation_id="OB-own-card-3", card_digest=d)
+    assert r.status_code == 409 and r.json["error"] == "not_authorized" and r.json["detail"] == "operation"
+    assert r.json["message"].startswith("Not approved: this portal is not yet allowed") and "one more click" in r.json["message"]
+    assert svc.get("outbox", "OB-own-card-3", "tok-principal").get("approval") is None
+    monkeypatch.setattr(svc.bindings, "resolve", real)                  # the binding put right
+    again = post(c, "/tasks/admit", operation_id="OB-own-card-3", card_digest=d)
+    assert again.status_code == 200 and again.json["state"] == "approved", again.json
+    ob = svc.get("outbox", "OB-own-card-3", "tok-principal")
+    assert ob["approval"]["event_id"].startswith("SE-own-own-card-3-r") and ob["approval"]["card_digest"] == d
+
+
+def test_refusal_words_never_show_a_bare_code():
+    assert T.refusal_words("outbox.record", "fenced", "task_changed_since_enqueue") == \
+        "Not declined: the task changed since the card was made. Nothing has started. Refresh to see the current card."
+    assert "(weird_code: x)" in T.refusal_words("outbox.approve", "weird_code", "x")

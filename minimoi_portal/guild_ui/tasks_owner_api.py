@@ -91,8 +91,34 @@ def _send(client, cmd):
                                 "finish it.", 503) if exc.answer != "absent" else \
             json_error("not_sent", "That step did not reach the task service; try again.", 503)
     if out.get("outcome") != "accepted":
-        return None, json_error(out.get("code") or "refused", out.get("detail") or "The task service refused it.", 409)
+        code, detail = out.get("code") or "refused", out.get("detail")
+        return None, json_error(code, refusal_words(cmd.get("kind"), code, detail), 409, detail=detail)
     return out, None
+
+
+# What Robert reads when the task service refuses a step: what did not happen, why in plain words, and what to do.
+# The raw code and detail still travel in the answer for agents and logs (Blue Lantern, 5 Nov: the page showed only
+# "operation", the detail of a binding that did not yet allow outbox.approve).
+_STEP = {"outbox.approve": "Not approved", "outbox.record": "Not declined", "request.promote": "Not confirmed",
+         "interpretation.dispose": "Not recorded", "correction.apply": "Not changed"}
+_WHY = {("not_authorized", "operation"): "this portal is not yet allowed to make that change in the task service",
+        ("not_authorized", "approval_digest_mismatch"): "the card changed since the page showed it",
+        ("not_authorized", "approval_not_for_this_card"): "your click did not match this card",
+        ("not_authorized", "approval_already_used"): "that click was already used for another card",
+        ("id_taken", "already_approved"): "it is already approved and waiting to start",
+        ("fenced", "task_changed_since_enqueue"): "the task changed since the card was made",
+        ("revision_conflict", None): "the record changed while you were looking at it"}
+
+
+def refusal_words(kind, code, detail):
+    step = _STEP.get(kind, "Not done")
+    why = _WHY.get((code, detail)) or _WHY.get((code, None))
+    if why is None:
+        why = f"the task service refused it ({code}{': ' + detail if detail else ''})"
+    after = ("Nothing has started. Your click is kept: once this is put right, one more click finishes it."
+             if kind == "outbox.approve" and (code, detail) == ("not_authorized", "operation")
+             else "Nothing has started. Refresh to see the current card.")
+    return f"{step}: {why}. {after}"
 
 
 def _proposal(client, iid, shown_digest):
