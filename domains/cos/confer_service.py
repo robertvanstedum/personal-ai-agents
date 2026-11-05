@@ -128,6 +128,9 @@ class ConferTurnRequest:
     # F2 D8, guildhall only: "owner_private" (verified members ⊆ {robert, cos, mc}) or "closed". Anything else,
     # including None on a guildhall turn, is treated as closed.
     meeting_scope: str | None = None
+    # F2 step 3: what the caller verified about who started this turn (domains/cos/binding.py TurnBinder). Never
+    # taken from a request body. None: the turn gets no tool binding, so bound tool calls are refused.
+    binding: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -435,6 +438,7 @@ class ConferTurnService:
             "Never claim research or cite a source you have not actually retrieved in this task. "
             "When web tools are unavailable or fail, say so and distinguish background knowledge."
         )
+        context["binding"] = dict(request.binding) if isinstance(request.binding, dict) else None
         context["confer"] = {
             "conversation_id": conversation_id,
             "input_channel": request.channel,

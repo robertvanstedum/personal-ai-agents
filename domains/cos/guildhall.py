@@ -30,7 +30,7 @@ def validate(turn):
     return turn
 
 
-def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verify_members=None):
+def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verify_members=None, stop_turn=None):
     """``verify_members(turn)`` returns the room's members from Records, or None; never the request body's."""
     token=Path(token_file).read_text().strip()
     if len(token)<32:raise ValueError('Guildhall service credential required')
@@ -49,6 +49,19 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
     def ready():
         available=bool(is_ready())
         return jsonify(ready=available), 200 if available else 503
+    @bp.post('/internal/guildhall/turns/<turn_id>/stop')
+    def stop(turn_id):
+        # F2 D9: the rooms worker's Stop, with this blueprint's guildhall service token (never in an agent
+        # container). Revokes the turn's tool binding at once; a Stop before the binding exists applies when it is
+        # written. Never claims the agent stopped.
+        try:
+            if str(UUID(turn_id)) != turn_id: raise ValueError
+        except ValueError:
+            return jsonify(error='Invalid turn'),400
+        if stop_turn is None:
+            return jsonify(state='not_bound'),202
+        stop_turn(turn_id)
+        return jsonify(state='tools_revoked'),202
     @bp.post('/internal/guildhall/turn')
     def turn():
         if request.content_length is None or request.content_length>256_000:return jsonify(error='Turn too large'),413
@@ -76,7 +89,7 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
             else:
                 from core.room_scope import meeting_scope
                 members=verify_members(value) if verify_members is not None else None
-                result=run_turn(value['trigger']['text'],meeting_context=prompt,channel='guildhall',conversation_id='guildhall:'+value['room']+':'+value['id'],request_id=value['id'],meeting_scope=meeting_scope(members))
+                result=run_turn(value['trigger']['text'],meeting_context=prompt,channel='guildhall',conversation_id='guildhall:'+value['room']+':'+value['id'],request_id=value['id'],turn_id=value['id'],meeting_scope=meeting_scope(members))
             answer={'text':result.reply,'turn_id':value['id'],'room':value['room']}
             if not isinstance(answer['text'],str) or not answer['text'].strip():raise ValueError('Empty reply')
             with db() as c:c.execute('UPDATE turns SET state=?,result=? WHERE id=?',('done',json.dumps(answer),value['id']))

@@ -841,6 +841,7 @@ def _process_confer_turn(
     turn_id: str | None = None,
     meeting_context: str | None = None,
     meeting_scope: str | None = None,
+    binding: dict | None = None,
 ):
     """One Confer turn through the canonical turn service. ``on_dispatch`` (CoS's direct voice only): called at the
     dispatch boundary (ConferTurnRequest.on_dispatch); None for every other caller."""
@@ -869,7 +870,27 @@ def _process_confer_turn(
         turn_id=turn_id,
         meeting_context=meeting_context,
         meeting_scope=meeting_scope,
+        binding=binding,
     ))
+
+
+def _request_binding() -> dict | None:
+    """F2 step 3: who started this turn, from THIS request's F3 signed assertion only. owner:<id> is the owner;
+    service:mc and service:telegram are the relaying services. Anything else, or no request, gets no binding."""
+    from flask import has_request_context
+    if not has_request_context():
+        return None
+    from domains.cos.owner_assertion import verified_subject
+    subject = verified_subject()
+    if not isinstance(subject, str):
+        return None
+    request_id = request.headers.get("X-Request-Id") or None
+    if subject.startswith("owner:") and len(subject) > 6:
+        return {"origin": "owner", "principal": subject[6:], "owner_request_id": request_id}
+    if subject in ("service:mc", "service:telegram"):
+        return {"origin": subject, "principal": os.environ.get("COS_OWNER_PRINCIPAL", "robert"),
+                "owner_request_id": request_id}
+    return None
 
 
 def _chat(
@@ -888,6 +909,25 @@ def _chat(
     ).reply
 
 
+_bindings = None
+
+
+def _tool_binder():
+    """F2: the per-turn tool binding store, only in the cos-scheduler process (init_backend runs from main() only)
+    and only when COS_TOOL_BINDINGS_FILE is set. Each process start is a new epoch, so a binding from a previous
+    process can never admit a call. None: the adapter keeps its earlier, unbound behaviour."""
+    global _bindings
+    path = os.environ.get("COS_TOOL_BINDINGS_FILE", "").strip()
+    if not path:
+        return None
+    if os.environ.get("WEB_CONCURRENCY", "1") not in ("", "1"):
+        raise RuntimeError("COS tool bindings need a single cos-scheduler process")
+    from domains.cos.binding import BindingStore, TurnBinder
+    _bindings = BindingStore(path, os.environ.get("COS_STORE_ENVIRONMENT", "dev"))
+    _bindings.start_epoch(uuid.uuid4().hex)
+    return TurnBinder(_bindings)
+
+
 def init_backend():
     """Initialize the active backend. Called once from main() at startup."""
     global _backend
@@ -900,6 +940,7 @@ def init_backend():
         _backend = OpenClawBackend(
             write_memory=_append_memory,
             dispatch_tool=_dispatch_tool,
+            binder=_tool_binder(),
         )
     else:
         raise ValueError(f"Unknown COS_BACKEND_TYPE: {backend_type!r}")
@@ -1376,6 +1417,7 @@ def chat_endpoint():
             channel=body.get("channel") or "api_text",
             conversation_id=body.get("conversation_id") or "owner",
             request_id=body.get("request_id"),
+            binding=_request_binding(),
         )
         return jsonify(result.public_dict())
     except InvalidConferTurn as e:
@@ -1515,7 +1557,7 @@ def ui_tab(tab):
     return render_template("cos_ui.html", initial_tab=tab, managed_realtime_ready=_cos_managed_realtime_ready)
 
 
-def _ui_turn(body: dict) -> tuple[dict, int]:
+def _ui_turn(body: dict, binding: dict | None = None) -> tuple[dict, int]:
     """One Confer turn from the page: (JSON payload, HTTP status). With attachments, the owner's words are followed
     by the files as marked DATA; files CoS writes to its outbox during the turn come back as download receipts."""
     text = (body.get("text") or "").strip()
@@ -1564,6 +1606,7 @@ def _ui_turn(body: dict) -> tuple[dict, int]:
                 else body.get("conversation_id") or "owner",
                 request_id=body.get("request_id"),
                 turn_id=_receipt_turn_id(kept["turn_id"]) if kept else None,
+                binding=binding,
             )
             payload = result.public_dict()
             if before is not None:
@@ -1615,7 +1658,7 @@ _ui_turns_lock = threading.Lock()
 _UI_TURN_KEEP_S = 3600
 
 
-def _start_ui_turn(body: dict) -> str:
+def _start_ui_turn(body: dict, binding: dict | None = None) -> str:
     handle = uuid.uuid4().hex
     with _ui_turns_lock:
         now = time.time()
@@ -1626,7 +1669,7 @@ def _start_ui_turn(body: dict) -> str:
     def run():
         from domains.cos.backends import openclaw_backend
         openclaw_backend.turn_timeout_seconds.set(openclaw_backend.BACKGROUND_TURN_TIMEOUT_SECONDS)
-        payload, code = _ui_turn(body)
+        payload, code = _ui_turn(body, binding)
         with _ui_turns_lock:
             _ui_turns[handle] = {"state": "done", "status": code, "payload": payload, "done_at": time.time()}
     threading.Thread(target=run, name=f"cos-ui-turn-{handle[:8]}", daemon=True).start()
@@ -1733,8 +1776,8 @@ def ui_send():
     if (body.get("channel") or "html_text") == "html_voice":
         body["_user_id"] = resolve_user_id(request)
     if body.get("background") is True and (body.get("channel") or "html_text") == "html_text":
-        return jsonify({"turn": _start_ui_turn(body), "state": "running"}), 202
-    payload, code = _ui_turn(body)
+        return jsonify({"turn": _start_ui_turn(body, _request_binding()), "state": "running"}), 202
+    payload, code = _ui_turn(body, _request_binding())
     return jsonify(payload), code
 
 
@@ -2005,7 +2048,8 @@ def _start_cos():
         from domains.cos.guildhall import install as install_guildhall
         install_guildhall(app, token_file=os.environ['COS_GUILDHALL_TOKEN_FILE'],
                          data_dir=os.environ['COS_GUILDHALL_DIR'], run_turn=_process_confer_turn,
-                         is_ready=lambda: _backend is not None)
+                         is_ready=lambda: _backend is not None,
+                         stop_turn=lambda turn_id: _bindings is not None and _bindings.revoke(turn_id, 'meeting_stop'))
 
     # Isolated dev proving uses the real chat route without periodic work.
     from domains.cos.runtime_policy import background_jobs_enabled

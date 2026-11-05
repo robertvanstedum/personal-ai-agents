@@ -95,6 +95,8 @@ class OpenClawBackend:
         agent_id: str | None = None,
         model_label: str | None = None,
         http_post=None,
+        binder=None,
+        meeting_agent_id: str = "cos-meeting",
     ):
         self._write_memory = write_memory
         self._dispatch_tool = dispatch_tool
@@ -120,6 +122,11 @@ class OpenClawBackend:
             else os.environ.get("COS_AGENT_RUNTIME_MODEL_LABEL", "gateway-unresolved")
         )
         self._http_post = http_post or requests.post
+        # F2 step 3: with a binder, every turn streams so the run id is attached from the opening chunk before any
+        # tool can fire, and its binding is recorded before the send and ended in ``finally``. Without one (the
+        # default until step 5's config), the adapter behaves exactly as before.
+        self._binder = binder
+        self._meeting_agent_id = meeting_agent_id
 
         parsed = urlparse(self._gateway_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -129,9 +136,9 @@ class OpenClawBackend:
         if not self._agent_id:
             raise ValueError("COS_AGENT_RUNTIME_AGENT_ID must not be empty")
 
-    def _session_user(self, conversation_id: str) -> str:
+    def _session_user(self, conversation_id: str, agent_id: str | None = None) -> str:
         """Return a stable opaque session id without leaking caller identifiers."""
-        material = f"cos-confer\0{self._agent_id}\0{conversation_id}".encode("utf-8")
+        material = f"cos-confer\0{agent_id or self._agent_id}\0{conversation_id}".encode("utf-8")
         digest = hashlib.sha256(material).hexdigest()[:32]
         return f"cos-confer:{digest}"
 
@@ -224,18 +231,22 @@ class OpenClawBackend:
         *,
         messages: list[dict],
         conversation_id: str,
+        agent_id: str | None = None,
+        on_run=None,
     ) -> dict:
-        """Call the Gateway once and return a validated completion payload."""
+        """Call the Gateway once and return a validated completion payload. With ``on_run`` the turn streams and
+        ``on_run(run_id)`` is called with the opening chunk's id before the rest of the reply is read."""
+        agent = agent_id or self._agent_id
         url = f"{self._gateway_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self._gateway_token}",
             "Content-Type": "application/json",
         }
         body = {
-            "model": f"openclaw/{self._agent_id}",
-            "user": self._session_user(conversation_id),
+            "model": f"openclaw/{agent}",
+            "user": self._session_user(conversation_id, agent),
             "messages": messages,
-            "stream": False,
+            "stream": on_run is not None,
         }
         self._enforce_request_cap(body)
         try:
@@ -245,6 +256,7 @@ class OpenClawBackend:
                 json=body,
                 timeout=(_CONNECT_TIMEOUT_SECONDS, turn_timeout_seconds.get()),
                 allow_redirects=False,
+                **({"stream": True} if on_run is not None else {}),
             )
         except requests.exceptions.Timeout as exc:
             raise AgentRuntimeError("COS Agent A timed out before replying.") from exc
@@ -264,10 +276,62 @@ class OpenClawBackend:
                 f"COS Agent A returned an HTTP {response.status_code} error."
             )
 
+        if on_run is not None:
+            return self._read_stream(response, on_run)
         try:
             return response.json()
         except ValueError as exc:
             raise AgentRuntimeError("COS Agent A returned an invalid response.") from exc
+
+    @staticmethod
+    def _read_stream(response, on_run) -> dict:
+        """Assemble an OpenAI-style SSE stream into the non-streaming payload shape the callers already check. The
+        run id is taken from the first chunk and handed to ``on_run`` at once. A tool-call delta is kept as a
+        tool_calls marker, so callers refuse it exactly as before."""
+        run_id = model = None
+        parts, finish, tool_calls, refusal, role = [], None, False, False, None
+        try:
+            for raw in response.iter_lines(decode_unicode=True):
+                if not raw or not raw.startswith("data:"):
+                    continue
+                data = raw[5:].strip()
+                if data == "[DONE]":
+                    break
+                chunk = json.loads(data)
+                if not isinstance(chunk, dict) or chunk.get("object") != "chat.completion.chunk":
+                    raise ValueError("not a completion chunk")
+                if run_id is None:
+                    run_id, model = chunk.get("id"), chunk.get("model")
+                    if not isinstance(run_id, str):
+                        raise ValueError("no run id")
+                    on_run(run_id)
+                elif chunk.get("id") != run_id:
+                    raise ValueError("run id changed mid-stream")
+                for choice in chunk.get("choices") or []:
+                    delta = choice.get("delta") or {}
+                    role = delta.get("role") or role
+                    if isinstance(delta.get("content"), str):
+                        parts.append(delta["content"])
+                    tool_calls = tool_calls or bool(delta.get("tool_calls") or delta.get("function_call"))
+                    refusal = refusal or bool(delta.get("refusal"))
+                    finish = choice.get("finish_reason") or finish
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise AgentRuntimeError("COS Agent A returned an invalid response.") from exc
+        except requests.exceptions.RequestException as exc:
+            raise AgentRuntimeError("COS Agent A stopped responding mid-reply.") from exc
+        finally:
+            close = getattr(response, "close", None)
+            if close:
+                close()
+        if run_id is None:
+            raise AgentRuntimeError("COS Agent A returned an invalid response.")
+        message = {"role": role or "assistant", "content": "".join(parts)}
+        if tool_calls:
+            message["tool_calls"] = [{"type": "unexpected"}]
+        if refusal:
+            message["refusal"] = True
+        return {"id": run_id, "object": "chat.completion", "model": model,
+                "choices": [{"index": 0, "message": message, "finish_reason": finish}]}
 
     def reset_conversation(self, conversation_id: str) -> bool:
         """Reset the mapped Gateway session in place using its supported command."""
@@ -294,7 +358,7 @@ class OpenClawBackend:
         trusted = (
             isinstance(payload, dict)
             and payload.get("object") == "chat.completion"
-            and payload.get("model") == f"openclaw/{self._agent_id}"
+            and payload.get("model") == f"openclaw/{context.get('runtime_agent_entry') or self._agent_id}"
             and isinstance(message, dict)
             and message.get("role") == "assistant"
             and not message.get("tool_calls")
@@ -355,7 +419,7 @@ class OpenClawBackend:
             choices = payload["choices"]
             if (
                 payload.get("object") != "chat.completion"
-                or payload.get("model") != f"openclaw/{self._agent_id}"
+                or payload.get("model") != f"openclaw/{context.get('runtime_agent_entry') or self._agent_id}"
                 or not isinstance(run_id, str)
                 or not re.fullmatch(
                     r"chatcmpl_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", run_id
@@ -407,10 +471,37 @@ class OpenClawBackend:
         from core.realtime_voice.timing import VoiceTiming
         timing = VoiceTiming(correlation=receipt_id)
         timing.emit("gateway_request_start")
+        if self._binder is None:
+            try:
+                result = self._post_turn(messages=messages, conversation_id=conversation_id)
+            except Exception:
+                timing.emit("gateway_request_failed")
+                raise
+            timing.emit("gateway_request_end")
+            return result
+        # F2 step 3: the agent entry follows the meeting scope (cos-meeting for any guildhall turn), the binding is
+        # recorded before the send, the run is attached from the opening chunk, and the binding ends in ``finally``.
+        scope = context.get("meeting_scope")
+        agent = self._meeting_agent_id if scope is not None else self._agent_id
+        context["runtime_agent_entry"] = agent
+        bound = self._binder.begin(turn_id=receipt_id or None, session_user=self._session_user(conversation_id, agent),
+                                   agent_entry=agent, conversation_id=conversation_id, meeting_scope=scope,
+                                   binding=context.get("binding"))
+        context["tool_binding"] = "bound" if bound else "unbound"
+        attached = {}
+
+        def on_run(run_id):
+            attached["run"] = run_id
+            if bound and not self._binder.attach(bound, run_id):
+                context["tool_binding"] = "attach_refused"
         try:
-            result = self._post_turn(messages=messages, conversation_id=conversation_id)
+            result = self._post_turn(messages=messages, conversation_id=conversation_id, agent_id=agent,
+                                     on_run=on_run)
         except Exception:
             timing.emit("gateway_request_failed")
             raise
+        finally:
+            if bound:
+                self._binder.end(bound)
         timing.emit("gateway_request_end")
         return result

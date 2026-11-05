@@ -346,3 +346,56 @@ class BindingStore:
 
 def dumps_trace(trace: dict) -> str:
     return json.dumps(trace, sort_keys=True, default=str)
+
+
+class TurnBinder:
+    """The adapter's side of the binding (step 3): one binding per turn, from the turn's own facts.
+
+    ``binding`` is what the caller verified, never what a request body or model said:
+    - owner turns: {"origin": "owner" | "service:mc" | "service:telegram", "principal": ..., "owner_request_id": ...},
+      taken from the F3 signed assertion of the request that started the turn;
+    - meeting turns: {"origin": "meeting", "principal": ..., "audience": <room>, "claim_id": ..., "room_generation":
+      ..., "trigger_seq": ..., "approval_generation": ...}, from the Records snapshot (step 4).
+    No binding, or an incomplete one, means no binding is recorded: every bound tool call of that turn is refused.
+    A closed meeting room never gets one.
+    """
+
+    def __init__(self, store: BindingStore, *, lifetime_s: float = 900):
+        self.store = store
+        self.lifetime_s = lifetime_s
+
+    def begin(self, *, turn_id, session_user, agent_entry, conversation_id, meeting_scope, binding) -> str | None:
+        if not isinstance(binding, dict) or not isinstance(turn_id, str) or not TURN_ID.fullmatch(turn_id):
+            return None
+        origin = binding.get("origin")
+        principal = binding.get("principal")
+        if meeting_scope is not None:
+            if meeting_scope != "owner_private" or origin != "meeting":
+                return None
+            args = dict(scope="meeting", audience=binding.get("audience"), supersession_key=None,
+                        claim_id=binding.get("claim_id"), room_generation=binding.get("room_generation"),
+                        trigger_seq=binding.get("trigger_seq"), approval_generation=binding.get("approval_generation"))
+        else:
+            if origin not in ("owner", "service:mc", "service:telegram"):
+                return None
+            args = dict(scope="owner", audience=str(conversation_id),
+                        supersession_key=f"{self.store.environment}:{conversation_id}")
+        try:
+            live = self.store.record(turn_id, principal=principal, origin=origin, agent_entry=agent_entry,
+                                     session_user=session_user, lifetime_s=self.lifetime_s,
+                                     owner_request_id=binding.get("owner_request_id"), **args)
+        except NotBound:
+            return None
+        return turn_id if live else None
+
+    def attach(self, turn_id: str, run_id: str) -> bool:
+        try:
+            return self.store.attach_run(turn_id, run_id)
+        except NotBound:
+            return False
+
+    def end(self, turn_id: str) -> None:
+        self.store.end(turn_id)
+
+    def stop(self, turn_id: str, reason: str = "owner_stop") -> bool:
+        return self.store.revoke(turn_id, reason)
