@@ -15,3 +15,30 @@ for(const id of ['mc-agent','mc-chat']) {assert.deepEqual(c.agents.entries[id].t
 assert.deepEqual(c.plugins,base.plugins);assert.deepEqual(c.tools,base.tools);
 for(const mutate of [d=>d.agents.entries['mc-chat'].model.primary='anthropic/claude-opus-5',d=>d.agents.defaults.model.fallbacks=['anthropic/claude-opus-5'],d=>d.agents.entries['mc-agent'].utilityModel='anthropic/x',d=>d.models.providers.extra={},d=>d.models.providers['minimoi-gateway-mc'].baseUrl='http://elsewhere',d=>d.agents.entries.extra={},d=>d.auth={profiles:{x:{mode:'api_key'}}}]){const bad=structuredClone(c);mutate(bad);assert.throws(()=>p.validate(bad,dev));}
 console.log('Gateway mode policy checks passed; tools, memory and persona paths preserved.');
+
+// Explicit plan selection: preserve tools/persona and fail closed on billing/runtime drift.
+const oauth = {MC_RUNTIME_MODEL_ACCESS:'plan', MC_PLAN_MODEL:'openai/gpt-6-astra', MC_PLAN_AUTH_PROFILE:'openai:synthetic'};
+const planConfig=merge(p.overlay(oauth),base);
+p.validate(planConfig,oauth);
+for(const id of ['mc-agent','mc-chat']) {
+ assert.deepEqual(planConfig.agents.entries[id].tools,base.agents.entries[id].tools);
+ assert.deepEqual(planConfig.agents.entries[id].memory,base.agents.entries[id].memory);
+ assert.equal(planConfig.agents.entries[id].workspace,base.agents.entries[id].workspace);
+}
+assert.deepEqual(planConfig.plugins,base.plugins);
+for(const mutate of [
+ d=>d.models.providers={'minimoi-gateway-mc':c.models.providers['minimoi-gateway-mc']},
+ d=>d.auth.profiles.extra={provider:'openai',mode:'api_key'},
+ d=>d.auth.order.openai.push('openai:other'),
+ d=>d.agents.entries['mc-chat'].model.fallbacks=['anthropic/claude-opus-5'],
+ d=>d.agents.entries['mc-agent'].model.primary='minimoi-gateway-mc/minimoi-mc-agent',
+ d=>d.agents.defaults.models['openai/gpt-6-astra'].agentRuntime.id='codex',
+ d=>d.agents.defaults.imageModel={primary:'openai/other'},
+ d=>d.agents.entries['mc-chat'].models['openai/gpt-6-astra'].agentRuntime.id='codex',
+]) {const bad=structuredClone(planConfig);mutate(bad);assert.throws(()=>p.validate(bad,oauth));}
+assert.throws(()=>p.overlay({...oauth,MC_PLAN_AUTH_PROFILE:''}));
+assert.throws(()=>p.overlay({...oauth,MC_PLAN_MODEL:'https://external/model'}));
+assert.throws(()=>p.overlay({...oauth,MC_MODEL_GATEWAY_KEY:dev.MC_MODEL_GATEWAY_KEY}));
+const claude={MC_RUNTIME_MODEL_ACCESS:'plan',MC_PLAN_MODEL:'anthropic/claude-opus-5-5'};
+p.validate(merge(p.overlay(claude),base),claude);
+console.log('Explicit OpenAI/Claude plan policy checks passed, with unchanged tools and no API fallback.');
