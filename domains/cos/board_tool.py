@@ -29,6 +29,7 @@ import json
 import os
 import re
 import stat
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -55,6 +56,7 @@ SCOPES = {"owner": frozenset(OPS)}
 LABELS = frozenset({"decide", "blocked", "remember", "followup", "idea", "fyi", None})
 MAX_BODY = 16 * 1024
 MAX_RESPONSE = 64 * 1024
+TOTAL_S = 7.5
 _NOTE_REF = re.compile(r"[1-9][0-9]{0,17}")
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 _CODE = re.compile(r"[a-z0-9_]{1,80}")
@@ -63,6 +65,10 @@ _IDENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
 
 class BoardInvalid(ValueError):
     pass
+
+
+def _label_ok(value):
+    return value is None or (isinstance(value, str) and value in LABELS)
 
 
 def _need(ok, why="board_request_invalid"):
@@ -137,7 +143,7 @@ def wire(op: str, args: dict):
     if op == "save":
         text = args.get("text")
         _need(isinstance(text, str) and text.strip() and len(text) <= 280, "text_invalid")
-        _need(args.get("label") in LABELS, "label_invalid")
+        _need(_label_ok(args.get("label")), "label_invalid")
     if op in ("update", "undo"):
         rev = args.get("expected_revision")
         _need(type(rev) is int and rev > 0, "expected_revision_invalid")
@@ -146,11 +152,12 @@ def wire(op: str, args: dict):
         _need(isinstance(ch, dict) and ch and set(ch) <= {"text", "label", "done"}, "changes_invalid")
         _need("text" not in ch or (isinstance(ch["text"], str) and ch["text"].strip() and len(ch["text"]) <= 280),
               "text_invalid")
-        _need("label" not in ch or ch["label"] in LABELS, "label_invalid")
+        _need("label" not in ch or _label_ok(ch["label"]), "label_invalid")
         _need("done" not in ch or type(ch["done"]) is bool, "changes_invalid")
     if op == "list":
         _need("limit" not in args or (type(args["limit"]) is int and 1 <= args["limit"] <= 20), "limit_invalid")
-        _need("state" not in args or args["state"] in {"active", "done", "all"}, "state_invalid")
+        _need("state" not in args or (isinstance(args["state"], str) and args["state"] in {"active", "done", "all"}),
+              "state_invalid")
         for k in ("query", "cursor"):
             _need(k not in args or (isinstance(args[k], str) and len(args[k]) <= 512), k + "_invalid")
     body = {k: args[k] for k in fields if k in args and k not in ("note_ref", "operation_ref")}
@@ -165,14 +172,27 @@ def http_exchange(base_url: str):
     session.trust_env = False
 
     def send(method, route, raw, headers):
+        # One total deadline for the whole exchange (the old client's 7.5 s): a watchdog closes the response, so a
+        # reply trickling in a byte at a time cannot hold a listener thread past it. Any failure is "unknown".
+        deadline = time.monotonic() + TOTAL_S
         r = session.request(method, base_url.rstrip("/") + route, data=raw or None, headers=headers,
                             timeout=(2, 5), allow_redirects=False, stream=True)
+        watchdog = threading.Timer(max(0.0, deadline - time.monotonic()), r.close)
+        watchdog.daemon = True
+        watchdog.start()
         try:
-            body = r.raw.read(MAX_RESPONSE + 1, decode_content=False)
+            body = bytearray()
+            while len(body) <= MAX_RESPONSE:
+                part = r.raw.read(4096, decode_content=False)
+                if not part:
+                    break
+                body.extend(part)
         finally:
+            watchdog.cancel()
             r.close()
+        _need(time.monotonic() <= deadline, "board_deadline")
         _need(len(body) <= MAX_RESPONSE, "board_response_too_large")
-        return r.status_code, body, r.headers.get("X-MiniMoi-Receipt") or ""
+        return r.status_code, bytes(body), r.headers.get("X-MiniMoi-Receipt") or ""
     return send
 
 
@@ -189,21 +209,23 @@ class CosBoardTool:
         """Serve one admitted call (``actions_v2.BoundCall``). Never raises for a Board outcome: transport doubt is
         ``unknown`` with the operation id, so the agent recovers with ``result`` instead of writing again."""
         if call is None or not getattr(call, "call_id", None):
-            return {"status": 403, "body": {"error": "unbound"}}
+            return {"status": 403, "outcome": "refused", "body": {"error": "unbound"}}
         if op not in SCOPES.get(call.scope, frozenset()):
-            return {"status": 403, "body": {"error": "scope_not_allowed"}}
+            return {"status": 403, "outcome": "refused", "body": {"error": "scope_not_allowed"}}
         try:
             method, route, raw, cap = wire(op, args)
             p = self.profile()
-        except (BoardInvalid, DomainError, OSError, ValueError) as exc:
-            return {"status": 422, "body": {"state": "not_applied", "error": str(exc) or "board_request_invalid"}}
+        except (BoardInvalid, DomainError, OSError, ValueError, TypeError, KeyError) as exc:
+            code = exc.code if isinstance(exc, DomainError) else (str(exc) if isinstance(exc, BoardInvalid)
+                                                                   else "board_request_invalid")
+            return {"status": 422, "outcome": "refused", "body": {"state": "not_applied", "error": code}}
         mutation = op in MUTATIONS
         op_id = operation_id(p, call.ref) if mutation else ""
         try:
             headers = protocol.request_headers(p.key, method=method, route=route, raw=raw, operation=op_id,
                                                now=self._clock())
         except DomainError as exc:
-            return {"status": 422, "body": {"state": "not_applied", "error": exc.code}}
+            return {"status": 422, "outcome": "refused", "body": {"state": "not_applied", "error": exc.code}}
         try:
             status, body, signature = self._exchange(method, route, raw, headers)
             _need(type(status) is int and 200 <= status < 600 and not 300 <= status < 400, "status")
@@ -215,8 +237,9 @@ class CosBoardTool:
             if status >= 400:
                 _need(value.get("state") in {"not_applied", "unknown"} and isinstance(value.get("error"), str)
                       and _CODE.fullmatch(value["error"]), "shape")
-                return {"status": 200, "body": {"schema": SCHEMA, "state": value["state"], "code": value["error"],
-                                                "operation_id": op_id or None}}
+                return {"status": 200, "outcome": "refused" if value["state"] == "not_applied" else "unknown",
+                        "body": {"schema": SCHEMA, "state": value["state"], "code": value["error"],
+                                 "operation_id": op_id or None}}
             if mutation or op == "result":
                 _need(value.get("state") in {"verified", "not_applied", "unknown"}, "shape")
                 if value["state"] == "verified":
@@ -228,9 +251,14 @@ class CosBoardTool:
                           and (not mutation or rc.get("capability") == cap), "receipt")
         except Exception:
             # Neither an unsigned error nor a dropped reply proves that nothing was saved.
-            return {"status": 200, "body": {
+            return {"status": 200, "outcome": "unknown", "body": {
                 "schema": SCHEMA, "state": "unknown", "operation_id": op_id or None, "code": "board_result_unconfirmed",
                 "instruction": "Read the operation result before attempting another write. "
                                "Do not create a replacement note."}}
-        return {"status": 200, "body": {"schema": SCHEMA, "operation_id": op_id or None, **value}}
+        if mutation or op == "result":
+            outcome = {"verified": "done", "not_applied": "refused"}.get(value["state"], "unknown")
+        else:
+            outcome = "done"                     # a signed 2xx read; a note's own "state" is its active/done flag
+        # The tool's own fields are written last, so a Board field of the same name can never replace them.
+        return {"status": 200, "outcome": outcome, "body": {**value, "schema": SCHEMA, "operation_id": op_id or None}}
 

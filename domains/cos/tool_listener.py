@@ -188,22 +188,25 @@ def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agen
                 return _answer("done", "ok", out["body"].get("message", "Done."), out["body"])
             return _answer("refused", str(out["body"].get("error", "refused")), "Nothing was recorded.", out["body"])
         if name == "cos_board":
-            out = board_tool.serve(bound_call, op, args)
-            body = out["body"]
+            try:
+                out = board_tool.serve(bound_call, op, args)
+            except Exception:
+                _log.exception("cos tool cos_board: outcome unconfirmed")
+                return _answer("unknown", "tool_outcome_unconfirmed",
+                               "CoS could not confirm what happened. Do not repeat it; read the result first.")
+            body, outcome = out["body"], out["outcome"]
             if out["status"] != 200:
                 return _answer("refused", str(body.get("error", "refused")), "Nothing was sent to the Board.", body)
-            if body.get("operation_id"):
+            receipt = body.get("receipt") if isinstance(body.get("receipt"), dict) else None
+            if op in board_mutations and outcome == "done" and receipt and receipt.get("target_ref"):
+                # Only a verified write links the call to the note; refusals and doubt never replace that link.
                 try:
-                    receipt = body.get("receipt") if isinstance(body.get("receipt"), dict) else {}
                     bindings.record_receipt(binding, ids["tool_call_id"], command_id=body["operation_id"],
-                                            receipt_id=str(receipt.get("target_ref") or body.get("state")))
+                                            receipt_id=str(receipt["target_ref"]))
                 except Exception:
                     _log.exception("cos tool cos_board: receipt link not recorded")
-            status = {"verified": "done", "not_applied": "refused"}.get(body.get("state"), "unknown")
-            if op not in board_mutations and body.get("state") is None:
-                status = "done"
-            return _answer(status, str(body.get("code") or body.get("state") or "ok"),
-                           "Board answer. Report saved only when state is verified.", body)
+            code = body.get("code") or ("verified" if outcome == "done" and op in board_mutations else "ok")
+            return _answer(outcome, str(code), "Board answer. Report saved only when state is verified.", body)
         try:
             out = actions_v2.serve(writer, bound_call, op, args)
             result = out["body"].get("result") if isinstance(out.get("body"), dict) else None

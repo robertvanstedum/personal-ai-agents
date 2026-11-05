@@ -967,7 +967,12 @@ def _board_tool():
     if not (profile_file and url):
         return None
     from domains.cos.board_tool import CosBoardTool, http_exchange, load_profile
-    load_profile(profile_file)  # fail at start on a bad or readable-by-others file, not on Robert's first note
+    try:
+        load_profile(profile_file)  # check at start: a bad or readable-by-others file is reported now
+    except Exception as exc:
+        # Only the Board goes off (cos_board answers tool_unavailable); chat, actions and tasks keep running.
+        print(f"   ⚠️  CoS Board not connected: profile refused ({type(exc).__name__}: {exc})")
+        return None
     return CosBoardTool(profile=lambda: load_profile(profile_file), exchange=http_exchange(url))
 
 

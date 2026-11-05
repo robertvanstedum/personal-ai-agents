@@ -111,18 +111,22 @@ def test_owner_turn_save_read_update_done_undo_with_receipts_linked_to_the_turn(
     note, op = data["current"]["id"], data["receipt"]["operation_id"]
     assert data["receipt"]["executor"] == "cos" and data["receipt"]["board"] == "cos-board"
     assert op == data["operation_id"]
-    listed = board(rig, dict(operation="list", query="résumé"), "c-list")["data"]
-    assert [x["id"] for x in listed["notes"]] == [note]
-    assert board(rig, dict(operation="read", note_ref=note), "c-read")["data"]["semantic_revision"] == 1
+    listed = board(rig, dict(operation="list", query="résumé"), "c-list")
+    assert listed["status"] == "done" and [x["id"] for x in listed["data"]["notes"]] == [note]
+    read = board(rig, dict(operation="read", note_ref=note), "c-read")
+    # A note's own "state" (active/done) is not the call's outcome: a good read is "done" (review must-fix 1).
+    assert read["status"] == "done" and read["data"]["semantic_revision"] == 1 and read["data"]["state"] == "active"
+    assert board(rig, dict(operation="capabilities"), "c-cap")["status"] == "done"
     done = board(rig, dict(operation="update", note_ref=note, expected_revision=1, changes={"done": True}), "c-done")
-    assert done["data"]["state"] == "verified" and done["data"]["current"]["state"] == "done"
+    assert done["status"] == "done" and done["data"]["state"] == "verified" and done["data"]["current"]["state"] == "done"
+    assert board(rig, dict(operation="read", note_ref=note), "c-read2")["status"] == "done"   # a done note reads fine
     stale = board(rig, dict(operation="update", note_ref=note, expected_revision=1, changes={"text": "Stale"}), "c-st")
     assert stale["status"] == "refused" and stale["data"]["code"] == "revision_conflict"
     undo = board(rig, dict(operation="undo", operation_ref=done["data"]["receipt"]["operation_id"],
                            expected_revision=2), "c-undo")
     assert undo["data"]["state"] == "verified" and undo["data"]["current"]["state"] == "active"
-    recovered = board(rig, dict(operation="result", operation_ref=op), "c-res")["data"]
-    assert recovered["receipt"] == data["receipt"]
+    recovered = board(rig, dict(operation="result", operation_ref=op), "c-res")
+    assert recovered["status"] == "done" and recovered["data"]["receipt"] == data["receipt"]
     # Every change traces to the turn: its admitted call carries the Board operation id.
     calls = {c["tool_call_id"]: c for c in rig["bindings"].trace("t1")["calls"]}
     assert calls["c-save"]["command_id"] == op and calls["c-save"]["receipt_id"] == data["receipt"]["target_ref"]
@@ -140,7 +144,10 @@ def test_host_retry_is_the_same_operation_and_a_reused_call_id_never_applies_twi
     again = board(rig, args, "c1")["data"]
     assert again["state"] == "verified" and again["replayed"] and again["operation_id"] == first["operation_id"]
     changed = board(rig, dict(operation="save", text="different words"), "c1")
-    assert changed["data"].get("state") != "verified"
+    assert changed["status"] == "refused" and changed["data"]["state"] == "not_applied", changed
+    # The refusal never replaces the call's link to the note it really saved (review should-fix 3).
+    call = [c for c in rig["bindings"].trace("t1")["calls"] if c["tool_call_id"] == "c1"][0]
+    assert call["receipt_id"] == first["receipt"]["target_ref"] and call["command_id"] == first["operation_id"]
     assert len(board(rig, dict(operation="list"), "c-list")["data"]["notes"]) == 1
 
 
@@ -149,6 +156,7 @@ def test_lost_or_tampered_reply_is_unknown_and_result_recovers_without_a_second_
     rig["faults"]["mode"] = "lost"
     lost = board(rig, dict(operation="save", text="Saved, reply lost"), "c1")
     assert lost["status"] == "unknown" and lost["data"]["state"] == "unknown" and lost["data"]["operation_id"]
+    assert [c for c in rig["bindings"].trace("t1")["calls"] if c["tool_call_id"] == "c1"][0]["receipt_id"] is None
     rig["faults"]["mode"] = "signature"
     bad = board(rig, dict(operation="save", text="Saved, reply tampered"), "c2")
     assert bad["status"] == "unknown"
@@ -172,7 +180,10 @@ def test_arguments_cannot_name_identity_and_bad_values_are_refused_before_sendin
                  dict(operation="update", note_ref="1", expected_revision=0, changes={"done": True}),
                  dict(operation="read", note_ref="../etc"),
                  dict(operation="undo", operation_ref="not-a-uuid", expected_revision=1),
-                 dict(operation="delete", note_ref="1")):
+                 dict(operation="delete", note_ref="1"),
+                 dict(operation="save", text="ok", label=["fyi"]),            # wrong types: refused, never a 500
+                 dict(operation="list", state={"x": 1}),
+                 dict(operation="update", note_ref="1", expected_revision=1, changes={"label": {"a": 1}})):
         out = board(rig, args, "c-" + hashlib.sha256(json.dumps(args).encode()).hexdigest()[:12])
         assert out["status"] == "refused", (args, out)
     assert sent == []
@@ -228,3 +239,29 @@ def test_operation_id_is_stable_per_call_and_distinct_across_calls(tmp_path):
     p = load_profile(_profile_file(tmp_path))
     a, b = operation_id(p, "tc-" + "1" * 40), operation_id(p, "tc-" + "2" * 40)
     assert a == operation_id(p, "tc-" + "1" * 40) and a != b and a[14] == "8"
+
+
+def _scheduler_board_tool():
+    """The scheduler's own ``_board_tool``, run in isolation (as tests/test_cos_runtime_policy.py does for startup)."""
+    import ast
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[3] / "domains/cos/chief_of_staff.py").read_text()
+    fn = next(n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name == "_board_tool")
+    namespace = {"os": os}
+    exec(compile(ast.Module(body=[fn], type_ignores=[]), "board_tool_startup", "exec"), namespace)
+    return namespace["_board_tool"]
+
+
+def test_a_bad_profile_turns_off_only_the_board_at_start(tmp_path, monkeypatch, capsys):
+    start = _scheduler_board_tool()
+    monkeypatch.setenv("COS_BOARD_URL", "http://cos-board:5014")
+    monkeypatch.delenv("COS_BOARD_PROFILE_FILE", raising=False)
+    assert start() is None                                         # not configured: Board off, nothing raised
+    loose = _profile_file(tmp_path)
+    os.chmod(loose, 0o644)
+    monkeypatch.setenv("COS_BOARD_PROFILE_FILE", str(loose))
+    assert start() is None and "CoS Board not connected" in capsys.readouterr().out
+    monkeypatch.setenv("COS_BOARD_PROFILE_FILE", str(tmp_path / "missing.json"))
+    assert start() is None
+    monkeypatch.setenv("COS_BOARD_PROFILE_FILE", str(_profile_file(tmp_path)))
+    assert isinstance(start(), CosBoardTool)
