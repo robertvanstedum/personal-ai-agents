@@ -35,7 +35,6 @@ COPY --chown=node:node docker/cos-agent-a/SOUL.md /home/node/.openclaw/workspace
 RUN node /opt/minimoi/cos-agent-a/build-mc-soul.mjs /opt/minimoi/cos-agent-a/owner-role/MASTER_CRAFTSMAN_PERSONA.md /opt/minimoi/cos-agent-a/mc-role-lock.json /home/node/.openclaw/workspace-cos-agent-a/SOUL.md
 COPY --chown=node:node docker/cos-agent-a/MEMORY.md /home/node/.openclaw/workspace-cos-agent-a/MEMORY.md
 COPY --chown=root:root docker/cos-agent-a/plugins/cos-github /opt/minimoi/openclaw-plugins/cos-github
-COPY --chown=root:root docker/cos-agent-a/plugins/cos-board /opt/minimoi/openclaw-plugins/cos-board
 COPY --chown=root:root docker/cos-agent-a/plugins/cos-bound /opt/minimoi/openclaw-plugins/cos-bound
 COPY --chown=node:node docker/cos-agent-a/plugins/cos-bounded-search /opt/minimoi/openclaw-plugins/cos-bounded-search
 COPY --chown=root:root docker/cos-agent-a/plugins/mc-cutoff-delivery /opt/minimoi/openclaw-plugins/mc-cutoff-delivery

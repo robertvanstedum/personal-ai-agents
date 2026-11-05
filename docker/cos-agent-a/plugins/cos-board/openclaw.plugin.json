@@ -1,1 +1,0 @@
-{"id":"cos-board","name":"CoS Board","description":"CoS-scoped access to the shared Board service.","configSchema":{"type":"object","additionalProperties":false},"activation":{"onStartup":true},"contracts":{"tools":["cos_board"]}}

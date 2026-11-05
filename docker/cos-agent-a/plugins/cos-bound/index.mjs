@@ -1,6 +1,6 @@
 /** CoS bound tools (F2 design v0.3, step 2). The CoS counterpart of MC's minimoi-tools.
  *
- * Every cos_actions call carries only host context (ctx.sessionKey, ctx.agentId, and the run and tool-call ids sealed
+ * Every bound call (cos_actions, cos_tasks, cos_board) carries only host context (ctx.sessionKey, ctx.agentId, and the run and tool-call ids sealed
  * by this plugin's before_tool_call hook) plus the model's arguments. cos-scheduler's listener resolves the sealed run
  * to the live turn's binding and refuses otherwise; who, why, where and when come from that binding, never the model.
  *
@@ -19,7 +19,7 @@ export const NATIVE = new Set(['write', 'edit', 'exec', 'apply_patch', 'process'
 // Meeting entries (review S2/S3): the hook is the second gate behind the config deny list. cos-meeting may call only
 // the bound tool and bounded search; cos-closed (a room with anyone outside Robert's team) may call nothing.
 export const RESTRICTED = Object.freeze({'cos-meeting': new Set(['cos_actions', 'cos_tasks', 'web_search']), 'cos-closed': new Set()});
-export const BOUND = new Set(['cos_actions', 'cos_tasks']);
+export const BOUND = new Set(['cos_actions', 'cos_tasks', 'cos_board']);
 const STATE = Symbol.for('cos-bound/process-state/v1');
 globalThis[STATE] ??= Object.freeze({instance: randomBytes(16).toString('hex'), sealKey: randomBytes(32)});
 export const INSTANCE = globalThis[STATE].instance;
@@ -49,6 +49,22 @@ export const TASKS_SPEC = {
     outcome: {type: 'string', maxLength: 500}, done_when: {type: 'string', maxLength: 500},
     lead: {type: 'string', enum: ['mc']}, holder: {type: 'string', enum: ['mc']},
     task_id: {type: 'string', maxLength: 80}}},
+};
+
+// The Board, bound (F2 M2). Same description and fields the agent knew from the old cos-board plugin; the key now
+// lives in cos-scheduler and the call is admitted against this turn's binding before anything is signed.
+const note = {type: 'string', minLength: 1, maxLength: 280};
+const label = {type: ['string', 'null'], enum: ['decide', 'blocked', 'remember', 'followup', 'idea', 'fyi', null]};
+export const BOARD_SPEC = {
+  name: 'cos_board', label: 'CoS Board',
+  description: 'Read and write Robert’s CoS Board, scoped to CoS. Use save only when Robert asks to keep a note; preserve his language, maximum 280 characters, never truncate. List/read to identify existing notes; clarify ambiguous targets. Read the current semantic_revision before update or undo and pass expected_revision. update changes text, label or done (true to complete, false to reopen). result recovers a prior operation receipt. undo reverses your own specified saved operation only when Robert asks; no force or permanent delete. Only report saved when state is verified with a receipt. On unknown, keep the operation_id and use result; never create a replacement. Board and Actions are separate. Photos use the Board UI. Never copy private material to a room without Robert’s permission. Not available in meetings.',
+  parameters: {type: 'object', additionalProperties: false, required: ['operation'], properties: {
+    operation: {type: 'string', enum: ['list', 'read', 'save', 'update', 'result', 'undo', 'capabilities']},
+    query: {type: 'string', maxLength: 200}, state: {type: 'string', enum: ['active', 'done', 'all']},
+    limit: {type: 'integer', minimum: 1, maximum: 20}, cursor: str, note_ref: str, operation_ref: str,
+    expected_revision: {type: 'integer', minimum: 1}, text: note, label,
+    changes: {type: 'object', additionalProperties: false, minProperties: 1,
+              properties: {text: note, label, done: {type: 'boolean'}}}}},
 };
 
 export function endpointUrl(endpoint) {
@@ -145,7 +161,9 @@ export function toolFactory({endpoint, token, tokenFile, agents, acceptCredentia
       return text(result.message + '\n' + JSON.stringify({status: result.status, code: result.code, data: result.data}),
                   {status: result.status, code: result.code});
     };
-    return [ACTIONS_SPEC, TASKS_SPEC].map(spec => ({...spec, execute: run(spec)}));
+    const offered = [ACTIONS_SPEC, TASKS_SPEC, BOARD_SPEC]
+      .filter(spec => !Object.hasOwn(RESTRICTED, agentId) || RESTRICTED[agentId].has(spec.name));
+    return offered.map(spec => ({...spec, execute: run(spec)}));
   };
 }
 
@@ -197,5 +215,5 @@ export default {id: 'cos-bound', name: 'CoS bound tools', register(api) {
   }
   api.on('before_tool_call', hook({agents, url, token}));
   announcer({url, token}).start();          // before any turn's first call (review M3)
-  api.registerTool(factory, {names: ['cos_actions', 'cos_tasks']});
+  api.registerTool(factory, {names: ['cos_actions', 'cos_tasks', 'cos_board']});
 }};

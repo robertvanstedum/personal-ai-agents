@@ -35,7 +35,8 @@
   "contracts": {
     "tools": [
       "cos_actions",
-      "cos_tasks"
+      "cos_tasks",
+      "cos_board"
     ]
   }
 }

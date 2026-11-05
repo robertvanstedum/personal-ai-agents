@@ -150,7 +150,6 @@ def test_search_is_bounded_and_does_not_receive_provider_credentials():
         "/opt/minimoi/openclaw-plugins/cos-bounded-search",
         "/opt/minimoi/openclaw-plugins/mc-cutoff-delivery",
         "/opt/minimoi/openclaw-plugins/cos-bound",
-        "/opt/minimoi/openclaw-plugins/cos-board",
         "/opt/minimoi/openclaw-plugins/cos-github",
     ]
     assert "web_search" in agent["tools"]["alsoAllow"]

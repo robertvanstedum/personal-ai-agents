@@ -958,6 +958,19 @@ def _task_tools():
                         environment=environment)
 
 
+def _board_tool():
+    """F2 M2: cos_board, bound. The Board key (COS_BOARD_PROFILE_FILE, owner-only JSON) lives in cos-scheduler, never
+    in the agent; COS_BOARD_URL is the fixed internal Board address. Otherwise None, and the listener refuses
+    cos_board. The profile is re-read on each call, so a rotated key applies at once."""
+    profile_file = os.environ.get("COS_BOARD_PROFILE_FILE", "").strip()
+    url = os.environ.get("COS_BOARD_URL", "").strip()
+    if not (profile_file and url):
+        return None
+    from domains.cos.board_tool import CosBoardTool, http_exchange, load_profile
+    load_profile(profile_file)  # fail at start on a bad or readable-by-others file, not on Robert's first note
+    return CosBoardTool(profile=lambda: load_profile(profile_file), exchange=http_exchange(url))
+
+
 def _start_tool_listener():
     """F2 step 2: the bound tool listener on its own port (COS_TOOL_LISTENER_PORT), published on the agent network
     only. Needs the binding store, the CoS store writer and COS_TOOL_LISTENER_TOKEN_SHA256. Otherwise not started,
@@ -972,7 +985,7 @@ def _start_tool_listener():
     from werkzeug.serving import make_server
     server = make_server(os.environ.get("COS_TOOL_LISTENER_HOST", "0.0.0.0"), int(port),
                          _tools_app(bindings=_bindings, writer=_cos_store_writer, token_sha256=digest,
-                                    task_tools=_task_tools()),
+                                    task_tools=_task_tools(), board_tool=_board_tool()),
                          threaded=True)
     threading.Thread(target=server.serve_forever, name="cos-tool-listener", daemon=True).start()
     print(f"   CoS tool listener: port {port} ✅")

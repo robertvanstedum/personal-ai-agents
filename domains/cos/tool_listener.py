@@ -34,6 +34,7 @@ from flask import Flask, Response, jsonify, request
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from domains.cos.binding import NotBound
+from domains.cos.board_tool import MUTATIONS as board_mutations
 from domains.cos.store import actions_v2
 
 PREFIX = "/internal/cos/v1"
@@ -42,7 +43,7 @@ _DIGEST = re.compile(r"[0-9a-f]{64}")
 _SESSION_KEY = re.compile(r"agent:(?P<agent>[a-z][a-z0-9-]{0,63}):openai-user:(?P<user>cos-confer:[0-9a-f]{32})")
 STATUSES = ("done", "refused", "unknown")
 # Per-turn admission limits for each bound tool (MC-equivalent defaults, design v0.1 §4).
-LIMITS = {"cos_actions": 20, "cos_tasks": 5}
+LIMITS = {"cos_actions": 20, "cos_tasks": 5, "cos_board": 20}
 NATIVE_TOOLS = frozenset({"write", "edit", "exec", "apply_patch", "process"})
 _log = logging.getLogger("cos_tools")
 
@@ -80,8 +81,9 @@ def session_user(session_key, agent_id, allowed_agents) -> str:
 
 
 def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agent-a", "cos-meeting"),
-               wait_s: float | None = None, task_tools=None) -> Flask:
-    """``task_tools`` (``domains.cos.task_tools.CosTaskTools``) serves ``cos_tasks``; None: that tool is refused."""
+               wait_s: float | None = None, task_tools=None, board_tool=None) -> Flask:
+    """``task_tools`` (``domains.cos.task_tools.CosTaskTools``) serves ``cos_tasks`` and ``board_tool``
+    (``domains.cos.board_tool.CosBoardTool``) serves ``cos_board``; None: that tool is refused."""
     if type(token_sha256) is not str or not _DIGEST.fullmatch(token_sha256):
         raise ValueError("cos_tools_listener_config_invalid")
     if bindings.environment != writer.environment:
@@ -157,6 +159,8 @@ def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agen
             return _answer("refused", "tool_unknown", "That tool is not served here, so nothing was done.")
         if name == "cos_tasks" and task_tools is None:
             return _answer("refused", "tool_unavailable", "Task tracking is not connected here, so nothing was done.")
+        if name == "cos_board" and board_tool is None:
+            return _answer("refused", "tool_unavailable", "The Board is not connected here, so nothing was done.")
         ids = sealed()
         try:
             user = session_user(ids["session_key"], ids["agent_id"], allowed)
@@ -183,6 +187,23 @@ def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agen
             if out["status"] == 200:
                 return _answer("done", "ok", out["body"].get("message", "Done."), out["body"])
             return _answer("refused", str(out["body"].get("error", "refused")), "Nothing was recorded.", out["body"])
+        if name == "cos_board":
+            out = board_tool.serve(bound_call, op, args)
+            body = out["body"]
+            if out["status"] != 200:
+                return _answer("refused", str(body.get("error", "refused")), "Nothing was sent to the Board.", body)
+            if body.get("operation_id"):
+                try:
+                    receipt = body.get("receipt") if isinstance(body.get("receipt"), dict) else {}
+                    bindings.record_receipt(binding, ids["tool_call_id"], command_id=body["operation_id"],
+                                            receipt_id=str(receipt.get("target_ref") or body.get("state")))
+                except Exception:
+                    _log.exception("cos tool cos_board: receipt link not recorded")
+            status = {"verified": "done", "not_applied": "refused"}.get(body.get("state"), "unknown")
+            if op not in board_mutations and body.get("state") is None:
+                status = "done"
+            return _answer(status, str(body.get("code") or body.get("state") or "ok"),
+                           "Board answer. Report saved only when state is verified.", body)
         try:
             out = actions_v2.serve(writer, bound_call, op, args)
             result = out["body"].get("result") if isinstance(out.get("body"), dict) else None
