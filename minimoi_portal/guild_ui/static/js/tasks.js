@@ -87,12 +87,19 @@ export function initTasks(page) {
     if (!terms || !p.interpretation_id || !p.proposal_digest) {
       card.append(node('p', 'This proposal is incomplete. It cannot be confirmed here.')); return card;
     }
-    facts(card, [['Request', p.proposed.outcome], ['Task outcome', terms.outcome], ['Lead', terms.lead], ['Next step', terms.holder], ['Done when', terms.done_when], ['Return window', terms.return_window == null ? 'Not set' : JSON.stringify(terms.return_window)], ['Scope', p.proposed.scope], ['Recipients', (p.proposed.recipients || []).join(', ')], ['Continuing work', p.proposed.continuing ? 'Yes' : 'No']]);
-    card.append(node('h4', 'Source words'));
+    facts(card, [...(p.proposed.outcome && p.proposed.outcome !== terms.outcome ? [['Request', p.proposed.outcome]] : []), ['Lead', terms.lead], ['Next step', terms.holder], ['Done when', terms.done_when], ['Return window', terms.return_window == null ? 'Not set' : JSON.stringify(terms.return_window)], ['Scope', p.proposed.scope], ['Recipients', (p.proposed.recipients || []).join(', ')], ['Continuing work', p.proposed.continuing ? 'Yes' : 'No']]);
+    const sources = node('details');
+    sources.append(node('summary', 'Source words and references'));
+    const shown = new Set([terms.outcome, p.proposed.outcome].filter(Boolean));
     for (const source of p.sources || []) {
-      card.append(node('blockquote', source.content || 'Source text is not included in this recovery view.'));
-      evidence(card, source.source_event_id);
+      if (!source.content) sources.append(node('p', 'Source text is not included in this recovery view.'));
+      else if (!shown.has(source.content)) {
+        // Only exact repeats collapse. Differences in scope or wording remain inspectable.
+        sources.append(node('blockquote', source.content)); shown.add(source.content);
+      } else sources.append(node('p', 'Same wording as shown above.'));
+      evidence(sources, source.source_event_id);
     }
+    if (p.sources?.length) card.append(sources);
     if (p.finishing) card.append(node('p', 'Your confirmation was recorded, but the remaining steps may need finishing. Nothing resumes until you click.'));
     evidence(card, `${p.interpretation_id}\n${p.proposal_digest}`);
     const actions = node('div', undefined, 'task-actions');

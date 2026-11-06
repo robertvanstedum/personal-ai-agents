@@ -4,6 +4,20 @@
 // card, never approves on load, and claims nothing the server did not answer.
 const PANEL = document.getElementById('tab-flight');
 const BOX = PANEL && PANEL.querySelector('[data-wc]');
+const CHAT = document.getElementById('chat-log');
+const CHAT_BOX = CHAT ? h('section', { class: 'wc wc-chat', 'data-wc-chat': '', 'aria-label': 'Work awaiting your decision' },
+  h('h2', {}, 'Work awaiting your decision'),
+  h('button', { type: 'button', class: 'fl-btn', 'data-wc-refresh': '' }, 'Refresh'),
+  h('p', { 'data-wc-say': '', role: 'status', hidden: true }),
+  h('div', { 'data-wc-list': '' })) : null;
+const BOXES = [BOX, CHAT_BOX].filter(Boolean);
+let readVersion = 0;
+let chatSignature = '';
+const JUMP = CHAT ? h('button', { type: 'button', class: 'wc-jump', hidden: true }, 'Work card updated ↓') : null;
+if (JUMP) {
+  CHAT.after(JUMP);
+  JUMP.addEventListener('click', () => { CHAT.scrollTop = CHAT.scrollHeight; JUMP.hidden = true; });
+}
 const BASE = location.pathname.replace(/\/ui(\/.*)?$/, '').replace(/\/$/, '');
 const API = BASE + '/work-cards';
 const ROLE = { builder: 'Does the work', reviewer: 'Reviews it' };
@@ -23,15 +37,17 @@ function h(tag, attrs = {}, ...kids) {
 }
 
 function headers() {
-  const token = document.querySelector('meta[name="minimoi-csrf-token"]')?.content;
-  return { 'Content-Type': 'application/json', Accept: 'application/json', ...(token ? { 'X-CSRF-Token': token } : {}) };
+  return { 'Content-Type': 'application/json', Accept: 'application/json', ...cosWriteHeaders() };
 }
 
-function say(text, warn) {
-  const line = BOX.querySelector('[data-wc-say]');
-  line.textContent = text || '';
-  line.hidden = !text;
-  line.classList.toggle('warn', !!warn);
+function say(text, warn, admission) {
+  for (const box of BOXES) {
+    const line = box.querySelector('[data-wc-say]');
+    const scoped = box === CHAT_BOX && admission?.conversation_id && admission.conversation_id !== window.cosHistory?.conversationId ? '' : text;
+    line.textContent = scoped || '';
+    line.hidden = !scoped;
+    line.classList.toggle('warn', !!warn);
+  }
 }
 
 // Who does it, by which route, for how much. "fakework" is the simulated worker: no model runs and nothing is spent.
@@ -48,8 +64,8 @@ function card(a) {
   const ref = c.ref ? String(c.ref).slice(0, 12) : 'unknown';
   const decide = (decision) => async () => {
     if (busy) return;
-    busy = true; render.last && render.last.forEach((b) => { b.disabled = true; });
-    say(decision === 'approve' ? 'Approving this card…' : 'Declining this card…');
+    busy = true; ++readVersion; render.last && render.last.forEach((b) => { b.disabled = true; });
+    say(decision === 'approve' ? 'Approving this card…' : 'Declining this card…', false, a);
     let answer = null;
     try {
       const r = await fetch(`${API}/${decision}`, { method: 'POST', credentials: 'same-origin', headers: headers(),
@@ -57,9 +73,15 @@ function card(a) {
       answer = await r.json().catch(() => null);
       if (!r.ok) answer = { failed: true, message: answer?.message || "That decision wasn't recorded. Reload to check." };
     } catch (e) { answer = { failed: true, message: "The portal couldn't be reached. Nothing is claimed; try again." }; }
+    if (!answer || (!answer.failed && (answer.operation_id !== a.operation_id ||
+        !['approved', 'declined'].includes(answer.state)))) {
+      answer = { failed: true, message: 'The decision is unconfirmed. Refresh to check before trying again.' };
+    }
+    say(answer.failed ? answer.message : answer.note, answer.failed, a);
+    // Keep both views locked until a fresh authoritative read replaces the old card.
+    while (!(await load(false, true))) { /* Selection changed: reconcile before unlocking. */ }
     busy = false;
-    say(answer.failed ? answer.message : answer.note, answer.failed);
-    await load(false);
+    render.last?.forEach(b => { b.disabled = b.dataset.decided === 'true'; });
   };
   return h('article', { class: 'wc-card', 'data-wc-op': a.operation_id },
     h('h3', {}, `${CLASS[c.class] || c.class || 'Work'} card for ${a.task_id}`),
@@ -68,32 +90,62 @@ function card(a) {
     steps.length ? h('details', { open: true }, h('summary', {}, 'The words each worker gets'), h('ul', {}, steps)) : null,
     a.approval ? h('p', { class: 'wc-note' }, 'Approved; waiting for the authority to admit it.') : null,
     h('p', { class: 'wc-actions' },
-      h('button', { type: 'button', class: 'fl-btn', 'data-wc-approve': a.operation_id, disabled: !!a.approval, onclick: decide('approve') }, 'Approve'),
+      h('button', { type: 'button', class: 'fl-btn', 'data-wc-approve': a.operation_id, disabled: !!a.approval || busy, 'data-decided': String(!!a.approval), onclick: decide('approve') }, 'Approve'),
       ' ',
-      h('button', { type: 'button', class: 'fl-btn', 'data-wc-decline': a.operation_id, disabled: !!a.approval, onclick: decide('decline') }, 'Decline')),
+      h('button', { type: 'button', class: 'fl-btn', 'data-wc-decline': a.operation_id, disabled: !!a.approval || busy, 'data-decided': String(!!a.approval), onclick: decide('decline') }, 'Decline')),
     h('p', { class: 'wc-digest' }, h('small', {}, `Card ${a.card_digest}`)));
 }
 
 function render(list, problem) {
-  const cards = BOX.querySelector('[data-wc-list]');
-  cards.replaceChildren();
-  if (problem) { cards.append(h('p', {}, problem)); render.last = []; return; }
-  if (!list.length) cards.append(h('p', {}, 'No work cards are waiting for you.'));
-  for (const a of list) cards.append(card(a));
-  render.last = [...cards.querySelectorAll('button')];
+  render.last = [];
+  for (const box of BOXES) {
+    const inChat = box === CHAT_BOX;
+    const visible = inChat ? list.filter(a => !a.conversation_id || a.conversation_id === window.cosHistory?.conversationId) : list;
+    const follow = inChat && CHAT.scrollHeight - CHAT.clientHeight - CHAT.scrollTop < 48;
+    const nextSignature = JSON.stringify([visible, problem]);
+    const cards = box.querySelector('[data-wc-list]');
+    cards.replaceChildren();
+    if (problem) cards.append(h('p', {}, problem));
+    else {
+      if (!visible.length && !inChat) cards.append(h('p', {}, 'No work cards are waiting for you.'));
+      for (const a of visible) cards.append(card(a));
+    }
+    if (inChat) {
+      // Canonical history redraws the stream. Reattach this view, never save it as a chat turn.
+      box.hidden = !problem && !visible.length && box.querySelector('[data-wc-say]').hidden;
+      CHAT.append(box); // Keep the decision view after newly appended canonical turns.
+      if (nextSignature !== chatSignature && !box.hidden) {
+        if (follow) { CHAT.scrollTop = CHAT.scrollHeight; JUMP.hidden = true; }
+        else JUMP.hidden = false;
+      }
+      chatSignature = nextSignature;
+    }
+    render.last.push(...cards.querySelectorAll('button'));
+  }
 }
 
-async function load(clear = true) {
+async function load(clear = true, afterDecision = false) {
+  if (busy && !afterDecision) return;
+  const version = ++readVersion;
   if (clear) say('');
   try {
     const r = await fetch(API, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
     const body = await r.json().catch(() => null);
+    if (version !== readVersion) return false;
     if (r.ok && body && Array.isArray(body.admissions)) render(body.admissions);
     else render([], body?.message || "Work cards couldn't be read just now. Nothing is lost; try Refresh.");
-  } catch (e) { render([], "Work cards couldn't be read just now. Nothing is lost; try Refresh."); }
+  } catch (e) {
+    if (version !== readVersion) return false;
+    render([], "Work cards couldn't be read just now. Nothing is lost; try Refresh.");
+  }
+  return true;
 }
 
-if (BOX) {
-  BOX.querySelector('[data-wc-refresh]').addEventListener('click', () => load());
+if (BOXES.length) {
+  for (const box of BOXES) box.querySelector('[data-wc-refresh]').addEventListener('click', () => load());
+  document.addEventListener('cos:conversation', () => { ++readVersion; CHAT_BOX?.remove(); if (JUMP) JUMP.hidden = true; chatSignature = ''; say(''); });
+  document.addEventListener('cos:conversation-selected', () => load());
+  document.addEventListener('cos:turns-changed', () => load(false));
+  document.addEventListener('cos:turn-completed', () => load(false));
   load();
 }

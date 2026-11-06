@@ -126,3 +126,35 @@
 .calm-sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .founders-cos #confer-welcome,.founders-cos #picture-mode{width:40px;min-width:40px;height:40px;padding:8px;display:inline-flex;align-items:center;justify-content:center}
 .founders-cos #confer-welcome svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}
+
+/* Beta: match Craft's field and shared controls, also in side-by-side mode. */
+.founders-cos[data-cos-tab=confer] .input-row{padding:10px 12px;gap:6px}
+.founders-cos[data-cos-tab=confer] #send-input{min-height:26px;font:16px/1.5 var(--sans)}
+.founders-cos[data-cos-tab=confer] .input-row>#btn-attach{width:38px;height:38px;min-height:38px;margin-right:auto}
+.founders-cos[data-cos-tab=confer] .input-row>#btn-voice{width:44px;min-width:44px;height:38px;padding:8px}
+@media(max-width:639px){
+ .founders-cos[data-cos-tab=confer] .input-row{padding:8px 10px}
+ .founders-cos[data-cos-tab=confer] .input-row>#btn-attach,.founders-cos[data-cos-tab=confer] .input-row>#btn-voice,.founders-cos[data-cos-tab=confer] .input-row>#btn-send{height:44px;min-height:44px;min-width:44px}
+}
+
+/* One canonical work card, available beside the conversation and in Actions. */
+.founders-cos .wc-card{padding:14px;border:1px solid #cbd4c8;border-radius:12px;background:#fff;margin:12px 0;overflow-wrap:anywhere;font:14px/1.5 var(--sans)}
+.founders-cos .wc-chat{width:100%;flex:none;max-width:760px}
+.founders-cos .wc-chat[hidden]{display:none}
+.founders-cos .wc-chat h2{font:600 16px var(--sans);margin:12px 0 6px}
+.founders-cos .wc-card h3{font:600 16px var(--sans);margin:0 0 10px}
+.founders-cos .wc-actions{display:flex;gap:8px}
+.founders-cos .wc button{min-height:38px;padding:6px 12px;border:1px solid #cbd4c8;border-radius:8px;background:#f1f4ee;color:#233d30;font:inherit;cursor:pointer}
+.founders-cos .wc button:disabled{opacity:.6;cursor:default}
+.founders-cos .wc .warn{color:#893522}
+.founders-cos .wc-digest{font-size:12px;color:var(--soft)}
+@media(max-width:639px){.founders-cos .wc button{min-height:44px}}
+.founders-cos .wc-jump{flex:none;align-self:center;margin:4px;padding:6px 14px;border:1px solid #cbd4c8;border-radius:999px;background:#f1f4ee;color:#233d30;font:14px var(--sans)}
+.founders-cos .wc-jump[hidden]{display:none}
+.founders-cos[data-cos-tab=confer] .input-row>#btn-voice:not([aria-pressed=true]),
+.founders-cos[data-cos-tab=confer] .input-row>#btn-voice[aria-pressed=true]{width:44px;min-width:44px;padding:8px}
+@media(max-width:639px){
+ .founders-cos[data-cos-tab=confer] #send-input{min-height:44px}
+ .founders-cos[data-cos-tab=confer] .input-row>#btn-voice:not([aria-pressed=true]),
+ .founders-cos[data-cos-tab=confer] .input-row>#btn-voice[aria-pressed=true]{height:44px;min-height:44px}
+}

@@ -171,7 +171,7 @@
       <input type="file" data-mc-file accept="image/jpeg,image/png,image/webp,image/gif,{{ page_json.attach.doc_ext|join(',') }}" multiple hidden>
       {% endif %}
       <label class="visually-hidden" for="mc-input">Type a note</label>
-      <textarea id="mc-input" class="mc-input" data-mc-input rows="1" autocomplete="off" autocapitalize="sentences" enterkeyhint="send" placeholder="Ask…"></textarea>
+      <textarea id="mc-input" class="mc-input" data-mc-input rows="1" autocomplete="off" autocapitalize="sentences" enterkeyhint="send" placeholder="Message MC…"></textarea>
       <button type="submit" class="btn" data-mc-send aria-describedby="mc-notes-line">Send</button>
       {# Voice: present only while the server has voice switched on; mc_voice.js shows it once the capabilities call answers. With
          message, attachment and Send it is one of the visible controls (owner, 18 Oct). On the record only for now. #}

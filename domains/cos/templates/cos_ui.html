@@ -7,7 +7,7 @@
   <title>Chief of Staff</title>
   <link rel="stylesheet" href="/static/cos.css?v=20261101-review06b">
   <link rel="stylesheet" href="/founders-ui/founders.css?v={{ founders_ui_version }}">
-  <link rel="stylesheet" href="/static/calm-confer.css?v=20261102-notices1">
+  <link rel="stylesheet" href="/static/calm-confer.css?v=20261106-beta1">
   {% from 'founders_ui/components.html' import assets %}
   {{ assets(founders_ui_version) }}
   <script defer src="/founders-ui/message-text.js?v=20261102-1"></script>
@@ -102,7 +102,7 @@
         <div class="input-row">
           <input id="attach-input" type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json,.html,.htm,.png,.jpg,.jpeg,.gif,.webp">
           <button id="btn-attach" type="button" title="Add a file or picture" aria-label="Attach a file">＋</button>
-          <textarea id="send-input" rows="2" placeholder="Message CoS…" autocomplete="off" autofocus></textarea>
+          <textarea id="send-input" rows="1" placeholder="Message CoS…" autocomplete="off" autofocus></textarea>
           <button id="btn-voice" title="Start voice conversation" aria-label="Start voice conversation">🎤</button>
           <button id="btn-send">Send</button>
         </div>
@@ -453,6 +453,7 @@ async function sendMessage() {
     window.MiniMoiNotices?.clear('cos-chat:' + conversationId + ':' + requestId);
     if (window.cosHistory.conversationId === conversationId) appendMsg('cos', data.reply, data.files);
     if (Array.isArray(data.files) && data.files.length) loadCosFiles();
+    document.dispatchEvent(new CustomEvent('cos:turn-completed', {detail: {id: conversationId}}));
   } catch(err) {
     thinking.remove();
     window.cosHistory.uncertain();
@@ -812,6 +813,6 @@ void readDirect();
 <script src="/static/cos-route-picker.js?v={{ founders_ui_version }}"></script>
 <script src="/static/calm-confer.js?v=20261102-1"></script>
 <script type="module" src="/static/cos-in-flight.js?v={{ founders_ui_version }}"></script>
-<script type="module" src="/static/cos-work-cards.js?v={{ founders_ui_version }}"></script>
+<script type="module" src="/static/cos-work-cards.js?v=20261106-beta1"></script>
 </body>
 </html>

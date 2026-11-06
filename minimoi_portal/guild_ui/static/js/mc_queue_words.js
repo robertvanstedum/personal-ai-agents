@@ -4,7 +4,7 @@ const ORD = ['next', '2nd', '3rd', '4th', '5th'];
 export const place = (position) => (position === 1 ? 'next to send' : `${ORD[position - 1] || `${position}th`} in line`);
 
 export function chipWords(position, running) {
-  return position === 1 && !running ? 'Waiting · next to send' : `Waiting · ${place(position)} · not sent yet`;
+  return `Not sent · ${place(position)}`;
 }
 
 export function pauseWords(pause, waiting) {
@@ -30,7 +30,7 @@ export function barWords(view, here) {
   const elsewhere = view.queued.filter((e) => e.conversation_id !== here).length;
   const where = elsewhere ? ` (${elsewhere} in another conversation)` : '';
   const what = waiting === 1 ? '1 message waiting' : `${waiting} messages waiting`;
-  return view.running ? `${what}${where} · sent one at a time, after the current answer` : `${what}${where}`;
+  return `${what}${where}`;
 }
 
 // Retry after a refusal that may pass (MC or a store not ready): 5 s, 15 s, 30 s, then every 60 s. Never a spin.

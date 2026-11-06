@@ -22,8 +22,8 @@ def run(script: str):
 
 def test_chip_words_say_waiting_and_place_only():
     assert run("return [W.chipWords(1, false), W.chipWords(1, true), W.chipWords(2, true), W.chipWords(5, false)];") == [
-        "Waiting · next to send", "Waiting · next to send · not sent yet",
-        "Waiting · 2nd in line · not sent yet", "Waiting · 5th in line · not sent yet"]
+        "Not sent · next to send", "Not sent · next to send",
+        "Not sent · 2nd in line", "Not sent · 5th in line"]
 
 
 def test_pause_words_never_claim_an_outcome():
@@ -49,7 +49,7 @@ def test_bar_words():
               W.barWords({queued: [q('c-1'), q('c-2')], running: null, pause: null}, 'c-1'),
               W.barWords({queued: [q('c-1')], running: null, pause: {reason: 'failed'}}, 'c-1')];""")
     assert out[0] == ""
-    assert out[1] == "1 message waiting · sent one at a time, after the current answer"
+    assert out[1] == "1 message waiting"
     assert out[2] == "2 messages waiting (1 in another conversation)"
     assert out[3].startswith("Paused: an earlier message failed")
     joined = " ".join(out).lower()

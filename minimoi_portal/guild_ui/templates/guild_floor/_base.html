@@ -12,6 +12,7 @@
   {% if embedded %}<link rel="stylesheet" href="{{ url_for('.asset', filename='companion_embed.css') }}">{% endif %}
   <link rel="stylesheet" href="/founders-ui/founders.css?v={{ founders_ui_version }}">
   {% if page_id == 'floor' and not embedded %}<link rel="stylesheet" href="{{ url_for('.asset', filename='css/calm-craft.css') }}">{% endif %}
+  {% if page_id == 'floor' %}<link rel="stylesheet" href="{{ url_for('.asset', filename='css/beta-chat.css') }}">{% endif %}
   {% block head %}{% endblock %}
   {% from 'founders_ui/components.html' import assets %}
   {{ assets(founders_ui_version) }}

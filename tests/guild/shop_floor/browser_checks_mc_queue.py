@@ -201,10 +201,10 @@ def test_send_is_free_while_an_answer_runs_and_the_next_message_waits_with_its_o
     _say(page, "Second question, no file")
     chip = page.locator("[data-queued-chip]")
     expect(chip).to_have_count(1)
-    expect(chip).to_contain_text("Waiting")
-    expect(chip).to_contain_text("not sent yet")
+    expect(chip).to_contain_text("Not sent")
+    expect(chip).to_contain_text("next to send")
     expect(page.locator("[data-mc-queue-bar]")).to_contain_text("1 message waiting")
-    expect(page.locator("[data-mc-queue-bar]")).to_contain_text("after the current answer")
+    expect(page.locator("[data-mc-queue-text]")).to_have_text("1 message waiting")
     time.sleep(1.0)
     assert len(_chat_posts(runtime)) == 1                           # nothing is sent while the first runs
     if width < 641:

@@ -57,11 +57,7 @@ function renderLights(lights) {
 }
 
 function needsLineText(needs) {
-  if (needs.status !== 'ok') return needs.text;
-  const at = localTime(needs.observed_at);
-  if (!needs.total) return `Nothing needs you · checked ${at}`;
-  const shown = needs.items.length;
-  return `${needs.total} in all${needs.total > shown ? ` · ${shown} shown` : ''} · checked ${at}`;
+  return needs.text;
 }
 
 function renderNeeds(needs) {
