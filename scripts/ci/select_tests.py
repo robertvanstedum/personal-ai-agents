@@ -55,6 +55,8 @@ CORE_TESTS = (
     "tests/test_immutable_production_deploy.py",
     "tests/test_deploy_keeps_live_queue.py",
     "tests/test_guild_queue_deploy_config.py",
+    # Fails when a new image enters git, whatever else the release touches.
+    "tests/test_photo_inventory.py",
 )
 
 # The test harness: every test depends on these, so a change runs everything.

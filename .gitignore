@@ -189,3 +189,8 @@ data/guild/.build_queue.json.lock
 /domains/curator/research/data/
 /domains/curator/research/state/
 /domains/curator/research/agent/config.json
+
+# Optional photos are stored data, never git (core/photo_store.py, tests/test_photo_inventory.py).
+domains/german/data/photos/
+domains/portuguese/data/photos/
+data/guild/photos/

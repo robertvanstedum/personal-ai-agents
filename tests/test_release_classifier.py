@@ -62,6 +62,11 @@ def test_german_change_restarts_german_and_its_bot_only():
     )
 
 
+def test_the_photo_store_restarts_the_two_language_domains_only():
+    release_class, services = classify(["core/photo_store.py"])
+    assert release_class == "domain" and set(services) == {"german", "portuguese", "system-bot"}
+
+
 def test_cos_change_does_not_restart_language_domains():
     release_class, services = classify(["domains/cos/chief_of_staff.py"])    # CoS-only; see PORTAL_COS_FILES
     assert release_class == "domain"

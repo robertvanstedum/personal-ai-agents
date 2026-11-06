@@ -16,6 +16,7 @@ from flask_cors import CORS
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from core.identity import resolve_user_display_name, resolve_user_id
+from core.photo_store import install_photo_route
 from core.realtime_voice.bootstrap import create_bootstrap_blueprint
 
 from german_domain import (
@@ -130,6 +131,9 @@ app.register_blueprint(create_bootstrap_blueprint(
     get_persona=_get_realtime_persona,
     is_production=lambda: os.environ.get("MINIMOI_ROLE") != "development",
 ))
+
+# Optional photos are stored data, not git; Portuguese installs the identical route.
+install_photo_route(app, "german", BASE_DIR / "data", BASE_DIR / "static" / "photos")
 
 _REALTIME_VOICE_STATIC_DIR = REPO_ROOT / "core" / "realtime_voice" / "static"
 

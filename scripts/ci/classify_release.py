@@ -450,6 +450,8 @@ def classify(paths: list[str],
             services.update(("model-gateway", "cos-bot", "cos-scheduler"))
         elif path.startswith("docker/cos-agent-a/") or path == "docker/Dockerfile.cos-agent-a":
             services.add("cos-agent-a")
+        elif path == "core/photo_store.py":
+            services.update(("german", "system-bot", "portuguese"))
         elif path.startswith("core/realtime_voice/"):
             services.update(("portal", "german", "portuguese", "cos-bot", "cos-scheduler"))
         elif path.startswith("core/telegram/"):
