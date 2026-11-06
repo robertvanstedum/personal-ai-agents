@@ -423,9 +423,33 @@ def _setup_ready(root: Path) -> None:
         refuse(f"run minimoi_1_2_prod_setup.py apply first; missing: {sorted(missing)}")
 
 
+BOARD_PAIR_FIELDS = ("key_id", "principal", "actor", "environment", "domain", "secret_hex", "numeric_user_id")
+
+
+def _board_pair_problem(root: Path) -> str:
+    """Names the fields that differ between the Board's two sides, never their values. '' when they agree."""
+    try:
+        rows = json.loads(read_private(root, BOARD_KEYS))["profiles"]
+        profile = json.loads(read_private(root, BOARD_PROFILE))
+    except (OSError, ValueError, KeyError, TypeError):
+        return "unreadable"
+    if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict) or not isinstance(profile, dict):
+        return "not one profile"
+    row = rows[0]
+    fields = [name for name in BOARD_PAIR_FIELDS if name not in row or name not in profile or row[name] != profile[name]]
+    if row.get("environment") != "prod" and "environment" not in fields:
+        fields.append("environment")
+    if set(row.get("capabilities") or ()) != set(BOARD_CAPABILITIES):
+        fields.append("capabilities")
+    return ", ".join(fields)
+
+
 def _board_files(root: Path, doc: dict, out: Outcome) -> None:
     have = [os.path.lexists(root / rel) for rel in (BOARD_PROFILE, BOARD_KEYS)]
     if all(have):
+        problem = _board_pair_problem(root)
+        if problem:
+            refuse(f"the Board key pair does not agree, nothing changed: {problem}")
         out.kept += [BOARD_PROFILE, BOARD_KEYS]
         return
     if any(have):
@@ -464,6 +488,12 @@ def _task_store(root: Path, out: Outcome) -> None:
     journal = root / STORE_JOURNAL
     if setup._linked(root, STORE_JOURNAL):
         refuse(f"a symlink on the way to {STORE_JOURNAL}")
+    # A blank journal is only right for a new store. Over existing records it would make them unaccounted for.
+    store = journal.parent.parent
+    if not os.path.lexists(journal) and store.exists():
+        held = [p for p in store.rglob("*") if not p.is_dir()]
+        if held:
+            refuse(f"the task store holds {len(held)} file(s) but no journal: not a new store, nothing changed")
     for folder in (journal.parent.parent, journal.parent):
         if not folder.exists():
             folder.mkdir(mode=0o700)
@@ -504,9 +534,15 @@ def group_local(root: Path, doc: dict, out: Outcome) -> None:
 
 # ---- docker -----------------------------------------------------------------------------------------------------------
 
+DOCKER_TARGET_VARS = ("DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH")
+
+
 def docker(*args, stdin=None, timeout=300):
     """Output comes back to this process only, and is never echoed. Values go by stdin, never argv."""
-    return subprocess.run([DOCKER, *args], input=stdin, capture_output=True, text=True, timeout=timeout, check=False)
+    # This host's own daemon only: a remote target would write credentials here and change services there.
+    env = {k: v for k, v in os.environ.items() if k not in DOCKER_TARGET_VARS}
+    return subprocess.run([DOCKER, "--context", "default", *args], input=stdin, capture_output=True, text=True, timeout=timeout,
+                          check=False, env=env)
 
 
 def _running(container: str) -> bool:
@@ -775,8 +811,7 @@ def check(root: Path, inputs: str = "") -> dict:
     if setup.status(root, BINDINGS, directory=False) == "present":
         agree.update({f"seat {seat} matches its token": same for seat, same in _seats_match(root).items()})
     if files[BOARD_KEYS] == files[BOARD_PROFILE] == "present":
-        keys = json.loads(read_private(root, BOARD_KEYS))["profiles"][0]
-        agree["Board key pair"] = keys["secret_hex"] == json.loads(read_private(root, BOARD_PROFILE))["secret_hex"]
+        agree["Board key pair"] = not _board_pair_problem(root)
     subject = _env_value(env_lines, "MINIMOI_PARTNERSHIP_OWNER_SUBJECT")
     if subject is not None:
         agree["owner subject form"] = subject == f"owner:{OWNER}"

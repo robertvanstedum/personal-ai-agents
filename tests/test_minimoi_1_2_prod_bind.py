@@ -37,6 +37,8 @@ FAKE_DOCKER = r'''#!PYTHON
 import json, os, sys
 base = os.environ["FAKE_DOCKER_DIR"]
 argv = sys.argv[1:]
+assert argv[:2] == ["--context", "default"], argv
+argv = argv[2:]
 with open(base + "/argv.log", "a") as f:
     f.write(json.dumps(argv) + "\n")
 config = json.load(open(base + "/config.json"))
@@ -969,3 +971,41 @@ def test_backup_names_match_production():
     assert "container_name: minimoi-mc-agent" in mc
     assert 'S3_BUCKET="s3://minimoi-backups"' in (REPO / "scripts/backup_s3.sh").read_text()
     assert "set -x" not in re.sub(r"#.*", "", script)
+
+
+def test_docker_calls_stay_on_this_hosts_daemon(monkeypatch):
+    seen = {}
+
+    def fake_run(argv, **kwargs):
+        seen.update(argv=argv, env=kwargs["env"])
+        return subprocess.CompletedProcess(argv, 0, "", "")
+    monkeypatch.setenv("DOCKER_HOST", "tcp://elsewhere:2375")
+    monkeypatch.setenv("DOCKER_CONTEXT", "elsewhere")
+    monkeypatch.setattr(bind.subprocess, "run", fake_run)
+    bind.docker("ps")
+    assert seen["argv"][1:4] == ["--context", "default", "ps"]
+    assert not {"DOCKER_HOST", "DOCKER_CONTEXT"} & set(seen["env"])
+
+
+def test_a_store_with_records_and_no_journal_is_refused(host):
+    store = host.root / setup.STATE / "partnership/store"
+    (store / "tasks").mkdir(parents=True)
+    (store / "tasks/one.json").write_text("{}")
+    with pytest.raises(SystemExit, match="no journal"):
+        host.apply(["local"])
+    assert not (store / "journal/journal.jsonl").exists()
+
+
+@pytest.mark.parametrize("field,value", [("key_id", "other"), ("principal", "someone"), ("environment", "dev"),
+                                         ("secret_hex", "00"), ("numeric_user_id", 7)])
+def test_a_board_pair_that_differs_anywhere_is_refused_and_left_alone(host, field, value):
+    host.apply(["local"])
+    path = host.root / bind.BOARD_KEYS
+    doc = json.loads(path.read_text())
+    doc["profiles"][0][field] = value
+    path.write_text(json.dumps(doc))
+    before = path.read_bytes()
+    assert field in bind._board_pair_problem(host.root)
+    with pytest.raises(SystemExit, match="does not agree"):
+        host.apply(["local"])
+    assert path.read_bytes() == before
