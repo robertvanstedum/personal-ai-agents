@@ -378,6 +378,7 @@ def _one_line(text, limit=120):
 
 def admissions(user=None):
     """Work cards waiting for Robert's approval: pending admissions whose task has not moved on."""
+    import requests
     from flask import jsonify
     from services.partnership_tasks.client import TaskServiceUnavailable
     client = _client(user)
@@ -392,7 +393,7 @@ def admissions(user=None):
                         "approval": _standing_approval(r, now),
                         "conversation_id": _origin_conversation(client, r["task_id"]),
                         "card": _card_summary((ob or {}).get("packet"))})
-    except TaskServiceUnavailable:
+    except (TaskServiceUnavailable, requests.RequestException):      # a raw connection error must not become a 500
         return json_error("unavailable", "The task service could not confirm the current state. Try Refresh.", 503)
     return jsonify(admissions=out)
 

@@ -200,3 +200,21 @@ def test_a_source_outside_cos_history_is_null():
             return {"task": {"interpretation_ref": "IN-1"}, "interpretation": {"source_event_ids": ["SE-1"]},
                     "source_event": {"source": {"store": "portal-owner-action", "id": "a:b"}}}[kind]
     assert T._origin_conversation(Records(), "TK-1") is None
+
+
+def test_a_raw_connection_error_reading_cards_is_unavailable_not_a_500(monkeypatch):
+    """The contract's 503 ``unavailable``: the client's get and outbox read can raise requests' own errors."""
+    import requests
+    from flask import Flask
+    from minimoi_portal.guild_ui import tasks_owner_api as api
+
+    class Broken:
+        def outbox_pending(self):
+            raise requests.ConnectionError("no route")
+
+    monkeypatch.setattr(api, "_client", lambda user=None: Broken())
+    with Flask(__name__).test_request_context():
+        got = api.admissions()
+    response = got if not isinstance(got, tuple) else got[0]
+    status = response.status_code if not isinstance(got, tuple) else got[1]
+    assert status == 503 and response.get_json()["error"] == "unavailable"
