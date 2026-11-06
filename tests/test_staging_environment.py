@@ -485,9 +485,9 @@ def _routes(path):
 
 def test_staging_gateway_keeps_production_names_and_settings():
     prod, staging = _load(GATEWAY_PROD), _load(GATEWAY_STAGING)
-    # Production's names plus MC and the explicitly requested local regression route.
+    # Production's names (MC's discussion route last) plus the explicitly requested local regression route.
     assert [m["model_name"] for m in staging["model_list"]] == \
-        [m["model_name"] for m in prod["model_list"]] + ["minimoi-mc-agent", "minimoi-cos-agent-local"]
+        [m["model_name"] for m in prod["model_list"]] + ["minimoi-cos-agent-local"]
     for block in ("router_settings", "general_settings"):
         assert staging[block] == prod[block], block
     # litellm_settings: production's, plus exactly the staging-only usage recorder (usage-record U1).

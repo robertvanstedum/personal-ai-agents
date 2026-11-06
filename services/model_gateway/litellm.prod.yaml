@@ -71,11 +71,6 @@ model_list:
   # A role sets only what is its own: timeout, effort where it must differ from
   # its tier (the latency routes run without reasoning), and its receipt
   # identity (model_info.id, fallback_position), which stays put across switches.
-  # MC's Guildhall discussion replies (services/rooms_worker/discussion.py): tool-free, reached only with its capped key.
-  - model_name: minimoi-mc-agent
-    litellm_params: {<<: *anthropic-low, timeout: 120}
-    model_info: {id: mc-guildhall-discussion, mode: chat, supports_function_calling: true}
-
   - model_name: minimoi-cos-agent
     litellm_params: {<<: *anthropic-low, timeout: 120}
     model_info: {id: cos-xai-primary, mode: chat, supports_function_calling: true, fallback_position: 0}
@@ -125,6 +120,11 @@ model_list:
       id: voice-intent-xai
       base_model: xai/grok-4.3
       mode: chat
+
+  # MC's Guildhall discussion replies (services/rooms_worker/discussion.py): tool-free, reached only with its capped key.
+  - model_name: minimoi-mc-agent
+    litellm_params: {<<: *anthropic-low, timeout: 120}
+    model_info: {id: mc-guildhall-discussion, mode: chat, supports_function_calling: true}
 
 router_settings:
   fallbacks:
