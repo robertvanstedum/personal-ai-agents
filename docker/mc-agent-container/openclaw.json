@@ -246,6 +246,7 @@
         "tools": {
           "profile": "full",
           "deny": [
+            "group:runtime",
             "group:messaging",
             "group:nodes",
             "group:automation",

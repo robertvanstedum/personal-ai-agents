@@ -138,7 +138,7 @@ class AgentAskToolTests(unittest.TestCase):
     def test_unavailable_when_the_front_door_is_off_or_the_rule_is_not_tier_2(self):
         self.say("Ask Codex to check.")
         off = self.service(asks=None)
-        self.assertEqual(self.call(off, {"to": "codex", "title": "Check"})["code"], "tool_unavailable")
+        self.assertEqual(self.call(off, {"to": "codex", "title": "Check"})["code"], "agent_requests_off")
         self.assertEqual(self.call(self.service(), {"to": "codex", "title": "Check"}, tier=1)["code"],
                          "tool_unavailable")
         self.assertEqual(self.requests(), [])

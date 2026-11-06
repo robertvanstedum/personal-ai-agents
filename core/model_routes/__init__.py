@@ -123,7 +123,8 @@ def snapshot(catalogue: dict, role_name: str, conv: dict | None = None) -> dict:
     return {"route_id": route["route_id"], "agent": agent, "role": role_name, "tier": route["tier"],
             "provider": route["provider"], "model": route["model"], "reasoning_effort": route["reasoning_effort"],
             "billing_mode": route["billing_mode"], "runtime": route["runtime"],
-            "runtime_override": route.get("runtime_override", True), "catalogue_revision": catalogue["revision"],
+            "runtime_override": route.get("runtime_override", True),
+            "session_history": route.get("session_history", "shared"), "catalogue_revision": catalogue["revision"],
             "selection_revision": int(selection.get("revision") or 0)}
 
 
@@ -151,7 +152,7 @@ def served_receipt(route: dict | None, served: dict | None) -> dict | None:
         matches = served.get("provider") in (route["provider"], route.get("runtime")) and served.get("model") == route["model"]
     return {"route_id": route["route_id"], "role": route["role"], "tier": route["tier"], "provider": route["provider"],
             "model": route["model"], "reasoning_effort": route["reasoning_effort"], "billing_mode": route["billing_mode"],
-            "catalogue_revision": route["catalogue_revision"], "served": served or None, "served_matches": matches}
+            "catalogue_revision": route["catalogue_revision"], "runtime": route.get("runtime"), "served": served or None, "served_matches": matches}
 
 
 def relay_routes(catalogue: dict, agent: str = "mc") -> dict:

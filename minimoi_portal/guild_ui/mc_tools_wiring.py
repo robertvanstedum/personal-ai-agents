@@ -455,6 +455,25 @@ def conversation_exporter(services, principal):
     return export
 
 
+def continuity_reader(services, principal):
+    """``read(conversation_id, note_request_id, after_id) -> notes``: this owner's on-record notes before his current one,
+    under the same fresh authorization as the conversation export. Anything else raises."""
+    authorize = conversation_exporter(services, principal).authorize
+
+    def read(conversation_id, note_request_id, after_id):
+        conv = authorize(conversation_id)
+        base = services.floor
+        floor = base if base.floor == conv['notes_floor'] else base.for_floor(conv['notes_floor'])
+        rows = floor.notes_before_snapshot(note_request_id, principal, after_id)
+        if any(r.get('author_kind') == 'owner' and r.get('who') != principal for r in rows):
+            raise ValueError('notes_snapshot_unavailable')
+        fresh = authorize(conversation_id)
+        if any(fresh.get(k) != conv.get(k) for k in ('principal', 'notes_floor', 'scope', 'record_mode')):
+            raise ValueError('notes_snapshot_unavailable')
+        return rows
+    return read
+
+
 def proposal_reader(services, principal):
     """``read_shown(conversation_id, note_key) -> note | None``: the platform's own note under that key, read back from
     the owner's conversation, so an offer becomes approvable only once its card is really there (spec §9.1, A04).

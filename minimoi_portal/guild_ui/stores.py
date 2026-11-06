@@ -340,6 +340,20 @@ class FloorStores(BoardMixin):
             return [_note(row) for row in rows]
         return self._run(work, write=False)
 
+    def notes_before_snapshot(self, request_id: str, principal: str, after_id: int, limit: int = 200):
+        """One MVCC statement: the newest on-record notes after ``after_id`` and before this exact owned owner note, oldest first."""
+        if not isinstance(request_id, str) or not request_id or not isinstance(principal, str) or not principal:
+            raise FloorStoreUnavailable('notes_snapshot_unavailable')
+        def work(q):
+            boundary = q("SELECT id FROM guild.floor_messages WHERE floor=%s AND request_id=%s AND author=%s "
+                         "AND author_kind='owner' AND record_mode='on_record'", [self.floor, request_id, principal])
+            if not boundary:
+                raise FloorStoreUnavailable('notes_snapshot_unavailable')
+            rows = q(f"SELECT {_NOTE_COLS} FROM guild.floor_messages WHERE floor=%s AND record_mode='on_record' "
+                     "AND id > %s AND id < %s ORDER BY id DESC LIMIT %s", [self.floor, after_id, boundary[0][0], limit])
+            return [_note(row) for row in reversed(rows)]
+        return self._run(work, write=False)
+
     def list_postits(self) -> SourceResult:
         return self._read(lambda q: {"postits": self._active(q), "bin_total": self._count(q, binned=True)})
 

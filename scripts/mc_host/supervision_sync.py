@@ -29,6 +29,10 @@ import urllib.request
 
 ENDPOINT = os.environ.get("MINIMOI_SUPERVISION_URL", "https://minimoi.ai/internal/supervision/v1/worker")
 ALLOWED = ("https://minimoi.ai/internal/supervision/v1/worker", "https://dev.minimoi.ai/internal/supervision/v1/worker")
+ACCOUNT = os.environ.get("MINIMOI_SUPERVISION_KEYCHAIN_ACCOUNT", "sync_token")     # another environment has its own token
+# Dev's sync (install_supervision_sync_dev.sh) relays only Robert's requests and their replies: stop lines, decision asks
+# and the agents' other exchanges stay with production.
+RELAY_ONLY = os.environ.get("MINIMOI_SUPERVISION_RELAY_ONLY") == "1"
 ROOT = Path(os.environ.get("MINIMOI_SUPERVISION_DIR") or Path.home() / ".minimoi" / "supervision")
 LEDGER = Path(os.environ.get("MINIMOI_AGENT_REQUESTS_DIR") or Path.home() / "minimoi-staging/data/guild/agent_requests")
 # The MC worker's own ledger (core/agent_requests/direct_contact.Outbox): read for the mirror too.
@@ -59,7 +63,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def token():
-    value = subprocess.run(["security", "find-generic-password", "-s", "minimoi_supervision", "-a", "sync_token", "-w"],
+    value = subprocess.run(["security", "find-generic-password", "-s", "minimoi_supervision", "-a", ACCOUNT, "-w"],
                            capture_output=True, text=True, timeout=10).stdout.strip()
     if not 32 <= len(value) <= 256:
         sys.exit("supervision sync: no token in the Keychain (run install_supervision_sync.sh)")
@@ -318,9 +322,9 @@ def relay_up(secret, now):
 
 def up(secret, now=None):
     now = now or time.time()
-    stops, asks = _pending("stops", 20), _pending("asks", 5)
+    stops, asks = ([], []) if RELAY_ONLY else (_pending("stops", 20), _pending("asks", 5))
     seen = _sent_keys()
-    news = exchanges(seen, now)
+    news = [] if RELAY_ONLY else exchanges(seen, now)
     answer = {}
     if stops or asks or news:
         body = {"phase": "report", "stops": [json.loads(f.read_text()) for f in stops],

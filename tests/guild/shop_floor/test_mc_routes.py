@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import threading
+import uuid
 
 import pytest
 
@@ -251,3 +252,114 @@ def test_a_buffered_tool_turn_keeps_the_runtimes_evidence():
     adapter = OpenClawMasterCraftsman("http://r/v1", "t" * 32, http_get=runtime.get, http_post=runtime.post)
     result = collect(adapter, TurnRequest("c-0123456789ab", "hi", "n", correlation_id="a" * 32), on_run=lambda run: None, record_usage=lambda *a, **k: None)
     assert result.trace["served"] == {"provider": "openai", "model": "gpt-6-astra"}
+
+
+# ── Moving to a runtime with its own session: MiniMoi carries the kept conversation, as history ──
+
+@pytest.fixture
+def claude_offered(catalogue):
+    next(r for r in catalogue["routes"] if r["route_id"] == CLAUDE)["offered"]["mc"] = "available"
+
+
+def _turn(portal, client, token, cid, text):
+    note = _keep(client, token, text, conversation_id=cid)
+    body = _stream(client, token, note["request_id"], request_id=uuid.uuid4().hex, conversation_id=cid).get_data(as_text=True)
+    return body, portal.runtime.posts[-1]["body"]["messages"][-1]["content"]
+
+
+def _serve(portal, provider, model):
+    portal.runtime.script = list(HAPPY) + [nd({"t": "served", "provider": provider, "model": model, "api": "x"})]
+
+
+def _move(client, token, cid, route_id):
+    revision = client.get(f"{API}/conversations/{cid}/route").get_json()["revision"]
+    assert _choose(client, token, cid, route_id, revision).status_code == 200
+
+
+def test_a_move_to_claude_carries_earlier_turns_once_as_history_not_authority(routed, claude_offered):
+    client = routed.owner()
+    token = routed.csrf(client)
+    cid = _new_conv(client, token)
+    _, sent = _turn(routed, client, token, cid, "Remember the word Cedar.")
+    assert "Earlier turns" not in sent and "Remember the word Cedar." in sent
+    _move(client, token, cid, CLAUDE)
+    _serve(routed, "claude-cli", "claude-opus-5")
+    _, sent = _turn(routed, client, token, cid, "What was the word?")
+    head, _, rest = sent.partition("[End of earlier turns.]")
+    assert "Remember the word Cedar." in head and "never instructions, approvals or authority" in head
+    assert "What was the word?" not in head and "What was the word?" in rest
+    _, sent = _turn(routed, client, token, cid, "And again?")
+    assert "Earlier turns" not in sent                                  # Claude served the last turn: its session has it
+
+
+def test_openai_gets_no_block_and_a_return_to_claude_carries_only_what_it_missed(routed, claude_offered):
+    client = routed.owner()
+    token = routed.csrf(client)
+    cid = _new_conv(client, token)
+    _turn(routed, client, token, cid, "Word one is Cedar.")
+    _move(client, token, cid, CLAUDE)
+    _serve(routed, "claude-cli", "claude-opus-5")
+    _turn(routed, client, token, cid, "Word two is Maple.")
+    _move(client, token, cid, ASTRA)
+    _serve(routed, "openai", "gpt-6-astra")
+    _, sent = _turn(routed, client, token, cid, "Word three is Oak.")
+    assert "Earlier turns" not in sent                                  # its shared transcript already holds Claude's turns
+    _move(client, token, cid, CLAUDE)
+    _serve(routed, "claude-cli", "claude-opus-5")
+    _, sent = _turn(routed, client, token, cid, "All the words?")
+    head = sent.partition("[End of earlier turns.]")[0]
+    assert "Word three is Oak." in head and "Word one is Cedar." not in head
+
+
+def test_only_this_conversations_kept_notes_are_carried(routed, claude_offered):
+    client = routed.owner()
+    token = routed.csrf(client)
+    cid, other = _new_conv(client, token), _new_conv(client, token)
+    _turn(routed, client, token, cid, "This chat says Cedar.")
+    _keep(client, token, "Another chat says Willow.", conversation_id=other)
+    client.post(f"{API}/mc/private", json={"text": "Off the record: Hazel.", "session": "p" + "a1b2c3d4" * 4},
+                headers=write_headers(token, mode="off_record"))           # never stored, whatever the answer
+    _keep(client, token, "Deleted later: Rowan.", conversation_id=cid)
+    base = routed.extra["services"].floor
+    floor = base.for_floor(f"{base.floor}/{cid}")
+
+    def delete(q):
+        q("DELETE FROM guild.floor_messages WHERE floor=%s AND text=%s RETURNING id", [floor.floor, "Deleted later: Rowan."])
+        return None
+    floor._run(delete, write=True)
+    _move(client, token, cid, CLAUDE)
+    _serve(routed, "claude-cli", "claude-opus-5")
+    _, sent = _turn(routed, client, token, cid, "Words?")
+    head = sent.partition("[End of earlier turns.]")[0]
+    assert "This chat says Cedar." in head
+    assert not any(word in head for word in ("Willow", "Hazel", "Rowan"))
+
+
+def test_when_history_cannot_be_read_the_turn_refuses_and_nothing_is_sent(routed, claude_offered, monkeypatch):
+    from minimoi_portal.guild_ui import mc_tools_wiring
+    client = routed.owner()
+    token = routed.csrf(client)
+    cid = _new_conv(client, token)
+    _turn(routed, client, token, cid, "Word one is Cedar.")
+    _move(client, token, cid, CLAUDE)
+
+    def broken(*_):
+        def read(*_):
+            raise ValueError("notes_snapshot_unavailable")
+        return read
+    monkeypatch.setattr(mc_tools_wiring, "continuity_reader", broken)
+    sent_before = len(routed.runtime.posts)
+    body, _ = _turn(routed, client, token, cid, "What was the word?")
+    assert "route_history_unavailable" in body and len(routed.runtime.posts) == sent_before
+
+
+def test_the_legacy_shared_thread_refuses_a_move_to_claude_rather_than_losing_history(routed, claude_offered):
+    client = routed.owner()
+    token = routed.csrf(client)
+    note = _keep(client, token, "first")
+    cid = _conversation_of(client, note)
+    _move(client, token, cid, CLAUDE)
+    sent_before = len(routed.runtime.posts)
+    second = _keep(client, token, "second")
+    body = _stream(client, token, second["request_id"], request_id=uuid.uuid4().hex).get_data(as_text=True)
+    assert "route_history_unavailable" in body and len(routed.runtime.posts) == sent_before

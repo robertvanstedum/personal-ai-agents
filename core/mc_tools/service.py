@@ -48,6 +48,7 @@ _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"        # no 0/O or 1/I/L: Rob
 AGENT_NAMES = {"claude-code": "Claude Code", "codex": "Codex"}
 ASK_AGENTS = ("claude-code", "codex", "grok")                # minimoi_agent_ask: who can be asked; "all" is the three
 REFUSED_WORDS = {
+    "agent_requests_off": "Asking the agents is switched off here, so nothing was recorded or sent.",
     "tool_turn_not_live": "This tool only works inside Robert's own live turn, and that turn is no longer running. Nothing was done.",
     "tool_session_invalid": "This conversation is not one MiniMoi can act in. Nothing was done.",
     "tool_unknown": "There is no such MiniMoi tool. Nothing was done.",
@@ -960,7 +961,9 @@ class ToolService:
         ones Robert's own words ask (checked before anything is recorded). The ledger ids come from the note, so a
         retry (a new call id, a crash after the write) never makes a second request; the receipt finishes from the
         ledger's own answer, and the words say only what is known (recorded, and whether a listener was seen)."""
-        if self.agent_ask is None or not self._tier2(caller):
+        if self.agent_ask is None:
+            return refused("agent_requests_off")
+        if not self._tier2(caller):
             return refused("tool_unavailable")
         if "all" in args["to"] and len(args["to"]) > 1:
             return refused("tool_argument_invalid")

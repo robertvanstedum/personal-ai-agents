@@ -352,3 +352,27 @@ class ContentHashTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_dev_sync_relays_only_and_reads_its_own_token(monkeypatch, tmp_path):
+    """Dev's sync sends none of production's stop lines, decision asks or exchanges, and uses its own Keychain entry."""
+    import importlib.util
+    import pathlib
+    import subprocess
+    monkeypatch.setenv("MINIMOI_SUPERVISION_RELAY_ONLY", "1")
+    monkeypatch.setenv("MINIMOI_SUPERVISION_KEYCHAIN_ACCOUNT", "sync_token_dev")
+    monkeypatch.setenv("MINIMOI_SUPERVISION_DIR", str(tmp_path))
+    source = pathlib.Path(__file__).resolve().parents[2] / "scripts/mc_host/supervision_sync.py"
+    spec = importlib.util.spec_from_file_location("dev_sync_under_test", source)
+    sync = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sync)
+    asked = []
+    monkeypatch.setattr(subprocess, "run", lambda args, **kw: asked.append(args) or type("R", (), {"stdout": "t" * 40})())
+    assert sync.token() == "t" * 40 and "sync_token_dev" in asked[0]
+    monkeypatch.setattr(sync, "_pending", lambda *a: (_ for _ in ()).throw(AssertionError("pending read")))
+    monkeypatch.setattr(sync, "exchanges", lambda *a: (_ for _ in ()).throw(AssertionError("exchanges read")))
+    calls = []
+    monkeypatch.setattr(sync, "call", lambda body, secret: calls.append(body) or {})
+    monkeypatch.setattr(sync, "relay_up", lambda secret, now: {})
+    sync.up("t" * 40)
+    assert calls == []

@@ -1651,12 +1651,14 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
     sent_text = note["text"]                    # the owner's own words, as he wrote them (#406)
     agent_state = _agent_state(conv)
     route, route_refusal = _route_snapshot(services, conv)       # fixed for this whole turn; a later change is the next turn's
+    if route_refusal is None:
+        carried, route_refusal = _carried_history(services, conv, principal, route, note)
     if route_refusal is not None:
         return "refused", {"error": route_refusal.code, "message": route_refusal.message}, 409
 
     def request_for(built):
         return TurnRequest(conversation_id=session_conversation_id(conv, principal), route=route,
-                           text=_with_context(_with_agent(_with_files(sent_text, built), agent_state), sent_text, conv, principal),
+                           text=carried + _with_context(_with_agent(_with_files(sent_text, built), agent_state), sent_text, conv, principal),
                            note_request_id=note_id, correlation_id=turn_id,
                            context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
 
@@ -1698,7 +1700,7 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
         _mc_release(principal)
         DISPATCHED.forget(request_id)
         raise
-    events = _with_route_receipt(events, route, turn_id, _route_recorder(conversations, conv, principal))
+    events = _with_route_receipt(events, route, turn_id, _route_recorder(conversations, conv, principal), note.get("id"))
     if observe is not None:
         events = observe(events)
     turns = turn_log_of(services)
@@ -2037,18 +2039,35 @@ def _route_recorder(conversations, conv, principal):
     """Keep what a turn was sent on and what the runtime's record showed. A failure here never touches the turn."""
     from core.model_routes import served_receipt
 
-    def record(route, turn_id, served):
+    def record(route, turn_id, served, through_note_id=None):
         if route is None:
             return
         try:
-            receipt = {**served_receipt(route, served), "turn_id": turn_id, "at": now_iso()}
+            receipt = {**served_receipt(route, served), "turn_id": turn_id, "at": now_iso(), "through_note_id": through_note_id}
             conversations.record_route_turn(conv["id"], principal, route["agent"], receipt)
         except Exception:
             _mc_log().warning("mc turn %s: route receipt not kept", turn_id)
     return record
 
 
-def _with_route_receipt(events, route, turn_id, record):
+def _carried_history(services, conv, principal, route, note):
+    """(history block, refusal). What a runtime with its own session has not seen, when it did not serve the last turn."""
+    from core.model_routes import RouteRefused, selection_of
+    from . import mc_continuity
+    from .mc_tools_wiring import continuity_reader
+    from .payment_scrub import scrub
+    after = mc_continuity.carry_after(route, selection_of(conv, route["agent"])) if route else None
+    if after is None:
+        return "", None
+    try:
+        return mc_continuity.block(continuity_reader(services, principal)(conv["id"], note["request_id"], after), scrub=scrub), None
+    except Exception as exc:
+        _mc_log().warning("model routes: history could not be carried (%s: %s)", type(exc).__name__, str(exc)[:60])
+        return "", RouteRefused("route_history_unavailable", "The earlier turns of this conversation could not be carried "
+                                                             "to this model. Nothing was sent. Choose another under Options.")
+
+
+def _with_route_receipt(events, route, turn_id, record, through_note_id=None):
     """Take the runtime's evidence out of the event stream and keep it; every other event passes untouched. The
     receipt is written when the stream ends, however it ends: no evidence stays no evidence, never the selection."""
     from .mc.stream import Served
@@ -2060,7 +2079,7 @@ def _with_route_receipt(events, route, turn_id, record):
                 continue
             yield event
     finally:
-        record(route, turn_id, served)
+        record(route, turn_id, served, through_note_id)
 
 
 @owner_api
@@ -2372,6 +2391,8 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         return {"error": "files_unsupported", "message": f"The {getattr(services.mc, 'display_name', 'assistant')} does not read "
                 "attached documents. Your note is kept; nothing was sent."}, 422
     route, route_refusal = _route_snapshot(services, conv)       # fixed for this whole turn; a later change is the next turn's
+    if route_refusal is None:
+        carried, route_refusal = _carried_history(services, conv, principal, route, note)
     if route_refusal is not None:
         return {"error": route_refusal.code, "message": route_refusal.message}, 409
     if not _mc_acquire(principal):
@@ -2423,7 +2444,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             turn_context["host_channel"] = MANAGED_VOICE_CHANNEL
         elif services.mc.kind == "openclaw" and host_channel is VOICE_MARKER:
             turn_context["host_channel"] = VOICE_MARKER          # the OpenClaw adapter translates it (Spec 164 §9)
-        req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=context_text, route=route,
+        req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=carried + context_text, route=route,
                           note_request_id=note_id, correlation_id=turn_id, context=turn_context)
         _mc_log().info("mc turn %s start backend=%s files=%d", turn_id, services.mc.kind, len(files.report) if files else 0)
         _files_recorder(conversations, conv, principal, note_id, files)()
@@ -2439,7 +2460,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             result = collect(services.mc, req, on_run=tools.attach_run)
         else:
             result = services.mc.turn(req)
-        _route_recorder(conversations, conv, principal)(route, turn_id, (result.trace or {}).get("served"))
+        _route_recorder(conversations, conv, principal)(route, turn_id, (result.trace or {}).get("served"), note.get("id"))
         duration_ms = int((time.monotonic() - started) * 1000)
         job_started = None
         if delivery and result.status == "answered" and (result.trace or {}).get("finish_reason") == "length":
