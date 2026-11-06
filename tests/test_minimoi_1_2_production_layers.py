@@ -1,0 +1,103 @@
+"""Production layers for plan failover and the offered Grok API route. No host, no secret values."""
+import json
+import re
+
+import yaml
+
+from scripts.operations import minimoi_1_2_prod_setup as setup
+
+
+def _root():
+    from pathlib import Path
+    return Path(__file__).resolve().parents[1]
+
+
+def _compose(name):
+    return yaml.safe_load((_root() / name).read_text())
+
+
+def _text(name):
+    return (_root() / name).read_text()
+
+
+LAYERS = (
+    "docker-compose.minimoi-1-2-production.yml",
+    "docker-compose.mc-1-2-production.yml",
+)
+
+
+def test_cos_keeps_route_a_and_offers_grok_only_as_api():
+    env = _compose(LAYERS[0])["services"]["cos-agent-a"]["environment"]
+    assert env["COS_PLAN_MODEL"] == "openai/gpt-6-astra"
+    assert env["COS_PLAN_ROUTES"] == "openai/gpt-6-sol,openai/gpt-6-luna"
+    assert env["COS_RUNTIME_MODEL_ACCESS"] == "plan"
+    assert env["COS_METERED_ROUTES"] == "minimoi-gateway/minimoi-xai-low"
+    assert "xai" not in env["COS_FAILOVER_ROUTES"]
+    assert env["COS_FAILOVER_ROUTES"].split(",") == [
+        "minimoi-gateway/minimoi-openai-strong",
+        "minimoi-gateway/minimoi-openai-mid",
+        "minimoi-gateway/minimoi-openai-low",
+    ]
+    # CoS's capped key stays where docker-compose.prod.yml mounts it, the path the code reads by default.
+    assert "COS_GATEWAY_KEY_FILE" not in env
+    assert "/run/cos-key" in _text("docker-compose.prod.yml")
+    assert "fallbacks" not in _text(LAYERS[0])
+
+
+def test_mc_plan_settings_are_required_and_have_no_compose_default():
+    env = _compose(LAYERS[1])["services"]["mc-agent"]["environment"]
+    required = {
+        "MC_RUNTIME_MODEL_ACCESS": "MINIMOI_MC_RUNTIME_MODEL_ACCESS",
+        "MC_PLAN_MODEL": "MINIMOI_MC_PLAN_MODEL",
+        "MC_PLAN_ROUTES": "MINIMOI_MC_PLAN_ROUTES",
+        "MC_PLAN_AUTH_PROFILE": "MINIMOI_MC_PLAN_AUTH_PROFILE",
+        "MC_MODEL_GATEWAY_KEY": "MINIMOI_MC_MODEL_GATEWAY_KEY",
+    }
+    for key, variable in required.items():
+        assert env[key] == f"${{{variable}:?{env[key].split(':?', 1)[1]}"
+        assert ":-" not in env[key]
+    assert "openai/gpt-6-astra" in env["MC_PLAN_MODEL"]
+    assert env["MC_METERED_ROUTES"] == "minimoi-gateway/minimoi-xai-low"
+    assert "xai" not in env["MC_FAILOVER_ROUTES"]
+    assert "minimoi-gateway/minimoi-openai-strong" in env["MC_FAILOVER_ROUTES"]
+    assert "anthropic" not in env["MC_FAILOVER_ROUTES"]
+
+
+def test_relay_knows_the_plan_targets_and_the_grok_api_route():
+    env = _compose(LAYERS[1])["services"]["mc-relay"]["environment"]
+    routes = json.loads(env["MC_RELAY_ROUTES"])
+    assert routes["plan-openai-strong"] == "openai/gpt-6-astra"
+    assert routes["api-openai-strong"] == "minimoi-gateway/minimoi-openai-strong"
+    assert routes["api-xai-low"] == "minimoi-gateway/minimoi-xai-low"
+    assert all("xai" not in ref for route_id, ref in routes.items() if route_id.startswith("plan-"))
+    assert env["MC_RELAY_TOOL_STARTS"] == "/mc-state/mc-tool-starts"
+    assert env["MC_RELAY_CHAT_DB"] == "/mc-state/agents/mc-chat/agent/openclaw-agent.sqlite"
+
+
+def test_layers_create_nothing_and_carry_no_dev_values():
+    for name in LAYERS:
+        text = _text(name)
+        assert "minimoi-staging" not in text
+        value = _compose(name)
+        for service in value["services"].values():
+            for key, item in (service.get("environment") or {}).items():
+                assert key != "COS_BACKGROUND_JOBS"
+                assert item != "dev" and "minimoi-staging" not in str(item)
+        for service in value["services"].values():
+            for volume in service.get("volumes") or []:
+                if isinstance(volume, dict):
+                    assert volume["bind"]["create_host_path"] is False
+        for service in value["services"].values():
+            image = service.get("image")
+            if image:
+                assert ":?" in str(image) and ":-" not in str(image)
+        if name.endswith("mc-1-2-production.yml"):
+            assert text.count("immutable reviewed MC image digest required") == 2
+
+
+def test_secret_folders_are_on_the_setup_list():
+    folders = []
+    for name in LAYERS:
+        folders.extend(re.findall(r"MINIMOI_1_2_SECRETS:\?[^}]*\}/([a-z0-9-]+)", _text(name)))
+    assert folders
+    assert all(f"{setup.SECRETS}/{name}" in setup.FOLDERS for name in folders)

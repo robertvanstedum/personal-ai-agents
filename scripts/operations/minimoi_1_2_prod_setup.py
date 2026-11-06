@@ -97,6 +97,8 @@ BY_HAND = (
     "Robert's approval of MC's production policy",
     "Robert logs in again after the identity changes",
     "Gateway-issued discussion keys for Guildhall CoS and MC, each capped to its discussion route",
+    "CoS's own capped key for failover and Grok, $20 a month: scripts/operations/cos_prod.sh key 20",
+    "MC's one capped key for failover and Grok, $20 a month: MINIMOI_MC_MODEL_GATEWAY_KEY in MC's env file",
 )
 
 

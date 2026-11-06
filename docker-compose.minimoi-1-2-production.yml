@@ -19,6 +19,11 @@ services:
       COS_PLAN_MODEL: openai/gpt-6-astra
       COS_PLAN_ROUTES: openai/gpt-6-sol,openai/gpt-6-luna
       COS_PLAN_AUTH_PROFILE: ${MINIMOI_COS_PLAN_AUTH_PROFILE:?the plan sign-in profile on production required}
+      # OpenAI plan tiers only. Grok is not a failover target. The default above stays route A.
+      COS_FAILOVER_ROUTES: minimoi-gateway/minimoi-openai-strong,minimoi-gateway/minimoi-openai-mid,minimoi-gateway/minimoi-openai-low
+      # Offered pay-per-use API. Not a default and not a fallback. These and the failover targets use CoS's own capped key,
+      # already mounted at /run/cos-key by docker-compose.prod.yml (scripts/operations/cos_prod.sh key). Without it, neither is there.
+      COS_METERED_ROUTES: minimoi-gateway/minimoi-xai-low
       COS_ACTIONS_TOKEN_FILE: /run/secrets/cos-actions-token/token
     volumes:
       - {type: bind, source: "${MINIMOI_1_2_SECRETS:?existing production-only secrets folder required}/cos-bound", target: /run/secrets/cos-bound, read_only: true, bind: {create_host_path: false}}

@@ -104,7 +104,7 @@ mc_failover_keygen_py() {
 # completions and responses (its bounded web search) only; a monthly budget;
 # rpm 60 (a CoS turn can make several calls: tools, the fallback, web search).
 # Like MC's, /key/info is not allowed (it would read other keys' records).
-COS_KEY_MODELS='["minimoi-cos-agent", "minimoi-cos-agent-xai-fast", "minimoi-cos-web-search", "minimoi-cos-agent-anthropic"]'
+COS_KEY_MODELS='["minimoi-cos-agent", "minimoi-cos-agent-xai-fast", "minimoi-cos-web-search", "minimoi-cos-agent-anthropic", "minimoi-openai-strong", "minimoi-openai-mid", "minimoi-openai-low", "minimoi-xai-low"]'
 COS_KEY_ROUTES='["/v1/chat/completions", "/chat/completions", "/v1/responses", "/responses"]'
 COS_KEY_BUDGET_DURATION="30d"
 COS_KEY_RPM=60

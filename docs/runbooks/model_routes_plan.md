@@ -89,7 +89,8 @@ stay as they are, whichever way these are set.
 - *Off, as shipped:* `"offered": {}` on that route. It isn't in the picker and can't be chosen.
 - *On:* on the host, the runtime must know it first, then one line in the host's catalogue:
   1. CoS: `COS_METERED_ROUTES=minimoi-gateway/minimoi-xai-low` on `cos-agent-a`, and add `minimoi-xai-low` to the models of
-     CoS's gateway key if it has its own (`/key/update` inside the gateway; a host on the master key needs nothing). Restart it.
+     CoS's own capped gateway key (`/key/update` inside the gateway). A host on the master key doesn't get the route: CoS starts
+     without it, and a Grok turn never spends on the master key. Restart it.
   2. MC: `MC_METERED_ROUTES=minimoi-gateway/minimoi-xai-low` and `MC_MODEL_GATEWAY_KEY` on `mc-agent`, a new capped key for that
      tier only (`mc_grok_keygen_py` in `scripts/staging/mc_keys.sh`). MC must be in plan mode with `MC_PLAN_MODEL` set. Add
      `"api-xai-low": "minimoi-gateway/minimoi-xai-low"` to `MC_RELAY_ROUTES` on `mc-relay`. Restart both (allow 10 minutes).

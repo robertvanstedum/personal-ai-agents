@@ -3,7 +3,7 @@
 # working skills, Robert, 26 Oct 2026; #215, #335; runbook docs/runbooks/cos_prod.md).
 #
 #   cos_prod.sh prepare           create CoS's folders (every main release runs this before the deploy; idempotent)
-#   cos_prod.sh key <dollars>     mint CoS's own capped key inside the gateway (CoS's four routes, chat completions and
+#   cos_prod.sh key <dollars>     mint CoS's own capped key inside the gateway (CoS's routes, its API failover tiers, Grok; chat completions and
 #                                 responses only, a 30-day budget, rpm 60) and recreate only cos-agent-a, which then uses
 #                                 it instead of the master key. A re-run rotates (the old key is deleted).
 #   cos_prod.sh key off           back to the master key: the key file moves to /root, cos-agent-a is recreated
@@ -23,7 +23,7 @@ KEY_DIR=$COS/agent-key
 KEY_FILE=$KEY_DIR/key
 AGENT=minimoi-cos-agent-a
 GATEWAY=minimoi-model-gateway
-MODELS='["minimoi-cos-agent", "minimoi-cos-agent-xai-fast", "minimoi-cos-web-search", "minimoi-cos-agent-anthropic"]'
+MODELS='["minimoi-cos-agent", "minimoi-cos-agent-xai-fast", "minimoi-cos-web-search", "minimoi-cos-agent-anthropic", "minimoi-openai-strong", "minimoi-openai-mid", "minimoi-openai-low", "minimoi-xai-low"]'
 ROUTES='["/v1/chat/completions", "/chat/completions", "/v1/responses", "/responses"]'
 
 log() { echo "cos-prod: $*"; }

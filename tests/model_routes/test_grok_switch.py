@@ -224,7 +224,7 @@ class TestCosRuntime:
         assert run.returncode == 0 and config == json.loads(COS_CONFIG.read_text())
 
     def test_on_a_gateway_host_it_is_allowed_never_primary_never_fallback(self, tmp_path):
-        run, config = _cos(tmp_path, {"COS_METERED_ROUTES": GROK_REF})
+        run, config = _cos(tmp_path, {"COS_METERED_ROUTES": GROK_REF, "COS_GATEWAY_KEY_CAPPED": "1"})
         assert run.returncode == 0, run.stderr
         pinned = json.loads(COS_CONFIG.read_text())
         assert "minimoi-xai-low" in [m["id"] for m in config["models"]["providers"]["minimoi-gateway"]["models"]]
@@ -234,12 +234,28 @@ class TestCosRuntime:
             assert agent["modelPolicy"]["allow"] == [*before["modelPolicy"]["allow"], GROK_REF]
 
     def test_on_a_plan_host_it_is_the_only_api_route_and_never_primary_or_fallback(self, tmp_path):
-        run, config = _cos(tmp_path, {**COS_PLAN_ENV, "COS_METERED_ROUTES": GROK_REF})
+        run, config = _cos(tmp_path, {**COS_PLAN_ENV, "COS_METERED_ROUTES": GROK_REF, "COS_GATEWAY_KEY_CAPPED": "1"})
         assert run.returncode == 0, run.stderr
         assert [m["id"] for m in config["models"]["providers"]["minimoi-gateway"]["models"]] == ["minimoi-xai-low"]
         for agent in [config["agents"]["defaults"], *config["agents"]["entries"].values()]:
             assert agent["model"] == {"primary": "openai/gpt-6-astra", "fallbacks": []}
             assert agent["modelPolicy"]["allow"] == ["openai/gpt-6-astra", "openai/gpt-6-sol", GROK_REF]
+
+    @pytest.mark.parametrize("access", [{}, COS_PLAN_ENV])
+    def test_without_a_capped_key_the_route_is_not_there_and_cos_still_starts(self, tmp_path, access):
+        no_file = {"COS_GATEWAY_KEY_FILE": str(tmp_path / "none")}
+        run, config = _cos(tmp_path, {**access, **no_file, "COS_METERED_ROUTES": GROK_REF})
+        assert run.returncode == 0, run.stderr
+        assert GROK_REF not in json.dumps(config)
+
+    def test_a_key_file_holding_the_master_key_is_not_a_capped_key(self, tmp_path):
+        master = "sk-" + "m" * 32
+        key = tmp_path / "key"
+        key.write_text(master + "\n")
+        env = {**COS_PLAN_ENV, "COS_METERED_ROUTES": GROK_REF, "COS_GATEWAY_KEY_FILE": str(key), "MINIMOI_MODEL_GATEWAY_KEY": master}
+        run, config = _cos(tmp_path, env)
+        assert run.returncode == 0, run.stderr
+        assert GROK_REF not in json.dumps(config)
 
     def test_a_plan_host_without_the_value_still_has_no_api_provider(self, tmp_path):
         run, config = _cos(tmp_path, COS_PLAN_ENV)

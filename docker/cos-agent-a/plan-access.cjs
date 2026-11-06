@@ -3,11 +3,13 @@
  * gateway config unchanged. In plan mode the model allowlist holds subscription models, there are no config fallbacks,
  * and the gateway provider is gone, unless a host names one of the two exceptions below. CoS's web search keeps its own key, a separate service.
  * The one exception is a host's explicit COS_METERED_ROUTES: Grok tiers an owner may choose per conversation, pay per use.
- * They are allowed, never a primary and never a fallback, in either mode.
+ * They are allowed, never a primary and never a fallback, in either mode, and only with the capped-key proof below: a Grok
+ * turn never spends on the master key. Without the proof the route isn't there, and CoS still starts.
  * COS_FAILOVER_ROUTES names a plan route's declared API target (core/model_routes catalogue, failover), same provider. Allowed
  * in plan mode only and never a config fallback: MiniMoi decides a switch from the turn's signal and tool evidence. It needs
  * proof CoS holds its own capped key, never the master key: the key file, or COS_GATEWAY_KEY_CAPPED=1 where a host passes
- * its own key by environment. Without that proof there is no target, so no switch; CoS still starts. */
+ * its own key by environment. A key file holding the master key isn't proof. Without that proof there is no target, so no
+ * switch; CoS still starts. */
 'use strict';
 const fs = require('node:fs');
 const REF = /^openai\/[a-zA-Z0-9._-]+$/;      // Claude needs its CLI in this image and its own limits first
@@ -21,11 +23,18 @@ function meteredRoutes(env) {
 }
 
 const FAILOVER = /^minimoi-gateway\/minimoi-openai-(?:strong|mid|low)$/;
+// This runs before apply-config.sh swaps the key file into MINIMOI_MODEL_GATEWAY_KEY, so that variable still holds the
+// master key here, and a key file equal to it is not a capped key.
 function cappedKey(env) {
   if (env.COS_GATEWAY_KEY_CAPPED === '1') return true;
   try {
-    return /^sk-[A-Za-z0-9_-]{16,200}$/.test(fs.readFileSync(env.COS_GATEWAY_KEY_FILE || '/run/cos-key/key', 'utf8').split('\n')[0].trim());
+    const key = fs.readFileSync(env.COS_GATEWAY_KEY_FILE || '/run/cos-key/key', 'utf8').split('\n')[0].trim();
+    return /^sk-[A-Za-z0-9_-]{16,200}$/.test(key) && key !== env.MINIMOI_MODEL_GATEWAY_KEY;
   } catch { return false; }
+}
+function offeredRoutes(env) {
+  const refs = meteredRoutes(env);
+  return refs.length && cappedKey(env) ? refs : [];
 }
 function failoverRoutes(env) {
   const refs = String(env.COS_FAILOVER_ROUTES || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -61,7 +70,7 @@ function routes(env) {
 }
 
 function apply(config, env) {
-  const offered = meteredRoutes(env);
+  const offered = offeredRoutes(env);
   if ((env.COS_RUNTIME_MODEL_ACCESS || 'gateway') === 'gateway') return offered.length ? offerOnGateway(config, offered) : config;
   if (env.COS_RUNTIME_MODEL_ACCESS !== 'plan') throw Error('Unknown COS model access');
   const metered = [...offered, ...failoverRoutes(env)];
@@ -80,7 +89,7 @@ function apply(config, env) {
 }
 
 function validate(config, env) {
-  const metered = [...meteredRoutes(env), ...failoverRoutes(env)], refs = routes(env), allow = [...refs, ...metered];
+  const metered = [...offeredRoutes(env), ...failoverRoutes(env)], refs = routes(env), allow = [...refs, ...metered];
   const providers = config.models?.providers || {};
   if (JSON.stringify(providers) !== JSON.stringify(metered.length ? {[GATEWAY]: gatewayProvider(metered)} : {})) throw Error('No API provider may remain in plan mode');
   for (const a of [config.agents.defaults, ...Object.values(config.agents.entries)]) {
@@ -97,4 +106,4 @@ if (require.main === module) {
   fs.writeFileSync(tmp, JSON.stringify(out, null, 2) + '\n', {mode: 0o600});
   fs.renameSync(tmp, file);
 }
-module.exports = {apply, validate, routes, meteredRoutes, failoverRoutes};
+module.exports = {apply, validate, routes, meteredRoutes, offeredRoutes, failoverRoutes};
