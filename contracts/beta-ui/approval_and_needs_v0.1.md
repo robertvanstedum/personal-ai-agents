@@ -61,3 +61,19 @@ Progress and result in the chat beyond approval. They arrive as CoS's own messag
 **Coming:** tag `Approve` for task proposals and work cards waiting for Robert, with an extra optional `href`. `item_id` may be a string for these. If the task service can't be read, `status` is `unknown` and `total` is null: show unknown, never "Nothing needs you".
 
 The UI shows `text` and doesn't compute its own count.
+
+## 3. Task proposal in the CoS chat (U1, added 6 November)
+
+A proposal is what CoS asks before a task exists; a work card is what MC asks before an agent starts. Same page pattern, separate records. Same gates as work cards. It stays in the Guild task view too, which is the same record.
+
+### Read: `GET <cos>/task-proposals`
+
+`{"proposals": [{"interpretation_id": "...", "proposal_digest": "...", "revision": 0, "proposed": {"outcome": "...", "done_when": "...", "task": {...}}, "sources": [...], "conversation_id": "string or null"}]}`. Show `proposed` as the record has it. Placement follows section 1's rule for `conversation_id`.
+
+### Decide: `POST <cos>/task-proposals/confirm` or `/decline`
+
+Body: `{"interpretation_id": "...", "proposal_digest": "<as shown>"}`, with `cosWriteHeaders()`.
+
+- Confirm, 200: `{"state": "confirmed", "interpretation_id": "...", "request_id": "...", "task_id": "...", "lead": "..."}`. "Confirmed" means the task exists, not that work began.
+- Decline, 200: `{"state": "declined", "interpretation_id": "..."}`.
+- Refusals as section 1: `changed`, `not_pending`, `invalid`, `unavailable`, `csrf`. Show `message`. A confirm that stopped part-way finishes forward on another click, under the same ids, so keep the card and reread after a failure.

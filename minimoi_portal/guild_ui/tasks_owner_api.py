@@ -179,10 +179,44 @@ def _decide(action):
     refusal, body = _body()
     if refusal is not None:
         return refusal
+    return decide_proposal(action, body)
+
+
+def cos_proposals(user=None):
+    """Proposals waiting for Robert, for the CoS chat: the same records and digests as the Guild task view, each with
+    the conversation it came from when that can be read."""
+    import requests
+    from flask import jsonify
+    from services.partnership_tasks.client import TaskServiceUnavailable
+    client = _client(user)
+    if client is None:
+        return json_error("unavailable", "Task tracking is not connected here.", 409)
+    try:
+        rows = client.pending()
+    except (TaskServiceUnavailable, requests.RequestException):
+        return json_error("unavailable", "The task service could not confirm the current state. Try Refresh.", 503)
+    return jsonify(proposals=[{**p, "conversation_id": _proposal_conversation(p)} for p in rows])
+
+
+def _proposal_conversation(row):
+    """The CoS conversation a proposal's source came from: its ``cos-history`` source id is
+    ``<conversation_id>:<turn_id>``. None when it did not come from one."""
+    for source in row.get("sources") or []:
+        ref = source.get("source") or {}
+        if ref.get("store") == "cos-history":
+            conversation, sep, _turn = str(ref.get("id") or "").rpartition(":")
+            return conversation if sep and conversation else None
+    return None
+
+
+def decide_proposal(action, body, user=None):
+    """One owner decision on one proposal exactly as shown. The caller has checked the owner and the write guard."""
+    if action not in ("confirm", "decline") or not isinstance(body, dict):
+        return json_error("invalid", "Choose one proposal as the page showed it.", 422)
     iid, shown = body.get("interpretation_id"), body.get("proposal_digest")
     if not isinstance(iid, str) or not _IID.fullmatch(iid) or not isinstance(shown, str) or not _DIGEST.fullmatch(shown):
         return json_error("invalid", "Choose one proposal as the page showed it.", 422)
-    client = _client()
+    client = _client(user)
     if client is None:
         return json_error("unavailable", "Task tracking is not connected here.", 409)
     current, refusal = _proposal(client, iid, shown)

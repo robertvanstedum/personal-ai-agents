@@ -792,6 +792,38 @@ def cos_work_card_decision(decision):
     return response
 
 
+# Task proposals in the CoS chat (1.2 Beta): the same reviewed confirm and decline as the Guild task view, behind the same
+# gates as work cards above. Nothing here can confirm without his click on the exact proposal shown.
+_PROPOSAL_DECISIONS = {"confirm": "confirm", "decline": "decline"}
+
+
+@app.route("/app/cos/task-proposals", methods=["GET"])
+@_require_owner
+def cos_task_proposals():
+    from minimoi_portal.guild_ui import tasks_owner_api as _tasks_owner
+    response = make_response(_tasks_owner.cos_proposals(user=_current_user()))
+    response.headers["Cache-Control"] = "no-store, private"
+    return response
+
+
+@app.route("/app/cos/task-proposals/<decision>", methods=["POST"])
+@_require_owner
+def cos_task_proposal_decision(decision):
+    from minimoi_portal.guild_ui import tasks_owner_api as _tasks_owner
+    action = _PROPOSAL_DECISIONS.get(decision)
+    if action is None:
+        return jsonify({"error": "not_found", "message": "No such decision."}), 404
+    if request.content_length is None or request.content_length > 4096:
+        return jsonify({"error": "invalid", "message": "Send one proposal decision."}), 413
+    refused = _cos_write_refused("task-proposals")
+    if refused is not None:
+        return refused
+    body = request.get_json(silent=True)
+    response = make_response(_tasks_owner.decide_proposal(action, body, user=_current_user()))
+    response.headers["Cache-Control"] = "no-store, private"
+    return response
+
+
 @app.route("/app/cos")
 @app.route("/app/cos/")
 @_require_owner
