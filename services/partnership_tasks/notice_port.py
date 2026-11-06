@@ -5,8 +5,8 @@ as agent ``partnership``, keyed by the outbox operation.
 The door is idempotent per key: the same key with the same words answers the existing item, so ``lookup`` is the
 same raise again and can never create a second notice. A different text under the same key is refused
 (``key_conflict``), which the drainer records as a conflict. Words are built here from the packet's fields (task,
-outcome, accepted set, delivered disagreements, or the needs-owner reason), never from model text, and are kept
-inside the door's 10-1500 character limit. The receipt names the operation and the packet's own digest, which is
+outcome, accepted set, delivered disagreements, the needs-owner reason, a failed child or a review without a verdict),
+never from model text, and are kept inside the door's 10-1500 character limit. The receipt names the operation and the packet's own digest, which is
 what the drainer's ``applied`` check requires.
 """
 from __future__ import annotations
@@ -29,10 +29,18 @@ def words_for(packet: dict) -> str:
         dis = packet.get("disagreements_delivered") or []
         if dis:
             text += " Delivered with disagreement: " + "; ".join(
-                f"{d.get('reviewer')} {d.get('verdict')}" for d in dis[:5]) + "."
+                f"{d.get('reviewer')} {'no verdict' if d.get('no_verdict') else d.get('verdict')}" for d in dis[:5]) + "."
     elif kind == "needs_owner":
         text = (f"Tracked work {packet.get('task_id')} needs you: its lead {packet.get('lead')} missed a checkpoint. "
                 "Open the task view to decide.")
+    elif kind == "child_failed":
+        text = (f"Tracked work {packet.get('task_id')}, a step of {packet.get('parent_task_id')} held by "
+                f"{packet.get('holder')}, failed: {str(packet.get('outcome') or '')[:400]}. "
+                f"Reason: {str(packet.get('reason') or '')[:300]}. Open the task view.")
+    elif kind == "review_without_verdict":
+        text = (f"The review of tracked work {packet.get('task_id')} by {packet.get('reviewer')} ended without a valid "
+                f"verdict for set {str(packet.get('reviewed_set') or '')[:20]}. It is not an approval. "
+                "Open the task view.")
     else:
         text = f"Tracked work {packet.get('task_id')}: {kind}. Open the task view."
     text = "".join(ch for ch in text if ch >= " ")[:1500]
