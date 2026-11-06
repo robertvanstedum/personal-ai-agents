@@ -128,6 +128,7 @@ class History:
         self._clock = clock
         self._thread_lock = threading.Lock()
         self._needs_recovery = True
+        self._interruption_pass_done = False
 
     # ---- conversations -----------------------------------------------------------------------------------------
 
@@ -311,11 +312,15 @@ class History:
         for folder in ("turns", "notes"):
             for path in sorted((self.root / folder).glob("*.jsonl")):
                 counts["quarantined"] += fsio.quarantine_torn_tail(path, self.root)
-        for path in sorted((self.root / "turns").glob("*.jsonl")):
-            for turn in _fold(fsio.read_stream(path)).values():
-                if turn["status"] == "pending":
-                    self._append_turn_locked(dict(turn, status="failed", failure_code="interrupted"))
-                    counts["interrupted"] += 1
+        # Only the first recovery of this process marks pending turns interrupted: those belonged to a process that is
+        # gone. A later recovery (after a read-back mismatch) must not touch turns this process is still answering.
+        if not self._interruption_pass_done:
+            for path in sorted((self.root / "turns").glob("*.jsonl")):
+                for turn in _fold(fsio.read_stream(path)).values():
+                    if turn["status"] == "pending":
+                        self._append_turn_locked(dict(turn, status="failed", failure_code="interrupted"))
+                        counts["interrupted"] += 1
+            self._interruption_pass_done = True
         self._last_recovery = counts
         self._needs_recovery = False
         return counts
