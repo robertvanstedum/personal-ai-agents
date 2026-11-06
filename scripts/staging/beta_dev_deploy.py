@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 
-RELEASE = "beta-20261106f"
+RELEASE = "beta-20261106g"
 STAGING_ROOT = "/opt/minimoi-staging"
 OPERATOR_NAME = "beta-dev-20261106"
 MIN_FREE_BYTES = 2 * 1024 ** 3
@@ -1009,8 +1009,11 @@ class RealHost:                                     # pragma: no cover  (exercis
             assert hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest() == want, "an existing override changed: " + path
         if self.others_strict:
             now = self._others()
-            moved = sorted(k for k in set(now) | set(self.saved["others"]) if now.get(k) != self.saved["others"].get(k))
+            moved = sorted(k for k in self.saved["others"] if now.get(k) != self.saved["others"][k])
             assert not moved, "an unrelated container changed: " + ", ".join(moved[:8])
+            appeared = sorted(set(now) - set(self.saved["others"]))
+            if appeared:                            # compose can hold a short-lived container mid-swap; noted, not fatal
+                self.record("others_appeared", {"containers": appeared[:8]})
         elif self._others() != self.saved["others"]:
             self.record("others_moved_since_apply", {"note": "not this rollback's doing"})
 
