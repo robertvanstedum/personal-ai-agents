@@ -138,17 +138,23 @@ def test_a_cli_runtimes_own_name_for_the_provider_still_matches_its_route():
     assert served_receipt(route, {"provider": "claude-cli", "model": "claude-sonnet-4-6"})["served_matches"] is False
 
 
-def _turn(runtime, through=None, served=True):
-    return {"runtime": runtime, "served": {"model": "m"} if served else None, "through_note_id": through}
+def _turn(runtime, through=None, served=True, matches=True):
+    return {"runtime": runtime, "served": {"model": "m"} if served else None, "served_matches": matches if served else None,
+            "through_note_id": through}
 
 
 @pytest.mark.parametrize("turns, after", [
     ([], 0),                                                              # never served here: everything
     ([_turn("openclaw", 5)], 0),
-    ([_turn("claude-cli", 5)], None),                                     # served the last turn: nothing
+    ([_turn("claude-cli", 5)], None),                                     # proved the last turn: nothing
     ([_turn("claude-cli", 5), _turn("openclaw", 9)], 5),                  # only what it missed
-    ([_turn("claude-cli", 5), _turn("claude-cli", 7, served=False)], None),
-    ([_turn("openclaw", 5), _turn("claude-cli", 7, served=False)], 0),    # no evidence is not served: history repeats, never lost
+    ([_turn("claude-cli", 5), _turn("openclaw", 9, served=False)], 5),    # another runtime answered with no receipt: still carried
+    ([_turn("claude-cli", 5), _turn("claude-cli", 7, served=False)], 5),  # unknown: repeats, never lost
+    ([_turn("openclaw", 5), _turn("claude-cli", 7, served=False)], 0),
+    ([_turn("claude-cli", 5), _turn("claude-cli", 7, matches=False)], 5), # selected Claude, but something else served
+    ([_turn("claude-cli", 7, matches=False)], 0),
+    ([_turn("openclaw", 3), _turn("claude-cli", None)], None),            # proved, though no note id was recorded
+    ([_turn("claude-cli", None), _turn("openclaw", 9)], 0),               # no usable mark: everything, within the bound
 ])
 def test_what_an_own_session_runtime_is_carried(turns, after):
     from minimoi_portal.guild_ui.mc_continuity import carry_after

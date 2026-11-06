@@ -10,14 +10,18 @@ BLOCK_CHARS = 24000         # the whole block, newest notes first
 
 
 def carry_after(route: dict, selection: dict) -> int | None:
-    """The note id to carry after, or None when nothing is carried. Only an own-session runtime that did not serve the
-    last turn needs it. No evidence counts as not served, so a doubtful turn repeats history rather than losing it."""
+    """The note id to carry after, or None when nothing is carried. Only an own-session runtime needs it, and only when
+    the latest turn is not proved to be its own. Missing evidence does not mean a reply did not happen, and a selected
+    runtime is not proof of who served, so an unproved turn carries from the last proved one: history may repeat, never go."""
     if not route or route.get("session_history") != "own":
         return None
-    served = [t for t in (selection.get("turns") or []) if isinstance(t, dict) and t.get("served")]
-    if served and served[-1].get("runtime") == route.get("runtime"):
+    turns = [t for t in (selection.get("turns") or []) if isinstance(t, dict)]
+
+    def proved(turn):
+        return bool(turn.get("served")) and turn.get("served_matches") is True and turn.get("runtime") == route.get("runtime")
+    if turns and proved(turns[-1]):
         return None
-    mine = [t["through_note_id"] for t in served if t.get("runtime") == route.get("runtime") and type(t.get("through_note_id")) is int]
+    mine = [t["through_note_id"] for t in turns if proved(t) and type(t.get("through_note_id")) is int]
     return mine[-1] if mine else 0
 
 

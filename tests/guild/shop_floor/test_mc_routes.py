@@ -311,6 +311,37 @@ def test_openai_gets_no_block_and_a_return_to_claude_carries_only_what_it_missed
     assert "Word three is Oak." in head and "Word one is Cedar." not in head
 
 
+def test_a_reply_with_no_receipt_is_still_carried_back_to_claude(routed, claude_offered):
+    client = routed.owner()
+    token = routed.csrf(client)
+    cid = _new_conv(client, token)
+    _move(client, token, cid, CLAUDE)
+    _serve(routed, "claude-cli", "claude-opus-5")
+    _turn(routed, client, token, cid, "Word one is Cedar.")
+    _move(client, token, cid, ASTRA)
+    routed.runtime.script = list(HAPPY)                                 # OpenAI answers; its record could not be read
+    _turn(routed, client, token, cid, "Word two is Maple.")
+    _move(client, token, cid, CLAUDE)
+    _serve(routed, "claude-cli", "claude-opus-5")
+    _, sent = _turn(routed, client, token, cid, "All the words?")
+    head = sent.partition("[End of earlier turns.]")[0]
+    assert "Word two is Maple." in head and "Word one is Cedar." not in head
+
+
+def test_a_turn_served_by_something_other_than_claude_does_not_count_as_claudes(routed, claude_offered):
+    client = routed.owner()
+    token = routed.csrf(client)
+    cid = _new_conv(client, token)
+    _turn(routed, client, token, cid, "Word one is Cedar.")
+    _move(client, token, cid, CLAUDE)
+    _serve(routed, "openai", "gpt-6-astra")                             # selected Claude, the runtime's record says otherwise
+    _turn(routed, client, token, cid, "Word two is Maple.")
+    _serve(routed, "claude-cli", "claude-opus-5")
+    _, sent = _turn(routed, client, token, cid, "All the words?")
+    head = sent.partition("[End of earlier turns.]")[0]
+    assert "Word one is Cedar." in head and "Word two is Maple." in head
+
+
 def test_only_this_conversations_kept_notes_are_carried(routed, claude_offered):
     client = routed.owner()
     token = routed.csrf(client)
