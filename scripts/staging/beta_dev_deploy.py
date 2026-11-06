@@ -115,7 +115,7 @@ TARGETS = {
     # Nothing these run changed in this release. A rule match later would put them in the plan.
     "records": dict(container="minimoi-records", repo="records", tier=1, base="portal", rules=_app("domains/records/"),
                     extra_rules=(("prototype-lab/projects/project-records-room-poc/", "/app/"),), wait=DEFAULT_WAIT),
-    "cos-board": dict(container="minimoi-cos-board", repo="cos-board", tier=1, base="portal", wait=DEFAULT_WAIT,
+    "cos-board": dict(container="minimoi-cos-board", repo="cos-board", tier=7, base="portal", worker=True, wait=DEFAULT_WAIT, down="the whole swap, plus its restart: CoS Board notes wait",
                       rules=_app("core/domain_api/", "core/domain_operations/", "domains/guild/board", "domains/guild/queue_store.py", "minimoi_portal/guild_ui/adapters/",
                                  "minimoi_portal/guild_ui/board", "minimoi_portal/guild_ui/stores.py", "utils/payment_scrub.py")),
     "supervisor": dict(container="minimoi-supervisor", repo="supervisor", tier=1, base="portal", wait=DEFAULT_WAIT,
