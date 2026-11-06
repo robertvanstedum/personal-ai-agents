@@ -7,6 +7,7 @@ than waiting. The caller's ``apply`` and ``restore`` must raise unless their res
 from __future__ import annotations
 
 from enum import Enum
+import sys
 
 
 class Outcome(str, Enum):
@@ -17,8 +18,17 @@ class Outcome(str, Enum):
 
 
 def guarded_swap(*, stop_workers, start_workers, wait_idle, gate, gate_alive, apply, restore, record) -> Outcome:
-    """Run one swap. Re-raises the failure that stopped it. ``record(name, detail)`` must not raise."""
+    """Run one swap. Re-raises the failure that stopped it. Whether anything could be recorded (a full disk, say) never
+    changes what happens next: a restore still runs, and workers still stay stopped."""
     outcome, failure = Outcome.NOT_STARTED, None
+    given_record = record
+
+    def record(name, detail):
+        try:
+            given_record(name, detail)
+        except BaseException as exc:                # last place left to say it
+            print(f"guarded_swap: could not record {name} {detail}: {type(exc).__name__}", file=sys.stderr, flush=True)
+
     try:
         stop_workers()                              # a partial stop is still only stopped workers: nothing live changed yet
         wait_idle()

@@ -38,10 +38,10 @@ class Rig:
         if self.fail.get("gate_close"):
             raise Boom("gate_close")
 
-    def go(self):
+    def go(self, record=None):
         return gs.guarded_swap(stop_workers=self.step("stop"), start_workers=self.step("start"), wait_idle=self.step("idle"),
-                               gate=self.gate, gate_alive=lambda _: self.alive, apply=self.step("apply"),
-                               restore=self.step("restore"), record=lambda name, detail: self.records.__setitem__(name, detail))
+                               gate=self.gate, gate_alive=lambda _: self.alive, apply=self.step("apply"), restore=self.step("restore"),
+                               record=record or (lambda name, detail: self.records.__setitem__(name, detail)))
 
 
 def test_a_verified_apply_resumes_workers_and_never_restores():
@@ -106,3 +106,27 @@ def test_workers_that_will_not_resume_are_reported():
     with pytest.raises(Boom, match="start"):
         rig.go()
     assert rig.records["workers_not_resumed"] == {"exception": "Boom"}
+
+
+def _full_disk(name, detail):
+    raise OSError(28, "No space left on device")
+
+
+def test_when_nothing_can_be_recorded_a_failed_apply_still_restores_before_workers_resume(capsys):
+    rig = Rig(apply=True)
+    with pytest.raises(Boom, match="apply"):
+        rig.go(_full_disk)
+    assert rig.calls.index("restore") < rig.calls.index("start")
+    assert "could not record apply_failed" in capsys.readouterr().err
+
+
+def test_when_nothing_can_be_recorded_a_failed_restore_still_leaves_workers_stopped(capsys):
+    rig = Rig(apply=True, restore=True)
+    with pytest.raises(Boom, match="apply"):
+        rig.go(_full_disk)
+    assert "start" not in rig.calls and "could not record recovery_required" in capsys.readouterr().err
+
+
+def test_when_nothing_can_be_recorded_a_good_apply_still_succeeds():
+    rig = Rig()
+    assert rig.go(_full_disk) is gs.Outcome.APPLIED and rig.calls[-1] == "start"
