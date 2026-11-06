@@ -225,6 +225,7 @@ def test_contract_differs_only_in_the_named_environment():
 def test_cos_key_kinds():
     assert R.classify_cos_key({"MINIMOI_MODEL_GATEWAY_KEY": MASTER}, ["/run/cos-key"], MASTER) == "file"
     assert R.classify_cos_key({"MINIMOI_MODEL_GATEWAY_KEY": COS_KEY}, [], MASTER) == "env"
+    assert R.classify_cos_key({"MINIMOI_MODEL_GATEWAY_KEY": COS_KEY}, ["/run/cos-key"], MASTER, file_readable=False) == "env"
     assert R.classify_cos_key({"MINIMOI_MODEL_GATEWAY_KEY": MASTER}, [], MASTER) == "master"
     with pytest.raises(R.Refused, match="no budget"):
         R.check_existing_key({"max_budget": None, "models": ["a"]})
@@ -830,7 +831,7 @@ def test_the_operator_ships_every_file_it_imports(tmp_path):
     ({"MINIMOI_ROLE": "production"}, True),
 ])
 def test_framework_modes_are_not_a_production_host_but_our_own_markers_are(env, refused):
-    check = lambda: R.RouteSwitch._refuse_if_production(None, env, "x")
+    check = lambda: R.RealHost._refuse_if_production(None, env, "x")
     if refused:
         with pytest.raises(R.Refused):
             check()

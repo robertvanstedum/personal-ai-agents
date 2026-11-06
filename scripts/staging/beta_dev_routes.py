@@ -206,10 +206,11 @@ def check_relay_routes(old_raw, new_raw: str, catalogue: dict, providers) -> dic
     return new
 
 
-def classify_cos_key(env: dict, mounts, master: str) -> str:
-    """How CoS holds its gateway key (docker/cos-agent-a/apply-config.sh): a readable key file wins, else the environment's."""
+def classify_cos_key(env: dict, mounts, master: str, file_readable: bool = True) -> str:
+    """How CoS holds its gateway key (docker/cos-agent-a/apply-config.sh): a readable key file wins, else the environment's.
+    A mounted folder with no key in it doesn't count: Dev's base compose mounts the folder and passes the key by environment."""
     file_path = env.get("COS_GATEWAY_KEY_FILE") or COS_KEY_MOUNT + "/key"
-    if any(file_path == m or file_path.startswith(m.rstrip("/") + "/") for m in mounts):
+    if file_readable and any(file_path == m or file_path.startswith(m.rstrip("/") + "/") for m in mounts):
         return "file"
     value = env.get("MINIMOI_MODEL_GATEWAY_KEY", "")
     if value and value != master and KEY.match(value):
@@ -701,7 +702,8 @@ class RealHost:
         master = self._env(GATEWAY_CONTAINER).get("LITELLM_MASTER_KEY", "")
         self.secrets.update({master, cos_env.get("MINIMOI_MODEL_GATEWAY_KEY", "")} - {""})
         mounts = [m["Destination"] for m in self.O.inspect(COS)["Mounts"]]
-        self.cos_key = {"kind": classify_cos_key(cos_env, mounts, master)}
+        key_file = cos_env.get("COS_GATEWAY_KEY_FILE") or COS_KEY_MOUNT + "/key"
+        self.cos_key = {"kind": classify_cos_key(cos_env, mounts, master, self._exec_ok(COS, "test", "-r", key_file))}
         wanted_cos = key_models(self.env_plan[COS]["COS_FAILOVER_ROUTES"])
         if self.cos_key["kind"] == "master":
             self.cos_key.update(budget=CAP_DOLLARS, budget_duration=BUDGET_DURATION, models_after=sorted({*cos_base_models(), *wanted_cos}),
