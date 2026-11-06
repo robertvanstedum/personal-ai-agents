@@ -1,4 +1,4 @@
-"""Named owner turns use the portal's existing MC ledger/tool path, dev only.
+"""Named owner turns use the portal's existing MC ledger/tool path, on Dev or production's own host.
 
 No prompt, credential, transcript or tool declaration is supplied by this client.
 Discussion continues to use its separate tool-free transport. Enabling this
@@ -15,7 +15,7 @@ class PortalMC:
 
     def __init__(self, token_file, *, base='http://portal:5011', session=None):
         if base != 'http://portal:5011':
-            raise ValueError('fixed_dev_portal_required')
+            raise ValueError('fixed_portal_required')
         self.token_file, self.base = token_file, base
         self.session = session or requests.Session()
         self.session.trust_env = False

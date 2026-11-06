@@ -1,14 +1,19 @@
 """Explicit laptop Records destinations, independent of user/model arguments."""
 # This module also ships in the minimal standalone worker image, which has no portal package.
 PRODUCTION_ENDPOINT='https://minimoi.ai/internal/records'
+# Host workers on production's own host reach Records directly over its reviewed internal network. This is its own
+# profile, so a laptop connector can never select it and nothing on production has to call itself dev.
+PRODUCTION_INTERNAL='production_internal'
+PRODUCTION_INTERNAL_ENDPOINT='http://minimoi-records:18880'
 DEV_ENDPOINTS=frozenset({'http://minimoi-records:18880','http://127.0.0.1:18881','http://localhost:18881'})
 def validate_endpoint(url,profile='dev'):
  if profile=='production'and url==PRODUCTION_ENDPOINT:return url
+ if profile==PRODUCTION_INTERNAL and url==PRODUCTION_INTERNAL_ENDPOINT:return url
  if profile=='dev'and url in DEV_ENDPOINTS:return url
  raise ValueError('records_transport_profile_refused')
 def from_env(environ,default):
  profile=environ.get('ROOMS_RECORDS_PROFILE','dev')
- if profile=='production'and environ.get('ROOMS_RECORDS_PRODUCTION')!='1':raise ValueError('records_production_admission_required')
+ if profile in('production',PRODUCTION_INTERNAL)and environ.get('ROOMS_RECORDS_PRODUCTION')!='1':raise ValueError('records_production_admission_required')
  return validate_endpoint(environ.get('RECORDS_URL',default),profile),profile
 
 
@@ -18,8 +23,11 @@ def admit_runtime(environ, *, kind):
  """
  default='http://127.0.0.1:18881' if kind=='connector' else 'http://minimoi-records:18880'
  url,profile=from_env(environ,default)
- if profile!='production':return url,profile
- keys=('ROOMS_CONNECTOR_SECRETS','ROOMS_CONNECTOR_STATE') if kind=='connector' else ('ROOMS_SECRETS_DIR','ROOMS_JOURNAL_DIR','MC_RELAY_TOKEN_FILE')
+ if profile not in('production',PRODUCTION_INTERNAL):return url,profile
+ if profile==PRODUCTION_INTERNAL and kind=='connector':raise ValueError('records_transport_profile_refused')
+ keys=(('ROOMS_CONNECTOR_SECRETS','ROOMS_CONNECTOR_STATE') if kind=='connector'
+       else ('ROOMS_SECRETS_DIR','ROOMS_JOURNAL_DIR') if kind=='cos_worker'   # CoS answers through cos-scheduler, no relay
+       else ('ROOMS_SECRETS_DIR','ROOMS_JOURNAL_DIR','MC_RELAY_TOKEN_FILE'))
  if environ.get('ROOMS_MANAGED_LEDGER'):keys+=('ROOMS_MANAGED_LEDGER',)
  from pathlib import PurePosixPath
  for key in keys:

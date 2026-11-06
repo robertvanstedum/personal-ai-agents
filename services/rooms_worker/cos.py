@@ -7,7 +7,7 @@ class CoS:
     # Stopping delivery is not proof that a remote tool operation stopped.
     stop_guaranteed = False
     def __init__(self, token_file, base='http://cos-scheduler:8769', session=None):
-        if base!='http://cos-scheduler:8769':raise ValueError('Fixed dev CoS endpoint required')
+        if base!='http://cos-scheduler:8769':raise ValueError('Fixed CoS endpoint required')
         self.base=base;self.token_file=token_file
         self.session=session or requests.Session();self.session.trust_env=False
     def headers(self):return {'Authorization':'Bearer '+read_secret(self.token_file)}
@@ -52,14 +52,15 @@ def main():
     from services.rooms_worker.worker import Worker,log
     from services.rooms_worker.discussion import Discussion
     from services.rooms_worker.journal import TurnJournal
-    from services.rooms_worker.transport_profile import admit_runtime
-    url,profile=admit_runtime(os.environ,kind='worker')
-    if profile!='dev':raise ValueError('Guildhall CoS is dev-only')
+    from services.rooms_worker.transport_profile import PRODUCTION_INTERNAL,admit_runtime
+    url,profile=admit_runtime(os.environ,kind='cos_worker')
+    # Dev, or production's own host over the internal network. Never the connector's public route.
+    if profile not in('dev',PRODUCTION_INTERNAL):raise ValueError('Guildhall CoS runs on Dev or production host only')
     secrets=Path(os.environ['ROOMS_SECRETS_DIR'])
     root=Path(os.environ['ROOMS_JOURNAL_DIR']);root.mkdir(mode=0o700,parents=True,exist_ok=True)
     lock=(root/'worker.lock').open('a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-    worker=Worker(Records(url,lambda:read_secret(secrets/'rooms-worker-cos.token')),
-                  Records(url,lambda:read_secret(secrets/'cos.token')),
+    worker=Worker(Records(url,lambda:read_secret(secrets/'rooms-worker-cos.token'),profile=profile),
+                  Records(url,lambda:read_secret(secrets/'cos.token'),profile=profile),
                   CoS(secrets/'cos-service.token'),TurnJournal(root/'turns'),
                   teammate='cos',agent_id='cos-agent-a',alive_path='/tmp/rooms-worker/alive',
                   discussion=Discussion('cos',secrets/'discussion-gateway.token'))

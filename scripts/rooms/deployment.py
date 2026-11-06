@@ -163,7 +163,7 @@ def admit(inputs, *, rows, network=None, validate=None, portal_file=PORTAL_FILE,
         s=path.stat();need(stat.S_ISREG(s.st_mode)and s.st_uid in {0,os.geteuid()}and not s.st_mode&0o022 and s.st_nlink==1)
     need(isinstance(network,dict)and network.get('Name')==inputs['network']and network.get('Internal')is True)
     members=network.get('Containers',{})
-    need(isinstance(members,dict)and {r.get('Name')for r in members.values()}<={'minimoi-records','minimoi-portal'})
+    need(isinstance(members,dict)and {r.get('Name')for r in members.values()}<={'minimoi-records','minimoi-portal','minimoi-cos-scheduler','minimoi-guildhall-cos','minimoi-guildhall-mc'})
     record=rows.get('minimoi-records')
     if record is not None:
         labels=record['Config'].get('Labels')or{}

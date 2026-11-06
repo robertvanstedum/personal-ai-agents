@@ -267,7 +267,16 @@ def install(app, bridge, token_sha256, *, forbidden_hashes=()):
 def attach(app, services, environ, cfg, *, craft_prefix):
     if environ.get('MINIMOI_MC_ROOMS') != '1':
         return
-    if (cfg['environment'] != 'dev' or cfg['principal'] != 'robert'
+    # Production takes its own explicit admission and its own Records profile; it never presents itself as dev.
+    if cfg['environment'] == 'prod':
+        if environ.get('MINIMOI_MC_ROOMS_PRODUCTION') != '1' or environ.get('MINIMOI_ROLE') != 'production':
+            raise ValueError('mc_rooms_production_admission_required')
+        records_profile = 'production_internal'
+    elif cfg['environment'] == 'dev':
+        records_profile = 'dev'
+    else:
+        raise ValueError('mc_rooms_dev_contract_required')
+    if (cfg['principal'] != 'robert'
             or getattr(services.mc, 'kind', '') != 'openclaw'
             or getattr(services.mc, 'chat_model', '') != 'openclaw/mc-chat'
             or getattr(services, 'turn_ledger', None) is None):
@@ -278,7 +287,7 @@ def attach(app, services, environ, cfg, *, craft_prefix):
     if any(not p.is_absolute() or any(x.is_symlink() for x in (p, *p.parents)) for p in (state, token_file)):
         raise ValueError('mc_rooms_private_paths_required')
     bridge = Bridge(services=services, environ=environ, principal=cfg['principal'],
-        records=Records('http://minimoi-records:18880', lambda: read_secret(token_file), timeout=3),
+        records=Records('http://minimoi-records:18880', lambda: read_secret(token_file), timeout=3, profile=records_profile),
         state_dir=state, craft_prefix=craft_prefix)
     install(app, bridge, environ.get('MINIMOI_MC_ROOMS_TOKEN_SHA256', ''), forbidden_hashes=[
         cfg['token_sha256'], environ.get('MINIMOI_MC_HANDOFF_TOKEN_SHA256'),

@@ -384,7 +384,7 @@ class Watcher(threading.Thread):
 
 def main():
     env = os.environ
-    from .transport_profile import admit_runtime
+    from .transport_profile import PRODUCTION_INTERNAL, admit_runtime
     from .discussion import Discussion
     records_url, profile = admit_runtime(env, kind="worker")
     journal_dir = Path(env.get("ROOMS_JOURNAL_DIR", "/journal"))
@@ -396,8 +396,8 @@ def main():
     transport = Relay(relay_url, read_secret(Path(env.get("MC_RELAY_TOKEN_FILE", str(secrets / "mc-relay.token")))))
     agent_id = "mc-agent"
     if env.get("ROOMS_MC_PORTAL") == "1":
-        if profile != "dev":
-            raise ValueError("mc_portal_dev_only")
+        if profile not in ("dev", PRODUCTION_INTERNAL):
+            raise ValueError("mc_portal_host_profile_required")
         from .portal_mc import PortalMC
         transport = PortalMC(secrets / "mc-service.token")
         agent_id = "mc-chat"

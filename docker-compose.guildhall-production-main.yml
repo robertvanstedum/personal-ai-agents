@@ -1,0 +1,45 @@
+# OPTIONAL explicit opt-in. Guildhall's main-project half on production, layered after
+# docker-compose.records-production-portal.yml: cos-scheduler answers meeting turns, and the portal gives MC's.
+# Present on the host only once switched on, on Robert's word; absent, nothing changes.
+# Provisions nothing. CoS's store, tool bindings and owner keys come with its own production settings; without the
+# bindings the meeting verifier is absent and cos-scheduler refuses to start Guildhall.
+services:
+  cos-scheduler:
+    environment:
+      MINIMOI_GUILDHALL_COS: "1"
+      MINIMOI_GUILDHALL_COS_PRODUCTION: "1"
+      COS_GUILDHALL_TOKEN_FILE: /run/secrets/guildhall/cos-service.token
+      COS_GUILDHALL_DIR: /var/lib/minimoi-guildhall
+      COS_MEETING_RECORDS_URL: http://minimoi-records:18880
+      COS_MEETING_OBSERVE_TOKEN_FILE: /run/secrets/guildhall/meeting-observe.token
+    volumes:
+      - type: bind
+        source: ${MINIMOI_COS_GUILDHALL_SECRETS:?existing production-only secrets required}
+        target: /run/secrets/guildhall
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${MINIMOI_COS_GUILDHALL_STATE:?existing production-only state required}
+        target: /var/lib/minimoi-guildhall
+        bind: {create_host_path: false}
+    networks:
+      - default
+      - vault-internal
+      - records-production
+  portal:
+    environment:
+      MINIMOI_MC_ROOMS: "1"
+      MINIMOI_MC_ROOMS_PRODUCTION: "1"
+      MINIMOI_MC_ROOMS_STATE_DIR: /app/runtime/guild/mc-rooms
+      MINIMOI_MC_ROOMS_WORK_TOKEN_FILE: /run/secrets/guildhall-mc-work/work.token
+      MINIMOI_MC_ROOMS_TOKEN_SHA256: ${MINIMOI_MC_ROOMS_TOKEN_SHA256:?hash of the guildhall-mc service token required}
+    volumes:
+      - type: bind
+        source: ${MINIMOI_MC_ROOMS_WORK_SECRETS:?existing production-only secrets required}
+        target: /run/secrets/guildhall-mc-work
+        read_only: true
+        bind: {create_host_path: false}
+networks:
+  records-production:
+    external: true
+    name: ${MINIMOI_RECORDS_NETWORK:?existing internal production-only network required}

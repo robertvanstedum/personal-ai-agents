@@ -2146,9 +2146,8 @@ def _start_cos():
         print(f"   ⚠️  Backend init failed: {e} — chat will fail")
 
     if os.environ.get('MINIMOI_GUILDHALL_COS') == '1':
-        if os.environ.get('COS_STORE_ENVIRONMENT') != 'dev':
-            raise RuntimeError('Guildhall CoS requires explicit dev environment')
-        from domains.cos.guildhall import install as install_guildhall
+        from domains.cos.guildhall import admit_environment, install as install_guildhall
+        admit_environment(os.environ, verifier=_meeting_verifier())
         install_guildhall(app, token_file=os.environ['COS_GUILDHALL_TOKEN_FILE'],
                          data_dir=os.environ['COS_GUILDHALL_DIR'], run_turn=_process_confer_turn,
                          is_ready=lambda: _backend is not None,

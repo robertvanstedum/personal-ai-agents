@@ -125,6 +125,12 @@ if [[ -f "$RUNTIME_LAYER" ]]; then
   COMPOSE+=(-f "$RUNTIME_LAYER")
 fi
 
+# Guildhall's production layer (scheduler and portal side): same rule as the runtime layer. On Robert's word only.
+GUILDHALL_LAYER=/opt/minimoi/docker-compose.guildhall-production-main.yml
+if [[ -f "$GUILDHALL_LAYER" ]]; then
+  COMPOSE+=(-f "$GUILDHALL_LAYER")
+fi
+
 python3 /opt/minimoi/scripts/release_status.py begin "$IMAGE_TAG" "${SERVICES[@]}"
 
 cd /opt/minimoi

@@ -32,6 +32,20 @@ def validate(turn):
     return turn
 
 
+def admit_environment(environ, *, verifier):
+    """Where Guildhall's CoS may run. Dev, as before. Production only with its own explicit identity and admission,
+    and always with the Records verifier: a production meeting turn runs only when Records admits it."""
+    environment = environ.get('COS_STORE_ENVIRONMENT')
+    if environment == 'dev':
+        return
+    if environment != 'prod':
+        raise RuntimeError('Guildhall CoS requires an explicit dev or prod environment')
+    if environ.get('MINIMOI_ROLE') != 'production' or environ.get('MINIMOI_GUILDHALL_COS_PRODUCTION') != '1':
+        raise RuntimeError('Guildhall CoS on production requires its explicit admission')
+    if verifier is None:
+        raise RuntimeError('Guildhall CoS on production requires the Records meeting verifier')
+
+
 def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verify_members=None, stop_turn=None,
             verifier=None):
     """``verify_members(turn)`` returns the room's members from Records, or None; never the request body's.

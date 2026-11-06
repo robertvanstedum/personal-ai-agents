@@ -1,5 +1,5 @@
 # Rooms worker (Rooms R1, docs/specs/minimoi-connected-work/ROOMS_R1.md §3.8),
-# STAGING ONLY. A sibling of Records in its own Compose project
+# Dev, and production only through docker-compose.guildhall-production.yml. A sibling of Records in its own Compose project
 # (docker-compose.records.yml): it claims Master Craftsman's meeting turns from
 # Records and answers them through the MC relay. No portal code is in this
 # image, so Rooms keeps answering while the portal is down.

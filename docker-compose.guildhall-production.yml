@@ -1,0 +1,84 @@
+name: minimoi-guildhall-production
+# OPTIONAL, default-off. Guildhall's two meeting workers on production's own host.
+# Run as its own project: --project-name minimoi-guildhall-production -f THIS_FILE --profile guildhall-production.
+# NEVER combine into the main project. Its other half is docker-compose.guildhall-production-main.yml.
+# Requires Records on its reviewed internal network (docker-compose.records-production.yml) and existing,
+# production-only secrets and journals. This file provisions nothing, and nothing here is copied from Dev.
+x-worker: &worker
+  profiles: [guildhall-production]
+  image: ${MINIMOI_ROOMS_WORKER_IMAGE:?immutable reviewed rooms-worker image digest required}
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp:size=16m,mode=1777
+  mem_limit: 256m
+  memswap_limit: 256m
+  cpus: 0.5
+  pids_limit: 64
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+
+services:
+  guildhall-cos:
+    <<: *worker
+    container_name: minimoi-guildhall-cos
+    command: [python, -m, services.rooms_worker.cos]
+    environment:
+      ROOMS_RECORDS_PROFILE: production_internal
+      ROOMS_RECORDS_PRODUCTION: "1"
+      RECORDS_URL: http://minimoi-records:18880
+      ROOMS_SECRETS_DIR: /run/secrets/guildhall-cos
+      ROOMS_JOURNAL_DIR: /var/lib/guildhall-cos
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      AWS_EC2_METADATA_DISABLED: "true"
+    volumes:
+      - type: bind
+        source: ${MINIMOI_GUILDHALL_COS_SECRETS:?existing production-only secrets required}
+        target: /run/secrets/guildhall-cos
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${MINIMOI_GUILDHALL_COS_JOURNAL:?existing production-only journal required}
+        target: /var/lib/guildhall-cos
+        bind: {create_host_path: false}
+    networks: [records-production, main]
+
+  guildhall-mc:
+    <<: *worker
+    container_name: minimoi-guildhall-mc
+    command: [python, -m, services.rooms_worker.worker]
+    environment:
+      ROOMS_RECORDS_PROFILE: production_internal
+      ROOMS_RECORDS_PRODUCTION: "1"
+      RECORDS_URL: http://minimoi-records:18880
+      ROOMS_MC_PORTAL: "1"
+      ROOMS_SECRETS_DIR: /run/secrets/guildhall-mc
+      ROOMS_JOURNAL_DIR: /var/lib/guildhall-mc
+      MC_RELAY_TOKEN_FILE: /run/secrets/guildhall-mc/mc-relay.token
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      AWS_EC2_METADATA_DISABLED: "true"
+    volumes:
+      - type: bind
+        source: ${MINIMOI_GUILDHALL_MC_SECRETS:?existing production-only secrets required}
+        target: /run/secrets/guildhall-mc
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${MINIMOI_GUILDHALL_MC_JOURNAL:?existing production-only journal required}
+        target: /var/lib/guildhall-mc
+        bind: {create_host_path: false}
+    # The main network too: the discussion path reaches model-gateway there, as CoS's does.
+    networks: [records-production, mc-portal, main]
+
+networks:
+  records-production:
+    external: true
+    name: ${MINIMOI_RECORDS_NETWORK:?existing internal production-only network required}
+  mc-portal:
+    external: true
+    name: minimoi-mc-portal
+  main:
+    external: true
+    name: minimoi_default
