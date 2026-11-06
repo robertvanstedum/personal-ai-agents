@@ -230,3 +230,20 @@ def test_the_runtime_check_refuses_anything_else(mutate):
     mutate(live)
     with pytest.raises(AssertionError):
         op.check_runtime(pinned, live)
+
+
+# ── The agent-only patch ──
+
+def test_the_patch_render_check_accepts_only_the_agents_image():
+    patch = _load("cos_agent_patch")
+    before = _rendered()
+    after = copy.deepcopy(before)
+    after["services"]["cos-agent-a"]["image"] = "a:new"
+    patch.only_agent_image(before, after, "a:new")
+    for mutate in (lambda d: d["services"]["cos-scheduler"].update(image="s:other"),
+                   lambda d: d["services"]["cos-agent-a"]["environment"].update(X="changed"),
+                   lambda d: d["services"]["cos-agent-a"].update(image="a:wrong")):
+        wrong = copy.deepcopy(after)
+        mutate(wrong)
+        with pytest.raises(AssertionError):
+            patch.only_agent_image(before, wrong, "a:new")

@@ -1,4 +1,5 @@
 import {test} from 'node:test';
+import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
 import {toolFactory, hook, endpointUrl} from '../../docker/cos-agent-a/plugins/cos-bound/index.mjs';
 import {runSealer} from '../../docker/cos-agent-a/plugins/cos-bound/shared.mjs';
@@ -166,17 +167,29 @@ test('the listener gets a stable id within its own limit', () => {
   assert.equal(backendCallId('call_1'), 'call_1');
 });
 
-test('the served report carries the reply record of this run and nothing else', () => {
+test('the served report names the completed call of this exact run, taking the agent from the session key', () => {
   const calls = [];
   const fetchImpl = async (url, options) => { calls.push({url: String(url), options}); return {body: null}; };
   const report = servedHook({agents: ['cos-agent-a'], url: new URL(ENDPOINT), token: TOKEN, fetchImpl});
-  const ctx = {agentId: 'cos-agent-a', sessionKey: SESSION, runId: RUN};
-  report({lastAssistant: {provider: 'openai', model: 'gpt-6-astra', api: 'openai-chatgpt-responses', content: 'SECRET'}, harnessId: 'openclaw'}, ctx);
+  const ctx = {sessionKey: SESSION, runId: RUN};                        // the runtime's real context: no agentId
+  const event = {outcome: 'completed', provider: 'openai', model: 'gpt-6-astra', api: 'openai-chatgpt-responses', callId: 'x', transport: 'ws'};
+  report(event, ctx);
   assert.equal(calls.length, 1);
   assert.ok(calls[0].url.endsWith('/served'));
-  assert.deepEqual(JSON.parse(calls[0].options.body), {provider: 'openai', model: 'gpt-6-astra', api: 'openai-chatgpt-responses', harness: 'openclaw'});
-  report({lastAssistant: {provider: 'openai', model: 'bad model'}}, ctx);
-  report({lastAssistant: {provider: 'openai', model: 'm'}}, {...ctx, runId: 'nope'});
-  report({lastAssistant: {provider: 'openai', model: 'm'}}, {...ctx, agentId: 'someone-else'});
+  assert.deepEqual(JSON.parse(calls[0].options.body), {provider: 'openai', model: 'gpt-6-astra', api: 'openai-chatgpt-responses'});
+  assert.equal(calls[0].options.headers['X-CoS-Agent'], 'cos-agent-a');
+  assert.equal(calls[0].options.headers['X-CoS-Run'], RUN);
+  report({...event, outcome: 'error'}, ctx);
+  report({...event, model: 'bad model'}, ctx);
+  report(event, {...ctx, runId: 'nope'});
+  report(event, {...ctx, sessionKey: 'agent:someone-else:openai-user:x'});
+  report(event, {runId: RUN});
   assert.equal(calls.length, 1);
+});
+
+test('the plugin listens on the hook that needs no conversation access', () => {
+  const on = [];
+  const source = readFileSync(new URL('../../docker/cos-agent-a/plugins/cos-bound/index.mjs', import.meta.url), 'utf8');
+  for (const m of source.matchAll(/api\.on\('([a-z_]+)'/g)) on.push(m[1]);
+  assert.deepEqual(on.sort(), ['before_tool_call', 'model_call_ended']);
 });

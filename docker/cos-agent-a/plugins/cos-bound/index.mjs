@@ -203,19 +203,22 @@ export function hook({sealer = PROCESS_SEALER, agents, url, token, instance = IN
 }
 
 const SERVED_FIELD = /^[A-Za-z0-9._:\/-]{1,80}$/;
-/** llm_output: tell the listener who really served this exact run, from the reply's own record. Evidence only: fire and
- *  forget, it changes nothing about the turn, and an unknown value is left out rather than guessed. */
+const SESSION_AGENT = /^agent:([a-z][a-z0-9-]{0,63}):/;
+/** model_call_ended: tell the listener which model this exact run called, once that call completed. Evidence only: fire and
+ *  forget, it changes nothing about the turn. This hook carries no conversation text and needs no conversation access,
+ *  unlike llm_output, which the runtime withholds from a plugin without that grant. Its context names no agent, so the
+ *  host's session key does. An unknown value is left out rather than guessed. */
 export function servedHook({agents, url, token, instance = INSTANCE, fetchImpl = fetch}) {
   const allowed = new Set(agents);
   return (event, ctx) => {
-    const agentId = ctx?.agentId, sessionKey = ctx?.sessionKey, runId = ctx?.runId ?? event?.runId;
-    if (!allowed.has(agentId) || !url || typeof runId !== 'string' || !RUN_ID.test(runId)) return;
-    const reply = event?.lastAssistant || {};
-    const fields = {provider: reply.provider, model: reply.model, api: reply.api, harness: event?.harnessId};
+    const sessionKey = ctx?.sessionKey ?? event?.sessionKey, runId = ctx?.runId ?? event?.runId;
+    const agentId = ctx?.agentId ?? (typeof sessionKey === 'string' ? sessionKey.match(SESSION_AGENT)?.[1] : undefined);
+    if (event?.outcome !== 'completed' || !allowed.has(agentId) || !url || typeof runId !== 'string' || !RUN_ID.test(runId)) return;
+    const fields = {provider: event.provider, model: event.model, api: event.api};
     const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => typeof v === 'string' && SERVED_FIELD.test(v)));
     if (!body.provider || !body.model) return;
     fetchImpl(`${url.href}/served`, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000),
-      headers: headers(token, {sessionKey: sessionKey || '', agentId: agentId || '', run: runId, toolCallId: '', instance}),
+      headers: headers(token, {sessionKey: sessionKey || '', agentId, run: runId, toolCallId: '', instance}),
       body: JSON.stringify(body)}).then(r => r.body?.cancel().catch(() => {}), () => {});
   };
 }
@@ -235,7 +238,7 @@ export default {id: 'cos-bound', name: 'CoS bound tools', register(api) {
     return;
   }
   api.on('before_tool_call', hook({agents, url, token}));
-  api.on('llm_output', servedHook({agents, url, token}));
+  api.on('model_call_ended', servedHook({agents, url, token}));
   announcer({url, token}).start();          // before any turn's first call (review M3)
   api.registerTool(factory, {names: ['cos_actions', 'cos_tasks', 'cos_board']});
 }};
