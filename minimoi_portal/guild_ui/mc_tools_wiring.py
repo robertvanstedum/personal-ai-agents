@@ -152,16 +152,24 @@ def binder(services, ledger_turn, *, environ, principal, conversation_id, note_i
         except Exception:
             _log.exception("mc tools: binding for ledger %s not recorded; tools refused for this turn", claim.ledger_id)
 
+    attached = []                                     # the run this binding holds; a switched turn's API run moves it
+
     def attach(run_id):
-        from core.mc_tools.binding import attach_run
+        from core.mc_tools.binding import attach_run, move_run
         try:
             conn = connect()
             try:
                 with conn:
-                    bound = attach_run(conn, ledger_id=claim.ledger_id, claim_generation=claim.generation, run_id=run_id,
-                                       environment=cfg["environment"])
+                    if attached:
+                        bound = move_run(conn, ledger_id=claim.ledger_id, claim_generation=claim.generation, old_run=attached[-1],
+                                         new_run=run_id, environment=cfg["environment"])
+                    else:
+                        bound = attach_run(conn, ledger_id=claim.ledger_id, claim_generation=claim.generation, run_id=run_id,
+                                           environment=cfg["environment"])
             finally:
                 conn.close()
+            if bound:
+                attached.append(run_id)
             if not bound:
                 _log.warning("mc tools: run for ledger %s not attached; tools refused for this turn", claim.ledger_id)
         except Exception:

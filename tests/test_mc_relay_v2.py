@@ -48,6 +48,7 @@ class Gateway:
     def __init__(self):
         self.seen, self.mode, self.text = [], "ok", "the job's answer"
         self.run_id = "chatcmpl_x"
+        self.error, self.error_status, self.partial = {}, 429, ""
         self.release = threading.Event()
         self.disconnected = threading.Event()
         self.on_disconnect = None
@@ -77,6 +78,17 @@ class Gateway:
                             except OSError:
                                 outer.disconnected.set()
                                 return
+                if mode == "sse_error":                  # OpenClaw's failed stream: role chunk, then its error envelope
+                    self.send_response(200)
+                    self.send_header("content-type", "text/event-stream")
+                    self.end_headers()
+                    deltas = [{"role": "assistant"}, *([{"content": outer.partial}] if outer.partial else [])]
+                    for delta in deltas:
+                        self.wfile.write(b"data: " + json.dumps({"id": outer.run_id, "choices": [{"delta": delta}]}).encode() + b"\n\n")
+                    self.wfile.write(b"data: " + json.dumps({"error": outer.error}).encode() + b"\n\ndata: [DONE]\n\n")
+                    return
+                if mode == "json_error":
+                    return self._send(outer.error_status, {"error": outer.error})
                 if mode == "status500":
                     return self._send(500, {"error": {"message": "boom"}})
                 if mode == "badjson":

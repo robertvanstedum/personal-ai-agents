@@ -1,7 +1,8 @@
 #!/bin/sh
 # Start Master Craftsman's own container (spec_mc_agent_container v0.2, phase 1).
 # 1. Refuse to start if the container holds a provider API key or the config names a non-plan Anthropic route
-#    (spec_provider_access: agents use plan routes only; no metered fallback).
+#    (spec_provider_access: agents use plan routes first; the only API route is a plan route's declared failover target,
+#    on MC's capped key, and MiniMoi decides that switch: OpenClaw's own config fallbacks stay empty).
 # 2. Lay out the pinned persona release into the workspace, refusing on any hash mismatch with the release manifest or
 #    an AGENTS header version that differs from the release folder (the 0.1.6-label defect cannot recur). Load the
 #    handbook the release pins (its manifest hash) into the same projection, counted in the same budget.
@@ -19,6 +20,8 @@ die() { log "REFUSED: $*"; exit 78; }
 # 1. Provider credentials remain forbidden. Explicit dev gateway mode accepts only
 # MC's separately capped virtual key; plan mode still refuses it.
 node "$IMAGE_DIR/model-access.cjs" || die "model access policy refused"
+# Plan failover's tool evidence (relay_v2 toolsSince): nothing counts until this start's hook says it is marking.
+rm -rf "${OPENCLAW_STATE_DIR:-/home/node/.openclaw}/mc-tool-starts"
 
 # 2. Persona: verify the release against its manifest, then lay it out.
 node -e '

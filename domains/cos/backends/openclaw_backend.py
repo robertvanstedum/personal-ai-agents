@@ -5,13 +5,14 @@ This adapter only sends one normalized turn to the dedicated OpenClaw Gateway's
 supported Chat Completions endpoint and returns assistant-visible text.
 """
 
-from core.model_routes import routes_enabled
+from core.model_routes import plan_signal, routes_enabled, switch_words, switched_route
 import contextvars
 import hashlib
 import json
 import logging
 import os
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -31,7 +32,11 @@ _TURN_TIMEOUT_SECONDS = 120
 BACKGROUND_TURN_TIMEOUT_SECONDS = 600
 # The model this owner turn was routed to (domains/cos/model_route.py). None: the runtime's default serves, as before.
 turn_model = contextvars.ContextVar("cos_turn_model", default=None)
-_MODEL_REF = re.compile(r"(?:openai|anthropic)/[A-Za-z0-9._-]{1,64}|minimoi-gateway/minimoi-xai-(?:strong|mid|low)")
+_MODEL_REF = re.compile(r"(?:openai|anthropic)/[A-Za-z0-9._-]{1,64}|minimoi-gateway/minimoi-(?:xai|openai|anthropic)-(?:strong|mid|low)")
+# This owner turn's route, as {"route": snapshot}; a turn that moves to its declared API route adds {"switched": route}.
+# None: no route on this turn, so no failover (Telegram, the MC lane, meetings, a host without routes).
+turn_route = contextvars.ContextVar("cos_turn_route", default=None)
+_TOOL_REPORT_GRACE_S = 0.5    # the plugin's reports are fire and forget: they get this long to land before they are read
 turn_timeout_seconds = contextvars.ContextVar("cos_turn_timeout_seconds", default=_TURN_TIMEOUT_SECONDS)
 _EMPTY_OUTPUT_NOTICE = (
     "[MiniMoi platform notice: The model reached its output limit before producing an answer. "
@@ -64,6 +69,22 @@ class AgentSessionRecoveryRequired(AgentRuntimeError):
 
 class AgentRequestTooLarge(AgentRuntimeError):
     """The turn exceeds the request-body cap and was not sent."""
+
+
+class _RuntimeRefused(AgentRuntimeError):
+    """The runtime turned this attempt down. ``saw_text``: some of a reply had already come."""
+
+    def __init__(self, message: str, *, saw_text: bool = False):
+        super().__init__(message)
+        self.saw_text = saw_text
+
+
+class PlanUnavailable(_RuntimeRefused):
+    """OpenClaw's declared plan-unavailable signal (core.model_routes.PLAN_SIGNALS). Any other error is never this."""
+
+    def __init__(self, signal: str, *, saw_text: bool = False):
+        super().__init__(f"COS Agent A's plan is unavailable ({signal}).", saw_text=saw_text)
+        self.signal = signal
 
 
 @dataclass(frozen=True)
@@ -239,6 +260,7 @@ class OpenClawBackend:
         conversation_id: str,
         agent_id: str | None = None,
         on_run=None,
+        model: str | None = None,
     ) -> dict:
         """Call the Gateway once and return a validated completion payload. With ``on_run`` the turn streams and
         ``on_run(run_id)`` is called with the opening chunk's id before the rest of the reply is read."""
@@ -248,7 +270,7 @@ class OpenClawBackend:
             "Authorization": f"Bearer {self._gateway_token}",
             "Content-Type": "application/json",
         }
-        routed = turn_model.get()
+        routed = model or turn_model.get()
         if routed is not None and agent == self._agent_id:
             if not _MODEL_REF.fullmatch(routed):
                 raise AgentRuntimeError("COS Agent A was given an invalid model route.")
@@ -283,7 +305,7 @@ class OpenClawBackend:
                 raise AgentSessionRecoveryRequired(
                     "COS Agent A session needs recovery. Send /new to reset it."
                 )
-            raise AgentRuntimeError(
+            raise _RuntimeRefused(
                 f"COS Agent A returned an HTTP {response.status_code} error."
             )
 
@@ -315,6 +337,11 @@ class OpenClawBackend:
                 if data == "[DONE]":
                     break
                 chunk = json.loads(data)
+                error = chunk.get("error") if isinstance(chunk, dict) else None
+                if plan_signal(error):
+                    raise PlanUnavailable(plan_signal(error), saw_text=any(parts))
+                if isinstance(error, dict) and "budget" in str(error.get("message") or "").lower():
+                    raise _RuntimeRefused("COS Agent A's gateway key reached its cap.", saw_text=any(parts))
                 if not isinstance(chunk, dict) or chunk.get("object") != "chat.completion.chunk":
                     raise ValueError("not a completion chunk")
                 if run_id is None:
@@ -388,6 +415,9 @@ class OpenClawBackend:
             reply = _EMPTY_OUTPUT_NOTICE
         else:
             reply = self._reply_text(payload)
+        state = turn_route.get()
+        if state and state.get("switched"):
+            reply = f"{reply}\n\n{switch_words(state['switched'], self._served_evidence(context))}"
         # OpenClaw adds its partial-text warning even when our only text is a
         # platform notice. Remove that exact duplicate only on trusted length;
         # real partial answers retain the native warning and all original text.
@@ -402,6 +432,51 @@ class OpenClawBackend:
                 "state": "cut_off", "reason": "output_limit", "source": "openclaw_connector",
             }
         return reply
+
+    def _served_evidence(self, context: dict) -> dict | None:
+        """The runtime's record of the switched run, for the words only. It is reported fire and forget, so a short look."""
+        receipt = str((context.get("confer") or {}).get("receipt_id") or "")
+        if self._binder is None or not receipt:
+            return None
+        served = self._binder.served(receipt)
+        if not served:
+            time.sleep(_TOOL_REPORT_GRACE_S)
+            served = self._binder.served(receipt)
+        return served
+
+    def _fail_over(self, down: PlanUnavailable, *, messages, conversation_id, agent, bound, attached, context) -> dict:
+        """The plan said it cannot serve. Move to the declared API route once, or say why not. Nothing retries a run that
+        may have acted: every doubt about tools stops the turn."""
+        state = turn_route.get()
+        route = state.get("route") if state else None
+        target = route.get("failover") if route and agent == self._agent_id else None
+        if not target:
+            raise AgentRuntimeError(f"{down} No API route is declared for it, so nothing else was tried.") from down
+        if (not bound or down.saw_text or context.get("tool_binding") != "bound" or not attached.get("run")
+                or not self._binder.quiet(bound, attached["run"], grace_s=_TOOL_REPORT_GRACE_S)):
+            raise AgentRuntimeError(f"{down} A tool may already have started, so it did not switch to the API and nothing "
+                                    "was sent again. Check what happened before asking again.") from down
+        moved = switched_route(route, down.signal)
+        state["switched"] = moved
+
+        def on_run(run_id):
+            if not self._binder.move(bound, attached["run"], run_id):
+                context["tool_binding"] = "attach_refused"
+            attached["run"] = run_id
+        try:
+            return self._post_turn(messages=messages, conversation_id=conversation_id, agent_id=agent, on_run=on_run,
+                                   model=f"{moved['provider']}/{moved['model']}")
+        except AgentSessionRecoveryRequired:
+            raise
+        except _RuntimeRefused as exc:
+            if not exc.saw_text:
+                raise AgentRuntimeError("COS Agent A's plan and its API route are both unavailable (no capped key, "
+                                        "its cap reached, or it refused the turn).") from exc
+            raise AgentRuntimeError(f"{down} The API route it switched to failed part way, so its outcome is unknown. "
+                                    "Check what happened before asking again.") from exc
+        except AgentRuntimeError as exc:
+            raise AgentRuntimeError(f"{down} The API route it switched to failed: {exc} Its outcome is unknown. "
+                                    "Check what happened before asking again.") from exc
 
     @staticmethod
     def _reply_text(payload: dict) -> str:
@@ -514,8 +589,12 @@ class OpenClawBackend:
             if bound and not self._binder.attach(bound, run_id):
                 context["tool_binding"] = "attach_refused"
         try:
-            result = self._post_turn(messages=messages, conversation_id=conversation_id, agent_id=agent,
-                                     on_run=on_run)
+            try:
+                result = self._post_turn(messages=messages, conversation_id=conversation_id, agent_id=agent,
+                                         on_run=on_run)
+            except PlanUnavailable as down:
+                result = self._fail_over(down, messages=messages, conversation_id=conversation_id, agent=agent,
+                                         bound=bound, attached=attached, context=context)
         except Exception:
             timing.emit("gateway_request_failed")
             raise

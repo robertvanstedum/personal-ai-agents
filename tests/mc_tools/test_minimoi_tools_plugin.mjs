@@ -491,3 +491,31 @@ test('tracked-work records reach model-visible content as untrusted data (Blue L
   assert.deepEqual(r.details.data, work);
   assert.ok(!JSON.stringify(r).includes(TOKEN));
 });
+
+test('plan failover evidence: every tool of any agent is marked before it runs, and doubt reads as no ready mark', async () => {
+  const {toolStartMarker} = await import('../../services/mc_operations/plugins/minimoi-tools/index.mjs');
+  const {existsSync, utimesSync, mkdirSync, rmSync} = await import('node:fs');
+  const dir = join(mkdtempSync(join(tmpdir(), 'mc-marks-')), 'mc-tool-starts');
+  const mark = toolStartMarker(dir);
+  assert.ok(existsSync(join(dir, '.ready')));
+  const hook = sealHook({sealer: runSealer(), tools: ['minimoi_guest_requests'], agents: ['mc-chat'], mark});
+  assert.equal(existsSync(join(dir, RUN)), false);
+  assert.equal(hook({toolName: 'read', params: {path: 'x'}}, {agentId: 'mc-agent', sessionKey: SESSION, runId: RUN, toolCallId: 'c1'}), undefined);
+  assert.ok(existsSync(join(dir, RUN)));
+  hook({toolName: 'exec', params: {}}, {agentId: 'mc-chat', sessionKey: SESSION, toolCallId: 'c2'});                // no run id: still marked
+  assert.ok(existsSync(join(dir, `no-run-${process.pid}`)));
+  const old = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  utimesSync(join(dir, RUN), old, old);
+  toolStartMarker(dir);                                                                                            // a new start prunes old marks
+  assert.equal(existsSync(join(dir, RUN)), false);
+  rmSync(dir, {recursive: true, force: true});
+  writeFileSync(dir, 'a file where the folder should be');
+  const broken = toolStartMarker(dir);
+  broken(RUN);                                                                                                     // never throws
+  rmSync(dir, {force: true});
+  mkdirSync(dir);
+  const later = toolStartMarker(dir);
+  rmSync(dir, {recursive: true, force: true});
+  later(RUN);                                                                                                      // a failed mark never blocks a tool
+  assert.equal(existsSync(join(dir, '.ready')), false);
+});

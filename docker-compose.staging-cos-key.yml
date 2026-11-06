@@ -14,3 +14,4 @@ services:
   cos-agent-a:
     environment:
       - MINIMOI_MODEL_GATEWAY_KEY=${COS_MODEL_GATEWAY_KEY:?set by scripts/staging/cos.sh key (cos.env)}
+      - COS_GATEWAY_KEY_CAPPED=1

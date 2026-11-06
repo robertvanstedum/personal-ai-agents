@@ -234,6 +234,34 @@ class BindingStore:
             db.execute("UPDATE bindings SET run_id=? WHERE turn_id=?", (run_id, turn_id))
             return True
 
+    @staticmethod
+    def _ran(db, turn_id: str, run_id: str) -> bool:
+        """Did this run do anything we were told of? An admitted call, a native call, or a completed model call: a tool can
+        only start after a model call completed, so a run with none of the three has not started one."""
+        return bool(db.execute("SELECT 1 FROM calls WHERE turn_id=? LIMIT 1", (turn_id,)).fetchone()
+                    or db.execute("SELECT 1 FROM native_calls WHERE run_id=? LIMIT 1", (run_id,)).fetchone()
+                    or db.execute("SELECT 1 FROM served_runs WHERE run_id=? LIMIT 1", (run_id,)).fetchone())
+
+    def quiet(self, turn_id: str, run_id: str) -> bool:
+        """True only when this turn's binding holds exactly this run and it did nothing we were told of."""
+        with self._tx() as db:
+            row = db.execute("SELECT run_id FROM bindings WHERE turn_id=?", (turn_id,)).fetchone()
+            return row is not None and row["run_id"] == run_id and not self._ran(db, turn_id, run_id)
+
+    def move_run(self, turn_id: str, old_run: str, new_run: str) -> bool:
+        """Plan failover only: the plan run ended quiet, and the API run takes over this binding. The one exception to
+        "never moved". A late call from the old run then finds no binding. False changes nothing, and the new run's tools
+        are refused."""
+        if not isinstance(new_run, str) or not RUN_ID.fullmatch(new_run):
+            raise NotBound("run_invalid")
+        with self._tx() as db:
+            row = db.execute("SELECT run_id, revoked FROM bindings WHERE turn_id=?", (turn_id,)).fetchone()
+            if (row is None or row["run_id"] != old_run or row["revoked"] is not None or self._ran(db, turn_id, old_run)
+                    or db.execute("SELECT 1 FROM bindings WHERE run_id=?", (new_run,)).fetchone()):
+                return False
+            db.execute("UPDATE bindings SET run_id=? WHERE turn_id=?", (new_run, turn_id))
+            return True
+
     def revoke(self, turn_id: str, reason: str = "owner_stop") -> bool:
         """Stop (or any revocation). Recorded against the turn first, so a binding written later starts revoked.
         True when a binding existed (now revoked). Admissions already past ``admit`` complete; nothing new passes."""
@@ -419,6 +447,20 @@ class TurnBinder:
             return self.store.attach_run(turn_id, run_id)
         except NotBound:
             return False
+
+    def quiet(self, turn_id: str, run_id: str, *, grace_s: float = 0.0) -> bool:
+        if grace_s:
+            time.sleep(grace_s)
+        return self.store.quiet(turn_id, run_id)
+
+    def move(self, turn_id: str, old_run: str, new_run: str) -> bool:
+        try:
+            return self.store.move_run(turn_id, old_run, new_run)
+        except NotBound:
+            return False
+
+    def served(self, turn_id: str) -> dict | None:
+        return self.store.served_for_turn(turn_id)
 
     def end(self, turn_id: str) -> None:
         self.store.end(turn_id)

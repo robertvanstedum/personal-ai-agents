@@ -200,3 +200,88 @@ def test_a_strange_model_name_is_no_evidence_and_never_breaks_the_answer(relay, 
     _chat_db(tmp_path / "chat.sqlite", model="gpt\u00e9\u2603")
     status, headers, _ = post(with_db(relay, tmp_path), chat("openclaw/mc-chat", user=USER))
     assert status == 200 and served_of(headers) is None
+
+
+# ── Plan failover: the relay reports the declared signal and the tool evidence; it never retries ──
+
+def _marks(tmp_path, *names, ready=True, age=0):
+    folder = tmp_path / "mc-tool-starts"
+    folder.mkdir(exist_ok=True)
+    if ready:
+        (folder / ".ready").touch()
+    for name in names:
+        path = folder / name
+        path.touch()
+        if age:
+            os.utime(path, (time.time() - age, time.time() - age))
+    return folder
+
+
+def _lines(text):
+    return [json.loads(line) for line in text.splitlines() if line]
+
+
+def _failing(relay, tmp_path, error, *, folder=None, partial=""):
+    env = relay(**({"MC_RELAY_TOOL_STARTS": str(folder)} if folder else {}))
+    env.gateway.run_id, env.gateway.mode, env.gateway.error, env.gateway.partial = RUN, "sse_error", error, partial
+    return env
+
+
+@pytest.mark.parametrize("kind,signal", [("rate_limit_error", "rate_limit"), ("insufficient_quota", "plan_exhausted"),
+                                         ("authentication_error", "signin_expired")])
+def test_rule_1_each_declared_type_is_reported_with_no_retry(relay, tmp_path, kind, signal):
+    env = _failing(relay, tmp_path, {"type": kind, "message": "whatever"}, folder=_marks(tmp_path))
+    _, _, text = post(env, chat("openclaw/mc-chat", user=USER, stream=True), **{"X-MC-Route": "plan-openai-strong"})
+    assert _lines(text)[-1] == {"t": "error", "class": "upstream", "signal": signal, "tools": "none"}
+    assert len(env.gateway.seen) == 1
+
+
+@pytest.mark.parametrize("error", [{"type": "api_error", "message": "rate limit reached"}, {"type": "permission_error"},
+                                   {"type": "invalid_request_error", "message": "insufficient_quota"}, {"message": "internal error"}])
+def test_rule_1_an_ambiguous_error_carries_no_signal_whatever_it_says(relay, tmp_path, error):
+    env = _failing(relay, tmp_path, error, folder=_marks(tmp_path))
+    _, _, text = post(env, chat("openclaw/mc-chat", user=USER, stream=True))
+    assert _lines(text)[-1] == {"t": "error", "class": "upstream"}
+
+
+def test_rule_2_a_tool_marked_during_this_turn_means_may_have_begun(relay, tmp_path):
+    env = _failing(relay, tmp_path, {"type": "rate_limit_error"}, folder=_marks(tmp_path, RUN))
+    assert _lines(post(env, chat("openclaw/mc-chat", user=USER, stream=True))[2])[-1]["tools"] == "may_have_begun"
+
+
+def test_rule_2_an_old_mark_from_an_earlier_turn_does_not_count(relay, tmp_path):
+    env = _failing(relay, tmp_path, {"type": "rate_limit_error"}, folder=_marks(tmp_path, OTHER_RUN, age=600))
+    assert _lines(post(env, chat("openclaw/mc-chat", user=USER, stream=True))[2])[-1]["tools"] == "none"
+
+
+def test_rule_2_text_already_sent_means_may_have_begun(relay, tmp_path):
+    env = _failing(relay, tmp_path, {"type": "rate_limit_error"}, folder=_marks(tmp_path), partial="Partly")
+    assert _lines(post(env, chat("openclaw/mc-chat", user=USER, stream=True))[2])[-1]["tools"] == "may_have_begun"
+
+
+@pytest.mark.parametrize("setup", ["no-setting", "no-ready", "missing-folder"])
+def test_rule_2_no_way_to_know_is_unknown_never_none(relay, tmp_path, setup):
+    folder = {"no-setting": None, "no-ready": _marks(tmp_path, ready=False), "missing-folder": tmp_path / "nope"}[setup]
+    env = _failing(relay, tmp_path, {"type": "rate_limit_error"}, folder=folder)
+    assert _lines(post(env, chat("openclaw/mc-chat", user=USER, stream=True))[2])[-1]["tools"] == "unknown"
+
+
+def test_rule_1_a_non_streaming_error_reports_in_headers(relay, tmp_path):
+    env = relay(MC_RELAY_TOOL_STARTS=str(_marks(tmp_path)))
+    env.gateway.mode, env.gateway.error, env.gateway.error_status = "json_error", {"type": "insufficient_quota", "message": "x"}, 402
+    status, headers, _ = post(env, chat("openclaw/mc-chat", user=USER))
+    got = {k.lower(): v for k, v in headers.items()}
+    assert status == 402 and got["x-mc-plan-signal"] == "plan_exhausted" and got["x-mc-plan-tools"] == "none"
+    env.gateway.error, env.gateway.error_status = {"type": "api_error"}, 500
+    assert "x-mc-plan-signal" not in {k.lower() for k in post(env, chat("openclaw/mc-chat", user=USER))[1]}
+
+
+def test_rule_3_a_budget_error_is_marked_as_the_cap(relay, tmp_path):
+    env = _failing(relay, tmp_path, {"type": "api_error", "message": "Budget has been exceeded"}, folder=_marks(tmp_path))
+    assert _lines(post(env, chat("openclaw/mc-chat", user=USER, stream=True))[2])[-1] == {"t": "error", "class": "upstream", "cap": True, "tools": "none"}
+
+
+def test_rule_6_the_api_targets_go_on_as_the_maps_model(relay):
+    env = relay(MC_RELAY_ROUTES=json.dumps({**ROUTES, "api-openai-strong": "minimoi-gateway/minimoi-openai-strong"}))
+    assert post(env, chat("openclaw/mc-chat"), **{"X-MC-Route": "api-openai-strong"})[0] == 200
+    assert {k.lower(): v for k, v in env.gateway.seen[-1]["headers"].items()}["x-openclaw-model"] == "minimoi-gateway/minimoi-openai-strong"

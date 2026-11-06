@@ -1688,11 +1688,13 @@ def _ui_turn(body: dict, binding: dict | None = None) -> tuple[dict, int]:
             kept, early = _history_begin(body, owner_text, attachment_names, channel)
             if early is not None:
                 return early
-        routed, model_token = None, None
+        routed, model_token, route_token, route_state = None, None, None, None
         try:
             before = _cos_files.snapshot() if _cos_files is not None else None
             routed = model_route.for_turn(_history, kept["conversation_id"]) if kept else None     # fixed for this turn; refuses, never substitutes
             model_token = openclaw_backend_module.turn_model.set(model_route.runtime_model(routed))
+            route_state = {"route": routed} if routed is not None else None
+            route_token = openclaw_backend_module.turn_route.set(route_state)
             result = _process_confer_turn(
                 text,
                 channel=channel,
@@ -1707,7 +1709,7 @@ def _ui_turn(body: dict, binding: dict | None = None) -> tuple[dict, int]:
             )
             payload = result.public_dict()
             if routed is not None:
-                model_route.record(_history, kept["conversation_id"], routed,
+                model_route.record(_history, kept["conversation_id"], route_state.get("switched") or routed,
                                    _bindings.served_for_turn(_receipt_turn_id(kept["turn_id"])) if _bindings is not None else None)
             if before is not None:
                 delivered = _cos_files.delivered_since(before)
@@ -1725,6 +1727,8 @@ def _ui_turn(body: dict, binding: dict | None = None) -> tuple[dict, int]:
         finally:
             if model_token is not None:       # this thread's next turn, Telegram's say, must not inherit this choice
                 openclaw_backend_module.turn_model.reset(model_token)
+            if route_token is not None:
+                openclaw_backend_module.turn_route.reset(route_token)
         if not kept and not payload.get("operation"):     # notes, reminders and /new keep their own records
             conversation_log.append(_conversations_dir, conversation_id=result.conversation_id, turn_id=result.turn_id,
                                     channel=channel, owner_text=owner_text, attachments=attachment_names,

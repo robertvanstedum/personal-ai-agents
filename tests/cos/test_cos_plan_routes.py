@@ -397,3 +397,283 @@ def test_the_pickers_write_needs_the_portals_csrf_and_is_forwarded_signed(monkey
 def test_the_picker_script():
     run = subprocess.run(["node", str(ROOT / "tests/cos/cos_route_picker.test.cjs")], capture_output=True, text=True, timeout=60)
     assert run.returncode == 0, run.stdout + run.stderr
+
+
+# ── Plan failover, Robert's decision of 6 Nov 2026: the seven rules through the real adapter and binding store ──
+
+from core.model_routes import served_receipt, snapshot, switched_route  # noqa: E402
+from domains.cos.binding import BindingStore, NotBound, TurnBinder  # noqa: E402
+
+RUN_A, RUN_B = "chatcmpl_00000001-0000-4000-8000-000000000000", "chatcmpl_00000002-0000-4000-8000-000000000000"
+TURN = "11111111-1111-4111-8111-111111111111"
+CHUNK = {"object": "chat.completion.chunk", "model": "openclaw/cos-agent-a"}
+
+
+class _Sse:
+    status_code = 200
+    text = ""
+
+    def __init__(self, run, *events):
+        self.lines = ["data: " + json.dumps({**CHUNK, "id": run, "choices": [{"delta": {"role": "assistant"}}]})]
+        self.lines += ["data: " + json.dumps(e if "error" in e else {**CHUNK, "id": run, "choices": [e]}) for e in events]
+        self.lines.append("data: [DONE]")
+
+    def iter_lines(self, **_):
+        return iter(self.lines)
+
+
+def _error(kind, message="x"):
+    return {"error": {"type": kind, "message": message}}
+
+
+def _ok(run=RUN_B):
+    return _Sse(run, {"delta": {"content": "Answer."}}, {"delta": {}, "finish_reason": "stop"})
+
+
+def _cos_route(*, failover=True):
+    catalogue = json.loads(json.dumps(load_catalogue(ROOT / "core/model_routes/catalogue.json")))
+    astra = next(r for r in catalogue["routes"] if r["route_id"] == ASTRA)
+    astra["offered"]["cos"] = "available"
+    if not failover:
+        astra.pop("failover")
+    catalogue["roles"]["cos-conversation"]["route"] = ASTRA
+    return snapshot(catalogue, "cos-conversation")
+
+
+class _Failover:
+    def __init__(self, tmp_path, monkeypatch, *answers, route=None, binder=True):
+        monkeypatch.setattr(openclaw_backend, "_TOOL_REPORT_GRACE_S", 0)
+        self.store = BindingStore(tmp_path / "b" / "b.sqlite3", "dev")
+        self.store.start_epoch("e1")
+        self.store.register_instance("a" * 32)
+        self.posts, self.answers = [], list(answers)
+        self.backend = _backend(self._post, binder=None)
+        self.backend._binder = TurnBinder(self.store) if binder else None
+        self.state = {"route": route or _cos_route()}
+        self.tokens = (openclaw_backend.turn_route.set(self.state), openclaw_backend.turn_model.set("openai/gpt-6-astra"))
+        self.context = {"confer": {"conversation_id": "c", "receipt_id": TURN},
+                        "binding": {"origin": "owner", "principal": "robert", "owner_request_id": "r"}}
+
+    def _post(self, url, headers=None, json=None, **kw):
+        self.posts.append({"model": headers.get("x-openclaw-model"), "user": json["user"], "messages": json["messages"]})
+        answer = self.answers.pop(0)
+        return answer(self) if callable(answer) else answer
+
+    def turn(self):
+        return self.backend.call_backend("hello", self.context, {})
+
+    def close(self):
+        openclaw_backend.turn_route.reset(self.tokens[0])
+        openclaw_backend.turn_model.reset(self.tokens[1])
+
+
+@pytest.fixture
+def failover(tmp_path, monkeypatch):
+    made = []
+
+    def build(*answers, **kw):
+        made.append(_Failover(tmp_path, monkeypatch, *answers, **kw))
+        return made[-1]
+    yield build
+    for one in made:
+        one.close()
+
+
+@pytest.mark.parametrize("kind", ["rate_limit_error", "insufficient_quota", "authentication_error"])
+def test_rule_1_each_declared_signal_moves_the_turn(failover, kind):
+    f = failover(_Sse(RUN_A, _error(kind)), _ok())
+    reply = f.turn()
+    assert [p["model"] for p in f.posts] == ["openai/gpt-6-astra", "minimoi-gateway/minimoi-openai-strong"]
+    assert reply.startswith("Answer.") and "the API" in reply and f.state["switched"]["route_id"] == "api-openai-strong"
+
+
+@pytest.mark.parametrize("error", [_error("api_error", "rate limit reached"), _error("permission_error"), _error("invalid_request_error"), {"error": {"message": "internal error"}}])
+def test_rule_1_anything_else_never_switches_and_reads_as_it_always_did(failover, error):
+    f = failover(_Sse(RUN_A, error), _ok())
+    with pytest.raises(openclaw_backend.AgentRuntimeError) as failed:
+        f.turn()
+    assert "invalid response" in str(failed.value) and len(f.posts) == 1 and "switched" not in f.state
+
+
+def test_rule_1_a_non_200_never_switches(failover):
+    f = failover(FakeResponse(status_code=429, text="too many"), _ok())
+    with pytest.raises(openclaw_backend.AgentRuntimeError) as failed:
+        f.turn()
+    assert "HTTP 429" in str(failed.value) and len(f.posts) == 1
+
+
+@pytest.mark.parametrize("report", ["calls", "native", "served"])
+def test_rule_2_any_report_of_activity_on_the_run_stops_the_switch(failover, report):
+    def down(f):
+        def lines():
+            yield _Sse(RUN_A).lines[0]
+            f.store.attach_run(TURN, RUN_A)
+            if report == "native":
+                f.store.log_native(run_id=RUN_A, tool_call_id="c1", tool="exec", target="x")
+            elif report == "served":
+                f.store.record_served(run_id=RUN_A, fields={"provider": "openai", "model": "gpt-6-astra"})
+            else:
+                f.store._db().execute("INSERT INTO calls VALUES(?,?,?,?,?,NULL,NULL)", (TURN, "c1", "cos_actions", "t", 1))
+            yield "data: " + json.dumps(_error("rate_limit_error"))
+        resp = _Sse(RUN_A)
+        resp.iter_lines = lambda **_: lines()
+        return resp
+    f = failover(down, _ok())
+    with pytest.raises(openclaw_backend.AgentRuntimeError) as failed:
+        f.turn()
+    assert "A tool may already have started" in str(failed.value) and len(f.posts) == 1 and "switched" not in f.state
+
+
+def test_rule_2_text_already_received_stops_the_switch(failover):
+    f = failover(_Sse(RUN_A, {"delta": {"content": "Part"}}, _error("rate_limit_error")), _ok())
+    with pytest.raises(openclaw_backend.AgentRuntimeError, match="A tool may already have started"):
+        f.turn()
+    assert len(f.posts) == 1
+
+
+def test_rule_2_no_binding_means_no_evidence_and_no_switch(failover):
+    f = failover(_Sse(RUN_A, _error("rate_limit_error")), _ok())
+    f.context.pop("binding")
+    with pytest.raises(openclaw_backend.AgentRuntimeError, match="A tool may already have started"):
+        f.turn()
+    assert len(f.posts) == 1
+
+
+def test_rule_2_a_turn_with_no_binder_at_all_does_not_stream_so_it_never_switches(failover):
+    f = failover(FakeResponse(status_code=429, text="too many"), binder=False)
+    with pytest.raises(openclaw_backend.AgentRuntimeError):
+        f.turn()
+    assert len(f.posts) == 1
+
+
+def test_rule_2_the_api_run_takes_the_binding_and_a_late_call_from_the_plan_run_finds_none(failover):
+    f = failover(_Sse(RUN_A, _error("rate_limit_error")), _ok())
+    f.turn()
+    assert f.context["tool_binding"] == "bound"
+    assert f.store.trace(TURN)["binding"]["run_id"] == RUN_B
+    with pytest.raises(NotBound):
+        f.store.resolve(run_id=RUN_A, tool_call_id="c", instance_id="a" * 32, agent_id="cos-agent-a",
+                        session_user=f.posts[0]["user"], wait_s=0)
+
+
+def test_rule_2_the_store_will_not_move_a_run_that_acted_or_a_stopped_turn(failover):
+    store = failover().store
+    for turn, run in ((TURN, RUN_A), ("t2", "chatcmpl_00000003-0000-4000-8000-000000000000")):
+        store.record(turn, principal="robert", origin="owner", scope="owner", audience="c", agent_entry="cos-agent-a",
+                     session_user="u" + turn, lifetime_s=60)
+        store.attach_run(turn, run)
+    store.record_served(run_id=RUN_A, fields={"provider": "openai", "model": "gpt-6-astra"})
+    assert store.quiet(TURN, RUN_A) is False and store.move_run(TURN, RUN_A, RUN_B) is False
+    store.revoke("t2")
+    assert store.move_run("t2", "chatcmpl_00000003-0000-4000-8000-000000000000", RUN_B) is False
+    assert store.quiet("t2", RUN_A) is False
+
+
+def test_rule_3_a_refused_api_attempt_says_both_unavailable(failover):
+    f = failover(_Sse(RUN_A, _error("rate_limit_error")), FakeResponse(status_code=400, text="model not allowed"))
+    with pytest.raises(openclaw_backend.AgentRuntimeError, match="both unavailable"):
+        f.turn()
+
+
+def test_rule_3_the_cap_reached_says_both_unavailable(failover):
+    f = failover(_Sse(RUN_A, _error("rate_limit_error")), _Sse(RUN_B, _error("api_error", "Budget has been exceeded")))
+    with pytest.raises(openclaw_backend.AgentRuntimeError, match="both unavailable"):
+        f.turn()
+
+
+def test_rule_4_the_words_follow_the_evidence_and_the_receipt_says_api(failover):
+    def answer(f):
+        f.store.record_served(run_id=RUN_B, fields={"provider": "minimoi-gateway", "model": "minimoi-openai-strong"})
+        return _ok()
+    f = failover(_Sse(RUN_A, _error("insufficient_quota")), answer)
+    reply = f.turn()
+    assert "quota is used up" in reply and "ran on the API: minimoi-openai-strong" in reply and "tries the plan again" in reply
+    receipt = served_receipt(f.state["switched"], f.store.served_for_turn(TURN))
+    assert (receipt["route_id"], receipt["billing_label"], receipt["served_matches"]) == ("api-openai-strong", "API", True)
+    assert receipt["switched_from"] == ASTRA
+
+
+def test_rule_4_with_no_evidence_it_says_sent_not_ran(failover):
+    f = failover(_Sse(RUN_A, _error("rate_limit_error")), _ok())
+    assert "was sent to the API route" in f.turn()
+
+
+def test_rule_5_the_same_session_and_messages_go_to_the_api_route(failover):
+    f = failover(_Sse(RUN_A, _error("rate_limit_error")), _ok())
+    f.turn()
+    assert f.posts[0]["user"] == f.posts[1]["user"] and f.posts[0]["messages"] == f.posts[1]["messages"]
+
+
+def test_rule_5_the_choice_stays_the_receipt_says_api_and_the_next_turn_tries_the_plan(page):
+    cos, seen, _ = page
+    cid = cos._history.ensure_default()["conversation_id"]
+
+    def switch(text, **kw):
+        seen.append(openclaw_backend.turn_model.get())
+        state = openclaw_backend.turn_route.get()
+        state["switched"] = switched_route(state["route"], "rate_limit")
+        return _Result()
+    plain = cos._process_confer_turn
+    cos._process_confer_turn = switch
+    assert cos._ui_turn({"text": "hello", "request_id": "r" * 32, "conversation_id": cid})[1] == 200
+    shown = model_route.view_for(cos._history, cid)
+    assert shown["last_turn"]["route_id"] == "api-openai-strong" and shown["last_turn"]["billing_label"] == "API"
+    assert shown["last_turn"]["switched_from"] == ASTRA and shown["selected_route_id"] == ASTRA and shown["revision"] == 0
+    assert openclaw_backend.turn_route.get() is None
+    cos._process_confer_turn = plain
+    assert cos._ui_turn({"text": "again", "request_id": "s" * 32, "conversation_id": cid})[1] == 200
+    assert seen == ["openai/gpt-6-astra", "openai/gpt-6-astra"]
+    assert model_route.view_for(cos._history, cid)["last_turn"]["route_id"] == ASTRA
+
+
+def test_rule_6_no_declared_target_means_no_switch_and_it_says_so(failover):
+    f = failover(_Sse(RUN_A, _error("rate_limit_error")), _ok(), route=_cos_route(failover=False))
+    with pytest.raises(openclaw_backend.AgentRuntimeError, match="No API route is declared"):
+        f.turn()
+    assert len(f.posts) == 1
+
+
+def test_rule_6_a_turn_with_no_route_never_switches(failover):
+    f = failover(_Sse(RUN_A, _error("rate_limit_error")), _ok())
+    openclaw_backend.turn_route.set(None)
+    with pytest.raises(openclaw_backend.AgentRuntimeError, match="No API route is declared"):
+        f.turn()
+    assert len(f.posts) == 1
+
+
+def test_rule_7_a_failed_api_attempt_never_starts_a_third(failover):
+    f = failover(_Sse(RUN_A, _error("rate_limit_error")), _Sse(RUN_B, _error("insufficient_quota")), _ok())
+    with pytest.raises(openclaw_backend.AgentRuntimeError, match="both unavailable"):
+        f.turn()
+    assert [p["model"] for p in f.posts] == ["openai/gpt-6-astra", "minimoi-gateway/minimoi-openai-strong"]
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="needs node")
+class TestFailoverRuntimeConfig:
+    REF = "minimoi-gateway/minimoi-openai-strong"
+
+    def test_rule_3_with_its_own_capped_key_the_target_is_allowed_never_primary_never_a_config_fallback(self, tmp_path):
+        run, config = _apply(tmp_path, {**PLAN_ENV, "COS_FAILOVER_ROUTES": self.REF, "COS_GATEWAY_KEY_CAPPED": "1"})
+        assert run.returncode == 0, run.stderr
+        assert config["models"]["providers"]["minimoi-gateway"]["apiKey"] == "${MINIMOI_MODEL_GATEWAY_KEY}"
+        for agent in [config["agents"]["defaults"], *config["agents"]["entries"].values()]:
+            assert agent["model"] == {"primary": "openai/gpt-6-astra", "fallbacks": []} and self.REF in agent["modelPolicy"]["allow"]
+
+    def test_rule_3_a_capped_key_file_is_proof(self, tmp_path):
+        key = tmp_path / "key"
+        key.write_text("sk-" + "a" * 22 + "\n")
+        run, config = _apply(tmp_path, {**PLAN_ENV, "COS_FAILOVER_ROUTES": self.REF, "COS_GATEWAY_KEY_FILE": str(key)})
+        assert run.returncode == 0 and self.REF in config["agents"]["defaults"]["modelPolicy"]["allow"]
+
+    def test_rule_3_no_proof_of_a_capped_key_means_no_target_and_cos_still_starts(self, tmp_path):
+        run, config = _apply(tmp_path, {**PLAN_ENV, "COS_FAILOVER_ROUTES": self.REF, "COS_GATEWAY_KEY_FILE": str(tmp_path / "none")})
+        assert run.returncode == 0 and "models" not in config
+        assert self.REF not in config["agents"]["defaults"]["modelPolicy"]["allow"]
+
+    @pytest.mark.parametrize("bad", ["minimoi-gateway/minimoi-xai-low", "minimoi-gateway/minimoi-anthropic-strong", "openai/gpt-6-astra", "minimoi-gateway/minimoi-cos-agent"])
+    def test_rule_6_only_openais_api_tiers_may_be_named(self, tmp_path, bad):
+        assert _apply(tmp_path, {**PLAN_ENV, "COS_FAILOVER_ROUTES": bad, "COS_GATEWAY_KEY_CAPPED": "1"})[0].returncode != 0
+
+    def test_a_gateway_host_ignores_it(self, tmp_path):
+        run, config = _apply(tmp_path, {"COS_FAILOVER_ROUTES": self.REF, "COS_GATEWAY_KEY_CAPPED": "1"})
+        assert run.returncode == 0 and config == json.loads(CONFIG.read_text())

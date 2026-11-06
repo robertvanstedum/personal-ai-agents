@@ -49,10 +49,20 @@ def test_as_shipped_no_picker_shows_it_and_no_conversation_can_choose_it(agent):
     assert refused.value.code == "route_unknown"
 
 
-def test_as_shipped_the_relay_list_is_only_the_subscription_routes():
+def test_as_shipped_the_relay_list_is_the_subscription_routes_and_their_failover_targets_and_never_grok():
     assert relay_routes(CAT) == {"plan-openai-strong": "openai/gpt-6-astra", "plan-openai-mid": "openai/gpt-6-sol",
                                  "plan-openai-low": "openai/gpt-6-luna", "plan-anthropic-strong": "anthropic/claude-opus-5",
-                                 "plan-anthropic-mid": "anthropic/claude-sonnet-4-6"}
+                                 "plan-anthropic-mid": "anthropic/claude-sonnet-4-6",
+                                 "api-openai-strong": "minimoi-gateway/minimoi-openai-strong",
+                                 "api-openai-mid": "minimoi-gateway/minimoi-openai-mid",
+                                 "api-openai-low": "minimoi-gateway/minimoi-openai-low",
+                                 "api-anthropic-strong": "minimoi-gateway/minimoi-anthropic-strong",
+                                 "api-anthropic-mid": "minimoi-gateway/minimoi-anthropic-mid"}
+
+
+def test_no_failover_lands_on_grok_and_grok_declares_none():
+    assert "failover" not in route_of(CAT, GROK) and route_of(CAT, GROK)["offered"] == {}
+    assert all(r["failover"] != GROK and "xai" not in r["failover"] for r in CAT["routes"] if "failover" in r)
 
 
 def test_a_reason_instead_of_available_keeps_it_out_of_the_relay():

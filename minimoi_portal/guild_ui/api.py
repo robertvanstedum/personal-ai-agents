@@ -2070,12 +2070,15 @@ def _carried_history(services, conv, principal, route, note):
 def _with_route_receipt(events, route, turn_id, record, through_note_id=None):
     """Take the runtime's evidence out of the event stream and keep it; every other event passes untouched. The
     receipt is written when the stream ends, however it ends: no evidence stays no evidence, never the selection."""
-    from .mc.stream import Served
+    from .mc.stream import Served, Switched
     served = None
     try:
         for event in events:
             if isinstance(event, Served):
                 served = event.fields
+                continue
+            if isinstance(event, Switched):              # the receipt names the route this turn was really sent on
+                route = event.route
                 continue
             yield event
     finally:
@@ -2460,7 +2463,8 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             result = collect(services.mc, req, on_run=tools.attach_run)
         else:
             result = services.mc.turn(req)
-        _route_recorder(conversations, conv, principal)(route, turn_id, (result.trace or {}).get("served"), note.get("id"))
+        _route_recorder(conversations, conv, principal)((result.trace or {}).get("route") or route, turn_id,
+                                                        (result.trace or {}).get("served"), note.get("id"))
         duration_ms = int((time.monotonic() - started) * 1000)
         job_started = None
         if delivery and result.status == "answered" and (result.trace or {}).get("finish_reason") == "length":

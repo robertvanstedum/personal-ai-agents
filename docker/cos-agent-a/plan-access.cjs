@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 /* CoS on a subscription, only where a host asks for it: COS_RUNTIME_MODEL_ACCESS=plan. Every other host keeps the pinned
- * gateway config unchanged. In plan mode no API route can serve a turn: the model allowlist holds only subscription models,
- * there are no fallbacks, and the gateway provider is gone. CoS's web search keeps its own key, a separate service.
+ * gateway config unchanged. In plan mode the model allowlist holds subscription models, there are no config fallbacks,
+ * and the gateway provider is gone, unless a host names one of the two exceptions below. CoS's web search keeps its own key, a separate service.
  * The one exception is a host's explicit COS_METERED_ROUTES: Grok tiers an owner may choose per conversation, pay per use.
- * They are allowed, never a primary and never a fallback, in either mode. */
+ * They are allowed, never a primary and never a fallback, in either mode.
+ * COS_FAILOVER_ROUTES names a plan route's declared API target (core/model_routes catalogue, failover), same provider. Allowed
+ * in plan mode only and never a config fallback: MiniMoi decides a switch from the turn's signal and tool evidence. It needs
+ * proof CoS holds its own capped key, never the master key: the key file, or COS_GATEWAY_KEY_CAPPED=1 where a host passes
+ * its own key by environment. Without that proof there is no target, so no switch; CoS still starts. */
 'use strict';
 const fs = require('node:fs');
 const REF = /^openai\/[a-zA-Z0-9._-]+$/;      // Claude needs its CLI in this image and its own limits first
@@ -14,6 +18,19 @@ function meteredRoutes(env) {
   const refs = String(env.COS_METERED_ROUTES || '').split(',').map(s => s.trim()).filter(Boolean);
   if (new Set(refs).size !== refs.length || refs.some(r => !METERED.test(r))) throw Error('COS_METERED_ROUTES must name minimoi-xai tiers');
   return refs;
+}
+
+const FAILOVER = /^minimoi-gateway\/minimoi-openai-(?:strong|mid|low)$/;
+function cappedKey(env) {
+  if (env.COS_GATEWAY_KEY_CAPPED === '1') return true;
+  try {
+    return /^sk-[A-Za-z0-9_-]{16,200}$/.test(fs.readFileSync(env.COS_GATEWAY_KEY_FILE || '/run/cos-key/key', 'utf8').split('\n')[0].trim());
+  } catch { return false; }
+}
+function failoverRoutes(env) {
+  const refs = String(env.COS_FAILOVER_ROUTES || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (new Set(refs).size !== refs.length || refs.some(r => !FAILOVER.test(r))) throw Error('COS_FAILOVER_ROUTES must name OpenAI API tiers');
+  return cappedKey(env) ? refs : [];
 }
 
 function meteredModels(refs) {
@@ -44,9 +61,10 @@ function routes(env) {
 }
 
 function apply(config, env) {
-  const metered = meteredRoutes(env);
-  if ((env.COS_RUNTIME_MODEL_ACCESS || 'gateway') === 'gateway') return metered.length ? offerOnGateway(config, metered) : config;
+  const offered = meteredRoutes(env);
+  if ((env.COS_RUNTIME_MODEL_ACCESS || 'gateway') === 'gateway') return offered.length ? offerOnGateway(config, offered) : config;
   if (env.COS_RUNTIME_MODEL_ACCESS !== 'plan') throw Error('Unknown COS model access');
+  const metered = [...offered, ...failoverRoutes(env)];
   const profile = env.COS_PLAN_AUTH_PROFILE;
   if (!profile || !profile.startsWith('openai:')) throw Error('Explicit OpenAI OAuth profile required');
   const refs = routes(env), model = {primary: refs[0], fallbacks: []}, modelPolicy = {allow: [...refs, ...metered]};
@@ -62,7 +80,7 @@ function apply(config, env) {
 }
 
 function validate(config, env) {
-  const metered = meteredRoutes(env), refs = routes(env), allow = [...refs, ...metered];
+  const metered = [...meteredRoutes(env), ...failoverRoutes(env)], refs = routes(env), allow = [...refs, ...metered];
   const providers = config.models?.providers || {};
   if (JSON.stringify(providers) !== JSON.stringify(metered.length ? {[GATEWAY]: gatewayProvider(metered)} : {})) throw Error('No API provider may remain in plan mode');
   for (const a of [config.agents.defaults, ...Object.values(config.agents.entries)]) {
@@ -79,4 +97,4 @@ if (require.main === module) {
   fs.writeFileSync(tmp, JSON.stringify(out, null, 2) + '\n', {mode: 0o600});
   fs.renameSync(tmp, file);
 }
-module.exports = {apply, validate, routes, meteredRoutes};
+module.exports = {apply, validate, routes, meteredRoutes, failoverRoutes};
