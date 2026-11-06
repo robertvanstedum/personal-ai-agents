@@ -407,7 +407,7 @@ def main():
                     TurnJournal(journal_dir / "turns"), teammate=env.get("ROOMS_TEAMMATE", "mc"),
                     alive_path="/tmp/rooms-worker/alive", agent_id=agent_id,
                     discussion=Discussion("mc", secrets / "discussion-gateway.token"))
-    log(event="started", records=records_url, relay=relay_url, teammate=worker.teammate)
+    log(event="started", records=records_url, relay=relay_url, teammate=worker.teammate, profile=profile)
     worker.start_housekeeping()
     while True:
         try:

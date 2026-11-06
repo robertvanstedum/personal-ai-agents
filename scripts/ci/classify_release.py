@@ -90,7 +90,10 @@ OPS_ONLY_FILES = frozenset({"scripts/operations/deploy_mc_container_ec2.sh",
                             "docker-compose.runtime.prod.yml",
                             # MC's 1.2 layer: travels in MC's own image and is refreshed by MC's tag release, only where
                             # an operator already placed it. No service in this pipeline reads it.
-                            "docker-compose.mc-1-2-production.yml"})
+                            "docker-compose.mc-1-2-production.yml",
+                            # Guildhall on production: a by-hand image build and a host operator run on Robert's word.
+                            ".github/workflows/rooms-worker-image.yml",
+                            "scripts/operations/guildhall_prod.sh"})
 # The host runtime's installer (host runtime spec v0.5 R3.4-a; S1-H): run by an operator on the Mac (launchd) or on
 # the staging host (the systemd templates), on Robert's word, from a checkout; it installs a bundle outside any
 # checkout and is in no service image's command, compose file, Dockerfile or workflow (the test guards this). Without
