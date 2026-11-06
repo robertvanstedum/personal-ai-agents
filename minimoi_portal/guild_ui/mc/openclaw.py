@@ -35,7 +35,12 @@ timeout), 256 KB of text, a 64 KB line. ``stop()`` asks the relay to abort the
 turn (POST /v1/turns/stop). A non-200 from the relay is classified exactly as
 the non-streaming path's. Both portal paths outlast the relay's 300 s budget,
 including silence while OpenClaw works through tools. Timeout remains uncertain;
-no turn is automatically retried.
+no turn is automatically retried, with one exception.
+
+Plan failover (Robert, 6 Nov 2026; docs/runbooks/model_routes_plan.md): a plan route that declares an API target moves to it,
+once, within the turn, when the relay reports a declared plan-unavailable signal and that no tool began. Doubt about tools
+stops the turn and says so. Any other error is reported as ever. The same session and request go to the target, the next turn
+tries the plan again, and the conversation's choice is not touched.
 """
 from __future__ import annotations
 
@@ -46,8 +51,11 @@ from urllib.parse import urlparse
 
 from collections import namedtuple
 
+from core.model_routes import switch_words, switched_route
+
 from .backend import Health, MasterCraftsmanBackend, TurnResult
-from .stream import Failure, Limits, StreamRefused, read_stream, served_fields
+from .stream import (PLAN_SIGNAL_WORDS, Delta, Failure, Finish, Limits, RunStarted, Served, StreamRefused, Switched, Usage, read_stream,
+                     served_fields)
 
 # What the header needs to remember about the last turn: its status and failure class, never its reply text, usage or trace
 # (a Private answer must not stay in this process's memory after the request ends; Codex review, 7 Oct).
@@ -97,6 +105,13 @@ def parse_served(raw) -> dict | None:
         return served_fields(json.loads(raw)) if raw else None
     except (TypeError, ValueError):
         return None
+
+
+def _plan_headers(response) -> tuple[str | None, str | None]:
+    """What the relay judged about a non-200: its declared signal, and whether a tool may have begun."""
+    headers = getattr(response, "headers", None) or {}
+    signal = headers.get("X-MC-Plan-Signal")
+    return (signal, headers.get("X-MC-Plan-Tools")) if signal in PLAN_SIGNAL_WORDS else (None, None)
 
 
 def classify_failure(status: int, body: str) -> tuple[str, str]:
@@ -224,11 +239,11 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
                               message="The turn is larger than 256 KB; nothing was sent")
         return payload
 
-    def _headers(self, req) -> dict:
+    def _headers(self, req, route: dict | None = None) -> dict:
         headers = {**self._auth(), "Content-Type": "application/json"}
         if req.correlation_id:
             headers["X-MC-Correlation-Id"] = req.correlation_id
-        route = req.route or {}
+        route = route or req.route or {}
         if route.get("runtime_override"):                # the route id only: the relay alone maps it to a model
             headers["X-MC-Route"] = route["route_id"]
         return headers
@@ -241,7 +256,48 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
         payload = self._payload(req, stream=True)
         if isinstance(payload, TurnResult):
             raise StreamRefused(payload.failure_class, payload.message)
-        return self._stream(payload, self._headers(req), cancel)
+        return self._stream_with_failover(req, payload, cancel)
+
+    def _stream_with_failover(self, req, payload: bytes, cancel):
+        """One attempt, and at most one more. Nothing here can start a third: the moved route has no failover."""
+        route, plan_run, down = req.route or {}, None, None
+        for event in self._stream(payload, self._headers(req), cancel):
+            if isinstance(event, RunStarted):
+                plan_run = event.run_id
+            if isinstance(event, Failure) and event.plan_signal:
+                down = event
+                break
+            yield event
+        if down is None:
+            return
+        target = route.get("failover")
+        if not target:
+            yield Failure(down.cls, down.turn_status, down.http_status)     # no switch declared: reported as ever
+            return
+        if down.tools != "none":
+            yield Failure("plan_switch_uncertain", "error", down.http_status)
+            return
+        moved = switched_route(route, down.plan_signal)
+        yield Switched(moved)
+        answered, served, tail = False, None, []
+        for event in self._stream(payload, self._headers(req, moved), cancel):
+            if isinstance(event, RunStarted):
+                yield RunStarted(event.run_id, replaces=plan_run or event.run_id)
+            elif isinstance(event, Failure):
+                refused = (event.http_status is not None and event.http_status not in (502, 504)      # those came after a call
+                           and event.cls not in ("stopped", "not_ready", "one_turn_in_flight"))
+                unused = not answered and (refused or ((event.plan_signal or event.cap) and event.tools == "none"))
+                yield Failure("plan_and_api_unavailable", "unavailable", event.http_status) if unused else event
+                return
+            elif isinstance(event, (Finish, Usage, Served)):    # held: the sentence below goes in before the finish
+                served = event.fields if isinstance(event, Served) else served
+                tail.append(event)
+            else:
+                answered = answered or isinstance(event, Delta)
+                yield event
+        if answered and any(isinstance(event, Finish) for event in tail):
+            yield Delta("\n\n" + switch_words(moved, served))
+        yield from tail
 
     def _stream(self, payload: bytes, headers: dict, cancel):
         if cancel is not None and cancel.is_set():
@@ -280,6 +336,11 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
             ctype = str((getattr(response, "headers", None) or {}).get("Content-Type", ""))
             if status != 200 or "ndjson" not in ctype:
                 text = getattr(response, "text", "") or ""
+                signal, tools = _plan_headers(response)
+                if status != 200 and signal:
+                    yield Failure(classify_failure(status, text)[1], classify_failure(status, text)[0], http_status=status,
+                                  plan_signal=signal, tools=tools)
+                    return
                 if status == 409 and "relay_stopped" in text:
                     yield Failure("stopped", "cancelled", http_status=status)
                     return
@@ -309,6 +370,29 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
         return getattr(response, "status_code", 0) == 200
 
     def _turn(self, req, cancel=None) -> TurnResult:
+        """The buffered path's one attempt, and at most one more (the same rules as the stream's)."""
+        route = req.route or {}
+        result = self._attempt(req, cancel, route)
+        signal = (result.trace or {}).get("plan_signal")
+        target = route.get("failover")
+        if not signal or not target:
+            return result
+        if result.trace.get("plan_tools") != "none":
+            return TurnResult("error", self.kind, failure_class="plan_switch_uncertain", trace=result.trace,
+                              message="The plan is unavailable and a tool may have started; nothing was sent again")
+        moved = switched_route(route, signal)
+        second = self._attempt(req, cancel, moved)
+        trace = {**(second.trace or {}), "route": moved}
+        if second.status == "answered":
+            words = switch_words(moved, trace.get("served"))
+            return TurnResult("answered", self.kind, text=f"{second.text}\n\n{words}", usage=second.usage, trace=trace)
+        if second.status in ("unavailable",) or trace.get("plan_signal"):
+            return TurnResult("unavailable", self.kind, failure_class="plan_and_api_unavailable", trace=trace,
+                              message="The plan and the API route are both unavailable")
+        return TurnResult(second.status, self.kind, text=second.text, failure_class=second.failure_class,
+                          message=second.message, usage=second.usage, trace=trace)
+
+    def _attempt(self, req, cancel, route) -> TurnResult:
         if not self.connected:
             return TurnResult("unavailable", self.kind, failure_class="not_connected",
                               message="Master Craftsman is not connected yet")
@@ -317,7 +401,7 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
         payload = self._payload(req)
         if isinstance(payload, TurnResult):
             return payload
-        headers = self._headers(req)
+        headers = self._headers(req, route)
         try:
             response = self._post(f"{self.url}/chat/completions", data=payload, headers=headers,
                                   timeout=(CONNECT_TIMEOUT_S, TURN_DEADLINE_S))
@@ -339,6 +423,9 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
             trace["served"] = served
         if status != 200:
             turn_status, failure = classify_failure(status, text)
+            signal, tools = _plan_headers(response)
+            if signal:
+                trace.update(plan_signal=signal, plan_tools=tools)
             return TurnResult(turn_status, self.kind, failure_class=failure, message=f"runtime answered {status}",
                               trace=trace)
         try:

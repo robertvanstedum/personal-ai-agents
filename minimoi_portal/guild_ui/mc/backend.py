@@ -237,6 +237,8 @@ UNAVAILABLE_WHY = {
     "misconfigured": "its connection settings are invalid",
     "not_verified": "connected, no answer yet",
     "route_refused": "this conversation's model route is not offered by its runtime",
+    "plan_switch_uncertain": "its plan is unavailable and a tool may have started, so it did not switch to the API",
+    "plan_and_api_unavailable": "its plan and its API route are both unavailable",
     "deadline": "the relay cancelled the run at its time limit; commands it started may still be running",
     "local_timeout": "no answer received; outcome unknown, work may still be running",
     "idle": "the relay cancelled the run after a long silence; commands it started may still be running",

@@ -134,6 +134,28 @@ def attach_run(conn, *, ledger_id: int, claim_generation: int, run_id: str, envi
     return row is not None and row[0] == run_id
 
 
+def move_run(conn, *, ledger_id: int, claim_generation: int, old_run: str, new_run: str, environment: str) -> bool:
+    """Plan failover only: this claimed turn's plan run ended before it did anything, and its API run takes over. Moved only
+    from exactly that run, only with no call ever admitted for the turn and the claim live, so a late call from the old run
+    finds no binding. False leaves the binding as it was, and the new run's tools are refused."""
+    if type(ledger_id) is not int or type(claim_generation) is not int or not isinstance(new_run, str) \
+            or not RUN_ID.fullmatch(new_run) or not isinstance(old_run, str) or not RUN_ID.fullmatch(old_run) \
+            or environment not in ("dev", "prod"):
+        raise ActionContractError("tool_run_invalid")
+    with conn.cursor() as cur:
+        _lock_current(cur, environment, "SHARE")
+        cur.execute("""UPDATE guild.mc_tool_turns t SET runtime_run_id=%s, run_bound_at=clock_timestamp()
+            FROM guild.mc_turn_ledger l
+            WHERE t.ledger_id=%s AND t.claim_generation=%s AND t.runtime_run_id=%s
+              AND l.id=t.ledger_id AND l.state='claimed' AND l.claim_generation=t.claim_generation
+              AND l.lease_until > clock_timestamp()
+              AND NOT EXISTS (SELECT 1 FROM guild.mc_tool_admissions a WHERE a.ledger_id=t.ledger_id
+                              AND a.claim_generation=t.claim_generation)
+              AND NOT EXISTS (SELECT 1 FROM guild.mc_tool_turns o WHERE o.runtime_run_id=%s)""",
+            (new_run, ledger_id, claim_generation, old_run, new_run))
+        return cur.rowcount == 1
+
+
 def register_instance(conn, *, environment: str, instance_id: str) -> bool:
     """The plugin's announcement of its gateway process (authenticated by the listener). A never-seen instance becomes
     current and the previous one is retired for good; a replacement revokes every turn bound to an earlier instance,

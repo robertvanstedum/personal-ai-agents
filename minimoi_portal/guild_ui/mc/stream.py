@@ -46,8 +46,10 @@ RUN_ID = re.compile(r"chatcmpl_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[
 
 @dataclass(frozen=True)
 class RunStarted:
-    """The runtime run this turn's request opened: the portal binds the turn's tool calls to it."""
+    """The runtime run this turn's request opened: the portal binds the turn's tool calls to it. ``replaces``: the run of the
+    plan attempt this one takes over from, on a switched turn (openclaw.py)."""
     run_id: str
+    replaces: str | None = None
 
 
 @dataclass(frozen=True)
@@ -67,6 +69,9 @@ class Failure:
     cls: str                                   # a FAILURE_CLASSES entry, or a runtime failure class
     turn_status: str = "error"                 # the TurnResult status this failure means
     http_status: int | None = None
+    plan_signal: str | None = None             # the relay's declared plan-unavailable signal (core.model_routes.PLAN_SIGNALS)
+    tools: str | None = None                   # with a signal: "none", "may_have_begun" or "unknown" (relay toolsSince)
+    cap: bool = False                          # the runtime named a budget
 
 
 class StreamRefused(Exception):
@@ -116,6 +121,16 @@ class Served:
     fields: dict
 
 
+@dataclass(frozen=True)
+class Switched:
+    """This turn moved from its plan route to the declared API route. Consumed by the route recorder, which keeps the receipt
+    against the route actually sent; the words for the owner arrive as text."""
+    route: dict
+
+
+PLAN_SIGNAL_WORDS = ("rate_limit", "plan_exhausted", "signin_expired")
+
+
 def parse_relay_line(line: str):
     """One line of the MC relay's NDJSON -> an event, or None (dropped)."""
     try:
@@ -138,7 +153,8 @@ def parse_relay_line(line: str):
         return Served(fields) if fields else None
     if kind == "error" and isinstance(obj.get("class"), str):
         cls = obj["class"] if obj["class"] in FAILURE_CLASSES else "upstream"
-        return Failure(cls)
+        return Failure(cls, plan_signal=obj.get("signal") if obj.get("signal") in PLAN_SIGNAL_WORDS else None,
+                       tools=obj.get("tools") if isinstance(obj.get("tools"), str) else None, cap=obj.get("cap") is True)
     return None
 
 
@@ -238,5 +254,5 @@ def read_stream(chunks: Iterable[bytes], *, limits: Limits, fmt: str = "ndjson",
             yield Failure("upstream")
 
 
-__all__ = ["Delta", "RunStarted", "Finish", "Usage", "Failure", "StreamRefused", "Limits", "read_stream", "parse_relay_line",
+__all__ = ["Delta", "RunStarted", "Finish", "Usage", "Failure", "Served", "Switched", "StreamRefused", "Limits", "read_stream", "parse_relay_line",
            "parse_sse_line", "STREAM_ANSWER_FINISH_REASONS", "FAILURE_CLASSES"]

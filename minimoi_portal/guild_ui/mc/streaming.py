@@ -75,9 +75,11 @@ MESSAGES = {
     "truncated": "No answer was saved: the reply ended before it was complete. Your message is kept. It may have been billed.",
     "upstream": "No answer was saved: Master Craftsman's run failed part way. Your message is kept. It may already have done some of the work and may have been billed.",
     "no_run_status": "Master Craftsman's answer carried no reply, so it was not kept.",
+    "plan_switch_uncertain": "No answer was saved: the plan became unavailable and a tool may already have started, so this turn did not switch to the API and nothing was sent again. Your message is kept. Check what happened before you ask again.",
+    "plan_and_api_unavailable": "No answer: the plan is unavailable, and the API route is too (no capped key, its cap reached, or it refused the turn). Your message is kept.",
     "not_kept": "Master Craftsman answered, but the answer could not be kept, so it is not shown. Treat it as unknown.",
 }
-PARTIAL_CLASSES = ("stopped", "deadline", "idle", "too_large", "truncated", "upstream", "local_timeout")
+PARTIAL_CLASSES = ("stopped", "deadline", "idle", "too_large", "truncated", "upstream", "local_timeout", "plan_switch_uncertain")
 RELAY_AFTER_DISPATCH = (409, 502, 504)       # relay answers that come after it called MC
 
 
@@ -312,7 +314,7 @@ class StreamRun:
         try:
             for event in ctx.events:
                 if isinstance(event, RunStarted):
-                    if not run_seen:
+                    if not run_seen or event.replaces:
                         run_seen = True
                         try:
                             ctx.on_run(event.run_id)

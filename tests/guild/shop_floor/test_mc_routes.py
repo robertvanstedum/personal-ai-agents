@@ -1,4 +1,4 @@
-"""A conversation's model route through the real portal: owner scope, revisions, next-turn switching, pinning, no fallback."""
+"""A conversation's model route through the real portal: owner scope, revisions, next-turn switching, pinning, plan failover."""
 from __future__ import annotations
 
 import json
@@ -394,3 +394,239 @@ def test_the_legacy_shared_thread_refuses_a_move_to_claude_rather_than_losing_hi
     second = _keep(client, token, "second")
     body = _stream(client, token, second["request_id"], request_id=uuid.uuid4().hex).get_data(as_text=True)
     assert "route_history_unavailable" in body and len(routed.runtime.posts) == sent_before
+
+
+# ── Plan failover, Robert's decision of 6 Nov 2026: the seven rules through the real portal and the real adapter ──
+
+RUN_A, RUN_B = "chatcmpl_11111111-1111-4111-8111-111111111111", "chatcmpl_22222222-2222-4222-8222-222222222222"
+API_ROUTE = "api-openai-strong"
+API_ANSWER = [nd({"t": "run", "id": RUN_B}), nd({"t": "delta", "text": "Answer."}), nd({"t": "finish", "reason": "stop"}),
+              nd({"t": "served", "provider": "minimoi-gateway", "model": "minimoi-openai-strong"})]
+
+
+def plan_down(signal="rate_limit", tools="none"):
+    return [nd({"t": "run", "id": RUN_A}), nd({"t": "error", "class": "upstream", "signal": signal, "tools": tools})]
+
+
+def _scripted(runtime, *scripts):
+    """Each model turn takes the next script; a tuple (status, text, headers) answers that attempt before any stream."""
+    queue, real = list(scripts), runtime.post
+
+    def post(url, data=None, headers=None, stream=False, **kw):
+        if url.endswith("/chat/completions") and queue:
+            step = queue.pop(0)
+            if isinstance(step, tuple):
+                runtime.posts.append({"url": url, "body": json.loads(data), "headers": dict(headers or {}), "stream": stream})
+                from test_mc_streaming import StreamResp
+                resp = StreamResp([], runtime, status=step[0], ctype="application/json", text=step[1])
+                resp.headers.update(step[2] if len(step) > 2 else {})
+                return resp
+            runtime.script = step
+        return real(url, data=data, headers=headers, stream=stream, **kw)
+    return post
+
+
+@pytest.fixture
+def switching(routed):
+    return routed
+
+
+def _run(floored, *scripts, text="hello"):
+    floored.extra["services"].mc._post = _scripted(floored.runtime, *scripts)
+    floored.runtime.posts.clear()
+    client = floored.owner()
+    token = floored.csrf(client)
+    note = _keep(client, token, text)
+    body = _stream(client, token, note["request_id"], request_id="rq-" + uuid.uuid4().hex).get_data(as_text=True)
+    cid = _conversation_of(client, note)
+    sent = [p["headers"].get("X-MC-Route") for p in floored.runtime.posts if p["url"].endswith("/chat/completions")]
+    return body, sent, client.get(f"{API}/conversations/{cid}/route").get_json(), client, token
+
+
+@pytest.mark.parametrize("signal", ["rate_limit", "plan_exhausted", "signin_expired"])
+def test_rule_1_each_signal_moves_the_turn_to_its_api_route(switching, signal):
+    body, sent, view, *_ = _run(switching, plan_down(signal), API_ANSWER)
+    assert sent == [ASTRA, API_ROUTE] and "Answer." in body
+
+
+def test_rule_1_an_unknown_error_never_switches_and_reads_as_it_always_did(switching):
+    body, sent, *_ = _run(switching, [nd({"t": "run", "id": RUN_A}), nd({"t": "error", "class": "upstream"})], API_ANSWER)
+    assert sent == [ASTRA] and "run failed part way" in body
+
+
+def test_rule_1_a_non_signal_http_error_never_switches(switching):
+    _, sent, *_ = _run(switching, (500, '{"error":{"message":"internal error","type":"api_error"}}'), API_ANSWER)
+    assert sent == [ASTRA]
+
+
+def test_rule_1_a_signal_before_the_stream_opens_switches_from_the_relays_headers(switching):
+    head = {"X-MC-Plan-Signal": "signin_expired", "X-MC-Plan-Tools": "none"}
+    _, sent, *_ = _run(switching, (401, '{"error":{"type":"authentication_error"}}', head), API_ANSWER)
+    assert sent == [ASTRA, API_ROUTE]
+
+
+@pytest.mark.parametrize("tools", ["may_have_begun", "unknown", None, "something new"])
+def test_rule_2_any_doubt_about_tools_stops_the_turn_and_says_so(switching, tools):
+    script = [nd({"t": "run", "id": RUN_A}), nd({k: v for k, v in {"t": "error", "class": "upstream", "signal": "rate_limit", "tools": tools}.items() if v})]
+    body, sent, view, *_ = _run(switching, script, API_ANSWER)
+    assert sent == [ASTRA] and "a tool may already have started" in body and "Answer." not in body
+    assert view["last_turn"]["route_id"] == ASTRA
+
+
+def test_rule_2_text_already_shown_stops_the_turn_too(switching):
+    script = [nd({"t": "run", "id": RUN_A}), nd({"t": "delta", "text": "Part"}), nd({"t": "error", "class": "upstream", "signal": "rate_limit", "tools": "may_have_begun"})]
+    _, sent, *_ = _run(switching, script, API_ANSWER)
+    assert sent == [ASTRA]
+
+
+def test_rule_3_a_runtime_without_the_capped_route_means_both_unavailable(switching):
+    refused = (409, '{"error":{"type":"relay_route_refused"}}')
+    body, sent, *_ = _run(switching, plan_down(), refused)
+    assert sent == [ASTRA, API_ROUTE] and "the API route is too" in body
+
+
+def test_rule_3_the_cap_reached_means_both_unavailable(switching):
+    cap = [nd({"t": "run", "id": RUN_B}), nd({"t": "error", "class": "upstream", "cap": True, "tools": "none"})]
+    body, sent, *_ = _run(switching, plan_down(), cap)
+    assert sent == [ASTRA, API_ROUTE] and "the API route is too" in body
+
+
+def test_rule_4_the_receipt_and_the_answer_say_api_and_which_model(switching):
+    body, _, view, *_ = _run(switching, plan_down("plan_exhausted"), API_ANSWER)
+    last = view["last_turn"]
+    assert (last["route_id"], last["billing_mode"], last["billing_label"]) == (API_ROUTE, "metered_api", "API")
+    assert last["served"]["model"] == "minimoi-openai-strong" and last["served_matches"] is True
+    assert last["switched_from"] == ASTRA and last["switch_signal"] == "plan_exhausted"
+    assert "quota is used up" in body and "ran on the API: minimoi-openai-strong" in body and "tries the plan again" in body
+
+
+def test_rule_4_no_evidence_is_said_as_no_evidence_and_still_never_plan(switching):
+    body, _, view, *_ = _run(switching, plan_down(), API_ANSWER[:-1])
+    assert view["last_turn"]["served"] is None and view["last_turn"]["billing_label"] == "API"
+    assert "was sent to the API route" in body and "ran on the API" not in body
+
+
+def test_rule_5_the_same_session_is_kept_the_choice_stays_and_the_next_turn_tries_the_plan(switching):
+    _, sent, view, client, token = _run(switching, plan_down(), API_ANSWER)
+    posts = [p for p in switching.runtime.posts if p["url"].endswith("/chat/completions")]
+    assert posts[0]["body"]["user"] == posts[1]["body"]["user"] and posts[0]["body"]["messages"] == posts[1]["body"]["messages"]
+    assert view["selected_route_id"] == ASTRA and view["revision"] == 0
+    switching.runtime.script = list(HAPPY)
+    switching.extra["services"].mc._post = switching.runtime.post
+    second = _keep(client, token, "second")
+    _stream(client, token, second["request_id"], request_id="rid-" + "d" * 20).get_data()
+    assert _route_sent(switching.runtime) == ASTRA
+
+
+def test_rule_5_a_claude_conversation_carries_the_api_turn_when_it_goes_back(switching):
+    from core.model_routes import served_receipt, snapshot, switched_route
+    from minimoi_portal.guild_ui import mc_continuity
+    conv = {"routes": {"mc": {"route_id": CLAUDE}}}
+    from core.model_routes import load_catalogue
+    catalogue = json.loads(json.dumps(load_catalogue()))
+    next(r for r in catalogue["routes"] if r["route_id"] == CLAUDE)["offered"]["mc"] = "available"
+    plan = snapshot(catalogue, "mc-conversation", conv)
+    assert plan["failover"]["route_id"] == "api-anthropic-strong"
+    claude_turn = {**served_receipt(plan, {"provider": "claude-cli", "model": "claude-opus-5"}), "through_note_id": 41}
+    api_turn = {**served_receipt(switched_route(plan, "rate_limit"), {"provider": "minimoi-gateway", "model": "minimoi-anthropic-strong"}), "through_note_id": 42}
+    assert mc_continuity.carry_after(plan, {"turns": [claude_turn, api_turn]}) == 41
+    assert mc_continuity.carry_after(switched_route(plan, "rate_limit"), {"turns": [claude_turn, api_turn]}) is None
+
+
+def test_rule_6_a_host_that_removed_the_line_reports_as_it_always_did(switching, catalogue):
+    next(r for r in catalogue["routes"] if r["route_id"] == ASTRA).pop("failover")
+    body, sent, *_ = _run(switching, plan_down(), API_ANSWER)
+    assert sent == [ASTRA] and "run failed part way" in body
+
+
+def test_rule_7_an_api_route_that_also_fails_ends_the_turn_with_no_third_attempt(switching):
+    body, sent, *_ = _run(switching, plan_down(), plan_down("plan_exhausted"), API_ANSWER)
+    assert sent == [ASTRA, API_ROUTE] and "the API route is too" in body
+
+
+def test_rule_7_an_api_failure_after_text_is_reported_as_a_failed_run_not_as_nothing_happened(switching):
+    broke = [nd({"t": "run", "id": RUN_B}), nd({"t": "delta", "text": "Half"}), nd({"t": "error", "class": "upstream"})]
+    body, sent, *_ = _run(switching, plan_down(), broke, API_ANSWER)
+    assert sent == [ASTRA, API_ROUTE] and "the API route is too" not in body
+
+
+def test_rule_7_the_api_route_when_chosen_or_tried_never_goes_back_to_plan(switching):
+    _, sent, *_ = _run(switching, plan_down(), [nd({"t": "error", "class": "upstream", "signal": "signin_expired", "tools": "none"})], HAPPY)
+    assert sent.count(ASTRA) == 1 and sent[-1] == API_ROUTE
+
+
+def test_a_stop_during_the_plan_attempt_sends_nothing_to_the_api():
+    from minimoi_portal.guild_ui.mc.stream import Failure
+    cancel = threading.Event()
+    posts = []
+
+    def post(url, **kw):
+        posts.append(url)
+        cancel.set()
+        from test_mc_streaming import StreamResp
+        return StreamResp([*plan_down()], None)
+    mc = OpenClawMasterCraftsman("http://mc-relay:8790/v1", "t" * 32, http_get=lambda *a, **k: None, http_post=post)
+    events = list(mc.stream_turn(_request(), cancel))
+    assert len(posts) == 1 and any(isinstance(e, Failure) and e.cls == "stopped" for e in events)
+
+
+def _request():
+    from core.model_routes import load_catalogue, snapshot
+    return TurnRequest(conversation_id="c", text="hi", note_request_id="n", correlation_id="a" * 32,
+                       route=snapshot(load_catalogue(), "mc-conversation"))
+
+
+class _Plain:
+    def __init__(self, status, payload, headers=None):
+        self.status_code, self.text, self.headers = status, json.dumps(payload), headers or {}
+
+
+def _buffered(*answers):
+    sent, queue = [], list(answers)
+
+    def post(url, data=None, headers=None, **kw):
+        sent.append(headers.get("X-MC-Route"))
+        return queue.pop(0)
+    return OpenClawMasterCraftsman("http://mc-relay:8790/v1", "t" * 32, http_get=lambda *a, **k: None, http_post=post), sent
+
+
+DOWN = {"X-MC-Plan-Signal": "rate_limit", "X-MC-Plan-Tools": "none"}
+OK = {"id": RUN_B, "choices": [{"message": {"content": "Answer."}, "finish_reason": "stop"}]}
+
+
+def test_the_buffered_path_switches_once_and_names_it():
+    mc, sent = _buffered(_Plain(429, {"error": {"type": "rate_limit_error"}}, DOWN),
+                         _Plain(200, OK, {"X-MC-Served": json.dumps({"provider": "minimoi-gateway", "model": "minimoi-openai-strong"})}))
+    result = mc.turn(_request())
+    assert sent == [ASTRA, API_ROUTE] and result.status == "answered" and "ran on the API: minimoi-openai-strong" in result.text
+    assert result.trace["route"]["route_id"] == API_ROUTE and result.trace["route"]["billing_mode"] == "metered_api"
+
+
+def test_the_buffered_path_stops_on_doubt_and_on_no_signal():
+    mc, sent = _buffered(_Plain(429, {"error": {"type": "rate_limit_error"}}, {**DOWN, "X-MC-Plan-Tools": "unknown"}))
+    assert mc.turn(_request()).failure_class == "plan_switch_uncertain" and sent == [ASTRA]
+    mc, sent = _buffered(_Plain(500, {"error": {"type": "api_error"}}))
+    assert mc.turn(_request()).status == "error" and sent == [ASTRA]
+
+
+def test_the_buffered_path_says_both_unavailable_and_never_tries_a_third():
+    mc, sent = _buffered(_Plain(429, {"error": {"type": "rate_limit_error"}}, DOWN),
+                         _Plain(402, {"error": {"type": "insufficient_quota"}}, {"X-MC-Plan-Signal": "plan_exhausted", "X-MC-Plan-Tools": "none"}))
+    assert mc.turn(_request()).failure_class == "plan_and_api_unavailable" and sent == [ASTRA, API_ROUTE]
+
+
+def test_the_internal_stream_binds_the_api_run_and_keeps_the_moved_route():
+    from minimoi_portal.guild_ui.mc.internal_stream import collect
+    from minimoi_portal.guild_ui.mc.stream import RunStarted, Switched, Delta, Finish
+    from core.model_routes import switched_route
+    moved = switched_route(_request().route, "rate_limit")
+
+    class Backend:
+        kind = "openclaw"
+        settle = staticmethod(lambda result: None)
+
+        def stream_turn(self, req):
+            return iter([RunStarted(RUN_A), Switched(moved), RunStarted(RUN_B, replaces=RUN_A), Delta("ok"), Finish("stop")])
+    runs = []
+    result = collect(Backend(), _request(), on_run=runs.append, record_usage=lambda **kw: None)
+    assert runs == [RUN_A, RUN_B] and result.trace["route"]["route_id"] == API_ROUTE

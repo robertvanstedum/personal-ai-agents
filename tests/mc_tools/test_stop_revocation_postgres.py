@@ -27,6 +27,25 @@ class StopRevocationTests(Base, unittest.TestCase):
     def ledger_state(self):
         return self.one("SELECT state FROM guild.mc_turn_ledger WHERE id=%s", (self.ledger_id,))[0]
 
+    def test_plan_failover_moves_only_a_quiet_run_and_a_late_call_from_the_plan_run_is_refused(self):
+        api_run = "chatcmpl_99999999-9999-4999-8999-999999999999"
+
+        def move(old, new):
+            with self.connect() as conn:
+                return binding.move_run(conn, ledger_id=self.ledger_id, claim_generation=1, old_run=old, new_run=new, environment="dev")
+        self.assertFalse(move(api_run, api_run))                 # not the run it holds
+        self.assertTrue(move(self.run, api_run))
+        self.assertEqual(self.one("SELECT runtime_run_id FROM guild.mc_tool_turns WHERE ledger_id=%s", (self.ledger_id,))[0], api_run)
+        with self.connect() as conn, self.assertRaises(binding.NotBound):
+            binding.resolve(conn, session_key=session_key(), agent_id="mc-chat", allowed_agents={"mc-chat"}, principal=OWNER,
+                            environment="dev", run_id=self.run, tool_call_id="call_late")
+
+    def test_plan_failover_never_moves_a_run_with_an_admitted_call(self):
+        self.call("minimoi_guest_requests")
+        with self.connect() as conn:
+            self.assertFalse(binding.move_run(conn, ledger_id=self.ledger_id, claim_generation=1, old_run=self.run,
+                                              new_run="chatcmpl_99999999-9999-4999-8999-999999999999", environment="dev"))
+
     def test_a_call_arriving_while_the_runtime_aborts_is_refused(self):
         observed = []
 
