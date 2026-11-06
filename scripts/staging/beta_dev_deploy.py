@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 
-RELEASE = "beta-20261106c"
+RELEASE = "beta-20261106d"
 STAGING_ROOT = "/opt/minimoi-staging"
 OPERATOR_NAME = "beta-dev-20261106"
 MIN_FREE_BYTES = 2 * 1024 ** 3
@@ -113,7 +113,7 @@ TARGETS = {
     "partnership-worker": dict(container="minimoi-partnership-worker", repo="partnership-worker", tier=7, base="cos", worker=True, wait=DEFAULT_WAIT, rules=_TASKS,
                                layout=_TASKS_LAYOUT, smoke=_python("services.partnership_tasks.worker"), down="the whole swap, plus its restart: tasks wait"),
     # Nothing these run changed in this release. A rule match later would put them in the plan.
-    "records": dict(container="minimoi-records", repo="records", tier=1, base="records", rules=_app("domains/records/"),
+    "records": dict(container="minimoi-records", repo="records", tier=7, base="records", worker=True, down="the whole swap, plus its restart: meetings wait", rules=_app("domains/records/"),
                     extra_rules=(("prototype-lab/projects/project-records-room-poc/", "/app/"),), wait=DEFAULT_WAIT),
     "cos-board": dict(container="minimoi-cos-board", repo="cos-board", tier=7, base="board", worker=True, wait=DEFAULT_WAIT, down="the whole swap, plus its restart: CoS Board notes wait",
                       rules=_app("core/domain_api/", "core/domain_operations/", "domains/guild/board", "domains/guild/queue_store.py", "minimoi_portal/guild_ui/adapters/",
