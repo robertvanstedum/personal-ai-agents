@@ -4,7 +4,8 @@
   check [--inputs FILE]           the default; read-only. Names and states only, never a value.
   apply --only GROUPS --inputs FILE   needs MINIMOI_1_2_SETUP_APPROVED=1. GROUPS, comma separated, each when its wait clears:
       local     new tokens, the Board key pair, seat bindings, the empty task store, hashes in .env. Waits on setup apply.
-      db        role partnership_worker, its grants and partnership/db.url. Waits on the migrations (it names missing tables).
+      db        roles partnership_worker and cos_board, their grants, partnership/db.url and cos-board/db.url. Waits on the
+                migrations (it names missing tables).
       gateway   Guildhall's discussion keys and the voice summary keys, $20 per 30 days each. Waits on the gateway's key database.
       records   Records-issued tokens (teammates, workers, observe). Waits on Records running.
   cos-auth                        read-only: which of CoS's three agents see a healthy plan sign-in, names and states only.
@@ -63,6 +64,7 @@ BINDINGS = f"{S}/partnership/bindings.json"
 GRANTS = f"{S}/partnership/grants.json"
 RUNNER_SEATS = f"{S}/partnership/runner-seats.json"
 DB_URL = f"{S}/partnership/db.url"
+BOARD_DB_URL = f"{S}/cos-board/db.url"
 BOARD_PROFILE = f"{S}/cos-partnership/board-profile.json"
 BOARD_KEYS = f"{S}/cos-board/profiles.json"
 COS_SERVICE = f"{S}/cos-guildhall/cos-service.token"
@@ -98,7 +100,7 @@ GATEWAY_KEYS = {
     f"{S}/guildhall-cos/discussion-gateway.token": {"models": ["minimoi-cos-agent"], "rpm": 10, "alias": "guildhall-discussion-cos-"},
     f"{S}/guildhall-mc/discussion-gateway.token": {"models": ["minimoi-mc-agent"], "rpm": 10, "alias": "guildhall-discussion-mc-"},
     # The portal and cos-scheduler read these through <variable>_FILE (core/realtime_voice/summary_gateway.py), from their
-    # own mounted folder. The compose layer must add the two variables, or the summary keeps reading "unavailable".
+    # own mounted folder; the compose layer names both. Without the files the summary reads "unavailable".
     f"{S}/cos-partnership/voice-summary-cos.key": {"models": VOICE_MODELS, "rpm": 60, "alias": "voice-summary-cos-"},
     f"{S}/portal-partnership/voice-summary-mc.key": {"models": VOICE_MODELS, "rpm": 60, "alias": "voice-summary-mc-"},
 }
@@ -106,7 +108,7 @@ KEY_FORM = re.compile(r"^sk-[A-Za-z0-9_-]{16,200}$")
 
 DB_ROLE = "partnership_worker"       # services/partnership_tasks/worker.py
 DB_NAME = "personal_agents"
-DB_HOST = "postgres"                 # the worker sits on the main network, where the service answers to this name
+DB_HOST = "postgres"                 # the worker and the Board sit on the main network, where the service answers to this name
 # What the worker's own path needs: DispatcherStore (admit, lookup, fence, stale, revoke), GrantStore and the runner door.
 # No DELETE, nothing outside these. A test holds this list to the tables those modules name.
 WORKER_TABLES = {
@@ -122,6 +124,23 @@ WORKER_TABLES = {
     "guild.supervision_decisions": "SELECT",
 }
 OPTIONAL_TABLES = frozenset({"guild.supervision_decisions"})     # read on one path only; granted when it exists
+
+BOARD_DB_ROLE = "cos_board"          # minimoi_portal/guild_ui/board_headless_runner.py
+# What the Board API's own path does: board_headless -> BoardActions.{query,read,create,update,result,undo} on FloorStores.
+# The session advisory lock needs no grant. Undo bins a note, it never deletes, so no DELETE. Not here because that path never
+# reaches them: floor_requests (the browser's ui_write only), floor_messages, floor_continue, media.*. domains/guild/queue_store.py
+# is a file, not a table, and the layer sets no BOARD_API_QUEUE_FILE. A test runs the path and holds this list to it.
+BOARD_TABLES = {
+    "guild.floor_postits": "SELECT, INSERT, UPDATE",
+    "guild.floor_board_meta": "SELECT, INSERT, UPDATE",
+    "guild.board_operations": "SELECT, INSERT",
+}
+# A BIGSERIAL default needs USAGE on its sequence. The identity columns on the worker's tables need none.
+BOARD_SEQUENCES = ("guild.floor_postits_id_seq",)
+DB_ROLES = (
+    {"url_file": DB_URL, "role": DB_ROLE, "tables": WORKER_TABLES, "optional": OPTIONAL_TABLES, "sequences": ()},
+    {"url_file": BOARD_DB_URL, "role": BOARD_DB_ROLE, "tables": BOARD_TABLES, "optional": frozenset(), "sequences": BOARD_SEQUENCES},
+)
 
 RECORDS_TEAMMATES = {
     "cos": {"label": "Chief of Staff", "worker": "rooms-worker-cos", "teammate_file": f"{S}/guildhall-cos/cos.token",
@@ -507,11 +526,13 @@ def scram_verifier(password: str, salt: bytes = None, iterations: int = 4096) ->
     return f"SCRAM-SHA-256${iterations}:{b64(salt)}${b64(stored)}:{b64(server)}"
 
 
-def role_sql(verifier: str, tables) -> str:
-    grants = "\n".join(f"GRANT {WORKER_TABLES[t]} ON {t} TO {DB_ROLE};" for t in sorted(tables))
-    return (f"BEGIN;\nCREATE ROLE {DB_ROLE} LOGIN PASSWORD '{verifier}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION "
-            f"NOBYPASSRLS NOINHERIT CONNECTION LIMIT 8;\nGRANT CONNECT ON DATABASE {DB_NAME} TO {DB_ROLE};\n"
-            f"GRANT USAGE ON SCHEMA guild TO {DB_ROLE};\n{grants}\nCOMMIT;\n")
+def role_sql(spec: dict, verifier: str, tables) -> str:
+    role = spec["role"]
+    grants = [f"GRANT {spec['tables'][t]} ON {t} TO {role};" for t in sorted(tables)]
+    grants += [f"GRANT USAGE ON SEQUENCE {s} TO {role};" for s in spec["sequences"]]
+    return (f"BEGIN;\nCREATE ROLE {role} LOGIN PASSWORD '{verifier}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION "
+            f"NOBYPASSRLS NOINHERIT CONNECTION LIMIT 8;\nGRANT CONNECT ON DATABASE {DB_NAME} TO {role};\n"
+            f"GRANT USAGE ON SCHEMA guild TO {role};\n" + "\n".join(grants) + "\nCOMMIT;\n")
 
 
 def _psql_read(sql: str) -> str:
@@ -522,30 +543,46 @@ def _psql_read(sql: str) -> str:
     return done.stdout
 
 
+def _make_role(root: Path, spec: dict, found: set, out: Outcome) -> None:
+    role, rel = spec["role"], spec["url_file"]
+    password = secrets.token_hex(32)
+    url = f"postgresql://{role}:{password}@{DB_HOST}:5432/{DB_NAME}\n".encode("ascii")
+    # Role first, then the file: a failed write leaves a role nobody can log in as, and the check before it stops a blind retry.
+    done = docker("exec", "-i", POSTGRES, "psql", "-U", "postgres", "-d", DB_NAME, "-q", "-v", "ON_ERROR_STOP=1", "-f", "-",
+                  stdin=role_sql(spec, scram_verifier(password), found & set(spec["tables"])), timeout=60)
+    if done.returncode != 0:
+        refuse(f"the role {role} was not made (psql exit {done.returncode}); no file was written for it")
+    out.note(rel, write_new(root, rel, url))
+    out.written.append(f"database role {role}")
+
+
 def group_db(root: Path, out: Outcome) -> None:
-    if setup.status(root, DB_URL, directory=False) == "present":
-        out.kept.append(DB_URL)
+    todo = []
+    for spec in DB_ROLES:
+        rel = spec["url_file"]
+        if setup.status(root, rel, directory=False) == "present":
+            out.kept.append(rel)
+        elif os.path.lexists(root / rel):
+            refuse(f"{rel} is unsafe")
+        else:
+            todo.append(spec)
+    if not todo:
         return
-    if os.path.lexists(root / DB_URL):
-        refuse(f"{DB_URL} is unsafe")
     if not _running(POSTGRES):
         refuse(f"{POSTGRES} is not running")
-    names = "\n".join(f"SELECT '{t}' WHERE to_regclass('{t}') IS NOT NULL;" for t in sorted(WORKER_TABLES))
-    found = set(_psql_read(names).split())
-    absent = sorted(set(WORKER_TABLES) - found - OPTIONAL_TABLES)
+    # Every check comes first, for every role: a missing table leaves no role half the group made.
+    wanted = sorted({name for spec in todo for name in (*spec["tables"], *spec["sequences"])})
+    found = set(_psql_read("\n".join(f"SELECT '{t}' WHERE to_regclass('{t}') IS NOT NULL;" for t in wanted)).split())
+    absent = sorted({name for spec in todo for name in (*spec["tables"], *spec["sequences"])
+                     if name not in found and name not in spec["optional"]})
     if absent:
         refuse(f"nothing changed; these tables don't exist yet, run the migrations first: {absent}")
-    if _psql_read(f"SELECT 1 FROM pg_roles WHERE rolname='{DB_ROLE}';").strip():
-        refuse(f"role {DB_ROLE} exists but {DB_URL} doesn't: its password is unknown. Drop the role on purpose, then run again")
-    password = secrets.token_hex(32)
-    url = f"postgresql://{DB_ROLE}:{password}@{DB_HOST}:5432/{DB_NAME}\n".encode("ascii")
-    # Role first, then the file: a failed write leaves a role nobody can log in as, and the check above stops a blind retry.
-    done = docker("exec", "-i", POSTGRES, "psql", "-U", "postgres", "-d", DB_NAME, "-q", "-v", "ON_ERROR_STOP=1", "-f", "-",
-                  stdin=role_sql(scram_verifier(password), found & set(WORKER_TABLES)), timeout=60)
-    if done.returncode != 0:
-        refuse(f"the role was not made (psql exit {done.returncode}); no file was written")
-    out.note(DB_URL, write_new(root, DB_URL, url))
-    out.written.append(f"database role {DB_ROLE}")
+    for spec in todo:
+        role = spec["role"]
+        if _psql_read(f"SELECT 1 FROM pg_roles WHERE rolname='{role}';").strip():
+            refuse(f"role {role} exists but {spec['url_file']} doesn't: its password is unknown. Drop the role on purpose, then run again")
+    for spec in todo:
+        _make_role(root, spec, found, out)
 
 
 # ---- group: gateway ---------------------------------------------------------------------------------------------------

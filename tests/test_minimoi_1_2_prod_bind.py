@@ -12,6 +12,7 @@ import stat
 import subprocess
 import sys
 import textwrap
+from uuid import uuid4
 
 import pytest
 
@@ -20,6 +21,8 @@ from scripts.operations import minimoi_1_2_prod_setup as setup
 
 REPO = Path(__file__).resolve().parents[1]
 S = setup.SECRETS
+
+ALL_DB_NAMES = sorted({*bind.WORKER_TABLES, *bind.BOARD_TABLES, *bind.BOARD_SEQUENCES})
 
 FAKE_DOCKER = r'''#!PYTHON
 import json, os, sys
@@ -87,7 +90,7 @@ def host(tmp_path, monkeypatch):
     monkeypatch.setattr(bind, "DOCKER", str(fake / "docker"))
     state = tmp_path / "records-state"
     state.mkdir()
-    config = {"tables": sorted(bind.WORKER_TABLES), "records_state": str(state),
+    config = {"tables": ALL_DB_NAMES, "records_state": str(state),
               "auth": {a: {"auth": {"oauth": {"profiles": []}}} for a in bind.COS_AGENTS},
               "key_facts": [{"max_budget": 20.0, "budget_duration": "30d", "models": sorted(s["models"])}
                             for s in bind.GATEWAY_KEYS.values()]}
@@ -395,7 +398,7 @@ def test_the_grants_cover_every_table_the_workers_code_names():
 
 
 def test_missing_tables_stop_it_with_their_names_and_nothing_made(host):
-    host.configure(tables=sorted(set(bind.WORKER_TABLES) - {"guild.mc_task_fences", "guild.mc_task_operations"}))
+    host.configure(tables=sorted(set(ALL_DB_NAMES) - {"guild.mc_task_fences", "guild.mc_task_operations"}))
     with pytest.raises(SystemExit, match="mc_task_fences.*mc_task_operations"):
         host.apply(["db"])
     assert not (host.root / bind.DB_URL).exists()
@@ -417,10 +420,114 @@ def test_a_failed_role_writes_no_file(host):
 
 
 def test_an_existing_db_url_is_kept_and_no_role_is_touched(host):
-    bind.write_new(host.root, bind.DB_URL, b"postgresql://kept\n")
-    assert bind.DB_URL in host.apply(["db"])["kept"]
+    for rel in (bind.DB_URL, bind.BOARD_DB_URL):
+        bind.write_new(host.root, rel, b"postgresql://kept\n")
+    assert {bind.DB_URL, bind.BOARD_DB_URL} <= set(host.apply(["db"])["kept"])
     assert (host.root / bind.DB_URL).read_text() == "postgresql://kept\n"
     assert not (host.fake / "stdin.log").exists()
+
+
+# ---- the Board's own role ---------------------------------------------------------------------------------------------------
+
+def test_the_board_role_is_least_privilege_and_its_password_is_never_sent_or_printed(host, capsys):
+    outcome = host.apply(["db"])
+    assert bind.BOARD_DB_URL in outcome["written"] and "database role cos_board" in outcome["written"]
+    url = (host.root / bind.BOARD_DB_URL).read_text()
+    password = re.fullmatch(r"postgresql://cos_board:([0-9a-f]{64})@postgres:5432/personal_agents\n", url).group(1)
+    assert stat.S_IMODE((host.root / bind.BOARD_DB_URL).stat().st_mode) == 0o600
+    sent = (host.fake / "stdin.log").read_text()
+    assert password not in sent and password not in host.argv() and password not in capsys.readouterr().out
+    script = next(part for part in sent.split("\n--\n") if "CREATE ROLE cos_board" in part)
+    assert "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT" in script and "partnership_worker" not in script
+    grants = sorted(line for line in script.splitlines() if line.startswith("GRANT"))
+    assert grants == ["GRANT CONNECT ON DATABASE personal_agents TO cos_board;",
+                      "GRANT SELECT, INSERT ON guild.board_operations TO cos_board;",
+                      "GRANT SELECT, INSERT, UPDATE ON guild.floor_board_meta TO cos_board;",
+                      "GRANT SELECT, INSERT, UPDATE ON guild.floor_postits TO cos_board;",
+                      "GRANT USAGE ON SCHEMA guild TO cos_board;",
+                      "GRANT USAGE ON SEQUENCE guild.floor_postits_id_seq TO cos_board;"]
+
+
+def test_the_board_reads_the_file_the_layer_names(host):
+    import yaml
+    from minimoi_portal.guild_ui.board_headless_runner import database_url
+    host.apply(["db"])
+    assert database_url({"DATABASE_URL_FILE": str(host.root / bind.BOARD_DB_URL)}).startswith("postgresql://cos_board:")
+    board = yaml.safe_load((REPO / "docker-compose.minimoi-1-2-production.yml").read_text())["services"]["cos-board"]
+    assert board["environment"]["DATABASE_URL_FILE"] == "/run/board-secrets/db.url"
+    assert any(v["target"] == "/run/board-secrets" and v["source"].endswith("/cos-board") for v in board["volumes"])
+    assert bind.BOARD_DB_URL in setup.BY_OPERATOR and setup.BY_OPERATOR.count(bind.BOARD_DB_URL) == 1
+    assert "/cos-board/db.url" not in (host.root / ".env").read_text()
+
+
+def test_a_missing_board_table_makes_neither_role(host):
+    host.configure(tables=sorted(set(ALL_DB_NAMES) - {"guild.board_operations"}))
+    with pytest.raises(SystemExit, match="board_operations"):
+        host.apply(["db"])
+    assert not (host.root / bind.DB_URL).exists() and not (host.root / bind.BOARD_DB_URL).exists()
+    assert "CREATE ROLE" not in (host.fake / "stdin.log").read_text()
+
+
+def test_the_board_role_is_made_when_only_the_workers_exists(host):
+    bind.write_new(host.root, bind.DB_URL, b"postgresql://kept\n")
+    outcome = host.apply(["db"])
+    assert bind.DB_URL in outcome["kept"] and bind.BOARD_DB_URL in outcome["written"]
+    sent = (host.fake / "stdin.log").read_text()
+    assert "CREATE ROLE cos_board" in sent and "CREATE ROLE partnership_worker" not in sent
+
+
+def test_the_board_grants_are_exactly_what_the_board_apis_path_does(tmp_path):
+    """The real BoardActions on the migrations' own tables, every operation board_headless can reach. Only SQLite can run
+    here, so the statements are read from SQLite's trace. Postgres's own rules are in the comments on BOARD_TABLES."""
+    sys.path.insert(0, str(REPO / "tests/guild/shop_floor"))
+    from floor_db_helpers import SqliteFloor
+    from minimoi_portal.guild_ui.board_actions import BoardActions, BoardContext
+    statements = []
+    store = SqliteFloor(tmp_path / "board").store("cos-board")
+    real = store._connect
+
+    def traced(url):
+        conn = real(url)
+        conn.set_trace_callback(statements.append)
+        return conn
+    store._connect = traced
+    caps = frozenset(bind.BOARD_CAPABILITIES)
+    svc = BoardActions(store, owner="robert", environment="prod", cursor_key=b"k" * 32)
+    ctx = BoardContext("robert", "prod", "cos-board", "cos", "headless:test", caps)
+    op = lambda: str(uuid4())   # noqa: E731
+    made_op, edit_op = op(), op()
+    made = svc.create(ctx, made_op, {"text": "first note", "label": None})
+    note = made["receipt"]["target_ref"]
+    edited = svc.update(ctx, edit_op, note, made["receipt"]["after_revision"], {"text": "changed", "done": True})
+    assert edited["code"] == "updated"
+    assert svc.update(ctx, op(), note, edited["receipt"]["after_revision"], {"done": False})["code"] == "updated"
+    assert svc.read(ctx, note)["text"] == "changed"
+    svc.query(ctx, query="changed", state="all")
+    assert svc.result(ctx, edit_op)["state"] == "verified"
+    assert svc.undo(ctx, op(), made_op, 1)["code"] == "revision_conflict"
+    second = svc.create(ctx, op(), {"text": "second note"})
+    assert svc.undo(ctx, op(), second["receipt"]["operation_id"], second["receipt"]["after_revision"])["code"] == "undone"
+
+    used = {}
+    for sql in statements:
+        for verb, pattern in (("SELECT", r"\bFROM\s+(\w+\.\w+)"), ("INSERT", r"\bINSERT INTO\s+(\w+\.\w+)"), ("UPDATE", r"\bUPDATE\s+(\w+\.\w+)"),
+                              ("DELETE", r"\bDELETE FROM\s+(\w+\.\w+)")):
+            for table in re.findall(pattern, sql):
+                if not (verb == "SELECT" and sql.lstrip().upper().startswith("DELETE")):
+                    used.setdefault(table, set()).add(verb)
+    assert used == {table: set(privileges.split(", ")) for table, privileges in bind.BOARD_TABLES.items()}
+
+
+def test_the_board_api_never_takes_the_browsers_paths_or_a_database_queue():
+    headless = (REPO / "minimoi_portal/guild_ui/board_headless.py").read_text()
+    assert "ui_write" not in headless and "empty_trash" not in headless
+    layer = (REPO / "docker-compose.minimoi-1-2-production.yml").read_text()
+    assert "BOARD_API_QUEUE_FILE" not in layer
+    queue = (REPO / "domains/guild/queue_store.py").read_text()
+    assert "psycopg" not in queue and "guild." not in re.sub(r"domains\.guild\.\w+", "", queue)
+    # The sequence is the default PostgreSQL gives this table's BIGSERIAL id.
+    assert "id              BIGSERIAL PRIMARY KEY" in (REPO / "minimoi_portal/guild_ui/sql/001_floor_b1.sql").read_text()
+    assert bind.BOARD_SEQUENCES == ("guild.floor_postits_id_seq",)
 
 
 # ---- G8, G15: gateway keys ------------------------------------------------------------------------------------------------
@@ -537,6 +644,11 @@ def test_voice_keys_are_read_from_their_private_file(tmp_path):
     assert GatewaySummary("voice-summary-cos", environ={name: str(file)})._key == "sk-voicekey"
     assert GatewaySummary("voice-summary-cos", environ={"MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS": "sk-env", name: str(file)})._key == "sk-env"
     assert not GatewaySummary("voice-summary-cos", environ={}).available()
+    # An empty variable, as docker-compose.prod.yml's scheduler line renders it, doesn't hide the file.
+    assert GatewaySummary("voice-summary-cos", environ={"MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS": "", name: str(file)})._key == "sk-voicekey"
+    from core.realtime_voice.intent_gateway import GatewayIntent    # the same key; direct_host builds both from it
+    person = {"name": "Robert", "short": "Robert"}
+    assert GatewayIntent("voice-summary-cos", person, environ={name: str(file)})._key == "sk-voicekey"
     file.chmod(0o644)
     assert not GatewaySummary("voice-summary-cos", environ={name: str(file)}).available()
     link = tmp_path / "link"

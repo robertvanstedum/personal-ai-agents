@@ -92,7 +92,7 @@ BY_OPERATOR = (
     f"{SECRETS}/portal-partnership/mc.token", f"{SECRETS}/cos-partnership/tasks-cos.token",
     f"{SECRETS}/cos-partnership/tasks-platform.token", f"{SECRETS}/cos-partnership/board-profile.json",
     f"{SECRETS}/cos-partnership/voice-summary-cos.key", f"{SECRETS}/portal-partnership/voice-summary-mc.key",
-    f"{SECRETS}/cos-board/profiles.json",
+    f"{SECRETS}/cos-board/profiles.json", f"{SECRETS}/cos-board/db.url",
     f"{SECRETS}/cos-guildhall/meeting-observe.token", f"{SECRETS}/guildhall-cos/rooms-worker-cos.token",
     f"{SECRETS}/guildhall-cos/cos.token", f"{SECRETS}/guildhall-cos/cos-service.token",
     f"{SECRETS}/guildhall-cos/discussion-gateway.token",
