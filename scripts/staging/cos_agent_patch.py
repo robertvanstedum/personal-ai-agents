@@ -9,6 +9,7 @@ import json
 import subprocess
 
 from cos_plan_deploy import AGENT, AGENT_ENV, AGENT_SVC, Deploy, RealHost, SCHED, check_runtime
+from mc_plugin_patch import check_payload, check_tag_is_running
 
 OLD, NEW = "minimoi-staging/cos-agent-a:plan-20261105c", "minimoi-staging/cos-agent-a:plan-20261105d"
 
@@ -30,14 +31,29 @@ class PatchHost(RealHost):                          # pragma: no cover  (exercis
         self.images = {"agent": NEW}
 
     def check_baseline(self):
-        assert self.O.inspect(AGENT)["Config"]["Image"] == OLD, "unexpected live agent image"
+        live = self.O.inspect(AGENT)
+        assert live["Config"]["Image"] == OLD, "unexpected live agent image"
+        check_tag_is_running(OLD, self._image_id(OLD), live["Image"])
+        check_payload(self.meta, lambda name: (self.OP / "payload" / name).read_bytes())
         assert self.O.inspect(SCHED)["Config"]["Image"].endswith(":plan-20261105"), "unexpected live scheduler image"
         assert not (self.OP / "recovery-required.json").exists(), "an earlier run needs recovery"
         for name, m in self.meta.items():
             got = subprocess.run(["docker", "run", "--rm", "--network", "none", "--entrypoint", "cat", OLD, m["dest"]], capture_output=True).stdout
             assert hashlib.sha256(got).hexdigest() == m["base"], "live file differs from the reviewed base: " + name
 
+    def _image_id(self, tag):
+        return json.loads(self._run("docker", "image", "inspect", tag))[0]["Id"]
+
+    def build_images(self):
+        check_payload(self.meta, lambda name: (self.OP / "payload" / name).read_bytes())    # again, right before it ships
+        super().build_images()
+        self.new_id = self._image_id(NEW)
+        (self.OP / "new-image.json").write_text(json.dumps({"agent": self.new_id}))
+
     def check_new_images(self, profile):
+        for name, m in self.meta.items():                   # what is inside the built image, not just what went in
+            got = subprocess.run(["docker", "run", "--rm", "--network", "none", "--entrypoint", "cat", self.new_id, m["dest"]], capture_output=True).stdout
+            assert hashlib.sha256(got).hexdigest() == m["after"], "built image holds a different file: " + name
         env = [x for e in self.O.inspect(AGENT)["Config"]["Env"] if e.split("=")[0] in AGENT_ENV for x in ("-e", e)]
         self._run("docker", "run", "--rm", "--network", "none", "--cap-drop", "ALL", *env, "--entrypoint", "sh", NEW, "-c",
                   "cp /opt/minimoi/cos-agent-a/openclaw.json /tmp/c.json && node /opt/minimoi/cos-agent-a/plan-access.cjs /tmp/c.json "
@@ -87,7 +103,8 @@ class PatchHost(RealHost):                          # pragma: no cover  (exercis
 
     def verify_new(self):
         def image(_):
-            assert self.O.inspect(AGENT)["Config"]["Image"] == NEW, "agent image"
+            live = self.O.inspect(AGENT)
+            assert live["Config"]["Image"] == NEW and live["Image"] == self.new_id, "agent image"
         self._same(image)
         pinned = json.loads(self._run("docker", "exec", AGENT, "cat", "/opt/minimoi/cos-agent-a/openclaw.json"))
         check_runtime(pinned, json.loads(self._run("docker", "exec", AGENT, "cat", "/home/node/.openclaw/openclaw.json")))
