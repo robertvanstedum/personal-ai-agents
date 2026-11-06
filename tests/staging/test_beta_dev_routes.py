@@ -538,7 +538,8 @@ class FakeOp:
         return {"env": sorted(c["Config"]["Env"]), "host": c["HostConfig"], "mounts": c["Mounts"]}
 
     def snapshot(self):
-        return {n: {"id": c["Id"], "image": c["Image"]} for n, c in self.docker.containers.items()}
+        # As the real snapshot does, this sees a stopped container as changed.
+        return {n: {"id": c["Id"], "image": c["Image"], "running": c["State"]["Running"]} for n, c in self.docker.containers.items()}
 
     def idle(self):
         return True

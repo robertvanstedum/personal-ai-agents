@@ -791,7 +791,8 @@ class RealHost:
         return [w for w in D.WORKERS if w in known and self.O.inspect(w)["State"]["Running"]]
 
     def _others(self):
-        mine = {n for n, _, _ in ORDER}
+        # Workers are ours too: this operator stops and starts them, and verify_workers proves them afterwards.
+        mine = {n for n, _, _ in ORDER} | set(D.WORKERS)
         return {k: v for k, v in self.O.snapshot().items() if k not in mine}
 
     def save_before(self):
