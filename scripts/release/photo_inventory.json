@@ -1,0 +1,2646 @@
+{
+ "images": {
+  "_NewDomains/research-intelligence/docs/test-reports/observe-shot.jpg": {
+   "bytes": 136822,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "_NewDomains/research-intelligence/docs/test-reports/P1-REPORT_FOR_CLAUDE.html"
+   ]
+  },
+  "docs/archive/review-packets/2026-03/AI_Observations_blurred.png": {
+   "bytes": 613953,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/archive/review-packets/2026-03/Daily_blurred.png": {
+   "bytes": 413316,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/archive/review-packets/2026-03/Library_blurred.png": {
+   "bytes": 547020,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/archive/review-packets/2026-03/Untitled 4.jpg": {
+   "bytes": 802553,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/archive/review-packets/2026-03/verify_ai_patch.png": {
+   "bytes": 51239,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/archive/review-packets/2026-03/verify_library_patch.png": {
+   "bytes": 36764,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/german-domain/screenshots/admin.png": {
+   "bytes": 84587,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/german-domain/screenshots/archiv.png": {
+   "bytes": 68660,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/german-domain/screenshots/landing.png": {
+   "bytes": 693394,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/german-domain/screenshots/lesen.png": {
+   "bytes": 461347,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/german-domain/screenshots/schreiben.png": {
+   "bytes": 54624,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/german-domain/screenshots/ueben.png": {
+   "bytes": 46570,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/german-domain/screenshots/woerter.png": {
+   "bytes": 67380,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/screenshots/2026-07-21/chief-of-staff-landing.jpg": {
+   "bytes": 194719,
+   "class": "stays",
+   "reason": "readme",
+   "used_by": [
+    "README.md"
+   ]
+  },
+  "docs/screenshots/2026-07-21/curator-current-account-deeper-dive.jpg": {
+   "bytes": 161869,
+   "class": "stays",
+   "reason": "readme",
+   "used_by": [
+    "README.md"
+   ]
+  },
+  "docs/screenshots/2026-07-21/curator-current-account-research-tools.jpg": {
+   "bytes": 75451,
+   "class": "stays",
+   "reason": "readme",
+   "used_by": [
+    "README.md"
+   ]
+  },
+  "docs/screenshots/2026-07-21/curator-current-account-scan.jpg": {
+   "bytes": 105575,
+   "class": "stays",
+   "reason": "readme",
+   "used_by": [
+    "README.md"
+   ]
+  },
+  "docs/screenshots/2026-07-21/curator-daily-briefing.jpg": {
+   "bytes": 119448,
+   "class": "stays",
+   "reason": "readme",
+   "used_by": [
+    "README.md"
+   ]
+  },
+  "docs/screenshots/2026-07-21/curator-landing.jpg": {
+   "bytes": 112276,
+   "class": "stays",
+   "reason": "readme",
+   "used_by": [
+    "README.md"
+   ]
+  },
+  "docs/screenshots/2026-07-21/german-landing.jpg": {
+   "bytes": 347512,
+   "class": "stays",
+   "reason": "readme",
+   "used_by": [
+    "README.md"
+   ]
+  },
+  "docs/screenshots/2026-07-21/german-writing-correction.jpg": {
+   "bytes": 146718,
+   "class": "stays",
+   "reason": "readme",
+   "used_by": [
+    "README.md"
+   ]
+  },
+  "docs/screenshots/2026-07-21/guild-landing.jpg": {
+   "bytes": 53844,
+   "class": "stays",
+   "reason": "readme",
+   "used_by": [
+    "README.md"
+   ]
+  },
+  "docs/screenshots/2026-07-21/portuguese-conversation.jpg": {
+   "bytes": 168541,
+   "class": "stays",
+   "reason": "readme",
+   "used_by": [
+    "README.md"
+   ]
+  },
+  "docs/screenshots/2026-07-21/portuguese-landing.jpg": {
+   "bytes": 235070,
+   "class": "stays",
+   "reason": "readme",
+   "used_by": [
+    "README.md"
+   ]
+  },
+  "docs/screenshots/_compressed/German_Scene_Prompt.png": {
+   "bytes": 357183,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN.md"
+   ]
+  },
+  "docs/screenshots/_compressed/German_Session_Conversation.png": {
+   "bytes": 156764,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN.md"
+   ]
+  },
+  "docs/screenshots/_compressed/German_Session_Start.png": {
+   "bytes": 84230,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN.md"
+   ]
+  },
+  "docs/screenshots/_compressed/admin.png": {
+   "bytes": 84587,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/screenshots/_compressed/ai-observations.png": {
+   "bytes": 555599,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/archive/legacy-repository/README_v3.md",
+    "docs/archive/review-packets/2026-03/V2/README_v2.md"
+   ]
+  },
+  "docs/screenshots/_compressed/archiv.png": {
+   "bytes": 68660,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/screenshots/_compressed/archive.png": {
+   "bytes": 105517,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/screenshots/_compressed/briefing.png": {
+   "bytes": 612108,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/archive/legacy-repository/README_v2 March 3.md",
+    "docs/archive/legacy-repository/README_v3.md",
+    "docs/archive/review-packets/2026-03/README.md",
+    "docs/archive/review-packets/2026-03/REVIEW_PACKET.md",
+    "docs/archive/review-packets/2026-03/V2/README_v2.md"
+   ]
+  },
+  "docs/screenshots/_compressed/daily-briefing.png": {
+   "bytes": 561557,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/archive/legacy-repository/README_v3.md"
+   ]
+  },
+  "docs/screenshots/_compressed/daily.png": {
+   "bytes": 591070,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/screenshots/_compressed/deep-dives.png": {
+   "bytes": 448158,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/archive/legacy-repository/README_v2 March 3.md",
+    "docs/archive/legacy-repository/README_v3.md",
+    "docs/archive/review-packets/2026-03/README.md",
+    "docs/archive/review-packets/2026-03/REVIEW_PACKET.md",
+    "docs/archive/review-packets/2026-03/V2/README_v2.md"
+   ]
+  },
+  "docs/screenshots/_compressed/desk.png": {
+   "bytes": 68940,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/screenshots/_compressed/focus.png": {
+   "bytes": 1486757,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/screenshots/_compressed/landing.png": {
+   "bytes": 624401,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/screenshots/_compressed/leanings.png": {
+   "bytes": 357212,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/screenshots/_compressed/lesen.png": {
+   "bytes": 461347,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/screenshots/_compressed/library.png": {
+   "bytes": 473001,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/archive/legacy-repository/README_v2 March 3.md",
+    "docs/archive/review-packets/2026-03/README.md",
+    "docs/archive/review-packets/2026-03/REVIEW_PACKET.md",
+    "docs/archive/review-packets/2026-03/V2/README_v2.md"
+   ]
+  },
+  "docs/screenshots/_compressed/morning-briefing.png": {
+   "bytes": 644778,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/archive/legacy-repository/README_v2 March 3.md",
+    "docs/archive/legacy-repository/README_v3.md",
+    "docs/archive/review-packets/2026-03/README.md",
+    "docs/archive/review-packets/2026-03/REVIEW_PACKET.md",
+    "docs/archive/review-packets/2026-03/V2/README_v2.md"
+   ]
+  },
+  "docs/screenshots/_compressed/observations.png": {
+   "bytes": 417038,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/archive/legacy-repository/README_v3.md",
+    "docs/archive/review-packets/2026-03/V2/README_v2.md"
+   ]
+  },
+  "docs/screenshots/_compressed/priorities.png": {
+   "bytes": 1483939,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/archive/legacy-repository/README_v2 March 3.md",
+    "docs/archive/legacy-repository/README_v3.md",
+    "docs/archive/review-packets/2026-03/README.md",
+    "docs/archive/review-packets/2026-03/REVIEW_PACKET.md",
+    "docs/archive/review-packets/2026-03/V2/README_v2.md"
+   ]
+  },
+  "docs/screenshots/_compressed/reading-library.png": {
+   "bytes": 718648,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/archive/legacy-repository/README_v2 March 3.md",
+    "docs/archive/review-packets/2026-03/README.md",
+    "docs/archive/review-packets/2026-03/REVIEW_PACKET.md",
+    "docs/archive/review-packets/2026-03/V2/README_v2.md"
+   ]
+  },
+  "docs/screenshots/_compressed/reading_room.png": {
+   "bytes": 497070,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/screenshots/_compressed/research_dashboard.png": {
+   "bytes": 73667,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/screenshots/_compressed/scans_dives.png": {
+   "bytes": 81919,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/screenshots/_compressed/scans_index.png": {
+   "bytes": 493934,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/screenshots/_compressed/schreiben.png": {
+   "bytes": 54624,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/screenshots/_compressed/ueben.png": {
+   "bytes": 46570,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/screenshots/_compressed/woerter.png": {
+   "bytes": 67380,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/screenshots/curator/current/archive.png": {
+   "bytes": 104793,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/screenshots/curator/current/daily.png": {
+   "bytes": 640805,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/screenshots/curator/current/desk.png": {
+   "bytes": 77912,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/screenshots/curator/current/landing.png": {
+   "bytes": 624861,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/screenshots/curator/current/leanings.png": {
+   "bytes": 357116,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/screenshots/curator/current/reading_room.png": {
+   "bytes": 519304,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/screenshots/curator/current/scans_dives.png": {
+   "bytes": 58137,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/screenshots/german/current/admin.png": {
+   "bytes": 148705,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/screenshots/german/current/archiv.png": {
+   "bytes": 814184,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/screenshots/german/current/gesprache.png": {
+   "bytes": 617915,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "docs/screenshots/german/current/landing.png": {
+   "bytes": 41383,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/screenshots/german/current/lesen.png": {
+   "bytes": 1018342,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/screenshots/german/current/schreiben.png": {
+   "bytes": 692404,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "docs/screenshots/german/current/woerter.png": {
+   "bytes": 881618,
+   "class": "unused",
+   "note": "Only documents name it",
+   "reason": "docs_only",
+   "used_by": [
+    "docs/GERMAN_HTML_SCREENSHOTS.md"
+   ]
+  },
+  "domains/cos/static/photos/cos-mark-256.webp": {
+   "bytes": 20332,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/cos/static/cos.css",
+    "domains/cos/templates/cos_ui.html"
+   ]
+  },
+  "domains/cos/static/photos/cos-mark-96.webp": {
+   "bytes": 3666,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/cos/static/cos.css",
+    "domains/cos/templates/cos_ui.html",
+    "minimoi_portal/guild_ui/cos_board.py",
+    "minimoi_portal/guild_ui/static/js/rooms.js",
+    "minimoi_portal/guild_ui/templates/guild_floor/_mc_conversation.html",
+    "minimoi_portal/guild_ui/templates/guild_floor/_section_subnav.html"
+   ]
+  },
+  "domains/cos/static/photos/cos_discuss.jpg": {
+   "bytes": 210162,
+   "class": "moves",
+   "note": "Chief of Staff photo no page picks",
+   "reason": "optional_photo",
+   "used_by": []
+  },
+  "domains/cos/static/photos/cos_discuss_private.png": {
+   "bytes": 2170805,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/cos/templates/cos_ui.html"
+   ]
+  },
+  "domains/cos/static/photos/cos_landing.jpg": {
+   "bytes": 784767,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/cos/static/cos.css"
+   ]
+  },
+  "domains/cos/static/photos/cos_notes.jpg": {
+   "bytes": 617156,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/cos/templates/cos_ui.html"
+   ]
+  },
+  "domains/cos/static/photos/cos_repository.jpg": {
+   "bytes": 298405,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/cos/templates/cos_ui.html"
+   ]
+  },
+  "domains/cos/static/photos/cos_todo.jpg": {
+   "bytes": 459859,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/cos/templates/cos_ui.html"
+   ]
+  },
+  "domains/curator/static/curator/landing-archive.jpg": {
+   "bytes": 414691,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/curator/templates/curator_landing.html"
+   ]
+  },
+  "domains/curator/static/curator/landing-bg.jpg": {
+   "bytes": 179745,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/curator/templates/curator_landing.html"
+   ]
+  },
+  "domains/curator/static/curator/landing-daily.jpg": {
+   "bytes": 376391,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/curator/templates/curator_landing.html"
+   ]
+  },
+  "domains/curator/static/curator/landing-leanings.jpg": {
+   "bytes": 279131,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/curator/templates/curator_landing.html"
+   ]
+  },
+  "domains/curator/static/curator/landing-research.jpg": {
+   "bytes": 324484,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/curator/templates/curator_landing.html"
+   ]
+  },
+  "domains/german/static/bg-alternate.jpg": {
+   "bytes": 396180,
+   "class": "moves",
+   "note": "German's alternate background; german.css names it only in a comment",
+   "reason": "optional_photo",
+   "used_by": []
+  },
+  "domains/german/static/bg-primary.jpg": {
+   "bytes": 1134362,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/german/static/german.css"
+   ]
+  },
+  "domains/german/static/photos/Bookstore_1.jpg": {
+   "bytes": 6987715,
+   "class": "moves",
+   "note": "German photo no page picks",
+   "reason": "optional_photo",
+   "used_by": []
+  },
+  "domains/german/static/photos/Bookstore_2.jpg": {
+   "bytes": 800331,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/german/templates/german_lesen.html"
+   ]
+  },
+  "domains/german/static/photos/Bookstore_3.jpg": {
+   "bytes": 7592179,
+   "class": "moves",
+   "note": "German photo no page picks",
+   "reason": "optional_photo",
+   "used_by": []
+  },
+  "domains/german/static/photos/Museum_2.jpg": {
+   "bytes": 148209,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/german/templates/german_lesen.html"
+   ]
+  },
+  "domains/german/static/photos/Newspaper.jpg": {
+   "bytes": 129273,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/german/templates/german_lesen.html"
+   ]
+  },
+  "domains/german/static/photos/Schnitzel_and_Beer.jpg": {
+   "bytes": 93812,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/german/templates/german_lesen.html"
+   ]
+  },
+  "domains/german/static/photos/Vera_cafe_IMG_5211_2.jpg": {
+   "bytes": 682941,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/german/static/german.css",
+    "domains/german/templates/german_schreiben.html"
+   ]
+  },
+  "domains/german/static/photos/beer_coffee_IMG_5189.jpg": {
+   "bytes": 349503,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/german/templates/german_gesprache.html"
+   ]
+  },
+  "domains/german/static/photos/bike_trail_IMG_5464.jpg": {
+   "bytes": 1083088,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/german/templates/german_woerter.html"
+   ]
+  },
+  "domains/german/static/photos/burger_garten_IMG_5543.jpg": {
+   "bytes": 3490148,
+   "class": "moves",
+   "note": "German photo no page picks",
+   "reason": "optional_photo",
+   "used_by": []
+  },
+  "domains/german/static/photos/burggarten_2_IMG_5541.jpg": {
+   "bytes": 861873,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/german/static/german.css",
+    "domains/german/templates/german_archiv.html"
+   ]
+  },
+  "domains/german/static/photos/cafe_sperl_interior.jpg": {
+   "bytes": 272575,
+   "class": "moves",
+   "note": "German photo no page picks",
+   "reason": "optional_photo",
+   "used_by": []
+  },
+  "domains/german/static/photos/croissant.jpg": {
+   "bytes": 73762,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/german/templates/german_lesen.html"
+   ]
+  },
+  "domains/german/static/photos/flower_market_IMG_5162_2.jpg": {
+   "bytes": 8947211,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/german/static/german.css"
+   ]
+  },
+  "domains/german/static/photos/grafiti_and_flowers_IMG_5172.jpg": {
+   "bytes": 8138445,
+   "class": "moves",
+   "note": "German photo no page picks",
+   "reason": "optional_photo",
+   "used_by": []
+  },
+  "domains/german/static/photos/outside_cafe_IMG_5234_3.jpg": {
+   "bytes": 7067917,
+   "class": "moves",
+   "note": "German photo no page picks",
+   "reason": "optional_photo",
+   "used_by": []
+  },
+  "domains/german/static/photos/street_s-bahn_IMG_5434.jpg": {
+   "bytes": 681796,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/german/static/german.css",
+    "domains/german/templates/german_ueben.html"
+   ]
+  },
+  "domains/german/static/photos/vera_cafe_cropped.jpg": {
+   "bytes": 5909083,
+   "class": "moves",
+   "note": "German photo no page picks",
+   "reason": "optional_photo",
+   "used_by": []
+  },
+  "domains/portuguese/static/bg-primary.jpg": {
+   "bytes": 1370992,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/portuguese/static/portuguese.css"
+   ]
+  },
+  "domains/portuguese/static/photos/rio_arquivo_01.jpg": {
+   "bytes": 1052298,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/portuguese/templates/portuguese_arquivo.html"
+   ]
+  },
+  "domains/portuguese/static/photos/rio_beach_01.jpg": {
+   "bytes": 1256089,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/portuguese/templates/portuguese_leitura.html"
+   ]
+  },
+  "domains/portuguese/static/photos/rio_cidade_01.jpg": {
+   "bytes": 783150,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/portuguese/static/portuguese.css",
+    "domains/portuguese/templates/portuguese_leitura.html"
+   ]
+  },
+  "domains/portuguese/static/photos/rio_conversas_01.jpg": {
+   "bytes": 903514,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/portuguese/templates/portuguese_conversas.html"
+   ]
+  },
+  "domains/portuguese/static/photos/rio_cotidiano_01.jpg": {
+   "bytes": 2966335,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/portuguese/templates/portuguese_leitura.html"
+   ]
+  },
+  "domains/portuguese/static/photos/rio_cultura_01.jpg": {
+   "bytes": 3398584,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/portuguese/templates/portuguese_leitura.html"
+   ]
+  },
+  "domains/portuguese/static/photos/rio_escrita_01.jpg": {
+   "bytes": 742493,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/portuguese/templates/portuguese_escrita.html"
+   ]
+  },
+  "domains/portuguese/static/photos/rio_noticias_01.jpg": {
+   "bytes": 2978527,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/portuguese/templates/portuguese_leitura.html"
+   ]
+  },
+  "domains/portuguese/static/photos/rio_palavras_01.jpg": {
+   "bytes": 916286,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/portuguese/templates/portuguese_palavras.html"
+   ]
+  },
+  "minimoi_portal/guild_ui/static/img/cos-mark-96.webp": {
+   "bytes": 3666,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/cos/static/cos.css",
+    "domains/cos/templates/cos_ui.html",
+    "minimoi_portal/guild_ui/cos_board.py",
+    "minimoi_portal/guild_ui/static/js/rooms.js",
+    "minimoi_portal/guild_ui/templates/guild_floor/_mc_conversation.html",
+    "minimoi_portal/guild_ui/templates/guild_floor/_section_subnav.html"
+   ]
+  },
+  "minimoi_portal/guild_ui/static/prototypes/iot-connect/slide-1.png": {
+   "bytes": 141942,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/guild_ui/lab_catalog.py"
+   ]
+  },
+  "minimoi_portal/guild_ui/static/prototypes/iot-connect/slide-2.png": {
+   "bytes": 72421,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/guild_ui/lab_catalog.py"
+   ]
+  },
+  "minimoi_portal/guild_ui/static/prototypes/iot-connect/slide-3.png": {
+   "bytes": 305421,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/guild_ui/lab_catalog.py"
+   ]
+  },
+  "minimoi_portal/guild_ui/static/prototypes/iot-connect/slide-4.png": {
+   "bytes": 127624,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/guild_ui/lab_catalog.py"
+   ]
+  },
+  "minimoi_portal/guild_ui/static/prototypes/iot-connect/slide-5.png": {
+   "bytes": 81402,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/guild_ui/lab_catalog.py"
+   ]
+  },
+  "minimoi_portal/static/guild/cos-mark-96.webp": {
+   "bytes": 3666,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "domains/cos/static/cos.css",
+    "domains/cos/templates/cos_ui.html",
+    "minimoi_portal/guild_ui/cos_board.py",
+    "minimoi_portal/guild_ui/static/js/rooms.js",
+    "minimoi_portal/guild_ui/templates/guild_floor/_mc_conversation.html",
+    "minimoi_portal/guild_ui/templates/guild_floor/_section_subnav.html"
+   ]
+  },
+  "minimoi_portal/static/guild/guild-build.jpg": {
+   "bytes": 388624,
+   "class": "moves",
+   "note": "Larger original of art a page shows as .webp",
+   "reason": "optional_photo",
+   "used_by": []
+  },
+  "minimoi_portal/static/guild/guild-build.webp": {
+   "bytes": 161600,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "core/founders_ui/static/founders.css",
+    "minimoi_portal/guild_ui/templates/guild_floor/_section_subnav.html",
+    "minimoi_portal/templates/guild/_build_card.html",
+    "minimoi_portal/workspaces.py"
+   ]
+  },
+  "minimoi_portal/static/guild/guild-chat-hero.jpg": {
+   "bytes": 267933,
+   "class": "moves",
+   "note": "Larger original of art a page shows as .webp",
+   "reason": "optional_photo",
+   "used_by": []
+  },
+  "minimoi_portal/static/guild/guild-chat-hero.webp": {
+   "bytes": 201960,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/guild_ui/static/components.css"
+   ]
+  },
+  "minimoi_portal/static/guild/guild-craftsman.webp": {
+   "bytes": 161600,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "core/founders_ui/static/founders.css",
+    "minimoi_portal/guild_ui/templates/guild_floor/_mc_conversation.html"
+   ]
+  },
+  "minimoi_portal/static/guild/guild-experiment.jpg": {
+   "bytes": 364722,
+   "class": "stays",
+   "note": "A test requires the file",
+   "reason": "test_pinned",
+   "used_by": [
+    "tests/test_guild_experiment.py"
+   ]
+  },
+  "minimoi_portal/static/guild/guild-experiment.webp": {
+   "bytes": 135564,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/guild_ui/pages.py",
+    "minimoi_portal/guild_ui/templates/guild_floor/prototype_lab.html",
+    "minimoi_portal/templates/guild/guild_landing.html"
+   ]
+  },
+  "minimoi_portal/static/guild/guild-improve-banner.webp": {
+   "bytes": 71878,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/guild_ui/templates/guild_floor/library.html"
+   ]
+  },
+  "minimoi_portal/static/guild/guild-improve.jpg": {
+   "bytes": 299404,
+   "class": "moves",
+   "note": "Larger original of art a page shows as .webp",
+   "reason": "optional_photo",
+   "used_by": []
+  },
+  "minimoi_portal/static/guild/guild-improve.webp": {
+   "bytes": 106488,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/guild_ui/pages.py",
+    "minimoi_portal/templates/guild/guild_landing.html"
+   ]
+  },
+  "minimoi_portal/static/guild/guild-mc-portrait.jpg": {
+   "bytes": 13397,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "core/founders_ui/static/founders.css",
+    "domains/cos/static/cos-history-ui.js",
+    "minimoi_portal/guild_ui/static/components.css",
+    "minimoi_portal/guild_ui/static/js/rooms.js",
+    "minimoi_portal/guild_ui/templates/guild_floor/_mc_conversation.html",
+    "minimoi_portal/templates/_companion.html"
+   ]
+  },
+  "minimoi_portal/static/guild/guild-operate-banner.webp": {
+   "bytes": 27188,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/guild_ui/templates/guild_floor/operate.html"
+   ]
+  },
+  "minimoi_portal/static/guild/guild-operate.jpg": {
+   "bytes": 209392,
+   "class": "moves",
+   "note": "Larger original of art a page shows as .webp",
+   "reason": "optional_photo",
+   "used_by": []
+  },
+  "minimoi_portal/static/guild/guild-operate.webp": {
+   "bytes": 54136,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/guild_ui/pages.py",
+    "minimoi_portal/guild_ui/static/css/workshop.css",
+    "minimoi_portal/templates/guild/guild_landing.html"
+   ]
+  },
+  "minimoi_portal/static/guild/guild-workshop-team.png": {
+   "bytes": 3086315,
+   "class": "moves",
+   "note": "Larger original of art a page shows as .webp",
+   "reason": "optional_photo",
+   "used_by": []
+  },
+  "minimoi_portal/static/guild/guild-workshop-team.webp": {
+   "bytes": 546044,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/guild_ui/static/css/rooms.css",
+    "minimoi_portal/guild_ui/static/js/rooms_art.js",
+    "minimoi_portal/guild_ui/templates/guild_floor/_mc_conversation.html",
+    "minimoi_portal/guild_ui/templates/guild_floor/rooms.html"
+   ]
+  },
+  "minimoi_portal/static/landing/coffee-cups.jpg": {
+   "bytes": 291647,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/dashboard.html",
+    "minimoi_portal/templates/landing.html"
+   ]
+  },
+  "minimoi_portal/static/preview/assets/bg-primary.jpg": {
+   "bytes": 396180,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/static/preview/assets/german.css",
+    "minimoi_portal/static/preview/german/landing.html"
+   ]
+  },
+  "minimoi_portal/static/preview/assets/curator_landing-archive.jpg": {
+   "bytes": 414691,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/static/preview/curator/briefing.html"
+   ]
+  },
+  "minimoi_portal/static/preview/assets/curator_landing-daily.jpg": {
+   "bytes": 376391,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/static/preview/curator/briefing.html",
+    "minimoi_portal/workspaces.py"
+   ]
+  },
+  "minimoi_portal/static/preview/assets/curator_landing-leanings.jpg": {
+   "bytes": 279131,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/static/preview/curator/briefing.html"
+   ]
+  },
+  "minimoi_portal/static/preview/assets/curator_landing-research.jpg": {
+   "bytes": 324484,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/static/preview/curator/briefing.html"
+   ]
+  },
+  "minimoi_portal/static/preview/assets/photos_Bookstore_2.jpg": {
+   "bytes": 797397,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/static/preview/german/lesen.html"
+   ]
+  },
+  "minimoi_portal/static/preview/assets/photos_Museum_2.jpg": {
+   "bytes": 145249,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/static/preview/german/lesen.html"
+   ]
+  },
+  "minimoi_portal/static/preview/assets/photos_Newspaper.jpg": {
+   "bytes": 122939,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/static/preview/german/lesen.html"
+   ]
+  },
+  "minimoi_portal/static/preview/assets/photos_Schnitzel_and_Beer.jpg": {
+   "bytes": 90902,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/static/preview/german/lesen.html"
+   ]
+  },
+  "minimoi_portal/static/preview/assets/photos_Vera_cafe_IMG_5211_2.jpg": {
+   "bytes": 676639,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/static/preview/german/schreiben.html"
+   ]
+  },
+  "minimoi_portal/static/preview/assets/photos_beer_coffee_IMG_5189.jpg": {
+   "bytes": 343213,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/static/preview/german/gesprache.html"
+   ]
+  },
+  "minimoi_portal/static/preview/assets/photos_bike_trail_IMG_5464.jpg": {
+   "bytes": 1080154,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/static/preview/german/worter.html"
+   ]
+  },
+  "minimoi_portal/static/preview/assets/photos_burggarten_2_IMG_5541.jpg": {
+   "bytes": 858919,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/static/preview/german/archiv.html"
+   ]
+  },
+  "minimoi_portal/static/preview/assets/photos_croissant.jpg": {
+   "bytes": 70828,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/static/preview/german/lesen.html"
+   ]
+  },
+  "minimoi_portal/static/tour/01-cos-landing-desktop.webp": {
+   "bytes": 369618,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html",
+    "minimoi_portal/workspaces.py"
+   ]
+  },
+  "minimoi_portal/static/tour/01-cos-landing-mobile.webp": {
+   "bytes": 197084,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/01-curator-landing-desktop.webp": {
+   "bytes": 254498,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/01-curator-landing-mobile.webp": {
+   "bytes": 214936,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/01-german-landing-desktop.webp": {
+   "bytes": 871576,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/01-guild-landing-desktop.webp": {
+   "bytes": 135770,
+   "class": "stays",
+   "note": "A test requires the file",
+   "reason": "test_pinned",
+   "used_by": [
+    "tests/test_cos_guild_visual_polish.py"
+   ]
+  },
+  "minimoi_portal/static/tour/01-guild-landing-mobile.webp": {
+   "bytes": 166208,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/01-portuguese-landing-desktop.webp": {
+   "bytes": 880500,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/02-cos-confer-direction-desktop.webp": {
+   "bytes": 132110,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/02-cos-confer-mobile.webp": {
+   "bytes": 106904,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/02-curator-breadth-mobile.webp": {
+   "bytes": 247760,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/02-curator-daily-briefing-desktop.webp": {
+   "bytes": 197550,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/02-german-reading-topics-desktop.webp": {
+   "bytes": 408566,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/02-guild-build-queue-desktop.webp": {
+   "bytes": 118214,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/02-guild-landing-partners-mobile.webp": {
+   "bytes": 158642,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/02-portuguese-reading-list-desktop.webp": {
+   "bytes": 407756,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/03-cos-confirm-decision-desktop.webp": {
+   "bytes": 119670,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/03-curator-choose-article-desktop.webp": {
+   "bytes": 223236,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/03-curator-daily-briefing-mobile.webp": {
+   "bytes": 182166,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/03-german-current-article-desktop.webp": {
+   "bytes": 393778,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/03-guild-build-log-mobile.webp": {
+   "bytes": 197452,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/03-guild-specification-desktop.webp": {
+   "bytes": 269012,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/03-portuguese-title-translation-desktop.webp": {
+   "bytes": 483352,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/04-cos-record-desktop.webp": {
+   "bytes": 604090,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/04-curator-choose-article-mobile.webp": {
+   "bytes": 197642,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/04-curator-original-source-desktop.webp": {
+   "bytes": 405214,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/04-german-translate-save-desktop.webp": {
+   "bytes": 119352,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/04-guild-spec-evaluation-desktop.webp": {
+   "bytes": 212574,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/04-guild-spec-mobile.webp": {
+   "bytes": 216624,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/04-portuguese-original-source-desktop.webp": {
+   "bytes": 308864,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/05-cos-track-desktop.webp": {
+   "bytes": 703004,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/05-curator-original-source-mobile.webp": {
+   "bytes": 235922,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/05-curator-scans-dives-desktop.webp": {
+   "bytes": 91680,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/05-german-original-source-desktop.webp": {
+   "bytes": 250436,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/05-guild-build-log-desktop.webp": {
+   "bytes": 193502,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/05-guild-roadmap-mobile.webp": {
+   "bytes": 260476,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/05-portuguese-article-translation-desktop.webp": {
+   "bytes": 167208,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/06-cos-store-desktop.webp": {
+   "bytes": 218226,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/06-curator-investigate-save-mobile.webp": {
+   "bytes": 200014,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/06-curator-scan-opening-desktop.webp": {
+   "bytes": 193004,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/06-german-reading-note-desktop.webp": {
+   "bytes": 123332,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/06-guild-github-issues-mobile.webp": {
+   "bytes": 175294,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/06-guild-issues-desktop.webp": {
+   "bytes": 263772,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/06-guild-roadmap-desktop.webp": {
+   "bytes": 381846,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/06-portuguese-reading-correction-desktop.webp": {
+   "bytes": 159144,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/07-curator-research-question-mobile.webp": {
+   "bytes": 166482,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/07-curator-scan-connections-desktop.webp": {
+   "bytes": 214766,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/07-german-reading-correction-desktop.webp": {
+   "bytes": 153590,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/07-guild-docs-desktop.webp": {
+   "bytes": 190306,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/07-guild-improve-mobile.webp": {
+   "bytes": 43772,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/07-guild-issue-context-desktop.webp": {
+   "bytes": 304950,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/07-portuguese-vocabulary-desktop.webp": {
+   "bytes": 232826,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/08-curator-scan-analysis-mobile.webp": {
+   "bytes": 220688,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/08-curator-scan-sources-desktop.webp": {
+   "bytes": 139964,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/08-german-vocabulary-desktop.webp": {
+   "bytes": 506226,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/08-guild-issue-acceptance-desktop.webp": {
+   "bytes": 216848,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/08-guild-operate-desktop.webp": {
+   "bytes": 85140,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/08-portuguese-conversation-choice-desktop.webp": {
+   "bytes": 399504,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/09-curator-deeper-dive-running-mobile.webp": {
+   "bytes": 139908,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/09-curator-deeper-synthesis-desktop.webp": {
+   "bytes": 292914,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/09-german-conversation-choice-desktop.webp": {
+   "bytes": 257950,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/09-guild-improve-desktop.webp": {
+   "bytes": 41498,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/09-guild-roadmap-desktop.webp": {
+   "bytes": 327074,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/09-portuguese-conversation-transcript-desktop.webp": {
+   "bytes": 434476,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/10-curator-deeper-dive-opening-mobile.webp": {
+   "bytes": 204946,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/10-curator-deeper-evidence-desktop.webp": {
+   "bytes": 305904,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/10-german-conversation-prepare-desktop.webp": {
+   "bytes": 296740,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/10-guild-transition-desktop.webp": {
+   "bytes": 127544,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/10-portuguese-speaking-feedback-desktop.webp": {
+   "bytes": 410314,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/11-curator-confirming-evidence-mobile.webp": {
+   "bytes": 235104,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/11-curator-deeper-challenge-desktop.webp": {
+   "bytes": 283766,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/11-german-conversation-transcript-desktop.webp": {
+   "bytes": 341000,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/11-guild-operate-desktop.webp": {
+   "bytes": 66912,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/11-portuguese-writing-desktop.webp": {
+   "bytes": 251626,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/12-curator-gaps-uncertainty-mobile.webp": {
+   "bytes": 251816,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/12-curator-leanings-desktop.webp": {
+   "bytes": 96062,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/12-german-speaking-feedback-desktop.webp": {
+   "bytes": 292694,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/12-guild-improve-desktop.webp": {
+   "bytes": 41744,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/12-portuguese-writing-correction-desktop.webp": {
+   "bytes": 283246,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/13-curator-analytical-challenge-mobile.webp": {
+   "bytes": 249172,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/13-german-writing-desktop.webp": {
+   "bytes": 267790,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/13-portuguese-archive-desktop.webp": {
+   "bytes": 343748,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/14-curator-alternative-interpretations-mobile.webp": {
+   "bytes": 249134,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/14-german-writing-feedback-desktop.webp": {
+   "bytes": 271842,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/14-portuguese-admin-desktop.webp": {
+   "bytes": 91436,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/15-curator-challenger-provenance-mobile.webp": {
+   "bytes": 195728,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/15-german-conversation-history-desktop.webp": {
+   "bytes": 363236,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/16-german-reopen-conversation-desktop.webp": {
+   "bytes": 471278,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/17-german-archived-writing-desktop.webp": {
+   "bytes": 404678,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/cos-confer-mobile.webp": {
+   "bytes": 93750,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/cos-confer-private.png": {
+   "bytes": 1999022,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/cos-confer.png": {
+   "bytes": 1999022,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/cos-landing.jpg": {
+   "bytes": 194719,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/cos-mobile-landing.webp": {
+   "bytes": 126398,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/cos-track-mobile.webp": {
+   "bytes": 154006,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/curator-daily-briefing.jpg": {
+   "bytes": 119448,
+   "class": "stays",
+   "reason": "readme",
+   "used_by": [
+    "README.md"
+   ]
+  },
+  "minimoi_portal/static/tour/curator-deeper-dive.jpg": {
+   "bytes": 161869,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/curator-landing.jpg": {
+   "bytes": 112276,
+   "class": "stays",
+   "reason": "readme",
+   "used_by": [
+    "README.md"
+   ]
+  },
+  "minimoi_portal/static/tour/curator-mobile-01-curator-landing.webp": {
+   "bytes": 104670,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/curator-mobile-02-daily-briefing.webp": {
+   "bytes": 113134,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/curator-mobile-03-investigate-article.webp": {
+   "bytes": 137738,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/curator-mobile-04-personalize-scan.webp": {
+   "bytes": 95646,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/curator-mobile-05-scan-analysis.webp": {
+   "bytes": 129626,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/curator-mobile-06-next-questions-and-sources.webp": {
+   "bytes": 139342,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/curator-mobile-07-choose-research-depth.webp": {
+   "bytes": 86684,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/curator-mobile-08-deeper-dive-report.webp": {
+   "bytes": 115950,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/curator-mobile-09-challenger-review.webp": {
+   "bytes": 151460,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/curator-mobile-10-leanings.webp": {
+   "bytes": 75988,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/curator-mobile-11-ai-observations.webp": {
+   "bytes": 131484,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/curator-mobile-12-archive.webp": {
+   "bytes": 67636,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/curator-research-tools.jpg": {
+   "bytes": 75451,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/curator-scan.jpg": {
+   "bytes": 105575,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/german-archiv-current.jpg": {
+   "bytes": 106307,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/german-archiv.png": {
+   "bytes": 814184,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/german-gespraeche-current.jpg": {
+   "bytes": 81452,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/german-gespraeche.png": {
+   "bytes": 617915,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/german-landing-mobile.png": {
+   "bytes": 79042,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/german-landing.jpg": {
+   "bytes": 493965,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/workspaces.py"
+   ]
+  },
+  "minimoi_portal/static/tour/german-lesen-article.jpg": {
+   "bytes": 121738,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/german-lesen-choices.jpg": {
+   "bytes": 271897,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/german-lesen-correction.jpg": {
+   "bytes": 131346,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/german-lesen-translation.jpg": {
+   "bytes": 129322,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/german-lesen-wien.png": {
+   "bytes": 3169821,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/german-lesen.png": {
+   "bytes": 1018342,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/german-mobile-01-landing.webp": {
+   "bytes": 277536,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/german-mobile-02-lesen.webp": {
+   "bytes": 315842,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/german-mobile-03-lesen-articles.webp": {
+   "bytes": 152994,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/german-mobile-04-lesen-translate.webp": {
+   "bytes": 132162,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/german-mobile-05-lesen-note.webp": {
+   "bytes": 109652,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/german-mobile-06-lesen-correction.webp": {
+   "bytes": 83024,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/german-mobile-07-lesen-source.webp": {
+   "bytes": 172016,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/german-mobile-08-gespraeche-persona.webp": {
+   "bytes": 84836,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/german-mobile-09-gespraeche-setup.webp": {
+   "bytes": 113192,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/german-mobile-10-gespraeche-active.webp": {
+   "bytes": 95898,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/german-mobile-11-gespraeche-transcript.webp": {
+   "bytes": 146176,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/german-mobile-12-gespraeche-feedback.webp": {
+   "bytes": 137120,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/german-mobile-13-gespraeche-archive.webp": {
+   "bytes": 120704,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/german-schreiben-current.jpg": {
+   "bytes": 89952,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/german-schreiben.png": {
+   "bytes": 692404,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/german-woerter-current.jpg": {
+   "bytes": 102607,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/german-woerter.png": {
+   "bytes": 881618,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/german-writing-correction.jpg": {
+   "bytes": 146718,
+   "class": "stays",
+   "reason": "readme",
+   "used_by": [
+    "README.md"
+   ]
+  },
+  "minimoi_portal/static/tour/guild-build-log-mobile.webp": {
+   "bytes": 108794,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/guild-build-queue-landscape.webp": {
+   "bytes": 74442,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/guild-build-queue.jpg": {
+   "bytes": 287105,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/guild-catalog-desktop.jpg": {
+   "bytes": 65114,
+   "class": "stays",
+   "note": "A test requires the file",
+   "reason": "test_pinned",
+   "used_by": [
+    "tests/test_auth.py",
+    "tests/test_cos_guild_visual_polish.py"
+   ]
+  },
+  "minimoi_portal/static/tour/guild-landing.jpg": {
+   "bytes": 53844,
+   "class": "stays",
+   "reason": "readme",
+   "used_by": [
+    "README.md"
+   ]
+  },
+  "minimoi_portal/static/tour/guild-landing.png": {
+   "bytes": 759536,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/guild-main-desktop.jpg": {
+   "bytes": 85286,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/guild-main-mobile.jpg": {
+   "bytes": 108979,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/guild-mobile-01-landing.webp": {
+   "bytes": 165650,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/guild-mobile-02-build-log.webp": {
+   "bytes": 197352,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/guild-mobile-landing.webp": {
+   "bytes": 107780,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/guild-operate-improve-mobile.webp": {
+   "bytes": 101742,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/guild-roadmap-committed.webp": {
+   "bytes": 170538,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/guild-roadmap-released.webp": {
+   "bytes": 130398,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/portuguese-arquivo.png": {
+   "bytes": 67901,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/portuguese-conversas.png": {
+   "bytes": 103848,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/portuguese-conversation-choice.webp": {
+   "bytes": 97314,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/portuguese-conversation.jpg": {
+   "bytes": 168541,
+   "class": "stays",
+   "reason": "readme",
+   "used_by": [
+    "README.md"
+   ]
+  },
+  "minimoi_portal/static/tour/portuguese-escrita.png": {
+   "bytes": 73321,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/portuguese-landing.jpg": {
+   "bytes": 235070,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/workspaces.py"
+   ]
+  },
+  "minimoi_portal/static/tour/portuguese-learning-archive.webp": {
+   "bytes": 135566,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/portuguese-leitura.png": {
+   "bytes": 100061,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/portuguese-mobile-landing.webp": {
+   "bytes": 300008,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/portuguese-palavras.png": {
+   "bytes": 70547,
+   "class": "unused",
+   "reason": "no_reference",
+   "used_by": []
+  },
+  "minimoi_portal/static/tour/portuguese-reading-article.webp": {
+   "bytes": 140982,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/portuguese-reading-categories.webp": {
+   "bytes": 262386,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/portuguese-reading-correction.webp": {
+   "bytes": 110524,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/portuguese-reading-list.webp": {
+   "bytes": 314502,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/portuguese-voice-coaching.webp": {
+   "bytes": 139720,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "minimoi_portal/static/tour/portuguese-voice-transcript.webp": {
+   "bytes": 137324,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "minimoi_portal/templates/tour.html"
+   ]
+  },
+  "prototype-lab/projects/project-iot-connect/app/static/iotconnect/presentation/slide-1.png": {
+   "bytes": 141942,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "prototype-lab/projects/project-iot-connect/app/static/iotconnect/presentation.html",
+    "prototype-lab/projects/project-iot-connect/scripts/check_url_prefix.sh",
+    "prototype-lab/projects/project-iot-connect/scripts/iotconnect_demo.py"
+   ]
+  },
+  "prototype-lab/projects/project-iot-connect/app/static/iotconnect/presentation/slide-2.png": {
+   "bytes": 72421,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "prototype-lab/projects/project-iot-connect/app/static/iotconnect/presentation.html"
+   ]
+  },
+  "prototype-lab/projects/project-iot-connect/app/static/iotconnect/presentation/slide-3.png": {
+   "bytes": 305421,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "prototype-lab/projects/project-iot-connect/app/static/iotconnect/presentation.html"
+   ]
+  },
+  "prototype-lab/projects/project-iot-connect/app/static/iotconnect/presentation/slide-4.png": {
+   "bytes": 127624,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "prototype-lab/projects/project-iot-connect/app/static/iotconnect/presentation.html"
+   ]
+  },
+  "prototype-lab/projects/project-iot-connect/app/static/iotconnect/presentation/slide-5.png": {
+   "bytes": 81402,
+   "class": "stays",
+   "reason": "site_page",
+   "used_by": [
+    "prototype-lab/projects/project-iot-connect/app/static/iotconnect/presentation.html"
+   ]
+  },
+  "static/bg-alternate.jpg": {
+   "bytes": 231995,
+   "class": "unused",
+   "note": "No app or nginx config in this repo serves the root static folder",
+   "reason": "not_served",
+   "used_by": []
+  },
+  "static/bg-primary.jpg": {
+   "bytes": 396180,
+   "class": "unused",
+   "note": "No app or nginx config in this repo serves the root static folder",
+   "reason": "not_served",
+   "used_by": []
+  },
+  "static/public/preview/assets/curator_landing-archive.jpg": {
+   "bytes": 414691,
+   "class": "unused",
+   "note": "No app or nginx config in this repo serves the root static folder",
+   "reason": "not_served",
+   "used_by": []
+  },
+  "static/public/preview/assets/curator_landing-daily.jpg": {
+   "bytes": 376391,
+   "class": "unused",
+   "note": "No app or nginx config in this repo serves the root static folder",
+   "reason": "not_served",
+   "used_by": []
+  },
+  "static/public/preview/assets/curator_landing-leanings.jpg": {
+   "bytes": 279131,
+   "class": "unused",
+   "note": "No app or nginx config in this repo serves the root static folder",
+   "reason": "not_served",
+   "used_by": []
+  },
+  "static/public/preview/assets/curator_landing-research.jpg": {
+   "bytes": 324484,
+   "class": "unused",
+   "note": "No app or nginx config in this repo serves the root static folder",
+   "reason": "not_served",
+   "used_by": []
+  },
+  "static/public/preview/assets/photos_Bookstore_2.jpg": {
+   "bytes": 800331,
+   "class": "unused",
+   "note": "No app or nginx config in this repo serves the root static folder",
+   "reason": "not_served",
+   "used_by": []
+  },
+  "static/public/preview/assets/photos_Museum_2.jpg": {
+   "bytes": 148209,
+   "class": "unused",
+   "note": "No app or nginx config in this repo serves the root static folder",
+   "reason": "not_served",
+   "used_by": []
+  },
+  "static/public/preview/assets/photos_Newspaper.jpg": {
+   "bytes": 129273,
+   "class": "unused",
+   "note": "No app or nginx config in this repo serves the root static folder",
+   "reason": "not_served",
+   "used_by": []
+  },
+  "static/public/preview/assets/photos_Schnitzel_and_Beer.jpg": {
+   "bytes": 93812,
+   "class": "unused",
+   "note": "No app or nginx config in this repo serves the root static folder",
+   "reason": "not_served",
+   "used_by": []
+  },
+  "static/public/preview/assets/photos_Vera_cafe_IMG_5211_2.jpg": {
+   "bytes": 682941,
+   "class": "unused",
+   "note": "No app or nginx config in this repo serves the root static folder",
+   "reason": "not_served",
+   "used_by": []
+  },
+  "static/public/preview/assets/photos_beer_coffee_IMG_5189.jpg": {
+   "bytes": 349503,
+   "class": "unused",
+   "note": "No app or nginx config in this repo serves the root static folder",
+   "reason": "not_served",
+   "used_by": []
+  },
+  "static/public/preview/assets/photos_bike_trail_IMG_5464.jpg": {
+   "bytes": 1083088,
+   "class": "unused",
+   "note": "No app or nginx config in this repo serves the root static folder",
+   "reason": "not_served",
+   "used_by": []
+  },
+  "static/public/preview/assets/photos_burggarten_2_IMG_5541.jpg": {
+   "bytes": 861873,
+   "class": "unused",
+   "note": "No app or nginx config in this repo serves the root static folder",
+   "reason": "not_served",
+   "used_by": []
+  },
+  "static/public/preview/assets/photos_croissant.jpg": {
+   "bytes": 73762,
+   "class": "unused",
+   "note": "No app or nginx config in this repo serves the root static folder",
+   "reason": "not_served",
+   "used_by": []
+  }
+ }
+}
