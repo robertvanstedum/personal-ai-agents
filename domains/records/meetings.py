@@ -335,6 +335,23 @@ def waiting_names(db, room, text, *, ambiguous=False):
     return waiting
 
 
+def absent_addressed(db, room, prose):
+    """Known teammates named with an explicit @ who aren't members of this room."""
+    members = {row["actor"] for row in db.execute("SELECT actor FROM members WHERE room=?", (room,))}
+    typed = re.findall(r"(?<![\w@])@([\w-]+)", prose)
+    named = {m.lower() for m in typed}
+    found = []
+    for row in db.execute("SELECT id,label FROM principals WHERE id<>'robert' ORDER BY id"):
+        if row["id"] not in members and named & {a.lower() for a in aliases(row)}:
+            found.append(row["id"])
+    # The directory's teammates count even on a host where they have no principal yet.
+    for name in sorted(DIRECTORY):
+        forms = {name.lower(), *(a.lower() for a in DIRECTORY[name].get("spoken_aliases", []))}
+        if name not in members and name not in found and named & forms:
+            found.append(next(m for m in typed if m.lower() in forms))      # the note shows it as he wrote it
+    return found
+
+
 def routing_names(db, room, body, target, meeting):
     """Return audience and the subset authorized for normal owner turns."""
     selected = list(target) if isinstance(target, list) else [target] if target else []
@@ -366,6 +383,11 @@ def routing_names(db, room, body, target, meeting):
                     break
         if named_waiting:
             return named_waiting, set()
+        # An explicit @name for a teammate who isn't in the room is addressed to them, not to whoever is here: they get a
+        # routing note saying why, and nobody answers in their place with an action turn.
+        absent = absent_addressed(db, room, prose)
+        if absent:
+            return absent, set(absent)
         available = [row['id'] for row in db.execute(
             "SELECT p.id FROM principals p JOIN members m ON m.actor=p.id WHERE m.room=? AND p.id<>'robert' AND m.role='contributor'", (room,))
             if card(db, row['id']) and hosted(db, row['id']) and accepted_member(db, room, row['id'])
