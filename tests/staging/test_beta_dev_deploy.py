@@ -962,7 +962,8 @@ class FakeDocker:
             return _Result("")
         if verb == "start":
             for name in args[2:]:
-                self.containers[name]["State"]["Running"] = True
+                if name in self.containers:      # a worker this rig's change set skips has no container here
+                    self.containers[name]["State"]["Running"] = True
             self.log.append(("start", args[2:]))
             return _Result("")
         if verb == "update":
@@ -1089,7 +1090,7 @@ def _frozen(rig):
 
 
 def _workers_running(rig):
-    return [w for w in op.WORKERS if rig.docker.containers[w]["State"]["Running"]]
+    return [w for w in op.WORKERS if w in rig.docker.containers and rig.docker.containers[w]["State"]["Running"]]
 
 
 def test_end_to_end_a_dry_run_changes_nothing_live_and_names_who_recreates(rig, capsys):
@@ -1099,7 +1100,7 @@ def test_end_to_end_a_dry_run_changes_nothing_live_and_names_who_recreates(rig, 
     assert not [e for e in rig.docker.log if e[0] in ("up", "stop", "start", "api")]
     order = [r["container"] for r in plan["recreate_in_order"]]
     assert order[0] == "minimoi-model-gateway" and order.index("minimoi-cos-scheduler") < order.index("minimoi-cos-agent-a") < order.index("minimoi-portal") < order.index("minimoi-mc-agent")
-    assert set(order[-3:]) == set(op.WORKERS) and "minimoi-records" not in order
+    assert set(order[-3:]) == set(op.WORKERS) - {"minimoi-cos-board"} and "minimoi-records" not in order
     out = capsys.readouterr().out
     assert "WILL RECREATE minimoi-portal" in out and "SKIP minimoi-records: nothing it runs changed" in out
     assert json.loads((rig.OP / "plan.json").read_text())["release"] == op.RELEASE
@@ -1143,7 +1144,7 @@ def _assert_restored(rig, before):
     assert now["images"] == before["images"] and now["tags"] == before["tags"], "images"
     assert now["files"] == before["files"], "files"
     assert not rig.host.OVERRIDES["compose"].exists() and not rig.host.OVERRIDES["mc"].exists()
-    assert sorted(_workers_running(rig)) == sorted(op.WORKERS)
+    assert sorted(_workers_running(rig)) == sorted(set(op.WORKERS) - {"minimoi-cos-board"})
 
 
 def test_end_to_end_a_failed_verify_restores_and_proves_it(rig):
