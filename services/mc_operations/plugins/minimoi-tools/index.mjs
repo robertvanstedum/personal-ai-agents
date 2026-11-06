@@ -84,7 +84,15 @@ export function endpointUrl(endpoint) {
 // tool-discovery) and may take the hook from one registration and the tools from another (A05 probe, 22 Oct).
 export const SEAL = '__minimoi_run';
 export const RUN_ID = /^chatcmpl_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-export const CALL_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
+// The host's id for one call. Code mode nests a call as tool_search_code:<parent, at most 120>:<tool name>:<n>, which runs
+// past 128 for an ordinary long tool name, so the host's id may be longer than the backend's. Same characters, and the
+// whole id binds the seal and the replay record.
+export const CALL_ID = /^[A-Za-z0-9_.:-]{1,256}$/;
+const BACKEND_CALL_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
+/** The id the backend records: the host's own when it fits, else its digest. Same id, same value, so retries still match. */
+export function backendCallId(toolCallId) {
+  return BACKEND_CALL_ID.test(toolCallId) ? toolCallId : 'sha256:' + createHash('sha256').update(toolCallId).digest('hex');
+}
 
 export function runSealer(key = randomBytes(32)) {
   if (!Buffer.isBuffer(key) || key.length < 32) throw new Error('MiniMoi run seal key invalid');
@@ -120,8 +128,26 @@ export function runSealer(key = randomBytes(32)) {
  * Tombstones prevent a delayed execute from consuming a reused call ID in a newer run.
  * At capacity we fail closed; nothing pending or consumed is silently evicted. */
 export function runBoundSealer({key = randomBytes(32), entries = new Map(), now = Date.now,
-                                ttlMs = 300000, maxEntries = 4096} = {}) {
+                                ttlMs = 300000, maxEntries = 4096, onRefuse = () => {}} = {}) {
   const crypto = runSealer(key);
+  // A refusal says which branch refused and the shape of the identity. Never arguments, a body, or an id's value.
+  const refuse = (reason, ctx) => {
+    try {
+      onRefuse({reason, tool: ctx?.toolName, agent: ctx?.agentId, nested: String(ctx?.toolCallId).startsWith('tool_search_code:'),
+                callLength: typeof ctx?.toolCallId === 'string' ? ctx.toolCallId.length : null,
+                runShapeOk: typeof ctx?.runId === 'string' && RUN_ID.test(ctx.runId), sessionKnown: Boolean(ctx?.sessionKey),
+                entries: entries.size, maxEntries});
+    } catch { /* a report never changes the refusal */ }
+    return null;
+  };
+  const identityProblem = ctx => {
+    if (typeof ctx.runId !== 'string' || !RUN_ID.test(ctx.runId)) return 'run_id_invalid';
+    if (typeof ctx.toolCallId !== 'string') return 'call_id_missing';
+    if (!CALL_ID.test(ctx.toolCallId)) return 'call_id_invalid';
+    if (typeof ctx.agentId !== 'string') return 'agent_missing';
+    if (typeof ctx.sessionKey !== 'string' || !ctx.sessionKey) return 'session_missing';
+    return null;
+  };
   const identity = ctx => JSON.stringify([ctx.agentId, ctx.sessionKey, ctx.toolName, ctx.toolCallId]);
   function canonical(value) {
     if (value === null || typeof value === 'boolean' || typeof value === 'string') return value;
@@ -140,24 +166,30 @@ export function runBoundSealer({key = randomBytes(32), entries = new Map(), now 
   const retire = row => { row.state = 'retired'; delete row.sealed; };
   return Object.freeze({
     seal(params, ctx) {
-      if (!ctx || typeof ctx.toolName !== 'string' || !/^minimoi_[a-z][a-z0-9_]*$/.test(ctx.toolName)) return null;
+      if (!ctx || typeof ctx.toolName !== 'string' || !/^minimoi_[a-z][a-z0-9_]*$/.test(ctx.toolName)) return refuse('tool_name_invalid', ctx);
       try {
-        if (!params || Object.getPrototypeOf(params) !== Object.prototype) return null;
+        if (!params || Object.getPrototypeOf(params) !== Object.prototype) return refuse('arguments_not_plain', ctx);
         const {[SEAL]: ignored, ...args} = params;
-        const digest = argumentsDigest(args), sealed = crypto.seal(structuredClone(args), ctx);
-        if (!sealed) return null;
+        const problem = identityProblem(ctx);
+        if (problem) return refuse(problem, ctx);
+        let digest;
+        try { digest = argumentsDigest(args); } catch { return refuse('arguments_not_canonical', ctx); }
+        const sealed = crypto.seal(structuredClone(args), ctx);
+        if (!sealed) return refuse('seal_failed', ctx);
         const id = identity(ctx), existing = entries.get(id), at = now();
         if (existing) {
           if (existing.state === 'pending' && existing.expires > at && existing.run === ctx.runId && existing.digest === digest)
             return structuredClone(args);
-          retire(existing); return null;
+          const reason = existing.state !== 'pending' ? 'call_already_used' : existing.expires <= at ? 'call_expired'
+            : existing.run !== ctx.runId ? 'call_other_run' : 'call_arguments_changed';
+          retire(existing); return refuse(reason, ctx);
         }
         // Release expired payloads but retain their identities as replay tombstones.
         for (const row of entries.values()) if (row.state === 'pending' && row.expires <= at) retire(row);
-        if (entries.size >= maxEntries) return null;
+        if (entries.size >= maxEntries) return refuse('registry_full', ctx);
         entries.set(id, {state: 'pending', run: ctx.runId, digest, sealed, expires: at + ttlMs});
         return structuredClone(args);
-      } catch { return null; }
+      } catch { return refuse('seal_exception', ctx); }
     },
     open(args, ctx) {
       if (!ctx) return null;
@@ -504,7 +536,7 @@ export function toolFactory({endpoint, token, tokenFile, agents, tools, diskPath
           response = await fetchImpl(`${url.href}/${spec.name}`, {method: 'POST', redirect: 'error', signal: abort,
             headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json',
                       'X-MC-Session': sessionKey, 'X-MC-Agent': agentId,
-                      'X-MC-Run': opened.run, 'X-MC-Tool-Call': toolCallId, 'X-MC-Instance': instance},
+                      'X-MC-Run': opened.run, 'X-MC-Tool-Call': backendCallId(toolCallId), 'X-MC-Instance': instance},
             body: JSON.stringify(body)});
         } catch {
           // Once a send has started it may have reached MiniMoi: unknown, never a silent retry.
@@ -543,7 +575,7 @@ export function toolFactory({endpoint, token, tokenFile, agents, tools, diskPath
               signal: signal ? AbortSignal.any([AbortSignal.timeout(10000), signal]) : AbortSignal.timeout(10000),
               headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json',
                 'X-MC-Session': sessionKey, 'X-MC-Agent': agentId, 'X-MC-Run': opened.run,
-                'X-MC-Tool-Call': toolCallId, 'X-MC-Instance': instance},
+                'X-MC-Tool-Call': backendCallId(toolCallId), 'X-MC-Instance': instance},
               body: JSON.stringify({...body, host_completion: {operation_id: d.operation_id, nonce: d.nonce, result: output}})});
             result = await boundedJson(callback);
             if (callback.status !== 200 || !result || !STATUSES.includes(result.status) ||
@@ -559,7 +591,7 @@ export function toolFactory({endpoint, token, tokenFile, agents, tools, diskPath
               signal: signal ? AbortSignal.any([AbortSignal.timeout(10000), signal]) : AbortSignal.timeout(10000),
               headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json',
                 'X-MC-Session': sessionKey, 'X-MC-Agent': agentId, 'X-MC-Run': opened.run,
-                'X-MC-Tool-Call': toolCallId, 'X-MC-Instance': instance},
+                'X-MC-Tool-Call': backendCallId(toolCallId), 'X-MC-Instance': instance},
               body: JSON.stringify({...body, artifact_request})});
             if (r.status !== 200) throw Error();
             return boundedJson(r);
@@ -584,7 +616,8 @@ export function toolFactory({endpoint, token, tokenFile, agents, tools, diskPath
 
 const BINDINGS = Symbol.for('minimoi-tools/run-bindings/v1');
 globalThis[BINDINGS] ??= new Map();
-const PROCESS_SEALER = runBoundSealer({key: globalThis[PROCESS_STATE].sealKey, entries: globalThis[BINDINGS]});
+const PROCESS_SEALER = runBoundSealer({key: globalThis[PROCESS_STATE].sealKey, entries: globalThis[BINDINGS],
+  onRefuse: detail => console.warn('minimoi-tools: seal refused ' + JSON.stringify(detail))});
 
 export default {id: 'minimoi-tools', name: 'MiniMoi tools', register(api) {
   const config = api.pluginConfig || {};

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {runBoundSealer,sealHook,toolFactory,checkArguments,SEAL} from '../../services/mc_operations/plugins/minimoi-tools/index.mjs';
+import {runBoundSealer,sealHook,toolFactory,checkArguments,SEAL,backendCallId} from '../../services/mc_operations/plugins/minimoi-tools/index.mjs';
 const RUN='chatcmpl_12345678-1234-4234-8234-123456789abc',OTHER='chatcmpl_00000000-0000-4000-8000-000000000000';
 const ctx={runId:RUN,toolCallId:'call_1',agentId:'mc-chat',sessionKey:'agent:mc-chat:openai-user:guild-mc:'+'a'.repeat(32),toolName:'minimoi_task_list'};
 const args={task_id:'TK-cos-18e9490595d3f256de94245d4abecb32'};
@@ -41,4 +41,36 @@ test('separate module copies consume the same process registry',async()=>{
  const a=first.runBoundSealer({key,entries}),b=second.runBoundSealer({key,entries}),c={...ctx,toolCallId:'cross-module-unique'};
  const hook=first.sealHook({sealer:a,tools:[c.toolName],agents:[c.agentId]}),clean=hook({toolName:c.toolName,params:args},c).params;
  assert.deepEqual(b.open(clean,c),{run:RUN,args});assert.equal(a.open(clean,c),null);
+});
+
+// Code mode's nested id: the runtime's real shape, from a 91-character parent id. 131 characters for minimoi_issue_create.
+const NESTED='tool_search_code:'+'c'.repeat(37)+'_'+'f'.repeat(53)+':minimoi_issue_create:1';
+test('a nested code-mode call longer than the backend id is sealed, opened once, and sent as a stable digest',()=>{
+ assert.equal(NESTED.length,131);
+ const {sealer}=setup(),args={title:'A real title',body:'Body'},c={...ctx,toolName:'minimoi_issue_create',toolCallId:NESTED};
+ assert.deepEqual(sealer.seal(args,c),args);
+ assert.equal(sealer.open(args,c).run,c.runId);
+ assert.equal(sealer.open(args,c),null);                             // still one shot
+ assert.equal(sealer.seal(args,c),null);                             // and still no replay
+ assert.match(backendCallId(NESTED),/^sha256:[0-9a-f]{64}$/);
+ assert.equal(backendCallId(NESTED),backendCallId(NESTED));
+ assert.equal(backendCallId('call_short'),'call_short');
+ assert.notEqual(backendCallId(NESTED),backendCallId(NESTED.slice(0,-1)+'2'));
+});
+test('every refusal names its branch and shows no arguments or id values',()=>{
+ const seen=[],at={now:1000},sealer=runBoundSealer({onRefuse:d=>seen.push(d),maxEntries:1,now:()=>at.now,ttlMs:50}),c={agentId:'mc-chat',sessionKey:'agent:mc-chat:x',toolName:'minimoi_issue_create',runId:RUN,toolCallId:'call_1'};
+ const reason=()=>seen.at(-1).reason;
+ assert.equal(sealer.seal({a:1},{...c,runId:'no'}),null);assert.equal(reason(),'run_id_invalid');
+ assert.equal(sealer.seal({a:1},{...c,toolCallId:undefined}),null);assert.equal(reason(),'call_id_missing');
+ assert.equal(sealer.seal({a:1},{...c,toolCallId:'bad|id'}),null);assert.equal(reason(),'call_id_invalid');
+ assert.equal(sealer.seal({a:1},{...c,toolCallId:'c'.repeat(257)}),null);assert.equal(reason(),'call_id_invalid');
+ assert.equal(sealer.seal({a:1},{...c,sessionKey:''}),null);assert.equal(reason(),'session_missing');
+ assert.equal(sealer.seal({a:undefined},c),null);assert.equal(reason(),'arguments_not_canonical');
+ assert.equal(sealer.seal([],c),null);assert.equal(reason(),'arguments_not_plain');
+ assert.equal(sealer.seal({a:'SECRET-BODY'},{...c,toolName:'other'}),null);assert.equal(reason(),'tool_name_invalid');
+ assert.deepEqual(sealer.seal({a:'SECRET-BODY'},c),{a:'SECRET-BODY'});
+ assert.equal(sealer.seal({a:'SECRET-BODY'},{...c,toolCallId:'call_2'}),null);assert.equal(reason(),'registry_full');
+ assert.equal(sealer.seal({a:'other'},c),null);assert.equal(reason(),'call_arguments_changed');
+ assert.equal(sealer.seal({a:'SECRET-BODY'},c),null);assert.equal(reason(),'call_already_used');
+ assert.ok(!JSON.stringify(seen).includes('SECRET-BODY')&&!JSON.stringify(seen).includes('call_1')&&!JSON.stringify(seen).includes(RUN));
 });
