@@ -73,8 +73,11 @@ from german_domain import (
 )
 from domains.german.session_files import session_sort_key
 
-BASE_DIR = Path(__file__).parent
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# BASE_DIR resolves repository-root paths (curator output, logs, voice notes, preview, German data).
+# It must stay the repository root: this file moved to core/telegram/ in the root consolidation, and
+# `Path(__file__).parent` silently resolved every one of those paths inside core/telegram/, where none exist.
+BASE_DIR = PROJECT_ROOT
 CURATOR_CRON_SCRIPT = PROJECT_ROOT / "scripts" / "operations" / "run_curator_cron.sh"
 
 # ─── Voice command patterns ───────────────────────────────────────────────────
