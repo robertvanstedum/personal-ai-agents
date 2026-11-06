@@ -21,7 +21,7 @@
     {"route_id": "plan-anthropic-strong", "tier": "strong", "provider": "anthropic", "model": "claude-opus-5", "label": "Claude Opus 5",
      "reasoning_effort": "high", "billing_mode": "subscription", "runtime": "claude-cli", "auth_profile_ref": "claude-max-plan",
      "capabilities": ["chat", "tools"],
-     "offered": {"mc": "Waiting for its swap test with real tools", "cos": "CoS is not signed in to this plan, and its tool adapter is not reviewed for it"}},
+     "offered": {"mc": "Swap test 5 Nov: OpenAI history does not reach Claude, and Claude's native tools sit outside MC's tool policy", "cos": "CoS is not signed in to this plan, and its tool adapter is not reviewed for it"}},
     {"route_id": "plan-anthropic-mid", "tier": "mid", "provider": "anthropic", "model": "claude-sonnet-4-6", "label": "Claude Sonnet 4.6",
      "reasoning_effort": "high", "billing_mode": "subscription", "runtime": "claude-cli", "auth_profile_ref": "claude-max-plan",
      "capabilities": ["chat", "tools"],

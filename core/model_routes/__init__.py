@@ -147,7 +147,8 @@ def served_receipt(route: dict | None, served: dict | None) -> dict | None:
         return None
     matches = None
     if served:
-        matches = served.get("provider") == route["provider"] and served.get("model") == route["model"]
+        # A CLI runtime records itself as the provider ("claude-cli" for Anthropic's plan route).
+        matches = served.get("provider") in (route["provider"], route.get("runtime")) and served.get("model") == route["model"]
     return {"route_id": route["route_id"], "role": route["role"], "tier": route["tier"], "provider": route["provider"],
             "model": route["model"], "reasoning_effort": route["reasoning_effort"], "billing_mode": route["billing_mode"],
             "catalogue_revision": route["catalogue_revision"], "served": served or None, "served_matches": matches}

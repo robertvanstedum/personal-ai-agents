@@ -125,6 +125,28 @@ def test_a_late_reply_from_an_earlier_run_is_never_this_turns_evidence(relay, tm
     assert status == 200 and served_of(headers) is None and '"served"' not in text and time.monotonic() - started < 5
 
 
+def _claude_reply(path, key):
+    db = sqlite3.connect(path)
+    message = {"role": "assistant", "provider": "claude-cli", "model": "claude-opus-5", "api": "cli", "idempotencyKey": key}
+    db.execute("INSERT INTO transcript_events VALUES ('s1', 9, ?, NULL)", (json.dumps({"type": "message", "message": message}),))
+    db.commit()
+    db.close()
+
+
+def test_a_claude_cli_reply_is_bound_to_its_run_by_its_key(relay, tmp_path):
+    _chat_db(tmp_path / "chat.sqlite", run=OTHER_RUN, harness=None)
+    _claude_reply(tmp_path / "chat.sqlite", f"cli-assistant:{RUN}")
+    _, headers, _ = post(with_db(relay, tmp_path), chat("openclaw/mc-chat", user=USER))
+    assert served_of(headers) == {"provider": "claude-cli", "model": "claude-opus-5", "api": "cli"}
+
+
+def test_another_runs_claude_cli_reply_is_no_evidence(relay, tmp_path):
+    _chat_db(tmp_path / "chat.sqlite", run=OTHER_RUN)
+    _claude_reply(tmp_path / "chat.sqlite", f"cli-assistant:{OTHER_RUN}")
+    _, headers, _ = post(with_db(relay, tmp_path), chat("openclaw/mc-chat", user=USER))
+    assert served_of(headers) is None
+
+
 def test_another_runs_later_reply_does_not_displace_this_runs_record(relay, tmp_path):
     _chat_db(tmp_path / "chat.sqlite", later_run=OTHER_RUN)
     _, headers, _ = post(with_db(relay, tmp_path), chat("openclaw/mc-chat", user=USER))

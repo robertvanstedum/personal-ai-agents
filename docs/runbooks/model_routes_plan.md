@@ -46,6 +46,9 @@ listed in `TASK_ROLES`: a missing line stops the work and never falls to the run
 - **Evidence:** it comes from OpenClaw's own session record, read by the relay, and only from the reply stamped with this
   turn's exact run id. If that reply isn't there, the receipt says no evidence, never the selected route. `served_matches`
   compares provider and model only, so it does not prove billing; that takes `api`, the auth in use, and API key spend.
+- **Claude plan routes (swap test 5 Nov):** not offered. Moving from OpenAI to Claude loses earlier turns (OpenClaw logs
+  `cli session history refused across auth boundary: reason=auth-unknown`), and Claude's native tools (`Bash`, `Write` and
+  others) sit outside MC's tool policy, including `fs.workspaceOnly`. Claude back to OpenAI keeps history.
 - **Waiting messages:** a waiting message takes the conversation's choice when it is sent, not when it was queued.
 - **CoS:** its plan routes are listed as unavailable until CoS is signed in and its tool adapter is reviewed. CoS's own
   page does not show the selector yet.

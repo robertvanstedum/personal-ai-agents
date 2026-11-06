@@ -129,3 +129,10 @@ def test_without_a_hosts_catalogue_no_task_has_a_route(monkeypatch):
 def test_the_morning_note_is_not_a_routed_task_because_it_always_runs_on_cos():
     """scripts/mc/morning.py is bound to the CoS backend, and CoS has no plan routes yet. Listing it here would claim a route it never reads."""
     assert not any("morning" in name for name in CAT["roles"])
+
+
+def test_a_cli_runtimes_own_name_for_the_provider_still_matches_its_route():
+    route = snapshot(json.loads(json.dumps(CAT)) | {"routes": [{**r, "offered": {**r["offered"], "mc": "available"}} for r in CAT["routes"]]}, "mc-conversation",
+                     {"routes": {"mc": {"route_id": "plan-anthropic-strong"}}})
+    assert served_receipt(route, {"provider": "claude-cli", "model": "claude-opus-5"})["served_matches"] is True
+    assert served_receipt(route, {"provider": "claude-cli", "model": "claude-sonnet-4-6"})["served_matches"] is False

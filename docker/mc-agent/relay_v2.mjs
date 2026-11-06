@@ -226,7 +226,8 @@ export function routeHeaders(value, routes = ROUTES) {
   return ref ? [false, { "x-openclaw-model": ref }] : [true, {}];
 }
 
-// OpenClaw's own record of who served this exact run: the reply it stamped with this run's id (message.__openclaw.runId).
+// OpenClaw's own record of who served this exact run: the reply it stamped with this run's id. Its own runtime writes
+// message.__openclaw.runId; a Claude CLI reply carries idempotencyKey "cli-assistant:<run id>" instead.
 // A reply from any other run is never this turn's evidence, however recent. Evidence only: it never decides anything,
 // and any problem reading it, or no reply stamped with this run, is "no evidence" (null), never the selected route.
 const CHAT_DB = process.env.MC_RELAY_CHAT_DB || "";
@@ -249,7 +250,7 @@ export function readServed(dbPath, sessionKey, runId) {
       const event = eventOf(row);
       const message = event && event.type === "message" ? event.message : null;
       if (!message || message.role !== "assistant" || !message.provider || !message.model) continue;
-      if (message.__openclaw?.runId !== runId) continue;
+      if (message.__openclaw?.runId !== runId && message.idempotencyKey !== `cli-assistant:${runId}`) continue;
       const found = { provider: message.provider, model: message.model, api: message.api || undefined, harness: session.agent_harness_id || undefined };
       return Object.values(found).every((v) => v === undefined || SERVED_FIELD.test(String(v))) ? found : null;
     }
