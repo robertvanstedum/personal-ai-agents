@@ -448,7 +448,7 @@ try:
         i = json.loads(r.read()).get('info', {})
 except Exception as e:
     print('bad', type(e).__name__); raise SystemExit
-ok = (sorted(i.get('models') or []) == sorted(['minimoi-cos-agent', 'minimoi-cos-agent-xai-fast', 'minimoi-cos-web-search', 'minimoi-cos-agent-anthropic'])
+ok = (sorted(m for m in i.get('models') or [] if not m.startswith('minimoi-xai-')) == sorted(['minimoi-cos-agent', 'minimoi-cos-agent-xai-fast', 'minimoi-cos-web-search', 'minimoi-cos-agent-anthropic'])
       and sorted(i.get('allowed_routes') or []) == sorted(['/v1/chat/completions', '/chat/completions', '/v1/responses', '/responses'])
       and i.get('budget_duration') == '30d' and (i.get('max_budget') or 0) > 0 and (i.get('key_alias') or '').startswith('cos-agent-'))
 print(('ok' if ok else 'bad'), i.get('max_budget'), i.get('budget_duration'), round(float(i.get('spend') or 0), 4))

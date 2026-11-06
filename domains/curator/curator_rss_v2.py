@@ -31,6 +31,7 @@ USAGE:
     --model=xai          Use xAI Grok 4.3 (production default)
     --model=grok-4.3     Explicit alias for the production xAI model
     --model=haiku        Use Anthropic Claude Haiku 5.5
+    --model=configured   The daily cron's choice: CURATOR_RANKING_MODEL, haiku unless set to grok-4.3
     --model=sonnet       Use Anthropic Claude Sonnet 4.5
     
     --dry-run            Preview without saving (output to curator_preview.html)
@@ -123,6 +124,15 @@ SCORING_MODE_MAP = {
     'haiku': 'ai',
     'sonnet': 'ai-two-stage',
 }
+
+
+def configured_ranking_model() -> str:
+    """The daily run's scorer. Grok is paused (#466): haiku unless CURATOR_RANKING_MODEL names grok-4.3. A value it does
+    not know stops the run rather than picking a model for it."""
+    value = os.environ.get("CURATOR_RANKING_MODEL", "").strip() or "haiku"
+    if value not in ("haiku", XAI_RANKING_MODEL):
+        raise ValueError(f"Unsupported CURATOR_RANKING_MODEL {value!r}: use haiku or {XAI_RANKING_MODEL}")
+    return value
 
 
 def calculate_xai_cost(input_tokens: int, output_tokens: int) -> float:
@@ -1349,6 +1359,8 @@ def main():
 
     # Resolve explicitly so a typo cannot silently select a different model.
     try:
+        if model == 'configured':
+            model = configured_ranking_model()
         mode = resolve_scoring_mode(model)
         if model == 'ollama':
             print('--model=ollama is a legacy alias for mechanical keyword scoring; no Ollama model is called')

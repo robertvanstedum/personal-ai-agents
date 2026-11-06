@@ -157,9 +157,11 @@ def served_receipt(route: dict | None, served: dict | None) -> dict | None:
 
 def relay_routes(catalogue: dict, agent: str = "mc") -> dict:
     """route_id -> provider/model for the relay and the runtime allowlist: every subscription route of the agent, proved
-    or not, so a route can be proved before it is offered. An unproved route is never reachable from a conversation."""
+    or not, so a route can be proved before it is offered. An unproved route is never reachable from a conversation.
+    A pay-per-use route is listed only once the host has offered it, so the relay never knows a paid route by default."""
     return {r["route_id"]: f"{r['provider']}/{r['model']}" for r in catalogue["routes"]
-            if agent in r["offered"] and r.get("runtime_override", True) and r["billing_mode"] == "subscription"}
+            if agent in r["offered"] and r.get("runtime_override", True)
+            and (r["billing_mode"] == "subscription" or r["offered"][agent] == AVAILABLE)}
 
 
 if __name__ == "__main__":

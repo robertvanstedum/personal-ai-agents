@@ -85,6 +85,13 @@ mc_keygen_py() {
   gateway_keygen_py "$MC_KEY_MODELS" "$MC_KEY_ROUTES" "$MC_KEY_BUDGET_DURATION" "$MC_KEY_RPM" "mc-agent-" "guild.mc" MC_CAP MC_OLD_KEY
 }
 
+# MC's key for a pay-per-use Grok route (docs/runbooks/model_routes_plan.md): that tier only, its own cap. Nothing runs
+# this unless a host turns the route on. Env in: MC_CAP, MC_OLD_KEY.
+MC_GROK_KEY_MODELS='["minimoi-xai-low"]'
+mc_grok_keygen_py() {
+  gateway_keygen_py "$MC_GROK_KEY_MODELS" "$MC_KEY_ROUTES" "$MC_KEY_BUDGET_DURATION" "$MC_KEY_RPM" "mc-grok-" "guild.mc" MC_CAP MC_OLD_KEY
+}
+
 # CoS's own key (cos.sh key; Robert's decision, September 28 2026: CoS gets
 # its own capped key instead of the master key). CoS's four routes only; chat
 # completions and responses (its bounded web search) only; a monthly budget;

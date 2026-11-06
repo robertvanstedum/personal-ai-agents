@@ -65,6 +65,7 @@ const base=JSON.parse(fs.readFileSync(img)),L=JSON.parse(fs.readFileSync(live));
 const isObj=v=>v&&typeof v==="object"&&!Array.isArray(v);
 const merge=(i,l)=>{if(!isObj(i)||!isObj(l))return i;const o={...l};for(const k of Object.keys(i))o[k]=merge(i[k],l[k]);return o;};
 const I=merge(policy.overlay(process.env),base);
+const retired=policy.retire(L,process.env);
 const out=merge(I,L);
 policy.validate(out,process.env);
 const allow=[...new Set([...(I.plugins?.allow||[]),...(L.plugins?.allow||[])])];
@@ -74,8 +75,8 @@ out.plugins.allow=allow;
 // Compare ignoring OpenClaw-owned bookkeeping (meta). Never write the file directly: OpenClaw treats an external write
 // as an accidental clobber and restores its own copy (seen 25 Oct). Emit a patch for `openclaw config patch` instead.
 const strip=o=>{const c={...o};delete c.meta;return c;};
-const changed=JSON.stringify(strip(out))!==JSON.stringify(strip(L));
-const patch={...I,plugins:{...I.plugins,allow}};
+const changed=Boolean(retired)||JSON.stringify(strip(out))!==JSON.stringify(strip(L));
+const patch={...(retired?merge(I,retired):I),plugins:{...I.plugins,allow}};
 fs.writeFileSync("/tmp/mc-config.patch.json",JSON.stringify(patch));
 console.error(changed?"config differs from image policy: patching":"config unchanged");
 process.exit(changed?10:0);

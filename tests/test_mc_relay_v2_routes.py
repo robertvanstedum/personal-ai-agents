@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import json
+import os
+from pathlib import Path
 import shutil
 import sqlite3
+import subprocess
 import time
 import urllib.error
 import urllib.request
@@ -93,6 +96,26 @@ def test_an_unknown_route_is_refused_with_nothing_sent(relay, route):
     env = relay()
     status, _, text = post(env, chat("openclaw/mc-chat"), **{"X-MC-Route": route})
     assert status == 409 and "relay_route_refused" in text and env.gateway.seen == []
+
+
+def test_an_offered_grok_tier_goes_on_as_the_maps_model(relay):
+    env = relay(MC_RELAY_ROUTES=json.dumps({**ROUTES, "api-xai-low": "minimoi-gateway/minimoi-xai-low"}))
+    assert post(env, chat("openclaw/mc-chat"), **{"X-MC-Route": "api-xai-low"})[0] == 200
+    assert {k.lower(): v for k, v in env.gateway.seen[-1]["headers"].items()}["x-openclaw-model"] == "minimoi-gateway/minimoi-xai-low"
+
+
+def test_the_grok_tier_is_refused_while_the_host_has_not_offered_it(relay):
+    env = relay()
+    status, _, text = post(env, chat("openclaw/mc-chat"), **{"X-MC-Route": "api-xai-low"})
+    assert status == 409 and "relay_route_refused" in text and env.gateway.seen == []
+
+
+@pytest.mark.parametrize("ref", ["xai/grok-4.3", "minimoi-gateway/minimoi-cos-agent", "minimoi-gateway/minimoi-xai-pro"])
+def test_the_relay_will_not_start_on_any_other_paid_reference(ref):
+    relay_file = Path(__file__).resolve().parents[1] / "docker/mc-agent/relay_v2.mjs"
+    run = subprocess.run(["node", str(relay_file)], capture_output=True, text=True, timeout=20,
+                         env={"PATH": os.environ["PATH"], "MC_RELAY_TOKEN": "x" * 32, "MC_RELAY_ROUTES": json.dumps({"bad": ref})})
+    assert run.returncode != 0 and "bad route" in run.stderr
 
 
 def test_no_route_header_means_no_override(relay):

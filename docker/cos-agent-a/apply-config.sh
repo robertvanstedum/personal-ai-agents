@@ -36,6 +36,10 @@ mv -f "$tmp" "$dest"
 if [ "${COS_RUNTIME_MODEL_ACCESS:-gateway}" != gateway ]; then
   node /opt/minimoi/cos-agent-a/plan-access.cjs "$dest" || { echo "cos-agent-a: plan model access refused; refusing to start" >&2; exit 1; }
 fi
+# A gateway host that names pay-per-use Grok tiers. Unset: this does nothing and the pinned config stands.
+if [ "${COS_RUNTIME_MODEL_ACCESS:-gateway}" = gateway ] && [ -n "${COS_METERED_ROUTES:-}" ]; then
+  node /opt/minimoi/cos-agent-a/plan-access.cjs "$dest" || { echo "cos-agent-a: metered route refused; refusing to start" >&2; exit 1; }
+fi
 
 # Existing volumes must receive the reviewed owner-directed runtime policy too.
 # Preserve adaptable SOUL/MEMORY/USER files, credentials and sessions.
