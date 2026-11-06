@@ -125,10 +125,27 @@ if [[ -f "$RUNTIME_LAYER" ]]; then
   COMPOSE+=(-f "$RUNTIME_LAYER")
 fi
 
+# MiniMoi 1.2's production layer: present on the host only once switched on (an operator act on Robert's word), then
+# layered on every release and every path through this script, so none strips its settings; absent, nothing changes.
+MINIMOI_1_2_LAYER=/opt/minimoi/docker-compose.minimoi-1-2-production.yml
+if [[ -f "$MINIMOI_1_2_LAYER" ]]; then
+  COMPOSE+=(-f "$MINIMOI_1_2_LAYER")
+fi
+
 # Guildhall's production layer (scheduler and portal side): same rule as the runtime layer. On Robert's word only.
 GUILDHALL_LAYER=/opt/minimoi/docker-compose.guildhall-production-main.yml
 if [[ -f "$GUILDHALL_LAYER" ]]; then
   COMPOSE+=(-f "$GUILDHALL_LAYER")
+fi
+
+# MiniMoi 1.2's images and profile: its companions run this release's images, never a value left on the host (an exported
+# value beats .env). The profile keeps them in the project, so --remove-orphans can't remove them. A setting or layer that
+# doesn't render stops the release here, before anything changes.
+if [[ -f "$MINIMOI_1_2_LAYER" ]]; then
+  COMPOSE+=(--profile minimoi-1-2)
+  export MINIMOI_PORTAL_IMAGE="$REGISTRY/portal:$IMAGE_TAG"
+  export MINIMOI_COS_SCHEDULER_IMAGE="$REGISTRY/cos-scheduler:$IMAGE_TAG"
+  "${COMPOSE[@]}" config -q || { echo "MiniMoi 1.2's layer does not render: setup is unfinished. Nothing was changed." >&2; exit 1; }
 fi
 
 python3 /opt/minimoi/scripts/release_status.py begin "$IMAGE_TAG" "${SERVICES[@]}"
@@ -326,6 +343,17 @@ fi
 AGENT_A_STOPPED=0
 CURATOR_STOPPED=0
 
+# MiniMoi 1.2's companions follow the service whose image they run: cos-board the portal's, the partnership pair the
+# scheduler's. A release of neither names none of them, and the tag of a service not released may not exist in ECR.
+if [[ -f "$MINIMOI_1_2_LAYER" ]]; then
+  MINIMOI_1_2_COMPANIONS=()
+  [[ " ${SERVICES[*]} " != *" portal "* ]] || MINIMOI_1_2_COMPANIONS+=(cos-board)
+  [[ " ${SERVICES[*]} " != *" cos-scheduler "* ]] || MINIMOI_1_2_COMPANIONS+=(partnership-tasks partnership-worker)
+  if (( ${#MINIMOI_1_2_COMPANIONS[@]} > 0 )); then
+    "${COMPOSE[@]}" up -d --no-deps "${MINIMOI_1_2_COMPANIONS[@]}"
+  fi
+fi
+
 expected_image() {
   case "$1" in
     german) echo "$REGISTRY/mein-deutsch:$IMAGE_TAG" ;;
@@ -396,6 +424,26 @@ done
 
 if [[ " ${SERVICES[*]} " == *" curator "* ]]; then
   "$OPS_SCRIPTS/check_curator_mounts.sh"
+fi
+
+# MiniMoi 1.2's companions are checked like a selected service, before the prune: this release's image, and running. A
+# broken one stops the release. A restart loop can pass an instant's look, hence the wait.
+if [[ -f "$MINIMOI_1_2_LAYER" ]] && (( ${#MINIMOI_1_2_COMPANIONS[@]} > 0 )); then
+  sleep 15
+  for service in "${MINIMOI_1_2_COMPANIONS[@]}"; do
+    case "$service" in
+      cos-board) expected=$(expected_image portal) ;;
+      *) expected=$(expected_image cos-scheduler) ;;
+    esac
+    actual=$(docker inspect --format='{{.Config.Image}}' "minimoi-$service")
+    [[ "$actual" == "$expected" ]] || { echo "minimoi-$service uses $actual; expected $expected"; exit 1; }
+    [[ "$(docker inspect --format='{{.State.Running}}' "minimoi-$service")" == "true" &&
+       "$(docker inspect --format='{{.State.Restarting}}' "minimoi-$service")" != "true" ]] || {
+      echo "minimoi-$service is not running"
+      docker logs --tail 40 "minimoi-$service" 2>&1 || true
+      exit 1
+    }
+  done
 fi
 
 # A recreated Vault is checked like any selected service, before the prune: the portal tag, running, and its own

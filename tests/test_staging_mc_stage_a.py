@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -229,7 +230,12 @@ UNTOUCHED = ("docker-compose.prod.yml", "docker-compose.yml", "docker/Dockerfile
 # script without them is the reviewed baseline's, byte for byte.
 P1A_BLOCKS = (("# Host runtime P1-a's production layer", "\nfi\n"),
               ("# Host runtime P1-a's EC2 witness", "\nfi\n"),
-              ('\nif [[ "$WITNESS_RECREATED" == "1" ]]; then', "\nfi\n"))
+              ('\nif [[ "$WITNESS_RECREATED" == "1" ]]; then', "\nfi\n"),
+              # MiniMoi 1.2's guarded blocks: each acts only with its layer on the host (tests/test_minimoi_1_2_release_scripts.py).
+              ("# MiniMoi 1.2's production layer", "\nfi\n"),
+              ("# MiniMoi 1.2's images and profile", "\nfi\n"),
+              ("# MiniMoi 1.2's companions follow", "\nfi\n"),
+              ("# MiniMoi 1.2's companions are checked", "\nfi\n"))
 
 
 def _without_p1a_blocks(text):
@@ -239,7 +245,7 @@ def _without_p1a_blocks(text):
         i = text.index(start)
         j = text.index(end, i) + len(end)
         text = text[:i] + text[j:] if not start.startswith("\n") else text[:i] + "\n" + text[j:]
-    return text.replace("\n\n\n", "\n\n")
+    return re.sub(r"\n{3,}", "\n\n", text)    # adjacent guarded blocks leave more than one blank line
 
 
 def test_production_compose_and_cos_files_are_byte_identical_to_the_reviewed_baseline():

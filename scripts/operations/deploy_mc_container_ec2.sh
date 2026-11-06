@@ -21,6 +21,8 @@ MC_DIR=$ROOT/mc
 MC_ENV=$MC_DIR/mc.env
 MAIN_ENV=$ROOT/.env
 COMPOSE_FILE=$ROOT/docker-compose.mc.prod.yml
+# MC's 1.2 production layer: present only once an operator placed it, on Robert's word; absent, nothing changes.
+MC_LAYER=$ROOT/docker-compose.mc-1-2-production.yml
 JUDGMENT=$ROOT/private/judgment
 JUDGMENT_TOOL=$ROOT/scripts/judgment_store.py
 # MC's conversation records inside its own state volume (agent mc-chat). Read only through a copy: opening the live
@@ -46,7 +48,24 @@ TAG_ERE='^mc-agent-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+(\.[A-Za-z0-9]+)*)?$'
 
 log() { echo "mc-container: $*"; }
 die() { echo "mc-container: REFUSED: $*" >&2; exit 2; }
-mc_compose() { MC_IMAGE_TAG="$1" docker-compose -p minimoi-mc --env-file "$MC_ENV" -f "$COMPOSE_FILE" "${@:2}"; }
+mc_compose() {
+  if [[ -f "$MC_LAYER" ]]; then
+    # The image is the tag being released, never a value left in mc.env (the shell's value beats --env-file).
+    MC_IMAGE_TAG="$1" MINIMOI_MC_IMAGE="$REGISTRY/minimoi/cos-scheduler:$1" \
+      docker-compose -p minimoi-mc --env-file "$MC_ENV" -f "$COMPOSE_FILE" -f "$MC_LAYER" "${@:2}"
+  else
+    MC_IMAGE_TAG="$1" docker-compose -p minimoi-mc --env-file "$MC_ENV" -f "$COMPOSE_FILE" "${@:2}"
+  fi
+}
+
+refresh_mc_layer() {
+  # A layer already switched on follows the release bundle. It is never created here: placing it is the opt-in, and its
+  # required settings may not exist yet. A setting the new copy needs and the host lacks stops the pull, with MC untouched.
+  local bundled="$ROOT/mc-release/${MC_LAYER##*/}"
+  if [[ -f "$MC_LAYER" && -f "$bundled" ]]; then
+    install -m 0644 "$bundled" "$MC_LAYER"
+  fi
+}
 env_value() { sed -n "s/^$2=//p" "$1" | tail -1; }
 
 relay_health() {
@@ -143,6 +162,7 @@ deploy() {
   [[ "$tag" =~ $TAG_ERE ]] || die "invalid release tag '$tag'"
   test -f "$COMPOSE_FILE" || die "missing $COMPOSE_FILE"
   prepare
+  refresh_mc_layer
   aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "$REGISTRY" >/dev/null
   mc_compose "$tag" pull
   mc_compose "$tag" up -d --remove-orphans

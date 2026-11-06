@@ -39,6 +39,7 @@ COPY --chown=root:root docker/mc-agent-container/plugins/mc-bounded-search/ /opt
 # deploy/switch script, the DB migration script and its migrations, the prod policy, the judgment collector and the
 # security/model checks. One immutable artifact per release.
 COPY --chown=root:root docker-compose.mc.prod.yml /opt/minimoi/mc-release/
+COPY --chown=root:root docker-compose.mc-1-2-production.yml /opt/minimoi/mc-release/
 COPY --chown=root:root scripts/operations/deploy_mc_container_ec2.sh scripts/operations/mc_prod_db_migrate.sh \
      scripts/judgment/judgment_store.py scripts/ops/mc_container_security_test.py scripts/ops/mc_container_model_tests.py \
      services/mc_operations/policy/mc-policy.prod.json /opt/minimoi/mc-release/

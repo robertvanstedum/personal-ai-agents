@@ -1,7 +1,8 @@
 # OPTIONAL explicit opt-in: MiniMoi 1.2's production settings for CoS, the model routes and the task flow.
 # Layered after docker-compose.prod.yml. Present on the host only once switched on, on Robert's word; absent, nothing
 # changes. Every secret and state folder must already exist on production: nothing here creates one (no host-path
-# creation), and nothing is copied from Dev. Images are immutable digests. Guildhall has its own two files.
+# creation), and nothing is copied from Dev. The release scripts set the two image values from the tag they just pulled,
+# so the companions can't drift from the release. Guildhall has its own two files.
 x-new-service: &new-service
   profiles: [minimoi-1-2]
   restart: unless-stopped
@@ -49,6 +50,8 @@ services:
       COS_TASKS_COS_TOKEN_FILE: /run/secrets/partnership/tasks-cos.token
       COS_TASKS_PLATFORM_TOKEN_FILE: /run/secrets/partnership/tasks-platform.token
       MINIMOI_COS_VOICE_DIRECT: "1"
+      # Installed above; this admits starts (domains/cos/direct_voice.py). Without it every start is refused in production.
+      MINIMOI_COS_DIRECT_VOICE_PRODUCTION: "1"
       VOICE_REALTIME_UI_ENABLED: "1"
       MINIMOI_MODEL_ROUTES_FILE: /run/minimoi-model-routes/catalogue.json
       PARTNERSHIP_ENVIRONMENT: prod
@@ -77,10 +80,14 @@ services:
       MINIMOI_MC_GUEST_ACTIONS: "1"
       MINIMOI_MC_GUEST_ACTIONS_ENV: prod
       MINIMOI_MC_VOICE_DIRECT: "1"
+      # Installed above; this admits starts (guild_mounts.production_environ). Without it every start is refused in production.
+      MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION: "1"
       MINIMOI_MC_VOICED_OUTCOMES: "1"
       VOICE_REALTIME_UI_ENABLED: "1"
       MINIMOI_MODEL_ROUTES_FILE: /run/minimoi-model-routes/catalogue.json
-      MINIMOI_ACTION_NOTICES: "1"
+      # The modes are off, record and on; anything else is off, silently. On here, and `notices off` still works: it writes
+      # off to .env, and a fixed value in this file would override it.
+      MINIMOI_ACTION_NOTICES: ${MINIMOI_ACTION_NOTICES:-on}
       MINIMOI_ACTION_NOTICES_ENV: prod
       PARTNERSHIP_ENVIRONMENT: prod
       PARTNERSHIP_TASKS_URL: http://partnership-tasks:8772
@@ -112,7 +119,8 @@ services:
       BOARD_API_FLOOR: cos-board
       BOARD_API_PROFILES_FILE: /run/board-secrets/profiles.json
       BOARD_API_CURSOR_KEY_FILE: /run/board-secrets/cursor.key
-      DATABASE_URL: ${MINIMOI_COS_BOARD_DATABASE_URL:?least-privilege Board database URL required}
+      # The least-privilege Board database URL, by file: every main service loads /opt/minimoi/.env, so it can't be there.
+      DATABASE_URL_FILE: /run/board-secrets/db.url
       MINIMOI_BOARD_ENV: prod
       PYTHONDONTWRITEBYTECODE: "1"
     volumes:
