@@ -25,7 +25,7 @@ import os
 import re
 import time
 
-from core.realtime_voice.summary_gateway import (DEFAULT_GATEWAY_URL, GATEWAY_URL_ENV, _streamed, answer_text,
+from core.realtime_voice.summary_gateway import (DEFAULT_GATEWAY_URL, GATEWAY_URL_ENV, _key_from_file, _streamed, answer_text,
                                                  bounded_post, key_env)
 
 INTENT_MODEL = "minimoi-voice-intent"                     # a gateway alias: the concrete model is gateway configuration
@@ -90,7 +90,7 @@ class GatewayIntent:
         environ = os.environ if environ is None else environ
         self.key_name, self.env, self.person = key_name, key_env(key_name), dict(person or {})
         self.owner, self.board = owner, board is True
-        self._key = environ.get(self.env) or ""
+        self._key = environ.get(self.env) or _key_from_file(environ.get(self.env + "_FILE"))
         self.url = (environ.get(GATEWAY_URL_ENV) or DEFAULT_GATEWAY_URL).rstrip("/") + "/chat/completions"
         self._post = http_post
 

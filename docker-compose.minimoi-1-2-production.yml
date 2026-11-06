@@ -56,6 +56,8 @@ services:
       MINIMOI_MODEL_ROUTES_FILE: /run/minimoi-model-routes/catalogue.json
       PARTNERSHIP_ENVIRONMENT: prod
       PARTNERSHIP_TASKS_URL: http://partnership-tasks:8772
+      # Her capped voice key, $20: from the mounted cos-partnership folder below, never from .env (minimoi_1_2_prod_bind.py).
+      MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS_FILE: /run/secrets/partnership/voice-summary-cos.key
     volumes:
       # The path scripts/backup_local.sh already backs up, under the store's lock.
       - {type: bind, source: /opt/minimoi/cos/store, target: /var/lib/minimoi/cos-store, bind: {create_host_path: false}}
@@ -72,9 +74,6 @@ services:
   portal:
     environment:
       MINIMOI_COS_WRITE_GUARD: "on"      # off by default on production (app.py); every CoS write is checked
-      MINIMOI_GUILD_MC: openclaw
-      MINIMOI_GUILD_MC_STREAM: "on"
-      MINIMOI_GUILD_MC_TURNS: "on"
       MC_TURNS_DIR: /app/data/mc-turns
       MINIMOI_GUILD_GITHUB_LOOKUP: "1"
       MINIMOI_MC_GUEST_ACTIONS: "1"
@@ -92,7 +91,10 @@ services:
       PARTNERSHIP_ENVIRONMENT: prod
       PARTNERSHIP_TASKS_URL: http://partnership-tasks:8772
       PARTNERSHIP_MC_TOKEN_FILE: /run/secrets/partnership/mc.token
-      PARTNERSHIP_CARD_REF: ${MINIMOI_PARTNERSHIP_CARD_REF:?commit the worker runs from required}
+      # The release's 40-hex commit (MC's task cards name it). The release scripts export it, so it follows every release.
+      PARTNERSHIP_CARD_REF: ${MINIMOI_PARTNERSHIP_CARD_REF:?the release commit required}
+      # MC's capped voice key, $20: from the mounted portal-partnership folder below, never from .env (minimoi_1_2_prod_bind.py).
+      MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_MC_FILE: /run/secrets/partnership/voice-summary-mc.key
       PORTAL_COS_OWNER_ENV: prod
       PORTAL_COS_OWNER_KEY_FILE: /run/secrets/partnership/portal-cos-owner.key
       PORTAL_PARTNERSHIP_OWNER_ENV: prod
@@ -137,6 +139,7 @@ services:
       PARTNERSHIP_PRODUCTION: "1"
       PARTNERSHIP_ENVIRONMENT: prod
       PARTNERSHIP_OWNER_ENV: prod
+      # Exactly owner:robert, the form the portal signs. minimoi_1_2_prod_bind.py writes it, and refuses any other value.
       PARTNERSHIP_OWNER_SUBJECT: ${MINIMOI_PARTNERSHIP_OWNER_SUBJECT:?production owner subject required}
       PARTNERSHIP_PORT: "8772"
       PARTNERSHIP_ROOT: /data/store

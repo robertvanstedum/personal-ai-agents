@@ -164,3 +164,35 @@ def test_secret_folders_are_on_the_setup_list():
         folders.extend(re.findall(r"MINIMOI_1_2_SECRETS:\?[^}]*\}/([a-z0-9-]+)", _text(name)))
     assert folders
     assert all(f"{setup.SECRETS}/{name}" in setup.FOLDERS for name in folders)
+
+
+def test_voice_keys_come_by_file_from_a_folder_each_service_already_mounts_read_only():
+    from scripts.operations import minimoi_1_2_prod_bind as bind
+    services = _compose(LAYERS[0])["services"]
+    for service, variable, name, folder in (
+            ("portal", "MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_MC_FILE", "voice-summary-mc.key", "portal-partnership"),
+            ("cos-scheduler", "MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS_FILE", "voice-summary-cos.key", "cos-partnership")):
+        spec = services[service]
+        assert spec["environment"][variable] == f"/run/secrets/partnership/{name}"
+        mount = next(v for v in spec["volumes"] if v["target"] == "/run/secrets/partnership")
+        assert mount["source"].endswith(f"/{folder}") and mount["read_only"] is True
+        assert mount["bind"]["create_host_path"] is False
+        assert f"{setup.SECRETS}/{folder}/{name}" in bind.GATEWAY_KEYS      # the operator writes that file, capped
+        assert f"{setup.SECRETS}/{folder}/{name}" in setup.BY_OPERATOR
+    assert "MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_MC:" not in _text(LAYERS[0])      # no value through compose
+
+
+def test_settings_production_removes_anyway_are_not_in_the_layer_and_mc_still_turns_on():
+    from minimoi_portal import guild_mounts
+    portal = _compose(LAYERS[0])["services"]["portal"]["environment"]
+    assert not set(portal) & set(guild_mounts.PRODUCTION_MC_ADMITTED)
+    environ = guild_mounts.production_environ({**portal, "MINIMOI_GUILD_CHAT": "mc", "MC_RUNTIME_URL": guild_mounts.PRODUCTION_MC_RELAY_URL,
+                                               "MC_RUNTIME_TOKEN": "x"})
+    assert environ["MINIMOI_GUILD_MC"] == "openclaw" and environ["MINIMOI_GUILD_MC_TURNS"] == "1" and environ["MINIMOI_GUILD_MC_STREAM"] == "1"
+
+
+def test_the_owner_subject_has_no_default_and_its_one_form_is_owner_robert():
+    from scripts.operations import minimoi_1_2_prod_bind as bind
+    tasks = _compose(LAYERS[0])["services"]["partnership-tasks"]["environment"]
+    assert tasks["PARTNERSHIP_OWNER_SUBJECT"].startswith("${MINIMOI_PARTNERSHIP_OWNER_SUBJECT:?")
+    assert "owner:robert" in _text(LAYERS[0]) and f"owner:{bind.OWNER}" == "owner:robert"

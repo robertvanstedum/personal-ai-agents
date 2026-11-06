@@ -21,6 +21,7 @@ MC_SCRIPT = ROOT / "scripts/operations/deploy_mc_container_ec2.sh"
 COS_PROD = ROOT / "scripts/operations/cos_prod.sh"
 REGISTRY = "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi"
 TAG = "a1b2c3d"
+COMMIT = TAG + "e" * 33
 LAYER_12 = "docker-compose.minimoi-1-2-production.yml"
 LAYER_MC = "docker-compose.mc-1-2-production.yml"
 LAYER_GUILDHALL = "docker-compose.guildhall-production-main.yml"
@@ -29,6 +30,7 @@ LAYER_RECORDS = "docker-compose.records-production-portal.yml"
 
 COMPOSE_STUB = r'''#!/bin/bash
 printf 'compose|%s|%s|%s\n' "${MINIMOI_PORTAL_IMAGE:-}" "${MINIMOI_COS_SCHEDULER_IMAGE:-}" "$*" >> "$STUB_LOG"
+[ -z "${MINIMOI_PARTNERSHIP_CARD_REF:-}" ] || echo "card|$MINIMOI_PARTNERSHIP_CARD_REF" >> "$STUB_LOG"
 if [ "${STUB_CONFIG_FAILS:-0}" = 1 ]; then
   case " $* " in *" config "*) echo 'required variable MINIMOI_1_2_SECRETS is missing' >&2; exit 1 ;; esac
 fi
@@ -39,6 +41,7 @@ DOCKER_STUB = r'''#!/bin/bash
 echo "docker $*" >> "$STUB_LOG"
 case "$1" in
   container) exit 1 ;;
+  exec) [ "$2 $3 $4" = "minimoi-portal printenv PARTNERSHIP_CARD_REF" ] && echo "${STUB_PORTAL_CARD_REF:-}"; exit 0 ;;
   login) cat >/dev/null; exit 0 ;;
   inspect)
     shift; fmt=""; target=""
@@ -103,7 +106,7 @@ def host(tmp_path):
             script.write_text(source.read_text().replace("/opt/minimoi", str(opt)))
             log.write_text("")
             base = {"PATH": f"{bin_dir}:{os.environ.get('PATH', '/usr/bin:/bin')}", "STUB_LOG": str(log),
-                    "STUB_REGISTRY": REGISTRY, "STUB_TAG": TAG, "HOME": str(tmp_path)}
+                    "STUB_REGISTRY": REGISTRY, "STUB_TAG": TAG, "HOME": str(tmp_path), "MINIMOI_RELEASE_COMMIT": COMMIT}
             result = subprocess.run(["bash", str(script), *args], env={**base, **env}, capture_output=True, text=True,
                                     timeout=60)
             return result, log.read_text().splitlines()
@@ -356,6 +359,67 @@ def test_the_board_reads_its_url_from_a_private_file_or_the_old_variable(tmp_pat
         database_url({"DATABASE_URL_FILE": str(path)})
 
 
+# ── the card commit follows the release ───────────────────────────────────────────────────────────────────────────────────
+
+STALE = "b" * 40
+
+
+def _cards(lines):
+    return {line.split("|", 1)[1] for line in lines if line.startswith("card|")}
+
+
+@pytest.mark.parametrize("source,args", [(SCOPED, (TAG, "portal")), (MANUAL, (TAG,))])
+def test_a_release_exports_its_own_commit_over_a_stale_env_file(host, source, args):
+    host.place(LAYER_12)
+    (host.path / ".env").write_text(f"MINIMOI_PARTNERSHIP_CARD_REF={STALE}\n")
+    result, lines = host.run(source, *args, MINIMOI_PARTNERSHIP_CARD_REF=STALE, STUB_PORTAL_CARD_REF=STALE)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _cards(lines) == {COMMIT}
+
+
+@pytest.mark.parametrize("source,args", [(SCOPED, (TAG, "portal")), (MANUAL, (TAG,))])
+def test_a_release_at_the_running_tag_keeps_the_running_portals_commit(host, source, args):
+    host.place(LAYER_12)
+    (host.path / ".env").write_text(f"MINIMOI_PARTNERSHIP_CARD_REF={STALE}\n")
+    result, lines = host.run(source, *args, MINIMOI_RELEASE_COMMIT="", STUB_PORTAL_CARD_REF=COMMIT)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _cards(lines) == {COMMIT}
+
+
+@pytest.mark.parametrize("source,args", [(SCOPED, (TAG, "portal")), (MANUAL, (TAG,))])
+@pytest.mark.parametrize("env", [{"MINIMOI_RELEASE_COMMIT": ""}, {"MINIMOI_RELEASE_COMMIT": STALE}, {"MINIMOI_RELEASE_COMMIT": TAG}])
+def test_a_portal_release_with_no_commit_for_its_tag_changes_nothing(host, source, args, env):
+    host.place(LAYER_12)
+    (host.path / ".env").write_text(f"MINIMOI_PARTNERSHIP_CARD_REF={STALE}\n")
+    result, lines = host.run(source, *args, STUB_PORTAL_CARD_REF=STALE, **env)
+    assert result.returncode == 1 and "Nothing was changed" in result.stderr
+    assert _compose_calls(lines) == [] and not [line for line in lines if line.startswith("release_status")]
+
+
+def test_a_release_that_leaves_the_portal_alone_needs_only_a_value_that_renders(host):
+    host.place(LAYER_12)
+    result, lines = host.run(SCOPED, "0ld0000", "cos-agent-a", MINIMOI_RELEASE_COMMIT="", STUB_PORTAL_CARD_REF=COMMIT,
+                             STUB_TAG="0ld0000")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _cards(lines) == {COMMIT}
+
+
+def test_no_layer_means_no_card_commit_and_no_look_at_the_portal(host):
+    result, lines = host.run(SCOPED, TAG, "portal")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _cards(lines) == set() and not [line for line in lines if "printenv" in line]
+
+
+def test_ci_gives_the_full_commit_and_the_portal_refuses_a_bare_tag():
+    from core.mc_tools.tasks_adapter import TasksAdapter
+    workflow = (ROOT / ".github/workflows/deploy.yml").read_text()
+    assert "MINIMOI_RELEASE_COMMIT=${{ github.sha }} /opt/minimoi/scripts/deploy_scoped_release.sh" in workflow
+    assert 'echo "sha=${GITHUB_SHA::7}"' in workflow                    # why the tag alone can't be the commit
+    TasksAdapter(None, environment="prod", card_ref=COMMIT)
+    with pytest.raises(ValueError, match="40-hex"):
+        TasksAdapter(None, environment="prod", card_ref=TAG)
+
+
 # ── a real offline render: no daemon, no pull ──────────────────────────────────────────────────────────────────────────
 
 PROD_ENV = {"MINIMOI_MODEL_GATEWAY_KEY": "synthetic", "XAI_API_KEY": "synthetic", "ANTHROPIC_API_KEY": "synthetic",
@@ -365,7 +429,7 @@ SETUP_ENV = {
     "MINIMOI_1_2_SECRETS": "/opt/minimoi/secrets/1-2", "MINIMOI_1_2_STATE": "/opt/minimoi/state/1-2",
     "MINIMOI_MODEL_ROUTES_DIR": "/opt/minimoi/state/1-2/model-routes", "MINIMOI_COS_PLAN_AUTH_PROFILE": "openai:synthetic",
     "MINIMOI_COS_TOOL_LISTENER_TOKEN_SHA256": "0" * 64, "MINIMOI_PARTNERSHIP_CARD_REF": "a" * 40,
-    "MINIMOI_PARTNERSHIP_OWNER_SUBJECT": "robert", "MINIMOI_PORTAL_IMAGE": f"{REGISTRY}/portal:{TAG}",
+    "MINIMOI_PARTNERSHIP_OWNER_SUBJECT": "owner:robert", "MINIMOI_PORTAL_IMAGE": f"{REGISTRY}/portal:{TAG}",
     "MINIMOI_COS_SCHEDULER_IMAGE": f"{REGISTRY}/cos-scheduler:{TAG}",
 }
 
@@ -390,6 +454,11 @@ def test_the_1_2_layer_renders_with_the_setup_values_and_keeps_notices_switchabl
     assert out.returncode == 0, out.stderr
     services = json.loads(out.stdout)["services"]
     assert services["portal"]["environment"]["MINIMOI_ACTION_NOTICES"] == "on"
+    assert services["partnership-tasks"]["environment"]["PARTNERSHIP_OWNER_SUBJECT"] == "owner:robert"
+    assert services["portal"]["environment"]["MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_MC_FILE"] == "/run/secrets/partnership/voice-summary-mc.key"
+    # docker-compose.prod.yml's empty scheduler line stays, and the file variable sits beside it.
+    assert services["cos-scheduler"]["environment"]["MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS_FILE"] == "/run/secrets/partnership/voice-summary-cos.key"
+    assert services["cos-scheduler"]["environment"]["MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS"] == ""
     assert services["cos-board"]["image"] == f"{REGISTRY}/portal:{TAG}"
     assert services["partnership-worker"]["image"] == f"{REGISTRY}/cos-scheduler:{TAG}"
     assert "DATABASE_URL" not in services["cos-board"]["environment"]

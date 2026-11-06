@@ -372,7 +372,7 @@ jobs:
               "cd /opt/minimoi",
               "/opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/.env",
               "/opt/minimoi/scripts/cos_prod.sh prepare",
-              "/opt/minimoi/scripts/deploy_scoped_release.sh ${{ needs.build-push.outputs.image_tag }} ${{ needs.classify.outputs.services }}"
+              "MINIMOI_RELEASE_COMMIT=${{ github.sha }} /opt/minimoi/scripts/deploy_scoped_release.sh ${{ needs.build-push.outputs.image_tag }} ${{ needs.classify.outputs.services }}"
             ],executionTimeout=["1800"]' \
             --query 'Command.CommandId' \
             --output text)
