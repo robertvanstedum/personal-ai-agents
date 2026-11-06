@@ -233,6 +233,7 @@ P1A_BLOCKS = (("# Host runtime P1-a's production layer", "\nfi\n"),
               ('\nif [[ "$WITNESS_RECREATED" == "1" ]]; then', "\nfi\n"),
               # MiniMoi 1.2's guarded blocks: each acts only with its layer on the host (tests/test_minimoi_1_2_release_scripts.py).
               ("# MiniMoi 1.2's production layer", "\nfi\n"),
+              ("# MINIMOI_PARTNERSHIP_CARD_REF for this release", "\n}\n"),
               ("# MiniMoi 1.2's images and profile", "\nfi\n"),
               ("# MiniMoi 1.2's companions follow", "\nfi\n"),
               ("# MiniMoi 1.2's companions are checked", "\nfi\n"))

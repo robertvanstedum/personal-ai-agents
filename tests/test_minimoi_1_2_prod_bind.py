@@ -19,6 +19,15 @@ import pytest
 from scripts.operations import minimoi_1_2_prod_bind as bind
 from scripts.operations import minimoi_1_2_prod_setup as setup
 
+
+@pytest.fixture(autouse=True)
+def _keep_this_process_umask():
+    """main() tightens the umask for the operator's own run. Left set, it changes what other tests' mkdir makes."""
+    saved = os.umask(0o022)
+    os.umask(saved)
+    yield
+    os.umask(saved)
+
 REPO = Path(__file__).resolve().parents[1]
 S = setup.SECRETS
 
