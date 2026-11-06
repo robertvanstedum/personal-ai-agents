@@ -1348,7 +1348,30 @@
         "input_digest": {
           "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "no_verdict"
+            ],
+            "properties": {
+              "no_verdict": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "verdict": {
+                "not": {
+                  "const": "approve"
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "payload.task.delegate": {
       "description": "E07: the parent's lead delegates one bounded child step. One level only; the parent lead stays the child's accountable lead.",
@@ -1427,7 +1450,7 @@
       }
     },
     "payload.outbox.approve": {
-      "description": "B4 execution design v0.4 §2 / v0.5 M2-M3: Robert's exact approval of one work card, recorded from his own session. It names the admission operation and the card digest he saw; it is used once, expires 15 minutes after it is recorded, and is spent by the first send.",
+      "description": "B4 execution design v0.4 \u00a72 / v0.5 M2-M3: Robert's exact approval of one work card, recorded from his own session. It names the admission operation and the card digest he saw; it is used once, expires 15 minutes after it is recorded, and is spent by the first send.",
       "type": "object",
       "additionalProperties": false,
       "required": [

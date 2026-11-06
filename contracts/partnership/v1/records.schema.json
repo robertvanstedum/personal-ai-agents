@@ -307,7 +307,7 @@
               "type": "boolean"
             },
             "task": {
-              "description": "B4 (connection design v0.2 §3): the task terms the owner confirms. request.promote must match them field by field when present; required for owner-confirmed promotion.",
+              "description": "B4 (connection design v0.2 \u00a73): the task terms the owner confirms. request.promote must match them field by field when present; required for owner-confirmed promotion.",
               "type": "object",
               "additionalProperties": false,
               "required": [
@@ -1132,7 +1132,30 @@
               "interpretation_ref": {
                 "$ref": "urn:minimoi:contract:partnership:common#/$defs/interpretation_id"
               }
-            }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "required": [
+                    "no_verdict"
+                  ],
+                  "properties": {
+                    "no_verdict": {
+                      "const": true
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "verdict": {
+                      "not": {
+                        "const": "approve"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
           }
         },
         "rounds": {

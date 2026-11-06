@@ -233,8 +233,12 @@ def main(argv=None) -> int:
     from services.partnership_tasks.auth import Bindings, Grants
     root = os.environ["PARTNERSHIP_ROOT"]
     environment = os.environ["PARTNERSHIP_ENVIRONMENT"]
-    if environment not in ("dev", "staging"):
-        raise SystemExit("the HTTP task service runs only on dev or staging")
+    if environment == "prod":
+        # Production takes its own explicit admission; it never presents itself as dev.
+        if os.environ.get("MINIMOI_ROLE") != "production" or os.environ.get("PARTNERSHIP_PRODUCTION") != "1":
+            raise SystemExit("the HTTP task service on production requires its explicit admission")
+    elif environment not in ("dev", "staging"):
+        raise SystemExit("the HTTP task service runs only on dev, staging or admitted production")
     if not (Path(root) / "journal" / "journal.jsonl").is_file():
         raise SystemExit("no task store at PARTNERSHIP_ROOT; provision it first")
     grants_file = os.environ.get("PARTNERSHIP_GRANTS")

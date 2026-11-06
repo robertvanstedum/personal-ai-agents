@@ -163,7 +163,7 @@ class TaskService:
         accepted = next((a["artifact_set_digest"] for a in reversed(task["acceptances"]) if a["status"] == "current"),
                         None)
         authors = _Planner.authors_of(task, want) if want else set()
-        approved = [r for r in task["reviews"] if r["reviewed_set_digest"] == want and r["verdict"] == "approve"
+        approved = [r for r in task["reviews"] if r["reviewed_set_digest"] == want and r["verdict"] == "approve" and not r.get("no_verdict")
                     and r["reviewer"] not in authors and r["interpretation_ref"] == task["interpretation_ref"]]
         ok = want is not None and accepted == want and bool(approved) and task["state"] == "completed"
         return {"gate": "open" if ok else "closed", "checked": want, "current": current, "accepted": accepted,
@@ -949,7 +949,7 @@ class _Planner:
             raise Refused("transition_not_allowed", "not_the_current_artifact_set")      # F04: a newer set arrived
         applicable = [r for r in task["reviews"] if r["applicable_to_current"]]
         authors = self.authors_of(task, current["digest"])
-        approvals = [r for r in applicable if r["verdict"] == "approve" and r["reviewer"] not in authors
+        approvals = [r for r in applicable if r["verdict"] == "approve" and not r.get("no_verdict") and r["reviewer"] not in authors
                      and r["reviewer"] != self.b.seat]           # the accepting lead's own approval never counts
         if not approvals and not self.delivered_review(task, current):
             raise Refused("transition_not_allowed", "no_non_author_approval_of_this_set")
@@ -1050,6 +1050,8 @@ class _Planner:
                   "findings_ref": self.p["findings_ref"], "interpretation_ref": task["interpretation_ref"],
                   "applicable_to_current": False, "task_revision": task["revision"] + 1}
         if self.p.get("no_verdict"):
+            if self.p["verdict"] == "approve":     # no verdict is never an approval, whatever the caller says
+                raise Refused("invalid", "no_verdict_cannot_approve")
             review["no_verdict"] = True
         t2 = dict(task, reviews=task["reviews"] + [review], review_refs=task["review_refs"] + [self.p["review_ref"]])
         rec = self.stamp(dict(t2, reviews=self.reapply(t2)), task)

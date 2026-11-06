@@ -49,8 +49,9 @@ services:
       PARTNERSHIP_ENVIRONMENT: prod
       PARTNERSHIP_TASKS_URL: http://partnership-tasks:8772
     volumes:
-      - {type: bind, source: "${MINIMOI_1_2_STATE:?existing production-only state folder required}/cos-store", target: /var/lib/minimoi/cos-store, bind: {create_host_path: false}}
-      - {type: bind, source: "${MINIMOI_1_2_STATE:?}/cos-turns", target: /app/data/cos-turns, bind: {create_host_path: false}}
+      # The path scripts/backup_local.sh already backs up, under the store's lock.
+      - {type: bind, source: /opt/minimoi/cos/store, target: /var/lib/minimoi/cos-store, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?existing production-only state folder required}/cos-turns", target: /app/data/cos-turns, bind: {create_host_path: false}}
       - {type: bind, source: "${MINIMOI_1_2_STATE:?}/cos-partnership", target: /app/runtime/partnership, bind: {create_host_path: false}}
       - {type: bind, source: "${MINIMOI_1_2_SECRETS:?}/cos-actions-token", target: /run/secrets/cos-actions-token, read_only: true, bind: {create_host_path: false}}
       - {type: bind, source: "${MINIMOI_1_2_SECRETS:?}/cos-partnership", target: /run/secrets/partnership, read_only: true, bind: {create_host_path: false}}
@@ -62,6 +63,7 @@ services:
 
   portal:
     environment:
+      MINIMOI_COS_WRITE_GUARD: "on"      # off by default on production (app.py); every CoS write is checked
       MINIMOI_GUILD_MC: openclaw
       MINIMOI_GUILD_MC_STREAM: "on"
       MINIMOI_GUILD_MC_TURNS: "on"
@@ -103,6 +105,9 @@ services:
       BOARD_API_BIND: 0.0.0.0
       BOARD_API_PORT: "5014"
       BOARD_API_FLOOR: cos-board
+      BOARD_API_PROFILES_FILE: /run/board-secrets/profiles.json
+      BOARD_API_CURSOR_KEY_FILE: /run/board-secrets/cursor.key
+      DATABASE_URL: ${MINIMOI_COS_BOARD_DATABASE_URL:?least-privilege Board database URL required}
       MINIMOI_BOARD_ENV: prod
       PYTHONDONTWRITEBYTECODE: "1"
     volumes:
@@ -115,6 +120,8 @@ services:
     container_name: minimoi-partnership-tasks
     command: [python, -m, services.partnership_tasks.http_api]
     environment:
+      MINIMOI_ROLE: production
+      PARTNERSHIP_PRODUCTION: "1"
       PARTNERSHIP_ENVIRONMENT: prod
       PARTNERSHIP_OWNER_ENV: prod
       PARTNERSHIP_OWNER_SUBJECT: ${MINIMOI_PARTNERSHIP_OWNER_SUBJECT:?production owner subject required}

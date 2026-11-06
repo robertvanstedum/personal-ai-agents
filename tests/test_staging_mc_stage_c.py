@@ -35,7 +35,11 @@ def test_mc_route_is_openai_strong_on_gateway_only_key_with_no_fallback():
     assert mc["litellm_params"]["reasoning_effort"] == "high"
     assert mc["model_info"]["id"] == "mc-xai-grok43" and "fallback_position" not in mc["model_info"]
     assert "minimoi-mc-agent" not in str(_load(GATEWAY_STAGING)["router_settings"])
-    assert "minimoi-mc-agent" not in GATEWAY_PROD.read_text()
+    # Production's minimoi-mc-agent is only Guildhall's tool-free discussion route, on Claude, with no fallback.
+    prod_text = _load(GATEWAY_PROD)
+    prod_route = next(m for m in prod_text["model_list"] if m["model_name"] == "minimoi-mc-agent")
+    assert prod_route["litellm_params"]["model"] == "anthropic/claude-haiku-5-5"
+    assert "minimoi-mc-agent" not in str(prod_text["router_settings"])
 
 
 def test_no_staging_route_uses_the_default_provider_key_names():
