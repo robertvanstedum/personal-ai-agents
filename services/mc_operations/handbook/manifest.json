@@ -1,22 +1,22 @@
 {
   "format": "minimoi-mc-handbook/1",
-  "candidate_version": "0.1.1",
-  "release_path": "v0.1.1",
+  "candidate_version": "0.1.2",
+  "release_path": "v0.1.2",
   "status": "review_candidate",
   "active_runtime_version": null,
-  "predecessor": "0.1.0",
-  "predecessor_reason": "how outside issue reports are handled (Robert, 29 Oct)",
-  "date": "2026-10-29",
-  "author": "Claude Code (build thread); wording by the design thread",
+  "predecessor": "0.1.1",
+  "predecessor_reason": "where official temporary plans live (Robert, 6 Nov)",
+  "date": "2026-11-06",
+  "author": "Claude Code (1.2 Beta build)",
   "decision_owner": "Robert",
   "runtime_activation_included": false,
   "source_basis": "Existing MC role and working agreement plus owner direction; not a replacement for runtime authority.",
   "files": {
-    "v0.1.1/ADOPTION.md": "03b94fe1d75f8b1296693d3a88d9c0c60fc447696996a2dc939fa1d1759c2455",
-    "v0.1.1/PROJECT.md": "1e77fb0e720cd9db611d9810efcd07d679e5ad75b48e3535c3341c05dd82e537",
-    "v0.1.1/skills/minimoi-engineering/SKILL.md": "5cbfacae771ce242aeaf217b561978a232f65ee33cb1fa32b4e6e2a0a2ad469d",
-    "v0.1.1/skills/minimoi-engineering/references/board-and-services.md": "3b8d2cec390620e3264b6c7f0b5b13b4468ea5aec3e7de7985e784f78cf6bac0",
-    "v0.1.1/skills/minimoi-engineering/references/build-and-deploy.md": "7245baeb812fe842753582279e263b30ebc74b6f10894c471e8146a630cc72b7",
-    "v0.1.1/skills/minimoi-engineering/references/regression.md": "1966384358150d7cefa2d55a0e17f833de3f0125ca6fc618182c979bcb8c4402"
+    "v0.1.2/ADOPTION.md": "40068b8df7c9531f3156480f5d7144fb564565e1490d349a6b6bf04d37437f19",
+    "v0.1.2/PROJECT.md": "c1b8ac415b7fb9060e2a54dab2b588118c8cbaa9059d1d338e3c1050bbf60f6a",
+    "v0.1.2/skills/minimoi-engineering/SKILL.md": "447f19369e1c600290896d376a42a6aa229dbf0c9238b455bca31479650ea107",
+    "v0.1.2/skills/minimoi-engineering/references/board-and-services.md": "e136b284d5607854baf39641345e9e1a77421abc44ab9eadca2f437ddf933f0b",
+    "v0.1.2/skills/minimoi-engineering/references/build-and-deploy.md": "57d8d850d57727008effc780ae99501a98d763ee59674a486687a92b642e7d28",
+    "v0.1.2/skills/minimoi-engineering/references/regression.md": "6c2e13c482b703094c75d7d32b1cc724f83ff3365e1a594b0bcb4deabdfb3a2d"
   }
 }
