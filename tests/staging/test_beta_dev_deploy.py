@@ -1321,3 +1321,9 @@ def test_a_config_difference_names_the_field_and_never_its_value():
 def test_standalone_containers_are_made_with_the_servers_own_api_version():
     source = open(op.__file__).read()
     assert '"/v1.' not in source      # an older pinned version changes read-only mounts (6 Nov)
+
+
+def test_the_deploys_own_backups_are_not_unrelated_containers():
+    source = open(op.__file__).read()
+    body = source.split("def _others(self):", 1)[1].split("# swap", 1)[0]
+    assert "self._backup(s)" in body
