@@ -337,7 +337,7 @@ class FakeDocker:
         self.after_up = None
         self.minted = []
         self.up_counts = {}
-        self.keys = {sha(COS_KEY.encode()): {"models": json.loads(subprocess_cos_models()), "max_budget": 30.0, "budget_duration": "30d", "spend": 1.5, "key_alias": "cos-agent-1", "blocked": None}}
+        self.keys = {sha(COS_KEY.encode()): {"models": ["minimoi-cos-agent", "minimoi-cos-agent-xai-fast", "minimoi-cos-web-search", "minimoi-cos-agent-anthropic"], "max_budget": 30.0, "budget_duration": "30d", "spend": 1.5, "key_alias": "cos-agent-1", "blocked": None}}
         self.gateway_answer = {"missing": [], "no_provider_key": [], "in_a_fallback": [], "key_database": True}
         env_cos = {"COS_RUNTIME_MODEL_ACCESS": "plan", "COS_PLAN_MODEL": "openai/gpt-6-astra", "COS_PLAN_AUTH_PROFILE": "openai:robert", "COS_GATEWAY_KEY_CAPPED": "1", "MINIMOI_MODEL_GATEWAY_KEY": COS_KEY, "MINIMOI_ENV": "dev"}
         env_mc = {"MC_RUNTIME_MODEL_ACCESS": "plan", "MC_PLAN_MODEL": "openai/gpt-6-astra", "MC_PLAN_ROUTES": "openai/gpt-6-sol", "MC_PLAN_AUTH_PROFILE": "openai:owner", "MC_TOOLS_TOKEN": TOOLS, "MINIMOI_ENV": "dev"}
