@@ -29,4 +29,4 @@ def test_a_provider_side_end_releases_the_microphone_and_an_error_is_said_on_ope
         [node, str(script)], capture_output=True, text=True, timeout=20, check=False
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "11 provider-end scenarios passed" in result.stdout
+    assert "13 provider-end scenarios passed" in result.stdout

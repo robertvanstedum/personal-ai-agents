@@ -215,7 +215,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
     static_root = Path(__file__).parents[1] / "minimoi_portal" / "static"
     map_images = [
         img.get("src")
-        for img in soup.select('.tour-domain-map img[src^="/static/tour/"]')
+        for img in soup.select('.tour-domain-map img[src^="/static/"]')   # tile artwork left /static/tour in 79b30639
     ]
     assert len(map_images) == 5
     assert all(
@@ -705,7 +705,7 @@ def test_domain_family_guest_session_is_not_checked_against_guests_json(client):
 def test_anonymous_guild_refresh_stays_static_and_private_routes_stay_locked(client):
     landing = BeautifulSoup(client.get("/").get_data(as_text=True), "html.parser")
     guild_card = landing.select_one(".tour-domain-card-guild img")
-    assert guild_card["src"] == "/static/tour/guild-catalog-desktop.jpg?v=20261014-g8-review1"
+    assert guild_card["src"] == "/static/guild/guild-build.webp"
     tour = BeautifulSoup(client.get("/tour").get_data(as_text=True), "html.parser")
     guild = tour.select_one("section#guild")
     assert len(guild.select(".tour-mobile-shot-link")) == 6

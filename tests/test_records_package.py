@@ -83,13 +83,19 @@ def test_relocation_preserves_routes_schema_and_asset_bytes(tmp_path):
     import io
     import json
     import tarfile
-    baseline = '85ae32a6213b248f6e3d91b245ee8b37c04f51ad'
+    # The relocation is the commit pair below, compared exactly. The package has grown on purpose since
+    # (400086bd added meeting routes and tables), so today's code answers only for keeping what was there.
+    baseline, relocated = '85ae32a6213b248f6e3d91b245ee8b37c04f51ad', '66d1f579'
     relative = str(LEGACY.relative_to(ROOT))
-    archive = subprocess.check_output(['git', 'archive', baseline, relative], cwd=ROOT)
-    original = tmp_path / 'original'
-    original.mkdir()
-    with tarfile.open(fileobj=io.BytesIO(archive)) as bundle:
-        bundle.extractall(original, filter='data')
+    def checkout(commit, path, folder):
+        archive = subprocess.check_output(['git', 'archive', commit, path], cwd=ROOT)
+        target = tmp_path / folder
+        target.mkdir()
+        with tarfile.open(fileobj=io.BytesIO(archive)) as bundle:
+            bundle.extractall(target, filter='data')
+        return target
+    original = checkout(baseline, relative, 'original')
+    moved = checkout(relocated, 'domains/records', 'moved')
     probe = '''
 import hashlib, importlib, json, pathlib, sqlite3, sys
 source, module, data = sys.argv[1:]
@@ -105,10 +111,16 @@ print(json.dumps({'routes': sorted((str(r),sorted(r.methods)) for r in a.url_map
                   'schema': schema, 'assets': hashes}, sort_keys=True))
 '''
     before = run_python(['-c', probe, str(original / relative), 'app', str(tmp_path / 'before')], tmp_path)
-    after = run_python(['-c', probe, str(ROOT), 'domains.records.app', str(tmp_path / 'after')], tmp_path)
+    after = run_python(['-c', probe, str(moved), 'domains.records.app', str(tmp_path / 'after')], tmp_path)
+    now = run_python(['-c', probe, str(ROOT), 'domains.records.app', str(tmp_path / 'now')], tmp_path)
     assert before.returncode == 0, before.stderr
     assert after.returncode == 0, after.stderr
-    assert json.loads(before.stdout) == json.loads(after.stdout)
+    assert now.returncode == 0, now.stderr
+    old, current = json.loads(before.stdout), json.loads(now.stdout)
+    assert old == json.loads(after.stdout)
+    assert {tuple(map(str, route)) for route in old['routes']} <= {tuple(map(str, route)) for route in current['routes']}
+    tables = lambda found: {row[1] for row in found['schema'] if row[0] == 'table'}
+    assert tables(old) <= tables(current)
 
 
 @pytest.mark.parametrize('script', ['app.py', 'manage.py', 'roomctl.py', 'accessctl.py'])

@@ -29,6 +29,8 @@ MANAGED_REALTIME_ADDED = {
 DOMAIN_API_ADDED = {
     "jsonschema": "4.26.0", "jsonschema-specifications": "2025.9.1", "referencing": "0.37.0",
     "rpds-py": "2026.9.1", "attrs": "26.1.0",
+    # CoS contracts' date-time format validation in clean images (77e3e393).
+    "rfc3339-validator": "0.1.4",
 }
 
 

@@ -291,7 +291,7 @@ def test_the_tool_texts_say_how_to_speak_same_turn_and_pending():
     from core.realtime_voice import direct_host
     assert not hasattr(direct_host, "tools")
     rules = direct_host.direct_rules({"name": "Test Person", "short": "TP", "notes": ("save a note:",)})
-    assert "you have no tools" in rules and "Outcomes come from the app" in rules
+    assert "The realtime speech model has no tools" in rules and "Outcomes come from the app" in rules
 
 
 # ── Item 5: reconciliation, GET …/consult/<session>/<owner_item_id>: the stored outcome, running nothing ────────────────

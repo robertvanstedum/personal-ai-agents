@@ -54,7 +54,7 @@ def test_openai_direct_the_page_creates_every_response_and_the_model_has_its_too
     assert vad["type"] == "server_vad" and vad["silence_duration_ms"] == 1200 and vad["prefix_padding_ms"] == 300
     # Adapted for v3: the page still creates every response, but the model has no tools; the same rules as on xAI.
     assert minted["tools"] is None
-    assert "you have no tools" in minted["instructions"] and "your two tools" not in minted["instructions"]
+    assert "The realtime speech model has no tools" in minted["instructions"] and "your two tools" not in minted["instructions"]
     assert "without repeating or describing his words" in minted["instructions"] and "press Check" not in minted["instructions"]
 
 
@@ -71,7 +71,7 @@ def test_xai_direct_has_no_action_tool_its_rules_send_actions_to_check_and_check
     assert minted["turn_detection"] == conversation_turn_detection("xai")   # xAI's turn detection unchanged
     text = minted["instructions"]
     # Adapted for v3: the same rules as OpenAI's (no "press Check" line: he confirms by voice on both providers).
-    assert "you have no tools" in text and "press Check" not in text and "your two tools" not in text
+    assert "The realtime speech model has no tools" in text and "press Check" not in text and "your two tools" not in text
     assert "Shall I sum up?" in text                                     # the spoken end is unchanged
     # Check with the person is page-initiated, its id and words from one capture record: it still works on xAI.
     sid = body["voice_session_id"]
