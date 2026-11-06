@@ -116,6 +116,13 @@ class AgentAskToolTests(unittest.TestCase):
         self.assertIn("no listener was seen", r["message"])                          # the truth, never "delivered"
         self.assertEqual(list(self.receipts.rows.values())[0]["state"], "verified")
 
+    def test_the_model_is_told_how_to_follow_a_request_in_the_data_code_mode_can_see(self):
+        self.say("Ask Codex to check.")
+        r = self.call(self.service(), {"to": ["codex"], "title": "Check"})
+        self.assertEqual((r["status"], r["code"]), ("done", "asked"))
+        self.assertIn("minimoi_agent_status", r["data"]["how_to_follow"])
+        self.assertIn("come back into this conversation", r["data"]["how_to_follow"])
+
     def test_all_is_three_requests_and_a_retry_makes_no_duplicates(self):
         s = self.service()
         first = self.call(s, {"to": "all", "title": "Phone path"})

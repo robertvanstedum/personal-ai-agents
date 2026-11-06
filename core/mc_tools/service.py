@@ -46,6 +46,8 @@ _SPACED = re.compile(r"(?<![A-Za-z])(?:[A-Za-z][\s.\-_'*]+){2,}[A-Za-z](?![A-Za-
 PROD_CHANGE_KINDS = {"guest_reject": "production data change", "access_invite": "production access change"}
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"        # no 0/O or 1/I/L: Robert types it back
 AGENT_NAMES = {"claude-code": "Claude Code", "codex": "Codex"}
+ASK_FOLLOW_UP = ("Pickup and each report come back into this conversation on their own. minimoi_agent_status and minimoi_agent_watch "
+                 "are for minimoi_agent_contact requests and refuse these ids; that says nothing about this request.")
 ASK_AGENTS = ("claude-code", "codex", "grok")                # minimoi_agent_ask: who can be asked; "all" is the three
 REFUSED_WORDS = {
     "agent_requests_off": "Asking the agents is switched off here, so nothing was recorded or sent.",
@@ -1012,7 +1014,9 @@ class ToolService:
                 evidence = effects.record_evidence(conn, b.context(), op, "agent_ask", outcome)
                 effects.RECEIPTS.finish(conn, lease, "verified" if all(ok) else "failed", evidence_refs=(evidence,))
             receipt = effects.RECEIPTS.read(conn, self.principal, self.environment, op)
-        data = {**outcome, "title": args["title"], "receipt_id": str(receipt["receipt_id"])}
+        # In data because code mode hands the model's code only status, code and data, never the message. Without it MC tried
+        # the status tools, which track minimoi_agent_contact's requests and refuse these ids, and reported a failure.
+        data = {**outcome, "title": args["title"], "receipt_id": str(receipt["receipt_id"]), "how_to_follow": ASK_FOLLOW_UP}
         if made is None:
             return result("unknown", "agent_ask_unconfirmed", "MiniMoi could not confirm whether Robert's message was "
                           "put to the agents. Do not repeat it; tell Robert, and he can check this conversation for "
