@@ -1,0 +1,121 @@
+name: Rooms worker image
+
+# Guildhall's two meeting workers on production (docker-compose.guildhall-production.yml) need an immutable image digest.
+# This builds and pushes that one image, by hand, for a commit already on main. It never runs on a push, never touches
+# the host and restarts nothing, so it adds no risk to the main release. Starting the workers is
+# scripts/operations/guildhall_prod.sh, which takes the digest printed here.
+#
+# The image goes in the existing minimoi/cos-scheduler repository under a rooms-worker- tag, the way agent-a-,
+# model-gateway- and mc-agent- images do, so it needs no new repository or permission on the host.
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: 'Full 40-character commit on main to build'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rooms-worker-image
+  cancel-in-progress: false
+
+env:
+  REPOSITORY: minimoi/cos-scheduler
+  REGISTRY: 332704997792.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: The commit is a full hash
+        env:
+          COMMIT: ${{ github.event.inputs.commit }}
+        run: |
+          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "commit must be a full 40-character hash"; exit 1; }
+          echo "TAG=rooms-worker-${COMMIT::7}" >> "$GITHUB_ENV"
+          echo "COMMIT=$COMMIT" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.COMMIT }}
+          fetch-depth: 0
+
+      - name: The commit is on main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$COMMIT" origin/main || { echo "commit is not on main"; exit 1; }
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Keep an image already built for this commit
+        id: existing
+        run: |
+          digest=$(aws ecr describe-images --repository-name "$REPOSITORY" --image-ids "imageTag=$TAG" \
+            --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)
+          if [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "digest=$digest" >> "$GITHUB_OUTPUT"
+            echo "A build of this commit exists; a rebuild would move its tag, so it is kept."
+          fi
+
+      - name: Build the worker image
+        if: steps.existing.outputs.digest == ''
+        run: |
+          docker build --platform linux/amd64 -f docker/Dockerfile.rooms-worker \
+            --label "org.opencontainers.image.revision=$COMMIT" -t rooms-worker-local .
+
+      - name: The image starts its code, carries no portal, and refuses a production start without admission
+        if: steps.existing.outputs.digest == ''
+        run: |
+          docker run --rm --network none --read-only rooms-worker-local python -c "
+          import importlib
+          for name in ('cos', 'worker', 'discussion', 'portal_mc', 'transport_profile'):
+              importlib.import_module('services.rooms_worker.' + name)
+          try:
+              importlib.import_module('minimoi_portal')
+          except ImportError:
+              pass
+          else:
+              raise SystemExit('portal code in the worker image')
+          from services.rooms_worker.transport_profile import admit_runtime
+          try:
+              admit_runtime({'ROOMS_RECORDS_PROFILE': 'production_internal'}, kind='worker')
+          except ValueError:
+              pass
+          else:
+              raise SystemExit('production start admitted without admission')
+          "
+
+      - name: Push the tested image
+        id: pushed
+        if: steps.existing.outputs.digest == ''
+        run: |
+          docker tag rooms-worker-local "$REGISTRY/$REPOSITORY:$TAG"
+          docker push "$REGISTRY/$REPOSITORY:$TAG"
+          digest=$(aws ecr describe-images --repository-name "$REPOSITORY" --image-ids "imageTag=$TAG" \
+            --query 'imageDetails[0].imageDigest' --output text)
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "no digest for the pushed image"; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: The digest pulls, and print it
+        env:
+          EXISTING: ${{ steps.existing.outputs.digest }}
+          PUSHED: ${{ steps.pushed.outputs.digest }}
+        run: |
+          digest="${EXISTING:-$PUSHED}"
+          image="$REGISTRY/$REPOSITORY@$digest"
+          docker pull --platform linux/amd64 "$image"
+          revision=$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image")
+          [[ "$revision" == "$COMMIT" ]] || { echo "the digest was not built from this commit"; exit 1; }
+          echo "MINIMOI_ROOMS_WORKER_IMAGE=$image"
+          echo "\`MINIMOI_ROOMS_WORKER_IMAGE=$image\`" >> "$GITHUB_STEP_SUMMARY"

@@ -64,6 +64,7 @@ def main():
                   CoS(secrets/'cos-service.token'),TurnJournal(root/'turns'),
                   teammate='cos',agent_id='cos-agent-a',alive_path='/tmp/rooms-worker/alive',
                   discussion=Discussion('cos',secrets/'discussion-gateway.token'))
+    log(event='started',records=url,teammate=worker.teammate,profile=profile)
     worker.start_housekeeping()
     while True:
         try:busy=worker.run_once()

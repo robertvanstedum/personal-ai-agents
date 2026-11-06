@@ -87,7 +87,10 @@ OPS_ONLY_FILES = frozenset({"scripts/operations/deploy_mc_container_ec2.sh",
                             # Host runtime P1-a's production Compose layer: no workflow ships it; an operator copies the
                             # reviewed file to the host at switch-on, on Robert's word, and the deploy scripts layer it
                             # only when it is there (tests/test_p1a_compose.py guards both).
-                            "docker-compose.runtime.prod.yml"})
+                            "docker-compose.runtime.prod.yml",
+                            # Guildhall on production: a by-hand image build and a host operator run on Robert's word.
+                            ".github/workflows/rooms-worker-image.yml",
+                            "scripts/operations/guildhall_prod.sh"})
 # The host runtime's installer (host runtime spec v0.5 R3.4-a; S1-H): run by an operator on the Mac (launchd) or on
 # the staging host (the systemd templates), on Robert's word, from a checkout; it installs a bundle outside any
 # checkout and is in no service image's command, compose file, Dockerfile or workflow (the test guards this). Without
