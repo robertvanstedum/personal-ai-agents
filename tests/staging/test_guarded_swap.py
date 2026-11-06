@@ -130,3 +130,36 @@ def test_when_nothing_can_be_recorded_a_failed_restore_still_leaves_workers_stop
 def test_when_nothing_can_be_recorded_a_good_apply_still_succeeds():
     rig = Rig()
     assert rig.go(_full_disk) is gs.Outcome.APPLIED and rig.calls[-1] == "start"
+
+
+class _NoStderr:
+    def write(self, *_):
+        raise OSError(28, "No space left on device")
+
+    def flush(self):
+        raise OSError(28, "No space left on device")
+
+
+def test_with_recorder_and_stderr_both_failing_a_failed_apply_still_restores_first(monkeypatch):
+    monkeypatch.setattr(gs.sys, "stderr", _NoStderr())
+    rig = Rig(apply=True)
+    with pytest.raises(Boom, match="apply"):
+        rig.go(_full_disk)
+    assert rig.calls.index("restore") < rig.calls.index("start")
+
+
+def test_with_recorder_and_stderr_both_failing_a_failed_restore_still_leaves_workers_stopped(monkeypatch):
+    monkeypatch.setattr(gs.sys, "stderr", _NoStderr())
+    rig = Rig(apply=True, restore=True)
+    with pytest.raises(Boom, match="apply"):
+        rig.go(_full_disk)
+    assert "start" not in rig.calls
+
+
+def test_with_recorder_and_stderr_both_failing_a_lost_gate_still_leaves_workers_stopped(monkeypatch):
+    monkeypatch.setattr(gs.sys, "stderr", _NoStderr())
+    rig = Rig(lose_gate_in="apply")
+    with pytest.raises(RuntimeError, match="gate lost"):
+        rig.go(_full_disk)
+    assert "start" not in rig.calls and "restore" not in rig.calls
+

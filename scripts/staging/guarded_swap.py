@@ -26,13 +26,17 @@ def guarded_swap(*, stop_workers, start_workers, wait_idle, gate, gate_alive, ap
     def record(name, detail):
         try:
             given_record(name, detail)
-        except BaseException as exc:                # last place left to say it
-            print(f"guarded_swap: could not record {name} {detail}: {type(exc).__name__}", file=sys.stderr, flush=True)
+        except BaseException as exc:                # last place left to say it, which may be on the same full disk
+            try:
+                print(f"guarded_swap: could not record {name} {detail}: {type(exc).__name__}", file=sys.stderr, flush=True)
+            except BaseException:
+                pass
 
     try:
         stop_workers()                              # a partial stop is still only stopped workers: nothing live changed yet
         wait_idle()
         with gate() as held:
+            outcome = Outcome.RECOVERY_REQUIRED     # from here live state may change: only a verified result lifts this
             try:
                 apply(held)
                 if not gate_alive(held):
@@ -41,7 +45,6 @@ def guarded_swap(*, stop_workers, start_workers, wait_idle, gate, gate_alive, ap
             except BaseException as exc:
                 failure = exc
                 record("apply_failed", {"exception": type(exc).__name__})
-                outcome = Outcome.RECOVERY_REQUIRED
                 if not gate_alive(held):
                     record("restore_skipped", {"reason": "admission gate lost"})
                 else:
