@@ -390,8 +390,8 @@ export class RealtimeVoiceController {
     });
     on("closed", () => {
       if (this._state !== "ending" && this._state !== "ended") {
-        if (this._managedBootstrap) this.endSession("disconnect");
-        else this._finalizeAndEnd("disconnect");
+        // The provider ended it. Through endSession on every path, because an adapter's own close leaves the microphone open.
+        this.endSession("disconnect");
       }
     });
   }
@@ -939,7 +939,7 @@ export class RealtimeVoiceController {
     // -- one attempt, then end visibly and preserve the partial transcript
     // rather than loop.
     if (this._reconnectAttempted) {
-      this._finalizeAndEnd("recoverable_error_no_retry");
+      this.endSession("recoverable_error_no_retry");        // releases the microphone too, never left open behind "ended"
       return;
     }
     this._reconnectAttempted = true;

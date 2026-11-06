@@ -27,6 +27,18 @@ import assert from 'node:assert/strict';
 const PATH = new URL('../../core/realtime_voice/static/realtime-voice-controller.js', import.meta.url);
 const BEFORE = '682906489b0b3f9f02cd3df951da6fbaaef74c2aa49927d5905827ea3b8c7f05';     // 93bf00c6, as German loads it today
 const CONTROLLER = [
+  // PR #274, the one deliberate change to what German and Portuguese run: a provider close or a second provider error ends
+  // through endSession, so the microphone is released (driven on the real adapters in tests/realtime_voice_provider_end.mjs).
+  [`        // The provider ended it. Through endSession on every path, because an adapter's own close leaves the microphone open.
+        this.endSession("disconnect");
+`,
+   `        if (this._managedBootstrap) this.endSession("disconnect");
+        else this._finalizeAndEnd("disconnect");
+`],
+  [`      this.endSession("recoverable_error_no_retry");        // releases the microphone too, never left open behind "ended"
+`,
+   `      this._finalizeAndEnd("recoverable_error_no_retry");
+`],
   // The v3 fix round (REVIEW_v3_build M2): the controller's opt-in onAudioStarted option and its audio_started listener,
   // and the adapters' new cache keys, taken out first (back to v3's file); German and Portuguese pass no such option.
   [`// an interim transcript's status, LV2), and xAI's for a microphone granted after the start ended (Gate 2 V S2), and both
