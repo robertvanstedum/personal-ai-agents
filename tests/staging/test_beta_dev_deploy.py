@@ -1327,3 +1327,9 @@ def test_the_deploys_own_backups_are_not_unrelated_containers():
     source = open(op.__file__).read()
     body = source.split("def _others(self):", 1)[1].split("# swap", 1)[0]
     assert "self._backup(s)" in body
+
+
+def test_mc_overlay_carries_the_plugin_that_marks_tool_starts():
+    """Failover's tool evidence lives in this plugin; an overlay without it made every switch stop on doubt, live on Dev."""
+    rules = dict(op.TARGETS["mc-agent"]["rules"])
+    assert rules["services/mc_operations/plugins/minimoi-tools/"] == op.MC_DIR + "plugins/minimoi-tools/"

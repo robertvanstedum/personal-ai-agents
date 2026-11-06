@@ -100,6 +100,7 @@ TARGETS = {
     "mc-agent": dict(container="minimoi-mc-agent", repo="mc-agent", tier=6, base="portal", old="route-roles-20261105g", wait=MC_WAIT, kind="node", build="mc",
                      rules=(("docker/mc-agent-container/start.sh", MC_DIR + "start.sh"), ("docker/mc-agent-container/model-access.cjs", MC_DIR + "model-access.cjs"),
                             ("docker/mc-agent-container/handbook.mjs", MC_DIR + "handbook.mjs"), ("docker/mc-agent/relay_v2.mjs", MC_DIR + "relay_v2.mjs"),
+                            ("services/mc_operations/plugins/minimoi-tools/", MC_DIR + "plugins/minimoi-tools/"),
                             (PERSONA, MC_DIR + "persona/"), (HANDBOOK + "manifest.json", MC_DIR + "handbook/manifest.json"),
                             (HANDBOOK + "v0.1.2/", MC_DIR + "handbook/v0.1.2/"),
                             ("scripts/ops/mc_container_security_test.py", "/opt/minimoi/mc-release/mc_container_security_test.py")),
