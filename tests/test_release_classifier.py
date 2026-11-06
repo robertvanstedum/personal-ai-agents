@@ -190,6 +190,9 @@ BACKEND_IMPORT_ALLOWED = ("core/workshop_journal/", "core/vault_t1/", "core/agen
                           "tools/workshop/", "scripts/dev/", "tests/", "prototype-lab/", "planning-studio/")
 # Exact new homes and only their actual backend dependencies, not a package/domain waiver.
 BACKEND_IMPORT_EXPECTED = {
+    # Dev Vault's feed and ask (04481770): read job status only, and they run on the Dev host, not in a release image.
+    "scripts/memory/dev_ask.py": ("core.jobs.status",),
+    "scripts/memory/dev_feed.py": ("core.jobs",),
     # Pure Board text policy moved from the portal; all classified Guild consumers ship utils.
     "domains/guild/board_text.py": ("utils.payment_scrub",),
     "core/memory_ask/context.py": ("utils.credential_scrub", "utils.payment_scrub"),
