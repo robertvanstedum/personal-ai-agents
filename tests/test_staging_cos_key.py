@@ -69,7 +69,7 @@ def _compose_lines(fake):
 
 def test_cos_key_scope_is_its_four_routes_chat_and_responses_monthly():
     out = subprocess.run(["bash", "-c", f'source "{SCRIPTS}/mc_keys.sh"; cos_keygen_py'], capture_output=True, text=True).stdout
-    assert '"models": ["minimoi-cos-agent", "minimoi-cos-agent-xai-fast", "minimoi-cos-web-search", "minimoi-cos-agent-anthropic"]' in out
+    assert '"models": ["minimoi-cos-agent", "minimoi-cos-agent-xai-fast", "minimoi-cos-web-search", "minimoi-cos-agent-anthropic", "minimoi-openai-strong", "minimoi-openai-mid", "minimoi-openai-low", "minimoi-xai-low"]' in out
     assert '"allowed_routes": ["/v1/chat/completions", "/chat/completions", "/v1/responses", "/responses"]' in out
     assert '"budget_duration": "30d"' in out and '"rpm_limit": 60' in out and '"key_alias": "cos-agent-"' in out
     assert '"role": "guild.cos"' in out and 'os.environ["COS_CAP"]' in out and 'os.environ.get("COS_OLD_KEY", "")' in out
@@ -81,7 +81,8 @@ def test_cos_key_scope_is_its_four_routes_chat_and_responses_monthly():
 def test_the_overlay_swaps_only_agent_as_gateway_key():
     data = _load(OVERLAY)
     assert data == {"services": {"cos-agent-a": {"environment": [
-        "MINIMOI_MODEL_GATEWAY_KEY=${COS_MODEL_GATEWAY_KEY:?set by scripts/staging/cos.sh key (cos.env)}"]}}}
+        "MINIMOI_MODEL_GATEWAY_KEY=${COS_MODEL_GATEWAY_KEY:?set by scripts/staging/cos.sh key (cos.env)}",
+        "COS_GATEWAY_KEY_CAPPED=1"]}}}
     extra = {"MINIMOI_ROOT": "/Users/x/minimoi-staging", "MINIMOI_IMAGE_TAG": "abc1234", "COS_MODEL_GATEWAY_KEY": "sk-cos-own"}
     with_key = yaml.safe_load(_compose_config(PROD, STAGING, OVERLAY, env_extra=extra))["services"]
     without = yaml.safe_load(_compose_config(PROD, STAGING, env_extra=extra))["services"]
@@ -91,8 +92,9 @@ def test_the_overlay_swaps_only_agent_as_gateway_key():
         if name != "cos-agent-a":
             assert with_key[name] == without[name], name
     a, b = dict(with_key["cos-agent-a"]), dict(without["cos-agent-a"])
-    a["environment"] = {k: v for k, v in a["environment"].items() if k != "MINIMOI_MODEL_GATEWAY_KEY"}
-    b["environment"] = {k: v for k, v in b["environment"].items() if k != "MINIMOI_MODEL_GATEWAY_KEY"}
+    own = ("MINIMOI_MODEL_GATEWAY_KEY", "COS_GATEWAY_KEY_CAPPED")
+    a["environment"] = {k: v for k, v in a["environment"].items() if k not in own}
+    b["environment"] = {k: v for k, v in b["environment"].items() if k not in own}
     assert a == b
 
 
