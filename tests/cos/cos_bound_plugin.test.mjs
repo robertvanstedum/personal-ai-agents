@@ -187,6 +187,19 @@ test('the served report names the completed call of this exact run, taking the a
   assert.equal(calls.length, 1);
 });
 
+test('a tool answer gives its data in details too, because code mode reads only those', async () => {
+  const data = {task_id: 'TK-1', state: 'completed'};
+  const f = fakeFetch({status: 'done', code: 'ok', message: 'Read.', data});
+  const sealer = runSealer();
+  const created = toolFactory({endpoint: ENDPOINT, token: TOKEN, tokenFile: '/private/token', agents: ['cos-agent-a'], acceptCredentialReadableBy: ['cos-agent-a'],
+    sealer, instance: 'a'.repeat(32), fetchImpl: f});
+  const tools = created({sessionKey: SESSION, agentId: 'cos-agent-a', workspaceDir: '/ws'});
+  const params = sealer.seal({operation: 'status', task_id: 'TK-1'}, {runId: RUN, toolCallId: 'call-1', agentId: 'cos-agent-a', sessionKey: SESSION});
+  const out = await tools.find(t => t.name === 'cos_tasks').execute('call-1', params);
+  assert.deepEqual(out.details, {status: 'done', code: 'ok', data});
+  assert.ok(out.content[0].text.includes('completed'));
+});
+
 test('the plugin listens on the hook that needs no conversation access', () => {
   const on = [];
   const source = readFileSync(new URL('../../docker/cos-agent-a/plugins/cos-bound/index.mjs', import.meta.url), 'utf8');

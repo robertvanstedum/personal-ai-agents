@@ -329,7 +329,7 @@ class BindingStore:
                        "WHERE turn_id=? AND tool_call_id=?", (command_id, receipt_id, binding.turn_id, tool_call_id))
 
     def record_served(self, *, run_id, fields: dict) -> bool:
-        """Who served this exact run, as the runtime's reply recorded it. Evidence only; the last attempt of a run wins."""
+        """The model call this exact run completed, as the runtime reported it. Evidence only; the last call of a run wins."""
         if not isinstance(run_id, str) or not RUN_ID.fullmatch(run_id):
             return False
         with self._tx() as db:

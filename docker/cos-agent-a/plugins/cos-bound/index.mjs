@@ -162,7 +162,8 @@ export function toolFactory({endpoint, token, tokenFile, agents, acceptCredentia
         return text(UNKNOWN, {status: 'unknown', code: 'http_' + response.status});
       }
       return text(result.message + '\n' + JSON.stringify({status: result.status, code: result.code, data: result.data}),
-                  {status: result.status, code: result.code});
+                  // Code mode hands the model's code these details, not the text, so the data must be here too.
+                  {status: result.status, code: result.code, data: result.data});
     };
     const offered = [ACTIONS_SPEC, TASKS_SPEC, BOARD_SPEC]
       .filter(spec => !Object.hasOwn(RESTRICTED, agentId) || RESTRICTED[agentId].has(spec.name));

@@ -10,7 +10,7 @@ import subprocess
 
 from cos_plan_deploy import AGENT, AGENT_ENV, AGENT_SVC, Deploy, RealHost, SCHED, check_runtime
 
-OLD, NEW = "minimoi-staging/cos-agent-a:plan-20261105", "minimoi-staging/cos-agent-a:plan-20261105b"
+OLD, NEW = "minimoi-staging/cos-agent-a:plan-20261105b", "minimoi-staging/cos-agent-a:plan-20261105c"
 
 
 def only_agent_image(before: dict, after: dict, image: str) -> None:
@@ -24,7 +24,7 @@ def only_agent_image(before: dict, after: dict, image: str) -> None:
 class PatchHost(RealHost):                          # pragma: no cover  (exercised by the dry-run on Dev)
     def __init__(self):
         super().__init__()
-        self.OP = self.R / "operators/cos-plan-20261105/patch-b"
+        self.OP = self.R / "operators/cos-plan-20261105/patch-c"
         self.meta = json.loads((self.OP / "payload/meta.json").read_text())
         self.old = {"agent": OLD}
         self.images = {"agent": NEW}

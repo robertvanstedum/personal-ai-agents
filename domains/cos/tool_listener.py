@@ -12,8 +12,8 @@
     POST /internal/cos/v1/instance                   the plugin announces its gateway process
     body: {"instance": "<32 hex>"}
 
-    POST /internal/cos/v1/served                     the plugin reports who served a run (provider, model, api, harness), from
-    body: {"provider": "...", "model": "..."}        the reply's own record. Evidence only.
+    POST /internal/cos/v1/served                     the plugin reports the model call a run completed (provider, model, api),
+    body: {"provider": "...", "model": "..."}        from the runtime's model_call_ended hook. Evidence only.
 
     POST /internal/cos/v1/native                     the plugin's hook reports one native write/edit/exec call in an
     body: {"tool": "...", "target": "..."}           owner turn, with the same sealed headers. Logged, never refused
