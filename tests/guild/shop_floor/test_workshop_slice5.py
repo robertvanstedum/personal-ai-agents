@@ -183,7 +183,7 @@ def test_rendering_never_writes_the_workshop_record(ws):
 def test_the_build_host_is_a_quiet_link_from_operate_and_the_old_address_moved_here(ws):
     _record(ws)
     page = ws.owner().get(PAGE).get_data(as_text=True)
-    assert 'data-operate-back' in page and "guild-sections" not in page                      # no Operate sub-tabs; one way back
+    assert 'href="/guild-next/guild/operate"' in page and "guild-sections" not in page                      # no Operate sub-tabs; Operate is on the shared row (09176521)
     operate = ws.owner().get("/guild-next/guild/operate").get_data(as_text=True)
     assert 'href="/guild-next/guild/operate/build-host">Build host</a>' in operate
     old = ws.owner().get("/guild-next/guild/workshop?item=12")

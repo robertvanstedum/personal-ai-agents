@@ -129,6 +129,6 @@ def test_the_wall_has_continue_filters_and_room_for_cards(staging):
 def test_chat_v2_art_is_served_without_changing_the_original_asset(staging):
     page = _floor(staging)
     assert 'class="hero-art" src="/static/guild/guild-workshop-team.webp"' in page
-    assert 'class="fc-art" src="/static/guild/guild-craftsman.webp"' in page
+    assert 'aria-label="Workshop picture"' in page and '<img src="/static/guild/guild-craftsman.webp"' in page    # calm-craft picture, ff53eef7
     for asset in ("guild-workshop-team.webp", "guild-build.webp", "guild-chat-hero.webp"):
         assert staging.owner().get("/static/guild/" + asset).status_code == 200

@@ -75,7 +75,7 @@ def env(tmp_path):
     e.say = say
 
     def claim():
-        r = call("POST", e.worker, "/turns/claim", {"addressees": ["mc"]})
+        r = call("POST", e.worker, "/turns/claim", {"addressees": ["mc"], "discussion_protocol": 1})   # as services/rooms_worker does
         assert r.status_code == 200, r.json
         return r.json["turn"]
     e.claim = claim
@@ -392,7 +392,7 @@ def test_unproven_teammate_cannot_accept_claim_or_be_routed(env):
     r = env.call("POST", env.owner, f"/rooms/{env.room}/invite", {"actor": "mc"})
     assert r.json["result"]["rsvp"]["rsvp_reason"] == "not_proven"
     assert env.call("POST", env.mc, f"/rooms/{env.room}/rsvp", {"state": "accepted"}).status_code == 409
-    env.say("Hello MC")
+    env.say("MC, please check this.")                                   # a greeting no longer addresses anyone (400086bd)
     assert env.claim() is None
     st = env.status()
     assert st["routing_notes"][0]["disposition"] == "not_proven" and st["turns"] == []
@@ -436,7 +436,7 @@ def test_pending_invitation_is_accepted_after_proof_and_the_waiting_turn_runs(en
     # The original room's invitation is now acceptable on the worker's next pass.
     pending = env.call("GET", env.worker, "/hosted-teammates").json["pending_invites"]
     assert pending == [{"room": env.room, "principal": "mc", "proven": True}]
-    env.say("Now in the original room")                                         # proven + invited: the turn waits
+    env.say("MC, please look at the original room.")                            # proven + invited: the turn waits
     assert env.claim() is None
     assert env.call("POST", env.mc, f"/rooms/{env.room}/rsvp", {"state": "accepted"}).status_code == 200
     t2 = env.claim()

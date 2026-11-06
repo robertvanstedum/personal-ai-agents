@@ -317,7 +317,7 @@ def test_the_brief_and_check_in_say_what_each_teammate_last_said(world):
     md = brief_view.render_markdown(brief)
     assert 'claude-code: progress at ' in md and '"Unit 4 is under way and the export fixture passes."' in md
     report = checkin.report(brief)
-    assert '"Unit 4 is under way' in report and "CDT" in report and "2026-10" not in report.split("Freshness")[0]
+    assert '"Unit 4 is under way' in report and ("CDT" in report or "CST" in report) and "2026-10" not in report.split("Freshness")[0]
     long = j.append({"actor": "codex", "kind": "progress", "item": "topic:scenario", "topic": "scenario", "text": "x" * 400, "payload": {"action": "w"}})
     assert long.committed and "…" in brief_view.render_markdown(j.brief(now=NOW))
 

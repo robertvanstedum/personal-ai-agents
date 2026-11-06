@@ -29,7 +29,7 @@ POLICY_VERSION = 1
 
 # Lowest normalizer version whose output is fit for retrieval, per provider. Unknown providers are held (fail closed).
 MIN_NORMALIZER = {"claude-code": 2, "codex": 3, "claude-ai": 2, "grok": 1, "chatgpt": 1, "paste": 1, "rooms": 1, "canary": 1,
-                  "minimoi-mc": 1}
+                  "minimoi-mc": 1, "minimoi-cos": 1}
 NON_DIALOGUE_CLASSES = frozenset({"approval_review", "subagent_task", "subagent", "handoff"})
 DIALOGUE_SPEAKERS = ("human", "assistant")
 TIERS = {"curated": ("curated",), "raw": ("raw",), "all": ("curated", "raw")}

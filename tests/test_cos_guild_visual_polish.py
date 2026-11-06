@@ -71,7 +71,7 @@ def test_public_cos_confer_slide_restores_photo_version():
 def test_guild_and_cos_cards_use_full_landscape_captures():
     workspaces = {workspace["key"]: workspace for workspace in WORKSPACES}
     expected = {
-        "guild": "/static/tour/guild-catalog-desktop.jpg?v=20261014-g8-review1",
+        "guild": "/static/guild/guild-build.webp",     # individual tile artwork, 79b30639
         "cos": "/static/tour/01-cos-landing-desktop.webp",
     }
 
@@ -83,7 +83,7 @@ def test_guild_and_cos_cards_use_full_landscape_captures():
             / public_path.split("?", 1)[0].removeprefix("/static/")
         )
         with Image.open(asset) as image:
-            assert image.size == ((1180, 331) if key == "guild" else (2880, 1800))
+            assert image.size == ((784, 1168) if key == "guild" else (2880, 1800))
 
 
 def test_guild_public_slides_are_the_approved_privacy_safe_refresh():

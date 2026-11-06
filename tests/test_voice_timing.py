@@ -94,6 +94,7 @@ def test_gateway_failure_fixed_metadata_preserves_exception(caplog):
     obj=object.__new__(OpenClawBackend)
     def fail(**kw):raise RuntimeError('PRIVATE_PROVIDER_ERROR')
     obj._post_turn=fail
+    obj._binder=None
     import pytest
     with caplog.at_level(logging.INFO,logger=t.LOG.name):
         with pytest.raises(RuntimeError,match='PRIVATE_PROVIDER_ERROR'):

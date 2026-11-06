@@ -1,16 +1,16 @@
 {
- "copies": [
-  "docker-compose.prod.yml",
-  "docker-compose.staging.yml"
- ],
- "deploy_scoped_release_base_sha256": "685e5132e49329b494586bc0bb8295307b8726b22abd9ed0b944db3e965d1258",
- "digests": {
-  "docker-compose.prod.yml": "c2ee26e3f6495f2a3bbd69b89bea0c10d347b7e7bef1782a7ae18a127a0dd476",
-  "docker-compose.yml": "4ff0cec83ff31e2b2598db24e8e5827aa1a5a44ca0cc72f47ff918244b9c94b1",
-  "docker/Dockerfile.cos-agent-a": "20d9fdaa25e52ee2606f57e2009a085323c0e5c52cf9368c1a104d8aa4a77724",
-  "docker/cos-agent-a/apply-config.sh": "3e6698100176eff37cedb5a4bf04fd96d833cb53e7d9c0305a7c66ee1f8d3b6b",
-  "docker/cos-agent-a/openclaw.json": "2d660b308bba4c0a859a666e4536ab4814d2eca2d06dc0659ca72186e9b304de",
-  "services/model_gateway/litellm.prod.yaml": "7b7c7e39c67586fe40d841938761781dabe4b413e5ea484d3a4b20c4be3c7a68"
- },
- "note": "The reviewed baseline stage A compares production and CoS files with (MC spec v0.8 stage A: production and CoS left as they are), committed so CI's one-commit checkout compares deterministically instead of skipping (Codex's P1-a re-check). Taken at e9445541, equal to origin/main 4f531c6f for every file. A deliberate change to one of these files updates this fixture in the same reviewed commit. Dev-only merge of 29 Oct (never pushed): refreshed to the merged tree, whose production, staging and gateway files carry other lanes' reviewed changes since 4f531c6f (voice: docker-compose.prod.yml, litellm.prod.yaml; notices: docker-compose.prod.yml, deploy_scoped_release.sh; Renewal: docker-compose.staging.yml), none of them stage A's."
+  "copies": [
+    "docker-compose.prod.yml",
+    "docker-compose.staging.yml"
+  ],
+  "deploy_scoped_release_base_sha256": "412b970374f38ef493804584f6276ab9a6b17e6373a15fdb04a4cb4bba384f85",
+  "digests": {
+    "docker-compose.prod.yml": "b7961f08da6baa5dc2d191724bb9fd8d6282ce1269b84c95124312c512216bb7",
+    "docker-compose.yml": "7d2d96081327078db2182f48f36e56d06ef42968dbef0b2e0f6e8d1596c29e01",
+    "docker/Dockerfile.cos-agent-a": "ab6404393c4c5d42d28f9190e2d323edab33d6ef1e1929d85d788d0704697037",
+    "docker/cos-agent-a/apply-config.sh": "f3ce163d37fc0b51cf54bdb6faa6e9a51dc982cd17a95f4a2214aa5a62d03b1e",
+    "docker/cos-agent-a/openclaw.json": "04f94f774db05b2c509e741ca3f7d5c064c02b66837bdc27275afb1931cf2aa9",
+    "services/model_gateway/litellm.prod.yaml": "48ff5a98b51046c8fe99b5cf06b11e72e6710ce747585d52df70c25a8e504e1f"
+  },
+  "note": "The reviewed baseline stage A compares production and CoS files with (MC spec v0.8 stage A: production and CoS left as they are), committed so CI's one-commit checkout compares deterministically instead of skipping (Codex's P1-a re-check). Taken at e9445541, equal to origin/main 4f531c6f for every file. A deliberate change to one of these files updates this fixture in the same reviewed commit. Dev-only merge of 29 Oct (never pushed): refreshed to the merged tree, whose production, staging and gateway files carry other lanes' reviewed changes since 4f531c6f (voice: docker-compose.prod.yml, litellm.prod.yaml; notices: docker-compose.prod.yml, deploy_scoped_release.sh; Renewal: docker-compose.staging.yml), none of them stage A's. Refreshed 6 Nov 2026 to the 1.2 candidate 6789b906, each change another lane's and none stage A's: the third gateway provider key and tiers (0f702fc7, on main; litellm later 5fd072d3, d41d01ab, e7017247), the local gateway image and OpenAI key (0f702fc7), CoS's plan access, role policy and bound plugins (683929f4, 87c0544e, 75614abe, 7c55dc81, ee09d2ea, 68c319df). The scoped deploy's base hash also takes f1ef6dc1's Guildhall layer, used only where its file exists on the host."
 }

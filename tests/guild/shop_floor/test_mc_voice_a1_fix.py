@@ -258,7 +258,7 @@ def test_mcs_instructions_tool_text_heads_and_summary_prompt_are_byte_identical_
                        "managed_instructions": direct.INSTRUCTIONS}, sort_keys=True)
     assert hashlib.sha256(blob.encode()).hexdigest() == MC_UNCHANGED_SHA
     rules = core.direct_rules(direct.PERSON, owner)
-    assert not hasattr(core, "tools") and "you have no tools" in rules and "only after Robert confirms" in rules
+    assert not hasattr(core, "tools") and "The realtime speech model has no tools" in rules and "only after Robert confirms" in rules
 
 
 def test_mcs_page_words_come_from_his_adapter(ready):

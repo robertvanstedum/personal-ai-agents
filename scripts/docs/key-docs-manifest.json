@@ -1,28 +1,28 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-06T14:02:36.920543+00:00",
+  "generated_at": "2026-11-06T17:31:52.475908+00:00",
   "publisher": "python3 scripts/docs/publish_key_docs.py",
   "documents": [
     {
       "source": "README.md",
       "pdf": "README.pdf",
-      "source_sha256": "0db2d395ea8906d8dd90b691e455983720465879c65ee5d726a6369be6c74bc7",
+      "source_sha256": "c67c14d577e5e7d7e6ff1b29b81223613f055de1accb1e8fb2eb39f678723a1b",
       "renderer_sha256": "d6b762ea5ed9e605152865845dca8ec2d3f7812d930f4a899774724578d88323",
-      "pdf_sha256": "517bc628205d7d294b7b33a9e4f08687612105034206e60b8058fb34a916fadb",
+      "pdf_sha256": "8fa95d3e930f4c579e6329a46d9bc3c93f6e395de34aff900c7cd197d8ce0d79",
       "mermaid_diagrams": 5,
       "pages": 12,
-      "extractable_text_characters": 18405,
+      "extractable_text_characters": 18680,
       "title": "mini-moi"
     },
     {
       "source": "ARCHITECTURE.md",
       "pdf": "ARCHITECTURE.pdf",
-      "source_sha256": "ba8a5811b7d8d79b38232ea5b2eaf7fc374050b9b8cff99e424e38a91e57230a",
+      "source_sha256": "c2915956f9e58ffd738e76b5c00a3a7343c03f3be3a0c7856d153043667892f7",
       "renderer_sha256": "d6b762ea5ed9e605152865845dca8ec2d3f7812d930f4a899774724578d88323",
-      "pdf_sha256": "2dce9676798871b7501b9ff16608dd1941a88e42ad41d33b16371497a41bcd4c",
+      "pdf_sha256": "9f9975158889387274cf7a3ad932832b1efeca98f71725672a17a3a2ddbb4f45",
       "mermaid_diagrams": 9,
-      "pages": 14,
-      "extractable_text_characters": 36492,
+      "pages": 15,
+      "extractable_text_characters": 37703,
       "title": "mini-moi Architecture"
     },
     {

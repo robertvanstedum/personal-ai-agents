@@ -3,6 +3,10 @@ from test_rooms_r1 import env
 from domains.records.store import Store
 
 
+def mc_row(approved):
+    return next(row for row in approved.inventory('robert') if row['agent']=='mc')
+
+
 def activate(e):
     a=e.store.approved_agents
     pending=a.change('robert','mc',True,'Keep replies useful.')
@@ -32,7 +36,7 @@ def test_approval_restart_off_on_fences_running_answer(env):
     activate(e)
     assert e.reply(t).status_code==409
     restarted=Store(e.store.root)
-    row=restarted.approved_agents.inventory('robert')[0]
+    row=mc_row(restarted.approved_agents)
     assert row['approved'] and row['availability']=='Unknown'
     assert row['image_understanding'] is False
 
@@ -80,7 +84,7 @@ def test_installer_crash_recovery_verifies_files_before_ack(env, tmp_path):
         raise AssertionError(path)
     installer.call=call
     assert installer.once() is False
-    assert a.inventory('robert')[0]['state']=='pending'
+    assert mc_row(a)['state']=='pending'
     # Simulate a damaged partial installation after restart: never acknowledge it.
     member=installer.root/'mc'/FILES['mc'][0]
     member.write_text('broken')
@@ -90,7 +94,7 @@ def test_installer_crash_recovery_verifies_files_before_ack(env, tmp_path):
     assert env.store.platform_access.authenticate(token=issued[0]['credentials']['membership']['token']) is None
     assert member.read_text().strip()==issued[1]['credentials']['membership']['token']
     assert member.stat().st_mode&0o777==0o600
-    assert a.inventory('robert')[0]['approved']
+    assert mc_row(a)['approved']
 
 
 def test_installer_api_is_private_and_ack_is_generation_bound(tmp_path):
@@ -199,13 +203,13 @@ def test_brief_edit_preserves_credentials_and_manual_keys_stay_revoked(env,tmp_p
     bundle=activate(e)
     a=e.store.approved_agents
     a.edit_brief('robert','mc','Answer in short conversational paragraphs.')
-    assert a.inventory('robert')[0]['generation']==bundle['generation']
+    assert mc_row(a)['generation']==bundle['generation']
     assert e.store.platform_access.authenticate(token=bundle['credentials']['membership']['token'])
     assert e.store.platform_access.authenticate(token=manual) is None
     e.prove();e.join();e.say('Hello',target='mc');t=e.claim()
     prompt=messages(t)
     assert 'Answer in short conversational paragraphs.' in prompt[0]['content']
-    assert a.inventory('robert')[0]['brief_hash'] in prompt[0]['content']
+    assert mc_row(a)['brief_hash'] in prompt[0]['content']
     assert 'standing_brief' not in prompt[1]['content']
     a.change('robert','mc',False)
     assert e.store.platform_access.authenticate(token=manual) is None
@@ -218,5 +222,5 @@ def test_pending_brief_edit_refused_without_invalidating_installation(env):
     pending=a.change('robert','mc',True,'Initial brief')
     with pytest.raises(AccessError,match='Wait for installation'):
         a.edit_brief('robert','mc','Changed during installation')
-    row=a.inventory('robert')[0]
+    row=mc_row(a)
     assert row['generation']==pending['generation'] and row['brief']=='Initial brief'
