@@ -472,6 +472,10 @@ for f in sorted(glob.glob(os.path.join(os.environ['USAGE_DIR'], 'usage-*.jsonl')
             continue
         if not isinstance(r, dict) or r.get('status') != 'refused' or not str(r.get('key_ref') or '').startswith('cos-agent-'):
             continue
+        # Section 10's own probes: CoS's key must be refused on MC's route and
+        # the pass-through, so those refusals are expected, not a missing route.
+        if r.get('route') in ('minimoi-mc-agent', 'claude-haiku-4-5-20251001'):
+            continue
         try:
             at = datetime.fromisoformat(str(r.get('occurred_at'))).timestamp()
         except ValueError:
