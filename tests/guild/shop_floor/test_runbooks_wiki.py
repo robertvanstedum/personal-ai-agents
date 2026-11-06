@@ -42,10 +42,10 @@ def test_wiki_guards_and_validation(staging):
 
 
 def test_operate_has_no_provisional_subtabs_its_tools_are_quiet_body_links_and_maintain_alias_is_wiki(staging):
-    page = staging.owner().get(PAGE).get_data(as_text=True)                                              # a tool's page: one way back, no tab row (10 Oct)
-    assert "data-operate-back" in page and "subnav-more" not in page and "In design</a>" not in page and "guild-sections" not in page
+    page = staging.owner().get(PAGE).get_data(as_text=True)                                              # a tool's page: the shared Workshop row (09176521), no sub-tabs
+    assert 'href="/guild-next/guild/operate"' in page and "In design</a>" not in page and "guild-sections" not in page
     operate = staging.owner().get("/guild-next/guild/operate").get_data(as_text=True)
-    assert "subnav-link" not in operate and "subnav-more" not in operate and "In design</a>" not in operate
+    assert "In design</a>" not in operate and "guild-sections" not in operate
     tools = operate[operate.index("data-operate-tools"):]
     tools = tools[:tools.index("</p>")]
     for label in ("Build host", "Runbooks", "Agents", "MC tending", "Operational checks", "Administration"):

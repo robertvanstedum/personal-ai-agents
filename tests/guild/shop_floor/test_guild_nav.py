@@ -23,8 +23,8 @@ PAGES = {"/guild-next/": None, "/guild-next/guild/build": "chat", "/guild-next/g
 
 
 def _nav(page):
-    start = page.index('<div class="workshop-row">')
-    return page[start:page.index("</nav>", start)]
+    start = page.index('<div class="mm-domain-row workshop-row">')          # the shared domain header, 20f7d2d0
+    return page[start:page.index("</details>", start)]
 
 
 @pytest.mark.parametrize("path", sorted(PAGES))
@@ -32,7 +32,7 @@ def test_every_build_page_has_work_tabs_and_phone_more(staging, path):
     r = staging.owner().get(path)
     assert r.status_code == 200, (path, r.status_code)
     nav = _nav(r.get_data(as_text=True))
-    tabs = re.findall(r'<a href="([^"]+)" class="subnav-link[^"]*" data-section="([a-z-]+)"[^>]*>([^<]+)</a>', nav)
+    tabs = re.findall(r'<a href="([^"]+)" class="mm-domain-tab subnav-link[^"]*" data-section="([a-z-]+)"[^>]*>([^<]+)</a>', nav)
     assert [(s, label, href) for href, s, label in tabs] == DAILY, path
     assert "data-subnav-more" in nav
     assert "/static/guild/guild-build.webp" in nav
@@ -40,7 +40,7 @@ def test_every_build_page_has_work_tabs_and_phone_more(staging, path):
     assert "gu-section-band" not in nav
     for word in ("Shop floor", "Wall", "Prototype Lab</a>", "Planning Studio</a>", "subnav-dot"):
         assert word not in nav, (path, word)                   # the old strip is gone
-    active = re.findall(r'class="subnav-link subnav-active" data-section="([a-z-]+)"', nav)
+    active = re.findall(r'class="mm-domain-tab subnav-link subnav-active active" data-section="([a-z-]+)"', nav)
     assert active == ([PAGES[path]] if PAGES[path] else []), (path, active)
     assert nav.count('aria-current="page"') <= 1
 
@@ -73,7 +73,7 @@ def test_the_portal_workspace_bar_is_unchanged(staging):
     for path in ("/guild-next/", "/guild-next/guild/build"):
         page = staging.owner().get(path).get_data(as_text=True)
         assert page.count('id="portal-nav-bar"') == 1
-        assert page.index('id="portal-nav-bar"') < page.index('class="guild-nav"')
+        assert page.index('id="portal-nav-bar"') < page.index('class="guild-nav mm-domain-header"')
 
 
 def test_the_labs_entry_points_stay_truthful(staging):
@@ -88,7 +88,7 @@ def test_other_areas_share_one_workshop_row(staging, path):
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     nav = _nav(html)
-    assert html.count('class="workshop-row"') == 1
+    assert html.count('class="mm-domain-row workshop-row"') == 1
     assert 'gu-section-band' not in html and 'guild-subnav' not in html
     assert 'guild-build.webp' in nav and '>Admin</a>' not in nav
     assert nav.count('aria-current="page"') == 2  # desktop link and phone More equivalent

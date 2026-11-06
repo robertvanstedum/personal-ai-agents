@@ -127,7 +127,7 @@ def test_the_cos_app_wires_the_routes_and_the_tab():
     assert "_in_flight_blueprint(" in source and "lambda: _cos_store_writer" in source
     assert '"cos.in_flight"' in (ROOT / "domains/cos/store/api.py").read_text()
     template = (ROOT / "domains/cos/templates/cos_ui.html").read_text()
-    assert 'data-tab="flight"' in template and 'id="tab-flight"' in template and "cos-in-flight.js" in template
+    assert "'data-tab':'flight'" in template and 'id="tab-flight"' in template and "cos-in-flight.js" in template
 
 
 def test_the_portal_guards_and_marks_in_flight_writes():

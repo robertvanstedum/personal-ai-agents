@@ -163,6 +163,41 @@ EXPECTED = {
     "/guild-next/api/v1/rooms/agents",
     "/guild-next/api/v1/rooms/agents/<agent>",
     "/guild-next/api/v1/rooms/agents/<agent>/brief",
+    # Partnership tasks (owner page and API; tests below keep them owner-only).
+    "/guild-next/guild/tasks",
+    "/guild-next/api/v1/tasks/view",
+    "/guild-next/api/v1/tasks/item/<task_id>",
+    "/guild-next/api/v1/tasks/pending",
+    "/guild-next/api/v1/tasks/admissions",
+    "/guild-next/api/v1/tasks/admit",
+    "/guild-next/api/v1/tasks/admission-decline",
+    "/guild-next/api/v1/tasks/decline",
+    "/guild-next/api/v1/tasks/cancel",
+    "/guild-next/api/v1/tasks/correct",
+    "/guild-next/api/v1/tasks/recover",
+    "/guild-next/api/v1/tasks/confirm",
+    # CoS's Board page, served by the Guild portal (cos_board.py; owner-only, tested below).
+    "/guild-next/cos-board",
+    "/guild-next/cos-board/popout",
+    "/guild-next/cos-board/assets/<path:filename>",
+    "/guild-next/cos-board/media/<asset_id>/<variant>",
+    "/guild-next/cos-board/api/v1/session",
+    "/guild-next/cos-board/api/v1/board",
+    "/guild-next/cos-board/api/v1/board/rev",
+    "/guild-next/cos-board/api/v1/media",
+    "/guild-next/cos-board/api/v1/postits",
+    "/guild-next/cos-board/api/v1/postits/bin",
+    "/guild-next/cos-board/api/v1/postits/photo",
+    "/guild-next/cos-board/api/v1/postits/reorder",
+    "/guild-next/cos-board/api/v1/postits/layout",
+    "/guild-next/cos-board/api/v1/postits/trash/empty",
+    "/guild-next/cos-board/api/v1/postits/<int:postit_id>/bin",
+    "/guild-next/cos-board/api/v1/postits/<int:postit_id>/restore",
+    "/guild-next/cos-board/api/v1/postits/<int:postit_id>/label",
+    "/guild-next/cos-board/api/v1/postits/<int:postit_id>/text",
+    "/guild-next/cos-board/api/v1/postits/<int:postit_id>/link",
+    "/guild-next/cos-board/api/v1/postits/<int:postit_id>/done",
+    "/guild-next/cos-board/api/v1/postits/<int:postit_id>/undone",
     "/guild-next/api/v1/library/links",
     "/guild-next/api/v1/",
     "/guild-next/api/v1/<path:rest>",
@@ -174,6 +209,20 @@ def test_exactly_the_allowlisted_routes(staging):
     assert rules == EXPECTED
     for word in ("reset", "landing", "proto"):
         assert not any(word in r for r in rules), word
+
+
+def test_task_and_cos_board_routes_refuse_everyone_but_the_owner(staging):
+    import re
+    rules = [r for r in staging.app.url_map.iter_rules()
+             if r.rule.startswith(("/guild-next/api/v1/tasks", "/guild-next/guild/tasks", "/guild-next/cos-board"))]
+    assert len(rules) >= 29
+    for client in (staging.guest(), staging.client()):
+        for rule in rules:
+            path = re.sub(r"<int:[^>]+>", "1", rule.rule)
+            path = re.sub(r"<[^>]+>", "x", path)
+            for method in rule.methods - {"HEAD", "OPTIONS"}:
+                status = client.open(path, method=method).status_code
+                assert status in (302, 401, 403), (rule.rule, method, status)
 
 
 def test_writes_are_post_only_and_reads_get_only(staging):
