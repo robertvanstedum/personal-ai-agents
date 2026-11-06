@@ -37,7 +37,7 @@ MC_TOOLS_PORT = 5011
 # The image each kind of file came from: the running tag's own commit. The candidate is ``git diff`` from there.
 # Every image diffs from the oldest commit any of them could hold, so Dev runs the release's files even where a tag's image
 # held older copies than its name says (seen on the scheduler, portal, German and Portuguese, 6 Nov).
-BASES = {"portal": "8481940d", "cos": "8481940d", "domains": "8481940d"}
+BASES = {"portal": "8481940d", "cos": "8481940d", "domains": "8481940d", "records": "fd6ca08a", "board": "29d7d59a"}
 OLDEST_ACCEPTED = "8481940d"                         # A live file may be any committed version since here: never a hand edit.
 
 MC_DIR, COS_DIR, PLUGINS = "/opt/minimoi/mc-agent/", "/opt/minimoi/cos-agent-a/", "/opt/minimoi/openclaw-plugins/"
@@ -113,9 +113,9 @@ TARGETS = {
     "partnership-worker": dict(container="minimoi-partnership-worker", repo="partnership-worker", tier=7, base="cos", worker=True, wait=DEFAULT_WAIT, rules=_TASKS,
                                layout=_TASKS_LAYOUT, smoke=_python("services.partnership_tasks.worker"), down="the whole swap, plus its restart: tasks wait"),
     # Nothing these run changed in this release. A rule match later would put them in the plan.
-    "records": dict(container="minimoi-records", repo="records", tier=1, base="portal", rules=_app("domains/records/"),
+    "records": dict(container="minimoi-records", repo="records", tier=1, base="records", rules=_app("domains/records/"),
                     extra_rules=(("prototype-lab/projects/project-records-room-poc/", "/app/"),), wait=DEFAULT_WAIT),
-    "cos-board": dict(container="minimoi-cos-board", repo="cos-board", tier=7, base="portal", worker=True, wait=DEFAULT_WAIT, down="the whole swap, plus its restart: CoS Board notes wait",
+    "cos-board": dict(container="minimoi-cos-board", repo="cos-board", tier=7, base="board", worker=True, wait=DEFAULT_WAIT, down="the whole swap, plus its restart: CoS Board notes wait",
                       rules=_app("core/domain_api/", "core/domain_operations/", "domains/guild/board", "domains/guild/queue_store.py", "minimoi_portal/guild_ui/adapters/",
                                  "minimoi_portal/guild_ui/board", "minimoi_portal/guild_ui/stores.py", "utils/payment_scrub.py")),
     "supervisor": dict(container="minimoi-supervisor", repo="supervisor", tier=1, base="portal", wait=DEFAULT_WAIT,

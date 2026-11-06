@@ -494,7 +494,7 @@ def test_cos_agent_gets_its_config_plugin_and_handbook_plus_the_source_its_build
 def test_an_image_with_nothing_changed_is_skipped():
     for key in ("records", "cos-board", "supervisor"):
         assert where(key) == {}, key
-    meta, _ = pay.build_meta(_FakeGit(CHANGED), "head", {"portal": "b", "cos": "b", "domains": "b"})
+    meta, _ = pay.build_meta(_FakeGit(CHANGED), "head", {"portal": "b", "cos": "b", "domains": "b", "records": "b", "board": "b"})
     assert set(meta["skipped"]) == {"minimoi-records", "minimoi-cos-board", "minimoi-supervisor"}
     assert all(why == "nothing it runs changed" for why in meta["skipped"].values())
 
@@ -670,7 +670,7 @@ class _FakeGit:
         return {"minimoi_portal/app.py": "1" * 64, "minimoi_portal/other.py": "2" * 64, "minimoi_portal/data/x.json": "3" * 64, "minimoi_portal/logo.png": "4" * 64}
 
 
-BASES = {"portal": "b", "cos": "b", "domains": "b"}
+BASES = {"portal": "b", "cos": "b", "domains": "b", "records": "b", "board": "b"}
 
 
 def test_the_manifest_names_every_hash_the_host_proves():
