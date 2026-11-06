@@ -19,6 +19,7 @@ from core.identity import resolve_user_display_name, resolve_user_id
 from core.realtime_voice.bootstrap import create_bootstrap_blueprint
 
 from german_domain import (
+    grok_text_on,
     GERMAN_DIR,
     DEFAULT_USER,
     get_lesen_pool,
@@ -272,6 +273,7 @@ def gesprache():
                            whereby_room_url=WHEREBY_ROOM_URL,
                            whereby_host_available=bool(WHEREBY_HOST_URL),
                            realtime_voice_enabled=realtime_voice_enabled,
+                           grok_text=grok_text_on(),
                            learner_name=learner_name,
                            is_guest=_de_is_guest(),
                            tip=_load_tip("german.gesprache"))
@@ -603,7 +605,7 @@ def api_transcribe():
 def api_review():
     body = request.get_json(force=True)
     transcript  = body.get("transcript", "").strip()
-    model       = body.get("model", "claude").strip()
+    model       = body.get("model", "grok" if grok_text_on() else "claude").strip()
     persona_name = body.get("persona_name", "").strip()
     scene       = body.get("scene", "").strip()
     source      = body.get("source", "ki_sitzung").strip()
@@ -662,7 +664,7 @@ def gesprache_ai_turn():
     history   = data.get("history", [])
     persona   = data.get("persona", "").strip()
     scene     = data.get("scene", "").strip()
-    model     = data.get("model", "claude").strip()
+    model     = data.get("model", "grok" if grok_text_on() else "claude").strip()
     user_turn = data.get("user_turn", "")
     if not persona:
         return jsonify({"ok": False, "error": "persona required"}), 400

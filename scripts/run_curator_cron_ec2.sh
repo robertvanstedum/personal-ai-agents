@@ -57,9 +57,10 @@ case "$STATE" in
       echo "$LOG_PREFIX scripts.x.x_pull_incremental failed — continuing with existing signals"
 
     # ── Run curator pipeline ──────────────────────────────────────────────────
-    echo "$LOG_PREFIX Running RSS curation (haiku; Grok paused, #466)..."
+    # The scorer is CURATOR_RANKING_MODEL in the Curator container: haiku unless set to grok-4.3 (Grok paused, #466).
+    echo "$LOG_PREFIX Running RSS curation (CURATOR_RANKING_MODEL, default haiku)..."
     docker exec minimoi-curator python domains/curator/curator_rss_v2.py \
-      --model=haiku --fallback --temperature=0.7
+      --model=configured --fallback --temperature=0.7
     RSS_STATUS=$?
 
     # Fail closed: a failed curation never reaches Telegram. Nothing marks the

@@ -122,8 +122,8 @@ _SPOKEN_NUMBERS = {
 
 _LLM_PROVIDERS = [
     # Grok is paused (#466, 31 Oct 2026): translation, writing correction and
-    # phrase handling start with Claude Haiku. To resume Grok, put back
-    # {"name": "grok-fast", "type": "xai", "model": "grok-4.3"} first.
+    # phrase handling start with Claude Haiku. GERMAN_GROK_TEXT=on puts Grok
+    # first again (_llm_providers).
     {"name": "claude-haiku", "type": "anthropic",  "model": "claude-haiku-4-5-20251001"},
     {"name": "ollama-gemma", "type": "ollama",     "model": "gemma3:1b"},
 ]
@@ -413,11 +413,24 @@ def _drill_completion_message(state: dict, reveal_line: str) -> str:
     return "\n".join(lines)
 
 
+# ─── LLM switch ───────────────────────────────────────────────────────────────
+
+def grok_text_on() -> bool:
+    """Grok for German text, off unless the host sets GERMAN_GROK_TEXT=on (#466). Voice has its own choice."""
+    return os.environ.get("GERMAN_GROK_TEXT", "").strip().lower() == "on"
+
+
+def _llm_providers() -> list:
+    if grok_text_on():
+        return [{"name": "grok-fast", "type": "xai", "model": "grok-4.3"}, *_LLM_PROVIDERS]
+    return _LLM_PROVIDERS
+
+
 # ─── LLM calls ────────────────────────────────────────────────────────────────
 
 def _call_llm(prompt: str, max_tokens: int = 300) -> str | None:
     """Call LLM providers in order, return text response or None if all fail."""
-    for provider in _LLM_PROVIDERS:
+    for provider in _llm_providers():
         try:
             if provider["type"] == "xai":
                 api_key = _get_secret("XAI_API_KEY", "xai", "api_key")

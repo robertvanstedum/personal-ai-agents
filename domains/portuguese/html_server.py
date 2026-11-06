@@ -746,6 +746,8 @@ def conversas():
         persona_progress=persona_progress,
         sessions_per_round=SESSIONS_PER_ROUND,
         realtime_voice_enabled=realtime_voice_enabled,
+        # Grok for text, off unless the host sets PORTUGUESE_GROK_TEXT=on (#466). Claude stays the selected default.
+        grok_text=os.environ.get("PORTUGUESE_GROK_TEXT", "").strip().lower() == "on",
         learner_name=learner_name,
         tip=_load_tip("portuguese.conversas"),
     )

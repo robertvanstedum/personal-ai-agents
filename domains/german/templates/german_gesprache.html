@@ -97,7 +97,8 @@
               <label class="gesprache-model-label">Textmodell</label>
               <select id="gesprache-model" class="gesprache-model-select">
                 <option value="claude" selected>Claude</option>
-                <option value="openai">OpenAI</option>
+                <option value="openai">OpenAI</option>{% if grok_text %}
+                <option value="grok" selected>Grok</option>{% endif %}
               </select>
             </div>
             <div class="prompt-actions">

@@ -111,7 +111,8 @@
               <label class="gesprache-model-label">Modelo de texto</label>
               <select id="conversas-model" class="gesprache-model-select">
                 <option value="claude" selected>Claude</option>
-                <option value="openai">OpenAI</option>
+                <option value="openai">OpenAI</option>{% if grok_text %}
+                <option value="grok">Grok</option>{% endif %}
               </select>
             </div>
             <div class="prompt-actions">
