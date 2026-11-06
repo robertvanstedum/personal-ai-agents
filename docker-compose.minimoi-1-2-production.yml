@@ -1,0 +1,162 @@
+# OPTIONAL explicit opt-in: MiniMoi 1.2's production settings for CoS, the model routes and the task flow.
+# Layered after docker-compose.prod.yml. Present on the host only once switched on, on Robert's word; absent, nothing
+# changes. Every secret and state folder must already exist on production: nothing here creates one (no host-path
+# creation), and nothing is copied from Dev. Images are immutable digests. Guildhall has its own two files.
+x-new-service: &new-service
+  profiles: [minimoi-1-2]
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp:size=32m,mode=1777
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+
+services:
+  cos-agent-a:
+    environment:
+      COS_AGENT_ROLE: cos
+      COS_RUNTIME_MODEL_ACCESS: plan
+      COS_PLAN_MODEL: openai/gpt-6-astra
+      COS_PLAN_ROUTES: openai/gpt-6-sol,openai/gpt-6-luna
+      COS_PLAN_AUTH_PROFILE: ${MINIMOI_COS_PLAN_AUTH_PROFILE:?the plan sign-in profile on production required}
+      COS_ACTIONS_TOKEN_FILE: /run/secrets/cos-actions-token/token
+    volumes:
+      - {type: bind, source: "${MINIMOI_1_2_SECRETS:?existing production-only secrets folder required}/cos-bound", target: /run/secrets/cos-bound, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_1_2_SECRETS:?}/cos-actions-token", target: /run/secrets/cos-actions-token, read_only: true, bind: {create_host_path: false}}
+
+  cos-scheduler:
+    environment:
+      # Production keeps its background jobs on. Dev's COS_BACKGROUND_JOBS=0 must never come here.
+      COS_STORE_ENVIRONMENT: prod
+      COS_STORE_DIR: /var/lib/minimoi/cos-store
+      COS_TURNS_DIR: /app/data/cos-turns
+      COS_VOICE_DIR: /app/data/cos-voice
+      COS_OWNER_PRINCIPAL: robert
+      COS_OWNER_ASSERTION_ENV: prod
+      COS_OWNER_ASSERTION_KEY_FILE: /run/secrets/partnership/cos-owner.key
+      COS_OWNER_ASSERTION_NONCE_FILE: /var/lib/minimoi/cos-store/owner-nonces.sqlite3
+      COS_ACTIONS_TOKEN_FILE: /run/secrets/cos-actions-token/token
+      COS_TOOL_BINDINGS_FILE: /var/lib/minimoi/cos-store/tool-bindings.sqlite3
+      COS_TOOL_LISTENER_PORT: "8771"
+      COS_TOOL_LISTENER_TOKEN_SHA256: ${MINIMOI_COS_TOOL_LISTENER_TOKEN_SHA256:?hash of the bound tool token required}
+      COS_BOARD_URL: http://cos-board:5014
+      COS_BOARD_PROFILE_FILE: /run/secrets/partnership/board-profile.json
+      COS_TASKS_COS_TOKEN_FILE: /run/secrets/partnership/tasks-cos.token
+      COS_TASKS_PLATFORM_TOKEN_FILE: /run/secrets/partnership/tasks-platform.token
+      MINIMOI_COS_VOICE_DIRECT: "1"
+      VOICE_REALTIME_UI_ENABLED: "1"
+      MINIMOI_MODEL_ROUTES_FILE: /run/minimoi-model-routes/catalogue.json
+      PARTNERSHIP_ENVIRONMENT: prod
+      PARTNERSHIP_TASKS_URL: http://partnership-tasks:8772
+    volumes:
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?existing production-only state folder required}/cos-store", target: /var/lib/minimoi/cos-store, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?}/cos-turns", target: /app/data/cos-turns, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?}/cos-partnership", target: /app/runtime/partnership, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_1_2_SECRETS:?}/cos-actions-token", target: /run/secrets/cos-actions-token, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_1_2_SECRETS:?}/cos-partnership", target: /run/secrets/partnership, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_MODEL_ROUTES_DIR:?production route catalogue folder required}", target: /run/minimoi-model-routes, read_only: true, bind: {create_host_path: false}}
+    networks:
+      - default
+      - vault-internal
+      - partnership
+
+  portal:
+    environment:
+      MINIMOI_GUILD_MC: openclaw
+      MINIMOI_GUILD_MC_STREAM: "on"
+      MINIMOI_GUILD_MC_TURNS: "on"
+      MC_TURNS_DIR: /app/data/mc-turns
+      MINIMOI_GUILD_GITHUB_LOOKUP: "1"
+      MINIMOI_MC_GUEST_ACTIONS: "1"
+      MINIMOI_MC_GUEST_ACTIONS_ENV: prod
+      MINIMOI_MC_VOICE_DIRECT: "1"
+      MINIMOI_MC_VOICED_OUTCOMES: "1"
+      VOICE_REALTIME_UI_ENABLED: "1"
+      MINIMOI_MODEL_ROUTES_FILE: /run/minimoi-model-routes/catalogue.json
+      MINIMOI_ACTION_NOTICES: "1"
+      MINIMOI_ACTION_NOTICES_ENV: prod
+      PARTNERSHIP_ENVIRONMENT: prod
+      PARTNERSHIP_TASKS_URL: http://partnership-tasks:8772
+      PARTNERSHIP_MC_TOKEN_FILE: /run/secrets/partnership/mc.token
+      PARTNERSHIP_CARD_REF: ${MINIMOI_PARTNERSHIP_CARD_REF:?commit the worker runs from required}
+      PORTAL_COS_OWNER_ENV: prod
+      PORTAL_COS_OWNER_KEY_FILE: /run/secrets/partnership/portal-cos-owner.key
+      PORTAL_PARTNERSHIP_OWNER_ENV: prod
+      PORTAL_PARTNERSHIP_OWNER_KEY_FILE: /run/secrets/partnership/portal-partnership-owner.key
+    volumes:
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?}/mc-turns", target: /app/data/mc-turns, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_1_2_SECRETS:?}/portal-partnership", target: /run/secrets/partnership, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_MODEL_ROUTES_DIR:?}", target: /run/minimoi-model-routes, read_only: true, bind: {create_host_path: false}}
+    networks:
+      - default
+      - iotconnect-edge
+      - mc-portal
+      - partnership
+
+  cos-board:
+    <<: *new-service
+    image: ${MINIMOI_PORTAL_IMAGE:?immutable reviewed portal image digest required}
+    container_name: minimoi-cos-board
+    entrypoint: [python, -m, minimoi_portal.guild_ui.board_headless_runner]
+    environment:
+      BOARD_API_OWNER: robert
+      BOARD_API_BIND: 0.0.0.0
+      BOARD_API_PORT: "5014"
+      BOARD_API_FLOOR: cos-board
+      MINIMOI_BOARD_ENV: prod
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - {type: bind, source: "${MINIMOI_1_2_SECRETS:?}/cos-board", target: /run/board-secrets, read_only: true, bind: {create_host_path: false}}
+    mem_limit: 256m
+
+  partnership-tasks:
+    <<: *new-service
+    image: ${MINIMOI_COS_SCHEDULER_IMAGE:?immutable reviewed scheduler image digest required}
+    container_name: minimoi-partnership-tasks
+    command: [python, -m, services.partnership_tasks.http_api]
+    environment:
+      PARTNERSHIP_ENVIRONMENT: prod
+      PARTNERSHIP_OWNER_ENV: prod
+      PARTNERSHIP_OWNER_SUBJECT: ${MINIMOI_PARTNERSHIP_OWNER_SUBJECT:?production owner subject required}
+      PARTNERSHIP_PORT: "8772"
+      PARTNERSHIP_ROOT: /data/store
+      PARTNERSHIP_HOST: 0.0.0.0
+      PARTNERSHIP_BINDINGS: /run/secrets/partnership/bindings.json
+      PARTNERSHIP_GRANTS: /run/secrets/partnership/grants.json
+      PARTNERSHIP_OWNER_KEY_FILE: /run/secrets/partnership/owner.key
+      PARTNERSHIP_OWNER_NONCE_FILE: /data/owner-nonces.sqlite3
+      PYTHONPATH: /app
+    volumes:
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?}/partnership", target: /data, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_1_2_SECRETS:?}/partnership", target: /run/secrets/partnership, read_only: true, bind: {create_host_path: false}}
+    networks: [partnership]
+    mem_limit: 256m
+
+  partnership-worker:
+    <<: *new-service
+    image: ${MINIMOI_COS_SCHEDULER_IMAGE:?}
+    container_name: minimoi-partnership-worker
+    command: [python, -m, services.partnership_tasks.worker]
+    environment:
+      PARTNERSHIP_ENVIRONMENT: prod
+      PARTNERSHIP_TASKS_URL: http://partnership-tasks:8772
+      PARTNERSHIP_DRAINER_TOKEN_FILE: /run/secrets/partnership/drainer.token
+      PARTNERSHIP_RUNNER_SEATS_FILE: /run/secrets/partnership/runner-seats.json
+      DATABASE_URL_FILE: /run/secrets/partnership/db.url
+      MINIMOI_MC_DELEGATION_ENV: prod
+      MINIMOI_MC_DELEGATION_PRINCIPAL: robert
+      MINIMOI_MC_DELEGATION_AUTHORITY_FILE: /app/core/mc_delegation_dispatcher/authority.prod.json
+      PARTNERSHIP_NOTICES_URL: http://portal:5001
+      PARTNERSHIP_NOTICES_TOKEN_FILE: /run/secrets/partnership/notices.token
+      PARTNERSHIP_WORKER_LOCK: /data/worker.lock
+      PYTHONPATH: /app
+    volumes:
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?}/partnership", target: /data, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_1_2_SECRETS:?}/partnership", target: /run/secrets/partnership, read_only: true, bind: {create_host_path: false}}
+    networks: [partnership, default]
+    mem_limit: 192m
+
+networks:
+  partnership:
+    name: minimoi-partnership
+    internal: true
