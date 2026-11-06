@@ -1,4 +1,4 @@
-"""The route catalogue: roles read routes, tier/provider/billing stay apart, only proved routes are offered, nothing falls back."""
+"""The route catalogue: roles read routes, tier/provider/billing stay apart, only proved routes are offered, and only a plan route's declared API target takes a switched turn."""
 import json
 
 import pytest

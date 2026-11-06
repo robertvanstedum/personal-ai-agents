@@ -7,8 +7,8 @@ changes and no route is sent.
 
 Tier (`strong`/`mid`/`low`, shown as A/B/C), provider and billing (Plan or API) are separate. A route is offered to an
 agent only when `offered.<agent>` says `available`, which means it was proved on that agent with real tools. Anything
-else in that field is the reason it is not offered, and the Options menu shows it. Nothing falls back: a route that
-cannot serve stops the turn with nothing sent.
+else in that field is the reason it is not offered, and the Options menu shows it. A route that cannot serve stops the
+turn, except for the one automatic switch under "Plan first, then the capped API route".
 
 ## Master Craftsman's tasks
 
@@ -40,9 +40,47 @@ listed in `TASK_ROLES`: a missing line stops the work and never falls to the run
    tool admission in `guild.mc_tool_admissions`, and unchanged spend on the API key.
 4. If it fails, put the reason back in `offered.mc`.
 
+## Plan first, then the capped API route
+
+Robert's decision, 6 Nov 2026, for MC and CoS. A turn on a plan route that declares `"failover"` in the catalogue moves to
+that API route once, automatically, and says so. The next turn tries the plan again; the chosen route doesn't change.
+
+**What switches.** Only OpenClaw's own error type on the turn: `rate_limit_error`, `insufficient_quota`, or
+`authentication_error` (`PLAN_SIGNALS`, read from OpenClaw 2026.9.6's `openai-compat-errors`). Any other error, whatever its
+words, is reported as before.
+
+**What stops it.** Any doubt that a tool began: the turn stops and says so. MC: any text sent, a tool mark since the turn
+began, or no way to read marks (`mc-tool-starts`, written by `minimoi-tools`' `before_tool_call` hook, read by the relay). CoS:
+any text, no live binding, or any admitted call, native call or completed model call reported for the run.
+
+**Limits.** One level, same provider. No capped key, or the cap reached: the turn says plan and API are both unavailable.
+Grok has no target, and `api-xai-low` stays unoffered, until its plan adapter exists. Only page, Private and Rooms turns have a
+route: MC's jobs, CoS's Telegram, MC-lane and meeting turns don't switch.
+
+**Switching it on, per host.** All are off until set, and a missing one means no switch, never an uncapped call:
+
+- The host's catalogue carries the route's `"failover"` line. Delete that one line to turn that route's switch off.
+- MC: `MC_FAILOVER_ROUTES` (the targets) and `MC_MODEL_GATEWAY_KEY` on `mc-agent`, a capped key allowed those tiers
+  (`mc_failover_keygen_py` in `scripts/staging/mc_keys.sh`). On `mc-relay`: `MC_RELAY_ROUTES` from `python -m core.model_routes`,
+  `MC_RELAY_TOOL_STARTS=<state>/mc-tool-starts`, and `MC_RELAY_CHAT_DB` for the served evidence. MC's tools must be on.
+- CoS: `COS_FAILOVER_ROUTES` on `cos-agent-a`, OpenAI tiers only, and CoS's own capped key allowed them (`/key/update` inside the
+  gateway). The key file proves it is capped; a host passing its own key by environment sets `COS_GATEWAY_KEY_CAPPED=1`. On the
+  master key the target is left out.
+
+**Prove it on Dev first:** see "What this has not been run against" below; force each signal once in a labelled chat, then
+check `routes.<agent>.last_turn` (`route_id`, `billing_label`, `served`, `switched_from`) and the key's spend.
+
+### What this has not been run against
+
+Tests use fake runtimes. No live plan has been exhausted or signed out. OpenClaw's classification of a real ChatGPT or Claude
+limit message, and whether its stream carries the mapped type rather than `internal error`, are confirmed only by reading code;
+a generic `internal error` simply never switches. Whether `before_tool_call` fires for OpenClaw's native tools on the Claude CLI
+bridge is not confirmed.
+
 ## Grok: on and off (#466)
 
-Grok text is paused and off in everything shipped. Each piece below turns on by itself; none falls back onto it. It bills
+Grok text is paused and off in everything shipped. Each piece below turns on by itself; none falls back onto it, and no
+plan route's failover may name it. It bills
 per use against the xAI key, so check the key's cap first. Grok Voice and the `minimoi-voice-*` roles are separate: they
 stay as they are, whichever way these are set.
 
