@@ -23,6 +23,24 @@ def only_image(before: dict, after: dict, service: str, image: str) -> None:
     assert a == b, "changed beyond the image of " + service
 
 
+def check_tag_is_running(tag: str, tag_id: str, running_id: str) -> None:
+    """A tag can move. The image this deploy builds on must be the very image running now."""
+    assert tag_id and tag_id == running_id, "tag no longer names the running image: " + tag
+
+
+def check_payload(meta: dict, read) -> None:
+    """Every file about to ship is the reviewed one, byte for byte. ``read(name) -> bytes``."""
+    assert meta, "empty payload"
+    for name, m in meta.items():
+        assert hashlib.sha256(read(name)).hexdigest() == m["after"], "payload differs from what was reviewed: " + name
+
+
+def same_runtime(saved: dict, live: dict) -> None:
+    """After a restore the runtime's config is the saved one. Only the runtime's own write stamp may differ."""
+    strip = lambda c: {k: v for k, v in c.items() if k != "meta"}
+    assert strip(saved) == strip(live), "restored runtime config differs from the saved one"
+
+
 def check_policy(live: dict) -> None:
     """The runtime policy this patch must leave exactly as reviewed."""
     chat = live["agents"]["entries"]["mc-chat"]["tools"]
@@ -91,14 +109,21 @@ class RealHost:                                     # pragma: no cover  (exercis
 
     def check_baseline(self):
         for key, name in self.names.items():
-            assert self.O.inspect(name)["Config"]["Image"] == OLD[key], "unexpected live image: " + key
+            live = self.O.inspect(name)
+            assert live["Config"]["Image"] == OLD[key], "unexpected live image: " + key
+            check_tag_is_running(OLD[key], self._image_id(OLD[key]), live["Image"])
         assert not (self.OP / "recovery-required.json").exists(), "an earlier run needs recovery"
+        check_payload(self.meta, lambda name: (self.OP / "payload" / name).read_bytes())
         for name, m in self.meta.items():
             got = subprocess.run(["docker", "run", "--rm", "--network", "none", "--entrypoint", "cat", OLD[m["k"]], m["dest"]], capture_output=True).stdout
             assert hashlib.sha256(got).hexdigest() == m["base"], "live file differs from the reviewed base: " + name
 
+    def _image_id(self, tag):
+        return json.loads(self._run("docker", "image", "inspect", tag))[0]["Id"]
+
     def build_images(self):
         import shutil
+        check_payload(self.meta, lambda name: (self.OP / "payload" / name).read_bytes())    # again, right before it ships
         d = self.OP / "ctx"
         shutil.rmtree(d, ignore_errors=True)
         for key in OLD:
@@ -111,8 +136,13 @@ class RealHost:                                     # pragma: no cover  (exercis
             (d / key / "Dockerfile").write_text(f"FROM {OLD[key]}\nCOPY ctx/ /\n")
             self._run("docker", "build", "--pull=false", "--network", "none", "-t", tag, str(d / key))
         shutil.rmtree(d)
+        self.new_ids = {key: self._image_id(tag) for key, tag in NEW.items()}
+        (self.OP / "new-images.json").write_text(json.dumps(self.new_ids))
 
     def check_new_images(self):
+        for name, m in self.meta.items():                   # what is inside the built image, not just what went in
+            got = subprocess.run(["docker", "run", "--rm", "--network", "none", "--entrypoint", "cat", self.new_ids[m["k"]], m["dest"]], capture_output=True).stdout
+            assert hashlib.sha256(got).hexdigest() == m["after"], "built image holds a different file: " + name
         self._run("docker", "run", "--rm", "--network", "none", "--entrypoint", "node", NEW["mc"], "--check", "/opt/minimoi/mc-agent/plugins/minimoi-tools/index.mjs")
         self._run("docker", "run", "--rm", "--network", "none", "--entrypoint", "python", NEW["portal"], "-c",
                   "from core.mc_tools.service import ASK_FOLLOW_UP;assert 'minimoi_agent_status' in ASK_FOLLOW_UP")
@@ -205,7 +235,8 @@ class RealHost:                                     # pragma: no cover  (exercis
 
     def verify_new(self):
         for key, name in self.names.items():
-            assert self.O.inspect(name)["Config"]["Image"] == NEW[key], "image: " + key
+            live = self.O.inspect(name)
+            assert live["Config"]["Image"] == NEW[key] and live["Image"] == self.new_ids[key], "image: " + key
         self._same_contracts()
         check_policy(json.loads(self.cfg.read_text()))
 
@@ -223,6 +254,7 @@ class RealHost:                                     # pragma: no cover  (exercis
         for name, image in self.saved["images"].items():
             assert self.O.inspect(name)["Image"] == image, "restored image differs: " + name
         self._same_contracts()
+        same_runtime(json.loads((self.OP / "before.runtime.private.json").read_text()), json.loads(self.cfg.read_text()))
 
 
 if __name__ == "__main__":                          # pragma: no cover

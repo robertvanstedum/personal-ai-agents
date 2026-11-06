@@ -132,3 +132,29 @@ def test_the_policy_check_refuses_any_loosening():
         mutate(wrong)
         with pytest.raises(AssertionError):
             op.check_policy(wrong)
+
+
+def test_a_tag_that_moved_is_refused():
+    op.check_tag_is_running("t:old", "sha256:aaa", "sha256:aaa")
+    for tag_id, running in (("sha256:bbb", "sha256:aaa"), ("", "")):
+        with pytest.raises(AssertionError, match="no longer names"):
+            op.check_tag_is_running("t:old", tag_id, running)
+
+
+def test_a_payload_that_is_not_what_was_reviewed_is_refused():
+    import hashlib
+    meta = {"a.mjs": {"after": hashlib.sha256(b"reviewed").hexdigest()}}
+    op.check_payload(meta, lambda _: b"reviewed")
+    with pytest.raises(AssertionError, match="differs from what was reviewed"):
+        op.check_payload(meta, lambda _: b"swapped")
+    with pytest.raises(AssertionError, match="empty"):
+        op.check_payload({}, lambda _: b"")
+
+
+def test_a_restored_runtime_config_must_equal_the_saved_one():
+    saved = {"agents": {"x": 1}, "auth": {"p": 1}, "meta": {"lastTouchedAt": "a"}}
+    op.same_runtime(saved, {**saved, "meta": {"lastTouchedAt": "b"}})
+    for live in ({**saved, "agents": {"x": 2}}, {"agents": {"x": 1}, "meta": {}}, {**saved, "extra": 1}):
+        with pytest.raises(AssertionError, match="differs from the saved"):
+            op.same_runtime(saved, live)
+
