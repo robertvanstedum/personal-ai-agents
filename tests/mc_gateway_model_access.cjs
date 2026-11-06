@@ -65,3 +65,40 @@ console.log('Explicit OpenAI/Claude plan policy checks passed, with unchanged to
   const shell=structuredClone(m);shell.agents.entries['mc-chat'].tools.deny=shell.agents.entries['mc-chat'].tools.deny.filter(x=>x!=='group:runtime');assert.throws(()=>p.validate(shell,multi));
   const files=structuredClone(m);delete files.agents.entries['mc-chat'].tools.fs;assert.throws(()=>p.validate(files,multi));
 }
+// Plan failover (6 Nov 2026): the declared API target is allowed in plan mode, on MC's capped key, never primary, never a config fallback.
+{
+  const key='sk-synthetic-test-key-not-real', ref='minimoi-gateway/minimoi-openai-strong', ant='minimoi-gateway/minimoi-anthropic-strong';
+  const on={...oauth,MC_PLAN_ROUTES:'anthropic/claude-opus-5',MC_FAILOVER_ROUTES:`${ref},${ant}`,MC_MODEL_GATEWAY_KEY:key};
+  assert.equal(p.mode(on),'plan');
+  assert.deepEqual(p.failoverRoutes(on),[ref,ant]);
+  const o=p.overlay(on);
+  assert.equal(o.models.providers['minimoi-gateway'].apiKey,'${MC_MODEL_GATEWAY_KEY}');
+  assert.deepEqual(o.models.providers['minimoi-gateway'].models.map(m=>m.id),['minimoi-openai-strong','minimoi-anthropic-strong']);
+  for (const a of [o.agents.defaults,...Object.values(o.agents.entries)]) {
+    assert.deepEqual(a.model,{primary:'openai/gpt-6-astra',fallbacks:[]});
+    assert.deepEqual(a.modelPolicy.allow,['openai/gpt-6-astra','anthropic/claude-opus-5',ref,ant]);
+    assert.equal(a.models[ref].agentRuntime.id,'openclaw');
+  }
+  const m=merge(o,base);p.validate(m,on);
+  const fell=structuredClone(m);fell.agents.entries['mc-chat'].model.fallbacks=[ref];assert.throws(()=>p.validate(fell,on));
+  // Rule 3: no capped key means no target and no switch; MC still starts on its plan, with no API provider.
+  for (const missing of [{...on,MC_MODEL_GATEWAY_KEY:''},{...on,MC_MODEL_GATEWAY_KEY:'mc-placeholder-not-a-key'}]) {
+    assert.equal(p.mode(missing),'plan');
+    assert.deepEqual(p.failoverRoutes(missing),[]);
+    assert.equal(p.overlay(missing).models,undefined);
+    assert.ok(!p.overlay(missing).agents.defaults.modelPolicy.allow.includes(ref));
+  }
+  // Rule 6: only OpenAI and Anthropic API tiers. Grok has no plan adapter yet and stays out of this list.
+  for (const bad of ['minimoi-gateway/minimoi-xai-low','xai/grok-4.3','openai/gpt-6-astra','minimoi-gateway/minimoi-mc-agent',`${ref},${ref}`]) assert.throws(()=>p.mode({...on,MC_FAILOVER_ROUTES:bad}));
+  assert.throws(()=>p.mode({...on,MC_PLAN_MODEL:''}));
+  assert.throws(()=>p.mode({MC_RUNTIME_MODEL_ACCESS:'gateway',MINIMOI_ENV:'dev',MC_MODEL_GATEWAY_KEY:key,MC_FAILOVER_ROUTES:ref}));
+  assert.throws(()=>p.mode({...on,OPENAI_API_KEY:'synthetic'}));
+  // Taking it off: the start removes what it patched in, and an unused key is refused again.
+  const live=structuredClone(m);
+  const off={...oauth,MC_PLAN_ROUTES:'anthropic/claude-opus-5'};
+  const patch=p.retire(live,off);
+  assert.equal(patch.models.providers['minimoi-gateway'],null);
+  assert.equal(p.retire(structuredClone(m),on),null);
+  assert.throws(()=>p.mode({...oauth,MC_MODEL_GATEWAY_KEY:key}));
+  console.log('Plan failover policy checks passed: capped key only, same-provider tiers only, never a config fallback.');
+}

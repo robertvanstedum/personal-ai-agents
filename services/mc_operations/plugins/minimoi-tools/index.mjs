@@ -5,7 +5,7 @@
  * No identity, turn, grant or approval is ever taken from the model. The credential is read from a
  * private file; it never enters a tool result.
  */
-import {openSync, closeSync, fstatSync, readSync, lstatSync, readFileSync, statfsSync, constants} from 'node:fs';
+import {openSync, closeSync, fstatSync, readSync, lstatSync, readFileSync, statfsSync, constants, mkdirSync, writeFileSync, readdirSync, statSync, rmSync} from 'node:fs';
 import {execFile} from 'node:child_process';
 import {createHmac, createHash, randomBytes, timingSafeEqual} from 'node:crypto';
 import {totalmem, freemem} from 'node:os';
@@ -643,16 +643,41 @@ export default {id: 'minimoi-tools', name: 'MiniMoi tools', register(api) {
     (api.logger?.warn ?? console.warn).call(api.logger ?? console, 'minimoi-tools: not registered (credential or configuration unavailable)');
     return;
   }
-  api.on('before_tool_call', sealHook({sealer, tools, agents}));
+  const state = process.env.OPENCLAW_STATE_DIR;
+  api.on('before_tool_call', sealHook({sealer, tools, agents, mark: state ? toolStartMarker(`${state}/mc-tool-starts`) : undefined}));
   announce.start();                                // recover a failed startup announcement without sacrificing a user turn
   api.registerTool(factory, {names: tools});
 }};
 
+const TOOL_MARK_KEEP_MS = 24 * 60 * 60 * 1000;
+/** The evidence behind plan failover's "no tool began" (docker/mc-agent/relay_v2.mjs toolsSince, which reads this folder from
+ *  the read-only state volume): one empty file per run, touched before any tool of that run starts. ".ready" says the hook
+ *  is marking; start.sh clears the folder, and a failed mark removes ".ready", so doubt reads as "unknown". Never blocks a tool. */
+export function toolStartMarker(dir, {now = Date.now} = {}) {
+  try {
+    mkdirSync(dir, {recursive: true});
+    for (const name of readdirSync(dir)) {
+      if (now() - statSync(`${dir}/${name}`).mtimeMs > TOOL_MARK_KEEP_MS) rmSync(`${dir}/${name}`, {force: true});
+    }
+    writeFileSync(`${dir}/.ready`, '');
+  } catch {
+    return () => {};
+  }
+  return (runId) => {
+    try {
+      writeFileSync(`${dir}/${typeof runId === 'string' && RUN_ID.test(runId) ? runId : `no-run-${process.pid}`}`, '');
+    } catch {
+      try { rmSync(`${dir}/.ready`, {force: true}); } catch { /* the relay finds an unwritable folder or no .ready: unknown */ }
+    }
+  };
+}
+
 /** The before_tool_call hook: seal the host's run and call ids into one of our tools' params, or block the call
- *  when the host gave no complete identity. Other tools and agents pass untouched. */
-export function sealHook({sealer, tools, agents}) {
+ *  when the host gave no complete identity. Other tools and agents pass untouched, marked first (any tool may act). */
+export function sealHook({sealer, tools, agents, mark = () => {}}) {
   const ours = new Set(tools), allowed = new Set(agents);
   return (event, ctx) => {
+    mark(ctx?.runId ?? event?.runId);
     const name = event?.toolName;
     if (!ours.has(name)) return;
     const agentId = ctx?.agentId;

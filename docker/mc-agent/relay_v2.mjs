@@ -55,6 +55,11 @@
 //   in flight one request at a time; a second gets 429 relay_busy
 //   trace     X-MC-Correlation-Id (32 hex) is logged and echoed back, never
 //             forwarded; logs never carry a token or message text
+//   plan down OpenClaw's own error type says a plan cannot serve (PLAN_SIGNALS below). The relay only reports it: on the
+//             stream's error line {"t":"error","class":"upstream","signal":…,"tools":…}, or as X-MC-Plan-Signal and
+//             X-MC-Plan-Tools on a non-200. tools is "none" only when MC's tool hook is known to be marking and marked
+//             nothing since this turn began, and no text was sent; "may_have_begun" or "unknown" otherwise. The portal
+//             decides whether to switch. The relay never retries.
 import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
@@ -214,7 +219,7 @@ export function parseRoutes(raw) {
   const map = JSON.parse(raw || "{}");
   if (!map || typeof map !== "object" || Array.isArray(map)) throw new Error("MC_RELAY_ROUTES must be an object");
   for (const [id, ref] of Object.entries(map)) {
-    if (!ROUTE_ID.test(id) || !/^(?:(?:openai|anthropic)\/[a-zA-Z0-9._-]+|minimoi-gateway\/minimoi-xai-(?:strong|mid|low))$/.test(String(ref))) throw new Error(`bad route ${id}`);
+    if (!ROUTE_ID.test(id) || !/^(?:(?:openai|anthropic)\/[a-zA-Z0-9._-]+|minimoi-gateway\/minimoi-(?:xai|openai|anthropic)-(?:strong|mid|low))$/.test(String(ref))) throw new Error(`bad route ${id}`);
   }
   return new Map(Object.entries(map));
 }
@@ -224,6 +229,36 @@ export function routeHeaders(value, routes = ROUTES) {
   if (value === undefined) return [false, {}];
   const ref = routes.get(String(value));
   return ref ? [false, { "x-openclaw-model": ref }] : [true, {}];
+}
+
+// OpenClaw's error type for a plan that cannot serve (core/model_routes PLAN_SIGNALS; openai-compat-errors, 2026.9.6). The
+// exact type only: an api_error that says "rate limit" in its words is no signal.
+const PLAN_SIGNALS = new Map([["rate_limit_error", "rate_limit"], ["insufficient_quota", "plan_exhausted"], ["authentication_error", "signin_expired"]]);
+export function planSignal(error) {
+  return error && typeof error === "object" && typeof error.type === "string" ? PLAN_SIGNALS.get(error.type) || null : null;
+}
+// May a tool have begun since this turn started? MC's before_tool_call hook (minimoi-tools) marks every tool call in this
+// folder, before the tool runs. No folder setting, no ".ready" from the hook, or anything unreadable: "unknown", never "none".
+// A mark from any run counts, a job's too, so a switch only ever loses to doubt.
+const TOOL_STARTS = process.env.MC_RELAY_TOOL_STARTS || "";
+const MARK_SLACK_MS = 2000;
+export function toolsSince(dir, startedMs) {
+  if (!dir) return "unknown";
+  try {
+    if (!fs.existsSync(path.join(dir, ".ready"))) return "unknown";
+    for (const name of fs.readdirSync(dir)) {
+      if (name !== ".ready" && fs.statSync(path.join(dir, name)).mtimeMs >= startedMs - MARK_SLACK_MS) return "may_have_begun";
+    }
+    return "none";
+  } catch {
+    return "unknown";
+  }
+}
+function planHeaders(status, text, startedMs) {
+  if (status === 200) return {};
+  let signal = null;
+  try { signal = planSignal(JSON.parse(text)?.error); } catch { /* not an envelope: no signal */ }
+  return signal ? { "x-mc-plan-signal": signal, "x-mc-plan-tools": toolsSince(TOOL_STARTS, startedMs) } : {};
 }
 
 // OpenClaw's own record of who served this exact run: the reply it stamped with this run's id. Its own runtime writes
@@ -359,7 +394,7 @@ const server = http.createServer(async (req, res) => {
     log({ event: "turn", correlation, status: r.status, ms: Date.now() - started });
     const evidence = r.status === 200 ? await served(body, runIdOfReply(text)) : null;
     res.writeHead(r.status, { "content-type": "application/json", "cache-control": "no-store", ...echo,
-      ...(evidence ? { "x-mc-served": JSON.stringify(evidence) } : {}) });
+      ...(evidence ? { "x-mc-served": JSON.stringify(evidence) } : {}), ...planHeaders(r.status, text, started) });
     res.end(text);
   } catch (error) {
     const timeout = error?.name === "TimeoutError";
@@ -398,7 +433,12 @@ export function* sseEvents(line) {
   let chunk;
   try { chunk = JSON.parse(data); } catch { return; }
   if (!chunk || typeof chunk !== "object") return;
-  if (chunk.error) { yield { t: "error", class: "upstream" }; return; }
+  if (chunk.error) {
+    const signal = planSignal(chunk.error);
+    const cap = /budget/i.test(String(chunk.error?.message || ""));      // the gateway's cap, in whatever type OpenClaw gave it
+    yield { t: "error", class: "upstream", ...(signal ? { signal } : {}), ...(cap ? { cap } : {}) };
+    return;
+  }
   const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : null;
   const text = choice && choice.delta && choice.delta.content;
   if (typeof text === "string" && text) yield { t: "delta", text };
@@ -435,7 +475,7 @@ async function streamTurn(res, body, correlation, echo, started, routeHeader = {
       if (r.status === 200) {
         return reply(res, 502, "relay_not_a_stream", "Master Craftsman did not answer with a stream", echo);
       }
-      res.writeHead(r.status, { "content-type": "application/json", "cache-control": "no-store", ...echo });
+      res.writeHead(r.status, { "content-type": "application/json", "cache-control": "no-store", ...echo, ...planHeaders(r.status, text, started) });
       return res.end(text);
     }
     res.writeHead(200, { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-cache, no-transform",
@@ -461,7 +501,11 @@ async function streamTurn(res, body, correlation, echo, started, routeHeader = {
         }
         for (const event of sseEvents(line)) {
           if (event.t === "done") break read;
-          if (event.t === "error") { send(event); outcome = "upstream"; break read; }
+          if (event.t === "error") {
+            send(event.signal || event.cap ? { ...event, tools: emitted > 0 ? "may_have_begun" : toolsSince(TOOL_STARTS, started) } : event);
+            outcome = "upstream";
+            break read;
+          }
           if (event.t === "delta") {
             emitted += Buffer.byteLength(event.text);
             if (emitted > STREAM_TEXT_MAX) { abort("too_large"); break read; }
