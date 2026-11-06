@@ -40,6 +40,40 @@ listed in `TASK_ROLES`: a missing line stops the work and never falls to the run
    tool admission in `guild.mc_tool_admissions`, and unchanged spend on the API key.
 4. If it fails, put the reason back in `offered.mc`.
 
+## Grok: on and off (#466)
+
+Grok text is paused and off in everything shipped. Each piece below turns on by itself; none falls back onto it. It bills
+per use against the xAI key, so check the key's cap first. Grok Voice and the `minimoi-voice-*` roles are separate: they
+stay as they are, whichever way these are set.
+
+**MC and CoS, per conversation.** The route is `api-xai-low` (`minimoi-xai-low`, Grok 4.3, shown as "pay per use · API").
+
+- *Off, as shipped:* `"offered": {}` on that route. It isn't in the picker and can't be chosen.
+- *On:* on the host, the runtime must know it first, then one line in the host's catalogue:
+  1. CoS: `COS_METERED_ROUTES=minimoi-gateway/minimoi-xai-low` on `cos-agent-a`, and add `minimoi-xai-low` to the models of
+     CoS's gateway key if it has its own (`/key/update` inside the gateway; a host on the master key needs nothing). Restart it.
+  2. MC: `MC_METERED_ROUTES=minimoi-gateway/minimoi-xai-low` and `MC_MODEL_GATEWAY_KEY` on `mc-agent`, a new capped key for that
+     tier only (`mc_grok_keygen_py` in `scripts/staging/mc_keys.sh`). MC must be in plan mode with `MC_PLAN_MODEL` set. Add
+     `"api-xai-low": "minimoi-gateway/minimoi-xai-low"` to `MC_RELAY_ROUTES` on `mc-relay`. Restart both (allow 10 minutes).
+  3. In the host's catalogue, copy the route in if its copy predates it, and set `"offered": {"mc": "available", "cos": "available"}`
+     (or just one of them). The owner then chooses it under Options, and it applies from that conversation's next turn on the
+     same history.
+- *Prove it before relying on it:* a labelled chat, one plain turn and one real tool read, then step 3 of "Offering a new
+  route". This route has not been run against a live runtime or provider.
+- *Off again:* put back `"offered": {}`. No restart. A conversation still on Grok refuses its next turn with nothing sent until
+  the owner chooses another; it is not moved for them. Then remove the env values and restart to take the runtime's permission
+  away; MC's start removes what it patched in.
+
+**Curator's daily ranking.** `CURATOR_RANKING_MODEL` in the Curator container (`/opt/minimoi/.env` in production). Unset or
+`haiku`: Claude Haiku. `grok-4.3`: Grok. Any other value stops the run, so nothing is sent, rather than choosing for you.
+Recreate the Curator container for a new value; the next generation uses it.
+
+**German text.** `GERMAN_GROK_TEXT=on` in the German container's environment, then recreate it. Translation, correction and
+phrases try Grok first, and Grok becomes the selected model in the conversation picker. Unset or anything else: off.
+
+**Portuguese text.** `PORTUGUESE_GROK_TEXT=on` in the Portuguese container's environment, then recreate it. Grok is added to
+the conversation picker, with Claude still selected. Unset or anything else: off.
+
 ## Limits
 
 - **Effort:** every MC plan route runs at the runtime's `thinkingDefault` (high), whatever its tier.
