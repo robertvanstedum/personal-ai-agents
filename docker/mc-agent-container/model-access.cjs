@@ -24,11 +24,16 @@ function planRoutes(env) {
   for (const r of refs) if (!/^(openai|anthropic)\/[a-zA-Z0-9._-]+$/.test(r)) throw Error('Invalid plan model reference');
   return refs;
 }
-// Claude's own tools sit outside OpenClaw's tool policy, so they are switched off and only MC's governed tools reach it.
-// The defaults these replace are OpenClaw's own for claude-cli, with only --tools added.
-const CLAUDE_ARGS = ['-p','--output-format','stream-json','--include-partial-messages','--verbose','--setting-sources','user',
-  '--tools','','--allowedTools','mcp__openclaw__*','--disallowedTools','ScheduleWakeup,CronCreate,Bash(run_in_background:true),Monitor'];
-const CLAUDE_BACKEND = {args: CLAUDE_ARGS, resumeArgs: [...CLAUDE_ARGS, '--resume', '{sessionId}']};
+// Claude's own tools sit outside OpenClaw's tool policy. OpenClaw runs it with user settings and no way to change its
+// arguments, so they are denied there, and only MC's governed tools (mcp__openclaw__*) reach it. A deploy checks the CLI's
+// own tool list is then empty, which catches a tool a newer CLI adds.
+const CLAUDE_DENY = ['Agent','AskUserQuestion','Bash','CronCreate','CronDelete','CronList','Edit','EnterPlanMode','EnterWorktree','ExitPlanMode',
+  'ExitWorktree','Glob','Grep','ListAgents','Monitor','NotebookEdit','Read','RemoteTrigger','ReportFindings','ScheduleWakeup','SendMessage','Skill',
+  'Task','TaskStop','WebFetch','WebSearch','Workflow','Write'];
+function claudeSettings(env) {
+  return mode(env) === 'plan' && env.MC_PLAN_MODEL && planRoutes(env).some(r => r.startsWith('anthropic/'))
+    ? {permissions: {deny: CLAUDE_DENY}} : null;
+}
 function overlay(env) {
   if (mode(env) === 'plan') {
     if (!env.MC_PLAN_MODEL) return {}; // existing Claude-plan configuration
@@ -42,8 +47,7 @@ function overlay(env) {
     return {
       ...(refs.some(r => r.startsWith('openai/')) ? {auth: {profiles: {[profile]: {provider: 'openai', mode: 'oauth'}}, order: {openai: [profile]}}} : {}),
       agents: {
-        defaults: {model, modelPolicy: policy, utilityModel: '', decisionModel: '', models,
-                   ...(refs.some(r => r.startsWith('anthropic/')) ? {cliBackends: {'claude-cli': CLAUDE_BACKEND}} : {})},
+        defaults: {model, modelPolicy: policy, utilityModel: '', decisionModel: '', models},
         entries: Object.fromEntries(['mc-agent','mc-chat'].map(id => [id, {model, modelPolicy: policy, utilityModel: '', decisionModel: '', models}]))
       }
     };
@@ -76,9 +80,6 @@ function validate(config, env) {
         if (!isDeepStrictEqual(a.models?.[ref], runtime)) throw Error('Unexpected subscription runtime');
       }
     }
-    if (planRoutes(env).some(r => r.startsWith('anthropic/')) &&
-        !isDeepStrictEqual(config.agents.defaults.cliBackends?.['claude-cli'], CLAUDE_BACKEND))
-      throw Error("Claude's own tools must be off");
     const chat = config.agents.entries['mc-chat'].tools || {};
     if (!(chat.deny || []).includes('group:runtime') || chat.fs?.workspaceOnly !== true) throw Error('The conversation lane must have no shell and workspace-only files');
     if (planRoutes(env).some(r => r.startsWith('openai/'))) {
@@ -97,7 +98,7 @@ function validate(config, env) {
   }
   for (const p of Object.values(config.auth?.profiles || {})) if (p.mode === 'api_key') throw Error('API-key auth profile forbidden');
 }
-module.exports = {mode, overlay, validate, planRoutes, ROUTE};
+module.exports = {mode, overlay, validate, planRoutes, claudeSettings, ROUTE};
 if (require.main === module) {
   try { mode(process.env); } catch (e) { console.error(e.message); process.exit(78); }
 }

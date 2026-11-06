@@ -57,4 +57,11 @@ console.log('Explicit OpenAI/Claude plan policy checks passed, with unchanged to
   const fallback=structuredClone(m);fallback.agents.entries['mc-chat'].model.fallbacks=['anthropic/claude-opus-5'];assert.throws(()=>p.validate(fallback,multi));
   const metered=structuredClone(m);metered.models={...metered.models,providers:{x:{}}};assert.throws(()=>p.validate(metered,multi));
   const keyed=structuredClone(m);keyed.auth.profiles.k={provider:'openai',mode:'api_key'};assert.throws(()=>p.validate(keyed,multi));
+  const denied=p.claudeSettings(multi).permissions.deny;
+  for (const tool of ['Bash','Write','Edit','Read','Task','Agent','WebFetch','WebSearch','Workflow','CronCreate','NotebookEdit','SendMessage']) assert.ok(denied.includes(tool),tool);
+  assert.ok(!denied.some(tool=>tool.startsWith('mcp__')));
+  assert.equal(p.claudeSettings({...multi,MC_PLAN_ROUTES:'openai/gpt-6-sol'}),multi.MC_PLAN_MODEL.startsWith('anthropic/')?p.claudeSettings(multi):null);
+  assert.equal(p.claudeSettings(dev),null);
+  const shell=structuredClone(m);shell.agents.entries['mc-chat'].tools.deny=shell.agents.entries['mc-chat'].tools.deny.filter(x=>x!=='group:runtime');assert.throws(()=>p.validate(shell,multi));
+  const files=structuredClone(m);delete files.agents.entries['mc-chat'].tools.fs;assert.throws(()=>p.validate(files,multi));
 }

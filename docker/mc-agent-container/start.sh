@@ -77,6 +77,11 @@ case "$rc" in
 esac
 node -e 'require(process.argv[2]).validate(JSON.parse(require("fs").readFileSync(process.argv[1])),process.env)' \
   "$STATE/openclaw.json" "$IMAGE_DIR/model-access.cjs" || die "installed model access policy refused"
+# Claude's own tools off, before anything can start a Claude turn. Refuse rather than start without it.
+node -e '
+const fs=require("fs"),s=require(process.argv[1]).claudeSettings(process.env);
+if(s){fs.mkdirSync("/home/node/.claude",{recursive:true});fs.writeFileSync("/home/node/.claude/settings.json",JSON.stringify(s,null,2)+"\n",{mode:0o600});}
+' "$IMAGE_DIR/model-access.cjs" || die "Claude tool limits could not be written"
 node -e '
 const c=JSON.parse(require("fs").readFileSync(process.argv[1]));
 const prof=((c.auth||{}).profiles)||{};
