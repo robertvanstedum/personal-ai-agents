@@ -70,7 +70,7 @@ def fake_provider(monkeypatch, text, error=None):
         calls.append(kwargs)
         if error:
             raise error
-        return SimpleNamespace(content=[SimpleNamespace(text=text)],
+        return SimpleNamespace(content=[SimpleNamespace(type='text', text=text)],
             usage=SimpleNamespace(input_tokens=10, output_tokens=5, prompt_tokens=10, completion_tokens=5),
             choices=[SimpleNamespace(message=SimpleNamespace(content=text))], model='fixture-effective-model')
     client = SimpleNamespace(messages=SimpleNamespace(create=create),

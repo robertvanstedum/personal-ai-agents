@@ -120,4 +120,17 @@ for (const provider of ['openai', 'xai']) {
   assert.equal(controller._state, 'reconnecting');
   n++;
 }
+// Interrupting when nothing is playing is a notice, not a fault: twice must not hang up, and no error is shown.
+for (const provider of ['openai', 'xai']) {
+  stops = 0;
+  const errors = [];
+  const controller = new Controller({bootstrapUrl: '/synthetic', onProviderError: e => errors.push(e)});
+  await controller.startSession({provider, persona: 'p', scene: 's'});
+  const before = controller._state;
+  for (let i = 0; i < 2; i++) adapter._emit('recoverable_error', {reason: 'provider_error', detail: {code: 'response_cancel_not_active'}});
+  assert.equal(controller._state, before);
+  assert.equal(stops, 0);
+  assert.deepEqual(errors, []);
+  n++;
+}
 console.log(`${n} provider-end scenarios passed`);

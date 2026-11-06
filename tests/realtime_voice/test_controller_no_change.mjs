@@ -27,6 +27,20 @@ import assert from 'node:assert/strict';
 const PATH = new URL('../../core/realtime_voice/static/realtime-voice-controller.js', import.meta.url);
 const BEFORE = '682906489b0b3f9f02cd3df951da6fbaaef74c2aa49927d5905827ea3b8c7f05';     // 93bf00c6, as German loads it today
 const CONTROLLER = [
+  // Benign provider notices (PR #281): interrupting twice must not end a call now that a second error ends it.
+  [`
+// Provider "error" events that a healthy session also sees; they never end it.
+const BENIGN_PROVIDER_ERRORS = new Set([
+  "conversation_already_has_active_response",
+  "response_cancel_not_active",
+  "input_audio_buffer_commit_empty",
+]);
+`,
+   ``],
+  [`    // Notices a healthy session also sees, such as interrupting when nothing is playing: never an ending or an error.
+    if (BENIGN_PROVIDER_ERRORS.has(info?.detail?.code) || BENIGN_PROVIDER_ERRORS.has(info?.detail?.type)) return;
+`,
+   ``],
   // PR #281's part: a provider error said in plain text, through the opt-in onProviderError German and Portuguese pass.
   [`    respondFor = null, onResponseStarted = null, refuseCalls = false, onAudioStarted = null, onProviderError = null,
 `,

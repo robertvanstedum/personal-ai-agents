@@ -69,6 +69,13 @@ function admissionRefused(error) {
   return error?.managedAdmissionRefused === true && Object.hasOwn(ADMISSION_MESSAGES,error.code);
 }
 
+// Provider "error" events that a healthy session also sees; they never end it.
+const BENIGN_PROVIDER_ERRORS = new Set([
+  "conversation_already_has_active_response",
+  "response_cancel_not_active",
+  "input_audio_buffer_commit_empty",
+]);
+
 export class RealtimeVoiceController {
   constructor({
     bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
@@ -937,6 +944,8 @@ export class RealtimeVoiceController {
       this._onFatalError({reason: "provider_control_error", detail: "Voice stopped; start a new session after its outcome is known."});
       return;
     }
+    // Notices a healthy session also sees, such as interrupting when nothing is playing: never an ending or an error.
+    if (BENIGN_PROVIDER_ERRORS.has(info?.detail?.code) || BENIGN_PROVIDER_ERRORS.has(info?.detail?.type)) return;
     // Section 11: one automatic reconnect attempt is allowed only before
     // meaningful state would be lost. Kept conservative for this release
     // -- one attempt, then end visibly and preserve the partial transcript
