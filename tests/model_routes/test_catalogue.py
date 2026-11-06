@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from core.model_routes import (CATALOGUE_PATH, TASK_ROLES, RouteRefused, check_selectable, conversation_role, load_catalogue, relay_routes,
+from core.model_routes import (plan_signal, switch_words, switched_route, CATALOGUE_PATH, TASK_ROLES, RouteRefused, check_selectable, conversation_role, load_catalogue, relay_routes,
                                role_snapshot_for, route_of, served_receipt, snapshot, view)
 
 CAT = load_catalogue()
@@ -22,7 +22,8 @@ def test_every_mc_task_reads_one_route_and_mc_is_on_the_openai_plan_today():
 
 def test_no_metered_route_is_offered_to_mc_at_all():
     assert all(r["billing_mode"] == "subscription" for r in CAT["routes"] if "mc" in r["offered"])
-    assert all(ref.split("/")[0] in ("openai", "anthropic") for ref in relay_routes(CAT).values())
+    picker = {r["route_id"] for r in view(CAT, "mc", {})["routes"]}
+    assert all(relay_routes(CAT)[r].split("/")[0] in ("openai", "anthropic") for r in picker)
 
 
 def test_a_role_must_read_an_available_route(tmp_path):
@@ -177,3 +178,104 @@ def test_claude_keeps_its_own_session_and_openai_shares_its_transcript():
     assert {r["route_id"]: r.get("session_history", "shared") for r in CAT["routes"] if r["runtime"] == "claude-cli"} == {
         "plan-anthropic-strong": "own", "plan-anthropic-mid": "own"}
     assert all(r.get("session_history", "shared") == "shared" for r in CAT["routes"] if r["runtime"] == "openclaw")
+
+
+# ── Failover, Robert's decision of 6 Nov 2026: plan first, then the capped API route, automatic and never silent ──
+
+PLANS = {"plan-openai-strong": ("api-openai-strong", "openai"), "plan-openai-mid": ("api-openai-mid", "openai"),
+         "plan-openai-low": ("api-openai-low", "openai"), "plan-anthropic-strong": ("api-anthropic-strong", "anthropic"),
+         "plan-anthropic-mid": ("api-anthropic-mid", "anthropic")}
+
+
+def _with(change):
+    copy = json.loads(json.dumps(CAT))
+    change(copy)
+    return copy
+
+
+def _load(tmp_path, catalogue):
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps(catalogue))
+    return load_catalogue(path)
+
+
+def test_rule_6_each_plan_route_declares_its_own_providers_api_route_as_shipped():
+    for plan, (target, provider) in PLANS.items():
+        route = route_of(CAT, plan)
+        assert route["failover"] == target and route_of(CAT, target)["model"].startswith(f"minimoi-{provider}-")
+        assert route_of(CAT, target)["billing_mode"] == "metered_api"
+
+
+def test_rule_6_a_host_removes_a_failover_by_one_line_and_the_turn_then_has_no_target(tmp_path):
+    removed = _with(lambda c: route_of(c, "plan-openai-strong").pop("failover"))
+    assert snapshot(_load(tmp_path, removed), "mc-conversation")["failover"] is None
+
+
+def test_rule_6_the_failover_lines_are_one_line_each_in_the_shipped_file():
+    lines = [line for line in CATALOGUE_PATH.read_text().splitlines() if '"failover"' in line]
+    assert len(lines) == len(PLANS) and all(line.strip().startswith('"failover": "api-') for line in lines)
+
+
+@pytest.mark.parametrize("target", ["api-anthropic-strong", "api-xai-low", "gateway-cos-role", "plan-openai-mid", "nope"])
+def test_rule_6_and_7_a_target_of_another_provider_grok_or_a_plan_refuses_the_catalogue(tmp_path, target):
+    with pytest.raises(ValueError):
+        _load(tmp_path, _with(lambda c: route_of(c, "plan-openai-strong").update(failover=target)))
+
+
+def test_rule_7_an_api_route_may_not_fail_over_so_there_is_no_chain(tmp_path):
+    with pytest.raises(ValueError):
+        _load(tmp_path, _with(lambda c: route_of(c, "api-openai-strong").update(failover="api-openai-mid")))
+
+
+def test_rule_7_a_switched_route_has_nowhere_further_to_go():
+    route = snapshot(CAT, "mc-conversation")
+    assert switched_route(route, "rate_limit")["failover"] is None
+
+
+def test_rule_5_the_choice_stays_and_the_target_is_not_in_any_picker():
+    conv = {"routes": {"mc": {"route_id": "plan-openai-strong", "revision": 3}}}
+    route = snapshot(CAT, "mc-conversation", conv)
+    moved = switched_route(route, "rate_limit")
+    assert moved["route_id"] == "api-openai-strong" and moved["session_history"] == "shared"
+    assert moved["selection_revision"] == 3 and moved["catalogue_revision"] == CAT["revision"]
+    assert view(CAT, "mc", conv)["selected_route_id"] == "plan-openai-strong"
+    for agent in ("mc", "cos"):
+        assert not {r["route_id"] for r in view(CAT, agent, {})["routes"]} & {t for t, _ in PLANS.values()}
+        with pytest.raises(RouteRefused):
+            check_selectable(CAT, agent, "api-openai-strong")
+
+
+def test_rule_4_a_switched_receipt_shows_api_and_which_model_and_where_it_came_from():
+    moved = switched_route(snapshot(CAT, "mc-conversation"), "plan_exhausted")
+    receipt = served_receipt(moved, {"provider": "minimoi-gateway", "model": "minimoi-openai-strong"})
+    assert (receipt["billing_mode"], receipt["billing_label"], receipt["model"]) == ("metered_api", "API", "minimoi-openai-strong")
+    assert receipt["served_matches"] is True and receipt["switched_from"] == "plan-openai-strong"
+    assert receipt["switch_signal"] == "plan_exhausted"
+
+
+def test_rule_4_billing_comes_from_the_evidence_so_api_can_never_read_as_plan():
+    route = snapshot(CAT, "mc-conversation")
+    assert route["billing_mode"] == "subscription"
+    receipt = served_receipt(route, {"provider": "minimoi-gateway", "model": "minimoi-openai-strong"})
+    assert receipt["billing_label"] == "API" and receipt["served_matches"] is False
+    assert served_receipt(route, {"provider": "openai", "model": "gpt-6-astra"})["billing_label"] == "Plan"
+
+
+def test_rule_4_the_words_claim_only_what_the_evidence_shows():
+    moved = switched_route(snapshot(CAT, "mc-conversation"), "signin_expired")
+    seen = switch_words(moved, {"provider": "minimoi-gateway", "model": "minimoi-openai-strong"})
+    assert "sign-in has expired" in seen and "ran on the API: minimoi-openai-strong" in seen and "tries the plan again" in seen
+    unseen = switch_words(moved, None)
+    assert "was sent to the API route minimoi-openai-strong" in unseen and "was not read" in unseen and "ran on" not in unseen
+
+
+@pytest.mark.parametrize("error,signal", [({"type": "rate_limit_error"}, "rate_limit"), ({"type": "insufficient_quota"}, "plan_exhausted"),
+                                          ({"type": "authentication_error"}, "signin_expired")])
+def test_rule_1_the_three_declared_signals(error, signal):
+    assert plan_signal(error) == signal
+
+
+@pytest.mark.parametrize("error", [{"type": "api_error", "message": "rate limit reached"}, {"type": "permission_error"}, {"type": "invalid_request_error"},
+                                   {"message": "insufficient_quota"}, {"type": "unauthorized"}, {"type": None}, {"type": 429}, {}, None, "rate_limit_error"])
+def test_rule_1_anything_else_is_no_signal_whatever_its_words_say(error):
+    assert plan_signal(error) is None
