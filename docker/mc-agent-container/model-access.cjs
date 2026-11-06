@@ -1,14 +1,32 @@
 // Explicit dev-only gateway mode. A virtual key is not a provider credential.
 const {isDeepStrictEqual} = require('node:util');
 const ROUTE = 'minimoi-gateway-mc/minimoi-mc-agent';
+// Pay-per-use Grok tiers a host may let an owner choose per conversation (MC_METERED_ROUTES). Off unless named. They are
+// allowed, never the primary and never a fallback, and they reach the gateway with MC's own capped key.
+const METERED_PROVIDER = 'minimoi-gateway';
+const METERED = /^minimoi-gateway\/minimoi-xai-(?:strong|mid|low)$/;
+function meteredRoutes(env) {
+  const refs = String(env.MC_METERED_ROUTES || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!refs.length) return refs;
+  if (new Set(refs).size !== refs.length || refs.some(r => !METERED.test(r))) throw Error('MC_METERED_ROUTES must name minimoi-xai tiers');
+  if (!env.MC_PLAN_MODEL) throw Error('A metered route needs an explicit plan default');
+  return refs;
+}
+function meteredProvider(refs) {
+  return {baseUrl: 'http://127.0.0.1:4000/v1', apiKey: '${MC_MODEL_GATEWAY_KEY}', api: 'openai-completions',
+    models: refs.map(r => r.split('/')[1]).map(id => ({id, name: id, input: ['text','image'], contextWindow: 131072, maxTokens: 8192}))};
+}
 function mode(env) {
   for (const name of ['ANTHROPIC_API_KEY','OPENAI_API_KEY','XAI_API_KEY','MC_ANTHROPIC_API_KEY']) {
     if (env[name]) throw Error('Raw provider credential is forbidden: ' + name);
   }
   const selected = env.MC_RUNTIME_MODEL_ACCESS || 'plan';
   if (selected === 'plan') {
-    if (env.MC_MODEL_GATEWAY_KEY) throw Error('Gateway credential requires explicit dev gateway mode');
+    if (meteredRoutes(env).length) {
+      if (!/^sk-[A-Za-z0-9_-]{16,256}$/.test(env.MC_MODEL_GATEWAY_KEY || '')) throw Error('Dedicated gateway credential missing or invalid');
+    } else if (env.MC_MODEL_GATEWAY_KEY) throw Error('Gateway credential requires explicit dev gateway mode');
   } else if (selected === 'gateway') {
+    if (env.MC_METERED_ROUTES) throw Error('Metered routes belong to plan mode');
     if (env.MINIMOI_ENV !== 'dev') throw Error('Gateway mode is dev-only');
     if (!/^sk-[A-Za-z0-9_-]{16,256}$/.test(env.MC_MODEL_GATEWAY_KEY || '')) throw Error('Dedicated gateway credential missing or invalid');
   } else throw Error('Unknown MC model access mode');
@@ -41,10 +59,13 @@ function overlay(env) {
     const refs = planRoutes(env);
     const profile = env.MC_PLAN_AUTH_PROFILE;
     if (refs.some(r => r.startsWith('openai/')) && (!profile || !profile.startsWith('openai:'))) throw Error('Explicit OpenAI OAuth profile required');
+    const metered = meteredRoutes(env);
     const model = {primary: ref, fallbacks: []};
-    const policy = {allow: refs};
-    const models = Object.fromEntries(refs.map(r => [r, {agentRuntime: {id: r.startsWith('openai/') ? 'openclaw' : 'claude-cli'}}]));
+    const policy = {allow: [...refs, ...metered]};
+    const models = Object.fromEntries([...refs.map(r => [r, {agentRuntime: {id: r.startsWith('openai/') ? 'openclaw' : 'claude-cli'}}]),
+      ...metered.map(r => [r, {agentRuntime: {id: 'openclaw'}}])]);
     return {
+      ...(metered.length ? {models: {providers: {[METERED_PROVIDER]: meteredProvider(metered)}}} : {}),
       ...(refs.some(r => r.startsWith('openai/')) ? {auth: {profiles: {[profile]: {provider: 'openai', mode: 'oauth'}}, order: {openai: [profile]}}} : {}),
       agents: {
         defaults: {model, modelPolicy: policy, utilityModel: '', decisionModel: '', models},
@@ -66,7 +87,7 @@ function validate(config, env) {
   if (mode(env) === 'plan') {
     if (!env.MC_PLAN_MODEL) return; // preserve legacy plan behavior until explicitly selected
     const wanted = overlay(env);
-    if (Object.keys(config.models?.providers || {}).length) throw Error('Remove custom API providers before selecting a plan');
+    if (!isDeepStrictEqual(config.models?.providers || {}, wanted.models?.providers || {})) throw Error('Remove custom API providers before selecting a plan');
     for (const p of Object.values(config.auth?.profiles || {})) if (p.mode === 'api_key') throw Error('API-key auth profile forbidden');
     if (config.agents?.defaults?.imageModel?.primary || (config.agents?.defaults?.imageModel?.fallbacks || []).length) throw Error('Separate image model forbidden in explicit plan mode');
     for (const a of [config.agents?.defaults, ...Object.values(config.agents?.entries || {})]) {
@@ -98,7 +119,21 @@ function validate(config, env) {
   }
   for (const p of Object.values(config.auth?.profiles || {})) if (p.mode === 'api_key') throw Error('API-key auth profile forbidden');
 }
-module.exports = {mode, overlay, validate, planRoutes, claudeSettings, ROUTE};
+// Turning Grok off: a live config keeps what an earlier start patched in, and a plan start refuses any API provider. This
+// takes it out of `live` and returns the patch that removes it (null deletes a key). Nothing to remove: null, no patch.
+function retire(live, env) {
+  if (mode(env) !== 'plan' || !env.MC_PLAN_MODEL || meteredRoutes(env).length) return null;
+  if (!live.models?.providers?.[METERED_PROVIDER]) return null;
+  delete live.models.providers[METERED_PROVIDER];
+  const patch = {models: {providers: {[METERED_PROVIDER]: null}}, agents: {defaults: {models: {}}, entries: {}}};
+  const stale = (a, into) => {
+    for (const ref of Object.keys(a?.models || {})) if (ref.startsWith(METERED_PROVIDER + '/')) { delete a.models[ref]; into[ref] = null; }
+  };
+  stale(live.agents?.defaults, patch.agents.defaults.models);
+  for (const [name, a] of Object.entries(live.agents?.entries || {})) stale(a, (patch.agents.entries[name] = {models: {}}).models);
+  return patch;
+}
+module.exports = {mode, overlay, validate, planRoutes, meteredRoutes, retire, claudeSettings, ROUTE};
 if (require.main === module) {
   try { mode(process.env); } catch (e) { console.error(e.message); process.exit(78); }
 }

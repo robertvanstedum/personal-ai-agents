@@ -1,5 +1,5 @@
 {
-  "revision": "2026-11-05.4",
+  "revision": "2026-11-06.1",
   "tiers": {
     "strong": {"letter": "A", "use": "Difficult reasoning, design and review"},
     "mid": {"letter": "B", "use": "Ordinary drafting and multi-step work"},
@@ -29,7 +29,11 @@
     {"route_id": "gateway-cos-role", "tier": "low", "provider": "gateway", "model": "minimoi-cos-agent", "label": "CoS's gateway role",
      "reasoning_effort": "per gateway role", "billing_mode": "metered_api", "runtime": "openclaw", "auth_profile_ref": null,
      "capabilities": ["chat", "tools"], "runtime_override": false,
-     "offered": {"cos": "available"}}
+     "offered": {"cos": "available"}},
+    {"route_id": "api-xai-low", "tier": "low", "provider": "minimoi-gateway", "model": "minimoi-xai-low", "label": "Grok 4.3 (pay per use)",
+     "reasoning_effort": "low", "billing_mode": "metered_api", "runtime": "openclaw", "auth_profile_ref": null,
+     "capabilities": ["chat", "tools"],
+     "offered": {}}
   ],
   "roles": {
     "mc-conversation": {"agent": "mc", "task": "Conversation", "route": "plan-openai-strong", "selectable": true},
