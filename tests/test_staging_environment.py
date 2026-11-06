@@ -499,9 +499,10 @@ def test_staging_gateway_keeps_production_names_and_settings():
 def test_staging_cos_agent_route_matches_production_and_other_routes_stay_stable():
     staging, prod, dev = _routes(GATEWAY_STAGING), _routes(GATEWAY_PROD), _routes(GATEWAY_DEV)
     agent = staging["minimoi-cos-agent"]
-    # D27 readiness: staging serves CoS with production's model and effort, whichever tier that is (#458).
-    for key in ("model", "reasoning_effort"):
-        assert agent["litellm_params"][key] == prod["minimoi-cos-agent"]["litellm_params"][key], key
+    # Staging deliberately differs from production: Robert's Dev choice of 1 Nov moved its active CoS roles to OpenAI
+    # (71e202ab), and production stays on Claude while Grok is paused (#466). Neither may point at xAI.
+    assert agent["litellm_params"]["model"] == "openai/gpt-6-luna"
+    assert prod["minimoi-cos-agent"]["litellm_params"]["model"] == "anthropic/claude-haiku-5-5"
     # Gateway-only provider key names on staging (the pass-through gap; MC stage C).
     assert agent["litellm_params"]["api_key"].startswith("os.environ/GATEWAY_")
     assert agent["model_info"]["id"] == "cos-xai-grok43-primary"
@@ -511,7 +512,7 @@ def test_staging_cos_agent_route_matches_production_and_other_routes_stay_stable
                "os.environ/GATEWAY_OPENAI_API_KEY": "os.environ/OPENAI_API_KEY",
                "os.environ/GATEWAY_XAI_API_KEY": "os.environ/XAI_API_KEY"}
     for name in staging:
-        if name == "minimoi-cos-agent" or name.startswith("minimoi-mc-"):
+        if name in ("minimoi-cos-agent", "minimoi-cos-agent-anthropic") or name.startswith("minimoi-mc-"):
             continue
         route = __import__("copy").deepcopy(staging[name])
         if name != "minimoi-cos-agent-local":

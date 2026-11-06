@@ -27,12 +27,12 @@ def _routes():
     return {m["model_name"]: m for m in _load(GATEWAY_STAGING)["model_list"]}
 
 
-def test_mc_route_is_a_low_tier_on_gateway_only_key_with_no_fallback():
+def test_mc_route_is_openai_strong_on_gateway_only_key_with_no_fallback():
     mc = _routes()["minimoi-mc-agent"]
-    # Grok paused (#466): MC's staging provider route is Haiku 5.5, the anthropic-low tier.
-    assert mc["litellm_params"]["model"] == "anthropic/claude-haiku-5-5"
-    assert mc["litellm_params"]["api_key"] == "os.environ/GATEWAY_ANTHROPIC_API_KEY"
-    assert mc["litellm_params"]["reasoning_effort"] == "low"
+    # Grok paused (#466). Staging chose OpenAI for MC's provider route (71e202ab), the openai-strong tier.
+    assert mc["litellm_params"]["model"] == "openai/gpt-6-astra"
+    assert mc["litellm_params"]["api_key"] == "os.environ/GATEWAY_OPENAI_API_KEY"
+    assert mc["litellm_params"]["reasoning_effort"] == "high"
     assert mc["model_info"]["id"] == "mc-xai-grok43" and "fallback_position" not in mc["model_info"]
     assert "minimoi-mc-agent" not in str(_load(GATEWAY_STAGING)["router_settings"])
     assert "minimoi-mc-agent" not in GATEWAY_PROD.read_text()
