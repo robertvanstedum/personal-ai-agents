@@ -50,7 +50,7 @@ class HostBindingTests(Base,unittest.TestCase):
         self.assertEqual(self.receipts(),[])
 
     def test_real_helper_result_returns_only_after_authenticated_completion(self):
-        with tempfile.TemporaryDirectory(dir='/private/tmp') as folder:
+        with tempfile.TemporaryDirectory(dir=('/private/tmp' if os.path.isdir('/private/tmp') else None)) as folder:
             source=Path(folder)/'ordinary.txt';source.write_text('source outside model workspace')
             self.args={'path':str(source),'limit':10}
             d=self.descriptor()

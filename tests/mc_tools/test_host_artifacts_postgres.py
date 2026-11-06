@@ -21,7 +21,7 @@ class ArtifactLifecycleTests(Base,unittest.TestCase):
         with self.connect() as conn,conn.cursor() as cur:
             cur.execute('TRUNCATE guild.mc_host_artifacts CASCADE')
             cur.execute('TRUNCATE guild.floor_messages CASCADE')
-        self.artifact_tmp=tempfile.TemporaryDirectory(dir='/private/tmp');self.addCleanup(self.artifact_tmp.cleanup)
+        self.artifact_tmp=tempfile.TemporaryDirectory(dir=('/private/tmp' if os.path.isdir('/private/tmp') else None));self.addCleanup(self.artifact_tmp.cleanup)
         self.service.artifact_root=self.artifact_tmp.name
         self.args={'text':'Exact Unicode artifact\n🙂'};self.tool='minimoi_working_write';self.cid='artifact_call'
 

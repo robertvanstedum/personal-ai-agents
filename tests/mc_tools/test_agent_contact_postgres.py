@@ -206,7 +206,7 @@ class AgentContactTests(Base,unittest.TestCase):
             response=self.client.post('/internal/mc/v1/agent-worker',json=body,headers={'Authorization':'Bearer '+TOKEN})
             self.assertEqual(response.status_code,200,response.get_json())
             return response.get_json()
-        with tempfile.TemporaryDirectory(dir='/private/tmp') as folder:
+        with tempfile.TemporaryDirectory(dir=('/private/tmp' if os.path.isdir('/private/tmp') else None)) as folder:
             config={'principal':OWNER,'environment':'dev','private_root':folder,'targets':{TARGET.alias:{
                 'target':asdict(TARGET),'binary_identity':[1,2,501,20,33261,100,1,1],
                 'routing_proof_sha256':'a'*64,'native_return_proof_sha256':'b'*64,'codex_home':'/synthetic/.codex',
