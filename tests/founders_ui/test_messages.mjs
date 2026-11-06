@@ -32,11 +32,27 @@ test('allowance is concise and provider text is not HTML',()=>{
  window.MiniMoiNotices.show('voice','<img src=x onerror=alert(1)>');assert.match(region.textContent,/<img/);
  assert.equal(region.children[0].children[0].children[1].children.length,0);
 });
+function walk(node, tag) {
+ const found = [];
+ for (const child of node.children || []) {
+  if (child.tag === tag) found.push(child);
+  found.push(...walk(child, tag));
+ }
+ return found;
+}
 test('agent formatting supports emphasis and code without evaluating markup',()=>{
  const {document,window}=page('message-text.js'),el=document.createElement('p');
  window.MiniMoiMessageText.render(el,'Saved **record** at `/path` <script>alert(1)</script>');
  assert.equal(el.textContent,'Saved record at /path <script>alert(1)</script>');
  assert.equal(el.children.filter(x=>x.tag==='strong').length,1);assert.equal(el.children.filter(x=>x.tag==='code').length,1);
  assert.equal(el.children.filter(x=>x.tag==='script').length,0);
+ window.MiniMoiMessageText.render(el,'Use **`Board`** and ```token```.');
+ assert.equal(el.textContent,'Use Board and token.');
+ assert.equal(walk(el,'code').length,2);
+ assert.equal(walk(el,'code').every(node => !node.textContent.includes('`')), true);
+ assert.equal(el.children.filter(x=>x.tag==='script').length,0);
+ window.MiniMoiMessageText.render(el,'A lone `tick stays, and\n```\nfenced\n```\nstays.');
+ assert.match(el.textContent, /`tick/);
+ assert.match(el.textContent, /```/);
  window.MiniMoiMessageText.render(el,'Replacement');assert.equal(el.textContent,'Replacement');
 });
