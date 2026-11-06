@@ -40,6 +40,9 @@ def _queue_url() -> str:
     return url_for(".queue") if reserve_pages_enabled() else url_for(".build_log")
 
 
+COS_WORK_CARDS_HREF = "/app/cos"
+
+
 def light_href(light) -> str:
     kind, _, tile = light["link"].partition(":")
     return _queue_url() if kind == "queue" else url_for(".operate", tile=tile)
@@ -47,6 +50,17 @@ def light_href(light) -> str:
 
 def item_href(item_id) -> str:
     return url_for(".item", item_id=item_id) if isinstance(item_id, int) else _queue_url()
+
+
+def approvals_read():
+    """What waits for Robert in the task service, each with where he decides it: proposals in the task view, work
+    cards in the CoS chat (their Actions list is the same record). None when this host has no task service."""
+    from . import tasks_owner_api
+    res = tasks_owner_api.approvals_waiting()
+    if res is not None and res.ok:
+        for row in res.data:
+            row["href"] = url_for(".tasks") if row["kind"] == "proposal" else COS_WORK_CARDS_HREF
+    return res
 
 
 def principal_of(c: dict) -> str:
@@ -141,9 +155,9 @@ def compute(c: dict, *, notes_limit: int = 0, conversation: dict | None = None) 
     lights = derive_lights(layout["floor"]["lights"], services, queue_res)
     for light in lights:
         light["href"] = light_href(light)
-    needs = needs_you(queue_res, checks, cap=layout["floor"]["max_reminders"])
+    needs = needs_you(queue_res, checks, cap=layout["floor"]["max_reminders"], approvals_res=approvals_read())
     for n in needs["items"]:
-        n["href"] = item_href(n["item_id"])
+        n.setdefault("href", item_href(n["item_id"]))
     active = [i for i in (queue_res.data or []) if i.get("status_known") and i.get("status") in ("spec_ready", "in_build")] \
         if queue_res.ok else None
     cap = layout["floor"].get("postit_cap", 4)

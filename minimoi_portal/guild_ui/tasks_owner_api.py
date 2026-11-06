@@ -23,7 +23,9 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import datetime, timezone
 
+import requests
 from flask import request
 
 from .security import json_error
@@ -307,6 +309,73 @@ def _card_summary(card):
             "attempts": card.get("attempts"), "input_artifacts": card.get("input_artifacts") or []}
 
 
+def _waiting_cards(client):
+    """Pending admissions whose task has not moved on: what the work-card list and the Needs-you count both read."""
+    return [r for r in client.outbox_pending()
+            if r["operation"] == "admit_bundle" and r["state"] == "pending" and not r["stale"]]
+
+
+def _standing_approval(row, now):
+    """The row's approval while it still stands; None once it was spent or ran out, because Robert can then approve
+    the card again (the same test the service applies to a new approval)."""
+    from services.partnership_tasks.service import APPROVAL_WINDOW_S
+    approval = row.get("approval")
+    if not approval or approval.get("spent_at") is not None:
+        return None
+    approved = datetime.fromisoformat(approval["approved_at"].replace("Z", "+00:00"))
+    return None if (now - approved).total_seconds() > APPROVAL_WINDOW_S else approval
+
+
+def _origin_conversation(client, task_id):
+    """The CoS conversation a task's proposal came from, or None when it did not come from one or cannot be read now.
+    The trail: task -> interpretation -> source events; a source in ``cos-history`` has the id
+    ``<conversation_id>:<turn_id>`` (domains/cos/task_tools.py). None only widens where a card shows; it never hides one."""
+    from services.partnership_tasks.client import TaskServiceUnavailable
+    try:
+        ref = (client.get("task", task_id) or {}).get("interpretation_ref")
+        interp = client.get("interpretation", ref) if ref else None
+        for sid in (interp or {}).get("source_event_ids") or []:
+            source = (client.get("source_event", sid) or {}).get("source") or {}
+            if source.get("store") == "cos-history":
+                conversation, sep, _turn = str(source.get("id") or "").rpartition(":")
+                return conversation if sep and conversation else None
+    except (TaskServiceUnavailable, requests.RequestException, ValueError):
+        return None
+    return None
+
+
+def approvals_waiting(user=None):
+    """Task proposals and work cards waiting for Robert, for the Needs-you count, as a SourceResult of rows
+    {kind, id, text, at}. None when this host has no task service at all. A service that is configured but cannot be
+    read, in any way, is unknown and says only the kind of failure. Short timeouts: every Guild page waits on this."""
+    from .adapters.contract import NOT_CONFIGURED, READ_FAILED, live_ok, live_unknown
+    evidence = "task service: /v1/pending, /v1/outbox/pending"
+    if not os.environ.get("PARTNERSHIP_TASKS_URL", "").strip():
+        return None
+    try:
+        client = _client(user)
+        if client is None:
+            return live_unknown(NOT_CONFIGURED, "task service connection is incomplete", evidence)
+        client.timeout = (1, 3)
+        now = datetime.now(timezone.utc)
+        rows = [{"kind": "proposal", "id": p["interpretation_id"], "at": p.get("created_at"),
+                 "text": f"Proposal waiting for you: {_one_line(p['proposed'].get('outcome'))}"}
+                for p in client.pending()]
+        for r in _waiting_cards(client):
+            if _standing_approval(r, now) is None:
+                task = client.get("task", r["task_id"]) or {}
+                rows.append({"kind": "card", "id": r["operation_id"], "at": r.get("created_at"),
+                             "text": f"Work card waiting for you: {_one_line(task.get('outcome') or r['task_id'])}"})
+    except Exception as exc:          # never "nothing needs you" because a read failed; the type names no secret
+        return live_unknown(READ_FAILED, f"task service read failed: {type(exc).__name__}", evidence)
+    return live_ok(rows, evidence)
+
+
+def _one_line(text, limit=120):
+    words = " ".join(str(text or "no description").split())
+    return words if len(words) <= limit else words[:limit - 1].rstrip() + "…"
+
+
 def admissions(user=None):
     """Work cards waiting for Robert's approval: pending admissions whose task has not moved on."""
     from flask import jsonify
@@ -315,13 +384,14 @@ def admissions(user=None):
     if client is None:
         return json_error("unavailable", "Task tracking is not connected here.", 409)
     try:
-        rows = [r for r in client.outbox_pending()
-                if r["operation"] == "admit_bundle" and r["state"] == "pending" and not r["stale"]]
+        now = datetime.now(timezone.utc)
         out = []
-        for r in rows:
+        for r in _waiting_cards(client):
             ob = client.get("outbox", r["operation_id"])
             out.append({"operation_id": r["operation_id"], "task_id": r["task_id"], "card_digest": r["bundle_digest"],
-                        "approval": r["approval"], "card": _card_summary((ob or {}).get("packet"))})
+                        "approval": _standing_approval(r, now),
+                        "conversation_id": _origin_conversation(client, r["task_id"]),
+                        "card": _card_summary((ob or {}).get("packet"))})
     except TaskServiceUnavailable:
         return json_error("unavailable", "The task service could not confirm the current state. Try Refresh.", 503)
     return jsonify(admissions=out)

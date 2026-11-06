@@ -23,9 +23,10 @@ def opening_briefing(lights: list[dict], needs: dict, observed_at: str) -> dict:
         parts.append({"light_id": None, "word": "needs you unknown"})
     elif needs["total"]:
         first = needs["items"][0]
+        # An Approve item's id is a task-service record id, not a queue number he would look up.
+        which = f"{first['tag']} #{first['item_id']}" if isinstance(first["item_id"], int) else first["tag"]
         parts.append({"light_id": None,
-                      "word": f"{needs['total']} need{'s' if needs['total'] == 1 else ''} you "
-                              f"({first['tag']} #{first['item_id']})"})
+                      "word": f"{needs['total']} need{'s' if needs['total'] == 1 else ''} you ({which})"})
     else:
         parts.append({"light_id": None, "word": "nothing needs you"})
     grey = 0
