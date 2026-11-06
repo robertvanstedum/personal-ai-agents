@@ -27,6 +27,7 @@ from __future__ import annotations
 import json as _json
 import os
 import re
+import stat
 import threading
 import time
 
@@ -49,6 +50,24 @@ def key_env(key_name):
     return "MINIMOI_GATEWAY_KEY_" + key_name.upper().replace("-", "_")
 
 
+def _key_from_file(path):
+    """The key from a private file (production: ``<variable>_FILE``, so it never sits in a shared env file). Empty when
+    there is none or it is not private: the summary then reads unavailable, as with no key at all."""
+    if not path:
+        return ""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077 or info.st_size > 512:
+                return ""
+            return os.read(fd, 513).decode("utf-8").strip()
+        finally:
+            os.close(fd)
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+
 class GatewaySummary:
     """One host's summary client: ``(system, prompt) -> (text, None) | (None, error word)``. ``http_post`` is
     requests.post unless a test hands in its own."""
@@ -56,8 +75,8 @@ class GatewaySummary:
     def __init__(self, key_name, *, environ=None, http_post=None):
         environ = os.environ if environ is None else environ
         self.key_name, self.env = key_name, key_env(key_name)
-        self._key = environ.get(self.env) or ""
-        self.url = (environ.get(GATEWAY_URL_ENV) or DEFAULT_GATEWAY_URL).rstrip("/") + "/chat/completions"
+        self._key = environ.get(self.env) or _key_from_file(environ.get(self.env + "_FILE"))
+        self.url =(environ.get(GATEWAY_URL_ENV) or DEFAULT_GATEWAY_URL).rstrip("/") + "/chat/completions"
         self._post = http_post
 
     def available(self):

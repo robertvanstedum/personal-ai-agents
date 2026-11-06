@@ -16,6 +16,9 @@ refuses, and does not report success, when it cannot set that identity.
 
 Records' own state and key come from ``services/records_prepare.py`` and ``scripts/rooms/production_plan.py``; this script
 does not make them.
+
+Run it on the host alone: it is this one file, on the Python standard library, with no copy of ``core`` and no
+PYTHONPATH. ``scripts/operations/minimoi_1_2_prod_bind.py`` writes the by-operator files listed below.
 """
 from __future__ import annotations
 
@@ -41,7 +44,7 @@ ROOT = (0, 0)
 # The node consumer must be able to read these, including the operator-written bindings.
 NODE_PATHS = (
     f"{SECRETS}/cos-bound",
-    f"{SECRETS}/cos-bound/bindings.json",
+    f"{SECRETS}/cos-bound/token",
     f"{SECRETS}/cos-actions-token",
     f"{SECRETS}/cos-actions-token/token",
 )
@@ -55,6 +58,11 @@ FOLDERS = (
     f"{SECRETS}/partnership", f"{SECRETS}/cos-board", f"{SECRETS}/cos-guildhall", f"{SECRETS}/guildhall-cos",
     f"{SECRETS}/guildhall-mc", f"{SECRETS}/mc-rooms-work",
 )
+
+# A folder with two consumers isn't private to one uid. cos/store is written by cos-scheduler (root) and read by CoS's
+# runtime through group 1000. This must equal `install -d -m 2750 -o root -g 1000` in cos_prod.sh prepare, which runs on
+# every release: then apply, key and prepare can come in any order, any number of times.
+SHARED_FOLDERS = {"cos/store": (0o2750, 0, 1000)}
 
 # (portal signer, service reader). Both files are the same kid:secret line.
 ASSERTION_PAIRS = (
@@ -75,12 +83,15 @@ GENERATED = (
 
 # Files only a reviewed operator can write, because their content binds identities or comes from another service.
 # The discussion tokens are gateway-issued capped keys, not local random strings.
+# cos-bound/token: the plugin reads it (docker/cos-agent-a/openclaw.json tokenFile); only its hash leaves the file.
+# No reader exists for a mc.token in partnership/: the task service keeps MC's hash in bindings.json, the portal the token.
 BY_OPERATOR = (
-    f"{SECRETS}/cos-bound/bindings.json",
+    f"{SECRETS}/cos-bound/token",
     f"{SECRETS}/partnership/bindings.json", f"{SECRETS}/partnership/grants.json", f"{SECRETS}/partnership/runner-seats.json",
-    f"{SECRETS}/partnership/db.url", f"{SECRETS}/partnership/mc.token",
+    f"{SECRETS}/partnership/db.url",
     f"{SECRETS}/portal-partnership/mc.token", f"{SECRETS}/cos-partnership/tasks-cos.token",
     f"{SECRETS}/cos-partnership/tasks-platform.token", f"{SECRETS}/cos-partnership/board-profile.json",
+    f"{SECRETS}/cos-partnership/voice-summary-cos.key", f"{SECRETS}/portal-partnership/voice-summary-mc.key",
     f"{SECRETS}/cos-board/profiles.json",
     f"{SECRETS}/cos-guildhall/meeting-observe.token", f"{SECRETS}/guildhall-cos/rooms-worker-cos.token",
     f"{SECRETS}/guildhall-cos/cos.token", f"{SECRETS}/guildhall-cos/cos-service.token",
@@ -96,7 +107,6 @@ BY_HAND = (
     "Claude plan sign-in for MC on production, if its relay needs one",
     "Robert's approval of MC's production policy",
     "Robert logs in again after the identity changes",
-    "Gateway-issued discussion keys for Guildhall CoS and MC, each capped to its discussion route",
     "CoS's own capped key for failover and Grok, $20 a month: scripts/operations/cos_prod.sh key 20",
     "MC's one capped key for failover and Grok, $20 a month: MINIMOI_MC_MODEL_GATEWAY_KEY in MC's env file",
 )
@@ -138,8 +148,21 @@ def _partner(rel: str):
 
 
 def _key_ok(path: Path) -> bool:
-    from core.portal_assertion import load_key
-    return load_key(str(path)) is not None
+    """The rule of core.portal_assertion.load_key, here so a host needs no copy of core (a test holds the two equal)."""
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            line = handle.readline().strip()
+    except (OSError, UnicodeDecodeError):
+        return False
+    kid, sep, secret = line.partition(":")
+    return bool(sep and kid and len(secret) >= 32)
+
+
+def owner_of(rel: str):
+    """(uid, gid) a path must carry. Differs from consumer only for a folder with two consumers."""
+    if rel in SHARED_FOLDERS:
+        return SHARED_FOLDERS[rel][1:]
+    return consumer(rel)
 
 
 def _lexical_symlink(path: Path) -> bool:
@@ -194,6 +217,12 @@ def status(root: Path, rel: str, *, directory: bool) -> str:
     path = root / rel
     if not os.path.lexists(path):
         return "missing"
+    if rel in SHARED_FOLDERS:
+        mode, uid, gid = SHARED_FOLDERS[rel]
+        info = path.lstat()
+        right = (stat.S_ISDIR(info.st_mode) and stat.S_IMODE(info.st_mode) == mode
+                 and (info.st_uid, info.st_gid) == (uid, gid))
+        return "present" if right else "unsafe"
     if not _safe(path, directory=directory):
         return "unsafe"
     partner = None if directory else _partner(rel)
@@ -274,7 +303,7 @@ def apply(root: Path) -> dict:
         path = root / rel
         if not path.exists():
             path.mkdir(parents=True, mode=0o700)
-            path.chmod(0o700)
+            path.chmod(SHARED_FOLDERS[rel][0] if rel in SHARED_FOLDERS else 0o700)
             made.append(rel)
     # Parents of every secret must be traversable by both consumers without listing other names.
     for rel in ("secrets", SECRETS):
@@ -298,7 +327,10 @@ def apply(root: Path) -> dict:
             _write_new(path, secrets.token_urlsafe(48))
             made.append(rel)
     # Node paths first, so a missing host identity fails on the consumer Codex measured.
-    owned = [*NODE_PATHS, *FOLDERS, *GENERATED, "secrets", SECRETS]
+    # cos: 0755 root:root, as cos_prod.sh prepare makes it, whichever of the two comes first.
+    if (root / "cos").is_dir() and not (root / "cos").is_symlink():
+        (root / "cos").chmod(0o755)
+    owned = [*NODE_PATHS, *FOLDERS, *GENERATED, "secrets", SECRETS, "cos"]
     seen = set()
     for rel in owned:
         if rel in seen:
@@ -306,8 +338,10 @@ def apply(root: Path) -> dict:
         seen.add(rel)
         path = root / rel
         if path.exists() and not path.is_symlink():
-            uid, gid = consumer(rel) if rel not in ("secrets", SECRETS) else ROOT
+            uid, gid = owner_of(rel) if rel not in ("secrets", SECRETS, "cos") else ROOT
             _give(path, uid, gid, rel)
+            if rel in SHARED_FOLDERS:
+                path.chmod(SHARED_FOLDERS[rel][0])      # after the owner: a chown may drop the setgid bit
     after = report(root)
     still = [r for group in ("folders", "generated", "by_operator") for r, v in after[group].items() if v == "unsafe"]
     if still:
