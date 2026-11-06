@@ -74,7 +74,7 @@ export class RealtimeVoiceController {
     bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
     onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall, onTranscriptUpdate, onPlayback,
     onSessionInfo, onPlaybackDrained = null, pageResponses = false, oncePerItem = false, onUnbound = null, bootstrapTimeoutMs = 0,
-    respondFor = null, onResponseStarted = null, refuseCalls = false, onAudioStarted = null,
+    respondFor = null, onResponseStarted = null, refuseCalls = false, onAudioStarted = null, onProviderError = null,
     openingInstruction = OPENING_INSTRUCTION,
     managedBootstrap = null, requestHeaders = null, includeTranscriptAfterEnd = true,
   }) {
@@ -91,6 +91,9 @@ export class RealtimeVoiceController {
     this._onWarning = onWarning || (() => {});
     this._onStop = onStop || (() => {});
     this._onFatalError = onFatalError || (() => {});
+    // Optional: onProviderError({reason, detail}) says a provider error in plain text, on the path without a managed
+    // bootstrap. German and Portuguese show it; a host that passes none hears nothing.
+    this._onProviderError = typeof onProviderError === "function" ? onProviderError : null;
     this._onFinalize = onFinalize || (() => {});
     this._onTranscriptUpdate = onTranscriptUpdate || (() => {});
     this._onUserTurn = onUserTurn || (() => {});
@@ -938,12 +941,17 @@ export class RealtimeVoiceController {
     // meaningful state would be lost. Kept conservative for this release
     // -- one attempt, then end visibly and preserve the partial transcript
     // rather than loop.
+    // OpenAI hands over its error object, xAI a string: the page gets words either way.
+    const raw = info?.detail, words = raw && typeof raw === "object" ? raw.message || raw.code || JSON.stringify(raw) : raw;
+    const error = {reason: info?.reason || raw?.code || "provider_error", detail: words || ""};
     if (this._reconnectAttempted) {
+      if (this._onProviderError) this._onProviderError(error);
       this.endSession("recoverable_error_no_retry");        // releases the microphone too, never left open behind "ended"
       return;
     }
     this._reconnectAttempted = true;
     this._setState("reconnecting");
+    if (this._onProviderError) this._onProviderError(error);
     // Actual reconnect (re-running startSession with the same params) is
     // the domain page's responsibility to trigger via onStateChange
     // observing "reconnecting" and offering the user "Reconnect" / "Start

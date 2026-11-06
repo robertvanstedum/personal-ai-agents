@@ -31,12 +31,13 @@ globalThis.clearInterval = () => {};
 async function session(provider) {
   stops = 0;
   globalThis.bootstrap = {provider, model: 'synthetic', warning_minutes: 20, max_minutes: 30, session_config: {}};
-  const seen = {states: [], finals: [], fatals: []};
+  const seen = {states: [], finals: [], fatals: [], errors: []};
   const controller = new Controller({
     bootstrapUrl: '/synthetic',
     onStateChange: s => seen.states.push(s),
     onFatalError: f => seen.fatals.push(f),
     onFinalize: f => seen.finals.push(f),
+    onProviderError: e => seen.errors.push({...e, state: controller._state}),
   });
   await controller.startSession({provider, persona: 'p', scene: 's'});
   assert.equal(controller._state, 'active');
@@ -93,5 +94,30 @@ for (const provider of ['openai', 'xai']) {
     assert.equal(seen.finals.length, 1);
     n++;
   }
+}
+// A provider error reaches the page in words, after the state it would otherwise overwrite; each adapter's own shape.
+{
+  const {seen, adapter} = await session('openai');
+  adapter._emit('recoverable_error', {detail: {code: 'server_error', message: 'The server had an error'}});
+  assert.deepEqual(seen.errors, [{reason: 'server_error', detail: 'The server had an error', state: 'reconnecting'}]);
+  adapter._emit('recoverable_error', {detail: {code: 'only_a_code'}});
+  assert.equal(seen.errors[1].detail, 'only_a_code');
+  n++;
+}
+{
+  const {seen, adapter} = await session('xai');
+  adapter._emit('recoverable_error', {reason: 'provider_error', detail: 'Grok said no'});
+  assert.deepEqual(seen.errors, [{reason: 'provider_error', detail: 'Grok said no', state: 'reconnecting'}]);
+  n++;
+}
+// A host that passes no callback sees what it saw.
+{
+  stops = 0;
+  const states = [];
+  const controller = new Controller({bootstrapUrl: '/synthetic', onStateChange: s => states.push(s)});
+  await controller.startSession({provider: 'xai', persona: 'p', scene: 's'});
+  adapter._emit('recoverable_error', {reason: 'provider_error', detail: 'x'});
+  assert.equal(controller._state, 'reconnecting');
+  n++;
 }
 console.log(`${n} provider-end scenarios passed`);
