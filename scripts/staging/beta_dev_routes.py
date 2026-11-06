@@ -548,7 +548,9 @@ class RealHost:
 
     # baseline: reads only
     def _refuse_if_production(self, env: dict, where: str):
-        if env.get("MINIMOI_ROLE") == "production" or any(k.endswith("_ENV") and v in ("production", "prod") for k, v in env.items()):
+        # FLASK_ENV and NODE_ENV are framework modes, production on every host. Dev's portal inherits the library value from the base compose file.
+        ignored = {"FLASK_ENV", "NODE_ENV", "MINIMOI_LIBRARY_INTAKE_ENV"}
+        if env.get("MINIMOI_ROLE") == "production" or any(k.endswith("_ENV") and k not in ignored and v in ("production", "prod") for k, v in env.items()):
             raise Refused(f"{where} says production; nothing changed")
 
     def _locate(self):

@@ -821,3 +821,18 @@ def test_the_operator_ships_every_file_it_imports(tmp_path):
     names = {Path(p).name for p in payload.OPERATOR_FILES}
     assert {"beta_dev_routes.py", "beta_dev_deploy.py", "guarded_swap.py", "mc_keys.sh"} == names
     assert all((ROOT / p).is_file() for p in payload.OPERATOR_FILES)
+
+
+@pytest.mark.parametrize("env,refused", [
+    ({"FLASK_ENV": "production", "NODE_ENV": "production", "MINIMOI_LIBRARY_INTAKE_ENV": "production", "MINIMOI_BOARD_ENV": "dev"}, False),
+    ({"FLASK_ENV": "production", "MINIMOI_BOARD_ENV": "production"}, True),
+    ({"MINIMOI_ENV": "prod"}, True),
+    ({"MINIMOI_ROLE": "production"}, True),
+])
+def test_framework_modes_are_not_a_production_host_but_our_own_markers_are(env, refused):
+    check = lambda: R.RouteSwitch._refuse_if_production(None, env, "x")
+    if refused:
+        with pytest.raises(R.Refused):
+            check()
+    else:
+        check()
