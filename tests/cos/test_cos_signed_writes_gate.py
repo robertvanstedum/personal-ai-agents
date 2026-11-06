@@ -34,6 +34,7 @@ def signed(subject, path, body):
     ("/ui/transcribe", {"data": {"audio": (io.BytesIO(b"x"), "a.webm")}, "content_type": "multipart/form-data"}),
     ("/ui/history/conversations", {"json": {"title": "x"}}),
     ("/ui/history/preferences", {"json": {"device": "desk", "picture": "faded"}}),
+    ("/ui/history/conversations/owner/route", {"json": {"route_id": "plan-openai-mid", "revision": 0}}),
     ("/ui/history/selection", {"json": {"device": "desk", "conversation_id": "owner"}}),
 ])
 def test_forwarded_owner_headers_alone_never_make_a_cos_write(cos, path, kwargs):
@@ -75,7 +76,7 @@ KNOWN_WRITES = {
     "/chat": "signed: owner, service:mc, or service:telegram (Telegram channel + owner session only)",
     "/ui/send": "signed owner", "/ui/upload": "signed owner", "/ui/transcribe": "signed owner",
     "/ui/history/conversations": "signed owner", "/ui/history/selection": "signed owner",
-    "/ui/history/preferences": "signed owner",
+    "/ui/history/preferences": "signed owner", "/ui/history/conversations/<conversation_id>/route": "signed owner",
     "/event": "OPEN: recorded follow-up (no caller identity yet)",
     "/internal/model-gateway/receipt": "own token",
     "/api/realtime-voice/confer/bootstrap": "signed owner",

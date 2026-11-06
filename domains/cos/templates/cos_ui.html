@@ -122,6 +122,7 @@
         <label>Voice mode <select id="voice-mode"><option value="realtime">Realtime · OpenAI</option><option value="chained">Voice · turn by turn</option></select></label>
         <label><input type="checkbox" id="voice-keep-transcript">Download transcript on End</label>
         {% endif %}
+        <label id="cos-route-control" hidden>Model <select id="cos-route"></select><small id="cos-route-note"></small></label>
         <div id="voice-transcript" aria-live="polite"></div>
         <div id="voice-sessions" class="voice-sessions" aria-label="Voice sessions to look at" hidden></div>
         </div><aside class="confer-picture" aria-label="Friends at the table">
@@ -808,6 +809,7 @@ document.addEventListener('cos:conversation-selected',()=>{updateVoiceAvailabili
 void readDirect();
 </script>
 <script src="/static/cos-history-ui.js?v={{ founders_ui_version }}"></script>
+<script src="/static/cos-route-picker.js?v={{ founders_ui_version }}"></script>
 <script src="/static/calm-confer.js?v=20261102-1"></script>
 <script type="module" src="/static/cos-in-flight.js?v={{ founders_ui_version }}"></script>
 <script type="module" src="/static/cos-work-cards.js?v={{ founders_ui_version }}"></script>

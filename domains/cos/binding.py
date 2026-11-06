@@ -56,6 +56,8 @@ CREATE TABLE IF NOT EXISTS stops(turn_id TEXT PRIMARY KEY, at REAL NOT NULL, rea
 CREATE TABLE IF NOT EXISTS calls(
   turn_id TEXT NOT NULL, tool_call_id TEXT NOT NULL, tool TEXT NOT NULL, at TEXT NOT NULL, seq INTEGER NOT NULL,
   command_id TEXT, receipt_id TEXT, PRIMARY KEY(turn_id, tool_call_id));
+CREATE TABLE IF NOT EXISTS served_runs(
+  run_id TEXT PRIMARY KEY, at TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, api TEXT, harness TEXT);
 CREATE TABLE IF NOT EXISTS native_calls(
   id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, turn_id TEXT, run_id TEXT, tool_call_id TEXT,
   tool TEXT NOT NULL, target TEXT, bound INTEGER NOT NULL);
@@ -325,6 +327,22 @@ class BindingStore:
         with self._tx() as db:
             db.execute("UPDATE calls SET command_id=coalesce(command_id,?), receipt_id=coalesce(receipt_id,?) "
                        "WHERE turn_id=? AND tool_call_id=?", (command_id, receipt_id, binding.turn_id, tool_call_id))
+
+    def record_served(self, *, run_id, fields: dict) -> bool:
+        """Who served this exact run, as the runtime's reply recorded it. Evidence only; the last attempt of a run wins."""
+        if not isinstance(run_id, str) or not RUN_ID.fullmatch(run_id):
+            return False
+        with self._tx() as db:
+            db.execute("INSERT OR REPLACE INTO served_runs(run_id, at, provider, model, api, harness) VALUES(?,?,?,?,?,?)",
+                       (run_id, _iso(self._clock()), fields["provider"], fields["model"], fields.get("api"), fields.get("harness")))
+        return True
+
+    def served_for_turn(self, turn_id: str) -> dict | None:
+        """The evidence for the run attached to this turn, or None. Never the selected route."""
+        with self._tx() as db:
+            row = db.execute("SELECT s.provider, s.model, s.api, s.harness FROM bindings b JOIN served_runs s ON s.run_id = b.run_id "
+                             "WHERE b.turn_id=?", (turn_id,)).fetchone()
+        return {k: row[k] for k in ("provider", "model", "api", "harness") if row[k]} if row else None
 
     def log_native(self, *, run_id, tool_call_id, tool: str, target: str | None) -> bool:
         """Record one native OpenClaw call (write, edit, exec) in an owner turn, bound or not. Never refuses the call

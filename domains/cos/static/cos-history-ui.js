@@ -77,7 +77,7 @@
     try {
     if (cid && cid !== id) await releaseVoice();
     persistDraft(); await api('history/selection', {device, conversation_id:id});
-    cid = id; conversation = doc; generation++; signature = ''; before = null; viewingEarlier = false;
+    cid = id; conversation = doc; document.dispatchEvent(new CustomEvent('cos:conversation', {detail: {id}})); generation++; signature = ''; before = null; viewingEarlier = false;
     input.value = storage(draftKey()) || '';
     const recover=pending();
     let draftFiles=[]; try {draftFiles=JSON.parse(storage(draftKey()+':files')||'[]');}catch(_){}

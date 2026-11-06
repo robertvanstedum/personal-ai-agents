@@ -28,6 +28,9 @@ _TURN_TIMEOUT_SECONDS = 120
 # A Confer background turn (the page polls for it, so no proxy waits on it) may run longer: research with several
 # searches and a written file. Set only for that turn, by the thread that runs it (chief_of_staff._start_ui_turn).
 BACKGROUND_TURN_TIMEOUT_SECONDS = 600
+# The model this owner turn was routed to (domains/cos/model_route.py). None: the runtime's default serves, as before.
+turn_model = contextvars.ContextVar("cos_turn_model", default=None)
+_MODEL_REF = re.compile(r"(?:openai|anthropic)/[A-Za-z0-9._-]{1,64}")
 turn_timeout_seconds = contextvars.ContextVar("cos_turn_timeout_seconds", default=_TURN_TIMEOUT_SECONDS)
 _EMPTY_OUTPUT_NOTICE = (
     "[MiniMoi platform notice: The model reached its output limit before producing an answer. "
@@ -244,6 +247,11 @@ class OpenClawBackend:
             "Authorization": f"Bearer {self._gateway_token}",
             "Content-Type": "application/json",
         }
+        routed = turn_model.get()
+        if routed is not None and agent == self._agent_id:
+            if not _MODEL_REF.fullmatch(routed):
+                raise AgentRuntimeError("COS Agent A was given an invalid model route.")
+            headers["x-openclaw-model"] = routed
         body = {
             "model": f"openclaw/{agent}",
             "user": self._session_user(conversation_id, agent),

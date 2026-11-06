@@ -11,7 +11,7 @@
  * offered. cos-agent-a keeps native exec in owner turns (Q1), so its exec can read the credential: the recorded
  * residual. Its tools are offered only when the operator lists it in acceptCredentialReadableBy.
  */
-import {runSealer, tokenFromFile, boundedJson, RUN_ID, CALL_ID} from './shared.mjs';
+import {runBoundSealer, backendCallId, tokenFromFile, boundedJson, RUN_ID, CALL_ID} from './shared.mjs';
 import {randomBytes} from 'node:crypto';
 
 export const ENDPOINT_PATH = '/internal/cos/v1';
@@ -23,7 +23,10 @@ export const BOUND = new Set(['cos_actions', 'cos_tasks', 'cos_board']);
 const STATE = Symbol.for('cos-bound/process-state/v1');
 globalThis[STATE] ??= Object.freeze({instance: randomBytes(16).toString('hex'), sealKey: randomBytes(32)});
 export const INSTANCE = globalThis[STATE].instance;
-const PROCESS_SEALER = runSealer(globalThis[STATE].sealKey);
+const BINDINGS = Symbol.for('cos-bound/run-bindings/v1');
+globalThis[BINDINGS] ??= new Map();
+const PROCESS_SEALER = runBoundSealer({key: globalThis[STATE].sealKey, entries: globalThis[BINDINGS],
+  onRefuse: detail => console.warn('cos-bound: seal refused ' + JSON.stringify(detail))});
 const UNKNOWN = 'CoS could not confirm what happened. Do not repeat it; tell Robert.';
 const text = (s, details) => ({content: [{type: 'text', text: s}], details});
 const str = {type: 'string'};
@@ -140,7 +143,7 @@ export function toolFactory({endpoint, token, tokenFile, agents, acceptCredentia
     }
     const run = (spec) => async (toolCallId, sealedArgs, signal) => {
       const opened = typeof toolCallId === 'string' && CALL_ID.test(toolCallId)
-        ? sealer.open(sealedArgs, {toolCallId, agentId, sessionKey}) : null;
+        ? sealer.open(sealedArgs, {toolCallId, agentId, sessionKey, toolName: spec.name}) : null;
       if (!opened) return text('CoS could not confirm which turn this call belongs to, so nothing was sent.',
                                {status: 'refused', code: 'run_identity_missing'});
       if (signal?.aborted) return text('CoS did not send this call, so nothing was done.', {status: 'refused', code: 'not_sent'});
@@ -150,7 +153,7 @@ export function toolFactory({endpoint, token, tokenFile, agents, acceptCredentia
       try {
         const abort = signal ? AbortSignal.any([AbortSignal.timeout(15000), signal]) : AbortSignal.timeout(15000);
         response = await fetchImpl(`${url.href}/tools/${spec.name}`, {method: 'POST', redirect: 'error', signal: abort,
-          headers: headers(token, {sessionKey, agentId, run: opened.run, toolCallId, instance}),
+          headers: headers(token, {sessionKey, agentId, run: opened.run, toolCallId: backendCallId(toolCallId), instance}),
           body: JSON.stringify({arguments: opened.args})});
       } catch { return text(UNKNOWN, {status: 'unknown', code: 'transport'}); }
       const result = await boundedJson(response);
@@ -180,7 +183,7 @@ export function hook({sealer = PROCESS_SEALER, agents, url, token, instance = IN
     }
     if (BOUND.has(name)) {
       if (!allowed.has(agentId)) return {block: true, blockReason: 'CoS tools are not available to this agent'};
-      const params = sealer.seal(event.params, {runId, toolCallId, agentId, sessionKey});
+      const params = sealer.seal(event.params, {runId, toolCallId, agentId, sessionKey, toolName: name});
       if (!params) return {block: true, blockReason: 'CoS could not confirm which turn this call belongs to'};
       return {params};
     }
@@ -189,13 +192,31 @@ export function hook({sealer = PROCESS_SEALER, agents, url, token, instance = IN
       const target = typeof p.command === 'string' ? p.command : typeof p.path === 'string' ? p.path
         : typeof p.file_path === 'string' ? p.file_path : null;
       const run = typeof runId === 'string' && RUN_ID.test(runId) ? runId : '';
-      const call = typeof toolCallId === 'string' && CALL_ID.test(toolCallId) ? toolCallId : '';
+      const call = typeof toolCallId === 'string' && CALL_ID.test(toolCallId) ? backendCallId(toolCallId) : '';
       fetchImpl(`${url.href}/native`, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000),
         headers: headers(token, {sessionKey: sessionKey || '', agentId: agentId || '', run, toolCallId: call, instance}),
         body: JSON.stringify({tool: name, target: target === null ? null : String(target).slice(0, 500)})})
         .then(r => r.body?.cancel().catch(() => {}), () => {});
     }
     return undefined;                                  // never blocks a native call (Q1)
+  };
+}
+
+const SERVED_FIELD = /^[A-Za-z0-9._:\/-]{1,80}$/;
+/** llm_output: tell the listener who really served this exact run, from the reply's own record. Evidence only: fire and
+ *  forget, it changes nothing about the turn, and an unknown value is left out rather than guessed. */
+export function servedHook({agents, url, token, instance = INSTANCE, fetchImpl = fetch}) {
+  const allowed = new Set(agents);
+  return (event, ctx) => {
+    const agentId = ctx?.agentId, sessionKey = ctx?.sessionKey, runId = ctx?.runId ?? event?.runId;
+    if (!allowed.has(agentId) || !url || typeof runId !== 'string' || !RUN_ID.test(runId)) return;
+    const reply = event?.lastAssistant || {};
+    const fields = {provider: reply.provider, model: reply.model, api: reply.api, harness: event?.harnessId};
+    const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => typeof v === 'string' && SERVED_FIELD.test(v)));
+    if (!body.provider || !body.model) return;
+    fetchImpl(`${url.href}/served`, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000),
+      headers: headers(token, {sessionKey: sessionKey || '', agentId: agentId || '', run: runId, toolCallId: '', instance}),
+      body: JSON.stringify(body)}).then(r => r.body?.cancel().catch(() => {}), () => {});
   };
 }
 
@@ -214,6 +235,7 @@ export default {id: 'cos-bound', name: 'CoS bound tools', register(api) {
     return;
   }
   api.on('before_tool_call', hook({agents, url, token}));
+  api.on('llm_output', servedHook({agents, url, token}));
   announcer({url, token}).start();          // before any turn's first call (review M3)
   api.registerTool(factory, {names: ['cos_actions', 'cos_tasks', 'cos_board']});
 }};

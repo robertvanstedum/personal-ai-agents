@@ -12,6 +12,7 @@ ENV OPENCLAW_NO_AUTO_UPDATE=1
 # runtime env vars; the config only names them.
 COPY --chown=root:root docker/cos-agent-a/openclaw.json /opt/minimoi/cos-agent-a/openclaw.json
 COPY --chown=root:root docker/cos-agent-a/apply-config.sh /opt/minimoi/cos-agent-a/apply-config.sh
+COPY --chown=root:root docker/cos-agent-a/plan-access.cjs /opt/minimoi/cos-agent-a/plan-access.cjs
 COPY --chown=root:root docker/cos-agent-a/AGENTS.md /opt/minimoi/cos-agent-a/AGENTS.md
 COPY --chown=root:root docker/cos-agent-a/COS_AGENTS.md /opt/minimoi/cos-agent-a/COS_AGENTS.md
 COPY --chown=root:root docker/cos-agent-a/build-mc-soul.mjs /opt/minimoi/cos-agent-a/build-mc-soul.mjs

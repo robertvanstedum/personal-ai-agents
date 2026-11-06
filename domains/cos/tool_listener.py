@@ -12,6 +12,9 @@
     POST /internal/cos/v1/instance                   the plugin announces its gateway process
     body: {"instance": "<32 hex>"}
 
+    POST /internal/cos/v1/served                     the plugin reports who served a run (provider, model, api, harness), from
+    body: {"provider": "...", "model": "..."}        the reply's own record. Evidence only.
+
     POST /internal/cos/v1/native                     the plugin's hook reports one native write/edit/exec call in an
     body: {"tool": "...", "target": "..."}           owner turn, with the same sealed headers. Logged, never refused
                                                      (Robert, Q1); the answer never changes what the agent may do.
@@ -42,6 +45,7 @@ MAX_BODY = 16 * 1024
 _DIGEST = re.compile(r"[0-9a-f]{64}")
 _SESSION_KEY = re.compile(r"agent:(?P<agent>[a-z][a-z0-9-]{0,63}):openai-user:(?P<user>cos-confer:[0-9a-f]{32})")
 STATUSES = ("done", "refused", "unknown")
+_SERVED_FIELD = re.compile(r"[A-Za-z0-9._:/-]{1,80}")
 # Per-turn admission limits for each bound tool (MC-equivalent defaults, design v0.1 §4).
 LIMITS = {"cos_actions": 20, "cos_tasks": 5, "cos_board": 20}
 NATIVE_TOOLS = frozenset({"write", "edit", "exec", "apply_patch", "process"})
@@ -130,6 +134,21 @@ def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agen
         except NotBound as exc:
             return jsonify(error=exc.code), 409
         return jsonify(status="recorded")
+
+    @app.post(PREFIX + "/served")
+    def served():
+        body, refused = preflight()
+        if refused:
+            return refused
+        if set(body) - {"provider", "model", "api", "harness"} or not all(
+                type(v) is str and _SERVED_FIELD.fullmatch(v) for v in body.values()) or not {"provider", "model"} <= set(body):
+            return jsonify(error="tool_request_invalid"), 400
+        try:
+            known = bindings.record_served(run_id=sealed()["run_id"], fields=body)
+        except Exception:
+            _log.exception("cos served evidence: not kept")
+            return jsonify(status="not_kept"), 503
+        return jsonify(status="kept" if known else "ignored")
 
     @app.post(PREFIX + "/native")
     def native():

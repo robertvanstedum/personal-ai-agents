@@ -32,6 +32,11 @@ cp "$PINNED_CONFIG" "$tmp"
 chmod 600 "$tmp"
 mv -f "$tmp" "$dest"
 
+# A host that asks for its subscription gets it here, every start; anything wrong refuses rather than falling to the API.
+if [ "${COS_RUNTIME_MODEL_ACCESS:-gateway}" != gateway ]; then
+  node /opt/minimoi/cos-agent-a/plan-access.cjs "$dest" || { echo "cos-agent-a: plan model access refused; refusing to start" >&2; exit 1; }
+fi
+
 # Existing volumes must receive the reviewed owner-directed runtime policy too.
 # Preserve adaptable SOUL/MEMORY/USER files, credentials and sessions.
 PINNED_POLICY=/opt/minimoi/cos-agent-a/AGENTS.md

@@ -131,3 +131,52 @@ test('meeting entries: cos-meeting may use only bound actions and search; cos-cl
   const owner = {...context, agentId: 'cos-agent-a', runId: RUN, toolCallId: 'o1'};
   assert.equal(h({toolName: 'browser', params: {}}, owner), undefined);          // owner keeps its tools (Q1)
 });
+
+// The ChatGPT route: arguments stay clean under a strict schema, and code mode's long nested ids still bind.
+import {servedHook} from '../../docker/cos-agent-a/plugins/cos-bound/index.mjs';
+import {runBoundSealer, backendCallId, SEAL} from '../../docker/cos-agent-a/plugins/cos-bound/shared.mjs';
+
+const NESTED = 'tool_search_code:' + 'c'.repeat(37) + '_' + 'f'.repeat(53) + ':cos_github_issues:1234567890123';
+const CTX = {runId: RUN, toolCallId: NESTED, agentId: 'cos-agent-a', sessionKey: SESSION, toolName: 'cos_actions'};
+
+test('a bound seal adds nothing to the arguments, opens once, and refuses a replay or changed arguments', () => {
+  assert.ok(NESTED.length > 128);
+  const sealer = runBoundSealer(), args = {action: 'note'};
+  const clean = sealer.seal(args, CTX);
+  assert.deepEqual(clean, args);
+  assert.ok(!Object.hasOwn(clean, SEAL));
+  assert.equal(sealer.open(args, CTX).run, RUN);
+  assert.equal(sealer.open(args, CTX), null);
+  assert.equal(sealer.seal(args, CTX), null);
+  const other = runBoundSealer();
+  other.seal(args, CTX);
+  assert.equal(other.open({action: 'changed'}, CTX), null);
+});
+
+test('a refused seal names its reason and shows no arguments or id', () => {
+  const seen = [], sealer = runBoundSealer({onRefuse: d => seen.push(d)});
+  assert.equal(sealer.seal({a: 'SECRET'}, {...CTX, toolCallId: 'bad|id'}), null);
+  assert.equal(seen[0].reason, 'call_id_invalid');
+  assert.ok(!JSON.stringify(seen).includes('SECRET') && !JSON.stringify(seen).includes(RUN));
+});
+
+test('the listener gets a stable id within its own limit', () => {
+  assert.match(backendCallId(NESTED), /^sha256:[0-9a-f]{64}$/);
+  assert.equal(backendCallId(NESTED), backendCallId(NESTED));
+  assert.equal(backendCallId('call_1'), 'call_1');
+});
+
+test('the served report carries the reply record of this run and nothing else', () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => { calls.push({url: String(url), options}); return {body: null}; };
+  const report = servedHook({agents: ['cos-agent-a'], url: new URL(ENDPOINT), token: TOKEN, fetchImpl});
+  const ctx = {agentId: 'cos-agent-a', sessionKey: SESSION, runId: RUN};
+  report({lastAssistant: {provider: 'openai', model: 'gpt-6-astra', api: 'openai-chatgpt-responses', content: 'SECRET'}, harnessId: 'openclaw'}, ctx);
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].url.endsWith('/served'));
+  assert.deepEqual(JSON.parse(calls[0].options.body), {provider: 'openai', model: 'gpt-6-astra', api: 'openai-chatgpt-responses', harness: 'openclaw'});
+  report({lastAssistant: {provider: 'openai', model: 'bad model'}}, ctx);
+  report({lastAssistant: {provider: 'openai', model: 'm'}}, {...ctx, runId: 'nope'});
+  report({lastAssistant: {provider: 'openai', model: 'm'}}, {...ctx, agentId: 'someone-else'});
+  assert.equal(calls.length, 1);
+});

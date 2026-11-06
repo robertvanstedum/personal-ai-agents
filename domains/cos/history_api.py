@@ -84,6 +84,32 @@ def create_blueprint(history: History, *, resolve_owner: Callable) -> Blueprint:
         except OSError:
             return unavailable()
 
+    @bp.route("/ui/history/conversations/<conversation_id>/route", methods=["GET", "POST"])
+    def conversation_route(conversation_id: str):
+        from core.model_routes import RouteRefused
+        from domains.cos import model_route
+        if resolve_owner(request) is None:
+            return refused(HistoryRefused("identity_required"))
+        if not model_route.enabled():
+            return jsonify({"error": "not_found"}), 404
+        try:
+            if history.conversation(conversation_id) is None:
+                return jsonify({"error": "not_found"}), 404
+            if request.method == "GET":
+                return jsonify(model_route.view_for(history, conversation_id))
+            body = request.get_json(silent=True)
+            if not isinstance(body, dict) or type(body.get("revision")) is not int or not isinstance(body.get("route_id"), str):
+                return jsonify({"error": "route_request_invalid"}), 400
+            return jsonify(model_route.choose(history, conversation_id, body["route_id"], body["revision"]))
+        except model_route.RevisionConflict as exc:
+            return jsonify({"error": "route_conflict", "revision": exc.revision}), 409
+        except RouteRefused as exc:
+            return jsonify({"error": exc.code, "message": exc.message}), 409
+        except HistoryRefused as exc:
+            return refused(exc)
+        except (OSError, ValueError):
+            return unavailable()
+
     @bp.route("/ui/history/preferences", methods=["GET", "POST"])
     def preferences():
         import hashlib

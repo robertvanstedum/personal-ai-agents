@@ -45,6 +45,8 @@ from core.realtime_voice.capabilities import (
 )
 from core.realtime_voice.confer import create_confer_voice_blueprint
 from core.realtime_voice.providers import openai_speech
+from domains.cos import model_route
+from domains.cos.backends import openclaw_backend as openclaw_backend_module
 from domains.cos.confer_service import (
     ConferOperationFailed,
     ConferTurnRequest,
@@ -828,7 +830,13 @@ def _reset_backend_conversation(conversation_id: str) -> bool:
 
 def _get_routing_receipt(receipt_id: str) -> dict | None:
     """Resolve LiteLLM's asynchronous receipt without guessing the serving model."""
-    return _routing_receipts.wait_for(receipt_id, timeout_seconds=1.0)
+    receipt = _routing_receipts.wait_for(receipt_id, timeout_seconds=1.0)
+    if receipt:
+        return receipt
+    # A plan turn has no gateway receipt. The runtime's record of this exact run is the evidence, or there is none.
+    served = _bindings.served_for_turn(receipt_id) if _bindings is not None else None
+    return {"logical_model": None, "served_provider": served["provider"], "served_model": served["model"],
+            "fallback_position": None, "fallback_reason": None} if served else None
 
 
 def _process_confer_turn(
@@ -1673,8 +1681,11 @@ def _ui_turn(body: dict, binding: dict | None = None) -> tuple[dict, int]:
             kept, early = _history_begin(body, owner_text, attachment_names, channel)
             if early is not None:
                 return early
+        routed, model_token = None, None
         try:
             before = _cos_files.snapshot() if _cos_files is not None else None
+            routed = model_route.for_turn(_history, kept["conversation_id"]) if kept else None     # fixed for this turn; refuses, never substitutes
+            model_token = openclaw_backend_module.turn_model.set(model_route.runtime_model(routed))
             result = _process_confer_turn(
                 text,
                 channel=channel,
@@ -1688,6 +1699,9 @@ def _ui_turn(body: dict, binding: dict | None = None) -> tuple[dict, int]:
                 if binding is not None and kept else binding,
             )
             payload = result.public_dict()
+            if routed is not None:
+                model_route.record(_history, kept["conversation_id"], routed,
+                                   _bindings.served_for_turn(_receipt_turn_id(kept["turn_id"])) if _bindings is not None else None)
             if before is not None:
                 delivered = _cos_files.delivered_since(before)
                 if delivered:
@@ -1701,6 +1715,9 @@ def _ui_turn(body: dict, binding: dict | None = None) -> tuple[dict, int]:
             if kept:
                 _history_fail(kept, exc)
             raise
+        finally:
+            if model_token is not None:       # this thread's next turn, Telegram's say, must not inherit this choice
+                openclaw_backend_module.turn_model.reset(model_token)
         if not kept and not payload.get("operation"):     # notes, reminders and /new keep their own records
             conversation_log.append(_conversations_dir, conversation_id=result.conversation_id, turn_id=result.turn_id,
                                     channel=channel, owner_text=owner_text, attachments=attachment_names,
