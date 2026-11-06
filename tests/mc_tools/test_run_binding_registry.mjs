@@ -74,3 +74,41 @@ test('every refusal names its branch and shows no arguments or id values',()=>{
  assert.equal(sealer.seal({a:'SECRET-BODY'},c),null);assert.equal(reason(),'call_already_used');
  assert.ok(!JSON.stringify(seen).includes('SECRET-BODY')&&!JSON.stringify(seen).includes('call_1')&&!JSON.stringify(seen).includes(RUN));
 });
+
+// Code mode hands the model's code only a tool's details, so its words must be there as well as in its text.
+function answering(reply){
+ const f=setup(),calls=[];
+ const factory=toolFactory({endpoint:'http://127.0.0.1:5011/internal/mc/v1/tools',token:'r'.repeat(40),tokenFile:'/private/token',agents:['mc-chat'],tools:[ctx.toolName],allowTokenReadableByAgent:true,sealer:f.sealer,fetchImpl:async(url,init)=>{
+  calls.push(String(url));if(String(url).endsWith('/instance'))return new Response('{}',{status:200,headers:{'content-type':'application/json'}});
+  return reply();
+ }});
+ const [tool]=factory({agentId:ctx.agentId,sessionKey:ctx.sessionKey,workspaceDir:'/private/ws'}).filter(t=>t.name===ctx.toolName);
+ return {tool,f,calls};
+}
+const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json'}});
+test('a successful answer keeps its status, code and data, and adds its words',async()=>{
+ const {tool,f}=answering(()=>json({status:'done',code:'task',message:'Read completely.',data:{state:'completed'}}));
+ assert.deepEqual(f.stage().params,args);
+ const out=await tool.execute(ctx.toolCallId,args);
+ assert.deepEqual(out.details,{message:'Read completely.',status:'done',code:'task',data:{state:'completed'}});
+ assert.equal(out.content[0].text,'Read completely.');
+});
+test('a refusal from the listener reaches details with its explanation',async()=>{
+ const {tool,f}=answering(()=>json({status:'refused',code:'name_in_public_text',message:'It names someone. Nothing was proposed.',data:{}}));
+ f.stage();
+ const out=await tool.execute(ctx.toolCallId,args);
+ assert.equal(out.details.code,'name_in_public_text');assert.equal(out.details.status,'refused');
+ assert.equal(out.details.message,'It names someone. Nothing was proposed.');
+});
+test('a refusal the plugin makes itself says why, and sends nothing',async()=>{
+ const {tool,calls}=answering(()=>{throw Error('must not be called');});
+ const out=await tool.execute(ctx.toolCallId,args);                     // never sealed
+ assert.equal(out.details.code,'run_identity_missing');assert.match(out.details.message,/nothing was sent/);
+ assert.ok(!calls.some(u=>u.endsWith(ctx.toolName)));
+});
+test('an answer that fails the existing checks is still unknown, and adds nothing from that answer',async()=>{
+ const {tool,f}=answering(()=>json({status:'done',code:'x',message:'SERVER WORDS',data:{},extra:1}));
+ f.stage();
+ const out=await tool.execute(ctx.toolCallId,args);
+ assert.equal(out.details.status,'unknown');assert.ok(!JSON.stringify(out).includes('SERVER WORDS'));
+});

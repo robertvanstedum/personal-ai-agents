@@ -14,7 +14,8 @@ const MAX_BYTES = 65536;
 const STATUSES = ['done', 'needs_confirmation', 'needs_clarification', 'refused', 'unknown'];
 const CATALOGUE = JSON.parse(readFileSync(new URL('./tools.json', import.meta.url), 'utf8'));
 const GB = 1024 ** 3;
-const text = (s, details) => ({content: [{type: 'text', text: s}], details});
+// Code mode hands the model's code a tool's details and never its content, so the same words go in both. Nothing else changes.
+const text = (s, details) => ({content: [{type: 'text', text: s}], details: {message: s, ...details}});
 const NOT_SENT = 'MiniMoi did not receive this call, so nothing was done.';
 const RECALL_UNKNOWN = 'Recall read could not be confirmed. No memory mutation was requested. You may retry this read; do not infer its result.';
 const READ_UNKNOWN = 'GitHub read could not be confirmed. No repository mutation was requested. You may retry this read; do not infer its result.';
