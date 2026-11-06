@@ -86,6 +86,12 @@ class TaskClient:
             raise TaskServiceUnavailable(f"pending failed: HTTP {r.status_code}")
         return r.json()
 
+    def unfinished(self) -> list:
+        r = self._call("GET", "/v1/pending/unfinished")
+        if r.status_code != 200:
+            raise TaskServiceUnavailable(f"unfinished failed: HTTP {r.status_code}")
+        return r.json()
+
     def submit(self, cmd: dict) -> dict:
         """The service's result for this command. Raises TaskServiceUnavailable when the outcome stays unknown."""
         try:

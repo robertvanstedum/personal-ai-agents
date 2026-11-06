@@ -18,6 +18,9 @@ class Client:
             raise self.error
         return self.rows
 
+    def unfinished(self):
+        return []
+
 
 def _status(got):
     return (got[0], got[1]) if isinstance(got, tuple) else (got, got.status_code)

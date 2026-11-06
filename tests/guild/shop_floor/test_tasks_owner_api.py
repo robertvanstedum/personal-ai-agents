@@ -241,3 +241,41 @@ def test_refusal_words_never_show_a_bare_code():
     assert T.refusal_words("outbox.record", "fenced", "task_changed_since_enqueue") == \
         "Not declined: the task changed since the card was made. Nothing has started. Refresh to see the current card."
     assert "(weird_code: x)" in T.refusal_words("outbox.approve", "weird_code", "x")
+
+
+def test_a_confirm_that_stopped_after_adoption_stays_listed_until_finished_and_makes_one_task(rig, monkeypatch):
+    """Codex's review: adoption succeeds, the request step fails, and a reread used to lose the proposal."""
+    svc, c = rig
+    shown = c.get("/tasks/pending").json["proposals"][0]["proposal_digest"]
+    real = T._send
+    calls = []
+
+    def flaky(client, cmd):
+        calls.append(cmd["kind"])
+        if cmd["kind"] == "request.record" and calls.count("request.record") == 1:
+            return None, T.json_error("unconfirmed", "lost", 503)
+        return real(client, cmd)
+    monkeypatch.setattr(T, "_send", flaky)
+    assert post(c, "/tasks/confirm", interpretation_id="IN-own-0001", proposal_digest=shown).status_code == 503
+    client = T._client()
+    assert client.pending() == []                     # no longer "proposed", which is how it used to vanish
+    rows = client.unfinished()
+    assert [r["interpretation_id"] for r in rows] == ["IN-own-0001"]
+    assert rows[0]["finishing"] is True and rows[0]["proposal_digest"] == shown
+    app = Flask(__name__)
+    with app.test_request_context():
+        listed = T.cos_proposals().get_json()["proposals"]
+    assert [p["interpretation_id"] for p in listed] == ["IN-own-0001"] and listed[0]["finishing"] is True
+    done = post(c, "/tasks/confirm", interpretation_id="IN-own-0001", proposal_digest=shown)
+    assert done.status_code == 200 and done.json["state"] == "confirmed", done.json
+    assert client.unfinished() == []                  # finished: gone from the list
+    assert svc.get("task", done.json["task_id"], "tok-principal")["lead"] == "mc"
+    again = post(c, "/tasks/confirm", interpretation_id="IN-own-0001", proposal_digest=shown)
+    assert again.status_code == 200 and again.json["task_id"] == done.json["task_id"]     # no second task
+
+
+def test_unfinished_confirmations_are_for_the_principal_only(rig):
+    from services.partnership_tasks.reconstruct import unfinished_confirmations
+    svc, _ = rig
+    assert unfinished_confirmations(svc, "tok-principal") == []
+    assert unfinished_confirmations(svc, "tok-not-a-seat") is None

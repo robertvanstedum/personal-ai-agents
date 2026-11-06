@@ -74,6 +74,8 @@ A proposal is what CoS asks before a task exists; a work card is what MC asks be
 
 Body: `{"interpretation_id": "...", "proposal_digest": "<as shown>"}`, with `cosWriteHeaders()`.
 
+A row with `"finishing": true` was confirmed but its task wasn't made, because a confirm stopped part-way. It stays in this list across reloads. Offer one action, Finish, which is the same `confirm` call with the same `interpretation_id` and `proposal_digest`; there's no decline. Repeating it can't make a second task.
+
 - Confirm, 200: `{"state": "confirmed", "interpretation_id": "...", "request_id": "...", "task_id": "...", "lead": "..."}`. "Confirmed" means the task exists, not that work began.
 - Decline, 200: `{"state": "declined", "interpretation_id": "..."}`.
 - Refusals as section 1: `changed`, `not_pending`, `invalid`, `unavailable`, `csrf`. Show `message`. A confirm that stopped part-way finishes forward on another click, under the same ids, so keep the card and reread after a failure.

@@ -192,7 +192,7 @@ def cos_proposals(user=None):
     if client is None:
         return json_error("unavailable", "Task tracking is not connected here.", 409)
     try:
-        rows = client.pending()
+        rows = client.pending() + client.unfinished()      # a confirm that stopped part-way stays, to finish it
     except (TaskServiceUnavailable, requests.RequestException):
         return json_error("unavailable", "The task service could not confirm the current state. Try Refresh.", 503)
     return jsonify(proposals=[{**p, "conversation_id": _proposal_conversation(p)} for p in rows])

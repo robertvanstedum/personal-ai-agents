@@ -348,6 +348,44 @@ def pending_proposals(svc: TaskService, token: str) -> list[dict] | None:
         raise StoreUnavailable(type(exc).__name__) from exc
 
 
+def unfinished_confirmations(svc: TaskService, token: str) -> list[dict] | None:
+    """Proposals the principal confirmed where the task was never made: adopted on an owner confirmation, but no
+    request from it was promoted. A confirm that stopped part-way must stay visible, so one more click can finish it
+    under the same ids. Same shape as pending_proposals, with ``finishing``; ``revision`` is the one the adoption was
+    sent against. Principal only (None for any other seat)."""
+    from core.canonical_json import digest
+    binding = svc.bindings.resolve(token, svc._clock())
+    if binding is None or not binding.is_owner:
+        return None
+    def read():
+        requests_folder = svc.journal.root / DIRS["request"]
+        promoted = set()
+        for p in sorted(requests_folder.glob("*.json")) if requests_folder.is_dir() else []:
+            rec = svc.journal.read(f"{DIRS['request']}/{p.name}")
+            if rec and rec.get("state") == "promoted":
+                promoted.add(rec.get("interpretation_ref"))
+        out = []
+        folder = svc.journal.root / DIRS["interpretation"]
+        for p in sorted(folder.glob("IN-*.json")) if folder.is_dir() else []:
+            rec = svc.journal.read(f"{DIRS['interpretation']}/{p.name}")
+            if (not rec or rec["data_scope"] not in binding.read_scopes or rec["disposition"] != "adopted"
+                    or (rec.get("authority") or {}).get("kind") != "owner_confirmation"
+                    or rec.get("superseded_by") or rec["interpretation_id"] in promoted):
+                continue
+            sources = [svc.journal.read(path_of("source_event", sid)) for sid in rec["source_event_ids"]]
+            out.append({"interpretation_id": rec["interpretation_id"], "revision": rec["revision"] - 1,
+                        "proposed": rec["proposed"], "proposal_digest": digest(rec["proposed"]),
+                        "proposed_by": rec["provenance"]["actor_seat"], "created_at": rec["created_at"],
+                        "finishing": True,
+                        "sources": [{"source_event_id": s["source_event_id"], "source": s["source"],
+                                     "content": s["content"]} for s in sources if s]})
+        return out
+    try:
+        return svc.journal.view(read)
+    except (JournalDamaged, OSError) as exc:
+        raise StoreUnavailable(type(exc).__name__) from exc
+
+
 def history(svc: TaskService, token: str, words: str) -> list[dict]:
     """J1 next-session recall: requests whose intent, any earlier edition, or source words contain all ``words``
     (case-insensitive), with the coverage and results each edition had. Scoped like every read."""
