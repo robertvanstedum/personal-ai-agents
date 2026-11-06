@@ -7,8 +7,8 @@
 #       WARNING: MC is stopped while its volumes are read (up to 10 minutes): MC chat is down. It is started again even
 #       when a copy fails. Everything else keeps running.
 #   minimoi_1_2_backup.sh restore-proof <folder>
-#       Restores personal_agents into a throwaway Postgres with no network, on the exact image the live database runs,
-#       and compares row counts with the live database. Unpacks files.tgz in the folder and diffs auth/ with the live
+#       Restores both databases into a throwaway Postgres with no network, on the exact image the live database runs,
+#       and compares row counts and every object count with the live database; any restore error fails it. Unpacks files.tgz in the folder and diffs auth/ with the live
 #       one. Removes both. Live data is only read.
 #
 # <folder> must be new or empty for backup; it is made 0700, and every file in it 0600. receipt.txt lists sizes and sha256.
@@ -76,7 +76,17 @@ backup() {
   for item in "${FILES[@]}"; do
     if [[ -e "$ROOT/$item" ]]; then present+=("$item"); else echo "not_on_this_host=$item" >> "$OUT/receipt.txt"; fi
   done
-  tar -czf "$OUT/files.tgz" -C "$ROOT" "${present[@]}"
+  # CoS's store: its writer takes this same lock for each command, so the copy holds one consistent state. Writes wait
+  # for the copy; nothing is stopped.
+  local store_lock="$ROOT/cos/store/journal/.lock"
+  if [[ -e "$store_lock" ]]; then
+    command -v flock >/dev/null 2>&1 || die "flock is needed to copy CoS's store consistently"
+    flock -x -w 120 "$store_lock" tar -czf "$OUT/files.tgz" -C "$ROOT" "${present[@]}" || die "could not copy the files under CoS's store lock"
+    echo "cos_store=copied_under_its_writer_lock" >> "$OUT/receipt.txt"
+  else
+    tar -czf "$OUT/files.tgz" -C "$ROOT" "${present[@]}"
+    echo "cos_store=no_writer_yet" >> "$OUT/receipt.txt"
+  fi
   receipt files.tgz
 
   log "stopping $MC to read its volumes at rest: MC chat is down until this finishes (up to 10 minutes)"
@@ -102,6 +112,10 @@ count() { # count <container> <database> <table>: rows, or absent.
     "SELECT CASE WHEN to_regclass('$3') IS NULL THEN 'absent' END" | grep -qx absent && { echo absent; return; }
   docker exec "$1" psql -U postgres -d "$2" -Atc "SELECT count(*) FROM $3"
 }
+
+# Tables, indexes, sequences, views and constraints, outside the system schemas: a restore that lost any of them differs.
+OBJECTS_SQL="SELECT (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname !~ '^pg_toast' AND c.relkind IN ('r','p')) || '|' || (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname !~ '^pg_toast' AND c.relkind='i') || '|' || (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND c.relkind='S') || '|' || (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND c.relkind IN ('v','m')) || '|' || (SELECT count(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema'))"
+objects() { docker exec "$1" psql -U postgres -d "$2" -Atc "$OBJECTS_SQL"; }
 
 remove_restore() { docker rm -f "$RESTORE" >/dev/null 2>&1 || true; }
 
@@ -130,9 +144,28 @@ restore_proof() {
     sleep 1
     [[ "$i" != 60 ]] || die "the throwaway Postgres did not start"
   done
-  docker exec "$RESTORE" createdb -U postgres r
-  # pg_restore reports ownership of roles this empty server lacks; --no-owner stops those, and a real fault shows in the counts.
-  docker exec -i "$RESTORE" pg_restore -U postgres --no-owner --no-privileges -d r < "$OUT/personal_agents.dump" >/dev/null 2>&1 || true
+  # Every database, and any error fails the proof: --no-owner and --no-privileges stop the role messages an empty server
+  # would give, so what is left is a real one to look at. Its details stay in a private file; they can quote row data.
+  local errors="$OUT/restore-errors.txt" target database
+  : > "$errors"
+  chmod 0600 "$errors"
+  for database in "${DATABASES[@]}"; do
+    target=r
+    [[ "$database" == personal_agents ]] || target="r_$database"
+    [[ -f "$OUT/$database.dump" ]] || die "$OUT holds no $database.dump"
+    docker exec "$RESTORE" createdb -U postgres "$target"
+    if ! docker exec -i "$RESTORE" pg_restore -U postgres --no-owner --no-privileges --exit-on-error -d "$target" < "$OUT/$database.dump" >/dev/null 2>>"$errors"; then
+      echo "restore $database=failed; see restore-errors.txt" | tee -a "$proof"; failed=1
+    else
+      echo "restore $database=clean" | tee -a "$proof"
+    fi
+    # The same objects as live: a dump can restore cleanly yet still have lost what it never held.
+    local live_objects restored_objects
+    live_objects=$(objects "$POSTGRES" "$database")
+    restored_objects=$(objects "$RESTORE" "$target")
+    echo "objects $database restored=$restored_objects live=$live_objects" | tee -a "$proof"
+    [[ "$live_objects" == "$restored_objects" ]] || { echo "differs=objects:$database" | tee -a "$proof"; failed=1; }
+  done
   local table live restored dumped
   for table in "${PROOF_TABLES[@]}"; do
     live=$(count "$POSTGRES" personal_agents "$table")

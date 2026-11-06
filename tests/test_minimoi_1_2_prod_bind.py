@@ -810,9 +810,10 @@ case "$1" in
     case "$1" in
       pg_dump) echo "dump of ${@: -1}" ;;
       pg_isready|createdb) ;;
-      pg_restore) cat > /dev/null ;;
+      pg_restore) cat > /dev/null; [[ ! -f "$FAKE_DIR/restore_fails" ]] || { echo "pg_restore: error: could not execute query" >&2; exit 1; } ;;
       psql)
         case "$*" in
+          *pg_constraint*) if [[ "$target" == *restore* ]]; then cat "$FAKE_DIR/restored_objects"; else echo "9|9|2|1|9"; fi ;;
           *to_regclass*) ;;
           *count*) if [[ "$target" == *restore* ]]; then cat "$FAKE_DIR/restored_rows"; else echo 5; fi ;;
         esac ;;
@@ -830,6 +831,9 @@ def backup_env(tmp_path):
     (fake / "docker").write_text(FAKE_BACKUP_DOCKER)
     (fake / "docker").chmod(0o755)
     (fake / "restored_rows").write_text("5\n")
+    (fake / "restored_objects").write_text("9|9|2|1|9\n")
+    (fake / "flock").write_text('#!/bin/bash\necho "$*" >> "$FAKE_DIR/flock.log"\nshift 4\nexec "$@"\n')
+    (fake / "flock").chmod(0o755)
     root = tmp_path / "minimoi"
     (root / "auth").mkdir(parents=True)
     (root / "auth/users.json").write_text('{"secret": "SECRET-IN-AUTH"}')
@@ -898,6 +902,41 @@ def test_restore_proof_fails_on_a_wrong_row_count(backup_env, rows):
     (fake / "restored_rows").write_text(rows)
     done = run("restore-proof", str(out))
     assert done.returncode == 1 and "DIFFERENCES" in done.stdout
+
+
+def test_a_restore_error_fails_the_proof_even_when_the_counts_match(backup_env):
+    run, fake, _, out = backup_env
+    assert run("backup", str(out)).returncode == 0
+    (fake / "restore_fails").write_text("")
+    done = run("restore-proof", str(out))
+    assert done.returncode == 1 and "restore personal_agents=failed" in done.stdout and "DIFFERENCES" in done.stdout
+    assert "could not execute query" not in done.stdout + done.stderr      # details stay in the private file
+    errors = out / "restore-errors.txt"
+    assert "could not execute query" in errors.read_text() and stat.S_IMODE(errors.stat().st_mode) == 0o600
+
+
+def test_a_missing_index_or_constraint_fails_the_proof(backup_env):
+    run, fake, _, out = backup_env
+    assert run("backup", str(out)).returncode == 0
+    (fake / "restored_objects").write_text("9|8|2|1|9\n")
+    done = run("restore-proof", str(out))
+    assert done.returncode == 1 and "differs=objects:personal_agents" in done.stdout
+
+
+def test_both_databases_are_restored(backup_env):
+    run, fake, _, out = backup_env
+    assert run("backup", str(out)).returncode == 0
+    done = run("restore-proof", str(out))
+    assert done.returncode == 0 and "restore personal_agents=clean" in done.stdout and "restore litellm_keys=clean" in done.stdout
+
+
+def test_cos_store_is_copied_under_its_writers_lock(backup_env):
+    run, fake, root, out = backup_env
+    (root / "cos/store/journal").mkdir(parents=True)
+    (root / "cos/store/journal/.lock").write_text("")
+    assert run("backup", str(out)).returncode == 0
+    assert str(root / "cos/store/journal/.lock") in (fake / "flock.log").read_text()
+    assert "cos_store=copied_under_its_writer_lock" in (out / "receipt.txt").read_text()
 
 
 def test_restore_proof_fails_on_a_changed_file_and_names_no_contents(backup_env):
