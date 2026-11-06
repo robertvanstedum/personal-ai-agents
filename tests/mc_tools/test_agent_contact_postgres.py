@@ -1,4 +1,5 @@
 """Real isolated DB admission/watch path; native transport is synthetic only."""
+import os
 import hashlib
 import unittest
 from dataclasses import asdict

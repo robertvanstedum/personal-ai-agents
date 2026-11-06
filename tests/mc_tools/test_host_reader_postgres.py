@@ -1,4 +1,5 @@
 """Real admission, taint, authenticated callback and cross-turn rejection for host reads."""
+import os
 import hashlib
 import json
 import unittest
