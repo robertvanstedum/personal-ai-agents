@@ -1310,3 +1310,14 @@ def test_a_standalone_containers_first_network_is_found_by_name_or_id():
 def test_an_unknown_first_network_is_refused_not_guessed(mode, nets):
     with pytest.raises(op.Refused):
         op.primary_network(mode, nets)
+
+
+def test_a_config_difference_names_the_field_and_never_its_value():
+    with pytest.raises(AssertionError) as caught:
+        op.check_restored({"env": ["KEY=secret-a"], "host": {"Memory": 1}}, {"env": ["KEY=secret-b"], "host": {"Memory": 1}}, "x")
+    assert "/env" in str(caught.value) and "secret" not in str(caught.value)
+
+
+def test_standalone_containers_are_made_with_the_servers_own_api_version():
+    source = open(op.__file__).read()
+    assert '"/v1.' not in source      # an older pinned version changes read-only mounts (6 Nov)

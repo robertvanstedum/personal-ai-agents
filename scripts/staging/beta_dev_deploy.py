@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 
-RELEASE = "beta-20261106d"
+RELEASE = "beta-20261106e"
 STAGING_ROOT = "/opt/minimoi-staging"
 OPERATOR_NAME = "beta-dev-20261106"
 MIN_FREE_BYTES = 2 * 1024 ** 3
@@ -463,9 +463,17 @@ def _same_meaning(contract):
     return value
 
 
+def _differing_fields(left, right, path=""):
+    """Which fields differ, by name only: a value here could be a secret."""
+    if isinstance(left, dict) and isinstance(right, dict):
+        return [f for key in sorted(set(left) | set(right)) for f in _differing_fields(left.get(key), right.get(key), f"{path}/{key}")]
+    return [] if left == right else [path or "/"]
+
+
 def check_restored(saved: dict, live: dict, what: str) -> None:
     """After a restore, what was saved is what is live, whole."""
-    assert _same_meaning(saved) == _same_meaning(live), "restored " + what + " differs from the saved one"
+    left, right = _same_meaning(saved), _same_meaning(live)
+    assert left == right, "restored " + what + " differs from the saved one, at: " + ", ".join(_differing_fields(left, right)[:8])
 
 
 def same_runtime(saved: dict, live: dict) -> None:
@@ -945,7 +953,7 @@ class RealHost:                                     # pragma: no cover  (exercis
                 self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                 self.sock.connect("/var/run/docker.sock")
         conn = Docker("localhost", timeout=90)
-        conn.request(method, "/v1.43" + path, None if body is None else json.dumps(body), {"Content-Type": "application/json"})
+        conn.request(method, path, None if body is None else json.dumps(body), {"Content-Type": "application/json"})
         r = conn.getresponse()
         raw, status = r.read(), r.status
         conn.close()
