@@ -156,15 +156,32 @@ def _article_payload(chat_id, num, title, url, source, category, score):
             "reply_markup": keyboard, "disable_web_page_preview": True}
 
 
+class TelegramSendFailed(requests.exceptions.HTTPError):
+    """Telegram answered and refused the message (bad token, unknown chat, blocked bot, malformed HTML). It carries
+    the status only: requests' own HTTPError quotes the URL, and this URL holds the bot token."""
+    def __init__(self, status):
+        super().__init__(f"Telegram refused the send (HTTP {status})")
+        self.status = status
+
+
+def _check_sent(response):
+    """Telegram's 4xx and 5xx don't raise on their own, so an unchecked send reads as delivered (issue #35)."""
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError:
+        raise TelegramSendFailed(response.status_code) from None
+
+
 def send_message(token, chat_id, text, parse_mode="HTML", retries=3):
-    """Simple fire-and-forget message send with retry on timeout"""
+    """Send one message, retrying a timeout. Raises TelegramSendFailed when Telegram refuses it."""
     for attempt in range(1, retries + 1):
         try:
-            requests.post(
+            response = requests.post(
                 f"https://api.telegram.org/bot{token}/sendMessage",
                 json=_message_payload(chat_id, text, parse_mode),
                 timeout=30
             )
+            _check_sent(response)
             return
         except requests.exceptions.Timeout:
             print(f"⚠️  send_message timeout (attempt {attempt}/{retries})")
@@ -172,15 +189,25 @@ def send_message(token, chat_id, text, parse_mode="HTML", retries=3):
                 print("❌ send_message failed after all retries")
                 raise
 
+def _progress(token, chat_id, text):
+    """A courtesy line before real work. A refused one is logged and the work goes on: these lines can quote
+    transcribed words that Telegram's HTML parser rejects, and that must not lose the note or the transcript."""
+    try:
+        send_message(token, chat_id, text)
+    except TelegramSendFailed as exc:
+        print(f"❌ Progress message not delivered: {exc}")
+
+
 def send_article(token, chat_id, num, title, url, source, category, score):
-    """Send one article with interactive buttons"""
+    """Send one article with interactive buttons. Raises TelegramSendFailed when Telegram refuses it."""
     for attempt in range(1, 4):
         try:
-            requests.post(
+            response = requests.post(
                 f"https://api.telegram.org/bot{token}/sendMessage",
                 json=_article_payload(chat_id, num, title, url, source, category, score),
                 timeout=30
             )
+            _check_sent(response)
             return
         except requests.exceptions.Timeout:
             print(f"⚠️  send_article timeout (attempt {attempt}/3)")
@@ -217,6 +244,17 @@ def send_briefing(token, chat_id):
     
     send_message(token, chat_id, BRIEFING_FOOTER)
     print(f"✅ Sent {len(articles[:10])} articles to Telegram")
+
+async def _send_briefing_and_say(update, token, chat_id):
+    """An on-demand briefing that fails says so in the chat that asked, and in the log."""
+    try:
+        send_briefing(token, chat_id)
+    except requests.exceptions.RequestException as exc:
+        # Never str(exc) for other request errors: a connection error quotes the URL, which holds the token.
+        print(f"❌ Briefing not delivered: {exc if isinstance(exc, TelegramSendFailed) else type(exc).__name__}")
+        await update.message.reply_text("❌ The briefing was not delivered: Telegram refused a message or did not "
+                                        "answer. See the bot log.")
+
 
 def parse_curator_output(path):
     """Compatibility wrapper around the pure Curator briefing parser."""
@@ -289,7 +327,7 @@ async def cmd_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ Curator run complete. Sending briefing...")
         token = get_polling_token()
         chat_id = get_chat_id() or str(update.message.chat_id)
-        send_briefing(token, chat_id)
+        await _send_briefing_and_say(update, token, chat_id)
     else:
         await update.message.reply_text(f"❌ Curator failed:\n{err[:300]}")
 
@@ -313,7 +351,7 @@ async def cmd_briefing(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     token = get_polling_token()
     chat_id = get_chat_id() or str(update.message.chat_id)
-    send_briefing(token, chat_id)
+    await _send_briefing_and_say(update, token, chat_id)
 
 # ─── Voice notes ──────────────────────────────────────────────────────────────
 
@@ -483,11 +521,10 @@ def handle_voice_message(message, token):
         return
 
     # Always echo back first
-    send_message(token, chat_id, f'🎙️ I heard: "{transcription}"')
+    _progress(token, chat_id, f'🎙️ I heard: "{transcription}"')
 
     if duration < 3:
-        send_message(token, chat_id,
-            "⚠️ Short note logged — double-check it made sense.")
+        _progress(token, chat_id, "⚠️ Short note logged — double-check it made sense.")
 
     # Classify: command or capture
     command, args = classify_voice(transcription)
@@ -2284,6 +2321,15 @@ def get_webhook_secret():
         return None
 
 
+def _logging_refused_sends(handler, message, token):
+    """A refused reply is logged, not raised to the webhook: a non-200 makes Telegram redeliver the update, and a
+    redelivered /run would start the Curator a second time."""
+    try:
+        handler(message, token)
+    except TelegramSendFailed as exc:
+        print(f"❌ Webhook reply not delivered: {exc}")
+
+
 def run_webhook_mode():
     """Start the authenticated owner-only webhook using the legacy CLI."""
     from core.telegram.webhook_app import create_webhook_app
@@ -2301,8 +2347,8 @@ def run_webhook_mode():
         resolve_owner=lambda: ROBERT_CHAT_ID,
         callback=lambda query: handle_webhook_callback(query, token),
         voice=lambda message: handle_voice_message(message, token),
-        command=lambda message: handle_webhook_command(message, token),
-        text=lambda message: handle_webhook_text_message(message, token),
+        command=lambda message: _logging_refused_sends(handle_webhook_command, message, token),
+        text=lambda message: _logging_refused_sends(handle_webhook_text_message, message, token),
     )
     print("Starting authenticated Telegram webhook on port 8444")
     app.run(host='0.0.0.0', port=8444, debug=False)
@@ -2352,7 +2398,7 @@ def handle_webhook_text_message(message, token):
 def _handle_webhook_german_transcript(text, chat_id, token):
     """Pass full message text to parse_transcript.py via subprocess (webhook mode)."""
     import tempfile
-    send_message(token, chat_id, "⏳ Parsing German session transcript...")
+    _progress(token, chat_id, "⏳ Parsing German session transcript...")
     german_dir = BASE_DIR / 'domains' / 'german'
     sessions_dir = german_dir / 'data' / 'sessions'
     sessions_dir.mkdir(parents=True, exist_ok=True)

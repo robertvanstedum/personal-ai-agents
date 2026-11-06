@@ -1,6 +1,6 @@
 """Offline contracts for the actual Telegram article sender.
 
-Load only its two sending functions so collection never imports a runtime,
+Load only its sending functions so collection never imports a runtime,
 reads credentials or sends a message. Full bot integration is covered by the
 separate delivery-ledger tests. Live acceptance is an explicit operator action.
 """
@@ -12,19 +12,26 @@ import pytest
 import requests
 
 
+def accepted():
+    response = requests.Response()
+    response.status_code = 200
+    return response
+
+
 @pytest.fixture
 def sender():
     source = Path(__file__).resolve().parents[1] / "core/telegram/telegram_bot.py"
     tree = ast.parse(source.read_text())
-    names = {"_article_payload", "send_article"}
-    functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in names]
+    names = {"TelegramSendFailed", "_check_sent", "_article_payload", "send_article"}
+    functions = [node for node in tree.body
+                 if isinstance(node, (ast.FunctionDef, ast.ClassDef)) and node.name in names]
     assert {node.name for node in functions} == names
     calls = []
     replies = []
 
     def post(url, **kwargs):
         calls.append((url, kwargs))
-        reply = replies.pop(0) if replies else None
+        reply = replies.pop(0) if replies else accepted()
         if isinstance(reply, Exception):
             raise reply
         return reply
@@ -57,7 +64,7 @@ def test_send_feedback_buttons_uses_fake_transport(sender, monkeypatch):
 
 
 def test_sender_retries_timeouts_with_the_same_payload(sender):
-    sender.replies[:] = [requests.exceptions.Timeout(), None]
+    sender.replies[:] = [requests.exceptions.Timeout(), accepted()]
     sender.send("fake", "fake", 1, "Title", "https://example.invalid", "Source", "other", "?")
     assert len(sender.calls) == 2
     assert sender.calls[0] == sender.calls[1]
