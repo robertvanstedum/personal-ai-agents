@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 
-RELEASE = "beta-20261106a"
+RELEASE = "beta-20261106b"
 STAGING_ROOT = "/opt/minimoi-staging"
 OPERATOR_NAME = "beta-dev-20261106"
 MIN_FREE_BYTES = 2 * 1024 ** 3
@@ -35,7 +35,9 @@ PORTAL_ROUTES = ("/app/cos/task-proposals", "/app/cos/work-cards")
 MC_TOOLS_PORT = 5011
 
 # The image each kind of file came from: the running tag's own commit. The candidate is ``git diff`` from there.
-BASES = {"portal": "ac41c252", "cos": "477ea212", "domains": "8481940d"}
+# Every image diffs from the oldest commit any of them could hold, so Dev runs the release's files even where a tag's image
+# held older copies than its name says (seen on the scheduler, portal, German and Portuguese, 6 Nov).
+BASES = {"portal": "8481940d", "cos": "8481940d", "domains": "8481940d"}
 OLDEST_ACCEPTED = "8481940d"                         # A live file may be any committed version since here: never a hand edit.
 
 MC_DIR, COS_DIR, PLUGINS = "/opt/minimoi/mc-agent/", "/opt/minimoi/cos-agent-a/", "/opt/minimoi/openclaw-plugins/"
@@ -438,9 +440,19 @@ def check_files(want: dict, got: dict, where: str) -> None:
         assert got.get(dest) == h, f"{where} holds a different file: {dest}"
 
 
+def _same_meaning(contract):
+    """Docker writes OomKillDisable as false on a new container where an older one holds null. Both mean off (seen on Dev,
+    6 Nov: it stopped an apply and its restore). Nothing else is forgiven."""
+    value = json.loads(json.dumps(contract))
+    host = value.get("host") if isinstance(value, dict) else None
+    if isinstance(host, dict) and not host.get("OomKillDisable"):
+        host["OomKillDisable"] = False
+    return value
+
+
 def check_restored(saved: dict, live: dict, what: str) -> None:
     """After a restore, what was saved is what is live, whole."""
-    assert json.loads(json.dumps(saved)) == json.loads(json.dumps(live)), "restored " + what + " differs from the saved one"
+    assert _same_meaning(saved) == _same_meaning(live), "restored " + what + " differs from the saved one"
 
 
 def same_runtime(saved: dict, live: dict) -> None:

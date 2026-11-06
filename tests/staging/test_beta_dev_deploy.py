@@ -1282,3 +1282,17 @@ def test_only_the_exact_reviewed_host_config_gets_past_the_base_check():
 def test_language_images_carry_the_photo_loader_their_servers_import():
     for key in ("german", "portuguese"):
         assert "core/photo_store.py" in str(op.TARGETS[key]["rules"])
+
+
+def test_a_new_containers_false_oom_setting_means_the_same_as_an_old_null():
+    op.check_restored({"host": {"OomKillDisable": None, "Memory": 1}}, {"host": {"OomKillDisable": False, "Memory": 1}}, "x")
+
+
+@pytest.mark.parametrize("saved,live", [
+    ({"host": {"OomKillDisable": None}}, {"host": {"OomKillDisable": True}}),
+    ({"host": {"OomKillDisable": False, "Memory": 1}}, {"host": {"OomKillDisable": False, "Memory": 2}}),
+    ({"env": ["A=1"]}, {"env": ["A=2"]}),
+])
+def test_every_real_config_difference_still_stops_the_restore(saved, live):
+    with pytest.raises(AssertionError):
+        op.check_restored(saved, live, "x")
