@@ -1297,3 +1297,16 @@ def test_a_new_containers_false_oom_setting_means_the_same_as_an_old_null():
 def test_every_real_config_difference_still_stops_the_restore(saved, live):
     with pytest.raises(AssertionError):
         op.check_restored(saved, live, "x")
+
+
+def test_a_standalone_containers_first_network_is_found_by_name_or_id():
+    nets = {"a-net": {"NetworkID": "111"}, "b-net": {"NetworkID": "222"}}
+    assert op.primary_network("b-net", nets) == "b-net"
+    assert op.primary_network("222", nets) == "b-net"
+    assert op.primary_network("default", {"only": {"NetworkID": "9"}}) == "only"
+
+
+@pytest.mark.parametrize("mode,nets", [("333", {"a": {"NetworkID": "111"}}), ("default", {"a": {}, "b": {}})])
+def test_an_unknown_first_network_is_refused_not_guessed(mode, nets):
+    with pytest.raises(op.Refused):
+        op.primary_network(mode, nets)

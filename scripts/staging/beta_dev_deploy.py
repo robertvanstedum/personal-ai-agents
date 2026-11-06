@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 
-RELEASE = "beta-20261106b"
+RELEASE = "beta-20261106c"
 STAGING_ROOT = "/opt/minimoi-staging"
 OPERATOR_NAME = "beta-dev-20261106"
 MIN_FREE_BYTES = 2 * 1024 ** 3
@@ -438,6 +438,19 @@ def check_files(want: dict, got: dict, where: str) -> None:
     """want, got: {image path: sha256}."""
     for dest, h in want.items():
         assert got.get(dest) == h, f"{where} holds a different file: {dest}"
+
+
+def primary_network(mode, networks):
+    """A container's first network by name. Docker records NetworkMode as a name, or as the network's id for a container
+    created by id (the CoS Board on Dev); "default" means its only one. Anything else is refused, not guessed."""
+    if mode in networks:
+        return mode
+    by_id = [name for name, net in networks.items() if net.get("NetworkID") == mode]
+    if len(by_id) == 1:
+        return by_id[0]
+    if mode == "default" and len(networks) == 1:
+        return next(iter(networks))
+    raise Refused("cannot tell the first network of a standalone container: " + str(mode)[:20])
 
 
 def _same_meaning(contract):
@@ -952,7 +965,7 @@ class RealHost:                                     # pragma: no cover  (exercis
         config["Image"] = new_id
         endpoints = {n: {"Aliases": [a for a in x.get("Aliases") or [] if a not in (old["Id"], old["Id"][:12])], "IPAMConfig": x.get("IPAMConfig")}
                      for n, x in old["NetworkSettings"]["Networks"].items()}
-        primary = old["HostConfig"]["NetworkMode"]
+        primary = primary_network(old["HostConfig"]["NetworkMode"], old["NetworkSettings"]["Networks"])
         self._api("POST", "/containers/create?name=" + name, {**config, "HostConfig": old["HostConfig"], "NetworkingConfig": {"EndpointsConfig": {primary: endpoints[primary]}}})
         for n, x in endpoints.items():
             if n != primary:
