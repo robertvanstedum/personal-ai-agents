@@ -39,7 +39,7 @@
     const d = await api('history/conversations/' + encodeURIComponent(cid) + '/turns?limit=50' + (earlier && before ? '&before_seq=' + before : ''));
     if (selected !== cid || epoch !== generation || input.disabled) return;
     const sig = JSON.stringify(d); if (!earlier && sig === signature) return;
-    signature = sig; before = d.next_before_seq;
+    signature = sig; before = d.next_before_seq; document.dispatchEvent(new CustomEvent('cos:turns-changed', {detail: {id: cid}}));
     const frag = document.createDocumentFragment();
     for (const turn of d.items) {
       frag.append(row('You', turn.user_text, turn.turn_id, turn.created_at));

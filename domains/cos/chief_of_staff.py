@@ -830,13 +830,20 @@ def _reset_backend_conversation(conversation_id: str) -> bool:
 
 def _get_routing_receipt(receipt_id: str) -> dict | None:
     """Resolve LiteLLM's asynchronous receipt without guessing the serving model."""
-    receipt = _routing_receipts.wait_for(receipt_id, timeout_seconds=1.0)
-    if receipt:
-        return receipt
-    # A plan turn has no gateway receipt. The runtime's record of this exact run is the evidence, or there is none.
-    served = _bindings.served_for_turn(receipt_id) if _bindings is not None else None
-    return {"logical_model": None, "served_provider": served["provider"], "served_model": served["model"],
-            "fallback_position": None, "fallback_reason": None} if served else None
+    if not model_route.enabled():
+        return _routing_receipts.wait_for(receipt_id, timeout_seconds=1.0)
+    # A plan turn has no gateway receipt, so the runtime's record of this exact run is the evidence, usually here already.
+    # Stop as soon as either answers; a turn with neither waits the same 1 s as ever and reports no evidence.
+    deadline = time.monotonic() + 1.0
+    while True:
+        served = _bindings.served_for_turn(receipt_id) if _bindings is not None else None
+        if served:
+            return {"logical_model": None, "served_provider": served["provider"], "served_model": served["model"],
+                    "fallback_position": None, "fallback_reason": None}
+        left = deadline - time.monotonic()
+        receipt = _routing_receipts.wait_for(receipt_id, timeout_seconds=max(0.0, min(0.1, left)))
+        if receipt or left <= 0:
+            return receipt
 
 
 def _process_confer_turn(

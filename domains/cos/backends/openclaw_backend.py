@@ -5,6 +5,7 @@ This adapter only sends one normalized turn to the dedicated OpenClaw Gateway's
 supported Chat Completions endpoint and returns assistant-visible text.
 """
 
+from core.model_routes import routes_enabled
 import contextvars
 import hashlib
 import json
@@ -123,7 +124,7 @@ class OpenClawBackend:
         self.model_label = (
             model_label
             if model_label is not None
-            else os.environ.get("COS_AGENT_RUNTIME_MODEL_LABEL", "gateway-unresolved")
+            else os.environ.get("COS_AGENT_RUNTIME_MODEL_LABEL", "no-evidence" if routes_enabled() else "gateway-unresolved")
         )
         self._http_post = http_post or requests.post
         # F2 step 3: with a binder, every turn streams so the run id is attached from the opening chunk before any

@@ -285,10 +285,115 @@ def test_a_page_turn_on_a_withdrawn_route_sends_nothing(page):
     assert openclaw_backend.turn_model.get() is None
 
 
-def test_a_plan_turn_with_no_gateway_receipt_reports_the_runtimes_own_record(page, monkeypatch):
+def test_a_plan_turn_reports_the_runtimes_record_at_once_rather_than_waiting_for_a_gateway_receipt(page, monkeypatch):
     cos, _, _ = page
-    monkeypatch.setattr(cos._routing_receipts, "wait_for", lambda *a, **k: None)
+    waits = []
+    monkeypatch.setattr(cos._routing_receipts, "wait_for", lambda *a, **k: waits.append(k) or None)
     monkeypatch.setattr(cos, "_bindings", type("B", (), {"served_for_turn": staticmethod(lambda t: {"provider": "openai", "model": "gpt-6-astra"})})())
+    assert cos._get_routing_receipt("t")["served_model"] == "gpt-6-astra" and waits == []
+
+
+def test_evidence_that_lands_during_the_wait_is_still_found(page, monkeypatch):
+    cos, _, _ = page
+    answers = iter([None, None, {"provider": "openai", "model": "gpt-6-astra"}])
+    monkeypatch.setattr(cos._routing_receipts, "wait_for", lambda *a, **k: None)
+    monkeypatch.setattr(cos, "_bindings", type("B", (), {"served_for_turn": staticmethod(lambda t: next(answers))})())
     assert cos._get_routing_receipt("t")["served_model"] == "gpt-6-astra"
+
+
+def test_with_no_evidence_the_wait_is_bounded_and_says_so(page, monkeypatch):
+    import time
+    cos, _, _ = page
+    monkeypatch.setattr(cos._routing_receipts, "wait_for", lambda *a, **k: time.sleep(k["timeout_seconds"]) or None)
     monkeypatch.setattr(cos, "_bindings", type("B", (), {"served_for_turn": staticmethod(lambda t: None)})())
-    assert cos._get_routing_receipt("t") is None
+    started = time.monotonic()
+    assert cos._get_routing_receipt("t") is None and time.monotonic() - started < 2
+
+
+def test_a_host_without_routes_keeps_its_gateway_wait_exactly(tmp_path, monkeypatch):
+    import sys
+    from test_history_wiring import _load
+    monkeypatch.delenv(CATALOGUE_VAR, raising=False)
+    cos = _load(monkeypatch, tmp_path, history_on=True)
+    calls = []
+    monkeypatch.setattr(cos._routing_receipts, "wait_for", lambda rid, timeout_seconds: calls.append(timeout_seconds) or {"served_model": "m"})
+    assert cos._get_routing_receipt("t") == {"served_model": "m"} and calls == [1.0]
+    sys.modules.pop("domains.cos.chief_of_staff", None)
+
+
+def test_the_label_never_claims_a_gateway_where_routes_are_on(monkeypatch):
+    monkeypatch.delenv("COS_AGENT_RUNTIME_MODEL_LABEL", raising=False)
+    def built():
+        return openclaw_backend.OpenClawBackend(write_memory=lambda e: True, dispatch_tool=lambda n, a: {}, gateway_url="http://x:1/v1",
+                                                 gateway_token="t", agent_id="cos-agent-a", http_post=lambda *a, **k: None).model_label
+    monkeypatch.delenv(CATALOGUE_VAR, raising=False)
+    assert built() == "gateway-unresolved"
+    monkeypatch.setenv(CATALOGUE_VAR, "/somewhere.json")
+    assert built() == "no-evidence"
+
+
+RUN_ID = "chatcmpl_00000001-0000-4000-8000-000000000000"
+
+
+class _Stream:
+    """What the runtime streams on a plan route: no provider named anywhere in it."""
+
+    def __init__(self, text=""):
+        base = {"id": RUN_ID, "object": "chat.completion.chunk", "model": "openclaw/cos-agent-a"}
+        self.chunks = [{**base, "choices": [{"delta": {"role": "assistant"}}]},
+                       *([{**base, "choices": [{"delta": {"content": text}}]}] if text else []),
+                       {**base, "choices": [{"delta": {}, "finish_reason": "length"}]}]
+
+    def iter_lines(self, **_):
+        for chunk in self.chunks:
+            yield "data: " + json.dumps(chunk)
+        yield "data: [DONE]"
+
+
+def _through_the_backend(monkeypatch, text):
+    """The real stream reader, then the real reply path: the same code every provider's turn goes through."""
+    backend = _backend(lambda *a, **k: None)
+    payload = backend._read_stream(_Stream(text), lambda run: None)
+    monkeypatch.setattr(backend, "_call_backend_payload", lambda *a: payload)
+    context = {}
+    return backend.call_backend("hello", context, {}), context
+
+
+def test_an_output_limit_with_no_text_tells_robert_on_a_plan_route_too(monkeypatch):
+    reply, context = _through_the_backend(monkeypatch, "")
+    assert reply == openclaw_backend._EMPTY_OUTPUT_NOTICE
+    assert context["completion_evidence"] == {"state": "cut_off", "reason": "output_limit", "source": "openclaw_connector"}
+
+
+def test_an_output_limit_after_some_text_keeps_the_text_and_is_marked_cut_off(monkeypatch):
+    reply, context = _through_the_backend(monkeypatch, "The first half")
+    assert reply.startswith("The first half") and context["completion_evidence"]["state"] == "cut_off"
+
+
+# ── Through the real portal ──
+
+def test_the_pickers_write_needs_the_portals_csrf_and_is_forwarded_signed(monkeypatch):
+    pytest.importorskip("minimoi_portal.app")
+    import minimoi_portal.app as portal_app
+    import minimoi_portal.config as cfg
+    monkeypatch.setattr(portal_app, "_cos_write_guard_on", lambda: True)
+    forwarded = []
+    monkeypatch.setattr(portal_app._proxy, "proxy_to", lambda *a, **k: forwarded.append((a, k)) or ("ok", 200))
+    client = portal_app.app.test_client()
+    with client.session_transaction() as sess:
+        sess["user"] = {"username": "robert", "tier": "owner", "display_name": "Robert", "auth_id": 2}
+        sess[portal_app.COS_CSRF_SESSION_KEY] = "w" * 43
+    path = "/app/cos/ui/history/conversations/cosc-abc/route"
+    body = {"route_id": SOL, "revision": 0}
+    assert client.post(path, json=body).status_code == 403 and forwarded == []
+    good = {"X-CSRF-Token": "w" * 43, "Origin": cfg.BASE_URL.rstrip("/"), "Sec-Fetch-Site": "same-origin"}
+    assert client.post(path, json=body, headers=good).status_code == 200
+    assert forwarded[0][1]["verified_cos_voice_write"] is True
+
+
+# ── The page script, in a fake browser ──
+
+@pytest.mark.skipif(not shutil.which("node"), reason="needs node")
+def test_the_picker_script():
+    run = subprocess.run(["node", str(ROOT / "tests/cos/cos_route_picker.test.cjs")], capture_output=True, text=True, timeout=60)
+    assert run.returncode == 0, run.stdout + run.stderr
