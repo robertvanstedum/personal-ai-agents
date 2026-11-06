@@ -1307,6 +1307,10 @@
         "input_digest"
       ],
       "properties": {
+        "no_verdict": {
+          "description": "The review ended without a valid review_verdict/1 for this set. Its verdict stays changes_requested, never approve; this says no reviewer actually asked for changes.",
+          "const": true
+        },
         "review_id": {
           "type": "string",
           "pattern": "^RV-[A-Za-z0-9_-]{4,64}$"

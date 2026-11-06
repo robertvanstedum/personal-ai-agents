@@ -9,7 +9,8 @@ Only what the authority recorded counts; nothing a model says reaches the task s
   item's result event.
 - Review result: a ``completed`` review step counts only when its ``output_text`` is a valid verdict
   (``review_verdict.schema.json``) AND it recorded a ``verdict`` artifact whose sha256 is sha256(output_text). Absent
-  or mismatched means ``changes_requested``, never ``approve`` (v0.5 M5).
+  or mismatched means ``changes_requested``, never ``approve`` (v0.5 M5), and the review is recorded ``no_verdict``, so
+  it is reported as a review that ended without a verdict rather than as a reviewer asking for changes.
   - The review card's input artifacts, composed by MC's adapter from the builder child's submitted set, must equal,
     one to one, the builder card's recorded outputs. The door finds that builder child in the harness by exactly
     this match.
@@ -179,7 +180,8 @@ class RunnerDoor:
         if builder is None or not builder["artifact_sets"] or builder["artifact_sets"][-1]["digest"] != reviewed:
             return [("task.record_review", builder_id, "refused:review_inputs_stale")]
         found = verdict_of(item)
-        verdict = found[0]["verdict"] if found and found[0]["reviewed_set_digest"] == reviewed else "changes_requested"
+        judged = found is not None and found[0]["reviewed_set_digest"] == reviewed
+        verdict = found[0]["verdict"] if judged else "changes_requested"
         art = found[1] if found else None
         review_ref = {"store": "harness", "id": art["ref"] if art else str(item["request_id"]),
                       "edition": str(item["generation"]),
@@ -192,7 +194,8 @@ class RunnerDoor:
         else:
             res = self._send(review_task["holder"], self._cmd("task.record_review", builder, {
                 "review_id": review_id, "reviewed_set_digest": reviewed,
-                "verdict": verdict, "review_ref": review_ref, "findings_ref": None, "input_digest": reviewed},
+                "verdict": verdict, "review_ref": review_ref, "findings_ref": None, "input_digest": reviewed,
+                **({} if judged else {"no_verdict": True})},
                 f"cmd-door-rev-{item['result_event_id']}", dict(harness_ref(item), id=str(item["result_event_id"]))))
         if res is not None:
             out.append(("task.record_review:" + verdict, builder["task_id"], res.get("outcome")))

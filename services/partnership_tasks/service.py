@@ -560,7 +560,8 @@ class _Planner:
                             "reviewer": r["reviewer"], "reviewed_set_digest": set_digest,
                             "input_digest": r["input_digest"], "verdict": r["verdict"], "review_ref": r["review_ref"],
                             "findings_ref": r["findings_ref"], "interpretation_ref": r["interpretation_ref"],
-                            "applicable_to_current": False, "task_revision": task["revision"] + 1})
+                            "applicable_to_current": False, "task_revision": task["revision"] + 1,
+                            **({"no_verdict": True} if r.get("no_verdict") else {})})
         return out, authors
 
     def delivered_review(self, task: dict, current: dict) -> bool:
@@ -601,7 +602,9 @@ class _Planner:
         return out
 
     def open_effects(self, task_id: str, states=("attempted", "unknown", "conflict")) -> list[str]:
-        return [ob["operation_id"] for ob in self.outbox_entries(task_id) if ob["state"] in states]
+        # A notice tells someone; it is not an effect to reconcile, so one that cannot be sent yet never holds work back.
+        return [ob["operation_id"] for ob in self.outbox_entries(task_id)
+                if ob["state"] in states and ob["operation"] != "notify"]
 
     def actionable(self, interpretation_id, request) -> None:
         problem = interpretation_problem(self.svc.journal, self.b.read_scopes, interpretation_id,
@@ -857,6 +860,15 @@ class _Planner:
         if to in ("canceled", "failed", "rejected"):
             extra += self.cascade(task, f"parent {to}")                    # J3/S2-2: delegated steps stop too
         rec = self.stamp(new, task)
+        if to == "failed" and task["parent_ref"] is not None:
+            # A failed child tells the owner, once per failure: same intent as the change, id derived from this
+            # revision. A child canceled because its parent ended is not a failure and raises nothing.
+            extra += self.notice(rec, f"child_failed@{rec['revision']}", "child_failed",
+                                 {"store": "task_service", "id": task["task_id"], "edition": str(rec["revision"]),
+                                  "digest": None},
+                                 {"kind": "child_failed", "task_id": task["task_id"], "parent_task_id": task["parent_ref"],
+                                  "holder": task["holder"], "outcome": task["outcome"], "reason": self.p["reason"],
+                                  "evidence": self.p["evidence_refs"]})
         return self.finish([(path_of("task", task["task_id"]), self.checked("task", rec))] + extra, rec["revision"])
 
     def k_task_assign(self) -> Plan:
@@ -968,7 +980,8 @@ class _Planner:
                                 "accepted_by": self.b.seat,
                                 "disagreements_delivered": [
                                     {"review_id": r["review_id"], "reviewer": r["reviewer"], "verdict": r["verdict"],
-                                     "review_ref": r["review_ref"], "findings_ref": r["findings_ref"]}
+                                     "review_ref": r["review_ref"], "findings_ref": r["findings_ref"],
+                                     **({"no_verdict": True} if r.get("no_verdict") else {})}
                                     for r in task["reviews"] if r["review_id"] in dissent],
                                 "children": [{"task_id": c["task_id"], "state": c["state"]} for c in kids]})
             return self.finish([(path_of("task", task["task_id"]), self.checked("task", rec))] + note,
@@ -1036,9 +1049,19 @@ class _Planner:
                   "verdict": self.p["verdict"], "review_ref": self.p["review_ref"],
                   "findings_ref": self.p["findings_ref"], "interpretation_ref": task["interpretation_ref"],
                   "applicable_to_current": False, "task_revision": task["revision"] + 1}
+        if self.p.get("no_verdict"):
+            review["no_verdict"] = True
         t2 = dict(task, reviews=task["reviews"] + [review], review_refs=task["review_refs"] + [self.p["review_ref"]])
         rec = self.stamp(dict(t2, reviews=self.reapply(t2)), task)
-        return self.finish([(path_of("task", task["task_id"]), self.checked("task", rec))], rec["revision"])
+        note = []
+        if self.p.get("no_verdict"):
+            note = self.notice(rec, f"no_verdict@{self.p['review_id']}", "review_without_verdict",
+                               {"store": "task_service", "id": task["task_id"], "edition": str(rec["revision"]),
+                                "digest": None},
+                               {"kind": "review_without_verdict", "task_id": task["task_id"],
+                                "review_id": self.p["review_id"], "reviewer": self.b.seat,
+                                "reviewed_set": self.p["reviewed_set_digest"]})
+        return self.finish([(path_of("task", task["task_id"]), self.checked("task", rec))] + note, rec["revision"])
 
     def k_task_delegate(self) -> Plan:
         """E07: the parent's lead delegates one bounded step to a holder. One level only (a child cannot delegate).

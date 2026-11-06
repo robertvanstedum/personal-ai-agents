@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "persona": "mc-chat",
+  "version": "0.1.23",
+  "base": "0.1.17 + 0.1.22: the outside-reports line (its rule now from the handbook block) and the voice line, merged; loads MC handbook 0.1.2",
+  "spec": "spec_mc_agent_container v0.2",
+  "status": "candidate",
+  "target": "mc-agent container",
+  "files": {
+    "SOUL.md": "3f79bf7edf148b8971f9707e67e334266027c0d12cecb5e18c1513f5996bd671",
+    "AGENTS.md": "f4691d16f7069f739e645cf2532d59d9181a921b9168638fa02993ca9125eb00",
+    "RUNTIME.openclaw.md": "2b2428ccded1174e6a9857bd17f1ccfa2b2b0f860c786649bfe39a2dbfdb7197",
+    "CHANGES.md": "108d5d90e1e14a899c738a1b6cf1f6e6e7207240a7538124da09b44b2635528e",
+    "voice.json": "aa6d8b1fde0b53bd53eb8db96bc0ecedb2b51992073e4710b162087b75487c63"
+  },
+  "handbook": {
+    "version": "0.1.2",
+    "manifest": "services/mc_operations/handbook/manifest.json",
+    "manifest_sha256": "5033cb04af14cbbb9d264c9249d3075865586bfb27c360a6e3754e73dbcabcd3"
+  },
+  "projection": "SOUL verbatim; AGENTS + runtime binding + handbook block",
+  "projection_budget_chars": 16000,
+  "config_change": false
+}
