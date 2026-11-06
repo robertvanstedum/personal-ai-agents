@@ -211,7 +211,9 @@ class RealHost:                                     # pragma: no cover  (exercis
         env = [x for k, v in agent_env(profile).items() for x in ("-e", f"{k}={v}")]
         self._run("docker", "run", "--rm", "--network", "none", "--cap-drop", "ALL", *env, "--entrypoint", "sh", self.images["agent"], "-c",
                   "cp /opt/minimoi/cos-agent-a/openclaw.json /tmp/c.json && node /opt/minimoi/cos-agent-a/plan-access.cjs /tmp/c.json "
-                  "&& OPENCLAW_CONFIG_PATH=/tmp/c.json node /app/openclaw.mjs config validate --json >/dev/null")
+                  # The runtime's startup migration stamps this on every start; the pinned file alone fails the strict validator.
+                  "&& node -e \"const f=require('fs'),c=JSON.parse(f.readFileSync('/tmp/c.json'));c.agents.ownership='explicit';f.writeFileSync('/tmp/c.json',JSON.stringify(c))\" "
+                  "&& OPENCLAW_CONFIG_PATH=/tmp/c.json node /app/openclaw.mjs config validate --json")
         tmp = self.OP / "catalogue.check.json"
         tmp.write_text(json.dumps(plan_catalogue(json.loads(self.CAT.read_text()))))
         tmp.chmod(0o644)
