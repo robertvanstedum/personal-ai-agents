@@ -28,7 +28,8 @@ globalThis[BINDINGS] ??= new Map();
 const PROCESS_SEALER = runBoundSealer({key: globalThis[STATE].sealKey, entries: globalThis[BINDINGS],
   onRefuse: detail => console.warn('cos-bound: seal refused ' + JSON.stringify(detail))});
 const UNKNOWN = 'CoS could not confirm what happened. Do not repeat it; tell Robert.';
-const text = (s, details) => ({content: [{type: 'text', text: s}], details});
+// Code mode hands the model's code a tool's details and never its content, so its words go in both.
+const text = (s, details) => ({content: [{type: 'text', text: s}], details: {message: s, ...details}});
 const str = {type: 'string'};
 
 export const ACTIONS_SPEC = {
@@ -163,7 +164,7 @@ export function toolFactory({endpoint, token, tokenFile, agents, acceptCredentia
       }
       return text(result.message + '\n' + JSON.stringify({status: result.status, code: result.code, data: result.data}),
                   // Code mode hands the model's code these details, not the text, so the data must be here too.
-                  {status: result.status, code: result.code, data: result.data});
+                  {message: result.message, status: result.status, code: result.code, data: result.data});
     };
     const offered = [ACTIONS_SPEC, TASKS_SPEC, BOARD_SPEC]
       .filter(spec => !Object.hasOwn(RESTRICTED, agentId) || RESTRICTED[agentId].has(spec.name));

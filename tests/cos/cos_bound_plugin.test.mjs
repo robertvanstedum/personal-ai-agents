@@ -196,8 +196,34 @@ test('a tool answer gives its data in details too, because code mode reads only 
   const tools = created({sessionKey: SESSION, agentId: 'cos-agent-a', workspaceDir: '/ws'});
   const params = sealer.seal({operation: 'status', task_id: 'TK-1'}, {runId: RUN, toolCallId: 'call-1', agentId: 'cos-agent-a', sessionKey: SESSION});
   const out = await tools.find(t => t.name === 'cos_tasks').execute('call-1', params);
-  assert.deepEqual(out.details, {status: 'done', code: 'ok', data});
+  assert.deepEqual(out.details, {message: 'Read.', status: 'done', code: 'ok', data});
   assert.ok(out.content[0].text.includes('completed'));
+});
+
+test('a refusal reaches details with its explanation, only the listener words and not the JSON', async () => {
+  const f = fakeFetch({status: 'refused', code: 'task_not_found', message: 'No such task. Nothing changed.', data: {}});
+  const sealer = runSealer();
+  const created = toolFactory({endpoint: ENDPOINT, token: TOKEN, tokenFile: '/private/token', agents: ['cos-agent-a'], acceptCredentialReadableBy: ['cos-agent-a'],
+    sealer, instance: 'a'.repeat(32), fetchImpl: f});
+  const tool = created({sessionKey: SESSION, agentId: 'cos-agent-a', workspaceDir: '/ws'}).find(t => t.name === 'cos_tasks');
+  const params = sealer.seal({operation: 'status', task_id: 'TK-1'}, {runId: RUN, toolCallId: 'call-1', agentId: 'cos-agent-a', sessionKey: SESSION});
+  const out = await tool.execute('call-1', params);
+  assert.deepEqual(out.details, {message: 'No such task. Nothing changed.', status: 'refused', code: 'task_not_found', data: {}});
+  const own = await tool.execute('call-2', {operation: 'status'});                 // never sealed: the plugin refuses it itself
+  assert.equal(own.details.code, 'run_identity_missing');
+  assert.match(own.details.message, /nothing was sent/);
+});
+
+test('an answer failing the existing checks is still unknown and adds none of its words', async () => {
+  const f = fakeFetch({status: 'done', code: 'x', message: 'SERVER WORDS', data: {}, extra: 1});
+  const sealer = runSealer();
+  const created = toolFactory({endpoint: ENDPOINT, token: TOKEN, tokenFile: '/private/token', agents: ['cos-agent-a'], acceptCredentialReadableBy: ['cos-agent-a'],
+    sealer, instance: 'a'.repeat(32), fetchImpl: f});
+  const tool = created({sessionKey: SESSION, agentId: 'cos-agent-a', workspaceDir: '/ws'}).find(t => t.name === 'cos_tasks');
+  const params = sealer.seal({operation: 'status', task_id: 'TK-1'}, {runId: RUN, toolCallId: 'call-3', agentId: 'cos-agent-a', sessionKey: SESSION});
+  const out = await tool.execute('call-3', params);
+  assert.equal(out.details.status, 'unknown');
+  assert.ok(!JSON.stringify(out).includes('SERVER WORDS'));
 });
 
 test('the plugin listens on the hook that needs no conversation access', () => {
