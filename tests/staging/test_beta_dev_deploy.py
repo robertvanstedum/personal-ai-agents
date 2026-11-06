@@ -1271,3 +1271,9 @@ def test_end_to_end_low_disk_is_refused(rig, monkeypatch):
     with pytest.raises(op.Refused, match="2 GB"):
         rig.deploy.dry_run()
     assert not [e for e in rig.docker.log if e[0] == "build"]
+
+
+def test_only_the_exact_reviewed_host_config_gets_past_the_base_check():
+    assert len(op.REVIEWED_HOST_CONFIGS) == 1
+    assert all(len(h) == 64 and set(h) <= set("0123456789abcdef") for h in op.REVIEWED_HOST_CONFIGS)
+    assert "0" * 64 not in op.REVIEWED_HOST_CONFIGS

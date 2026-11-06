@@ -123,6 +123,12 @@ TARGETS = {
 WORKERS = tuple(t["container"] for t in TARGETS.values() if t.get("worker"))
 
 
+# Host config files no commit produced, reviewed by hand and accepted by exact hash. Dev's gateway file is a JSON render from
+# 1 Nov: compared route by route with the candidate, it differs only in the voice roles' info, the added local route, and
+# minimoi-cos-agent-xai-fast, whose Grok fallback the candidate replaces. Any other host file is still refused.
+REVIEWED_HOST_CONFIGS = frozenset({"a50a08e429c7f6a1237089a588e2985a8dcb972eec1ad8c582bc3672741ee666"})
+
+
 class Refused(RuntimeError):
     """Stopped before anything live changed."""
 
@@ -643,7 +649,7 @@ class RealHost:                                     # pragma: no cover  (exercis
             if spec.get("kind") == "config":
                 got = hashlib.sha256((self.R / "config" / spec["config"]).read_bytes()).hexdigest()
                 only = next(iter(spec["files"].values()))
-                if got not in only["accepted"] and got != only["after"]:
+                if got not in only["accepted"] and got != only["after"] and got not in REVIEWED_HOST_CONFIGS:
                     problems.append(f"{spec['container']}: {spec['config']}: no commit explains the host's file")
                 continue
             tag = live["Config"]["Image"]
