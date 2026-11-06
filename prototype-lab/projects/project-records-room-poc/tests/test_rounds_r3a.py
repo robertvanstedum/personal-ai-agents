@@ -2,7 +2,12 @@
 clarification): addressed rounds. One turn per teammate, in order; each sees
 the earlier replies of its round; a lost teammate is skipped, fenced or
 released by Records so it can never start late; delivery-only recovery of a
-saved reply survives the inference deadline."""
+saved reply survives the inference deadline.
+
+Since 400086bd an @everyone message no longer queues teammates behind one
+another (the Guildhall spec: "no fixed MC-first wait"). Order and its fences
+now apply when one turn depends on another, as a peer follow-up does, so these
+tests build that dependency directly and keep every fence check."""
 from datetime import datetime, timedelta, timezone
 from domains.records.meetings import DEFAULT_MAX_TURNS
 import json
@@ -49,8 +54,17 @@ def env(tmp_path):
         return r.json["result"]
     e.say = say
 
+    def say_dependent(text):
+        """Claude Code's turn waits for MC's, in the shape meetings.handoff records."""
+        result = say(text)
+        with store.connect() as d:
+            ids = {r["addressee"]: r["id"] for r in d.execute("SELECT id,addressee FROM turns WHERE trigger_seq=?", (result["seq"],))}
+            d.execute("UPDATE turn_order SET position=1,waits_for=?,claimable_at=NULL WHERE turn_id=?", (ids["mc"], ids["claude-code"]))
+        return result
+    e.say_dependent = say_dependent
+
     def claim(worker, who):
-        return call("POST", worker, "/turns/claim", {"addressees": [who]}).json["turn"]
+        return call("POST", worker, "/turns/claim", {"addressees": [who], "discussion_protocol": 1}).json["turn"]
     e.claim = claim
 
     def run(worker, member, t, text, claim_id=None):
@@ -74,8 +88,16 @@ def env(tmp_path):
     return e
 
 
-def test_everyone_is_one_turn_each_in_strip_order_and_the_second_sees_the_first(env):
-    trigger = env.say("@everyone what first?")
+def test_everyone_is_one_turn_each_and_neither_waits_for_the_other(env):
+    env.say("@everyone what first?")
+    t = env.turns()
+    assert t["mc"]["round"]["position"] == 0 and t["claude-code"]["round"]["position"] == 0
+    assert env.claim(env.ccw, "claude-code") is not None                # no fixed MC-first wait
+    assert env.claim(env.mcw, "mc") is not None
+
+
+def test_a_dependent_turn_waits_and_sees_the_reply_it_depends_on(env):
+    trigger = env.say_dependent("@everyone what first?")
     assert env.claim(env.ccw, "claude-code") is None                    # not its turn yet
     mc = env.claim(env.mcw, "mc")
     assert mc["trigger"]["text"] == "@everyone what first?"
@@ -91,16 +113,14 @@ def test_everyone_is_one_turn_each_in_strip_order_and_the_second_sees_the_first(
     assert t["mc"]["round"]["position"] == 0 and t["claude-code"]["round"]["position"] == 1
 
 
-def test_a_name_list_runs_in_the_order_written(env):
+def test_a_name_list_sets_no_fixed_order(env):
     env.say("@Claude then @MC please")
-    assert env.claim(env.mcw, "mc") is None
-    cc = env.claim(env.ccw, "claude-code")
-    env.run(env.ccw, env.cc, cc, "first")
     assert env.claim(env.mcw, "mc") is not None
+    assert env.claim(env.ccw, "claude-code") is not None
 
 
 def test_a_skipped_away_teammate_never_starts_later(env):
-    env.say("@everyone go")
+    env.say_dependent("@everyone go")
     env.sql("UPDATE turn_order SET claimable_at=? WHERE position=0", past(100))
     env.call("GET", env.owner, f"/rooms/{env.room}/turns")              # Records-owned sweep
     t = env.turns()
@@ -113,7 +133,7 @@ def test_a_skipped_away_teammate_never_starts_later(env):
 
 
 def test_an_expired_predecessor_is_fenced_and_its_late_post_refused(env):
-    env.say("@everyone go")
+    env.say_dependent("@everyone go")
     mc = env.claim(env.mcw, "mc")
     env.call("POST", env.mcw, f"/turns/{mc['id']}/start", {"claim_id": mc["claim_id"]})
     env.sql("UPDATE turns SET expires=? WHERE id=?", past(5), mc["id"])
@@ -128,7 +148,7 @@ def test_an_expired_predecessor_is_fenced_and_its_late_post_refused(env):
 
 
 def test_an_uncertain_predecessor_releases_the_round_and_its_saved_reply_arrives_labelled_late(env):
-    env.say("@everyone go")
+    env.say_dependent("@everyone go")
     mc = env.claim(env.mcw, "mc")
     env.call("POST", env.mcw, f"/turns/{mc['id']}/start", {"claim_id": mc["claim_id"]})
     env.sql("UPDATE turns SET lease_until=? WHERE id=?", past(5), mc["id"])
@@ -150,7 +170,7 @@ def test_an_uncertain_predecessor_releases_the_round_and_its_saved_reply_arrives
 
 def test_the_budget_cuts_a_round(env):
     env.sql("UPDATE meetings SET remaining=1 WHERE room=?", env.room)
-    env.say("@everyone go")
+    env.say_dependent("@everyone go")
     mc = env.claim(env.mcw, "mc")
     env.run(env.mcw, env.mc, mc, "the last slot")
     assert env.claim(env.ccw, "claude-code") is None
@@ -204,7 +224,7 @@ def test_round_replies_export_under_transcript_1_1(env):
 # ── Codex review A3-01 / A3-02 ───────────────────────────────────────────────
 
 def _uncertain_first_turn(env):
-    env.say("@everyone go")
+    env.say_dependent("@everyone go")
     mc = env.claim(env.mcw, "mc")
     env.call("POST", env.mcw, f"/turns/{mc['id']}/start", {"claim_id": mc["claim_id"]})
     env.sql("UPDATE turns SET lease_until=?,expires=? WHERE id=?", past(5), past(5), mc["id"])
