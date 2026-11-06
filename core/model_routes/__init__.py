@@ -23,6 +23,8 @@ CATALOGUE_VAR = "MINIMOI_MODEL_ROUTES_FILE"    # a host's own copy, so a one-lin
 AGENT_BY_BACKEND = {"openclaw": "mc", "cos": "cos"}
 BILLING_WORDS = {"subscription": "Plan", "metered_api": "API"}
 AVAILABLE = "available"
+TASK_ROLES = {"mc-conversation": "mc", "mc-private": "mc", "mc-rooms": "mc",
+              "cos-conversation": "cos"}    # every task the code asks for; a catalogue without one of them is broken
 
 
 class RouteRefused(ValueError):
@@ -46,6 +48,9 @@ def load_catalogue(path: Path | str | None = None) -> dict:
         ids = [r["route_id"] for r in catalogue["routes"]]
         if len(ids) != len(set(ids)):
             raise ValueError("duplicate route_id in the catalogue")
+        for name, agent in TASK_ROLES.items():
+            if catalogue["roles"].get(name, {}).get("agent") != agent:
+                raise ValueError(f"the catalogue has no role {name} for {agent}")
         for name, role in catalogue["roles"].items():
             route = route_of(catalogue, role["route"])
             if route is None or route["offered"].get(role["agent"]) != AVAILABLE:
@@ -124,17 +129,15 @@ def snapshot(catalogue: dict, role_name: str, conv: dict | None = None) -> dict:
 
 def role_snapshot_for(kind: str | None, role_name: str) -> dict | None:
     """A non-conversation task's route. None only where this role has no routes (routes not enabled on this host, or
-    another backend). A catalogue that cannot be read refuses, as a conversation does: never a silent default."""
-    if not routes_enabled() or agent_for_backend(kind) is None:
+    a backend this task does not belong to). A catalogue that cannot be read, or that lacks a task, refuses, as a
+    conversation does: never a silent default."""
+    if not routes_enabled() or agent_for_backend(kind) != TASK_ROLES.get(role_name):
         return None
     try:
         catalogue = load_catalogue()
     except (OSError, ValueError) as exc:
         log.warning("model routes: the catalogue could not be read for %s (%s)", role_name, type(exc).__name__)
         raise RouteRefused("route_unavailable", "The model routes could not be read. Nothing was sent.") from exc
-    role = catalogue["roles"].get(role_name)
-    if role is None or agent_for_backend(kind) != role["agent"]:
-        return None
     return snapshot(catalogue, role_name)
 
 

@@ -1,5 +1,5 @@
 {
-  "revision": "2026-11-05.2",
+  "revision": "2026-11-05.3",
   "tiers": {
     "strong": {"letter": "A", "use": "Difficult reasoning, design and review"},
     "mid": {"letter": "B", "use": "Ordinary drafting and multi-step work"},
@@ -35,7 +35,6 @@
     "mc-conversation": {"agent": "mc", "task": "Conversation", "route": "plan-openai-strong", "selectable": true},
     "mc-private": {"agent": "mc", "task": "Private conversation", "route": "plan-openai-strong"},
     "mc-rooms": {"agent": "mc", "task": "Rooms", "route": "plan-openai-strong"},
-    "mc-morning": {"agent": "mc", "task": "Morning note", "route": "plan-openai-strong"},
     "cos-conversation": {"agent": "cos", "task": "Conversation", "route": "gateway-cos-role", "selectable": true}
   }
 }

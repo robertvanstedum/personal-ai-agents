@@ -144,15 +144,10 @@ def run_once(floor, backend, *, now: datetime, reminder_id=None, record=None):
     if not rows:
         return receipt("noop")
     captured = [{"id": r["id"], "version": r["version"]} for r in rows]
-    from core.model_routes import RouteRefused, role_snapshot_for
-    try:
-        route = role_snapshot_for(getattr(backend, "kind", None), "mc-morning")   # before the attempt: nothing was sent
-    except RouteRefused:
-        _fail("route_unavailable")
     receipt("attempt_started", captured,
             target["id"] if target else None)
     reply = backend.turn(TurnRequest("mc-morning-" + scope, prompt, key,
-                                     context={"mode": "on_record", "page": "board"}, route=route))
+                                     context={"mode": "on_record", "page": "board"}))
     if reply.status == "timeout_uncertain":
         receipt("timeout_uncertain", captured, reminder=target["id"] if target else None)
         _fail("timeout_uncertain")

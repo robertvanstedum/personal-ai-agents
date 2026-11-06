@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
-from core.model_routes import role_snapshot_for
+from core.model_routes import RouteRefused, role_snapshot_for
 from services.rooms_worker.journal import TurnJournal, RoomBridgeError, encoded
 
 PATH = '/internal/mc/v1/rooms'
@@ -209,6 +209,12 @@ class Bridge:
             output = result('refused', exc.body['error'])
             if exc.body['error'] == 'paused':
                 output['reason'] = 'mc_paused'
+            self.journal.generated(operation, output)
+            return output
+        except RouteRefused as exc:    # raised before the turn is dispatched: nothing was sent
+            if ledger is not None:
+                ledger.finish_not_sent()
+            output = result('refused', exc.code)
             self.journal.generated(operation, output)
             return output
         except Exception:

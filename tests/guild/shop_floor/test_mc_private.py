@@ -188,3 +188,19 @@ def test_the_adapter_keeps_only_status_not_the_private_answer_after_the_request(
     assert not hasattr(last, "text") and not hasattr(last, "usage") and not hasattr(last, "trace")
     assert "Happy to" not in repr(last) and "interview" not in repr(vars(backend))
     assert backend.health().state == "ready"                                           # the header still says live
+
+def _catalogue_without(tmp_path, monkeypatch, role):
+    from core.model_routes import CATALOGUE_PATH, CATALOGUE_VAR
+    catalogue = json.loads(CATALOGUE_PATH.read_text())
+    del catalogue["roles"][role]
+    path = tmp_path / "routes.json"
+    path.write_text(json.dumps(catalogue))
+    monkeypatch.setenv(CATALOGUE_VAR, str(path))
+
+
+def test_a_catalogue_missing_this_task_stops_it_before_the_runtime(turned, tmp_path, monkeypatch):
+    _catalogue_without(tmp_path, monkeypatch, "mc-private")
+    client = turned.owner()
+    r = _private(client, turned.csrf(client))
+    assert r.status_code == 409 and r.get_json()["error"] == "route_unavailable" and turned.extra["runtime"].sent == []
+

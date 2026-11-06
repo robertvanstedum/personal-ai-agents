@@ -205,3 +205,16 @@ def test_approval_path_uses_current_environment(world, prefix):
     assert world.bridge.run(IDS)['outcome']=='done'
     assert requests[0].context['page']==f'{prefix}/guild/build?c=c-abc'
     assert 'https://dev.minimoi.ai' not in requests[0].text
+
+
+def test_a_catalogue_missing_this_task_refuses_and_nothing_reaches_the_runtime(world, tmp_path, monkeypatch):
+    import json
+    from core.model_routes import CATALOGUE_PATH, CATALOGUE_VAR
+    catalogue = json.loads(CATALOGUE_PATH.read_text())
+    del catalogue['roles']['mc-rooms']
+    path = tmp_path / 'routes.json'
+    path.write_text(json.dumps(catalogue))
+    monkeypatch.setenv(CATALOGUE_VAR, str(path))
+    output = world.bridge.run(IDS)
+    assert output['outcome'] == 'refused' and output['detail'] == 'route_unavailable'
+    assert world.backend.calls == 0 and 'dispatch' not in world.events and 'not_sent' in world.events

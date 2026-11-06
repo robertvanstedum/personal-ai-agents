@@ -47,6 +47,7 @@ class Gateway:
 
     def __init__(self):
         self.seen, self.mode, self.text = [], "ok", "the job's answer"
+        self.run_id = "chatcmpl_x"
         self.release = threading.Event()
         self.disconnected = threading.Event()
         self.on_disconnect = None
@@ -83,8 +84,16 @@ class Gateway:
                     self.end_headers()
                     self.wfile.write(b"not json")
                     return
+                if mode == "stream":
+                    self.send_response(200)
+                    self.send_header("content-type", "text/event-stream")
+                    self.end_headers()
+                    for delta in ({"role": "assistant"}, {"content": outer.text}):
+                        self.wfile.write(b"data: " + json.dumps({"id": outer.run_id, "choices": [{"delta": delta}]}).encode() + b"\n\n")
+                    self.wfile.write(b"data: [DONE]\n\n")
+                    return
                 text = "No response from OpenClaw." if mode == "placeholder" else outer.text
-                self._send(200, {"id": "chatcmpl_x", "choices": [{"message": {"content": text}, "finish_reason": "stop"}]})
+                self._send(200, {"id": outer.run_id, "choices": [{"message": {"content": text}, "finish_reason": "stop"}]})
 
             def _send(self, code, obj):
                 data = json.dumps(obj).encode()

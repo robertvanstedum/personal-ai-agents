@@ -226,8 +226,9 @@ export function routeHeaders(value, routes = ROUTES) {
   return ref ? [false, { "x-openclaw-model": ref }] : [true, {}];
 }
 
-// OpenClaw's own record of who served this conversation's latest reply. Evidence only: it never decides anything, and
-// any problem reading it is "no evidence" (null), never the selected route.
+// OpenClaw's own record of who served this exact run: the reply it stamped with this run's id (message.__openclaw.runId).
+// A reply from any other run is never this turn's evidence, however recent. Evidence only: it never decides anything,
+// and any problem reading it, or no reply stamped with this run, is "no evidence" (null), never the selected route.
 const CHAT_DB = process.env.MC_RELAY_CHAT_DB || "";
 const zstdDecompressSync = zlib.zstdDecompressSync;
 function eventOf(row) {
@@ -236,8 +237,8 @@ function eventOf(row) {
   return null;
 }
 const SERVED_FIELD = /^[A-Za-z0-9._:\/-]{1,80}$/;     // plain words only: this goes into a header and a stream line
-export function readServed(dbPath, sessionKey, since) {
-  if (!DatabaseSync || !dbPath) return null;
+export function readServed(dbPath, sessionKey, runId) {
+  if (!DatabaseSync || !dbPath || !RUN_ID.test(String(runId))) return null;
   let db = null;
   try {
     db = new DatabaseSync(dbPath, { readOnly: true });
@@ -248,7 +249,7 @@ export function readServed(dbPath, sessionKey, since) {
       const event = eventOf(row);
       const message = event && event.type === "message" ? event.message : null;
       if (!message || message.role !== "assistant" || !message.provider || !message.model) continue;
-      if (!(Date.parse(event.timestamp || "") >= since)) return null;   // older than this turn, or no readable time: no evidence
+      if (message.__openclaw?.runId !== runId) continue;
       const found = { provider: message.provider, model: message.model, api: message.api || undefined, harness: session.agent_harness_id || undefined };
       return Object.values(found).every((v) => v === undefined || SERVED_FIELD.test(String(v))) ? found : null;
     }
@@ -259,13 +260,22 @@ export function readServed(dbPath, sessionKey, since) {
     try { db?.close(); } catch { /* read-only */ }
   }
 }
-async function served(body, since) {
+async function served(body, runId) {
+  if (!CHAT_DB || !runId) return null;
   const agent = String(body.model || "").split("/")[1];
   const key = `agent:${agent}:openai-user:${body.user}`;
-  const first = readServed(CHAT_DB, key, since);
-  if (first || !CHAT_DB) return first;
+  const first = readServed(CHAT_DB, key, runId);
+  if (first) return first;
   await new Promise((resolve) => { setTimeout(resolve, 500); });      // the transcript row can land just after the stream ends: one more look
-  return readServed(CHAT_DB, key, since);
+  return readServed(CHAT_DB, key, runId);
+}
+function runIdOfReply(text) {
+  try {
+    const id = JSON.parse(text)?.id;
+    return typeof id === "string" && RUN_ID.test(id) ? id : null;
+  } catch {
+    return null;
+  }
 }
 
 async function forward(path, init, extra = {}) {
@@ -346,7 +356,7 @@ const server = http.createServer(async (req, res) => {
     const r = await forward("/v1/chat/completions", { method: "POST", body: clean }, routeHeader);
     const text = await r.text();
     log({ event: "turn", correlation, status: r.status, ms: Date.now() - started });
-    const evidence = r.status === 200 ? await served(body, started) : null;
+    const evidence = r.status === 200 ? await served(body, runIdOfReply(text)) : null;
     res.writeHead(r.status, { "content-type": "application/json", "cache-control": "no-store", ...echo,
       ...(evidence ? { "x-mc-served": JSON.stringify(evidence) } : {}) });
     res.end(text);
@@ -434,7 +444,7 @@ async function streamTurn(res, body, correlation, echo, started, routeHeader = {
     const reader = r.body.getReader();
     let pending = "";
     let emitted = 0;
-    let runSent = false;
+    let runId = null;
     read: for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -444,9 +454,9 @@ async function streamTurn(res, body, correlation, echo, started, routeHeader = {
       while ((nl = pending.indexOf("\n")) >= 0) {
         const line = pending.slice(0, nl).replace(/\r$/, "");
         pending = pending.slice(nl + 1);
-        if (!runSent) {
-          const run = runIdOf(line);
-          if (run) { runSent = true; send({ t: "run", id: run }); }
+        if (!runId) {
+          runId = runIdOf(line);
+          if (runId) send({ t: "run", id: runId });
         }
         for (const event of sseEvents(line)) {
           if (event.t === "done") break read;
@@ -463,7 +473,7 @@ async function streamTurn(res, body, correlation, echo, started, routeHeader = {
     if (why) { send({ t: "error", class: why }); outcome = why; }
     else if (outcome === "ended") outcome = "done";
     if (streaming && !why) {
-      const evidence = await served(body, started);
+      const evidence = await served(body, runId);
       if (evidence) send({ t: "served", ...evidence });
     }
   } catch (error) {

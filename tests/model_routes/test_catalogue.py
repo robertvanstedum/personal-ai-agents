@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from core.model_routes import (RouteRefused, check_selectable, conversation_role, load_catalogue, relay_routes,
+from core.model_routes import (CATALOGUE_PATH, TASK_ROLES, RouteRefused, check_selectable, conversation_role, load_catalogue, relay_routes,
                                role_snapshot_for, route_of, served_receipt, snapshot, view)
 
 CAT = load_catalogue()
@@ -27,7 +27,7 @@ def test_no_metered_route_is_offered_to_mc_at_all():
 
 def test_a_role_must_read_an_available_route(tmp_path):
     broken = json.loads(json.dumps(CAT))
-    broken["roles"]["mc-morning"]["route"] = "plan-anthropic-strong"     # not proved yet
+    broken["roles"]["mc-rooms"]["route"] = "plan-anthropic-strong"     # not proved yet
     path = tmp_path / "c.json"
     path.write_text(json.dumps(broken))
     with pytest.raises(ValueError):
@@ -71,8 +71,8 @@ def test_cos_is_honest_its_plan_routes_are_listed_unavailable_and_it_never_overr
 
 def test_a_non_selectable_task_ignores_a_conversation_choice():
     conv = {"routes": {"mc": {"route_id": "plan-anthropic-strong"}}}
-    assert snapshot(CAT, "mc-morning", conv)["route_id"] == CAT["roles"]["mc-morning"]["route"]
-    assert role_snapshot_for("cos", "mc-morning") is None and role_snapshot_for("stub", "mc-rooms") is None
+    assert snapshot(CAT, "mc-rooms", conv)["route_id"] == CAT["roles"]["mc-rooms"]["route"]
+    assert role_snapshot_for("cos", "mc-rooms") is None and role_snapshot_for("stub", "mc-rooms") is None
 
 
 def test_selected_and_served_stay_separate():
@@ -84,12 +84,12 @@ def test_selected_and_served_stay_separate():
 
 def test_a_hosts_own_copy_is_read_fresh_so_one_line_moves_a_task(tmp_path, monkeypatch):
     copy = json.loads(json.dumps(CAT))
-    copy["roles"]["mc-morning"]["route"] = "plan-openai-low"
+    copy["roles"]["mc-rooms"]["route"] = "plan-openai-low"
     next(r for r in copy["routes"] if r["route_id"] == "plan-openai-low")["offered"]["mc"] = "available"
     path = tmp_path / "routes.json"
     path.write_text(json.dumps(copy))
     monkeypatch.setenv("MINIMOI_MODEL_ROUTES_FILE", str(path))
-    assert role_snapshot_for("openclaw", "mc-morning")["model"] == "gpt-6-luna"
+    assert role_snapshot_for("openclaw", "mc-rooms")["model"] == "gpt-6-luna"
 
 
 def test_a_broken_host_copy_refuses_a_task_rather_than_defaulting_silently(tmp_path, monkeypatch):
@@ -98,9 +98,34 @@ def test_a_broken_host_copy_refuses_a_task_rather_than_defaulting_silently(tmp_p
         path.write_text(broken)
         monkeypatch.setenv("MINIMOI_MODEL_ROUTES_FILE", str(path))
         with pytest.raises(RouteRefused):
-            role_snapshot_for("openclaw", "mc-morning")
+            role_snapshot_for("openclaw", "mc-rooms")
+
+
+@pytest.mark.parametrize("missing", sorted(TASK_ROLES))
+def test_a_catalogue_without_a_known_task_refuses_every_task_rather_than_running_the_default(tmp_path, monkeypatch, missing):
+    broken = json.loads(json.dumps(CAT))
+    del broken["roles"][missing]
+    path = tmp_path / "routes.json"
+    path.write_text(json.dumps(broken))
+    monkeypatch.setenv("MINIMOI_MODEL_ROUTES_FILE", str(path))
+    with pytest.raises(ValueError):
+        load_catalogue()
+    for task in ("mc-private", "mc-rooms"):
+        with pytest.raises(RouteRefused):
+            role_snapshot_for("openclaw", task)
+
+
+def test_a_task_of_another_agent_has_no_route_on_this_backend(tmp_path, monkeypatch):
+    monkeypatch.setenv("MINIMOI_MODEL_ROUTES_FILE", str(CATALOGUE_PATH))
+    assert role_snapshot_for("cos", "mc-rooms") is None
+    assert role_snapshot_for("something-else", "mc-rooms") is None
 
 
 def test_without_a_hosts_catalogue_no_task_has_a_route(monkeypatch):
     monkeypatch.delenv("MINIMOI_MODEL_ROUTES_FILE", raising=False)
-    assert role_snapshot_for("openclaw", "mc-morning") is None
+    assert role_snapshot_for("openclaw", "mc-rooms") is None
+
+
+def test_the_morning_note_is_not_a_routed_task_because_it_always_runs_on_cos():
+    """scripts/mc/morning.py is bound to the CoS backend, and CoS has no plan routes yet. Listing it here would claim a route it never reads."""
+    assert not any("morning" in name for name in CAT["roles"])
