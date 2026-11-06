@@ -400,8 +400,9 @@ notices() {
   case "$to" in
     on)
       local hashes="${2:-}" name
-      [[ -z "$hashes" || "$hashes" =~ ^(claude-code|codex):[0-9a-f]{64}(,(claude-code|codex):[0-9a-f]{64})?$ ]] \
-        || die "notices on [claude-code:<sha256>,codex:<sha256>] (the line waiting.py install prints)"
+      # partnership: the task worker's own hash, so its failed-task notices are raised (minimoi_1_2_prod_bind.py keeps it in .env).
+      [[ -z "$hashes" || "$hashes" =~ ^(claude-code|codex|partnership):[0-9a-f]{64}(,(claude-code|codex|partnership):[0-9a-f]{64}){0,2}$ ]] \
+        || die "notices on [claude-code:<sha256>,codex:<sha256>,partnership:<sha256>] (waiting.py install prints the first two)"
       for name in pending.json reset_requests.json; do
         [[ -f "$ROOT/auth/$name" ]] || die "$ROOT/auth/$name missing: run notices prepare first"
       done

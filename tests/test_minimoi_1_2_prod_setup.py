@@ -29,7 +29,8 @@ def _apply_refuses_ownership(root):
 def test_apply_makes_private_folders_and_secrets(tmp_path):
     _apply_refuses_ownership(tmp_path)
     for rel in setup.FOLDERS:
-        assert stat.S_IMODE((tmp_path / rel).stat().st_mode) == 0o700
+        want = setup.SHARED_FOLDERS[rel][0] if rel in setup.SHARED_FOLDERS else 0o700
+        assert stat.S_IMODE((tmp_path / rel).stat().st_mode) == want
     for rel in setup.GENERATED:
         path = tmp_path / rel
         assert stat.S_IMODE(path.stat().st_mode) == 0o600 and len(path.read_text()) >= 32
@@ -131,8 +132,8 @@ def test_a_half_pair_or_a_bad_key_is_refused(tmp_path):
     assert not (tmp_path / setup.FOLDERS[0]).exists()
 
 
-def test_a_private_binding_the_node_consumer_cannot_read_is_unsafe(tmp_path):
-    rel = f"{setup.SECRETS}/cos-bound/bindings.json"
+def test_a_private_token_the_node_consumer_cannot_read_is_unsafe(tmp_path):
+    rel = f"{setup.SECRETS}/cos-bound/token"
     path = tmp_path / rel
     path.parent.mkdir(parents=True, mode=0o711)
     (tmp_path / "secrets").chmod(0o711)
@@ -184,3 +185,103 @@ def test_layer_secret_folders_are_all_provisioned():
     assert folders and all(f"{setup.SECRETS}/{name}" in setup.FOLDERS for name in folders)
     states = re.findall(r'MINIMOI_1_2_STATE:\?[^}]*\}/([a-z-]+)', layer)
     assert states and all(f"{setup.STATE}/{name}" in setup.FOLDERS for name in states)
+
+
+@pytest.fixture
+def owned_host(monkeypatch):
+    """A host where this process is the identity every consumer runs as: what root gets on production."""
+    me = (os.getuid(), os.getgid())
+    monkeypatch.setattr(setup, "consumer", lambda rel: me)
+    monkeypatch.setattr(setup, "ROOT", me)
+    monkeypatch.setattr(setup, "SHARED_FOLDERS", {"cos/store": (0o2750, *me)})
+    monkeypatch.setattr(setup, "_give", lambda path, uid, gid, rel: None)
+    return me
+
+
+def _rows(report):
+    return [v for group in ("folders", "generated", "by_operator") for v in report[group].values()]
+
+
+def test_g4_the_plugins_token_is_listed_and_the_file_nothing_reads_is_not():
+    from pathlib import Path
+    config = json.loads((Path(__file__).resolve().parents[1] / "docker/cos-agent-a/openclaw.json").read_text())
+    assert config["plugins"]["entries"]["cos-bound"]["config"]["tokenFile"] == "/run/secrets/cos-bound/token"
+    token = f"{setup.SECRETS}/cos-bound/token"
+    assert token in setup.BY_OPERATOR and setup.consumer(token) == (1000, 1000)
+    gone = f"{setup.SECRETS}/cos-bound/bindings.json"
+    assert gone not in setup.BY_OPERATOR and gone not in setup.NODE_PATHS
+
+
+def test_g6_report_runs_on_a_host_with_only_this_file(tmp_path):
+    """Copied alone, -I so nothing of the repository can be imported, once a key pair exists: this used to crash."""
+    import shutil
+    import subprocess
+    import sys
+    from pathlib import Path
+    root = tmp_path / "root"
+    root.mkdir()
+    left, right = setup.ASSERTION_PAIRS[0]
+    for rel in (left, right):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text("kid:" + "s" * 40 + "\n")
+        (root / rel).chmod(0o600)
+    alone = tmp_path / "alone"
+    alone.mkdir()
+    shutil.copy(Path(setup.__file__), alone)
+    done = subprocess.run([sys.executable, "-I", str(alone / "minimoi_1_2_prod_setup.py"), "check", "--root", str(root)],
+                          capture_output=True, text=True, cwd=alone)
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout)["generated"][left] in ("present", "unsafe")
+
+
+@pytest.mark.parametrize("line,ok", [("kid:" + "s" * 32 + "\n", True), ("kid:short\n", False),
+                                     ("no separator here at all, none\n", False), (":" + "s" * 40, False), ("", False)])
+def test_g6_the_key_rule_equals_the_portals(tmp_path, line, ok):
+    from core.portal_assertion import load_key
+    path = tmp_path / "k"
+    path.write_text(line)
+    assert setup._key_ok(path) is ok and (load_key(str(path)) is not None) is ok
+    assert setup._key_ok(tmp_path / "absent") is False and load_key(str(tmp_path / "absent")) is None
+
+
+def _prepare(root):
+    """cos_prod.sh prepare's effect on cos/store. The next test holds these values to the script."""
+    (root / "cos" / "store").mkdir(parents=True, exist_ok=True)
+    (root / "cos").chmod(0o755)
+    (root / "cos" / "store").chmod(0o2750)
+
+
+def test_g7_setup_and_cos_prod_prepare_agree_on_the_store():
+    import re
+    from pathlib import Path
+    script = (Path(__file__).resolve().parents[1] / "scripts/operations/cos_prod.sh").read_text()
+    (line,) = re.findall(r'install -d -m (\d+) -o (\S+) -g (\S+) "\$COS/store"', script)
+    mode, uid, gid = setup.SHARED_FOLDERS["cos/store"]
+    assert (int(line[0], 8), line[1], int(line[2])) == (mode, "root", gid) and uid == 0
+    assert 'install -d -m 0755 -o root -g root "$COS"' in script
+
+
+def test_g7_apply_can_run_twice_and_key_or_apply_can_come_first(tmp_path, owned_host):
+    first, second = tmp_path / "apply-first", tmp_path / "key-first"
+    first.mkdir()
+    second.mkdir()
+    # apply, apply, then prepare (key), then apply again.
+    setup.apply(first)
+    before = {rel: (first / rel).read_bytes() for rel in setup.GENERATED}
+    assert setup.apply(first)["made"] == []
+    _prepare(first)
+    assert setup.apply(first)["made"] == []
+    assert "unsafe" not in _rows(setup.report(first))
+    assert {rel: (first / rel).read_bytes() for rel in setup.GENERATED} == before
+    # prepare (key) before the first apply.
+    _prepare(second)
+    setup.apply(second)
+    assert "unsafe" not in _rows(setup.report(second))
+    assert stat.S_IMODE((second / "cos/store").stat().st_mode) == 0o2750
+
+
+def test_g7_a_store_with_any_other_mode_is_still_unsafe(tmp_path, owned_host):
+    (tmp_path / "cos/store").mkdir(parents=True)
+    (tmp_path / "cos/store").chmod(0o755)
+    with pytest.raises(SystemExit, match="unsafe"):
+        setup.apply(tmp_path)
