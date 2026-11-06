@@ -20,7 +20,7 @@ services:
   mc-relay:
     image: ${MINIMOI_MC_IMAGE:?immutable reviewed MC image digest required}
     environment:
-      # python -c relay_routes(load_catalogue()) at 6c30061e, plus the offered Grok API route.
+      # relay_routes(load_catalogue()), plus the offered Grok API route. tests/test_minimoi_1_2_production_layers.py holds this.
       MC_RELAY_ROUTES: '{"api-anthropic-mid":"minimoi-gateway/minimoi-anthropic-mid","api-anthropic-strong":"minimoi-gateway/minimoi-anthropic-strong","api-openai-low":"minimoi-gateway/minimoi-openai-low","api-openai-mid":"minimoi-gateway/minimoi-openai-mid","api-openai-strong":"minimoi-gateway/minimoi-openai-strong","api-xai-low":"minimoi-gateway/minimoi-xai-low","plan-anthropic-mid":"anthropic/claude-sonnet-4-6","plan-anthropic-strong":"anthropic/claude-opus-5","plan-openai-low":"openai/gpt-6-luna","plan-openai-mid":"openai/gpt-6-sol","plan-openai-strong":"openai/gpt-6-astra"}'
       # The agent state volume is already /mc-state on this service. The hook writes marks under the state dir.
       MC_RELAY_TOOL_STARTS: /mc-state/mc-tool-starts

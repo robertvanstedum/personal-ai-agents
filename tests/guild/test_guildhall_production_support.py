@@ -201,7 +201,7 @@ def test_the_task_service_needs_explicit_admission_on_production(monkeypatch, tm
 def test_each_new_production_service_has_the_settings_its_code_requires():
     services = _compose("docker-compose.minimoi-1-2-production.yml")["services"]
     board = services["cos-board"]["environment"]
-    assert {"BOARD_API_PROFILES_FILE", "BOARD_API_CURSOR_KEY_FILE", "DATABASE_URL", "BOARD_API_OWNER",
+    assert {"BOARD_API_PROFILES_FILE", "BOARD_API_CURSOR_KEY_FILE", "DATABASE_URL_FILE", "BOARD_API_OWNER",
             "MINIMOI_BOARD_ENV"} <= set(board)
     tasks = services["partnership-tasks"]
     assert tasks["environment"]["PARTNERSHIP_PRODUCTION"] == "1" and tasks["environment"]["MINIMOI_ROLE"] == "production"

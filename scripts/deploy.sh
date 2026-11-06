@@ -36,6 +36,29 @@ if [[ -f "$RUNTIME_LAYER" ]]; then
   COMPOSE+=(-f "$RUNTIME_LAYER")
 fi
 
+# MiniMoi 1.2's production layer: present on the host only once switched on (an operator act on Robert's word), then
+# layered on every release and every path through this script, so none strips its settings; absent, nothing changes.
+MINIMOI_1_2_LAYER=/opt/minimoi/docker-compose.minimoi-1-2-production.yml
+if [[ -f "$MINIMOI_1_2_LAYER" ]]; then
+  COMPOSE+=(-f "$MINIMOI_1_2_LAYER")
+fi
+
+# Guildhall's production layer (scheduler and portal side): same rule as the scoped release's. On Robert's word only.
+GUILDHALL_LAYER=/opt/minimoi/docker-compose.guildhall-production-main.yml
+if [[ -f "$GUILDHALL_LAYER" ]]; then
+  COMPOSE+=(-f "$GUILDHALL_LAYER")
+fi
+
+# MiniMoi 1.2's images and profile: its companions run this release's images, never a value left on the host (an exported
+# value beats .env). The profile keeps them in the project, so --remove-orphans can't remove them. A setting or layer that
+# doesn't render stops the release here, before anything changes.
+if [[ -f "$MINIMOI_1_2_LAYER" ]]; then
+  COMPOSE+=(--profile minimoi-1-2)
+  export MINIMOI_PORTAL_IMAGE="${ECR}/minimoi/portal:$MINIMOI_IMAGE_TAG"
+  export MINIMOI_COS_SCHEDULER_IMAGE="${ECR}/minimoi/cos-scheduler:$MINIMOI_IMAGE_TAG"
+  "${COMPOSE[@]}" config -q || { echo "MiniMoi 1.2's layer does not render: setup is unfinished. Nothing was changed." >&2; exit 1; }
+fi
+
 python3 /opt/minimoi/scripts/release_status.py begin "$MINIMOI_IMAGE_TAG" portal curator german portuguese system-bot cos-bot cos-scheduler cos-agent-a model-gateway
 
 echo "=== Authenticating with ECR ==="

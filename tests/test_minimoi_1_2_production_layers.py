@@ -95,6 +95,69 @@ def test_layers_create_nothing_and_carry_no_dev_values():
             assert text.count("immutable reviewed MC image digest required") == 2
 
 
+def test_the_relay_routes_are_the_catalogues_plus_the_offered_grok_route():
+    """The layer's pinned list can't drift from the route catalogue. Claude's targets stay: the catalogue lists them, and
+    they are unoffered there. Only MC_FAILOVER_ROUTES leaves them out."""
+    from core.model_routes import load_catalogue, relay_routes
+    pinned = json.loads(_compose(LAYERS[1])["services"]["mc-relay"]["environment"]["MC_RELAY_ROUTES"])
+    catalogue = load_catalogue()
+    grok = next(r for r in catalogue["routes"] if r["route_id"] == "api-xai-low")
+    assert pinned == {**relay_routes(catalogue), "api-xai-low": f"{grok['provider']}/{grok['model']}"}
+    # The host's catalogue offers Grok to MC (the runbook's one change for it): then the two are the same list.
+    grok["offered"] = {**grok["offered"], "mc": "available"}
+    assert pinned == relay_routes(catalogue)
+
+
+def test_grok_is_nobodys_failover_in_the_catalogue_the_relay_reads():
+    from core.model_routes import load_catalogue
+    assert not [r["route_id"] for r in load_catalogue()["routes"] if r.get("failover") == "api-xai-low"]
+
+
+def test_action_notices_are_on_by_a_mode_the_code_knows_and_stay_switchable():
+    from minimoi_portal.action_waiting.settings import MODES, Settings
+    value = _compose(LAYERS[0])["services"]["portal"]["environment"]["MINIMOI_ACTION_NOTICES"]
+    assert value == "${MINIMOI_ACTION_NOTICES:-on}"     # `notices off` writes .env; a fixed value would override it
+    assert "on" in MODES and Settings.from_environ({"MINIMOI_ACTION_NOTICES": "on"}).mode == "on"
+    assert Settings.from_environ({"MINIMOI_ACTION_NOTICES": "1"}).mode == "off"    # the old value: off, silently
+
+
+def test_voice_starts_are_admitted_in_production_by_what_the_layer_sets():
+    from domains.cos import direct_voice
+    from minimoi_portal import guild_mounts
+    services = _compose(LAYERS[0])["services"]
+    portal = {**services["portal"]["environment"], "MINIMOI_GUILD_VOICE_PRODUCTION": "1", "MINIMOI_MC_VOICE": "1",
+              "MINIMOI_GUILD_CHAT": "mc", "MC_RUNTIME_URL": guild_mounts.PRODUCTION_MC_RELAY_URL, "MC_RUNTIME_TOKEN": "x"}
+    environ = guild_mounts.production_environ(portal)
+    assert environ[guild_mounts.DIRECT_VOICE_ADMITTED] == "1" and environ["MINIMOI_MC_VOICE_DIRECT"] == "1"
+    del portal[guild_mounts.DIRECT_VOICE_PRODUCTION_FLAG]
+    assert guild_mounts.production_environ(portal)[guild_mounts.DIRECT_VOICE_ADMITTED] == "0"
+    cos = dict(services["cos-scheduler"]["environment"], MINIMOI_ROLE="production")
+    assert direct_voice.may_start(cos)
+    del cos[direct_voice.PRODUCTION_SWITCH]
+    assert not direct_voice.may_start(cos)
+
+
+def test_the_layer_leaves_both_voice_providers_available():
+    from core.realtime_voice.capabilities import AGENT_CONVERSATION_MODE, providers_for_mode
+    for name in LAYERS:
+        for service in _compose(name)["services"].values():
+            for key in service.get("environment") or {}:
+                assert "VOICE" not in key or "PROVIDER" not in key, key     # nothing narrows or chooses the provider
+    assert {c.provider for c in providers_for_mode(AGENT_CONVERSATION_MODE, "en-US")} >= {"openai", "xai"}
+
+
+def test_the_board_database_password_is_not_a_compose_variable():
+    text = _text(LAYERS[0])
+    assert "MINIMOI_COS_BOARD_DATABASE_URL" not in text
+    board = _compose(LAYERS[0])["services"]["cos-board"]
+    assert "DATABASE_URL" not in board["environment"]
+    mount = next(v for v in board["volumes"] if v["target"] == "/run/board-secrets")
+    assert board["environment"]["DATABASE_URL_FILE"] == f"{mount['target']}/db.url" and mount["read_only"] is True
+    # The partnership worker already reads its URL from a file (services/partnership_tasks/worker.py).
+    assert "DATABASE_URL" not in _compose(LAYERS[0])["services"]["partnership-worker"]["environment"]
+    assert f"{setup.SECRETS}/cos-board" in setup.FOLDERS and f"{setup.SECRETS}/partnership/db.url" in setup.BY_OPERATOR
+
+
 def test_secret_folders_are_on_the_setup_list():
     folders = []
     for name in LAYERS:

@@ -2,7 +2,8 @@
 
 Run explicitly: python -m minimoi_portal.guild_ui.board_headless_runner
 Requires BOARD_API_PROFILES_FILE, BOARD_API_CURSOR_KEY_FILE, BOARD_API_OWNER,
-MINIMOI_BOARD_ENV and DATABASE_URL. No secrets or identities are generated.
+MINIMOI_BOARD_ENV and DATABASE_URL_FILE (an owner-only file holding the URL) or
+DATABASE_URL. No secrets or identities are generated.
 Default bind is loopback. The CoS companion may explicitly bind 0.0.0.0 on
 an isolated Docker network with no published ports (operator verified).
 Key file is owner-only JSON: {"profiles": [KeyProfile fields plus secret_hex]}.
@@ -98,6 +99,16 @@ def listener(floor, value):
     return value
 
 
+def database_url(environ):
+    """The URL from its private file when one is named (production: no password in the shared .env), else DATABASE_URL."""
+    path = environ.get("DATABASE_URL_FILE")
+    if not path:
+        return environ["DATABASE_URL"]
+    value = private_bytes(path).decode("utf-8").strip()
+    require(value, "database_url_file_empty")
+    return value
+
+
 def main():
     import psycopg2
     from werkzeug.serving import make_server
@@ -106,7 +117,7 @@ def main():
     floor = os.environ.get("BOARD_API_FLOOR", "guild")
     require(floor in {"guild", "cos-board"}, "board_floor_invalid")
     bind = listener(floor, os.environ.get("BOARD_API_BIND", "127.0.0.1"))
-    dsn = os.environ["DATABASE_URL"]
+    dsn = database_url(os.environ)
     def connect():
         return psycopg2.connect(dsn, connect_timeout=3, options="-c statement_timeout=3000 -c lock_timeout=2000")
     lease = SingleProcessLease(connect, owner=owner, environment=env, floor=floor)
