@@ -12,6 +12,9 @@ through both in a single test corrupts Flask's global context stack
 hazard, not an application bug -- avoided here by never mixing clients
 within one test.
 """
+from pathlib import Path
+
+import pytest
 
 
 def test_german_endpoint_registered_and_backed_by_shared_module(german_client):
@@ -122,7 +125,7 @@ def test_german_dev_ui_makes_realtime_primary(monkeypatch, german_client):
     # the portal's /app/german proxy prefix, leaving the Start button inert.
     assert (
         'from "./static/realtime-voice/realtime-voice-controller.js'
-        '?v=20260809-ga1"' in page
+        '?v=20261106-err1"' in page
     )
     assert "bootstrapUrl: './api/realtime-voice/bootstrap'" in page
     assert "source: session.source || 'ki_sitzung'" in page
@@ -152,7 +155,7 @@ def test_portuguese_dev_ui_makes_realtime_primary(monkeypatch, portuguese_client
     assert "realtime-transcript" in page
     assert (
         'from "./static/realtime-voice/realtime-voice-controller.js'
-        '?v=20260809-ga1"' in page
+        '?v=20261106-err1"' in page
     )
     assert "bootstrapUrl: './api/realtime-voice/bootstrap'" in page
     assert "source: session.source || 'ki_sessao'" in page
@@ -213,3 +216,14 @@ def test_portuguese_data_directory_can_be_mounted_outside_code():
         "domains/portuguese/html_server.py", encoding="utf-8"
     ).read()
     assert 'os.environ.get("PORTUGUESE_DATA_DIR"' in source
+
+
+@pytest.mark.parametrize("template,words", [
+    ("domains/german/templates/german_gesprache.html", "Fehler beim Anbieter: ${providerError}."),
+    ("domains/portuguese/templates/portuguese_conversas.html", "Erro do provedor: ${providerError}."),
+])
+def test_both_language_pages_say_a_provider_error_plainly(template, words):
+    # PR #281's part: one provider error left a silent "Status: reconnecting" on both pages.
+    page = (Path(__file__).resolve().parents[1] / template).read_text(encoding="utf-8")
+    assert "onProviderError(info) {" in page and words in page
+    assert "partial_reason === 'recoverable_error_no_retry' && providerError" in page

@@ -347,3 +347,22 @@ def test_first_message_titles_only_an_unnamed_chat(hist):
     named = hist.create("My chosen title")["conversation_id"]
     hist.begin(send(named, "t-000000000003", text="Do not rename this"))
     assert hist.conversation(named)["title"] == "My chosen title"
+
+
+def test_a_later_recovery_leaves_live_turns_alone(hist):
+    # Only the first recovery of a process interrupts pending turns; those belonged to a gone process (PR #462, S6).
+    cid = hist.ensure_default()["conversation_id"]
+    hist.begin(send(cid))
+    hist._needs_recovery = True                       # e.g. after a read-back mismatch
+    hist.ensure_default()                             # any locked call runs recovery again
+    assert hist.turn(cid, "t-0a1b2c3d4e5f6a")["status"] == "pending"
+
+
+def test_a_new_process_still_interrupts_turns_left_pending(hist, tmp_path):
+    # The other half of the same rule: the first recovery of a new process still closes a turn its predecessor left.
+    cid = hist.ensure_default()["conversation_id"]
+    hist.begin(send(cid))
+    restarted = History(hist.base, hist.environment)
+    assert restarted.recover()["interrupted"] == 1
+    turn = restarted.turn(cid, "t-0a1b2c3d4e5f6a")
+    assert turn["status"] == "failed" and turn["failure_code"] == "interrupted"

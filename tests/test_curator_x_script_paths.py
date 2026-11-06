@@ -32,3 +32,14 @@ def test_curator_cron_callers_use_the_packaged_runner():
     assert "BASE_DIR / 'run_curator_cron.sh'" not in telegram_source
     assert "python -m scripts.x.x_pull_incremental" in local_cron_source
     assert "python -m scripts.x.x_pull_incremental" in ec2_cron_source
+
+
+def test_telegram_bot_resolves_repository_paths_from_the_repository_root():
+    # PR #212: BASE_DIR pointed inside core/telegram, so the briefing fallback, logs, voice notes, the on-demand
+    # preview and the German folder all missed. Every path built from it must land where those files live.
+    from core.telegram import telegram_bot
+
+    assert telegram_bot.PROJECT_ROOT == ROOT
+    assert telegram_bot.BASE_DIR == ROOT
+    assert (telegram_bot.BASE_DIR / "domains" / "german").is_dir()
+    assert (telegram_bot.BASE_DIR / "domains" / "curator" / "curator_rss_v2.py").is_file()

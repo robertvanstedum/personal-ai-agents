@@ -92,9 +92,19 @@ rsync_path "/opt/minimoi/cos_reminders/"        "cos_reminders/"
 # reason: cos-agent-a mounts data/ read-write and must not reach them.
 rsync_path "/opt/minimoi/cos_voice/"            "cos_voice/"
 # CoS 1.2 (spec v0.3 section 4.21): the CoS store and the canonical conversation history, both written only by
-# cos-scheduler outside data/. A copy taken mid-write is safe: the writers quarantine a torn last line on start and
-# resolve the journal. The store's derived/ is rebuilt after a restore, but is small enough to copy too.
-rsync_path "/opt/minimoi/cos/store/"            "cos-store/"
+# cos-scheduler outside data/. The history's torn last line is quarantined on start. The store is copied under its
+# writer's own lock, so the copy's journal never runs ahead of its records; a backup must still happen, so a lock not
+# had in 5 minutes is logged and the store copied anyway (its writer resolves the journal on start). The store's
+# derived/ is rebuilt after a restore, but is small enough to copy too.
+COS_STORE_LOCK="/opt/minimoi/cos/store/journal/.lock"
+if [ -e "$COS_STORE_LOCK" ] && command -v flock >/dev/null 2>&1 && exec 9<"$COS_STORE_LOCK"; then
+    flock -w 300 9 || log "WARNING: CoS store lock not had in 300s; copying the store without it"
+    rsync_path "/opt/minimoi/cos/store/"        "cos-store/"
+    flock -u 9 || true
+    exec 9<&-
+else
+    rsync_path "/opt/minimoi/cos/store/"        "cos-store/"
+fi
 rsync_path "/opt/minimoi/cos/conversations/"    "cos-conversations/"
 
 log "=== Local backup complete: ${LOCAL_BACKUP} ==="

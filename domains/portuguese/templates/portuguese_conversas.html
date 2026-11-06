@@ -1633,7 +1633,7 @@ document.getElementById('advance-modal').addEventListener('click', e => {
 // Reads current persona/scene from the DOM rather than this page's own
 // script-level state above -- decoupled on purpose, so this beta wiring
 // can't accidentally break the existing session flow's state.
-import { RealtimeVoiceController } from "./static/realtime-voice/realtime-voice-controller.js?v=20260809-ga1";
+import { RealtimeVoiceController } from "./static/realtime-voice/realtime-voice-controller.js?v=20261106-err1";
 
 const startBtn = document.getElementById('realtime-voice-start-btn');
 const endBtn = document.getElementById('realtime-voice-end-btn');
@@ -1644,6 +1644,7 @@ const transcriptEl = document.getElementById('realtime-transcript-text');
 const learnerName = {{ learner_name|tojson }};
 
 let controller = null;
+let providerError = '';
 
 function setStatus(text) {
   if (statusEl) statusEl.textContent = text;
@@ -1652,7 +1653,7 @@ function setStatus(text) {
 async function finalizeAndSave(result) {
   setStatus(
     result.partial
-      ? `Sessão encerrada (parcial: ${result.partial_reason}). Preparando transcrição…`
+      ? `Sessão encerrada (parcial: ${result.partial_reason === 'recoverable_error_no_retry' && providerError ? providerError : result.partial_reason}). Preparando transcrição…`
       : 'Sessão encerrada. Preparando transcrição…'
   );
   const personaEl = document.querySelector('.persona-list-item.active');
@@ -1709,6 +1710,7 @@ startBtn?.addEventListener('click', async () => {
   if (transcriptWrap) transcriptWrap.style.display = 'none';
   if (transcriptEl) transcriptEl.textContent = '';
 
+  providerError = '';
   controller = new RealtimeVoiceController({
     bootstrapUrl: './api/realtime-voice/bootstrap',
     onStateChange(state) {
@@ -1733,6 +1735,10 @@ startBtn?.addEventListener('click', async () => {
     },
     onFatalError(info) {
       setStatus(`Erro: ${info.reason} — ${info.detail || ''}`);
+    },
+    onProviderError(info) {
+      providerError = info.detail || info.reason;
+      setStatus(`Erro do provedor: ${providerError}. A reconexão não é automática. Se a conversa não continuar, encerre a sessão e comece de novo.`);
     },
     onFinalize: finalizeAndSave,
   });
