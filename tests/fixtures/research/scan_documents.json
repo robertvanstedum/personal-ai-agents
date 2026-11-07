@@ -25,7 +25,7 @@
         "What historical or empirical comparisons best test the argument in Untitled scan?"
       ]
     ],
-    "page_sha256": "94580aa0dcde4974e505f08d1f8709c6b0ed0bf214074a6d156bb2db0572218e"
+    "page_sha256": "96215a64d915295c9a73bf3664ea7d676043253463e7bbdd18e8d04b46c3e69a"
   },
   {
     "name": "plain",
@@ -53,7 +53,7 @@
         "What historical or empirical comparisons best test the argument in Plain scan?"
       ]
     ],
-    "page_sha256": "8d4ba3d95da68111d6c9aaf238a7911603f376e1ae13aa6c90fd372db46988fb"
+    "page_sha256": "36b1899d7437f01781332f1a76dd3720dd72336089b9cc18ec2d1f81b3e9be33"
   },
   {
     "name": "structured",
@@ -105,7 +105,7 @@
         "What evidence is missing?"
       ]
     ],
-    "page_sha256": "9e0bdc3a6553c71a67621cab20f42dc31ff3b5a45bdd93d71f8563b324cd4e98"
+    "page_sha256": "2b4193050fd552f1fd4b41d2387667d95b2558801caa9e1f1bbc42de1712d520"
   },
   {
     "name": "inline_interest",
@@ -148,6 +148,6 @@
         "What historical or empirical comparisons best test the argument in Metadata?"
       ]
     ],
-    "page_sha256": "7a98aca793ab9215c0063db60b10e36051df6dad7e9d037b56c519a03b55972f"
+    "page_sha256": "500daac9087d7d694414cb2ba1c9b854ba9c117637f3443f1c98483b8cd55fbf"
   }
 ]
