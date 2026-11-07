@@ -83,11 +83,34 @@ def _attribute_filter(tag: str, attr: str, value: str):
 # the model (raw HTML stays off), so the allow-list below admits details/summary only as this code produces them.
 _FOLD = re.compile(r"^\s*(?:\*\*)?Details(?:\*\*)?:?\s*$", re.IGNORECASE)
 _FENCE = re.compile(r"^\s*(```|~~~)")
+# A model sometimes writes the tags itself. Raw HTML is off, so Robert saw "</details>" as text (7 Nov). Those lines become
+# the same fold; nothing the model wrote reaches the page as a tag.
+_MODEL_DETAILS_OPEN = re.compile(r"^\s*<details(?:\s[^>]*)?>\s*(?:<summary(?:\s[^>]*)?>.*?</summary>\s*)?$", re.IGNORECASE)
+_MODEL_DETAILS_LINE = re.compile(r"^\s*(?:<summary(?:\s[^>]*)?>.*?</summary>|</details>)\s*$", re.IGNORECASE)
+
+
+def _unwrap_model_details(source: str) -> str:
+    """The model's own details tags as our fold line. Only with an opening and a closing tag on lines of their own, outside code."""
+    fenced, opened, closed = False, False, False
+    out = []
+    for line in source.split("\n"):
+        if _FENCE.match(line):
+            fenced = not fenced
+        elif not fenced and not opened and _MODEL_DETAILS_OPEN.match(line):
+            opened = True
+            out.append("Details")
+            continue
+        elif not fenced and opened and _MODEL_DETAILS_LINE.match(line):
+            closed = closed or line.strip().lower() == "</details>"
+            continue
+        out.append(line)
+    return "\n".join(out) if opened and closed else source
 
 
 def _split_fold(source: str):
     """(answer, detail) at the first fold line outside a code block, or (source, None)."""
     fenced = False
+    source = _unwrap_model_details(source)
     lines = source.split("\n")
     for i, line in enumerate(lines):
         if _FENCE.match(line):
