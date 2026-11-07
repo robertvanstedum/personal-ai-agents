@@ -479,6 +479,16 @@ def _differing_fields(left, right, path=""):
     return [] if left == right else [path or "/"]
 
 
+def with_image_env(saved: dict, spec: dict) -> dict:
+    """What a new container should hold: the saved contract plus exactly its target's image switches. A restore compares with the saved one alone."""
+    added = [f"{name}={value}" for name, value in spec.get("image_env", ())]
+    return {**saved, "env": sorted([*saved["env"], *added])}
+
+
+def sorted_env(contract: dict) -> dict:
+    return {**contract, "env": sorted(contract["env"])}
+
+
 def check_restored(saved: dict, live: dict, what: str) -> None:
     """After a restore, what was saved is what is live, whole."""
     left, right = _same_meaning(saved), _same_meaning(live)
@@ -1034,7 +1044,7 @@ class RealHost:                                     # pragma: no cover  (exercis
                 assert live["Image"] == self.new_ids[key], "not the new image: " + spec["container"]
             else:
                 self._check_gateway_serves(spec)
-            check_restored(self.saved["contracts"][key], self.O.contract(spec["container"]), "contract of " + spec["container"])
+            check_restored(with_image_env(self.saved["contracts"][key], spec), sorted_env(self.O.contract(spec["container"])), "contract of " + spec["container"])
             assert dev_values(live["Config"]["Env"]) == self.saved["dev_values"][key], "a Dev setting moved: " + spec["container"]
             check_required_env(spec["container"], live["Config"]["Env"])
             if spec.get("worker"):

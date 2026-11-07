@@ -912,6 +912,9 @@ class FakeDocker:
         if c["Config"]["Image"] != spec["image"] or c["Image"] != image["Id"] or "--force-recreate" in words:
             c["Id"] = c["Id"] + "+"
         c["Config"]["Image"], c["Image"] = spec["image"], image["Id"]
+        # As docker does: a container holds its image's ENV lines; the old image brings none back.
+        c["Config"]["Env"] = [e for e in c["Config"]["Env"] if e not in c.get("from_image", [])] + image.get("added", [])
+        c["from_image"] = image.get("added", [])
         c["State"]["Running"] = "--no-start" not in words
         self.log.append(("recreated", name))
         return _Result("")
@@ -937,6 +940,7 @@ class FakeDocker:
         if added:
             config = self.images[tag]["Config"]
             config["Env"] = [*(config.get("Env") or []), *added]
+            self.images[tag]["added"] = added
         return _Result("")
 
     def _sums(self, files, paths):
@@ -1357,3 +1361,9 @@ def test_the_overlay_check_admits_exactly_the_named_switch():
         op.check_overlay(base, good, image_env=(("S", "2"),))            # another value: refused
     with pytest.raises(AssertionError):
         op.check_overlay(base, {**good, "Config": {**good["Config"], "Env": ["A=2", "S=1"]}}, image_env=(("S", "1"),))
+
+
+def test_with_image_env_is_the_saved_contract_plus_exactly_the_named_switch():
+    saved = {"env": ["B=1", "A=1"], "host": {}, "mounts": []}
+    assert op.with_image_env(saved, {})["env"] == ["A=1", "B=1"]
+    assert op.with_image_env(saved, {"image_env": (("S", "1"),)}) == {"env": ["A=1", "B=1", "S=1"], "host": {}, "mounts": []}
