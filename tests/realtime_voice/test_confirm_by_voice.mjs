@@ -462,6 +462,15 @@ await check('openai: asking for the recap makes it now', () => run('openai', asy
   assert.equal(t.posts('/summary').length, 1);
 }, { routes: { ...table({ 'Sum it up.': { decision: 'summary_now' } }), '/summary': () => ({ ok: true, state: 'proposed', spoken: 'We talked.' }) } }));
 
+// Robert, 7 Nov 2026: what he types during a call reaches it as a line it can see, and asks for no response.
+for (const provider of ['openai', 'xai']) {
+  await check(`${provider}: a typed line reaches the call and asks for no response`, () => run(provider, async (t) => {
+    const before = t.frames.filter((f) => f.type === 'response.create').length;
+    assert.equal(t.s.context('He typed this. <<<hello>>>'), true);
+    assert.ok(t.lines().at(-1).includes('<<<hello>>>'));
+    assert.equal(t.frames.filter((f) => f.type === 'response.create').length, before);
+  }));
+}
 // S2: asking for the summary mid-session gets one content-free line, never his words.
 await check('openai: S2 "read me the summary" mid-session says the summary comes at the end, never the waiting words', () => run('openai', async (t) => {
   await t.speak('a', WORDS); t.asked('RA'); await quiet(); t.replied('RA', 'Shall I go ahead?');

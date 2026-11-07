@@ -363,3 +363,15 @@ def test_admitted_but_refused_is_told_apart_from_not_admitted_with_its_words(mon
     assert caps["direct_voice"] is False and caps["direct_refused"] == core.NO_ALLOWANCE
     refused = boot(no_allowance)                             # a start is still refused, as before (MC's words unchanged)
     assert refused.status_code == 503 and refused.get_json() == {"error": "unavailable", "message": core.NO_ALLOWANCE}
+
+
+def test_a_chats_ended_sessions_can_be_read_back_and_never_a_live_one(monkeypatch, tmp_path):
+    # Robert, 7 Nov 2026: the write-up belongs to the chat, on any device, not only the page that ended the call.
+    r = build(monkeypatch, tmp_path, store=Listing())
+    url = BASE + "/sessions?view=ended&conversation_id=owner"
+    sid = start(r)
+    assert r.client.get(url, headers=OWNER).get_json()["sessions"] == []
+    assert r.client.post(BASE + f"/session/{sid}/end", headers=OWNER, json={"conversation_id": "owner"}).status_code == 200
+    assert [v["session_id"] for v in r.client.get(url, headers=OWNER).get_json()["sessions"]] == [sid]
+    assert r.client.get(BASE + "/sessions?view=ended&conversation_id=other", headers=OWNER).get_json()["sessions"] == []
+    assert r.client.get(BASE + "/sessions?view=ended", headers=OWNER).get_json()["sessions"] == []

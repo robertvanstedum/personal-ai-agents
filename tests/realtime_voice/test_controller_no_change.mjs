@@ -27,6 +27,16 @@ import assert from 'node:assert/strict';
 const PATH = new URL('../../core/realtime_voice/static/realtime-voice-controller.js', import.meta.url);
 const BEFORE = '682906489b0b3f9f02cd3df951da6fbaaef74c2aa49927d5905827ea3b8c7f05';     // 93bf00c6, as German loads it today
 const CONTROLLER = [
+  // 7 Nov 2026: additive, and German and Portuguese never call it.
+  [`  // A line the model sees with no response asked for. Only the direct page's typed-during-a-call note calls it.
+  addContext(text) {
+    if (typeof this._adapter?.addContextItem !== "function") return false;
+    this._adapter.addContextItem(text);
+    return true;
+  }
+
+`,
+   ``],
   // Benign provider notices (PR #281): interrupting twice must not end a call now that a second error ends it.
   [`
 // Provider "error" events that a healthy session also sees; they never end it.
@@ -80,8 +90,8 @@ const BENIGN_PROVIDER_ERRORS = new Set([
 // for each response's first audio (audio_started; the v3 fix round, review M2), and OpenAI's for the page's lines as system
 // items (the v3 live check, fault 1): new keys so browsers fetch them (Spec 165 §4.3, §5.1, §5.3; review FR N3, V R2-M1;
 // v0.3 G3; the C2 binding pass).
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261031-live1";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261031-live1";
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261107-context1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261107-context1";
 `,
    `// an interim transcript's status, LV2), and xAI's for a microphone granted after the start ended (Gate 2 V S2): new keys
 // so browsers fetch them (Spec 165 §4.3, §5.1, §5.3; review FR N3, V R2-M1; v0.3 G3; the C2 binding pass).
@@ -756,6 +766,16 @@ const source = fs.readFileSync(PATH, 'utf8');
 // The adapters: exactly the additions below, nothing else (each taken out, the file is its 93bf00c6 bytes).
 const ADAPTERS = {
   'adapters/xai-websocket-adapter.js': ['afe83aa8aae73e4b47d6eaa920f8893932cf4bf04ee225e0918db06d5db3afbf', [
+    [`  // A line for the model to see, with no response asked for. Only the direct page's typed-during-a-call note uses it.
+  addContextItem(text) {
+    this._ws?.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: { type: "message", role: "user", content: [{ type: "input_text", text }] },
+    }));
+  }
+
+`,
+     ``],
   [`        // The v3 fix round (review M2): each response's first audio, for a host that counts a question from it. Nothing
         // listens unless a host passes onAudioStarted to the controller; German and Portuguese do not.
         if (event.response_id && event.response_id !== this._sounding) {
@@ -889,6 +909,16 @@ const ADAPTERS = {
 `],
   ]],
   'adapters/openai-webrtc-adapter.js': ['dae118fd252add9a80755a363d64ce6b4ef377b004d177e8dc10bba5a3c274a7', [
+    [`  // A line for the model to see, with no response asked for. Only the direct page's typed-during-a-call note uses it.
+  addContextItem(text) {
+    this._dc?.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: { type: "message", role: "system", content: [{ type: "input_text", text }] },
+    }));
+  }
+
+`,
+     ``],
   [`        // The v3 fix round (review M2): the response's first audio, for a host that counts a question from it. Nothing
         // listens unless a host passes onAudioStarted to the controller; German and Portuguese do not.
         this._emit("audio_started", { response_id: event.response_id || null });

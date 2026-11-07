@@ -2747,6 +2747,16 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             who = principal()
             if who is None:
                 return refusal("not_allowed", "That needs the owner's sign-in.", 401)
+            if request.args.get("view") == "ended":             # this chat's finished sessions, kept in its history (Robert, 7 Nov)
+                cid = request.args.get("conversation_id")
+                listed = []
+                for handle, sid in store.sessions(who, True) or ():
+                    view = session_view(adapter, sessions, handle, sid) if cid and handle == cid else None
+                    if view is not None and view["state"] != "live":
+                        listed.append(view)
+                        if len(listed) >= SESSIONS_MAX:
+                            break
+                return jsonify({"ok": True, "sessions": listed})
             return jsonify({"ok": True, "sessions": views(who)})
 
         def found(raw_sid, cid):

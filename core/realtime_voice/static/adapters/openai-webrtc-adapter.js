@@ -154,6 +154,14 @@ export class OpenAIWebRTCAdapter {
     this._emit("closed", { reason });
   }
 
+  // A line for the model to see, with no response asked for. Only the direct page's typed-during-a-call note uses it.
+  addContextItem(text) {
+    this._dc?.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: { type: "message", role: "system", content: [{ type: "input_text", text }] },
+    }));
+  }
+
   sendContinuationInstruction(text, tag, role) {
     // Text-only continuation (Section 9's idle re-engagement) -- per
     // OpenAI docs: conversation.item.create with input_text, then

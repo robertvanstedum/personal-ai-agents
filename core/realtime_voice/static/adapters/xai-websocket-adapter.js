@@ -199,6 +199,14 @@ export class XAIWebSocketAdapter {
     }
   }
 
+  // A line for the model to see, with no response asked for. Only the direct page's typed-during-a-call note uses it.
+  addContextItem(text) {
+    this._ws?.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: { type: "message", role: "user", content: [{ type: "input_text", text }] },
+    }));
+  }
+
   sendContinuationInstruction(text) {
     this._ws?.send(JSON.stringify({
       type: "conversation.item.create",

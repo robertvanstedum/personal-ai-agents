@@ -232,8 +232,17 @@ const tabPanels = document.querySelectorAll('.tab-panel');
 const tabPhotos = document.querySelectorAll('.tab-photo');
 const tabLoaded = { confer: true, rooms: true, records: true, record: false, track: false, store: false };
 
+// A live call keeps its bar and End on every tab: the bar floats above the page away from Confer (Robert, 7 Nov).
+const voiceBar = document.getElementById('voice-live'), voiceBarHome = document.getElementById('save-state');
+function placeVoiceBar(tab) {
+  const away = tab !== 'confer';
+  voiceBar.classList.toggle('voice-live-floating', away);
+  if (away) { if (voiceBar.parentNode !== document.body) document.body.append(voiceBar); }
+  else if (voiceBar.parentNode !== voiceBarHome.parentNode) voiceBarHome.before(voiceBar);
+}
 function activateTab(tab, pushState) {
   document.body.dataset.cosTab = tab;
+  placeVoiceBar(tab);
   document.body.classList.toggle('show-cos-home', tab === 'home');
   document.getElementById('cos-home').setAttribute('aria-current', tab === 'home' ? 'page' : 'false');
   document.body.classList.toggle('show-cos-board', tab === 'records');
@@ -427,6 +436,7 @@ async function sendMessage() {
   attached = []; renderTray();
   setInputDisabled(true);
   appendMsg('user', [text, ...files.map(f => '📎 ' + f.name)].filter(Boolean).join('\n'));
+  window.cosVoiceTyped?.(text);
   const thinking = appendThinking();
   const restore = () => {
     if (!sendInput.value.trim()) sendInput.value = text;
@@ -457,6 +467,7 @@ async function sendMessage() {
     window.cosHistory.confirm(data.history, data.operation);
     window.MiniMoiNotices?.clear('cos-chat:' + conversationId + ':' + requestId);
     if (window.cosHistory.conversationId === conversationId) appendMsg('cos', data.reply, data.files);
+    window.cosVoiceTyped?.(data.reply, 'The chat answered him in writing during the call');
     if (Array.isArray(data.files) && data.files.length) loadCosFiles();
     document.dispatchEvent(new CustomEvent('cos:turn-completed', {detail: {id: conversationId}}));
   } catch(err) {
@@ -759,7 +770,7 @@ void refreshLegacyAvailability();
 // (her routes not installed, or admission off): Confer is exactly as it was. Not while a voice session of today's modes
 // runs: the path changes once it has ended.
 const DIRECT_CAPABILITIES='../api/realtime-voice/direct/api/realtime-voice/capabilities';
-const DIRECT_KEY='20261102-notices1';   // v3's live check (31 Oct) changed the session module, the controller and an adapter
+const DIRECT_KEY='20261107-voice1';   // v3's live check (31 Oct) changed the session module, the controller and an adapter
 // Not while a session of today's modes runs, nor while an earlier one's end is unconfirmed (its restart block, Gate 2 Q N10).
 // Admitted and refused (Q S2): the button says why, and no other mode is offered.
 function adoptDirect(){
@@ -804,6 +815,7 @@ async function readDirect(){
         loadController:()=>import(`../static/realtime-voice/realtime-voice-controller.js?v=${DIRECT_KEY}`),
         beforeStart:()=>dictation.stop('voice_started')});
       voiceRecords=pendingDirect.records;
+      window.cosVoiceTyped=pendingDirect.typed;
       updateVoiceAvailability();
     }else voiceRecords=page.conferSessions({doc:document,direct:info,chat:chatLog,list:els.sessions,get,post,conversationId:()=>window.cosVoiceConversationId || 'owner'});
     if(caps.direct_records===true)await voiceRecords.refresh();
@@ -812,6 +824,7 @@ async function readDirect(){
   }
 }
 document.addEventListener('cos:conversation-selected',()=>{updateVoiceAvailability();void voiceRecords?.refresh();});
+document.addEventListener('cos:chat-rendered',()=>{void voiceRecords?.restore?.();});
 void readDirect();
 </script>
 <script src="/static/cos-history-ui.js?v={{ founders_ui_version }}"></script>

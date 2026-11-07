@@ -1378,6 +1378,11 @@ export function directVoice(d) {
     sumUp,
     keepTalking,
     proposing: () => proposing,
+    // A line the call can see and need not answer: the page's own data, no response asked for.
+    context(line) {
+      if (lifecycle !== 'live' || !connected || finalized) return false;
+      try { return c?.addContext?.(line) === true; } catch (e) { return false; }
+    },
     state: () => lifecycle,
     sessionId,
     // Ends the session for any reason (End, the microphone handed over, Private, the page going away). Resolves once End is sent.

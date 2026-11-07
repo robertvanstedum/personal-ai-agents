@@ -26,7 +26,7 @@
     return d.toDateString() === new Date().toDateString() ? t : d.toLocaleDateString([], {day:'numeric', month:'short'}) + ', ' + t; };
   function row(label, text, id, at) {
     const mine = label === 'You';
-    const item = document.createElement('div'); item.className = 'msg ' + (mine ? 'msg-user' : 'msg-cos'); item.dataset.turn = id || '';
+    const item = document.createElement('div'); item.className = 'msg ' + (mine ? 'msg-user' : 'msg-cos'); item.dataset.turn = id || ''; if (at) item.dataset.at = at;
     const who = document.createElement('div'); who.className = 'msg-label'; who.textContent = mine ? label : 'Chief of Staff';
     const time = clock(at); if (time) who.dataset.time = time;
     const words = document.createElement('div'); words.className = 'msg-text'; words.textContent = text;
@@ -61,6 +61,7 @@
       if (atBottom) log.scrollTop = log.scrollHeight;
     }
     document.getElementById('history-earlier').hidden = !before;
+    document.dispatchEvent(new CustomEvent('cos:chat-rendered', {detail: {id: cid}}));
   }
   async function releaseVoice() {
     const pending=[]; let deadline;

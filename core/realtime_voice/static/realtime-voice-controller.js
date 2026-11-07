@@ -28,8 +28,8 @@
 // for each response's first audio (audio_started; the v3 fix round, review M2), and OpenAI's for the page's lines as system
 // items (the v3 live check, fault 1): new keys so browsers fetch them (Spec 165 §4.3, §5.1, §5.3; review FR N3, V R2-M1;
 // v0.3 G3; the C2 binding pass).
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261031-live1";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261031-live1";
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261107-context1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261107-context1";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
 // The page's own responses (Spec 165 §5.1 as amended for Robert's C2 decision, 28 Oct 2026: "tie by construction"): a page
@@ -626,6 +626,13 @@ export class RealtimeVoiceController {
   _instruct(text, tag) {
     if (this._owned) this._adapter.sendContinuationInstruction(text, tag, "system");
     else if (tag) this._adapter.sendContinuationInstruction(text, tag); else this._adapter.sendContinuationInstruction(text);
+  }
+
+  // A line the model sees with no response asked for. Only the direct page's typed-during-a-call note calls it.
+  addContext(text) {
+    if (typeof this._adapter?.addContextItem !== "function") return false;
+    this._adapter.addContextItem(text);
+    return true;
   }
 
   // A function result: its follow-up is owned by the item of the call it continues (V R2-M1, R2-S1).
