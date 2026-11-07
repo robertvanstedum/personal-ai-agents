@@ -2,7 +2,7 @@
 const BOX = null;
 const CHAT = document.getElementById('chat-log');
 const CHAT_BOX = CHAT ? h('section', { class: 'wc wc-chat', 'data-tp-chat': '', 'aria-label': 'Proposed work awaiting your decision' },
-  h('h2', {}, 'Proposed work awaiting your decision'),
+  h('h2', { 'data-tp-heading': '' }, 'Proposed work awaiting your decision'),
   h('button', { type: 'button', class: 'fl-btn', 'data-tp-refresh': '' }, 'Refresh'),
   h('p', { 'data-tp-say': '', role: 'status', hidden: true }),
   h('div', { 'data-tp-list': '' })) : null;
@@ -116,7 +116,11 @@ function render(list, problem) {
     }
     if (inChat) {
       // Canonical history redraws the stream. Reattach this view, never save it as a chat turn.
-      box.hidden = !problem && !visible.length && box.querySelector('[data-tp-say]').hidden;
+      const line = box.querySelector('[data-tp-say]'), waiting = !!problem || visible.length > 0;
+      box.hidden = !waiting && line.hidden;
+      // Once nothing waits, only the outcome line stays; Refresh stays for an outcome it asks him to check.
+      box.querySelector('[data-tp-heading]').hidden = !waiting;
+      box.querySelector('[data-tp-refresh]').hidden = !waiting && !line.classList.contains('warn');
       CHAT.append(box); // Keep the decision view after newly appended canonical turns.
       if (nextSignature !== chatSignature && !box.hidden) {
         if (follow) { CHAT.scrollTop = CHAT.scrollHeight; JUMP.hidden = true; }

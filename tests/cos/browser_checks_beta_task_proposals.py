@@ -62,6 +62,8 @@ def test_exact_confirmation_and_recorded_terms(ui):
     page.locator('[data-tp-confirm]').click()
     expect(page.locator('[data-tp-chat]')).to_contain_text('Confirmed; the task exists.')
     expect(page.locator('[data-tp-confirm]')).to_have_count(0)
+    expect(page.locator('[data-tp-chat] h2')).to_be_hidden()   # the heading must not outlive the proposal
+    expect(page.locator('[data-tp-chat] [data-tp-refresh]')).to_be_hidden()
     assert len(state['posts']) == 1
     body, headers = state['posts'][0]
     assert body == {'interpretation_id':'ip1','proposal_digest':'digest-original'}
