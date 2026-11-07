@@ -43,6 +43,14 @@ def test_primary_rollback_and_previous(staging, monkeypatch):
     assert staging.owner().post("/guild").status_code == 405
 
 
+def test_the_portal_bar_opens_the_chat_only_where_the_new_guild_is_primary(staging, load_portal, monkeypatch):
+    assert staging.owner().get("/guild/open").location == "/guild-next/guild/build"
+    assert staging.guest().get("/guild/open").status_code in (302, 403)
+    assert staging.guest().get("/guild/open").location != "/guild-next/guild/build"
+    monkeypatch.setenv("MINIMOI_GUILD_PRIMARY", "0")
+    assert staging.owner().get("/guild/open").location == "/guild"
+
+
 def test_production_entry_unchanged(load_portal):
     portal = load_portal(base_url="https://minimoi.ai")
     assert portal.owner().get("/guild").status_code == 200

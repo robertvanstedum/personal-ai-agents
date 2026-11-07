@@ -1730,6 +1730,13 @@ def guild_landing():
     return render_template("guild/guild_landing.html", user=_current_user())
 
 
+@app.route("/guild/open")
+@_require_owner
+def guild_open():
+    # The portal bar's Guild link: his chat where the new Guild is primary, otherwise this host's own Guild entry.
+    return redirect("/guild-next/guild/build" if _guild_primary_on() else "/guild", code=302)
+
+
 @app.route("/guild-previous")
 @_require_owner
 def guild_previous():

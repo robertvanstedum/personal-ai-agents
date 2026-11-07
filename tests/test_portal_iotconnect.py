@@ -122,7 +122,7 @@ def test_proxy_nav_does_not_link_iotconnect_for_owner():
     from minimoi_portal.proxy import _portal_nav_html
     html = _portal_nav_html(OWNER, "/app/iotconnect")
     assert 'href="/app/iotconnect"' not in html
-    assert 'href="/guild-next/guild/build"' in html
+    assert 'href="/guild/open"' in html
 
 
 def test_guild_improve_is_a_placeholder_again_and_points_at_experiment(portal_client):

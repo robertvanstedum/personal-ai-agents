@@ -61,7 +61,7 @@ def test_proxy_nav_shows_owner_workspaces_to_owner():
         {"tier": "owner", "display_name": "Robert"},
         "/app/cos",
     )
-    assert 'href="/guild-next/guild/build"' in html
+    assert 'href="/guild/open"' in html
     assert 'href="/app/cos"' in html
 
 
