@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 
-RELEASE = "beta-20261106k"
+RELEASE = "beta-20261107a"
 STAGING_ROOT = "/opt/minimoi-staging"
 OPERATOR_NAME = "beta-dev-20261106"
 MIN_FREE_BYTES = 2 * 1024 ** 3
@@ -50,6 +50,9 @@ def _app(*paths):
     return tuple((p, "/app/" + p) for p in paths)
 
 
+# The domain images hold the whole app: their overlays carry the shared code too, or Dev runs an older copy than the commit (a
+# Deeper Dive on 7 Nov 2026 failed on a stale domains/guild/services/challenger.py).
+_SHARED = ("core/", "domains/guild/", "contracts/cos/", "contracts/partnership/")
 _SCHEDULER = _app("core/", "domains/cos/", "domains/guild/", "contracts/partnership/", "services/partnership_tasks/")
 _SCHEDULER_LAYOUT = ("core/", "domains/cos/", "domains/guild/", "contracts/partnership/", "services/partnership_tasks/")
 _TASKS = _app("contracts/partnership/", "services/partnership_tasks/")     # the scheduler's image, running only the task service's modules
@@ -68,14 +71,14 @@ TARGETS = {
                           rules=(("services/model_gateway/litellm.staging.yaml", "@config/litellm.staging.yaml"),),
                           health="http://127.0.0.1:4000/health/liveliness", down="about 1 minute (config reread on recreate)"),
     "curator": dict(container="minimoi-curator", repo="curator", tier=1, base="domains", old="minimoi12-8481940d", wait=DEFAULT_WAIT,
-                    rules=_app("domains/curator/", "core/telegram/telegram_bot.py"), layout=("domains/curator/",),
+                    rules=_app("domains/curator/", *_SHARED), layout=("domains/curator/", *_SHARED),
                     health="http://127.0.0.1:8766/health", down="under 1 minute"),
     "german": dict(container="minimoi-german", repo="german", tier=1, base="domains", old="minimoi12-8481940d", wait=DEFAULT_WAIT,
-                   rules=_app("domains/german/", VOICE_JS, "core/photo_store.py"), layout=("domains/german/", "core/realtime_voice/"),
+                   rules=_app("domains/german/", *_SHARED), layout=("domains/german/", *_SHARED),
                    smoke=("python", "-c", "import sys;sys.path.insert(0,'/app/domains/german');sys.path.insert(0,'/app');import german_domain as g;assert g.grok_text_on() is False"),
                    health="http://127.0.0.1:8767/health", down="under 1 minute"),
     "portuguese": dict(container="minimoi-portuguese", repo="portuguese", tier=1, base="domains", old="minimoi12-8481940d", wait=DEFAULT_WAIT,
-                       rules=_app("domains/portuguese/", VOICE_JS, "core/photo_store.py"), layout=("domains/portuguese/", "core/realtime_voice/"),
+                       rules=_app("domains/portuguese/", *_SHARED), layout=("domains/portuguese/", *_SHARED),
                        health="http://127.0.0.1:8770/health", down="under 1 minute"),
     "partnership-tasks": dict(container="minimoi-partnership-tasks", repo="partnership-tasks", tier=1, base="cos", wait=DEFAULT_WAIT, rules=_TASKS,
                               layout=_TASKS_LAYOUT, smoke=_python("services.partnership_tasks.http_api"),
