@@ -168,6 +168,52 @@ def _():
         f"exit {code}: {out.splitlines()[-1] if out else ''}"
 
 
+# The CLI's own view of its tools, from the same user settings a real turn reads and with OpenClaw's arguments. It asks for no
+# MCP servers, so the right answer is an empty list. The closed port means no model is called and no plan is spent; the list
+# comes out before any request. Bounded: the CLI stops at its first failed request, or `timeout` stops it.
+CLAUDE_TOOL_LIST = ("echo x | ANTHROPIC_BASE_URL=http://127.0.0.1:9 NO_PROXY=127.0.0.1 no_proxy=127.0.0.1 CLAUDE_CODE_MAX_RETRIES=0 "
+                    "timeout 25 claude -p --output-format stream-json --verbose --setting-sources user "
+                    "--allowedTools 'mcp__openclaw__*' --disallowedTools 'ScheduleWakeup,CronCreate,Bash(run_in_background:true),Monitor' "
+                    "--strict-mcp-config --no-session-persistence")
+GOVERNED_PREFIX = "mcp__openclaw__"
+
+
+def claude_route_offered(config: dict) -> bool:
+    """True when any agent may select a route that runs on the Claude CLI. minimoi-gateway/ API tiers don't run on it."""
+    agents = config.get("agents") or {}
+    refs: set = set()
+    for a in [agents.get("defaults") or {}, *(agents.get("entries") or {}).values()]:
+        model = a.get("model") or {}
+        refs |= {model} if isinstance(model, str) else {model.get("primary"), *(model.get("fallbacks") or [])}
+        refs |= set((a.get("modelPolicy") or {}).get("allow") or []) | set(a.get("models") or {})
+    return any(isinstance(r, str) and r.startswith("anthropic/") for r in refs)
+
+
+def claude_init_tools(output: str) -> list[str] | None:
+    """The tool list from the CLI's init event, or None when it never reported one."""
+    for line in output.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(event, dict) and event.get("type") == "system" and event.get("subtype") == "init" and isinstance(event.get("tools"), list):
+            return event["tools"]
+    return None
+
+
+@check("8a", "the Claude route offers only MC's governed tools (the CLI's own tool list is empty)")
+def claude_native_tools():
+    _, config = sh(AGENT, "cat /home/node/.openclaw/openclaw.json")
+    if not claude_route_offered(json.loads(config)):
+        return True, "no Claude route offered on this host; nothing to check"
+    _, output = sh(AGENT, CLAUDE_TOOL_LIST, timeout=40)
+    tools = claude_init_tools(output)
+    if tools is None:
+        return False, "the CLI reported no tool list, so nothing is proved"
+    native = sorted(t for t in tools if not str(t).startswith(GOVERNED_PREFIX))
+    return not native, ("native tools on the Claude route: " + ",".join(native)) if native else "no native tools"
+
+
 PENDING = [
     ("4", "search cannot reach an arbitrary URL; a query with a planted secret is refused (needs Grok sign-in)"),
     ("5", "instructions inside fetched/uploaded content stay data (needs a model sign-in)"),

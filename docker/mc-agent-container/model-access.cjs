@@ -56,14 +56,25 @@ function planRoutes(env) {
   return refs;
 }
 // Claude's own tools sit outside OpenClaw's tool policy. OpenClaw runs it with user settings and no way to change its
-// arguments, so they are denied there, and only MC's governed tools (mcp__openclaw__*) reach it. A deploy checks the CLI's
-// own tool list is then empty, which catches a tool a newer CLI adds.
-const CLAUDE_DENY = ['Agent','AskUserQuestion','Bash','CronCreate','CronDelete','CronList','Edit','EnterPlanMode','EnterWorktree','ExitPlanMode',
-  'ExitWorktree','Glob','Grep','ListAgents','Monitor','NotebookEdit','Read','RemoteTrigger','ReportFindings','ScheduleWakeup','SendMessage','Skill',
-  'Task','TaskStop','WebFetch','WebSearch','Workflow','Write'];
+// arguments, so they are refused there, and only MC's governed tools (mcp__openclaw__*) reach it. Three layers, because a
+// list of names goes stale:
+// 1. A deny rule per capital letter. Claude's own tools are capitalised and MC's are not, so a tool a newer CLI adds is off
+//    the list the model sees. Honoured by 2.1.309 and 2.1.317; 2.1.76 ignores these rules.
+// 2. The names, for a CLI that ignores those rules. Names no CLI has are harmless.
+// 3. A hook refusing any call that isn't mcp__openclaw__*, whatever the permission mode.
+// mc_container_security_test.py check 8a reads the CLI's own tool list in the running container and fails on anything else.
+const CLAUDE_DENY_BY_SHAPE = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map(c => c + '*');
+const CLAUDE_DENY = ['Agent','Artifact','ArtifactCheck','ArtifactComments','ArtifactData','AskUserQuestion','Bash','BashOutput','Brief','Config',
+  'CronCreate','CronDelete','CronList','Edit','EnterPlanMode','EnterWorktree','ExitPlanMode','ExitWorktree','Glob','Grep','KillBash','KillShell','LS',
+  'LSP','ListAgents','ListMcpResourcesTool','MCPSearch','Monitor','MultiEdit','NotebookEdit','NotebookRead','PowerShell','PushNotification','REPL',
+  'Read','ReadMcpResourceTool','RemoteTrigger','ReportFindings','ScheduleWakeup','SendMessage','SendUserMessage','Skill','Sleep','SlashCommand',
+  'StructuredOutput','SubscribePR','Task','TaskCreate','TaskGet','TaskList','TaskOutput','TaskStop','TaskUpdate','TeamCreate','TeamDelete','TodoRead',
+  'TodoWrite','ToolSearch','WebBrowser','WebFetch','WebSearch','Workflow','Write'];
+const CLAUDE_HOOKS = {PreToolUse: [{matcher: '^(?!mcp__openclaw__)', hooks: [{type: 'command',
+  command: "echo 'Refused: this tool is outside MC governed tools. Use the mcp__openclaw__minimoi_ tools.' >&2; exit 2"}]}]};
 function claudeSettings(env) {
   return mode(env) === 'plan' && env.MC_PLAN_MODEL && planRoutes(env).some(r => r.startsWith('anthropic/'))
-    ? {permissions: {deny: CLAUDE_DENY}} : null;
+    ? {permissions: {deny: [...CLAUDE_DENY_BY_SHAPE, ...CLAUDE_DENY]}, hooks: CLAUDE_HOOKS} : null;
 }
 function overlay(env) {
   if (mode(env) === 'plan') {

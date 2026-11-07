@@ -60,6 +60,18 @@ console.log('Explicit OpenAI/Claude plan policy checks passed, with unchanged to
   const denied=p.claudeSettings(multi).permissions.deny;
   for (const tool of ['Bash','Write','Edit','Read','Task','Agent','WebFetch','WebSearch','Workflow','CronCreate','NotebookEdit','SendMessage']) assert.ok(denied.includes(tool),tool);
   assert.ok(!denied.some(tool=>tool.startsWith('mcp__')));
+  // The task list that answered "0 tasks" from outside MC's governed tools (Dev, 6 Nov), and its neighbours.
+  for (const tool of ['TaskList','TaskCreate','TaskGet','TaskUpdate','TaskOutput','TodoWrite','NotebookRead','BashOutput','KillShell','ListMcpResourcesTool','ReadMcpResourceTool','ToolSearch']) assert.ok(denied.includes(tool),tool);
+  // Default deny: a capitalised name nobody has listed yet is covered, and MC's own tools never are.
+  const covers=name=>denied.some(rule=>rule.endsWith('*')?name.startsWith(rule.slice(0,-1)):rule===name);
+  for (const tool of ['FutureNativeTool','Zebra','TaskList']) assert.ok(covers(tool),tool);
+  for (const tool of ['mcp__openclaw__minimoi_task_list','mcp__openclaw__minimoi_board_note_read']) assert.ok(!covers(tool),tool);
+  // The hook refuses any other call, whatever the permission mode, and lets MC's own through.
+  const hook=p.claudeSettings(multi).hooks.PreToolUse[0];
+  const hits=new RegExp(hook.matcher);
+  for (const tool of ['TaskList','Bash','FutureNativeTool','mcp__other__x']) assert.ok(hits.test(tool),tool);
+  assert.ok(!hits.test('mcp__openclaw__minimoi_task_list'));
+  assert.match(hook.hooks[0].command,/exit 2$/);
   assert.equal(p.claudeSettings({...multi,MC_PLAN_ROUTES:'openai/gpt-6-sol'}),multi.MC_PLAN_MODEL.startsWith('anthropic/')?p.claudeSettings(multi):null);
   assert.equal(p.claudeSettings(dev),null);
   const shell=structuredClone(m);shell.agents.entries['mc-chat'].tools.deny=shell.agents.entries['mc-chat'].tools.deny.filter(x=>x!=='group:runtime');assert.throws(()=>p.validate(shell,multi));

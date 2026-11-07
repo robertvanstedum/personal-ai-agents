@@ -59,7 +59,7 @@ Sign-in state lives only on the `minimoi-dev-mc-claude-home` and `minimoi-dev-mc
 - **Lessons:**
   - Never write `openclaw.json` directly: OpenClaw restores its own copy (`*.clobbered.*`). Policy is applied with `openclaw config patch`.
   - A hard stop leaves the gateway lease held about 4 minutes. Hence the 120 s stop grace and the bounded retries.
-  - Under the Claude CLI runtime, Claude Code's built-in tools aren't bound by OpenClaw's tool policy. The network wall is the boundary.
+  - Under the Claude CLI runtime, Claude Code's built-in tools aren't bound by OpenClaw's tool policy. `model-access.cjs` refuses them in the CLI's user settings, and security check 8a fails if the CLI still lists one. The network wall stays the outer boundary.
 
 ## Commands
 
