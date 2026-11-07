@@ -105,3 +105,66 @@ def test_issue_rules(rig):
         rig.store.platform_access.issue('robert', dict(base, installation_id=rig.installation, operations=['work']))
     with pytest.raises(AccessError):
         rig.store.platform_access.issue('robert', dict(base, principal='cos', installation_id=rig.installation))
+
+
+@pytest.fixture
+def adopted(env, tmp_path):
+    """CoS the way Dev runs it: adopted through Approved Agents, so its worker credentials carry an approval generation
+    and the observe credential joins that worker installation afterwards (Dev, 7 Nov 2026)."""
+    env.prove(); env.join()
+    manage = _load('records_poc_manage_for_tests_observe_adopted', 'manage.py')
+    manage.provision_rooms(env.store, 'cos', 'Chief of Staff', tmp_path / 'cos-secrets', worker='rooms-worker-cos')
+    with env.store.connect() as db:
+        db.execute("UPDATE teammates SET proven_at=? WHERE principal='cos'", (datetime.now(timezone.utc).isoformat(),))
+    agents = env.store.approved_agents
+    generation = agents.change('robert', 'cos', True)['generation']
+    issued = agents.issue('cos', generation)
+    with env.store.connect() as db:
+        brief_hash = db.execute("SELECT brief_hash FROM agent_approvals WHERE agent='cos'").fetchone()[0]
+    agents.acknowledge('cos', dict(generation=generation, brief_hash=brief_hash,
+                                   member_id=issued['credentials']['membership']['credential_id'],
+                                   worker_id=issued['credentials']['work']['credential_id']))
+    assert env.call('POST', f'/rooms/{env.room}/invite', {'actor': 'cos'})[0] == 201
+    work = Records(BACKEND, issued['credentials']['work']['token'], session=Session(env.app))
+    member = Records(BACKEND, issued['credentials']['membership']['token'], session=Session(env.app))
+    Worker(work, member, FakeRelay(), TurnJournal(tmp_path / 'cos-journal'), teammate='cos',
+           agent_id='cos-agent-a').housekeeping()
+    observe = env.store.platform_access.issue('robert', dict(
+        principal='approved-worker-cos', label='cos-scheduler observe', scope='observe',
+        installation_id='approved:cos:work', expires_at=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat()))
+    env.work, env.observer = work, Records(BACKEND, observe['access_token'], session=Session(env.app))
+    return env
+
+
+def test_observer_of_an_approved_agent_reads_the_snapshot(adopted):
+    turn = _claimed_running(adopted)
+    status, body = adopted.observer.call('POST', f"/turns/{turn['id']}/heartbeat",
+                                         {'claim_id': turn['claim_id'], 'intent': 'dispatch', 'snapshot': True},
+                                         key=str(uuid4()))
+    assert status == 200 and body['dispatch'] is True
+    assert body['turn']['trigger']['text'] == 'CoS, please help me plan tomorrow.'
+
+
+def test_observer_of_an_approved_agent_is_still_only_an_observer(adopted):
+    adopted.say('CoS, please help me plan tomorrow.')
+    assert adopted.observer.call('POST', '/turns/claim', {'addressees': ['cos'], 'discussion_protocol': 1},
+                                 key=str(uuid4()))[0] == 403
+    assert adopted.observer.call('GET', f'/rooms/{adopted.room}')[0] in (401, 403)
+
+
+def test_observer_ends_when_the_approval_ends(adopted):
+    turn = _claimed_running(adopted)
+    adopted.store.approved_agents.change('robert', 'cos', False)
+    status, _ = adopted.observer.call('POST', f"/turns/{turn['id']}/heartbeat", {'claim_id': turn['claim_id']},
+                                      key=str(uuid4()))
+    assert status == 401
+
+
+def test_observer_stops_while_the_approval_is_not_active(adopted):
+    """Even with a credential not yet revoked: only an active approval's installation may observe."""
+    turn = _claimed_running(adopted)
+    with adopted.store.connect() as db:
+        db.execute("UPDATE agent_approvals SET state='pending' WHERE agent='cos'")
+    status, _ = adopted.observer.call('POST', f"/turns/{turn['id']}/heartbeat", {'claim_id': turn['claim_id']},
+                                      key=str(uuid4()))
+    assert status == 401
