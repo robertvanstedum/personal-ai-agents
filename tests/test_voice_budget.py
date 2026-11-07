@@ -234,7 +234,7 @@ def test_the_ledger_stores_no_text_audio_or_raw_identity(ledger):
     take(ledger, 0.30, who="robert@example.com")
     cols = [r[0] for r in ledger.rows("SELECT column_name FROM information_schema.columns WHERE table_name = 'voice_budget_entry' ORDER BY ordinal_position")] \
         if ledger.backend == "postgres" else [r[1] for r in ledger.rows("PRAGMA table_info(voice_budget_entry)")]
-    assert cols == ["id", "day", "at", "domain", "kind", "who", "micro", "state"]
+    assert cols == ["id", "day", "at", "domain", "kind", "who", "micro", "state", "settled_micro", "settled_at"]
     dump = json.dumps([list(map(str, r)) for r in ledger.rows("SELECT * FROM voice_budget_entry")])
     assert "robert" not in dump and "example.com" not in dump
     assert ledger.rows("SELECT who FROM voice_budget_entry")[0][0] != "robert@example.com"

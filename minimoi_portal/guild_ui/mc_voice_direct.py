@@ -26,7 +26,8 @@ durable markers, so an earlier session's records reveal and its proposal is deci
 when its start marker names this owner and the conversation End names (review S-2, A4 fix item 4; capture "incomplete").
 Admission is read once, at install: a per-process snapshot, as the mount's environment
 is. A session reserves MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO against the shared daily voice budget before the provider
-is contacted; unset, voice is unavailable and says so. Sessions live in this process (the portal is one process).
+is contacted; unset, voice is unavailable and says so. End brings that down to an estimate from how long the session ran,
+through the shared core (core.realtime_voice.budget, settle_session), as for CoS. Sessions live in this process (the portal is one process).
 
 Durable capture (§6, mc_voice_reveal): bootstrap keeps a start marker on the conversation's floor; every owner and
 assistant turn the page posts, and every consult request and receipt, is kept as it happens through

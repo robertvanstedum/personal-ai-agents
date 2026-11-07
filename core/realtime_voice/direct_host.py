@@ -960,11 +960,13 @@ def allowance(environ):
 class DirectSessions(ConsultLedger):
     """A voice session is a UUID bound at bootstrap to its owner and to the conversation it was started in, with a
     durable start marker in the host's store. Past its maximum duration it is closed. End keeps the end marker (the
-    reveal). Sessions live in this process (each host is one process)."""
+    reveal). Sessions live in this process (each host is one process). ``sweep``: called with a session let go that never
+    said End, to settle its voice allowance at the maximum (never raises)."""
 
-    def __init__(self, adapter, clock=time.time):
+    def __init__(self, adapter, clock=time.time, sweep=None):
         super().__init__()
         self._adapter, self._meta, self._meta_lock, self.clock = adapter, {}, threading.Lock(), clock
+        self._sweep = sweep
         self._summaries, self._summary_lock = {}, threading.Lock()       # session -> the summary attempt running here
         self._deciding = {}                  # session -> its utterance lock: one owner item decided at a time (v3)
 
@@ -1010,14 +1012,19 @@ class DirectSessions(ConsultLedger):
                 self._deciding.pop(sid, None)
         if gone:
             with self._lock:
+                unended = [sid for sid in gone if self._sessions.get(sid, {}).get("open")]
                 for sid in gone:
                     self._sessions.pop(sid, None)
             self._adapter.forget(set(gone))
+            if self._sweep is not None:
+                for sid in unended:
+                    self._sweep(sid)
         return gone
 
     def issue(self, owner):
         self.prune()                                       # a new session lets go of long-ended ones: no timer
         sid, cid = str(uuid.uuid4()), g.direct_voice_conversation
+        g.direct_voice_session = sid                       # the bootstrap's reservation is entered under this session
         handle, refused = self._adapter.conversation(cid)
         if refused is not None:
             raise SessionRefused("Voice conversation unavailable")
@@ -2273,7 +2280,16 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
     from core.realtime_voice.config import resolve_provider
     from core.realtime_voice.standards import TRANSCRIPTION_VOCABULARY
     person, store = adapter.person, adapter.store
-    sessions = DirectSessions(adapter, clock)
+    def settle(sid, *, at_maximum=False):
+        """This session's voice allowance comes down to an estimate from how long it ran (budget.settle_session), or, with
+        ``at_maximum``, to the maximum. The caller has already bound the session to its owner; nothing from the request
+        reaches here. Never stops End: a failure leaves the full reservation counted."""
+        try:
+            (budget or shared_budget.default_budget()).settle_session(shared_budget.direct_entry_id(sid), at_maximum=at_maximum)
+        except Exception:
+            log.exception("%s direct voice: allowance not settled; the reservation stays", person["domain"])
+
+    sessions = DirectSessions(adapter, clock, sweep=lambda sid: settle(sid, at_maximum=True))
     summary_client = (GatewaySummary(adapter.summary_key, environ=environ, http_post=summary_http)
                       if adapter.summary_key else None)
     # v3's understanding call: the same capped per-host key as the summary, its own gateway alias (minimoi-voice-intent),
@@ -2337,7 +2353,8 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
 
     def admit(user_id):
         return shared_budget.admit(kind="realtime_direct_session", domain=person["domain"], principal=str(user_id),
-                                   required=True, amount_micro=allowance(environ), budget=budget)
+                                   required=True, amount_micro=allowance(environ), budget=budget,
+                                   entry_id=shared_budget.direct_entry_id(g.direct_voice_session))
 
     def get_persona(name, actions=True):
         """The bootstrap's allow-list: only this person, with the card the pin names now (a session keeps the card it
@@ -2509,7 +2526,10 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         marker with its capture report, the summary's playback and the turns not acted on. Its capture is "incomplete"
         with no count: what the page posted to the old process may be missing, and the events End carries are not kept
         (this process holds none of the session's caps or times). Already ended: harmless, the first close's capture.
-        Nothing here gives a call, a consult or a transcript post an owner: those still need this process's ledger."""
+        Nothing here gives a call, a consult or a transcript post an owner: those still need this process's ledger.
+
+        Past those checks, End settles the session's voice allowance from the ledger's own start time and clock
+        (budget.settle_session). Nothing in the body names a time or an amount, and a failure leaves the reservation."""
         if not adapter.csrf_ok():
             return jsonify({"ok": False, "error": "csrf"}), 403
         who = principal()
@@ -2537,6 +2557,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
                 if len(ids) < len(carried):
                     sessions.uncounted(session_id)
         capture = sessions.close_session(session_id, report=report)
+        settle(session_id)
         if isinstance(body, dict) and "summary_playback" in body:          # how the spoken summary ended (v0.3 §5.3, G3)
             keep_playback(adapter, sessions, session_id, body.get("summary_playback"))
         if isinstance(body, dict) and "not_acted" in body:                 # his turns not acted on (review B S3, N2)
@@ -2555,6 +2576,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             done, marker = None, None
         if done is None:
             return jsonify({"ok": False, "error": "not kept"}), 503
+        settle(sid)
         if done == "closed":
             adapter.ended(handle, sid)
         elif isinstance(marker, dict) and marker.get("capture") in ("complete", "incomplete"):
@@ -2861,7 +2883,9 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         running = sessions.in_flight(sid)                              # outside this summary's cutoff (B2)
         if sessions.is_open(sid):
             sessions.close_session(sid, report=report)
+            settle(sid)                                                # a spoken yes ends the session without End
         elif store.read_marker(handle, sid, "end") is None:
+            settle(sid)
             # Not held here (after a restart), or never ended: the page's report counts every id it did not hear back
             # (review R1 P3-6, R2 N5); with none, how much was kept is not known (a dropped session, R2 N6).
             store.close(handle, sid, reason="summary",

@@ -565,4 +565,4 @@ def test_s3_on_the_real_portal_end_closes_a_session_started_before_the_restart(l
     refused = client.post(DIRECT + "/bootstrap", json={"persona": "master_craftsman", "provider": "openai",
                                                        "conversation_id": cid}, headers=headers)
     assert refused.status_code == 503 and refused.get_json()["error"] == NOT_ON
-    assert len(minted) == 1 and budget.status()["reserved_usd"] == 2.0       # only the first, admitted start
+    assert len(minted) == 1 and budget.status()["reserved_usd"] == 0.10      # only the first, admitted start, settled by its End

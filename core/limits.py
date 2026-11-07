@@ -34,7 +34,7 @@ DEFINITIONS: dict[str, dict] = {
     "voice.daily_cap_usd": {
         "label": "Voice daily allowance", "unit": "usd_reserved", "default": 20.0, "hard_min": 1.0, "hard_max": 50.0, "editable": True,
         "what": "The most paid speech (reading answers aloud, and live transcription for voice and dictation) that may be started in one America/Chicago day. It is a RESERVED allowance counted when a "
-                "session or reading starts (about three times the provider's published estimate), not a bill. Lowering it applies at once; raising it applies from the next day.",
+                "session or reading starts (about three times the provider's published estimate), and a direct voice session that ends keeps only an estimate from how long it ran; not a bill. Lowering it applies at once; raising it applies from the next day.",
         "enforced_by": "the shared voice budget (core.realtime_voice.budget), before any provider call", "reload": "live (lower) / next day (raise)", "mc_may_propose": False},
     "mc.relay_idle_s": {
         "label": "Master Craftsman silence limit", "unit": "seconds", "default": 300.0, "hard_min": 30.0, "hard_max": 300.0, "editable": False,

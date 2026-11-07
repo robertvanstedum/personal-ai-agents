@@ -751,3 +751,18 @@ def test_a_decided_session_with_nothing_running_or_late_still_leaves_the_list(r)
     assert [v["session_id"] for v in r.client.get(BASE + "/sessions", headers=READ).get_json()["sessions"]] == [sid]
     r.client.post(BASE + f"/session/{sid}/summary/decision", headers=OWNER, json={"conversation_id": "owner", "decision": "confirm"})
     assert r.client.get(BASE + "/sessions", headers=READ).get_json()["sessions"] == []
+
+
+def test_cos_end_settles_the_allowance_from_how_long_the_session_ran(monkeypatch, tmp_path):
+    """Through the shared core: the reservation comes down to an estimate at End, once, whatever the body says."""
+    from datetime import datetime, timedelta, timezone
+    r, now = rig.build(monkeypatch, tmp_path), [datetime(2026, 10, 13, 15, 0, tzinfo=timezone.utc)]
+    r.budget._clock = lambda: now[0]
+    sid = rig.start(r)
+    assert r.budget.status()["reserved_usd"] > 0.10
+    now[0] += timedelta(seconds=10)
+    assert r.client.post(BASE + f"/session/{sid}/end", headers=OWNER, json={"amount_micro": 1}).status_code == 200
+    assert r.budget.status()["reserved_usd"] == 0.10
+    now[0] += timedelta(minutes=5)
+    assert r.client.post(BASE + f"/session/{sid}/end", headers=OWNER, json={}).status_code == 200
+    assert r.budget.status()["reserved_usd"] == 0.10

@@ -1320,3 +1320,18 @@ def test_a_session_this_process_issued_stays_hidden_when_its_marker_cannot_be_re
     assert rows == [] and sessions[0]["state"] == "unknown"
     rows, sessions = reveal.view(r.notes, transcript, live=lambda s: False)       # not held here: shown as before
     assert len(rows) == 1 and sessions == []
+
+
+def test_mc_end_settles_the_allowance_from_how_long_the_session_ran(ready):
+    """Through the shared core: the $2 reservation comes down to an estimate at End, once, whatever the body says."""
+    from datetime import datetime, timedelta, timezone
+    r, now = ready, [datetime(2026, 10, 13, 15, 0, tzinfo=timezone.utc)]
+    r.budget._clock = lambda: now[0]
+    sid = start(r)["voice_session_id"]
+    assert r.budget.status()["reserved_usd"] == 2.0
+    now[0] += timedelta(seconds=10)
+    assert r.client.post(BASE + f"/session/{sid}/end", json={"amount_micro": 1}, headers=r.headers).status_code == 200
+    assert r.budget.status()["reserved_usd"] == 0.10
+    now[0] += timedelta(minutes=5)
+    assert r.client.post(BASE + f"/session/{sid}/end", headers=r.headers).status_code == 200
+    assert r.budget.status()["reserved_usd"] == 0.10
