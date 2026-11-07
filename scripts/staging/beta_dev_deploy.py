@@ -52,7 +52,7 @@ def _app(*paths):
 
 # The domain images hold the whole app: their overlays carry the shared code too, or Dev runs an older copy than the commit (a
 # Deeper Dive on 7 Nov 2026 failed on a stale domains/guild/services/challenger.py).
-_SHARED = ("core/", "domains/guild/", "contracts/cos/", "contracts/partnership/")
+_SHARED = ("core/", "domains/guild/", "contracts/cos/", "contracts/partnership/", "services/partnership_tasks/")
 _SCHEDULER = _app("core/", "domains/cos/", "domains/guild/", "contracts/partnership/", "services/partnership_tasks/")
 _SCHEDULER_LAYOUT = ("core/", "domains/cos/", "domains/guild/", "contracts/partnership/", "services/partnership_tasks/")
 _TASKS = _app("contracts/partnership/", "services/partnership_tasks/")     # the scheduler's image, running only the task service's modules

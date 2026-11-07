@@ -464,7 +464,7 @@ def test_each_image_gets_its_own_paths():
     assert where("portal")["minimoi_portal/app.py"] == "/app/minimoi_portal/app.py"
     assert "domains/german/german_domain.py" not in where("portal") and "core/telegram/telegram_bot.py" not in where("portal")
     shared = {"core/mc_tools/tasks_adapter.py", "core/realtime_voice/static/realtime-voice-controller.js", "core/telegram/telegram_bot.py",
-              "contracts/partnership/v1/command.schema.json"}     # the domain images hold the whole app, so the shared code goes too
+              "contracts/partnership/v1/command.schema.json", "services/partnership_tasks/service.py"}     # the domain images hold the whole app, so the shared code goes too
     assert where("german")["domains/german/german_domain.py"] == "/app/domains/german/german_domain.py"
     assert set(where("german")) == shared | {"domains/german/german_domain.py"}
     assert set(where("portuguese")) == shared | {"domains/portuguese/html_server.py"}
