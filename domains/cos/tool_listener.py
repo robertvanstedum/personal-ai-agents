@@ -47,7 +47,7 @@ _SESSION_KEY = re.compile(r"agent:(?P<agent>[a-z][a-z0-9-]{0,63}):openai-user:(?
 STATUSES = ("done", "refused", "unknown")
 _SERVED_FIELD = re.compile(r"[A-Za-z0-9._:/-]{1,80}")
 # Per-turn admission limits for each bound tool (MC-equivalent defaults, design v0.1 §4).
-LIMITS = {"cos_actions": 20, "cos_tasks": 5, "cos_board": 20}
+LIMITS = {"cos_actions": 20, "cos_tasks": 5, "cos_board": 20, "cos_send_to_mc": 3}
 NATIVE_TOOLS = frozenset({"write", "edit", "exec", "apply_patch", "process"})
 _log = logging.getLogger("cos_tools")
 
@@ -85,9 +85,10 @@ def session_user(session_key, agent_id, allowed_agents) -> str:
 
 
 def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agent-a", "cos-meeting"),
-               wait_s: float | None = None, task_tools=None, board_tool=None) -> Flask:
+               wait_s: float | None = None, task_tools=None, board_tool=None, mc_send=None) -> Flask:
     """``task_tools`` (``domains.cos.task_tools.CosTaskTools``) serves ``cos_tasks`` and ``board_tool``
-    (``domains.cos.board_tool.CosBoardTool``) serves ``cos_board``; None: that tool is refused."""
+    (``domains.cos.board_tool.CosBoardTool``) serves ``cos_board``; ``mc_send`` (``domains.cos.mc_send.CosMcSend``) serves
+    ``cos_send_to_mc``; None: that tool is refused."""
     if type(token_sha256) is not str or not _DIGEST.fullmatch(token_sha256):
         raise ValueError("cos_tools_listener_config_invalid")
     if bindings.environment != writer.environment:
@@ -180,6 +181,8 @@ def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agen
             return _answer("refused", "tool_unavailable", "Task tracking is not connected here, so nothing was done.")
         if name == "cos_board" and board_tool is None:
             return _answer("refused", "tool_unavailable", "The Board is not connected here, so nothing was done.")
+        if name == "cos_send_to_mc" and mc_send is None:
+            return _answer("refused", "tool_unavailable", "Sending to MC is switched off here, so nothing was sent.")
         ids = sealed()
         try:
             user = session_user(ids["session_key"], ids["agent_id"], allowed)
@@ -206,6 +209,19 @@ def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agen
             if out["status"] == 200:
                 return _answer("done", "ok", out["body"].get("message", "Done."), out["body"])
             return _answer("refused", str(out["body"].get("error", "refused")), "Nothing was recorded.", out["body"])
+        if name == "cos_send_to_mc":
+            try:
+                out = mc_send.serve(binding, op, args)
+            except Exception:
+                _log.exception("cos tool cos_send_to_mc: outcome unconfirmed")
+                return _answer("unknown", "tool_outcome_unconfirmed",
+                               "CoS could not confirm whether MC received it. Do not repeat it; tell Robert it is unknown.")
+            answer = out["body"]
+            if out["status"] == 200:
+                return _answer("done", "sent", answer["message"], answer)
+            if answer.get("state") == "unknown":
+                return _answer("unknown", "outcome_unknown", answer["message"], answer)
+            return _answer("refused", str(answer.get("error", "refused")), answer.get("message", "Nothing was sent."), answer)
         if name == "cos_board":
             try:
                 out = board_tool.serve(bound_call, op, args)

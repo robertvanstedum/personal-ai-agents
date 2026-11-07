@@ -186,6 +186,7 @@
             "cos_actions",
             "cos_tasks",
             "cos_board",
+            "cos_send_to_mc",
             "cos_github_issues"
           ],
           "deny": [
@@ -240,6 +241,7 @@
             "pdf",
             "view_image",
             "cos_board",
+            "cos_send_to_mc",
             "cos_github_issues"
           ],
           "fs": {
@@ -278,6 +280,7 @@
             "cos_actions",
             "cos_board",
             "cos_github_issues",
+            "cos_send_to_mc",
             "cos_tasks",
             "edit",
             "exec",

@@ -1,6 +1,6 @@
 /** CoS bound tools (F2 design v0.3, step 2). The CoS counterpart of MC's minimoi-tools.
  *
- * Every bound call (cos_actions, cos_tasks, cos_board) carries only host context (ctx.sessionKey, ctx.agentId, and the run and tool-call ids sealed
+ * Every bound call (cos_actions, cos_tasks, cos_board, cos_send_to_mc) carries only host context (ctx.sessionKey, ctx.agentId, and the run and tool-call ids sealed
  * by this plugin's before_tool_call hook) plus the model's arguments. cos-scheduler's listener resolves the sealed run
  * to the live turn's binding and refuses otherwise; who, why, where and when come from that binding, never the model.
  *
@@ -19,7 +19,7 @@ export const NATIVE = new Set(['write', 'edit', 'exec', 'apply_patch', 'process'
 // Meeting entries (review S2/S3): the hook is the second gate behind the config deny list. cos-meeting may call only
 // the bound tool and bounded search; cos-closed (a room with anyone outside Robert's team) may call nothing.
 export const RESTRICTED = Object.freeze({'cos-meeting': new Set(['cos_actions', 'cos_tasks', 'web_search']), 'cos-closed': new Set()});
-export const BOUND = new Set(['cos_actions', 'cos_tasks', 'cos_board']);
+export const BOUND = new Set(['cos_actions', 'cos_tasks', 'cos_board', 'cos_send_to_mc']);
 const STATE = Symbol.for('cos-bound/process-state/v1');
 globalThis[STATE] ??= Object.freeze({instance: randomBytes(16).toString('hex'), sealKey: randomBytes(32)});
 export const INSTANCE = globalThis[STATE].instance;
@@ -69,6 +69,15 @@ export const BOARD_SPEC = {
     expected_revision: {type: 'integer', minimum: 1}, text: note, label,
     changes: {type: 'object', additionalProperties: false, minProperties: 1,
               properties: {text: note, label, done: {type: 'boolean'}}}}},
+};
+
+// Robert's own words to MC, who handles it from there, including asking Claude Code. It takes no text: the host reads his words
+// from this bound turn, and refuses unless they tell CoS to send to MC.
+export const SEND_TO_MC_SPEC = {
+  name: 'cos_send_to_mc', label: 'Send to MC',
+  description: 'Send Robert\u2019s own words to Master Craftsman (MC), who answers on his own and can ask Claude Code, Codex or Grok. Use it only when Robert\u2019s current message tells you to send, tell or ask something to MC, including "send this to MC". You write nothing: the host carries his exact words from this turn and, for "send this", attaches the latest earlier message of this conversation with its true author. Sends once per message. The answer says sent, not sent or unknown: repeat exactly that. On unknown do not try again. MC\u2019s answer comes back as a note in this chat, and it is in MC\u2019s history under Through CoS. Not available in meetings or Private conversations.',
+  parameters: {type: 'object', additionalProperties: false, required: ['operation'], properties: {
+    operation: {type: 'string', enum: ['send']}}},
 };
 
 export function endpointUrl(endpoint) {
@@ -166,7 +175,7 @@ export function toolFactory({endpoint, token, tokenFile, agents, acceptCredentia
                   // Code mode hands the model's code these details, not the text, so the data must be here too.
                   {message: result.message, status: result.status, code: result.code, data: result.data});
     };
-    const offered = [ACTIONS_SPEC, TASKS_SPEC, BOARD_SPEC]
+    const offered = [ACTIONS_SPEC, TASKS_SPEC, BOARD_SPEC, SEND_TO_MC_SPEC]
       .filter(spec => !Object.hasOwn(RESTRICTED, agentId) || RESTRICTED[agentId].has(spec.name));
     return offered.map(spec => ({...spec, execute: run(spec)}));
   };
@@ -242,5 +251,5 @@ export default {id: 'cos-bound', name: 'CoS bound tools', register(api) {
   api.on('before_tool_call', hook({agents, url, token}));
   api.on('model_call_ended', servedHook({agents, url, token}));
   announcer({url, token}).start();          // before any turn's first call (review M3)
-  api.registerTool(factory, {names: ['cos_actions', 'cos_tasks', 'cos_board']});
+  api.registerTool(factory, {names: ['cos_actions', 'cos_tasks', 'cos_board', 'cos_send_to_mc']});
 }};

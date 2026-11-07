@@ -973,6 +973,13 @@ def _task_tools():
                         environment=environment)
 
 
+def _mc_send():
+    """cos_send_to_mc, when MINIMOI_COS_TO_MC is on, COS_TO_MC_URL names MC's internal door, and the binding store and CoS
+    history are on. Otherwise None, and the listener refuses the tool."""
+    from domains.cos.mc_send import from_environ
+    return from_environ(os.environ, bindings=_bindings, history=_history)
+
+
 def _board_tool():
     """F2 M2: cos_board, bound. The Board key (COS_BOARD_PROFILE_FILE, owner-only JSON) lives in cos-scheduler, never
     in the agent; COS_BOARD_URL is the fixed internal Board address. Otherwise None, and the listener refuses
@@ -1005,7 +1012,7 @@ def _start_tool_listener():
     from werkzeug.serving import make_server
     server = make_server(os.environ.get("COS_TOOL_LISTENER_HOST", "0.0.0.0"), int(port),
                          _tools_app(bindings=_bindings, writer=_cos_store_writer, token_sha256=digest,
-                                    task_tools=_task_tools(), board_tool=_board_tool()),
+                                    task_tools=_task_tools(), board_tool=_board_tool(), mc_send=_mc_send()),
                          threaded=True)
     threading.Thread(target=server.serve_forever, name="cos-tool-listener", daemon=True).start()
     print(f"   CoS tool listener: port {port} ✅")
@@ -1488,6 +1495,20 @@ def realtime_voice_static(filename):
     return send_from_directory(_REALTIME_VOICE_STATIC_DIR, filename)
 
 
+@app.route("/internal/cos/v1/mc-reply", methods=["POST"])
+def mc_reply():
+    """MC's answer to what Robert sent through CoS. Signed by the portal as service:mc for exactly this path, never accepted
+    on a header. Kept as one proactive note per delivery."""
+    from domains.cos.owner_assertion import verified_subject
+    if verified_subject() != "service:mc":
+        return jsonify({"error": "not_allowed"}), 403
+    tool = _mc_send()
+    if tool is None:
+        return jsonify({"error": "not_connected"}), 503
+    status, answer = tool.reply(request.get_json(silent=True))
+    return jsonify(answer), status
+
+
 @app.route("/chat", methods=["POST"])
 def chat_endpoint():
     """Primary chat endpoint — used by Telegram handler and future HTML portal."""
@@ -1502,6 +1523,8 @@ def chat_endpoint():
         if body.get("channel") not in ("telegram_text", "telegram_voice") or body.get("conversation_id") != "owner" \
                 or body.get("request_id") is not None:
             return jsonify({"reply": "Not allowed."}), 403
+        # Telegram keeps no history turn, so the words a tool may carry to MC are kept against the binding, from this signed request.
+        binding = dict(binding, owner_words=text)
     try:
         result = _process_confer_turn(
             text,

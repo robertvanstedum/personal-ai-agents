@@ -36,7 +36,8 @@
     "tools": [
       "cos_actions",
       "cos_tasks",
-      "cos_board"
+      "cos_board",
+      "cos_send_to_mc"
     ]
   }
 }

@@ -2304,7 +2304,7 @@ def conversation_retry_release(cid):
 
 def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_id,
                 request_id: str | None = None, capture: bool = True, attachment_ids=None, host_channel=None,
-                ledger_turn=None, voice_only: bool = False) -> tuple[dict, int]:
+                ledger_turn=None, voice_only: bool = False, delivered_data=None) -> tuple[dict, int]:
     """One Master Craftsman turn for a kept owner note, after the route's
     guards (write guard, turn gate, the note is this owner's): one reply per
     note, MC's state must allow turns, one turn in flight per owner, the note
@@ -2440,6 +2440,8 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             context_text += "\n\n" + board_plan.contract()
         if delivery:
             context_text += "\n\n" + mc_deliveries.CONTRACT
+        if delivered_data:                              # marked DATA from a send through CoS (cos_delivery.py); never the note's text
+            context_text += "\n\n" + delivered_data
         turn_context = {"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")}
         # Explicit trusted host input only; never copy a browser/note channel.
         from .mc.cos import MANAGED_VOICE_CHANNEL

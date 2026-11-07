@@ -41,6 +41,9 @@ services:
       COS_OWNER_ASSERTION_ENV: prod
       COS_OWNER_ASSERTION_KEY_FILE: /run/secrets/partnership/cos-owner.key
       COS_OWNER_ASSERTION_NONCE_FILE: /var/lib/minimoi/cos-store/owner-nonces.sqlite3
+      # cos_send_to_mc (domains/cos/mc_send.py): off unless .env sets 1; then its one address, MC's internal door.
+      MINIMOI_COS_TO_MC: ${MINIMOI_COS_TO_MC:-0}
+      COS_TO_MC_URL: http://portal:5011/internal/mc/v1/from-cos
       COS_ACTIONS_TOKEN_FILE: /run/secrets/cos-actions-token/token
       COS_TOOL_BINDINGS_FILE: /var/lib/minimoi/cos-store/tool-bindings.sqlite3
       COS_TOOL_LISTENER_PORT: "8771"
@@ -95,6 +98,8 @@ services:
       PARTNERSHIP_CARD_REF: ${MINIMOI_PARTNERSHIP_CARD_REF:?the release commit required}
       # MC's capped voice key, $20: from the mounted portal-partnership folder below, never from .env (minimoi_1_2_prod_bind.py).
       MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_MC_FILE: /run/secrets/partnership/voice-summary-mc.key
+      # What Robert sends through CoS (cos_delivery.py): MC's internal door on its tool listener. Off unless .env sets 1.
+      MINIMOI_COS_TO_MC: ${MINIMOI_COS_TO_MC:-0}
       PORTAL_COS_OWNER_ENV: prod
       PORTAL_COS_OWNER_KEY_FILE: /run/secrets/partnership/portal-cos-owner.key
       PORTAL_PARTNERSHIP_OWNER_ENV: prod

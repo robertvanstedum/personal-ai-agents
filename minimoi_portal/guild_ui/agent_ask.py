@@ -21,6 +21,7 @@ import secrets
 from flask import jsonify
 
 from core import agent_requests as ar
+from core import owner_referent
 
 from .security import check_write, json_error
 from .stores import CLAUDE_CODE, CODEX, GROK, GUILD_PLATFORM
@@ -335,6 +336,46 @@ def owner_ask_proposal(owner_text, proposal, current_doc_ids):
     elif requested:
         return None, OWNER_FILES_REFUSED
     return result, None
+
+
+# "Can you send this to Claude" must carry what "this" points at (Robert's phone, 6 Nov). His words alone are read for intent;
+# the item is quoted material from the record. See core/owner_referent.py.
+ITEM_UNAVAILABLE = ("Not sent. I can't tell what that points at: there is no earlier message on record here to attach. "
+                    "Nothing was put to any agent. Ask Robert what to send, or to say it in his message.")
+_POINTER_SEND = re.compile(r"\b(?:send|pass|forward|give|hand|assign)\s+(?P<p>" + owner_referent.POINTER
+                           + r")\s+(?:(?:over|along|on)\s+)?to\s+" + _OWNER_AGENT + r"\b", re.I)
+_POINTER_ASK = re.compile(r"\b" + _OWNER_VERB + r"\s+" + _OWNER_AGENT + r"\s+(?:(?:about|regarding|on)\s+)?(?P<p>"
+                          + owner_referent.POINTER + r")\s*$", re.I)
+
+
+def pointed_at(owner_text):
+    """None when his words carry their own request; else whose message they point at: "agent", "owner" or "" (the latest of either)."""
+    if not isinstance(owner_text, str):
+        return None
+    for clause in _owner_clauses(owner_text):
+        match = _POINTER_SEND.search(clause) or _POINTER_ASK.search(clause)
+        if match:
+            return owner_referent.author_hint(match["p"]) or ""
+    return None
+
+
+def attached_item(words, earlier, note_request_id, hint):
+    """His words, then the item, within what the request ledger holds, cut visibly. None: nothing to attach. A delivered
+    item is the one kept beside his note; otherwise the latest prior message, his or an agent's. Platform lines are not messages."""
+    from .cos_delivery import attachment_key
+    room = ar.ACTION_MAX - len(words) - 2
+    key = attachment_key(note_request_id)
+    delivered = next((n for n in reversed(earlier) if isinstance(n, dict) and n.get("request_id") == key), None) if key else None
+    if delivered is not None:
+        return f"{words}\n\n" + owner_referent.cut(str(delivered.get("text") or ""), room)[0]
+    if hint is None:
+        return None
+    want = {"agent": ("agent",), "owner": ("owner",), "": ("owner", "agent")}[hint]
+    for note in reversed(earlier):
+        if isinstance(note, dict) and note.get("author_kind") in want and str(note.get("text") or "").strip():
+            who = "Robert's message" if note["author_kind"] == "owner" else f"{note.get('author_label') or 'An agent'}'s reply"
+            return f"{words}\n\n" + owner_referent.attachment(who + owner_referent.time_label(note.get("created_at")), note["text"], room)
+    return None
 
 
 def is_bare_answer(text) -> bool:

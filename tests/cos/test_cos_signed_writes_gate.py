@@ -79,6 +79,7 @@ KNOWN_WRITES = {
     "/ui/history/preferences": "signed owner", "/ui/history/conversations/<conversation_id>/route": "signed owner",
     "/event": "OPEN: recorded follow-up (no caller identity yet)",
     "/internal/model-gateway/receipt": "own token",
+    "/internal/cos/v1/mc-reply": "signed service:mc, this exact path, by the portal's key only (test_cos_send_to_mc.py)",
     "/api/realtime-voice/confer/bootstrap": "signed owner",
 }
 SELF_GATED = ("/api/realtime-voice/managed/", "/api/realtime-voice/direct/", "/ui/api/in-flight/")

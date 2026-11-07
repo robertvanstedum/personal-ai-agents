@@ -104,7 +104,7 @@ def test_gateway_is_internal_token_authenticated_and_not_model_hardcoded():
 ROLE_TOOLS = ["read", "ls", "write", "edit", "exec", "web_search", "web_fetch",
               "memory_search", "memory_get", "pdf", "view_image"]
 # Later CoS record tools; cos_actions is served by the bound cos-bound plugin (F2 step 5).
-RECORD_TOOLS = ["cos_actions", "cos_tasks", "cos_board", "cos_github_issues"]
+RECORD_TOOLS = ["cos_actions", "cos_tasks", "cos_board", "cos_send_to_mc", "cos_github_issues"]
 
 
 def test_owner_access_is_narrowed_to_the_role_tools_with_idle_jobs():

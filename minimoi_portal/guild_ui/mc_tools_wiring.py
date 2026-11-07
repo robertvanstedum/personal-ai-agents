@@ -516,7 +516,7 @@ class AgentAsker:
         names an agent, answering MC's question, sends his instruction from just before it (agent_ask.answered_ask)."""
         mismatch = self.check(note_text, to)
         if mismatch is None:
-            return note_text, None
+            return self._with_item(conversation_id, note_request_id, note_text)
         from .agent_ask import OWNER_FILES_REFUSED, answered_ask, is_bare_answer
         if self.earlier_notes is None or not is_bare_answer(note_text):
             return None, mismatch
@@ -530,6 +530,24 @@ class AgentAsker:
         if refusal or self._already_asked(conversation_id, words, to):
             return None, mismatch
         return words, None
+
+    def _with_item(self, conversation_id, note_request_id, note_text):
+        """(the words to send, None) or (None, refusal). The recipients were already checked on his words alone: an item
+        attached here cannot name anyone. "Send this to Claude Code" carries the latest prior message, labelled with its true
+        author, from the record; words that came through CoS with an item carry that item. Nothing here comes from the model."""
+        from .agent_ask import ITEM_UNAVAILABLE, attached_item, pointed_at
+        from .cos_delivery import is_delivered_note
+        hint = pointed_at(note_text)
+        if hint is None and not is_delivered_note(note_request_id):
+            return note_text, None
+        try:
+            earlier = self.earlier_notes(conversation_id, note_request_id, 0) if self.earlier_notes is not None else None
+        except Exception:
+            earlier = None                       # what cannot be read is never guessed at
+        composed = attached_item(note_text, earlier, note_request_id, hint) if earlier is not None else None
+        if composed is None:
+            return (None, ("no_referent", ITEM_UNAVAILABLE)) if hint is not None else (note_text, None)
+        return composed, None
 
     def _already_asked(self, conversation_id, words, to):
         """That instruction already went to one of these agents: a name given afterwards must not make a second request."""
@@ -724,6 +742,8 @@ def attach(app, blueprint_name, services):
         from .mc_rooms_bridge import attach as attach_rooms
         attach_rooms(listener, services, environ, cfg,
                      craft_prefix=app.extensions[blueprint_name].get("url_prefix", ""))
+    from .cos_delivery import attach as attach_cos_delivery
+    attach_cos_delivery(listener, app, app.extensions[blueprint_name], services, environ, cfg)   # off unless MINIMOI_COS_TO_MC is on
     thread = serve(listener, host=host, port=cfg["port"])
     app.extensions["mc_tools_listener"] = thread
     _log.info("mc tools: listener on %s:%s (agents %s)", host, cfg["port"], ",".join(cfg["agents"]))

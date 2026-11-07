@@ -7,7 +7,7 @@ same network can set a header, not sign an assertion.
 
 Configuration (key, environment and nonce file, or every signed write is refused):
   COS_OWNER_ASSERTION_KEY_FILE      the portal's key, one line ``<kid>:<secret>``: may sign owner:<id> for any gated
-                                    write, and service:mc for /chat only
+                                    write, and service:mc for /chat and MC's reply path only
   COS_TELEGRAM_ASSERTION_KEY_FILE   optional, the Telegram bot's own key: may sign service:telegram for /chat only
   COS_OWNER_ASSERTION_ENV           the environment name both sign for (dev, staging, production)
   COS_OWNER_ASSERTION_NONCE_FILE    SQLite file for spent nonces (the CoS data volume)
@@ -28,11 +28,12 @@ AUDIENCE = "cos-owner"
 HEADER = "X-Portal-Owner-Assertion"
 SUBJECT_PREFIX = "owner:"
 SERVICE_PREFIX = "service:"
+MC_REPLY_PATH = "/internal/cos/v1/mc-reply"      # MC's answer to a send through CoS (domains/cos/mc_send.py)
 
 
 def _portal_may(subject, path):
     return (subject.startswith(SUBJECT_PREFIX) and len(subject) > len(SUBJECT_PREFIX)) or \
-        (subject == "service:mc" and path == "/chat")
+        (subject == "service:mc" and path in ("/chat", MC_REPLY_PATH))
 
 
 def _telegram_may(subject, path):

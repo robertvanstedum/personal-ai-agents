@@ -61,6 +61,10 @@ CREATE TABLE IF NOT EXISTS served_runs(
 CREATE TABLE IF NOT EXISTS native_calls(
   id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, turn_id TEXT, run_id TEXT, tool_call_id TEXT,
   tool TEXT NOT NULL, target TEXT, bound INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS turn_words(turn_id TEXT PRIMARY KEY, text TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS mc_deliveries(
+  delivery_id TEXT PRIMARY KEY, turn_id TEXT NOT NULL, conversation_id TEXT, state TEXT NOT NULL, receipt TEXT,
+  at TEXT NOT NULL);
 """
 
 
@@ -180,7 +184,8 @@ class BindingStore:
                session_user: str, lifetime_s: float, owner_request_id: str | None = None,
                supersession_key: str | None = None, claim_id: str | None = None,
                room_generation: str | None = None, trigger_seq: int | None = None,
-               approval_generation: int | None = None, source_ref: dict | None = None) -> bool:
+               approval_generation: int | None = None, source_ref: dict | None = None,
+               owner_words: str | None = None) -> bool:
         """The binding for a turn being handed to the agent. True when it is live; False when there is no current
         runtime instance or epoch (tools stay refused), or a Stop already reached the turn. A newer binding with the
         same supersession key revokes the older ones (reason 'superseded')."""
@@ -216,6 +221,8 @@ class BindingStore:
                         approval_generation, json.dumps(source_ref, sort_keys=True) if source_ref else None,
                         instance, epoch, now + lifetime_s, now,
                         now if stop else None, stop["reason"] if stop else None))
+            if isinstance(owner_words, str) and owner_words:      # a Telegram turn has no history record to read them from
+                db.execute("INSERT OR REPLACE INTO turn_words VALUES(?,?)", (turn_id, owner_words))
             return stop is None
 
     def attach_run(self, turn_id: str, run_id: str) -> bool:
@@ -386,6 +393,33 @@ class BindingStore:
                                                  name[:64], text, 1 if row else 0))
         return row is not None
 
+    def owner_words(self, turn_id: str) -> str | None:
+        """Robert's words for a turn that has no history record (Telegram), as the signed request carried them."""
+        row = self._db().execute("SELECT text FROM turn_words WHERE turn_id=?", (turn_id,)).fetchone()
+        return row["text"] if row else None
+
+    # ── one send to MC per CoS turn (domains/cos/mc_send.py) ─────────────────
+    def delivery(self, delivery_id: str) -> dict | None:
+        row = self._db().execute("SELECT * FROM mc_deliveries WHERE delivery_id=?", (delivery_id,)).fetchone()
+        if row is None:
+            return None
+        return {"delivery_id": row["delivery_id"], "turn_id": row["turn_id"], "conversation_id": row["conversation_id"],
+                "state": row["state"], "receipt": json.loads(row["receipt"]) if row["receipt"] else None}
+
+    def claim_delivery(self, delivery_id: str, turn_id: str, conversation_id: str | None) -> bool:
+        """Recorded before the POST. False: this delivery already exists, so nothing is posted."""
+        with self._tx() as db:
+            cur = db.execute("INSERT OR IGNORE INTO mc_deliveries VALUES(?,?,?,'sending',NULL,?)",
+                             (delivery_id, turn_id, conversation_id, _iso(self._clock())))
+            return cur.rowcount == 1
+
+    def finish_delivery(self, delivery_id: str, state: str, receipt: dict) -> None:
+        if state not in ("sent", "refused", "unknown"):
+            raise ValueError("unknown delivery state")
+        with self._tx() as db:
+            db.execute("UPDATE mc_deliveries SET state=?, receipt=? WHERE delivery_id=? AND state='sending'",
+                       (state, json.dumps(receipt, sort_keys=True), delivery_id))
+
     def trace(self, turn_id: str) -> dict:
         """Everything recorded for one turn: the binding, its admitted calls with receipts, and native calls."""
         db = self._db()
@@ -437,7 +471,8 @@ class TurnBinder:
             live = self.store.record(turn_id, principal=principal, origin=origin, agent_entry=agent_entry,
                                      session_user=session_user, lifetime_s=self.lifetime_s,
                                      owner_request_id=binding.get("owner_request_id"),
-                                     source_ref=binding.get("history") if origin == "owner" else None, **args)
+                                     source_ref=binding.get("history") if origin == "owner" else None,
+                                     owner_words=binding.get("owner_words") if origin == "service:telegram" else None, **args)
         except NotBound:
             return None
         return turn_id if live else None
