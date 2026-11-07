@@ -540,10 +540,10 @@ class AgentAsker:
 
     def check(self, note_text, to):
         """None when Robert's own words ask exactly these agents, else (code, plain words)."""
-        from .agent_ask import owner_ask_proposal
+        from .agent_ask import owner_ask_proposal, refused_words
         got, refusal = owner_ask_proposal(note_text, {"to": list(to), "files": None}, ())
         if refusal:
-            return "owner_intent_mismatch", refusal.replace("**", "")
+            return "owner_intent_mismatch", refused_words(note_text, refusal).replace("**", "")
         if got.get("files"):
             return "owner_files_unsupported", FILES_BY_TOOL_REFUSED
         return None

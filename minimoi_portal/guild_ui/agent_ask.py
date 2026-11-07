@@ -189,6 +189,9 @@ def holding_prefix(text: str) -> bool:
 
 
 OWNER_INTENT_REFUSED = ("**Not sent.** The proposed recipient does not match a clear instruction in your current message. Nothing was put to any agent. To send it, say who and what in one message, for example: Ask Codex to check the issue reader. You can name Claude Code, Codex, Grok, both or all.")
+# "Make a task for Codex" is not an ask, and MC has no way to create a task: tasks come from proposals Robert confirms.
+TASK_REQUEST_REFUSED = ("**Not sent.** MC cannot create a task itself; a task comes from a proposal you confirm. Nothing was put to any agent. What works: say \"Ask Codex: ...\" and it goes now, or confirm a proposed task in your task view and MC delegates its steps.")
+_TASK_REQUEST = re.compile(r"\b(?:make|create|open|start|add|file|set\s+up)\b[^.!?\n]{0,40}\btask\b", re.I)
 OWNER_FILES_REFUSED = ("**Not sent.** I could not match the requested files to your current instruction and attachments. Nothing was put to any agent. Please attach the file to this message or explicitly request the latest file.")
 _OWNER_AGENT = r"(?:claude[ -]code|claude|codex|grok|both|all|everyone)"       # Claude alone is Claude Code (GROUPS): the only Claude on the team
 _OWNER_VERB = r"(?:ask|tell|task|contact|message|ping|notify|send|write\s+to|reach(?:\s+out\s+to)?|get\s+in\s+touch\s+with)"
@@ -238,6 +241,13 @@ def _owner_clauses(text):
         return
     for clause in re.split(r'[.!?;\n]', visible):
         yield clause
+
+
+def refused_words(owner_text, refusal):
+    """The plain words for a refused ask: when he asked for a task, what works instead. It changes words, never the refusal."""
+    if refusal == OWNER_INTENT_REFUSED and isinstance(owner_text, str) and _TASK_REQUEST.search(owner_text):
+        return TASK_REQUEST_REFUSED
+    return refusal
 
 
 def owner_ask_proposal(owner_text, proposal, current_doc_ids):

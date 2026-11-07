@@ -255,6 +255,18 @@ class AgentAskToolTests(unittest.TestCase):
         self.assertIn("Nothing was put to any agent", r["message"])
         self.assertEqual((self.requests(), self.receipts.rows), ([], {}), text)          # no request, no receipt
 
+    def test_asking_for_a_task_is_refused_with_what_works_and_gives_no_new_authority(self):
+        self.say("Make a task for Codex: check the issue reader.")
+        r = self.call(self.service(), {"to": "codex", "title": "Check the issue reader"})
+        self.assertEqual((r["status"], r["code"]), ("refused", "owner_intent_mismatch"))
+        self.assertIn("Nothing was put to any agent", r["message"])
+        self.assertIn("MC cannot create a task itself", r["message"])
+        self.assertIn('"Ask Codex: ..."', r["message"])
+        self.assertEqual((self.requests(), self.receipts.rows), ([], {}))
+        self.say("Ask Codex: check the issue reader.")                                       # the words it offers do work
+        self.assertEqual(self.call(self.service(), {"to": "codex", "title": "Check the issue reader"})["status"], "done")
+        self.assertEqual(len(self.requests()), 1)
+
     def test_robert_s_own_words_decide_who_is_asked_before_anything_is_recorded(self):
         for text, to in (("Do not ask any agents. Keep this here.", ["all"]),                # negative
                          ("Don't ask Codex about this.", ["codex"]),
