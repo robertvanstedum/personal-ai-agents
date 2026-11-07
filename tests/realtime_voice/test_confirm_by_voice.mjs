@@ -441,6 +441,27 @@ for (const provider of ['openai', 'xai']) {
   }, { routes: table({ "We're done.": { decision: 'ask', kind: 'end', action_id: 'e1', owner_item_id: 't0' } }) }));
 }
 
+// Robert, 7 Nov 2026: done means done. The server's goodbye says one line and ends the call, with no summary; words he says first keep it going.
+for (const provider of ['openai', 'xai']) {
+  await check(`${provider}: goodbye ends the call without a summary`, () => run(provider, async (t) => {
+    await t.speak('a', "We're done.");
+    if (provider === 'openai') { assert.equal(t.lines().at(-1), D.GOODBYE_LINE); t.asked('RA'); await quiet(); t.replied('RA', D.GOODBYE); }
+    else { t.created('XA'); await quiet(); }
+    for (let i = 0; i < 4; i++) await t.advance(5000);
+    for (let i = 0; i < 8; i++) await flush();
+    assert.equal(t.posts('/summary').length, 0);
+    assert.equal(t.posts('/end').length, 1);
+    assert.equal(t.s.proposing(), false);
+  }, { routes: table({ "We're done.": { decision: 'ask', kind: 'end', goodbye: true, action_id: 'e1', owner_item_id: 't0' } }) }));
+}
+await check('openai: asking for the recap makes it now', () => run('openai', async (t) => {
+  await t.speak('a', 'Sum it up.');
+  assert.equal(t.lines().at(-1), `Say this briefly, adding nothing: ${D.ALL_RIGHT}`);
+  t.asked('RA'); await quiet(); t.replied('RA', D.ALL_RIGHT);
+  for (let i = 0; i < 8; i++) await flush();
+  assert.equal(t.posts('/summary').length, 1);
+}, { routes: { ...table({ 'Sum it up.': { decision: 'summary_now' } }), '/summary': () => ({ ok: true, state: 'proposed', spoken: 'We talked.' }) } }));
+
 // S2: asking for the summary mid-session gets one content-free line, never his words.
 await check('openai: S2 "read me the summary" mid-session says the summary comes at the end, never the waiting words', () => run('openai', async (t) => {
   await t.speak('a', WORDS); t.asked('RA'); await quiet(); t.replied('RA', 'Shall I go ahead?');

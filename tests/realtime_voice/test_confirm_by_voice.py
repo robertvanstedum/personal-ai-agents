@@ -522,9 +522,9 @@ def test_s2_asking_for_the_summary_mid_session_never_reads_the_waiting_actions_w
     sid = h.start()
     ask = requested(h, sid, "t1")
     later = utter(h, sid, "t3", "Read me the summary").get_json()
-    assert later["decision"] == "summary_later" and "text" not in later and REQUEST[h.kind] not in str(later)
+    assert later["decision"] == "summary_now" and "text" not in later and REQUEST[h.kind] not in str(later)
     assert utter(h, sid, "t5", "yes").get_json()["action_id"] == ask["action_id"]     # it still waits, unread
-    assert utter(h, sid, "t7", "lê o resumo").get_json()["decision"] == "summary_later"   # nothing waiting: the same
+    assert utter(h, sid, "t7", "lê o resumo").get_json()["decision"] == "summary_now"   # nothing waiting: the same
 
 
 def test_s3_a_second_yes_after_a_lost_answer_confirms_once_with_the_actions_own_item_and_hash(host):

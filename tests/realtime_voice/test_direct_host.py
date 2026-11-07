@@ -288,7 +288,7 @@ def test_a_host_gets_the_routes_the_metadata_and_a_recorded_session(rig):
     assert text.index("Test rules.") < text.index("Test Person, plain and brief.") < text.index("continuity of owner")
     assert "You are Test Person (TP) speaking by voice" in text and "only after Rosa confirms" in text
     assert "must never execute work directly" in text and "without that result" in text
-    assert "Shall I sum up?" in text and "Robert" not in text
+    assert "All right. Talk soon." in text and "Shall I sum up?" not in text and "Robert" not in text
     assert r.budget.status()["reserved_usd"] == 2.0
 
 

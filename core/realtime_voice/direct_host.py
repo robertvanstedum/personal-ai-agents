@@ -58,6 +58,7 @@ CLOCK_SLACK_S = 300                  # a phone's clock may be off; times are evi
 LIVE_WINDOW_S = 60                   # the page posts a heartbeat every 20 s while connected
 RECOVERY = "Voice session ended unexpectedly; recovering what was said."
 SUMMARY_PROMPT = "Shall I sum up?"
+GOODBYE = "All right. Talk soon."      # Robert, 7 Nov 2026: done means done; a recap only when he asks (direct-voice-session.js)
 SUMMARY_UNAVAILABLE = "Summary unavailable."
 SPEECH_MAX_CHARS = 3500              # a longer reply is read in part and the page says so aloud
 CONSULT_WAIT_S = 25                  # a consult is waited for this long, under every proxy and portal timeout, then pending
@@ -241,7 +242,7 @@ def bare_confirmation(text):
 # power to act. A request becomes the session's one waiting action; his next item decides it.
 KINDS = ("note", "postit", "consult", "end")                     # what may wait; end is "Shall I sum up?"
 LABELS = ("note", "postit", "consult", "yes", "no", "read_back", "read_summary", "chat")   # what the understanding call says
-DECISIONS = ("ask", "confirm", "dropped", "read_back", "nothing_waiting", "summary_later", "chat")
+DECISIONS = ("ask", "confirm", "dropped", "read_back", "nothing_waiting", "summary_later", "summary_now", "chat")
 ANSWER_S = 30            # the answer window, from the question starting to play; paused during a read-back
 LIFETIME_S = 120         # a waiting action's whole life, however often it is re-asked
 CONSUME_S = 15           # a yes the server judged is consumed by the action path within this long, else it is let go
@@ -316,7 +317,9 @@ READ_BACK = frozenset((
 READ_SUMMARY = frozenset((
     "read me the summary", "read the summary", "read the summary to me", "read me the summary please",
     "lies mir die zusammenfassung vor", "lies die zusammenfassung vor", "lê o resumo", "leia o resumo",
-    "lê o resumo para mim", "leia o resumo para mim"))
+    "lê o resumo para mim", "leia o resumo para mim",
+    "sum up", "sum it up", "sum that up", "sum this up", "recap", "recap that", "recap this", "give me a recap", "give me a summary",
+    "fass zusammen", "fass das zusammen", "resuma", "faz um resumo"))
 _POLITE = ("please", "bitte", "por favor", "can you", "could you", "kannst du", "pode")
 
 
@@ -422,7 +425,7 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False):
               "files, jobs, any work), "
     ask = (request + "never ask him to confirm it yourself and never say it is done: the app hears what he asks for, and "
            "when it has heard a request its own instruction tells you to ask him; ask then, briefly and naturally, "
-           "without repeating or describing his words. Otherwise say briefly that the request has not reached your work runtime yet and that typing it in the chat will; never tell him to say it more clearly. " if page_asks else
+           "without repeating or describing his words. If he clearly asked for such work and the app gave you no such instruction, say briefly that typing it in the chat will do it; never tell him to say it more clearly. Otherwise just talk with him: never mention requests, your runtime, or anything not coming through. " if page_asks else
            request + "ask him briefly and naturally to confirm, for example \"Sure, just confirm for me\" or \"Shall I "
            "go ahead?\", without repeating or describing his words, and never say it is done. ")
     return (f"You are {name} ({short}) speaking by voice, not a separate companion. The realtime speech model has no "
@@ -431,9 +434,9 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False):
             "including when the app returns your result. Never pretend a lookup or action happened without that result. " + ask +
             "Never repeat his words back unless he asks you to. Outcomes come from the app: say only what it gives "
             f"you, and never claim anything was checked, saved or done otherwise. When {owner} says he is done "
-            f"(\"we're done\"), answer only: \"{SUMMARY_PROMPT}\" A negated or questioned one (\"we're not done\") is "
-            "not an ending; carry on. Never summarize from memory: the summary is made from this session's kept record "
-            "after it ends.")
+            f"(\"we're done\"), answer only: \"{GOODBYE}\" A negated or questioned one (\"we're not done\") is "
+            "not an ending; carry on. Never offer a recap or summary. Never summarize from memory: one is made from this "
+            "session's kept record only when he asks.")
 
 
 def compose_instructions(operating_rules, card, data):
@@ -1351,7 +1354,7 @@ class DirectSessions(ConsultLedger):
             return {"decision": "ask", "action_id": new["action_id"], "kind": kind, "owner_item_id": item,
                     "text_sha256": new["text_hash"], **({"replaced": old["action_id"]} if old is not None else {}),
                     **({"replaced_kind": old["kind"]} if old is not None else {}),
-                    **({"prompt": SUMMARY_PROMPT} if label == "end" else {})}
+                    **({"prompt": SUMMARY_PROMPT, "goodbye": True} if label == "end" else {})}
         if label == "yes":
             if slot is None:
                 last = meta.get("last_confirmed")
@@ -1387,7 +1390,7 @@ class DirectSessions(ConsultLedger):
             return {"decision": "dropped", "action_id": slot["action_id"], "kind": slot["kind"], "reason": "no"}
         if label == "read_summary":
             # Review v3 S2: never the waiting action's words, which stays as it was; one content-free line.
-            return {"decision": "summary_later"}
+            return {"decision": "summary_now"}                 # Robert, 7 Nov 2026: a recap when he asks, made now
         if label == "read_back":
             if slot is None:                                # read-back after expiry reads nothing; with nothing ever
                 return {"decision": "nothing_waiting" if now < meta.get("stray_until", 0) else "chat"}   # waiting: chat

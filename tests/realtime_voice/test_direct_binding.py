@@ -72,7 +72,7 @@ def test_xai_direct_has_no_action_tool_its_rules_send_actions_to_check_and_check
     text = minted["instructions"]
     # Adapted for v3: the same rules as OpenAI's (no "press Check" line: he confirms by voice on both providers).
     assert "The realtime speech model has no tools" in text and "press Check" not in text and "your two tools" not in text
-    assert "Shall I sum up?" in text                                     # the spoken end is unchanged
+    assert "All right. Talk soon." in text and "Shall I sum up?" not in text   # done means done (Robert, 7 Nov)
     # Check with the person is page-initiated, its id and words from one capture record: it still works on xAI.
     sid = body["voice_session_id"]
     done = consult(r, sid, call_id="host-1", words="What is on my agenda?", turn="t0")

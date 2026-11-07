@@ -71,14 +71,17 @@ export const NOT_HEARD = "I didn't catch that; say it again.";
 export const ASK_LINE = 'Ask him briefly, in your own natural words, to confirm before anything is done, for example "Sure, ' +
   'just confirm for me" or "Shall I go ahead?". Do not repeat, quote or describe what he asked, and do not say it is done.';
 export const END_LINE = 'Answer only: "Shall I sum up?"';
+// Robert, 7 Nov 2026: "No sum up... If I need a recap, I'll ask." The server's goodbye on the end: the call ends; a recap only when asked.
+export const GOODBYE = 'All right. Talk soon.';
+export const GOODBYE_LINE = `Say only this, then stop: "${GOODBYE}"`;
 // OpenAI only (the page creates every response): the word on his item when nothing from it waits for his yes (chat, a
 // lost decision, other words that let a waiting action go, or a refused fold). The live check (LIVE_CHECK_V3_RESULT.md,
 // 31 Oct, fault 2) found a plain response there asking "Shall I go ahead?" by itself (4 of 4), a question the app never
 // asked; this reminder is sent beside it as a system item (Robert, 31 Oct: option c, with the stray-yes line on every
 // provider). At the hold's bound the decision is not known yet, so that response stays plain; the stray-yes line covers it.
 export const CHAT_LINE = 'Nothing from his last words is waiting to be done: answer them as conversation. Do not ask him to ' +
-  'confirm anything, and do not say anything is or will be done. If he did ask for something, say briefly that it did not ' +
-  'come through and that he can say it again.';
+  'confirm anything, and do not say anything is or will be done. Do not mention requests, the work side, or anything not ' +
+  'coming through, unless he clearly asked you to do something; only then say briefly that typing it in the chat will do it.';
 export const SAY = 'Say this briefly, adding nothing: ';
 export const SAVED = 'Saved.';
 export const POSTED = 'Post-it added.';              // the fix round's own words (b337f1cd), kept (coordinator addition 2)
@@ -528,6 +531,8 @@ export function directVoice(d) {
     for (const [item, reason] of notActed) {
       const at = typeof c?.placeOf === 'function' ? c.placeOf(item) : null;
       const id = Number.isInteger(at) ? `t${at}` : null;
+      // Robert, 7 Nov 2026: plain conversation is never "not acted on"; only a request that did not run (or a reply End cut off).
+      if (reason !== 'closed' && !kinds.has(id)) continue;
       if (id && !consulted.has(id) && capture?.said(at) && !out.includes(id)) { out.push(id); if (reason) why[id] = reason; }
     }
     return { ids: out, why };
@@ -738,7 +743,7 @@ export function directVoice(d) {
   let stops = 0;                           // his speech stops so far
   let speeches = 0;                        // his speech starts so far (review M2: a question his speech began over)
   let owned = false;                       // the page creates every response (the bootstrap's page_responses: OpenAI)
-  const DECIDED = ['ask', 'confirm', 'dropped', 'read_back', 'nothing_waiting', 'summary_later', 'chat'];
+  const DECIDED = ['ask', 'confirm', 'dropped', 'read_back', 'nothing_waiting', 'summary_later', 'summary_now', 'chat'];
   const askedUrl = (aid) => at(direct.asked_url || '').split('{action_id}').join(encodeURIComponent(aid));
 
   function hear(i, text) {
@@ -760,11 +765,12 @@ export function directVoice(d) {
   function wordFor(x) {
     if (lifecycle !== 'live') return { skip: true };
     switch (x.decision) {
-      case 'ask': return { instruction: x.kind === 'end' ? END_LINE : ASK_LINE };
+      case 'ask': return { instruction: x.goodbye ? GOODBYE_LINE : x.kind === 'end' ? END_LINE : ASK_LINE };
       case 'confirm': return { skip: true, quiet: true };  // no reply follows his yes: the outcome is said when it answers
       case 'read_back': return { instruction: readBackLine(x.text) };
       case 'nothing_waiting': return { instruction: SAY + NOTHING_WAITING };
       case 'summary_later': return { instruction: SAY + SUMMARY_LATER };
+      case 'summary_now': return { instruction: SAY + ALL_RIGHT };     // his own ask: the summary follows (follow)
       case 'dropped': return { instruction: x.reason === 'no' ? SAY + ALL_RIGHT : CHAT_LINE };
       default: return { instruction: CHAT_LINE };          // chat: answered as conversation, never asked (fault 2)
     }
@@ -964,9 +970,23 @@ export function directVoice(d) {
     }
     if (x.decision === 'nothing_waiting') { if (x.via !== 'response') sayAtPause(SAY + NOTHING_WAITING); return; }
     if (x.decision === 'summary_later') { if (x.via !== 'response') sayAtPause(SAY + SUMMARY_LATER); return; }
+    if (x.decision === 'summary_now') { Promise.resolve().then(sumUp); return; }     // he asked for it: now it is made
     if (x.dropped && waiting && waiting.action_id === x.dropped) clearWaiting(NOT_DONE_SCREEN);   // anything else drops it
   }
+  // He said he is done: one short goodbye, then the call ends. Anything he says first keeps it going.
+  async function goodbye(x, i) {
+    const moved = () => finalized || lifecycle !== 'live' || [...decisions.keys()].some((k) => k > i);
+    clearWaiting(x.replaced && waiting && waiting.action_id === x.replaced && waiting.kind !== 'end' ? NOT_DONE_SCREEN : null);
+    let start = await questionStart(i);
+    if (moved()) return;
+    if (!start) start = await tracked(GOODBYE_LINE);
+    if (moved()) return;
+    if (start) await whenHeard(start, start.page ? start.base : speechAt.get(i));
+    await atPause();
+    if (!moved()) endNow('user_ended');
+  }
   async function asking(x, i) {
+    if (x.goodbye) return goodbye(x, i);
     if (!waiting || waiting.action_id !== x.action_id) {
       // Review N2: a new request or the end replacing an action that waited says that action was not done.
       clearWaiting(x.replaced && waiting && waiting.action_id === x.replaced && waiting.kind !== 'end' ? NOT_DONE_SCREEN : null);
