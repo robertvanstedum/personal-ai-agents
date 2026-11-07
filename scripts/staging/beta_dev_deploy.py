@@ -41,7 +41,7 @@ BASES = {"portal": "8481940d", "cos": "8481940d", "domains": "8481940d", "record
 OLDEST_ACCEPTED = "8481940d"                         # A live file may be any committed version since here: never a hand edit.
 
 MC_DIR, COS_DIR, PLUGINS = "/opt/minimoi/mc-agent/", "/opt/minimoi/cos-agent-a/", "/opt/minimoi/openclaw-plugins/"
-HANDBOOK, PERSONA = "services/mc_operations/handbook/", "services/mc_operations/personas/mc-chat/releases/0.1.23/"
+HANDBOOK, PERSONA = "services/mc_operations/handbook/", "services/mc_operations/personas/mc-chat/releases/0.1.24/"
 VOICE_JS = "core/realtime_voice/static/realtime-voice-controller.js"
 TEXT = (".py", ".js", ".mjs", ".cjs", ".json", ".html", ".css")
 
@@ -202,7 +202,7 @@ def dockerfile_for(spec: dict, base_id: str, user: str) -> str:
     lines.append("COPY ctx/ /")
     if build == "mc":
         lines.append(f"RUN chmod 0755 {MC_DIR}start.sh && sh {MC_DIR}.beta-check-6c.sh && rm -f {MC_DIR}.beta-check-6c.sh")
-        lines.append("LABEL minimoi.persona=0.1.23 minimoi.handbook=0.1.2")
+        lines.append("LABEL minimoi.persona=0.1.24 minimoi.handbook=0.1.2")
     if build == "cos":
         lines.append(f"RUN node {COS_DIR}build-mc-role.mjs {COS_DIR}AGENTS.md {COS_DIR}owner-role {COS_DIR}mc-role-lock.json {COS_DIR}AGENTS.md {COS_DIR}ROLE_LOAD.json")
         lines.append(f"RUN node {COS_DIR}build-mc-handbook.mjs {COS_DIR}AGENTS.md {COS_DIR}handbook {COS_DIR}AGENTS.md {COS_DIR}ROLE_LOAD.json")

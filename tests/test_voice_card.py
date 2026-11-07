@@ -2,6 +2,7 @@
 voice id, and is pinned by data: <root>/pin.json names the release (Spec 165 §4.5). Optional language and accent."""
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -100,14 +101,26 @@ def test_language_is_an_allowed_locale_and_accent_a_short_label(tmp_path):
 
 
 def test_mcs_card_is_pinned_and_verified():
-    manifest = json.loads((MC_ROOT / "releases/0.1.22/manifest.json").read_text())
+    manifest = json.loads((MC_ROOT / "releases/0.1.24/manifest.json").read_text())
     assert "voice.json" in manifest["files"]
-    assert json.loads((MC_ROOT / "pin.json").read_text()) == {"release": "0.1.22"}
+    assert json.loads((MC_ROOT / "pin.json").read_text()) == {"release": "0.1.24"}
     pinned = load_pinned(MC_ROOT)
-    assert pinned["release"] == "0.1.22" and pinned["language"] == "en-US" and pinned["transcription"] == "bilingual"
+    assert pinned["release"] == "0.1.24" and pinned["language"] == "en-US" and pinned["transcription"] == "bilingual"
     assert pinned["card"].startswith("Master Craftsman, Robert's longtime collaborator and friend in the work;")
     assert pinned["voices"] == {"openai": "marin", "xai": "leo"} and pinned["named"] == ["openai", "xai"]   # by ear, 29 Oct
-    assert pinned == load_card(MC_ROOT, "0.1.22")
+    assert pinned == load_card(MC_ROOT, "0.1.24")
+
+
+def test_mcs_card_restates_the_manner_for_the_direct_path_and_carries_no_sentence_of_it():
+    """Robert's direction of 6 Nov 2026: VOICE_MANNER's clauses, in the card's own words (Spec 165 §6.2, as CoS's card)."""
+    from core.realtime_voice.controlled_config import VOICE_MANNER
+    card = load_pinned(MC_ROOT)["card"]
+    for clause in ("dry humour", "same desk", "fifteen to forty words", "leave him the floor", "Don't offer help",
+                   "Stay quiet through his silences", "If he cuts in", "No recaps"):
+        assert clause in card, clause
+    for sentence in re.split(r"(?<=[.;])\s+", VOICE_MANNER.split("\n", 1)[1]):
+        if len(sentence) > 25:
+            assert sentence.rstrip(".;") not in card, sentence
 
 
 def test_a_header_release_carries_the_voice_card_and_its_hash(tmp_path):

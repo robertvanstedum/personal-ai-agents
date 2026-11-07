@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "persona": "mc-chat",
+  "version": "0.1.24",
+  "base": "0.1.23 + the voice card's new text; loads MC handbook 0.1.2",
+  "spec": "spec_mc_agent_container v0.2; Robert's direction of 6 Nov 2026, restoring VOICE_MANNER's clauses to the direct path",
+  "status": "candidate",
+  "target": "mc-agent container",
+  "files": {
+    "SOUL.md": "3f79bf7edf148b8971f9707e67e334266027c0d12cecb5e18c1513f5996bd671",
+    "AGENTS.md": "a1c3aec5a3f295457300c09bc122c6d1cff2d1375ba1594d6812cdcd6ed066f0",
+    "RUNTIME.openclaw.md": "2b2428ccded1174e6a9857bd17f1ccfa2b2b0f860c786649bfe39a2dbfdb7197",
+    "CHANGES.md": "09e538c7f9b8f3869576d1039e47679a5859c50e07c5c8b87a3947b3ad19d5c5",
+    "voice.json": "274a9108c49a4577bd896909b780bd0553a40ab9f1fd186cdb11d010b7ea2b7d"
+  },
+  "handbook": {
+    "version": "0.1.2",
+    "manifest": "services/mc_operations/handbook/manifest.json",
+    "manifest_sha256": "5033cb04af14cbbb9d264c9249d3075865586bfb27c360a6e3754e73dbcabcd3"
+  },
+  "projection": "SOUL verbatim; AGENTS + runtime binding + handbook block",
+  "projection_budget_chars": 16000,
+  "config_change": false
+}

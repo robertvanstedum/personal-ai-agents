@@ -441,7 +441,7 @@ scripts/staging/cos_plan_deploy.py
 scripts/vault/dev_cycle.py
 services/mc_operations/handbook/manifest.json
 services/mc_operations/handbook/v0.1.2/PROJECT.md
-services/mc_operations/personas/mc-chat/releases/0.1.23/AGENTS.md
+services/mc_operations/personas/mc-chat/releases/0.1.24/AGENTS.md
 services/model_gateway/litellm.prod.yaml
 services/model_gateway/litellm.staging.yaml
 services/partnership_tasks/service.py
@@ -477,7 +477,7 @@ def test_each_image_gets_its_own_paths():
 def test_mc_lays_out_its_persona_handbook_and_release_tools():
     mc = where("mc-agent")
     assert mc["docker/mc-agent-container/handbook.mjs"] == op.MC_DIR + "handbook.mjs"
-    assert mc["services/mc_operations/personas/mc-chat/releases/0.1.23/AGENTS.md"] == op.MC_DIR + "persona/AGENTS.md"
+    assert mc["services/mc_operations/personas/mc-chat/releases/0.1.24/AGENTS.md"] == op.MC_DIR + "persona/AGENTS.md"
     assert mc["services/mc_operations/handbook/manifest.json"] == op.MC_DIR + "handbook/manifest.json"
     assert mc["services/mc_operations/handbook/v0.1.2/PROJECT.md"] == op.MC_DIR + "handbook/v0.1.2/PROJECT.md"
     assert mc["scripts/ops/mc_container_security_test.py"] == "/opt/minimoi/mc-release/mc_container_security_test.py"
@@ -512,7 +512,7 @@ def test_mcs_overlay_replaces_persona_and_handbook_runs_check_6c_and_restores_it
     assert lines[0] == "FROM sha256:abc" and lines[1] == "USER root" and lines[-1] == "USER node"
     assert lines.index(f"RUN rm -rf {op.MC_DIR}persona {op.MC_DIR}handbook") < lines.index("COPY ctx/ /")
     assert any(".beta-check-6c.sh" in x and "chmod 0755" in x and "rm -f" in x for x in lines)
-    assert "minimoi.persona=0.1.23" in text and "minimoi.handbook=0.1.2" in text
+    assert "minimoi.persona=0.1.24" in text and "minimoi.handbook=0.1.2" in text
     assert "USER" not in op.dockerfile_for(op.TARGETS["mc-agent"], "sha256:abc", "")        # an image with no user set keeps none
 
 
@@ -528,11 +528,11 @@ def test_cos_overlay_reruns_role_then_handbook_as_its_dockerfile_does():
 
 def test_mc_overlay_matches_its_dockerfile_on_persona_and_handbook():
     dockerfile = (ROOT / "docker/mc-agent-container/Dockerfile").read_text()
-    assert "services/mc_operations/personas/mc-chat/releases/0.1.23/ /opt/minimoi/mc-agent/persona/" in dockerfile
+    assert "services/mc_operations/personas/mc-chat/releases/0.1.24/ /opt/minimoi/mc-agent/persona/" in dockerfile
     assert "services/mc_operations/handbook/manifest.json /opt/minimoi/mc-agent/handbook/manifest.json" in dockerfile
     assert "services/mc_operations/handbook/v0.1.2/ /opt/minimoi/mc-agent/handbook/v0.1.2/" in dockerfile
-    assert "minimoi.persona=0.1.23" in dockerfile and "minimoi.handbook=0.1.2" in dockerfile
-    assert op.PERSONA == "services/mc_operations/personas/mc-chat/releases/0.1.23/"
+    assert "minimoi.persona=0.1.24" in dockerfile and "minimoi.handbook=0.1.2" in dockerfile
+    assert op.PERSONA == "services/mc_operations/personas/mc-chat/releases/0.1.24/"
 
 
 def test_a_build_context_has_exact_modes_and_open_folders(tmp_path):
