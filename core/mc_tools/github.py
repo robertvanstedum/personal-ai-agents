@@ -154,21 +154,39 @@ class GitHubIssues:
         message = HEAD + '\n' + json.dumps(data, ensure_ascii=False) + '\nRead each text file with operation=source, ref and path. Removed paths may not exist at head. Patches are not returned.'
         return 'ok', message, data
 
-    def search(self, query: str) -> tuple[str, str, dict]:
-        state, found = self._json("/search/issues", {"q": f"{query} repo:{self.repo}", "per_page": RESULTS,
-                                                     "sort": "updated"})
+    def _found(self, params, page) -> tuple[str, str | None, list, dict]:
+        """(state, failure words, rows, raw answer) of one bounded search in the fixed repository."""
+        state, found = self._json("/search/issues", {**params, "per_page": RESULTS, **({"page": page} if page > 1 else {})})
         if state != "ok" or not isinstance(found, dict):
-            return state if state != 'ok' else 'unreadable', _failed(state, "the search"), {}
+            return (state if state != 'ok' else 'unreadable'), _failed(state, "the search"), [], {}
         items = [i for i in found.get("items") or [] if isinstance(i, dict)][:RESULTS]
         if any(type(i.get('number')) is not int or i['number'] < 1 or i.get('repository_url') != f'{API}/repos/{self.repo}' for i in items):
-            return 'unreadable', 'Search results did not match the fixed repository.', {}
+            return 'unreadable', 'Search results did not match the fixed repository.', [], {}
         rows = [{"number": i.get("number"), "state": i.get("state"), "title": _t(i.get("title"), 200),
-                 "updated": str(i.get("updated_at"))[:10], "kind": "pull request" if i.get("pull_request") else "issue",
+                 "created": str(i.get("created_at"))[:10], "updated": str(i.get("updated_at"))[:10],
+                 "kind": "pull request" if i.get("pull_request") else "issue",
                  "url": f"https://github.com/{self.repo}/{'pull' if i.get('pull_request') else 'issues'}/{i.get('number')}"} for i in items]
+        return "ok", None, rows, found
+
+    def search(self, query: str, page: int = 1) -> tuple[str, str, dict]:
+        state, failure, rows, found = self._found({"q": f"{query} repo:{self.repo}", "sort": "updated"}, page)
+        if state != "ok":
+            return state, failure, {}
         if not rows:
             return "ok", f"{HEAD}\nNo issues match “{query}”.", {"results": []}
         lines = [HEAD, f"{found.get('total_count', len(rows))} match(es); the most recently updated:"]
         lines += [f"- #{r['number']} · {r['kind']} · {r['state']} (search state; read PR to verify merge) · {r['title']} · updated {r['updated']} · {r['url']}" for r in rows]
+        return "ok", "\n".join(lines), {"results": rows}
+
+    def latest(self, page: int = 1) -> tuple[str, str, dict]:
+        """The newest issues of the fixed repository, open or closed, newest first. Pull requests are left out."""
+        state, failure, rows, found = self._found({"q": f"repo:{self.repo} is:issue", "sort": "created", "order": "desc"}, page)
+        if state != "ok":
+            return state, failure, {}
+        if not rows:
+            return "ok", f"{HEAD}\nNo issues on that page.", {"results": []}
+        lines = [HEAD, f"{found.get('total_count', len(rows))} issue(s) in all; the newest first (pull requests left out):"]
+        lines += [f"- #{r['number']} · {r['state']} · {r['title']} · opened {r['created']} · {r['url']}" for r in rows]
         return "ok", "\n".join(lines), {"results": rows}
 
 
@@ -198,7 +216,9 @@ def valid_request(args):
     op = args.get('operation', 'search' if 'query' in args else 'issue')
     fields = set(args) - {'operation'}
     if op == 'search':
-        return fields == {'query'} and not re.search(r'(?:^|\s)-?(?:repo|org|user):', args['query'], re.I)
+        return 'query' in fields and fields <= {'query', 'page'} and not re.search(r'(?:^|\s)-?(?:repo|org|user):', args['query'], re.I)
+    if op == 'latest':
+        return fields <= {'page'}
     if op == 'issue':
         return 'number' in fields and fields <= {'number', 'offset', 'digest'}
     if op == 'source':

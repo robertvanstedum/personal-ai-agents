@@ -432,7 +432,10 @@ class ToolService:
             return refused("tool_unavailable")
         from .github import valid_request
         if not valid_request(args):
-            return refused("tool_arguments_invalid")
+            # Said in full: with only "do not fit", a model retried the same search seven times and gave up (7 Nov).
+            return result("refused", "tool_arguments_invalid", "Those arguments do not fit minimoi_github_issues. Nothing "
+                          "was done. For the newest issues send {\"operation\": \"latest\"}; to search send {\"query\": "
+                          "\"words\"}, optionally with page; for one issue or PR send {\"number\": 123}.", {})
         with self._tx() as conn:
             b = self._bind(conn, caller)
             with _cursor(conn) as cur:                # anyone can write on GitHub: proposals need a code from now on
@@ -975,11 +978,12 @@ class ToolService:
         text, refusal = self._owner_words(b)
         if refusal:
             return refusal
-        mismatch = self.agent_ask.check(text, to)
+        # What is sent: his current note, or, when it only answers MC's "which agent?", the instruction it answers.
+        text, mismatch = self.agent_ask.admit(b.conversation_id, b.note_request_id, text, to)
         if mismatch:
             code, words = mismatch
-            return result("refused", code, f"{words} Do not try other agents; ask Robert whom he means, in his words.",
-                          {"to": to})
+            return result("refused", code, f"{words} Do not try other agents. Tell Robert this plainly, in the language "
+                          "he wrote in, with the example.", {"to": to})
         edition = hashlib.sha256(text.encode("utf-8")).hexdigest()
         canonical = {"to": to, "source": {"conversation": b.conversation_id, "note": b.note_request_id,
                                           "edition": edition}}
