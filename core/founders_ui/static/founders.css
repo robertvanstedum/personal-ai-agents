@@ -130,6 +130,11 @@
 .founders-cos #both-open[aria-pressed=true]{font-weight:600}
 .founders-cos .conv-menu-rule{height:1px;margin:5px 4px;background:var(--line)}
 .founders-cos .conv-menu-note{margin:0 10px 4px;color:var(--mute);font-size:12px}
+.founders-cos .conv-menu-route{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px;min-height:34px;padding:4px 10px;color:var(--mute);font-size:13.5px}
+.founders-cos .conv-menu-route[hidden]{display:none}
+.founders-cos .conv-menu-route select{flex:1 1 0;min-width:0;max-width:190px;height:30px;padding:0 6px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--ink);font:14px var(--sans)}
+.founders-cos .conv-menu-route small{flex-basis:100%;color:var(--mute);font-size:12px;line-height:1.35}
+.founders-cos .conv-menu-route small:empty{display:none}
 /* The direct-voice provider choice sits under "Talk with CoS (voice)", only when her direct voice is admitted (the choice
    is there); the words confer-voice.js otherwise writes in its place stay out of the menu. */
 .founders-cos .conv-menu-provider{display:none}
