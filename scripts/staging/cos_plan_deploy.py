@@ -79,6 +79,7 @@ def check_runtime(pinned: dict, live: dict) -> None:
     assert all(p.get("mode") == "oauth" for p in (live.get("auth") or {}).get("profiles", {}).values()) and live["auth"]["profiles"], "plan profile"
     allow = [PLAN_MODEL, *PLAN_ROUTES.split(",")]
     assert live["agents"]["defaults"].get("thinkingDefault") == "high", "effort"
+    assert live.get("memory") == pinned.get("memory"), "memory search"
     assert set(live["agents"]["entries"]) == set(pinned["agents"]["entries"]) == set(AGENTS), "agents"
     for name, entry in [("defaults", live["agents"]["defaults"]), *live["agents"]["entries"].items()]:
         assert entry["model"] == {"primary": PLAN_MODEL, "fallbacks": []} and entry["modelPolicy"]["allow"] == allow, "model: " + name

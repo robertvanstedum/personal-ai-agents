@@ -43,6 +43,13 @@ class TestRuntimeConfig:
             assert agent["model"] == {"primary": "openai/gpt-6-astra", "fallbacks": []}
             assert agent["modelPolicy"]["allow"] == ["openai/gpt-6-astra", "openai/gpt-6-sol", "openai/gpt-6-luna"]
 
+    def test_memory_search_is_keyword_only_on_purpose(self, tmp_path):
+        # No CoS host holds an embedding key, and CoS's capped gateway key is refused on embeddings (scripts/staging/verify.sh).
+        pinned = json.loads(CONFIG.read_text())
+        assert pinned["memory"] == {"search": {"provider": "none"}}
+        _, config = _apply(tmp_path, PLAN_ENV)
+        assert config["memory"] == pinned["memory"]
+
     def test_plan_mode_keeps_each_agents_identity_tools_and_workspace(self, tmp_path):
         before = json.loads(CONFIG.read_text())["agents"]["entries"]
         _, config = _apply(tmp_path, PLAN_ENV)

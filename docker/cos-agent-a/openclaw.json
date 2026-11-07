@@ -49,6 +49,11 @@
       }
     }
   },
+  "memory": {
+    "search": {
+      "provider": "none"
+    }
+  },
   "plugins": {
     "allow": [
       "memory-core",
