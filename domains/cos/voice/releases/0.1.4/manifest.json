@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "card": "chief-of-staff voice",
+  "version": "0.1.4",
+  "status": "candidate",
+  "spec": "Spec 165 v0.3 §6.2: Robert's direction of 6 Nov 2026, restoring VOICE_MANNER's clauses to the direct path; restated, voices, accents and transcription as 0.1.3",
+  "persona": {
+    "source": "MASTER_CRAFTSMAN_PERSONA.md",
+    "version": "1.1",
+    "sha256": "f07078f5c913323f1098381faf44d38f77223258e48498ddd0552f53042c4f1b"
+  },
+  "files": {
+    "voice.json": "1a0e95dbc8829280e03462b6b6147175cf4cd14a6afe54c29e50b77f80786a59"
+  }
+}

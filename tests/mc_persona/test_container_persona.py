@@ -137,7 +137,7 @@ def test_the_container_loads_the_handbook_the_persona_pins(tmp_path):
 
 def test_the_merged_persona_carries_both_lines(tmp_path):
     """0.1.23 is 0.1.17 (outside reports) and 0.1.22 (the voice card), both from 0.1.16, in one release."""
-    merged, outside, voice = RELEASES / pinned_release(), RELEASES / "0.1.17", RELEASES / "0.1.22"
+    merged, outside, voice = RELEASES / "0.1.23", RELEASES / "0.1.17", RELEASES / "0.1.22"
     m = json.loads((merged / "manifest.json").read_text())
     for f in ("SOUL.md", "RUNTIME.openclaw.md"):
         assert (merged / f).read_bytes() == (outside / f).read_bytes() == (voice / f).read_bytes()
@@ -155,6 +155,30 @@ def test_the_merged_persona_carries_both_lines(tmp_path):
         assert vm["version"] == v and "voice.json" in vm["files"]
         for f, want in vm["files"].items():
             assert sha((RELEASES / v / f).read_bytes()) == want, (v, f)
+
+
+def test_one_persona_the_portals_pin_and_the_container_name_the_same_release():
+    """The portal reads the voice card through pin.json, the container copies the release its Dockerfile names: one release."""
+    pin = json.loads((RELEASES.parent / "pin.json").read_text())
+    assert pin == {"release": pinned_release()}
+    assert f"minimoi.persona={pin['release']} " in DOCKERFILE.read_text()
+    assert f'personas/mc-chat/releases/{pin["release"]}/"' in (REPO / "scripts/staging/beta_dev_deploy.py").read_text()
+
+
+def test_0_1_24_changes_only_the_voice_cards_text_from_0_1_23():
+    new, old = RELEASES / "0.1.24", RELEASES / "0.1.23"
+    for f in ("SOUL.md", "RUNTIME.openclaw.md"):
+        assert (new / f).read_bytes() == (old / f).read_bytes()
+    assert (new / "AGENTS.md").read_text().split("\n")[1:] == (old / "AGENTS.md").read_text().split("\n")[1:]
+    assert (new / "AGENTS.md").read_text().split("\n")[0] == "# MC conversation contract — persona 0.1.24"
+    card, was = json.loads((new / "voice.json").read_text()), json.loads((old / "voice.json").read_text())
+    assert card.pop("card") != was.pop("card") and card == was
+    m, base = json.loads((new / "manifest.json").read_text()), json.loads((old / "manifest.json").read_text())
+    assert m["version"] == "0.1.24" and m["status"] == "candidate" and m["handbook"] == base["handbook"]
+    assert "Robert's direction of 6 Nov 2026, restoring VOICE_MANNER's clauses to the direct path" in m["spec"]
+    assert set(m["files"]) == set(base["files"])
+    for f, want in m["files"].items():
+        assert sha((new / f).read_bytes()) == want, f
 
 
 def test_start_refuses_a_release_that_names_no_handbook(tmp_path):

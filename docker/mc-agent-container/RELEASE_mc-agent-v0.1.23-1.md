@@ -1,5 +1,8 @@
 # Master Craftsman container release: next tag `mc-agent-v0.1.23-1`
 
+> The Dockerfile has since moved to persona 0.1.24 and the portal's pin with it: 0.1.23 with a new voice card, nothing
+> else (the release's CHANGES.md). Read 0.1.24 for 0.1.23 in the tag and the steps below.
+
 **Not tagged.** A pushed `mc-agent-v*` tag deploys production at once (`.github/workflows/deploy-mc-agent.yml` builds,
 pushes and deploys in one run; no approval gate). The tag waits for Robert's word, after staging has run this release.
 
