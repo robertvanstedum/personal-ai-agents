@@ -232,6 +232,8 @@
   .founders-cos{width:100%;max-width:100%;overflow-x:hidden}
   .founders-cos .phone-only{display:inline-grid}
   .founders-cos .header-nav{height:52px;gap:4px;padding:0 6px 0 8px}
+  /* Actions and Guildhall stay neighbours here until mobile-nav.js moves them. A 4px row gap leaves the labels touching. */
+  .founders-cos .header-nav > a[data-portal-link]{margin-left:14px}
   .founders-cos .cos-bar-btn{width:34px;height:34px;flex:none;place-items:center;padding:0;border:0;border-radius:8px;background:none;color:var(--soft);font-size:17px}
   .founders-cos .cos-bar-new{color:var(--accent);font-size:19px}
   .founders-cos .cos-mark{flex:1;gap:8px;margin-left:2px}
@@ -503,6 +505,7 @@ body.gu[data-page=floor] .floor-strip{margin:0;padding:4px 16px;border:0;border-
   .founders-cos .phone-tools #files-open::before{content:"📄";font-size:14px}
   .founders-cos .phone-tools #files-open .conv-count{font-size:12px}
   .founders-cos .header-nav{gap:2px}
+  .founders-cos .header-nav > a[data-portal-link]{margin-left:0}
 }
 
 /* ── CoS · In flight (Review 06, Option A, slice 3): a working table in Confer's palette. Like the Board, it fills the space
