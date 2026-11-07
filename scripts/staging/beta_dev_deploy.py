@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 
-RELEASE = "beta-20261107a"
+RELEASE = "beta-20261107b"
 STAGING_ROOT = "/opt/minimoi-staging"
 SHORT_LIVED = ("dev-memory-feed-",)
 OPERATOR_NAME = "beta-dev-20261106"
