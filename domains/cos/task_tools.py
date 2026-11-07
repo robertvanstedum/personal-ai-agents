@@ -34,10 +34,9 @@ def _refuse(status, error, **extra):
 
 
 class CosTaskTools:
-    def __init__(self, *, platform, cos, history, environment: str, portal_base: str = "/guild-next/guild/tasks",
-                 scope: str = "personal"):
+    def __init__(self, *, platform, cos, history, environment: str, scope: str = "personal"):
         self.platform, self.cos, self.history = platform, cos, history
-        self.environment, self.portal_base, self.scope = environment, portal_base, scope
+        self.environment, self.scope = environment, scope
 
     def serve(self, binding, op: str, args: dict) -> dict:
         if op not in ARGS:
@@ -93,8 +92,9 @@ class CosTaskTools:
         if out.get("outcome") == "accepted":
             return {"status": 200, "body": {
                 "schema": SCHEMA, "interpretation_id": iid, "state": "awaiting_robert",
-                "replayed": bool(out.get("replayed")), "portal_link": f"{self.portal_base}?proposal={iid}",
-                "message": "Proposed. Nothing starts until Robert confirms it in his task view."}}
+                "replayed": bool(out.get("replayed")),
+                "message": "Proposed. Nothing starts until Robert confirms it. Confer shows him the proposal with its own "
+                           "Confirm button under your reply, so write no link; the task view holds it too."}}
         if out.get("code") == "command_id_reused":
             return _refuse(409, "already_proposed", interpretation_id=iid)
         return _refuse(422, out.get("code") or "refused", detail=out.get("detail"))

@@ -83,7 +83,8 @@ def test_journey_1_backend_from_saved_words_to_a_task_led_by_mc(rig):
     out = call(client, PROPOSAL)
     assert out["status"] == "done", out
     iid = out["data"]["interpretation_id"]
-    assert out["data"]["portal_link"] == f"/guild-next/guild/tasks?proposal={iid}"   # the mounted task view (Blue Lantern, 5 Nov)
+    assert "portal_link" not in out["data"] and "guild-next" not in json.dumps(out)   # the card has the button; no raw link in Confer
+    assert "write no link" in out["data"]["message"] and "Nothing starts until Robert confirms" in out["data"]["message"]
     interp = tasks.get("interpretation", iid, "tok-principal")
     source = tasks.get("source_event", interp["source_event_ids"][0], "tok-principal")
     assert source["content"] == "Track a small test task for our codebase map. Ask MC to lead."   # from history
