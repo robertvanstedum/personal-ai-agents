@@ -46,6 +46,8 @@ def test_history_draft_picture_and_reply_survive_reload(tmp_path,width,height):
         def click_control(selector):
             if tab.locator(f'[data-conv-menu] {selector}').count() and not tab.locator(selector).is_visible():
                 tab.locator('[data-conv-more] > summary').click()
+            elif tab.locator(f'[data-cos-options] {selector}').count() and not tab.locator(selector).is_visible():
+                tab.locator('[data-cos-options] > summary').click()
             elif width < 640 and tab.locator(f'[data-mobile-menu] {selector}').count():
                 tab.locator('.header-nav [data-list-open]').click()
             tab.locator(selector).click()

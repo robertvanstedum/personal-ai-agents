@@ -216,16 +216,18 @@
   });
   function closeDrawer() { sidebar.closeDrawer(); }
   document.querySelectorAll('[data-new-conversation], .tab-btn[data-tab], #cos-home, #cos-resume').forEach(b => b.addEventListener('click', closeDrawer));
-  // ⋯ holds History, Picture, Side by side, its own window and voice; a choice closes it.
+  // ⋯ holds History, Side by side and its own window; a choice closes it.
   const moreMenu = document.querySelector('[data-conv-more]');
   moreMenu.querySelector('[data-conv-menu]').addEventListener('click', e => { if (e.target.closest('button')) moreMenu.open = false; });
   document.addEventListener('click', e => { if (moreMenu.open && !moreMenu.contains(e.target)) moreMenu.open = false; });
   document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (moreMenu.open) { moreMenu.open = false; moreMenu.querySelector('summary').focus(); } closeDrawer(); });
-  // "Talk with CoS (voice)" presses the voice button, which keeps every rule about when voice may start.
-  const voiceButton = document.getElementById('btn-voice'), talk = document.querySelector('[data-voice-start]');
-  const mirrorVoice = () => { talk.disabled = voiceButton.disabled; talk.title = voiceButton.title; };
-  talk.addEventListener('click', () => voiceButton.click());
-  new MutationObserver(mirrorVoice).observe(voiceButton, {attributes:true, attributeFilter:['disabled','title']}); mirrorVoice();
+  // ••• beside ＋: settings for this chat. A choice of Dictate closes it; clicking outside or Escape closes it too.
+  const options = document.querySelector('[data-cos-options]');
+  if (options) {
+    options.querySelector('.cos-options-body').addEventListener('click', e => { if (e.target.closest('button')) options.open = false; });
+    document.addEventListener('click', e => { if (options.open && !options.contains(e.target)) options.open = false; });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && options.open) { options.open = false; options.querySelector('summary').focus(); } });
+  }
   // Files shows only when CoS has files to give; its count follows the list in the Files sheet.
   const filesButton = document.getElementById('files-open'), fileList = document.getElementById('cos-files-list');
   const countFiles = () => { const n = fileList.querySelectorAll('a').length; filesButton.hidden = !n; document.querySelector('[data-files-count]').textContent = n ? String(n) : ''; };
