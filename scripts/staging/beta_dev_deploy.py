@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 
-RELEASE = "beta-20261106j"
+RELEASE = "beta-20261106k"
 STAGING_ROOT = "/opt/minimoi-staging"
 OPERATOR_NAME = "beta-dev-20261106"
 MIN_FREE_BYTES = 2 * 1024 ** 3
@@ -86,6 +86,7 @@ TARGETS = {
     "cos-agent-a": dict(container="minimoi-cos-agent-a", repo="cos-agent-a", tier=3, base="cos", old="plan-20261105d", wait=AGENT_WAIT, kind="node", build="cos",
                         rules=(("docker/cos-agent-a/apply-config.sh", COS_DIR + "apply-config.sh"), ("docker/cos-agent-a/plan-access.cjs", COS_DIR + "plan-access.cjs"),
                                ("docker/cos-agent-a/build-mc-handbook.mjs", COS_DIR + "build-mc-handbook.mjs"),
+                               ("docker/cos-agent-a/openclaw.json", COS_DIR + "openclaw.json"), ("docker/cos-agent-a/COS_AGENTS.md", COS_DIR + "COS_AGENTS.md"),
                                ("docker/cos-agent-a/plugins/cos-bound/", PLUGINS + "cos-bound/"), (HANDBOOK, COS_DIR + "handbook/")),
                         always=(("docker/cos-agent-a/AGENTS.md", COS_DIR + "AGENTS.md"),), executables=(COS_DIR + "apply-config.sh",),
                         down="up to 11 minutes (gateway owner lease); CoS refuses messages meanwhile"),
