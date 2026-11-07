@@ -933,6 +933,10 @@ class FakeDocker:
         files.pop(op.MC_DIR + ".beta-check-6c.sh", None)
         new_id = "sha256:new-" + hashlib.sha256(tag.encode()).hexdigest()[:12]
         self.images[tag] = self.images[new_id] = {"Id": new_id, "RootFS": {"Layers": [*base["RootFS"]["Layers"], new_id]}, "Config": copy.deepcopy(base["Config"]), "files": files}
+        added = [l[4:] for l in (folder / "Dockerfile").read_text().splitlines() if l.startswith("ENV ")]        # as docker build lays them
+        if added:
+            config = self.images[tag]["Config"]
+            config["Env"] = [*(config.get("Env") or []), *added]
         return _Result("")
 
     def _sums(self, files, paths):
@@ -1341,3 +1345,15 @@ def test_cos_to_mc_switch_lives_in_the_overlay_image_so_a_rollback_removes_it():
     assert dict(deploy.TARGETS["portal"]["image_env"]) == {"MINIMOI_COS_TO_MC": "1"}
     assert dict(deploy.TARGETS["cos-scheduler"]["image_env"])["MINIMOI_COS_TO_MC"] == "1"
     assert all("image_env" not in spec for key, spec in deploy.TARGETS.items() if key not in ("portal", "cos-scheduler"))
+
+
+def test_the_overlay_check_admits_exactly_the_named_switch():
+    base = {"RootFS": {"Layers": ["a"]}, "Config": {"Env": ["A=1"], "User": "u", "Image": "x", "Labels": {}}}
+    good = {"RootFS": {"Layers": ["a", "b"]}, "Config": {"Env": ["A=1", "S=1"], "User": "u", "Image": "y", "Labels": {}}}
+    op.check_overlay(base, good, image_env=(("S", "1"),))
+    with pytest.raises(AssertionError):
+        op.check_overlay(base, good)                                     # not named: refused
+    with pytest.raises(AssertionError):
+        op.check_overlay(base, good, image_env=(("S", "2"),))            # another value: refused
+    with pytest.raises(AssertionError):
+        op.check_overlay(base, {**good, "Config": {**good["Config"], "Env": ["A=2", "S=1"]}}, image_env=(("S", "1"),))

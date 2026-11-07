@@ -361,12 +361,15 @@ def check_tag_is_running(tag: str, tag_id: str, running_id: str) -> None:
     assert tag_id and tag_id == running_id, "tag no longer names the running image: " + tag
 
 
-def check_overlay(base: dict, new: dict, allowed=("Image", "Labels")) -> None:
-    """A child of the running image, with the same runtime config."""
+def check_overlay(base: dict, new: dict, allowed=("Image", "Labels"), image_env=()) -> None:
+    """A child of the running image, with the same runtime config, plus exactly the switches its target names."""
     b = base["RootFS"]["Layers"]
     assert new["RootFS"]["Layers"][:len(b)] == b, "image is not a child of the running one"
     strip = lambda c: {k: v for k, v in c.items() if k not in allowed}
-    assert strip(new["Config"]) == strip(base["Config"]), "the overlay's image config changed"
+    want = dict(base["Config"])
+    if image_env:
+        want["Env"] = [*(base["Config"].get("Env") or []), *(f"{name}={value}" for name, value in image_env)]
+    assert strip(new["Config"]) == strip(want), "the overlay's image config changed"
 
 
 def only_images(before: dict, after: dict, images: dict) -> None:
@@ -749,7 +752,8 @@ class RealHost:                                     # pragma: no cover  (exercis
                 self._check_gateway_config(spec)
                 continue
             new_id = self.new_ids[key]
-            check_overlay(json.loads(self._run("docker", "image", "inspect", self.base[key]["id"]))[0], json.loads(self._run("docker", "image", "inspect", new_id))[0])
+            check_overlay(json.loads(self._run("docker", "image", "inspect", self.base[key]["id"]))[0], json.loads(self._run("docker", "image", "inspect", new_id))[0],
+                          image_env=spec.get("image_env", ()))
             want = want_hashes(spec["files"])
             check_files(want, self._hashes_in_image(new_id, sorted(want)), "built image for " + spec["container"])       # what is inside, not what went in
             for path in spec.get("executables", ()):
