@@ -422,7 +422,7 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False):
               "files, jobs, any work), "
     ask = (request + "never ask him to confirm it yourself and never say it is done: the app hears what he asks for, and "
            "when it has heard a request its own instruction tells you to ask him; ask then, briefly and naturally, "
-           "without repeating or describing his words. Otherwise explain briefly that the request has not reached your work runtime yet. " if page_asks else
+           "without repeating or describing his words. Otherwise say briefly that the request has not reached your work runtime yet and that typing it in the chat will; never tell him to say it more clearly. " if page_asks else
            request + "ask him briefly and naturally to confirm, for example \"Sure, just confirm for me\" or \"Shall I "
            "go ahead?\", without repeating or describing his words, and never say it is done. ")
     return (f"You are {name} ({short}) speaking by voice, not a separate companion. The realtime speech model has no "

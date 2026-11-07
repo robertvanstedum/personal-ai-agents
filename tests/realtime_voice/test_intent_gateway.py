@@ -267,3 +267,13 @@ def test_slow_contextual_yes_cannot_confirm_an_expired_request(ready):
     assert not worker.is_alive()
     assert results[0]['decision'] == 'chat' and results[0]['stale']
     assert len(r.turns) == 0
+
+
+def test_the_understanding_call_counts_a_work_card_or_a_send_as_work():
+    # Robert, 7 Nov 2026: five spoken requests for a work card were all heard as chat, and voice kept saying they had not arrived.
+    from core.realtime_voice.intent_gateway import system_message
+    words = system_message({"name": "Chief of Staff", "short": "CoS"}, "Robert", board=False)
+    assert "work card, task, action, reminder or record" in words
+    assert "send or pass something on to a named person or agent" in words
+    assert "which CoS does for him" in words
+    assert "Asking to talk to someone else is chat." in words

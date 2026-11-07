@@ -54,7 +54,9 @@ def system_message(person, owner=None, board=True):
             "note: he asks to make or save a note.\n"
             + ("postit: he asks to put a post-it on the Board.\n" if board else "") +
             f"consult: he asks {short} to do or check something only {short} can do: current facts, project state, "
-            f"files, jobs, a lookup, or any work. A request for anyone other than {short} is chat.\n"
+            f"files, jobs, a lookup, or any work. Making, changing or closing a work card, task, action, reminder or record "
+            f"is work, however he words it, and so is any request to send or pass something on to a named person or agent, "
+            f"such as 'send this to Ana', which {short} does for him. Asking to talk to someone else is chat.\n"
             "yes: he clearly confirms the exact pending request. He may restate that same request or explain why it is "
             "simple; that is still yes if the scope is unchanged. Without pending request words, only an unqualified "
             "confirmation is yes. Never infer consent from a question, negation or ambiguous wording.\n"
