@@ -80,7 +80,8 @@ TARGETS = {
     "partnership-tasks": dict(container="minimoi-partnership-tasks", repo="partnership-tasks", tier=1, base="cos", wait=DEFAULT_WAIT, rules=_TASKS,
                               layout=_TASKS_LAYOUT, smoke=_python("services.partnership_tasks.http_api"),
                               health="http://127.0.0.1:8772/healthz", down="under 1 minute"),
-    "cos-scheduler": dict(container="minimoi-cos-scheduler", repo="cos-scheduler", tier=2, base="cos", old="plan-20261105", wait=DEFAULT_WAIT, rules=_SCHEDULER, exclude=_BOTS_ONLY,
+    "cos-scheduler": dict(container="minimoi-cos-scheduler", repo="cos-scheduler", tier=2, base="cos", old="plan-20261105", wait=DEFAULT_WAIT,
+                          image_env=(("MINIMOI_COS_TO_MC", "1"), ("COS_TO_MC_URL", "http://minimoi-portal:5011/internal/mc/v1/from-cos")), rules=_SCHEDULER, exclude=_BOTS_ONLY,
                           layout=_SCHEDULER_LAYOUT, smoke=_python("core.model_routes", "domains.cos.model_route"),
                           health="http://127.0.0.1:8769/health", down="under 2 minutes; CoS refuses messages meanwhile"),
     "cos-agent-a": dict(container="minimoi-cos-agent-a", repo="cos-agent-a", tier=3, base="cos", old="plan-20261105d", wait=AGENT_WAIT, kind="node", build="cos",
@@ -91,6 +92,7 @@ TARGETS = {
                         always=(("docker/cos-agent-a/AGENTS.md", COS_DIR + "AGENTS.md"),), executables=(COS_DIR + "apply-config.sh",),
                         down="up to 11 minutes (gateway owner lease); CoS refuses messages meanwhile"),
     "portal": dict(container="minimoi-portal", repo="portal", tier=4, base="portal", old="route-roles-20261105g", wait=DEFAULT_WAIT,
+                   image_env=(("MINIMOI_COS_TO_MC", "1"),),
                    rules=_app("core/", "domains/guild/", "minimoi_portal/", "contracts/partnership/", "services/partnership_tasks/", "services/rooms_worker/",
                               "services/mc_operations/"),
                    exclude=_BOTS_ONLY, layout=("core/", "minimoi_portal/", "services/partnership_tasks/", "services/rooms_worker/"),
@@ -201,6 +203,8 @@ def dockerfile_for(spec: dict, base_id: str, user: str) -> str:
     if build == "mc":
         lines.append(f"RUN rm -rf {MC_DIR}persona {MC_DIR}handbook")
     lines.append("COPY ctx/ /")
+    # Compose stays image-only (only_images); a rollback to the old image takes the switch with it.
+    lines += [f"ENV {name}={value}" for name, value in spec.get("image_env", ())]
     if build == "mc":
         lines.append(f"RUN chmod 0755 {MC_DIR}start.sh && sh {MC_DIR}.beta-check-6c.sh && rm -f {MC_DIR}.beta-check-6c.sh")
         lines.append("LABEL minimoi.persona=0.1.26 minimoi.handbook=0.1.2")

@@ -500,8 +500,9 @@ def test_an_image_with_nothing_changed_is_skipped():
 
 
 def test_an_overlay_builds_on_the_exact_id_and_never_a_tag():
-    text = op.dockerfile_for(op.TARGETS["portal"], "sha256:abc", "")
+    text = op.dockerfile_for(op.TARGETS["german"], "sha256:abc", "")
     assert text == "FROM sha256:abc\nCOPY ctx/ /\n"
+    assert op.dockerfile_for(op.TARGETS["portal"], "sha256:abc", "") == "FROM sha256:abc\nCOPY ctx/ /\nENV MINIMOI_COS_TO_MC=1\n"
     with pytest.raises(AssertionError):
         op.dockerfile_for(op.TARGETS["portal"], "minimoi-staging/portal:route-roles-20261105g", "")
 
@@ -1333,3 +1334,10 @@ def test_mc_overlay_carries_the_plugin_that_marks_tool_starts():
     """Failover's tool evidence lives in this plugin; an overlay without it made every switch stop on doubt, live on Dev."""
     rules = dict(op.TARGETS["mc-agent"]["rules"])
     assert rules["services/mc_operations/plugins/minimoi-tools/"] == op.MC_DIR + "plugins/minimoi-tools/"
+
+
+def test_cos_to_mc_switch_lives_in_the_overlay_image_so_a_rollback_removes_it():
+    from scripts.staging import beta_dev_deploy as deploy
+    assert dict(deploy.TARGETS["portal"]["image_env"]) == {"MINIMOI_COS_TO_MC": "1"}
+    assert dict(deploy.TARGETS["cos-scheduler"]["image_env"])["MINIMOI_COS_TO_MC"] == "1"
+    assert all("image_env" not in spec for key, spec in deploy.TARGETS.items() if key not in ("portal", "cos-scheduler"))
