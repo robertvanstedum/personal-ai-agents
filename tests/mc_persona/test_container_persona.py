@@ -219,6 +219,24 @@ def test_0_1_26_says_english_gets_english_and_changes_nothing_else():
         assert sha((new / f).read_bytes()) == want, f
 
 
+def test_0_1_27_points_mc_at_the_delivery_record_and_changes_nothing_else():
+    new, old = RELEASES / "0.1.27", RELEASES / "0.1.26"
+    for f in ("SOUL.md", "RUNTIME.openclaw.md", "voice.json"):
+        assert (new / f).read_bytes() == (old / f).read_bytes()
+    agents, was = (new / "AGENTS.md").read_text().split("\n"), (old / "AGENTS.md").read_text().split("\n")
+    assert agents[0] == "# MC conversation contract — persona 0.1.27"
+    added = [line for line in agents[1:] if line not in was]
+    assert added == ["## What was delivered (Robert, 7 Nov)", added[1]]
+    assert "/minimoi/docs/delivery/DEV.md" in added[1] and "in production, on Dev only, or still open" in added[1]
+    section = "\n" + "\n".join(added) + "\n"
+    assert "\n".join(agents[1:]).replace(section, "", 1) == "\n".join(was[1:])
+    m, base = json.loads((new / "manifest.json").read_text()), json.loads((old / "manifest.json").read_text())
+    assert m["version"] == "0.1.27" and m["status"] == "candidate" and m["handbook"] == base["handbook"]
+    assert set(m["files"]) == set(base["files"]) and m["config_change"] is False
+    for f, want in m["files"].items():
+        assert sha((new / f).read_bytes()) == want, f
+
+
 def test_start_refuses_a_release_that_names_no_handbook(tmp_path):
     image = image_copy(tmp_path)
     m = json.loads((image / "persona/manifest.json").read_text())

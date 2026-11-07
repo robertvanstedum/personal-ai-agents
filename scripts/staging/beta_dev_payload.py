@@ -70,6 +70,20 @@ class Git:
         """Every commit in since..commit that touched this path."""
         return self._out("log", "--format=%H", f"{since}..{commit}", "--", path).decode().split()
 
+    def titles(self, since: str, commit: str, limit: int) -> list:
+        """[(short hash, title)] for since..commit, newest first, at most ``limit``."""
+        out = self._out("log", f"--max-count={limit}", "--format=%h%x09%s", f"{since}..{commit}").decode().splitlines()
+        return [tuple(line.split("\t", 1)) for line in out if "\t" in line]
+
+    def subject(self, commit: str) -> str:
+        return self._out("log", "-1", "--format=%s", commit).decode().strip()
+
+    def count(self, since: str, commit: str) -> int:
+        return int(self._out("rev-list", "--count", f"{since}..{commit}").decode().strip())
+
+    def branches(self, commit: str) -> list:
+        return self._out("for-each-ref", "--points-at", commit, "--format=%(refname:short)", "refs/heads").decode().split()
+
     def tree_hashes(self, commit: str, prefixes) -> dict:
         """{repo path: sha256} for files under these prefixes, read from the commit, written nowhere."""
         if not prefixes:
@@ -129,7 +143,20 @@ def build_meta(git, commit_ref: str, bases=None) -> tuple:
         layout = {("/app/" + p): h for p, h in tree_cache.items()
                   if p.startswith(tuple(spec.get("layout", ()) or ("\0",))) and p.endswith(D.TEXT) and "/data/" not in p and p not in mapping}
         targets[key] = {**out, "files": files, "layout_files": layout}
-    return {"release": D.RELEASE, "commit": commit, "bases": resolved, "oldest_accepted": git.rev(D.OLDEST_ACCEPTED), "targets": targets, "skipped": skipped}, blobs
+    return {"release": D.RELEASE, "commit": commit, "bases": resolved, "oldest_accepted": git.rev(D.OLDEST_ACCEPTED), "targets": targets, "skipped": skipped,
+            "delivery": delivery_meta(git, commit)}, blobs
+
+
+MAIN = "origin/main"                                # production deploys from main: what main lacks is on Dev only
+DELIVERY_TITLES = 40
+
+
+def delivery_meta(git, commit: str, main_ref: str = MAIN) -> dict:
+    """What MC and CoS read as Dev's delivery record: this commit, main as packaged, and the commits Dev has that main lacks."""
+    main = git.rev(main_ref)
+    titles = git.titles(main, commit, DELIVERY_TITLES)
+    return {"commit": commit, "title": git.subject(commit), "branches": git.branches(commit),
+            "main": main, "main_ref": main_ref, "ahead_of_main": git.count(main, commit), "titles": [list(t) for t in titles]}
 
 
 def make_tar(meta: dict, blobs: dict, operator_files: dict) -> bytes:

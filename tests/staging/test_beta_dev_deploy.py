@@ -441,7 +441,7 @@ scripts/staging/cos_plan_deploy.py
 scripts/vault/dev_cycle.py
 services/mc_operations/handbook/manifest.json
 services/mc_operations/handbook/v0.1.2/PROJECT.md
-services/mc_operations/personas/mc-chat/releases/0.1.26/AGENTS.md
+services/mc_operations/personas/mc-chat/releases/0.1.27/AGENTS.md
 services/model_gateway/litellm.prod.yaml
 services/model_gateway/litellm.staging.yaml
 services/partnership_tasks/service.py
@@ -479,7 +479,7 @@ def test_each_image_gets_its_own_paths():
 def test_mc_lays_out_its_persona_handbook_and_release_tools():
     mc = where("mc-agent")
     assert mc["docker/mc-agent-container/handbook.mjs"] == op.MC_DIR + "handbook.mjs"
-    assert mc["services/mc_operations/personas/mc-chat/releases/0.1.26/AGENTS.md"] == op.MC_DIR + "persona/AGENTS.md"
+    assert mc["services/mc_operations/personas/mc-chat/releases/0.1.27/AGENTS.md"] == op.MC_DIR + "persona/AGENTS.md"
     assert mc["services/mc_operations/handbook/manifest.json"] == op.MC_DIR + "handbook/manifest.json"
     assert mc["services/mc_operations/handbook/v0.1.2/PROJECT.md"] == op.MC_DIR + "handbook/v0.1.2/PROJECT.md"
     assert mc["scripts/ops/mc_container_security_test.py"] == "/opt/minimoi/mc-release/mc_container_security_test.py"
@@ -515,7 +515,7 @@ def test_mcs_overlay_replaces_persona_and_handbook_runs_check_6c_and_restores_it
     assert lines[0] == "FROM sha256:abc" and lines[1] == "USER root" and lines[-1] == "USER node"
     assert lines.index(f"RUN rm -rf {op.MC_DIR}persona {op.MC_DIR}handbook") < lines.index("COPY ctx/ /")
     assert any(".beta-check-6c.sh" in x and "chmod 0755" in x and "rm -f" in x for x in lines)
-    assert "minimoi.persona=0.1.26" in text and "minimoi.handbook=0.1.2" in text
+    assert "minimoi.persona=0.1.27" in text and "minimoi.handbook=0.1.2" in text
     assert "USER" not in op.dockerfile_for(op.TARGETS["mc-agent"], "sha256:abc", "")        # an image with no user set keeps none
 
 
@@ -531,11 +531,11 @@ def test_cos_overlay_reruns_role_then_handbook_as_its_dockerfile_does():
 
 def test_mc_overlay_matches_its_dockerfile_on_persona_and_handbook():
     dockerfile = (ROOT / "docker/mc-agent-container/Dockerfile").read_text()
-    assert "services/mc_operations/personas/mc-chat/releases/0.1.26/ /opt/minimoi/mc-agent/persona/" in dockerfile
+    assert "services/mc_operations/personas/mc-chat/releases/0.1.27/ /opt/minimoi/mc-agent/persona/" in dockerfile
     assert "services/mc_operations/handbook/manifest.json /opt/minimoi/mc-agent/handbook/manifest.json" in dockerfile
     assert "services/mc_operations/handbook/v0.1.2/ /opt/minimoi/mc-agent/handbook/v0.1.2/" in dockerfile
-    assert "minimoi.persona=0.1.26" in dockerfile and "minimoi.handbook=0.1.2" in dockerfile
-    assert op.PERSONA == "services/mc_operations/personas/mc-chat/releases/0.1.26/"
+    assert "minimoi.persona=0.1.27" in dockerfile and "minimoi.handbook=0.1.2" in dockerfile
+    assert op.PERSONA == "services/mc_operations/personas/mc-chat/releases/0.1.27/"
 
 
 def test_a_build_context_has_exact_modes_and_open_folders(tmp_path):
@@ -671,6 +671,18 @@ class _FakeGit:
 
     def tree_hashes(self, commit, prefixes):
         return {"minimoi_portal/app.py": "1" * 64, "minimoi_portal/other.py": "2" * 64, "minimoi_portal/data/x.json": "3" * 64, "minimoi_portal/logo.png": "4" * 64}
+
+    def titles(self, since, commit, limit):
+        return [("hhhhhhh", "Guild opens your last chat"), ("ggggggg", "Work cards use plain words")][:limit]
+
+    def subject(self, commit):
+        return "Guild opens your last chat"
+
+    def count(self, since, commit):
+        return 2
+
+    def branches(self, commit):
+        return ["claude/beta-final"]
 
 
 BASES = {"portal": "b", "cos": "b", "domains": "b", "records": "b", "board": "b"}
@@ -1384,3 +1396,63 @@ def test_a_scheduled_jobs_container_is_not_an_unrelated_change():
     assert not "postgres-ai-agents".startswith(op.SHORT_LIVED)
     source = open(op.__file__).read()
     assert "not k.startswith(SHORT_LIVED)" in source.split("def _others(self):", 1)[1].split("# swap", 1)[0]
+
+
+# ── Dev's delivery record ──
+
+def test_the_payload_says_which_commits_dev_has_that_main_lacks():
+    meta, _ = pay.build_meta(_FakeGit(CHANGED), "head", BASES)
+    d = meta["delivery"]
+    assert d["commit"] == "H" * 40 and d["main"] == "B" * 40 and d["main_ref"] == "origin/main" and d["ahead_of_main"] == 2
+    assert d["titles"] == [["hhhhhhh", "Guild opens your last chat"], ["ggggggg", "Work cards use plain words"]]
+    assert d["branches"] == ["claude/beta-final"] and d["title"] == "Guild opens your last chat"
+
+
+def test_the_record_names_release_commit_and_what_is_dev_only():
+    meta, _ = pay.build_meta(_FakeGit(CHANGED), "head", BASES)
+    text, doc = op.delivery_record(meta, "deployed", 1794072717.0)
+    assert f"release `{op.RELEASE}` deployed and verified" in text and "`HHHHHHHH` on `claude/beta-final`" in text
+    assert "## On Dev, not yet on main (2 commits, newest first)" in text and "- `hhhhhhh` Guild opens your last chat" in text
+    assert "Merged to main means production" in text and "**Still open:** not in this record" in text
+    assert doc["status"] == "deployed" and doc["ahead_of_main"] == 2
+
+
+def test_a_rolled_back_record_never_lists_commits_as_on_dev():
+    meta, _ = pay.build_meta(_FakeGit(CHANGED), "head", BASES)
+    text, doc = op.delivery_record(meta, "rolled_back", 1794072717.0)
+    assert "was rolled back" in text and "nothing listed below is on Dev now" in text and "not yet on main" not in text
+    with pytest.raises(AssertionError):
+        op.delivery_record(meta, "half done", 1.0)
+
+
+def test_a_record_from_an_older_payload_still_says_what_it_knows():
+    text, _ = op.delivery_record({"release": "r", "commit": "C" * 40}, "deployed", 1.0)
+    assert "`CCCCCCCC`" in text and "not yet on main" not in text
+
+
+def test_only_a_verified_result_writes_the_record_and_a_failed_write_changes_nothing_live():
+    host = Host()
+    deploy(host).apply()
+    assert host.calls[-1] == "write_delivery"
+    host = Host(verify_new=True)
+    with pytest.raises(Boom):
+        deploy(host).apply()
+    assert "write_delivery" not in host.calls
+    host = Host(verify_workers=True)
+    with pytest.raises(Boom):
+        deploy(host).apply()
+    assert host.calls.count("write_delivery") == 1          # the rollback's own, never "deployed"
+    host = Host(write_delivery=True)
+    assert deploy(host).apply() is gs.Outcome.APPLIED
+    assert host.records["delivery_record_failed"] == {"status": "deployed", "exception": "Boom"}
+
+
+def test_end_to_end_the_record_is_written_read_only_beside_a_history(rig):
+    rig.deploy.apply()
+    d = rig.root / op.DELIVERY_DIR
+    text = (d / "DEV.md").read_text()
+    assert "deployed and verified" in text and json.loads((d / "DEV.json").read_text())["release"] == op.RELEASE
+    assert oct((d / "DEV.md").stat().st_mode & 0o777) == "0o644" and oct(d.stat().st_mode & 0o777) == "0o755"
+    rig.deploy.rollback()
+    assert "was rolled back" in (d / "DEV.md").read_text()
+    assert [json.loads(x)["status"] for x in (d / "history.jsonl").read_text().splitlines()] == ["deployed", "rolled_back"]

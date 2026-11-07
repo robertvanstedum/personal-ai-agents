@@ -42,7 +42,7 @@ BASES = {"portal": "8481940d", "cos": "8481940d", "domains": "8481940d", "record
 OLDEST_ACCEPTED = "8481940d"                         # A live file may be any committed version since here: never a hand edit.
 
 MC_DIR, COS_DIR, PLUGINS = "/opt/minimoi/mc-agent/", "/opt/minimoi/cos-agent-a/", "/opt/minimoi/openclaw-plugins/"
-HANDBOOK, PERSONA = "services/mc_operations/handbook/", "services/mc_operations/personas/mc-chat/releases/0.1.26/"
+HANDBOOK, PERSONA = "services/mc_operations/handbook/", "services/mc_operations/personas/mc-chat/releases/0.1.27/"
 VOICE_JS = "core/realtime_voice/static/realtime-voice-controller.js"
 TEXT = (".py", ".js", ".mjs", ".cjs", ".json", ".html", ".css")
 
@@ -143,6 +143,49 @@ class Refused(RuntimeError):
     """Stopped before anything live changed."""
 
 
+# ── Dev's delivery record: what MC and CoS read for "what was delivered?" ──
+# Written under <root>/docs/delivery, which both see at /minimoi/docs/delivery. Root owns it, 0755 and 0644: they read it, never
+# write it. Only a verified deploy or a verified rollback writes it, so it never claims what Dev does not run.
+
+DELIVERY_DIR = "docs/delivery"
+
+
+def _utc(at: float) -> str:
+    return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(at))
+
+
+def delivery_record(meta: dict, status: str, at: float) -> tuple:
+    """(DEV.md text, DEV.json doc) for a verified ``deployed`` or ``rolled_back``."""
+    assert status in ("deployed", "rolled_back"), status
+    d = meta.get("delivery") or {}
+    commit, main = meta["commit"], d.get("main")
+    doc = {"at": at, "status": status, "release": meta["release"], "commit": commit, "title": d.get("title", ""),
+           "branches": d.get("branches", []), "main": main, "ahead_of_main": d.get("ahead_of_main"), "titles": d.get("titles", [])}
+    rel, short = meta["release"], commit[:8]
+    lines = ["# What is on Dev (dev.minimoi.ai)", "",
+             f"Written by Dev's deploy at {_utc(at)}, after it verified the result. A platform record: read it, never edit it.", ""]
+    if status == "deployed":
+        lines += [f"- **State:** release `{rel}` deployed and verified on Dev.",
+                  f"- **Commit:** `{short}`{' on `' + ', '.join(doc['branches']) + '`' if doc['branches'] else ''}: {doc['title']}"]
+    else:
+        lines += [f"- **State:** release `{rel}` (commit `{short}`) was rolled back. Dev runs what it ran before it; nothing listed below is on Dev now."]
+    if main:
+        lines += [f"- **Production:** production deploys from `main`, which was `{main[:8]}` when this release was packaged. "
+                  "Merged to main means production; this record does not read production."]
+    if status == "deployed" and main:
+        n = doc["ahead_of_main"] or 0
+        lines += ["", f"## On Dev, not yet on main ({n} commit{'s' if n != 1 else ''}, newest first)", ""]
+        lines += [f"- `{h}` {s}" for h, s in doc["titles"]] or ["- None: Dev runs what main holds."]
+        if n > len(doc["titles"]):
+            lines += [f"- and {n - len(doc['titles'])} older"]
+    lines += ["", "## Answering \"what was delivered?\"", "",
+              "- **In production:** what is merged to `main`. Check GitHub's main branch for merges.",
+              "- **On Dev only:** the list above. Built and verified on Dev, waiting for Robert's go before it reaches main.",
+              "- **Still open:** not in this record. Say so, and use the planning record or ask Robert.",
+              "- Each Dev deploy rewrites this file; `history.jsonl` beside it keeps one line per deploy or rollback.", ""]
+    return "\n".join(lines), doc
+
+
 # ── Pure checks, tested without a host ──
 
 def refuse_production(path) -> None:
@@ -211,7 +254,7 @@ def dockerfile_for(spec: dict, base_id: str, user: str) -> str:
     lines += [f"ENV {name}={value}" for name, value in spec.get("image_env", ())]
     if build == "mc":
         lines.append(f"RUN chmod 0755 {MC_DIR}start.sh && sh {MC_DIR}.beta-check-6c.sh && rm -f {MC_DIR}.beta-check-6c.sh")
-        lines.append("LABEL minimoi.persona=0.1.26 minimoi.handbook=0.1.2")
+        lines.append("LABEL minimoi.persona=0.1.27 minimoi.handbook=0.1.2")
     if build == "cos":
         lines.append(f"RUN node {COS_DIR}build-mc-role.mjs {COS_DIR}AGENTS.md {COS_DIR}owner-role {COS_DIR}mc-role-lock.json {COS_DIR}AGENTS.md {COS_DIR}ROLE_LOAD.json")
         lines.append(f"RUN node {COS_DIR}build-mc-handbook.mjs {COS_DIR}AGENTS.md {COS_DIR}handbook {COS_DIR}AGENTS.md {COS_DIR}ROLE_LOAD.json")
@@ -579,6 +622,7 @@ class Deploy:
                 h.record("rollback_after_worker_failure_failed", {"exception": type(rollback_exc).__name__})
             raise
         h.record("result", {"status": "deployed_verified"})
+        self._deliver("deployed")
         return outcome
 
     def rollback(self):
@@ -590,7 +634,15 @@ class Deploy:
         outcome = self._swap(lambda gate: h.restore_verified(gate), no_second_try)
         h.verify_restored_workers()
         h.record("result", {"status": "rolled_back_verified"})
+        self._deliver("rolled_back")
         return outcome
+
+    def _deliver(self, status):
+        """The record follows a verified result. A failure to write it is journalled and changes nothing live."""
+        try:
+            self.host.write_delivery(status)
+        except Exception as exc:
+            self.host.record("delivery_record_failed", {"status": status, "exception": type(exc).__name__})
 
     def _swap(self, forward, restore):
         h = self.host
@@ -927,6 +979,30 @@ class RealHost:                                     # pragma: no cover  (exercis
         os.chmod(tmp, stat.st_mode & 0o777)
         os.chown(tmp, stat.st_uid, stat.st_gid)
         os.replace(tmp, path)
+
+    def write_delivery(self, status):
+        d = self.R / DELIVERY_DIR
+        refuse_production(d)
+        text, doc = delivery_record(self.meta, status, time.time())
+        d.mkdir(parents=True, exist_ok=True)
+        root = os.geteuid() == 0
+        os.chmod(d, 0o755)
+        if root:
+            os.chown(d, 0, 0)
+        for name, body in (("DEV.md", text), ("DEV.json", json.dumps(doc, indent=2) + "\n")):
+            tmp = d / (name + ".tmp")
+            tmp.write_text(body)
+            os.chmod(tmp, 0o644)
+            if root:
+                os.chown(tmp, 0, 0)
+            os.replace(tmp, d / name)
+        history = d / "history.jsonl"
+        with history.open("a") as f:
+            f.write(json.dumps({k: doc[k] for k in ("at", "status", "release", "commit", "main")}) + "\n")
+        os.chmod(history, 0o644)
+        if root:
+            os.chown(history, 0, 0)
+        self.record("delivery_record", {"status": status, "path": str(d / "DEV.md")})
 
     def write_new(self):
         for wrapper, override in self.OVERRIDES.items():

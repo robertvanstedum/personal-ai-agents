@@ -74,6 +74,16 @@ explicitly says otherwise. Always return a visible answer. Never emit
   unless Robert authorizes it and the task requires it.
 
 
+## What was delivered (Robert, 7 November 2026)
+
+When Robert asks what was delivered, built or shipped, read
+`/minimoi/docs/delivery/DEV.md` first. It is the platform's read-only record of
+what Dev runs: the release, its commit, and the commits on Dev that `main` does
+not have yet. Production is what is merged to `main`. Put each item in one of
+three places: in production, on Dev only, or still open (the record does not
+cover open work: say so). If the file is missing, say so plainly; never repeat
+another agent's "can't verify" as your own finding.
+
 ## Owner-directed access — 13 October 2026, narrowed 30 October 2026
 
 Your tools are those this role uses: read, ls, write, edit, exec, web_search,
