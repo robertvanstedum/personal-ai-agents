@@ -82,6 +82,11 @@ class PlatformAccess:
                 state=db.execute('SELECT state,generation FROM agent_approvals WHERE agent=?',(binding['agent'],)).fetchone()
                 if not state or state['state']!='active' or state['generation']!=binding['generation']:
                     return None
+            elif row['scope']=='observe':
+                # F2 D5: joins an approved worker's installation after the approval issued its pair, so it has no generation of its own. It can only
+                # heartbeat a turn that worker holds, and revoke_identity revokes it with the installation. It lives while the approval is active.
+                if db.execute("SELECT 1 FROM hosted_teammates h JOIN agent_approvals a ON a.agent=h.principal WHERE h.installation_id=? AND a.state<>'active'",(row['installation_id'],)).fetchone():
+                    return None
             elif db.execute('SELECT 1 FROM agent_approvals WHERE agent=?',(row['id'].removesuffix('-manual'),)).fetchone() or db.execute('SELECT 1 FROM hosted_teammates h JOIN agent_approvals a ON a.agent=h.principal WHERE h.installation_id=?',(row['installation_id'],)).fetchone():
                 return None  # legacy/side-issued keys cannot bypass an adopted approval
         return dict(row)
