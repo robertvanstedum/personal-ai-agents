@@ -47,7 +47,7 @@ export const ACTIONS_SPEC = {
 
 export const TASKS_SPEC = {
   name: 'cos_tasks', label: 'CoS Tasks',
-  description: 'Propose tracked work from what Robert asked in this conversation, or check a task. propose: give the outcome, lead and holder (mc) and done_when; it records your proposal only. Nothing starts until Robert confirms it in his task view, so say exactly that and never claim the task started. One proposal per Robert message. status: give a task_id to read its state. In a meeting you can only use status.',
+  description: 'Propose tracked work from what Robert asked in this conversation, or check a task. propose: give the outcome and done_when; MC leads and holds it, so lead and holder are optional and can only be mc. It records your proposal only. Nothing starts until Robert confirms it in his task view, so say exactly that and never claim the task started. One proposal per Robert message. status: give a task_id to read its state. In a meeting you can only use status.',
   parameters: {type: 'object', additionalProperties: false, required: ['operation'], properties: {
     operation: {type: 'string', enum: ['propose', 'status']},
     outcome: {type: 'string', maxLength: 500}, done_when: {type: 'string', maxLength: 500},

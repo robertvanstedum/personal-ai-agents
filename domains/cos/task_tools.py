@@ -23,8 +23,9 @@ from services.partnership_tasks.client import TaskServiceUnavailable, command
 
 SCHEMA = "minimoi.cos.tasks_tool/1"
 ARGS = {"propose": {"outcome", "lead", "holder", "done_when"}, "status": {"task_id"}}
-REQUIRED = {"propose": {"outcome", "lead", "holder", "done_when"}, "status": {"task_id"}}
+REQUIRED = {"propose": {"outcome", "done_when"}, "status": {"task_id"}}
 EXECUTOR_SEATS = frozenset({"mc"})          # leads/holders CoS may propose in B4; MC delegates further
+DEFAULT_SEAT = "mc"                         # the only seat there is, so leaving lead or holder out says the same thing
 RUNTIME = {"kind": "model", "model": None, "provider": "openclaw", "build": "cos-bound/1", "config_version": None}
 
 
@@ -42,7 +43,9 @@ class CosTaskTools:
         if op not in ARGS:
             return _refuse(400, "invalid_operation")
         if not isinstance(args, dict) or set(args) - ARGS[op] or REQUIRED[op] - set(args):
-            return _refuse(422, "unexpected_or_missing_fields", allowed=sorted(ARGS[op]))
+            given = set(args) if isinstance(args, dict) else set()
+            return _refuse(422, "unexpected_or_missing_fields", allowed=sorted(ARGS[op]),
+                           required=sorted(REQUIRED[op]), missing=sorted(REQUIRED[op] - given))
         if op == "propose":
             if binding.scope != "owner":
                 return _refuse(403, "scope_read_only")
@@ -56,7 +59,8 @@ class CosTaskTools:
         for key in ("outcome", "done_when"):
             if not isinstance(args[key], str) or not args[key].strip() or len(args[key]) > 500:
                 return _refuse(422, "invalid", field=key)
-        if args["lead"] not in EXECUTOR_SEATS or args["holder"] not in EXECUTOR_SEATS:
+        lead, holder = args.get("lead", DEFAULT_SEAT), args.get("holder", DEFAULT_SEAT)
+        if lead not in EXECUTOR_SEATS or holder not in EXECUTOR_SEATS:
             return _refuse(422, "lead_and_holder_must_be", seats=sorted(EXECUTOR_SEATS))
         turn = self.history.turn(ref["conversation_id"], ref["turn_id"])
         if turn is None or not isinstance(turn.get("user_text"), str) or not turn["user_text"].strip():
@@ -71,7 +75,7 @@ class CosTaskTools:
                              session_id=binding.turn_id)
         proposed = {"outcome": args["outcome"].strip(), "scope": self.scope, "recipients": ["principal"],
                     "continuing": True,
-                    "task": {"lead": args["lead"], "holder": args["holder"], "outcome": args["outcome"].strip(),
+                    "task": {"lead": lead, "holder": holder, "outcome": args["outcome"].strip(),
                              "done_when": args["done_when"].strip(), "return_window": None}}
         interp_cmd = command("interpretation.record", "interpretation", iid,
                              {"source_event_ids": [sid], "correction_event_ids": [], "proposed": proposed,
