@@ -121,7 +121,7 @@
       <p class="msg-text">{{ state.notes.text }}</p>
     </li>
     {% else %}
-    {% if page_id == 'floor' and not embedded and not state.notes.recent %}{# Review 06: a new, empty conversation opens on the workshop's card; it is the first thing in the thread and scrolls away with it. The greeting follows the viewer's clock (floorlayout.js). #}
+    {% if page_id == 'floor' and not state.notes.recent %}{# Beside CoS too (Robert, 7 Nov: a new chat there was a blank page). Review 06: a new, empty conversation opens on the workshop's card; it is the first thing in the thread and scrolls away with it. The greeting follows the viewer's clock (floorlayout.js). #}
     <li class="craft-hero" data-craft-hero>
       <div class="craft-hero-copy"><p class="craft-eyebrow">The Workshop</p><h2 data-greeting data-name="{{ (user.display_name if user and user.display_name else '') }}">Hello{{ (', ' ~ user.display_name) if user and user.display_name else '' }}.</h2><p>Ask, plan or build with the {{ mc_name }}.</p></div>
       <div class="craft-hero-ph" aria-hidden="true"></div>

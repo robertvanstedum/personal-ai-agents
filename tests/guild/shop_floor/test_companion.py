@@ -83,3 +83,11 @@ voiceRestartBlocked=true;handler({detail:{waitUntil:p=>wait=p}});await Promise.r
 assert.deepEqual(calls.slice(0,2),['dictation:companion_opened','voice:companion_opened']);})().catch(e=>{console.error(e);process.exitCode=1});
 '''
     subprocess.run(['node','-e',harness],check=True,capture_output=True,text=True)
+
+
+def test_a_new_chat_beside_cos_opens_on_the_workshop_greeting_like_the_full_page(host):
+    """Robert, 7 Nov: a new MC chat in the side pane was a blank page; the full page greets him."""
+    client = host.owner()
+    normal, embedded = client.get('/guild-next/guild/build'), client.get('/guild-next/guild/companion/cos')
+    for page in (normal, embedded):
+        assert 'data-craft-hero' in page.text and 'Ask, plan or build with the' in page.text

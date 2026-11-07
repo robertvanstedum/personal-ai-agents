@@ -21,3 +21,8 @@ body.gu[data-mc-embed] .hero-sub { margin:4px 0 0; font-size:var(--gu-size-sm); 
 
 /* Keep optional transcript inside the scrollable dock, not outside the clipped frame. */
 body.gu[data-mc-embed] [data-mc-voice-transcript-text] { max-height:20dvh; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; }
+
+/* A new chat beside CoS opens on the workshop's greeting, compact and without its picture, like the full page. */
+body.gu[data-mc-embed] .mc-thread>.craft-hero { display:block; margin:0; padding:16px 18px; background:none; box-shadow:none; }
+body.gu[data-mc-embed] .craft-hero-ph { display:none; }
+body.gu[data-mc-embed] .craft-hero h2 { font:400 24px/1.2 var(--r6-serif, serif); margin:4px 0 6px; }

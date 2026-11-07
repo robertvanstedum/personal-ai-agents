@@ -1554,6 +1554,8 @@ export function initRooms(p) {
   if (agentsBox) agentsBox.addEventListener('toggle', () => { if (agentsBox.open) loadAgents(); });
   const accessBox = $('[data-rm-access]');
   if (accessBox) accessBox.addEventListener('click', (e) => { const b = e.target.closest('[data-rm-access-toggle]'); if (b) toggleAccess(b); });
+  // Back on the tab: read the room at once, not at the next 15-second poll (hidden tabs do not poll) (Robert, 7 Nov).
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && current && !signedOut) loadRoom(current); });
   poll = window.setInterval(() => { if (!document.hidden && current && !signedOut) { if (handoffOpen.has(current)) reportHandoffs(current); loadRoom(current); const a=$('[data-rm-agents]'); if (a && a.open && !a.contains(document.activeElement)) loadAgents(); } }, 15000);
 }
 

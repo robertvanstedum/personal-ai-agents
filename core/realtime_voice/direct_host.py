@@ -1313,6 +1313,11 @@ class DirectSessions(ConsultLedger):
                             "heard": label if label in (*LABELS, "end") else "chat"}
                 meta["decided"][item] = decision
                 meta["last_place"] = item_place(item)
+                # One line per decision, never his words, so a voice fault can be proved from the log (Robert, 7 Nov:
+                # "Nothing's waiting" after each confirm, with no record of why).
+                log.info("%s direct voice decision: %s heard=%s waiting=%s reason=%s kind=%s",
+                         self._adapter.person["domain"], decision.get("decision"), decision.get("heard"), waiting or "-",
+                         decision.get("reason", "-"), decision.get("kind", "-"))
                 return dict(decision)
 
     def _apply(self, meta, item, text, label, tool_of):

@@ -238,3 +238,10 @@ def test_recipient_selection_send_and_round_recovery():
         pytest.skip("Node is required for executable UI checks")
     result = subprocess.run([node, "-e", SCRIPT, str(JS)], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
+
+
+def test_guildhall_reads_the_room_at_once_when_its_tab_shows_again():
+    """Hidden tabs skip the 15-second poll; coming back reads the room at once (Robert, 7 Nov)."""
+    from pathlib import Path
+    js = (Path(__file__).resolve().parents[3] / "minimoi_portal/guild_ui/static/js/rooms.js").read_text()
+    assert "document.addEventListener('visibilitychange', () => { if (!document.hidden && current && !signedOut) loadRoom(current); });" in js

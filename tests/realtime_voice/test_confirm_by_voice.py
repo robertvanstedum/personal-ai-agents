@@ -668,3 +668,14 @@ def test_s6_where_the_page_asks_the_voice_never_asks_itself_and_where_it_answers
         assert "never ask him to confirm it yourself" not in text and "Shall I go ahead?" in text
         if h.kind == "CoS":
             assert "ask Robert briefly to confirm" in text
+
+
+def test_each_decision_is_logged_in_one_line_without_his_words(host, caplog):
+    """Robert, 7 Nov: "Nothing's waiting" after each confirm, and no record of why. Now the log says, never his words."""
+    import logging
+    caplog.set_level(logging.INFO)
+    sid = host.start()
+    utter(host, sid, "t1", REQUEST[host.kind] + ". Yes.")
+    lines = [r.getMessage() for r in caplog.records if "direct voice decision:" in r.getMessage()]
+    assert lines and "dropped" in lines[-1] and "reason=folded" in lines[-1]
+    assert REQUEST[host.kind] not in "\n".join(lines)

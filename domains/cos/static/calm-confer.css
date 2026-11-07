@@ -38,15 +38,13 @@
 .founders-cos #confer-picture-dialog{inset:0;margin:auto;width:fit-content;height:fit-content;max-width:94vw;max-height:94dvh;border:0;border-radius:12px;padding:16px;background:#faf7f0;overflow:auto}
 .founders-cos #confer-picture-dialog header{margin-bottom:12px}
 .founders-cos #confer-picture-dialog img{display:block;max-width:85vw;max-height:76dvh;object-fit:contain}
-/* Opening MC must not implicitly hide the selected photograph. */
+/* Side by side the conversation has the column to itself: the picture steps aside while MC is open and returns when it
+   closes; the saved Picture choice is not changed (Robert, 7 Nov: the picture moved to the top and should disappear). */
 .founders-cos[data-cos-tab=confer].both-open .tab-layout-split{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
-.founders-cos.both-open .confer-workspace{grid-template-columns:minmax(0,1fr);grid-template-rows:clamp(64px,20dvh,150px) minmax(0,1fr)}
-.founders-cos.both-open .confer-picture{grid-row:1;border-left:0;border-bottom:1px solid var(--line);padding:8px}
-.founders-cos.both-open .confer-picture img{max-height:clamp(48px,calc(20dvh - 16px),130px)}
-.founders-cos.both-open .confer-picture-link{display:none}
-.founders-cos.both-open .confer-chat{grid-row:2}
-.founders-cos.both-open[data-picture=hidden] .confer-workspace{grid-template-rows:minmax(0,1fr)}
-.founders-cos.both-open[data-picture=hidden] .confer-chat{grid-row:1}
+.founders-cos.both-open .confer-workspace{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+.founders-cos.both-open .confer-picture{display:none}
+.founders-cos.both-open .confer-chat{grid-row:1}
+.founders-cos.both-open #picture-mode{display:none}
 @media(max-width:1000px){
  .founders-cos .confer-workspace{grid-template-columns:minmax(0,1fr) 220px}
  .founders-cos[data-cos-tab=confer] .conv-head{padding:0 14px}
