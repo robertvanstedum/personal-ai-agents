@@ -24,3 +24,9 @@ def test_both_test_jobs_give_the_database_tests_a_throwaway_postgres():
         # The fixture (tests/minimoi_actions/postgres_fixture_support.py) refuses all but a local mc12_test_* database.
         assert dsn["dbname"].startswith("mc12_test_") and dsn["dbname"] == postgres["env"]["POSTGRES_DB"], workflow
         assert dsn["host"] == "127.0.0.1" and str(postgres["ports"][0]) == f"{dsn['port']}:5432", workflow
+
+
+def test_the_whole_suite_has_the_disk_its_reserves_need():
+    for workflow in ("deploy.yml", "nightly-tests.yml"):
+        text = (Path(__file__).resolve().parents[1] / ".github/workflows" / workflow).read_text()
+        assert text.index("name: Free runner disk") < text.index("name: Install test dependencies"), workflow

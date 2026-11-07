@@ -98,6 +98,12 @@ jobs:
         with:
           python-version: '3.11'
 
+      # Some tests need 5 GB free (their own reserves), and a hosted runner sometimes has less: 2 of 3 runs failed that way, 7 Nov.
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
       - name: Install test dependencies
         run: |
           pip install -r requirements.test.txt
