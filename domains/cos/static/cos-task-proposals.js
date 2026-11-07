@@ -54,11 +54,13 @@ function card(a) {
     article.append(h('p', {}, 'This proposal is incomplete. It cannot be confirmed here.'));
     return article;
   }
+  // Plain words on the card; what is confirmed stays exactly what the proposal holds (Robert, 7 Nov).
+  const who = (id) => ({ mc: 'Master Craftsman', cos: 'Chief of Staff', principal: 'You', owner: 'You', robert: 'You' })[String(id).toLowerCase()] || id;
   const fields = [
     ...(p.outcome && p.outcome !== t.outcome ? [['Request', p.outcome]] : []),
-    ['Lead', t.lead], ['Next step', t.holder], ['Done when', t.done_when],
+    ['Lead', who(t.lead)], ['Next step with', who(t.holder)], ['Done when', t.done_when],
     ['Return window', t.return_window == null ? 'Not set' : JSON.stringify(t.return_window)],
-    ['Scope', p.scope], ['Recipients', (p.recipients || []).join(', ')],
+    ['Scope', p.scope], ['Goes to', (p.recipients || []).map(who).join(', ')],
     ['Continuing work', p.continuing ? 'Yes' : 'No']];
   for (const [label, value] of fields) if (value != null && value !== '')
     article.append(h('p', {}, h('strong', {}, label + ': '), String(value)));

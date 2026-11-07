@@ -91,3 +91,11 @@ def test_full_reader_download_and_relative_links(staging, tmp_path, monkeypatch)
     assert download.mimetype == "text/markdown" and download.get_data(as_text=True) == source
     for client in (staging.guest(), staging.client()):
         assert client.get(url + "&download=md").status_code in (302, 403)
+
+
+def test_a_meetings_working_chats_stay_out_of_the_chat_list(tmp_path):
+    # Robert, 7 Nov 2026: each meeting turn's working conversation filled MC's list; meetings stay in Guildhall.
+    from minimoi_portal.guild_ui.conversations import MEETING_TITLE
+    from minimoi_portal.guild_ui.mc_rooms_bridge import __file__ as bridge
+    assert MEETING_TITLE == "Guildhall · "
+    assert "(MEETING_TITLE + turn['brief']['title'])" in open(bridge, encoding="utf-8").read()

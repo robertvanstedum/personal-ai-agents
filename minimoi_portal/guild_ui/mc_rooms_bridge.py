@@ -93,13 +93,13 @@ class Bridge:
         return turn if snapshot else None
 
     def _prepare(self, turn, operation):
-        from .conversations import conversations_of, session_conversation_id
+        from .conversations import MEETING_TITLE, conversations_of, session_conversation_id
         from .stores import Author
         from .payment_scrub import scrub
         conversations = conversations_of(self.services)
         conv, _ = conversations.create(self.principal, key=operation)
         conversations.rename(conv['id'], self.principal,
-                             ('Guildhall · ' + turn['brief']['title'])[:120])
+                             (MEETING_TITLE + turn['brief']['title'])[:120])
         floor = self.services.floor.for_floor(conv['notes_floor'])
         note_id = operation + '-owner'
         # Exactly the owner's command, not attributed transcript or standing brief.

@@ -134,7 +134,8 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
         label = workspace.get("short_label", workspace["label"])
         active = prefixes.get(workspace["key"]) == portal_prefix
         nav_links.append(
-            f'<a href="{workspace["path"]}" '
+            # Guild opens his chat; its welcome page stays behind the Guild mark (Robert, 7 Nov 2026).
+            f'<a href="{"/guild-next/guild/build" if workspace["key"] == "guild" else workspace["path"]}" '
             f'class="portal-workspace-link{" is-active" if active else ""}" '
             f'style="color:{"#ffffff" if active else "rgba(247,240,228,.8)"};text-decoration:none;'
             f'display:inline-flex;align-items:center;height:100%;padding-top:2px;'

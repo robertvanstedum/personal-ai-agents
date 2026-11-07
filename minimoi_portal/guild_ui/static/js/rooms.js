@@ -368,8 +368,10 @@ function renderDetails() {
     parts.push(el('p', {class:'small'}, archiveSnapshot.archived_at ? 'Archived from the Active list. The record is kept.' : 'An idle conversation can be archived after 30 days. The record is kept; pending work blocks archive.'));
     parts.push(el('button', {type:'button',class:'rm-btn','data-rm-archive-action':archiveSnapshot.archived_at ? 'restore':'archive'}, archiveSnapshot.archived_at ? 'Restore to Active':'Archive if idle'));
   }
-  parts.push(el('a', { href: `${cfg.api}/v1/rooms/${encodeURIComponent(room.id)}/export?format=markdown` }, 'Download the transcript (Markdown)'));
   box.replaceChildren(...parts);
+  const transcript = $('[data-rm-transcript]');
+  transcript.href = `${cfg.api}/v1/rooms/${encodeURIComponent(room.id)}/export?format=markdown`;
+  transcript.hidden = false;
 }
 
 async function loadRoom(id) {
@@ -404,7 +406,9 @@ async function loadAll({keepCurrent=false}={}) {
   $('[data-rm-blocked]').hidden = true;
   rooms = r.body.rooms || [];
   const wanted = new URLSearchParams(window.location.search).get('room');
-  current = keepCurrent && current ? current : wanted || null;
+  // Coming back opens the meeting he was in; the welcome page is for when there is none to return to (Robert, 7 Nov).
+  const last = selectedView === 'active' ? store.get(`${page.storage_ns}.rooms.last`) : null;
+  current = keepCurrent && current ? current : wanted || (rooms.some((r) => r.id === last) ? last : null);
   listPage = Math.floor(Math.max(0, rooms.findIndex((r) => r.id === current)) / ROOMS_PER_PAGE);
   renderList();
   if (current) {
@@ -899,6 +903,7 @@ function participantState(p) {
   if ((meeting?.turns || []).some(t => t.addressee === p.id && t.state === 'uncertain')) return p.waiting ? 'Waiting · reply outcome unknown' : 'Reply outcome unknown';
   if (p.waiting) return 'Waiting';
   if (active.length) return 'Queued';
+  if (p.rsvp === 'no_response') return 'Invite timed out: no answer, it may not be connected here';
   if (p.rsvp !== 'accepted') return p.rsvp === 'invited' ? 'Invited' : 'Not joined';
   return ['here','reachable','answering'].includes(p.reach?.state) ? 'Available' : 'Not reachable';
 }

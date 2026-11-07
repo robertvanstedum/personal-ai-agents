@@ -44,6 +44,9 @@ def local_day() -> str:
 
 
 
+MEETING_TITLE = "Guildhall · "       # mc_rooms_bridge: the working conversation behind one meeting turn (Robert, 7 Nov 2026)
+
+
 class ConversationStoreUnavailable(RuntimeError):
     """The conversations folder cannot be read or written."""
 
@@ -225,7 +228,8 @@ class ConversationStore:
         """Newest first, pinned on top; archived ones only in the Archive view."""
         with self._lock():
             self._migrate(principal)
-            rows = [c for c in self._all() if c.get("principal") == principal and bool(c.get("archived")) == archived]
+            rows = [c for c in self._all() if c.get("principal") == principal and bool(c.get("archived")) == archived
+                    and not str(c.get("title") or "").startswith(MEETING_TITLE)]   # a meeting's turns stay in Guildhall
         rows.sort(key=lambda c: c.get("updated_at") or "", reverse=True)
         rows.sort(key=lambda c: not c.get("pinned"))
         return rows
