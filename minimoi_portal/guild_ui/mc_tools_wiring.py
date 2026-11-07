@@ -504,10 +504,39 @@ class AgentAsker:
     """MC's tool's way through the front door (agent_ask.AskService, the request ledger at <store>/agent_requests).
     ``check`` is the ASK line's own owner-intent check on Robert's kept note, run before anything is recorded: the
     agents MC names must be exactly the agents his own words ask, never inferred, quoted, negated or broadened.
-    Calling it asks them: ``(conversation_id, note_text, note_request_id, to) -> (made, words)``."""
+    Calling it asks them: ``(conversation_id, note_text, note_request_id, to) -> (made, words)``.
+    ``earlier_notes`` is continuity_reader's ``read``: only ``admit`` uses it, and only for a note that is nothing but a name."""
 
-    def __init__(self, asks):
+    def __init__(self, asks, earlier_notes=None):
         self.asks = asks
+        self.earlier_notes = earlier_notes
+
+    def admit(self, conversation_id, note_request_id, note_text, to):
+        """(the words to send, None) or (None, (code, plain words)). His note itself first; failing that, a note that only
+        names an agent, answering MC's question, sends his instruction from just before it (agent_ask.answered_ask)."""
+        mismatch = self.check(note_text, to)
+        if mismatch is None:
+            return note_text, None
+        from .agent_ask import OWNER_FILES_REFUSED, answered_ask, is_bare_answer
+        if self.earlier_notes is None or not is_bare_answer(note_text):
+            return None, mismatch
+        try:
+            earlier = self.earlier_notes(conversation_id, note_request_id, 0)
+            words, refusal = answered_ask(note_text, earlier, to)
+        except Exception:
+            return None, mismatch                # what cannot be read authorizes nothing
+        if refusal == OWNER_FILES_REFUSED:
+            return None, ("owner_files_unsupported", FILES_BY_TOOL_REFUSED)
+        if refusal or self._already_asked(conversation_id, words, to):
+            return None, mismatch
+        return words, None
+
+    def _already_asked(self, conversation_id, words, to):
+        """That instruction already went to one of these agents: a name given afterwards must not make a second request."""
+        from core import agent_requests as ar
+        action = self.asks.scrub(words)
+        return any(d["request"].get("to") in to and d["request"].get("action") == action
+                   for d in ar.for_conversation(self.asks.root, conversation_id))
 
     def check(self, note_text, to):
         """None when Robert's own words ask exactly these agents, else (code, plain words)."""
@@ -524,9 +553,9 @@ class AgentAsker:
         return made, self.asks.words(made)
 
 
-def agent_asker(asks):
+def agent_asker(asks, earlier_notes=None):
     """An AgentAsker over the front door, or None while MINIMOI_GUILD_AGENT_REQUESTS is off."""
-    return None if asks is None else AgentAsker(asks)
+    return None if asks is None else AgentAsker(asks, earlier_notes)
 
 
 def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, show=None, read_shown=None,
@@ -623,7 +652,8 @@ def attach(app, blueprint_name, services):
                             domain_health=domain_health_reader(environ, app.extensions[blueprint_name].get("base_url", "")),
                             registers=_mc_registers(environ, cfg["principal"],
                                                     app.extensions[blueprint_name].get("base_url", "")),
-                            agent_ask=agent_asker(app.extensions[blueprint_name].get("agent_asks")))
+                            agent_ask=agent_asker(app.extensions[blueprint_name].get("agent_asks"),
+                                                  continuity_reader(services, cfg["principal"])))
     service.tasks = tasks_adapter(environ)
     agent_worker_sha = (environ.get('MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256') or '').strip().lower()
     enrollment_path = environ.get('MINIMOI_MC_AGENT_ENROLLMENT')

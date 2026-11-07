@@ -188,13 +188,23 @@ def holding_prefix(text: str) -> bool:
 
 
 
-OWNER_INTENT_REFUSED = ("**Not sent.** The proposed recipient does not match a clear instruction in your current message. Nothing was put to any agent. Please name Claude Code, Codex, Grok, both or all explicitly.")
+OWNER_INTENT_REFUSED = ("**Not sent.** The proposed recipient does not match a clear instruction in your current message. Nothing was put to any agent. To send it, say who and what in one message, for example: Ask Codex to check the issue reader. You can name Claude Code, Codex, Grok, both or all.")
 OWNER_FILES_REFUSED = ("**Not sent.** I could not match the requested files to your current instruction and attachments. Nothing was put to any agent. Please attach the file to this message or explicitly request the latest file.")
-_OWNER_AGENT = r"(?:claude[ -]code|codex|grok|both|all|everyone)"
-_OWNER_DIRECT = re.compile(r"\b(?:ask|tell|task|contact)\s+(?P<agent>" + _OWNER_AGENT + r")\b", re.I)
+_OWNER_AGENT = r"(?:claude[ -]code|claude|codex|grok|both|all|everyone)"       # Claude alone is Claude Code (GROUPS): the only Claude on the team
+_OWNER_VERB = r"(?:ask|tell|task|contact|message|ping|notify|send|write\s+to|reach(?:\s+out\s+to)?|get\s+in\s+touch\s+with)"
+_OWNER_DIRECT = re.compile(r"\b" + _OWNER_VERB + r"\s+(?P<agent>" + _OWNER_AGENT + r")\b", re.I)
 _OWNER_TO = re.compile(r"\b(?:hand|send|pass|forward|give|assign)\b[^.!?;\n]{0,250}?\bto\s+(?P<agent>" + _OWNER_AGENT + r")\b", re.I)
 _OWNER_NEGATIVE = re.compile(r"\b(?:not|never|without|don't|do not|do\s+not)\b", re.I)
 _OWNER_FILE = re.compile(r"\b(?:files?|attachments?|diffs?|patch(?:es)?|screenshots?|images?|documents?)\b", re.I)
+# What may stand before the instruction: politeness and "try to". Nothing that makes it a report, a condition or a question about the past.
+_OWNER_LEAD = re.compile(r"(?:(?:please|just|(?:can|could|would|will) you|try (?:to|and)|go ahead and|i (?:want|need) you to|i(?:'|’)?d like you to)\s*)*"
+                         r"(?:for this (?:check|test|task|request),?\s*)?", re.I)
+# "Contact Codex and send a message": a second verb for the same agent, not a second recipient.
+_OWNER_AND_THEN = re.compile(r"\s+and\s+(?:then\s+)?(?:tell|send|say|let|give|pass|explain|report|show|share|ask|have|see|check|get|find|write|mention)\b", re.I)
+_OWNER_ANY_AGENT = re.compile(r"\b(?:claude|codex|grok|both|everyone)\b", re.I)
+_OWNER_BARE = re.compile(r"\s*(?:please\s+)?(?P<one>" + _OWNER_AGENT + r")(?:\s+and\s+(?P<two>" + _OWNER_AGENT + r"))?(?:[,\s]+please)?\s*[.!]?\s*", re.I)
+_OWNER_VAGUE = r"(?:an?\s+agent|the\s+agents?|one\s+of\s+(?:them|the\s+agents)|them|someone|somebody)"
+_OWNER_PENDING = re.compile(r"\b" + _OWNER_VERB + r"\s+(?:(?P<agent>" + _OWNER_AGENT + r")|" + _OWNER_VAGUE + r")\b", re.I)
 
 
 def _owner_clauses(text):
@@ -235,6 +245,8 @@ def owner_ask_proposal(owner_text, proposal, current_doc_ids):
 
     No history fallback, title-only inference, file-body authority, inferred
     both, or automatic request retry. AskService remains a trusted primitive.
+    (answered_ask is the one narrow companion, for MC's tool only: a note that
+    is nothing but a name, right after MC asked. It does not widen this check.)
     """
     if not isinstance(owner_text, str):
         return None, OWNER_INTENT_REFUSED
@@ -250,12 +262,15 @@ def owner_ask_proposal(owner_text, proposal, current_doc_ids):
             if _OWNER_NEGATIVE.search(prefix) or re.search(r'\bno\b', prefix, re.I):
                 excluded |= set(recipients(who))
                 continue
-            if not re.fullmatch(r'(?:(?:please|(?:can|could|would) you)\s*)*(?:for this (?:check|test|task|request),?\s*)?', prefix, re.I):
+            if not _OWNER_LEAD.fullmatch(prefix):
                 continue
             suffix = clause[match.end():]
             other = re.match(r'\s+(and|or)\s+(' + _OWNER_AGENT + r')\b', suffix, re.I)
             if other is None and re.match(r'\s+(?:and|or)\b', suffix, re.I):
-                return None, OWNER_INTENT_REFUSED
+                if not _OWNER_AND_THEN.match(suffix) or _OWNER_ANY_AGENT.search(suffix):
+                    return None, OWNER_INTENT_REFUSED
+                if _OWNER_FILE.search(suffix):
+                    return None, OWNER_FILES_REFUSED
             if re.match(r'\s*[,/&]', suffix) and not re.match(r'\s*,\s*(?:not|never|except|excluding)\b', suffix, re.I):
                 return None, OWNER_INTENT_REFUSED
             if other and re.match(r'\s*(?:,|and\b|or\b|[&/])', suffix[other.end():], re.I):
@@ -310,6 +325,52 @@ def owner_ask_proposal(owner_text, proposal, current_doc_ids):
     elif requested:
         return None, OWNER_FILES_REFUSED
     return result, None
+
+
+def is_bare_answer(text) -> bool:
+    """His whole message is nothing but an agent's name (or two), as an answer to "which one?"."""
+    return isinstance(text, str) and _OWNER_BARE.fullmatch(text) is not None
+
+
+def answered_ask(current_text, earlier, to):
+    """(his earlier instruction, None) when this note only names the agent MC asked about, else (None, refusal).
+
+    The recipient comes from his own current words and the instruction from his own note just before MC's question; those
+    are the only two things that authorize. MC's words authorize nothing: its note only has to be there, directly between
+    them and asking something, which narrows and never widens. Quoted or negated instructions, another agent's note in
+    between, and an earlier instruction naming someone else all refuse. Anything about files refuses: this path sends none."""
+    answer = _OWNER_BARE.fullmatch(current_text) if isinstance(current_text, str) else None
+    if answer is None:
+        return None, OWNER_INTENT_REFUSED
+    named = set(recipients(answer["one"].lower().replace(" ", "-")))
+    if answer["two"]:
+        named |= set(recipients(answer["two"].lower().replace(" ", "-")))
+    if named != set(to):
+        return None, OWNER_INTENT_REFUSED
+    spoken = [n for n in earlier if isinstance(n, dict) and n.get("author_kind") != "platform"]
+    if len(spoken) < 2:
+        return None, OWNER_INTENT_REFUSED
+    mc, owner = spoken[-1], spoken[-2]
+    if (mc.get("who") != "master_craftsman" or "?" not in str(mc.get("text") or "")
+            or owner.get("author_kind") != "owner" or not isinstance(owner.get("text"), str)):
+        return None, OWNER_INTENT_REFUSED
+    instruction = owner["text"]
+    pending = None
+    for clause in _owner_clauses(instruction):
+        for match in _OWNER_PENDING.finditer(clause):
+            prefix = clause[:match.start()].strip()
+            if _OWNER_NEGATIVE.search(prefix) or re.search(r"\bno\b", prefix, re.I) or not _OWNER_LEAD.fullmatch(prefix):
+                continue
+            who = match["agent"]
+            if who is None or named <= set(recipients(who.lower().replace(" ", "-"))):
+                pending = clause
+            else:
+                return None, OWNER_INTENT_REFUSED      # he had named someone else: ask him, never guess which he means
+    if pending is None:
+        return None, OWNER_INTENT_REFUSED
+    if _OWNER_FILE.search(instruction):
+        return None, OWNER_FILES_REFUSED
+    return instruction, None
 
 
 class AskService:

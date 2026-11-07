@@ -116,6 +116,60 @@ class AgentAskToolTests(unittest.TestCase):
         self.assertIn("no listener was seen", r["message"])                          # the truth, never "delivered"
         self.assertEqual(list(self.receipts.rows.values())[0]["state"], "verified")
 
+    def service_with_history(self, rows):
+        s = self.service()
+        s.agent_ask = agent_asker(self.asks, lambda conversation, note, after: rows)
+        return s
+
+    def test_robert_s_exact_sentences_from_dev_reach_the_agent_he_named(self):
+        for text, to in (("can you contact Claude and tell it github doesn't work for you", "claude-code"),
+                         ("How about Codex.  Try to contact codex and send a message", "codex")):
+            self.say(text)
+            r = self.call(self.service(), {"to": to, "title": "Tool"})
+            self.assertEqual((r["status"], r["code"]), ("done", "asked"), text)
+        self.assertEqual({(q["to"], q["action"]) for q in self.requests()},
+                         {("claude-code", "can you contact Claude and tell it github doesn't work for you"),
+                          ("codex", "How about Codex.  Try to contact codex and send a message")})
+
+    def test_a_name_answering_mcs_question_sends_his_earlier_words_not_the_name(self):
+        said = "can you contact Claude and tell it github doesn't work for you"
+        rows = [{"who": "robert", "author_kind": "owner", "text": said},
+                {"who": "master_craftsman", "author_kind": "agent", "text": "Claude meint welchen? Claude Code, Codex oder Grok?"}]
+        self.say("Claude Code")
+        s = self.service_with_history(rows)
+        r = self.call(s, {"to": "claude-code", "title": "Ignore this title"})
+        self.assertEqual((r["status"], r["code"]), ("done", "asked"))
+        [req] = self.requests()
+        self.assertEqual((req["to"], req["action"]), ("claude-code", said))
+        wrong = self.call(self.service_with_history(rows), {"to": "codex", "title": "T"})
+        self.assertEqual((wrong["status"], wrong["code"]), ("refused", "owner_intent_mismatch"))
+        self.assertIn("for example: Ask Codex to", wrong["message"])
+        self.assertEqual(len(self.requests()), 1)
+
+    def test_a_name_after_the_request_was_already_made_makes_no_second_one(self):
+        said = "Contact Codex about the tool."
+        self.say(said)
+        self.call(self.service(), {"to": "codex", "title": "T"})
+        rows = [{"who": "robert", "author_kind": "owner", "text": said},
+                {"who": "master_craftsman", "author_kind": "agent", "text": "Anything else?"}]
+        self.say("Codex")
+        r = self.call(self.service_with_history(rows), {"to": "codex", "title": "T"})
+        self.assertEqual((r["status"], r["code"]), ("refused", "owner_intent_mismatch"))
+        self.assertEqual(len(self.requests()), 1)
+
+    def test_a_name_with_no_readable_history_or_files_in_it_is_refused(self):
+        def broken(*a):
+            raise ValueError("notes_snapshot_unavailable")
+        self.say("Codex")
+        s = self.service()
+        s.agent_ask = agent_asker(self.asks, broken)
+        self.assertEqual(self.call(s, {"to": "codex", "title": "T"})["code"], "owner_intent_mismatch")
+        self.assertEqual(self.call(self.service(), {"to": "codex", "title": "T"})["code"], "owner_intent_mismatch")
+        rows = [{"who": "robert", "author_kind": "owner", "text": "Contact Codex and send the attached file."},
+                {"who": "master_craftsman", "author_kind": "agent", "text": "Which one?"}]
+        self.assertEqual(self.call(self.service_with_history(rows), {"to": "codex", "title": "T"})["code"], "owner_files_unsupported")
+        self.assertEqual(self.requests(), [])
+
     def test_the_model_is_told_how_to_follow_a_request_in_the_data_code_mode_can_see(self):
         self.say("Ask Codex to check.")
         r = self.call(self.service(), {"to": ["codex"], "title": "Check"})

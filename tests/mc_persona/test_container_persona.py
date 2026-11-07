@@ -197,6 +197,28 @@ def test_0_1_25_changes_only_the_voice_cards_text_from_0_1_24():
         assert sha((new / f).read_bytes()) == want, f
 
 
+def test_0_1_26_says_english_gets_english_and_changes_nothing_else():
+    new, old = RELEASES / "0.1.26", RELEASES / "0.1.25"
+    for f in ("RUNTIME.openclaw.md", "voice.json"):
+        assert (new / f).read_bytes() == (old / f).read_bytes()
+    soul, was = (new / "SOUL.md").read_text().split("\n"), (old / "SOUL.md").read_text().split("\n")
+    assert soul[:-2] == was[:-2]
+    assert "When he writes in English, reply in English" in soul[-2] and "follows only real German from him" in soul[-2]
+    assert "never a German answer" in soul[-2]
+    assert "Preserve each language persona's distinct character" in soul[-2]
+    agents, was = (new / "AGENTS.md").read_text().split("\n"), (old / "AGENTS.md").read_text().split("\n")
+    assert agents[0] == "# MC conversation contract — persona 0.1.26"
+    added = [line for line in agents[1:] if line not in was]
+    assert len(added) == 1 and "English from him gets English" in added[0]
+    assert "German follows only real German from him" in added[0]
+    assert [line for line in agents[1:] if line != added[0]] == was[1:]
+    m, base = json.loads((new / "manifest.json").read_text()), json.loads((old / "manifest.json").read_text())
+    assert m["version"] == "0.1.26" and m["status"] == "candidate" and m["handbook"] == base["handbook"]
+    assert set(m["files"]) == set(base["files"]) and m["config_change"] is False
+    for f, want in m["files"].items():
+        assert sha((new / f).read_bytes()) == want, f
+
+
 def test_start_refuses_a_release_that_names_no_handbook(tmp_path):
     image = image_copy(tmp_path)
     m = json.loads((image / "persona/manifest.json").read_text())

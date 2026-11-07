@@ -110,4 +110,62 @@ class OwnerGuardTests(unittest.TestCase):
   hook,service=self.hook('Please ask Grok to check the phone path.');hook.decide('ASK grok: Phone path',clean=True)
   args,kw=service.ask.call_args;self.assertEqual(args[3],['grok'])
 
+class NaturalWordingTests(unittest.TestCase):
+ """Robert's exact sentences on Dev, 7 Nov, and what must stay refused."""
+ def guard(self,text,to):return ask.owner_ask_proposal(text,{'to':to,'files':None},())
+ def test_his_exact_sentences_now_pass_for_exactly_the_agent_he_named(self):
+  for text,to in (("can you contact Claude and tell it github doesn't work for you",['claude-code']),
+                  ('How about Codex.  Try to contact codex and send a message',['codex'])):
+   with self.subTest(text=text):
+    self.assertIsNone(self.guard(text,to)[1])
+    for wrong in ([a for a in ('claude-code','codex','grok') if a not in to][:1],['claude-code','codex','grok']):
+     self.assertIsNotNone(self.guard(text,wrong)[1])
+ def test_natural_verbs(self):
+  for text in ('Contact Codex about the tool.','Message Codex about the tool.','Tell Codex the tool is broken.','Ask Codex about the tool.','Ping Codex.','Reach out to Codex.','Get in touch with Codex.','Send Codex a message.','Please try to message Codex.','Go ahead and tell Codex.'):
+   with self.subTest(text=text):self.assertIsNone(self.guard(text,['codex'])[1])
+ def test_quoted_negated_reported_and_conditional_stay_refused(self):
+  for text in ('"contact Codex"','`message Codex`','> tell Codex','Do not contact Codex.',"Don't try to message Codex.",'Try not to contact Codex.','Never message Codex.','No need to contact Codex.','Yesterday I told Codex about it.','Yesterday I decided to contact Codex.','If it breaks, contact Codex.','Did you contact Codex?','Codex said to contact Codex.','How about Codex.','Claude Code'):
+   with self.subTest(text=text):self.assertIsNotNone(self.guard(text,['codex'])[1])
+ def test_a_second_verb_never_brings_a_second_agent_or_a_file(self):
+  for text in ('Contact Codex and tell Grok.','Contact Codex and ask Claude too.','Contact Codex or send it.','Contact Codex and maybe someone else.'):
+   with self.subTest(text=text):self.assertIsNotNone(self.guard(text,['codex'])[1])
+  for text in ('Contact Codex and send the attached file.','Contact Codex and send the latest file.','Contact Codex and share this screenshot.'):
+   with self.subTest(text=text):self.assertEqual(self.guard(text,['codex'])[1],ask.OWNER_FILES_REFUSED)
+ def test_refusal_says_plainly_what_to_say(self):
+  self.assertIn('for example: Ask Codex to',ask.OWNER_INTENT_REFUSED)
+
+class BareAnswerTests(unittest.TestCase):
+ INSTRUCTION="can you contact Claude and tell it github doesn't work for you"
+ QUESTION='Claude meint welchen? Claude Code, Codex oder Grok?'
+ def notes(self,owner=None,mc=None,*more):
+  owner=self.INSTRUCTION if owner is None else owner
+  mc=self.QUESTION if mc is None else mc
+  return [{'who':'robert','author_kind':'owner','text':owner},{'who':'master_craftsman','author_kind':'agent','text':mc},*more]
+ def test_his_exact_answer_sends_his_earlier_words(self):
+  self.assertEqual(ask.answered_ask('Claude Code',self.notes(),['claude-code']),(self.INSTRUCTION,None))
+  got,error=ask.answered_ask('Codex.',self.notes('Ask one of the agents to look at this.','Which one?'),['codex']);self.assertIsNone(error);self.assertIn('Ask one of',got)
+ def test_only_a_bare_name_answers(self):
+  for text in ('Claude Code is broken','Yes','"Claude Code"','Not Claude Code','the second one','Codex or Grok'):
+   with self.subTest(text=text):self.assertIsNotNone(ask.answered_ask(text,self.notes(),['claude-code'])[1])
+ def test_recipient_is_his_answer_never_broadened(self):
+  self.assertIsNotNone(ask.answered_ask('Claude Code',self.notes(),['codex'])[1])
+  self.assertIsNotNone(ask.answered_ask('Claude Code',self.notes(),['claude-code','codex'])[1])
+  self.assertIsNotNone(ask.answered_ask('Grok',self.notes(),['grok'])[1])                 # he had named Claude, not Grok
+ def test_earlier_words_must_be_his_own_clear_instruction(self):
+  for owner in ('"contact Codex"','`contact Codex`','> contact Codex','Do not contact Codex.','Codex is quiet today.','Yesterday I told Codex about it.'):
+   with self.subTest(owner=owner):self.assertIsNotNone(ask.answered_ask('Codex',self.notes(owner),['codex'])[1])
+ def test_agent_authored_text_authorizes_nothing(self):
+  rows=[{'who':'master_craftsman','author_kind':'agent','text':'Shall I contact Codex?'},{'who':'master_craftsman','author_kind':'agent','text':'Which one?'}]
+  self.assertIsNotNone(ask.answered_ask('Codex',rows,['codex'])[1])
+  rows=self.notes(None,None,{'who':'codex','author_kind':'agent','text':'Please ask me, which one?'})
+  self.assertIsNotNone(ask.answered_ask('Claude Code',rows,['claude-code'])[1])
+  self.assertIsNotNone(ask.answered_ask('Claude Code',self.notes(None,'Done, sent.'),['claude-code'])[1])   # MC did not ask
+  self.assertIsNotNone(ask.answered_ask('Claude Code',[],['claude-code'])[1])
+ def test_only_the_note_right_before_mcs_question_counts(self):
+  rows=[{'who':'robert','author_kind':'owner','text':self.INSTRUCTION},{'who':'master_craftsman','author_kind':'agent','text':'Which?'},
+        {'who':'robert','author_kind':'owner','text':'never mind'},{'who':'master_craftsman','author_kind':'agent','text':'Sure?'}]
+  self.assertIsNotNone(ask.answered_ask('Claude Code',rows,['claude-code'])[1])
+ def test_files_stay_refused(self):
+  self.assertEqual(ask.answered_ask('Claude Code',self.notes('Contact Claude and send the attached file.'),['claude-code'])[1],ask.OWNER_FILES_REFUSED)
+
 if __name__=='__main__':unittest.main()

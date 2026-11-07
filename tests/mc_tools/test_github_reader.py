@@ -124,6 +124,67 @@ class GitHubTests(unittest.TestCase):
         for args in ({'number':1},{'query':'xx'},{'operation':'source','ref':REF,'path':'docs/spec.md'}):
             self.assertTrue(valid_request(validate('minimoi_github_issues',args)))
 
+    def test_the_calls_seen_on_dev_through_the_real_schema_and_validator(self):
+        # Exact arguments MC sent on Dev, 7 Nov: refused for carrying page beside query, then for having no query.
+        for args in ({'query':'sort:created-desc','operation':'search','page':1},
+                     {'query':'is:issue sort:created-desc','operation':'search','page':1}):
+            self.assertTrue(valid_request(validate('minimoi_github_issues',args)),args)
+        self.assertFalse(valid_request(validate('minimoi_github_issues',{'operation':'search','page':1})))
+        for args in ({'operation':'latest'},{'operation':'latest','page':2}):
+            self.assertTrue(valid_request(validate('minimoi_github_issues',args)),args)
+        for args in ({'operation':'latest','query':'xx'},{'operation':'latest','number':1},{'operation':'latest','ref':REF}):
+            self.assertFalse(valid_request(validate('minimoi_github_issues',args)),args)
+        self.assertFalse(valid_request(validate('minimoi_github_issues',{'query':'xx repo:someone/else'})))
+        self.assertFalse(valid_request(validate('minimoi_github_issues',{'query':'xx repo:someone/else','page':2})))
+        with self.assertRaises(ArgumentsRefused):validate('minimoi_github_issues',{'operation':'list'})
+
+    def test_latest_lists_the_newest_issues_of_the_fixed_repo_only(self):
+        row = {'number':472,'state':'open','title':'Newest','created_at':'2026-11-04T00:53:46Z','updated_at':'2026-11-05T00:00:00Z',
+               'repository_url':f'{API}/repos/{DEFAULT_REPO}'}
+        reader = self.reader(lambda url,_: Reply({'total_count':193,'items':[row]}))
+        state,message,data = reader.latest()
+        self.assertEqual(state,'ok')
+        url,kw = self.requests[0]
+        self.assertTrue(url.endswith('/search/issues'))
+        self.assertEqual(kw['params'],{'q':f'repo:{DEFAULT_REPO} is:issue','sort':'created','order':'desc','per_page':8})
+        self.assertIn('#472',message);self.assertIn('opened 2026-11-04',message)
+        self.assertIn('https://github.com/'+DEFAULT_REPO+'/issues/472',message)
+        self.assertEqual(data['results'][0]['kind'],'issue')
+        reader.latest(page=3);self.assertEqual(self.requests[-1][1]['params']['page'],3)
+        wrong = dict(row,repository_url=f'{API}/repos/someone/else')
+        self.assertEqual(self.reader(lambda url,_: Reply({'items':[wrong]})).latest()[0],'unreadable')
+
+    def test_service_runs_latest_and_a_bad_call_says_what_would_fit(self):
+        from contextlib import nullcontext
+        from types import SimpleNamespace
+        from unittest import mock
+        from core.mc_tools import service as svc
+        row = {'number':472,'state':'open','title':'Newest','created_at':'2026-11-04T00:00:00Z','updated_at':'2026-11-05T00:00:00Z',
+               'repository_url':f'{API}/repos/{DEFAULT_REPO}'}
+        s = svc.ToolService(lambda: None, principal='robert', environment='dev',
+                            github=self.reader(lambda url,_: Reply({'total_count':193,'items':[row]})))
+        cursor = mock.MagicMock()
+        with mock.patch.object(svc.ToolService,'_tx',lambda self: nullcontext(None)), \
+                mock.patch.object(svc.ToolService,'_bind',lambda self,conn,caller: SimpleNamespace(ledger_id=1,generation=1,conversation_id='c-1')), \
+                mock.patch.object(svc,'_cursor',lambda conn: cursor):
+            done = s._github_issues(validate('minimoi_github_issues',{'operation':'latest'}),None,None)
+            self.assertEqual((done['status'],done['code']),('done','read'))
+            self.assertIn('#472',done['message'])
+            cursor.reset_mock();self.requests.clear()
+            bad = s._github_issues(validate('minimoi_github_issues',{'operation':'search','page':1}),None,None)
+        self.assertEqual((bad['status'],bad['code']),('refused','tool_arguments_invalid'))
+        self.assertIn('"operation": "latest"',bad['message'])
+        self.assertEqual(self.requests,[]);cursor.__enter__.assert_not_called()
+
+    def test_search_keeps_working_with_and_without_page(self):
+        row = {'number':69,'state':'open','title':'Guest','created_at':'2026-01-01T00:00:00Z','updated_at':'2026-02-01T00:00:00Z',
+               'repository_url':f'{API}/repos/{DEFAULT_REPO}'}
+        reader = self.reader(lambda url,_: Reply({'total_count':1,'items':[row]}))
+        self.assertEqual(reader.search('guest')[0],'ok')
+        self.assertEqual(self.requests[0][1]['params'],{'q':f'guest repo:{DEFAULT_REPO}','sort':'updated','per_page':8})
+        self.assertEqual(reader.search('guest',page=2)[0],'ok')
+        self.assertEqual(self.requests[-1][1]['params']['page'],2)
+
     def test_model_envelope_stays_under_listener_limit_and_large_text_refuses(self):
         body = '😀' * BODY_CHARS
         comments = [{'body': '😀' * 600} for _ in range(8)]
