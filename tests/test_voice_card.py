@@ -101,26 +101,35 @@ def test_language_is_an_allowed_locale_and_accent_a_short_label(tmp_path):
 
 
 def test_mcs_card_is_pinned_and_verified():
-    manifest = json.loads((MC_ROOT / "releases/0.1.24/manifest.json").read_text())
+    manifest = json.loads((MC_ROOT / "releases/0.1.25/manifest.json").read_text())
     assert "voice.json" in manifest["files"]
-    assert json.loads((MC_ROOT / "pin.json").read_text()) == {"release": "0.1.24"}
+    assert json.loads((MC_ROOT / "pin.json").read_text()) == {"release": "0.1.25"}
     pinned = load_pinned(MC_ROOT)
-    assert pinned["release"] == "0.1.24" and pinned["language"] == "en-US" and pinned["transcription"] == "bilingual"
-    assert pinned["card"].startswith("Master Craftsman, Robert's longtime collaborator and friend in the work;")
+    assert pinned["release"] == "0.1.25" and pinned["language"] == "en-US" and pinned["transcription"] == "bilingual"
+    assert pinned["card"].startswith("You are Master Craftsman, MC. You and Robert have been building this together for a long time:")
     assert pinned["voices"] == {"openai": "marin", "xai": "leo"} and pinned["named"] == ["openai", "xai"]   # by ear, 29 Oct
-    assert pinned == load_card(MC_ROOT, "0.1.24")
+    assert pinned == load_card(MC_ROOT, "0.1.25")
 
 
 def test_mcs_card_restates_the_manner_for_the_direct_path_and_carries_no_sentence_of_it():
     """Robert's direction of 6 Nov 2026: VOICE_MANNER's clauses, in the card's own words (Spec 165 §6.2, as CoS's card)."""
     from core.realtime_voice.controlled_config import VOICE_MANNER
     card = load_pinned(MC_ROOT)["card"]
-    for clause in ("dry humour", "same desk", "fifteen to forty words", "leave him the floor", "Don't offer help",
+    for clause in ("dryly", "same bench", "fifteen to forty words", "leave him the floor", "Don't offer help",
                    "Stay quiet through his silences", "If he cuts in", "No recaps"):
         assert clause in card, clause
     for sentence in re.split(r"(?<=[.;])\s+", VOICE_MANNER.split("\n", 1)[1]):
         if len(sentence) > 25:
             assert sentence.rstrip(".;") not in card, sentence
+
+
+def test_mcs_card_is_a_partner_with_a_view_and_no_added_authority():
+    """Robert's direction of 6 Nov 2026: not a task taker; opinion and pushback are speech and change nothing about what acts."""
+    card = load_pinned(MC_ROOT)["card"]
+    for clause in ("You are not a task taker", "give your recommendation first", "Push back and debate",
+                   "once he decides, go with it", "never bluff",
+                   "Having an opinion changes nothing about what you may do: the rules above still decide what acts"):
+        assert clause in card, clause
 
 
 def test_a_header_release_carries_the_voice_card_and_its_hash(tmp_path):

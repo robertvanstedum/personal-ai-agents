@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "card": "chief-of-staff voice",
+  "version": "0.1.5",
+  "status": "candidate",
+  "spec": "Spec 165 v0.3 §6.2: Robert's direction of 6 Nov 2026: voice persona as his longtime partner, not a task taker, on the model of German's persona. Voices, accents and transcription as 0.1.4",
+  "persona": {
+    "source": "MASTER_CRAFTSMAN_PERSONA.md",
+    "version": "1.1",
+    "sha256": "f07078f5c913323f1098381faf44d38f77223258e48498ddd0552f53042c4f1b"
+  },
+  "files": {
+    "voice.json": "cf704521b7ab546cd5a70a52d47750f73fe5cb387301a91f09730a99c5493486"
+  }
+}

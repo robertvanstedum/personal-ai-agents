@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "persona": "mc-chat",
+  "version": "0.1.25",
+  "base": "0.1.24 + the voice card's new text; loads MC handbook 0.1.2",
+  "spec": "spec_mc_agent_container v0.2; Robert's direction of 6 Nov 2026: voice persona as his longtime partner, not a task taker, on the model of German's persona.",
+  "status": "candidate",
+  "target": "mc-agent container",
+  "files": {
+    "SOUL.md": "3f79bf7edf148b8971f9707e67e334266027c0d12cecb5e18c1513f5996bd671",
+    "AGENTS.md": "47e21af8676772f9783258c4931fe09d9fe4fe476185fe691cc7ea626aace054",
+    "RUNTIME.openclaw.md": "2b2428ccded1174e6a9857bd17f1ccfa2b2b0f860c786649bfe39a2dbfdb7197",
+    "CHANGES.md": "95a054f025919001d236ef48f630fd9d14504b6883886b967854d6acabed2c74",
+    "voice.json": "75aefa0ffa3876cebab3232fa28f391cac44e6dbb4c842f80e46f9c136e2e733"
+  },
+  "handbook": {
+    "version": "0.1.2",
+    "manifest": "services/mc_operations/handbook/manifest.json",
+    "manifest_sha256": "5033cb04af14cbbb9d264c9249d3075865586bfb27c360a6e3754e73dbcabcd3"
+  },
+  "projection": "SOUL verbatim; AGENTS + runtime binding + handbook block",
+  "projection_budget_chars": 16000,
+  "config_change": false
+}

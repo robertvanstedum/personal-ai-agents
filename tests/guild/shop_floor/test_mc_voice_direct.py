@@ -208,7 +208,7 @@ def test_bootstrap_issues_an_owner_session_with_a_sceneless_english_persona_and_
     assert "voice_notices" not in body                  # his card names both voices (0.1.19): no provider default
     minted = r.mints[0]
     assert minted["transcription_language"] is None and minted["voice"] == "marin"      # bilingual (D19, review S-3)
-    assert "Master Craftsman, Robert's longtime collaborator and friend in the work" in minted["instructions"]
+    assert "You are Master Craftsman, MC. You and Robert have been building this together" in minted["instructions"]
     assert "SCENARIO FOR THIS SESSION" not in minted["instructions"]
     # A live role question exposed an identity split: the voice called MC someone else.
     # Check the assembled provider prompt, retaining both identity and execution boundaries.
@@ -242,7 +242,7 @@ def test_the_session_text_is_composed_here_rules_then_card_then_this_conversatio
     start(r)
     first, second = r.mints[0]["instructions"], r.mints[1]["instructions"]
     pinned = load_pinned(direct.CARD_ROOT)                     # MC's card is pinned by data (Spec 165 §4.5)
-    assert pinned["release"] == "0.1.24" and r.config["mc_direct_voice"]["card_release"] == "0.1.24"
+    assert pinned["release"] == "0.1.25" and r.config["mc_direct_voice"]["card_release"] == "0.1.25"
     card = pinned["card"]
     rules, who, now = second.index(INSTRUCTIONS), second.index(card), second.index("THIS CONVERSATION SO FAR (DATA)")
     assert second.startswith("=== OPERATING RULES ===") and rules < who < now

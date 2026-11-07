@@ -2,6 +2,9 @@
 
 Robert's MC and CoS voices read rules plus a versioned card. Change them here, not in a summary somewhere else.
 
+**Current.** MC 0.1.25, CoS 0.1.5: each voice is Robert's longtime partner, not a task taker. This persona is the card's
+job. Opinion and pushback are speech only, with no added authority: the rules still decide what acts, and when.
+
 **The direct path (Dev and production).** `direct_host.compose_instructions`: rules, then card, then data.
 
 - Cards: MC `services/mc_operations/personas/mc-chat/releases/<v>/voice.json`, CoS `domains/cos/voice/releases/<v>/voice.json`.
