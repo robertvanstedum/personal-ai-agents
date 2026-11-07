@@ -52,6 +52,21 @@ CHALLENGER_PROMPT_FILE  = PROMPTS_DIR / 'challenger_geopolitics_finance.md'
 
 DOMAIN = 'Research'
 
+DEFAULT_DIVE_MODEL = 'claude-opus-4-5'
+# Standard pricing per token (in, out), reviewed 2026-08-17. A model missing here is refused, not costed by guesswork.
+DIVE_RATES = {
+    'claude-opus-4-5':   (0.000005, 0.000025),
+    'claude-sonnet-4-5': (0.000003, 0.000015),
+    'claude-haiku-4-5':  (0.000001, 0.000005),
+}
+
+
+def dive_model() -> str:
+    """The one model both Dive essay passes use: models.dive.model in the research config, as agent/observe.py reads its own."""
+    if not PATHS.config.exists():
+        return DEFAULT_DIVE_MODEL
+    return json.loads(PATHS.config.read_text()).get('models', {}).get('dive', {}).get('model', DEFAULT_DIVE_MODEL)
+
 
 # ── Shared document parsing; Dive section semantics remain distinct ──────────
 from domains.curator.research.document_text import (
@@ -275,15 +290,15 @@ def run_agent(client, system_prompt: str, user_prompt: str,
         messages=[{'role': 'user', 'content': user_prompt}],
     )
     text = response.content[0].text
-    # Claude Opus 4.5 standard pricing, reviewed 2026-08-17: $5/M in, $25/M out.
-    cost = (response.usage.input_tokens * 0.000005) + (response.usage.output_tokens * 0.000025)
+    rate_in, rate_out = DIVE_RATES[model]
+    cost = (response.usage.input_tokens * rate_in) + (response.usage.output_tokens * rate_out)
     print(f"     {label}: {response.usage.input_tokens} in + {response.usage.output_tokens} out tokens — ${cost:.4f}")
     return text, cost
 
 
 # ── Essay assembly ────────────────────────────────────────────────────────────
 
-def assemble_essay(data: dict, s_out: str, c_out: str, total_cost: float) -> str:
+def assemble_essay(data: dict, s_out: str, c_out: str, total_cost: float, model: str = DEFAULT_DIVE_MODEL) -> str:
     topic      = data['topic']
     motivation = data['motivation'] or '(not recorded)'
     today      = date.today().isoformat()
@@ -319,7 +334,7 @@ def assemble_essay(data: dict, s_out: str, c_out: str, total_cost: float) -> str
 {bibliography}
 
 ---
-*Synthesizer: claude-opus-4-5 (temp 0.3) · Challenger: claude-opus-4-5 (temp 0.7)*
+*Synthesizer: {model} · Challenger: {model}*
 *Deeper Dive v1.0 — POC*
 """
 
@@ -424,6 +439,10 @@ def main() -> None:
         return
 
     # Run agents
+    model = dive_model()
+    if model not in DIVE_RATES:
+        print(f"Error: no price known for model {model}; add it to DIVE_RATES so the cost shown stays true.")
+        sys.exit(1)
     client = get_anthropic_client()
     print(f"\nRunning two-agent analysis…")
 
@@ -431,12 +450,12 @@ def main() -> None:
         client,
         system_prompt=synthesizer_system,
         user_prompt=synthesizer_user,
-        model='claude-opus-4-5',
+        model=model,
         temperature=0.3,
         label='Synthesizer',
     )
 
-    # ── Challenger pass (Grok cross-provider quality review) ──────────────────
+    # ── Challenger pass (ChallengerService; its models are in challenger_config.json) ──
     _ch_result = None
     try:
         from domains.guild.services.challenger import ChallengerService as _CS
@@ -477,7 +496,7 @@ def main() -> None:
         client,
         system_prompt=challenger_system,
         user_prompt=challenger_user,
-        model='claude-opus-4-5',
+        model=model,
         temperature=0.7,
         label='Challenger',
     )
@@ -485,7 +504,7 @@ def main() -> None:
     total_cost = s_cost + c_cost
 
     # Assemble and write
-    essay = assemble_essay(data, s_out, c_out, total_cost)
+    essay = assemble_essay(data, s_out, c_out, total_cost, model)
     out_path = args.output_path or next_output_path(topic)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(essay)

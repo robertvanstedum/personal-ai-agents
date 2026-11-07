@@ -15,6 +15,8 @@ import types
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from domains.curator import research_routes
 from domains.curator.research_routes import research_bp, save_annotation, _get_recent_annotations
 
@@ -84,6 +86,64 @@ def test_generate_dive_uses_shared_secret_lookup(monkeypatch):
         "api_key",
     )
     assert calls["api_key"] == "test-key"
+
+
+def _generate_dive_module(name):
+    script = ROOT / "domains" / "curator" / "research" / "scripts" / "generate_dive.py"
+    spec = importlib.util.spec_from_file_location(name, script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_dive_model_is_one_configured_value_with_its_true_cost_and_label(monkeypatch, tmp_path):
+    module = _generate_dive_module("test_generate_dive_model")
+    config = tmp_path / "config.json"
+    monkeypatch.setattr(module, "PATHS", types.SimpleNamespace(config=config, repo=tmp_path))
+    assert module.dive_model() == "claude-opus-4-5"                               # no config file: the default
+    config.write_text('{"models": {"synthesis": {"model": "claude-sonnet-4-5"}}}')
+    assert module.dive_model() == "claude-opus-4-5"                               # no dive entry: the default
+    config.write_text('{"models": {"dive": {"model": "claude-sonnet-4-5"}}}')
+    assert module.dive_model() == "claude-sonnet-4-5"
+
+    seen = {}
+
+    class Messages:
+        def create(self, **kwargs):
+            seen.update(kwargs)
+            return types.SimpleNamespace(content=[types.SimpleNamespace(text="essay")],
+                                         usage=types.SimpleNamespace(input_tokens=1000, output_tokens=1000))
+
+    client = types.SimpleNamespace(messages=Messages())
+    assert module.run_agent(client, "s", "u", "claude-opus-4-5", 0.3, "x")[1] == pytest.approx(0.030)
+    assert module.run_agent(client, "s", "u", "claude-sonnet-4-5", 0.3, "x")[1] == pytest.approx(0.018)
+    assert seen["model"] == "claude-sonnet-4-5"
+
+    essay = module.assemble_essay({"topic": "t", "motivation": "m", "sessions": [], "domain": "d"}, "s", "c", 0.5,
+                                  "claude-sonnet-4-5")
+    assert "Synthesizer: claude-sonnet-4-5 · Challenger: claude-sonnet-4-5" in essay
+    assert "temp 0." not in essay and "Est. cost: $0.50" in essay
+
+
+def test_an_unpriced_dive_model_is_refused_before_any_call(monkeypatch, capsys):
+    module = _generate_dive_module("test_generate_dive_unpriced")
+    monkeypatch.setattr(module, "dive_model", lambda: "claude-unpriced")
+    monkeypatch.setattr(module, "load_thread_data", lambda topic: {"sessions": [], "annotations": [], "motivation": ""})
+    monkeypatch.setattr(module, "guard_has_findings", lambda data: None)
+    monkeypatch.setattr(module, "build_synthesizer_user_prompt", lambda data: "")
+    monkeypatch.setattr(module, "get_anthropic_client", lambda: pytest.fail("no call may be made"))
+    monkeypatch.setattr(sys, "argv", ["generate_dive.py", "--topic", "t"])
+    with pytest.raises(SystemExit):
+        module.main()
+    assert "no price known for model claude-unpriced" in capsys.readouterr().out
+
+
+def test_dive_page_words_say_what_really_runs():
+    research = ROOT / "domains" / "curator" / "research"
+    assert "Grok" not in (research / "scan_render.py").read_text()
+    assert "Claude Sonnet challenge pass" in (research / "web" / "dive_confirm.html").read_text()
+    config = json.loads((ROOT / "domains/guild/config/challenger_config.json").read_text())["challenger"]
+    assert config["challenger_model"].startswith("claude-") and config["primary_model"].startswith("claude-sonnet")
 
 
 def test_scan_research_directions_use_scan_questions():

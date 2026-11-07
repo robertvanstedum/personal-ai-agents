@@ -194,7 +194,7 @@ def render_scan_page(dd: dict, hash_id: str) -> str:
   <div class="dive-panel" id="dive-panel">
     <div class="dive-panel-text">
       <h3>→ Generate Deeper Dive</h3>
-      <p>Synthesize this article with Claude + Grok challenge pass.</p>
+      <p>Synthesize this article with Claude, then test it with a Claude challenge pass.</p>
       <p class="one-session-note">Note: this dive draws from a single article. For multi-session depth, use Start Research Thread below.</p>
       <div id="dive-status"></div>
     </div>

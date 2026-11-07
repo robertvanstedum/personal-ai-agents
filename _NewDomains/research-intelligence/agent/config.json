@@ -26,6 +26,9 @@
       "model": "claude-haiku-4-5",
       "temperature": 0.3
     },
+    "dive": {
+      "model": "claude-opus-4-5"
+    },
     "synthesis": {
       "model": "claude-sonnet-4-5",
       "temperature": 0.7,
