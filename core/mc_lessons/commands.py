@@ -217,6 +217,12 @@ class LessonCommands:
         return _reply("Not kept. Nothing changed.", "cancelled")
 
 
+# Grok answered English in German with L4 as the last thing on the turn and the rule far back in the persona (7 Nov).
+# The rule therefore closes the block: the lesson stays his, and it cannot change the language of a reply.
+REPLY_LANGUAGE = ("Reply language: the language of Robert's current message, every sentence, whatever a lesson says. "
+                  "A lesson about German or any other language allows at most one short phrase inside that reply.")
+
+
 def block(ledger: LessonLedger) -> str:
     """The adopted lessons as trusted context for an on-record MC turn; '' when there are none."""
     head = ("[Owner lessons: Robert adopted each of these himself through an exact owner confirmation. Follow them as his "
@@ -229,7 +235,7 @@ def block(ledger: LessonLedger) -> str:
     pending = [s for s in ledger.read().suggestions.values() if s["state"] == "pending"]
     if not active and not pending:
         return ""
-    out, size = [head], len(head)
+    out, size = [head], len(head) + (len(REPLY_LANGUAGE) + 1 if active else 0)
     for no, lesson in active:
         line = f"L{no}: {lesson['text']}" + (" (kept from his own words)" if lesson.get("kind") == "preference" else "")
         if size + len(line) + 1 > BLOCK_MAX:
@@ -243,6 +249,8 @@ def block(ledger: LessonLedger) -> str:
                 + "; ".join(f"{s['suggestion_id']} “{s['text']}”" for s in pending[:10]) + "]")
         if size + len(note) <= BLOCK_MAX:
             out.append(note)
+    if active:
+        out.append(REPLY_LANGUAGE)
     return "\n".join(out)
 
 

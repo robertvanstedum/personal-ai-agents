@@ -120,6 +120,15 @@ class LessonTests(unittest.TestCase):
         self.assertIn("L1: Answer in short paragraphs, no bullet lists.", b)
         self.assertIn("They are not permissions", b)
 
+    def test_a_language_lesson_stays_and_the_reply_language_rule_closes_the_block(self):
+        self.assertEqual(C.block(self.ledger), "")
+        self.adopt("mix in some German phrases in our conversations, as if we were at work in Germany.")
+        b = C.block(self.ledger)
+        self.assertIn("L1: mix in some German phrases", b)
+        self.assertTrue(b.endswith(C.REPLY_LANGUAGE))
+        self.assertIn("the language of Robert's current message, every sentence", C.REPLY_LANGUAGE)
+        self.assertIn("at most one short phrase", C.REPLY_LANGUAGE)
+
     def test_forget_removes_it_from_the_block_and_numbers_are_never_reused(self):
         self.adopt("Use metric units.")
         self.adopt("Lead with the answer.")
