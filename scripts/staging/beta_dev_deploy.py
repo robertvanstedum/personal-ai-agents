@@ -22,6 +22,7 @@ import time
 
 RELEASE = "beta-20261107a"
 STAGING_ROOT = "/opt/minimoi-staging"
+SHORT_LIVED = ("dev-memory-feed-",)
 OPERATOR_NAME = "beta-dev-20261106"
 MIN_FREE_BYTES = 2 * 1024 ** 3
 SAMPLE_PER_IMAGE = 12
@@ -888,7 +889,8 @@ class RealHost:                                     # pragma: no cover  (exercis
 
     def _others(self):
         mine = {s["container"] for s in self.targets.values()} | {self._backup(s) for s in self.targets.values()}
-        return {k: v for k, v in self.O.snapshot().items() if k not in mine}
+        # A scheduled job's container comes and goes on its own: its leaving mid-swap is not a change (7 Nov 2026, a failed apply).
+        return {k: v for k, v in self.O.snapshot().items() if k not in mine and not k.startswith(SHORT_LIVED)}
 
     # swap
     def stop_workers(self):

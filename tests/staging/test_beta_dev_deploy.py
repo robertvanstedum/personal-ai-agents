@@ -1376,3 +1376,11 @@ def test_with_image_env_is_the_saved_contract_plus_exactly_the_named_switch():
     saved = {"env": ["B=1", "A=1"], "host": {}, "mounts": []}
     assert op.with_image_env(saved, {})["env"] == ["A=1", "B=1"]
     assert op.with_image_env(saved, {"image_env": (("S", "1"),)}) == {"env": ["A=1", "B=1", "S=1"], "host": {}, "mounts": []}
+
+
+def test_a_scheduled_jobs_container_is_not_an_unrelated_change():
+    # 7 Nov 2026: a memory-feed job ending mid-swap failed the apply and its restore.
+    assert "dev-memory-feed-045f".startswith(op.SHORT_LIVED)
+    assert not "postgres-ai-agents".startswith(op.SHORT_LIVED)
+    source = open(op.__file__).read()
+    assert "not k.startswith(SHORT_LIVED)" in source.split("def _others(self):", 1)[1].split("# swap", 1)[0]
