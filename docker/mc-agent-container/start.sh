@@ -137,14 +137,26 @@ log "forwarders: 127.0.0.1:5011 and :4000 -> $DOOR (the only way to MiniMoi)"
 # ("Another Gateway owner lease is still active"; see docker/mc-agent/start-mc.sh). A gateway that exits within 90 s is
 # retried after a pause, at most START_ATTEMPTS times; one that ran longer exits with its own status (restart policy).
 START_ATTEMPTS="${MC_START_ATTEMPTS:-14}"            # the lease was observed to take ~4 minutes to clear
+# A clean stop. `docker stop` sends TERM to the whole group (the image runs this under `tini -g`), the gateway included.
+# Untrapped, this shell died at once, tini exited with it, and the gateway was killed mid-shutdown, before it gave its lease
+# back (a hypothesis: no log yet shows the lease release). So: the shell stays, waits for the gateway to finish its own
+# shutdown, and never retries after a stop. It sends no second TERM: the gateway already has one.
+stopping=0
+gw=""
+trap 'stopping=1' TERM INT
 n=1
 while :; do
   log "starting gateway (release ${MINIMOI_RELEASE_SHA:-unknown}), attempt $n/$START_ATTEMPTS"
   t0=$(date +%s)
   set +e
-  $OPENCLAW gateway --port 18789
+  $OPENCLAW gateway --port 18789 &
+  gw=$!
+  wait "$gw"
   rc=$?
+  while kill -0 "$gw" 2>/dev/null; do wait "$gw"; rc=$?; done     # a trapped signal ends the first wait early
   set -e
+  gw=""
+  if [ "$stopping" = 1 ]; then log "stopped: the gateway shut down on its own (status $rc)"; exit 0; fi
   ran=$(( $(date +%s) - t0 ))
   [ "$rc" -eq 137 ] && { log "gateway was KILLED (status 137: out of memory or SIGKILL) after ${ran}s; not retrying here"; exit "$rc"; }
   [ "$ran" -lt 90 ] && [ "$n" -lt "$START_ATTEMPTS" ] || exit "$rc"

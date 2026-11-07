@@ -725,12 +725,12 @@ def test_every_chunk_stays_under_ssms_limit_and_the_host_verifies_each_part_and_
     tar = os.urandom(500_000)
     digest = sha(tar)
     scripts = pay.chunk_scripts(tar, digest)
-    assert len(scripts) == 10
+    assert len(scripts) == 9                                # nine parts; the last, small, carries the unpack too
     for script in scripts:
         assert pay.envelope_size(script) < pay.SSM_LIMIT
         assert "/opt/minimoi-staging/operators/beta-dev-20261106" in script and not re.search(r"/opt/minimoi(?![-\w])", script)
     rebuilt = b""
-    for part, script in zip(range(9), scripts[:-1]):
+    for script in scripts:
         b64 = re.search(r"printf %s '([^']+)'", script).group(1)
         data = base64.b64decode(b64)
         rebuilt += data

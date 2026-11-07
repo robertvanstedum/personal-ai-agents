@@ -6,6 +6,11 @@ reads its state once. ``build`` touches nothing on any host. Reuses beta_dev_pay
   beta_dev_routes_payload.py send --out DIR
   beta_dev_routes_payload.py start dry-run|apply|rollback [--failover openai]
   beta_dev_routes_payload.py read                     one bounded read of status, journal and log; never loops
+  beta_dev_routes_payload.py check --operator-commit HEAD   one read: may a release update leave routes as they are?
+
+Routes stay on through a release update (beta_dev_deploy.py update) when Dev's routes operator is this commit's: same
+beta_dev_routes.py and mc_keys.sh, the files that decide what it switched on. The update itself refuses a change to anything
+routes verified (ROUTES_SENSITIVE), and moves the routes operator's saved images on after a verified result.
 """
 from __future__ import annotations
 
@@ -31,6 +36,54 @@ def operator_blobs(git, commit: str) -> dict:
         name = pathlib.Path(path).name
         assert (pathlib.Path(__file__).resolve().parent / name).read_bytes() == data, f"{path} differs from {commit}"
         out[name] = data
+    return out
+
+
+ROUTES_LOGIC = ("beta_dev_routes.py", "mc_keys.sh")    # what decides the override, the catalogue and the keys it made
+
+
+def check_script() -> str:
+    """One bounded read: is a routes override applied, and which routes operator made it."""
+    P.check_destination(HOST_DIR)
+    lines = [f"D={HOST_DIR}", '[ -e "$D/compose.routes.yml" ] || [ -e "$D/mc.routes.yml" ] && echo "APPLIED yes" || echo "APPLIED no"',
+             '[ ! -e "$D/recovery-required.json" ] || echo "RECOVERY yes"']
+    lines += [f'printf "SHA %s " {name}; sha256sum < "$D/release/operator/{name}" 2>/dev/null | cut -d" " -f1 || echo none' for name in ROUTES_LOGIC]
+    return "\n".join(lines) + "\nexit 0\n"
+
+
+def parse_check(out: str) -> dict:
+    found = {"applied": False, "recovery": False, "sha": {}}
+    for line in out.splitlines():
+        words = line.split()
+        if words[:2] == ["APPLIED", "yes"]:
+            found["applied"] = True
+        elif words[:2] == ["RECOVERY", "yes"]:
+            found["recovery"] = True
+        elif len(words) == 3 and words[0] == "SHA":
+            found["sha"][words[1]] = words[2]
+    return found
+
+
+def routes_decision(local: dict, host: dict) -> tuple:
+    """(verdict, words). local: {file name: sha256} at the operator commit. host: parse_check's result."""
+    if host["recovery"]:
+        return "stop", "the routes operator needs recovery: nothing else runs until someone has looked"
+    if not host["applied"]:
+        return "off", "routes are off on Dev: the update runs without them; run routes-on afterwards only if you want them on"
+    differs = sorted(n for n in ROUTES_LOGIC if host["sha"].get(n) != local[n])
+    if differs:
+        return "cycle", "Dev's routes operator differs (" + ", ".join(differs) + "): routes-off, the update, routes-on"
+    return "skip", "routes stay on: Dev's routes operator is this commit's, and the update refuses anything they verified"
+
+
+def local_logic(git, commit: str) -> dict:
+    out = {}
+    for path in OPERATOR_FILES:
+        name = pathlib.Path(path).name
+        if name in ROUTES_LOGIC:
+            data = git.blob(commit, path)
+            assert data is not None, f"{path} is not in {commit}"
+            out[name] = P.sha(data)
     return out
 
 
@@ -70,6 +123,8 @@ def main(argv=None):                                # pragma: no cover
     start.add_argument("action", choices=("dry-run", "apply", "rollback"))
     start.add_argument("--failover", default=R.DEFAULT_FAILOVER)
     sub.add_parser("read")
+    check = sub.add_parser("check")
+    check.add_argument("--operator-commit", required=True)
     args = parser.parse_args(argv)
     if args.command == "build":
         git, out = P.Git(), pathlib.Path(args.out)
@@ -89,6 +144,10 @@ def main(argv=None):                                # pragma: no cover
             print(P.run_on_host(script).strip())
     elif args.command == "start":
         print(P.run_on_host(start_script(args.action, args.failover), 60))
+    elif args.command == "check":
+        git = P.Git()
+        verdict, words = routes_decision(local_logic(git, git.rev(args.operator_commit)), parse_check(P.run_on_host(check_script(), 60)))
+        print(f"ROUTES {verdict}: {words}")
     else:
         print(P.run_on_host(P.read_script(HOST_DIR), 60))
 
