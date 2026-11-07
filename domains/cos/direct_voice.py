@@ -225,9 +225,14 @@ class ChiefOfStaff(DirectVoiceAdapter):
              "invalid": "Voice unavailable: open Confer to talk with CoS.",
              "kept_in": "in Chief of Staff's voice records, which she can recall"}
 
-    def __init__(self, *, store, process_turn, briefing, memory, files=None, card_root=CARD_ROOT, clock=time.time, history=None):
+    def __init__(self, *, store, process_turn, briefing, memory, files=None, card_root=CARD_ROOT, clock=time.time, history=None,
+                 owner_turn=None, request_binding=None):
         self.store, self._process, self._briefing, self._memory = store, process_turn, briefing, memory
         self._history = history
+        # A spoken action runs as an owner turn, like a typed one (Dev, 7 Nov: every Board and card call from voice was
+        # refused run_unattached). request_binding reads THIS request's signed assertion, in the request's own thread;
+        # owner_turn saves his words in the chat and binds the turn to them.
+        self._owner_turn, self._request_binding = owner_turn, request_binding
         self._files, self._card_root, self._clock = files or (lambda: None), card_root, clock
 
     def owner(self):
@@ -369,11 +374,16 @@ class ChiefOfStaff(DirectVoiceAdapter):
             log.exception("cos direct voice: outbox not read")
             before = None
         gate, box, finished, limit = _Boundary(), {}, threading.Event(), turn_deadline()
+        binding = self._request_binding() if self._request_binding is not None else None
 
         def work():
             try:
-                box["result"] = self._process(text, channel="html_voice", conversation_id=cos_history.backend_session(handle),
-                                              request_id=request_id, on_dispatch=gate.cross)
+                if self._owner_turn is not None and binding is not None:
+                    box["result"] = self._owner_turn(text, conversation=handle, request_id=request_id,
+                                                     on_dispatch=gate.cross, binding=binding)
+                else:
+                    box["result"] = self._process(text, channel="html_voice", conversation_id=cos_history.backend_session(handle),
+                                                  request_id=request_id, on_dispatch=gate.cross)
             except BaseException as exc:          # noqa: BLE001 - classified by the boundary below, never by class
                 box["error"] = exc
             finally:
@@ -431,7 +441,7 @@ class ChiefOfStaff(DirectVoiceAdapter):
 
 
 def install(app, *, environ, process_turn, briefing, memory, files=None, recall=None, budget=None,
-            clock=time.time, summary_http=None, card_root=CARD_ROOT, history=None):
+            clock=time.time, summary_http=None, card_root=CARD_ROOT, history=None, owner_turn=None, request_binding=None):
     """Register her direct voice on cos-scheduler's app when MINIMOI_COS_VOICE_DIRECT=1: the core's routes under PREFIX,
     with this adapter. Returns the core's metadata, or None (nothing registered). ``recall``: Confer's recall folder
     (conversation_log.folder), where settled sessions are projected (D6 (a)). A start is allowed only where may_start()
@@ -443,7 +453,7 @@ def install(app, *, environ, process_turn, briefing, memory, files=None, recall=
         log.error("cos direct voice: %s is not a usable folder; voice is refused until it is", voice_store.ENV)
     adapter = ChiefOfStaff(store=voice_store.FileStore(root, recall=recall, clock=clock), process_turn=process_turn,
                            briefing=briefing, memory=memory, files=files, card_root=card_root,
-                           clock=clock, history=history)
+                           clock=clock, history=history, owner_turn=owner_turn, request_binding=request_binding)
 
     def admitted():
         if not may_start(environ):

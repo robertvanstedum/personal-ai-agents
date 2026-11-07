@@ -174,3 +174,21 @@ def test_page_refuses_silent_truncation_and_completion_without_close(client):
     assert post(client, 'open', 202, title='Bad completed state', status='done').status_code == 422
     row = post(client, 'open', 203, title='Briefing', kind='briefing').json['row']
     assert post(client, 'comment', 204, item_id=row['item_id'], text='x'*4001).status_code == 422
+
+
+def test_actions_reads_afresh_each_time_it_opens_and_when_a_chat_reply_lands():
+    """Robert, 7 Nov: records CoS wrote from the chat showed in Actions only after a hard refresh."""
+    from pathlib import Path
+    js = (Path(__file__).resolve().parents[2] / "domains/cos/static/cos-in-flight.js").read_text()
+    shown = js[js.index("function shownNow()"):]
+    assert "if (on && !visible) load();" in shown and "visible = on;" in shown
+    assert "!state.loaded) load()" not in shown
+    assert "document.addEventListener('cos:chat-rendered', () => { if (visible) load(); });" in js
+
+
+def test_the_status_list_offers_cancelled_and_it_closes_the_item_as_cancel_work_does():
+    from pathlib import Path
+    js = (Path(__file__).resolve().parents[2] / "domains/cos/static/cos-in-flight.js").read_text()
+    select = js[js.index("function statusSelect("):js.index("function typeSelect(")]
+    assert "{ ...STATUS, dropped: 'Cancelled' }" in select
+    assert "else if (to === 'dropped') send('close', { item_id: row.item_id, outcome: 'dropped' });" in select

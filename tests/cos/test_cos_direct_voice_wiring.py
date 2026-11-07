@@ -100,6 +100,12 @@ def ask(cos, sid, words, item="t1", name="consult", call="call_1"):
         "session_id": sid, "call_id": call if call.startswith("host-") else "host-" + call, "name": name, "owner_transcript_item": words, "owner_item_id": item}).get_json()
 
 
+@pytest.fixture
+def on_with_history(monkeypatch, tmp_path):
+    yield load(monkeypatch, tmp_path, MINIMOI_COS_VOICE_DIRECT="1", MINIMOI_ROLE="development", COS_STORE_ENVIRONMENT="dev")
+    sys.modules.pop("domains.cos.chief_of_staff", None)
+
+
 def reminder_records(cos):
     path = cos.test.reminders / "reminders.json"
     return json.loads(path.read_text()).get("reminders", []) if path.exists() else []
@@ -249,3 +255,31 @@ def test_her_static_files_are_served_and_the_portal_rewrites_none_of_them(off):
     for text in (page.get_data(True), session.get_data(True), script,
                  (root / "core/realtime_voice/static/realtime-voice-controller.js").read_text()):
         assert _rewrite_js(text, "/app/cos") == text        # the page's own rebase is the only prefixing: never doubled
+
+
+# ── a spoken action is an owner turn (Dev, 7 Nov: every Board and card call from voice was refused run_unattached) ──
+
+def test_a_spoken_action_carries_the_owners_binding_and_his_words_saved_in_the_chat(on_with_history):
+    cos = on_with_history
+    assert cos._history is not None
+    sid = start(cos)
+    answer = ask(cos, sid, "Create a post-it that says German persona")
+    assert answer["outcome"] == "done", answer.get("spoken")
+    (prompt, context), = cos.test.sent
+    assert prompt == "Create a post-it that says German persona"
+    binding = context["binding"]
+    assert binding["origin"] == "owner" and binding["principal"] == "7"
+    ref = binding["history"]
+    turn = cos._history.turn(ref["conversation_id"], ref["turn_id"])
+    assert turn["user_text"] == "Create a post-it that says German persona" and turn["channel"] == "voice"
+    assert turn["status"] == "answered" and turn["reply_text"] == "Here is what I found."
+
+
+def test_a_spoken_action_the_portal_did_not_sign_never_reaches_her(on_with_history):
+    cos = on_with_history
+    sid = start(cos)
+    unsigned = {k: v for k, v in OWNER.items() if k != "X-Test-Sign-Owner"}
+    answer = cos.app.test_client().post(PREFIX + "/consult", headers={**unsigned, "X-Test-Unsigned": "1"}, json={
+        "session_id": sid, "call_id": "host-call_9", "name": "consult", "owner_transcript_item": "Create a post-it",
+        "owner_item_id": "t9"})
+    assert answer.status_code == 403 and cos.test.sent == []

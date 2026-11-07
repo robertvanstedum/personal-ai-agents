@@ -132,9 +132,11 @@ function statusSelect(row, closed = row.closed_at != null) {
     onchange: (e) => {
       const to = e.target.value;
       if (to === 'done') send('close', { item_id: row.item_id, outcome: 'done' });
+      else if (to === 'dropped') send('close', { item_id: row.item_id, outcome: 'dropped' });    // as "Cancel work" does
       else send('update', { item_id: row.item_id, status: to });
     } },
-  ...Object.entries(STATUS).map(([v, label]) => h('option', { value: v, selected: v === row.status }, label)));
+  // Cancelled sits in the list too, not only behind the row's "Cancel work" (Robert, 7 Nov: no cancel in the dropdown).
+  ...Object.entries({ ...STATUS, dropped: 'Cancelled' }).map(([v, label]) => h('option', { value: v, selected: v === row.status }, label)));
   return sel;
 }
 
@@ -299,14 +301,19 @@ function bind() {
 }
 
 // The tab itself: the page's own activateTab shows the panel; here the body learns In flight is showing (no page art, no
-// conversation list; on a phone the bar says "In flight", from founders.css), and the table loads the first time.
+// conversation list; on a phone the bar says "In flight", from founders.css). The table reads afresh each time the tab
+// opens, and when a chat reply lands while it shows: CoS writes records from the chat, and they showed only after a
+// hard refresh (Robert, 7 Nov).
+let visible = false;
 function shownNow() {
   const on = PANEL.classList.contains('active');
   document.body.classList.toggle('show-cos-flight', on);
-  if (on && !state.loaded) load();
+  if (on && !visible) load();
+  visible = on;
 }
 bind();
 new MutationObserver(shownNow).observe(PANEL, { attributes: true, attributeFilter: ['class'] });
+document.addEventListener('cos:chat-rendered', () => { if (visible) load(); });
 if (typeof INITIAL_TAB !== 'undefined' && INITIAL_TAB === 'flight' && typeof activateTab === 'function') activateTab('flight', false);
 shownNow();
 window.cosInFlight = { reload: load, get ready() { return state.loaded; } };

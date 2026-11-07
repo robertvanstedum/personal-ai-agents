@@ -1424,7 +1424,8 @@ _cos_managed_realtime_ready = _install_managed_realtime(app, environ=os.environ,
 # MINIMOI_COS_DIRECT_VOICE_PRODUCTION=1 (domains/cos/direct_voice.py). Off: nothing is registered and Confer is as before.
 from domains.cos.direct_voice import install as _install_direct_voice
 _cos_direct_voice = _install_direct_voice(app, environ=os.environ, process_turn=_process_confer_turn,
-    briefing=_build_system_prompt, memory=_read_memory, files=lambda: _cos_files, recall=_conversations_dir, history=_history)
+    briefing=_build_system_prompt, memory=_read_memory, files=lambda: _cos_files, recall=_conversations_dir, history=_history,
+    owner_turn=lambda *a, **k: _voice_owner_turn(*a, **k), request_binding=lambda: _request_binding())
 # The CoS store's one writer and its internal API (CoS 1.2 spec v0.3 section 4.5). Mounted only when COS_STORE_DIR,
 # COS_STORE_ENVIRONMENT and COS_STORE_TOKEN_FILE are all set; otherwise nothing changes.
 from domains.cos.store.api import install as _install_cos_store
@@ -1778,6 +1779,49 @@ def _ui_turn(body: dict, binding: dict | None = None) -> tuple[dict, int]:
     except Exception as e:
         _log_file("ui_send_error", str(e))
         return {"reply": f"CoS error: {e}"}, 500
+
+
+def _voice_owner_turn(text: str, *, conversation: str, request_id: str, on_dispatch, binding: dict):
+    # ``conversation`` is the voice session's: "owner" (her default chat, created on first use, as a typed turn does)
+    # or a chat id.
+    """A spoken action as an owner turn, the way a typed one runs (Dev, 7 Nov: from voice, every Board post-it and work
+    card was refused run_unattached, while the same words typed worked). His words are saved in the chat on the voice
+    channel, the turn is bound to the signed request that carried them, so a proposal cites them, and the chat's chosen
+    model serves it. Returns the turn service's result, as the voice adapter expects."""
+    kept = None
+    if _history is not None and not _is_confer_operation(text):
+        kept, early = _history_begin({"conversation_id": conversation, "request_id": request_id}, text, [], "html_voice")
+        if early is not None:
+            raise InvalidConferTurn(early[0]["reply"])
+    model_token = route_token = routed = None
+    try:
+        routed = model_route.for_turn(_history, kept["conversation_id"]) if kept else None
+        model_token = openclaw_backend_module.turn_model.set(model_route.runtime_model(routed))
+        route_state = {"route": routed} if routed is not None else None
+        route_token = openclaw_backend_module.turn_route.set(route_state)
+        result = _process_confer_turn(
+            text, channel="html_voice",
+            conversation_id=cos_history.backend_session(kept["conversation_id"] if kept else conversation),
+            request_id=request_id, on_dispatch=on_dispatch,
+            turn_id=_receipt_turn_id(kept["turn_id"]) if kept else None,
+            binding=dict(binding, history={"conversation_id": kept["conversation_id"], "turn_id": kept["turn_id"]})
+            if kept else binding,
+        )
+        if routed is not None:
+            model_route.record(_history, kept["conversation_id"], route_state.get("switched") or routed,
+                               _bindings.served_for_turn(_receipt_turn_id(kept["turn_id"])) if _bindings is not None else None)
+        if kept:
+            _history_answer(kept, result.public_dict(), "html_voice", text, [])
+    except BaseException as exc:
+        if kept:
+            _history_fail(kept, exc)
+        raise
+    finally:
+        if model_token is not None:
+            openclaw_backend_module.turn_model.reset(model_token)
+        if route_token is not None:
+            openclaw_backend_module.turn_route.reset(route_token)
+    return result
 
 
 # Background turns: a research turn (several searches, a file written) can outlast the edge's 120 s request limit.
