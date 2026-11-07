@@ -160,7 +160,6 @@ def call_haiku(prompt, client, model, temperature=0.0, max_tokens=512, system=No
         kwargs = dict(
             model=model,
             max_tokens=max_tokens,
-            temperature=temperature,
             messages=[{"role": "user", "content": prompt}],
         )
         if system:

@@ -7,7 +7,7 @@ feedparser==6.0.11
 beautifulsoup4>=4.14.0
 python-dateutil
 markdown
-anthropic
+anthropic==2.3.0
 openai
 tavily-python
 watchdog

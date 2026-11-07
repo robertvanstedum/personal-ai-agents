@@ -163,7 +163,6 @@ def call_sonnet(system: str, prompt: str, client: anthropic.Anthropic,
     msg = client.messages.create(
         model=model,
         max_tokens=1024,
-        temperature=temperature,
         system=system,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -189,7 +188,6 @@ def extract_query_candidates(text: str, client: anthropic.Anthropic,
         msg = client.messages.create(
             model=haiku_model,
             max_tokens=256,
-            temperature=0.0,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = msg.content[0].text.strip() if msg.content else "[]"

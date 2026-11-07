@@ -5,7 +5,7 @@ flask-cors==6.0.2
 requests==2.32.5
 psycopg2-binary>=2.9.0
 openai
-anthropic
+anthropic==2.3.0
 deepl
 python-dotenv
 feedparser>=6.0.0

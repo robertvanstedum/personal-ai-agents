@@ -267,11 +267,10 @@ def get_anthropic_client():
 def run_agent(client, system_prompt: str, user_prompt: str,
               model: str, temperature: float, label: str) -> tuple[str, float]:
     """Run one agent call. Returns (output_text, cost_usd)."""
-    print(f"  → Running {label} ({model}, temp={temperature})…", flush=True)
+    print(f"  → Running {label} ({model})…", flush=True)
     response = client.messages.create(
         model=model,
         max_tokens=4000,
-        temperature=temperature,
         system=system_prompt,
         messages=[{'role': 'user', 'content': user_prompt}],
     )
