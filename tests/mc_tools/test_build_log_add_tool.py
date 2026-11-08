@@ -243,6 +243,11 @@ class RegistrationTests(unittest.TestCase):
         prod = json.loads((ROOT / "services/mc_operations/policy/mc-policy.prod.json").read_text())
         self.assertNotIn("build_log_add_v1", {r["handler"] for r in prod["rules"]})
 
+    def test_reading_a_file_is_not_treated_as_proof_of_what_the_site_shows(self):
+        description = catalogue.TOOLS["minimoi_host_read"]["description"]
+        self.assertIn("not proof of what the site shows", description)
+        self.assertIn("which file you read", description)
+
     def test_off_when_there_is_no_live_queue(self):
         self.assertIsNone(build_log_store({}))
 
