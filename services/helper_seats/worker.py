@@ -3,7 +3,7 @@ the tasks this seat holds, works the chartered ones, and submits a result to the
 as this seat's own source events, so no new store is needed and the lead reads them with its own token.
 
 python -m services.helper_seats.worker --seat apprentice
-Env: PARTNERSHIP_TASKS_URL, PARTNERSHIP_ENVIRONMENT, HELPER_TOKEN_FILE, HELPER_CHARTERS_DIR, HELPER_STATE_DIR, HELPER_REPO_ROOT,
+Env: PARTNERSHIP_TASKS_URL, PARTNERSHIP_ENVIRONMENT, HELPER_TOKEN_FILE, HELPER_CHARTER_APPROVALS, HELPER_STATE_DIR, HELPER_REPO_ROOT,
 GUILD_QUEUE_PATH, HELPER_GATEWAY_URL, HELPER_GATEWAY_KEY_FILE, HELPER_MODEL."""
 from __future__ import annotations
 
@@ -113,7 +113,8 @@ def main(argv=None):
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         sys.exit(f"another {args.seat} worker is running: a second replica is a failed start")
-    charter = Charters.load(os.environ["HELPER_CHARTERS_DIR"]).get(args.seat)
+    charters = Charters.load(os.environ.get("HELPER_CHARTERS_DIR") or "/app/config/partnership/charters", os.environ["HELPER_CHARTER_APPROVALS"])
+    charter = charters.get(args.seat)
     if charter is None:
         sys.exit(f"no approved charter for {args.seat}")
     token_file = os.environ["HELPER_TOKEN_FILE"]

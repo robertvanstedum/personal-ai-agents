@@ -57,16 +57,27 @@ def _check(doc: dict, name: str) -> None:
             raise CharterRefused(f"{name}/{type_id}: bad return or revision limit")
 
 
+DEFAULT_DIR, DEFAULT_APPROVALS = "/app/config/partnership/charters", "/run/secrets/partnership/charter-approvals.json"
+
+
+def load_if_approved(environ):
+    """The approved charters, or None until Robert's approvals are on the host."""
+    approvals = environ.get("PARTNERSHIP_CHARTER_APPROVALS") or DEFAULT_APPROVALS
+    if not Path(approvals).is_file():
+        return None
+    return Charters.load(environ.get("PARTNERSHIP_CHARTERS_DIR") or DEFAULT_DIR, approvals)
+
+
 class Charters:
     def __init__(self, charters=()):
         self._by_seat = {c.seat: c for c in charters}
 
     @classmethod
-    def load(cls, root) -> "Charters":
-        """Every <seat>/v<N>.json under ``root``, each matching an approval in approvals.json. A mismatch refuses the whole start:
-        a changed charter with an old approval must not run."""
+    def load(cls, root, approvals_file=None) -> "Charters":
+        """Every <seat>/v<N>.json under ``root``, each matching an approval. The approvals file is a host record, like a policy's
+        authority file, not part of the image. A mismatch refuses the whole start: a changed charter with an old approval must not run."""
         root = Path(root)
-        approvals = json.loads((root / "approvals.json").read_text("utf-8"))
+        approvals = json.loads(Path(approvals_file or root / "approvals.json").read_text("utf-8"))
         out = []
         for path in sorted(root.glob("*/v*.json")):
             doc = json.loads(path.read_text("utf-8"))

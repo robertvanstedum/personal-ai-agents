@@ -632,12 +632,9 @@ def artifact_root(environ):
 
 def _charters(environ):
     """The approved helper charters, or None (helpers off). A charter that doesn't match its approval turns only helpers off."""
-    root = str(environ.get("PARTNERSHIP_CHARTERS_DIR", "") or "").strip() or "/app/config/partnership/charters"
-    if not os.path.isfile(os.path.join(root, "approvals.json")):
-        return None
-    from services.partnership_tasks.charters import CharterRefused, Charters
+    from services.partnership_tasks.charters import CharterRefused, load_if_approved
     try:
-        return Charters.load(root)
+        return load_if_approved(environ)
     except (CharterRefused, OSError, ValueError) as exc:
         _log.warning("mc tools: helpers off (%s)", type(exc).__name__)
         return None
