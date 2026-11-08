@@ -47,6 +47,19 @@ be proved; the read-only delivery record written only after a verified result. A
 built from the exact commit Dev runs, under a release name of its own, with none of its tags already present, and with no
 earlier update unresolved (`update-in-flight.json`).
 
+## When an update fails (8 Nov)
+
+The first live update's portal never answered `/health`: `core/founders_ui` read a CoS page file at startup that the portal
+image did not hold, because the portal target never shipped `domains/cos/`. Now:
+
+- The portal ships and lays out `domains/cos/`. Until a release built with that runs on Dev, an update that rebuilds the
+  portal also ships `domains/cos/` as changed since the portal's base (`catch_up`; about 170 KB, so 6 SSM calls from
+  cc85389f). Drop `catch_up` from the portal's target once one has run.
+- A sealed startup check imports `minimoi_portal.app` and gets `/health` before any worker stops.
+- A container that restarts 3 times while its health is awaited fails at once, not after the full wait.
+- Before a restore replaces a failed container, its last 200 log lines and state are kept in the operator folder as
+  `failed-<container>-<time>.private.log` (0600); the journal's `failed_logs` line names the file.
+
 ## Running it (each run waits for Robert's go)
 
 ```bash

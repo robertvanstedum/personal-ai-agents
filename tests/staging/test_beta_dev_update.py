@@ -56,6 +56,8 @@ class Docker(base.FakeDocker):
     def __init__(self, root, meta):
         super().__init__(root, meta)
         self.probe_ok, self.health_on_up = True, None
+        # health_fail: {container: the image id that still answers}; any other image's health URL fails, and the container restarts
+        self.health_fail, self.startup_fail, self.logs_fail = {}, False, False
 
     def build(self, args):
         out = super().build(args)
@@ -81,6 +83,18 @@ class Docker(base.FakeDocker):
             return base._Result(json.dumps({p: image["files"].get(p) for p in json.loads(kw["input"])}) + "\n")
         if args[:2] == ["docker", "exec"] and args[3:4] == ["probe"]:
             return base._Result("", 0 if self.probe_ok else 1)
+        if args[:2] == ["docker", "exec"] and args[2] in self.health_fail and "urlopen" in args[-1]:
+            c = self.containers[args[2]]
+            if c["Image"] != self.health_fail[args[2]]:
+                c["RestartCount"] = c.get("RestartCount", 0) + 1      # unless-stopped brings a crashing service back, again and again
+                return base._Result("", 1, "ConnectionRefusedError")
+        if args[:2] == ["docker", "logs"]:
+            if self.logs_fail:
+                raise subprocess.TimeoutExpired(args, 60)
+            return base._Result("2026-11-08T00:48:01Z  * Serving Flask app\n", 0,
+                                "2026-11-08T00:48:02Z FileNotFoundError: [Errno 2] No such file or directory: '/app/domains/cos/static/cos-task-proposals.js'\n")
+        if args[:2] == ["docker", "run"] and self.startup_fail and any("test_client" in a for a in args):
+            return base._Result("", 1, "FileNotFoundError")
         return super().__call__(args, **kw)
 
 
@@ -287,6 +301,85 @@ def test_a_running_file_that_differs_after_the_swap_restores(dev):
         op.Deploy(dev.host(), gs.guarded_swap).update()
     dev.docker.bad_running_file = None
     _assert_on_running_release(dev, before, files)
+
+
+# ── 8 Nov: the portal read a CoS file its image did not hold ──
+
+def test_the_portal_ships_and_lays_out_the_cos_folder_it_reads():
+    spec = op.TARGETS["portal"]
+    assert op.dest_for(spec["rules"], "domains/cos/static/cos-task-proposals.js") == "/app/domains/cos/static/cos-task-proposals.js"
+    assert "domains/cos/" in spec["layout"]
+    meta, blobs = pay.build_meta(base._FakeGit(["domains/cos/static/cos.css"]), "head", base.BASES)
+    assert "domains/cos/static/cos.css" in meta["targets"]["portal"]["files"] and "catch_up" not in meta["targets"]["portal"]
+
+
+class CatchUpGit(NextGit):
+    """Since the declared base, CoS's folder changed too; since the commit Dev runs (H), only ``changed`` did."""
+    COS = ("domains/cos/static/cos-task-proposals.js", "domains/cos/owner_words.py")
+
+    def status(self, since, commit):
+        return [("M", p) for p in self.changed] + ([("A", p) for p in self.COS] if since != H else [])
+
+
+def test_an_update_that_rebuilds_the_portal_catches_up_the_cos_folder_from_its_base():
+    m, blobs = pay.build_meta(CatchUpGit(["minimoi_portal/app.py"]), "next", base.BASES, from_ref="head", release=NEXT)
+    portal = m["targets"]["portal"]["files"]
+    assert set(CatchUpGit.COS) <= set(portal) and portal[CatchUpGit.COS[0]]["dest"] == "/app/" + CatchUpGit.COS[0]
+    assert all(p in blobs for p in CatchUpGit.COS)
+    assert "cos-scheduler" not in m["targets"]                  # the scheduler always laid it out: nothing to catch up
+
+
+def test_an_update_that_leaves_the_portal_alone_does_not_rebuild_it_to_catch_up():
+    m, _ = pay.build_meta(CatchUpGit(["docker/mc-agent/relay_v2.mjs"]), "next", base.BASES, from_ref="head", release=NEXT)
+    assert "portal" not in m["targets"] and m["skipped"]["minimoi-portal"] == "nothing it runs changed"
+
+
+def test_a_portal_that_cannot_start_is_refused_before_anything_stops(dev):
+    dev.send(["minimoi_portal/app.py"])
+    before, files = dev.running(), _files(dev)
+    dev.docker.startup_fail = True
+    with pytest.raises(RuntimeError, match="command failed"):
+        op.Deploy(dev.host(), gs.guarded_swap).update()
+    assert dev.ups() == [] and dev.stops() == [] and dev.running() == before and _files(dev) == files
+
+
+def test_a_portal_that_keeps_restarting_restores_early_and_keeps_its_last_log_lines(dev):
+    dev.send(["minimoi_portal/app.py"])
+    before, files = dev.running(), _files(dev)
+    dev.docker.health_fail = {"minimoi-portal": before["minimoi-portal"]}
+    with pytest.raises(RuntimeError, match="keeps restarting"):
+        op.Deploy(dev.host(), gs.guarded_swap).update()
+    _assert_on_running_release(dev, before, files)
+    assert json.loads((dev.OP / "outcome.json").read_text())["outcome"] == "restored"
+    events = [json.loads(line) for line in (dev.OP / "journal.jsonl").read_text().splitlines()]
+    kept = [e for e in events if e["event"] == "failed_logs"]
+    assert len(kept) == 1 and kept[0]["container"] == "minimoi-portal" and kept[0]["lines"] == 2
+    assert [e["event"] for e in events].index("failed_logs") < [e["event"] for e in events].index("restored")
+    log = Path(kept[0]["path"])
+    assert log.parent == dev.OP and log.stat().st_mode & 0o777 == 0o600
+    text = log.read_text()
+    assert "cos-task-proposals.js" in text and '"RestartCount"' not in text.split("## stdout")[1]
+
+
+def test_a_log_read_that_fails_never_stops_the_restore(dev):
+    dev.send(["minimoi_portal/app.py"])
+    before, files = dev.running(), _files(dev)
+    dev.docker.health_fail, dev.docker.logs_fail = {"minimoi-portal": before["minimoi-portal"]}, True
+    with pytest.raises(RuntimeError, match="keeps restarting"):
+        op.Deploy(dev.host(), gs.guarded_swap).update()
+    _assert_on_running_release(dev, before, files)
+    events = [json.loads(line) for line in (dev.OP / "journal.jsonl").read_text().splitlines()]
+    assert [e.get("error") for e in events if e["event"] == "failed_logs"] == ["TimeoutExpired"]
+
+
+def test_the_portal_startup_check_passes_on_this_checkout():
+    """The sealed check, run here: this commit's portal starts and answers /health, with no env file and a throwaway key."""
+    pytest.importorskip("flask")
+    import sys
+    argv = op.TARGETS["portal"]["startup"]
+    env = {"PATH": os.environ.get("PATH", ""), "HOME": "/nonexistent", "FLASK_ENV": "production", "PORT": "5001", "PYTHONDONTWRITEBYTECODE": "1"}
+    p = subprocess.run([sys.executable, *argv[1:]], cwd=ROOT, env=env, capture_output=True, text=True, timeout=120)
+    assert p.returncode == 0, p.stderr[-2000:]
 
 
 def test_mc_never_ready_restores_mc_to_the_running_release(dev):

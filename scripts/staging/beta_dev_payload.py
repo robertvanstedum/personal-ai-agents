@@ -135,11 +135,12 @@ def build_meta(git, commit_ref: str, bases=None, from_ref=None, release=None) ->
     """(meta, {repo path: bytes}). One entry per image: which changed files it holds, where, and every hash the host proves.
     With ``from_ref`` (the commit Dev runs) every image diffs from there: an update carries only what changed since."""
     commit = git.rev(commit_ref)
-    resolved = {k: git.rev(v) for k, v in (bases or D.BASES).items()}
+    declared = resolved = {k: git.rev(v) for k, v in (bases or D.BASES).items()}
     from_commit = git.rev(from_ref) if from_ref else None
     if from_commit:
         resolved = {k: from_commit for k in resolved}
-    statuses = {c: git.status(c, commit) for c in set(resolved.values())}
+    catching_up = from_commit and any(s.get("catch_up") for s in D.TARGETS.values())
+    statuses = {c: git.status(c, commit) for c in set(resolved.values()) | (set(declared.values()) if catching_up else set())}
     targets, skipped, blobs = {}, {}, {}
     tree_cache = git.tree_hashes(commit, sorted({p for s in D.TARGETS.values() for p in s.get("layout", ())}))
     tree = {"/app/" + p: h for p, h in tree_cache.items() if p.endswith(D.TEXT) and "/data/" not in p}
@@ -152,6 +153,12 @@ def build_meta(git, commit_ref: str, bases=None, from_ref=None, release=None) ->
         if not mapping:
             skipped[spec["container"]] = "nothing it runs changed"
             continue
+        if from_commit and spec.get("catch_up"):    # a folder the running release never laid out: all of it since the base, as
+            since_base = statuses[declared[spec["base"]]]       # the full chain ships it; only when the image is rebuilt anyway
+            inside = lambda p: p.startswith(tuple(spec["catch_up"]))
+            gone = [p for state, p in since_base if state == "D" and inside(p) and D.dest_for(spec["rules"], p)]
+            assert not gone, f"{key}: an overlay cannot follow a deleted file: {gone}"
+            mapping.update(D.files_for(spec, [p for state, p in since_base if state != "D" and inside(p)]))
         mapping.update(replaced_trees(git, commit, spec))
         files = {}
         always = dict(spec.get("always", ()))
@@ -164,7 +171,7 @@ def build_meta(git, commit_ref: str, bases=None, from_ref=None, release=None) ->
                            "base": sha(base_blob) if base_blob is not None else None, "accepted": accepted_hashes(git, commit, path)}
             if path in always:                      # an input a RUN step compiles over: the file the image holds is the compiled one
                 files[path]["generated_input"] = True
-        out = {k: v for k, v in spec.items() if k not in ("rules", "extra_rules", "always", "layout", "exclude")}
+        out = {k: v for k, v in spec.items() if k not in ("rules", "extra_rules", "always", "layout", "exclude", "catch_up")}
         if from_commit:                             # one digest, recomputed in the built image from the shared path list
             paths = D.layout_paths(tree, spec.get("layout", ()), mapping, spec.get("exclude", ()))
             targets[key] = {**out, "files": files, "layout_digest": {"prefixes": list(spec.get("layout", ())), "count": len(paths),
