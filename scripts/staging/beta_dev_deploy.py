@@ -38,6 +38,8 @@ REQUIRED_ENV = {"minimoi-cos-scheduler": {"COS_BACKGROUND_JOBS": "0"}, "minimoi-
                 "minimoi-guildhall-mc": {"ROOMS_RECORDS_PROFILE": "dev"}}
 PORTAL_ROUTES = ("/app/cos/task-proposals", "/app/cos/work-cards")
 MC_TOOLS_PORT = 5011
+CRASH_LOOP = 3                                      # restarts within one health wait: a service that cannot start
+FAILED_LOG_LINES = 200                              # kept privately from a container that failed its wait, before the restore
 READY_INTERVAL, READY_PASSES = 3, 2                 # the container's own healthcheck, run by us: twice in a row, 3 s apart
 
 # The plan-routes operator layers its own override on top of this one's. An update may run under it, except where a file the
@@ -108,10 +110,18 @@ TARGETS = {
                         down="up to 11 minutes (gateway owner lease); CoS refuses messages meanwhile"),
     "portal": dict(container="minimoi-portal", repo="portal", tier=4, base="portal", old="route-roles-20261105g", wait=DEFAULT_WAIT,
                    image_env=(("MINIMOI_COS_TO_MC", "1"),),
-                   rules=_app("core/", "domains/guild/", "minimoi_portal/", "contracts/partnership/", "services/partnership_tasks/", "services/rooms_worker/",
-                              "services/mc_operations/"),
-                   exclude=_BOTS_ONLY, layout=("core/", "minimoi_portal/", "services/partnership_tasks/", "services/rooms_worker/"),
+                   rules=_app("core/", "domains/cos/", "domains/guild/", "minimoi_portal/", "contracts/partnership/", "services/partnership_tasks/",
+                              "services/rooms_worker/", "services/mc_operations/"),
+                   exclude=_BOTS_ONLY, layout=("core/", "domains/cos/", "minimoi_portal/", "services/partnership_tasks/", "services/rooms_worker/"),
+                   # The portal reads domains/cos/ (CoS's page files at startup, its modules per request) but did not ship it until 8 Nov:
+                   # Dev's portal holds the 5 Nov base's copy. An update ships that folder as the full chain would, from the base, until
+                   # a release built with it runs on Dev; then this line goes.
+                   catch_up=("domains/cos/",),
                    smoke=("python", "-c", "from core.mc_tools.service import ASK_FOLLOW_UP;import core.model_routes as m;import minimoi_portal.guild_ui.api;m.relay_routes(m.load_catalogue())"),
+                   # The portal as it starts: app.py and its startup reads, then its own /health. A throwaway key, since the sealed
+                   # run has no env file; production mode refuses to boot without one (8 Nov: a missing CoS file stopped the start).
+                   startup=("python", "-c", "import os,secrets;os.environ.setdefault('PORTAL_SECRET_KEY',secrets.token_hex(32));"
+                            "import minimoi_portal.app as a;r=a.app.test_client().get('/health');assert r.status_code==200,r.status_code"),
                    health="http://127.0.0.1:5001/health", down="under 2 minutes; pages fail meanwhile"),
     "mc-relay": dict(container="minimoi-mc-relay", repo="mc-relay", tier=5, base="portal", old="route-roles-20261105e", wait=DEFAULT_WAIT, kind="node",
                      rules=(("docker/mc-agent/relay_v2.mjs", MC_DIR + "relay_v2.mjs"),), down="under 1 minute, inside MC's window"),
@@ -612,6 +622,12 @@ def check_mc_policy(live: dict) -> None:
     assert not (live.get("models") or {}).get("providers"), "an API provider appeared"
 
 
+def failed_log_text(name, state, stdout, stderr) -> str:
+    """What keep_failed_logs writes: the container's state, then its last lines. docker logs puts the service's stderr on stderr."""
+    return (f"# {name}: last {FAILED_LOG_LINES} log lines, kept before the restore\n# state: {json.dumps(state, sort_keys=True)}\n"
+            f"## stdout\n{stdout}\n## stderr\n{stderr}")
+
+
 def healthcheck_argv(test):
     """The container's own healthcheck as a ``docker exec`` command, or None when it has none we can run the same way."""
     if not test or test[0] in ("NONE",):
@@ -1009,8 +1025,9 @@ class RealHost:                                     # pragma: no cover  (exercis
                 self._sealed(new_id, "test", "-x", path)
             if spec.get("build") == "mc":
                 self._sealed(new_id, "test", "!", "-e", MC_DIR + ".beta-check-6c.sh")
-            if spec.get("smoke"):
-                self._sealed(new_id, spec["smoke"][0], *spec["smoke"][1:], extra=("-e", "PYTHONDONTWRITEBYTECODE=1"))
+            for check in ("smoke", "startup"):
+                if spec.get(check):
+                    self._sealed(new_id, spec[check][0], *spec[check][1:], extra=("-e", "PYTHONDONTWRITEBYTECODE=1"))
             if spec.get("kind") == "node":
                 for path in want:
                     if path.endswith((".mjs", ".cjs")):
@@ -1229,6 +1246,9 @@ class RealHost:                                     # pragma: no cover  (exercis
             p = subprocess.run(["docker", "exec", spec["container"], "python", "-c", code], capture_output=True, timeout=60)
             if p.returncode == 0:
                 return
+            restarts = self.O.inspect(spec["container"]).get("RestartCount") or 0
+            if restarts >= CRASH_LOOP:              # a service that answers never restarts: waiting out the limit only delays the restore
+                raise RuntimeError(f"{spec['container']} keeps restarting ({restarts} times) and did not answer its health URL")
             if time.monotonic() > end:
                 raise RuntimeError(spec["container"] + " did not answer its health URL")
             if gate is not None:
@@ -1244,9 +1264,25 @@ class RealHost:                                     # pragma: no cover  (exercis
             force = ("--force-recreate",) if spec.get("kind") == "config" else ()
             started = time.monotonic()
             self._compose(wrapper, "up", "-d", "--no-deps", "--no-build", "--pull", "never", *force, service)
-            self._wait_ready(spec, gate)
-            self._wait_http(spec, gate)
+            try:
+                self._wait_ready(spec, gate)
+                self._wait_http(spec, gate)
+            except BaseException:
+                self.keep_failed_logs(spec["container"])    # before any restore replaces the container and its logs with it
+                raise
             self.record("recreated", {"container": spec["container"], "seconds": round(time.monotonic() - started)})
+
+    def keep_failed_logs(self, name):
+        """The failed container's last log lines and state, privately (0600, operator folder), for the next look. Never raises:
+        the restore that follows matters more than the record of why it was needed."""
+        try:
+            p = subprocess.run(["docker", "logs", "--timestamps", "--tail", str(FAILED_LOG_LINES), name], capture_output=True, text=True, timeout=60)
+            state = {k: v for k, v in (self.O.inspect(name).get("State") or {}).items() if k != "Health"}
+            path = self.OP / f"failed-{name}-{int(time.time())}.private.log"
+            self._write_private(path, failed_log_text(name, state, p.stdout, p.stderr))
+            self.record("failed_logs", {"container": name, "path": str(path), "lines": len((p.stdout + p.stderr).splitlines())})
+        except Exception as e:                      # noqa: BLE001
+            self.record("failed_logs", {"container": name, "error": type(e).__name__})
 
     def _wait_ready(self, spec, gate):
         """The container's own healthcheck, run by us every few seconds, instead of waiting for Docker's next scheduled run."""
