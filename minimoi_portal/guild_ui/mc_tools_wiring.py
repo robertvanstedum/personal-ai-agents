@@ -630,6 +630,19 @@ def artifact_root(environ):
     return root if root and os.path.isabs(root) and os.path.normpath(root) == root else None
 
 
+def _charters(environ):
+    """The approved helper charters, or None (helpers off). A charter that doesn't match its approval turns only helpers off."""
+    root = str(environ.get("PARTNERSHIP_CHARTERS_DIR", "") or "").strip() or "/app/config/partnership/charters"
+    if not os.path.isfile(os.path.join(root, "approvals.json")):
+        return None
+    from services.partnership_tasks.charters import CharterRefused, Charters
+    try:
+        return Charters.load(root)
+    except (CharterRefused, OSError, ValueError) as exc:
+        _log.warning("mc tools: helpers off (%s)", type(exc).__name__)
+        return None
+
+
 def tasks_adapter(environ):
     """Partnership v1.1 (B4 v0.6): MC's tracked-work tools, seat ``mc``. Off unless the task service URL, MC's seat
     token file (private, held by this portal process, never by the agent), the card commit and the environment are
@@ -647,7 +660,7 @@ def tasks_adapter(environ):
         platform_file = str(environ.get("PARTNERSHIP_MC_PLATFORM_TOKEN_FILE", "") or "").strip() \
             or os.path.join(os.path.dirname(token_file), "platform.token")
         platform = TaskClient(url, lambda: read_token(platform_file)) if os.path.isfile(platform_file) else None
-        return TasksAdapter(TaskClient(url, lambda: read_token(token_file)), environment=env, card_ref=card_ref, platform=platform)
+        return TasksAdapter(TaskClient(url, lambda: read_token(token_file)), environment=env, card_ref=card_ref, platform=platform, charters=_charters(environ))
     except Exception as exc:                               # a bad configuration turns off only these tools
         _log.warning("mc tools: tracked-work tools off (%s)", type(exc).__name__)
         return None

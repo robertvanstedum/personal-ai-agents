@@ -43,7 +43,7 @@ STANDING_CAPABILITIES = ("host.career.synthetic", "agent.contact.existing", "age
                          "guild.board.note.create", "guild.board.note.update", "guild.board.operation.undo",
                          # Partnership v1.1: task records only; paid work is admitted by Robert's own card approval.
                          "partnership.task.delegate_child", "partnership.task.submit_parent", "partnership.task.accept",
-                         "partnership.task.adopt_interpretation", "partnership.task.propose_build")
+                         "partnership.task.adopt_interpretation", "partnership.task.propose_build", "partnership.helper.ask", "partnership.helper.review")
 CATALOGUE = {**{c: CapabilityRule(1, False, True) for c in PROPOSAL_CAPABILITIES + STANDING_CAPABILITIES},
              **{c: CapabilityRule(1, True, True) for c in EXACT_CAPABILITIES}}
 GRANTS = GrantStore(CATALOGUE)

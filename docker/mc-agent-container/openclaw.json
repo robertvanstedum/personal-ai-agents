@@ -97,7 +97,10 @@
             "minimoi_task_submit",
             "minimoi_task_accept",
             "minimoi_task_adopt",
-            "minimoi_build_item"
+            "minimoi_build_item",
+            "minimoi_helper_ask",
+            "minimoi_helper_result",
+            "minimoi_helper_review"
           ],
           "diskPaths": [
             "/",

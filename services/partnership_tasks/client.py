@@ -140,6 +140,13 @@ class TaskClient:
             raise TaskServiceUnavailable(f"outbox read failed: HTTP {r.status_code}")
         return r.json()
 
+    def held(self) -> list:
+        """The task ids this seat holds now."""
+        r = self._call("GET", "/v1/work")
+        if r.status_code != 200:
+            raise TaskServiceUnavailable(f"work read failed: HTTP {r.status_code}")
+        return r.json().get("holds", [])
+
     def open_work(self) -> list:
         r = self._call("GET", "/v1/open")
         if r.status_code != 200:

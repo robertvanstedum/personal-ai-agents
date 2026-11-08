@@ -253,7 +253,7 @@ def template() -> dict:
             "platform": {"origin": "platform", **personal, "operations": ["source_event.record"]},
             "mc": {"origin": "agent", **personal, "operations": [
                 "task.delegate", "task.assign", "task.request_admission", "task.transition", "task.submit_artifacts",
-                "task.accept", "task.adopt_interpretation", "interpretation.record"]},
+                "task.accept", "task.adopt_interpretation", "interpretation.record", "interpretation.dispose", "request.record", "request.promote", "task.record_review"]},
             "outbox-drainer": {"origin": "platform", **personal, "operations": ["outbox.record"]},
         },
         "grants": [],

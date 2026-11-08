@@ -130,6 +130,10 @@ HANDLERS.update({
     "task_submit_v1": Handler("minimoi_task_submit", "partnership.task.submit_parent", frozenset({2}),
                               "task_readback_v1", "none"),
     # "Build it" on one Build Log item (MC front door spec A9): a proposal only; Robert confirms it in his task view.
+    # Helper seats spec v0.4: a chartered task from his own note, the lead's read of it, and the lead's verdict. No owner click per task.
+    "helper_ask_v1": Handler("minimoi_helper_ask", "partnership.helper.ask", frozenset({2}), "task_readback_v1", "none"),
+    "helper_result_v1": Handler("minimoi_helper_result", "partnership.task.read", frozenset({1}), None, "none"),
+    "helper_review_v1": Handler("minimoi_helper_review", "partnership.helper.review", frozenset({2}), "task_readback_v1", "none"),
     "task_build_item_v1": Handler("minimoi_build_item", "partnership.task.propose_build", frozenset({2}), "task_readback_v1", "none"),
     "task_accept_v1": Handler("minimoi_task_accept", "partnership.task.accept", frozenset({2}), "task_readback_v1",
                               "none"),
