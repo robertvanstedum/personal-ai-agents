@@ -679,3 +679,15 @@ def test_each_decision_is_logged_in_one_line_without_his_words(host, caplog):
     lines = [r.getMessage() for r in caplog.records if "direct voice decision:" in r.getMessage()]
     assert lines and "dropped" in lines[-1] and "reason=folded" in lines[-1]
     assert REQUEST[host.kind] not in "\n".join(lines)
+
+
+@pytest.mark.parametrize("provider", ["openai", "xai"])
+def test_a_yes_after_the_voice_asks_to_confirm_with_a_full_stop_is_told_nothing_waits(host, monkeypatch, provider):
+    """Dev, 7 Nov: the voice said "Sure, just confirm for me." with nothing waiting; his yes was chat, and the voice went
+    on to say "On it". A request to confirm is a question however it ends."""
+    h = host
+    sid, _session = boot_on(h, monkeypatch, provider)
+    assert post(h, sid, [h.event("assistant", "t1", "Sure, just confirm for me.")]).status_code == 200
+    assert utter(h, sid, "t2", "Yes.").get_json()["decision"] == "nothing_waiting" and h.effects() == 0
+    post(h, sid, [h.event("assistant", "t3", "It is in build.")])
+    assert utter(h, sid, "t4", "yes").get_json()["decision"] == "chat"

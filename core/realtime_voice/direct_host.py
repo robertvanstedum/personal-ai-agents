@@ -156,6 +156,9 @@ _DONE = re.compile(r"\b(?:we(?:'re|’re| are) (?:all )?(?:done|finished)|(?:i'?
 _HEDGED = re.compile(r"\b(?:not|never|nearly|almost|yet|if|when|until|unless|before)\b|n['’]t\b|\?\s*\Z", re.I)
 _YES = re.compile(r"\A\W*(?:yes|yeah|yep|sure|please|go ahead|do it|sum (?:it )?up|ok(?:ay)?|ja|genau)\b", re.I)
 _NO = re.compile(r"\b(?:no|not|don'?t|don’t|nein|wait)\b", re.I)
+# The voice asking him to confirm, however it ends: "Sure, just confirm for me." ended in a full stop on Dev (7 Nov), so his
+# "Confirm, yes" after it was conversation, and the voice went on to say "On it" with nothing waiting.
+_ASKS_CONFIRM = re.compile(r"\b(?:confirm for me|just confirm|shall i|should i|want me to|go ahead\?)", re.I)
 
 
 def done_intent(text):
@@ -1260,7 +1263,8 @@ class DirectSessions(ConsultLedger):
             meta = self._meta.get(sid)
             place = item_place(item)
             if meta is not None and place > (meta.get("voice_said") or (-1, False))[0]:
-                meta["voice_said"] = (place, isinstance(text, str) and text.rstrip().endswith(("?", "？")))
+                meta["voice_said"] = (place, isinstance(text, str) and (text.rstrip().endswith(("?", "？"))
+                                                                      or bool(_ASKS_CONFIRM.search(text))))
 
     def deciding(self, sid):
         with self._meta_lock:

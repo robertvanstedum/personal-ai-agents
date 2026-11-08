@@ -47,6 +47,14 @@ def acts_on(item) -> list:
     return []
 
 
+def for_information(item) -> bool:
+    """Tracked work's own "Finished: …" notice (services/partnership_tasks/notice_port.FINISHED): nothing waits on Robert;
+    he may look, or dismiss it. Every other partnership notice (needs you, a failed step, a review without a verdict)
+    still waits on him."""
+    return (item.get("kind") == "agent_ask" and (item.get("facts") or {}).get("agent") == "partnership"
+            and str(item.get("words") or "").startswith("Finished: "))
+
+
 def headline(item) -> str:
     kind, facts = item.get("kind"), item.get("facts") or {}
     if kind == "guest_access":
@@ -56,6 +64,8 @@ def headline(item) -> str:
     if kind == "decision":
         code = facts.get("decision") or "D-?"
         return f"Decision {code} from {agent_name(facts.get('agent'))}"
+    if for_information(item):
+        return "Finished work, for your information"
     if kind == "agent_ask":
         text = f"{agent_name(facts.get('agent'))} is blocked on you"
         if facts.get("branch"):
@@ -92,6 +102,8 @@ def answer(item) -> str:
     if kind == "decision":
         code = facts.get("decision") or "D-?"
         return f"\"approve {code}\" or \"no {code}\" here, or the approvals bot reply"
+    if for_information(item):
+        return f"nothing to do; say \"dismiss {item['code']}\" here to clear it"
     if kind == "agent_ask":                          # the session is named in the headline
         return f"in {agent_name(facts.get('agent'))}'s own session, or \"dismiss {item['code']}\" here"
     return "in MiniMoi"

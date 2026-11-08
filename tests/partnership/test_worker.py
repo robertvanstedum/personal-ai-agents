@@ -110,3 +110,11 @@ def test_the_worker_builds_productions_version_2_store_with_its_grant_catalogue(
     assert store is not None
     source = (root / "services/partnership_tasks/worker.py").read_text()
     assert "production.store(" in source and "DispatcherStore(" not in source
+
+
+def test_finished_work_reads_plainly_with_the_task_id_last():
+    """Robert, 7 Nov: "Tracked work TK-cos-… is done and accepted by mc: … (cut)" read as something waiting on him."""
+    words = words_for({"kind": "return_packet", "task_id": "TK-cos-18e9", "outcome": "Prepare a three-bullet checklist.",
+                       "accepted_by": "mc", "accepted_set": "sha256:" + "a" * 64, "artifacts": [{"id": "x"}]})
+    assert words == ("Finished: Prepare a three-bullet checklist. Accepted by Master Craftsman, with 1 file(s). "
+                     "Nothing needed from you. (task TK-cos-18e9)")

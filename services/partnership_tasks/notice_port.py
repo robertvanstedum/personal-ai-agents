@@ -20,16 +20,29 @@ from services.partnership_tasks.outbox import DestinationUnreachable, HarnessRef
 RAISE = "/internal/notices/v1/raise"
 
 
+FINISHED = "Finished: "                     # minimoi_portal/action_waiting/words.py reads it: for his information only
+_WHO = {"mc": "Master Craftsman", "cos": "Chief of Staff", "robert": "you", "principal": "you",
+        "claude-code": "Claude Code", "codex": "Codex", "grok": "Grok"}
+
+
+def _who(seat) -> str:
+    return _WHO.get(str(seat or "").strip().lower(), str(seat or "someone"))
+
+
 def words_for(packet: dict) -> str:
     kind = packet.get("kind")
     if kind == "return_packet":
-        text = (f"Tracked work {packet.get('task_id')} is done and accepted by {packet.get('accepted_by')}: "
-                f"{str(packet.get('outcome') or '')[:400]}. Accepted set {str(packet.get('accepted_set') or '')[:20]}"
-                f" with {len(packet.get('artifacts') or [])} artifact(s).")
+        # Plain words first, the task id last, so a line cut to fit keeps what matters (Robert, 7 Nov: "Tracked work
+        # TK-cos-… is done and accepted by mc: … (cut)" read as something waiting on him).
+        files = len(packet.get("artifacts") or [])
+        text = (f"{FINISHED}{str(packet.get('outcome') or '').strip().rstrip('.')[:300]}. "
+                f"Accepted by {_who(packet.get('accepted_by'))}{f', with {files} file(s)' if files else ''}. "
+                "Nothing needed from you.")
         dis = packet.get("disagreements_delivered") or []
         if dis:
             text += " Delivered with disagreement: " + "; ".join(
                 f"{d.get('reviewer')} {'no verdict' if d.get('no_verdict') else d.get('verdict')}" for d in dis[:5]) + "."
+        text += f" (task {packet.get('task_id')})"
     elif kind == "needs_owner":
         text = (f"Tracked work {packet.get('task_id')} needs you: its lead {packet.get('lead')} missed a checkpoint. "
                 "Open the task view to decide.")

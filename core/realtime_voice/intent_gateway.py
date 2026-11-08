@@ -21,6 +21,7 @@ Without the key (dev, until Robert runs ``voice.sh summary-keys``) the grammar f
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 import time
@@ -30,6 +31,7 @@ from core.realtime_voice.summary_gateway import (DEFAULT_GATEWAY_URL, GATEWAY_UR
 
 INTENT_MODEL = "minimoi-voice-intent"                     # a gateway alias: the concrete model is gateway configuration
 LABELS = ("note", "postit", "consult", "yes", "no", "read_back", "read_summary", "chat")   # direct_host.LABELS
+log = logging.getLogger(__name__)
 CONNECT_TIMEOUT_S = 1
 READ_TIMEOUT_S = 2.5
 TOTAL_TIMEOUT_S = 2.5                                     # the whole call, never retried
@@ -107,14 +109,30 @@ class GatewayIntent:
 
     def __call__(self, text, waiting=None, *, pending=None):
         if not self._key or not isinstance(text, str) or not text.strip():
+            self._said("chat", "no_key" if not self._key else "no_words", 0.0)
             return "chat"
+        started = time.monotonic()
         try:
             payload, error = bounded_post(self._post or _streamed(time.monotonic() + TOTAL_TIMEOUT_S), self.url,
                                           self.request(text, waiting, pending), self._key, total_s=TOTAL_TIMEOUT_S,
                                           timeout=(CONNECT_TIMEOUT_S, READ_TIMEOUT_S), thread="voice-intent-gateway")
             if error is not None:
+                self._said("chat", error, started)
                 return "chat"
             answer, why = answer_text(payload)
-            return label_of(answer) if why is None else "chat"
-        except Exception:                                   # whatever went wrong, it counts as chat
+            if why is not None:
+                self._said("chat", why, started)
+                return "chat"
+            label = label_of(answer)
+            said_chat = re.sub(r"\W+", "", answer or "").lower() == "chat"
+            self._said(label, "answered" if label != "chat" or said_chat else "not_a_label", started)
+            return label
+        except Exception as exc:                            # whatever went wrong, it counts as chat
+            self._said("chat", "exception " + type(exc).__name__, started)
             return "chat"
+
+    def _said(self, label, outcome, started):
+        """One line per call: the label, how it came about and how long it took, never his words (Robert, 7 Nov: every
+        spoken request was heard as chat on Dev, and nothing said whether the call answered, timed out or was refused)."""
+        took = int((time.monotonic() - started) * 1000) if started else 0
+        log.info("voice intent: label=%s outcome=%s ms=%d", label, outcome, took)

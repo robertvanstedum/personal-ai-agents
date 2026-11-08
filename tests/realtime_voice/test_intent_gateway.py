@@ -277,3 +277,28 @@ def test_the_understanding_call_counts_a_work_card_or_a_send_as_work():
     assert "send or pass something on to a named person or agent" in words
     assert "which CoS does for him" in words
     assert "Asking to talk to someone else is chat." in words
+
+
+@pytest.mark.parametrize("post,label,outcome", [
+    (answering("consult")[0], "consult", "answered"),
+    (answering("chat")[0], "chat", "answered"),
+    (answering("delete")[0], "chat", "not_a_label"),
+    (answering("note", status=401)[0], "chat", "key_refused"),
+    (answering("note", status=429)[0], "chat", "rate_limited"),
+    (answering(raise_=ConnectionError("down"))[0], "chat", "gateway_down"),
+])
+def test_each_call_logs_its_label_and_how_it_came_about_never_his_words(post, label, outcome, caplog):
+    """Dev, 7 Nov: every spoken request was heard as chat, and nothing said whether the call answered, timed out or was
+    refused. One line per call now says so, never his words."""
+    import logging
+    caplog.set_level(logging.INFO, logger="core.realtime_voice.intent_gateway")
+    assert ig.GatewayIntent("voice-summary-mc", PERSON, environ=KEY_ENV, http_post=post)("make a post called kiln", None) == label
+    lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("voice intent:")]
+    assert len(lines) == 1 and f"label={label} outcome={outcome} ms=" in lines[0] and "kiln" not in lines[0]
+
+
+def test_no_key_is_logged_as_no_key(caplog):
+    import logging
+    caplog.set_level(logging.INFO, logger="core.realtime_voice.intent_gateway")
+    ig.GatewayIntent("voice-summary-mc", PERSON, environ={}, http_post=answering("note")[0])("save that", None)
+    assert any("outcome=no_key" in r.getMessage() for r in caplog.records)
