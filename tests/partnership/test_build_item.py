@@ -221,6 +221,12 @@ class TestRevisionCheck:
             raise OSError("no")
         assert work_item.problem(r, boom)[0] == "item_unreadable"
 
+    def test_a_task_naming_a_missing_interpretation_fails_closed(self, rig):
+        client = mock.Mock()
+        client.get.return_value = None
+        with pytest.raises(LookupError):
+            work_item.bound(client, {"interpretation_ref": "IN-gone"})
+
     def test_a_task_with_no_item_is_not_checked(self, rig):
         assert work_item.problem(None, rig.host.build_log.read_items) is None
 
@@ -248,6 +254,14 @@ class TestDelegate:
     def delegate(self, rig):
         args = {"task_id": "TK-mc-0001", "kind": "build", "holder": "claude-code", "outcome": "Build the inbox.", "done_when": "It takes a correction."}
         return rig.adapter.delegate(rig.host, args, caller())
+
+    def test_a_later_keep_here_stops_the_delegate(self, rig):
+        """Codex: a task already confirmed, then Robert says keep this here."""
+        self.task(rig)
+        rig.host.note = "Keep this here for now. Do not send this anywhere."
+        r = self.delegate(rig)
+        assert r["code"] == "kept_here"
+        assert not list(Path(rig.svc.journal.root, "outbox").glob("OB-mc-*"))
 
     def test_the_task_knows_its_item(self, rig):
         task = self.task(rig)

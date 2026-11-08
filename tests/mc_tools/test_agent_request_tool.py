@@ -132,7 +132,7 @@ class TypedRequestTests(Base):
 
     def test_the_ledger_refuses_any_effect(self):
         env = {"purpose": "review", "item": {"id": 1, "revision": "a" * 64}, "owner": {"note": "n", "sha256": "a" * 64, "text": "x"},
-               "analysis": {"by": "master-craftsman", "text": "x"}, "allowed_effects": ["write"], "authorization": {}, "scrubbed": False}
+               "analysis": {"by": "master-craftsman", "text": "x"}, "allowed_effects": ["write"], "authorization": {"kind": "standing_review", "source_note": "n"}, "scrubbed": False}
         with self.assertRaises(ar.Refused):
             ar.create_request(self.ledger, request_id=ar.request_id_for("y"), frm="mc", to="codex", action="go", envelope=env)
 
@@ -259,6 +259,74 @@ class KeepHereTests(Base):
         self.assertEqual(self.path.read_bytes(), before)
 
 
+class WholeItemAndScrubTests(Base):
+    CARD = "4111 1111 1111 1111"
+
+    def test_a_review_after_an_addition_carries_the_addition(self):
+        """Codex: the new revision hash went out with only the original text."""
+        store = qs.QueueStore(self.path, in_container=False, code_root=self.path.parent.parent.parent / "code")
+        w = "No, the opposite of that."
+        rev = qs.content_digest(json.loads(self.path.read_text())[0])
+        saved = store.add_to_item(8, rev, source={"conversation": CONV, "note": "n-9", "chars": len(w), "sha256": hashlib.sha256(w.encode()).hexdigest()},
+                                  owner_words=w, kind="conflict", note={"by": "master-craftsman", "revision": 1, "text": "He reversed it."},
+                                  question="Which holds?", principal="robert")
+        self.assertTrue(saved.ok, saved)
+        self.call(self.review())
+        env = self.docs()[0]["envelope"]
+        self.assertEqual(env["item"]["additions"][0]["owner_words"], w)
+        self.assertEqual(env["item"]["additions"][0]["open_question"], "Which holds?")
+        self.assertEqual(env["item"]["revision"], qs.content_digest(json.loads(self.path.read_text())[0]))
+
+    def service_with_scrub(self):
+        s = self.service()
+        real = s.agent_ask
+        s.agent_ask = SimpleNamespace(typed=real.typed, withdraw=real.withdraw, scrub=lambda t: t.replace(self.CARD, "[card removed]"))
+        return s
+
+    def seed_card(self):
+        doc = json.loads(self.path.read_text())
+        doc[0]["owner_words"] = f"My card is {self.CARD} for the record."
+        self.path.write_bytes(qs.serialize(doc))
+
+    def test_stored_words_are_scrubbed_on_the_way_out(self):
+        self.seed_card()
+        self.call(self.review(), self.service_with_scrub())
+        [req] = self.docs()
+        self.assertNotIn(self.CARD, json.dumps(req))
+        self.assertTrue(req["envelope"]["scrubbed"])
+
+    def test_the_analysis_is_scrubbed(self):
+        self.call(self.review(analysis=f"He gave {self.CARD} here."), self.service_with_scrub())
+        self.assertNotIn(self.CARD, json.dumps(self.docs()[0]))
+
+    def test_the_revision_still_names_the_original(self):
+        self.seed_card()
+        original = qs.content_digest(json.loads(self.path.read_text())[0])
+        self.call(self.review(), self.service_with_scrub())
+        self.assertEqual(self.docs()[0]["envelope"]["item"]["revision"], original)
+
+    def test_clean_text_is_not_marked_scrubbed(self):
+        self.call(self.review(), self.service_with_scrub())
+        self.assertFalse(self.docs()[0]["envelope"]["scrubbed"])
+
+
+class KeepHereEverywhereTests(Base):
+    def test_delegation_proposals_respect_it(self):
+        self.note = {"text": "Keep this here for now."}
+        s = self.service()
+        s.delegation = True
+        for name, method in (("minimoi_delegate_build", s._delegate_build), ("minimoi_delegate_research", s._delegate_research)):
+            caller = Caller("k", "mc-chat", "r", "c", None, name, SimpleNamespace(tier=3, max_operations_per_turn=1))
+            self.assertEqual(method({"title": "x", "agent": "claude-code"}, caller, None)["code"], "kept_here", name)
+
+    def test_a_named_ask_respects_it(self):
+        self.note = {"text": "Ask Codex about this but keep this here for now."}
+        caller = Caller("k", "mc-chat", "r", "c", None, "minimoi_agent_ask", SimpleNamespace(tier=2, max_operations_per_turn=1))
+        r = self.service()._agent_ask(catalogue.validate("minimoi_agent_ask", {"to": ["codex"], "title": "A title"}), caller, None)
+        self.assertEqual(r["code"], "kept_here")
+        self.assertEqual(self.docs(), [])
+
+
 class WithdrawTests(Base):
     def withdraw(self, rid, s=None):
         caller = Caller("guild:robert:" + CONV, "mc-chat", "run-1", "w-1", None, "minimoi_agent_request_withdraw",
@@ -319,6 +387,16 @@ class RelayTests(Base):
         d = self.docs()[0]
         bad = {**{k: d[k] for k in ("request_id", "to", "action", "conversation_id", "created_at", "content_sha256")},
                "envelope": {**d["envelope"], "purpose": "build"}}
+        self.assertFalse(sync.create_relayed(Path(tempfile.mkdtemp()), bad))
+
+    def test_a_relayed_envelope_allowing_effects_is_refused_even_with_a_matching_hash(self):
+        self.call(self.review())
+        d = self.docs()[0]
+        env = {**d["envelope"], "allowed_effects": ["write", "deploy"]}
+        body = {k: d[k] for k in ("v", "request_id", "from", "to", "action", "conversation_id", "topic_id", "pointer", "origin")}
+        body["envelope"] = env
+        digest = hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        bad = {**{k: d[k] for k in ("request_id", "to", "action", "conversation_id", "created_at")}, "content_sha256": digest, "envelope": env}
         self.assertFalse(sync.create_relayed(Path(tempfile.mkdtemp()), bad))
 
     def test_an_altered_envelope_fails_the_hash(self):

@@ -274,6 +274,12 @@ class TasksAdapter:
                 return refused("tool_arguments_invalid")
         with host._tx() as conn:
             b = host._bind(conn, caller)
+        text, refusal = host._owner_words(b)
+        if refusal:
+            return refusal
+        kept_here = host._kept_here(text, "nothing was delegated")
+        if kept_here:
+            return kept_here
         try:
             parent = self._task(args.get("task_id"))
             reviewed = self._task(args.get("reviewed_child")) if kind == "review" else None
@@ -284,8 +290,8 @@ class TasksAdapter:
         from . import work_item
         try:
             ref = work_item.bound(self.client, parent)
-        except TaskServiceUnavailable:
-            return result("unknown", "task_unconfirmed", "The task service could not be read now. Tell Robert.")
+        except (TaskServiceUnavailable, LookupError):
+            return result("unknown", "task_unconfirmed", "The task service could not confirm what this task was approved for. Nothing was delegated. Tell Robert.")
         build_log = getattr(host, "build_log", None)
         changed = work_item.problem(ref, build_log.read_items if build_log is not None else None)
         if changed:

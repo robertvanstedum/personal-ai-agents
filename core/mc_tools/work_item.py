@@ -18,8 +18,12 @@ def reference(item: dict) -> dict:
 
 def bound(client, task) -> dict | None:
     """The Build Log reference on this task's interpretation, or None when the task isn't tied to an item."""
-    interpretation = client.get("interpretation", task["interpretation_ref"]) if task.get("interpretation_ref") else None
-    return next((r for r in (interpretation or {}).get("context_refs") or () if r.get("store") == STORE), None)
+    if not task.get("interpretation_ref"):
+        return None
+    interpretation = client.get("interpretation", task["interpretation_ref"])
+    if interpretation is None:                         # it names one we can't find: that isn't the same as naming no item
+        raise LookupError("interpretation not found")
+    return next((r for r in interpretation.get("context_refs") or () if r.get("store") == STORE), None)
 
 
 def problem(ref, read_items) -> tuple[str, str] | None:

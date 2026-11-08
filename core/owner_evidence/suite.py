@@ -76,6 +76,12 @@ class Run:
     bundle: Bundle
     grades: list
     suite_digest: str
+    expected: int = 0
+
+    @property
+    def digest(self) -> str:
+        """Names the whole frozen bundle and suite. A rubric is good only for this."""
+        return "sha256:" + hashlib.sha256(json.dumps({"bundle": asdict(self.bundle), "suite": self.suite_digest}, sort_keys=True).encode()).hexdigest()
 
 
 def load(path) -> Suite:
@@ -156,6 +162,10 @@ def run(suite: Suite, bundle: Bundle, transport: Callable, *, trials: int = DEFA
         raise ValueError(f"bundle is missing {bundle.missing()}")
     if bundle.suite_version != suite.version:
         raise ValueError("bundle names a different suite version")
+    if type(trials) is not int or trials < 1:
+        raise ValueError("at least one trial")
+    if not suite.cases:
+        raise ValueError("an empty suite proves nothing")
     grades = []
     for case in suite.cases:
         for mode in case.modes:
@@ -164,32 +174,34 @@ def run(suite: Suite, bundle: Bundle, transport: Callable, *, trials: int = DEFA
             for trial in range(1, trials + 1):
                 reply, tools = transport(words, memory=memory, case_id=case.id, mode=mode, trial=trial)
                 grades.append(grade(case, mode, trial, reply, tools))
-    return Run(bundle, grades, suite.digest)
+    return Run(bundle, grades, suite.digest, expected=sum(len(c.modes) for c in suite.cases) * trials)
 
 
 def gate(result: Run, rubric: dict | None) -> dict:
     """Whether a persona release may ship. Any trial failing a hard rule blocks it, and no average can hide one. The rubric is
-    Robert's own, per rubric name: {"judgement": "pass"|"fail", "personality": ..., "bundle": <persona hash>}."""
+    Robert's own, per rubric name: {"judgement": "pass"|"fail", "personality": ..., "run": <Run.digest>}."""
     failed = [asdict(g) for g in result.grades if not g.passed]
     reasons = []
+    if not result.grades or len(result.grades) != result.expected:
+        reasons.append("the run did not cover the whole suite")
     if failed:
         reasons.append(f"{len(failed)} of {len(result.grades)} trials failed a hard rule")
     if not rubric:
         reasons.append("Robert has not graded the rubric")
     else:
-        if rubric.get("bundle") != result.bundle.persona_hash:
-            reasons.append("the rubric was graded on a different persona")
+        if rubric.get("run") != result.digest:
+            reasons.append("the rubric was graded on a different run")
         for name in RUBRICS:
             if rubric.get(name) != "pass":
                 reasons.append(f"{name} is not passed")
-    return {"open": not reasons, "reasons": reasons, "failures": failed, "bundle": asdict(result.bundle), "suite": result.suite_digest}
+    return {"open": not reasons, "reasons": reasons, "failures": failed, "bundle": asdict(result.bundle), "suite": result.suite_digest, "run": result.digest}
 
 
 def sample_sheet(result: Run, *, per_case: int = 1) -> str:
     """What Robert reads to grade the rubric: real replies, one trial per case and mode by default, nothing rated for him."""
     lines = [f"# Owner-evidence sample, {result.bundle.suite_version}", "",
              f"Model {result.bundle.model} · persona {result.bundle.persona_hash} · policy {result.bundle.tool_policy_revision} · "
-             f"{result.bundle.environment}", "",
+             f"{result.bundle.environment} · run {result.digest}", "",
              "Grade **judgement** (right reading, right action or none, evidence, a real recommendation, useful disagreement, follow-through) "
              "and **personality** (the longtime partner: easy, direct, sometimes funny; no machinery talk; survives correction).", ""]
     for g in result.grades:

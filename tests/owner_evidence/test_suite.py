@@ -115,6 +115,10 @@ class TestRun:
         run(s, BUNDLE, self.transport())
         assert {c[0] for c in self.calls} == {"Make the digest daily instead."}
 
+    def test_zero_trials_are_refused(self, tmp_path):
+        with pytest.raises(ValueError, match="trial"):
+            run(load(corpus(tmp_path)), BUNDLE, self.transport(), trials=0)
+
     def test_an_unpinned_bundle_is_refused(self, tmp_path):
         with pytest.raises(ValueError, match="missing"):
             run(load(corpus(tmp_path)), Bundle("", "p", "r", "v1", "dev"), self.transport())
@@ -128,25 +132,44 @@ class TestGate:
     def result(self, failures=()):
         good = grade(case(must_be_substantive=False), "cold", 1, "fine", [])
         bad = [grade(case(must_call=("x",), must_be_substantive=False), "cold", 2, "fine", []) for _ in failures]
-        return Run(BUNDLE, [good, *bad], "sha256:s")
+        return Run(BUNDLE, [good, *bad], "sha256:s", expected=1 + len(bad))
 
-    PASS = {"judgement": "pass", "personality": "pass", "bundle": "sha256:p"}
+    def rubric(self, **over):
+        return {"judgement": "pass", "personality": "pass", "run": self.result().digest, **over}
 
     def test_opens_only_with_clean_trials_and_his_rubric(self):
-        assert gate(self.result(), self.PASS)["open"] is True
+        assert gate(self.result(), self.rubric())["open"] is True
 
     def test_one_failed_trial_blocks_it(self):
-        out = gate(self.result([1]), self.PASS)
+        out = gate(self.result([1]), self.rubric())
         assert out["open"] is False and "1 of 2" in out["reasons"][0]
 
     def test_no_rubric_blocks_it(self):
         assert "Robert has not graded the rubric" in gate(self.result(), None)["reasons"]
 
     def test_personality_is_gated_not_assumed(self):
-        assert "personality is not passed" in gate(self.result(), {**self.PASS, "personality": "fail"})["reasons"]
+        assert "personality is not passed" in gate(self.result(), self.rubric(personality="fail"))["reasons"]
 
-    def test_a_rubric_for_another_persona_does_not_count(self):
-        assert "the rubric was graded on a different persona" in gate(self.result(), {**self.PASS, "bundle": "sha256:q"})["reasons"]
+    def test_a_rubric_from_another_bundle_does_not_count(self):
+        for changed in (Bundle("other", "sha256:p", "rev", "v1", "dev"), Bundle("m", "sha256:p", "rev2", "v1", "dev"), Bundle("m", "sha256:p", "rev", "v1", "prod")):
+            r = self.result()
+            r.bundle = changed
+            assert "the rubric was graded on a different run" in gate(r, self.rubric())["reasons"]
+
+    def test_a_rubric_for_another_suite_does_not_count(self):
+        r = self.result()
+        r.suite_digest = "sha256:other"
+        assert "the rubric was graded on a different run" in gate(r, self.rubric())["reasons"]
+
+    def test_a_run_with_no_trials_cannot_open_it(self):
+        empty = Run(BUNDLE, [], "sha256:s", expected=3)
+        out = gate(empty, {"judgement": "pass", "personality": "pass", "run": empty.digest})
+        assert out["open"] is False and "the run did not cover the whole suite" in out["reasons"]
+
+    def test_a_partial_run_cannot_open_it(self):
+        r = self.result()
+        r.expected = 9
+        assert gate(r, self.rubric())["open"] is False
 
 
 def test_the_sample_sheet_shows_replies_and_rates_nothing():

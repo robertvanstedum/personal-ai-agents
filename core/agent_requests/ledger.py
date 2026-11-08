@@ -210,6 +210,9 @@ def clean_envelope(envelope) -> dict:
         raise Refused("invalid", "A typed request is for review or analysis only.")
     if envelope["allowed_effects"] != ["none"]:
         raise Refused("invalid", "A typed request allows no effects.")
+    if type(envelope["scrubbed"]) is not bool or not isinstance(envelope["authorization"], dict) \
+            or set(envelope["authorization"]) != {"kind", "source_note"} or envelope["authorization"]["kind"] != "standing_review":
+        raise Refused("invalid", "Bad request envelope.")
     item = envelope["item"]
     if envelope["purpose"] == "review" and item is None:
         raise Refused("invalid", "A review names one item.")

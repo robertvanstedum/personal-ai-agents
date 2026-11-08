@@ -234,7 +234,9 @@ def create_relayed(root, r):
             "topic_id": None, "pointer": None, "origin": "owner_message_via_mc"}
     envelope = r.get("envelope")
     if envelope is not None:                                  # a typed request: review or analysis only, never a build
-        if type(envelope) is not dict or envelope.get("purpose") not in ("review", "analysis"):
+        if (type(envelope) is not dict or envelope.get("purpose") not in ("review", "analysis")
+                or envelope.get("allowed_effects") != ["none"] or type(envelope.get("scrubbed")) is not bool
+                or not isinstance(envelope.get("authorization"), dict) or envelope["authorization"].get("kind") != "standing_review"):
             return False
         body["envelope"] = envelope
     if hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest() != digest:

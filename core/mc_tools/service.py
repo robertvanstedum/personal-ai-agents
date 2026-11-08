@@ -48,6 +48,20 @@ _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"        # no 0/O or 1/I/L: Rob
 AGENT_NAMES = {"claude-code": "Claude Code", "codex": "Codex"}
 ASK_FOLLOW_UP = ("Pickup and each report come back into this conversation on their own. minimoi_agent_status and minimoi_agent_watch "
                  "are for minimoi_agent_contact requests and refuse these ids; that says nothing about this request.")
+_NOT_TEXT = frozenset({"revision", "sha256", "note", "conversation", "via", "kind", "by", "at", "status"})
+
+
+def _scrub_deep(scrub, value, key=None):
+    """Every text in a value, scrubbed; identifiers and hashes are left alone."""
+    if isinstance(value, str):
+        return value if key in _NOT_TEXT else scrub(value)
+    if isinstance(value, dict):
+        return {k: _scrub_deep(scrub, v, k) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_scrub_deep(scrub, v, key) for v in value]
+    return value
+
+
 def _request_id_for(seed):
     from core.agent_requests import request_id_for
     return request_id_for(seed)
@@ -999,6 +1013,9 @@ class ToolService:
             code, words = mismatch
             return result("refused", code, f"{words} Do not try other agents. Tell Robert this plainly, in the language "
                           "he wrote in, with the example.", {"to": to})
+        kept_here = self._kept_here(text, "nothing was sent to anyone")
+        if kept_here:
+            return kept_here
         edition = hashlib.sha256(text.encode("utf-8")).hexdigest()
         canonical = {"to": to, "source": {"conversation": b.conversation_id, "note": b.note_request_id,
                                           "edition": edition}}
@@ -1085,17 +1102,20 @@ class ToolService:
             if found is None:
                 return result("refused", "item_not_found", f"There is no Build Log item #{args['item_id']}, so nothing was sent.")
             item = {"id": found["id"], "revision": content_digest(found), "title": found.get("spec_title"), "status": found.get("status"),
-                    "summary": found.get("summary"), "owner_words": found.get("owner_words"), "first_pass": found.get("first_pass"),
-                    "source": found.get("source")}
+                    "spec_file": found.get("spec_file"), "summary": found.get("summary"), "owner_words": found.get("owner_words"),
+                    "first_pass": found.get("first_pass"), "source": found.get("source"), "additions": found.get("additions")}
         elif purpose == "review":
             return result("refused", "review_needs_item", "A review names one Build Log item. Nothing was sent. Record it first, then "
                           "ask for the review with its number.")
         edition = hashlib.sha256(text.encode("utf-8")).hexdigest()
-        ask = self.agent_ask
-        owner_text = ask.scrub(text)
+        # Every outbound text is scrubbed, including what was stored earlier. The hashes stay those of the originals; "scrubbed" says
+        # the text here may differ from what they cover.
+        owner_text, sent_item, sent_take = _scrub_deep(self.agent_ask.scrub, text), _scrub_deep(self.agent_ask.scrub, item), _scrub_deep(self.agent_ask.scrub, take)
+        scrubbed = owner_text != text or sent_item != item or sent_take != take
+        item, take = sent_item, sent_take
         envelope = {"purpose": purpose, "item": item, "owner": {"note": b.note_request_id, "sha256": edition, "text": owner_text},
                     "analysis": {"by": "master-craftsman", "text": take}, "allowed_effects": ["none"],
-                    "authorization": {"kind": "standing_review", "source_note": b.note_request_id}, "scrubbed": owner_text != text}
+                    "authorization": {"kind": "standing_review", "source_note": b.note_request_id}, "scrubbed": scrubbed}
         subject = f"Build Log #{item['id']}, revision {item['revision'][:12]}: {item['title']}" if item else "a question from Robert"
         excerpt = owner_text.strip()[:1500]
         action = (f"{purpose.capitalize()} only, of {subject}. No build, no commit, no deploy.\n\nRobert's words"
@@ -1305,6 +1325,11 @@ class ToolService:
                  "addition": f"Added to #{args['item_id']}, with his words and the date. Tell him the number.",
                  "conflict": f"Kept both on #{args['item_id']}, with one open question. Name both and ask him which holds."}[args["kind"]]
         return result("done", "added_to", words, data)
+
+    def _kept_here_now(self, b, what):
+        """The keep-here refusal for this turn's note, or None. A note that can't be read isn't a keep-here: the caller's own checks apply."""
+        text, refusal = self._owner_words(b)
+        return None if refusal else self._kept_here(text, what)
 
     def _kept_here(self, text, what):
         from . import keep_here
@@ -1605,6 +1630,10 @@ class ToolService:
     def _delegate_research(self, args, caller, observation):
         if not self.delegation:
             return refused("tool_unavailable")
+        with self._tx() as conn:
+            kept_here = self._kept_here_now(self._bind(conn, caller), "nothing was proposed")
+        if kept_here:
+            return kept_here
         who = AGENT_NAMES[args["agent"]]
         limit = "time limit 30 minutes" if args["agent"] == "codex" else "cost cap 2 USD"
         words = (f"Ask {who} to research your message (“{args['title']}”), read-only in a fresh copy of the "
@@ -1617,6 +1646,10 @@ class ToolService:
     def _delegate_build(self, args, caller, observation):
         if not self.delegation or not self.build_jobs:
             return refused("tool_unavailable")
+        with self._tx() as conn:
+            kept_here = self._kept_here_now(self._bind(conn, caller), "nothing was proposed")
+        if kept_here:
+            return kept_here
         who = AGENT_NAMES[args["agent"]]
         words = (f"Hand your message to {who} to build (“{args['title']}”)? It works in a fresh copy of the repository "
                  "on a branch of its own: no push, no merge, no production release, cost cap 5 USD. Your own message "
