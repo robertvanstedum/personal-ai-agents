@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "persona": "mc-chat",
+  "version": "0.1.28",
+  "base": "0.1.27 + AGENTS answer-now section; loads MC handbook 0.1.2",
+  "spec": "MC front door spec v0.5 section 2; helper seats spec v0.4 D6, personality cases waived by Robert for this section only.",
+  "status": "candidate",
+  "target": "mc-agent container",
+  "files": {
+    "SOUL.md": "34a086b539224de91a7e5e8d3034c4852dacb07825429a0dd52f625ad3a68a95",
+    "AGENTS.md": "b2fa31ef67c773a1d0adb910fd9080773c6a60a70bfaabdc9104bb6fd6bfadbc",
+    "RUNTIME.openclaw.md": "2b2428ccded1174e6a9857bd17f1ccfa2b2b0f860c786649bfe39a2dbfdb7197",
+    "CHANGES.md": "e6dcde7e3a749982346d7d9ecb7145d7b337640b17611732060faadcf16fad11",
+    "voice.json": "75aefa0ffa3876cebab3232fa28f391cac44e6dbb4c842f80e46f9c136e2e733"
+  },
+  "handbook": {
+    "version": "0.1.2",
+    "manifest": "services/mc_operations/handbook/manifest.json",
+    "manifest_sha256": "5033cb04af14cbbb9d264c9249d3075865586bfb27c360a6e3754e73dbcabcd3"
+  },
+  "projection": "SOUL verbatim; AGENTS + runtime binding + handbook block",
+  "projection_budget_chars": 16000,
+  "config_change": false
+}

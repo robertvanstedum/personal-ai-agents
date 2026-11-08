@@ -333,3 +333,15 @@ def test_the_cos_image_and_this_container_pin_the_same_handbook():
     cos = (REPO / "docker/cos-agent-a/build-mc-handbook.mjs").read_text()
     assert f"MANIFEST_SHA256 = '{sha((HANDBOOK / 'manifest.json').read_bytes())}'" in cos
     assert f"candidate_version !== '{pinned_handbook()}'" in cos
+
+
+def test_0_1_28_adds_only_the_answer_now_section():
+    new, old = RELEASES / "0.1.28", RELEASES / "0.1.27"
+    for name in ("SOUL.md", "voice.json", "RUNTIME.openclaw.md"):
+        assert (new / name).read_bytes() == (old / name).read_bytes(), name
+    agents = (new / "AGENTS.md").read_text()
+    assert agents.startswith("# MC conversation contract — persona 0.1.28")
+    assert "**Answer now or say when:** it waits till he asks; you can't return." in agents
+    before = (old / "AGENTS.md").read_text().split("\n", 1)[1].rstrip("\n")
+    assert before in agents
+    assert json.loads((new / "manifest.json").read_text())["version"] == "0.1.28"
