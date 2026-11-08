@@ -166,8 +166,9 @@ def build_meta(git, commit_ref: str, bases=None, from_ref=None, release=None) ->
                 files[path]["generated_input"] = True
         out = {k: v for k, v in spec.items() if k not in ("rules", "extra_rules", "always", "layout", "exclude")}
         if from_commit:                             # one digest, recomputed in the built image from the shared path list
-            paths = D.layout_paths(tree, spec.get("layout", ()), mapping)
+            paths = D.layout_paths(tree, spec.get("layout", ()), mapping, spec.get("exclude", ()))
             targets[key] = {**out, "files": files, "layout_digest": {"prefixes": list(spec.get("layout", ())), "count": len(paths),
+                                                                       "exclude": list(spec.get("exclude", ())),
                                                                        "sha256": D.layout_digest({p: tree[p] for p in paths})}}
         else:
             layout = {("/app/" + p): h for p, h in tree_cache.items()

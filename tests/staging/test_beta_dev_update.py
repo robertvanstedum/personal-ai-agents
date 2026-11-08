@@ -576,6 +576,17 @@ def test_layout_paths_and_digest_agree_on_both_sides():
     assert op.layout_digest({"/a": "1"}) != op.layout_digest({"/a": None}) == op.layout_digest({"/a": "-"})
 
 
+def test_a_file_an_image_is_built_without_on_purpose_is_not_held_against_an_update():
+    """Dev, 7 Nov: the first fast update refused on core/telegram/telegram_bot.py, which the scheduler and portal images
+    are built without (the target's exclude); the full chain only noted it. Both sides now leave it out alike."""
+    tree = ["/app/core/telegram/telegram_bot.py", "/app/core/x.py"]
+    assert op.layout_paths(tree, ("core/",), set(), op._BOTS_ONLY) == ["/app/core/x.py"]
+    meta, _ = next_meta(["minimoi_portal/static/site.css"])
+    portal = meta["targets"]["portal"]["layout_digest"]
+    assert portal["exclude"] == list(op._BOTS_ONLY)
+    assert "/app/core/telegram/telegram_bot.py" not in op.layout_paths(meta["tree"], portal["prefixes"], set(), portal["exclude"])
+
+
 def test_a_small_update_goes_in_one_ssm_call_to_release_next_and_never_replaces_the_running_release():
     meta, blobs = next_meta(["minimoi_portal/static/site.css"])
     tar = pay.make_tar(meta, blobs, {"beta_dev_deploy.py": (ROOT / "scripts/staging/beta_dev_deploy.py").read_bytes(),

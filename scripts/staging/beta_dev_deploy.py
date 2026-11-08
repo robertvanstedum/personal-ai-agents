@@ -400,12 +400,15 @@ print(json.dumps({"differs": sorted(differs), "missing": sorted(missing)}))
 '''
 
 
-def layout_paths(tree, prefixes, files) -> list:
+def layout_paths(tree, prefixes, files, exclude=()) -> list:
     """The reviewed files beyond the payload an image holds: text files of the commit under its layout, by image path.
-    tree: image paths ("/app/<repo path>"); files: the payload's repo paths. The Mac and the host both choose them this way."""
+    tree: image paths ("/app/<repo path>"); files: the payload's repo paths; exclude: repo paths the image is built
+    without on purpose (the target's ``exclude``, such as the Telegram bot, 7 Nov). The Mac and the host both choose them
+    this way."""
     if not prefixes:
         return []
-    return sorted(t for t in tree if t[len("/app/"):].startswith(tuple(prefixes)) and t[len("/app/"):] not in files)
+    return sorted(t for t in tree if t[len("/app/"):].startswith(tuple(prefixes)) and t[len("/app/"):] not in files
+                  and t[len("/app/"):] not in exclude)
 
 
 def layout_digest(hashes: dict) -> str:
@@ -1035,7 +1038,7 @@ class RealHost:                                     # pragma: no cover  (exercis
     def _check_layout_digest(self, key, spec, new_id):
         """An update ships only what changed since the running release, so every other reviewed file must already be the commit's."""
         want = spec.get("layout_digest") or {"prefixes": [], "count": 0, "sha256": layout_digest({})}
-        paths = layout_paths(self.meta.get("tree", ()), want["prefixes"], spec["files"])
+        paths = layout_paths(self.meta.get("tree", ()), want["prefixes"], spec["files"], want.get("exclude", ()))
         got = json.loads(self._sealed(new_id, "python", "-c", LAYOUT_HASHES, input=json.dumps(paths)).strip().splitlines()[-1])
         self._write_private(self.OP / f"layout-{key}.private.json", json.dumps(got, indent=0))
         self.layout_report[key] = {"differs": [] if layout_digest(got) == want["sha256"] else ["digest"], "missing": sorted(p for p, h in got.items() if not h)}
