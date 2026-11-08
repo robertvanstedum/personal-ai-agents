@@ -44,3 +44,17 @@ def test_voice_starts_from_one_place_and_the_options_hold_dictate_and_voice():
     body = template[template.index("data-cos-options"):template.index("</details>", template.index("data-cos-options"))]
     assert 'id="btn-dictate"' in body and 'id="voice-provider"' in body
     assert 'id="btn-voice"' in template.split('class="input-row"')[1]
+
+
+def test_cos_page_assets_change_address_whenever_their_bytes_change():
+    """Robert, 7 Nov: the side-by-side fix was live, but the page kept a cached stylesheet under an unchanged address."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    page = (root / "domains/cos/templates/cos_ui.html").read_text()
+    for asset in ("cos.css", "calm-confer.css", "calm-confer.js", "cos-work-cards.js", "cos-task-proposals.js", "message-text.js"):
+        assert f"{asset}?v={{{{ founders_ui_version }}}}" in page, asset
+    hashed = (root / "core/founders_ui/__init__.py").read_text()
+    for asset in ("cos.css", "calm-confer.css", "calm-confer.js", "cos-work-cards.js", "cos-task-proposals.js"):
+        assert f"domains/cos/static/{asset}'" in hashed, asset
+    css = (root / "domains/cos/static/calm-confer.css").read_text()
+    assert ".founders-cos.both-open .confer-picture{display:none}" in css

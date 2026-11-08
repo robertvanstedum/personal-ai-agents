@@ -34,7 +34,7 @@ REPLY = 'Use **`Board`** and ```token```. <script>alert(1)</script>'
 def test_confer_sources_render_assistant_text_and_leave_user_text_alone():
     template = (ROOT / 'domains/cos/templates/cos_ui.html').read_text()
     history = (ROOT / 'domains/cos/static/cos-history-ui.js').read_text()
-    assert 'message-text.js?v=20261106-ticks1' in template
+    assert 'message-text.js?v={{ founders_ui_version }}' in template
     assert "if (role !== 'user') window.MiniMoiMessageText?.render(body, text);" in template
     assert "if (!mine) window.MiniMoiMessageText?.render(words, text);" in history
 
