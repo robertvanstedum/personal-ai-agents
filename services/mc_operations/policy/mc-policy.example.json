@@ -1,6 +1,6 @@
 {
   "schema": "mc-policy/1",
-  "revision": "dev-example-partnership-1",
+  "revision": "dev-example-front-door-1",
   "rules": [
     {
       "capability": "host.health",
@@ -610,6 +610,24 @@
       "source_requirement": "current_owner_turn",
       "handler": "agent_ask_v1",
       "verify": "agent_request_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 1
+    },
+    {
+      "capability": "guild.build_log.add",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "build_log_add_v1",
+      "verify": "build_log_readback_v1",
       "undo": null,
       "egress": "none",
       "max_operations_per_turn": 1

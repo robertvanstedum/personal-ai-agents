@@ -571,6 +571,15 @@ class AgentAsker:
         return made, self.asks.words(made)
 
 
+def build_log_store(environ):
+    """The live Build Log (MC front door spec §4.1), or None where the portal only shows the repository copy."""
+    path = (environ.get("GUILD_QUEUE_PATH") or "").strip()
+    if not path:
+        return None
+    from domains.guild.queue_store import QueueStore
+    return QueueStore(path)
+
+
 def agent_asker(asks, earlier_notes=None):
     """An AgentAsker over the front door, or None while MINIMOI_GUILD_AGENT_REQUESTS is off."""
     return None if asks is None else AgentAsker(asks, earlier_notes)
@@ -578,7 +587,7 @@ def agent_asker(asks, earlier_notes=None):
 
 def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, show=None, read_shown=None,
                   read_owner_note=None, domain_health=None, registers=None, board=None, export_conversation=None, recall_source=None,
-                  agent_ask=None):
+                  agent_ask=None, build_log=None):
     from core.activity import config as activity_config
     from core.mc_tools.service import ToolService
     lessons = None
@@ -594,7 +603,7 @@ def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, sho
                        standard_changes=cfg["standard_changes"],
                        guests_lookup=_guests_lookup, policy=policy_source(cfg), read_owner_note=read_owner_note,
                        domain_health=domain_health, registers=registers, board=board, export_conversation=export_conversation, recall_source=recall_source,
-                       artifact_root=artifact_root(os.environ), agent_ask=agent_ask,
+                       artifact_root=artifact_root(os.environ), agent_ask=agent_ask, build_log=build_log,
                        # MC's build update (CoS 1.2 spec section 4.4): MINIMOI_ACTIVITY_DIR names the portal's
                        # data/activity/guild-build/ folder; off unless it and MINIMOI_ACTIVITY_ENVIRONMENT are set.
                        activity_update=activity_config.writer_from_environ(
@@ -671,7 +680,8 @@ def attach(app, blueprint_name, services):
                             registers=_mc_registers(environ, cfg["principal"],
                                                     app.extensions[blueprint_name].get("base_url", "")),
                             agent_ask=agent_asker(app.extensions[blueprint_name].get("agent_asks"),
-                                                  continuity_reader(services, cfg["principal"])))
+                                                  continuity_reader(services, cfg["principal"])),
+                            build_log=build_log_store(environ))
     service.tasks = tasks_adapter(environ)
     agent_worker_sha = (environ.get('MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256') or '').strip().lower()
     enrollment_path = environ.get('MINIMOI_MC_AGENT_ENROLLMENT')

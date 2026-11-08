@@ -60,6 +60,8 @@ HANDLERS = {
     # door, agent_ask.AskService); the agents treat a request as data, never as authority. No model text is sent.
     "agent_ask_v1": Handler("minimoi_agent_ask", "agent.ask.owner_note", frozenset({2}), "agent_request_readback_v1",
                             "none"),
+    # An idea on the Build Log (MC front door spec §4.1): his note kept whole, MC's take apart from it. Builds nothing.
+    "build_log_add_v1": Handler("minimoi_build_log_add", "guild.build_log.add", frozenset({2}), "build_log_readback_v1", "none"),
     "career_trial_v1": Handler("minimoi_career_trial", "host.career.synthetic", frozenset({2}), "host_artifact_readback_v1", "none"),
     "working_write_v1": Handler("minimoi_working_write", "host.artifacts.create", frozenset({2}), "host_artifact_readback_v1", "none"),
     "conversation_export_v1": Handler("minimoi_conversation_export", "host.conversation.export", frozenset({2}), "host_artifact_readback_v1", "none"),

@@ -66,6 +66,8 @@ STATUSES = (
     # correct. Additive; nothing is renamed or collapsed.
     "rework",
 )
+SUMMARY_MAX = 6000
+CAPTURE_WORDS_MAX = 64 * 1024  # an owner's message kept whole; beyond this it is refused, never cut
 EDITABLE_FIELDS = ("spec_title", "summary", "github_issue")
 
 # "Trouble" is blocked or rework (spec §4.2). While in trouble an item carries
@@ -221,6 +223,32 @@ def write_location_problem(path: str | os.PathLike | None, *,
 
 
 # ── Result ────────────────────────────────────────────────────────────────────
+
+def _same_source(a, b) -> bool:
+    return (isinstance(a, dict) and isinstance(b, dict)
+            and all(a.get(k) == b.get(k) for k in ("conversation", "note", "sha256")))
+
+
+def _capture_problem(capture) -> str | None:
+    """Why a capture can't be kept, or None. Words over the limit are refused here, so nothing is ever kept cut short."""
+    if capture is None:
+        return None
+    if not isinstance(capture, dict) or set(capture) != {"source", "owner_words", "first_pass"}:
+        return "a capture needs its source, the owner's words and the first pass"
+    words, source, first = capture["owner_words"], capture["source"], capture["first_pass"]
+    if not isinstance(words, str) or not words.strip():
+        return "the owner's words are empty"
+    if len(words) > CAPTURE_WORDS_MAX:
+        return f"the owner's message is over {CAPTURE_WORDS_MAX} characters and cannot be kept whole"
+    if not isinstance(source, dict) or not all(isinstance(source.get(k), str) and source[k]
+                                               for k in ("conversation", "note", "sha256")):
+        return "the capture's source is incomplete"
+    if source["sha256"] != sha256_bytes(words.encode("utf-8")):
+        return "the capture's hash does not match the owner's words"
+    if not isinstance(first, dict) or not isinstance(first.get("text"), str) or not first["text"].strip():
+        return "the first pass is empty"
+    return None
+
 
 @dataclass
 class SaveResult:
@@ -912,24 +940,45 @@ class QueueStore:
                             principal=principal, via=via, idempotency_key=idempotency_key)
 
     def create_item(self, spec_title: str, status: str = "idea", *, principal: str,
-                    via: str = "guild-next", idempotency_key: str | None = None) -> SaveResult:
+                    via: str = "guild-next", idempotency_key: str | None = None,
+                    summary: str | None = None, capture: dict | None = None) -> SaveResult:
         """A new item (spec §4.5): id = max + 1 under the lock, journaled like
-        any Save. Only idea, design or backlog. The queue stays a bare list."""
+        any Save. Only idea, design or backlog. The queue stays a bare list.
+
+        ``capture`` (MC front door spec §4.1): Robert's message kept whole, with
+        its source reference and hash, and MC's first pass kept apart from it.
+        One source is one item: the first accepted payload is frozen, so a
+        repeat, even with a regenerated title or take, returns the same item
+        as ``repeated`` and changes nothing."""
         title = spec_title.strip() if isinstance(spec_title, str) else ""
         if not title or len(title) > TITLE_MAX:
             return SaveResult(INVALID, op="create", reason=f"a title of 1 to {TITLE_MAX} characters is needed")
         if status not in CREATE_STATUSES:
             return SaveResult(INVALID, op="create", reason="a new item starts as idea, design or backlog")
+        if summary is not None and (not isinstance(summary, str) or not summary.strip() or len(summary) > SUMMARY_MAX):
+            return SaveResult(INVALID, op="create", reason=f"a summary of 1 to {SUMMARY_MAX} characters is needed")
+        problem = _capture_problem(capture)
+        if problem:
+            return SaveResult(INVALID, op="create", reason=problem)
+        extra = {**({"summary": summary.strip()} if summary is not None else {}), **(capture or {})}
 
         def plan(items: list):
+            if capture is not None:
+                for it in items:
+                    if isinstance(it, dict) and _same_source(it.get("source"), capture["source"]):
+                        return SaveResult(SAVED, item_id=it.get("id"), op="create", new=it.get("status"), verified=True,
+                                          repeated=True, current_item=it)
             ids = [it["id"] for it in items if isinstance(it, dict) and isinstance(it.get("id"), int)
                    and not isinstance(it.get("id"), bool)]
             new_id = max(ids, default=0) + 1
             item = {"id": new_id, "spec_title": title, "spec_file": None, "status": status,
-                    "blocked_reason": None, "last_transition_at": _iso(self._clock())}
+                    "blocked_reason": None, "last_transition_at": _iso(self._clock()), **extra}
             return _Plan(items=items + [item], item_id=new_id, old=None, new=status, item=item)
 
-        return self._commit(op="create", item_id=0, plan=plan, change={"spec_title": title, "status": status},
+        # With a capture the change is the source alone: a retry with a regenerated title or take is the same change.
+        change = ({"capture_source": capture["source"]} if capture is not None
+                  else {"spec_title": title, "status": status, **extra})
+        return self._commit(op="create", item_id=0, plan=plan, change=change,
                             principal=principal, via=via, idempotency_key=idempotency_key)
 
     def item_journal(self, item_id: int) -> list[dict]:

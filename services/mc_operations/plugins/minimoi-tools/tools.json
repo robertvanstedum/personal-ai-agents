@@ -1068,6 +1068,40 @@
       }
     },
     {
+      "name": "minimoi_build_log_add",
+      "capability": "guild.build_log.add",
+      "label": "Record Robert's idea on the Build Log",
+      "description": "When Robert brings an idea, direction or next step for MiniMoi, think it through with him and look for earlier related items first, then call this once to record it as one Build Log item. MiniMoi keeps his message whole from his current note; you give only a short title, idea or design, and your own first pass, which stays separately attributed to you. It builds nothing, starts no job and asks no one. Not for a plain question, not for conversation, and not when he says to keep it here. If he asks you to do something MiniMoi cannot do yet, use minimoi_record_gap. Calling again for the same message finds the same item and changes nothing. Tell him the number naturally, in a few words; do not announce how you classified his message.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "status",
+          "take"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "idea",
+              "design"
+            ]
+          },
+          "take": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 4000
+          }
+        }
+      }
+    },
+    {
       "name": "minimoi_career_trial",
       "label": "Run synthetic Career Kit trial",
       "capability": "host.career.synthetic",

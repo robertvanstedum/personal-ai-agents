@@ -54,6 +54,7 @@
           ],
           "tools": [
             "minimoi_agent_ask",
+            "minimoi_build_log_add",
             "minimoi_agent_contact",
             "minimoi_agent_status",
             "minimoi_agent_watch",

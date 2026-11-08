@@ -48,6 +48,7 @@ _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"        # no 0/O or 1/I/L: Rob
 AGENT_NAMES = {"claude-code": "Claude Code", "codex": "Codex"}
 ASK_FOLLOW_UP = ("Pickup and each report come back into this conversation on their own. minimoi_agent_status and minimoi_agent_watch "
                  "are for minimoi_agent_contact requests and refuse these ids; that says nothing about this request.")
+BUILD_LOG_EXCERPT = 1500                                     # the display excerpt; his whole message is kept on the item
 ASK_AGENTS = ("claude-code", "codex", "grok")                # minimoi_agent_ask: who can be asked; "all" is the three
 REFUSED_WORDS = {
     "agent_requests_off": "Asking the agents is switched off here, so nothing was recorded or sent.",
@@ -174,7 +175,7 @@ class ToolService:
                  isolated_runtime: bool = False, worker: str = "mc-tools", guests_lookup=None, people=None,
                  standard_changes=None, display_tz: str = offers.DISPLAY_TZ, policy=None, read_owner_note=None,
                  domain_health=None, registers=None, board=None, tasks=None, export_conversation=None, artifact_root=None, agent_contact=None, recall_source=None,
-                 agent_ask=None, activity_update=None):
+                 agent_ask=None, activity_update=None, build_log=None):
         """``connect()`` returns a new psycopg2 connection to the guild database (autocommit off).
         ``lessons`` is a LessonLedger (or None: lessons off). ``guests_lookup(email)`` returns an existing
         guest login with that email (or None); invites are refused while it is missing."""
@@ -215,6 +216,7 @@ class ToolService:
         # agent_ask(conversation_id, note_text, note_request_id, to) -> (made, words), with agent_ask.check(note_text,
         # to) -> None | (code, words): the front door (portal wiring, AgentAsker), or None while asking the agents is off.
         self.agent_ask = agent_ask
+        self.build_log = build_log                    # domains.guild.queue_store.QueueStore (the Build Log), or None
         # activity_update: core.activity.writer.ActivityWriter for guild-build's update part (CoS 1.2 spec section 4.4),
         # or None while MC's build update is off.
         self.activity_update = activity_update
@@ -1043,6 +1045,81 @@ class ToolService:
         material = json.dumps([self.principal, self.environment, b.conversation_id, b.note_request_id, capability,
                                canonical], sort_keys=True, ensure_ascii=False, separators=(",", ":"))
         return str(uuid.UUID(hashlib.sha256(material.encode("utf-8")).hexdigest()[:32]))
+
+    # ── tier 2: Robert's idea on the Build Log (MC front door spec §4.1) ──────────────────────────────────────────────
+    def _build_log_add(self, args, caller, observation):
+        """Robert's idea, direction or next step as one Build Log item. His current kept note is kept whole, with its source
+        reference and hash; MC's first pass is kept apart and attributed. One note is one item: a retry, under any call id
+        and with any regenerated title or take, finds the same item and changes nothing. It builds nothing, starts no job
+        and asks no one."""
+        if self.build_log is None or self.read_owner_note is None or not self._tier2(caller):
+            return refused("tool_unavailable")
+        with self._tx() as conn:
+            b = self._bind(conn, caller)
+        text, refusal = self._owner_words(b)
+        if refusal:
+            return refusal
+        edition = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        title, status, take = args["title"].strip(), args["status"], args["take"].strip()
+        source = {"conversation": b.conversation_id, "note": b.note_request_id, "sha256": edition, "chars": len(text)}
+        canonical = {"source": source}
+        op = self._operation_id(b, "guild.build_log.add", canonical)
+        words = text.strip()
+        excerpt = words if len(words) <= BUILD_LOG_EXCERPT else words[:BUILD_LOG_EXCERPT].rstrip() + " …"
+        label = "Robert's words" if excerpt == words else "Robert's words (excerpt; the whole message is kept with this item)"
+        summary = f"{label}: {excerpt}\n\nMaster Craftsman's first pass: {take}"
+        capture = {"source": source, "owner_words": text,
+                   "first_pass": {"by": "master-craftsman", "revision": 1, "text": take}}
+        effect = lease = None
+        with self._tx() as conn:
+            b = self._bind_again(conn, caller, b)
+            if effects.receipt_exists(conn, self.principal, self.environment, op):
+                lease = effects.reconcile_effect(conn, principal=self.principal, environment=self.environment,
+                                                 operation_id=op, worker=self.worker)
+            else:
+                effect = effects.begin_standing_effect(conn, b, effects.request("guild.build_log.add", canonical),
+                                                       operation_id=op, worker=self.worker)
+        try:
+            saved = self.build_log.create_item(title, status, principal=self.principal, via="mc",
+                                               idempotency_key=op.replace("-", ""), summary=summary, capture=capture)
+        except Exception:
+            _log.exception("mc tools: build log add outcome unknown")
+            saved = None
+        kept = None
+        if saved is not None and saved.ok:
+            try:
+                kept = next((i for i in self.build_log.read_items() if isinstance(i, dict) and i.get("id") == saved.item_id), None)
+            except Exception:
+                _log.exception("mc tools: build log read-back failed")
+        verified = bool(kept) and isinstance(kept.get("owner_words"), str) and kept.get("source", {}).get("sha256") == edition \
+            and hashlib.sha256(kept["owner_words"].encode("utf-8")).hexdigest() == edition
+        unsure = saved is None or saved.result == "uncertain" or (saved.ok and not verified)
+        outcome = {"state": "unknown" if unsure else "added" if verified else "refused",
+                   "item_id": saved.item_id if saved else None, "repeated": bool(saved and saved.repeated)}
+        with self._tx() as conn:
+            if unsure:
+                if effect is not None:
+                    effect.unknown(conn)
+                elif lease is not None:
+                    effects.RECEIPTS.finish(conn, lease, "unknown")
+            elif effect is not None:
+                effect.finish(conn, "build_log_add", outcome, verified=verified)
+            elif lease is not None:
+                evidence = effects.record_evidence(conn, b.context(), op, "build_log_add", outcome)
+                effects.RECEIPTS.finish(conn, lease, "verified" if verified else "failed", evidence_refs=(evidence,))
+            receipt = effects.RECEIPTS.read(conn, self.principal, self.environment, op)
+        data = {**outcome, "receipt_id": str(receipt["receipt_id"])}
+        if unsure:
+            return result("unknown", "build_log_unconfirmed", "MiniMoi could not confirm whether the Build Log item was kept "
+                          "whole. Do not repeat it; tell Robert, and he can check the Build Log.", data)
+        if not verified:
+            return result("refused", "build_log_refused", f"The Build Log refused that ({saved.reason or saved.result}); "
+                          "nothing was added. Tell Robert.", data)
+        if saved.repeated:
+            return result("done", "already_added", f"This message is already on the Build Log as #{saved.item_id}, and nothing "
+                          "changed. Any new wording in this call was not applied. Tell Robert the number.", data)
+        return result("done", "added", f"Added to the Build Log as #{saved.item_id} ({status}), with his words kept whole and "
+                      "your first pass apart from them. Tell Robert the number in a few words.", data)
 
     def _owner_words(self, b):
         """(text, edition) of Robert's current note, or a refusal result."""
