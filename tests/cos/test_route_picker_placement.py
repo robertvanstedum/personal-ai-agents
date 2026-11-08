@@ -58,3 +58,15 @@ def test_cos_page_assets_change_address_whenever_their_bytes_change():
         assert f"domains/cos/static/{asset}'" in hashed, asset
     css = (root / "domains/cos/static/calm-confer.css").read_text()
     assert ".founders-cos.both-open .confer-picture{display:none}" in css
+
+
+def test_a_service_without_the_cos_files_still_starts(monkeypatch, tmp_path):
+    """Dev, 8 Nov: the portal's image holds no CoS files, and its start failed reading one for the asset version."""
+    from pathlib import Path
+    from flask import Flask
+    import core.founders_ui as fu
+    real = Path.is_file
+    monkeypatch.setattr(Path, "is_file", lambda self: False if "domains/cos/static" in str(self) else real(self))
+    app = Flask(__name__)
+    fu.install(app)
+    assert len(app.jinja_env.globals["founders_ui_version"]) == 16
