@@ -9,6 +9,7 @@ Run: cd ~/Projects/personal-ai-agents && venv/bin/python3 minimoi_portal/app.py
 """
 
 import json
+import mimetypes
 import os
 import secrets
 import sys
@@ -45,6 +46,10 @@ from flask_cors import CORS
 
 BASE_DIR = Path(__file__).parent
 REPO_DIR = BASE_DIR.parent
+
+# The portal image's Python names no type for .webp, so Flask served the workshop pictures as
+# application/octet-stream and "View full picture" downloaded the file (Robert, 8 Nov).
+mimetypes.add_type("image/webp", ".webp")
 
 app = Flask(
     __name__,
