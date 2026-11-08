@@ -244,7 +244,7 @@ def bare_confirmation(text):
 # and, only when that says nothing, by one small understanding call (intent_gateway); the result is one word, which has no
 # power to act. A request becomes the session's one waiting action; his next item decides it.
 KINDS = ("note", "postit", "consult", "end")                     # what may wait; end is "Shall I sum up?"
-LABELS = ("note", "postit", "consult", "yes", "no", "read_back", "read_summary", "chat")   # what the understanding call says
+LABELS = ("note", "postit", "consult", "lookup", "yes", "no", "read_back", "read_summary", "chat")   # what the understanding call says
 DECISIONS = ("ask", "confirm", "dropped", "read_back", "nothing_waiting", "summary_later", "summary_now", "chat")
 ANSWER_S = 30            # the answer window, from the question starting to play; paused during a read-back
 LIFETIME_S = 120         # a waiting action's whole life, however often it is re-asked
@@ -424,8 +424,11 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False):
     question with nothing waiting is told so on every provider (_stray). Otherwise (xAI answers by itself, live probes)
     the model's own reply to a request is the question: it asks briefly and naturally."""
     name, short = person["name"], person["short"]
-    request = f"When {owner} asks for a note, a post-it, or work that needs your runtime (current facts, project state, " \
-              "files, jobs, any work), "
+    lookup = (f"When {owner} only asks to look something up or check something (facts, status, counts, whether something "
+              "happened), never ask him to confirm: the app looks it up at once; say only a brief word such as \"Let me "
+              "check.\", and never say what you think the answer is. ")
+    request = lookup + f"When {owner} asks for a note, a post-it, or work that changes something (making, changing, " \
+              "closing or sending anything, files, jobs, any work), "
     ask = (request + "never ask him to confirm it yourself and never say it is done: the app hears what he asks for, and "
            "when it has heard a request its own instruction tells you to ask him; ask then, briefly and naturally, "
            "without repeating or describing his words. If he clearly asked for such work and the app gave you no such instruction, say briefly that typing it in the chat will do it; never tell him to say it more clearly. Otherwise just talk with him: never mention requests, your runtime, or anything not coming through. " if page_asks else
@@ -1335,7 +1338,7 @@ class DirectSessions(ConsultLedger):
                 and norm(text) != norm(slot["text"]) and norm(text).startswith(norm(slot["text"]))):
             self._let_go(meta, slot, "folded", now)
             return {"decision": "dropped", "action_id": slot["action_id"], "kind": slot["kind"], "reason": "folded"}
-        if label in ("note", "postit", "consult") and ends_in_answer(text):
+        if label in ("note", "postit", "consult", "lookup") and ends_in_answer(text):
             # Review v3 S7: a request whose own words end in a bare answer ("… the kiln is hot. Yes.") is a fold, on any
             # provider, whether or not the overtaken item was heard first: refused whole, never a note holding "yes". A
             # waiting action goes too (anything else drops it), and a later yes is told nothing waits.
@@ -1345,8 +1348,20 @@ class DirectSessions(ConsultLedger):
                 meta["stray_until"] = now + LIFETIME_S
             return {"decision": "dropped", "reason": "folded",
                     **({"action_id": slot["action_id"], "kind": slot["kind"]} if slot is not None else {})}
-        if label in ("note", "postit", "consult") and bare_confirmation(text):
+        if label in ("note", "postit", "consult", "lookup") and bare_confirmation(text):
             label = "chat"                                  # a bare yes or stop is never a request (D16)
+        if label == "lookup":
+            # Robert, 8 Nov 2026: "I don't need you to ask me for permission to read things, maybe just to write things."
+            # A lookup runs at once, confirmed by its own words, as a request whose host turn may only read (the host
+            # refuses every tool that changes anything: cos tool_listener.READ_OPERATIONS, core.mc_tools.read_only).
+            # A request waiting is not touched: his yes still answers it.
+            new = {"action_id": uuid.uuid4().hex, "kind": "consult", "owner_item_id": item, "text": text,
+                   "text_hash": digest(text), "tool": "consult", "read_only": True, "state": "confirmed",
+                   "created": now, "after": item, "asked_at": None, "expires": None, "paused": False, "screen": False,
+                   "confirm_item": item, "confirmed_at": now}
+            meta["confirmed"][new["action_id"]] = new
+            return {"decision": "confirm", "action_id": new["action_id"], "kind": "consult", "confirm_item_id": item,
+                    "owner_item_id": item, "text_sha256": new["text_hash"], "lookup": True}
         if label in ("note", "postit", "consult", "end"):
             old = slot
             if old is not None:
@@ -1696,7 +1711,7 @@ def compact(result, limit=RECORD_MAX - 400):
     return keep
 
 
-def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
+def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item, *, read_only=False):
     """One owner action, admitted durably before it is dispatched (Spec 165 §5.1). The key is (session, owner_item_id):
     one effect per owner turn, whichever tool asks (the tool is recorded, not keyed: a consult on "make a note that …"
     saves the note, so Check and the model's save_note are one action). Before dispatch a consult_request record is put
@@ -1770,7 +1785,8 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
             except Exception:
                 log.exception("%s direct voice: consult request not kept", adapter.person["domain"])
                 return unrun(adapter, sessions, handle, sid, call_id, name, item, not_done("not_kept", FAILED)), 200
-            return run(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began), 200
+            return run(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began,
+                       read_only=read_only), 200
         sessions.release(sid, item, call_id)
         if kept.outcome == "refused":
             return not_done("not_recorded", NOT_RECORDED), 200
@@ -1860,7 +1876,7 @@ def same_key(adapter, sessions, handle, sid, call_id, item, words, existing, nam
     return answer, 200
 
 
-def run(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began):
+def run(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began, *, read_only=False):
     """The admitted owner turn runs in a worker (Spec 165 §5.1). This request waits CONSULT_WAIT_S for it: the result if
     it finishes, else pending ("the answer will be in the conversation"). The worker keeps the outcome record and the
     receipt when the turn completes, whenever that is, and, when this request already answered pending, queues the
@@ -1876,7 +1892,8 @@ def run(adapter, sessions, principal, handle, sid, call_id, name, text, item, n,
 
     def work():
         try:
-            result = dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began)
+            result = dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began,
+                              read_only=read_only)
         except Exception:                                # never left running: the turn is settled unknown
             log.exception("%s direct voice: consult worker failed", adapter.person["domain"])
             result = settled_result({"ok": False, "call_id": call_id, "error": "exception", "outcome": "unknown"})
@@ -1900,13 +1917,15 @@ def run(adapter, sessions, principal, handle, sid, call_id, name, text, item, n,
     return {"ok": False, "call_id": call_id, "outcome": "pending", "spoken": PENDING}
 
 
-def dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began):
+def dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began, *, read_only=False):
     """The admitted owner turn through the host's typed turn, then its outcome record and receipt. A consult that
     finishes after End still keeps both."""
     voice_item = "k" + item
     started = time.monotonic()
     try:
-        result = adapter.typed_turn(handle, principal, sid, n, name, text, item=item)
+        # A spoken lookup (run without his yes) asks the host for a turn whose tools may only read.
+        result = adapter.typed_turn(handle, principal, sid, n, name, text, item=item,
+                                    **({"read_only": True} if read_only else {}))
     except Exception:                                    # after dispatch: it may have acted (review R1 P1-1)
         log.exception("%s direct voice: consult failed", adapter.person["domain"])
         result = {"ok": False, "error": "exception", "outcome": "unknown"}
@@ -2465,7 +2484,8 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
     def run_action(who, sid, call_id, slot):
         """A consumed waiting action through the one dispatcher, on the action's own owner item and text, never the yes
         item's: the (session, owner_item_id) key, receipts, one effect per owner item, reconcile and retry unchanged."""
-        answer, status = consult(adapter, sessions, who, sid, call_id, slot["tool"], slot["text"], slot["owner_item_id"])
+        answer, status = consult(adapter, sessions, who, sid, call_id, slot["tool"], slot["text"], slot["owner_item_id"],
+                                 read_only=slot.get("read_only") is True)
         return jsonify({**answer, "action_id": slot["action_id"], "kind": slot["kind"],
                         "owner_item_id": slot["owner_item_id"]}), status
 
@@ -2686,6 +2706,10 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
 
         def hear(words, waiting, pending):
             label = fast_label(adapter, grammar, words, waiting)
+            if label == "consult":
+                # "Ask MC whether …": the grammar heard a request; only the understanding call can say it is a lookup.
+                # Anything else it says (or no key, or a failure: chat) keeps it a request, which asks for his yes.
+                return "lookup" if understand(words, waiting, pending) == "lookup" else "consult"
             return label if label is not None else understand(words, waiting, pending)
         decision = sessions.decide(sid, item, text.strip(), hear, tool_of)
         if decision is None:

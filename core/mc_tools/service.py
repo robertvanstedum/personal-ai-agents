@@ -60,6 +60,8 @@ REFUSED_WORDS = {
     "tool_unavailable": "That tool is not switched on here. Nothing was done.",
     "tool_run_missing": "MiniMoi could not tell which turn this call belongs to. Nothing was done.",
     "tool_run_not_bound": "This call does not belong to Robert's current turn. Nothing was done.",
+    "tool_read_only": "Robert asked by voice for a lookup only, so nothing was changed. Answer from what you can read, "
+                      "and tell him that a change needs him to ask for it, so he can confirm it.",
     "tool_turn_stopped": "Robert stopped this turn, so no tool runs for it any more. Nothing was done.",
     "tool_runtime_replaced": "MiniMoi could not match this call's runtime process to the process bound to this turn "
                              "and currently registered. This call was blocked. This does not establish why the "
@@ -247,6 +249,10 @@ class ToolService:
                                 instance_id=caller.instance_id,
                                 allowed_agents=self.allowed_agents,
                                 principal=self.principal, environment=self.environment)
+        from . import read_only
+        if not read_only.allowed(b.note_request_id, caller.tool):
+            _log.info("mc tool %s refused: tool_read_only", caller.tool)
+            raise NotBound("tool_read_only")      # a spoken lookup: refused before it is recorded or counted
         binding_mod.admit(conn, b, tool=caller.tool, tool_call_id=caller.tool_call_id,
                           policy_version=caller.policy_version, limit=caller.rule.max_operations_per_turn)
         self._admitted.turn = (b.ledger_id, b.generation, caller.tool_call_id)

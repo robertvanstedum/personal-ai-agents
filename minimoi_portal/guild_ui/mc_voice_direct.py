@@ -341,13 +341,18 @@ class _MasterCraftsman(DirectVoiceAdapter):
             return "note"
         return "postit" if board_commands.parse(text) else None
 
-    def typed_turn(self, conv, principal, session_id, n, name, text, *, item):
+    def typed_turn(self, conv, principal, session_id, n, name, text, *, item, read_only=False):
         from . import api
         from .mc.ledger_gate import Refusal
         # The owner's words kept as his note, as POST /notes keeps a typed one. Its id is MC's typed-turn request id, and
         # it derives from the consult's key (Spec 165 §5.1): vc-<session>-<owner item>. A second dispatch of the same owner
         # turn, however it got past admission, is the same note, and MC's one reply per note answers it from the store.
         note_id = reveal.consult_note_id(session_id, item)
+        if read_only:
+            # A spoken lookup, run without his yes (Robert, 8 Nov): MC's tools may only read on this turn. Marked before
+            # anything is sent (core.mc_tools.read_only); server-held, never from the request.
+            from core.mc_tools import read_only as lookup
+            lookup.mark(note_id)
         floor = api._conv_floor(conv)
         kept = floor.add_note(note_id, text, api._author(), page="voice")
         if kept.outcome != "kept" or not kept.value:

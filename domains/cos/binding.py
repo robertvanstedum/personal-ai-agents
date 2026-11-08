@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS bindings(
   scope TEXT NOT NULL, audience TEXT NOT NULL, owner_request_id TEXT, supersession_key TEXT,
   claim_id TEXT, room_generation TEXT, trigger_seq INTEGER, approval_generation INTEGER,
   source_ref TEXT, runtime_instance TEXT NOT NULL, epoch TEXT NOT NULL, run_id TEXT UNIQUE, expires REAL NOT NULL,
-  created REAL NOT NULL, revoked REAL, revoked_reason TEXT);
+  created REAL NOT NULL, revoked REAL, revoked_reason TEXT, read_only INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS bindings_live ON bindings(supersession_key) WHERE revoked IS NULL;
 CREATE TABLE IF NOT EXISTS stops(turn_id TEXT PRIMARY KEY, at REAL NOT NULL, reason TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS calls(
@@ -93,6 +93,8 @@ class Binding:
     approval_generation: int | None = None
     # B4: the CoS history turn this owner turn was saved as ({conversation_id, turn_id}), or None.
     source_ref: dict | None = None
+    # A spoken lookup, run without his yes: only READ_OPERATIONS pass (tool_listener).
+    read_only: bool = False
 
 
 def _iso(ts: float) -> str:
@@ -114,7 +116,12 @@ class BindingStore:
         fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600)
         os.close(fd)
         os.chmod(self.path, 0o600)
-        self._db().executescript(_SCHEMA)
+        db = self._db()
+        db.executescript(_SCHEMA)
+        # A spoken lookup's turn (Robert, 8 Nov: "I don't need you to ask me for permission to read things, maybe just
+        # to write things"): its bound tools may only read. Added to a file made before the column existed.
+        if "read_only" not in {row["name"] for row in db.execute("PRAGMA table_info(bindings)")}:
+            db.execute("ALTER TABLE bindings ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0")
 
     # ── plumbing ─────────────────────────────────────────────────────────────
     def _db(self) -> sqlite3.Connection:
@@ -185,7 +192,7 @@ class BindingStore:
                supersession_key: str | None = None, claim_id: str | None = None,
                room_generation: str | None = None, trigger_seq: int | None = None,
                approval_generation: int | None = None, source_ref: dict | None = None,
-               owner_words: str | None = None) -> bool:
+               owner_words: str | None = None, read_only: bool = False) -> bool:
         """The binding for a turn being handed to the agent. True when it is live; False when there is no current
         runtime instance or epoch (tools stay refused), or a Stop already reached the turn. A newer binding with the
         same supersession key revokes the older ones (reason 'superseded')."""
@@ -215,12 +222,12 @@ class BindingStore:
             db.execute("""INSERT INTO bindings(turn_id, environment, principal, origin, seat, actor, agent_entry,
                 session_user, scope, audience, owner_request_id, supersession_key, claim_id, room_generation,
                 trigger_seq, approval_generation, source_ref, runtime_instance, epoch, run_id, expires, created,
-                revoked, revoked_reason) VALUES(?,?,?,?,'cos','cos',?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?)""",
+                revoked, revoked_reason, read_only) VALUES(?,?,?,?,'cos','cos',?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,?,?)""",
                        (turn_id, self.environment, principal, origin, agent_entry, session_user, scope, audience,
                         owner_request_id, supersession_key, claim_id, room_generation, trigger_seq,
                         approval_generation, json.dumps(source_ref, sort_keys=True) if source_ref else None,
                         instance, epoch, now + lifetime_s, now,
-                        now if stop else None, stop["reason"] if stop else None))
+                        now if stop else None, stop["reason"] if stop else None, 1 if read_only is True else 0))
             if isinstance(owner_words, str) and owner_words:      # a Telegram turn has no history record to read them from
                 db.execute("INSERT OR REPLACE INTO turn_words VALUES(?,?)", (turn_id, owner_words))
             return stop is None
@@ -324,7 +331,7 @@ class BindingStore:
         return Binding(row["turn_id"], row["environment"], row["principal"], row["origin"], row["scope"],
                        row["audience"], row["owner_request_id"], row["run_id"], row["agent_entry"], row["claim_id"],
                        row["room_generation"], row["trigger_seq"], row["approval_generation"],
-                       json.loads(row["source_ref"]) if row["source_ref"] else None)
+                       json.loads(row["source_ref"]) if row["source_ref"] else None, bool(row["read_only"]))
 
     def admit(self, binding: Binding, *, tool: str, tool_call_id: str, instance_id: str, session_user: str,
               limit: int) -> BoundCall:
@@ -472,7 +479,8 @@ class TurnBinder:
                                      session_user=session_user, lifetime_s=self.lifetime_s,
                                      owner_request_id=binding.get("owner_request_id"),
                                      source_ref=binding.get("history") if origin == "owner" else None,
-                                     owner_words=binding.get("owner_words") if origin == "service:telegram" else None, **args)
+                                     owner_words=binding.get("owner_words") if origin == "service:telegram" else None,
+                                     read_only=binding.get("read_only") is True and meeting_scope is None, **args)
         except NotBound:
             return None
         return turn_id if live else None

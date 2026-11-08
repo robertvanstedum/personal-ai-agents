@@ -1037,7 +1037,7 @@ def _portal_cos_closure(root):
     is cos-bot's own), then everything those import inside domains/cos, transitively."""
     readers = [p for p in (root / "minimoi_portal").rglob("*.py")]
     readers += [p for p in (root / "core").rglob("*.py") if "telegram" not in p.relative_to(root / "core").parts]
-    pending = {name for p in readers if not (set(p.parts) & SKIPPED_DIRS)
+    pending = {name for p in readers if not (set(p.relative_to(root).parts) & SKIPPED_DIRS)
                for name in _imported_names(p.read_text(encoding="utf-8")) if name.startswith("domains.cos.")}
     found = set()
     while pending:

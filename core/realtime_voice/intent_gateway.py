@@ -30,7 +30,7 @@ from core.realtime_voice.summary_gateway import (DEFAULT_GATEWAY_URL, GATEWAY_UR
                                                  bounded_post, key_env)
 
 INTENT_MODEL = "minimoi-voice-intent"                     # a gateway alias: the concrete model is gateway configuration
-LABELS = ("note", "postit", "consult", "yes", "no", "read_back", "read_summary", "chat")   # direct_host.LABELS
+LABELS = ("note", "postit", "consult", "lookup", "yes", "no", "read_back", "read_summary", "chat")   # direct_host.LABELS
 log = logging.getLogger(__name__)
 CONNECT_TIMEOUT_S = 1
 READ_TIMEOUT_S = 2.5
@@ -55,10 +55,14 @@ def system_message(person, owner=None, board=True):
             f"exactly one word from this list, and nothing else: {', '.join(labels)}.\n"
             "note: he asks to make or save a note.\n"
             + ("postit: he asks to put a post-it on the Board.\n" if board else "") +
-            f"consult: he asks {short} to do or check something only {short} can do: current facts, project state, "
-            f"files, jobs, a lookup, or any work. Making, changing or closing a work card, task, action, reminder or record "
+            f"consult: he asks {short} to do something only {short} can do that changes something: files, jobs, or any "
+            f"work. Making, changing or closing a work card, task, action, reminder or record "
             f"is work, however he words it, and so is any request to send or pass something on to a named person or agent, "
             f"such as 'send this to Ana', which {short} does for him. Asking to talk to someone else is chat.\n"
+            f"lookup: he only asks {short} to find out, check or tell him something {short} must look up (what is on a "
+            "list, how many, the status of something, whether something happened, what a record says), and asks for no "
+            "change of any kind. If he also asks to make, change, close, send, start or remember anything, it is consult, "
+            "not lookup; when unsure, it is consult.\n"
             "yes: he clearly confirms the exact pending request. He may restate that same request or explain why it is "
             "simple; that is still yes if the scope is unchanged. Without pending request words, only an unqualified "
             "confirmation is yes. Never infer consent from a question, negation or ambiguous wording.\n"

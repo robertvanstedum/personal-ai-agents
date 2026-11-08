@@ -93,7 +93,7 @@ def test_the_whole_call_is_bounded_and_never_retried(monkeypatch):
 
 def test_the_brief_bounds_are_the_modules():
     assert ig.TOTAL_TIMEOUT_S == 2.5 and ig.MAX_TOKENS == 16 and ig.TEMPERATURE == 0        # review v3 N6: 16
-    assert ig.LABELS == ("note", "postit", "consult", "yes", "no", "read_back", "read_summary", "chat")
+    assert ig.LABELS == ("note", "postit", "consult", "lookup", "yes", "no", "read_back", "read_summary", "chat")
     from core.realtime_voice import direct_host
     assert ig.LABELS == direct_host.LABELS
 
@@ -135,7 +135,8 @@ def test_the_table_is_heard_by_the_grammar_or_the_call_and_decided_as_its_word(r
     before = len(r.cos.intents)
     got = mc.utter(r, sid, "t3", case["text"]).get_json()
     called = len(r.cos.intents) - before
-    assert called == (1 if case["path"] == "model" else 0), (case, got)
+    # A request the grammar heard ("Ask MC …") still asks the call once, which alone may hear it as a lookup (8 Nov).
+    assert called == (1 if case["path"] == "model" or case["label"] == "consult" else 0), (case, got)
     if called:
         sent = r.cos.intents[-1]
         assert case["text"] in sent["messages"][1]["content"] and "tools" not in sent and "user" not in sent
@@ -302,3 +303,55 @@ def test_no_key_is_logged_as_no_key(caplog):
     caplog.set_level(logging.INFO, logger="core.realtime_voice.intent_gateway")
     ig.GatewayIntent("voice-summary-mc", PERSON, environ={}, http_post=answering("note")[0])("save that", None)
     assert any("outcome=no_key" in r.getMessage() for r in caplog.records)
+
+
+# ── a lookup runs at once, read-only; a change still waits for his yes (Robert, 8 Nov 2026) ───────────────────────────────
+
+def test_a_lookup_is_confirmed_by_its_own_words_and_runs_read_only_while_a_change_still_asks(ready):
+    r = ready
+    r.cos.intent = lambda body: "lookup"
+    sid = mc.start(r)["voice_session_id"]
+    got = mc.utter(r, sid, "t1", "Ask MC whether issue 121 was created").get_json()
+    assert got["decision"] == "confirm" and got["lookup"] is True and got["kind"] == "consult", got
+    assert got["confirm_item_id"] == got["owner_item_id"] == "t1"
+    r.cos.intent = lambda body: "consult"
+    change = mc.utter(r, sid, "t3", "Ask MC to close issue 121").get_json()
+    assert change["decision"] == "ask", change                      # a change still waits for his yes
+
+
+def test_a_lookup_never_touches_the_request_that_waits(ready):
+    r = ready
+    sid = mc.start(r)["voice_session_id"]
+    ask = wait_for(r, sid, "note")
+    r.cos.intent = lambda body: "lookup"
+    look = mc.utter(r, sid, "t3", "What is on the Board today?").get_json()
+    assert look["decision"] == "confirm" and look["action_id"] != ask["action_id"] and "dropped" not in look
+    r.cos.intent = lambda body: "yes"
+    yes = mc.utter(r, sid, "t5", "yes").get_json()
+    assert yes["decision"] == "confirm" and yes["action_id"] == ask["action_id"]
+
+
+def test_a_bare_yes_heard_as_a_lookup_is_never_one(ready):
+    r = ready
+    r.cos.intent = lambda body: "lookup"
+    sid = mc.start(r)["voice_session_id"]
+    assert mc.utter(r, sid, "t1", "Yes, go ahead.").get_json()["decision"] != "confirm"
+
+
+def test_the_lookups_turn_runs_at_once_and_marks_mcs_tools_read_only(ready):
+    from core.mc_tools import read_only
+    r = ready
+    r.cos.intent = lambda body: "lookup"
+    sid = mc.start(r)["voice_session_id"]
+    look = mc.utter(r, sid, "t1", "Ask MC what is stuck on 12").get_json()
+    done = r.client.post(mc.BASE + "/consult", headers=r.headers, json={
+        "session_id": sid, "call_id": "confirm-" + look["action_id"], "action_id": look["action_id"],
+        "confirm_item_id": look["confirm_item_id"], "owner_item_id": look["owner_item_id"],
+        "text_sha256": look["text_sha256"]}).get_json()
+    assert done["outcome"] == "done" and len(r.turns) == 1, done
+    note = r.turns[0]["note_id"]
+    assert read_only.marked(note)
+    assert read_only.allowed(note, "minimoi_github_issues") and read_only.allowed(note, "minimoi_task_list")
+    for change in ("minimoi_issue_create", "minimoi_agent_ask", "minimoi_board_note_save", "minimoi_delegate_build"):
+        assert not read_only.allowed(note, change)
+    assert read_only.allowed("vc-another-turn", "minimoi_issue_create")    # a typed or confirmed turn is not limited

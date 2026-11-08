@@ -362,7 +362,7 @@ class ChiefOfStaff(DirectVoiceAdapter):
             lines.pop(0)
         return "\n".join(lines)
 
-    def typed_turn(self, handle, principal, sid, n, name, text, *, item):
+    def typed_turn(self, handle, principal, sid, n, name, text, *, item, read_only=False):
         """Her canonical Confer turn on his words (§6.4), bounded by turn_deadline() (typed Confer's own bound), its
         outcome by the dispatch boundary: an exception before anything was dispatched is not_done; after it, unknown,
         never by its class."""
@@ -375,6 +375,10 @@ class ChiefOfStaff(DirectVoiceAdapter):
             before = None
         gate, box, finished, limit = _Boundary(), {}, threading.Event(), turn_deadline()
         binding = self._request_binding() if self._request_binding is not None else None
+        if read_only and binding is not None:
+            # A spoken lookup, run without his yes (Robert, 8 Nov): her bound tools may only read on this turn
+            # (tool_listener.READ_OPERATIONS). Server-held, never from the request.
+            binding = dict(binding, read_only=True)
 
         def work():
             try:
