@@ -121,6 +121,15 @@ def item_digest(item: dict) -> str:
     return sha256_bytes(canonical.encode("utf-8"))
 
 
+CONTENT_FIELDS = ("spec_title", "spec_file", "summary", "owner_words", "first_pass", "source")
+
+
+def content_digest(item: dict) -> str:
+    """The revision of what an item says. A status or rank move leaves it alone, so moving an item doesn't void a review or
+    an approval of it (MC front door spec A4, A9); any edit of its words does."""
+    return item_digest({k: item.get(k) for k in CONTENT_FIELDS})
+
+
 def serialize(items: list) -> bytes:
     """The queue file's on-disk format (unchanged from the portal's old writer)."""
     return json.dumps(items, indent=2, ensure_ascii=False).encode("utf-8")

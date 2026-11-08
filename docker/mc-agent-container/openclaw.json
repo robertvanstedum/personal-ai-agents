@@ -55,6 +55,7 @@
           "tools": [
             "minimoi_agent_ask",
             "minimoi_agent_request",
+            "minimoi_agent_request_withdraw",
             "minimoi_build_log_add",
             "minimoi_agent_contact",
             "minimoi_agent_status",
@@ -93,7 +94,8 @@
             "minimoi_task_delegate",
             "minimoi_task_submit",
             "minimoi_task_accept",
-            "minimoi_task_adopt"
+            "minimoi_task_adopt",
+            "minimoi_build_item"
           ],
           "diskPaths": [
             "/",

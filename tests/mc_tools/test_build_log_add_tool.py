@@ -102,7 +102,7 @@ class BuildLogAddTests(unittest.TestCase):
         self.assertEqual(item["id"], 8)
         self.assertEqual(item["owner_words"], LONG)
         self.assertTrue(item["owner_words"].endswith("THE END"))
-        self.assertEqual(item["source"], {"conversation": CONV, "note": NOTE_ID, "chars": len(LONG),
+        self.assertEqual(item["source"], {"conversation": CONV, "note": NOTE_ID, "chars": len(LONG), "via": "typed",
                                           "sha256": hashlib.sha256(LONG.encode()).hexdigest()})
         self.assertEqual(list(self.receipts.rows.values())[0]["state"], "verified")
 

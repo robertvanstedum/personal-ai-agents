@@ -7,12 +7,12 @@ import pytest
 
 from core.mc_tools import catalogue, tasks_adapter
 
-SAMPLE = {"task_id": "TK-sample-0001", "child_id": "TK-sample-0002", "reviewed_child": "TK-sample-0003",
+SAMPLE = {"item_id": 8, "task_id": "TK-sample-0001", "child_id": "TK-sample-0002", "reviewed_child": "TK-sample-0003",
           "interpretation_id": "IN-sample-0001", "kind": "build", "holder": "codex", "outcome": "Some words.",
           "done_when": "Some words."}
 SOURCE = Path(tasks_adapter.__file__).read_text()
 METHOD = {"minimoi_task_list": "list", "minimoi_task_delegate": "delegate", "minimoi_task_submit": "submit",
-          "minimoi_task_accept": "accept", "minimoi_task_adopt": "adopt"}
+          "minimoi_task_accept": "accept", "minimoi_task_adopt": "adopt", "minimoi_build_item": "build_item"}
 
 
 def schema(name):

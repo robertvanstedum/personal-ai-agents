@@ -139,7 +139,8 @@
             "notices",
             "billing_fixture",
             "external",
-            "cos_in_flight"
+            "cos_in_flight",
+            "build_log"
           ]
         },
         "id": {

@@ -1110,6 +1110,27 @@
       }
     },
     {
+      "name": "minimoi_agent_request_withdraw",
+      "capability": "agent.request.withdraw",
+      "label": "Withdraw a queued request",
+      "description": "When Robert says he is taking something to a builder himself, withdraw the request you sent for it, so it can't run later as a duplicate. Only a request you sent in this conversation, and only while nobody has picked it up.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "request_id"
+        ],
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "pattern": "^r-[0-9a-f]{20,40}$",
+            "minLength": 22,
+            "maxLength": 42
+          }
+        }
+      }
+    },
+    {
       "name": "minimoi_build_log_add",
       "capability": "guild.build_log.add",
       "label": "Record Robert's idea on the Build Log",
@@ -1439,6 +1460,32 @@
             "type": "string",
             "pattern": "^IN-[A-Za-z0-9_-]{4,64}$",
             "maxLength": 70
+          }
+        }
+      }
+    },
+    {
+      "name": "minimoi_build_item",
+      "capability": "partnership.task.propose_build",
+      "label": "Propose building one Build Log item",
+      "description": "When Robert says to build one Build Log item, call this once with its number and what done looks like. It records his message and the item's exact revision as a proposal. Nothing starts: he confirms it in his task view, you then delegate it to a builder with minimoi_task_delegate, and he approves that work card. Say exactly that. If the item is edited before then, his word has to be given again. Use it only when he has said to build that item; an idea or a discussion goes on the Build Log instead.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "item_id",
+          "done_when"
+        ],
+        "properties": {
+          "item_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9999999
+          },
+          "done_when": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
           }
         }
       }

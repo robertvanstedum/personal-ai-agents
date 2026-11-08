@@ -558,6 +558,17 @@ class AskService:
         finally:
             os.close(fd)
 
+    def withdraw_typed(self, conversation_id: str, request_id: str) -> str:
+        """withdrawn | picked_up | not_found. Only MC's own typed request in this conversation, and only while still queued."""
+        doc = ar.load(self.root, request_id) if ar.valid_request_id(request_id) else None
+        if not doc or doc["request"].get("from") != "mc" or not doc["request"].get("envelope") \
+                or doc["request"].get("conversation_id") != conversation_id or doc["closed"] is not None:
+            return "not_found"
+        if doc["stage"] != "queued":
+            return "picked_up"
+        ar.cancel(self.root, request_id, "mc")
+        return "withdrawn"
+
     def words(self, made: list[dict]) -> str:
         """What the portal says right after an ask: what is KNOWN, in as few words as honest. One agent: one sentence plus one line. Both: one short line per agent (each with its
         own listener state or its own failure) and one shared line. A recipient that failed says so, and never claims anything about the others. It never says a request was

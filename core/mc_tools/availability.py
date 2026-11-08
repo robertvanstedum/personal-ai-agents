@@ -44,6 +44,7 @@ def snapshot(service, policy_tools, offered_tools):
         "minimoi_publish_update": [(getattr(service, "activity_update", None) is not None, "activity_unavailable")],
         "minimoi_delegate_research": [(service.delegation, "delegation_off")],
         "minimoi_delegate_build": [(service.delegation, "delegation_off"), (getattr(service, "build_jobs", True), "build_jobs_off")],
+        "minimoi_agent_request_withdraw": [(callable(getattr(getattr(service, "agent_ask", None), "withdraw", None)), "agent_requests_unavailable")],
         "minimoi_agent_request": [(callable(getattr(getattr(service, "agent_ask", None), "typed", None)), "agent_requests_unavailable"),
                                   (service.read_owner_note is not None, "owner_note_reader_unavailable")],
         "minimoi_access_invite": [(service.invites, "invites_off"),

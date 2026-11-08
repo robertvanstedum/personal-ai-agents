@@ -39,6 +39,7 @@
       "minimoi_agent_watch",
       "minimoi_agent_ask",
       "minimoi_agent_request",
+      "minimoi_agent_request_withdraw",
       "minimoi_build_log_add",
       "minimoi_career_trial",
       "minimoi_recall",
@@ -47,7 +48,8 @@
       "minimoi_task_delegate",
       "minimoi_task_submit",
       "minimoi_task_accept",
-      "minimoi_task_adopt"
+      "minimoi_task_adopt",
+      "minimoi_build_item"
     ]
   },
   "configSchema": {

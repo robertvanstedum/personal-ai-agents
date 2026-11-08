@@ -445,6 +445,24 @@ def _admission(client, op, shown):
     return ob, None
 
 
+def _work_item_problem(client, ob):
+    """(code, words) when this card's Build Log item is no longer the revision Robert confirmed (MC front door spec A9)."""
+    from core.mc_tools import work_item
+    try:
+        task = client.get("task", ob["task_id"])
+        ref = work_item.bound(client, task) if task else None
+    except Exception:
+        return "unavailable", "The work card could not be checked. Nothing has started; refresh and try again."
+    if ref is None:
+        return None
+    path = (os.environ.get("GUILD_QUEUE_PATH") or "").strip()
+    read_items = None
+    if path:
+        from domains.guild.queue_store import QueueStore
+        read_items = QueueStore(path).read_items
+    return work_item.problem(ref, read_items)
+
+
 def admit():
     return _admission_decision("admit")
 
@@ -480,6 +498,10 @@ def decide_admission(action, body, user=None):
         return json_error("unavailable", "The work card could not be read. Refresh before acting.", 503)
     if refusal is not None:
         return refusal
+    if action == "admit":
+        stale = _work_item_problem(client, ob)
+        if stale is not None:
+            return json_error(stale[0], stale[1], 409)
     # One event per click on this revision: a re-approval after expiry or a resend is a new, separate approval.
     key = f"{op[3:]}-r{ob['revision']}"
     content = ({"action": "admit", "operation_id": op, "card_digest": shown} if action == "admit"

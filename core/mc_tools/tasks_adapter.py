@@ -37,10 +37,11 @@ from .service import refused, result
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS = ("minimoi_task_list", "minimoi_task_delegate", "minimoi_task_submit", "minimoi_task_accept",
-         "minimoi_task_adopt")
+         "minimoi_task_adopt", "minimoi_build_item")
 CAPABILITY = {"minimoi_task_list": "partnership.task.read", "minimoi_task_delegate": "partnership.task.delegate_child",
               "minimoi_task_submit": "partnership.task.submit_parent", "minimoi_task_accept": "partnership.task.accept",
-              "minimoi_task_adopt": "partnership.task.adopt_interpretation"}
+              "minimoi_task_adopt": "partnership.task.adopt_interpretation",
+              "minimoi_build_item": "partnership.task.propose_build"}
 RUNTIME = {"kind": "model", "model": None, "provider": "openclaw", "build": "mc-tools/tasks/1", "config_version": None}
 VERDICT_SCHEMA = "minimoi.partnership.review_verdict/1"
 
@@ -51,13 +52,14 @@ def profiles(path=None) -> dict:
 
 
 class TasksAdapter:
-    def __init__(self, client, *, environment: str, card_ref: str, profiles_doc=None, scope: str = "personal"):
+    def __init__(self, client, *, environment: str, card_ref: str, profiles_doc=None, scope: str = "personal", platform=None):
         """``client`` is the ``mc`` seat's TaskClient (its token is held by the portal's MC tool path, never by the
         agent). ``card_ref`` is the 40-hex repository commit cards are built from (config, never the model)."""
         if not (isinstance(card_ref, str) and len(card_ref) == 40 and all(c in "0123456789abcdef" for c in card_ref)):
             raise ValueError("card_ref must be a 40-hex commit")
         self.client, self.env, self.card_ref, self.scope = client, environment, card_ref, scope
         self.profiles = profiles_doc or profiles()
+        self.platform = platform                          # the platform seat records Robert's kept note as the source event
 
     # -- dispatch -------------------------------------------------------------------------------------------------
     def call(self, host, name, args, caller):
@@ -66,7 +68,8 @@ class TasksAdapter:
         if not host._tier2(caller):
             return refused("tool_unavailable")
         return {"minimoi_task_delegate": self.delegate, "minimoi_task_submit": self.submit,
-                "minimoi_task_accept": self.accept, "minimoi_task_adopt": self.adopt}[name](host, args, caller)
+                "minimoi_task_accept": self.accept, "minimoi_task_adopt": self.adopt,
+                "minimoi_build_item": self.build_item}[name](host, args, caller)
 
     # -- helpers --------------------------------------------------------------------------------------------------
     def _cmd(self, kind, ttype, tid, payload, cid, *, expected, parent=None):
@@ -97,7 +100,8 @@ class TasksAdapter:
                 cmd = build()
                 if cmd is None:
                     continue
-                out = self.client.submit(cmd)
+                seat, cmd = cmd if isinstance(cmd, tuple) else (self.client, cmd)
+                out = seat.submit(cmd)
                 if out.get("outcome") != "accepted":
                     refusal = out.get("detail") or out.get("code") or "refused"
                     break
@@ -181,6 +185,8 @@ class TasksAdapter:
 
     def _brief(self, kind, holder, canonical, reviewed_set=None):
         words = f"{canonical['outcome']}\nDone when: {canonical['done_when']}"
+        if canonical.get("work_item"):       # in the card, so in its digest: the card is for this revision and no other
+            words += f"\nBuild Log #{canonical['work_item']['id']}, revision {canonical['work_item']['revision']}."
         if self.profiles["profiles"][holder][kind]["actor"] != "fakework":
             return words if kind == "build" else words + "\n\n" + self._verdict_terms(reviewed_set)
         comments = ["# " + ln if ln.strip() else "#" for ln in words.splitlines()]
@@ -191,6 +197,71 @@ class TasksAdapter:
                 raise ValueError("a fakework review needs the reviewed set's digest")
             steps = ["findings none", f"verdict approve set={reviewed_set}", "result ok"]
         return "\n".join(["fakework/1", *comments, *steps])
+
+    def build_item(self, host, args, caller):
+        """Robert said to build one Build Log item (MC front door spec A9). His kept note becomes the source event, and the
+        proposal names the item's exact revision. Nothing starts here: he confirms it in his task view, MC then delegates it,
+        and he approves the card. Each of those re-checks the revision."""
+        from services.partnership_tasks.client import TaskServiceUnavailable, command
+        from . import work_item
+        if self.platform is None or getattr(host, "build_log", None) is None:
+            return refused("tool_unavailable")
+        done_when = args["done_when"].strip()
+        with host._tx() as conn:
+            b = host._bind(conn, caller)
+        text, refusal = host._owner_words(b)
+        if refusal:
+            return refusal
+        kept_here = host._kept_here(text, "nothing was proposed")
+        if kept_here:
+            return kept_here
+        try:
+            item = next((i for i in host.build_log.read_items() if isinstance(i, dict) and i.get("id") == args["item_id"]), None)
+        except Exception:
+            return result("refused", "build_log_unreadable", "The Build Log can't be read just now, so nothing was proposed. Tell Robert.")
+        if item is None:
+            return result("refused", "item_not_found", f"There is no Build Log item #{args['item_id']}, so nothing was proposed.")
+        ref = work_item.reference(item)
+        edition = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        canonical = {"item": [ref["id"], ref["edition"]],
+                     "source": {"conversation": b.conversation_id, "note": b.note_request_id, "edition": edition}}
+        capability = CAPABILITY["minimoi_build_item"]
+        op = host._operation_id(b, capability, canonical)
+        key = op.replace("-", "")[:32]
+        sid, iid = f"SE-mc-{key}", f"IN-mc-{key}"
+        label = f"Build Log #{item['id']}: {item.get('spec_title') or ''}"[:500]
+        # The record's limit is 8000 characters; a longer note is marked as cut, and its whole text stays on the item.
+        content = text if len(text) <= 8000 else text[:7800] + f"\n[cut for the task record; whole message sha256 {edition}]"
+        proposed = {"outcome": label, "scope": self.scope, "recipients": ["principal"], "continuing": True,
+                    "task": {"lead": "mc", "holder": "mc", "outcome": label, "done_when": done_when, "return_window": None}}
+
+        def source_step():
+            if self.client.get("source_event", sid) is not None:
+                return None
+            return self.platform, command("source_event.record", "source_event", sid,
+                                          {"source": {"store": "mc-floor", "id": f"{b.conversation_id}:{b.note_request_id}", "position": 1},
+                                           "content": content, "correction_of": None},
+                                          command_id=f"cmd-mc-src-{key}"[:80], environment=self.env, scope=self.scope, session_id=None)
+
+        def interpretation_step():
+            if self.client.get("interpretation", iid) is not None:
+                return None
+            return self._cmd("interpretation.record", "interpretation", iid,
+                             {"source_event_ids": [sid], "correction_event_ids": [], "proposed": proposed,
+                              "context_refs": [ref], "supersedes": None},
+                             f"cmd-mc-int-{key}", expected=None,
+                             parent={"store": "task_service", "id": sid, "edition": None, "digest": None})
+
+        def verify():
+            found = self.client.get("interpretation", iid)
+            return found is not None and work_item.bound(self.client, {"interpretation_ref": iid}) == ref
+        try:
+            return self._effect(host, caller, b, capability, canonical, op, [source_step, interpretation_step], verify,
+                                f"Proposed Build Log #{item['id']} for building, at its current revision. Nothing has started. Robert confirms it "
+                                "in his task view; you then delegate it to a builder; he approves that work card. Say exactly that. If "
+                                "the item changes before then, his word has to be given again.")
+        except TaskServiceUnavailable:
+            return result("unknown", "task_unconfirmed", "The task service could not be read now. Do not repeat it; tell Robert.")
 
     def delegate(self, host, args, caller):
         from core.mc_delegation_dispatcher import cards as card_mod
@@ -210,6 +281,15 @@ class TasksAdapter:
             return result("unknown", "task_unconfirmed", "The task service could not be read now. Tell Robert.")
         if parent is None or parent["lead"] != "mc" or parent["parent_ref"] is not None:
             return refused("task_not_found")
+        from . import work_item
+        try:
+            ref = work_item.bound(self.client, parent)
+        except TaskServiceUnavailable:
+            return result("unknown", "task_unconfirmed", "The task service could not be read now. Tell Robert.")
+        build_log = getattr(host, "build_log", None)
+        changed = work_item.problem(ref, build_log.read_items if build_log is not None else None)
+        if changed:
+            return result("refused", changed[0], changed[1] + " Tell Robert.")
         inputs = []
         if kind == "review":
             if reviewed is None or reviewed["parent_ref"] != parent["task_id"]:
@@ -223,7 +303,8 @@ class TasksAdapter:
                       for a in reviewed["artifact_sets"][-1]["artifacts"]]
         canonical = {"parent": parent["task_id"], "kind": kind, "holder": holder, "outcome": args["outcome"].strip(),
                      "done_when": args["done_when"].strip(), "reviewed": reviewed["task_id"] if reviewed else None,
-                     "inputs": inputs, "source": {"conversation": b.conversation_id, "note": b.note_request_id}}
+                     "inputs": inputs, "source": {"conversation": b.conversation_id, "note": b.note_request_id},
+                     **({"work_item": {"id": ref["id"], "revision": ref["edition"]}} if ref else {})}
         capability = CAPABILITY["minimoi_task_delegate"]
         op = host._operation_id(b, capability, canonical)
         key = op.replace("-", "")[:24]

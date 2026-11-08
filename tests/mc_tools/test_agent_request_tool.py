@@ -44,7 +44,7 @@ class _Receipts:
         return op in self.rows
 
     def begin(self, conn, b, req, *, operation_id, worker):
-        assert req.operation in ("agent.request.typed", "guild.build_log.add") and operation_id not in self.rows
+        assert req.operation in ("agent.request.typed", "agent.request.withdraw", "guild.build_log.add") and operation_id not in self.rows
         row = self.rows[operation_id] = {"receipt_id": f"rc-{len(self.rows) + 1}", "state": "dispatched", "outcome": None}
 
         def finish(conn, kind, outcome, *, verified):
@@ -113,7 +113,7 @@ class TypedRequestTests(Base):
         [req] = self.docs()
         env = req["envelope"]
         self.assertEqual((env["purpose"], env["item"]["id"], env["allowed_effects"]), ("review", 8, ["none"]))
-        self.assertEqual(env["item"]["revision"], qs.item_digest(json.loads(self.path.read_text())[0]))
+        self.assertEqual(env["item"]["revision"], qs.content_digest(json.loads(self.path.read_text())[0]))
         self.assertEqual(env["item"]["owner_words"], "I want the learning to be everywhere.")
         self.assertEqual(env["owner"]["text"], NOTE)
         self.assertEqual(env["analysis"], {"by": "master-craftsman", "text": "Worth a second look at the inbox."})
@@ -257,6 +257,51 @@ class KeepHereTests(Base):
         r = self.service()._build_log_add(catalogue.validate("minimoi_build_log_add", args), caller, None)
         self.assertEqual((r["status"], r["code"]), ("refused", "kept_here"))
         self.assertEqual(self.path.read_bytes(), before)
+
+
+class WithdrawTests(Base):
+    def withdraw(self, rid, s=None):
+        caller = Caller("guild:robert:" + CONV, "mc-chat", "run-1", "w-1", None, "minimoi_agent_request_withdraw",
+                        SimpleNamespace(tier=2, max_operations_per_turn=1))
+        return (s or self.service())._agent_request_withdraw(catalogue.validate("minimoi_agent_request_withdraw", {"request_id": rid}), caller, None)
+
+    def test_a_queued_request_is_withdrawn_and_frees_the_builder(self):
+        self.call(ANALYSIS)
+        r = self.withdraw(self.docs()[0]["request_id"])
+        self.assertEqual((r["status"], r["code"]), ("done", "withdrawn"))
+        self.note_id = "n-owner-note-2"
+        self.assertEqual(self.call(ANALYSIS)["code"], "requested")
+
+    def test_a_picked_up_request_cannot_be_withdrawn(self):
+        self.call(ANALYSIS)
+        rid = self.docs()[0]["request_id"]
+        ar.receipt(self.ledger, rid, "claude-code")
+        self.assertEqual(self.withdraw(rid)["code"], "already_picked_up")
+        self.assertIsNone(ar.load(self.ledger, rid)["closed"])
+
+    def test_another_conversation_s_request_cannot_be_withdrawn(self):
+        rid = ar.request_id_for("other")
+        ar.create_request(self.ledger, request_id=rid, frm="mc", to="codex", action="Hello.", conversation_id="c-ffffffffffffffff")
+        self.assertEqual(self.withdraw(rid)["code"], "not_withdrawable")
+
+
+class VoiceTests(Base):
+    def test_a_confirmed_spoken_turn_can_write_and_a_spoken_lookup_cannot(self):
+        from core.mc_tools import read_only
+        for tool in ("minimoi_build_log_add", "minimoi_agent_request", "minimoi_agent_request_withdraw"):
+            self.assertTrue(read_only.allowed("vc-confirmed-turn", tool), tool)
+        read_only.mark("vc-lookup-turn")
+        for tool in ("minimoi_build_log_add", "minimoi_agent_request", "minimoi_agent_request_withdraw"):
+            self.assertFalse(read_only.allowed("vc-lookup-turn", tool), tool)
+
+    def test_a_spoken_idea_is_recorded_as_a_transcript(self):
+        self.note_id = "vc-session-item"
+        caller = Caller("guild:robert:" + CONV, "mc-chat", "run-1", "c", None, "minimoi_build_log_add",
+                        SimpleNamespace(tier=2, max_operations_per_turn=1))
+        args = {"title": "An idea", "status": "idea", "take": "My take."}
+        r = self.service()._build_log_add(catalogue.validate("minimoi_build_log_add", args), caller, None)
+        self.assertEqual(r["code"], "added")
+        self.assertEqual(json.loads(self.path.read_text())[1]["source"]["via"], "voice")
 
 
 class RelayTests(Base):

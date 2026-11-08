@@ -575,6 +575,9 @@ class AgentAsker:
     def scrub(self, text):
         return self.asks.scrub(text)
 
+    def withdraw(self, conversation_id, request_id):
+        return self.asks.withdraw_typed(conversation_id, request_id)
+
     def __call__(self, conversation_id, note_text, note_request_id, to):
         made = self.asks.ask({"id": conversation_id}, {"text": note_text}, note_request_id, list(to))
         return made, self.asks.words(made)
@@ -640,7 +643,9 @@ def tasks_adapter(environ):
     try:
         from core.mc_tools.tasks_adapter import TasksAdapter
         from services.partnership_tasks.client import TaskClient, read_token
-        return TasksAdapter(TaskClient(url, lambda: read_token(token_file)), environment=env, card_ref=card_ref)
+        platform_file = str(environ.get("PARTNERSHIP_MC_PLATFORM_TOKEN_FILE", "") or "").strip()
+        platform = TaskClient(url, lambda: read_token(platform_file)) if platform_file else None      # off without it
+        return TasksAdapter(TaskClient(url, lambda: read_token(token_file)), environment=env, card_ref=card_ref, platform=platform)
     except Exception as exc:                               # a bad configuration turns off only these tools
         _log.warning("mc tools: tracked-work tools off (%s)", type(exc).__name__)
         return None

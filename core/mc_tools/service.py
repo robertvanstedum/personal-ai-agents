@@ -1075,7 +1075,7 @@ class ToolService:
         if "item_id" in args:
             if self.build_log is None:
                 return refused("tool_unavailable")
-            from domains.guild.queue_store import item_digest
+            from domains.guild.queue_store import content_digest
             try:
                 found = next((i for i in self.build_log.read_items() if isinstance(i, dict) and i.get("id") == args["item_id"]), None)
             except Exception:
@@ -1083,7 +1083,7 @@ class ToolService:
                 return result("refused", "build_log_unreadable", "The Build Log can't be read just now, so nothing was sent. Tell Robert.")
             if found is None:
                 return result("refused", "item_not_found", f"There is no Build Log item #{args['item_id']}, so nothing was sent.")
-            item = {"id": found["id"], "revision": item_digest(found), "title": found.get("spec_title"), "status": found.get("status"),
+            item = {"id": found["id"], "revision": content_digest(found), "title": found.get("spec_title"), "status": found.get("status"),
                     "summary": found.get("summary"), "owner_words": found.get("owner_words"), "first_pass": found.get("first_pass"),
                     "source": found.get("source")}
         elif purpose == "review":
@@ -1146,6 +1146,52 @@ class ToolService:
         return result("done", "requested", f"Asked {who} for {'a review' if purpose == 'review' else 'an analysis'} of {subject}. Say you chose "
                       f"{who}, in a few words.{heard} It is recorded, not yet done; its report comes back when {who} finishes.", data)
 
+    def _agent_request_withdraw(self, args, caller, observation):
+        """Robert took it to the builder himself (spec A5): the queued typed request is withdrawn so it can't run later as a
+        duplicate. Only one MC sent in this conversation, and only while nobody has picked it up."""
+        withdraw = getattr(self.agent_ask, "withdraw", None)
+        if not callable(withdraw) or not self._tier2(caller):
+            return refused("agent_requests_off")
+        with self._tx() as conn:
+            b = self._bind(conn, caller)
+        rid = args["request_id"]
+        canonical = {"request": rid, "conversation": b.conversation_id}
+        op = self._operation_id(b, "agent.request.withdraw", canonical)
+        effect = lease = None
+        with self._tx() as conn:
+            b = self._bind_again(conn, caller, b)
+            if effects.receipt_exists(conn, self.principal, self.environment, op):
+                lease = effects.reconcile_effect(conn, principal=self.principal, environment=self.environment,
+                                                 operation_id=op, worker=self.worker)
+            else:
+                effect = effects.begin_standing_effect(conn, b, effects.request("agent.request.withdraw", canonical),
+                                                       operation_id=op, worker=self.worker)
+        try:
+            state = withdraw(b.conversation_id, rid)
+        except Exception:
+            _log.exception("mc tools: withdraw outcome unknown")
+            state = None
+        outcome = {"request_id": rid, "state": state or "unknown"}
+        with self._tx() as conn:
+            if state is None:
+                if effect is not None:
+                    effect.unknown(conn)
+                elif lease is not None:
+                    effects.RECEIPTS.finish(conn, lease, "unknown")
+            elif effect is not None:
+                effect.finish(conn, "agent_request_withdraw", outcome, verified=state == "withdrawn")
+            elif lease is not None:
+                evidence = effects.record_evidence(conn, b.context(), op, "agent_request_withdraw", outcome)
+                effects.RECEIPTS.finish(conn, lease, "verified" if state == "withdrawn" else "failed", evidence_refs=(evidence,))
+        if state is None:
+            return result("unknown", "withdraw_unconfirmed", "MiniMoi could not confirm the request was withdrawn. Tell Robert.", outcome)
+        if state == "withdrawn":
+            return result("done", "withdrawn", "Withdrawn: it won't run later as a duplicate. Tell Robert in a few words.", outcome)
+        if state == "picked_up":
+            return result("refused", "already_picked_up", "A builder has already picked that up, so it can't be withdrawn. Tell Robert, "
+                          "so he doesn't start the same work twice.", outcome)
+        return result("refused", "not_withdrawable", "That is not an open request you sent in this conversation. Nothing changed.", outcome)
+
     def _kept_here(self, text, what):
         from . import keep_here
         if not keep_here.says_keep_here(text):
@@ -1170,7 +1216,8 @@ class ToolService:
             return kept_here
         edition = hashlib.sha256(text.encode("utf-8")).hexdigest()
         title, status, take = args["title"].strip(), args["status"], args["take"].strip()
-        source = {"conversation": b.conversation_id, "note": b.note_request_id, "sha256": edition, "chars": len(text)}
+        source = {"conversation": b.conversation_id, "note": b.note_request_id, "sha256": edition, "chars": len(text),
+                  "via": "voice" if b.note_request_id.startswith("vc-") else "typed"}         # a transcript can mishear names
         canonical = {"source": source}
         op = self._operation_id(b, "guild.build_log.add", canonical)
         words = text.strip()
