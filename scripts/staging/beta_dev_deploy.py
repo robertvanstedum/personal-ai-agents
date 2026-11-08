@@ -5,7 +5,11 @@ resume only after a verified result; the running digest, the reviewed payload an
 
 Each overlay is ``FROM <exact running image id>`` plus the changed files, tagged RELEASE. The tags sit in overrides this operator
 owns, layered last, so no existing override changes. Plan routes, catalogue, default A, COS_BACKGROUND_JOBS=0,
-ROOMS_RECORDS_PROFILE=dev and every *_ENV value stay as they are. Never touches production, sign-ins, authority files or gates."""
+ROOMS_RECORDS_PROFILE=dev and every *_ENV value stay as they are. Never touches production, sign-ins, authority files or gates.
+
+``update`` (and ``update-dry-run``) moves an applied release to the next one: only the images whose files changed since the
+commit Dev runs, each FROM what that container runs now, and only those containers recreated. A failure restores the release
+that was running, proved; ``rollback`` still returns to the pre-Beta baseline. See docs/runbooks/dev_fast_update.md."""
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -34,6 +38,13 @@ REQUIRED_ENV = {"minimoi-cos-scheduler": {"COS_BACKGROUND_JOBS": "0"}, "minimoi-
                 "minimoi-guildhall-mc": {"ROOMS_RECORDS_PROFILE": "dev"}}
 PORTAL_ROUTES = ("/app/cos/task-proposals", "/app/cos/work-cards")
 MC_TOOLS_PORT = 5011
+READY_INTERVAL, READY_PASSES = 3, 2                 # the container's own healthcheck, run by us: twice in a row, 3 s apart
+
+# The plan-routes operator layers its own override on top of this one's. An update may run under it, except where a file the
+# routes operator verified changes: then routes must come off and go back on, so they verify again.
+ROUTES_OPERATOR = "beta-dev-routes-20261106"
+ROUTED = ("minimoi-cos-agent-a", "minimoi-mc-relay", "minimoi-mc-agent")     # the containers its override changes
+UPDATE_IN_FLIGHT = "update-in-flight.json"
 
 # The image each kind of file came from: the running tag's own commit. The candidate is ``git diff`` from there.
 # Every image diffs from the oldest commit any of them could hold, so Dev runs the release's files even where a tag's image
@@ -132,6 +143,12 @@ TARGETS = {
 }
 WORKERS = tuple(t["container"] for t in TARGETS.values() if t.get("worker"))
 
+# What the plan-routes operator checked when it switched routes on (beta_dev_routes CODE_MARKS, the policies it renders,
+# the gateway tiers it reads). An update that changes one of these while routes are on is refused.
+ROUTES_SENSITIVE = (MC_DIR + "start.sh", MC_DIR + "model-access.cjs", MC_DIR + "relay_v2.mjs", MC_DIR + "plugins/minimoi-tools/",
+                    COS_DIR + "plan-access.cjs", COS_DIR + "apply-config.sh", COS_DIR + "openclaw.json", "/app/core/model_routes/",
+                    "@config/litellm.staging.yaml")
+
 
 # Host config files no commit produced, reviewed by hand and accepted by exact hash. Dev's gateway file is a JSON render from
 # 1 Nov: compared route by route with the candidate, it differs only in the voice roles' info, the added local route, and
@@ -168,7 +185,7 @@ def delivery_record(meta: dict, status: str, at: float) -> tuple:
         lines += [f"- **State:** release `{rel}` deployed and verified on Dev.",
                   f"- **Commit:** `{short}`{' on `' + ', '.join(doc['branches']) + '`' if doc['branches'] else ''}: {doc['title']}"]
     else:
-        lines += [f"- **State:** release `{rel}` (commit `{short}`) was rolled back. Dev runs what it ran before it; nothing listed below is on Dev now."]
+        lines += [f"- **State:** release `{rel}` (commit `{short}`) was rolled back. Dev runs what it ran before the Beta releases; nothing listed below is on Dev now."]
     if main:
         lines += [f"- **Production:** production deploys from `main`, which was `{main[:8]}` when this release was packaged. "
                   "Merged to main means production; this record does not read production."]
@@ -241,7 +258,19 @@ def want_hashes(files: dict) -> dict:
     return {m["dest"]: m["after"] for m in files.values() if not m.get("generated_input")}
 
 
-def dockerfile_for(spec: dict, base_id: str, user: str) -> str:
+def spec_only(target: dict) -> dict:
+    """A target as a rollback needs it: everything but the payload."""
+    return {k: v for k, v in target.items() if k not in ("files", "layout_files")}
+
+
+def missing_image_env(env, image_env) -> tuple:
+    """The target's image switches its base does not hold yet. An update builds on an overlay that already holds them, and
+    Docker keeps one line per name, so naming one again would make the overlay check expect a line Docker never writes."""
+    have = set(env or ())
+    return tuple((name, value) for name, value in image_env if f"{name}={value}" not in have)
+
+
+def dockerfile_for(spec: dict, base_id: str, user: str, base_env=()) -> str:
     """FROM the exact running image id, never a tag. RUN steps restore the image's own user, so the runtime contract does not move."""
     assert base_id.startswith("sha256:"), "an overlay builds on an image id, not a tag"
     lines, build = ["FROM " + base_id], spec.get("build")
@@ -251,7 +280,7 @@ def dockerfile_for(spec: dict, base_id: str, user: str) -> str:
         lines.append(f"RUN rm -rf {MC_DIR}persona {MC_DIR}handbook")
     lines.append("COPY ctx/ /")
     # Compose stays image-only (only_images); a rollback to the old image takes the switch with it.
-    lines += [f"ENV {name}={value}" for name, value in spec.get("image_env", ())]
+    lines += [f"ENV {name}={value}" for name, value in missing_image_env(base_env, spec.get("image_env", ()))]
     if build == "mc":
         lines.append(f"RUN chmod 0755 {MC_DIR}start.sh && sh {MC_DIR}.beta-check-6c.sh && rm -f {MC_DIR}.beta-check-6c.sh")
         lines.append("LABEL minimoi.persona=0.1.27 minimoi.handbook=0.1.2")
@@ -368,6 +397,32 @@ for path, want in json.load(sys.stdin).items():
         missing.append(path); continue
     if got != want: differs.append(path)
 print(json.dumps({"differs": sorted(differs), "missing": sorted(missing)}))
+'''
+
+
+def layout_paths(tree, prefixes, files) -> list:
+    """The reviewed files beyond the payload an image holds: text files of the commit under its layout, by image path.
+    tree: image paths ("/app/<repo path>"); files: the payload's repo paths. The Mac and the host both choose them this way."""
+    if not prefixes:
+        return []
+    return sorted(t for t in tree if t[len("/app/"):].startswith(tuple(prefixes)) and t[len("/app/"):] not in files)
+
+
+def layout_digest(hashes: dict) -> str:
+    """One sha256 over "<path> <sha256>" lines, sorted. A missing file counts as "-", so it never matches."""
+    return hashlib.sha256("".join(f"{p} {hashes.get(p) or '-'}\n" for p in sorted(hashes)).encode()).hexdigest()
+
+
+# Run inside a built Python image: {image path: sha256 or null} for the paths on stdin. Reads files, executes none.
+LAYOUT_HASHES = r'''
+import hashlib, json, sys
+out = {}
+for path in json.load(sys.stdin):
+    try:
+        out[path] = hashlib.sha256(open(path, "rb").read()).hexdigest()
+    except OSError:
+        out[path] = None
+print(json.dumps(out))
 '''
 
 
@@ -528,7 +583,7 @@ def _differing_fields(left, right, path=""):
 
 def with_image_env(saved: dict, spec: dict) -> dict:
     """What a new container should hold: the saved contract plus exactly its target's image switches. A restore compares with the saved one alone."""
-    added = [f"{name}={value}" for name, value in spec.get("image_env", ())]
+    added = [f"{name}={value}" for name, value in missing_image_env(saved["env"], spec.get("image_env", ()))]
     return {**saved, "env": sorted([*saved["env"], *added])}
 
 
@@ -555,6 +610,73 @@ def check_mc_policy(live: dict) -> None:
     assert "group:runtime" not in live["agents"]["entries"]["mc-agent"]["tools"]["deny"], "job agent"
     assert all(p.get("mode") == "oauth" for p in live["auth"]["profiles"].values()), "an API profile appeared"
     assert not (live.get("models") or {}).get("providers"), "an API provider appeared"
+
+
+def healthcheck_argv(test):
+    """The container's own healthcheck as a ``docker exec`` command, or None when it has none we can run the same way."""
+    if not test or test[0] in ("NONE",):
+        return None
+    if test[0] == "CMD":
+        return list(test[1:]) or None
+    if test[0] == "CMD-SHELL" and len(test) == 2:
+        return ["sh", "-c", test[1]]
+    return None
+
+
+def wait_ready(name, *, inspect, probe, gate_ok, limit, sleep, clock, interval=READY_INTERVAL, passes=READY_PASSES) -> str:
+    """Ready when Docker says healthy, or as soon as the container's own healthcheck passes ``passes`` times in a row while it
+    runs. Docker runs that check only once per interval, so its verdict can come minutes after the service answers; the check
+    itself is the same. Unhealthy, a lost gate or the time limit raise. Returns who said ready: "docker" or "probe"."""
+    end, good = clock() + limit, 0
+    while True:
+        state = inspect()["State"]
+        health = (state.get("Health") or {}).get("Status")
+        if health == "unhealthy":
+            raise RuntimeError(name + " is unhealthy")
+        if not state.get("Running") or state.get("Restarting"):
+            good = 0                                # a restart policy may bring it back inside the limit
+        elif health == "healthy":
+            return "docker"
+        elif probe():
+            good += 1
+            if good >= passes:
+                return "probe"
+        else:
+            good = 0
+        if clock() > end:
+            raise RuntimeError(name + " did not become ready in time")
+        assert gate_ok(), "Admission gate lost"
+        sleep(interval)
+
+
+def routes_sensitive_hits(targets: dict) -> list:
+    """Payload files the plan-routes operator verified when it switched routes on. targets: {key: {"files": {repo path: meta}}}."""
+    return sorted(f"{t['container']}: {m['dest']}" for t in targets.values() for m in t["files"].values()
+                  if any(m["dest"] == s or (s.endswith("/") and m["dest"].startswith(s)) for s in ROUTES_SENSITIVE))
+
+
+def next_override(current: dict, images: dict) -> dict:
+    """The override that runs the next release: what runs now, with exactly the changed services moved to their new images."""
+    services = {s: dict(v) for s, v in (current.get("services") or {}).items()}
+    for service, image in images.items():
+        services[service] = {"image": image, "pull_policy": "never"}
+    return {"services": dict(sorted(services.items()))}
+
+
+def rebase_routes_state(state: dict, tags: dict, image_ids: dict) -> dict:
+    """The routes operator's saved state, told that the release under it moved. tags: {wrapper: {service: new tag}};
+    image_ids: {container: new image id}. Only images move: its saved env, contracts, catalogue and wrappers stay as they were."""
+    out = copy.deepcopy(state)
+    for wrapper, services in tags.items():
+        for service, tag in services.items():
+            render = (out.get("renders") or {}).get(wrapper) or {}
+            if service in (render.get("services") or {}):
+                render["services"][service]["image"] = tag
+                render["services"][service]["pull_policy"] = "never"
+    for name, image in image_ids.items():
+        if name in (out.get("images") or {}):
+            out["images"][name] = image
+    return out
 
 
 def write_context(ctx: pathlib.Path, files: dict, payload: pathlib.Path, extra=None) -> None:
@@ -637,6 +759,55 @@ class Deploy:
         self._deliver("rolled_back")
         return outcome
 
+    # Release to release. Only the containers whose files changed since the running release, each FROM the image it runs now.
+    # Nothing goes back to the pre-Beta baseline: a failure restores the release that was running, and proves it.
+
+    def _prepare_update(self):
+        h = self.host
+        h.check_update_baseline()
+        h.check_disk()
+        try:
+            h.build_images()
+            h.check_new_images()
+        finally:
+            h.clean_build()
+        h.check_update_render()
+        h.check_disk()
+
+    def update_dry_run(self) -> dict:
+        self._prepare_update()
+        return self.host.plan()
+
+    def update(self):
+        h = self.host
+        self._prepare_update()
+        h.save_current()                            # also marks the update in flight: no second run until it is resolved
+
+        def forward(gate):
+            h.write_next()
+            for tier in self.TIERS:
+                h.recreate(tier, gate)
+            h.create_workers(gate)                  # created stopped: they start only after this whole swap is verified
+            h.verify_next()
+
+        def no_second_try(_):
+            raise RuntimeError("restore of the running release failed; recovery required")
+        outcome = self._swap(forward, h.restore_current_verified)
+        try:
+            h.verify_workers()
+        except BaseException as exc:
+            h.record("workers_failed_verification", {"exception": type(exc).__name__})
+            try:
+                self._swap(h.restore_current_verified, no_second_try)
+                h.verify_restored_current_workers()
+            except BaseException as restore_exc:
+                h.record("restore_after_worker_failure_failed", {"exception": type(restore_exc).__name__})
+            raise
+        h.commit_update()
+        h.record("result", {"status": "updated_verified"})
+        self._deliver("deployed")
+        return outcome
+
     def _deliver(self, status):
         """The record follows a verified result. A failure to write it is journalled and changes nothing live."""
         try:
@@ -651,15 +822,21 @@ class Deploy:
 
 
 class RealHost:                                     # pragma: no cover  (exercised by the dry-run on Dev)
-    def __init__(self, root=STAGING_ROOT, op_module=None):
+    def __init__(self, root=STAGING_ROOT, op_module=None, update=False):
         self.R = pathlib.Path(root)
         refuse_production(self.R)
         self.OP = self.R / "operators" / OPERATOR_NAME
         refuse_production(self.OP)
-        self.REL = self.OP / "release"
-        self.meta = json.loads((self.REL / "meta.json").read_text())
+        self.REL, self.NEXT, self.updating = self.OP / "release", self.OP / "release-next", update
+        # An update reads the next release from release-next and keeps release/ as the one running until it is verified.
+        self.meta = json.loads(((self.NEXT if update else self.REL) / "meta.json").read_text())
+        self.current = json.loads((self.REL / "meta.json").read_text()) if update else None
+        self.PAYLOAD = (self.NEXT if update else self.REL) / "payload"
+        self.release = self.meta.get("release") or RELEASE
         self.targets = {k: v for k, v in self.meta["targets"].items() if v["files"]}
-        self.BEFORE = self.OP / "before"
+        self.BEFORE, self.UPD = self.OP / "before", self.OP / "before-update"
+        self.ROUTES = self.R / "operators" / ROUTES_OPERATOR
+        self.ready_by_probe, self.workers_to_start = set(), None
         self.CTX = self.OP / "ctx"
         self.CAT = self.R / "config/model-routes/catalogue.json"
         self.COMPOSE, self.MC_WRAP = self.R / "bin/compose.sh", self.R / "bin/mc.sh"
@@ -733,9 +910,11 @@ class RealHost:                                     # pragma: no cover  (exercis
         assert self.R.is_dir() and self.REL.is_dir(), "not the Dev host"
         assert not (self.OP / "recovery-required.json").exists(), "an earlier run needs recovery"
         assert not self.OVERRIDES["compose"].exists() and not self.OVERRIDES["mc"].exists(), "already applied: roll back first"
+        # An update carries only what changed since one release: on the baseline it would run a mix. A full release is sent anew.
+        assert self.meta.get("mode") != "update", "release/ holds an update, which only moves an applied release: send a full release to apply"
         check_release((self.OP / "release.tar.gz").read_bytes(), (self.OP / "release.sha256").read_text().split()[0])
         for spec in self.targets.values():
-            check_payload(spec["files"], lambda name: (self.REL / "payload" / name).read_bytes())
+            check_payload(spec["files"], lambda name: (self.PAYLOAD / name).read_bytes())
         for wrapper in self.WRAPPERS.values():
             refuse_production_text(wrapper.read_text(), wrapper.name)
         portal = self.O.inspect("minimoi-portal")
@@ -769,7 +948,7 @@ class RealHost:                                     # pragma: no cover  (exercis
                 assert renders[wrapper]["services"][service]["image"] == tag, "compose would not run what is running: " + spec["container"]
             else:
                 assert subprocess.run(["docker", "inspect", self._backup(spec)], capture_output=True).returncode != 0, "a backup container is already there: " + spec["container"]
-            self.base[key] = {"id": live["Image"], "tag": tag, "user": json.loads(self._run("docker", "image", "inspect", live["Image"]))[0]["Config"].get("User") or ""}
+            self.base[key] = self._base_record(live)
             hashes = self._hashes_in_image(live["Image"], sorted(m["dest"] for m in spec["files"].values()))
             problems += [f"{spec['container']}: {x}" for x in base_mismatches(spec["files"], hashes, spec.get("replaces", ()))]
             off = not_on_declared_base(spec["files"], hashes, spec.get("replaces", ()))
@@ -780,6 +959,10 @@ class RealHost:                                     # pragma: no cover  (exercis
             for line in problems:
                 print("BASE", line, flush=True)
             raise Refused(f"{len(problems)} live file(s) no commit explains; nothing changed. See base-mismatches.json.")
+
+    def _base_record(self, live):
+        image = json.loads(self._run("docker", "image", "inspect", live["Image"]))[0]
+        return {"id": live["Image"], "tag": live["Config"]["Image"], "user": image["Config"].get("User") or "", "env": list(image["Config"].get("Env") or [])}
 
     def check_disk(self):
         root = self._run("docker", "info", "-f", "{{.DockerRootDir}}").strip()
@@ -793,11 +976,11 @@ class RealHost:                                     # pragma: no cover  (exercis
         for key, spec in self.targets.items():
             if spec.get("kind") == "config":
                 continue
-            check_payload(spec["files"], lambda name: (self.REL / "payload" / name).read_bytes())    # again, right before it ships
+            check_payload(spec["files"], lambda name: (self.PAYLOAD / name).read_bytes())    # again, right before it ships
             d = self.CTX / key
             (d / "ctx").mkdir(parents=True)
-            write_context(d, spec["files"], self.REL / "payload", {MC_DIR + ".beta-check-6c.sh": CHECK_6C} if spec.get("build") == "mc" else None)
-            (d / "Dockerfile").write_text(dockerfile_for(spec, self.base[key]["id"], self.base[key]["user"]))
+            write_context(d, spec["files"], self.PAYLOAD, {MC_DIR + ".beta-check-6c.sh": CHECK_6C} if spec.get("build") == "mc" else None)
+            (d / "Dockerfile").write_text(dockerfile_for(spec, self.base[key]["id"], self.base[key]["user"], self.base[key]["env"]))
             tag = self._tag(spec)
             env = {**os.environ, "DOCKER_BUILDKIT": "0"}
             self._run("docker", "build", "--pull=false", "--network=none", "-t", tag, str(d), env=env)
@@ -810,7 +993,7 @@ class RealHost:                                     # pragma: no cover  (exercis
         assert not self.CTX.exists(), "build context left behind"
 
     def _tag(self, spec):
-        return f"minimoi-staging/{spec['repo']}:{RELEASE}"
+        return f"minimoi-staging/{spec['repo']}:{self.release}"
 
     def check_new_images(self):
         for key, spec in self.targets.items():
@@ -819,7 +1002,7 @@ class RealHost:                                     # pragma: no cover  (exercis
                 continue
             new_id = self.new_ids[key]
             check_overlay(json.loads(self._run("docker", "image", "inspect", self.base[key]["id"]))[0], json.loads(self._run("docker", "image", "inspect", new_id))[0],
-                          image_env=spec.get("image_env", ()))
+                          image_env=missing_image_env(self.base[key]["env"], spec.get("image_env", ())))
             want = want_hashes(spec["files"])
             check_files(want, self._hashes_in_image(new_id, sorted(want)), "built image for " + spec["container"])       # what is inside, not what went in
             for path in spec.get("executables", ()):
@@ -835,7 +1018,10 @@ class RealHost:                                     # pragma: no cover  (exercis
             else:
                 bad = json.loads(self._sealed(new_id, "python", "-c", IMPORT_CHECK, "/app", *[d for d in sorted(want) if d.endswith(".py")]).strip().splitlines()[-1])
                 assert not bad, f"{spec['container']}: imports that do not resolve in the built image: {bad[:10]}"
-                self.layout_report[key] = json.loads(self._sealed(new_id, "python", "-c", LAYOUT_CHECK, input=json.dumps(spec.get("layout_files", {}))).strip().splitlines()[-1])
+                if self.updating:
+                    self._check_layout_digest(key, spec, new_id)
+                else:
+                    self.layout_report[key] = json.loads(self._sealed(new_id, "python", "-c", LAYOUT_CHECK, input=json.dumps(spec.get("layout_files", {}))).strip().splitlines()[-1])
             if spec.get("build") == "cos":
                 self._sealed(new_id, "grep", "-q", "BEGIN_MINIMOI_MC_HANDBOOK 0.1.2", COS_DIR + "AGENTS.md")
                 self._sealed(new_id, "test", "-f", COS_DIR + "ROLE_LOAD.json")
@@ -846,10 +1032,21 @@ class RealHost:                                     # pragma: no cover  (exercis
                           "&& OPENCLAW_CONFIG_PATH=/tmp/c.json node /app/openclaw.mjs config validate --json")
         (self.OP / "layout-report.json").write_text(json.dumps(self.layout_report, indent=1))
 
+    def _check_layout_digest(self, key, spec, new_id):
+        """An update ships only what changed since the running release, so every other reviewed file must already be the commit's."""
+        want = spec.get("layout_digest") or {"prefixes": [], "count": 0, "sha256": layout_digest({})}
+        paths = layout_paths(self.meta.get("tree", ()), want["prefixes"], spec["files"])
+        got = json.loads(self._sealed(new_id, "python", "-c", LAYOUT_HASHES, input=json.dumps(paths)).strip().splitlines()[-1])
+        self._write_private(self.OP / f"layout-{key}.private.json", json.dumps(got, indent=0))
+        self.layout_report[key] = {"differs": [] if layout_digest(got) == want["sha256"] else ["digest"], "missing": sorted(p for p, h in got.items() if not h)}
+        if len(paths) != want["count"] or layout_digest(got) != want["sha256"]:
+            raise Refused(f"{spec['container']}: files beyond this update differ from the commit ({len(paths)} checked; hashes kept in layout-{key}.private.json). "
+                          "Use the full chain. Nothing changed.")
+
     def _check_gateway_config(self, spec):
         """The gateway's own YAML reader, on the new file: it parses, and no route a caller uses today disappears."""
         name = next(iter(spec["files"]))
-        new, live = self.REL / "payload" / name, self.R / "config" / spec["config"]
+        new, live = self.PAYLOAD / name, self.R / "config" / spec["config"]
         code = ("import yaml;a=yaml.safe_load(open('/new.yaml'));b=yaml.safe_load(open('/live.yaml'));names=lambda d:{m['model_name'] for m in d['model_list']};"
                 "assert names(b)<=names(a),'a route name disappeared'")
         self._sealed(self.O.inspect(spec["container"])["Image"], "python", "-c", code, extra=("-v", f"{new}:/new.yaml:ro", "-v", f"{live}:/live.yaml:ro"))
@@ -877,7 +1074,7 @@ class RealHost:                                     # pragma: no cover  (exercis
                 order.append({"container": spec["container"], "image": spec.get("config") or self._tag(spec), "from": self.base.get(key, {}).get("id", "host config file"),
                               "files": len(spec["files"]), "down": spec.get("down", "")})
                 files[spec["container"]] = {m["dest"]: name for name, m in spec["files"].items()}
-        plan = {"release": RELEASE, "commit": self.meta["commit"], "recreate_in_order": order, "skipped": self.meta["skipped"], "layout": {k: {x: len(v[x]) for x in v} for k, v in self.layout_report.items()},
+        plan = {"release": self.release, "mode": "update" if self.updating else "apply", "commit": self.meta["commit"], "recreate_in_order": order, "skipped": self.meta["skipped"], "layout": {k: {x: len(v[x]) for x in v} for k, v in self.layout_report.items()},
                 "not_on_declared_base": self.off_base,
                 "changed": "nothing live; overlay images built, build context removed"}
         (self.OP / "plan.json").write_text(json.dumps({**plan, "files": files, "layout_detail": self.layout_report}, indent=1))
@@ -920,7 +1117,10 @@ class RealHost:                                     # pragma: no cover  (exercis
         for i, p in enumerate(sorted(overrides)):
             shutil.copy2(p, self.BEFORE / f"override.{i}.private")
         saved = {"images": {}, "tags": {}, "contracts": {}, "dev_values": {}, "overrides": overrides, "state": state, "where": self.where, "new_ids": self.new_ids,
-                 "others": self._others(), "renders": {w: self._render(w) for w in self.WRAPPERS}, "catalogue_sha": hashlib.sha256(self.CAT.read_bytes()).hexdigest()}
+                 "others": self._others(), "renders": {w: self._render(w) for w in self.WRAPPERS}, "catalogue_sha": hashlib.sha256(self.CAT.read_bytes()).hexdigest(),
+                 # What a later rollback needs after updates have moved release/ on: every target's spec, the baseline's own name and backups.
+                 "release": self.release, "specs": {k: spec_only(v) for k, v in self.targets.items()},
+                 "backups": {spec["container"]: self._backup(spec) for key, spec in self.targets.items() if spec.get("worker") and not self.where[key][0]}}
         for key, spec in self.targets.items():
             live = self.O.inspect(spec["container"])
             saved["images"][key], saved["tags"][key] = live["Image"], live["Config"]["Image"]
@@ -936,11 +1136,15 @@ class RealHost:                                     # pragma: no cover  (exercis
         self.where = {k: tuple(v) for k, v in self.saved["where"].items()}
         self.others_strict = False                  # a rollback can come much later: other containers may have moved on their own
         self.new_ids = self.saved["new_ids"]
+        if self.saved.get("specs"):                 # every target any release or update touched since the baseline
+            self.targets = self.saved["specs"]
         gateway = self.targets.get("model-gateway")
         self.gateway_file = self.R / "config" / gateway["config"] if gateway else None
 
     def _others(self):
-        mine = {s["container"] for s in self.targets.values()} | {self._backup(s) for s in self.targets.values()}
+        mine = {s["container"] for s in self.targets.values()} | {self._backup(s) for s in self.targets.values()} | {self._prev(s) for s in self.targets.values()}
+        if self.updating:                           # the swap stops and starts every worker; verify_workers proves them after
+            mine |= set(WORKERS)
         # A scheduled job's container comes and goes on its own: its leaving mid-swap is not a change (7 Nov 2026, a failed apply).
         return {k: v for k, v in self.O.snapshot().items() if k not in mine and not k.startswith(SHORT_LIVED)}
 
@@ -951,7 +1155,9 @@ class RealHost:                                     # pragma: no cover  (exercis
             self._run("docker", "stop", "--time", str(WORKER_STOP_SECONDS), *running)
 
     def start_workers(self):
-        self._run("docker", "start", *WORKERS)
+        names = WORKERS if self.workers_to_start is None else self.workers_to_start     # an update starts what was running, no more
+        if names:
+            self._run("docker", "start", *names)
 
     def wait_idle(self):
         self.O.idle()                               # MC's delegations and turns; the admission gate checks them again under lock
@@ -1012,7 +1218,7 @@ class RealHost:                                     # pragma: no cover  (exercis
             self._write_file(path, with_override(path.read_text(), str(override)), path)
         if self.gateway_file:
             spec = self.targets["model-gateway"]
-            self._write_file(self.gateway_file, (self.REL / "payload" / next(iter(spec["files"]))).read_text(), self.gateway_file)
+            self._write_file(self.gateway_file, (self.PAYLOAD / next(iter(spec["files"]))).read_text(), self.gateway_file)
 
     def _wait_http(self, spec, gate):
         if not spec.get("health"):
@@ -1036,14 +1242,38 @@ class RealHost:                                     # pragma: no cover  (exercis
             if key == "mc-agent":                   # a SIGKILL before OpenClaw frees its lease costs minutes on the next start
                 subprocess.run(["docker", "stop", "--time", "120", spec["container"]], capture_output=True, timeout=180)
             force = ("--force-recreate",) if spec.get("kind") == "config" else ()
+            started = time.monotonic()
             self._compose(wrapper, "up", "-d", "--no-deps", "--no-build", "--pull", "never", *force, service)
-            self.O.wait_healthy(spec["container"], gate, spec["wait"])
+            self._wait_ready(spec, gate)
             self._wait_http(spec, gate)
-            self.record("recreated", {"container": spec["container"]})
+            self.record("recreated", {"container": spec["container"], "seconds": round(time.monotonic() - started)})
+
+    def _wait_ready(self, spec, gate):
+        """The container's own healthcheck, run by us every few seconds, instead of waiting for Docker's next scheduled run."""
+        name = spec["container"]
+        argv = healthcheck_argv((self.O.inspect(name)["Config"].get("Healthcheck") or {}).get("Test"))
+        if argv is None:
+            self.O.wait_healthy(name, gate, spec["wait"])
+            return
+        def probe():
+            try:
+                return subprocess.run(["docker", "exec", name, *argv], capture_output=True, timeout=30).returncode == 0
+            except subprocess.TimeoutExpired:       # a check that hangs is a check that failed, as Docker counts it
+                return False
+        who = wait_ready(name, inspect=lambda: self.O.inspect(name), probe=probe, gate_ok=lambda: gate is None or self.O.gate_alive(gate),
+                         limit=spec["wait"], sleep=time.sleep, clock=time.monotonic)
+        if who == "probe":
+            self.ready_by_probe.add(name)
 
     # A standalone worker keeps every setting: stop, keep the old container renamed, create the replacement from its exact config.
     def _backup(self, spec):
-        return spec["container"] + "-before-" + RELEASE
+        """The pre-Beta container a standalone worker kept, named once at the first apply and kept through every update."""
+        saved = getattr(self, "saved", None) or {}
+        return (saved.get("backups") or {}).get(spec["container"]) or spec["container"] + "-before-" + (saved.get("release") or self.release)
+
+    def _prev(self, spec):
+        """The running release's container a standalone worker keeps during an update, until the update is verified."""
+        return spec["container"] + "-prev-" + self.release
 
     def _api(self, method, path, body=None):
         import http.client
@@ -1062,11 +1292,11 @@ class RealHost:                                     # pragma: no cover  (exercis
             raise RuntimeError(f"Docker API refused {method} {path.split('?')[0]} ({status})")
         return json.loads(raw) if raw else {}
 
-    def _swap_standalone(self, spec, new_id):
-        name, backup = spec["container"], self._backup(spec)
+    def _swap_standalone(self, spec, new_id, backup=None, keep=None):
+        name, backup, keep = spec["container"], backup or self._backup(spec), keep or self.BEFORE
         old = self.O.inspect(name)
         assert not old["State"]["Running"], name + " is still running"
-        (self.BEFORE / f"{name}.private.json").write_text(json.dumps(old))
+        (keep / f"{name}.private.json").write_text(json.dumps(old))
         self._run("docker", "update", "--restart=no", name)
         self._api("POST", f"/containers/{name}/rename?name={backup}")
         config = dict(old["Config"])
@@ -1080,8 +1310,8 @@ class RealHost:                                     # pragma: no cover  (exercis
             if n != primary:
                 self._api("POST", f"/networks/{n}/connect", {"Container": name, "EndpointConfig": x})
 
-    def _restore_standalone(self, spec):
-        name, backup = spec["container"], self._backup(spec)
+    def _restore_standalone(self, spec, backup=None, keep=None):
+        name, backup, keep = spec["container"], backup or self._backup(spec), keep or self.BEFORE
         exists = lambda n: subprocess.run(["docker", "inspect", n], capture_output=True).returncode == 0
         if not exists(backup):
             return                                  # never swapped: its own container stands
@@ -1089,7 +1319,7 @@ class RealHost:                                     # pragma: no cover  (exercis
             subprocess.run(["docker", "stop", "--time", "75", name], capture_output=True, timeout=120)
             self._run("docker", "rm", name)
         self._api("POST", f"/containers/{backup}/rename?name={name}")
-        old = json.loads((self.BEFORE / f"{name}.private.json").read_text())
+        old = json.loads((keep / f"{name}.private.json").read_text())
         self._api("POST", f"/containers/{name}/update", {"RestartPolicy": old["HostConfig"]["RestartPolicy"]})
 
     def create_workers(self, gate):
@@ -1099,6 +1329,8 @@ class RealHost:                                     # pragma: no cover  (exercis
             wrapper, service = self.where[key]
             if wrapper:
                 self._compose(wrapper, "up", "--no-start", "--no-deps", "--no-build", "--pull", "never", service)
+            elif self.updating:                     # the running release's container stays, renamed, until the update is verified
+                self._swap_standalone(spec, self.new_ids[key], self._prev(spec), self.UPD)
             else:
                 self._swap_standalone(spec, self.new_ids[key])
             self.record("worker_created", {"container": spec["container"]})
@@ -1140,7 +1372,10 @@ class RealHost:                                     # pragma: no cover  (exercis
     def _check_running_files(self, spec, live):
         if spec.get("kind") == "config":
             return                                  # the host file is the payload; hashed in restore and in the gateway config check
-        assert live["State"]["Running"] and live["State"].get("Health", {}).get("Status") in (None, "healthy"), "not healthy: " + spec["container"]
+        health = (live["State"].get("Health") or {}).get("Status")
+        # "starting" only where its own healthcheck already passed twice in a row (wait_ready); unhealthy never
+        assert live["State"]["Running"] and (health in (None, "healthy") or (health == "starting" and spec["container"] in self.ready_by_probe)), \
+            "not healthy: " + spec["container"]
         want = want_hashes(spec["files"])
         picked = sample(want, [m["Destination"] for m in live["Mounts"]])
         check_files({d: want[d] for d in picked}, self._hashes_in_container(spec["container"], picked), "running " + spec["container"])
@@ -1167,9 +1402,15 @@ class RealHost:                                     # pragma: no cover  (exercis
         self.record("portal_answers", got)
 
     def verify_workers(self):
+        if self.updating:                           # a worker this update did not rebuild was only stopped and started: same image, running
+            rebuilt = {s["container"] for s in self.targets.values()}
+            for name, image in self.snap["worker_images"].items():
+                if name not in rebuilt:
+                    live = self.O.inspect(name)
+                    assert live["State"]["Running"] and live["Image"] == image, "worker did not come back as it was: " + name
         for key, spec in self.targets.items():
             if spec.get("worker"):
-                self.O.wait_healthy(spec["container"], None, spec["wait"])
+                self._wait_ready(spec, None)
                 live = self.O.inspect(spec["container"])
                 assert live["State"]["Running"] and live["Image"] == self.new_ids[key], "worker: " + spec["container"]
                 if spec["container"].startswith("minimoi-guildhall"):
@@ -1222,6 +1463,7 @@ class RealHost:                                     # pragma: no cover  (exercis
             assert self.gateway_file.read_bytes() == (self.BEFORE / "gateway-config.yaml").read_bytes(), "restored gateway config differs"
         self._check_dev_state()
         same_runtime(json.loads((self.BEFORE / "runtime.private.json").read_text()), json.loads(cfg.read_text()))
+        (self.OP / UPDATE_IN_FLIGHT).unlink(missing_ok=True)     # the baseline is proved: no update is in flight any more
         self.record("restored", {"status": "previous images, overrides and config proved"})
 
     def verify_restored_workers(self):
@@ -1230,6 +1472,285 @@ class RealHost:                                     # pragma: no cover  (exercis
                 self.O.wait_healthy(spec["container"], None, spec["wait"])
                 assert self.O.inspect(spec["container"])["Image"] == self.saved["images"][key], "restored worker: " + spec["container"]
 
+    # ── update: release to release ──
+    # self.saved stays the pre-Beta baseline (a later rollback's target); self.snap is the running release, this update's own
+    # restore point, kept in before-update/. The wrappers never change: only this operator's two override files move.
+
+    def _exists(self, ref, kind="container"):
+        args = ("docker", "image", "inspect", ref) if kind == "image" else ("docker", "inspect", ref)
+        return subprocess.run(list(args), capture_output=True).returncode == 0
+
+    def _write_private(self, path, text):
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(text)
+        tmp.chmod(0o600)
+        os.replace(tmp, path)
+
+    def check_update_baseline(self):
+        assert self.updating, "not an update"
+        assert self.R.is_dir() and self.REL.is_dir() and self.NEXT.is_dir(), "not the Dev host"
+        assert not (self.OP / "recovery-required.json").exists(), "an earlier run needs recovery"
+        assert not (self.OP / UPDATE_IN_FLIGHT).exists(), "an earlier update did not finish; look before running another"
+        assert not (self.ROUTES / "recovery-required.json").exists(), "the routes operator needs recovery first"
+        assert all(o.exists() for o in self.OVERRIDES.values()), "nothing applied: an update moves an applied release; use apply"
+        assert (self.BEFORE / "state.private.json").exists(), "no saved baseline: an update needs the first apply's state"
+        if self.meta.get("mode") != "update" or (self.meta.get("from") or {}).get("commit") != self.current["commit"]:
+            raise Refused(f"Dev runs {self.current['commit'][:8]} ({self.current['release']}); this update was not built from it. Nothing changed.")
+        if self.release == self.current["release"]:
+            raise Refused("the next release needs a name of its own, so its tags never move the running release's. Nothing changed.")
+        check_release((self.OP / "release-next.tar.gz").read_bytes(), (self.OP / "release-next.sha256").read_text().split()[0])
+        if not self.targets:
+            raise Refused("nothing any container runs changed since the running release. Nothing changed.")
+        for spec in self.targets.values():
+            check_payload(spec["files"], lambda name: (self.PAYLOAD / name).read_bytes())
+        for wrapper, path in self.WRAPPERS.items():
+            text = path.read_text()
+            refuse_production_text(text, path.name)
+            assert text.count(f"-f {self.OVERRIDES[wrapper]} ") == 1, "the wrapper does not run this operator's override: " + path.name
+        portal = self.O.inspect("minimoi-portal")
+        assert (portal["Config"].get("Labels") or {}).get("com.docker.compose.project") == "minimoi-staging", "the portal is not Dev's"
+        assert dict(e.split("=", 1) for e in portal["Config"]["Env"]).get("MINIMOI_ROLE") != "production", "this host says production"
+        renders, self.where = self._locate()
+        for wrapper, render in renders.items():
+            refuse_production_sources(render, [s for w, s in self.where.values() if w == wrapper])
+        reviewed = json.loads(self.O.mc_compose("config", "--format", "json"))
+        ours = set(json.loads(self.OVERRIDES["mc"].read_text()).get("services") or {})
+        strip = lambda svc, name: {k: v for k, v in svc.items() if name not in ours or k not in ("image", "pull_policy")}
+        for key, (wrapper, service) in self.where.items():
+            if wrapper == "mc":                     # this operator's override names the image; the MC operator's render may not
+                assert strip(reviewed["services"][service], service) == strip(renders["mc"]["services"][service], service), \
+                    "bin/mc.sh and the MC operator render differently: " + service
+        check_catalogue(json.loads(self.CAT.read_text()))
+        self.saved = json.loads((self.BEFORE / "state.private.json").read_text())
+        touched = set(self.saved.get("specs") or self.current["targets"])
+        self.routes_on = any((self.ROUTES / n).exists() for n in ("compose.routes.yml", "mc.routes.yml"))
+        if self.routes_on:
+            hits = routes_sensitive_hits(self.targets)
+            if hits:
+                raise Refused("routes are on and this update changes what they verified (" + "; ".join(hits[:4]) + "): run routes-off, the update, "
+                              "then routes-on. Nothing changed.")
+            new_under_routes = sorted(s["container"] for k, s in self.targets.items() if k not in touched and s["container"] in ROUTED)
+            assert not new_under_routes, "routes are on and the release never touched these, so their baseline cannot be read now: " + ", ".join(new_under_routes)
+        problems, self.base, self.off_base = [], {}, {}
+        for key, spec in self.targets.items():
+            live = self.O.inspect(spec["container"])
+            check_required_env(spec["container"], live["Config"]["Env"])
+            if spec.get("kind") == "config":
+                got = hashlib.sha256((self.R / "config" / spec["config"]).read_bytes()).hexdigest()
+                only = next(iter(spec["files"].values()))
+                if got not in only["accepted"] and got != only["after"] and got not in REVIEWED_HOST_CONFIGS:
+                    problems.append(f"{spec['container']}: {spec['config']}: no commit explains the host's file")
+                continue
+            tag = live["Config"]["Image"]
+            check_tag_is_running(tag, self._image_id(tag), live["Image"])
+            wrapper, service = self.where[key]
+            if wrapper:
+                assert renders[wrapper]["services"][service]["image"] == tag, "compose would not run what is running: " + spec["container"]
+            else:
+                assert key in touched, spec["container"] + ": a standalone worker the release never touched; use the full chain for it"
+                assert not self._exists(self._prev(spec)), "a kept container is already there: " + self._prev(spec)
+            assert not self._exists(self._tag(spec), "image"), "the next release's tag already exists: " + self._tag(spec)
+            self.base[key] = self._base_record(live)
+            hashes = self._hashes_in_image(live["Image"], sorted(m["dest"] for m in spec["files"].values()))
+            problems += [f"{spec['container']}: {x}" for x in base_mismatches(spec["files"], hashes, spec.get("replaces", ()))]
+            off = not_on_declared_base(spec["files"], hashes, spec.get("replaces", ()))
+            if off:
+                self.off_base[spec["container"]] = off
+        if problems:
+            (self.OP / "base-mismatches.json").write_text(json.dumps(problems, indent=1))
+            for line in problems:
+                print("BASE", line, flush=True)
+            raise Refused(f"{len(problems)} live file(s) no commit explains; nothing changed. See base-mismatches.json.")
+
+    def check_update_render(self):
+        """What compose would run with the next override differs from now by the changed services' images, and nothing else."""
+        for wrapper in self.OVERRIDES:
+            before, images = self._render(wrapper), self._images(wrapper)
+            tmp = self.OP / f"check.{wrapper}.private.yml"
+            self._write_private(tmp, json.dumps(override_doc(images), indent=2))
+            try:
+                after = self._render(wrapper, tmp)
+            finally:
+                tmp.unlink(missing_ok=True)
+            only_images(before, after, images)
+
+    def save_current(self):
+        shutil.rmtree(self.UPD, ignore_errors=True)
+        self.UPD.mkdir(mode=0o700)
+        gateway = self.targets.get("model-gateway")
+        self.gateway_file = self.R / "config" / gateway["config"] if gateway else None
+        if self.gateway_file:
+            shutil.copy2(self.gateway_file, self.UPD / "gateway-config.yaml")
+        state = next(v["Source"] for v in self.O.inspect(self.O.MC)["Mounts"] if v["Destination"] == "/home/node/.openclaw")
+        if "mc-agent" in self.targets:
+            shutil.copy2(pathlib.Path(state) / "openclaw.json", self.UPD / "runtime.private.json")
+        ours = {str(o) for o in self.OVERRIDES.values()}
+        snap = {"release": self.current["release"], "commit": self.current["commit"], "state": state, "routes_on": self.routes_on, "where": self.where,
+                "docs": {w: o.read_text() for w, o in self.OVERRIDES.items()}, "wrappers": {w: p.read_text() for w, p in self.WRAPPERS.items()},
+                "fixed": {p: hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in self._override_files() if p not in ours},
+                "renders": {w: self._render(w) for w in self.WRAPPERS}, "others": self._others(), "catalogue_sha": hashlib.sha256(self.CAT.read_bytes()).hexdigest(),
+                "workers": [w for w in WORKERS if w in self.O.snapshot()], "new_ids": self.new_ids, "images": {}, "contracts": {}, "dev_values": {}}
+        snap["worker_images"] = {w: self.O.inspect(w)["Image"] for w in snap["workers"]}
+        for key, spec in self.targets.items():
+            live = self.O.inspect(spec["container"])
+            snap["images"][key] = live["Image"]
+            snap["contracts"][key] = json.loads(json.dumps(self.O.contract(spec["container"])))
+            snap["dev_values"][key] = dev_values(live["Config"]["Env"])
+        self._write_private(self.UPD / "state.private.json", json.dumps(snap))
+        self.snap, self.workers_to_start = snap, snap["workers"]
+        self._extend_baseline()
+        self._write_private(self.OP / UPDATE_IN_FLIGHT, json.dumps({"at": time.time(), "from": self.current["release"], "to": self.release}))
+
+    def _extend_baseline(self):
+        """A later rollback still goes to the pre-Beta baseline. A target this update is the first to touch is running its baseline now."""
+        path, base = self.BEFORE / "state.private.json", copy.deepcopy(self.saved)
+        base.setdefault("release", self.current["release"])
+        base.setdefault("specs", {k: spec_only(v) for k, v in self.current["targets"].items()})
+        added = []
+        for key, spec in self.targets.items():
+            if key in base["specs"]:
+                continue
+            live = self.O.inspect(spec["container"])
+            base["specs"][key] = spec_only(spec)
+            base["images"][key], base["tags"][key] = live["Image"], live["Config"]["Image"]
+            base["contracts"][key], base["dev_values"][key] = self.snap["contracts"][key], self.snap["dev_values"][key]
+            base["where"][key] = list(self.where[key])
+            if spec.get("kind") == "config" and not (self.BEFORE / "gateway-config.yaml").exists():
+                shutil.copy2(self.gateway_file, self.BEFORE / "gateway-config.yaml")
+            added.append(key)
+        if base != self.saved:
+            self._write_private(path, json.dumps(base))
+            self.record("baseline_extended", {"added": added})
+        self.saved = base
+
+    def write_next(self):
+        for wrapper, override in self.OVERRIDES.items():
+            self._write_private(override, json.dumps(next_override(json.loads(self.snap["docs"][wrapper]), self._images(wrapper)), indent=2))
+        if self.gateway_file:
+            spec = self.targets["model-gateway"]
+            self._write_file(self.gateway_file, (self.PAYLOAD / next(iter(spec["files"]))).read_text(), self.gateway_file)
+        self.record("next_written", {"release": self.release})
+
+    def _check_update_state(self):
+        check_catalogue(json.loads(self.CAT.read_text()))
+        assert hashlib.sha256(self.CAT.read_bytes()).hexdigest() == self.snap["catalogue_sha"], "the host catalogue changed"
+        for path, want in self.snap["fixed"].items():
+            assert hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest() == want, "an existing override changed: " + path
+        for wrapper, path in self.WRAPPERS.items():
+            assert path.read_text() == self.snap["wrappers"][wrapper], "a wrapper changed: " + path.name
+        now = self._others()
+        moved = sorted(k for k in self.snap["others"] if now.get(k) != self.snap["others"][k])
+        assert not moved, "an unrelated container changed: " + ", ".join(moved[:8])
+        appeared = sorted(set(now) - set(self.snap["others"]))
+        if appeared:
+            self.record("others_appeared", {"containers": appeared[:8]})
+
+    def _check_runtime(self):
+        if "mc-agent" not in self.targets:
+            return                                  # MC did not restart: nothing re-read its runtime config
+        live = json.loads((pathlib.Path(self.snap["state"]) / "openclaw.json").read_text())
+        if self.snap["routes_on"]:                  # what the routes operator verified, unchanged but for OpenClaw's own stamp
+            same_runtime(json.loads((self.UPD / "runtime.private.json").read_text()), live)
+        else:
+            check_mc_policy(live)
+
+    def verify_next(self):
+        for key, spec in self.targets.items():
+            live = self.O.inspect(spec["container"])
+            if spec.get("kind") != "config":
+                assert live["Image"] == self.new_ids[key], "not the new image: " + spec["container"]
+            else:
+                self._check_gateway_serves(spec)
+            check_restored(with_image_env(self.snap["contracts"][key], spec), sorted_env(self.O.contract(spec["container"])), "contract of " + spec["container"])
+            assert dev_values(live["Config"]["Env"]) == self.snap["dev_values"][key], "a Dev setting moved: " + spec["container"]
+            check_required_env(spec["container"], live["Config"]["Env"])
+            if not spec.get("worker"):
+                self._check_running_files(spec, live)
+        self._check_update_state()
+        for wrapper, override in self.OVERRIDES.items():
+            assert json.loads(override.read_text()) == next_override(json.loads(self.snap["docs"][wrapper]), self._images(wrapper)), "override is not the planned one"
+            only_images(self.snap["renders"][wrapper], self._render(wrapper), self._images(wrapper))
+        self._check_runtime()
+        self._check_portal_answers()
+
+    def restore_current_verified(self, gate):
+        for wrapper, override in self.OVERRIDES.items():
+            self._write_private(override, self.snap["docs"][wrapper])
+        if self.gateway_file:
+            self._write_file(self.gateway_file, (self.UPD / "gateway-config.yaml").read_text(), self.gateway_file)
+        cfg = pathlib.Path(self.snap["state"]) / "openclaw.json"
+        if "mc-agent" in self.targets:
+            subprocess.run(["docker", "stop", "--time", "120", "minimoi-mc-agent"], capture_output=True, timeout=180)
+            st, tmp = cfg.stat(), cfg.with_name("openclaw.json.restore")
+            shutil.copy2(self.UPD / "runtime.private.json", tmp)
+            os.chown(tmp, st.st_uid, st.st_gid)
+            os.replace(tmp, cfg)
+        for tier in Deploy.TIERS:
+            self.recreate(tier, gate)
+        for key, spec in sorted(self.targets.items()):
+            if spec.get("worker"):
+                wrapper, service = self.where[key]
+                if wrapper:
+                    self._compose(wrapper, "up", "--no-start", "--no-deps", "--no-build", "--pull", "never", service)
+                else:
+                    self._restore_standalone(spec, self._prev(spec), self.UPD)
+        for key, spec in self.targets.items():
+            assert self.O.inspect(spec["container"])["Image"] == self.snap["images"][key], "restored image differs: " + spec["container"]
+            check_restored(self.snap["contracts"][key], self.O.contract(spec["container"]), "contract of " + spec["container"])
+        for wrapper, override in self.OVERRIDES.items():
+            assert override.read_text() == self.snap["docs"][wrapper], "restored override differs: " + override.name
+            check_restored(self.snap["renders"][wrapper], self._render(wrapper), "compose render")
+        if self.gateway_file:
+            assert self.gateway_file.read_bytes() == (self.UPD / "gateway-config.yaml").read_bytes(), "restored gateway config differs"
+        self._check_update_state()
+        if "mc-agent" in self.targets:
+            same_runtime(json.loads((self.UPD / "runtime.private.json").read_text()), json.loads(cfg.read_text()))
+        (self.OP / UPDATE_IN_FLIGHT).unlink(missing_ok=True)
+        self.record("restored", {"status": "the running release " + self.snap["release"] + " proved"})
+
+    def verify_restored_current_workers(self):
+        for key, spec in self.targets.items():
+            if spec.get("worker"):
+                self._wait_ready(spec, None)
+                assert self.O.inspect(spec["container"])["Image"] == self.snap["images"][key], "restored worker: " + spec["container"]
+
+    def commit_update(self):
+        """After a verified update: the next release becomes the running one. Nothing here changes what runs."""
+        for key, spec in self.targets.items():
+            if spec.get("worker") and not self.where[key][0] and self._exists(self._prev(spec)):
+                if subprocess.run(["docker", "rm", self._prev(spec)], capture_output=True).returncode:
+                    self.record("kept_container_not_removed", {"container": self._prev(spec)})
+        ids = self.OP / "new-images.json"
+        merged = {**(json.loads(ids.read_text()) if ids.exists() else {}), **self.new_ids}
+        ids.write_text(json.dumps(merged, indent=1))
+        shutil.rmtree(self.OP / "release.prev", ignore_errors=True)
+        os.replace(self.REL, self.OP / "release.prev")
+        os.replace(self.NEXT, self.REL)
+        for name in ("tar.gz", "sha256"):
+            os.replace(self.OP / f"release.{name}", self.OP / f"release.prev.{name}")
+            os.replace(self.OP / f"release-next.{name}", self.OP / f"release.{name}")
+        (self.OP / UPDATE_IN_FLIGHT).unlink(missing_ok=True)
+        self.record("update_committed", {"from": self.snap["release"], "to": self.release, "recreated": sorted(s["container"] for s in self.targets.values())})
+        if self.snap["routes_on"]:
+            try:
+                self._rebase_routes()
+            except Exception as exc:                # Dev runs the verified update; only a later routes rollback would stop on it
+                (self.OP / "routes-rebase-required.json").write_text(json.dumps({"at": time.time(), "release": self.release, "exception": type(exc).__name__}))
+                self.record("routes_state_rebase_failed", {"exception": type(exc).__name__})
+                print("NOTE the routes operator's saved images were not moved to this release; see routes-rebase-required.json before a routes rollback", flush=True)
+
+    def _rebase_routes(self):
+        """The routes operator restores to its saved images and renders. They named the release under it; now they name this one."""
+        path = self.ROUTES / "before" / "state.private.json"
+        refuse_production(path)
+        state = json.loads(path.read_text())
+        ids = {spec["container"]: self.new_ids[key] for key, spec in self.targets.items() if key in self.new_ids}
+        new = rebase_routes_state(state, {w: self._images(w) for w in self.WRAPPERS}, ids)
+        if new != state:
+            shutil.copy2(path, path.with_name(f"state.private.before-{self.release}.json"))
+            self._write_private(path, json.dumps(new))
+            self.record("routes_state_rebased", {"images": sorted(k for k in ids if k in state.get("images", {}))})
+
 
 def main(argv):                                     # pragma: no cover
     import fcntl
@@ -1237,15 +1758,16 @@ def main(argv):                                     # pragma: no cover
     sys.path.insert(0, str(here))
     from guarded_swap import guarded_swap
     action = argv[1]
-    assert action in ("dry-run", "apply", "rollback"), "dry-run, apply or rollback"
-    host = RealHost()
+    assert action in ("dry-run", "apply", "rollback", "update-dry-run", "update"), "dry-run, apply, rollback, update-dry-run or update"
+    host = RealHost(update=action.startswith("update"))
     status = host.OP / "status.json"
     with (host.R / ".renewal-deploy.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)    # refused before status.json: a second start must not overwrite a run's state
         status.write_text(json.dumps({"action": action, "state": "running", "at": time.time()}))
         try:
             deploy = Deploy(host, guarded_swap)
-            result = {"dry-run": deploy.dry_run, "apply": deploy.apply, "rollback": deploy.rollback}[action]()
+            result = {"dry-run": deploy.dry_run, "apply": deploy.apply, "rollback": deploy.rollback,
+                      "update-dry-run": deploy.update_dry_run, "update": deploy.update}[action]()
         except BaseException as exc:
             status.write_text(json.dumps({"action": action, "state": "failed", "exception": type(exc).__name__, "message": str(exc)[:400], "at": time.time()}))
             raise

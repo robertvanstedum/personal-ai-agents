@@ -2,10 +2,14 @@
 """Run on the Mac. Packages the combined 1.2 candidate from an exact commit, sends it to Dev through ssm_run.sh, starts the host
 operator detached, and reads its state once. ``build`` and the tarball touch nothing on any host.
 
-  beta_dev_payload.py build --commit e7017247 --operator-commit HEAD --out DIR
-  beta_dev_payload.py send --out DIR [--start-part N]
-  beta_dev_payload.py start dry-run|apply|rollback
+  beta_dev_payload.py build --commit e7017247 --operator-commit HEAD --out DIR [--release NAME]
+  beta_dev_payload.py build --commit C --from DEV_COMMIT --release NAME --operator-commit HEAD --out DIR    an update
+  beta_dev_payload.py send --out DIR [--start-part N]  one SSM call when the tarball fits, verified parts when it does not
+  beta_dev_payload.py start dry-run|apply|rollback|update-dry-run|update
   beta_dev_payload.py read                            one bounded read of status, journal and log; never loops
+
+An update (``--from``) ships only what changed since the commit Dev runs, to release-next/ beside the running release. The
+host refuses it unless Dev runs exactly that commit, then rebuilds only the containers those files reach, FROM what they run.
 """
 from __future__ import annotations
 
@@ -112,15 +116,35 @@ def accepted_hashes(git, commit: str, path: str) -> list:
     return sorted(found)
 
 
-def build_meta(git, commit_ref: str, bases=None) -> tuple:
-    """(meta, {repo path: bytes}). One entry per image: which changed files it holds, where, and every hash the host proves."""
+def replaced_trees(git, commit: str, spec: dict) -> dict:
+    """{repo path: image path} for every commit file under a folder the build empties first (MC's persona and handbook):
+    the overlay must carry all of it, or the image loses what did not change."""
+    replaces = spec.get("replaces", ())
+    if not replaces:
+        return {}
+    sources = [src for src, dest in spec["rules"] if dest.startswith(tuple(replaces))]
+    out = {}
+    for path in git.tree_hashes(commit, sources):
+        dest = D.dest_for(spec["rules"], path)
+        if dest and dest.startswith(tuple(replaces)):
+            out[path] = dest
+    return out
+
+
+def build_meta(git, commit_ref: str, bases=None, from_ref=None, release=None) -> tuple:
+    """(meta, {repo path: bytes}). One entry per image: which changed files it holds, where, and every hash the host proves.
+    With ``from_ref`` (the commit Dev runs) every image diffs from there: an update carries only what changed since."""
     commit = git.rev(commit_ref)
     resolved = {k: git.rev(v) for k, v in (bases or D.BASES).items()}
-    statuses = {k: git.status(v, commit) for k, v in resolved.items()}
+    from_commit = git.rev(from_ref) if from_ref else None
+    if from_commit:
+        resolved = {k: from_commit for k in resolved}
+    statuses = {c: git.status(c, commit) for c in set(resolved.values())}
     targets, skipped, blobs = {}, {}, {}
     tree_cache = git.tree_hashes(commit, sorted({p for s in D.TARGETS.values() for p in s.get("layout", ())}))
+    tree = {"/app/" + p: h for p, h in tree_cache.items() if p.endswith(D.TEXT) and "/data/" not in p}
     for key, spec in D.TARGETS.items():
-        changed = statuses[spec["base"]]
+        changed = statuses[resolved[spec["base"]]]
         deleted = [p for state, p in changed if state == "D" and D.dest_for(spec["rules"], p)]
         assert not deleted, f"{key}: an overlay cannot follow a deleted file: {deleted}"
         names = [p for state, p in changed if state != "D"]
@@ -128,6 +152,7 @@ def build_meta(git, commit_ref: str, bases=None) -> tuple:
         if not mapping:
             skipped[spec["container"]] = "nothing it runs changed"
             continue
+        mapping.update(replaced_trees(git, commit, spec))
         files = {}
         always = dict(spec.get("always", ()))
         for path, dest in sorted(mapping.items()):
@@ -140,11 +165,20 @@ def build_meta(git, commit_ref: str, bases=None) -> tuple:
             if path in always:                      # an input a RUN step compiles over: the file the image holds is the compiled one
                 files[path]["generated_input"] = True
         out = {k: v for k, v in spec.items() if k not in ("rules", "extra_rules", "always", "layout", "exclude")}
-        layout = {("/app/" + p): h for p, h in tree_cache.items()
-                  if p.startswith(tuple(spec.get("layout", ()) or ("\0",))) and p.endswith(D.TEXT) and "/data/" not in p and p not in mapping}
-        targets[key] = {**out, "files": files, "layout_files": layout}
-    return {"release": D.RELEASE, "commit": commit, "bases": resolved, "oldest_accepted": git.rev(D.OLDEST_ACCEPTED), "targets": targets, "skipped": skipped,
-            "delivery": delivery_meta(git, commit)}, blobs
+        if from_commit:                             # one digest, recomputed in the built image from the shared path list
+            paths = D.layout_paths(tree, spec.get("layout", ()), mapping)
+            targets[key] = {**out, "files": files, "layout_digest": {"prefixes": list(spec.get("layout", ())), "count": len(paths),
+                                                                       "sha256": D.layout_digest({p: tree[p] for p in paths})}}
+        else:
+            layout = {("/app/" + p): h for p, h in tree_cache.items()
+                      if p.startswith(tuple(spec.get("layout", ()) or ("\0",))) and p.endswith(D.TEXT) and "/data/" not in p and p not in mapping}
+            targets[key] = {**out, "files": files, "layout_files": layout}
+    meta = {"release": release or D.RELEASE, "commit": commit, "bases": resolved, "oldest_accepted": git.rev(D.OLDEST_ACCEPTED), "targets": targets,
+            "skipped": skipped, "delivery": delivery_meta(git, commit)}
+    if from_commit:
+        assert release, "an update needs a release name of its own (--release)"
+        meta.update(mode="update", tree=sorted(tree), **{"from": {"commit": from_commit}})
+    return meta, blobs
 
 
 MAIN = "origin/main"                                # production deploys from main: what main lacks is on Dev only
@@ -176,40 +210,60 @@ def make_tar(meta: dict, blobs: dict, operator_files: dict) -> bytes:
     return buf.getvalue()
 
 
-def chunk_scripts(tar: bytes, digest: str, host_dir: str = HOST_DIR, chunk_bytes: int = CHUNK_BYTES) -> list:
-    """Scripts for ssm_run.sh: each writes one verified part; the last reassembles, verifies the whole hash, and unpacks."""
-    check_destination(host_dir)
-    parts = [tar[i:i + chunk_bytes] for i in range(0, len(tar), chunk_bytes)]
-    scripts = []
-    for n, part in enumerate(parts):
-        scripts.append(f"""set -eu
+# Where a transfer lands, and what must be true there first. "release": a full release, only while nothing is applied.
+# "release-next": an update, only while a release is applied and no earlier update is unresolved. The running release stays.
+LANDINGS = {
+    "release": ("release", "incoming", """[ ! -e "$D/compose.beta.yml" ] || { echo 'already applied: roll back first'; exit 1; }"""),
+    "release-next": ("release-next", "incoming-next",
+                     """[ -e "$D/compose.beta.yml" ] || { echo 'nothing applied: an update needs an applied release'; exit 1; }\n"""
+                     f"""[ ! -e "$D/{D.UPDATE_IN_FLIGHT}" ] || {{ echo 'an earlier update did not finish; nothing sent'; exit 1; }}"""),
+}
+
+
+def _part_script(part: bytes, n: int, total: int, host_dir: str, incoming: str) -> str:
+    return f"""set -eu
 umask 077
 D={host_dir}
-mkdir -p "$D/incoming"
+mkdir -p "$D/{incoming}"
 chmod 700 "$D"
-printf %s '{base64.b64encode(part).decode()}' | base64 -d > "$D/incoming/part-{n:05d}"
-echo '{sha(part)}  '"$D/incoming/part-{n:05d}" | sha256sum -c - >/dev/null
-echo 'part {n + 1} of {len(parts)}'
-""")
-    scripts.append(f"""set -eu
-umask 022
-D={host_dir}
-[ ! -e "$D/recovery-required.json" ] || {{ echo 'an earlier run needs recovery; nothing sent'; exit 1; }}
-[ ! -e "$D/compose.beta.yml" ] || {{ echo 'already applied: roll back first'; exit 1; }}
-[ "$(ls "$D/incoming" | wc -l)" = {len(parts)} ] || {{ echo 'a part is missing'; exit 1; }}
-cat "$D"/incoming/part-* > "$D/{TAR_NAME}.new"
-echo '{digest}  '"$D/{TAR_NAME}.new" | sha256sum -c -
-rm -rf "$D/release.new"
-mkdir "$D/release.new"
-tar -xzf "$D/{TAR_NAME}.new" -C "$D/release.new" --no-same-owner
-rm -rf "$D/release"
-mv "$D/release.new" "$D/release"
-mv "$D/{TAR_NAME}.new" "$D/{TAR_NAME}"
-echo '{digest}' > "$D/release.sha256"
-rm -rf "$D/incoming"
-echo 'release unpacked, sha256 {digest}'
-""")
-    return scripts
+printf %s '{base64.b64encode(part).decode()}' | base64 -d > "$D/{incoming}/part-{n:05d}"
+echo '{sha(part)}  '"$D/{incoming}/part-{n:05d}" | sha256sum -c - >/dev/null
+echo 'part {n + 1} of {total}'
+"""
+
+
+def _unpack_body(digest: str, landing: str, parts: int) -> str:
+    """Everything after the opening ``set -eu``/``umask``/``D=`` lines: guards, reassembly, the whole hash, unpack."""
+    name, incoming, guards = LANDINGS[landing]
+    return f"""[ ! -e "$D/recovery-required.json" ] || {{ echo 'an earlier run needs recovery; nothing sent'; exit 1; }}
+{guards}
+[ "$(ls "$D/{incoming}" | wc -l | tr -d ' ')" = {parts} ] || {{ echo 'a part is missing'; exit 1; }}
+cat "$D"/{incoming}/part-* > "$D/{name}.tar.gz.new"
+echo '{digest}  '"$D/{name}.tar.gz.new" | sha256sum -c -
+rm -rf "$D/{name}.new"
+mkdir "$D/{name}.new"
+tar -xzf "$D/{name}.tar.gz.new" -C "$D/{name}.new" --no-same-owner
+rm -rf "$D/{name}"
+mv "$D/{name}.new" "$D/{name}"
+mv "$D/{name}.tar.gz.new" "$D/{name}.tar.gz"
+echo '{digest}' > "$D/{name}.sha256"
+rm -rf "$D/{incoming}"
+echo '{name} unpacked, sha256 {digest}'
+"""
+
+
+def chunk_scripts(tar: bytes, digest: str, host_dir: str = HOST_DIR, chunk_bytes: int = CHUNK_BYTES, landing: str = "release") -> list:
+    """Scripts for ssm_run.sh: each writes one verified part; the last reassembles, verifies the whole hash, and unpacks.
+    The last part carries the unpack when both fit in one envelope: a tarball of one part is one SSM call."""
+    check_destination(host_dir)
+    incoming = LANDINGS[landing][1]
+    parts = [tar[i:i + chunk_bytes] for i in range(0, len(tar), chunk_bytes)]
+    scripts = [_part_script(part, n, len(parts), host_dir, incoming) for n, part in enumerate(parts)]
+    body = _unpack_body(digest, landing, len(parts))
+    joined = scripts[-1] + "umask 022\n" + body
+    if envelope_size(joined) < SSM_LIMIT:
+        return [*scripts[:-1], joined]
+    return [*scripts, f"set -eu\numask 022\nD={host_dir}\n" + body]
 
 
 def envelope_size(script: str) -> int:
@@ -236,17 +290,28 @@ def run_on_host(script: str, timeout_s: int = 120) -> str:
     return p.stdout
 
 
+ACTIONS = ("dry-run", "apply", "rollback", "update-dry-run", "update")
+
+
+def landing_for(tar: bytes) -> str:
+    """An update's tarball goes beside the running release; a full one replaces release/ (only while nothing is applied)."""
+    with tarfile.open(fileobj=io.BytesIO(tar), mode="r:gz") as t:
+        meta = json.load(t.extractfile("meta.json"))
+    return "release-next" if meta.get("mode") == "update" else "release"
+
+
 def start_script(action: str, host_dir: str = HOST_DIR) -> str:
     """Detached, because SSM kills long scripts. The operator holds the deploy lock itself, and writes status.json."""
-    assert action in ("dry-run", "apply", "rollback"), "dry-run, apply or rollback"
+    assert action in ACTIONS, ", ".join(ACTIONS)
     check_destination(host_dir)
+    where = "release-next" if action.startswith("update") else "release"     # an update runs the operator it was sent with
     return f"""set -eu
 D={host_dir}
 cd "$D"
-[ -f release.sha256 ] || {{ echo 'no release on the host'; exit 1; }}
+[ -f {where}.sha256 ] || {{ echo 'no {where} on the host'; exit 1; }}
 log="$D/run-{action}-$(date -u +%Y%m%dT%H%M%SZ).log"
 umask 077
-nohup setsid python3 "$D/release/operator/beta_dev_deploy.py" {action} > "$log" 2>&1 < /dev/null &
+nohup setsid python3 "$D/{where}/operator/beta_dev_deploy.py" {action} > "$log" 2>&1 < /dev/null &
 echo "started {action}; log $log"
 """
 
@@ -256,6 +321,10 @@ def read_script(host_dir: str = HOST_DIR) -> str:
     check_destination(host_dir)
     return f"""D={host_dir}
 cat "$D/status.json" 2>/dev/null; echo
+if [ -e "$D/compose.beta.yml" ]; then
+  python3 -c 'import json,sys;m=json.load(open(sys.argv[1]));print("APPLIED", m.get("release"), m.get("commit"), "(an update builds --from this commit)")' "$D/release/meta.json" 2>/dev/null || true
+else echo 'APPLIED nothing: Dev runs its pre-Beta baseline'; fi
+[ ! -e "$D/update-in-flight.json" ] || echo 'UPDATE IN FLIGHT'
 [ ! -e "$D/recovery-required.json" ] || echo 'RECOVERY REQUIRED'
 tail -n 15 "$D/journal.jsonl" 2>/dev/null
 log=$(ls -t "$D"/run-*.log 2>/dev/null | head -n 1)
@@ -293,30 +362,34 @@ def main(argv=None):
     build.add_argument("--commit", required=True)
     build.add_argument("--operator-commit", required=True)
     build.add_argument("--out", required=True)
+    build.add_argument("--release", help="this release's name; its tags. Default: " + D.RELEASE)
+    build.add_argument("--from", dest="from_ref", help="the commit Dev runs: build an update of only what changed since")
     send = sub.add_parser("send")
     send.add_argument("--out", required=True)
     send.add_argument("--start-part", type=int, default=0)
     start = sub.add_parser("start")
-    start.add_argument("action", choices=("dry-run", "apply", "rollback"))
+    start.add_argument("action", choices=ACTIONS)
     sub.add_parser("read")
     args = parser.parse_args(argv)
 
     if args.command == "build":
         git, out = Git(), pathlib.Path(args.out)
         out.mkdir(parents=True, exist_ok=True)
-        meta, blobs = build_meta(git, args.commit)
+        meta, blobs = build_meta(git, args.commit, from_ref=args.from_ref, release=args.release)
         tar = make_tar(meta, blobs, operator_blobs(git, git.rev(args.operator_commit)))
         (out / TAR_NAME).write_bytes(tar)
         digest = sha(tar)
         (out / (TAR_NAME + ".sha256")).write_text(f"{digest}  {TAR_NAME}\n")
         print_plan(meta)
-        print(f"{TAR_NAME}: {len(tar)} bytes, sha256 {digest}, from {meta['commit']}")
+        sends = len(chunk_scripts(tar, digest, landing=landing_for(tar)))
+        print(f"{TAR_NAME}: {len(tar)} bytes, sha256 {digest}, {meta['release']} from {meta['commit']}"
+              + (f", an update from {meta['from']['commit'][:8]}" if meta.get("mode") == "update" else "") + f"; {sends} SSM call(s) to send")
     elif args.command == "send":
         out = pathlib.Path(args.out)
         tar = (out / TAR_NAME).read_bytes()
         digest = (out / (TAR_NAME + ".sha256")).read_text().split()[0]
         D.check_release(tar, digest)
-        scripts = chunk_scripts(tar, digest)
+        scripts = chunk_scripts(tar, digest, landing=landing_for(tar))
         for n, script in enumerate(scripts):
             if n >= args.start_part or n == len(scripts) - 1:
                 print(run_on_host(script).strip())
