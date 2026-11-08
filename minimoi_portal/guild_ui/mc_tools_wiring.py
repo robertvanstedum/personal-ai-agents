@@ -48,6 +48,8 @@ def settings(environ) -> dict | None:
             "issues_token_file": environ.get("MINIMOI_MC_ISSUES_TOKEN_FILE") or "",
             "repo": environ.get("MINIMOI_GITHUB_REPO") or "",
             "delegation": environ.get("MINIMOI_MC_DELEGATION") == "1",
+            # The code-gated build job can't run on Dev (MC front door spec §3): off there unless said otherwise.
+            "build_jobs": environ.get("MINIMOI_MC_BUILD_JOBS", "0" if environ.get("MINIMOI_MC_TOOLS_ENV") == "dev" else "1") == "1",
             # Operator-installed policy and its approval record (spec §8.1); absolute paths, outside any agent's reach.
             "policy_file": environ.get("MINIMOI_MC_POLICY_FILE") or "",
             "policy_authority_file": environ.get("MINIMOI_MC_POLICY_AUTHORITY_FILE") or ""}
@@ -566,6 +568,13 @@ class AgentAsker:
             return "owner_files_unsupported", FILES_BY_TOOL_REFUSED
         return None
 
+    def typed(self, conversation_id, to, request_id, action, envelope):
+        """A typed review or analysis request (MC front door spec §4.2)."""
+        return self.asks.ask_typed(conversation_id, to, request_id, action, envelope)
+
+    def scrub(self, text):
+        return self.asks.scrub(text)
+
     def __call__(self, conversation_id, note_text, note_request_id, to):
         made = self.asks.ask({"id": conversation_id}, {"text": note_text}, note_request_id, list(to))
         return made, self.asks.words(made)
@@ -596,6 +605,7 @@ def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, sho
         lessons = LessonLedger(lessons_root, principal=cfg["principal"], environment=lessons_env)
     return ToolService(_connect(cfg["dsn"]), principal=cfg["principal"], environment=cfg["environment"],
                        allowed_agents=cfg["agents"], lessons=lessons, delegation=cfg["delegation"],
+                       build_jobs=cfg["build_jobs"],
                        invites=cfg["invites"] if invites is None else invites,
                        tickets=issue_filer(cfg) is not None, comments=issue_commenter(cfg) is not None,
                        guest_rejects=cfg["guest_rejects"], github=github_reader(cfg), show=show, read_shown=read_shown,
@@ -846,7 +856,7 @@ def proposals(environ, *, start_research, delivery, lessons=None, read_shown=Non
     invite = invite_runner(*delivery) if cfg["invites"] and delivery else None
     return ToolProposals(_connect(cfg["dsn"]), principal=cfg["principal"], environment=cfg["environment"],
                          start_research=start_research if cfg["delegation"] else None, invite=invite,
-                         start_build=start_build if cfg["delegation"] else None,
+                         start_build=start_build if cfg["delegation"] and cfg["build_jobs"] else None,
                          file_issue=issue_filer(cfg), comment_issue=issue_commenter(cfg),
                          update_issue=issue_updater(cfg),
                          guest_rejects=cfg["guest_rejects"], lessons=lessons, read_shown=read_shown,

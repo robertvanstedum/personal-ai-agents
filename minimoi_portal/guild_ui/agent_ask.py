@@ -11,6 +11,7 @@ idempotent (one note per request and kind), attributed to the agent that wrote t
 not a verification and not an approval."""
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import logging
@@ -521,6 +522,41 @@ class AskService:
             else:
                 made.append({"request_id": rid, "to": who, "ok": None, "error": "I could not confirm whether it was recorded."})
         return made
+
+    def ask_typed(self, conversation_id: str, to: str, request_id: str, action: str, envelope: dict) -> dict:
+        """One typed request (MC front door spec §4.2, A6). A review is read-only and can run beside other work; anything else
+        waits while that builder has one open. The check and the write happen under one lock, so two can't both pass."""
+        expected = dict(frm="mc", to=to, action=action, conversation_id=conversation_id, origin="owner_message_via_mc", envelope=envelope)
+        os.makedirs(self.root, exist_ok=True)
+        fd = os.open(os.path.join(self.root, ".pacing.lock"), os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            if ar.load(self.root, request_id) is not None:           # a retry: the first accepted request is frozen
+                return {"request_id": request_id, "to": to, "created": False, "listening": self.listening(to), "ok": True}
+            if envelope["purpose"] != "review":
+                busy = [d for d in ar.open_typed(self.root, to)
+                        if d["request"]["request_id"] != request_id and d["request"]["envelope"]["purpose"] != "review"]
+                if busy:
+                    return {"request_id": None, "to": to, "ok": False, "busy": busy[0]["request"]["request_id"]}
+            try:
+                req, created = ar.create_request(self.root, request_id=request_id, **expected)
+                return {"request_id": req["request_id"], "to": to, "created": created, "listening": self.listening(to), "ok": True}
+            except ar.Refused as exc:
+                failure = exc.message
+            except Exception as exc:
+                failure = "The request could not be written just now."
+                logging.getLogger("guild_ui.agent_ask").warning("a typed ask for %s failed part-way: %s", to, type(exc).__name__)
+            try:
+                truth = ar.reconcile_request(self.root, request_id, **expected)
+            except Exception:
+                truth = "unknown"
+            if truth == "recorded":
+                return {"request_id": request_id, "to": to, "created": None, "listening": self.listening(to), "ok": True}
+            if truth == "absent":
+                return {"request_id": None, "to": to, "ok": False, "error": failure}
+            return {"request_id": request_id, "to": to, "ok": None, "error": "I could not confirm whether it was recorded."}
+        finally:
+            os.close(fd)
 
     def words(self, made: list[dict]) -> str:
         """What the portal says right after an ask: what is KNOWN, in as few words as honest. One agent: one sentence plus one line. Both: one short line per agent (each with its

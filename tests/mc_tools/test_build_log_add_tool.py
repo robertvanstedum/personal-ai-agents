@@ -182,6 +182,39 @@ class BuildLogAddTests(unittest.TestCase):
         r = self.call(self.service(store))
         self.assertEqual((r["status"], r["code"]), ("unknown", "build_log_unconfirmed"))
 
+    def busy(self, store):
+        store.create_item = lambda *a, **k: qs.SaveResult(qs.BUSY, item_id=0, op="create")
+        return store
+
+    def test_a_retry_that_finds_the_store_busy_still_reports_the_item(self):
+        """Codex, review of 38b83dd3: the first call added #8, the retry met a busy lock and said nothing was added."""
+        self.call(self.service())
+        r = self.call(self.service(self.busy(self.store())), call_id="call-2")
+        self.assertEqual((r["status"], r["code"], r["data"]["item_id"]), ("done", "already_added", 8))
+        self.assertIn("#8", r["message"])
+
+    def test_a_retry_after_an_unknown_outcome_that_cannot_look_stays_unknown(self):
+        store = mock.Mock(create_item=mock.Mock(side_effect=RuntimeError("boom")))
+        self.call(self.service(store))
+        store = self.busy(self.store())
+        store.read_items = mock.Mock(side_effect=OSError("unreadable"))
+        r = self.call(self.service(store), call_id="call-2")
+        self.assertEqual((r["status"], r["code"]), ("unknown", "build_log_unconfirmed"))
+        self.assertNotIn("nothing was added", r["message"])
+        self.assertEqual(list(self.receipts.rows.values())[0]["state"], "unknown")
+
+    def test_a_retry_after_an_unknown_outcome_that_finds_the_item_settles_it(self):
+        store = mock.Mock(create_item=mock.Mock(side_effect=RuntimeError("boom")))
+        self.call(self.service(store))
+        self.call(self.service())                                            # the same source lands
+        r = self.call(self.service(self.busy(self.store())), call_id="call-3")
+        self.assertEqual(r["code"], "already_added")
+
+    def test_a_first_attempt_on_a_busy_store_is_a_true_refusal(self):
+        r = self.call(self.service(self.busy(self.store())))
+        self.assertEqual((r["status"], r["code"]), ("refused", "build_log_refused"))
+        self.assertIn("nothing was added", r["message"])
+
     def test_his_words_cannot_be_edited_as_a_field(self):
         for field in ("owner_words", "source", "first_pass"):
             self.assertNotIn(field, qs.EDITABLE_FIELDS)

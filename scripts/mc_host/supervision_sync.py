@@ -232,6 +232,11 @@ def create_relayed(root, r):
         return False
     body = {"v": 1, "request_id": rid, "from": "mc", "to": to, "action": action, "conversation_id": cid,
             "topic_id": None, "pointer": None, "origin": "owner_message_via_mc"}
+    envelope = r.get("envelope")
+    if envelope is not None:                                  # a typed request: review or analysis only, never a build
+        if type(envelope) is not dict or envelope.get("purpose") not in ("review", "analysis"):
+            return False
+        body["envelope"] = envelope
     if hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest() != digest:
         return False
     try:

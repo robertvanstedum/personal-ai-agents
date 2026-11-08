@@ -108,7 +108,8 @@ class Relay:
         out.sort(key=lambda d: L._order(self.root, d))
         return [{"request_id": d["request"]["request_id"], "to": d["request"]["to"], "action": d["request"]["action"],
                  "conversation_id": d["request"]["conversation_id"], "created_at": d["request"]["created_at"],
-                 "content_sha256": d["request"]["content_sha256"]} for d in out[:MAX_PULL]]
+                 "content_sha256": d["request"]["content_sha256"],
+                 **({"envelope": d["request"]["envelope"]} if d["request"].get("envelope") else {})} for d in out[:MAX_PULL]]
 
     def ack(self, ids) -> list[str]:
         """Mark each eligible request relayed, once (temp file, then link: never half written, never replaced)."""

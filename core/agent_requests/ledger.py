@@ -27,6 +27,8 @@ CONNECTED = ("claude-code", "codex")               # who has an automated sessio
 EVENT_KINDS = ("delivery", "receipt", "progress", "result", "needs_you", "cancel")
 STAGES = ("queued", "acknowledged", "working", "returned")          # the Workshop Log's request stages; set by receipts here, not by hand
 ACTION_MAX = 4000
+ENVELOPE_PURPOSES = ("review", "analysis")      # never "build": a ledger message cannot stand in for task admission (MC front door spec §4.2)
+ENVELOPE_MAX = 40 * 1024
 TEXT_MAX = 16 * 1024
 LINE_MAX = 32 * 1024
 LIST_MAX = 400
@@ -162,7 +164,7 @@ def _digest(body: dict) -> str:
 
 
 def reconcile_request(root: str, request_id: str, *, frm: str, to: str, action: str, conversation_id: str | None = None, topic_id: str | None = None,
-                      origin: str = "agent") -> str:
+                      origin: str = "agent", envelope=None) -> str:
     """After a ``create_request`` that raised, what is the truth on disk? ``recorded`` (the file is there with EXACTLY this content, so the work can run), ``absent`` (the request
     file does not exist: ONLY a missing file counts as absent), ``different`` (that id holds other content), or ``unknown`` (the file exists or may exist but cannot be read or
     understood: a permission or I/O failure, damaged JSON). It never guesses "not recorded" from an unreadable file."""
@@ -193,14 +195,40 @@ def reconcile_request(root: str, request_id: str, *, frm: str, to: str, action: 
         return "unknown"
     try:
         body = {"v": 1, "request_id": request_id, "from": frm, "to": to, "action": _text(action, ACTION_MAX, "request", multiline=True), "conversation_id": conversation_id,
-                "topic_id": topic_id, "pointer": None, "origin": origin}
+                "topic_id": topic_id, "pointer": None, "origin": origin, **({"envelope": clean_envelope(envelope)} if envelope is not None else {})}
     except Refused:
         return "different"
     return "recorded" if have.get("content_sha256") == _digest(body) else "different"
 
 
+def clean_envelope(envelope) -> dict:
+    """A typed request's fields, or Refused. It carries no lifecycle or recovery of its own: pickups and results bind to the
+    request, and all recovery lives in the stores. It grants nothing: review and analysis only, and no effects."""
+    if not isinstance(envelope, dict) or set(envelope) != {"purpose", "item", "owner", "analysis", "allowed_effects", "authorization", "scrubbed"}:
+        raise Refused("invalid", "Bad request envelope.")
+    if envelope["purpose"] not in ENVELOPE_PURPOSES:
+        raise Refused("invalid", "A typed request is for review or analysis only.")
+    if envelope["allowed_effects"] != ["none"]:
+        raise Refused("invalid", "A typed request allows no effects.")
+    item = envelope["item"]
+    if envelope["purpose"] == "review" and item is None:
+        raise Refused("invalid", "A review names one item.")
+    if item is not None and (not isinstance(item, dict) or type(item.get("id")) is not int
+                             or not _SHA.fullmatch(str(item.get("revision")))):
+        raise Refused("invalid", "A typed request binds to an item revision.")
+    owner, analysis = envelope["owner"], envelope["analysis"]
+    if not isinstance(owner, dict) or not _SHA.fullmatch(str(owner.get("sha256"))) or not isinstance(owner.get("text"), str):
+        raise Refused("invalid", "A typed request carries the owner's message and its hash.")
+    if not isinstance(analysis, dict) or analysis.get("by") != "master-craftsman" or not isinstance(analysis.get("text"), str):
+        raise Refused("invalid", "The analysis must be attributed.")
+    if len(json.dumps(envelope, ensure_ascii=False)) > ENVELOPE_MAX:
+        raise Refused("too_long", "That item is too long to send whole.")
+    return envelope
+
+
 def create_request(root: str, *, request_id: str, frm: str, to: str, action: str, conversation_id: str | None = None,
-                   topic_id: str | None = None, pointer: dict | None = None, origin: str = "agent") -> tuple[dict, bool]:
+                   topic_id: str | None = None, pointer: dict | None = None, origin: str = "agent",
+                   envelope: dict | None = None) -> tuple[dict, bool]:
     """(request, created). The same id with the same content is ``created=False`` and changes nothing; the same id with different content is refused."""
     if not valid_request_id(request_id):
         raise Refused("invalid", "Bad request id.")
@@ -223,7 +251,8 @@ def create_request(root: str, *, request_id: str, frm: str, to: str, action: str
             raise Refused("invalid", "Bad pointer.")
         ptr = {"path": pointer["path"], **({"sha256": pointer["sha256"]} if pointer.get("sha256") else {})}
     body = {"v": 1, "request_id": request_id, "from": frm, "to": to, "action": _text(action, ACTION_MAX, "request", multiline=True),
-            "conversation_id": conversation_id, "topic_id": topic_id, "pointer": ptr, "origin": origin}
+            "conversation_id": conversation_id, "topic_id": topic_id, "pointer": ptr, "origin": origin,
+            **({"envelope": clean_envelope(envelope)} if envelope is not None else {})}
     digest = _digest(body)
     request = {**body, "created_at": _now(), "content_sha256": digest}
     folder = _dirs(root, request_id)
@@ -436,6 +465,22 @@ def pending(root: str, to: str) -> list[dict]:
         if doc and doc["request"]["to"] == to and doc["closed"] is None and doc["stage"] == "queued":
             out.append(doc)
     out.sort(key=lambda d: _order(root, d))
+    return out
+
+
+def open_typed(root: str, to: str, *, within_s: int = 24 * 3600) -> list[dict]:
+    """Typed requests to ``to`` still open and recent. The age limit is so one a builder never closed can't block it for ever."""
+    now, out = datetime.now(timezone.utc), []
+    for rid in _all_ids(root):
+        doc = load(root, rid)
+        if not doc or doc["request"]["to"] != to or doc["closed"] is not None or not doc["request"].get("envelope"):
+            continue
+        try:
+            age = (now - datetime.fromisoformat(doc["request"]["created_at"].replace("Z", "+00:00"))).total_seconds()
+        except (TypeError, ValueError):
+            age = 0
+        if age <= within_s:
+            out.append(doc)
     return out
 
 

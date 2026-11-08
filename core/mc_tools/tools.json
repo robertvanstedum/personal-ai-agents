@@ -1068,6 +1068,48 @@
       }
     },
     {
+      "name": "minimoi_agent_request",
+      "capability": "agent.request.typed",
+      "label": "Ask a builder to review or analyse",
+      "description": "Ask one of Robert's builders to review a Build Log item, or to analyse something you can't settle by reading, when his message calls for that. He does not have to name anyone; choose the builder and tell him whom you chose. MiniMoi builds the request from his current note and the item as stored; you give only the recipient, the purpose and your own analysis, which stays attributed to you. Review is for an item that has become a spec, or when he asks; plain discussion needs no review. It grants no build authority and can never start one. A builder already holding an open analysis must finish it first. Not when he says to keep it here. If he named the agent and wants his own message passed on, use minimoi_agent_ask.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "to",
+          "purpose",
+          "analysis"
+        ],
+        "properties": {
+          "to": {
+            "type": "string",
+            "enum": [
+              "claude-code",
+              "codex",
+              "grok"
+            ]
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "review",
+              "analysis"
+            ]
+          },
+          "item_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9999999
+          },
+          "analysis": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 4000
+          }
+        }
+      }
+    },
+    {
       "name": "minimoi_build_log_add",
       "capability": "guild.build_log.add",
       "label": "Record Robert's idea on the Build Log",

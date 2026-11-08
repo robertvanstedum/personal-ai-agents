@@ -48,6 +48,11 @@ _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"        # no 0/O or 1/I/L: Rob
 AGENT_NAMES = {"claude-code": "Claude Code", "codex": "Codex"}
 ASK_FOLLOW_UP = ("Pickup and each report come back into this conversation on their own. minimoi_agent_status and minimoi_agent_watch "
                  "are for minimoi_agent_contact requests and refuse these ids; that says nothing about this request.")
+def _request_id_for(seed):
+    from core.agent_requests import request_id_for
+    return request_id_for(seed)
+
+
 BUILD_LOG_EXCERPT = 1500                                     # the display excerpt; his whole message is kept on the item
 ASK_AGENTS = ("claude-code", "codex", "grok")                # minimoi_agent_ask: who can be asked; "all" is the three
 REFUSED_WORDS = {
@@ -175,7 +180,7 @@ class ToolService:
                  isolated_runtime: bool = False, worker: str = "mc-tools", guests_lookup=None, people=None,
                  standard_changes=None, display_tz: str = offers.DISPLAY_TZ, policy=None, read_owner_note=None,
                  domain_health=None, registers=None, board=None, tasks=None, export_conversation=None, artifact_root=None, agent_contact=None, recall_source=None,
-                 agent_ask=None, activity_update=None, build_log=None):
+                 agent_ask=None, activity_update=None, build_log=None, build_jobs=True):
         """``connect()`` returns a new psycopg2 connection to the guild database (autocommit off).
         ``lessons`` is a LessonLedger (or None: lessons off). ``guests_lookup(email)`` returns an existing
         guest login with that email (or None); invites are refused while it is missing."""
@@ -184,6 +189,7 @@ class ToolService:
         self._connect, self.principal, self.environment = connect, principal, environment
         self.allowed_agents = frozenset(allowed_agents)
         self.lessons, self.delegation, self.invites = lessons, bool(delegation), bool(invites)
+        self.build_jobs = bool(build_jobs)                 # the code-gated build job; off on Dev (MC front door spec §3)
         self.tickets, self.comments, self.guest_rejects = bool(tickets), bool(comments), bool(guest_rejects)
         self.github = github                          # core.mc_tools.github.GitHubIssues, or None: GitHub reads off
         # show(conversation_id, note_key, text) -> bool: the platform posts a proposal verbatim in the conversation;
@@ -1047,6 +1053,106 @@ class ToolService:
         return str(uuid.UUID(hashlib.sha256(material.encode("utf-8")).hexdigest()[:32]))
 
     # ── tier 2: Robert's idea on the Build Log (MC front door spec §4.1) ──────────────────────────────────────────────
+    # ── tier 2: a typed review or analysis request (MC front door spec §4.2, A3, A4, A6) ─────────────────────────
+    def _agent_request(self, args, caller, observation):
+        """One request to one builder, built here from his current note and the item as stored; the model supplies only who,
+        why and its own analysis, kept attributed. It carries no build authority and has no lifecycle of its own. A later
+        edit of the item is a new revision, so it never inherits this review (E06)."""
+        typed = getattr(self.agent_ask, "typed", None)
+        if not callable(typed) or not self._tier2(caller):
+            return refused("agent_requests_off")
+        with self._tx() as conn:
+            b = self._bind(conn, caller)
+        text, refusal = self._owner_words(b)
+        if refusal:
+            return refusal
+        kept_here = self._kept_here(text, "nothing was sent to anyone")
+        if kept_here:
+            return kept_here
+        to, purpose, take = args["to"], args["purpose"], args["analysis"].strip()
+        who = {"claude-code": "Claude Code", "codex": "Codex", "grok": "Grok"}[to]
+        item = None
+        if "item_id" in args:
+            if self.build_log is None:
+                return refused("tool_unavailable")
+            from domains.guild.queue_store import item_digest
+            try:
+                found = next((i for i in self.build_log.read_items() if isinstance(i, dict) and i.get("id") == args["item_id"]), None)
+            except Exception:
+                _log.exception("mc tools: build log unreadable for a typed request")
+                return result("refused", "build_log_unreadable", "The Build Log can't be read just now, so nothing was sent. Tell Robert.")
+            if found is None:
+                return result("refused", "item_not_found", f"There is no Build Log item #{args['item_id']}, so nothing was sent.")
+            item = {"id": found["id"], "revision": item_digest(found), "title": found.get("spec_title"), "status": found.get("status"),
+                    "summary": found.get("summary"), "owner_words": found.get("owner_words"), "first_pass": found.get("first_pass"),
+                    "source": found.get("source")}
+        elif purpose == "review":
+            return result("refused", "review_needs_item", "A review names one Build Log item. Nothing was sent. Record it first, then "
+                          "ask for the review with its number.")
+        edition = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        ask = self.agent_ask
+        owner_text = ask.scrub(text)
+        envelope = {"purpose": purpose, "item": item, "owner": {"note": b.note_request_id, "sha256": edition, "text": owner_text},
+                    "analysis": {"by": "master-craftsman", "text": take}, "allowed_effects": ["none"],
+                    "authorization": {"kind": "standing_review", "source_note": b.note_request_id}, "scrubbed": owner_text != text}
+        subject = f"Build Log #{item['id']}, revision {item['revision'][:12]}: {item['title']}" if item else "a question from Robert"
+        excerpt = owner_text.strip()[:1500]
+        action = (f"{purpose.capitalize()} only, of {subject}. No build, no commit, no deploy.\n\nRobert's words"
+                  f"{' (excerpt)' if len(owner_text.strip()) > 1500 else ''}:\n{excerpt}\n\nMaster Craftsman's analysis (its words, not his):\n"
+                  f"{take[:1500]}\n\nThe whole item and message are in this request's typed section.")
+        canonical = {"to": to, "purpose": purpose, "item": [item["id"], item["revision"]] if item else None,
+                     "source": {"conversation": b.conversation_id, "note": b.note_request_id, "edition": edition}}
+        op = self._operation_id(b, "agent.request.typed", canonical)
+        rid = _request_id_for(f"typed:{b.note_request_id}:{to}:{purpose}:{item['id'] if item else ''}:{item['revision'] if item else ''}")
+        effect = lease = None
+        with self._tx() as conn:
+            b = self._bind_again(conn, caller, b)
+            if effects.receipt_exists(conn, self.principal, self.environment, op):
+                lease = effects.reconcile_effect(conn, principal=self.principal, environment=self.environment,
+                                                 operation_id=op, worker=self.worker)
+            else:
+                effect = effects.begin_standing_effect(conn, b, effects.request("agent.request.typed", canonical),
+                                                       operation_id=op, worker=self.worker)
+        try:
+            made = typed(b.conversation_id, to, rid, action, envelope)
+        except Exception:
+            _log.exception("mc tools: typed request outcome unknown")
+            made = {"ok": None}
+        ok = made.get("ok")
+        outcome = {"request_id": made.get("request_id"), "to": to, "purpose": purpose, "ok": ok, "listening": made.get("listening"),
+                   "busy": made.get("busy")}
+        with self._tx() as conn:
+            if ok is None:
+                if effect is not None:
+                    effect.unknown(conn)
+                elif lease is not None:
+                    effects.RECEIPTS.finish(conn, lease, "unknown")
+            elif effect is not None:
+                effect.finish(conn, "agent_request", outcome, verified=bool(ok))
+            elif lease is not None:
+                evidence = effects.record_evidence(conn, b.context(), op, "agent_request", outcome)
+                effects.RECEIPTS.finish(conn, lease, "verified" if ok else "failed", evidence_refs=(evidence,))
+            receipt = effects.RECEIPTS.read(conn, self.principal, self.environment, op)
+        data = {**outcome, "receipt_id": str(receipt["receipt_id"])}
+        if ok is None:
+            return result("unknown", "agent_request_unconfirmed", "MiniMoi could not confirm whether the request was recorded. Do not "
+                          "repeat it; tell Robert.", data)
+        if made.get("busy"):
+            return result("refused", "builder_busy", f"{who} still has an open analysis, so nothing new was sent. Tell Robert it will "
+                          "wait for that, or choose another builder.", data)
+        if not ok:
+            return result("refused", "agent_request_refused", f"{made.get('error') or 'That could not be recorded.'} Nothing was sent. Tell Robert.", data)
+        heard = "" if made.get("listening") else f" No {who} session was seen listening, so it waits until one picks it up; if it's urgent he can go to {who} directly."
+        return result("done", "requested", f"Asked {who} for {'a review' if purpose == 'review' else 'an analysis'} of {subject}. Say you chose "
+                      f"{who}, in a few words.{heard} It is recorded, not yet done; its report comes back when {who} finishes.", data)
+
+    def _kept_here(self, text, what):
+        from . import keep_here
+        if not keep_here.says_keep_here(text):
+            return None
+        return result("refused", "kept_here", f"He said to keep this here, so {what}. It stays in this conversation. Tell him so "
+                      "plainly, in a few words, and carry on talking it through.")
+
     def _build_log_add(self, args, caller, observation):
         """Robert's idea, direction or next step as one Build Log item. His current kept note is kept whole, with its source
         reference and hash; MC's first pass is kept apart and attributed. One note is one item: a retry, under any call id
@@ -1059,6 +1165,9 @@ class ToolService:
         text, refusal = self._owner_words(b)
         if refusal:
             return refusal
+        kept_here = self._kept_here(text, "nothing was added to the Build Log")
+        if kept_here:
+            return kept_here
         edition = hashlib.sha256(text.encode("utf-8")).hexdigest()
         title, status, take = args["title"].strip(), args["status"], args["take"].strip()
         source = {"conversation": b.conversation_id, "note": b.note_request_id, "sha256": edition, "chars": len(text)}
@@ -1085,17 +1194,25 @@ class ToolService:
         except Exception:
             _log.exception("mc tools: build log add outcome unknown")
             saved = None
+        # Read back by source, not by the attempt's result: a retry that could not get the lock must still find an item an
+        # earlier attempt added. What this attempt failed to do says nothing about what an earlier one did.
         kept = None
-        if saved is not None and saved.ok:
-            try:
-                kept = next((i for i in self.build_log.read_items() if isinstance(i, dict) and i.get("id") == saved.item_id), None)
-            except Exception:
-                _log.exception("mc tools: build log read-back failed")
-        verified = bool(kept) and isinstance(kept.get("owner_words"), str) and kept.get("source", {}).get("sha256") == edition \
+        try:
+            kept = next((i for i in self.build_log.read_items() if isinstance(i, dict) and isinstance(i.get("source"), dict)
+                         and all(i["source"].get(k) == source[k] for k in ("conversation", "note", "sha256"))), None)
+        except Exception:
+            _log.exception("mc tools: build log read-back failed")
+        verified = bool(kept) and isinstance(kept.get("owner_words"), str) \
             and hashlib.sha256(kept["owner_words"].encode("utf-8")).hexdigest() == edition
-        unsure = saved is None or saved.result == "uncertain" or (saved.ok and not verified)
+        applied = saved is not None and saved.ok
+        repeated = verified and (not applied or saved.repeated)
+        # A first attempt the store refused added nothing, and neither did words the store can never accept. A retry that
+        # failed, with no item to be found, can't rule out an earlier attempt: the store may simply have been unreadable.
+        definite = saved is not None and saved.result != "uncertain" and (effect is not None or saved.result == "invalid")
+        unsure = not verified and (applied or not definite)
+        item_id = kept.get("id") if verified else (saved.item_id if saved else None)
         outcome = {"state": "unknown" if unsure else "added" if verified else "refused",
-                   "item_id": saved.item_id if saved else None, "repeated": bool(saved and saved.repeated)}
+                   "item_id": item_id, "repeated": repeated}
         with self._tx() as conn:
             if unsure:
                 if effect is not None:
@@ -1115,10 +1232,10 @@ class ToolService:
         if not verified:
             return result("refused", "build_log_refused", f"The Build Log refused that ({saved.reason or saved.result}); "
                           "nothing was added. Tell Robert.", data)
-        if saved.repeated:
-            return result("done", "already_added", f"This message is already on the Build Log as #{saved.item_id}, and nothing "
+        if repeated:
+            return result("done", "already_added", f"This message is already on the Build Log as #{item_id}, and nothing "
                           "changed. Any new wording in this call was not applied. Tell Robert the number.", data)
-        return result("done", "added", f"Added to the Build Log as #{saved.item_id} ({status}), with his words kept whole and "
+        return result("done", "added", f"Added to the Build Log as #{item_id} ({status}), with his words kept whole and "
                       "your first pass apart from them. Tell Robert the number in a few words.", data)
 
     def _owner_words(self, b):
@@ -1337,7 +1454,7 @@ class ToolService:
                                                effects.request("delegate.propose_research", args), words)
 
     def _delegate_build(self, args, caller, observation):
-        if not self.delegation:
+        if not self.delegation or not self.build_jobs:
             return refused("tool_unavailable")
         who = AGENT_NAMES[args["agent"]]
         words = (f"Hand your message to {who} to build (“{args['title']}”)? It works in a fresh copy of the repository "
