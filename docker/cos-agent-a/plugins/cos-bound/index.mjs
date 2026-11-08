@@ -47,12 +47,14 @@ export const ACTIONS_SPEC = {
 
 export const TASKS_SPEC = {
   name: 'cos_tasks', label: 'CoS Tasks',
-  description: 'Propose tracked work from what Robert asked in this conversation, or check a task. propose: give the outcome and done_when; MC leads and holds it, so lead and holder are optional and can only be mc. It records your proposal only. Nothing starts until Robert confirms it in his task view, so say exactly that and never claim the task started. One proposal per Robert message. status: give a task_id to read its state. In a meeting you can only use status.',
+  description: 'ask_helper hands a chartered routine job to your Executive Assistant: recall-search (give subject) or actions-upkeep. helper_result reads a job that was still running, and helper_review records your verdict (approve or changes_requested) on the set you read; say who drafted it. You cannot come back on your own: if it is still running, say it will be there when he asks. Propose tracked work from what Robert asked in this conversation, or check a task. propose: give the outcome and done_when; MC leads and holds it, so lead and holder are optional and can only be mc. It records your proposal only. Nothing starts until Robert confirms it in his task view, so say exactly that and never claim the task started. One proposal per Robert message. status: give a task_id to read its state. In a meeting you can only use status.',
   parameters: {type: 'object', additionalProperties: false, required: ['operation'], properties: {
-    operation: {type: 'string', enum: ['propose', 'status']},
+    operation: {type: 'string', enum: ['propose', 'status', 'ask_helper', 'helper_result', 'helper_review']},
     outcome: {type: 'string', maxLength: 500}, done_when: {type: 'string', maxLength: 500},
     lead: {type: 'string', enum: ['mc']}, holder: {type: 'string', enum: ['mc']},
-    task_id: {type: 'string', maxLength: 80}}},
+    task_id: {type: 'string', maxLength: 80},
+    type_id: {type: 'string', enum: ['recall-search', 'actions-upkeep']}, subject: {type: 'string', maxLength: 400},
+    set_digest: {type: 'string', maxLength: 80}, verdict: {type: 'string', enum: ['approve', 'changes_requested']}, reasons: {type: 'string', maxLength: 1000}}},
 };
 
 // The Board, bound (F2 M2). Same description and fields the agent knew from the old cos-board plugin; the key now

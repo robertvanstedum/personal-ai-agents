@@ -956,6 +956,17 @@ def _meeting_verifier():
                                   principal=os.environ.get("COS_OWNER_PRINCIPAL", "robert"))
 
 
+def _ea_charter():
+    """The Executive Assistant's approved charter, or None until Robert's approval is on the host."""
+    try:
+        from services.partnership_tasks.charters import load_if_approved
+        charters = load_if_approved(os.environ)
+        return charters.get("ea") if charters else None
+    except Exception:
+        log.warning("cos: helpers off (charter not loadable)")
+        return None
+
+
 def _task_tools():
     """B4: cos_tasks, when the task service is configured (PARTNERSHIP_TASKS_URL, the platform and cos seat token
     files, PARTNERSHIP_ENVIRONMENT) and CoS history is on. Both tokens stay in cos-scheduler. Otherwise None, and the
@@ -970,7 +981,7 @@ def _task_tools():
     from services.partnership_tasks.client import TaskClient, read_token
     return CosTaskTools(platform=TaskClient(url, lambda: read_token(platform_file)),
                         cos=TaskClient(url, lambda: read_token(cos_file)), history=_history,
-                        environment=environment)
+                        environment=environment, charter=_ea_charter())
 
 
 def _mc_send():

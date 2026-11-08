@@ -73,4 +73,31 @@ def hygiene_check(ctx: Ctx, inputs: dict) -> dict:
     return {"findings": findings, "items_checked": len(ctx.read_items()), "note": "A report only. Nothing was changed."}
 
 
-TYPES = {"repo-lookup": repo_lookup, "summary": summary, "hygiene-check": hygiene_check}
+def recall_search(ctx: Ctx, inputs: dict) -> dict:
+    """Earlier records on a subject, with where and when. Candidates only, and it says what it searched."""
+    words = {w.casefold() for w in re.findall(r"[^\W\d_]{4,}", inputs["subject"])} - STOP
+    found = []
+    items = [i for i in ctx.read_items() if isinstance(i, dict)]
+    for item in items:
+        hay = " ".join(str(item.get(k) or "") for k in ("spec_title", "summary", "owner_words")).casefold()
+        if words and any(w in hay for w in words):
+            found.append({"item_id": item.get("id"), "title": item.get("spec_title"), "status": item.get("status"), "when": item.get("last_transition_at"),
+                          "current": item.get("status") not in ("done", "cancelled", "superseded")})
+    return {"records": found[:12], "searched": {"build_log_items": len(items)}, "not_searched": ["conversations", "CoS history"]}
+
+
+def actions_upkeep(ctx: Ctx, inputs: dict) -> dict:
+    """Open items that look stale or duplicated. It proposes; it never merges or closes anything."""
+    items = [i for i in ctx.read_items() if isinstance(i, dict) and i.get("status") in STALE_STATUSES]
+    seen, findings = {}, []
+    for item in items:
+        name = " ".join(str(item.get("spec_title") or "").casefold().split())
+        if name in seen:
+            findings.append({"item_id": item.get("id"), "finding": "same title as another open item", "other": seen[name]})
+        seen.setdefault(name, item.get("id"))
+        if not item.get("last_transition_at"):
+            findings.append({"item_id": item.get("id"), "finding": "no recorded change date"})
+    return {"findings": findings, "items_checked": len(items), "note": "Proposals only. Nothing was changed."}
+
+
+TYPES = {"repo-lookup": repo_lookup, "summary": summary, "hygiene-check": hygiene_check, "recall-search": recall_search, "actions-upkeep": actions_upkeep}
