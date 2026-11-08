@@ -643,8 +643,10 @@ def tasks_adapter(environ):
     try:
         from core.mc_tools.tasks_adapter import TasksAdapter
         from services.partnership_tasks.client import TaskClient, read_token
-        platform_file = str(environ.get("PARTNERSHIP_MC_PLATFORM_TOKEN_FILE", "") or "").strip()
-        platform = TaskClient(url, lambda: read_token(platform_file)) if platform_file else None      # off without it
+        # The platform seat's token, held beside MC's. Without it "build it" is off and nothing else changes.
+        platform_file = str(environ.get("PARTNERSHIP_MC_PLATFORM_TOKEN_FILE", "") or "").strip() \
+            or os.path.join(os.path.dirname(token_file), "platform.token")
+        platform = TaskClient(url, lambda: read_token(platform_file)) if os.path.isfile(platform_file) else None
         return TasksAdapter(TaskClient(url, lambda: read_token(token_file)), environment=env, card_ref=card_ref, platform=platform)
     except Exception as exc:                               # a bad configuration turns off only these tools
         _log.warning("mc tools: tracked-work tools off (%s)", type(exc).__name__)
