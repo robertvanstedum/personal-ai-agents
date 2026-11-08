@@ -110,9 +110,9 @@ TARGETS = {
                         down="up to 11 minutes (gateway owner lease); CoS refuses messages meanwhile"),
     "portal": dict(container="minimoi-portal", repo="portal", tier=4, base="portal", old="route-roles-20261105g", wait=DEFAULT_WAIT,
                    image_env=(("MINIMOI_COS_TO_MC", "1"),),
-                   rules=_app("core/", "domains/cos/", "domains/guild/", "minimoi_portal/", "contracts/partnership/", "services/partnership_tasks/", "config/partnership/charters/",
+                   rules=_app("core/", "domains/cos/", "domains/guild/", "minimoi_portal/", "contracts/partnership/", "services/partnership_tasks/", "services/helper_seats/", "config/partnership/charters/",
                               "services/rooms_worker/", "services/mc_operations/"),
-                   exclude=_BOTS_ONLY, layout=("core/", "domains/cos/", "minimoi_portal/", "services/partnership_tasks/", "services/rooms_worker/", "config/partnership/charters/"),
+                   exclude=_BOTS_ONLY, layout=("core/", "domains/cos/", "minimoi_portal/", "services/partnership_tasks/", "services/rooms_worker/", "services/helper_seats/", "config/partnership/charters/"),
                    # The portal reads domains/cos/ (CoS's page files at startup, its modules per request) but did not ship it until 8 Nov:
                    # Dev's portal holds the 5 Nov base's copy. An update ships that folder as the full chain would, from the base, until
                    # a release built with it runs on Dev; then this line goes.
