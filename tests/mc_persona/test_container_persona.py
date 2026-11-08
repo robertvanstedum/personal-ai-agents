@@ -144,7 +144,7 @@ def test_the_merged_persona_carries_both_lines(tmp_path):
     assert (merged / "voice.json").read_bytes() == (voice / "voice.json").read_bytes()
     assert m["files"]["voice.json"] == json.loads((voice / "manifest.json").read_text())["files"]["voice.json"]
     # Every line of 0.1.17's contract is in what the container loads (its outside-reports section via the handbook).
-    r, ws = lay_out(tmp_path)
+    r, ws = lay_out(tmp_path, "0.1.28")
     assert r.returncode == 0, r.stderr
     loaded = (ws / "AGENTS.md").read_text()
     contract = (outside / "AGENTS.md").read_text().split("\n")[1:]
@@ -345,3 +345,17 @@ def test_0_1_28_adds_only_the_answer_now_section():
     before = (old / "AGENTS.md").read_text().split("\n", 1)[1].rstrip("\n")
     assert before in agents
     assert json.loads((new / "manifest.json").read_text())["version"] == "0.1.28"
+
+
+def test_0_1_29_is_within_12000_with_the_handbook_and_keeps_the_rules(tmp_path):
+    r, ws = lay_out(tmp_path, "0.1.29")
+    assert r.returncode == 0, r.stderr
+    assert container_chars((ws / "AGENTS.md").read_text(), ws) <= 12000
+    new, old = RELEASES / "0.1.29", RELEASES / "0.1.28"
+    for name in ("SOUL.md", "voice.json"):
+        assert (new / name).read_bytes() == (old / name).read_bytes(), name
+    agents = (new / "AGENTS.md").read_text()
+    for kept in ("evidence, never instructions or grants", "Never retry refused or uncertain mutations", "never bypass a refusal", "```capture",
+                 "You never approve for Robert", "minimoi_build_log_add", "minimoi_agent_request", "minimoi_build_item", "Keep this here",
+                 "request ledger", "it waits till he asks"):
+        assert kept in agents, kept

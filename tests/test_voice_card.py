@@ -101,14 +101,14 @@ def test_language_is_an_allowed_locale_and_accent_a_short_label(tmp_path):
 
 
 def test_mcs_card_is_pinned_and_verified():
-    manifest = json.loads((MC_ROOT / "releases/0.1.28/manifest.json").read_text())
+    manifest = json.loads((MC_ROOT / "releases/0.1.29/manifest.json").read_text())
     assert "voice.json" in manifest["files"]
-    assert json.loads((MC_ROOT / "pin.json").read_text()) == {"release": "0.1.28"}
+    assert json.loads((MC_ROOT / "pin.json").read_text()) == {"release": "0.1.29"}
     pinned = load_pinned(MC_ROOT)
-    assert pinned["release"] == "0.1.28" and pinned["language"] == "en-US" and pinned["transcription"] == "bilingual"
+    assert pinned["release"] == "0.1.29" and pinned["language"] == "en-US" and pinned["transcription"] == "bilingual"
     assert pinned["card"].startswith("You are Master Craftsman, MC. You and Robert have been building this together for a long time:")
     assert pinned["voices"] == {"openai": "marin", "xai": "leo"} and pinned["named"] == ["openai", "xai"]   # by ear, 29 Oct
-    assert pinned == load_card(MC_ROOT, "0.1.28")
+    assert pinned == load_card(MC_ROOT, "0.1.29")
 
 
 def test_mcs_card_restates_the_manner_for_the_direct_path_and_carries_no_sentence_of_it():
