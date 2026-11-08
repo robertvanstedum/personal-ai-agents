@@ -688,6 +688,8 @@ def _gateway_loop(tmp_path, fake_gateway):
 SHELLS = [s for s in ("sh", "dash") if __import__("shutil").which(s)]        # MC's image runs Debian's dash
 
 
+@pytest.mark.xfail(strict=True, reason="MC's clean-stop start.sh is held back from beta-final until a routes cycle can carry it "
+                   "(7 Nov: it is routes-sensitive, and the first fast update must not need one); it is on claude/fast-dev-deploy")
 @pytest.mark.parametrize("shell", SHELLS)
 def test_a_stop_reaches_the_gateway_waits_for_it_and_never_retries(tmp_path, shell):
     marks = tmp_path / "marks"
