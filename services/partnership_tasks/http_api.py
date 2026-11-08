@@ -252,7 +252,10 @@ def main(argv=None) -> int:
         raise SystemExit("no task store at PARTNERSHIP_ROOT; provision it first")
     grants_file = os.environ.get("PARTNERSHIP_GRANTS")
     grants = Grants(json.loads(Path(grants_file).read_text())) if grants_file else None
-    svc = TaskService(root, environment, Bindings.load(os.environ["PARTNERSHIP_BINDINGS"]), grants=grants)
+    charters_dir = os.environ.get("PARTNERSHIP_CHARTERS_DIR")
+    from services.partnership_tasks.charters import Charters
+    charters = Charters.load(charters_dir) if charters_dir else None              # a mismatch refuses the start
+    svc = TaskService(root, environment, Bindings.load(os.environ["PARTNERSHIP_BINDINGS"]), grants=grants, charters=charters)
     from core import portal_assertion as PA
     nonce_file = os.environ.get("PARTNERSHIP_OWNER_NONCE_FILE")
     app = create_app(svc, owner_key=PA.load_key(os.environ.get("PARTNERSHIP_OWNER_KEY_FILE")),

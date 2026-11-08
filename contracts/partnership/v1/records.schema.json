@@ -307,7 +307,7 @@
               "type": "boolean"
             },
             "task": {
-              "description": "B4 (connection design v0.2 \u00a73): the task terms the owner confirms. request.promote must match them field by field when present; required for owner-confirmed promotion.",
+              "description": "B4 (connection design v0.2 §3): the task terms the owner confirms. request.promote must match them field by field when present; required for owner-confirmed promotion.",
               "type": "object",
               "additionalProperties": false,
               "required": [
@@ -1162,6 +1162,36 @@
           "description": "J3: how many times this task was reopened for revision; a child is bounded (MAX_CHILD_ROUNDS).",
           "type": "integer",
           "minimum": 0
+        },
+        "charter_ref": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "seat",
+            "version",
+            "digest",
+            "type_id"
+          ],
+          "properties": {
+            "seat": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "type_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          }
         }
       }
     },

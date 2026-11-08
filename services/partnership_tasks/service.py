@@ -62,12 +62,14 @@ def path_of(target_type: str, target_id: str) -> str:
 
 class TaskService:
     def __init__(self, root: Path | str, environment: str, bindings: Bindings, *, grants: Grants | None = None,
-                 clock: Callable[[], str] = _now):
+                 clock: Callable[[], str] = _now, charters=None):
         if environment not in ("synthetic", "dev", "staging", "prod"):
             raise ValueError("environment")
         self.environment = environment
         self.bindings = bindings
         self.grants = grants or Grants()
+        from services.partnership_tasks.charters import Charters
+        self.charters = charters or Charters()              # helper seats spec v0.4 §3.1: none until a charter is loaded
         self._clock = clock
         self.journal = Journal(root, result_schema=RESULT, clock=clock, doc_dirs=tuple(DIRS.values()))
 
@@ -539,7 +541,7 @@ class _Planner:
         original reviewer, verdict, review_ref and interpretation; its id names the child and the original review."""
         out, authors, seen = [], set(), set()
         for child in self.children(task["task_id"]):
-            if child["state"] != "completed":
+            if child["state"] != "completed" or child.get("charter_ref"):   # a helper's acceptance never reviews build work
                 continue
             acc = [a for a in child["acceptances"] if a["status"] == "current" and a["artifact_set_digest"] == set_digest]
             if not acc:
@@ -644,7 +646,10 @@ class _Planner:
             if not self.b.is_owner:
                 raise Refused("not_authorized", "owner_confirmation_needs_owner_session")
         elif auth["kind"] == "existing_grant":
-            if not self.svc.grants.covers(auth["ref"]["id"], self.b.seat, scope, self.now):
+            if str(auth["ref"]["id"]).startswith("charter:"):
+                if not self.svc.charters.covers(auth["ref"]["id"], self.b.seat, scope):
+                    raise Refused("not_authorized", "charter_does_not_cover")
+            elif not self.svc.grants.covers(auth["ref"]["id"], self.b.seat, scope, self.now):
                 raise Refused("not_authorized", "grant_does_not_cover")
 
     # -- requests (D02, D03) --
@@ -755,6 +760,11 @@ class _Planner:
         if terms is not None and any(self.p[k] != terms[k] for k in ("lead", "holder", "outcome", "done_when",
                                                                        "return_window")):
             raise Refused("payload_invalid", "promote_not_as_confirmed")         # B4 design v0.2 §3
+        charter_ref = self.p.get("charter_ref")
+        if str((interp["authority"].get("ref") or {}).get("id") or "").startswith("charter:"):
+            self.check_chartered(interp, charter_ref)
+        elif charter_ref is not None:
+            raise Refused("not_authorized", "charter_ref_needs_the_charter_grant")
         tid = self.p["task_id"]
         if self.svc.journal.read(path_of("task", tid)) is not None:
             raise Refused("id_taken", "task")
@@ -771,10 +781,30 @@ class _Planner:
                 "state": "submitted", "reason": None, "waiting": None, "parent_ref": self.p["parent_ref"],
                 "execution_refs": [], "review_refs": [], "acceptances": [], "assignments": assignments,
                 "artifact_sets": [], "reviews": [], "rounds": 0,
-                "fence_generation": 0, "pending_operation": None}
+                "fence_generation": 0, "pending_operation": None, **({"charter_ref": charter_ref} if charter_ref else {})}
         task = self.stamp(task, None)
         return self.finish([(path_of("task", tid), self.checked("task", task)),
                             (path_of("request", req["request_id"]), self.checked("request", req2))], req2["revision"])
+
+    OWNER_NOTE_STORES = ("mc-floor", "cos-history")
+
+    def check_chartered(self, interp: dict, ref: dict | None) -> None:
+        """Helper seats spec v0.4 §3.1: the grant is bound to the charter's digest, type, scope and holder, and it starts only
+        from Robert's own kept note, so a lead can't promote its own words."""
+        found = self.svc.charters.chartered(ref)
+        if found is None:
+            raise Refused("not_authorized", "not_chartered")
+        charter, _ = found
+        if interp["authority"]["ref"]["id"] != charter.grant_id:
+            raise Refused("not_authorized", "not_this_charter")
+        if self.p["holder"] != charter.seat or self.p["lead"] not in charter.leads or self.cmd["data_scope"] not in charter.scopes:
+            raise Refused("not_authorized", "outside_the_charter")
+        if self.p["lead"] != self.b.seat and not self.b.is_owner:
+            raise Refused("not_authorized", "only_its_lead_starts_it")
+        for sid in interp["source_event_ids"]:
+            source = self.load("source_event", sid)
+            if source["producer"] != "platform" or source["source"]["store"] not in self.OWNER_NOTE_STORES:
+                raise Refused("not_authorized", "not_the_owners_kept_note")
 
     def k_request_link_source(self) -> Plan:
         """B4 design v0.3 R-M2: the owner attaches a source event (a meeting message) to a request, explicitly. The
@@ -951,7 +981,7 @@ class _Planner:
         authors = self.authors_of(task, current["digest"])
         approvals = [r for r in applicable if r["verdict"] == "approve" and not r.get("no_verdict") and r["reviewer"] not in authors
                      and r["reviewer"] != self.b.seat]           # the accepting lead's own approval never counts
-        if not approvals and not self.delivered_review(task, current):
+        if not approvals and not self.delivered_review(task, current) and not self.lead_may_accept_helper(task, current, applicable):
             raise Refused("transition_not_allowed", "no_non_author_approval_of_this_set")
         dissent = {r["review_id"] for r in applicable if r["verdict"] != "approve"}
         latest = {}
@@ -970,7 +1000,7 @@ class _Planner:
                             "task_revision": task["revision"] + 1, "status": "current",
                             "disagreements_delivered": dissent})
         rec = self.stamp(dict(task, state="completed", waiting=None, acceptances=acceptances), task)
-        if task["parent_ref"] is None:
+        if task["parent_ref"] is None and not task.get("charter_ref"):       # the lead presents a helper's result itself
             # J2: the return packet reaches the principal with the browser closed; disagreement travels with it.
             note = self.notice(task, f"return@{rec['revision']}", "return_packet",      # B2D S2-5: per acceptance
                                {"store": "task_service", "id": task["task_id"], "edition": str(rec["revision"]),
@@ -988,6 +1018,16 @@ class _Planner:
                                rec["revision"])
         return self.finish([(path_of("task", task["task_id"]), self.checked("task", rec))], rec["revision"])
 
+    def lead_may_accept_helper(self, task: dict, current: dict, applicable: list) -> bool:
+        """Helper seats spec v0.4 §3.1 row 1: a lead's own review accepts only chartered work with effects none or internal, by
+        that charter's seat, authored by it alone, approved by this lead on this exact set."""
+        found = self.svc.charters.chartered(task.get("charter_ref"))
+        if found is None:
+            return False
+        charter, kind = found
+        return (kind["effects"] in ("none", "internal") and task["holder"] == charter.seat and set(current["authored_by"]) == {charter.seat}
+                and any(r["verdict"] == "approve" and not r.get("no_verdict") and r["reviewer"] == self.b.seat for r in applicable))
+
     def k_task_submit_artifacts(self) -> Plan:
         """E06/E07: the holder (or the lead) submits a new current artifact set. Submitted, not accepted. Every review
         of another set stops applying to the current one; nothing is erased."""
@@ -1000,6 +1040,9 @@ class _Planner:
             raise Refused("transition_not_allowed", task["state"])
         if self.p["fence_generation"] != task["fence_generation"]:
             raise Refused("fenced", "stale_generation")
+        found = self.svc.charters.chartered(task.get("charter_ref"))
+        if found is not None and len(task["artifact_sets"]) > found[1]["max_revisions"]:
+            raise Refused("transition_not_allowed", "revision_limit")
         keys = [(a["store"], a["id"], a.get("edition") or "") for a in self.p["artifacts"]]
         if len(set(keys)) != len(keys):
             raise Refused("payload_invalid", "duplicate_artifact")

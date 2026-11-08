@@ -855,6 +855,36 @@
         },
         "parent_ref": {
           "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_task_id"
+        },
+        "charter_ref": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "seat",
+            "version",
+            "digest",
+            "type_id"
+          ],
+          "properties": {
+            "seat": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "type_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          }
         }
       }
     },
@@ -1450,7 +1480,7 @@
       }
     },
     "payload.outbox.approve": {
-      "description": "B4 execution design v0.4 \u00a72 / v0.5 M2-M3: Robert's exact approval of one work card, recorded from his own session. It names the admission operation and the card digest he saw; it is used once, expires 15 minutes after it is recorded, and is spent by the first send.",
+      "description": "B4 execution design v0.4 §2 / v0.5 M2-M3: Robert's exact approval of one work card, recorded from his own session. It names the admission operation and the card digest he saw; it is used once, expires 15 minutes after it is recorded, and is spent by the first send.",
       "type": "object",
       "additionalProperties": false,
       "required": [
