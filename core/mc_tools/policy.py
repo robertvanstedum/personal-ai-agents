@@ -64,6 +64,8 @@ HANDLERS = {
     # A typed review or analysis request (spec §4.2): server-built from the item and his note; it can never carry a build.
     "agent_request_v1": Handler("minimoi_agent_request", "agent.request.typed", frozenset({2}), "agent_request_readback_v1", "none"),
     "agent_request_withdraw_v1": Handler("minimoi_agent_request_withdraw", "agent.request.withdraw", frozenset({2}), "agent_request_readback_v1", "none"),
+    "build_log_search_v1": Handler("minimoi_build_log_search", "guild.build_log.search", frozenset({1}), None, "none"),
+    "build_log_add_to_v1": Handler("minimoi_build_log_add_to", "guild.build_log.add_to", frozenset({2}), "build_log_readback_v1", "none"),
     "build_log_add_v1": Handler("minimoi_build_log_add", "guild.build_log.add", frozenset({2}), "build_log_readback_v1", "none"),
     "career_trial_v1": Handler("minimoi_career_trial", "host.career.synthetic", frozenset({2}), "host_artifact_readback_v1", "none"),
     "working_write_v1": Handler("minimoi_working_write", "host.artifacts.create", frozenset({2}), "host_artifact_readback_v1", "none"),

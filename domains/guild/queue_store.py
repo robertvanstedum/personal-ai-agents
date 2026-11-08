@@ -121,7 +121,8 @@ def item_digest(item: dict) -> str:
     return sha256_bytes(canonical.encode("utf-8"))
 
 
-CONTENT_FIELDS = ("spec_title", "spec_file", "summary", "owner_words", "first_pass", "source")
+CONTENT_FIELDS = ("spec_title", "spec_file", "summary", "owner_words", "first_pass", "source", "additions")
+ADDITION_KINDS = ("repeat", "addition", "conflict")
 
 
 def content_digest(item: dict) -> str:
@@ -988,6 +989,37 @@ class QueueStore:
         change = ({"capture_source": capture["source"]} if capture is not None
                   else {"spec_title": title, "status": status, **extra})
         return self._commit(op="create", item_id=0, plan=plan, change=change,
+                            principal=principal, via=via, idempotency_key=idempotency_key)
+
+    def add_to_item(self, item_id: int, expected_revision: str, *, source: dict, owner_words: str, kind: str, note: dict,
+                    question: str | None, principal: str, via: str = "mc", idempotency_key: str | None = None) -> SaveResult:
+        """Robert's new words added to an existing item (MC front door spec A8, §5), checked against the revision that was read.
+        Nothing is merged or overwritten: each addition keeps its own source. A conflict keeps both statements and one open
+        question. One source adds once; a retry finds it."""
+        if kind not in ADDITION_KINDS:
+            return SaveResult(INVALID, item_id=item_id, op="add_to", reason="an addition is a repeat, an addition or a conflict")
+        if kind == "conflict" and not (isinstance(question, str) and question.strip()):
+            return SaveResult(INVALID, item_id=item_id, op="add_to", reason="a conflict holds one open question")
+        problem = _capture_problem({"source": source, "owner_words": owner_words, "first_pass": note})
+        if problem:
+            return SaveResult(INVALID, item_id=item_id, op="add_to", reason=problem)
+
+        def plan(items: list):
+            item = next((it for it in items if isinstance(it, dict) and it.get("id") == item_id), None)
+            if item is None:
+                return SaveResult(NOT_FOUND, item_id=item_id, op="add_to")
+            for added in item.get("additions") or ():
+                if _same_source(added.get("source"), source):
+                    return SaveResult(SAVED, item_id=item_id, op="add_to", new=item.get("status"), verified=True, repeated=True, current_item=item)
+            if content_digest(item) != expected_revision:
+                return SaveResult(CONFLICT, item_id=item_id, op="add_to", current_item=item, reason="the item changed since it was read")
+            entry = {"source": source, "owner_words": owner_words, "kind": kind, "note": note, "at": _iso(self._clock()),
+                     **({"open_question": question.strip()} if kind == "conflict" else {})}
+            updated = dict(item, additions=[*(item.get("additions") or ()), entry])
+            return _Plan(items=[updated if it is item else it for it in items], item_id=item_id, old=item.get("status"),
+                         new=item.get("status"), item=updated)
+
+        return self._commit(op="add_to", item_id=item_id, plan=plan, change={"capture_source": source},
                             principal=principal, via=via, idempotency_key=idempotency_key)
 
     def item_journal(self, item_id: int) -> list[dict]:

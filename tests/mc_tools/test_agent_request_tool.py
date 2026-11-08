@@ -21,7 +21,7 @@ from scripts.mc_host import supervision_sync as sync
 
 ROOT = Path(__file__).resolve().parents[2]
 CONV, NOTE_ID = "c-0123456789abcdef", "n-owner-note-1"
-NOTE = "Can we think about reinforcement in daily work?"
+NOTE = "Can we think about this example direction?"
 ANALYSIS = {"to": "claude-code", "purpose": "analysis", "analysis": "Is the inbox the right shape?"}
 
 
@@ -69,9 +69,9 @@ class Base(unittest.TestCase):
         folder = Path(tempfile.mkdtemp()) / "state" / "guild"
         folder.mkdir(parents=True)
         self.path = folder / "build_queue.json"
-        words = "I want the learning to be everywhere."
+        words = "An example owner message."
         self.path.write_bytes(qs.serialize([{
-            "id": 8, "spec_title": "Learning everywhere", "status": "idea", "blocked_reason": None, "owner_words": words,
+            "id": 8, "spec_title": "An example idea", "status": "idea", "blocked_reason": None, "owner_words": words,
             "first_pass": {"by": "master-craftsman", "revision": 1, "text": "Three parts."},
             "source": {"conversation": CONV, "note": "n-0", "sha256": hashlib.sha256(words.encode()).hexdigest(), "chars": len(words)}}]))
         self.receipts = _Receipts()
@@ -114,7 +114,7 @@ class TypedRequestTests(Base):
         env = req["envelope"]
         self.assertEqual((env["purpose"], env["item"]["id"], env["allowed_effects"]), ("review", 8, ["none"]))
         self.assertEqual(env["item"]["revision"], qs.content_digest(json.loads(self.path.read_text())[0]))
-        self.assertEqual(env["item"]["owner_words"], "I want the learning to be everywhere.")
+        self.assertEqual(env["item"]["owner_words"], "An example owner message.")
         self.assertEqual(env["owner"]["text"], NOTE)
         self.assertEqual(env["analysis"], {"by": "master-craftsman", "text": "Worth a second look at the inbox."})
         self.assertTrue(req["action"].startswith("Review only, of Build Log #8"))

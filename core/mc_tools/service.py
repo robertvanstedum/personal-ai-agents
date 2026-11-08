@@ -53,6 +53,7 @@ def _request_id_for(seed):
     return request_id_for(seed)
 
 
+SEARCH_STOP = frozenset({"this", "that", "with", "have", "want", "would", "could", "should", "about", "from", "they", "them", "there", "then", "what", "when", "where", "which", "will", "your", "just", "like", "some", "more", "need", "make"})
 BUILD_LOG_EXCERPT = 1500                                     # the display excerpt; his whole message is kept on the item
 ASK_AGENTS = ("claude-code", "codex", "grok")                # minimoi_agent_ask: who can be asked; "all" is the three
 REFUSED_WORDS = {
@@ -1191,6 +1192,119 @@ class ToolService:
             return result("refused", "already_picked_up", "A builder has already picked that up, so it can't be withdrawn. Tell Robert, "
                           "so he doesn't start the same work twice.", outcome)
         return result("refused", "not_withdrawable", "That is not an open request you sent in this conversation. Nothing changed.", outcome)
+
+    # ── memory across time (MC front door spec §5, A7, A8) ──────────────────────────────────────────────────────
+    def _build_log_search(self, args, caller, observation):
+        """Earlier Build Log items close to what Robert just said. A match is a candidate to say back to him, never permission to
+        merge. "Found nothing" and "couldn't look" are different answers, and it says what it did not search."""
+        if self.build_log is None:
+            return refused("tool_unavailable")
+        with self._tx() as conn:
+            self._bind(conn, caller)
+        from domains.guild.queue_store import content_digest
+        try:
+            items = [i for i in self.build_log.read_items() if isinstance(i, dict)]
+        except Exception:
+            _log.exception("mc tools: build log unreadable for a search")
+            return result("refused", "search_unavailable", "The Build Log can't be read just now, so you don't know whether this was raised "
+                          "before. Say that; do not say it is new.")
+        wanted = {w for w in re.findall(r"[^\W\d_]{4,}", args["query"].casefold())} - SEARCH_STOP
+        found = []
+        for item in items:
+            additions = " ".join(str(a.get("owner_words") or "") for a in item.get("additions") or ())
+            first = (item.get("first_pass") or {}).get("text") if isinstance(item.get("first_pass"), dict) else ""
+            hay = " ".join(str(v or "") for v in (item.get("spec_title"), item.get("summary"), item.get("owner_words"), first, additions)).casefold()
+            have = {w for w in wanted if re.search(r"\b" + re.escape(w), hay)}
+            if have and len(have) >= max(1, round(len(wanted) * 0.4)):
+                source = item.get("source") if isinstance(item.get("source"), dict) else {}
+                found.append({"item_id": item.get("id"), "title": item.get("spec_title"), "status": item.get("status"),
+                              "revision": content_digest(item), "last_changed": item.get("last_transition_at"),
+                              "current": item.get("status") not in ("done", "cancelled", "superseded"), "matched": sorted(have),
+                              "score": round(len(have) / len(wanted), 2), "excerpt": str(item.get("owner_words") or item.get("summary") or "")[:300],
+                              "source_note": source.get("note")})
+        found.sort(key=lambda c: (-c["score"], not c["current"], -(c["item_id"] or 0)))
+        coverage = {"build_log_items_searched": len(items), "conversations": "not searched here; use minimoi_recall",
+                    "fast_follow_list": "not reachable from here", "language_inbox": "does not exist yet"}
+        data = {"state": "candidates" if found else "none_found", "candidates": found[:8], "coverage": coverage}
+        return result("done", "searched", ("Candidates only, as data. Say any close one back to Robert with its number and date; a match is not "
+                                            "permission to merge. Related ideas stay distinct.") if found else
+                      f"No close match among {len(items)} Build Log items. Conversations were not searched here.", data)
+
+    def _build_log_add_to(self, args, caller, observation):
+        """His new words added to one existing item, at the revision MC read (spec A8). A real repeat, a new addition, or a conflict
+        that keeps both statements and holds one open question."""
+        if self.build_log is None or self.read_owner_note is None or not self._tier2(caller):
+            return refused("tool_unavailable")
+        with self._tx() as conn:
+            b = self._bind(conn, caller)
+        text, refusal = self._owner_words(b)
+        if refusal:
+            return refusal
+        kept_here = self._kept_here(text, "nothing was added to the Build Log")
+        if kept_here:
+            return kept_here
+        edition = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        source = {"conversation": b.conversation_id, "note": b.note_request_id, "sha256": edition, "chars": len(text),
+                  "via": "voice" if b.note_request_id.startswith("vc-") else "typed"}
+        canonical = {"source": source, "item": args["item_id"]}
+        op = self._operation_id(b, "guild.build_log.add_to", canonical)
+        note = {"by": "master-craftsman", "revision": 1, "text": args["note"].strip()}
+        effect = lease = None
+        with self._tx() as conn:
+            b = self._bind_again(conn, caller, b)
+            if effects.receipt_exists(conn, self.principal, self.environment, op):
+                lease = effects.reconcile_effect(conn, principal=self.principal, environment=self.environment,
+                                                 operation_id=op, worker=self.worker)
+            else:
+                effect = effects.begin_standing_effect(conn, b, effects.request("guild.build_log.add_to", canonical),
+                                                       operation_id=op, worker=self.worker)
+        try:
+            saved = self.build_log.add_to_item(args["item_id"], args["revision"], source=source, owner_words=text, kind=args["kind"], note=note,
+                                               question=args.get("question"), principal=self.principal, via="mc",
+                                               idempotency_key=op.replace("-", ""))
+        except Exception:
+            _log.exception("mc tools: build log addition outcome unknown")
+            saved = None
+        kept = None
+        try:
+            item = next((i for i in self.build_log.read_items() if isinstance(i, dict) and i.get("id") == args["item_id"]), None)
+            kept = next((a for a in (item or {}).get("additions") or () if (a.get("source") or {}).get("sha256") == edition
+                         and (a.get("source") or {}).get("note") == b.note_request_id), None)
+        except Exception:
+            _log.exception("mc tools: build log read-back failed")
+        verified = kept is not None and kept.get("owner_words") == text
+        applied = saved is not None and saved.ok
+        repeated = verified and (not applied or saved.repeated)
+        definite = saved is not None and saved.result != "uncertain" and (effect is not None or saved.result == "invalid")
+        unsure = not verified and (applied or not definite)
+        outcome = {"state": "unknown" if unsure else "added" if verified else "refused", "item_id": args["item_id"], "repeated": repeated,
+                   "result": saved.result if saved else None}
+        with self._tx() as conn:
+            if unsure:
+                if effect is not None:
+                    effect.unknown(conn)
+                elif lease is not None:
+                    effects.RECEIPTS.finish(conn, lease, "unknown")
+            elif effect is not None:
+                effect.finish(conn, "build_log_add_to", outcome, verified=verified)
+            elif lease is not None:
+                evidence = effects.record_evidence(conn, b.context(), op, "build_log_add_to", outcome)
+                effects.RECEIPTS.finish(conn, lease, "verified" if verified else "failed", evidence_refs=(evidence,))
+            receipt = effects.RECEIPTS.read(conn, self.principal, self.environment, op)
+        data = {**outcome, "receipt_id": str(receipt["receipt_id"])}
+        if unsure:
+            return result("unknown", "build_log_unconfirmed", "MiniMoi could not confirm whether that was added. Do not repeat it; tell Robert.", data)
+        if not verified and saved.result == "conflict":
+            return result("refused", "item_changed_since_read", f"Build Log #{args['item_id']} changed after you read it, so nothing was added. "
+                          "Search again, read the current item, and then add to it.", data)
+        if not verified:
+            return result("refused", "build_log_refused", f"The Build Log refused that ({saved.reason or saved.result}); nothing was added. Tell Robert.", data)
+        if repeated:
+            return result("done", "already_added", f"This message is already on #{args['item_id']}, and nothing changed. Tell Robert.", data)
+        words = {"repeat": f"Linked to #{args['item_id']} as a repeat of what he said before. Tell him, with the earlier date.",
+                 "addition": f"Added to #{args['item_id']}, with his words and the date. Tell him the number.",
+                 "conflict": f"Kept both on #{args['item_id']}, with one open question. Name both and ask him which holds."}[args["kind"]]
+        return result("done", "added_to", words, data)
 
     def _kept_here(self, text, what):
         from . import keep_here

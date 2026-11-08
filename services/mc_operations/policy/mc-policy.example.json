@@ -651,6 +651,42 @@
       "max_operations_per_turn": 1
     },
     {
+      "capability": "guild.build_log.search",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "build_log_search_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 10
+    },
+    {
+      "capability": "guild.build_log.add_to",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "build_log_add_to_v1",
+      "verify": "build_log_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 1
+    },
+    {
       "capability": "guild.build_log.add",
       "version": 1,
       "actors": [

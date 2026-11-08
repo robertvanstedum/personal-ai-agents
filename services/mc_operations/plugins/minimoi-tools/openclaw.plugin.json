@@ -41,6 +41,8 @@
       "minimoi_agent_request",
       "minimoi_agent_request_withdraw",
       "minimoi_build_log_add",
+      "minimoi_build_log_search",
+      "minimoi_build_log_add_to",
       "minimoi_career_trial",
       "minimoi_recall",
       "minimoi_publish_update",

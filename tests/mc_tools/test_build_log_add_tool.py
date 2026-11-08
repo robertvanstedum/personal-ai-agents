@@ -16,8 +16,8 @@ from minimoi_portal.guild_ui.mc_tools_wiring import build_log_store
 
 ROOT = Path(__file__).resolve().parents[2]
 CONV, NOTE_ID = "c-0123456789abcdef", "n-owner-note-1"
-LONG = ("I want the learning to be everywhere and then officially registered in the german domain. " * 70)[:6121] + " THE END"
-ARGS = {"title": "Learning everywhere", "status": "idea", "take": "Three parts: capture, register later, reinforce."}
+LONG = ("An example owner message about a product idea, repeated until it is long. " * 70)[:6121] + " THE END"
+ARGS = {"title": "An example idea", "status": "idea", "take": "A first take in three parts."}
 
 
 class _Conn:
