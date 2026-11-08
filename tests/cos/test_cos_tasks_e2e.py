@@ -216,7 +216,8 @@ def test_naming_the_seats_is_the_same_proposal_as_leaving_them_out(rig, advertis
 def test_each_operations_required_fields_are_enough_to_pass_validation(rig, advertised, op):
     tasks, history, bindings, client = rig
     owner_turn(history, bindings, "Track a test task.")
-    args = {"operation": op, **{f: "TK-none-0001" if f == "task_id" else "words" for f in REQUIRED[op]}}
+    sample = {"task_id": "TK-none-0001", "type_id": "recall-search", "verdict": "approve"}
+    args = {"operation": op, **{f: sample.get(f, "words") for f in REQUIRED[op]}}
     assert schema_allows(advertised, args)
     assert call(client, args)["code"] != "unexpected_or_missing_fields"
 
