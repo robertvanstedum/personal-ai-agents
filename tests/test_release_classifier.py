@@ -337,6 +337,8 @@ GUILD_ALLOWED_PREFIXES = ("core/agent_requests/", "minimoi_portal/", "tests/",
 GUILD_ALLOWED_FILES = {"core/limits.py", "scripts/agent_connection.py", "scripts/agent_requests.py",
                        # MC tools served by the portal's MC tools listener (Codex's MC runtime work, 24 Oct).
                        "core/mc_tools/agent_contact.py", "core/mc_tools/approved_handoff.py", "core/mc_tools/task_watch.py",
+                       # MC's typed requests (front door spec §4.2), the same listener.
+                       "core/mc_tools/service.py",
                        # The supervision sync's relay of MC's front-door requests, served by the portal (27 Oct).
                        "core/supervision/relay.py",
                        # Host bridge (runs from the installed agent-bridge bundle on the Mac host; no production image).

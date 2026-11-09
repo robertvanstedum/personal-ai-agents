@@ -252,7 +252,7 @@ def test_an_mc_persona_change_restarts_mc_cleanly_and_ships_its_whole_persona(de
     tree = {persona + "AGENTS.md": "a" * 64, persona + "manifest.json": "b" * 64, persona + "RUNTIME.openclaw.md": "c" * 64}
     m = dev.send([persona + "AGENTS.md"], tree=tree)
     mc = m["targets"]["mc-agent"]["files"]
-    assert set(mc) == set(tree)                    # the build empties persona/: the overlay carries all of it, not only what changed
+    assert set(mc) == set(tree) | {"docker/mc-agent-container/openclaw.json"}      # the build empties persona/: the overlay carries all of it, plus MC's tool list
     assert set(m["targets"]) == {"mc-agent", "portal"}          # the portal reads the persona too
     op.Deploy(dev.host(), gs.guarded_swap).update()
     assert dev.ups() == ["portal", "mc-agent"] and dev.stops().count("minimoi-mc-agent") == 1
