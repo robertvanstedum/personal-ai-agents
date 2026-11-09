@@ -44,6 +44,9 @@ class Worker:
             return False
         if not task["artifact_sets"]:
             return True
+        kind = self.charter.types.get((task.get("charter_ref") or {}).get("type_id"))
+        if kind is None or len(task["artifact_sets"]) > kind["max_revisions"]:      # the task service would refuse another set
+            return False
         current = task["artifact_sets"][-1]["digest"]
         return any(r["reviewed_set_digest"] == current and r["verdict"] == "changes_requested" for r in task["reviews"])
 

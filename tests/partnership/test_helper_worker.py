@@ -144,6 +144,22 @@ def test_changes_requested_gets_a_new_set(rig):
     assert len(svc.get("task", tid, "tok-mc")["artifact_sets"]) == 2
 
 
+def test_at_the_revision_limit_it_stops_and_does_not_retry(rig):
+    """Found on Dev, 8 Nov: a second change request sent the worker round a refused submit every few seconds."""
+    svc, f, w, calls, *_ = rig
+    tid = task(rig)
+    w.pass_once()
+    for n in (1, 2):
+        t = svc.get("task", tid, "tok-mc")
+        d = t["artifact_sets"][-1]["digest"]
+        rid = f"RV-syn-h-{n}"
+        assert svc.submit(cmd("task.record_review", "task", tid, {"review_id": rid, "reviewed_set_digest": d, "input_digest": d, "verdict": "changes_requested", "review_ref": ref("artifacts", rid, digest("x"), edition="1"), "findings_ref": None}, expected=t["revision"]), "tok-mc")["outcome"] == "accepted"
+        w.pass_once()
+    before = len(calls)
+    assert w.pass_once() == 0
+    assert len(calls) == before and len(svc.get("task", tid, "tok-mc")["artifact_sets"]) == 2
+
+
 def test_a_read_of_a_path_outside_the_repo_is_refused(tmp_path):
     (tmp_path / "repo").mkdir()
     (tmp_path / "secret").write_text("x")
