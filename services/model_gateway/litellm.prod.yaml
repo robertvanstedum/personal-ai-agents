@@ -142,6 +142,8 @@ litellm_settings:
   set_verbose: false
   callbacks:
     - receipt_callback.receipt_callback
+    # One standard usage record per call, written only where the environment sets MINIMOI_USAGE_DIR.
+    - usage_recorder.usage_recorder
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

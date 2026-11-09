@@ -40,6 +40,11 @@ PRODUCTION = Path("/opt/minimoi")
 # guildhall-cos, guildhall-mc, cos-board and records are root on Dev and are not on production yet.
 NODE = (1000, 1000)
 ROOT = (0, 0)
+# Each helper runs as its own uid (docker-compose.minimoi-1-2-production.yml), never root, and owns only its own two folders.
+HELPERS = {"apprentice": (2101, 2101), "ea": (2102, 2102)}
+GATEWAY = (1000, 0)     # the non-root model gateway writes the usage store; group root lets root services read it
+USAGE = f"{STATE}/usage"
+USAGE_WRITERS = ("portal", "cos-bot", "cos-scheduler")
 
 # The node consumer must be able to read these, including the operator-written bindings.
 NODE_PATHS = (
@@ -53,7 +58,8 @@ FOLDERS = (
     "cos/store",
     f"{STATE}/cos-turns", f"{STATE}/cos-partnership", f"{STATE}/mc-turns", f"{STATE}/partnership",
     f"{STATE}/cos-guildhall", f"{STATE}/guildhall-cos-journal", f"{STATE}/guildhall-mc-journal",
-    f"{STATE}/model-routes",
+    f"{STATE}/model-routes", f"{STATE}/workshops", USAGE, *(f"{USAGE}/{name}" for name in USAGE_WRITERS),
+    *(f"{STATE}/helper-{seat}" for seat in HELPERS), *(f"{SECRETS}/helper-{seat}" for seat in HELPERS),
     f"{SECRETS}/cos-bound", f"{SECRETS}/cos-actions-token", f"{SECRETS}/cos-partnership", f"{SECRETS}/portal-partnership",
     f"{SECRETS}/partnership", f"{SECRETS}/cos-board", f"{SECRETS}/cos-guildhall", f"{SECRETS}/guildhall-cos",
     f"{SECRETS}/guildhall-mc", f"{SECRETS}/mc-rooms-work",
@@ -62,7 +68,8 @@ FOLDERS = (
 # A folder with two consumers isn't private to one uid. cos/store is written by cos-scheduler (root) and read by CoS's
 # runtime through group 1000. This must equal `install -d -m 2750 -o root -g 1000` in cos_prod.sh prepare, which runs on
 # every release: then apply, key and prepare can come in any order, any number of times.
-SHARED_FOLDERS = {"cos/store": (0o2750, 0, 1000)}
+# The usage store is the same case: the gateway writes the monthly file, the root services read it.
+SHARED_FOLDERS = {"cos/store": (0o2750, 0, 1000), USAGE: (0o750, *GATEWAY)}
 
 # (portal signer, service reader). Both files are the same kid:secret line.
 ASSERTION_PAIRS = (
@@ -79,6 +86,7 @@ GENERATED = (
     f"{SECRETS}/cos-board/cursor.key",
     f"{SECRETS}/cos-guildhall/cos-service.token",
     f"{SECRETS}/guildhall-mc/mc-service.token",
+    *(f"{SECRETS}/helper-{seat}/task.token" for seat in HELPERS),
 )
 
 # Files only a reviewed operator can write, because their content binds identities or comes from another service.
@@ -100,6 +108,10 @@ BY_OPERATOR = (
     f"{SECRETS}/guildhall-mc/mc-relay.token", f"{SECRETS}/guildhall-mc/discussion-gateway.token",
     f"{SECRETS}/mc-rooms-work/work.token",
     f"{STATE}/model-routes/catalogue.json",
+    *(f"{SECRETS}/helper-{seat}/gateway.key" for seat in HELPERS),
+    *(f"{SECRETS}/helper-{seat}/charter-approvals.json" for seat in HELPERS),
+    f"{SECRETS}/partnership/charter-approvals.json", f"{SECRETS}/cos-partnership/charter-approvals.json",
+    f"{SECRETS}/portal-partnership/charter-approvals.json",
 )
 
 BY_HAND = (
@@ -109,11 +121,25 @@ BY_HAND = (
     "Robert logs in again after the identity changes",
     "CoS's own capped key for failover and Grok, $20 a month: scripts/operations/cos_prod.sh key 20",
     "MC's one capped key for failover and Grok, $20 a month: MINIMOI_MC_MODEL_GATEWAY_KEY in MC's env file",
+    "Robert's approval of the helper charters and seats, in his own words: minimoi_1_2_prod_bind.py helpers-template",
+    "What feeds the Workshop view on production: the record is made on the Mac, and nothing sends it here yet",
 )
+
+
+def _helper_of(rel: str):
+    """The helper whose own folder rel is, or None."""
+    for seat in HELPERS:
+        for base in (f"{SECRETS}/helper-{seat}", f"{STATE}/helper-{seat}"):
+            if rel == base or rel.startswith(base + "/"):
+                return seat
+    return None
 
 
 def consumer(rel: str):
     """(uid, gid) of the container that reads rel, or None when this script does not track rel."""
+    seat = _helper_of(rel)
+    if seat is not None and (rel in FOLDERS or rel in GENERATED or rel in BY_OPERATOR):
+        return HELPERS[seat]
     if rel in NODE_PATHS:
         if NODE != (1000, 1000):
             raise SystemExit("refused: the node consumer mapping is missing")
@@ -310,6 +336,11 @@ def apply(root: Path) -> dict:
         parent = root / rel
         if parent.is_dir() and not parent.is_symlink():
             parent.chmod(0o711)
+    # A helper's uid must pass through to its own state folder. Only adds that one bit: other things use these two folders.
+    for rel in ("state", STATE):
+        parent = root / rel
+        if parent.is_dir() and not parent.is_symlink():
+            parent.chmod(stat.S_IMODE(parent.lstat().st_mode) | 0o001)
     paired = {rel for pair in ASSERTION_PAIRS for rel in pair}
     for left, right in ASSERTION_PAIRS:
         left_path, right_path = root / left, root / right

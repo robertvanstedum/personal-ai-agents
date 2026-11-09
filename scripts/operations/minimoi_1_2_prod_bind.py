@@ -8,8 +8,12 @@
                 migrations (it names missing tables).
       gateway   Guildhall's discussion keys and the voice summary keys, $20 per 30 days each. Waits on the gateway's key database.
       records   Records-issued tokens (teammates, workers, observe). Waits on Records running.
+      helpers   needs --helper-inputs. The Apprentice and EA seats, the CoS lead's added operations, the charter approvals in
+                Robert's words, then state/1-2/helpers.on. Waits on local and gateway, and on a task service whose image holds
+                the charters. The only group that changes a file already there: it adds rows to bindings.json, with a backup.
   cos-auth                        read-only: which of CoS's three agents see a healthy plan sign-in, names and states only.
   inputs-template                 prints an unapproved input file to stdout. It holds no secret.
+  helpers-template                prints an unapproved helpers input file, with the charter digests of the running image.
 
 Rules it keeps: never overwrites (an existing file is kept, a differing pair or hash is refused); refuses symlinks; writes
 atomically with the consumer's uid and mode 0600; never prints, logs or puts a value in argv (values travel by stdin and
@@ -51,7 +55,8 @@ COS_AGENT = "minimoi-cos-agent-a"
 COS_AGENTS = ("cos-agent-a", "cos-meeting", "cos-closed")
 RECORDS_BINDING = "/etc/minimoi/records-production.json"
 RECORDS_DATA = "/var/lib/minimoi-records"       # docker-compose.records-production.yml
-GROUPS = ("local", "db", "gateway", "records")
+GROUPS = ("local", "db", "gateway", "records", "helpers")
+TASKS_CONTAINER = "minimoi-partnership-tasks"
 
 S = setup.SECRETS
 COS_BOUND = f"{S}/cos-bound/token"
@@ -110,6 +115,9 @@ GATEWAY_KEYS = {
     # own mounted folder; the compose layer names both. Without the files the summary reads "unavailable".
     f"{S}/cos-partnership/voice-summary-cos.key": {"models": VOICE_MODELS, "rpm": 60, "alias": "voice-summary-cos-"},
     f"{S}/portal-partnership/voice-summary-mc.key": {"models": VOICE_MODELS, "rpm": 60, "alias": "voice-summary-mc-"},
+    # The low tier only, the worker's HELPER_MODEL. The charters' daily budgets sit inside this cap.
+    f"{S}/helper-apprentice/gateway.key": {"models": ["minimoi-openai-low"], "rpm": 10, "alias": "helper-apprentice-"},
+    f"{S}/helper-ea/gateway.key": {"models": ["minimoi-openai-low"], "rpm": 10, "alias": "helper-ea-"},
 }
 KEY_FORM = re.compile(r"^sk-[A-Za-z0-9_-]{16,200}$")
 
@@ -329,7 +337,7 @@ def validate_inputs(doc) -> dict:
     return doc
 
 
-def load_inputs(path: str) -> dict:
+def _read_input_file(path: str):
     if not path:
         refuse("this group needs --inputs")
     file = Path(path)
@@ -351,7 +359,85 @@ def load_inputs(path: str) -> dict:
                 refuse("the input file is not valid JSON")
     finally:
         os.close(fd)
-    return validate_inputs(doc)
+    return doc
+
+
+def load_inputs(path: str) -> dict:
+    return validate_inputs(_read_input_file(path))
+
+
+def load_helper_inputs(path: str) -> dict:
+    return validate_helper_inputs(_read_input_file(path))
+
+
+# ---- helpers' inputs --------------------------------------------------------------------------------------------------
+
+HELPER_INPUT_SCHEMA = "minimoi.1-2-prod-bind.helpers/1"
+HELPER_INPUT_FIELDS = {"schema", "environment", "approved_by", "words", "charters", "seats", "cos_adds"}
+HELPER_SEATS = tuple(setup.HELPERS)
+HELPER_OPERATIONS = ["source_event.record", "task.submit_artifacts", "task.transition"]
+# What CoS needs to lead the EA, the same chain MC uses for its Apprentice (services/helper_seats/lead.py).
+COS_LEAD_OPERATIONS = ["interpretation.dispose", "request.promote", "request.record", "task.accept", "task.record_review", "task.transition"]
+CHARTER_NAME = re.compile(r"^[a-z][a-z0-9-]{1,40}@[0-9]{1,6}$")
+CHARTER_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+MAX_WORDS = 1000
+HELPERS_ON = f"{setup.STATE}/helpers.on"      # scripts/deploy.sh and deploy_scoped_release.sh look for this
+CHARTER_APPROVALS = tuple(f"{S}/{name}/charter-approvals.json"
+                          for name in ("partnership", "cos-partnership", "portal-partnership", *(f"helper-{seat}" for seat in HELPER_SEATS)))
+# Both helpers read the Build Queue, and the Apprentice MC's clone. Owned by others on the host, so their modes decide it.
+HELPER_READS = {"apprentice": ("data/guild", "data/guild/build_queue.json", "mc/repo"), "ea": ("data/guild", "data/guild/build_queue.json")}
+
+CHARTERS_PROGRAM = """
+import json
+from pathlib import Path
+from core.canonical_json import digest
+print(json.dumps({f"{d['seat']}@{d['version']}": digest(d) for d in (json.loads(p.read_text("utf-8")) for p in sorted(Path("/app/config/partnership/charters").glob("*/v*.json")))}))
+"""
+
+
+def image_charters() -> dict:
+    """The charters in the image the task service is running: what an approval has to match when it starts."""
+    if not _running(TASKS_CONTAINER):
+        refuse(f"{TASKS_CONTAINER} is not running")
+    done = docker("exec", "-i", TASKS_CONTAINER, "python", "-", stdin=CHARTERS_PROGRAM, timeout=60)
+    if done.returncode != 0:
+        refuse(f"could not read the charters from the running image (exit {done.returncode})")
+    try:
+        found = json.loads(done.stdout)
+    except ValueError:
+        refuse("the running image's charters were not readable")
+    if not isinstance(found, dict) or not {f"{seat}@1" for seat in HELPER_SEATS} <= set(found):
+        refuse("the running image has no helper charters: release the image first")
+    return found
+
+
+def helpers_template() -> dict:
+    return {"schema": HELPER_INPUT_SCHEMA, "environment": "prod", "approved_by": "", "words": "", "charters": image_charters(),
+            "seats": {seat: list(HELPER_OPERATIONS) for seat in HELPER_SEATS}, "cos_adds": list(COS_LEAD_OPERATIONS)}
+
+
+def validate_helper_inputs(doc) -> dict:
+    """Fails closed, naming the field and never its value. The operations are fixed here, so the file can't widen them."""
+    if not isinstance(doc, dict) or set(doc) != HELPER_INPUT_FIELDS:
+        refuse(f"the helpers input file must hold exactly: {sorted(HELPER_INPUT_FIELDS)}")
+    if doc["schema"] != HELPER_INPUT_SCHEMA:
+        refuse("helpers input schema")
+    if doc["environment"] != "prod":
+        refuse("helpers input environment")
+    if doc["approved_by"] != OWNER:
+        refuse("helpers input approved_by: only the owner approves a charter")
+    words = doc["words"]
+    if not isinstance(words, str) or not words.strip() or len(words) > MAX_WORDS:
+        refuse("helpers input words: Robert's own words, as he gave them")
+    charters = doc["charters"]
+    if (not isinstance(charters, dict) or not charters
+            or not all(isinstance(k, str) and CHARTER_NAME.fullmatch(k) and isinstance(v, str) and CHARTER_DIGEST.fullmatch(v) for k, v in charters.items())):
+        refuse("helpers input charters")
+    if doc["seats"] != {seat: HELPER_OPERATIONS for seat in HELPER_SEATS}:
+        refuse("helpers input seats: exactly the helpers' three operations")
+    if doc["cos_adds"] != COS_LEAD_OPERATIONS:
+        refuse("helpers input cos_adds: exactly what CoS needs to lead the EA")
+    return doc
 
 
 # ---- .env: hashes only ------------------------------------------------------------------------------------------------
@@ -774,6 +860,115 @@ def group_records(root: Path, binding: str, out: Outcome) -> None:
         os.rmdir(outbox)
 
 
+# ---- group: helpers ---------------------------------------------------------------------------------------------------
+
+def _helpers_cannot_read(root: Path) -> list:
+    """What a helper's uid couldn't read through its read-only mounts. The mounts start at these paths, so no parent counts."""
+    blocked = []
+    for seat, paths in HELPER_READS.items():
+        uid, gid = setup.HELPERS[seat]
+        for rel in paths:
+            try:
+                good = setup.readable_by((root / rel).lstat(), uid, gid)
+            except OSError:
+                good = False
+            if not good:
+                blocked.append(f"{seat}: {rel}")
+    return blocked
+
+
+def _replace_bindings(root: Path, rows: list, out: Outcome) -> None:
+    """The one file this tool rewrites. A dated backup first, then atomically, with the same owner and mode."""
+    path = root / BINDINGS
+    if setup._linked(root, BINDINGS):
+        refuse(f"a symlink on the way to {BINDINGS}")
+    info = path.lstat()
+    backup = path.with_name(f".bindings.json.bak-bind-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{secrets.token_hex(3)}")
+    shutil.copy2(path, backup)
+    os.chmod(backup, 0o600)
+    temp = path.with_name(f".bindings.json.{secrets.token_hex(6)}")
+    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(rows, indent=1))
+            handle.flush()
+            try:
+                _fchown(handle.fileno(), info.st_uid, info.st_gid)
+            except OSError:
+                refuse(f"could not keep {BINDINGS}'s owner")
+            os.fchmod(handle.fileno(), stat.S_IMODE(info.st_mode))
+            os.fsync(handle.fileno())
+        os.replace(temp, path)
+    finally:
+        if temp.exists():
+            os.unlink(temp)
+    _sync_dir(path.parent)
+    out.written.append(BINDINGS)
+
+
+def helper_token(seat: str) -> str:
+    return f"{S}/helper-{seat}/task.token"
+
+
+def _helper_row(root: Path, seat: str) -> dict:
+    return {"binding_id": f"bind-prod-{seat}", "token_sha256": sha256(read_private(root, helper_token(seat))), "seat": seat,
+            "principal": OWNER, "environment": "prod", "origin": "agent", "scopes": ["personal"], "read_scopes": ["personal"],
+            "operations": list(HELPER_OPERATIONS), "expires_at": None, "revoked_at": None}
+
+
+def _merged_bindings(root: Path) -> list:
+    """The current rows plus the helpers' and CoS's added operations; None when nothing would change. Nothing else in a row moves."""
+    try:
+        rows = json.loads(read_private(root, BINDINGS))
+    except ValueError:
+        refuse(f"{BINDINGS} is not valid JSON")
+    by_seat = {row.get("seat"): row for row in rows}
+    if "cos" not in by_seat:
+        refuse(f"{BINDINGS} has no cos seat: run the local group first")
+    changed = False
+    for seat in HELPER_SEATS:
+        wanted = _helper_row(root, seat)
+        have = by_seat.get(seat)
+        if have is None:
+            rows.append(wanted)
+            changed = True
+        elif have != wanted:
+            refuse(f"{BINDINGS} already holds a different {seat} seat, nothing changed")
+    cos = by_seat["cos"]
+    missing = [op for op in COS_LEAD_OPERATIONS if op not in cos["operations"]]
+    if missing:
+        cos["operations"] = sorted({*cos["operations"], *missing})
+        changed = True
+    return rows if changed else None
+
+
+def group_helpers(root: Path, doc: dict, out: Outcome) -> None:
+    _setup_ready(root)
+    # Every check comes first: a refusal here leaves no seat, no approval and no marker.
+    absent = [rel for rel in (BINDINGS, *(k for k in GATEWAY_KEYS if "/helper-" in k)) if setup.status(root, rel, directory=False) != "present"]
+    if absent:
+        refuse(f"run the local and gateway groups first; not ready: {sorted(absent)}")
+    blocked = _helpers_cannot_read(root)
+    if blocked:
+        refuse(f"a helper could not read: {blocked}. Nothing changed")
+    if doc["charters"] != image_charters():
+        refuse("the approved charters are not the ones in the running image, nothing changed")
+    rows = _merged_bindings(root)
+    approvals = {name: {"digest": value, "approved_by": doc["approved_by"], "ref": doc["words"], "environment": "prod"}
+                 for name, value in doc["charters"].items()}
+    body = json.dumps(approvals, indent=1, sort_keys=True).encode("utf-8")
+    for rel in CHARTER_APPROVALS:
+        if os.path.lexists(root / rel) and read_private(root, rel).encode("utf-8") != body.strip():
+            refuse(f"{rel} already holds a different approval: a new charter or wording is a deliberate change, nothing changed")
+    if rows is None:
+        out.kept.append(BINDINGS)
+    else:
+        _replace_bindings(root, rows, out)
+    for rel in CHARTER_APPROVALS:
+        out.note(rel, write_new(root, rel, body))
+    out.note(HELPERS_ON, write_new(root, HELPERS_ON, b"", owner=setup.ROOT))
+
+
 # ---- cos-auth (G14) ---------------------------------------------------------------------------------------------------
 
 def cos_auth() -> dict:
@@ -781,7 +976,9 @@ def cos_auth() -> dict:
     refresh token may rotate, so nothing here moves one: an agent reads the shared store, or Robert signs it in."""
     agents, ids = {}, set()
     for agent in COS_AGENTS:
-        done = docker("exec", COS_AGENT, "node", "/app/openclaw.mjs", "models", "status", "--agent", agent, "--json", timeout=120)
+        # A docker exec doesn't see the variable OpenClaw's config names. This read-only status needs it set, not real.
+        done = docker("exec", "-e", "MINIMOI_MODEL_GATEWAY_KEY=status-check-placeholder", COS_AGENT, "node", "/app/openclaw.mjs",
+                      "models", "status", "--agent", agent, "--json", timeout=120)
         if done.returncode != 0:
             agents[agent] = {"state": "unreadable"}
             continue
@@ -831,6 +1028,7 @@ def check(root: Path, inputs: str = "") -> dict:
     report = {"files": files, "agree": agree, "counts": {}}
     for value in files.values():
         report["counts"][value] = report["counts"].get(value, 0) + 1
+    report["helpers"] = {"on": os.path.lexists(root / HELPERS_ON), "cannot_read": _helpers_cannot_read(root)}
     report["inputs"] = "not given"
     if inputs:
         load_inputs(inputs)
@@ -851,7 +1049,7 @@ def _plain_status(root: Path, rel: str) -> str:
 
 # ---- main -------------------------------------------------------------------------------------------------------------
 
-def apply(root: Path, only, inputs: str, records_binding: str) -> dict:
+def apply(root: Path, only, inputs: str, records_binding: str, helper_inputs: str = "") -> dict:
     if os.environ.get("MINIMOI_1_2_SETUP_APPROVED") != "1":
         refuse("apply needs MINIMOI_1_2_SETUP_APPROVED=1, set by the reviewed operator")
     if setup._lexical_symlink(root):
@@ -863,6 +1061,7 @@ def apply(root: Path, only, inputs: str, records_binding: str) -> dict:
         refuse(f"--only takes {list(GROUPS)}")
     out = Outcome()
     doc = load_inputs(inputs) if "local" in only else None
+    helper_doc = load_helper_inputs(helper_inputs) if "helpers" in only else None
     if not (root / S).is_dir():
         refuse("run minimoi_1_2_prod_setup.py apply first")
     os.umask(0o077)
@@ -879,14 +1078,17 @@ def apply(root: Path, only, inputs: str, records_binding: str) -> dict:
             group_gateway(root, out)
         if "records" in only:
             group_records(root, records_binding, out)
+        if "helpers" in only:
+            group_helpers(root, helper_doc, out)
     return out.as_dict()
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("mode", nargs="?", choices=("check", "apply", "cos-auth", "inputs-template"), default="check")
+    parser.add_argument("mode", nargs="?", choices=("check", "apply", "cos-auth", "inputs-template", "helpers-template"), default="check")
     parser.add_argument("--root", default=str(setup.PRODUCTION))
     parser.add_argument("--inputs", default="")
+    parser.add_argument("--helper-inputs", default="")
     parser.add_argument("--only", default="")
     parser.add_argument("--records-binding", default=RECORDS_BINDING)
     args = parser.parse_args(argv)
@@ -895,11 +1097,13 @@ def main(argv=None) -> int:
     try:
         if args.mode == "inputs-template":
             result = template()
+        elif args.mode == "helpers-template":
+            result = helpers_template()
         elif args.mode == "cos-auth":
             result = cos_auth()
             code = 0 if result["ok"] else 1
         elif args.mode == "apply":
-            result = apply(root, [g for g in args.only.split(",") if g], args.inputs, args.records_binding)
+            result = apply(root, [g for g in args.only.split(",") if g], args.inputs, args.records_binding, args.helper_inputs)
         else:
             result = check(root, args.inputs)
             code = 0 if result["ok"] else 1

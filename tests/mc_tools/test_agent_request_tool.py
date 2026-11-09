@@ -442,14 +442,14 @@ class RegistrationTests(unittest.TestCase):
         from core.mc_tools import read_only
         self.assertNotIn("minimoi_agent_request", read_only.READ_TOOLS)
 
-    def test_the_production_policy_has_the_front_door_rows_as_reviewed_and_no_helpers(self):
+    def test_the_production_policy_has_the_front_door_and_helper_rows_as_reviewed(self):
         prod = json.loads((ROOT / "services/mc_operations/policy/mc-policy.prod.json").read_text())
         example = json.loads((ROOT / "services/mc_operations/policy/mc-policy.example.json").read_text())
         reviewed = {r["handler"]: r for r in example["rules"]}
         rows = {r["handler"]: r for r in prod["rules"]}
-        for handler in ("agent_request_v1", "agent_request_withdraw_v1", "build_log_search_v1", "build_log_add_v1", "build_log_add_to_v1", "task_build_item_v1"):
+        for handler in ("agent_request_v1", "agent_request_withdraw_v1", "build_log_search_v1", "build_log_add_v1", "build_log_add_to_v1", "task_build_item_v1",
+                        "helper_ask_v1", "helper_result_v1", "helper_review_v1"):
             self.assertEqual(rows[handler], reviewed[handler])
-        self.assertFalse({"helper_ask_v1", "helper_result_v1", "helper_review_v1"} & set(rows))
 
 
 if __name__ == "__main__":

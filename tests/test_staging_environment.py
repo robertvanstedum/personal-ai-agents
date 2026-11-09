@@ -483,6 +483,10 @@ def _routes(path):
     return {m["model_name"]: m for m in _load(path)["model_list"]}
 
 
+def staged_callbacks_of(config):
+    return config["litellm_settings"]["callbacks"]
+
+
 def test_staging_gateway_keeps_production_names_and_settings():
     prod, staging = _load(GATEWAY_PROD), _load(GATEWAY_STAGING)
     # Production's names (MC's discussion route last) plus the explicitly requested local regression route.
@@ -490,9 +494,10 @@ def test_staging_gateway_keeps_production_names_and_settings():
         [m["model_name"] for m in prod["model_list"]] + ["minimoi-cos-agent-local"]
     for block in ("router_settings", "general_settings"):
         assert staging[block] == prod[block], block
-    # litellm_settings: production's, plus exactly the staging-only usage recorder (usage-record U1).
+    # litellm_settings: production's, and both now carry the usage recorder (usage-record U1).
     staged = dict(staging["litellm_settings"])
-    assert staged.pop("callbacks") == prod["litellm_settings"]["callbacks"] + ["usage_recorder.usage_recorder"]
+    assert staged.pop("callbacks") == prod["litellm_settings"]["callbacks"]
+    assert "usage_recorder.usage_recorder" in staged_callbacks_of(staging)
     assert staged == {k: v for k, v in prod["litellm_settings"].items() if k != "callbacks"}
 
 

@@ -285,3 +285,20 @@ def test_g7_a_store_with_any_other_mode_is_still_unsafe(tmp_path, owned_host):
     (tmp_path / "cos/store").chmod(0o755)
     with pytest.raises(SystemExit, match="unsafe"):
         setup.apply(tmp_path)
+
+
+def test_each_helper_owns_only_its_own_folders_and_files():
+    apprentice, ea = setup.HELPERS["apprentice"], setup.HELPERS["ea"]
+    assert apprentice != ea and 0 not in (*apprentice, *ea) and (1000, 1000) not in (apprentice, ea)
+    for seat, want in setup.HELPERS.items():
+        for rel in (f"{setup.SECRETS}/helper-{seat}", f"{setup.STATE}/helper-{seat}", f"{setup.SECRETS}/helper-{seat}/task.token",
+                    f"{setup.SECRETS}/helper-{seat}/gateway.key", f"{setup.SECRETS}/helper-{seat}/charter-approvals.json"):
+            assert setup.consumer(rel) == want
+    assert setup.consumer(f"{setup.SECRETS}/partnership/charter-approvals.json") == setup.ROOT
+
+
+def test_the_gateway_owns_the_usage_store_and_root_writers_their_own_folders():
+    assert setup.owner_of(setup.USAGE) == setup.GATEWAY
+    assert setup.SHARED_FOLDERS[setup.USAGE][0] == 0o750
+    for writer in setup.USAGE_WRITERS:
+        assert setup.owner_of(f"{setup.USAGE}/{writer}") == setup.ROOT
