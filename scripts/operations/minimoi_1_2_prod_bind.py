@@ -60,6 +60,11 @@ TASKS_PLATFORM = f"{S}/cos-partnership/tasks-platform.token"
 PORTAL_MC = f"{S}/portal-partnership/mc.token"
 # The platform seat's token, held beside MC's: the portal's "build it" records its source event with it (mc_tools_wiring.tasks_adapter).
 PORTAL_PLATFORM = f"{S}/portal-partnership/platform.token"
+# The owner's task view (tasks_owner_api). Fixed here, never from the input file: the input file still can't name owner
+# authority, and the task service accepts this seat only with the portal's signature over each request.
+PORTAL_PRINCIPAL = f"{S}/portal-partnership/principal.token"
+PRINCIPAL_OPERATIONS = ["correction.apply", "interpretation.dispose", "interpretation.record", "outbox.approve", "outbox.record",
+                        "request.link_source", "request.promote", "request.record", "request.refine", "source_event.record"]
 DRAINER = f"{S}/partnership/drainer.token"
 NOTICES = f"{S}/partnership/notices.token"
 BINDINGS = f"{S}/partnership/bindings.json"
@@ -472,7 +477,10 @@ def seat_bindings(root: Path, doc: dict) -> list:
              "principal": doc["owner_principal"], "environment": "prod", "origin": doc["seats"][seat]["origin"],
              "scopes": doc["seats"][seat]["scopes"], "read_scopes": doc["seats"][seat]["read_scopes"],
              "operations": doc["seats"][seat]["operations"], "expires_at": None, "revoked_at": None}
-            for seat, rel in SEAT_TOKENS.items()]
+            for seat, rel in SEAT_TOKENS.items()] + [
+            {"binding_id": "bind-prod-principal", "token_sha256": sha256(read_private(root, PORTAL_PRINCIPAL)), "seat": "principal",
+             "principal": doc["owner_principal"], "environment": "prod", "origin": "owner_session", "scopes": ["personal"],
+             "read_scopes": ["personal"], "operations": PRINCIPAL_OPERATIONS, "expires_at": None, "revoked_at": None}]
 
 
 def _seats_match(root: Path) -> dict:
@@ -483,7 +491,7 @@ def _seats_match(root: Path) -> dict:
         refuse(f"{BINDINGS} is not valid JSON")
     by_seat = {row.get("seat"): row.get("token_sha256") for row in rows}
     return {seat: os.path.lexists(root / rel) and by_seat.get(seat) == sha256(read_private(root, rel))
-            for seat, rel in SEAT_TOKENS.items()}
+            for seat, rel in {**SEAT_TOKENS, "principal": PORTAL_PRINCIPAL}.items()}
 
 
 def _task_store(root: Path, out: Outcome) -> None:
@@ -511,7 +519,7 @@ def _task_store(root: Path, out: Outcome) -> None:
 
 def group_local(root: Path, doc: dict, out: Outcome) -> None:
     _setup_ready(root)
-    for rel in (COS_BOUND, TASKS_COS, TASKS_PLATFORM, PORTAL_MC, MC_RELAY):
+    for rel in (COS_BOUND, TASKS_COS, TASKS_PLATFORM, PORTAL_MC, PORTAL_PRINCIPAL, MC_RELAY):
         out.note(rel, write_new(root, rel, new_token()))
     out.note(PORTAL_PLATFORM, write_new(root, PORTAL_PLATFORM, read_private(root, TASKS_PLATFORM).encode()))
     if read_private(root, PORTAL_PLATFORM) != read_private(root, TASKS_PLATFORM):

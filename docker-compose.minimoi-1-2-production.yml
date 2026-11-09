@@ -104,6 +104,7 @@ services:
       PORTAL_COS_OWNER_KEY_FILE: /run/secrets/partnership/portal-cos-owner.key
       PORTAL_PARTNERSHIP_OWNER_ENV: prod
       PORTAL_PARTNERSHIP_OWNER_KEY_FILE: /run/secrets/partnership/portal-partnership-owner.key
+      PORTAL_PARTNERSHIP_PRINCIPAL_TOKEN_FILE: /run/secrets/partnership/principal.token
     volumes:
       - {type: bind, source: "${MINIMOI_1_2_STATE:?}/mc-turns", target: /app/data/mc-turns, bind: {create_host_path: false}}
       - {type: bind, source: "${MINIMOI_1_2_SECRETS:?}/portal-partnership", target: /run/secrets/partnership, read_only: true, bind: {create_host_path: false}}

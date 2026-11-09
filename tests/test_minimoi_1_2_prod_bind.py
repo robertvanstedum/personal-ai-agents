@@ -203,6 +203,9 @@ def test_pairs_stay_equal_and_hashes_go_where_the_bindings_read_them(host):
     host.apply(["local"])
     assert (host.root / bind.COS_SERVICE_COPY).read_text() == (host.root / bind.COS_SERVICE).read_text()
     assert (host.root / bind.PORTAL_PLATFORM).read_text() == (host.root / bind.TASKS_PLATFORM).read_text()
+    row = next(r for r in json.loads((host.root / bind.BINDINGS).read_text()) if r["seat"] == "principal")
+    assert row["origin"] == "owner_session" and row["operations"] == bind.PRINCIPAL_OPERATIONS
+    assert row["token_sha256"] == bind.sha256((host.root / bind.PORTAL_PRINCIPAL).read_text())
     env = (host.root / ".env").read_text()
     digest = hashlib.sha256((host.root / bind.COS_BOUND).read_bytes()).hexdigest()
     assert f"MINIMOI_COS_TOOL_LISTENER_TOKEN_SHA256={digest}\n" in env
@@ -278,7 +281,7 @@ def test_bindings_that_dont_match_their_tokens_are_refused(host):
 
 def test_each_file_goes_to_its_consumers_uid_and_a_refused_owner_leaves_nothing(tmp_path, monkeypatch):
     assert setup.consumer(bind.COS_BOUND) == (1000, 1000) and setup.consumer(bind.BINDINGS) == (0, 0)
-    assert setup.consumer(bind.PORTAL_PLATFORM) == setup.consumer(bind.PORTAL_MC)
+    assert setup.consumer(bind.PORTAL_PLATFORM) == setup.consumer(bind.PORTAL_MC) == setup.consumer(bind.PORTAL_PRINCIPAL)
     (tmp_path / bind.COS_BOUND).parent.mkdir(parents=True)
     given = []
     monkeypatch.setattr(bind, "_fchown", lambda fd, uid, gid: given.append((uid, gid)))
