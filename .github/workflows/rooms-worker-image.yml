@@ -101,9 +101,9 @@ jobs:
         if: steps.existing.outputs.digest == ''
         run: |
           docker tag rooms-worker-local "$REGISTRY/$REPOSITORY:$TAG"
-          docker push "$REGISTRY/$REPOSITORY:$TAG"
-          digest=$(aws ecr describe-images --repository-name "$REPOSITORY" --image-ids "imageTag=$TAG" \
-            --query 'imageDetails[0].imageDigest' --output text)
+          docker push "$REGISTRY/$REPOSITORY:$TAG" | tee /tmp/push.out
+          # From the push itself: this user can push to ECR but not list it (ecr:DescribeImages, refused 9 Nov).
+          digest=$(sed -n 's/.*digest: \(sha256:[a-f0-9]\{64\}\).*/\1/p' /tmp/push.out | tail -1)
           [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "no digest for the pushed image"; exit 1; }
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 

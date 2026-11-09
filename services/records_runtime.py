@@ -22,6 +22,18 @@ def private_file(path,maximum,*,metadata_only=False):
         if metadata_only:return None
         raw=os.read(fd,maximum+1);z=os.fstat(fd);refuse(len(raw)==s.st_size and len(raw)<=maximum and (s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns)==(z.st_dev,z.st_ino,z.st_size,z.st_mtime_ns),'file_changed');return raw
     finally:os.close(fd)
+def open_read_only(path):
+    """A read-only connection. A WAL database on a read-only mount can't make its shared-memory file, so plain mode=ro fails
+    there; the preflight's no-writer one-shot run opens it immutable instead. Anywhere else a live WAL is still honoured."""
+    uri=Path(path).as_uri()
+    try:
+        db=sqlite3.connect(uri+'?mode=ro',uri=True)
+        try:
+            db.execute('SELECT 1 FROM sqlite_master LIMIT 1').fetchone();return db
+        except sqlite3.OperationalError:
+            db.close();raise
+    except sqlite3.OperationalError:
+        return sqlite3.connect(uri+'?mode=ro&immutable=1',uri=True)
 def schema_hash(db):
     rows=db.execute("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").fetchall()
     return hashlib.sha256(json.dumps(rows,separators=(',',':')).encode()).hexdigest()
@@ -43,7 +55,7 @@ def preflight(data_dir,environ,*,port=18880):
     owner=private_file(root/'owner-key.txt',4096).strip();session=private_file(root/'session-key.txt',4096).strip()
     refuse(len(owner)>=32 and len(session)>=32 and hashlib.sha256(owner).hexdigest()==marker['owner_key_sha256'] and hashlib.sha256(session).hexdigest()==marker['session_key_sha256'],'prepared_store_keys_required')
     private_file(root/'records.sqlite3',512*1024*1024,metadata_only=True)
-    with closing(sqlite3.connect((root/'records.sqlite3').as_uri()+'?mode=ro',uri=True)) as db:
+    with closing(open_read_only(root/'records.sqlite3')) as db:
         refuse(schema_hash(db)==marker['schema_sha256'],'prepared_schema_mismatch')
         tables={r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")};refuse(REQUIRED_TABLES<=tables,'prepared_schema_incomplete')
         refuse(db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()==('5',),'prepared_schema_version_required')
