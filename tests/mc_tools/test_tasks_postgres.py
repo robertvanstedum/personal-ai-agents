@@ -39,6 +39,7 @@ class TaskToolTests(Base, unittest.TestCase):
         self.tasks = service(Path(tempfile.mkdtemp()) / "tasks")
         self.parent = Flow(self.tasks).promoted_task()                 # lead and holder mc
         self.service.tasks = TasksAdapter(InProcess(self.tasks, "tok-mc"), environment="synthetic", card_ref="a" * 40)
+        self.service.read_owner_note = lambda conversation, note: {"text": "Delegate the coordination note."}   # delegate reads his words
 
     def task(self, tid):
         return self.tasks.get("task", tid, "tok-principal")
