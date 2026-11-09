@@ -58,6 +58,8 @@ COS_BOUND = f"{S}/cos-bound/token"
 TASKS_COS = f"{S}/cos-partnership/tasks-cos.token"
 TASKS_PLATFORM = f"{S}/cos-partnership/tasks-platform.token"
 PORTAL_MC = f"{S}/portal-partnership/mc.token"
+# The platform seat's token, held beside MC's: the portal's "build it" records its source event with it (mc_tools_wiring.tasks_adapter).
+PORTAL_PLATFORM = f"{S}/portal-partnership/platform.token"
 DRAINER = f"{S}/partnership/drainer.token"
 NOTICES = f"{S}/partnership/notices.token"
 BINDINGS = f"{S}/partnership/bindings.json"
@@ -511,6 +513,9 @@ def group_local(root: Path, doc: dict, out: Outcome) -> None:
     _setup_ready(root)
     for rel in (COS_BOUND, TASKS_COS, TASKS_PLATFORM, PORTAL_MC, MC_RELAY):
         out.note(rel, write_new(root, rel, new_token()))
+    out.note(PORTAL_PLATFORM, write_new(root, PORTAL_PLATFORM, read_private(root, TASKS_PLATFORM).encode()))
+    if read_private(root, PORTAL_PLATFORM) != read_private(root, TASKS_PLATFORM):
+        refuse(f"{PORTAL_PLATFORM} differs from {TASKS_PLATFORM}")
     out.note(COS_SERVICE_COPY, write_new(root, COS_SERVICE_COPY, read_private(root, COS_SERVICE).encode()))
     if read_private(root, COS_SERVICE_COPY) != read_private(root, COS_SERVICE):
         refuse(f"{COS_SERVICE_COPY} differs from {COS_SERVICE}")

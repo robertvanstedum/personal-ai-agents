@@ -202,6 +202,7 @@ def test_what_the_tool_holds_and_the_contracts_stay_equal():
 def test_pairs_stay_equal_and_hashes_go_where_the_bindings_read_them(host):
     host.apply(["local"])
     assert (host.root / bind.COS_SERVICE_COPY).read_text() == (host.root / bind.COS_SERVICE).read_text()
+    assert (host.root / bind.PORTAL_PLATFORM).read_text() == (host.root / bind.TASKS_PLATFORM).read_text()
     env = (host.root / ".env").read_text()
     digest = hashlib.sha256((host.root / bind.COS_BOUND).read_bytes()).hexdigest()
     assert f"MINIMOI_COS_TOOL_LISTENER_TOKEN_SHA256={digest}\n" in env

@@ -1,6 +1,6 @@
 {
   "schema": "mc-policy/1",
-  "revision": "mc-prod-20261027-agent-ask",
+  "revision": "mc-prod-20261109-front-door",
   "rules": [
     {
       "capability": "host.health",
@@ -649,6 +649,114 @@
       "undo": null,
       "egress": "none",
       "max_operations_per_turn": 10
+    },
+    {
+      "capability": "agent.request.typed",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "agent_request_v1",
+      "verify": "agent_request_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 1
+    },
+    {
+      "capability": "agent.request.withdraw",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "agent_request_withdraw_v1",
+      "verify": "agent_request_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 1
+    },
+    {
+      "capability": "guild.build_log.search",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "build_log_search_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 10
+    },
+    {
+      "capability": "guild.build_log.add",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "build_log_add_v1",
+      "verify": "build_log_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 1
+    },
+    {
+      "capability": "guild.build_log.add_to",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "build_log_add_to_v1",
+      "verify": "build_log_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 1
+    },
+    {
+      "capability": "partnership.task.propose_build",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "task_build_item_v1",
+      "verify": "task_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 2
     }
   ]
 }
