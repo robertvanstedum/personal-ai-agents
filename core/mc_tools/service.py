@@ -30,6 +30,9 @@ from core.minimoi_actions.receipts import _cursor
 from . import binding as binding_mod, catalogue, effects, host, offers
 from .binding import NotBound
 
+# Tools the task adapter answers that aren't named minimoi_task_*.
+TASK_ADAPTER_TOOLS = frozenset({"minimoi_build_item", "minimoi_helper_ask", "minimoi_helper_result", "minimoi_helper_review"})
+
 _log = logging.getLogger("mc_tools")
 STATUSES = ("done", "needs_confirmation", "needs_clarification", "refused", "unknown")
 PROPOSAL_MINUTES = int(offers.PROPOSAL_WINDOW.total_seconds() // 60)
@@ -358,7 +361,7 @@ class ToolService:
                 from . import host_files
                 answer = (host_files.complete(self, args, caller, host_completion) if host_completion is not None
                           else host_files.admit(self, args, caller))
-            elif name.startswith("minimoi_task_"):
+            elif name.startswith("minimoi_task_") or name in TASK_ADAPTER_TOOLS:
                 answer = (self.tasks.call(self, name, args, caller) if self.tasks is not None
                           else refused("tool_unavailable"))
             elif name in board_ops or name == "minimoi_clarify_action":
@@ -1106,7 +1109,8 @@ class ToolService:
                     "first_pass": found.get("first_pass"), "source": found.get("source"), "additions": found.get("additions")}
         elif purpose == "review":
             return result("refused", "review_needs_item", "A review names one Build Log item. Nothing was sent. Record it first, then "
-                          "ask for the review with its number.")
+                          "ask for the review with its number. If he named the agent and just wants it asked, "
+                          "use minimoi_agent_ask instead.")
         edition = hashlib.sha256(text.encode("utf-8")).hexdigest()
         # Every outbound text is scrubbed, including what was stored earlier. The hashes stay those of the originals; "scrubbed" says
         # the text here may differ from what they cover.
