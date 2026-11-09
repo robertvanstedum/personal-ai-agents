@@ -32,7 +32,8 @@ def open_read_only(path):
             db.execute('SELECT 1 FROM sqlite_master LIMIT 1').fetchone();return db
         except sqlite3.OperationalError:
             db.close();raise
-    except sqlite3.OperationalError:
+    except sqlite3.OperationalError as exc:
+        if 'unable to open database file' not in str(exc):raise      # only the read-only mount's refusal; anything else is a real failure
         return sqlite3.connect(uri+'?mode=ro&immutable=1',uri=True)
 def schema_hash(db):
     rows=db.execute("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").fetchall()
