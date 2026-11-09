@@ -44,7 +44,7 @@ jobs:
         run: |
           grep -q '^FROM ghcr.io/openclaw/openclaw:[0-9.]*@sha256:' docker/mc-agent-container/Dockerfile
           bash -n scripts/operations/deploy_mc_container_ec2.sh
-          python3 -c "import json; m=json.load(open('services/mc_operations/personas/mc-chat/releases/0.1.17/manifest.json')); assert m"
+          python3 -c "import json; m=json.load(open('services/mc_operations/personas/mc-chat/releases/0.1.29/manifest.json')); assert m"
 
       - name: Build the MC image
         run: |
@@ -56,7 +56,8 @@ jobs:
           set +e
           docker run --rm -e ANTHROPIC_API_KEY=synthetic mc-agent-local > /tmp/key.out 2>&1; code=$?
           set -e
-          test "$code" = 78 && grep -q "REFUSED: provider key ANTHROPIC_API_KEY" /tmp/key.out
+          test "$code" = 78 && grep -q "Raw provider credential is forbidden: ANTHROPIC_API_KEY" /tmp/key.out \
+            && grep -q "REFUSED: model access policy refused" /tmp/key.out || { cat /tmp/key.out; exit 1; }
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
