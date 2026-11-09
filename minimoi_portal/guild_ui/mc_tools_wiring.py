@@ -585,7 +585,9 @@ class AgentAsker:
 
 def build_log_store(environ):
     """The live Build Log (MC front door spec §4.1), or None where the portal only shows the repository copy."""
-    path = (environ.get("GUILD_QUEUE_PATH") or "").strip()
+    # The mount's filtered settings don't carry the queue path; it is the portal's own config, as the Build Log page reads it.
+    from minimoi_portal import config as portal_config
+    path = (environ.get("GUILD_QUEUE_PATH") or portal_config.GUILD_QUEUE_PATH or "").strip()
     if not path:
         return None
     from domains.guild.queue_store import QueueStore

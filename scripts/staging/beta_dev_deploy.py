@@ -132,6 +132,7 @@ TARGETS = {
                             (PERSONA, MC_DIR + "persona/"), (HANDBOOK + "manifest.json", MC_DIR + "handbook/manifest.json"),
                             (HANDBOOK + "v0.1.2/", MC_DIR + "handbook/v0.1.2/"),
                             ("scripts/ops/mc_container_security_test.py", "/opt/minimoi/mc-release/mc_container_security_test.py")),
+                     always=(("docker/mc-agent-container/openclaw.json", MC_DIR + "openclaw.json"),),   # the plugin's tool list: start.sh applies it each start
                      replaces=(MC_DIR + "persona/", MC_DIR + "handbook/"), executables=(MC_DIR + "start.sh",), down="6 to 12 minutes (owner lease plus a 3-minute healthcheck)"),
     "guildhall-cos": dict(container="minimoi-guildhall-cos", repo="guildhall-cos", tier=7, base="portal", worker=True, wait=DEFAULT_WAIT,
                           rules=_app("services/rooms_worker/"), layout=("services/rooms_worker/",), smoke=_python("services.rooms_worker.cos"),
