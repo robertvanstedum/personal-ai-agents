@@ -87,6 +87,8 @@ _FENCE = re.compile(r"^\s*(```|~~~)")
 # the same fold; nothing the model wrote reaches the page as a tag.
 _MODEL_DETAILS_OPEN = re.compile(r"^\s*<details(?:\s[^>]*)?>\s*(?:<summary(?:\s[^>]*)?>.*?</summary>\s*)?$", re.IGNORECASE)
 _MODEL_DETAILS_LINE = re.compile(r"^\s*(?:<summary(?:\s[^>]*)?>.*?</summary>|</details>)\s*$", re.IGNORECASE)
+# MC's correction capture, folded as the Guildhall folds it. Only a complete fence; the stored text keeps it for the judgment store.
+_LEARNING = re.compile(r"^```capture[^\S\r\n]*\r?\n[\s\S]*?^```[^\S\r\n]*$(?:\r?\n(?:\r?\n)?Captured \d+ correction pairs?[^\S\r\n]*$)?", re.MULTILINE)
 
 
 def _unwrap_model_details(source: str) -> str:
@@ -128,11 +130,15 @@ def render_markdown(text: str) -> str:
     cut = max(0, len(source) - MAX_CHARS)
     source = source[:MAX_CHARS]
     try:
-        head, detail = _split_fold(source)
+        notes = [m.group(0) for m in _LEARNING.finditer(source)]
+        head, detail = _split_fold(_LEARNING.sub("", source).strip() if notes else source)
         html = _MD.render(_separate_blocks(head))
         if detail is not None:
             html += ('<details class="mc-detail"><summary>Details</summary>'
                      + _MD.render(_separate_blocks(detail)) + "</details>")
+        for note in notes:
+            html += ('<details class="mc-detail"><summary>Learning note</summary>'
+                     + _MD.render(_separate_blocks(note)) + "</details>")
     except Exception:
         html = "<p>" + nh3.clean_text(source) + "</p>"
     if cut:

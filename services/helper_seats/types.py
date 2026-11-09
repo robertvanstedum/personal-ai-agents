@@ -8,7 +8,9 @@ from pathlib import Path
 MAX_FILES, MAX_BYTES, MAX_SNIPPETS, SNIPPET = 4000, 200_000, 8, 400
 TEXT = {".py", ".md", ".json", ".html", ".sh", ".yml", ".yaml", ".js", ".mjs", ".css", ".txt"}
 STALE_STATUSES = ("idea", "design", "backlog", "spec_ready", "blocked", "rework")
-STOP = frozenset({"where", "what", "which", "does", "this", "that", "with", "from", "have", "there", "when", "about"})
+STOP = frozenset({"where", "what", "which", "does", "this", "that", "with", "from", "have", "there", "when", "about", "file", "files", "defines", "define", "defined", "code", "implements"})
+PROSE_DIRS = frozenset({"docs", "_working", "_NewDomains", "planning", "archive", "tests"})
+DEFINITION = re.compile(r"^\s*(?:async\s+)?(?:class|def|function|const|export\s+function)\s+([A-Za-z_][A-Za-z0-9_]*)", re.M)
 
 
 class Ctx:
@@ -18,12 +20,20 @@ class Ctx:
         self.repo_root, self.read_items, self.ask_model, self.now = repo_root, read_items, ask_model, now
 
 
+def _is_prose(rel: Path) -> bool:
+    return rel.suffix in (".md", ".txt") or (rel.parts and rel.parts[0] in PROSE_DIRS)
+
+
 def _search(root: Path, words: set) -> list:
+    """Code before prose, at every stage: read code first so the file limit can't cut it off, and a name or definition that matches
+    outranks a file that only mentions the words. The excerpt starts at the best definition, if there is one."""
     hits, seen = [], 0
-    for path in sorted(root.rglob("*")):
+    rels = (p.relative_to(root) for p in root.rglob("*"))
+    for rel in sorted(rels, key=lambda r: (_is_prose(r), str(r))):
         if seen >= MAX_FILES:
             break
-        if not path.is_file() or path.suffix not in TEXT or any(p.startswith(".") or p in ("node_modules", "venv", "__pycache__") for p in path.parts):
+        path = root / rel
+        if not path.is_file() or path.suffix not in TEXT or any(p.startswith(".") or p in ("node_modules", "venv", "__pycache__") for p in rel.parts):
             continue
         seen += 1
         try:
@@ -32,9 +42,14 @@ def _search(root: Path, words: set) -> list:
             continue
         low = text.casefold()
         found = {w for w in words if w in low}
-        if found:
-            at = min(low.find(w) for w in found)
-            hits.append((len(found), str(path.relative_to(root)), text[max(0, at - 100):at + SNIPPET]))
+        if not found:
+            continue
+        name = re.sub(r"[_\-./]", " ", str(rel).casefold())
+        in_name = sum(w in name for w in words)
+        defs = [m for m in DEFINITION.finditer(text) if any(w in m.group(1).casefold().replace("_", " ") or w in m.group(1).casefold() for w in words)]
+        at = defs[0].start() if defs else min(low.find(w) for w in found)
+        score = len(found) + 3 * in_name + 2 * min(len(defs), 3) - (3 if _is_prose(rel) else 0)
+        hits.append((score, str(rel), text[max(0, at - 100):at + SNIPPET]))
     hits.sort(key=lambda h: (-h[0], h[1]))
     return hits[:MAX_SNIPPETS]
 

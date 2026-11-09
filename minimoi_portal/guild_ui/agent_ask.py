@@ -196,10 +196,11 @@ TASK_REQUEST_REFUSED = ("**Not sent.** MC cannot create a task itself; a task co
 _TASK_REQUEST = re.compile(r"\b(?:make|create|open|start|add|file|set\s+up)\b[^.!?\n]{0,40}\btask\b", re.I)
 OWNER_FILES_REFUSED = ("**Not sent.** I could not match the requested files to your current instruction and attachments. Nothing was put to any agent. Please attach the file to this message or explicitly request the latest file.")
 _OWNER_AGENT = r"(?:claude[ -]code|claude|codex|grok|both|all|everyone)"       # Claude alone is Claude Code (GROUPS): the only Claude on the team
-_OWNER_VERB = r"(?:ask|tell|task|contact|message|ping|notify|send|write\s+to|reach(?:\s+out\s+to)?|get\s+in\s+touch\s+with)"
+_OWNER_VERB = r"(?:ask|tell|task|contact|message|ping|notify|send|write\s+to|reach(?:\s+out\s+to)?|get\s+in\s+touch\s+with|pull\s+in|bring\s+in|loop\s+in)"
 _OWNER_DIRECT = re.compile(r"\b" + _OWNER_VERB + r"\s+(?P<agent>" + _OWNER_AGENT + r")\b", re.I)
 _OWNER_TO = re.compile(r"\b(?:hand|send|pass|forward|give|assign)\b[^.!?;\n]{0,250}?\bto\s+(?P<agent>" + _OWNER_AGENT + r")\b", re.I)
 _OWNER_NEGATIVE = re.compile(r"\b(?:not|never|without|don't|do not|do\s+not)\b", re.I)
+_OWNER_CONDITION = re.compile(r"\b(?:if|when|unless|once|after|before|should|might|maybe|would|could)\b", re.I)
 _OWNER_FILE = re.compile(r"\b(?:files?|attachments?|diffs?|patch(?:es)?|screenshots?|images?|documents?)\b", re.I)
 # What may stand before the instruction: politeness and "try to". Nothing that makes it a report, a condition or a question about the past.
 _OWNER_LEAD = re.compile(r"(?:(?:please|just|(?:can|could|would|will) you|try (?:to|and)|go ahead and|i (?:want|need) you to|i(?:'|’)?d like you to)\s*)*"
@@ -274,7 +275,10 @@ def owner_ask_proposal(owner_text, proposal, current_doc_ids):
             if _OWNER_NEGATIVE.search(prefix) or re.search(r'\bno\b', prefix, re.I):
                 excluded |= set(recipients(who))
                 continue
-            if not _OWNER_LEAD.fullmatch(prefix):
+            lead = prefix
+            if re.match(r'(?:pull|bring|loop)\s', match[0], re.I) and not _OWNER_CONDITION.search(prefix):
+                lead = prefix.rsplit(',', 1)[-1].strip()         # "we need a war room on this, pull in Claude and Codex"
+            if not _OWNER_LEAD.fullmatch(lead):
                 continue
             suffix = clause[match.end():]
             other = re.match(r'\s+(and|or)\s+(' + _OWNER_AGENT + r')\b', suffix, re.I)
@@ -559,9 +563,9 @@ class AskService:
             os.close(fd)
 
     def withdraw_typed(self, conversation_id: str, request_id: str) -> str:
-        """withdrawn | picked_up | not_found. Only MC's own typed request in this conversation, and only while still queued."""
+        """withdrawn | picked_up | not_found. Only MC's own request in this conversation, typed or a plain ask, and only while still queued."""
         doc = ar.load(self.root, request_id) if ar.valid_request_id(request_id) else None
-        if not doc or doc["request"].get("from") != "mc" or not doc["request"].get("envelope") \
+        if not doc or doc["request"].get("from") != "mc" \
                 or doc["request"].get("conversation_id") != conversation_id or doc["closed"] is not None:
             return "not_found"
         if doc["stage"] != "queued":
