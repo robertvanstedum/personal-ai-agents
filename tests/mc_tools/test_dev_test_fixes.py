@@ -45,6 +45,12 @@ class PullIn(TestCase):
             with self.subTest(text=text):
                 self.assertIsNone(self._call(text, ["claude-code", "codex"])[1])
 
+    def test_get_an_agent_to_do_something(self):
+        self.assertIsNone(self._call("Get Grok to review #164.", ["grok"])[1])
+        self.assertIsNone(self._call("Get Claude Code to look at this.", ["claude-code"])[1])
+        self.assertIsNotNone(self._call("I need to get Grok to review this.", ["grok"])[1])
+        self.assertIsNotNone(self._call("Get Grok's view.", ["grok"])[1])
+
     def test_a_negated_or_wrong_recipient_still_fails(self):
         self.assertIsNotNone(self._call("Don't pull in Codex.", ["codex"])[1])
         self.assertIsNotNone(self._call("Pull in Codex.", ["grok"])[1])

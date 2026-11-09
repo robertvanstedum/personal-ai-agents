@@ -196,7 +196,7 @@ TASK_REQUEST_REFUSED = ("**Not sent.** MC cannot create a task itself; a task co
 _TASK_REQUEST = re.compile(r"\b(?:make|create|open|start|add|file|set\s+up)\b[^.!?\n]{0,40}\btask\b", re.I)
 OWNER_FILES_REFUSED = ("**Not sent.** I could not match the requested files to your current instruction and attachments. Nothing was put to any agent. Please attach the file to this message or explicitly request the latest file.")
 _OWNER_AGENT = r"(?:claude[ -]code|claude|codex|grok|both|all|everyone)"       # Claude alone is Claude Code (GROUPS): the only Claude on the team
-_OWNER_VERB = r"(?:ask|tell|task|contact|message|ping|notify|send|write\s+to|reach(?:\s+out\s+to)?|get\s+in\s+touch\s+with|pull\s+in|bring\s+in|loop\s+in)"
+_OWNER_VERB = r"(?:ask|tell|task|contact|message|ping|notify|send|write\s+to|reach(?:\s+out\s+to)?|get\s+in\s+touch\s+with|pull\s+in|bring\s+in|loop\s+in|get(?=\s+(?:claude\s+code|\S+)\s+to\b))"
 _OWNER_DIRECT = re.compile(r"\b" + _OWNER_VERB + r"\s+(?P<agent>" + _OWNER_AGENT + r")\b", re.I)
 _OWNER_TO = re.compile(r"\b(?:hand|send|pass|forward|give|assign)\b[^.!?;\n]{0,250}?\bto\s+(?P<agent>" + _OWNER_AGENT + r")\b", re.I)
 _OWNER_NEGATIVE = re.compile(r"\b(?:not|never|without|don't|do not|do\s+not)\b", re.I)
