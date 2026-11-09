@@ -89,7 +89,7 @@ BY_OPERATOR = (
     f"{SECRETS}/cos-bound/token",
     f"{SECRETS}/partnership/bindings.json", f"{SECRETS}/partnership/grants.json", f"{SECRETS}/partnership/runner-seats.json",
     f"{SECRETS}/partnership/db.url",
-    f"{SECRETS}/portal-partnership/mc.token", f"{SECRETS}/cos-partnership/tasks-cos.token",
+    f"{SECRETS}/portal-partnership/mc.token", f"{SECRETS}/portal-partnership/platform.token", f"{SECRETS}/cos-partnership/tasks-cos.token",
     f"{SECRETS}/cos-partnership/tasks-platform.token", f"{SECRETS}/cos-partnership/board-profile.json",
     f"{SECRETS}/cos-partnership/voice-summary-cos.key", f"{SECRETS}/portal-partnership/voice-summary-mc.key",
     f"{SECRETS}/cos-board/profiles.json", f"{SECRETS}/cos-board/db.url",

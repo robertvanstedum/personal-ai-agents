@@ -278,6 +278,7 @@ def test_bindings_that_dont_match_their_tokens_are_refused(host):
 
 def test_each_file_goes_to_its_consumers_uid_and_a_refused_owner_leaves_nothing(tmp_path, monkeypatch):
     assert setup.consumer(bind.COS_BOUND) == (1000, 1000) and setup.consumer(bind.BINDINGS) == (0, 0)
+    assert setup.consumer(bind.PORTAL_PLATFORM) == setup.consumer(bind.PORTAL_MC)
     (tmp_path / bind.COS_BOUND).parent.mkdir(parents=True)
     given = []
     monkeypatch.setattr(bind, "_fchown", lambda fd, uid, gid: given.append((uid, gid)))
