@@ -442,7 +442,7 @@ def test_german_providers_off_are_the_paused_list_and_on_put_grok_first(german_d
 
 
 def test_voice_is_untouched_by_the_switch():
-    """The Grok Voice choice stays in both domains; the voice summary and intent calls left xAI when its credit ran out (10 Nov)."""
+    """The Grok Voice choice stays in both domains; the voice summary and intent calls left xAI after its 429s stalled a live call (10 Nov)."""
     for path in ("domains/german/templates/german_gesprache.html", "domains/portuguese/templates/portuguese_conversas.html"):
         assert '<option value="xai">Grok Voice</option>' in (ROOT / path).read_text()
     config = yaml.safe_load((ROOT / "services/model_gateway/litellm.prod.yaml").read_text())

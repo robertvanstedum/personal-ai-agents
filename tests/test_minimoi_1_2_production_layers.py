@@ -232,7 +232,7 @@ def test_the_helpers_join_a_release_only_after_the_marker_robert_approval_writes
 
 def test_usage_folders_are_made_by_setup_and_each_writer_gets_only_its_own():
     layer = _compose(LAYERS[0])["services"]
-    assert setup.SHARED_FOLDERS[setup.USAGE][1] == 1000       # the gateway's own uid
+    assert setup.SHARED_FOLDERS[setup.USAGE][1] == 65534      # the gateway's own uid
     for writer in setup.USAGE_WRITERS:
         assert f"{setup.USAGE}/{writer}" in setup.FOLDERS
     for name, writer in (("cos-bot", "cos-bot"), ("cos-scheduler", "cos-scheduler"), ("portal", "portal")):
