@@ -29,6 +29,10 @@ RELEASE_WORKFLOWS = ("deploy.yml", "deploy-mc-agent.yml", "deploy-iotconnect.yml
 STALL_AFTER = timedelta(minutes=20)        # a turn that ended with no stop line, or open work, and nothing since: Robert hears
 REVIEW_WAIT = timedelta(minutes=60)
 GREEN_SETTLE = timedelta(minutes=10)
+# A green PR is "ready for your merge" only when GitHub says it merges cleanly and it has changed lately. One that
+# conflicts with main says it needs a rebase; one untouched this long says to check it still applies.
+STALE_AFTER = timedelta(days=7)
+PULL_TTL = timedelta(hours=1)              # a green PR's mergeability is read at most hourly per head commit
 
 
 class GitHub:
@@ -52,6 +56,17 @@ class GitHub:
     def checks(self, sha):
         return self.get(f"/commits/{sha}/check-runs", per_page=100).get("check_runs", [])
 
+    def pull(self, number, sha=None, *, now=None):
+        """One PR's detail (mergeable, mergeable_state), kept an hour per head commit so a check-in adds few calls."""
+        now = now or datetime.now(timezone.utc)
+        cache = self.__dict__.setdefault("_pulls", {})
+        hit = cache.get((number, sha))
+        if hit and now - hit[0] < PULL_TTL:
+            return hit[1]
+        detail = self.get(f"/pulls/{number}")
+        cache[(number, sha)] = (now, detail)
+        return detail
+
     def runs(self):
         return self.get("/actions/runs", per_page=30).get("workflow_runs", [])
 
@@ -68,6 +83,25 @@ def ci_state(check_runs):
         return "running"
     bad = {"failure", "timed_out", "cancelled", "action_required", "startup_failure"}
     return "failed" if any(c.get("conclusion") in bad for c in check_runs) else "passed"
+
+
+def _readiness(github, pr, sha, now):
+    """'ready' | 'conflict' | 'stale' for a settled green PR. Without a way to read the PR's detail (a test double, or the
+    read failing), it stays 'ready', as before: the check-in never invents a conflict."""
+    lookup = getattr(github, "pull", None)
+    if lookup is None:
+        return "ready"
+    try:
+        detail = lookup(pr["number"], sha, now=now)
+    except Exception:
+        return "ready"
+    if not isinstance(detail, dict):
+        return "ready"
+    if detail.get("mergeable") is False or detail.get("mergeable_state") == "dirty":
+        return "conflict"
+    if now - _ts(pr["updated_at"]) >= STALE_AFTER:
+        return "stale"
+    return "ready"
 
 
 def _who(stop):
@@ -95,9 +129,20 @@ def check_in(store, github, *, now=None, since=None, runtime=None, sync_view_bou
                 items.append({"key": f"pr-failed:{pr['number']}:{sha[:12]}", "kind": "error",
                               "text": f"PR #{pr['number']} CI failed at {sha[:8]}: {pr['title'][:100]}"})
             elif state == "passed" and now - _ts(pr["updated_at"]) >= GREEN_SETTLE:
-                items.append({"key": f"pr-green:{pr['number']}:{sha[:12]}", "kind": "waiting_on_robert",
-                              "text": f"PR #{pr['number']} is green at {sha[:8]} and waits for your merge: "
-                                      f"{pr['title'][:100]}"})
+                readiness = _readiness(github, pr, sha, now)
+                if readiness == "conflict":
+                    items.append({"key": f"pr-conflict:{pr['number']}:{sha[:12]}", "kind": "blocked",
+                                  "text": f"PR #{pr['number']} is open but conflicts with main, so it needs a rebase before "
+                                          f"it can merge (its CI was green at {sha[:8]}): {pr['title'][:100]}"})
+                elif readiness == "stale":
+                    days = (now - _ts(pr["updated_at"])).days
+                    items.append({"key": f"pr-stale:{pr['number']}:{sha[:12]}", "kind": "stalled",
+                                  "text": f"PR #{pr['number']} has had no change for {days} days (CI green at {sha[:8]}); "
+                                          f"check it still applies before merging: {pr['title'][:100]}"})
+                else:
+                    items.append({"key": f"pr-green:{pr['number']}:{sha[:12]}", "kind": "waiting_on_robert",
+                                  "text": f"PR #{pr['number']} is green at {sha[:8]} and waits for your merge: "
+                                          f"{pr['title'][:100]}"})
     except Exception as exc:
         errors.append(f"pull requests unreadable ({type(exc).__name__})")
 
