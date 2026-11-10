@@ -69,7 +69,7 @@ def _compose_lines(fake):
 
 def test_cos_key_scope_is_its_four_routes_chat_and_responses_monthly():
     out = subprocess.run(["bash", "-c", f'source "{SCRIPTS}/mc_keys.sh"; cos_keygen_py'], capture_output=True, text=True).stdout
-    assert '"models": ["minimoi-cos-agent", "minimoi-cos-agent-xai-fast", "minimoi-cos-web-search", "minimoi-cos-agent-anthropic", "minimoi-openai-strong", "minimoi-openai-mid", "minimoi-openai-low", "minimoi-xai-low"]' in out
+    assert '"models": ["minimoi-cos-agent", "minimoi-cos-agent-xai-fast", "minimoi-cos-web-search", "minimoi-cos-agent-anthropic", "minimoi-openai-strong", "minimoi-openai-mid", "minimoi-openai-low", "minimoi-xai-low", "minimoi-xai-strong", "minimoi-xai-mid", "minimoi-anthropic-strong", "minimoi-anthropic-mid", "minimoi-anthropic-low"]' in out
     assert '"allowed_routes": ["/v1/chat/completions", "/chat/completions", "/v1/responses", "/responses"]' in out
     assert '"budget_duration": "30d"' in out and '"rpm_limit": 60' in out and '"key_alias": "cos-agent-"' in out
     assert '"role": "guild.cos"' in out and 'os.environ["COS_CAP"]' in out and 'os.environ.get("COS_OLD_KEY", "")' in out
