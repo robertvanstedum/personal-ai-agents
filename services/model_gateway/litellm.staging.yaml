@@ -138,13 +138,15 @@ model_list:
   # bounds each call at 2.5 s and never retries.
   - model_name: minimoi-voice-intent
     litellm_params:
-      model: xai/grok-4.3
-      api_key: os.environ/GATEWAY_XAI_API_KEY
+      model: anthropic/claude-haiku-5-5
+      api_key: os.environ/GATEWAY_ANTHROPIC_API_KEY
       timeout: 5
-      reasoning_effort: none
+      reasoning_effort: low
+      # Haiku thinks unless told not to, and thinking uses up the call's 16 tokens: the answer comes back empty, read as chat.
+      thinking: {type: disabled}
     model_info:
-      id: voice-intent-xai
-      base_model: xai/grok-4.3
+      id: voice-intent-anthropic
+      base_model: anthropic/claude-haiku-5-5
       mode: chat
 
   - model_name: minimoi-mc-agent

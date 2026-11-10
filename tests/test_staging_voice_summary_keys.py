@@ -323,11 +323,12 @@ def test_summary_keys_adds_every_missing_voice_route_in_one_change(tmp_path, she
         assert "already routes minimoi-voice-summary (unchanged)" in result.stdout
 
 
-def test_the_intent_route_is_the_summarys_model_with_reasoning_off_on_every_gateway():
+def test_the_intent_route_is_haiku_with_thinking_off_on_every_gateway():
+    """With thinking on, Haiku spends the call's few tokens on thinking and answers nothing, which counts as chat every time."""
     for name in ("litellm.yaml", "litellm.staging.yaml", "litellm.prod.yaml"):
         routes = {r["model_name"]: r for r in yaml.safe_load((GATEWAY_STAGING.parent / name).read_text())["model_list"]}
-        intent, summary = routes[INTENT]["litellm_params"], routes[ALIAS]["litellm_params"]
-        assert intent["model"] == summary["model"] and intent["api_key"] == summary["api_key"], name
-        assert intent["reasoning_effort"] == "none" and intent["timeout"] == 5, name
+        intent = routes[INTENT]["litellm_params"]
+        assert intent["model"] == "anthropic/claude-haiku-5-5" and "ANTHROPIC_API_KEY" in intent["api_key"], name
+        assert intent["thinking"] == {"type": "disabled"} and intent["timeout"] == 5, name
     from core.realtime_voice.intent_gateway import INTENT_MODEL
     assert INTENT_MODEL == INTENT

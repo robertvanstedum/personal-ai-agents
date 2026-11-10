@@ -442,9 +442,9 @@ def test_german_providers_off_are_the_paused_list_and_on_put_grok_first(german_d
 
 
 def test_voice_is_untouched_by_the_switch():
-    """The Grok Voice choice stays in both domains, and the gateway's voice roles stay on Grok where they are."""
+    """The Grok Voice choice stays in both domains; the voice summary stays on Grok, and the intent call moved to Haiku after xAI 429s in a live call."""
     for path in ("domains/german/templates/german_gesprache.html", "domains/portuguese/templates/portuguese_conversas.html"):
         assert '<option value="xai">Grok Voice</option>' in (ROOT / path).read_text()
     config = yaml.safe_load((ROOT / "services/model_gateway/litellm.prod.yaml").read_text())
     served = {m["model_name"]: m["litellm_params"]["model"] for m in config["model_list"]}
-    assert served["minimoi-voice-summary"] == served["minimoi-voice-intent"] == "xai/grok-4.3"
+    assert served["minimoi-voice-summary"] == "xai/grok-4.3" and served["minimoi-voice-intent"] == "anthropic/claude-haiku-5-5"
