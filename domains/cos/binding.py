@@ -111,8 +111,11 @@ class BindingStore:
         self.environment = environment
         self._clock = clock
         self._local = threading.local()
-        self.path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
-        os.chmod(self.path.parent, 0o700)
+        # Only a folder made here is tightened. On production this file sits in the CoS store, whose mode the deploy sets
+        # (cos_prod.sh prepare): the file itself stays 0600 either way.
+        if not self.path.parent.exists():
+            self.path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+            os.chmod(self.path.parent, 0o700)
         fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600)
         os.close(fd)
         os.chmod(self.path, 0o600)
