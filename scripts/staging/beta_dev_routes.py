@@ -37,6 +37,12 @@ GATEWAY_CONTAINER = "minimoi-model-gateway"
 GATEWAY = "minimoi-gateway"
 GROK_ROUTE, GROK_MODEL = "api-xai-low", "minimoi-xai-low"
 GROK_REF = f"{GATEWAY}/{GROK_MODEL}"
+# --default xai (#466): the catalogue's roles read Grok, each Grok tier falling over to Claude's at its level.
+XAI_TIERS = ("strong", "mid", "low")
+XAI_REFS = tuple(f"{GATEWAY}/minimoi-xai-{tier}" for tier in XAI_TIERS)
+XAI_DEFAULT_ROUTE = "api-xai-strong"
+XAI_DEFAULT_REF = f"{GATEWAY}/minimoi-xai-strong"
+XAI_ONLY_ROUTES = ("api-xai-strong", "api-xai-mid", "api-anthropic-low")     # added only when Grok is the default
 GROK_OFFERED = {"mc": "available", "cos": "available"}
 PROVIDERS = ("openai", "anthropic")
 DEFAULT_FAILOVER = "openai"
@@ -64,6 +70,9 @@ API_ROUTES = {r["route_id"]: r for r in (
     _api("api-openai-low", "low", "minimoi-openai-low", "GPT-6 Luna (API)", "low"),
     _api("api-anthropic-strong", "strong", "minimoi-anthropic-strong", "Claude Opus 5.5 (API)", "high"),
     _api("api-anthropic-mid", "mid", "minimoi-anthropic-mid", "Claude Sonnet 5.5 (API)", "medium"),
+    _api("api-anthropic-low", "low", "minimoi-anthropic-low", "Claude Haiku 5.5 (API)", "low"),
+    _api("api-xai-strong", "strong", "minimoi-xai-strong", "Grok 4.7 (pay per use)", "high"),
+    _api("api-xai-mid", "mid", "minimoi-xai-mid", "Grok 4.6 (pay per use)", "medium"),
     _api(GROK_ROUTE, "low", GROK_MODEL, "Grok 4.3 (pay per use)", "low"),
 )}
 
@@ -92,21 +101,25 @@ def failover_statement(providers) -> str:
                    " --failover openai,anthropic is possible later.")
 
 
-def _is_target_of(route_id: str, providers) -> bool:
+def _is_target_of(route_id: str, providers, xai: bool = False) -> bool:
+    if xai and route_id.startswith(("api-xai-", "api-anthropic-")):
+        return True
+    if route_id in XAI_ONLY_ROUTES:
+        return False
     return route_id == GROK_ROUTE or any(route_id.startswith(f"api-{p}-") for p in providers)
 
 
-def plan_catalogue(old: dict, providers) -> tuple:
+def plan_catalogue(old: dict, providers, xai: bool = False) -> tuple:
     """(new catalogue, semantic diff lines). Everything else in the host's file stays as it is, including its revision."""
     new = copy.deepcopy(old)
     routes, lines = new["routes"], []
     for route_id, template in API_ROUTES.items():
         have = next((r for r in routes if r["route_id"] == route_id), None)
         if have is None:
-            if _is_target_of(route_id, providers):
+            if _is_target_of(route_id, providers, xai):
                 routes.append(copy.deepcopy(template))
                 lines.append(f"+ route {route_id}: {GATEWAY}/{template['model']}, metered_api, offered {{}}")
-        elif _is_target_of(route_id, providers) and (have.get("model") != template["model"] or have.get("billing_mode") != "metered_api" or have.get("provider") != GATEWAY):
+        elif _is_target_of(route_id, providers, xai) and (have.get("model") != template["model"] or have.get("billing_mode") != "metered_api" or have.get("provider") != GATEWAY):
             raise Refused(f"the host's {route_id} is not {GATEWAY}/{template['model']} on metered_api; nothing changed")
     by_id = {r["route_id"]: r for r in routes}
     for route in routes:
@@ -128,18 +141,33 @@ def plan_catalogue(old: dict, providers) -> tuple:
     if grok["offered"] != GROK_OFFERED:
         lines.append(f"~ route {GROK_ROUTE}: offered {json.dumps(grok['offered'], sort_keys=True)} -> {json.dumps(GROK_OFFERED, sort_keys=True)}")
         grok["offered"] = dict(GROK_OFFERED)
-    check_new_catalogue(old, new, providers)
+    if xai:
+        for tier in XAI_TIERS:
+            route = by_id[f"api-xai-{tier}"]
+            route["offered"], route["failover"] = dict(GROK_OFFERED), f"api-anthropic-{tier}"
+            lines.append(f"~ route api-xai-{tier}: offered to MC and CoS; + failover: api-anthropic-{tier}")
+        for name, role in new["roles"].items():
+            if role["route"] != XAI_DEFAULT_ROUTE:
+                lines.append(f"~ role {name}: {role['route']} -> {XAI_DEFAULT_ROUTE}")
+                role["route"] = XAI_DEFAULT_ROUTE
+    check_new_catalogue(old, new, providers, xai)
     return new, lines
 
 
-def check_new_catalogue(old: dict, new: dict, providers) -> None:
-    """Default routes unchanged; Grok a choice only; every old field where it was, but the stated additions."""
+def check_new_catalogue(old: dict, new: dict, providers, xai: bool = False) -> None:
+    """Default routes unchanged unless Grok was chosen as the default; every old field where it was, but the stated additions."""
     D.check_catalogue(old)
-    D.check_catalogue(new)
-    assert new["roles"] == old["roles"], "a role moved"
-    assert {k: v for k, v in new.items() if k != "routes"} == {k: v for k, v in old.items() if k != "routes"}, "changed beyond its routes"
-    if any(role["route"] == GROK_ROUTE for role in new["roles"].values()):
-        raise Refused("a role reads Grok: Grok is never a default")
+    if xai:
+        assert all(role["route"] == XAI_DEFAULT_ROUTE for role in new["roles"].values()), "a role does not read Grok"
+        assert {k: {f: v for f, v in r.items() if f != "route"} for k, r in new["roles"].items()} == \
+               {k: {f: v for f, v in r.items() if f != "route"} for k, r in old["roles"].items()}, "a role changed beyond its route"
+    else:
+        D.check_catalogue(new)
+        assert new["roles"] == old["roles"], "a role moved"
+        if any(role["route"] == GROK_ROUTE for role in new["roles"].values()):
+            raise Refused("a role reads Grok: Grok is never a default")
+    skip = ("routes", "roles")
+    assert {k: v for k, v in new.items() if k not in skip} == {k: v for k, v in old.items() if k not in skip}, "changed beyond its routes"
     for route in new["routes"]:
         if route.get("failover") == GROK_ROUTE or "xai" in str(route.get("failover") or ""):
             raise Refused("a failover names Grok: nothing falls back onto it")
@@ -148,11 +176,11 @@ def check_new_catalogue(old: dict, new: dict, providers) -> None:
     for route in new["routes"]:
         rid = route["route_id"]
         if rid not in was:
-            assert _is_target_of(rid, providers), "route added beyond the plan: " + rid
+            assert _is_target_of(rid, providers, xai), "route added beyond the plan: " + rid
             continue
-        drop = {"failover"} if rid != GROK_ROUTE else {"failover", "offered"}
+        drop = {"failover"} if rid != GROK_ROUTE and not (xai and rid.startswith("api-xai-")) else {"failover", "offered"}
         assert {k: v for k, v in route.items() if k not in drop} == {k: v for k, v in was[rid].items() if k not in drop}, "route changed: " + rid
-        if rid != GROK_ROUTE and route.get("failover") != was[rid].get("failover"):
+        if rid != GROK_ROUTE and not (xai and rid.startswith("api-xai-")) and route.get("failover") != was[rid].get("failover"):
             assert route["provider"] in providers, "failover beyond the plan: " + rid
 
 
@@ -181,25 +209,31 @@ def failover_refs(catalogue: dict, agent: str, provider=None) -> list:
     return out
 
 
-def route_env(catalogue: dict) -> dict:
-    """{container: {name: value}}, the settings without the key. CoS's runtime holds OpenAI targets only (plan-access.cjs)."""
+def route_env(catalogue: dict, xai: bool = False) -> dict:
+    """{container: {name: value}}, the settings without the key. CoS's runtime holds OpenAI targets only (plan-access.cjs),
+    and Claude's at each level when Grok is the default."""
+    if xai:
+        metered = ",".join(XAI_REFS)
+        return {COS: {"COS_METERED_ROUTES": metered, "COS_FAILOVER_ROUTES": ",".join(failover_refs(catalogue, "cos")), "COS_PRIMARY_ROUTE": XAI_DEFAULT_REF},
+                MC: {"MC_METERED_ROUTES": metered, "MC_FAILOVER_ROUTES": ",".join(failover_refs(catalogue, "mc")), "MC_PRIMARY_ROUTE": XAI_DEFAULT_REF}}
     return {COS: {"COS_METERED_ROUTES": GROK_REF, "COS_FAILOVER_ROUTES": ",".join(failover_refs(catalogue, "cos", "openai"))},
             MC: {"MC_METERED_ROUTES": GROK_REF, "MC_FAILOVER_ROUTES": ",".join(failover_refs(catalogue, "mc"))}}
 
 
-def key_models(env_value: str) -> list:
+def key_models(env_value: str, xai: bool = False) -> list:
     """The gateway tiers a key must allow: the failover targets and Grok."""
     refs = [r for r in env_value.split(",") if r]
-    return sorted({r.split("/")[1] for r in refs} | {GROK_MODEL})
+    grok = {r.split("/")[1] for r in XAI_REFS} if xai else {GROK_MODEL}
+    return sorted({r.split("/")[1] for r in refs} | grok)
 
 
-def check_relay_routes(old_raw, new_raw: str, catalogue: dict, providers) -> dict:
+def check_relay_routes(old_raw, new_raw: str, catalogue: dict, providers, xai: bool = False) -> dict:
     """The relay keeps every route it knows and gains only the declared API routes."""
     old, new = json.loads(old_raw or "{}"), json.loads(new_raw)
     for route_id, ref in old.items():
         assert new.get(route_id) == ref, "the relay would lose or move a route: " + route_id
     for route_id in sorted(set(new) - set(old)):
-        assert _is_target_of(route_id, providers), "the relay would gain a route beyond the plan: " + route_id
+        assert _is_target_of(route_id, providers, xai), "the relay would gain a route beyond the plan: " + route_id
     assert new.get(GROK_ROUTE) == GROK_REF, "the relay would not know Grok"
     for ref in failover_refs(catalogue, "mc"):
         assert ref in new.values(), "the relay would not know a failover target: " + ref
@@ -464,7 +498,7 @@ class RouteSwitch:
 
 
 class RealHost:
-    def __init__(self, root=D.STAGING_ROOT, op_module=None, providers=(DEFAULT_FAILOVER,)):
+    def __init__(self, root=D.STAGING_ROOT, op_module=None, providers=(DEFAULT_FAILOVER,), xai=False):
         self.R = pathlib.Path(root)
         D.refuse_production(self.R)
         self.OP = self.R / "operators" / OPERATOR_NAME
@@ -479,6 +513,7 @@ class RealHost:
             import op as op_module
         self.O = op_module
         self.providers = providers
+        self.xai = xai
         self.secrets, self.notes, self.where = set(), [], {}
 
     # plumbing
@@ -584,8 +619,8 @@ class RealHost:
         self._check_code()
         old = json.loads(self.CAT.read_text())
         self.old_catalogue = old
-        self.new_catalogue, self.catalogue_lines = plan_catalogue(old, self.providers)
-        self.env_plan = route_env(self.new_catalogue)
+        self.new_catalogue, self.catalogue_lines = plan_catalogue(old, self.providers, self.xai)
+        self.env_plan = route_env(self.new_catalogue, self.xai)
         self._check_catalogue_readers(hashlib.sha256(self.CAT.read_bytes()).hexdigest())
         self._check_gateway()
         self._plan_relay()
@@ -644,8 +679,9 @@ class RealHost:
             raise Refused("the gateway has no tier: " + ", ".join(got["missing"]))
         if got["no_provider_key"]:
             raise Refused("the gateway has no provider key by this name: " + ", ".join(got["no_provider_key"]))
-        if got["in_a_fallback"]:
-            raise Refused("the gateway's own fallback chain touches: " + ", ".join(got["in_a_fallback"]))
+        chained = [m for m in got["in_a_fallback"] if not (self.xai and m.startswith("minimoi-anthropic-"))]   # Claude is Grok's declared failover
+        if chained:
+            raise Refused("the gateway's own fallback chain touches: " + ", ".join(chained))
         if not got["key_database"]:
             raise Refused("the gateway has no key database, so no capped key can be made. Nothing changed.")
         assert self.O.inspect(GATEWAY_CONTAINER)["State"]["Running"], "the gateway is not running"
@@ -670,7 +706,7 @@ class RealHost:
             raise Refused("no readable conversation record for the relay's MC_RELAY_CHAT_DB. Nothing changed.")
         portal = self.O.inspect("minimoi-portal")["Image"]
         raw = self._sealed(portal, "python", "-c", RELAY_ROUTES_PY, input=catalogue_text(self.new_catalogue), extra=("-e", "PYTHONDONTWRITEBYTECODE=1")).strip().splitlines()[-1]
-        check_relay_routes(env.get("MC_RELAY_ROUTES"), raw, self.new_catalogue, self.providers)
+        check_relay_routes(env.get("MC_RELAY_ROUTES"), raw, self.new_catalogue, self.providers, self.xai)
         self.env_plan[RELAY] = {"MC_RELAY_ROUTES": raw, "MC_RELAY_TOOL_STARTS": f"{mount['Destination']}/mc-tool-starts", "MC_RELAY_CHAT_DB": chat}
 
     def _node_policy(self, name, code, policy_file, env, extra_env=()):
@@ -683,7 +719,8 @@ class RealHost:
         self.want_mc = self._node_policy(MC, MC_POLICY_JS, MC_POLICY_FILE, {**mc, **self.env_plan[MC], "MC_MODEL_GATEWAY_KEY": PLACEHOLDER_KEY})
         self.want_cos = self._node_policy(COS, COS_POLICY_JS, COS_POLICY_FILE, {**cos, **self.env_plan[COS], "COS_GATEWAY_KEY_CAPPED": "1"}, (("ROUTES_PINNED_CONFIG", COS_PINNED_CONFIG),))
         for who, want, primary in (("MC", self.want_mc, mc.get("MC_PLAN_MODEL")), ("CoS", self.want_cos, cos.get("COS_PLAN_MODEL"))):
-            assert want["primary"] == primary and want["primary"] != GROK_REF and not want["fallbacks"], who + "'s planned default or fallbacks are wrong"
+            expected = XAI_DEFAULT_REF if self.xai else primary
+            assert want["primary"] == expected and want["primary"] != GROK_REF and not want["fallbacks"], who + "'s planned default or fallbacks are wrong"
 
     def _cos_key_value(self):
         """CoS's key as CoS holds it. Kept in this process; reaches the gateway by environment only."""
@@ -704,7 +741,7 @@ class RealHost:
         mounts = [m["Destination"] for m in self.O.inspect(COS)["Mounts"]]
         key_file = cos_env.get("COS_GATEWAY_KEY_FILE") or COS_KEY_MOUNT + "/key"
         self.cos_key = {"kind": classify_cos_key(cos_env, mounts, master, self._exec_ok(COS, "test", "-r", key_file))}
-        wanted_cos = key_models(self.env_plan[COS]["COS_FAILOVER_ROUTES"])
+        wanted_cos = key_models(self.env_plan[COS]["COS_FAILOVER_ROUTES"], self.xai)
         if self.cos_key["kind"] == "master":
             self.cos_key.update(budget=CAP_DOLLARS, budget_duration=BUDGET_DURATION, models_after=sorted({*cos_base_models(), *wanted_cos}),
                                 state="reuse this operator's kept key" if self.COS_KEY_FILE.exists() else "new")
@@ -714,7 +751,7 @@ class RealHost:
             self.cos_key.update(budget=info["max_budget"], budget_duration=info.get("budget_duration"), spend=info.get("spend"), models_before=info["models"],
                                 add=sorted(set(wanted_cos) - set(info["models"])), models_after=sorted({*info["models"], *wanted_cos}), state="existing: models extended, budget unchanged",
                                 capped_flag_needed=self.cos_key["kind"] == "env" and cos_env.get("COS_GATEWAY_KEY_CAPPED") != "1")
-        self.mc_models = key_models(self.env_plan[MC]["MC_FAILOVER_ROUTES"])
+        self.mc_models = key_models(self.env_plan[MC]["MC_FAILOVER_ROUTES"], self.xai)
         self.mc_key_state = "reuse this operator's kept key" if self.MC_KEY_FILE.exists() else "new"
         if self.MC_KEY_FILE.exists():
             info = self._key_info(self.MC_KEY_FILE.read_text().strip())
@@ -976,7 +1013,7 @@ class RealHost:
             only_env(self.saved["renders"][wrapper], self._render(wrapper), env)
         catalogue = json.loads(self.CAT.read_text())
         assert catalogue == self.new_catalogue, "the host catalogue is not the planned one"
-        check_new_catalogue(self.old_catalogue, catalogue, self.providers)
+        check_new_catalogue(self.old_catalogue, catalogue, self.providers, self.xai)
         self._check_catalogue_readers(hashlib.sha256(self.CAT.read_bytes()).hexdigest())
         secrets = [s for s in (self.mc_key, self.cos_file_key) if s]
         check_routed_mc_policy(json.loads((pathlib.Path(self.saved["state"]) / "openclaw.json").read_text()), self.want_mc, secrets)
@@ -1047,8 +1084,9 @@ def main(argv=None):                                # pragma: no cover
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("dry-run", "apply", "rollback"))
     parser.add_argument("--failover", default=DEFAULT_FAILOVER)
+    parser.add_argument("--default", choices=("plan", "xai"), default="plan", help="xai: the catalogue's roles read Grok (#466)")
     args = parser.parse_args(argv)
-    host = RealHost(providers=parse_failover(args.failover))
+    host = RealHost(providers=parse_failover(args.failover), xai=args.default == "xai")
     status = host.OP / "status.json"
     with (host.R / ".renewal-deploy.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)    # refused before status.json: a second start must not overwrite a run's state

@@ -89,7 +89,7 @@ TARGETS = {
                     health="http://127.0.0.1:8766/health", down="under 1 minute"),
     "german": dict(container="minimoi-german", repo="german", tier=1, base="domains", old="minimoi12-8481940d", wait=DEFAULT_WAIT,
                    rules=_app("domains/german/", *_SHARED), layout=("domains/german/", *_SHARED),
-                   smoke=("python", "-c", "import sys;sys.path.insert(0,'/app/domains/german');sys.path.insert(0,'/app');import german_domain as g;assert g.grok_text_on() is False"),
+                   smoke=("python", "-c", "import sys;sys.path.insert(0,'/app/domains/german');sys.path.insert(0,'/app');import german_domain as g;assert g.grok_text_on() is True"),
                    health="http://127.0.0.1:8767/health", down="under 1 minute"),
     "portuguese": dict(container="minimoi-portuguese", repo="portuguese", tier=1, base="domains", old="minimoi12-8481940d", wait=DEFAULT_WAIT,
                        rules=_app("domains/portuguese/", *_SHARED), layout=("domains/portuguese/", *_SHARED),

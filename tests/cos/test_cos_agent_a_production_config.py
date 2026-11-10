@@ -26,10 +26,10 @@ def test_production_gateway_omits_development_only_ollama():
     }
 
     assert {name: model for name, model in deployments.items() if name.startswith("minimoi-cos")} == {
-        # Grok paused (#466): CoS on Haiku 5.5, its first fallback and web search on GPT-6 Luna.
-        "minimoi-cos-agent": "anthropic/claude-haiku-5-5",
-        "minimoi-cos-agent-xai-fast": "openai/gpt-6-luna",
-        "minimoi-cos-web-search": "openai/gpt-6-luna",
+        # All xAI (#466): CoS on Grok 4.7, Claude at the same level when xAI cannot serve, web search on Grok 4.3.
+        "minimoi-cos-agent": "xai/grok-4.7",
+        "minimoi-cos-agent-xai-fast": "anthropic/claude-opus-5-5",
+        "minimoi-cos-web-search": "xai/grok-4.3",
         "minimoi-cos-agent-anthropic": "anthropic/claude-sonnet-5-5",
     }
     assert config["router_settings"]["fallbacks"] == [{
@@ -37,6 +37,10 @@ def test_production_gateway_omits_development_only_ollama():
             "minimoi-cos-agent-xai-fast",
             "minimoi-cos-agent-anthropic",
         ],
+    }, {
+        "minimoi-voice-intent": ["minimoi-voice-intent-anthropic"],
+    }, {
+        "minimoi-mc-agent": ["minimoi-anthropic-strong"],
     }]
     assert "ollama_chat/" not in PROD_GATEWAY_CONFIG.read_text()
 
@@ -194,5 +198,6 @@ def test_production_gateway_has_the_voice_routes_and_never_falls_back_to_them():
     deployments = {item["model_name"]: item["litellm_params"]["model"] for item in config["model_list"]}
     assert deployments["minimoi-voice-summary"] == "xai/grok-4.3"
     assert deployments["minimoi-voice-intent"] == "xai/grok-4.3"
-    fallbacks = str(config["router_settings"]["fallbacks"])
-    assert "minimoi-voice" not in fallbacks
+    assert deployments["minimoi-voice-intent-anthropic"] == "anthropic/claude-haiku-5-5"
+    cos_fallbacks = str(next(f for f in config["router_settings"]["fallbacks"] if "minimoi-cos-agent" in f))
+    assert "minimoi-voice" not in cos_fallbacks

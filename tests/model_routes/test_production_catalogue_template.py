@@ -1,8 +1,8 @@
 """The production route catalogue template is a file to review, not a catalogue that is installed.
 
-MC and CoS default to route A (plan-openai-strong), and the OpenAI plan routes are available to CoS,
-as proved on Dev with real tools. Failover is the three OpenAI plan routes only. Grok is the
-selectable capped API route, labelled pay-per-use API, and never a failover or a default.
+MC and CoS default to Grok 4.7 (api-xai-strong) on the capped API key, each Grok tier falling over to Claude's at its
+level (#466). The OpenAI plan routes stay available to choose under Options, each with its own API failover. No failover
+ever lands on Grok.
 """
 import json
 from pathlib import Path
@@ -29,7 +29,7 @@ def _shipped():
 
 def test_the_template_loads_and_is_not_the_installed_catalogue():
     loaded = load_catalogue(TEMPLATE_PATH)
-    assert loaded["revision"] == "2026-11-06.production-template"
+    assert loaded["revision"] == "2026-11-10.production-template"
     assert TEMPLATE_PATH.resolve() != CATALOGUE_PATH.resolve()
     assert loaded["revision"] != _shipped()["revision"]
 
@@ -43,7 +43,7 @@ def test_grok_is_offered_to_mc_and_cos_as_paid_api():
     assert grok["billing_mode"] == "metered_api"
     assert grok["runtime"] == "openclaw"
     assert grok.get("auth_profile_ref") is None
-    assert "failover" not in grok
+    assert grok["failover"] == "api-anthropic-low"
     assert "pay per use" in grok["label"]
     for agent in ("mc", "cos"):
         shown = {row["route_id"]: row for row in view(catalogue, agent, {})["routes"]}
@@ -52,16 +52,23 @@ def test_grok_is_offered_to_mc_and_cos_as_paid_api():
         assert shown["api-xai-low"]["billing_mode"] == "metered_api"
 
 
-def test_failover_is_only_the_openai_plan_routes():
+GROK_FAILOVER = {"api-xai-strong": "api-anthropic-strong", "api-xai-mid": "api-anthropic-mid", "api-xai-low": "api-anthropic-low"}
+
+
+def test_failover_is_the_openai_plan_routes_and_grok_onto_claude():
     catalogue = _template()
     declared = {route["route_id"]: route["failover"] for route in catalogue["routes"] if "failover" in route}
-    assert declared == OPENAI_FAILOVER
+    assert declared == {**OPENAI_FAILOVER, **GROK_FAILOVER}
     by_id = {route["route_id"]: route for route in catalogue["routes"]}
     for plan, target in OPENAI_FAILOVER.items():
         assert by_id[plan]["provider"] == "openai"
         assert by_id[plan]["billing_mode"] == "subscription"
         assert by_id[target]["billing_mode"] == "metered_api"
         assert by_id[target]["provider"] == "minimoi-gateway"
+        assert "failover" not in by_id[target]
+    for grok, target in GROK_FAILOVER.items():
+        assert by_id[grok]["billing_mode"] == by_id[target]["billing_mode"] == "metered_api"
+        assert by_id[grok]["tier"] == by_id[target]["tier"]
         assert "failover" not in by_id[target]
 
 
@@ -79,23 +86,18 @@ def test_no_claude_route_fails_over_and_no_failover_names_grok():
             assert "failover" not in route
 
 
-def test_defaults_stay_on_route_a_and_the_shipped_cos_role():
+def test_every_role_defaults_to_grok_strong():
     template, shipped = _template(), _shipped()
-    assert {k: v for k, v in template["roles"].items() if k != "cos-conversation"} == {k: v for k, v in shipped["roles"].items() if k != "cos-conversation"}
     assert template["tiers"] == shipped["tiers"]
     assert template["tiers"]["strong"]["letter"] == "A"
-    for name in ("mc-conversation", "mc-private", "mc-rooms"):
-        assert template["roles"][name]["route"] == "plan-openai-strong"
-        assert route_of(template, "plan-openai-strong")["tier"] == "strong"
-    assert template["roles"]["cos-conversation"]["route"] == "plan-openai-strong"
+    assert route_of(template, "api-xai-strong")["tier"] == "strong"
+    assert {role["route"] for role in template["roles"].values()} == {"api-xai-strong"}
     catalogue = load_catalogue(TEMPLATE_PATH)
-    assert view(catalogue, "mc", {})["selected_route_id"] == "plan-openai-strong"
-    assert view(catalogue, "cos", {})["selected_route_id"] == "plan-openai-strong"
-    for role in template["roles"].values():
-        assert role["route"] != "api-xai-low"
+    for agent in ("mc", "cos"):
+        assert view(catalogue, agent, {})["selected_route_id"] == "api-xai-strong"
 
 
-def test_the_template_changes_only_revision_claude_failover_cos_plan_and_the_grok_offer():
+def test_the_template_changes_only_revision_claude_failover_cos_plan_and_the_grok_routes():
     template, shipped = _template(), _shipped()
     assert [route["route_id"] for route in template["routes"]] == [route["route_id"] for route in shipped["routes"]]
     for new, old in zip(template["routes"], shipped["routes"]):
@@ -106,12 +108,12 @@ def test_the_template_changes_only_revision_claude_failover_cos_plan_and_the_gro
         elif new["route_id"] in ("plan-openai-strong", "plan-openai-mid", "plan-openai-low"):
             assert new["offered"]["cos"] == "available" and new["offered"]["mc"] == old["offered"]["mc"]
             assert {k: v for k, v in new.items() if k != "offered"} == {k: v for k, v in old.items() if k != "offered"}
-        elif new["route_id"] == "api-xai-low":
+        elif new["route_id"] in GROK_FAILOVER:
             assert old["offered"] == {}
             assert new["offered"] == {"mc": "available", "cos": "available"}
-            assert new["label"] == "Grok 4.3 (pay per use)"     # the picker adds its billing word, API
-            rest_new = {key: value for key, value in new.items() if key not in {"offered", "label"}}
-            rest_old = {key: value for key, value in old.items() if key not in {"offered", "label"}}
+            assert new["failover"] == GROK_FAILOVER[new["route_id"]] and "pay per use" in new["label"]   # the picker adds its billing word, API
+            rest_new = {key: value for key, value in new.items() if key not in {"offered", "failover"}}
+            rest_old = {key: value for key, value in old.items() if key not in {"offered", "failover"}}
             assert rest_new == rest_old
         else:
             assert new == old

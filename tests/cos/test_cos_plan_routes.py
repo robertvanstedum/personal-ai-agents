@@ -677,8 +677,8 @@ class TestFailoverRuntimeConfig:
         assert run.returncode == 0 and "models" not in config
         assert self.REF not in config["agents"]["defaults"]["modelPolicy"]["allow"]
 
-    @pytest.mark.parametrize("bad", ["minimoi-gateway/minimoi-xai-low", "minimoi-gateway/minimoi-anthropic-strong", "openai/gpt-6-astra", "minimoi-gateway/minimoi-cos-agent"])
-    def test_rule_6_only_openais_api_tiers_may_be_named(self, tmp_path, bad):
+    @pytest.mark.parametrize("bad", ["minimoi-gateway/minimoi-xai-low", "openai/gpt-6-astra", "minimoi-gateway/minimoi-cos-agent"])
+    def test_rule_6_only_openai_and_claude_api_tiers_may_be_named(self, tmp_path, bad):
         assert _apply(tmp_path, {**PLAN_ENV, "COS_FAILOVER_ROUTES": bad, "COS_GATEWAY_KEY_CAPPED": "1"})[0].returncode != 0
 
     def test_a_gateway_host_ignores_it(self, tmp_path):

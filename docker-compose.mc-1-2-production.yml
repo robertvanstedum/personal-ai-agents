@@ -1,7 +1,7 @@
 # OPTIONAL explicit opt-in: MiniMoi 1.2's production settings for MC's plan, its capped API failover, and Grok as a
 # pay-per-use API choice. Layered after docker-compose.mc.prod.yml. Absent, that file is unchanged. Nothing here is
 # copied from Dev, and nothing is created (no host-path creation). Images are immutable digests. The plan sign-in and
-# the capped key stay on the host. Grok is offered, not the default, and no plan route fails over onto it.
+# the capped key stay on the host. Grok is the default route (the catalogue's roles, #466); no plan route fails over onto it.
 services:
   mc-agent:
     image: ${MINIMOI_MC_IMAGE:?immutable reviewed MC image digest required}
@@ -11,17 +11,19 @@ services:
       MC_PLAN_MODEL: ${MINIMOI_MC_PLAN_MODEL:?route A openai/gpt-6-astra required}
       MC_PLAN_ROUTES: ${MINIMOI_MC_PLAN_ROUTES:?MC plan routes required}
       MC_PLAN_AUTH_PROFILE: ${MINIMOI_MC_PLAN_AUTH_PROFILE:?MC plan sign-in profile required}
-      # Declared API targets of the plan routes. Not Grok. Claude's targets join once its tool evidence is proved on Dev.
-      MC_FAILOVER_ROUTES: minimoi-gateway/minimoi-openai-strong,minimoi-gateway/minimoi-openai-mid,minimoi-gateway/minimoi-openai-low
+      # Declared API targets of the routes: the OpenAI plan's own, and Claude's at the same level for Grok routes (#466).
+      MC_FAILOVER_ROUTES: minimoi-gateway/minimoi-openai-strong,minimoi-gateway/minimoi-openai-mid,minimoi-gateway/minimoi-openai-low,minimoi-gateway/minimoi-anthropic-strong,minimoi-gateway/minimoi-anthropic-mid,minimoi-gateway/minimoi-anthropic-low
       # Offered pay-per-use API. The same capped key serves this and the failover targets; the runtime has one key.
-      MC_METERED_ROUTES: minimoi-gateway/minimoi-xai-low
+      MC_METERED_ROUTES: minimoi-gateway/minimoi-xai-strong,minimoi-gateway/minimoi-xai-mid,minimoi-gateway/minimoi-xai-low
+      # The runtime's default where a turn names no route (the job agent): Grok, not the plan.
+      MC_PRIMARY_ROUTE: minimoi-gateway/minimoi-xai-strong
       MC_MODEL_GATEWAY_KEY: ${MINIMOI_MC_MODEL_GATEWAY_KEY:?capped MC gateway key required}
 
   mc-relay:
     image: ${MINIMOI_MC_IMAGE:?immutable reviewed MC image digest required}
     environment:
       # relay_routes(load_catalogue()), plus the offered Grok API route. tests/test_minimoi_1_2_production_layers.py holds this.
-      MC_RELAY_ROUTES: '{"api-anthropic-mid":"minimoi-gateway/minimoi-anthropic-mid","api-anthropic-strong":"minimoi-gateway/minimoi-anthropic-strong","api-openai-low":"minimoi-gateway/minimoi-openai-low","api-openai-mid":"minimoi-gateway/minimoi-openai-mid","api-openai-strong":"minimoi-gateway/minimoi-openai-strong","api-xai-low":"minimoi-gateway/minimoi-xai-low","plan-anthropic-mid":"anthropic/claude-sonnet-4-6","plan-anthropic-strong":"anthropic/claude-opus-5","plan-openai-low":"openai/gpt-6-luna","plan-openai-mid":"openai/gpt-6-sol","plan-openai-strong":"openai/gpt-6-astra"}'
+      MC_RELAY_ROUTES: '{"api-anthropic-low":"minimoi-gateway/minimoi-anthropic-low","api-anthropic-mid":"minimoi-gateway/minimoi-anthropic-mid","api-anthropic-strong":"minimoi-gateway/minimoi-anthropic-strong","api-openai-low":"minimoi-gateway/minimoi-openai-low","api-openai-mid":"minimoi-gateway/minimoi-openai-mid","api-openai-strong":"minimoi-gateway/minimoi-openai-strong","api-xai-low":"minimoi-gateway/minimoi-xai-low","api-xai-mid":"minimoi-gateway/minimoi-xai-mid","api-xai-strong":"minimoi-gateway/minimoi-xai-strong","plan-anthropic-mid":"anthropic/claude-sonnet-4-6","plan-anthropic-strong":"anthropic/claude-opus-5","plan-openai-low":"openai/gpt-6-luna","plan-openai-mid":"openai/gpt-6-sol","plan-openai-strong":"openai/gpt-6-astra"}'
       # The agent state volume is already /mc-state on this service. The hook writes marks under the state dir.
       MC_RELAY_TOOL_STARTS: /mc-state/mc-tool-starts
       # The conversation record. The job database stays the relay's existing MC_RELAY_AGENT_DB.

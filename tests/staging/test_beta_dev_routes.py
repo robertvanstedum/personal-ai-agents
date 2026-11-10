@@ -170,7 +170,7 @@ def test_keygen_comes_from_the_helper_with_this_exact_model_list_and_the_cap_by_
 
 def test_gateway_check_reads_a_real_gateway_config(tmp_path):
     code = R.GATEWAY_CHECK_PY.replace("/app/config.yaml", str(ROOT / "services/model_gateway/litellm.staging.yaml"))
-    env = {"PATH": os.environ["PATH"], "ROUTES_WANT": json.dumps(["minimoi-openai-low", "minimoi-xai-low", "minimoi-none", "minimoi-cos-agent-xai-fast"]), "GATEWAY_OPENAI_API_KEY": "x"}
+    env = {"PATH": os.environ["PATH"], "ROUTES_WANT": json.dumps(["minimoi-openai-low", "minimoi-xai-low", "minimoi-none", "minimoi-cos-agent-xai-fast"]), "GATEWAY_OPENAI_API_KEY": "x", "GATEWAY_ANTHROPIC_API_KEY": "x"}
     run = REAL_RUN([sys.executable, "-c", code], capture_output=True, text=True, env=env, check=True)
     got = json.loads(run.stdout)
     assert got["missing"] == ["minimoi-none"] and got["no_provider_key"] == ["GATEWAY_XAI_API_KEY"]
@@ -838,3 +838,32 @@ def test_framework_modes_are_not_a_production_host_but_our_own_markers_are(env, 
             check()
     else:
         check()
+
+
+def test_the_xai_default_moves_only_the_roles_and_the_grok_routes():
+    old = dev_catalogue()
+    new, lines = R.plan_catalogue(old, ("openai",), xai=True)
+    assert {role["route"] for role in new["roles"].values()} == {"api-xai-strong"}
+    by_id = {r["route_id"]: r for r in new["routes"]}
+    for tier in R.XAI_TIERS:
+        assert by_id[f"api-xai-{tier}"]["offered"] == R.GROK_OFFERED and by_id[f"api-xai-{tier}"]["failover"] == f"api-anthropic-{tier}"
+    assert by_id["api-anthropic-low"]["offered"] == {}
+    assert "~ role mc-conversation: plan-openai-strong -> api-xai-strong" in lines
+
+
+def test_the_xai_default_runs_only_when_asked():
+    new, _ = R.plan_catalogue(dev_catalogue(), ("openai",))
+    assert "api-xai-strong" not in {r["route_id"] for r in new["routes"]} and "api-anthropic-low" not in {r["route_id"] for r in new["routes"]}
+
+
+def test_the_xai_default_runtime_settings_and_key_models():
+    new, _ = R.plan_catalogue(dev_catalogue(), ("openai",), xai=True)
+    env = R.route_env(new, xai=True)
+    assert env[R.MC]["MC_PRIMARY_ROUTE"] == env[R.COS]["COS_PRIMARY_ROUTE"] == R.XAI_DEFAULT_REF
+    assert env[R.MC]["MC_METERED_ROUTES"] == env[R.COS]["COS_METERED_ROUTES"] == ",".join(R.XAI_REFS)
+    assert set(f"minimoi-gateway/minimoi-anthropic-{t}" for t in R.XAI_TIERS) <= set(env[R.MC]["MC_FAILOVER_ROUTES"].split(","))
+    assert set(R.key_models(env[R.MC]["MC_FAILOVER_ROUTES"], xai=True)) >= {"minimoi-xai-strong", "minimoi-xai-mid", "minimoi-xai-low", "minimoi-anthropic-low"}
+
+
+def test_the_xai_default_passes_through_the_start_script():
+    assert "--failover openai --default xai >" in payload.start_script("apply", R.DEFAULT_FAILOVER, "xai")

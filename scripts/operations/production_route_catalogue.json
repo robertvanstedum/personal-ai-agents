@@ -1,5 +1,5 @@
 {
-  "revision": "2026-11-06.production-template",
+  "revision": "2026-11-10.production-template",
   "tiers": {
     "strong": {
       "letter": "A",
@@ -214,6 +214,62 @@
       "offered": {}
     },
     {
+      "route_id": "api-anthropic-low",
+      "tier": "low",
+      "provider": "minimoi-gateway",
+      "model": "minimoi-anthropic-low",
+      "label": "Claude Haiku 5.5 (API)",
+      "reasoning_effort": "low",
+      "billing_mode": "metered_api",
+      "runtime": "openclaw",
+      "auth_profile_ref": null,
+      "capabilities": [
+        "chat",
+        "tools"
+      ],
+      "offered": {}
+    },
+    {
+      "route_id": "api-xai-strong",
+      "tier": "strong",
+      "provider": "minimoi-gateway",
+      "model": "minimoi-xai-strong",
+      "label": "Grok 4.7 (pay per use)",
+      "reasoning_effort": "high",
+      "billing_mode": "metered_api",
+      "runtime": "openclaw",
+      "auth_profile_ref": null,
+      "capabilities": [
+        "chat",
+        "tools"
+      ],
+      "failover": "api-anthropic-strong",
+      "offered": {
+        "mc": "available",
+        "cos": "available"
+      }
+    },
+    {
+      "route_id": "api-xai-mid",
+      "tier": "mid",
+      "provider": "minimoi-gateway",
+      "model": "minimoi-xai-mid",
+      "label": "Grok 4.6 (pay per use)",
+      "reasoning_effort": "medium",
+      "billing_mode": "metered_api",
+      "runtime": "openclaw",
+      "auth_profile_ref": null,
+      "capabilities": [
+        "chat",
+        "tools"
+      ],
+      "failover": "api-anthropic-mid",
+      "offered": {
+        "mc": "available",
+        "cos": "available"
+      }
+    },
+    {
       "route_id": "api-xai-low",
       "tier": "low",
       "provider": "minimoi-gateway",
@@ -227,6 +283,7 @@
         "chat",
         "tools"
       ],
+      "failover": "api-anthropic-low",
       "offered": {
         "mc": "available",
         "cos": "available"
@@ -237,23 +294,23 @@
     "mc-conversation": {
       "agent": "mc",
       "task": "Conversation",
-      "route": "plan-openai-strong",
+      "route": "api-xai-strong",
       "selectable": true
     },
     "mc-private": {
       "agent": "mc",
       "task": "Private conversation",
-      "route": "plan-openai-strong"
+      "route": "api-xai-strong"
     },
     "mc-rooms": {
       "agent": "mc",
       "task": "Rooms",
-      "route": "plan-openai-strong"
+      "route": "api-xai-strong"
     },
     "cos-conversation": {
       "agent": "cos",
       "task": "Conversation",
-      "route": "plan-openai-strong",
+      "route": "api-xai-strong",
       "selectable": true
     }
   }

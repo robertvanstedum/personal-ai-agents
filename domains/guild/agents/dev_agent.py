@@ -79,7 +79,7 @@ DEFAULT_WATCH_EXCLUDE_DIRS = (
     "tour-capture", "guild-prototype-evidence", "dist", "build",
 )
 DEFAULT_DEBOUNCE_SECONDS = 10
-DEFAULT_CLASSIFY_MODEL = "claude-haiku-5-5"  # Grok paused (#466, 31 Oct 2026)
+DEFAULT_CLASSIFY_MODEL = "grok-4.3"  # level C on xAI (#466)
 DEFAULT_CLASSIFY_REASONING_EFFORT = "none"   # Spec 159 economy tier: grok-4.3, effort none
 DEFAULT_MODEL_CALLS_PER_MINUTE = 6
 DEFAULT_MODEL_CALLS_PER_DAY = 60

@@ -28,14 +28,15 @@ def _load_context() -> dict:
         return json.load(f)
 
 
-# Grok is paused (#466, 31 Oct 2026): the scout asks Claude Haiku 5.5 through
-# Anthropic's OpenAI-compatible endpoint. Haiku 5.5 refuses `temperature`.
-_SCOUT_MODEL = "claude-haiku-5-5"
+# Level C on xAI (#466). A claude-* model here would go to Anthropic's OpenAI-compatible endpoint, without `temperature`.
+_SCOUT_MODEL = "grok-4.3"
+_SCOUT_TEMPERATURE = {"temperature": 0.2}
 
 
 def _scout_client() -> OpenAI:
-    api_key = keyring.get_password("anthropic", "api_key")
-    return OpenAI(api_key=api_key, base_url="https://api.anthropic.com/v1/")
+    if _SCOUT_MODEL.startswith("claude-"):
+        return OpenAI(api_key=keyring.get_password("anthropic", "api_key"), base_url="https://api.anthropic.com/v1/")
+    return OpenAI(api_key=keyring.get_password("xai", "api_key"), base_url="https://api.x.ai/v1")
 
 
 def _send_telegram(msg: str) -> None:
@@ -148,6 +149,7 @@ def run_novelty_watch() -> dict:
     try:
         resp = client.chat.completions.create(
             model=_SCOUT_MODEL,
+            **({} if _SCOUT_MODEL.startswith("claude-") else _SCOUT_TEMPERATURE),
             messages=[{"role": "user", "content": prompt}],
         )
         raw = resp.choices[0].message.content.strip()

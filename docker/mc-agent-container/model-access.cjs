@@ -2,7 +2,8 @@
 const {isDeepStrictEqual} = require('node:util');
 const ROUTE = 'minimoi-gateway-mc/minimoi-mc-agent';
 // Pay-per-use Grok tiers a host may let an owner choose per conversation (MC_METERED_ROUTES). Off unless named. They are
-// allowed, never the primary and never a fallback, and they reach the gateway with MC's own capped key.
+// allowed, never a fallback, and they reach the gateway with MC's own capped key. They are the primary only where a host
+// names one of them in MC_PRIMARY_ROUTE (primaryRef): a turn with a route still runs on that route.
 const METERED_PROVIDER = 'minimoi-gateway';
 const METERED = /^minimoi-gateway\/minimoi-xai-(?:strong|mid|low)$/;
 function meteredRoutes(env) {
@@ -11,6 +12,13 @@ function meteredRoutes(env) {
   if (new Set(refs).size !== refs.length || refs.some(r => !METERED.test(r))) throw Error('MC_METERED_ROUTES must name minimoi-xai tiers');
   if (!env.MC_PLAN_MODEL) throw Error('A metered route needs an explicit plan default');
   return refs;
+}
+// The runtime's default model: the plan, unless the host names one of its offered Grok tiers.
+function primaryRef(env) {
+  const chosen = String(env.MC_PRIMARY_ROUTE || '').trim();
+  if (!chosen) return env.MC_PLAN_MODEL;
+  if (!METERED.test(chosen) || !meteredRoutes(env).includes(chosen)) throw Error('MC_PRIMARY_ROUTE must be one of MC_METERED_ROUTES');
+  return chosen;
 }
 // A plan route's declared API target (core/model_routes catalogue, failover), offered to the runtime only through this list.
 // Allowed, never the primary and never a config fallback: MiniMoi decides a switch from the turn's signal and tool evidence,
@@ -84,7 +92,7 @@ function overlay(env) {
     const profile = env.MC_PLAN_AUTH_PROFILE;
     if (refs.some(r => r.startsWith('openai/')) && (!profile || !profile.startsWith('openai:'))) throw Error('Explicit OpenAI OAuth profile required');
     const metered = [...meteredRoutes(env), ...failoverRoutes(env)];
-    const model = {primary: ref, fallbacks: []};
+    const model = {primary: primaryRef(env), fallbacks: []};
     const policy = {allow: [...refs, ...metered]};
     const models = Object.fromEntries([...refs.map(r => [r, {agentRuntime: {id: r.startsWith('openai/') ? 'openclaw' : 'claude-cli'}}]),
       ...metered.map(r => [r, {agentRuntime: {id: 'openclaw'}}])]);
@@ -115,7 +123,7 @@ function validate(config, env) {
     for (const p of Object.values(config.auth?.profiles || {})) if (p.mode === 'api_key') throw Error('API-key auth profile forbidden');
     if (config.agents?.defaults?.imageModel?.primary || (config.agents?.defaults?.imageModel?.fallbacks || []).length) throw Error('Separate image model forbidden in explicit plan mode');
     for (const a of [config.agents?.defaults, ...Object.values(config.agents?.entries || {})]) {
-      if (a?.model?.primary !== env.MC_PLAN_MODEL || (a.model.fallbacks || []).length ||
+      if (a?.model?.primary !== primaryRef(env) || (a.model.fallbacks || []).length ||
           !isDeepStrictEqual(a.modelPolicy?.allow, wanted.agents.defaults.modelPolicy.allow) || a.utilityModel || a.decisionModel)
         throw Error('Unexpected plan model route or fallback');
     }
@@ -157,7 +165,7 @@ function retire(live, env) {
   for (const [name, a] of Object.entries(live.agents?.entries || {})) stale(a, (patch.agents.entries[name] = {models: {}}).models);
   return patch;
 }
-module.exports = {mode, overlay, validate, planRoutes, meteredRoutes, failoverRoutes, retire, claudeSettings, ROUTE};
+module.exports = {mode, overlay, validate, planRoutes, meteredRoutes, primaryRef, failoverRoutes, retire, claudeSettings, ROUTE};
 if (require.main === module) {
   try { mode(process.env); } catch (e) { console.error(e.message); process.exit(78); }
 }

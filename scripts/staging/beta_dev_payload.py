@@ -72,7 +72,7 @@ class Git:
 
     def versions(self, since: str, commit: str, path: str) -> list:
         """Every commit in since..commit that touched this path."""
-        return self._out("log", "--format=%H", f"{since}..{commit}", "--", path).decode().split()
+        return self._out("log", "--full-history", "--format=%H", f"{since}..{commit}", "--", path).decode().split()
 
     def titles(self, since: str, commit: str, limit: int) -> list:
         """[(short hash, title)] for since..commit, newest first, at most ``limit``."""

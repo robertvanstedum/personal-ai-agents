@@ -11,7 +11,7 @@
 #
 # Production routes/fallbacks remain unchanged. Two explicit staging-only
 # routes support MC and the approved local-model regression:
-#   minimoi-mc-agent: MC's bounded provider route, with no fallback.
+#   minimoi-mc-agent: MC's bounded provider route, Claude when xAI cannot serve.
 #   minimoi-cos-agent-local: Ollama llama3.2:3b on the host, called by name
 #   only. It is never in a fallback chain and is absent from production.
 #
@@ -88,21 +88,21 @@ model_list:
       reasoning_effort: low
     model_info: {id: tier-xai-low, mode: chat, supports_function_calling: true}
 
-  # Dev choice, Robert 1 Nov 2026: active roles use OpenAI or Grok. Legacy
+  # Active roles use Grok, with Claude at the same level as failover (#466). Legacy
   # alias/receipt IDs remain stable; usage records report the actual provider/model.
   # ── Roles: the names callers ask for. To switch one, change its `<<:` line. ──
-  # Grok paused (#466, 31 Oct 2026): no role points at an xai-* tier. The route
+  # All xAI for now (#466), Claude at the same level when xAI cannot serve. The route
   # names keep their history (`-xai-fast`, `cos-xai-*` ids) so callers, fallbacks
   # and receipts stay continuous; the merge line is what serves them.
   # A role sets only what is its own: timeout, effort where it must differ from
   # its tier (the latency routes run without reasoning), and its receipt
   # identity (model_info.id, fallback_position), which stays put across switches.
   - model_name: minimoi-cos-agent
-    litellm_params: {<<: *openai-low, timeout: 120}
+    litellm_params: {<<: *xai-strong, timeout: 120}
     model_info: {id: cos-xai-grok43-primary, mode: chat, supports_function_calling: true, fallback_position: 0}
 
   - model_name: minimoi-cos-agent-xai-fast
-    litellm_params: {<<: *openai-low, timeout: 120, reasoning_effort: none}
+    litellm_params: {<<: *anthropic-strong, timeout: 120}
     model_info: {id: cos-xai-fast, mode: chat, supports_function_calling: true, fallback_position: 1}
 
   - model_name: minimoi-cos-web-search
@@ -111,11 +111,11 @@ model_list:
     # on the shared backend key and never downgrades it, which sent every Grok
     # chat route through the Responses bridge and dropped the system message
     # (#454, #455).
-    litellm_params: {<<: *openai-low, timeout: 60}
+    litellm_params: {<<: *xai-low, timeout: 60}
     model_info: {id: cos-xai-bounded-web-search, supports_web_search: true}
 
   - model_name: minimoi-cos-agent-anthropic
-    litellm_params: {<<: *openai-mid, timeout: 120}
+    litellm_params: {<<: *anthropic-mid, timeout: 120}
     model_info: {id: cos-anthropic-secondary, mode: chat, supports_function_calling: true, fallback_position: 2}
 
   # The voice summary (Spec 165 §5.4, D22 (a)): one plain completion, no tools, after a voice session ends. Reached only
@@ -147,10 +147,25 @@ model_list:
       base_model: xai/grok-4.3
       mode: chat
 
+  # Claude's answer to the same one word, only when xAI cannot serve (router_settings.fallbacks), so a busy xAI does not turn
+  # every spoken request into chat. Reached only through that fallback and the capped voice keys.
+  - model_name: minimoi-voice-intent-anthropic
+    litellm_params:
+      model: anthropic/claude-haiku-5-5
+      api_key: os.environ/GATEWAY_ANTHROPIC_API_KEY
+      timeout: 5
+      reasoning_effort: low
+      # Haiku thinks unless told not to, and thinking uses up the call's 16 tokens: the answer comes back empty, read as chat.
+      thinking: {type: disabled}
+    model_info:
+      id: voice-intent-anthropic
+      base_model: anthropic/claude-haiku-5-5
+      mode: chat
+
   - model_name: minimoi-mc-agent
     # Staging only (MC spec v0.9 stage C). MC's capped virtual key remains the
-    # admission boundary. No fallback.
-    litellm_params: {<<: *openai-strong, timeout: 120}
+    # admission boundary. Claude at the same level when xAI cannot serve.
+    litellm_params: {<<: *xai-strong, timeout: 120}
     model_info: {id: mc-xai-grok43, mode: chat, supports_function_calling: true}
 
 
@@ -171,6 +186,10 @@ router_settings:
     - minimoi-cos-agent:
         - minimoi-cos-agent-xai-fast
         - minimoi-cos-agent-anthropic
+    - minimoi-voice-intent:
+        - minimoi-voice-intent-anthropic
+    - minimoi-mc-agent:
+        - minimoi-anthropic-strong
   num_retries: 0
   allowed_fails: 1
   cooldown_time: 60

@@ -1,6 +1,7 @@
 """Production layers for plan failover and the offered Grok API route. No host, no secret values."""
 import json
 import re
+from pathlib import Path as _Path
 
 import yaml
 
@@ -26,18 +27,20 @@ LAYERS = (
 )
 
 
-def test_cos_keeps_route_a_and_offers_grok_only_as_api():
+XAI_TIERS = "minimoi-gateway/minimoi-xai-strong,minimoi-gateway/minimoi-xai-mid,minimoi-gateway/minimoi-xai-low"
+FAILOVER_TIERS = ["minimoi-gateway/minimoi-openai-strong", "minimoi-gateway/minimoi-openai-mid", "minimoi-gateway/minimoi-openai-low",
+                  "minimoi-gateway/minimoi-anthropic-strong", "minimoi-gateway/minimoi-anthropic-mid", "minimoi-gateway/minimoi-anthropic-low"]
+
+
+def test_cos_runs_on_grok_with_the_plan_still_configured_and_claude_as_failover():
     env = _compose(LAYERS[0])["services"]["cos-agent-a"]["environment"]
     assert env["COS_PLAN_MODEL"] == "openai/gpt-6-astra"
     assert env["COS_PLAN_ROUTES"] == "openai/gpt-6-sol,openai/gpt-6-luna"
     assert env["COS_RUNTIME_MODEL_ACCESS"] == "plan"
-    assert env["COS_METERED_ROUTES"] == "minimoi-gateway/minimoi-xai-low"
+    assert env["COS_METERED_ROUTES"] == XAI_TIERS
+    assert env["COS_PRIMARY_ROUTE"] == "minimoi-gateway/minimoi-xai-strong"
     assert "xai" not in env["COS_FAILOVER_ROUTES"]
-    assert env["COS_FAILOVER_ROUTES"].split(",") == [
-        "minimoi-gateway/minimoi-openai-strong",
-        "minimoi-gateway/minimoi-openai-mid",
-        "minimoi-gateway/minimoi-openai-low",
-    ]
+    assert env["COS_FAILOVER_ROUTES"].split(",") == FAILOVER_TIERS
     # CoS's capped key stays where docker-compose.prod.yml mounts it, the path the code reads by default.
     assert "COS_GATEWAY_KEY_FILE" not in env
     assert "/run/cos-key" in _text("docker-compose.prod.yml")
@@ -57,10 +60,10 @@ def test_mc_plan_settings_are_required_and_have_no_compose_default():
         assert env[key] == f"${{{variable}:?{env[key].split(':?', 1)[1]}"
         assert ":-" not in env[key]
     assert "openai/gpt-6-astra" in env["MC_PLAN_MODEL"]
-    assert env["MC_METERED_ROUTES"] == "minimoi-gateway/minimoi-xai-low"
+    assert env["MC_METERED_ROUTES"] == XAI_TIERS
+    assert env["MC_PRIMARY_ROUTE"] == "minimoi-gateway/minimoi-xai-strong"
     assert "xai" not in env["MC_FAILOVER_ROUTES"]
-    assert "minimoi-gateway/minimoi-openai-strong" in env["MC_FAILOVER_ROUTES"]
-    assert "anthropic" not in env["MC_FAILOVER_ROUTES"]
+    assert env["MC_FAILOVER_ROUTES"].split(",") == FAILOVER_TIERS
 
 
 def test_relay_knows_the_plan_targets_and_the_grok_api_route():
@@ -95,17 +98,11 @@ def test_layers_create_nothing_and_carry_no_dev_values():
             assert text.count("immutable reviewed MC image digest required") == 2
 
 
-def test_the_relay_routes_are_the_catalogues_plus_the_offered_grok_route():
-    """The layer's pinned list can't drift from the route catalogue. Claude's targets stay: the catalogue lists them, and
-    they are unoffered there. Only MC_FAILOVER_ROUTES leaves them out."""
+def test_the_relay_routes_are_the_production_template_list():
+    """The layer's pinned list can't drift from the production catalogue template."""
     from core.model_routes import load_catalogue, relay_routes
     pinned = json.loads(_compose(LAYERS[1])["services"]["mc-relay"]["environment"]["MC_RELAY_ROUTES"])
-    catalogue = load_catalogue()
-    grok = next(r for r in catalogue["routes"] if r["route_id"] == "api-xai-low")
-    assert pinned == {**relay_routes(catalogue), "api-xai-low": f"{grok['provider']}/{grok['model']}"}
-    # The host's catalogue offers Grok to MC (the runbook's one change for it): then the two are the same list.
-    grok["offered"] = {**grok["offered"], "mc": "available"}
-    assert pinned == relay_routes(catalogue)
+    assert pinned == relay_routes(load_catalogue(_Path(__file__).resolve().parents[1] / "scripts/operations/production_route_catalogue.json"))
 
 
 def test_grok_is_nobodys_failover_in_the_catalogue_the_relay_reads():
