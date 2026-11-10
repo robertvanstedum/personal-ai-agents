@@ -37,7 +37,7 @@ x-helper-env: &helper-env
 services:
   model-gateway:
     environment:
-      # One file per month, owned by the gateway (uid 1000). Every other writer has its own folder under it.
+      # One file per month, owned by the gateway (uid 65534, its image's non-root user). Every other writer has its own folder under it.
       MINIMOI_USAGE_DIR: /app/usage-data
       MINIMOI_ENV: prod
     volumes:

@@ -299,6 +299,7 @@ def test_each_helper_owns_only_its_own_folders_and_files():
 
 def test_the_gateway_owns_the_usage_store_and_root_writers_their_own_folders():
     assert setup.owner_of(setup.USAGE) == setup.GATEWAY
+    assert setup.GATEWAY[0] == 65534      # the uid the gateway really runs as; 1000 left every write refused on production
     assert setup.SHARED_FOLDERS[setup.USAGE][0] == 0o750
     for writer in setup.USAGE_WRITERS:
         assert setup.owner_of(f"{setup.USAGE}/{writer}") == setup.ROOT

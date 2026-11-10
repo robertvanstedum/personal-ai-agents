@@ -42,7 +42,7 @@ NODE = (1000, 1000)
 ROOT = (0, 0)
 # Each helper runs as its own uid (docker-compose.minimoi-1-2-production.yml), never root, and owns only its own two folders.
 HELPERS = {"apprentice": (2101, 2101), "ea": (2102, 2102)}
-GATEWAY = (1000, 0)     # the non-root model gateway writes the usage store; group root lets root services read it
+GATEWAY = (65534, 0)    # the model gateway runs as nobody (its image's non-root user) and writes the usage store; group root lets root services read it
 USAGE = f"{STATE}/usage"
 USAGE_WRITERS = ("portal", "cos-bot", "cos-scheduler")
 
