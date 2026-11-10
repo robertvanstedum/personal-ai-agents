@@ -46,6 +46,7 @@ def settings(environ) -> dict | None:
             "isolated_runtime": environ.get("MINIMOI_MC_TOOLS_RUNTIME_ISOLATED") == "1",
             "standard_changes": _standard_changes(environ.get("MINIMOI_MC_TOOLS_STANDARD_CHANGES") or ""),
             "issues_token_file": environ.get("MINIMOI_MC_ISSUES_TOKEN_FILE") or "",
+            "read_token_file": environ.get("MINIMOI_MC_GITHUB_READ_TOKEN_FILE") or "/run/secrets/mc/github-read-token",
             "repo": environ.get("MINIMOI_GITHUB_REPO") or "",
             "delegation": environ.get("MINIMOI_MC_DELEGATION") == "1",
             # The code-gated build job can't run on Dev (MC front door spec §3): off there unless said otherwise.
@@ -205,21 +206,8 @@ def _guests_lookup(email):
 
 def _private_token(path):
     """The token from an owner-only regular file (no symlink), or None. Never logged."""
-    import stat
-    try:
-        if not path or not os.path.isabs(path):
-            return None
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-        try:
-            st = os.fstat(fd)
-            if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o077 or st.st_size > 512:
-                return None
-            token = os.read(fd, 512).decode("ascii").strip()
-        finally:
-            os.close(fd)
-        return token if 20 <= len(token) <= 255 and token.isprintable() and " " not in token else None
-    except (OSError, UnicodeError):
-        return None
+    from .mc_context import owner_file_token
+    return owner_file_token(path)
 
 
 def _repo(cfg):
@@ -296,7 +284,7 @@ def github_reader(cfg, *, http_get=None):
         return None
     import requests
     from core.mc_tools.github import GitHubIssues
-    return GitHubIssues(http_get or requests.get, repo=_repo(cfg))
+    return GitHubIssues(http_get or requests.get, repo=_repo(cfg), token=_private_token(cfg.get("read_token_file", "")))
 
 
 def _guest_people():

@@ -23,6 +23,8 @@ TIERS = {
     ("xai", "low"): "xai/grok-4.3",
 }
 EFFORT = {"strong": "high", "mid": "medium", "low": "low"}
+# Grok 4.7 runs chat at low effort: at high its calls took 45-67 s and outran the page (10 Nov).
+EFFORT_EXCEPTIONS = {("xai", "strong"): "low"}
 
 
 def _config() -> dict:
@@ -206,7 +208,7 @@ def test_every_config_defines_the_nine_tiers_with_explicit_effort():
             route = routes[f"minimoi-{provider}-{tier}"]
             params = route["litellm_params"]
             assert params["model"] == model, (path.name, provider, tier)
-            assert params["reasoning_effort"] == EFFORT[tier], (path.name, provider, tier)
+            assert params["reasoning_effort"] == EFFORT_EXCEPTIONS.get((provider, tier), EFFORT[tier]), (path.name, provider, tier)
             assert params["api_key"].endswith(f"{provider.upper()}_API_KEY"), (path.name, provider, tier)
             assert route["model_info"]["id"] == f"tier-{provider}-{tier}"
 

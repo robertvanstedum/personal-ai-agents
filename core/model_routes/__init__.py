@@ -189,14 +189,31 @@ def billing_served(route: dict, served: dict | None) -> str:
     return "metered_api" if served and served.get("provider") == "minimoi-gateway" else route["billing_mode"]
 
 
+PROVIDER_WORDS = {"openai": "OpenAI", "anthropic": "Claude", "xai": "xAI"}
+
+
+def _provider_of(model_or_route: str) -> str | None:
+    """The provider a route id (plan-openai-strong, api-xai-strong) or a gateway tier (minimoi-anthropic-mid) names."""
+    match = re.match(r"(?:plan|api|minimoi)-(openai|anthropic|xai)-", str(model_or_route or ""))
+    return PROVIDER_WORDS.get(match.group(1)) if match else None
+
+
 def switch_words(route: dict, served: dict | None) -> str:
-    """The plain sentence a switched turn's answer carries. The turn's evidence decides what it claims."""
+    """The plain sentence a switched turn's answer carries. It names the provider that could not serve and the one that
+    answered, so the owner never has to guess which account ran out. The turn's evidence decides what it claims."""
     why = SIGNAL_WORDS.get(route.get("switch_signal"), "The plan could not serve")
-    again = "the plan"
-    if str(route.get("switched_from") or "").startswith("api-xai-"):      # a Grok route's declared target, not a plan's
+    source = str(route.get("switched_from") or "")
+    who = _provider_of(source)
+    if source.startswith("api-xai-"):                                    # a Grok route's declared target, not a plan's
         why, again = why.replace("The plan", "xAI", 1), "xAI"
+    elif who:
+        why, again = why.replace("The plan", f"The {who} plan", 1), f"the {who} plan"
+    else:
+        again = "the plan"
     if served and served.get("provider") == "minimoi-gateway":
-        ran = f"so this turn ran on the API: {served.get('model')}, billed per use against the capped key"
+        answered = _provider_of(served.get("model"))
+        ran = (f"so this turn ran on the {answered + ' ' if answered else ''}API: {served.get('model')}, "
+               "billed per use against the capped key")
     else:
         ran = (f"so this turn was sent to the API route {route['model']}, billed per use against the capped key; "
                "the runtime's record of it was not read")

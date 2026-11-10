@@ -497,13 +497,13 @@ def test_rule_4_the_receipt_and_the_answer_say_api_and_which_model(switching):
     assert (last["route_id"], last["billing_mode"], last["billing_label"]) == (API_ROUTE, "metered_api", "API")
     assert last["served"]["model"] == "minimoi-openai-strong" and last["served_matches"] is True
     assert last["switched_from"] == ASTRA and last["switch_signal"] == "plan_exhausted"
-    assert "quota is used up" in body and "ran on the API: minimoi-openai-strong" in body and "tries the plan again" in body
+    assert "quota is used up" in body and "ran on the OpenAI API: minimoi-openai-strong" in body and "tries the OpenAI plan again" in body
 
 
 def test_rule_4_no_evidence_is_said_as_no_evidence_and_still_never_plan(switching):
     body, _, view, *_ = _run(switching, plan_down(), API_ANSWER[:-1])
     assert view["last_turn"]["served"] is None and view["last_turn"]["billing_label"] == "API"
-    assert "was sent to the API route" in body and "ran on the API" not in body
+    assert "was sent to the API route" in body and "ran on the" not in body
 
 
 def test_rule_5_the_same_session_is_kept_the_choice_stays_and_the_next_turn_tries_the_plan(switching):
@@ -598,7 +598,7 @@ def test_the_buffered_path_switches_once_and_names_it():
     mc, sent = _buffered(_Plain(429, {"error": {"type": "rate_limit_error"}}, DOWN),
                          _Plain(200, OK, {"X-MC-Served": json.dumps({"provider": "minimoi-gateway", "model": "minimoi-openai-strong"})}))
     result = mc.turn(_request())
-    assert sent == [ASTRA, API_ROUTE] and result.status == "answered" and "ran on the API: minimoi-openai-strong" in result.text
+    assert sent == [ASTRA, API_ROUTE] and result.status == "answered" and "ran on the OpenAI API: minimoi-openai-strong" in result.text
     assert result.trace["route"]["route_id"] == API_ROUTE and result.trace["route"]["billing_mode"] == "metered_api"
 
 

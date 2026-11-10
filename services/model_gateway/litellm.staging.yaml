@@ -73,7 +73,9 @@ model_list:
     litellm_params: &xai-strong
       model: xai/grok-4.7
       api_key: os.environ/GATEWAY_XAI_API_KEY
-      reasoning_effort: high
+      # Low while chat (MC, CoS) is this tier's only user: at high, Grok 4.7 spent 45-67 s a call reasoning and MC's
+      # turns outran the page's connection (10 Nov). Raise it for work that needs depth.
+      reasoning_effort: low
     model_info: {id: tier-xai-strong, mode: chat, supports_function_calling: true}
   - model_name: minimoi-xai-mid
     litellm_params: &xai-mid
