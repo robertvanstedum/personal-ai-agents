@@ -12,7 +12,50 @@ x-new-service: &new-service
   security_opt: [no-new-privileges:true]
   cap_drop: [ALL]
 
+# Apprentice and EA. Their own profile: scripts/deploy.sh and deploy_scoped_release.sh add it only once state/1-2/helpers.on
+# exists, which minimoi_1_2_prod_bind.py writes last, after Robert's approval. Own uid, own secrets, no route out.
+x-helper: &helper
+  <<: *new-service
+  profiles: [minimoi-helpers]
+  image: ${MINIMOI_COS_SCHEDULER_IMAGE:?immutable reviewed scheduler image digest required}
+  networks: [partnership, helpers]
+  mem_limit: 192m
+
+x-helper-env: &helper-env
+  PARTNERSHIP_TASKS_URL: http://partnership-tasks:8772
+  PARTNERSHIP_ENVIRONMENT: prod
+  HELPER_TOKEN_FILE: /run/helper/task.token
+  HELPER_CHARTER_APPROVALS: /run/helper/charter-approvals.json
+  HELPER_STATE_DIR: /state
+  GUILD_QUEUE_PATH: /guild/build_queue.json
+  HELPER_GATEWAY_URL: http://model-gateway:4000/v1
+  HELPER_GATEWAY_KEY_FILE: /run/helper/gateway.key
+  HELPER_MODEL: minimoi-openai-low
+  PYTHONPATH: /app
+  PYTHONDONTWRITEBYTECODE: "1"
+
 services:
+  model-gateway:
+    environment:
+      # One file per month, owned by the gateway (uid 1000). Every other writer has its own folder under it.
+      MINIMOI_USAGE_DIR: /app/usage-data
+      MINIMOI_ENV: prod
+    volumes:
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?}/usage", target: /app/usage-data, bind: {create_host_path: false}}
+    networks:
+      - default
+      - mc-portal
+      - helpers
+
+  cos-bot:
+    environment:
+      MINIMOI_USAGE_DIR: /app/data/usage
+      MINIMOI_USAGE_WRITER: cos-bot
+      MINIMOI_ENV: prod
+    volumes:
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?}/usage", target: /app/data/usage, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?}/usage/cos-bot", target: /app/data/usage/cos-bot, bind: {create_host_path: false}}
+
   cos-agent-a:
     environment:
       COS_AGENT_ROLE: cos
@@ -61,7 +104,12 @@ services:
       PARTNERSHIP_TASKS_URL: http://partnership-tasks:8772
       # Her capped voice key, $20: from the mounted cos-partnership folder below, never from .env (minimoi_1_2_prod_bind.py).
       MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS_FILE: /run/secrets/partnership/voice-summary-cos.key
+      MINIMOI_USAGE_DIR: /app/data/usage
+      MINIMOI_USAGE_WRITER: cos-scheduler
+      MINIMOI_ENV: prod
     volumes:
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?}/usage", target: /app/data/usage, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?}/usage/cos-scheduler", target: /app/data/usage/cos-scheduler, bind: {create_host_path: false}}
       # The path scripts/backup_local.sh already backs up, under the store's lock.
       - {type: bind, source: /opt/minimoi/cos/store, target: /var/lib/minimoi/cos-store, bind: {create_host_path: false}}
       - {type: bind, source: "${MINIMOI_1_2_STATE:?existing production-only state folder required}/cos-turns", target: /app/data/cos-turns, bind: {create_host_path: false}}
@@ -105,7 +153,16 @@ services:
       PORTAL_PARTNERSHIP_OWNER_ENV: prod
       PORTAL_PARTNERSHIP_OWNER_KEY_FILE: /run/secrets/partnership/portal-partnership-owner.key
       PORTAL_PARTNERSHIP_PRINCIPAL_TOKEN_FILE: /run/secrets/partnership/principal.token
+      # Read here; MC's own stream records go only to usage/portal, mounted read-write below.
+      MINIMOI_USAGE_DIR: /app/data/usage
+      MINIMOI_ENV: prod
+      # The Workshop view reads this folder and never writes it. Nothing feeds it on production yet, so it reads "unknown".
+      MINIMOI_WORKSHOPS_DIR: /app/data/workshops
+      MINIMOI_WORKSHOP_ID: mac
     volumes:
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?}/usage", target: /app/data/usage, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?}/usage/portal", target: /app/data/usage/portal, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?}/workshops", target: /app/data/workshops, read_only: true, bind: {create_host_path: false}}
       - {type: bind, source: "${MINIMOI_1_2_STATE:?}/mc-turns", target: /app/data/mc-turns, bind: {create_host_path: false}}
       - {type: bind, source: "${MINIMOI_1_2_SECRETS:?}/portal-partnership", target: /run/secrets/partnership, read_only: true, bind: {create_host_path: false}}
       - {type: bind, source: "${MINIMOI_MODEL_ROUTES_DIR:?}", target: /run/minimoi-model-routes, read_only: true, bind: {create_host_path: false}}
@@ -185,7 +242,38 @@ services:
     networks: [partnership, default]
     mem_limit: 192m
 
+  helper-apprentice:
+    <<: *helper
+    container_name: minimoi-helper-apprentice
+    user: "2101:2101"
+    command: [python, -m, services.helper_seats.worker, --seat, apprentice]
+    environment:
+      <<: *helper-env
+      HELPER_REPO_ROOT: /repo
+    volumes:
+      - {type: bind, source: "${MINIMOI_1_2_SECRETS:?}/helper-apprentice", target: /run/helper, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?}/helper-apprentice", target: /state, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_ROOT:-/opt/minimoi}/mc/repo", target: /repo, read_only: true, bind: {create_host_path: false}}
+      # The folder, not the file: the portal replaces the file on each save, and a file mount would keep reading the old one.
+      - {type: bind, source: "${MINIMOI_ROOT:-/opt/minimoi}/data/guild", target: /guild, read_only: true, bind: {create_host_path: false}}
+
+  helper-ea:
+    <<: *helper
+    container_name: minimoi-helper-ea
+    user: "2102:2102"
+    command: [python, -m, services.helper_seats.worker, --seat, ea]
+    environment:
+      <<: *helper-env
+    volumes:
+      - {type: bind, source: "${MINIMOI_1_2_SECRETS:?}/helper-ea", target: /run/helper, read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_1_2_STATE:?}/helper-ea", target: /state, bind: {create_host_path: false}}
+      - {type: bind, source: "${MINIMOI_ROOT:-/opt/minimoi}/data/guild", target: /guild, read_only: true, bind: {create_host_path: false}}
+
 networks:
   partnership:
     name: minimoi-partnership
+    internal: true
+  # The helpers and the model gateway only. Internal, so a helper has no route out.
+  helpers:
+    name: minimoi-helpers
     internal: true

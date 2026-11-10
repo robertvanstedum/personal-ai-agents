@@ -72,7 +72,7 @@ elif argv[0] == "exec" and argv[1] == "minimoi-records":
     for name in (teammate, worker):
         open(out + "/" + name + ".token", "w").write("records-" + name + "-" + "z" * 30 + "\n")
     print(json.dumps({"hosted": {"installation_id": "inst-" + teammate}}))
-elif argv[0] == "exec" and argv[1] == "minimoi-cos-agent-a":
+elif argv[0] == "exec" and "minimoi-cos-agent-a" in argv[:4]:
     print(json.dumps(config["auth"][argv[argv.index("--agent") + 1]]))
 else:
     sys.exit(9)
@@ -552,7 +552,7 @@ def test_every_key_is_capped_at_20_and_only_in_a_0600_file(host, capsys):
     outcome = host.apply(["gateway"])
     assert set(bind.GATEWAY_KEYS) <= set(outcome["written"])
     programs = (host.fake / "stdin.log").read_text().split("\n--\n")
-    assert sum("max_budget" in p for p in programs) == 4
+    assert sum("max_budget" in p for p in programs) == len(bind.GATEWAY_KEYS)
     out = capsys.readouterr().out
     for rel in bind.GATEWAY_KEYS:
         path = host.root / rel
@@ -736,7 +736,7 @@ def test_cos_auth_names_the_login_robert_runs_for_a_blind_agent_and_copies_nothi
     assert report["robert_runs"] == ["sudo docker exec -it minimoi-cos-agent-a node /app/openclaw.mjs models auth login "
                                      "--agent cos-meeting --provider openai --device-code"]
     calls = [json.loads(line) for line in host.argv().splitlines()]
-    assert all(call[:2] == ["exec", "minimoi-cos-agent-a"] and "status" in call for call in calls)
+    assert all(call[0] == "exec" and "minimoi-cos-agent-a" in call[:4] and "status" in call for call in calls)
 
 
 def test_cos_auth_refuses_two_different_profiles(host, capsys):
@@ -1014,3 +1014,127 @@ def test_a_board_pair_that_differs_anywhere_is_refused_and_left_alone(host, fiel
     with pytest.raises(SystemExit, match="does not agree"):
         host.apply(["local"])
     assert path.read_bytes() == before
+
+
+# ---- helpers ------------------------------------------------------------------------------------------------------------
+
+DIGESTS = {"apprentice@1": "sha256:" + "a" * 64, "ea@1": "sha256:" + "b" * 64}
+WORDS = "test approval words"
+
+
+@pytest.fixture
+def helpers_host(host, tmp_path, monkeypatch):
+    """A host with the local and gateway groups done, MC's clone and the queue in place, and an image holding the charters."""
+    host.apply(["local", "gateway"])
+    for rel in ("data/guild", "mc/repo"):
+        (host.root / rel).mkdir(parents=True)
+        (host.root / rel).chmod(0o755)
+    (host.root / "data/guild/build_queue.json").write_text("[]")
+    (host.root / "data/guild/build_queue.json").chmod(0o644)
+    monkeypatch.setattr(bind, "image_charters", lambda: dict(DIGESTS))
+    path = tmp_path / "helpers.json"
+    host.helper_doc = {"schema": bind.HELPER_INPUT_SCHEMA, "environment": "prod", "approved_by": "robert", "words": WORDS, "charters": dict(DIGESTS),
+                       "seats": {seat: list(bind.HELPER_OPERATIONS) for seat in bind.HELPER_SEATS}, "cos_adds": list(bind.COS_LEAD_OPERATIONS)}
+
+    def run(doc=None):
+        path.write_text(json.dumps(host.helper_doc if doc is None else doc))
+        path.chmod(0o600)
+        return bind.apply(host.root, ["helpers"], "", "", str(path))
+    host.run_helpers = run
+    return host
+
+
+def _bindings(host):
+    return {row["seat"]: row for row in json.loads((host.root / bind.BINDINGS).read_text())}
+
+
+def test_helpers_add_two_seats_and_widen_only_cos_with_a_backup(helpers_host):
+    before = _bindings(helpers_host)
+    helpers_host.run_helpers()
+    after = _bindings(helpers_host)
+    assert set(after) == set(before) | {"apprentice", "ea"}
+    for seat in bind.HELPER_SEATS:
+        token = (helpers_host.root / bind.helper_token(seat)).read_text().strip()
+        row = after[seat]
+        assert row["token_sha256"] == hashlib.sha256(token.encode()).hexdigest()
+        assert row["operations"] == bind.HELPER_OPERATIONS and row["origin"] == "agent" and row["environment"] == "prod"
+    assert set(after["cos"]["operations"]) == set(before["cos"]["operations"]) | set(bind.COS_LEAD_OPERATIONS)
+    for seat in set(before) - {"cos"}:
+        assert after[seat] == before[seat]
+    folder = (helpers_host.root / bind.BINDINGS).parent
+    backups = list(folder.glob(".bindings.json.bak-bind-*"))
+    assert len(backups) == 1 and {r["seat"] for r in json.loads(backups[0].read_text())} == set(before)
+    assert stat.S_IMODE((helpers_host.root / bind.BINDINGS).stat().st_mode) == 0o600
+
+
+def test_the_approvals_are_his_words_and_every_reader_loads_them(helpers_host):
+    helpers_host.run_helpers()
+    for rel in bind.CHARTER_APPROVALS:
+        doc = json.loads((helpers_host.root / rel).read_text())
+        assert doc["ea@1"] == {"digest": DIGESTS["ea@1"], "approved_by": "robert", "ref": WORDS, "environment": "prod"}
+        assert stat.S_IMODE((helpers_host.root / rel).stat().st_mode) == 0o600
+    assert (helpers_host.root / bind.HELPERS_ON).exists()
+
+
+def test_a_second_helpers_run_changes_nothing(helpers_host):
+    helpers_host.run_helpers()
+    first = (helpers_host.root / bind.BINDINGS).read_bytes()
+    outcome = helpers_host.run_helpers()
+    assert (helpers_host.root / bind.BINDINGS).read_bytes() == first
+    assert bind.BINDINGS in outcome["kept"] and outcome["written"] == []
+    assert len(list((helpers_host.root / bind.BINDINGS).parent.glob(".bindings.json.bak-bind-*"))) == 1
+
+
+@pytest.mark.parametrize("field,value,why", [
+    ("approved_by", "someone", "approved_by"), ("words", "  ", "words"), ("environment", "dev", "environment"),
+    ("cos_adds", ["task.delegate"], "cos_adds"),
+    ("seats", {"apprentice": ["task.accept"], "ea": bind.HELPER_OPERATIONS}, "seats"),
+])
+def test_an_unapproved_or_wider_file_is_refused_and_changes_nothing(helpers_host, field, value, why):
+    before = (helpers_host.root / bind.BINDINGS).read_bytes()
+    with pytest.raises(SystemExit, match=why):
+        helpers_host.run_helpers({**helpers_host.helper_doc, field: value})
+    assert (helpers_host.root / bind.BINDINGS).read_bytes() == before and not (helpers_host.root / bind.HELPERS_ON).exists()
+
+
+def test_a_digest_the_image_does_not_hold_is_refused_before_any_change(helpers_host):
+    before = (helpers_host.root / bind.BINDINGS).read_bytes()
+    with pytest.raises(SystemExit, match="running image"):
+        helpers_host.run_helpers({**helpers_host.helper_doc, "charters": {**DIGESTS, "ea@1": "sha256:" + "c" * 64}})
+    assert (helpers_host.root / bind.BINDINGS).read_bytes() == before
+    assert not any((helpers_host.root / rel).exists() for rel in bind.CHARTER_APPROVALS)
+
+
+def test_a_queue_a_helper_cannot_read_stops_it_before_any_change(helpers_host):
+    (helpers_host.root / "data/guild/build_queue.json").chmod(0o600)
+    with pytest.raises(SystemExit, match="could not read"):
+        helpers_host.run_helpers()
+    assert not (helpers_host.root / bind.HELPERS_ON).exists()
+    assert "apprentice: data/guild/build_queue.json" in bind.check(helpers_host.root)["helpers"]["cannot_read"]
+
+
+def test_a_different_approval_already_there_is_refused(helpers_host):
+    helpers_host.run_helpers()
+    with pytest.raises(SystemExit, match="different approval"):
+        helpers_host.run_helpers({**helpers_host.helper_doc, "words": "other words"})
+
+
+def test_a_different_helper_seat_already_bound_is_refused(helpers_host):
+    helpers_host.run_helpers()
+    rows = json.loads((helpers_host.root / bind.BINDINGS).read_text())
+    next(r for r in rows if r["seat"] == "ea")["operations"].append("task.accept")
+    (helpers_host.root / bind.BINDINGS).write_text(json.dumps(rows))
+    with pytest.raises(SystemExit, match="different ea seat"):
+        helpers_host.run_helpers()
+
+
+def test_helper_keys_are_low_tier_only():
+    for seat in bind.HELPER_SEATS:
+        spec = bind.GATEWAY_KEYS[f"{bind.S}/helper-{seat}/gateway.key"]
+        assert spec["models"] == ["minimoi-openai-low"] and spec["rpm"] == 10
+
+
+def test_the_cos_auth_status_sets_only_a_placeholder():
+    text = (Path(bind.__file__)).read_text()
+    assert '"MINIMOI_MODEL_GATEWAY_KEY=status-check-placeholder"' in text
+    assert "exec\", \"-e\", \"MINIMOI_MODEL_GATEWAY_KEY=status-check-placeholder\", COS_AGENT" in text

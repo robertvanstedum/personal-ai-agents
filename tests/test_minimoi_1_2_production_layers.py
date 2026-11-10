@@ -196,3 +196,64 @@ def test_the_owner_subject_has_no_default_and_its_one_form_is_owner_robert():
     tasks = _compose(LAYERS[0])["services"]["partnership-tasks"]["environment"]
     assert tasks["PARTNERSHIP_OWNER_SUBJECT"].startswith("${MINIMOI_PARTNERSHIP_OWNER_SUBJECT:?")
     assert "owner:robert" in _text(LAYERS[0]) and f"owner:{bind.OWNER}" == "owner:robert"
+
+
+HELPER_SERVICES = {"helper-apprentice": "apprentice", "helper-ea": "ea"}
+
+
+def test_each_helper_runs_as_its_own_uid_on_a_closed_network_and_mounts_only_its_own_secrets():
+    layer = _compose(LAYERS[0])
+    assert layer["networks"]["helpers"]["internal"] is True and layer["networks"]["partnership"]["internal"] is True
+    uids = set()
+    for name, seat in HELPER_SERVICES.items():
+        service = layer["services"][name]
+        uid, gid = setup.HELPERS[seat]
+        assert service["user"] == f"{uid}:{gid}" and uid != 0 and gid != 0
+        uids.add(uid)
+        assert service["read_only"] is True and service["cap_drop"] == ["ALL"] and service["security_opt"] == ["no-new-privileges:true"]
+        assert service["profiles"] == ["minimoi-helpers"] and sorted(service["networks"]) == ["helpers", "partnership"]
+        assert service["environment"]["PARTNERSHIP_ENVIRONMENT"] == "prod" and "HELPER_MODEL" in service["environment"]
+        secrets = [v for v in service["volumes"] if "SECRETS" in v["source"]]
+        assert [v["source"].rsplit("/", 1)[1] for v in secrets] == [f"helper-{seat}"] and secrets[0]["read_only"] is True
+        writable = [v["target"] for v in service["volumes"] if not v.get("read_only")]
+        assert writable == ["/state"]
+    assert len(uids) == 2
+    assert "/repo" not in [v["target"] for v in layer["services"]["helper-ea"]["volumes"]]
+
+
+def test_the_helpers_join_a_release_only_after_the_marker_robert_approval_writes():
+    from scripts.operations import minimoi_1_2_prod_bind as bind
+    assert bind.HELPERS_ON == f"{setup.STATE}/helpers.on"
+    for name in ("scripts/deploy.sh", "scripts/operations/deploy_scoped_release.sh"):
+        text = _text(name)
+        assert "[[ ! -f /opt/minimoi/state/1-2/helpers.on ]] || COMPOSE+=(--profile minimoi-helpers)" in text
+    assert "helper-apprentice helper-ea" in _text("scripts/operations/deploy_scoped_release.sh")
+
+
+def test_usage_folders_are_made_by_setup_and_each_writer_gets_only_its_own():
+    layer = _compose(LAYERS[0])["services"]
+    assert setup.SHARED_FOLDERS[setup.USAGE][1] == 1000       # the gateway's own uid
+    for writer in setup.USAGE_WRITERS:
+        assert f"{setup.USAGE}/{writer}" in setup.FOLDERS
+    for name, writer in (("cos-bot", "cos-bot"), ("cos-scheduler", "cos-scheduler"), ("portal", "portal")):
+        rows = [v for v in layer[name]["volumes"] if "/usage" in v["source"]]
+        assert {v["source"].split("STATE:?}/")[1]: bool(v.get("read_only")) for v in rows} == {"usage": True, f"usage/{writer}": False}
+    assert layer["cos-bot"]["environment"]["MINIMOI_USAGE_WRITER"] == "cos-bot"
+    assert layer["cos-scheduler"]["environment"]["MINIMOI_USAGE_WRITER"] == "cos-scheduler"
+    assert "MINIMOI_USAGE_WRITER" not in layer["portal"]["environment"]
+
+
+def test_the_systems_light_stays_honest_where_there_is_no_operations_agent():
+    """The Operations agent runs on the Mac under launchd. Production has no address to give the portal."""
+    assert "GUILD_OPERATIONS_STATUS_URL" not in _compose(LAYERS[0])["services"]["portal"]["environment"]
+
+
+def test_the_scheduler_image_holds_what_the_helpers_run():
+    text = _text("docker/Dockerfile.cos-scheduler")
+    assert "COPY services/helper_seats/" in text and "COPY config/partnership/charters/" in text
+
+
+def test_mc_nightly_refresh_works_from_cron_as_the_repos_owner():
+    text = _text("scripts/operations/deploy_mc_container_ec2.sh")
+    assert "root /usr/sbin/runuser -u ec2-user -- /usr/bin/env HOME=/home/ec2-user git -C %s pull -q --ff-only" in text
+    assert 'install -d -m 0711 -o root -g root "$MC_DIR"' in text and 'install -d -m 0700 -o root -g root "$MC_DIR"' not in text

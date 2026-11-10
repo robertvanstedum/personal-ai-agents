@@ -202,25 +202,24 @@ def test_actor_of():
 
 # ── staging only ──────────────────────────────────────────────────────────────
 
-def test_production_never_loads_the_gateway_recorder_and_only_cos_images_copy_the_library():
-    """U2: the CoS images copy services/usage/ (the classifier maps it to
-    cos-bot and cos-scheduler). The production gateway never loads the
-    recorder, and production writes nothing: it sets no MINIMOI_USAGE_DIR."""
+def test_production_writes_usage_only_through_its_1_2_layer():
+    """The production gateway carries the recorder, which writes nothing without
+    MINIMOI_USAGE_DIR, and only the 1.2 layer sets that (with the folders the setup tool makes)."""
     copiers, loaders = [], []
     for path in (REPO / "docker").glob("Dockerfile.*"):
         if "services/usage" in path.read_text():
             copiers.append(path.name)
     for path in (REPO / "docker-compose.prod.yml", REPO / "docker-compose.yml",
-                 REPO / "services/model_gateway/litellm.prod.yaml", REPO / "services/model_gateway/litellm.yaml",
-                 REPO / "docker/Dockerfile.model-gateway", REPO / ".github/workflows/deploy.yml",
+                 REPO / "services/model_gateway/litellm.yaml", REPO / ".github/workflows/deploy.yml",
                  REPO / "scripts/operations/deploy_scoped_release.sh"):
         text = path.read_text()
         if "usage_recorder" in text or "MINIMOI_USAGE_DIR" in text or "usage_record.py" in text:
             loaders.append(path.name)
-    assert sorted(copiers) == ["Dockerfile.cos", "Dockerfile.cos-bot", "Dockerfile.cos-scheduler"]
+    assert sorted(copiers) == ["Dockerfile.cos", "Dockerfile.cos-bot", "Dockerfile.cos-scheduler", "Dockerfile.model-gateway"]
     assert loaders == []
-    staging = (REPO / "services/model_gateway/litellm.staging.yaml").read_text()
-    assert "usage_recorder.usage_recorder" in staging
+    for name in ("litellm.staging.yaml", "litellm.prod.yaml"):
+        assert "usage_recorder.usage_recorder" in (REPO / "services/model_gateway" / name).read_text()
+    assert "MINIMOI_USAGE_DIR" in (REPO / "docker-compose.minimoi-1-2-production.yml").read_text()
 
 
 # ── U2: the direct-call helper (Tavily, CoS's Grok backend) ──────────────────
@@ -228,7 +227,7 @@ def test_production_never_loads_the_gateway_recorder_and_only_cos_images_copy_th
 def test_classifier_maps_the_usage_library_to_the_cos_images():
     sys.path.insert(0, str(REPO / "scripts" / "ci"))
     from classify_release import classify
-    assert classify(["services/usage/usage_record.py"]) == ("domain", ("portal", "cos-bot", "cos-scheduler"))
+    assert classify(["services/usage/usage_record.py"]) == ("domain", ("portal", "cos-bot", "cos-scheduler", "model-gateway"))
 
 
 class _Usage:

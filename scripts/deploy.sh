@@ -78,6 +78,8 @@ minimoi_1_2_card_ref() {   # TAG EXACT
 # doesn't render stops the release here, before anything changes.
 if [[ -f "$MINIMOI_1_2_LAYER" ]]; then
   COMPOSE+=(--profile minimoi-1-2)
+  # The helpers join only after Robert's approval: minimoi_1_2_prod_bind.py writes this last.
+  [[ ! -f /opt/minimoi/state/1-2/helpers.on ]] || COMPOSE+=(--profile minimoi-helpers)
   export MINIMOI_PORTAL_IMAGE="${ECR}/minimoi/portal:$MINIMOI_IMAGE_TAG"
   export MINIMOI_COS_SCHEDULER_IMAGE="${ECR}/minimoi/cos-scheduler:$MINIMOI_IMAGE_TAG"
   # The portal's task cards name the release's 40-hex commit, and the tag is only its first seven characters. Give it as

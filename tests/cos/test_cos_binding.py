@@ -233,3 +233,19 @@ def test_invalid_records_are_refused(store):
                 dict(lifetime_s=99999), dict(audience=""), dict(session_user="")):
         assert code(lambda: store.record("t9", **dict(good, **bad))) == "turn_invalid"
     assert code(lambda: store.record("bad id!", **good)) == "turn_invalid"
+
+
+def test_starting_leaves_an_existing_folders_mode_and_tightens_only_its_own_file(tmp_path):
+    """The store's root belongs to the deploy (cos_prod.sh prepare): a scheduler start must not change it."""
+    import os
+    import stat
+    from domains.cos.binding import BindingStore
+    folder = tmp_path / "store"
+    folder.mkdir()
+    folder.chmod(0o750)
+    BindingStore(folder / "tool-bindings.sqlite3", "prod")
+    assert stat.S_IMODE(folder.stat().st_mode) == 0o750
+    assert stat.S_IMODE((folder / "tool-bindings.sqlite3").stat().st_mode) == 0o600
+    new = tmp_path / "made-here" / "tool-bindings.sqlite3"
+    BindingStore(new, "prod")
+    assert stat.S_IMODE(os.stat(new.parent).st_mode) == 0o700
