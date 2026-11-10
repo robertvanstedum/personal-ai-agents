@@ -56,8 +56,8 @@ def test_gateway_has_one_logical_primary_and_ordered_fallbacks():
     }
     # Voice's own routes (Spec 165 §5.4; confirm by voice v3): reached only with the capped voice keys, never a fallback.
     assert {name: model for name, model in deployments.items() if name.startswith("minimoi-voice")} == {
-        "minimoi-voice-summary": "anthropic/claude-haiku-5-5",
-        "minimoi-voice-intent": "anthropic/claude-haiku-5-5",
+        "minimoi-voice-summary": "xai/grok-4.3",
+        "minimoi-voice-intent": "xai/grok-4.3",
     }
     assert {name: model for name, model in deployments.items() if name.startswith("minimoi-cos")} == {
         # Grok paused (#466): CoS on Haiku 5.5, its first fallback and web search on GPT-6 Luna.
