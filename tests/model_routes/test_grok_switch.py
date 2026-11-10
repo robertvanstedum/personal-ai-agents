@@ -367,14 +367,15 @@ class TestMcRuntime:
 
 # ── Curator ──
 
-def test_curator_default_is_haiku_and_only_the_one_value_turns_on_grok(monkeypatch):
+def test_curator_default_is_grok_and_haiku_is_the_one_other_value(monkeypatch):
     from domains.curator.curator_rss_v2 import configured_ranking_model, resolve_scoring_mode
     monkeypatch.delenv("CURATOR_RANKING_MODEL", raising=False)
-    assert configured_ranking_model() == "haiku"
-    monkeypatch.setenv("CURATOR_RANKING_MODEL", "  ")
-    assert configured_ranking_model() == "haiku"
-    monkeypatch.setenv("CURATOR_RANKING_MODEL", "grok-4.3")
+    assert configured_ranking_model() == "grok-4.3"
     assert resolve_scoring_mode(configured_ranking_model()) == "xai"
+    monkeypatch.setenv("CURATOR_RANKING_MODEL", "  ")
+    assert configured_ranking_model() == "grok-4.3"
+    monkeypatch.setenv("CURATOR_RANKING_MODEL", "haiku")
+    assert configured_ranking_model() == "haiku"
 
 
 @pytest.mark.parametrize("bad", ["grok", "grok-4.7", "sonnet", "mechanical", "HAIKU"])
@@ -420,7 +421,8 @@ def test_portuguese_picker_off_is_the_paused_picker_byte_for_byte_and_on_adds_gr
 
 def test_each_page_passes_its_own_switch():
     assert "grok_text=grok_text_on()" in (ROOT / "domains/german/html_server.py").read_text()
-    assert 'os.environ.get("PORTUGUESE_GROK_TEXT", "").strip().lower() == "on"' in (ROOT / "domains/portuguese/html_server.py").read_text()
+    portuguese = (ROOT / "domains/portuguese/html_server.py").read_text()
+    assert 'os.environ.get("PORTUGUESE_GROK_TEXT", "").strip().lower() != "off"' in portuguese and "grok_text=_grok_text_on()" in portuguese
 
 
 @pytest.fixture
@@ -429,16 +431,13 @@ def german_domain(german_client):
     return sys.modules["german_domain"]
 
 
-def test_german_providers_off_are_the_paused_list_and_on_put_grok_first(german_domain, monkeypatch):
+def test_german_providers_put_grok_first_unless_the_host_turns_it_off(german_domain, monkeypatch):
     monkeypatch.delenv("GERMAN_GROK_TEXT", raising=False)
-    assert german_domain._llm_providers() is german_domain._LLM_PROVIDERS
-    assert [p["type"] for p in german_domain._LLM_PROVIDERS] == ["anthropic", "ollama"]
-    for almost in ("", "off", "1", "true", "grok"):
-        monkeypatch.setenv("GERMAN_GROK_TEXT", almost)
-        assert german_domain._llm_providers() is german_domain._LLM_PROVIDERS
-    monkeypatch.setenv("GERMAN_GROK_TEXT", "on")
     assert german_domain._llm_providers()[0] == {"name": "grok-fast", "type": "xai", "model": "grok-4.3"}
     assert [p["type"] for p in german_domain._llm_providers()[1:]] == ["anthropic", "ollama"]
+    assert [p["type"] for p in german_domain._LLM_PROVIDERS] == ["anthropic", "ollama"]
+    monkeypatch.setenv("GERMAN_GROK_TEXT", "off")
+    assert german_domain._llm_providers() is german_domain._LLM_PROVIDERS
 
 
 def test_voice_is_untouched_by_the_switch():

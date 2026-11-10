@@ -141,9 +141,9 @@ def test_an_unpriced_dive_model_is_refused_before_any_call(monkeypatch, capsys):
 def test_dive_page_words_say_what_really_runs():
     research = ROOT / "domains" / "curator" / "research"
     assert "Grok" not in (research / "scan_render.py").read_text()
-    assert "Claude Sonnet challenge pass" in (research / "web" / "dive_confirm.html").read_text()
+    assert "Grok challenge pass" in (research / "web" / "dive_confirm.html").read_text()
     config = json.loads((ROOT / "domains/guild/config/challenger_config.json").read_text())["challenger"]
-    assert config["challenger_model"].startswith("claude-") and config["primary_model"].startswith("claude-sonnet")
+    assert config["challenger_model"] == "grok-4.6" and config["primary_model"].startswith("claude-sonnet")
 
 
 def test_scan_research_directions_use_scan_questions():

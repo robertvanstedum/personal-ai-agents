@@ -31,7 +31,7 @@ USAGE:
     --model=xai          Use xAI Grok 4.3 (production default)
     --model=grok-4.3     Explicit alias for the production xAI model
     --model=haiku        Use Anthropic Claude Haiku 5.5
-    --model=configured   The daily cron's choice: CURATOR_RANKING_MODEL, haiku unless set to grok-4.3
+    --model=configured   The daily cron's choice: CURATOR_RANKING_MODEL, grok-4.3 unless set to haiku
     --model=sonnet       Use Anthropic Claude Sonnet 4.5
     
     --dry-run            Preview without saving (output to curator_preview.html)
@@ -127,9 +127,9 @@ SCORING_MODE_MAP = {
 
 
 def configured_ranking_model() -> str:
-    """The daily run's scorer. Grok is paused (#466): haiku unless CURATOR_RANKING_MODEL names grok-4.3. A value it does
+    """The daily run's scorer: Grok 4.3, level C (#466), unless CURATOR_RANKING_MODEL names haiku. A value it does
     not know stops the run rather than picking a model for it."""
-    value = os.environ.get("CURATOR_RANKING_MODEL", "").strip() or "haiku"
+    value = os.environ.get("CURATOR_RANKING_MODEL", "").strip() or XAI_RANKING_MODEL
     if value not in ("haiku", XAI_RANKING_MODEL):
         raise ValueError(f"Unsupported CURATOR_RANKING_MODEL {value!r}: use haiku or {XAI_RANKING_MODEL}")
     return value

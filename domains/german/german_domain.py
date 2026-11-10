@@ -121,9 +121,8 @@ _SPOKEN_NUMBERS = {
 # ─── LLM provider list ────────────────────────────────────────────────────────
 
 _LLM_PROVIDERS = [
-    # Grok is paused (#466, 31 Oct 2026): translation, writing correction and
-    # phrase handling start with Claude Haiku. GERMAN_GROK_TEXT=on puts Grok
-    # first again (_llm_providers).
+    # Translation, writing correction and phrase handling (#466): Grok 4.3 goes first
+    # unless GERMAN_GROK_TEXT=off (_llm_providers); then this list runs from Claude Haiku.
     {"name": "claude-haiku", "type": "anthropic",  "model": "claude-haiku-4-5-20251001"},
     {"name": "ollama-gemma", "type": "ollama",     "model": "gemma3:1b"},
 ]
@@ -416,8 +415,8 @@ def _drill_completion_message(state: dict, reveal_line: str) -> str:
 # ─── LLM switch ───────────────────────────────────────────────────────────────
 
 def grok_text_on() -> bool:
-    """Grok for German text, off unless the host sets GERMAN_GROK_TEXT=on (#466). Voice has its own choice."""
-    return os.environ.get("GERMAN_GROK_TEXT", "").strip().lower() == "on"
+    """Grok for German text, on unless the host sets GERMAN_GROK_TEXT=off (#466). Voice has its own choice."""
+    return os.environ.get("GERMAN_GROK_TEXT", "").strip().lower() != "off"
 
 
 def _llm_providers() -> list:

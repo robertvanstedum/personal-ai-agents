@@ -5,7 +5,7 @@
 # (issue #35 investigation, 2026-08-07) lived. The old native-venv version of
 # this script had real Keychain access and never hit that bug at all — it
 # only validated the idempotency-check fix, not the crash itself.
-# Model: CURATOR_RANKING_MODEL in the Curator container. Claude Haiku 5.5 unless set to grok-4.3 (Grok paused, #466), about $0.01/day;
+# Model: CURATOR_RANKING_MODEL in the Curator container. Grok 4.3 unless set to haiku (#466), about $0.08/day;
 # fallback to mechanical scoring if the API is unavailable.
 # Runs hourly via the existing launchd job (com.vanstedum.curator, StartInterval=3600).
 #
@@ -77,7 +77,7 @@ case "$STATE" in
       echo "$LOG_PREFIX scripts.x.x_pull_incremental failed — continuing with existing signals"
 
     # ── Run curator pipeline ──────────────────────────────────────────────────
-    echo "$LOG_PREFIX Running RSS curation (CURATOR_RANKING_MODEL, default haiku)..."
+    echo "$LOG_PREFIX Running RSS curation (CURATOR_RANKING_MODEL, default grok-4.3)..."
     docker exec -e MINIMOI_ROLE=production minimoi-curator python domains/curator/curator_rss_v2.py \
       --model=configured --fallback --temperature=0.7
     RSS_STATUS=$?

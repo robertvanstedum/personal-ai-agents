@@ -149,7 +149,7 @@ def _review_grok(transcript: str, persona: str, scene: str, learner_name: str) -
         raise ProviderError("xAI API key not found")
     client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
     resp = client.chat.completions.create(
-        model="grok-4.3",
+        model="grok-4.6",
         max_tokens=2000,
         temperature=0.3,
         messages=[

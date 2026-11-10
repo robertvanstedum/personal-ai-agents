@@ -44,6 +44,11 @@ _PERSONA_VOICES = {
 }
 
 
+def _grok_text_on() -> bool:
+    """Grok for Portuguese text, on unless the host sets PORTUGUESE_GROK_TEXT=off (#466)."""
+    return os.environ.get("PORTUGUESE_GROK_TEXT", "").strip().lower() != "off"
+
+
 def _persona_voices(name: str) -> dict:
     return dict(_PERSONA_VOICES.get(
         name,
@@ -750,8 +755,8 @@ def conversas():
         persona_progress=persona_progress,
         sessions_per_round=SESSIONS_PER_ROUND,
         realtime_voice_enabled=realtime_voice_enabled,
-        # Grok for text, off unless the host sets PORTUGUESE_GROK_TEXT=on (#466). Claude stays the selected default.
-        grok_text=os.environ.get("PORTUGUESE_GROK_TEXT", "").strip().lower() == "on",
+        # Grok for text, on unless the host sets PORTUGUESE_GROK_TEXT=off (#466). Claude stays the selected default.
+        grok_text=_grok_text_on(),
         learner_name=learner_name,
         tip=_load_tip("portuguese.conversas"),
     )
@@ -1141,7 +1146,7 @@ def api_pt_transcribe():
 def api_pt_review():
     body         = request.get_json(force=True)
     transcript   = body.get("transcript", "").strip()
-    model        = body.get("model", "claude").strip()
+    model        = body.get("model", "grok" if _grok_text_on() else "claude").strip()
     persona_name = body.get("persona_name", "").strip()
     scene        = body.get("scene", "").strip()
     source       = body.get("source", "ki_sessao").strip()
@@ -1208,7 +1213,7 @@ def api_pt_chat():
     history   = data.get("history", [])
     persona   = data.get("persona", "").strip()
     scene     = data.get("scene", "").strip()
-    model     = data.get("model", "claude").strip()
+    model     = data.get("model", "grok" if _grok_text_on() else "claude").strip()
     user_turn = data.get("user_turn", "")
     if not persona:
         return jsonify({"ok": False, "error": "persona required"}), 400

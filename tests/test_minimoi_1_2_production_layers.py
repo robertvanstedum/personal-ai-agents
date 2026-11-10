@@ -1,6 +1,7 @@
 """Production layers for plan failover and the offered Grok API route. No host, no secret values."""
 import json
 import re
+from pathlib import Path as _Path
 
 import yaml
 
@@ -101,7 +102,7 @@ def test_the_relay_routes_are_the_production_template_list():
     """The layer's pinned list can't drift from the production catalogue template."""
     from core.model_routes import load_catalogue, relay_routes
     pinned = json.loads(_compose(LAYERS[1])["services"]["mc-relay"]["environment"]["MC_RELAY_ROUTES"])
-    assert pinned == relay_routes(load_catalogue(Path(__file__).resolve().parents[1] / "scripts/operations/production_route_catalogue.json"))
+    assert pinned == relay_routes(load_catalogue(_Path(__file__).resolve().parents[1] / "scripts/operations/production_route_catalogue.json"))
 
 
 def test_grok_is_nobodys_failover_in_the_catalogue_the_relay_reads():
