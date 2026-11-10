@@ -110,6 +110,8 @@ elif argv[0] == "rm":
     save(state)
 elif argv[0] == "login":
     sys.stdin.read()
+elif argv[0] == "exec" and state.get("owner_access_refused"):
+    sys.exit(1)
 '''
 
 FAKE_COMPOSE = FAKE_COMMON + r'''
@@ -506,6 +508,26 @@ def test_start_resumes_in_order_and_ends_verified(host):
     # Own project only: nothing merges it into the main one.
     assert "docker-compose.prod.yml" not in " ".join(argv)
     assert host.run("status").returncode == 0
+
+
+def test_start_confirms_roberts_rooms_access_after_the_release_and_before_the_workers(host):
+    host.up()
+    calls = host.calls()
+    release = position(calls, lambda c: c["tool"] == "release")
+    seed = position(calls, lambda c: c["tool"] == "docker" and c["argv"][0] == "exec" and "seed_owner" in " ".join(c["argv"]))
+    workers = position(calls, lambda c: c["tool"] == "docker-compose" and "minimoi-guildhall-production" in c["argv"])
+    assert release < seed < workers
+    assert 'seed_owner("account:robert", "robert"' in " ".join(calls[seed]["argv"])
+
+
+def test_start_stops_before_the_workers_when_roberts_rooms_access_is_not_confirmed(host):
+    assert host.start().returncode == 3         # the wait for tokens comes first on a fresh host
+    host.bound_tokens()
+    host.update(owner_access_refused=True)
+    result = host.start()
+    assert result.returncode == 6
+    assert "Rooms access could not be confirmed" in result.stderr
+    assert not [c for c in host.calls() if c["tool"] == "docker-compose" and "minimoi-guildhall-production" in c["argv"]]
 
 
 def test_own_env_file_is_private_and_exact(host):

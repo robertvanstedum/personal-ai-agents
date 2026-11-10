@@ -26,6 +26,7 @@ import threading
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from flask import Blueprint, copy_current_request_context, g, has_request_context, jsonify, request
 
@@ -409,6 +410,12 @@ def item_place(item):
 OWNER = "the owner"              # the owner's name in the core's words when a host names none (the adapter's owner_name)
 
 
+def clock_line(now=None):
+    """The time when the session starts, in the owner's zone. The page adds a fresher line each minute of a call."""
+    when = datetime.fromtimestamp(time.time() if now is None else now, ZoneInfo("America/Chicago"))
+    return f"Clock: it is {when.strftime('%A, %d %B %Y, %I:%M %p').replace(' 0', ' ')} Central time in Chicago."
+
+
 def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False):
     """Spec 164 §7, part 1, as confirm by voice v3 makes it (V3_BUILD_BRIEF "The voice side"): what a direct session adds to
     the host's own operating rules. The model has no tools: it cannot act, the app does, and only after the owner
@@ -424,9 +431,15 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False):
     question with nothing waiting is told so on every provider (_stray). Otherwise (xAI answers by itself, live probes)
     the model's own reply to a request is the question: it asks briefly and naturally."""
     name, short = person["name"], person["short"]
-    lookup = (f"When {owner} only asks to look something up or check something (facts, status, counts, whether something "
-              "happened), never ask him to confirm: the app looks it up at once; say only a brief word such as \"Let me "
-              "check.\", and never say what you think the answer is. ")
+    # A simple question gets a quick answer, and status talk is the system speaking, not the conversation (phone test, 10 Nov).
+    lookup = ("Answer at once, with no check, anything you already have: the time and date (from the latest clock line "
+              "in this call), your briefing and this conversation. "
+              f"When {owner} only asks to look something else up (facts, status, counts, whether something happened), "
+              "never ask him to confirm: the app looks it up at once; give at most a short human beat such as \"Hm, one "
+              "moment.\", and never say what you think the answer is. Never narrate the machinery: never say you are "
+              "checking, waiting on a result, or that a result has not arrived. If an answer has not reached you by his "
+              "next words, say plainly that you couldn't get it just now, and carry on with him. "
+              f"A written record of this call is kept: after the call {owner} can download its transcript from the chat. ")
     request = lookup + f"When {owner} asks for a note, a post-it, or work that changes something (making, changing, " \
               "closing or sending anything, files, jobs, any work), "
     ask = (request + "never ask him to confirm it yourself and never say it is done: the app hears what he asks for, and "
@@ -439,7 +452,7 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False):
             f"and only after {owner} confirms. This is an internal execution boundary: speak as {short} throughout, "
             "including when the app returns your result. Never pretend a lookup or action happened without that result. " + ask +
             "Never repeat his words back unless he asks you to. Outcomes come from the app: say only what it gives "
-            f"you, and never claim anything was checked, saved or done otherwise. When {owner} says he is done "
+            f"you, and never claim anything was checked, saved or done otherwise. {clock_line()} When {owner} says he is done "
             f"(\"we're done\"), answer only: \"{GOODBYE}\" A negated or questioned one (\"we're not done\") is "
             "not an ending; carry on. Never offer a recap or summary. Never summarize from memory: one is made from this "
             "session's kept record only when he asks.")

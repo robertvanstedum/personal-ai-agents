@@ -113,7 +113,7 @@ _RULES = ("You are Robert's Chief of Staff (CoS), speaking with him by voice: th
 # confirms, and gives the voice her answer to say. Who asks for that confirmation is plumbing (review v3 S6): where the page
 # makes every response (OpenAI) its own asking line is the question and the voice never asks one itself; where the
 # provider answers by itself (xAI) her voice's own reply is the question.
-_NEEDS = ("When the answer requires live or current facts, web research, MiniMoi state beyond the supplied context, stored "
+_NEEDS = ("When the answer requires live or current facts (not the time or date: you have those), web research, MiniMoi state beyond the supplied context, stored "
           "history, or substantive domain judgment, or before saying that a capability, tool or piece of history is "
           "unavailable, ")
 _ASKS = "ask Robert briefly to confirm that you should check; the app then checks through your work runtime "

@@ -648,6 +648,21 @@ deploy_main_project() {
   say "released: CoS scheduler and portal, with Guildhall's layer"
 }
 
+# Robert's own row in Rooms' access list, through the portal that reads it. seed_owner never overwrites a list that exists,
+# so a re-run, or a list changed since, stays as it is. Without this row he is refused Rooms on a working Guildhall.
+ensure_owner_access() {
+  docker exec -w /app minimoi-portal python3 -c '
+import os
+from minimoi_portal import rooms_identity as R
+folder = os.environ["MINIMOI_ROOMS_ACCESS_DIR"]
+os.makedirs(folder, mode=0o700, exist_ok=True)
+access = R.RoomsAccess(folder)
+access.seed_owner("account:robert", "robert", granted_by="guildhall_prod-start")
+raise SystemExit(0 if access.decide("account:robert").ok else 1)
+' >/dev/null 2>&1 || die "Robert's Rooms access could not be confirmed. Nothing was undone: read the access list, or run stop." 6
+  say "confirmed: Robert's Rooms access"
+}
+
 start_workers() {
   local log
   if [[ ! -e "$ENV_FILE" ]]; then
@@ -700,6 +715,7 @@ cmd_start() {
   tokens_agree || die "guildhall-cos and cos-guildhall hold different cos-service tokens"
 
   deploy_main_project
+  ensure_owner_access
   start_workers
   wait_verified || die "started, but not verified. Nothing was undone. Read status, or run stop." 6
   say "result: Guildhall is up. Prove it with one real meeting: named turn, open question, stop, reload."

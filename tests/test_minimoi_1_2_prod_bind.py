@@ -219,6 +219,17 @@ def test_pairs_stay_equal_and_hashes_go_where_the_bindings_read_them(host):
         assert (host.root / path).read_text().strip() not in env
 
 
+@pytest.mark.parametrize("bad", [0, -1, "3", True])
+def test_owner_portal_id_must_be_a_positive_number(bad):
+    with pytest.raises(SystemExit):
+        bind.validate_inputs({**_doc(), "owner_portal_id": bad})
+
+
+def test_owner_portal_id_is_optional():
+    assert bind.validate_inputs({**_doc(), "owner_portal_id": 3})
+    assert bind.validate_inputs(_doc())
+
+
 def test_the_owner_subject_is_the_form_the_portal_signs():
     assert 'subject=f"owner:{owner}"' in (REPO / "minimoi_portal/guild_ui/tasks_owner_api.py").read_text()
 

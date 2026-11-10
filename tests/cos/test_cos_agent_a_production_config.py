@@ -192,7 +192,7 @@ def test_production_gateway_has_the_voice_routes_and_never_falls_back_to_them():
     the capped voice-summary keys, and never a fallback of CoS's agent routes."""
     config = yaml.safe_load(PROD_GATEWAY_CONFIG.read_text())
     deployments = {item["model_name"]: item["litellm_params"]["model"] for item in config["model_list"]}
-    assert deployments["minimoi-voice-summary"] == "xai/grok-4.3"
-    assert deployments["minimoi-voice-intent"] == "xai/grok-4.3"
+    assert deployments["minimoi-voice-summary"] == "anthropic/claude-haiku-5-5"
+    assert deployments["minimoi-voice-intent"] == "anthropic/claude-haiku-5-5"
     fallbacks = str(config["router_settings"]["fallbacks"])
     assert "minimoi-voice" not in fallbacks

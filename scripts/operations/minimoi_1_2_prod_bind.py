@@ -287,8 +287,10 @@ def _no_duplicates(rows):
 
 def validate_inputs(doc) -> dict:
     """Fails closed, naming the field and never its value."""
-    if not isinstance(doc, dict) or set(doc) != INPUT_FIELDS:
+    if not isinstance(doc, dict) or set(doc) - {"owner_portal_id"} != INPUT_FIELDS:
         refuse(f"the input file must hold exactly: {sorted(INPUT_FIELDS)}")
+    if "owner_portal_id" in doc and not (type(doc["owner_portal_id"]) is int and doc["owner_portal_id"] > 0):
+        refuse("input owner_portal_id: the owner's numeric id in auth.users, or leave it out")
     if doc["schema"] != INPUT_SCHEMA:
         refuse("input schema")
     if doc["environment"] != "prod":
@@ -627,7 +629,9 @@ def group_local(root: Path, doc: dict, out: Outcome) -> None:
     set_env_hashes(root, {
         "MINIMOI_COS_TOOL_LISTENER_TOKEN_SHA256": sha256(read_private(root, COS_BOUND)),
         "MINIMOI_MC_ROOMS_TOKEN_SHA256": sha256(read_private(root, MC_SERVICE)),
-        "MINIMOI_PARTNERSHIP_OWNER_SUBJECT": f"owner:{doc['owner_principal']}",     # the portal signs owner:<id>
+        # The portal signs owner:<auth_id> when the login has a row in auth.users, which the owner's does: without
+        # owner_portal_id, every owner read of the task service is refused.
+        "MINIMOI_PARTNERSHIP_OWNER_SUBJECT": f"owner:{doc.get('owner_portal_id') or doc['owner_principal']}",
     }, sha256(read_private(root, NOTICES)), out)
 
 
@@ -1024,7 +1028,7 @@ def check(root: Path, inputs: str = "") -> dict:
         agree["Board key pair"] = not _board_pair_problem(root)
     subject = _env_value(env_lines, "MINIMOI_PARTNERSHIP_OWNER_SUBJECT")
     if subject is not None:
-        agree["owner subject form"] = subject == f"owner:{OWNER}"
+        agree["owner subject form"] = bool(re.fullmatch(rf"owner:({OWNER}|[1-9][0-9]*)", subject))
     report = {"files": files, "agree": agree, "counts": {}}
     for value in files.values():
         report["counts"][value] = report["counts"].get(value, 0) + 1

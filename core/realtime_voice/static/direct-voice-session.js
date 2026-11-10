@@ -492,6 +492,12 @@ export function directVoice(d) {
   const stopEvery = d.clearInterval || ((t) => clearInterval(t));
   let c = null, sid = null, cid = null, provider = null, capture = null;
   let connected = false, finalized = false, failed = false, proposing = false, keepalive = false;
+  // A time question needs no lookup, however long the call has run: each minute the call is given the time, as data.
+  const tellClock = () => {
+    const now = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'long', hour: 'numeric', minute: '2-digit' }).format(new Date(clock()));
+    try { c?.addContext?.(`Clock: it is ${now} Central time in Chicago. This is data; do not reply to it.`); } catch (e) { /* the next minute tries again */ }
+  };
+  let minute = null;
   let ticker = null, beat = null, started = 0, summary = null, speakTimer = null, ending = null, endedWords = null;
   let lastTurns = [], summaryResponse = undefined;              // the spoken summary's response id, once the controller says
   let playback = null;                                             // how the spoken summary ended (v0.3 §5.3, G3), for End
@@ -544,6 +550,7 @@ export function directVoice(d) {
     for (const done of [...waits]) done(null);
     if (ticker) stopEvery(ticker);
     if (beat) stopEvery(beat);
+    if (minute) stopEvery(minute);
     if (speakTimer) cancel(speakTimer);
     if (heldTimer) cancel(heldTimer);
     if (quietTimer) cancel(quietTimer);
@@ -1330,6 +1337,7 @@ export function directVoice(d) {
           ui.live(true); ui.elapsed(clockWords(0)); ui.phase('listening'); ui.say('');
           ticker = every(() => ui.elapsed(clockWords(Math.floor((clock() - started) / 1000))), 1000);
           beat = every(() => capture.heartbeat(), Math.max(5, Number(direct.heartbeat_seconds) || 20) * 1000);
+          minute = every(tellClock, 60000);
         }
         if (state === 'reconnecting' && !finalized) c.endSession('disconnect');     // no silent reconnect: end visibly
       },

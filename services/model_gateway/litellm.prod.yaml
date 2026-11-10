@@ -96,14 +96,10 @@ model_list:
   # with the capped keys voice-summary-mc and voice-summary-cos (core/realtime_voice/summary_gateway.py). The server bounds
   # each attempt at 35 s.
   - model_name: minimoi-voice-summary
-    litellm_params:
-      model: xai/grok-4.3
-      api_key: os.environ/XAI_API_KEY
-      timeout: 30
-      reasoning_effort: none
+    litellm_params: {<<: *anthropic-low, timeout: 30, reasoning_effort: none}
     model_info:
-      id: voice-summary-xai
-      base_model: xai/grok-4.3
+      id: voice-summary-anthropic
+      base_model: anthropic/claude-haiku-5-5
       mode: chat
 
   # The voice understanding call (confirm by voice, v3; core/realtime_voice/intent_gateway.py): one plain completion of a
@@ -111,14 +107,10 @@ model_list:
   # nothing. Reached only with the same capped keys as the summary (voice-summary-mc, voice-summary-cos). The server
   # bounds each call at 2.5 s and never retries.
   - model_name: minimoi-voice-intent
-    litellm_params:
-      model: xai/grok-4.3
-      api_key: os.environ/XAI_API_KEY
-      timeout: 5
-      reasoning_effort: none
+    litellm_params: {<<: *anthropic-low, timeout: 5, reasoning_effort: none}
     model_info:
-      id: voice-intent-xai
-      base_model: xai/grok-4.3
+      id: voice-intent-anthropic
+      base_model: anthropic/claude-haiku-5-5
       mode: chat
 
   # MC's Guildhall discussion replies (services/rooms_worker/discussion.py): tool-free, reached only with its capped key.
