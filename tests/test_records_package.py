@@ -142,8 +142,9 @@ def test_container_preserves_provisioning_launcher_and_removes_preview_fixtures(
     assert 'rm -rf /app/domains/records/static/v2/fixtures' in dockerfile
 
 
-def test_full_ci_and_nightly_include_records_acceptance():
-    for name in ('deploy.yml', 'nightly-tests.yml'):
+def test_nightly_includes_records_acceptance():
+    # The release pipeline runs a quick sanity set; the whole suite, records acceptance included, runs nightly.
+    for name in ('nightly-tests.yml',):
         workflow = (ROOT / '.github/workflows' / name).read_text()
         assert 'pytest tests/ prototype-lab/projects/project-records-room-poc/tests/' in workflow
 
