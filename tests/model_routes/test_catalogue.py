@@ -264,7 +264,7 @@ def test_rule_4_billing_comes_from_the_evidence_so_api_can_never_read_as_plan():
 def test_rule_4_the_words_claim_only_what_the_evidence_shows():
     moved = switched_route(snapshot(CAT, "mc-conversation"), "signin_expired")
     seen = switch_words(moved, {"provider": "minimoi-gateway", "model": "minimoi-openai-strong"})
-    assert "sign-in has expired" in seen and "ran on the API: minimoi-openai-strong" in seen and "tries the plan again" in seen
+    assert "sign-in has expired" in seen and "ran on the OpenAI API: minimoi-openai-strong" in seen and "tries the OpenAI plan again" in seen
     unseen = switch_words(moved, None)
     assert "was sent to the API route minimoi-openai-strong" in unseen and "was not read" in unseen and "ran on" not in unseen
 
@@ -279,3 +279,11 @@ def test_rule_1_the_three_declared_signals(error, signal):
                                    {"message": "insufficient_quota"}, {"type": "unauthorized"}, {"type": None}, {"type": 429}, {}, None, "rate_limit_error"])
 def test_rule_1_anything_else_is_no_signal_whatever_its_words_say(error):
     assert plan_signal(error) is None
+
+
+def test_the_switch_note_names_the_plan_that_ran_out_and_the_api_that_answered():
+    """The owner reads which account ran out (here the OpenAI plan) and which provider's API answered instead (#475)."""
+    moved = switched_route(snapshot(CAT, "mc-conversation"), "rate_limit")
+    words = switch_words(moved, {"provider": "minimoi-gateway", "model": "minimoi-openai-strong"})
+    assert words == ("[The OpenAI plan hit its rate or usage limit, so this turn ran on the OpenAI API: minimoi-openai-strong, "
+                     "billed per use against the capped key. The next turn tries the OpenAI plan again.]")

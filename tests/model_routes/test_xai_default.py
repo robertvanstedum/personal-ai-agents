@@ -37,6 +37,7 @@ def test_a_switched_grok_turn_names_xai_not_the_plan():
     words = switch_words(switched_route(route, "rate_limit"), {"provider": "minimoi-gateway", "model": "minimoi-anthropic-strong"})
     assert words.startswith("[xAI hit its rate or usage limit,") and words.endswith("The next turn tries xAI again.]")
     assert "plan" not in words
+    assert "ran on the Claude API: minimoi-anthropic-strong" in words
 
 
 def _node(script, env):

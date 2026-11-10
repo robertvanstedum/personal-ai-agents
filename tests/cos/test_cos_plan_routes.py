@@ -594,7 +594,7 @@ def test_rule_4_the_words_follow_the_evidence_and_the_receipt_says_api(failover)
         return _ok()
     f = failover(_Sse(RUN_A, _error("insufficient_quota")), answer)
     reply = f.turn()
-    assert "quota is used up" in reply and "ran on the API: minimoi-openai-strong" in reply and "tries the plan again" in reply
+    assert "quota is used up" in reply and "ran on the OpenAI API: minimoi-openai-strong" in reply and "tries the OpenAI plan again" in reply
     receipt = served_receipt(f.state["switched"], f.store.served_for_turn(TURN))
     assert (receipt["route_id"], receipt["billing_label"], receipt["served_matches"]) == ("api-openai-strong", "API", True)
     assert receipt["switched_from"] == ASTRA
