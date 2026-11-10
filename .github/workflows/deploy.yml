@@ -72,6 +72,8 @@ jobs:
   test:
     needs: classify
     runs-on: ubuntu-latest
+    # A release waits on this job: past 15 minutes it fails rather than holds the deploy.
+    timeout-minutes: 15
     # A throwaway PostgreSQL for the opt-in database tests (MC_BINDING_TEST_DSN):
     # trust auth, synthetic data only, gone when the job ends. It is the image
     # production runs (docker-compose.prod.yml). Without it those tests skip.
@@ -126,9 +128,15 @@ jobs:
           if [ "$TEST_SCOPE" = "focused" ] && [ -n "$TEST_TARGETS" ]; then
             echo "Focused tests: $TEST_TARGETS"
             # shellcheck disable=SC2086 # the targets are space-separated repository paths
-            pytest $TEST_TARGETS -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke
+            pytest $TEST_TARGETS -q -x --junit-xml=data/reports/junit.xml --ignore=tests/smoke
           else
-            pytest tests/ prototype-lab/projects/project-records-room-poc/tests/ -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke
+            # A quick sanity set before a full release: the always-run core (the release and deploy guards). The whole
+            # suite runs nightly on main (nightly-tests.yml) and files an issue for anything it finds; the owner tests
+            # further in production. Keeps merge-to-live near ten minutes.
+            CORE=$(python3 -c "import os,sys; sys.path.insert(0, 'scripts/ci'); import select_tests as s; print(' '.join(t for t in s.CORE_TESTS if os.path.isfile(t)))")
+            echo "Sanity tests: $CORE"
+            # shellcheck disable=SC2086 # space-separated repository paths
+            pytest $CORE -q -x --junit-xml=data/reports/junit.xml --ignore=tests/smoke
           fi
 
       - name: Check docs/specs naming/duplicates/supersession
@@ -156,7 +164,8 @@ jobs:
             --branch $BRANCH
 
   build-push:
-    needs: [classify, test]
+    # Builds while the tests run; deploy waits for both.
+    needs: [classify]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.classify.outputs.release_class != 'documents'
     runs-on: ubuntu-latest
     outputs:
@@ -209,7 +218,7 @@ jobs:
           done
 
   deploy:
-    needs: [classify, build-push]
+    needs: [classify, test, build-push]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:

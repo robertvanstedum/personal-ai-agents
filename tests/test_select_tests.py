@@ -183,7 +183,9 @@ def test_the_workflow_runs_the_focused_set_only_when_told_and_the_whole_suite_ot
     assert classify_job.count('echo "test_scope=full"') == 2                 # manual runs and rewritten history
     test_job = workflow[workflow.index("  test:"):workflow.index("  build-push:")]
     assert 'if [ "$TEST_SCOPE" = "focused" ] && [ -n "$TEST_TARGETS" ]; then' in test_job
-    assert "pytest tests/ prototype-lab/projects/project-records-room-poc/tests/ -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke" in test_job.split("else", 1)[1]
+    sanity = test_job.split("else", 1)[1]                                    # a full release: the quick sanity set, not the whole suite
+    assert "select_tests as s" in sanity and "s.CORE_TESTS" in sanity and "pytest $CORE -q -x" in sanity
+    assert "timeout-minutes: 15" in test_job
 
 
 def test_the_nightly_run_takes_the_whole_suite_on_main_and_deploys_nothing():

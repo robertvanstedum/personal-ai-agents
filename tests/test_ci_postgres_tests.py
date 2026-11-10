@@ -19,7 +19,7 @@ def test_both_test_jobs_give_the_database_tests_a_throwaway_postgres():
         job = _test_job(workflow)
         postgres = job["services"]["postgres"]
         assert postgres["env"]["POSTGRES_HOST_AUTH_METHOD"] == "trust", workflow
-        suite = next(step for step in job["steps"] if "pytest tests/" in step.get("run", ""))
+        suite = next(step for step in job["steps"] if step.get("name") == "Run regression tests" or "pytest tests/" in step.get("run", ""))
         dsn = parse_dsn(suite["env"]["MC_BINDING_TEST_DSN"])
         # The fixture (tests/minimoi_actions/postgres_fixture_support.py) refuses all but a local mc12_test_* database.
         assert dsn["dbname"].startswith("mc12_test_") and dsn["dbname"] == postgres["env"]["POSTGRES_DB"], workflow

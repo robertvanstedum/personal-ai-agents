@@ -32,7 +32,7 @@ def test_mc_route_is_grok_strong_on_gateway_only_key_with_claude_behind_it():
     # All xAI (#466): MC's route is the xai-strong tier, Claude's strong tier when xAI cannot serve.
     assert mc["litellm_params"]["model"] == "xai/grok-4.7"
     assert mc["litellm_params"]["api_key"] == "os.environ/GATEWAY_XAI_API_KEY"
-    assert mc["litellm_params"]["reasoning_effort"] == "high"
+    assert mc["litellm_params"]["reasoning_effort"] == "low"          # chat runs Grok 4.7 at low effort (10 Nov)
     assert mc["model_info"]["id"] == "mc-xai-grok43" and "fallback_position" not in mc["model_info"]
     assert {"minimoi-mc-agent": ["minimoi-anthropic-strong"]} in _load(GATEWAY_STAGING)["router_settings"]["fallbacks"]
     # Production's minimoi-mc-agent is Guildhall's tool-free discussion route: the same tier and failover.
