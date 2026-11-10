@@ -36,6 +36,7 @@ PLAN_SIGNALS = {"rate_limit_error": "rate_limit", "insufficient_quota": "plan_ex
 SIGNAL_WORDS = {"rate_limit": "The plan hit its rate or usage limit", "plan_exhausted": "The plan's quota is used up",
                 "signin_expired": "The plan's sign-in has expired"}
 _API_MODEL = re.compile(r"minimoi-(openai|anthropic)-(?:strong|mid|low)")
+_XAI_MODEL = re.compile(r"minimoi-xai-(?:strong|mid|low)")
 
 
 class RouteRefused(ValueError):
@@ -79,10 +80,20 @@ def _check_failover(catalogue: dict, route: dict) -> None:
         return
     target = route_of(catalogue, route["failover"])
     family = _API_MODEL.fullmatch(target["model"]) if target else None
-    if (route["billing_mode"] != "subscription" or target is None or target["billing_mode"] != "metered_api"
-            or "failover" in target or target.get("runtime") != "openclaw" or not target.get("runtime_override", True)
-            or family is None or family.group(1) != route["provider"]):
-        raise ValueError(f"route {route['route_id']} may fail over only to its own provider's API route")
+    if (target is None or target["billing_mode"] != "metered_api" or "failover" in target or target.get("runtime") != "openclaw"
+            or not target.get("runtime_override", True) or family is None
+            or not (_plan_to_own_api(route, family) or _xai_to_claude(route, family))):
+        raise ValueError(f"route {route['route_id']} may fail over only to its own provider's API route, "
+                         "or from a Grok API route to Claude's")
+
+
+def _plan_to_own_api(route: dict, family) -> bool:
+    return route["billing_mode"] == "subscription" and family.group(1) == route["provider"]
+
+
+def _xai_to_claude(route: dict, family) -> bool:
+    return (route["billing_mode"] == "metered_api" and _XAI_MODEL.fullmatch(route["model"]) is not None
+            and family.group(1) == "anthropic")
 
 
 def plan_signal(error) -> str | None:
@@ -181,12 +192,15 @@ def billing_served(route: dict, served: dict | None) -> str:
 def switch_words(route: dict, served: dict | None) -> str:
     """The plain sentence a switched turn's answer carries. The turn's evidence decides what it claims."""
     why = SIGNAL_WORDS.get(route.get("switch_signal"), "The plan could not serve")
+    again = "the plan"
+    if str(route.get("switched_from") or "").startswith("api-xai-"):      # a Grok route's declared target, not a plan's
+        why, again = why.replace("The plan", "xAI", 1), "xAI"
     if served and served.get("provider") == "minimoi-gateway":
         ran = f"so this turn ran on the API: {served.get('model')}, billed per use against the capped key"
     else:
         ran = (f"so this turn was sent to the API route {route['model']}, billed per use against the capped key; "
                "the runtime's record of it was not read")
-    return f"[{why}, {ran}. The next turn tries the plan again.]"
+    return f"[{why}, {ran}. The next turn tries {again} again.]"
 
 
 def role_snapshot_for(kind: str | None, role_name: str) -> dict | None:

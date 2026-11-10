@@ -65,18 +65,18 @@ model_list:
     model_info: {id: tier-xai-low, mode: chat, supports_function_calling: true}
 
   # ── Roles: the names callers ask for. To switch one, change its `<<:` line. ──
-  # Grok paused (#466, 31 Oct 2026): no role points at an xai-* tier. The route
+  # All xAI for now (#466), Claude at the same level when xAI cannot serve. The route
   # names keep their history (`-xai-fast`, `cos-xai-*` ids) so callers, fallbacks
   # and receipts stay continuous; the merge line is what serves them.
   # A role sets only what is its own: timeout, effort where it must differ from
   # its tier (the latency routes run without reasoning), and its receipt
   # identity (model_info.id, fallback_position), which stays put across switches.
   - model_name: minimoi-cos-agent
-    litellm_params: {<<: *anthropic-low, timeout: 120}
+    litellm_params: {<<: *xai-strong, timeout: 120}
     model_info: {id: cos-xai-primary, mode: chat, supports_function_calling: true, fallback_position: 0}
 
   - model_name: minimoi-cos-agent-xai-fast
-    litellm_params: {<<: *openai-low, timeout: 120, reasoning_effort: none}
+    litellm_params: {<<: *anthropic-strong, timeout: 120}
     model_info: {id: cos-xai-fast, mode: chat, supports_function_calling: true, fallback_position: 1}
 
   - model_name: minimoi-cos-web-search
@@ -85,7 +85,7 @@ model_list:
     # on the shared backend key and never downgrades it, which sent every Grok
     # chat route through the Responses bridge and dropped the system message
     # (#454, #455).
-    litellm_params: {<<: *openai-low, timeout: 60}
+    litellm_params: {<<: *xai-low, timeout: 60}
     model_info: {id: cos-xai-bounded-web-search, supports_web_search: true}
 
   - model_name: minimoi-cos-agent-anthropic
@@ -112,6 +112,19 @@ model_list:
   # bounds each call at 2.5 s and never retries.
   - model_name: minimoi-voice-intent
     litellm_params:
+      model: xai/grok-4.3
+      api_key: os.environ/XAI_API_KEY
+      timeout: 5
+      reasoning_effort: none
+    model_info:
+      id: voice-intent-xai
+      base_model: xai/grok-4.3
+      mode: chat
+
+  # Claude's answer to the same one word, only when xAI cannot serve (router_settings.fallbacks), so a busy xAI does not turn
+  # every spoken request into chat. Reached only through that fallback and the capped voice keys.
+  - model_name: minimoi-voice-intent-anthropic
+    litellm_params:
       model: anthropic/claude-haiku-5-5
       api_key: os.environ/ANTHROPIC_API_KEY
       timeout: 5
@@ -125,7 +138,7 @@ model_list:
 
   # MC's Guildhall discussion replies (services/rooms_worker/discussion.py): tool-free, reached only with its capped key.
   - model_name: minimoi-mc-agent
-    litellm_params: {<<: *anthropic-low, timeout: 120}
+    litellm_params: {<<: *xai-strong, timeout: 120}
     model_info: {id: mc-guildhall-discussion, mode: chat, supports_function_calling: true}
 
 router_settings:
@@ -133,6 +146,10 @@ router_settings:
     - minimoi-cos-agent:
         - minimoi-cos-agent-xai-fast
         - minimoi-cos-agent-anthropic
+    - minimoi-voice-intent:
+        - minimoi-voice-intent-anthropic
+    - minimoi-mc-agent:
+        - minimoi-anthropic-strong
   num_retries: 0
   allowed_fails: 1
   cooldown_time: 60

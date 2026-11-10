@@ -107,17 +107,17 @@ BOARD_CAPABILITIES = ("guild.board.notes.read", "guild.board.note.create", "guil
 KEY_CAP = 20.0
 KEY_DURATION = "30d"
 CHAT_ROUTES = ["/v1/chat/completions", "/chat/completions"]
-VOICE_MODELS = ["minimoi-voice-summary", "minimoi-voice-intent"]     # scripts/staging/mc_keys.sh
+VOICE_MODELS = ["minimoi-voice-summary", "minimoi-voice-intent", "minimoi-voice-intent-anthropic"]     # scripts/staging/mc_keys.sh
 GATEWAY_KEYS = {
     f"{S}/guildhall-cos/discussion-gateway.token": {"models": ["minimoi-cos-agent"], "rpm": 10, "alias": "guildhall-discussion-cos-"},
-    f"{S}/guildhall-mc/discussion-gateway.token": {"models": ["minimoi-mc-agent"], "rpm": 10, "alias": "guildhall-discussion-mc-"},
+    f"{S}/guildhall-mc/discussion-gateway.token": {"models": ["minimoi-mc-agent", "minimoi-anthropic-strong"], "rpm": 10, "alias": "guildhall-discussion-mc-"},
     # The portal and cos-scheduler read these through <variable>_FILE (core/realtime_voice/summary_gateway.py), from their
     # own mounted folder; the compose layer names both. Without the files the summary reads "unavailable".
     f"{S}/cos-partnership/voice-summary-cos.key": {"models": VOICE_MODELS, "rpm": 60, "alias": "voice-summary-cos-"},
     f"{S}/portal-partnership/voice-summary-mc.key": {"models": VOICE_MODELS, "rpm": 60, "alias": "voice-summary-mc-"},
     # The low tier only, the worker's HELPER_MODEL. The charters' daily budgets sit inside this cap.
-    f"{S}/helper-apprentice/gateway.key": {"models": ["minimoi-openai-low"], "rpm": 10, "alias": "helper-apprentice-"},
-    f"{S}/helper-ea/gateway.key": {"models": ["minimoi-openai-low"], "rpm": 10, "alias": "helper-ea-"},
+    f"{S}/helper-apprentice/gateway.key": {"models": ["minimoi-xai-low"], "rpm": 10, "alias": "helper-apprentice-"},
+    f"{S}/helper-ea/gateway.key": {"models": ["minimoi-xai-low"], "rpm": 10, "alias": "helper-ea-"},
 }
 KEY_FORM = re.compile(r"^sk-[A-Za-z0-9_-]{16,200}$")
 

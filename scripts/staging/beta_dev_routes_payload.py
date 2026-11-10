@@ -95,10 +95,12 @@ def scripts_for(tar: bytes, digest: str) -> list:
     return scripts
 
 
-def start_script(action: str, failover: str) -> str:
+def start_script(action: str, failover: str, default: str = "plan") -> str:
     """Detached, because SSM kills long scripts. The operator holds the deploy lock itself, and writes status.json."""
     assert action in ("dry-run", "apply", "rollback"), "dry-run, apply or rollback"
+    assert default in ("plan", "xai"), "--default is plan or xai"
     providers = ",".join(R.parse_failover(failover))
+    default_arg = " --default xai" if default == "xai" else ""
     P.check_destination(HOST_DIR)
     return f"""set -eu
 D={HOST_DIR}
@@ -106,7 +108,7 @@ cd "$D"
 [ -f release.sha256 ] || {{ echo 'no release on the host'; exit 1; }}
 log="$D/run-{action}-$(date -u +%Y%m%dT%H%M%SZ).log"
 umask 077
-nohup setsid python3 "$D/release/operator/beta_dev_routes.py" {action} --failover {providers} > "$log" 2>&1 < /dev/null &
+nohup setsid python3 "$D/release/operator/beta_dev_routes.py" {action} --failover {providers}{default_arg} > "$log" 2>&1 < /dev/null &
 echo "started {action}; failover {providers}; log $log"
 """
 
@@ -122,6 +124,7 @@ def main(argv=None):                                # pragma: no cover
     start = sub.add_parser("start")
     start.add_argument("action", choices=("dry-run", "apply", "rollback"))
     start.add_argument("--failover", default=R.DEFAULT_FAILOVER)
+    start.add_argument("--default", choices=("plan", "xai"), default="plan")
     sub.add_parser("read")
     check = sub.add_parser("check")
     check.add_argument("--operator-commit", required=True)
@@ -143,7 +146,7 @@ def main(argv=None):                                # pragma: no cover
         for script in scripts_for(tar, digest):
             print(P.run_on_host(script).strip())
     elif args.command == "start":
-        print(P.run_on_host(start_script(args.action, args.failover), 60))
+        print(P.run_on_host(start_script(args.action, args.failover, args.default), 60))
     elif args.command == "check":
         git = P.Git()
         verdict, words = routes_decision(local_logic(git, git.rev(args.operator_commit)), parse_check(P.run_on_host(check_script(), 60)))

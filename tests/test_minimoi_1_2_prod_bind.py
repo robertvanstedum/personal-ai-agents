@@ -580,7 +580,7 @@ def test_the_keys_reach_only_models_the_callers_ask_for_and_production_has():
     source = (REPO / "services/rooms_worker/discussion.py").read_text()
     assert '"minimoi-" + self.teammate + "-agent"' in source
     assert bind.GATEWAY_KEYS[f"{S}/guildhall-cos/discussion-gateway.token"]["models"] == ["minimoi-cos-agent"]
-    assert bind.GATEWAY_KEYS[f"{S}/guildhall-mc/discussion-gateway.token"]["models"] == ["minimoi-mc-agent"]
+    assert bind.GATEWAY_KEYS[f"{S}/guildhall-mc/discussion-gateway.token"]["models"] == ["minimoi-mc-agent", "minimoi-anthropic-strong"]
     prod = (REPO / "services/model_gateway/litellm.prod.yaml").read_text()
     for spec in bind.GATEWAY_KEYS.values():
         for model in spec["models"]:
@@ -1142,7 +1142,7 @@ def test_a_different_helper_seat_already_bound_is_refused(helpers_host):
 def test_helper_keys_are_low_tier_only():
     for seat in bind.HELPER_SEATS:
         spec = bind.GATEWAY_KEYS[f"{bind.S}/helper-{seat}/gateway.key"]
-        assert spec["models"] == ["minimoi-openai-low"] and spec["rpm"] == 10
+        assert spec["models"] == ["minimoi-xai-low"] and spec["rpm"] == 10
 
 
 def test_the_cos_auth_status_sets_only_a_placeholder():

@@ -87,14 +87,14 @@ mc_keygen_py() {
 
 # MC's key for a pay-per-use Grok route (docs/runbooks/model_routes_plan.md): that tier only, its own cap. Nothing runs
 # this unless a host turns the route on. Env in: MC_CAP, MC_OLD_KEY.
-MC_GROK_KEY_MODELS='["minimoi-xai-low"]'
+MC_GROK_KEY_MODELS='["minimoi-xai-strong", "minimoi-xai-mid", "minimoi-xai-low"]'
 mc_grok_keygen_py() {
   gateway_keygen_py "$MC_GROK_KEY_MODELS" "$MC_KEY_ROUTES" "$MC_KEY_BUDGET_DURATION" "$MC_KEY_RPM" "mc-grok-" "guild.mc" MC_CAP MC_OLD_KEY
 }
 
 # MC's key for plan failover (docs/runbooks/model_routes_plan.md): its plan routes' declared API tiers only, its own cap.
 # Nothing runs this unless a host turns failover on. Env in: MC_CAP, MC_OLD_KEY.
-MC_FAILOVER_KEY_MODELS='["minimoi-openai-strong", "minimoi-openai-mid", "minimoi-openai-low", "minimoi-anthropic-strong", "minimoi-anthropic-mid"]'
+MC_FAILOVER_KEY_MODELS='["minimoi-openai-strong", "minimoi-openai-mid", "minimoi-openai-low", "minimoi-anthropic-strong", "minimoi-anthropic-mid", "minimoi-anthropic-low"]'
 mc_failover_keygen_py() {
   gateway_keygen_py "$MC_FAILOVER_KEY_MODELS" "$MC_KEY_ROUTES" "$MC_KEY_BUDGET_DURATION" "$MC_KEY_RPM" "mc-failover-" "guild.mc" MC_CAP MC_OLD_KEY
 }
@@ -104,7 +104,7 @@ mc_failover_keygen_py() {
 # completions and responses (its bounded web search) only; a monthly budget;
 # rpm 60 (a CoS turn can make several calls: tools, the fallback, web search).
 # Like MC's, /key/info is not allowed (it would read other keys' records).
-COS_KEY_MODELS='["minimoi-cos-agent", "minimoi-cos-agent-xai-fast", "minimoi-cos-web-search", "minimoi-cos-agent-anthropic", "minimoi-openai-strong", "minimoi-openai-mid", "minimoi-openai-low", "minimoi-xai-low"]'
+COS_KEY_MODELS='["minimoi-cos-agent", "minimoi-cos-agent-xai-fast", "minimoi-cos-web-search", "minimoi-cos-agent-anthropic", "minimoi-openai-strong", "minimoi-openai-mid", "minimoi-openai-low", "minimoi-xai-low", "minimoi-xai-strong", "minimoi-xai-mid", "minimoi-anthropic-strong", "minimoi-anthropic-mid", "minimoi-anthropic-low"]'
 COS_KEY_ROUTES='["/v1/chat/completions", "/chat/completions", "/v1/responses", "/responses"]'
 COS_KEY_BUDGET_DURATION="30d"
 COS_KEY_RPM=60
@@ -125,7 +125,7 @@ cos_keygen_py() {
 # did not hear left the summary rate-limited, "Summary unavailable"); the
 # monthly budget, not the rpm, is the cost cap. Like MC's, /key/info is not
 # allowed.
-VOICE_SUMMARY_KEY_MODELS='["minimoi-voice-summary", "minimoi-voice-intent"]'
+VOICE_SUMMARY_KEY_MODELS='["minimoi-voice-summary", "minimoi-voice-intent", "minimoi-voice-intent-anthropic"]'
 VOICE_SUMMARY_KEY_ROUTES='["/v1/chat/completions", "/chat/completions"]'
 VOICE_SUMMARY_KEY_BUDGET_DURATION="30d"
 VOICE_SUMMARY_KEY_RPM=60

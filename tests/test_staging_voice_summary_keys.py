@@ -31,7 +31,7 @@ def _keys(fn, *args):
 @pytest.mark.parametrize("host", ["mc", "cos"])
 def test_summary_key_is_the_alias_only_chat_only_monthly_and_rate_limited(host):
     py = _keys("voice_summary_keygen_py", host).stdout
-    assert '"models": ["minimoi-voice-summary", "minimoi-voice-intent"]' in py      # v3: the understanding call too
+    assert '"models": ["minimoi-voice-summary", "minimoi-voice-intent", "minimoi-voice-intent-anthropic"]' in py      # v3: the understanding call too
     assert '"allowed_routes": ["/v1/chat/completions", "/chat/completions"]' in py
     assert "/key/info" not in py and "/v1/responses" not in py
     # rpm 60 (the v3 fix round, review S5): the summary keeps headroom over a busy minute of understanding calls
@@ -180,7 +180,7 @@ def test_summary_keys_adds_the_route_writes_both_keys_unprinted_and_redeploys(tm
     assert "sk-fake-voice-key" not in out and "sk-master-key" not in out and "sk-mc-agent-key" not in out
     assert "Master Craftsman's voice summary key (voice-summary-mc): monthly cap $7 (30d)" in out and "…ab11" in out
     assert "Chief of Staff's voice summary key (voice-summary-cos): monthly cap $5 (30d)" in out and "…ab22" in out
-    assert '["minimoi-voice-summary", "minimoi-voice-intent"]' in out and "rpm 60" in out
+    assert '["minimoi-voice-summary", "minimoi-voice-intent", "minimoi-voice-intent-anthropic"]' in out and "rpm 60" in out
     assert _read(fake / "keygen.env").splitlines() == ["cap=7 old=", "cap=5 old="]
     # The route: exactly the repo's, the rest of the live config unchanged; a backup of the file before.
     assert yaml.safe_load(cfg.read_text()) == yaml.safe_load(GATEWAY_STAGING.read_text())
@@ -323,12 +323,18 @@ def test_summary_keys_adds_every_missing_voice_route_in_one_change(tmp_path, she
         assert "already routes minimoi-voice-summary (unchanged)" in result.stdout
 
 
-def test_the_intent_route_is_haiku_with_thinking_off_on_every_gateway():
-    """With thinking on, Haiku spends the call's few tokens on thinking and answers nothing, which counts as chat every time."""
+def test_the_intent_route_is_the_summarys_model_with_reasoning_off_and_haiku_behind_it_on_every_gateway():
+    """Grok first, with Haiku for when xAI cannot serve. With thinking on, Haiku spends the call's few tokens thinking and
+    answers nothing, which counts as chat every time."""
     for name in ("litellm.yaml", "litellm.staging.yaml", "litellm.prod.yaml"):
-        routes = {r["model_name"]: r for r in yaml.safe_load((GATEWAY_STAGING.parent / name).read_text())["model_list"]}
-        intent = routes[INTENT]["litellm_params"]
-        assert intent["model"] == "anthropic/claude-haiku-5-5" and "ANTHROPIC_API_KEY" in intent["api_key"], name
-        assert intent["thinking"] == {"type": "disabled"} and intent["timeout"] == 5, name
+        config = yaml.safe_load((GATEWAY_STAGING.parent / name).read_text())
+        routes = {r["model_name"]: r for r in config["model_list"]}
+        intent, summary = routes[INTENT]["litellm_params"], routes[ALIAS]["litellm_params"]
+        assert intent["model"] == summary["model"] and intent["api_key"] == summary["api_key"], name
+        assert intent["reasoning_effort"] == "none" and intent["timeout"] == 5, name
+        haiku = routes[INTENT + "-anthropic"]["litellm_params"]
+        assert haiku["model"] == "anthropic/claude-haiku-5-5" and "ANTHROPIC_API_KEY" in haiku["api_key"], name
+        assert haiku["thinking"] == {"type": "disabled"} and haiku["timeout"] == 5, name
+        assert {INTENT: [INTENT + "-anthropic"]} in config["router_settings"]["fallbacks"], name
     from core.realtime_voice.intent_gateway import INTENT_MODEL
     assert INTENT_MODEL == INTENT

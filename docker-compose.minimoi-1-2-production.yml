@@ -30,7 +30,7 @@ x-helper-env: &helper-env
   GUILD_QUEUE_PATH: /guild/build_queue.json
   HELPER_GATEWAY_URL: http://model-gateway:4000/v1
   HELPER_GATEWAY_KEY_FILE: /run/helper/gateway.key
-  HELPER_MODEL: minimoi-openai-low
+  HELPER_MODEL: minimoi-xai-low
   PYTHONPATH: /app
   PYTHONDONTWRITEBYTECODE: "1"
 
@@ -63,11 +63,13 @@ services:
       COS_PLAN_MODEL: openai/gpt-6-astra
       COS_PLAN_ROUTES: openai/gpt-6-sol,openai/gpt-6-luna
       COS_PLAN_AUTH_PROFILE: ${MINIMOI_COS_PLAN_AUTH_PROFILE:?the plan sign-in profile on production required}
-      # OpenAI plan tiers only. Grok is not a failover target. The default above stays route A.
-      COS_FAILOVER_ROUTES: minimoi-gateway/minimoi-openai-strong,minimoi-gateway/minimoi-openai-mid,minimoi-gateway/minimoi-openai-low
+      # API tiers a route may switch to: the plan routes' own, and Claude's at the same level for Grok routes (#466).
+      COS_FAILOVER_ROUTES: minimoi-gateway/minimoi-openai-strong,minimoi-gateway/minimoi-openai-mid,minimoi-gateway/minimoi-openai-low,minimoi-gateway/minimoi-anthropic-strong,minimoi-gateway/minimoi-anthropic-mid,minimoi-gateway/minimoi-anthropic-low
+      # The runtime's default where a turn names no route: Grok, not the plan.
+      COS_PRIMARY_ROUTE: minimoi-gateway/minimoi-xai-strong
       # Offered pay-per-use API. Not a default and not a fallback. These and the failover targets use CoS's own capped key,
       # already mounted at /run/cos-key by docker-compose.prod.yml (scripts/operations/cos_prod.sh key). Without it, neither is there.
-      COS_METERED_ROUTES: minimoi-gateway/minimoi-xai-low
+      COS_METERED_ROUTES: minimoi-gateway/minimoi-xai-strong,minimoi-gateway/minimoi-xai-mid,minimoi-gateway/minimoi-xai-low
       COS_ACTIONS_TOKEN_FILE: /run/secrets/cos-actions-token/token
     volumes:
       - {type: bind, source: "${MINIMOI_1_2_SECRETS:?existing production-only secrets folder required}/cos-bound", target: /run/secrets/cos-bound, read_only: true, bind: {create_host_path: false}}
