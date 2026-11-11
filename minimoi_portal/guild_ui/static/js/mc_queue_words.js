@@ -14,7 +14,7 @@ export function pauseWords(pause, waiting) {
   const at = timeOf(pause.created_at);
   const head = `Paused${at ? ` at ${at}` : ''}: `;
   const what = pause.reason === 'unknown'
-    ? "an earlier message didn't finish (its note above says why). It may have run, or may still be running."
+    ? "an earlier message didn't finish. It may have run, or may still be running."
     : "an earlier message didn't get an answer (it failed, or could not be sent as it was).";
   const next = waiting
     ? ` ${waiting === 1 ? '1 waiting message is' : `${waiting} waiting messages are`} held; Continue sends ${waiting === 1 ? 'it' : 'them'}.`
