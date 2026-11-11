@@ -15,8 +15,10 @@ reviews' tightening to real card, account and routing shapes):
   digits. In a run of digit groups, every stretch of whole groups that holds
   13 to 19 digits and is a card is removed, so a card followed by a CVV, an
   expiry or another number is still caught (see _is_card):
-  * plain separators (one space or one dash), as before: it passes Luhn; a
-    mistyped card (a standard grouping that fails Luhn) needs a card word
+  * plain separators (one space or one dash): every group 3 digits or more
+    and the first 4 or more, and it passes Luhn. A group of only 3 digits
+    counts only in a standard card shape, so a phone written 4-3-3-4 stays.
+    A mistyped card (a standard grouping that fails Luhn) needs a card word
     near it ("card", "cc", "paid", a brand...);
   * wide separators (several spaces, a tab, a dot, a spaced dash): Luhn, one
     separator throughout, every group 3 digits or more and the first 4 or
@@ -117,7 +119,9 @@ def _is_card(groups: list[str], seps: list[str], card_word_near: bool = False) -
     - one group: it passes Luhn and starts like a card (or a card word is
       near); a single 15 or 16 digit group that fails Luhn (a mistyped card)
       needs a card word near;
-    - plain separators (main's rule): it passes Luhn; or it has a standard
+    - plain separators: card-like groups (every group 3 digits or more, the
+      first 4 or more) and Luhn; a group of only 3 digits counts only in a
+      standard card shape, so a phone's 4-3-3-4 window stays; or a standard
       card grouping and a card word is near (a mistyped card);
     - wide separators: the same one throughout, card-like groups (every group
       3 digits or more, the first 4 or more) and Luhn;
@@ -134,6 +138,12 @@ def _is_card(groups: list[str], seps: list[str], card_word_near: bool = False) -
         return len(digits) in (15, 16) and card_word_near
     kinds = {_sep_kind(s) for s in seps}
     if kinds == {"plain"}:
+        if any(n < 3 for n in shape) or shape[0] < 4:
+            return False
+        # A phone is 3-3-4. Two of them make a 4-3-3-4 window that can pass
+        # Luhn. A group of 3 is a card only in a standard card shape.
+        if any(n < 4 for n in shape) and shape not in _CARD_SHAPES:
+            return False
         return luhn or (shape in _CARD_SHAPES and card_word_near)
     if None in kinds or len(set(seps)) != 1 or not luhn:
         return False
