@@ -593,7 +593,9 @@ async function drainQueue() {
     }
   } finally { draining = false; }
 }
-document.addEventListener('cos:conversation-selected', () => { if (window.cosHistory?.ready) loadQueue().then(drainQueue); });
+const resumeQueue = () => { if (window.cosHistory?.ready) loadQueue().then(drainQueue); };
+document.addEventListener('cos:conversation-selected', resumeQueue);
+document.addEventListener('cos:history-ready', resumeQueue);       // first load: the line waiting from before a reload
 document.addEventListener('cos:chat-rendered', () => { if (queued.length && !window.cosHistory?.pendingTurn) drainQueue(); });
 
 // ── Files from CoS (its outbox) ───────────────────────────────────────────────
