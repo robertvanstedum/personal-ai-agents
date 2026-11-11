@@ -7,7 +7,7 @@ export function chipWords(position, running) {
   return `Not sent · ${place(position)}`;
 }
 
-// When it paused, what is uncertain, and what Continue does (Dev, 11 Nov 2026: "a strange message ... not clear to me").
+// When it paused, what is uncertain, and what Continue does (Dev, 11 Nov 2026: the earlier wording did not say).
 const timeOf = (iso) => { const d = new Date(iso || ''); return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
 export function pauseWords(pause, waiting) {
   const at = timeOf(pause.created_at);
