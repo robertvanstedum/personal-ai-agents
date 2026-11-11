@@ -524,6 +524,15 @@ class BindingStore:
             row = db.execute("SELECT text FROM run_answers WHERE run_id=?", (run_id,)).fetchone()
         return row["text"] if row else None
 
+    def run_report(self, run_id: str) -> tuple[str | None, bool, bool]:
+        """(this run's final step or None, whether its end receipt has arrived, whether this host records end receipts)."""
+        with self._tx() as db:
+            row = db.execute("SELECT text FROM run_answers WHERE run_id=?", (run_id,)).fetchone()
+            ended = db.execute("SELECT 1 FROM terminal_runs WHERE run_id=? UNION SELECT 1 FROM terminal_audit_runs WHERE run_id=?",
+                               (run_id, run_id)).fetchone() is not None
+            receipts = ended or db.execute("SELECT 1 FROM terminal_runs LIMIT 1").fetchone() is not None
+        return (row["text"] if row else None), ended, receipts
+
     def served_for_turn(self, turn_id: str) -> dict | None:
         """The evidence for the run attached to this turn, or None. Never the selected route."""
         with self._tx() as db:
@@ -652,6 +661,9 @@ class TurnBinder:
 
     def answer(self, run_id: str) -> str | None:
         return self.store.answer_for_run(run_id)
+
+    def run_report(self, run_id: str):
+        return self.store.run_report(run_id)
 
     def prepare_depth(self, turn_id: str, run_id: str, nonce: str, wait_s: float = 5.0) -> bool:
         deadline = time.monotonic() + wait_s

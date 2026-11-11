@@ -450,22 +450,20 @@ class OpenClawBackend:
         return reply
 
     def _run_answer(self, run_id) -> str | None:
-        """The run's final step as the plugin reported it at the run's end, or None (fire and forget: a short look)."""
+        """The run's final step, as the plugin reported it at the run's end. Its report lands just before the run's end
+        receipt, which can be just after the stream closes: on a host that records end receipts, wait for either, at most
+        2 s. A host without them never waits and keeps the streamed text."""
         if self._binder is None or not isinstance(run_id, str):
             return None
-        # Look once; wait one grace period only where the hook is known to report, so a host without it pays nothing.
-        for attempt in range(2):
+        deadline = time.monotonic() + 2.0
+        while True:
             try:
-                found = self._binder.answer(run_id)
+                answer, ended, receipts = self._binder.run_report(run_id)
             except Exception:
                 return None
-            if found:
-                type(self)._answers_reported = True
-                return found
-            if attempt or not getattr(type(self), "_answers_reported", False):
-                return None
-            time.sleep(_TOOL_REPORT_GRACE_S)
-        return None
+            if answer or ended or not receipts or time.monotonic() > deadline:
+                return answer
+            time.sleep(0.1)
 
     def _served_evidence(self, context: dict) -> dict | None:
         """The runtime's record of the switched run, for the words only. It is reported fire and forget, so a short look."""
