@@ -296,6 +296,43 @@ export function readServed(dbPath, sessionKey, runId) {
     try { db?.close(); } catch { /* read-only */ }
   }
 }
+// The run's own final step, from OpenClaw's record. A tool-using turn streams every step's text as one run of deltas:
+// "I'll read X." [tool] "Now Y." [tool] then the answer. Each step is its own assistant message, and only the last one
+// ends with stopReason "stop", so its text alone is the answer. Anything unsure (no record, another run, a step that
+// called tools last, no text) is null and the portal keeps the streamed text as before.
+export function readAnswer(dbPath, sessionKey, runId) {
+  if (!DatabaseSync || !dbPath || !RUN_ID.test(String(runId))) return null;
+  let db = null;
+  try {
+    db = new DatabaseSync(dbPath, { readOnly: true });
+    const session = db.prepare("SELECT session_id FROM session_windows WHERE session_key = ? ORDER BY updated_at DESC LIMIT 1").get(sessionKey);
+    if (!session) return null;
+    const rows = db.prepare("SELECT event_json, event_zstd FROM transcript_events WHERE session_id = ? ORDER BY seq DESC LIMIT 40").all(session.session_id);
+    for (const row of rows) {
+      const event = eventOf(row);
+      const message = event && event.type === "message" ? event.message : null;
+      if (!message || message.role !== "assistant") continue;
+      if (message.__openclaw?.runId !== runId && message.idempotencyKey !== `cli-assistant:${runId}`) continue;
+      if (message.stopReason !== "stop" || !Array.isArray(message.content)) return null;
+      if (message.content.some((part) => part && part.type === "toolCall")) return null;
+      const text = message.content.filter((part) => part && part.type === "text" && typeof part.text === "string").map((part) => part.text).join("");
+      return text.trim() ? text : null;
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    try { db?.close(); } catch { /* read-only */ }
+  }
+}
+async function answerOf(body, runId) {
+  if (!CHAT_DB || !runId) return null;
+  const key = `agent:${String(body.model || "").split("/")[1]}:openai-user:${body.user}`;
+  const first = readAnswer(CHAT_DB, key, runId);
+  if (first) return first;
+  await new Promise((resolve) => { setTimeout(resolve, 500); });      // the last step's row can land just after the stream ends
+  return readAnswer(CHAT_DB, key, runId);
+}
 async function served(body, runId) {
   if (!CHAT_DB || !runId) return null;
   const agent = String(body.model || "").split("/")[1];
@@ -509,6 +546,10 @@ async function streamTurn(res, body, correlation, echo, started, routeHeader = {
     let pending = "";
     let emitted = 0;
     let runId = null;
+    let streamed = "";
+    let finish = null;          // held, with what follows it, until the stream ends, so the run's answer line can go first
+    const after = [];
+    const flush = () => { if (finish) send(finish); for (const e of after) send(e); finish = null; after.length = 0; };
     read: for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -525,6 +566,7 @@ async function streamTurn(res, body, correlation, echo, started, routeHeader = {
         for (const event of sseEvents(line)) {
           if (event.t === "done") break read;
           if (event.t === "error") {
+            flush();                                          // the order OpenClaw sent them in
             send(event.signal || event.cap ? { ...event, tools: emitted > 0 ? "may_have_begun" : toolsSince(TOOL_STARTS, started) } : event);
             outcome = "upstream";
             break read;
@@ -532,12 +574,21 @@ async function streamTurn(res, body, correlation, echo, started, routeHeader = {
           if (event.t === "delta") {
             emitted += Buffer.byteLength(event.text);
             if (emitted > STREAM_TEXT_MAX) { abort("too_large"); break read; }
+            streamed += event.text;
           }
+          if (event.t === "finish" && !finish) { finish = event; continue; }
+          if (finish) { after.push(event); continue; }
           send(event);
         }
       }
       if (pending.length > LINE_MAX) { abort("too_large"); break; }
     }
+    if (finish && !why && outcome !== "upstream") {
+      // Only when the streamed text holds more than the answer (narration between tool steps) and ends with it exactly.
+      const answer = await answerOf(body, runId);
+      if (answer && answer.trim() !== streamed.trim() && streamed.trimEnd().endsWith(answer.trim())) send({ t: "answer", text: answer.trim() });
+    }
+    flush();
     if (why) { send({ t: "error", class: why }); outcome = why; }
     else if (outcome === "ended") outcome = "done";
     if (streaming && !why) {

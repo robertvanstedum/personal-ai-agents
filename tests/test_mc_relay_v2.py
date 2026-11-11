@@ -47,6 +47,7 @@ class Gateway:
 
     def __init__(self):
         self.seen, self.mode, self.text = [], "ok", "the job's answer"
+        self.steps = ["I'll read the file first.", "The answer is 42."]
         self.run_id = "chatcmpl_x"
         self.error, self.error_status, self.partial = {}, 429, ""
         self.release = threading.Event()
@@ -95,6 +96,15 @@ class Gateway:
                     self.send_response(200)
                     self.end_headers()
                     self.wfile.write(b"not json")
+                    return
+                if mode == "stream_steps":               # a tool-using run: each step's text in one stream, then the finish
+                    self.send_response(200)
+                    self.send_header("content-type", "text/event-stream")
+                    self.end_headers()
+                    for chunk in ({"delta": {"role": "assistant"}}, *({"delta": {"content": t}} for t in outer.steps),
+                                  {"delta": {}, "finish_reason": "stop"}):
+                        self.wfile.write(b"data: " + json.dumps({"id": outer.run_id, "choices": [chunk]}).encode() + b"\n\n")
+                    self.wfile.write(b"data: [DONE]\n\n")
                     return
                 if mode == "stream":
                     self.send_response(200)

@@ -45,7 +45,7 @@ from typing import Callable
 from ..adapters.contract import now_iso
 from .backend import REAL_KINDS, NotAnAnswer, TurnResult, keep_reply
 from .openclaw import OPENCLAW_NO_RESPONSE
-from .stream import STREAM_ANSWER_FINISH_REASONS, Delta, Failure, Finish, RunStarted, Usage, Progress
+from .stream import STREAM_ANSWER_FINISH_REASONS, Answer, Delta, Failure, Finish, RunStarted, Usage, Progress
 
 PING_S = 10.0
 RENDER_EVERY_S = 0.5
@@ -310,6 +310,7 @@ class StreamRun:
         decided = False
         run_seen = False
         emitted = 0
+        answer_only = None
         _log.info("mc turn %s stream start backend=%s", ctx.turn_id, ctx.backend.kind)
         try:
             ctx.on_dispatch()
@@ -319,6 +320,9 @@ class StreamRun:
             for event in ctx.events:
                 if isinstance(event, Progress):
                     self._put(("progress", {"t": "progress", "text": event.text}))
+                    continue
+                if isinstance(event, Answer):
+                    answer_only = event.text
                     continue
                 if isinstance(event, RunStarted):
                     if not run_seen or event.replaces:
@@ -368,7 +372,7 @@ class StreamRun:
                     if final_at is None:
                         final_at = self.clock()
                         self._clean_finish = event.reason == "stop"       # a reply cut short (e.g. "length") is kept, but is not a complete answer
-                        text = "".join(parts)
+                        text = answer_text("".join(parts), answer_only)
                         if (event.reason in STREAM_ANSWER_FINISH_REASONS and text.strip()
                                 and text.strip() != OPENCLAW_NO_RESPONSE):
                             keep_text = text
@@ -509,6 +513,14 @@ class StreamRun:
                   self.consumer_gone.is_set())
         DISPATCHED.finish(ctx.request_id, {k: v for k, v in outcome.items() if k != "t"})
         self._put(("end", outcome), essential=True)
+
+
+def answer_text(streamed: str, answer: str | None) -> str:
+    """What is kept: the run's final step when the stream ends with it exactly, so narration between tool steps ("I'll
+    read X.") is shown live but not saved as the answer. Otherwise the streamed text, as before."""
+    if answer and answer.strip() and streamed.rstrip().endswith(answer.strip()) and len(answer.strip()) < len(streamed.strip()):
+        return answer.strip()
+    return streamed
 
 
 # ── what the browser reads ────────────────────────────────────────────────────
