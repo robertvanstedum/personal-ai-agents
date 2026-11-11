@@ -359,3 +359,16 @@ def test_0_1_29_is_within_12000_with_the_handbook_and_keeps_the_rules(tmp_path):
                  "You never approve for Robert", "minimoi_build_log_add", "minimoi_agent_request", "minimoi_build_item", "Keep this here",
                  "request ledger", "it waits till he asks"):
         assert kept in agents, kept
+
+
+def test_persona_0131_lays_out_within_budget_and_offers_an_agent_for_mac_checks(tmp_path):
+    """0.1.31 is 0.1.30 plus one line: checks on Robert's Mac go to Claude Code, Codex or Grok, sent only once he names one."""
+    r, ws = lay_out(tmp_path, "0.1.31")
+    assert r.returncode == 0, r.stderr
+    loaded = (ws / "AGENTS.md").read_text()
+    assert "persona 0.1.31 laid out" in r.stderr
+    assert "Claude Code, Codex and Grok run on Robert's Mac" in loaded and "only after he names one" in loaded
+    assert container_chars(loaded, ws) <= 16000
+    new, old = RELEASES / "0.1.31", RELEASES / "0.1.30"
+    for name in ("SOUL.md", "RUNTIME.openclaw.md", "voice.json"):
+        assert (new / name).read_bytes() == (old / name).read_bytes(), name
