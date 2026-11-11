@@ -322,6 +322,8 @@ def _corpus():
         "microsecond times": lambda: f"at {us()}",
         "date-based ids": lambda: f"run id {stamp_id()}",
         "times hh:mm:ss": lambda: f"{rnd.randint(0, 23):02d}:{rnd.randint(0, 59):02d}:{rnd.randint(0, 59):02d}",
+        "phone numbers, spaces": lambda: "call " + " ".join(phone().replace("-", " ") for _ in range(2)),
+        "ISO dates, spaces": lambda: " ".join(date().replace("-", " ") for _ in range(2)),
     }
     return {name: [make() for _ in range(400)] for name, make in shapes.items()}
 
