@@ -219,7 +219,7 @@ export function parseRoutes(raw) {
   const map = JSON.parse(raw || "{}");
   if (!map || typeof map !== "object" || Array.isArray(map)) throw new Error("MC_RELAY_ROUTES must be an object");
   for (const [id, ref] of Object.entries(map)) {
-    if (!ROUTE_ID.test(id) || !/^(?:(?:openai|anthropic)\/[a-zA-Z0-9._-]+|minimoi-gateway\/minimoi-(?:xai|openai|anthropic)-(?:strong|mid|low))$/.test(String(ref))) throw new Error(`bad route ${id}`);
+    if (!ROUTE_ID.test(id) || !/^(?:(?:openai|anthropic)\/[a-zA-Z0-9._-]+|minimoi-gateway\/minimoi-(?:xai|openai|anthropic)-(?:strong|mid|low)|minimoi-gateway\/minimoi-xai-strong-deep)$/.test(String(ref))) throw new Error(`bad route ${id}`);
   }
   return new Map(Object.entries(map));
 }

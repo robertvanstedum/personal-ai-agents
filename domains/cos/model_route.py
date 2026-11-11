@@ -9,7 +9,8 @@ from __future__ import annotations
 import hashlib
 
 from core import durable_files as fsio
-from core.model_routes import RouteRefused, check_selectable, conversation_role, load_catalogue, routes_enabled, served_receipt, snapshot, view
+from core.model_routes import RouteRefused, check_selectable, conversation_role, load_catalogue, routes_enabled, served_receipt, view
+from core.model_routes.depth import for_owner_turn
 
 AGENT = "cos"
 ROLE = conversation_role(AGENT)
@@ -40,13 +41,13 @@ def _catalogue() -> dict:
         raise RouteRefused("route_unavailable", "The model routes could not be read. Nothing was sent.") from exc
 
 
-def for_turn(history, conversation_id: str) -> dict | None:
+def for_turn(history, conversation_id: str, owner_text: str = "") -> dict | None:
     """This turn's route, or None where routes are off. Refuses (a ValueError) rather than substitutes."""
     if not enabled():
         return None
     with history._locked():
         selection = _selection(history, conversation_id)
-    return snapshot(_catalogue(), ROLE, {"routes": {AGENT: selection}})
+    return for_owner_turn(_catalogue(), ROLE, {"routes": {AGENT: selection}}, owner_text)
 
 
 def runtime_model(route: dict | None) -> str | None:

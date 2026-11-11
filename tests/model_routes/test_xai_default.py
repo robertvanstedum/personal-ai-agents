@@ -60,6 +60,31 @@ def test_mc_keeps_its_plan_default_when_no_primary_is_named():
     assert json.loads(run.stdout)["primary"] == "openai/gpt-6-astra"
 
 
+def test_mc_deep_alias_requires_explicit_host_allowlist():
+    deep = XAI + "-deep"
+    assert _node(MC_SCRIPT, {**MC_ENV, "MC_PRIMARY_ROUTE": deep}).returncode != 0
+    run = _node(MC_SCRIPT, {**MC_ENV, "MC_METERED_ROUTES": XAI_ALL + "," + deep, "MC_PRIMARY_ROUTE": deep})
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == {"primary": deep, "fallbacks": []}
+
+
+def test_cos_deep_alias_requires_capped_key_proof():
+    deep = XAI + "-deep"
+    script = "const p=require('./docker/cos-agent-a/plan-access.cjs');console.log(JSON.stringify(p.offeredRoutes(process.env)))"
+    env = {"COS_METERED_ROUTES": deep, "COS_GATEWAY_KEY_FILE": "/nonexistent/synthetic-key"}
+    assert json.loads(_node(script, env).stdout) == []
+    assert json.loads(_node(script, {**env, "COS_GATEWAY_KEY_CAPPED": "1"}).stdout) == [deep]
+
+
+def test_dev_gateway_aliases_pin_same_model_with_different_effort():
+    import yaml
+    doc = yaml.safe_load((ROOT / "services/model_gateway/litellm.staging.yaml").read_text())
+    models = {m["model_name"]: m["litellm_params"] for m in doc["model_list"]}
+    quick, deep = models["minimoi-xai-strong"], models["minimoi-xai-strong-deep"]
+    assert quick["model"] == deep["model"] == "xai/grok-4.7"
+    assert (quick["reasoning_effort"], deep["reasoning_effort"]) == ("low", "high")
+
+
 @pytest.mark.parametrize("bad", ["minimoi-gateway/minimoi-openai-strong", "xai/grok-4.7", "minimoi-gateway/minimoi-xai-pro"])
 def test_mc_refuses_a_primary_that_is_not_an_offered_grok_tier(bad):
     assert _node(MC_SCRIPT, {**MC_ENV, "MC_PRIMARY_ROUTE": bad}).returncode != 0

@@ -32,7 +32,7 @@ _TURN_TIMEOUT_SECONDS = 120
 BACKGROUND_TURN_TIMEOUT_SECONDS = 600
 # The model this owner turn was routed to (domains/cos/model_route.py). None: the runtime's default serves, as before.
 turn_model = contextvars.ContextVar("cos_turn_model", default=None)
-_MODEL_REF = re.compile(r"(?:openai|anthropic)/[A-Za-z0-9._-]{1,64}|minimoi-gateway/minimoi-(?:xai|openai|anthropic)-(?:strong|mid|low)")
+_MODEL_REF = re.compile(r"(?:openai|anthropic)/[A-Za-z0-9._-]{1,64}|minimoi-gateway/minimoi-(?:xai|openai|anthropic)-(?:strong|mid|low)|minimoi-gateway/minimoi-xai-strong-deep")
 # This owner turn's route, as {"route": snapshot}; a turn that moves to its declared API route adds {"switched": route}.
 # None: no route on this turn, so no failover (Telegram, the MC lane, meetings, a host without routes).
 turn_route = contextvars.ContextVar("cos_turn_route", default=None)

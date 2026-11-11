@@ -69,6 +69,9 @@ def load_catalogue(path: Path | str | None = None) -> dict:
                 raise ValueError(f"role {name} must read a route available to {role['agent']}")
         for route in catalogue["routes"]:
             _check_failover(catalogue, route)
+        from .depth import validate_policy
+        for name in catalogue["roles"]:
+            validate_policy(catalogue, name)
     except (KeyError, TypeError, AttributeError) as exc:
         raise ValueError("the route catalogue has the wrong shape") from exc
     return catalogue

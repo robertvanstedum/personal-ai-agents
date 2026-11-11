@@ -101,6 +101,12 @@ def test_a_routed_turn_asks_for_its_model_and_an_unrouted_one_asks_for_nothing()
     assert "x-openclaw-model" not in _headers(None)
 
 
+def test_deep_alias_uses_existing_cos_transport():
+    model = "minimoi-gateway/minimoi-xai-strong-deep"
+    assert _headers(model)["x-openclaw-model"] == model
+    assert "x-openclaw-model" not in _headers(model, agent="cos-meeting")
+
+
 def test_a_meeting_agent_never_takes_a_conversations_choice():
     assert "x-openclaw-model" not in _headers("openai/gpt-6-sol", agent="cos-meeting")
 

@@ -77,6 +77,14 @@ model_list:
       # turns outran the page's connection (10 Nov). Raise it for work that needs depth.
       reasoning_effort: low
     model_info: {id: tier-xai-strong, mode: chat, supports_function_calling: true}
+  # A separate Dev-only alias makes depth a real routing choice. Activation
+  # requires the caller's capped key and runtime allowlist to name this alias.
+  - model_name: minimoi-xai-strong-deep
+    litellm_params:
+      model: xai/grok-4.7
+      api_key: os.environ/GATEWAY_XAI_API_KEY
+      reasoning_effort: high
+    model_info: {id: tier-xai-strong-deep, mode: chat, supports_function_calling: true}
   - model_name: minimoi-xai-mid
     litellm_params: &xai-mid
       model: xai/grok-4.6

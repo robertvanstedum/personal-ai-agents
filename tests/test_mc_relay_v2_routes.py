@@ -83,6 +83,15 @@ def post(env, body, **headers):
         return e.code, dict(e.headers), e.read().decode()
 
 
+def test_deep_alias_is_forwarded_only_from_host_route_map(relay):
+    model = "minimoi-gateway/minimoi-xai-strong-deep"
+    env = relay(MC_RELAY_ROUTES=json.dumps({"api-xai-strong-deep": model}))
+    status, _, _ = post(env, chat("openclaw/mc-chat"), **{"X-MC-Route": "api-xai-strong-deep"})
+    assert status == 200
+    sent = env.gateway.seen[-1]
+    assert {k.lower(): v for k, v in sent["headers"].items()}["x-openclaw-model"] == model
+
+
 def test_a_known_route_goes_on_as_the_maps_model_and_a_callers_header_never_does(relay):
     env = relay()
     status, _, _ = post(env, chat("openclaw/mc-chat"), **{"X-MC-Route": "plan-openai-strong", "x-openclaw-model": "anthropic/evil"})
