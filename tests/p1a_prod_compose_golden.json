@@ -54,6 +54,7 @@
     "${MINIMOI_ROOT:-/opt/minimoi}/mc/work:/minimoi/mc/work:ro",
     "${MINIMOI_ROOT:-/opt/minimoi}/mc/workshops:/minimoi/mc/workshops:ro",
     "${MINIMOI_ROOT:-/opt/minimoi}/mc/artifacts:/minimoi/mc/artifacts:ro",
+    "${MINIMOI_ROOT:-/opt/minimoi}/private/professional-agent-a:/minimoi/private/professional:ro",
     "${MINIMOI_ROOT:-/opt/minimoi}/cos/agent-key:/run/cos-key:ro"
    ]
   },
@@ -120,6 +121,7 @@
     "COS_AGENT_INBOX=/minimoi/cos/inbox",
     "COS_AGENT_OUTBOX=/minimoi/cos/outbox",
     "COS_AGENT_CONVERSATIONS=/minimoi/cos/conversations",
+    "COS_WORK_SOURCE_ROOTS_FILE=/minimoi/private/professional/work_source_roots.json",
     "COS_VOICE_DIR=/app/data/cos-voice",
     "MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS=${MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS:-}"
    ],
@@ -142,7 +144,8 @@
     "${MINIMOI_ROOT:-/opt/minimoi}/cos/inbox:/app/data/cos-files/inbox",
     "${MINIMOI_ROOT:-/opt/minimoi}/cos/outbox:/app/data/cos-files/outbox:ro",
     "${MINIMOI_ROOT:-/opt/minimoi}/cos/conversations:/app/data/cos-conversations",
-    "${MINIMOI_ROOT:-/opt/minimoi}/cos_voice:/app/data/cos-voice"
+    "${MINIMOI_ROOT:-/opt/minimoi}/cos_voice:/app/data/cos-voice",
+    "${MINIMOI_ROOT:-/opt/minimoi}/private/professional:/minimoi/private/professional:ro"
    ]
   },
   "curator": {
@@ -556,5 +559,5 @@
    ]
   }
  },
- "source": "docker-compose.prod.yml at the dev-only merge (harness e9445541's golden + voice ae8f6854 + notices 4ef2cc36), every service's rendered values"
+ "source": "docker-compose.prod.yml, every service's rendered values"
 }

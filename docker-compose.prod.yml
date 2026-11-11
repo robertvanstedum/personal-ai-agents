@@ -106,6 +106,10 @@ services:
       - ${MINIMOI_ROOT:-/opt/minimoi}/mc/work:/minimoi/mc/work:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/mc/workshops:/minimoi/mc/workshops:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/mc/artifacts:/minimoi/mc/artifacts:ro
+      # The one named exception to "never private" above (1.2 data map spec, 11 Nov 2026; #502): the read-only
+      # career mirror, this container's own copy (owned by its uid, 0700), written only by career-sync on the host.
+      # Never the private/ parent, never writable.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/private/professional-agent-a:/minimoi/private/professional:ro
       # CoS's own capped gateway key (cos_prod.sh key), read by apply-config.sh at start instead of the master key.
       # Empty folder: the master key stays (the rollback is `cos_prod.sh key off`).
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos/agent-key:/run/cos-key:ro
@@ -463,6 +467,8 @@ services:
       - COS_AGENT_INBOX=/minimoi/cos/inbox
       - COS_AGENT_OUTBOX=/minimoi/cos/outbox
       - COS_AGENT_CONVERSATIONS=/minimoi/cos/conversations
+      # CoS Work's read-only source roots (domains/cos/work/roots.py): written by career-sync at the REAL release path.
+      - COS_WORK_SOURCE_ROOTS_FILE=/minimoi/private/professional/work_source_roots.json
       # Her direct voice (Spec 165 §6.5, §6.8; domains/cos/direct_voice.py): its voice store's folder, mounted below, and her
       # capped summary key (empty until operations provisions it: the summary then reads "unavailable", nothing fails).
       # The switches MINIMOI_COS_VOICE_DIRECT and MINIMOI_COS_DIRECT_VOICE_PRODUCTION default off.
@@ -485,6 +491,8 @@ services:
       # Her voice store (Spec 165 §6.5, D5 (b)): beside cos_reminders, outside data/ and cos/, and never mounted into
       # cos-agent-a, so her runtime cannot read a live session. Operations creates it 0700 before her voice is on.
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos_voice:/app/data/cos-voice
+      # The career mirror for CoS Work, read-only, root-owned 0700 (1.2 data map spec; #502). Never the private/ parent.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/private/professional:/minimoi/private/professional:ro
     ports:
       - "127.0.0.1:8769:8769"
     # Vault retrieval for MC/CoS turns (owner decisions 17 Oct 2026). Off until the Vault
