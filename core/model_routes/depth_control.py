@@ -8,6 +8,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+
+DEEP_ANSWER_INSTRUCTION = (
+    "This turn has been admitted for deeper consideration. Give the owner a useful decision, "
+    "not just a compressed conclusion. Address the requested cases, material assumptions, "
+    "uncertainty, alternatives and tradeoffs, and explain why your recommendation follows. "
+    "Distinguish guarantees from best efforts and evidence from inference. Include a concrete "
+    "way to check the recommendation when relevant. Do not omit a material limitation to meet "
+    "an everyday-chat brevity preference; use as much detail as the decision needs, without padding. "
+    "Give your conclusions and supporting explanation, not private internal deliberation. "
+    "This changes answer depth only: existing scope, tools, budgets and action approvals still apply."
+)
 import re
 
 MARKER = "[[MINIMOI_DEPTH_V1]]\n"

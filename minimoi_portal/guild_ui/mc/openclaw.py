@@ -262,11 +262,22 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
         return self._stream_with_failover(req, payload, cancel)
 
     def _stream_depth(self, req, payload, cancel):
-        from core.model_routes.depth_control import ControlBuffer, InvalidDepthControl, instruction
+        from core.model_routes.depth_control import ControlBuffer, InvalidDepthControl, instruction, DEEP_ANSWER_INSTRUCTION
         from core.model_routes.runtime_proof import unused_completed
         depth = req.route["depth"]
+        def deeper_payload():
+            body = json.loads(payload)
+            body["messages"].insert(0, {"role": "system", "content": DEEP_ANSWER_INSTRUCTION})
+            encoded = json.dumps(body, ensure_ascii=False).encode()
+            if len(encoded) > MAX_REQUEST_BODY_BYTES:
+                return None
+            return encoded
         if not depth.get("allow_continuation"):
             if depth["kind"] == "deep":
+                payload = deeper_payload()
+                if payload is None:
+                    yield Failure("request_too_large", "refused")
+                    return
                 yield Progress("I’ll take a closer look at this.")
             yield from self._stream(payload, self._headers(req), cancel)
             return
@@ -342,7 +353,11 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
         yield Progress("I’ll take a closer look at this.")
         yield Switched(deep)
         second_usage = None
-        for event in self._stream(payload, self._headers(req, deep), cancel):
+        deep_payload = deeper_payload()
+        if deep_payload is None:
+            yield Failure("request_too_large", "refused")
+            return
+        for event in self._stream(deep_payload, self._headers(req, deep), cancel):
             if isinstance(event, RunStarted):
                 deep["attempts"][-1].update(run_id=event.run_id, outcome="started")
                 yield RunStarted(event.run_id, replaces=run_id, required=True)

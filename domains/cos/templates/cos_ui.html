@@ -404,7 +404,10 @@ async function runTurn(payload, thinking) {
   });
   const data = await resp.json().catch(() => ({}));
   if (resp.status !== 202 || !data.turn) return { resp, data };
+  const stop = window.cosHistory?.stopButton(payload.conversation_id, 't-' + payload.request_id.replaceAll('-', ''));
+  if (stop) thinking.after(stop);
   const started = Date.now();
+  try {
   while (Date.now() - started < 15 * 60 * 1000) {
     await sleep(2500);
     let r;
@@ -419,6 +422,7 @@ async function runTurn(payload, thinking) {
   }
   return { resp: { ok: false, status: 504 },
            data: { reply: 'CoS is still working after 15 minutes. Check Files from CoS later.' } };
+  } finally { stop?.remove(); }
 }
 
 async function sendMessage() {

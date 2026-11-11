@@ -22,7 +22,9 @@ def catalogue():
 
 @pytest.mark.parametrize("text,kind", [
     ("Quick answer: how late?", "quick"), ("Please look into this: delivery failures", "deep"),
-    ("Think harder about this", "deep"), ("This is important: compare the options", "deep"),
+    ("Think harder about this", "deep"), ("Think hard. Compare the options", "deep"),
+    ("Please think hard about this", "deep"), ("thinking hard", None),
+    ("This is important: compare the options", "deep"),
     ("go deep", "deep"), ('Translate "look into this"', None),
     ('> Think harder about this', None), ('```\nlook into this\n```', None),
     ('"this is important"', None), ("What are the risks?", None),

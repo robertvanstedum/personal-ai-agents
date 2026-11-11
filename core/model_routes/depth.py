@@ -15,7 +15,7 @@ from . import RouteRefused, check_selectable, selection_of, snapshot
 # instructions. Unrecognized important questions belong to the lead's judgement.
 _QUICK = re.compile(r"^\s*(?:please\s+)?quick answer\b", re.I)
 _DEEP = re.compile(
-    r"^\s*(?:please\s+)?(?:think harder(?: about this)?|this is important|look into this|go deep)\b", re.I
+    r"^\s*(?:please\s+)?(?:think hard(?:er)?(?: about this)?|this is important|look into this|go deep)\b", re.I
 )
 
 

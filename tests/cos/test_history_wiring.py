@@ -299,3 +299,26 @@ def test_board_tab_has_its_own_address(cos):
     response = cos.app.test_client().get('/ui/records', headers=OWNER)
     assert response.status_code == 200
     assert "const INITIAL_TAB = 'records';" in response.get_data(as_text=True)
+
+
+def test_owner_stop_discards_late_visible_answer_and_files(cos):
+    cid=cos._history.ensure_default()['conversation_id']
+    kept,_=cos._history.begin({'schema':'minimoi.cos.send/1','conversation_id':cid,'turn_id':TURN_ID,'text':'Synthetic stop','channel':'web'})
+    cos._history.stop(cid,TURN_ID,lambda:None)
+    payload={'reply':'Late answer must not appear','files':[{'path':'late.txt'}]}
+    state=cos._history_answer(kept,payload,'html_text','Synthetic stop',[])
+    assert state['failure_code']=='owner_stop' and not state['reply_saved']
+    assert 'Late answer' not in payload['reply'] and 'files' not in payload
+    assert cos._history.turn(cid,TURN_ID)['reply_text'] is None
+
+
+def test_stop_refusal_suppresses_payload_even_if_readback_unavailable(cos, monkeypatch):
+    from domains.cos.history import HistoryRefused
+    def stopped(*a,**kw):raise HistoryRefused('owner_stopped')
+    def unavailable(*a,**kw):raise OSError('readback unavailable')
+    monkeypatch.setattr(cos._history,'answer',stopped)
+    monkeypatch.setattr(cos._history,'turn',unavailable)
+    payload={'reply':'Late secret answer','files':[{'path':'late.txt'}]}
+    result=cos._history_answer({'conversation_id':DEFAULT_CONVERSATION_ID,'turn_id':TURN_ID},payload,'html_text','Stop',[])
+    assert result['failure_code']=='owner_stop'
+    assert 'Late secret' not in payload['reply'] and 'files' not in payload

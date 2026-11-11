@@ -570,6 +570,10 @@ class OpenClawBackend:
         timing = VoiceTiming(correlation=receipt_id)
         timing.emit("gateway_request_start")
         if self._binder is None:
+            from core.model_routes.depth_control import DEEP_ANSWER_INSTRUCTION
+            depth = ((turn_route.get() or {}).get("route") or {}).get("depth") or {}
+            if depth.get("kind") == "deep":
+                messages = [{"role": "system", "content": DEEP_ANSWER_INSTRUCTION}, *messages]
             try:
                 result = self._post_turn(messages=messages, conversation_id=conversation_id)
             except Exception:
@@ -594,6 +598,9 @@ class OpenClawBackend:
         automatic = bool(bound and depth.get("allow_continuation") and scope is None)
         nonce = uuid4().hex if automatic else None
         original_messages = messages
+        from core.model_routes.depth_control import DEEP_ANSWER_INSTRUCTION
+        if depth.get("kind") == "deep":
+            messages = [{"role": "system", "content": DEEP_ANSWER_INSTRUCTION}, *messages]
         if automatic:
             from core.model_routes.depth_control import instruction
             messages = [{"role": "system", "content": instruction(nonce)}, *messages]
@@ -658,7 +665,7 @@ class OpenClawBackend:
                         if not self._binder.attach_depth(bound, next_run):
                             raise AgentRuntimeError("The deeper attempt could not acquire this turn. Do not repeat it automatically.")
 
-                    result = self._post_turn(messages=original_messages, conversation_id=conversation_id, agent_id=agent,
+                    result = self._post_turn(messages=[{"role": "system", "content": DEEP_ANSWER_INSTRUCTION}, *original_messages], conversation_id=conversation_id, agent_id=agent,
                         on_run=on_deep_run, model=f"{deep['provider']}/{deep['model']}")
                     record_result(result)
         except Exception:

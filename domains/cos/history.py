@@ -199,6 +199,8 @@ class History:
         reply = _bounded_reply(str(reply or ""))
         with self._locked():
             current = self._turn_locked(conversation_id, turn_id)
+            if current.get("failure_code") == "owner_stop":
+                raise HistoryRefused("owner_stopped")
             if current["status"] in _TERMINAL:
                 if current["reply_text"] == reply:
                     return current
@@ -210,6 +212,21 @@ class History:
             if status == "answered":
                 turn["failure_code"] = None
             return self._append_turn_locked(turn)
+
+    def stop(self, conversation_id: str, turn_id: str, fence) -> dict:
+        """Fence tools and suppress a late reply under the same lock as answer.
+
+        This records owner intent, not proof that provider work has terminated.
+        Existing work may finish; the execution lane remains held by its caller.
+        """
+        with self._locked():
+            current = self._turn_locked(conversation_id, turn_id)
+            if current["status"] in _TERMINAL:
+                return current
+            fence()
+            if current.get("failure_code") == "owner_stop":
+                return current
+            return self._append_turn_locked(dict(current, status="failed", failure_code="owner_stop"))
 
     def fail(self, conversation_id: str, turn_id: str, code: str) -> dict:
         with self._locked():

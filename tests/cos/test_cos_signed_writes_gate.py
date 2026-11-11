@@ -36,6 +36,7 @@ def signed(subject, path, body):
     ("/ui/history/preferences", {"json": {"device": "desk", "picture": "faded"}}),
     ("/ui/history/conversations/owner/route", {"json": {"route_id": "plan-openai-mid", "revision": 0}}),
     ("/ui/history/selection", {"json": {"device": "desk", "conversation_id": "owner"}}),
+    ("/ui/history/conversations/owner/turns/t-aaaaaaaa000040008000000000000001/stop", {"json": {}}),
 ])
 def test_forwarded_owner_headers_alone_never_make_a_cos_write(cos, path, kwargs):
     r = cos.app.test_client().post(path, headers=UNSIGNED, **kwargs)
@@ -73,6 +74,7 @@ def test_reads_and_internal_token_routes_are_not_gated_and_event_is_the_recorded
 # Every write route on the real CoS app, and how it is authorised. A new write route fails this test until it is
 # placed here deliberately, so nothing new can slip under an exempt prefix unseen (F3 re-review N3).
 KNOWN_WRITES = {
+    "/ui/history/conversations/<conversation_id>/turns/<turn_id>/stop": "signed owner; durable tool fence and late-answer suppression",
     "/chat": "signed: owner, service:mc, or service:telegram (Telegram channel + owner session only)",
     "/ui/send": "signed owner", "/ui/upload": "signed owner", "/ui/transcribe": "signed owner",
     "/ui/history/conversations": "signed owner", "/ui/history/selection": "signed owner",
@@ -90,3 +92,16 @@ def test_every_write_route_on_the_real_cos_app_is_accounted_for(cos):
                      if set(rule.methods or ()) - {"GET", "HEAD", "OPTIONS"}})
     unknown = [w for w in writes if w not in KNOWN_WRITES and not w.startswith(SELF_GATED)]
     assert unknown == [], f"new CoS write routes need a deliberate F3 decision: {unknown}"
+
+
+def test_stop_requires_matching_signed_owner_and_fences_exact_turn(cos,monkeypatch):
+    from types import SimpleNamespace
+    cid=cos._history.ensure_default()['conversation_id'];tid='t-aaaaaaaa000040008000000000000001'
+    cos._history.begin({'schema':'minimoi.cos.send/1','conversation_id':cid,'turn_id':tid,'text':'Synthetic','channel':'web'})
+    calls=[];monkeypatch.setattr(cos,'_bindings',SimpleNamespace(revoke=lambda *a:calls.append(a)))
+    path=f'/ui/history/conversations/{cid}/turns/{tid}/stop';body=b'{}';client=cos.app.test_client()
+    assert client.post(path,data=body,headers={**signed('owner:2',path,body),**OWNER}).status_code==403
+    assert calls==[]
+    result=client.post(path,data=body,headers={**signed('owner:1',path,body),**OWNER})
+    assert result.status_code==200 and result.json['stop_requested']
+    assert calls==[('aaaaaaaa-0000-4000-8000-000000000001','owner_stop')]

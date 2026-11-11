@@ -1499,7 +1499,12 @@ _install_lead_return(app,_history,os.environ,lambda:_bindings)
 
 if _history is not None:
     from domains.cos.history_api import create_blueprint as _history_blueprint
-    app.register_blueprint(_history_blueprint(_history, resolve_owner=resolve_user_id))
+    def _stop_history_turn(turn_id):
+        if _bindings is None:
+            raise RuntimeError("stop_unavailable")
+        _bindings.revoke(_receipt_turn_id(turn_id), "owner_stop")
+    app.register_blueprint(_history_blueprint(_history, resolve_owner=resolve_user_id,
+                                             stop_turn=_stop_history_turn))
 
 
 
@@ -1959,10 +1964,20 @@ def _history_answer(kept: dict, payload: dict, channel: str, owner_text: str, at
             # An append may have reached disk before the acknowledgement failed.
             # answer is idempotent: retry saving this reply, never rerun the model.
             turn = _history.answer(kept["conversation_id"], kept["turn_id"], payload["reply"])
-    except (cos_history.HistoryRefused, OSError):
+    except (cos_history.HistoryRefused, OSError) as exc:
+        if isinstance(exc, cos_history.HistoryRefused) and exc.code == "owner_stopped":
+            payload["reply"] = "Stop requested. No late answer will be saved. Already-started work may still finish and incur cost."
+            payload.pop("files", None)
+            return {"conversation_id": kept["conversation_id"], "turn_id": kept["turn_id"],
+                    "status": "failed", "failure_code": "owner_stop", "saved": True, "reply_saved": False}
         _log_file("history_answer_unrecorded", f"turn {kept['turn_id']} reply save acknowledgement failed")
         try:
             turn = _history.turn(kept["conversation_id"], kept["turn_id"])
+            if turn and turn.get("failure_code") == "owner_stop":
+                payload["reply"] = "Stop requested. No late answer will be saved. Already-started work may still finish and incur cost."
+                payload.pop("files", None)
+                return {"conversation_id": kept["conversation_id"], "turn_id": kept["turn_id"],
+                        "status": "failed", "failure_code": "owner_stop", "saved": True, "reply_saved": False}
             if turn and turn["status"] == "pending":
                 turn = _history.fail(kept["conversation_id"], kept["turn_id"], "history_answer_unavailable")
         except (cos_history.HistoryRefused, OSError):

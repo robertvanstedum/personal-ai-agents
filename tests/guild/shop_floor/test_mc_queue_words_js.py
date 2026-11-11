@@ -63,4 +63,4 @@ def test_retry_delays_back_off_and_cap():
 
 
 def test_confirmed_stop_never_claims_the_message_was_not_sent():
-    assert run("return W.notSentWords({state:'cancelled', outcome:{status:'stopped', reason:'owner_stop_acknowledged'}});") is None
+    assert run("return W.notSentWords({state:'cancelled', outcome:{status:'stopped', reason:'owner_stop_acknowledged'}});") == 'Stopped · cancellation confirmed; no answer saved'

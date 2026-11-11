@@ -33,6 +33,22 @@
     if (!mine) window.MiniMoiMessageText?.render(words, text);
     item.append(who, words); return item;
   }
+  function stopButton(conversationId, turnId) {
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'btn-mini'; button.textContent = 'Stop';
+    button.onclick = async () => {
+      button.disabled = true;
+      try {
+        const result = await api('history/conversations/' + encodeURIComponent(conversationId) + '/turns/' + encodeURIComponent(turnId) + '/stop', {});
+        button.textContent = result.stop_requested ? 'Stop requested' : 'Answer already saved';
+        state.textContent = result.stop_requested ? 'Stop requested; already-started work may still finish.' : 'Saved';
+        signature = ''; await reload();
+      } catch (_) {
+        button.disabled = false; state.textContent = 'Stop not confirmed. You can try Stop again.';
+      }
+    };
+    return button;
+  }
   async function reload(earlier = false) {
     if (!cid || busy || input.disabled || (viewingEarlier && !earlier)) return;
     const selected = cid, epoch = generation;
@@ -44,7 +60,12 @@
     for (const turn of d.items) {
       frag.append(row('You', turn.user_text, turn.turn_id, turn.created_at));
       if (turn.reply_text) frag.append(row('CoS', turn.reply_text, turn.turn_id, turn.answered_at || turn.created_at));
-      else frag.append(row('CoS', turn.status === 'pending' ? 'Working on it' : 'This reply was interrupted. Your message is saved.', turn.turn_id, turn.created_at));
+      else {
+        const stopped = turn.failure_code === 'owner_stop';
+        const reply = row('CoS', stopped ? 'Stop requested. No late answer will be saved. Already-started work may still finish and incur cost.' : turn.status === 'pending' ? 'Working on it' : 'This reply was interrupted. Your message is saved.', turn.turn_id, turn.created_at);
+        if (turn.status === 'pending' && turn.channel !== 'voice') reply.append(stopButton(cid, turn.turn_id));
+        frag.append(reply);
+      }
       const p = pending();
       if (p && turn.turn_id === 't-' + p.id.replaceAll('-', '')) { state.textContent = 'Saved'; if (turn.status !== 'pending') { if (input.value === JSON.parse(p.key)[0]) { input.value=''; persistDraft(); } const sentIds=new Set((p.files||[]).map(f=>f.file_id)); attached=attached.filter(f=>!sentIds.has(f.file_id));renderTray();window.MiniMoiNotices?.clear('cos-chat:' + cid + ':' + p.id);clearPending(); } }
     }
@@ -113,7 +134,7 @@
     for (const c of d.items) { const b = document.createElement('button'); b.type='button'; b.className='history-row'; b.textContent=(c.title || 'Conversation') + (c.private ? ' · Private' : ''); b.onclick=async()=>{try { await select(c.conversation_id,c); activateTab('confer',true); document.getElementById('history-sheet').close(); } catch (_) { state.textContent='Could not open that conversation.'; }}; el.append(b); }
     next=d.next; document.getElementById('history-more').hidden=!next;
   }
-  window.cosHistory = {ready:false, device, conversationId:null, persistDraft,
+  window.cosHistory = {ready:false, device, conversationId:null, persistDraft, stopButton,
     requestId(text, files) { const previous=pending(), key=JSON.stringify([text, files.map(f=>f.file_id)]); if(previous && previous.key!==key){state.textContent='Checking the previous message before sending another.';return null;} const id=previous?.id || crypto.randomUUID(); storage(pendingKey(),JSON.stringify({id,key,text,files})); state.textContent='Checking…'; return id; },
     confirm(h, operation) { const receipt = operation && ((['note_save','reminder_set'].includes(operation.type) && ['saved','deduplicated'].includes(operation.status) && operation.operation_id) || (operation.type==='session_reset' && operation.status==='reset')); if (h?.saved || receipt) {clearPending();state.textContent='Saved';} else state.textContent='Save not confirmed'; refreshList(); },
     uncertain(h) { if(h?.refused){clearPending();state.textContent='Not saved';}else state.textContent='Checking…'; }
