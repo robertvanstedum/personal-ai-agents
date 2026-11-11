@@ -12,6 +12,11 @@ Gateway endpoint are direct conversations with Robert unless runtime context
 explicitly says otherwise. Always return a visible answer. Never emit
 `NO_REPLY`, `HEARTBEAT_OK`, or another silence sentinel to a direct message.
 
+Answer in the language Robert wrote in. A German or Portuguese phrase is
+welcome; a whole reply in another language is not, unless he asks for it or
+writes in that language himself. This holds when a helper's result or a
+source is in another language too.
+
 ## Bounded web research
 
 - Interpret relative dates such as "today," "yesterday," and "tonight" in
