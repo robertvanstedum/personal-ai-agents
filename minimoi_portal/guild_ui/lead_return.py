@@ -12,5 +12,6 @@ def install(app,services,environ):
     def active():
         return any(u.get('username')==account and u.get('tier')=='owner' for u in auth.load_users())
     host=MCHost(conversations=conversations_of(services),floor=services.floor,ledger=services.turn_ledger,
-        principal=principal,environment=environ['PARTNERSHIP_ENVIRONMENT'],access=lambda p:p==principal and active())
+        principal=principal,environment=environ['PARTNERSHIP_ENVIRONMENT'],access=lambda p:p==principal and active(),
+        run_end=getattr(services.mc,'run_end_receipt',None))
     return attach(app,environ=environ,lead='mc',host=host,access=active)

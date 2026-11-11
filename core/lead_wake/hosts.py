@@ -25,9 +25,10 @@ class Admission:
 
 
 class MCHost:
-    def __init__(self, *, conversations, floor, ledger, principal, environment, access):
+    def __init__(self, *, conversations, floor, ledger, principal, environment, access, run_end=None):
         self.conversations,self.floor,self.ledger=conversations,floor,ledger
         self.principal,self.environment,self.access=principal,environment,access
+        self.run_end=run_end   # the relay's signed end receipt for a run: settles a turn whose stream was lost, on proof only
         self._claim=ContextVar("mc_return_claim",default=None)
 
     def _bound(self,p):
@@ -49,6 +50,10 @@ class MCHost:
     def lane(self, op, p):
         cid,tid=source_ids(p,'mc')
         with self.conversations._lock(): self._bound(p)
+        if self.run_end is not None and hasattr(self.ledger,'settle_unknown'):
+            # A portal restart leaves the origin turn 'unknown' forever; settle it only on the runtime's signed receipt.
+            try:self.ledger.settle_unknown(principal=self.principal,conversation_id=cid,note_request_id=tid,run_end=self.run_end)
+            except Exception:pass
         # Fresh service admission identity permits reconciliation attempts; the
         # durable inbox claim, not this lane identity, controls one inference.
         key='OB-wake-'+hashlib.sha256((op+uuid.uuid4().hex).encode()).hexdigest()[:40]

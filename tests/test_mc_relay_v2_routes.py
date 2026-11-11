@@ -343,3 +343,28 @@ def test_no_answer_line_when_the_record_cannot_prove_it(relay, tmp_path, case):
     events = _stream_events(env)
     assert not [e for e in events if e["t"] == "answer"]
     assert [e["t"] for e in events].count("finish") == 1
+
+
+# A portal restart loses a turn's stream; the portal settles it only on the runtime's signed end receipt (Dev, 11 Nov).
+def _get(env, path, token=CALLER):
+    req = urllib.request.Request(env.base + path, headers={"authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.status, json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return e.code, None
+
+
+def test_the_relay_serves_a_runs_end_receipt_to_the_portal_only(relay, tmp_path):
+    proofs = tmp_path / "proofs"
+    proofs.mkdir()
+    receipt = {"instance": "a" * 32, "run": RUN, "session": "agent:mc-chat:openai-user:x", "agent": "mc-chat",
+               "success": True, "model_calls": 2, "tool_calls": 1, "signature": "s"}
+    (proofs / f"{RUN}.json").write_text(json.dumps(receipt))
+    (proofs / f"{OTHER_RUN}.json").write_text(json.dumps({**receipt, "run": RUN}))     # a file that names another run
+    env = relay(MC_RELAY_DEPTH_PROOFS=str(proofs))
+    assert _get(env, f"/v1/runs/{RUN}/terminal") == (200, {"receipt": receipt})
+    assert _get(env, f"/v1/runs/{OTHER_RUN}/terminal")[0] == 404
+    assert _get(env, "/v1/runs/chatcmpl_33333333-3333-4333-8333-333333333333/terminal")[0] == 404
+    assert _get(env, "/v1/runs/../terminal")[0] in (401, 403, 404)
+    assert _get(env, f"/v1/runs/{RUN}/terminal", token="wrong" * 8)[0] == 401

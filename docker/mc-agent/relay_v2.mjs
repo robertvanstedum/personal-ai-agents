@@ -355,6 +355,23 @@ export function readTerminal(dir, body, runId) {
   } catch { return null; }
 }
 
+// GET /v1/runs/<run>/terminal: the runtime's signed, content-free end receipt for one run, for the portal to settle a turn
+// whose stream was lost (a portal restart). The portal verifies the signature against the instance's registered key; the
+// relay only serves the file the runtime wrote. No receipt is never proof that a run stopped: 404.
+export function readRunTerminal(dir, runId) {
+  if (!dir || !RUN_ID.test(String(runId)) || String(runId).length > 60) return null;
+  try {
+    const evidence = JSON.parse(fs.readFileSync(path.join(dir, `${runId}.json`), 'utf8'));
+    return evidence && evidence.run === runId ? evidence : null;
+  } catch { return null; }
+}
+function runTerminal(res, runId) {
+  const evidence = readRunTerminal(process.env.MC_RELAY_DEPTH_PROOFS, runId);
+  if (!evidence) return reply(res, 404, "terminal_unknown", "no end receipt for that run");
+  res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+  return res.end(JSON.stringify({ receipt: evidence }));
+}
+
 async function terminal(body, runId) {
   const dir = process.env.MC_RELAY_DEPTH_PROOFS;
   if (!dir) return null;
@@ -404,6 +421,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "POST" && url.pathname === "/v1/turns/stop") return stopTurn(req, res);
   if (req.method === "GET" && url.pathname === "/v1/capabilities") return capabilities(res);
+  if (req.method === "GET" && /^\/v1\/runs\/[^/]+\/terminal$/.test(url.pathname)) return runTerminal(res, url.pathname.split("/")[3]);
   if (url.pathname === "/v1/jobs" || url.pathname.startsWith("/v1/jobs/")) return jobRoute(req, res, url);
   if (!(req.method === "POST" && url.pathname === "/v1/chat/completions")) {
     log({ event: "refused", reason: "path", method: req.method, path: url.pathname });

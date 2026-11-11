@@ -45,6 +45,7 @@ tries the plan again, and the conversation's choice is not touched.
 from __future__ import annotations
 
 import hashlib
+import re
 import json
 import time
 from uuid import uuid4
@@ -477,6 +478,22 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
             close = getattr(response, "close", None)
             if close:
                 close()
+
+    def run_end_receipt(self, run_id: str):
+        """The runtime's signed end receipt for one run, from the relay, or None. Content-free; the caller verifies it."""
+        if not self.connected or not isinstance(run_id, str) or not re.fullmatch(r"chatcmpl_[0-9a-f-]{36}", run_id):
+            return None
+        try:
+            response = self._get(f"{self.url}/runs/{run_id}/terminal", headers=self._auth(),
+                                 timeout=(CONNECT_TIMEOUT_S, STOP_TIMEOUT_S))
+        except Exception:
+            return None
+        if getattr(response, "status_code", 0) != 200:
+            return None
+        try:
+            return (response.json() or {}).get("receipt")
+        except ValueError:
+            return None
 
     def stop(self, correlation_id: str) -> bool:
         """Ask the relay to abort this turn's call to MC. True when it was running."""
