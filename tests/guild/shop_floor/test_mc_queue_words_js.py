@@ -22,13 +22,13 @@ def run(script: str):
 
 def test_chip_words_say_waiting_and_place_only():
     assert run("return [W.chipWords(1, false), W.chipWords(1, true), W.chipWords(2, true), W.chipWords(5, false)];") == [
-        "Not sent · next to send", "Not sent · next to send",
-        "Not sent · 2nd in line", "Not sent · 5th in line"]
+        "Not sent · next to send", "Not sent · next to send · waits for MC's current answer",
+        "Not sent · 2nd in line · waits for MC's current answer", "Not sent · 5th in line"]
 
 
 def test_pause_words_never_claim_an_outcome():
     unknown, failed, none = run("return [W.pauseWords({reason:'unknown'}, 2), W.pauseWords({reason:'failed'}, 1), W.pauseWords({reason:'unknown'}, 0)];")
-    assert "may have run, or may still be running" in unknown and "2 waiting messages are held; Continue sends them" in unknown
+    assert "may have run, or may still be running" in unknown and "lost its connection" not in unknown and "2 waiting messages are held; Continue sends them" in unknown
     assert "failed, or could not be sent" in failed and "1 waiting message is held; Continue sends it" in failed
     assert none.endswith("Continue lets new messages go through again.")
 
