@@ -8,7 +8,8 @@ import this one). ``scrub`` replaces each match in place with
 - ``password``, ``pw``, ``secret``, ``token`` or ``api key`` followed by a
   value (``password: x``, ``token=x``, ``my password is x``): the value goes,
   the word stays;
-- ``Bearer …``, JWTs, ``ghp_`` and ``github_pat_``, ``sk-ant-``, ``xai-`` and
+- ``Bearer …``, JWTs, GitHub ``ghp_``, ``gho_``, ``ghs_``, ``ghu_``, ``ghr_``
+  and ``github_pat_``, ``sk-ant-``, ``xai-`` and
   ``sk-``, ``tvly-``, ``AKIA…``, PEM blocks, Telegram bot tokens, and
   ``scheme://user:pass@`` (the ``user:pass`` goes).
 
@@ -26,7 +27,7 @@ _TOKENS = (
     r"\bbearer\s+\S+",
     r"\beyJ[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]*(?:\.[A-Za-z0-9_\-]*)?",     # a JWT
     r"\bgithub_pat_[A-Za-z0-9_]*",
-    r"\bghp_[A-Za-z0-9]{10,}",
+    r"\bgh[posur]_[A-Za-z0-9]{10,}",                                # ghp_ gho_ ghs_ ghu_ ghr_
     r"\bsk-ant-[A-Za-z0-9_\-]{8,}",
     r"\bsk-[A-Za-z0-9_\-]{8,}",
     r"\bxai-[A-Za-z0-9]{16,}",
