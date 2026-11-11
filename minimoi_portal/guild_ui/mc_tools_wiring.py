@@ -854,6 +854,26 @@ def invite_runner(send_email, notify, *, db=None):
     return invite
 
 
+def proposal_status(environ, conversation_id):
+    """Pending proposals in this conversation, each marked against the database clock. [] when tools are off.
+    Read-only: asking about one does not close it. The yes/no path still does that."""
+    cfg = settings(environ)
+    if cfg is None or not conversation_id:
+        return []
+    from core.minimoi_actions.receipts import _cursor
+    conn = _connect(cfg["dsn"])()
+    try:
+        with conn, _cursor(conn) as cur:
+            cur.execute("""SELECT code, expires_at <= clock_timestamp() AS expired, expires_at
+                FROM guild.mc_tool_proposals
+                WHERE principal_id=%s AND environment=%s AND conversation_id=%s AND state='pending'
+                ORDER BY created_at LIMIT 5""",
+                        (cfg["principal"], cfg["environment"], conversation_id))
+            return [dict(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
 def proposals(environ, *, start_research, delivery, lessons=None, read_shown=None, start_build=None):
     """The ToolProposals handler for this mount, or None when tools are off."""
     cfg = settings(environ)
