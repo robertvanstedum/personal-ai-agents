@@ -1,0 +1,105 @@
+{
+  "seat": "apprentice",
+  "version": 2,
+  "leads": [
+    "mc"
+  ],
+  "scopes": [
+    "personal"
+  ],
+  "readers": [
+    "repo",
+    "build_log",
+    "github_issues"
+  ],
+  "daily_budget_usd": 10.0,
+  "types": {
+    "repo-lookup": {
+      "purpose": "Answer a bounded question from repository, spec or Build Log contents, with sources",
+      "inputs": [
+        "question"
+      ],
+      "outputs": [
+        "answer",
+        "sources"
+      ],
+      "evidence": [
+        "sources"
+      ],
+      "effects": "none",
+      "model": "small",
+      "per_task_budget_usd": 0.5,
+      "max_revisions": 1,
+      "escalation": "back to the lead with what was missing",
+      "return": "in_turn",
+      "tools": [
+        "repo.read",
+        "build_log.read"
+      ]
+    },
+    "summary": {
+      "purpose": "Summarize a diff, log, thread or document with references",
+      "inputs": [
+        "text_ref"
+      ],
+      "outputs": [
+        "summary",
+        "references"
+      ],
+      "evidence": [
+        "references"
+      ],
+      "effects": "none",
+      "model": "small",
+      "per_task_budget_usd": 0.5,
+      "max_revisions": 1,
+      "escalation": "back to the lead with what was missing",
+      "return": "in_turn",
+      "tools": [
+        "repo.read"
+      ]
+    },
+    "hygiene-check": {
+      "purpose": "Check Build Log and issue links, stale items and missing fields; report, never fix",
+      "inputs": [],
+      "outputs": [
+        "findings"
+      ],
+      "evidence": [
+        "item_ids"
+      ],
+      "effects": "none",
+      "model": "deterministic",
+      "per_task_budget_usd": 0.0,
+      "max_revisions": 1,
+      "escalation": "back to the lead with what was missing",
+      "return": "in_turn",
+      "tools": [
+        "build_log.read",
+        "github.read"
+      ]
+    },
+    "write-up-draft": {
+      "purpose": "Draft a Build Log write-up from the owner's words and MC's notes, as a task artifact only",
+      "inputs": [
+        "owner_words",
+        "notes"
+      ],
+      "outputs": [
+        "draft"
+      ],
+      "evidence": [
+        "source"
+      ],
+      "effects": "internal",
+      "model": "mid",
+      "per_task_budget_usd": 0.5,
+      "max_revisions": 1,
+      "escalation": "back to the lead with what was missing",
+      "return": "background",
+      "tools": [
+        "build_log.read"
+      ]
+    }
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "seat": "ea",
+  "version": 2,
+  "leads": [
+    "cos"
+  ],
+  "scopes": [
+    "personal"
+  ],
+  "readers": [
+    "records",
+    "actions",
+    "tasks"
+  ],
+  "daily_budget_usd": 10.0,
+  "types": {
+    "actions-upkeep": {
+      "purpose": "Flag stale, duplicate-looking or unlinked action items; propose, never merge",
+      "inputs": [],
+      "outputs": [
+        "findings"
+      ],
+      "evidence": [
+        "item_ids"
+      ],
+      "effects": "none",
+      "model": "small",
+      "per_task_budget_usd": 0.5,
+      "max_revisions": 1,
+      "escalation": "back to the lead with what was missing",
+      "return": "in_turn",
+      "tools": [
+        "actions.read"
+      ]
+    },
+    "recall-search": {
+      "purpose": "Retrieve prior records on a subject with source, date and current or superseded status",
+      "inputs": [
+        "subject"
+      ],
+      "outputs": [
+        "records"
+      ],
+      "evidence": [
+        "sources"
+      ],
+      "effects": "none",
+      "model": "small",
+      "per_task_budget_usd": 0.5,
+      "max_revisions": 1,
+      "escalation": "back to the lead with what was missing",
+      "return": "in_turn",
+      "tools": [
+        "records.read",
+        "recall.read"
+      ]
+    },
+    "briefing-assembly": {
+      "purpose": "Assemble the briefing from authoritative reads, as a task artifact for CoS's review",
+      "inputs": [],
+      "outputs": [
+        "briefing"
+      ],
+      "evidence": [
+        "sources"
+      ],
+      "effects": "none",
+      "model": "small",
+      "per_task_budget_usd": 0.5,
+      "max_revisions": 1,
+      "escalation": "back to the lead with what was missing",
+      "return": "background",
+      "tools": [
+        "tasks.read",
+        "actions.read"
+      ]
+    },
+    "follow-up-draft": {
+      "purpose": "Draft a chase or follow-up for CoS to send, as a task artifact",
+      "inputs": [
+        "context"
+      ],
+      "outputs": [
+        "draft"
+      ],
+      "evidence": [
+        "source"
+      ],
+      "effects": "none",
+      "model": "mid",
+      "per_task_budget_usd": 0.5,
+      "max_revisions": 1,
+      "escalation": "back to the lead with what was missing",
+      "return": "background",
+      "tools": [
+        "tasks.read"
+      ]
+    }
+  }
+}

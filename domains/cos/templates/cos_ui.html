@@ -450,8 +450,7 @@ async function sendMessage() {
 // One message through the ordinary send path. True when CoS answered and the answer was saved.
 async function deliver(text, files, requestId) {
   const conversationId = window.cosHistory.conversationId;
-  window.cosTurnRunning = true;
-  btnAttach.disabled = true;
+  window.cosTurnRunning = true;               // ＋ stays usable: a file can go with a queued message
   appendMsg('user', [text, ...files.map(f => '📎 ' + f.name)].filter(Boolean).join('\n'));
   window.cosVoiceTyped?.(text);
   const thinking = appendThinking();
@@ -496,7 +495,6 @@ async function deliver(text, files, requestId) {
     return false;
   } finally {
     window.cosTurnRunning = false;
-    btnAttach.disabled = false;
     sendInput.focus();
   }
 }
