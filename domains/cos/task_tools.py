@@ -18,6 +18,7 @@ binding's turn. Neither ever comes from tool arguments (S3).
 """
 from __future__ import annotations
 
+import os
 from core.canonical_json import digest
 from services.partnership_tasks.client import TaskServiceUnavailable, command
 
@@ -118,8 +119,19 @@ class CosTaskTools:
                 if args["verdict"] not in ("approve", "changes_requested"):
                     return _refuse(422, "invalid", field="verdict")
                 task = L.review(self.cos, args["task_id"], args["set_digest"], args["verdict"], str(args["reasons"]), turn_key, self.environment, self.scope, evidence_client=self.platform)
-                return {"status": 200, "body": {"schema": SCHEMA, "state": task["state"],
+                answer = {"status": 200, "body": {"schema": SCHEMA, "state": task["state"],
                                                 "say": f"Drafted by {task['holder']}, accepted by you." if args["verdict"] == "approve" else "Sent back with your reasons."}}
+                if args["verdict"] == "approve" and os.environ.get("COS_HELPER_RETURN") == "1":
+                    from core.lead_wake.inline import offer
+                    text = offer(lead="cos", principal=binding.principal, environment=self.environment,
+                                 source_ref={"store": "cos-history", "id": turn_key}, task=task, reader=self.cos,
+                                 review_id="RV-h-"+L.review_key(turn_key, args["task_id"], args["set_digest"], args["verdict"], str(args["reasons"])))
+                    if text:
+                        answer["body"]["presentation_text"] = text
+                        answer["body"]["say"] += " Include presentation_text verbatim in your final answer so MiniMoi can verify delivery."
+                    else:
+                        answer["body"]["say"] += " Acceptance is saved; presentation is unconfirmed. Do not repeat the review."
+                return answer
             inputs = {"subject": args["subject"]} if args.get("subject") else {}
             tid = L.ask(lead_client=self.cos, platform=self.platform, charter=self.charter, lead="cos", type_id=args["type_id"], inputs=inputs,
                         source={"store": "cos-history", "id": turn_key, "position": int(turn.get("seq") or 1)}, words=turn["user_text"], turn_key=turn_key,

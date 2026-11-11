@@ -52,3 +52,13 @@ class ReturnPublication(Base,unittest.TestCase):
             self.assertTrue(self.turn_ledger.finish(claim,'not_sent',{}))
             with self.assertRaises(Exception):self.host.write(self.packet)
         self.assertIsNone(self.notes.get_note(self.packet['id']))
+
+    def test_inline_receipt_reads_exact_canonical_mc_reply(self):
+        import hashlib
+        from minimoi_portal.guild_ui.stores import MASTER_CRAFTSMAN
+        key='mc-'+hashlib.sha256(NOTE.encode('utf-8')).hexdigest()[:40]
+        self.assertIsNone(self.host.inline_answer(self.packet))
+        self.notes.add_note(key,'Exact reviewed helper block.',MASTER_CRAFTSMAN,page='mc')
+        self.assertEqual(self.host.inline_answer(self.packet),(key,'Exact reviewed helper block.'))
+        self.host.access=lambda _:False
+        with self.assertRaises(PermissionError):self.host.inline_answer(self.packet)

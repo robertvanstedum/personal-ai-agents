@@ -18,6 +18,8 @@ class Host:
 
 def setup(rig,tmp_path,reviewer=None):
     _,wake,inbox=delivered(rig,tmp_path)
+    inbox.path.rename(tmp_path/"inbox.sqlite")
+    inbox.path=tmp_path/"inbox.sqlite"
     svc=rig.svc
     svc.helper_returns=True
     b=svc.bindings.resolve('tok-mc',svc._clock())
@@ -83,13 +85,14 @@ def test_definitive_commit_refusal_keeps_review_and_stops_retry_loop(rig,tmp_pat
     assert rt.pass_once()==[] and len(calls)==len(submitted)==1
 
 
-def test_inline_review_suppresses_extra_model_without_claiming_presentation(rig,tmp_path):
+def test_inline_review_without_proof_commits_accepted_result_without_another_model(rig,tmp_path):
     from tests.partnership.test_helper_ask import review
     rt,wake,calls=setup(rig,tmp_path)
     task=rig.svc.get('task',wake['task_id'],'tok-mc')
     outcome=review(rig,{'data':{'task_id':task['task_id'],'set_digest':wake['packet']['result_digest']}})
     assert outcome['status']=='done'
-    assert rt.pass_once()==[(wake['operation_id'],'reviewed_elsewhere')]
+    assert rt.pass_once()==[(wake['operation_id'],'committed')]
+    assert rt.publication(wake['operation_id'])['packet']['review_id']==rig.svc.get('task',wake['task_id'],'tok-mc')['reviews'][-1]['review_id']
     assert calls==[] and rt.inbox.status(wake['operation_id'])!='presented'
 
 
@@ -113,3 +116,90 @@ def test_task_http_main_requires_explicit_return_activation(tmp_path,monkeypatch
     monkeypatch.setattr(werkzeug.serving,'make_server',lambda *a,**kw:SimpleNamespace(serve_forever=lambda:None))
     assert http_api.main()==0
     assert captured[0]['helper_returns'] is enabled
+
+
+def inline_accepted(rig, rt, wake, monkeypatch):
+    from tests.partnership.test_helper_ask import review
+    monkeypatch.setenv('MC_HELPER_RETURN','1')
+    monkeypatch.setenv('LEAD_RETURN_STATE_DIR',str(rt.inbox.path.parent))
+    monkeypatch.setenv('LEAD_RETURN_PRINCIPAL','principal')
+    monkeypatch.setenv('PARTNERSHIP_ENVIRONMENT','synthetic')
+    bind = rig.host._bind
+    def bound(*args):
+        b = bind(*args); b.principal='principal'
+        return b
+    monkeypatch.setattr(rig.host,'_bind',bound)
+    result = review(rig,{'data':{'task_id':wake['task_id'],'set_digest':wake['packet']['result_digest']}})
+    assert result['status']=='done'
+    assert set(result)=={'status','code','message','data'}
+    return result['data']['presentation_text']
+
+
+@pytest.mark.parametrize('saved_kind',['exact','unrelated','rewritten','none','wrong_conversation'])
+def test_inline_requires_canonical_exact_block_and_destination(rig,tmp_path,monkeypatch,saved_kind):
+    rt,wake,calls=setup(rig,tmp_path)
+    block=inline_accepted(rig,rt,wake,monkeypatch)
+    assert "MC reviewed Apprentice" in block and 'build_log.html' in block
+    answer = {'exact': 'Here is the result.\n'+block, 'unrelated': "I'll get back to you.",
+              'rewritten': block.replace('build_log.html','build.html'), 'none':None,
+              'wrong_conversation':block}[saved_kind]
+    rt.host.inline_answer=lambda c: ('canonical-answer',answer) if answer else None
+    if saved_kind=='wrong_conversation':
+        with rt.inbox._db() as db:
+            import json
+            row=db.execute('SELECT candidate FROM inline_candidates').fetchone()
+            c=json.loads(row[0]);c['source_ref']['id']='c-other:note'
+            db.execute('UPDATE inline_candidates SET candidate=?',(json.dumps(c),))
+    expected='presented_inline' if saved_kind=='exact' else 'committed'
+    assert rt.pass_once()==[(wake['operation_id'],expected)]
+    assert calls==[]
+    assert rt.inbox.status(wake['operation_id'])=='presented' if saved_kind=='exact' else rt.inbox.status(wake['operation_id'])!='presented'
+    assert (rt.publication(wake['operation_id']) is None)==(saved_kind=='exact')
+    if saved_kind=='exact':assert rt.pass_once()==[]
+    else:assert rt.pass_once()==[(wake['operation_id'],'committed')]
+
+
+def test_inline_proof_lost_ack_reconciles_without_current_wake_or_model(rig,tmp_path,monkeypatch):
+    rt,wake,calls=setup(rig,tmp_path)
+    block=inline_accepted(rig,rt,wake,monkeypatch)
+    rt.host.inline_answer=lambda c:('canonical-answer',block)
+    original=rt.inbox.mark_presented
+    monkeypatch.setattr(rt.inbox,'mark_presented',lambda *a:(_ for _ in ()).throw(OSError('lost ACK')))
+    assert rt.pass_once()==[(wake['operation_id'],'unavailable')]
+    monkeypatch.setattr(rt.inbox,'mark_presented',original)
+    rt.inbox.resolve=lambda _:(_ for _ in ()).throw(AssertionError('already presented'))
+    assert rt.pass_once()==[(wake['operation_id'],'presented_inline')]
+    assert calls==[] and rt.publication(wake['operation_id']) is None
+
+
+def test_accepted_fallback_lost_commit_ack_never_repeats_review(rig,tmp_path,monkeypatch):
+    rt,wake,calls=setup(rig,tmp_path)
+    inline_accepted(rig,rt,wake,monkeypatch)
+    rt.host.inline_answer=lambda c:None
+    original=rt.committer.submit
+    sent=[]
+    def submit(cmd):
+        sent.append(cmd)
+        assert original(cmd)['outcome']=='accepted'
+        raise OSError('lost commit ACK')
+    rt.committer.submit=submit
+    assert rt.pass_once()==[(wake['operation_id'],'unavailable')]
+    assert rt.pass_once()==[(wake['operation_id'],'committed')]
+    assert len(sent)==1 and calls==[]
+
+
+@pytest.mark.parametrize('error',[ValueError('too large'),OSError('disk unavailable')])
+def test_presentation_preparation_failure_preserves_successful_acceptance(rig,tmp_path,monkeypatch,error):
+    from core.lead_wake import inline
+    from tests.partnership.test_helper_ask import review
+    rt,wake,calls=setup(rig,tmp_path)
+    monkeypatch.setenv('MC_HELPER_RETURN','1')
+    bind=rig.host._bind
+    def bound(*args):
+        b=bind(*args);b.principal='principal';return b
+    monkeypatch.setattr(rig.host,'_bind',bound)
+    monkeypatch.setattr(inline,'_offer',lambda **kw:(_ for _ in ()).throw(error))
+    result=review(rig,{'data':{'task_id':wake['task_id'],'set_digest':wake['packet']['result_digest']}})
+    assert result['status']=='done' and 'presentation is unconfirmed' in result['message']
+    assert rig.svc.get('task',wake['task_id'],'tok-mc')['state']=='completed'
+    assert calls==[]

@@ -82,7 +82,7 @@
       },
       "tools": {
         "type": "array",
-        "maxItems": 48,
+        "maxItems": 53,
         "items": {
           "type": "string"
         }

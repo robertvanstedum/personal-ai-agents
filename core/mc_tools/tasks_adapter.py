@@ -433,8 +433,19 @@ class TasksAdapter:
         words = ("Accepted. Present it with the credit from the record: drafted by " + task["holder"] + ", accepted by you." if verdict == "approve"
                  else "Sent back with your reasons. The helper will submit again, up to its limit.")
         try:
-            return self._effect(host, caller, b, capability, canonical, op, [evidence_step, review_step, accept_step],
+            answer = self._effect(host, caller, b, capability, canonical, op, [evidence_step, review_step, accept_step],
                                 lambda: any(r["review_id"] == review_id for r in self._task(task["task_id"])["reviews"]), words)
+            if verdict == "approve" and answer["status"] == "done" and os.environ.get("MC_HELPER_RETURN") == "1":
+                from core.lead_wake.inline import offer
+                text = offer(lead="mc", principal=b.principal, environment=self.env,
+                             source_ref={"store": "mc-floor", "id": b.conversation_id+":"+b.note_request_id},
+                             task=self._task(task["task_id"]), reader=self.client, review_id=review_id)
+                if text:
+                    answer["data"]["presentation_text"] = text
+                    answer["message"] += " Include presentation_text verbatim in your final answer so MiniMoi can verify delivery."
+                else:
+                    answer["message"] += " Acceptance is saved; presentation is unconfirmed. Do not repeat the review."
+            return answer
         except TaskServiceUnavailable:
             return result("unknown", "task_unconfirmed", "The task service could not confirm this. Do not repeat it; tell Robert.")
 

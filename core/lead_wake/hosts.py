@@ -80,6 +80,17 @@ class MCHost:
                 raise Conflict('canonical note differs')
             return True
 
+    def inline_answer(self, candidate):
+        from minimoi_portal.guild_ui.stores import MASTER_CRAFTSMAN
+        with self.conversations._lock():
+            floor = self._bound(candidate)
+            _, tid = source_ids(candidate, 'mc')
+            key = 'mc-' + hashlib.sha256(tid.encode('utf-8')).hexdigest()[:40]
+            note = floor.get_note(key)
+            if note is None or note['who'] != MASTER_CRAFTSMAN.id:
+                return None
+            return key, note['text']
+
     def write(self,p):
         from minimoi_portal.guild_ui.stores import MASTER_CRAFTSMAN
         with self.conversations._lock():
@@ -131,6 +142,15 @@ class CoSHost:
                 yield None
                 return
             yield Admission(lambda:None)  # flock remains held until exit
+
+    def inline_answer(self, candidate):
+        with self.history._locked():
+            cid = self._bound(candidate)
+            _, tid = source_ids(candidate, 'cos')
+            turn = self.history._turn_locked(cid, tid)
+            if turn['status'] not in ('answered', 'recovered'):
+                return None
+            return cid+':'+tid, turn['reply_text']
 
     @staticmethod
     def note(p):

@@ -78,3 +78,23 @@ def test_endpoint_authentication_and_no_model_selected_text(tmp_path):
     assert c.post(path,json=body).status_code==401
     assert c.post(path,json=dict(body,text='injected'),headers={'Authorization':'Bearer secret'}).status_code==400
     assert c.post(path,json=body,headers={'Authorization':'Bearer secret'}).status_code==200
+
+
+def test_cos_inline_reads_only_saved_answer_and_current_access(tmp_path):
+    r=rig(tmp_path)
+    host=r.dest.host
+    candidate=dict(r.p)
+    answer=host.inline_answer(candidate)
+    assert answer==(r.p['source_ref']['id'],'I asked the EA.')
+    r.allowed[0]=False
+    with pytest.raises(PermissionError):host.inline_answer(candidate)
+
+
+def test_cos_inline_stop_and_pending_never_prove_presentation(tmp_path):
+    r=rig(tmp_path)
+    cid=r.p['conversation_id'];tid='t-000000000002'
+    r.history.begin(send(cid,tid))
+    c=dict(r.p,source_ref={'store':'cos-history','id':cid+':'+tid})
+    with pytest.raises(RuntimeError):r.dest.host.inline_answer(c)
+    r.history.stop(cid,tid,lambda:None)
+    assert r.dest.host.inline_answer(c) is None

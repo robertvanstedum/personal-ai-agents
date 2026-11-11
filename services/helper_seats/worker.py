@@ -23,6 +23,12 @@ from services.partnership_tasks.client import TaskServiceUnavailable, command
 _log = logging.getLogger("helper")
 MAX_RESULT = 7800
 IDLE_S = 3
+MAX_REQUEST_BYTES = 200_000
+MAX_OUTPUT_TOKENS = 400
+
+
+class RequestTooLarge(ValueError):
+    pass
 
 
 class Worker:
@@ -80,6 +86,8 @@ class Worker:
         try:
             ctx = self.ctx_for(task, kind, round_no)
             outcome = T.TYPES[ref["type_id"]](ctx, self.inputs_of(task))
+        except RequestTooLarge:
+            outcome = {"stopped": "request_too_large", "note": "The model request exceeded the input limit; no call or charge was made."}
         except spend.AlreadyCalled:
             outcome = {"stopped": "already_called", "note": "This call may already have run before a restart, so it was not repeated."}
         except spend.CapReached as cap:
@@ -121,11 +129,33 @@ def reserve_model_call(ledger, *, task_id, key, task_cap, purpose, environ):
     return marker, bound
 
 
+
+def call_model(ledger, *, prompt, purpose, task_id, key, task_cap, environ, post=None):
+    """Cap the exact serialized request before any reservation or provider call."""
+    body = {"model": environ["HELPER_MODEL"], "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": MAX_OUTPUT_TOKENS}
+    raw = json.dumps(body, ensure_ascii=True, allow_nan=False).encode('utf-8')
+    if len(raw) > MAX_REQUEST_BYTES:
+        raise RequestTooLarge('helper_request_too_large')
+    marker, bound = reserve_model_call(ledger, task_id=task_id, key=key, task_cap=task_cap,
+                                       purpose=purpose, environ=environ)
+    if post is None:
+        import requests
+        post = requests.post
+    credential = Path(environ["HELPER_GATEWAY_KEY_FILE"]).read_text().strip()
+    response = post(environ["HELPER_GATEWAY_URL"].rstrip("/")+"/chat/completions",
+                    timeout=(3,25), allow_redirects=False, data=raw,
+                    headers={"Authorization": f"Bearer {credential}", "Content-Type": "application/json"})
+    response.raise_for_status()
+    body = response.json()
+    ledger.settle(marker, bound)
+    return body["choices"][0]["message"]["content"]
+
+
 def main(argv=None):
     from domains.guild.queue_store import QueueStore
     from services.partnership_tasks.charters import Charters
     from services.partnership_tasks.client import TaskClient, read_token
-    import requests
     p = argparse.ArgumentParser()
     p.add_argument("--seat", required=True)
     args = p.parse_args(argv)
@@ -151,16 +181,9 @@ def main(argv=None):
 
         def ask_model(prompt, purpose):
             counter["n"] += 1
-            marker, bound = reserve_model_call(ledger, task_id=task['task_id'],
+            return call_model(ledger, prompt=prompt, purpose=purpose, task_id=task['task_id'],
                 key=f"{task['task_id']}-{round_no}-{counter['n']}", task_cap=kind["per_task_budget_usd"],
-                purpose=purpose, environ=os.environ)
-            key = Path(os.environ["HELPER_GATEWAY_KEY_FILE"]).read_text().strip()
-            r = requests.post(os.environ["HELPER_GATEWAY_URL"].rstrip("/") + "/chat/completions", timeout=(3, 25), headers={"Authorization": f"Bearer {key}"},
-                              json={"model": os.environ["HELPER_MODEL"], "messages": [{"role": "user", "content": prompt}], "max_tokens": 400})
-            r.raise_for_status()
-            body = r.json()
-            ledger.settle(marker, bound)                      # the bound, labelled an estimate: receipts join later (Q04)
-            return body["choices"][0]["message"]["content"]
+                environ=os.environ)
         return T.Ctx(repo_root=os.environ.get("HELPER_REPO_ROOT"), read_items=queue.read_items if queue else None, ask_model=ask_model)
 
     worker = Worker(client, args.seat, charter, environment=os.environ["PARTNERSHIP_ENVIRONMENT"], ledger=ledger, ctx_for=ctx_for)

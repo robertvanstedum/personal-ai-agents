@@ -1527,6 +1527,7 @@
         "answer"
       ],
       "properties": {
+        "existing_review_id": {"type": "string", "minLength": 1, "maxLength": 100},
         "wake_operation_id": {
           "type": "string",
           "pattern": "^OB-wake-[0-9a-f]{40}$"

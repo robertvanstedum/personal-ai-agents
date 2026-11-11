@@ -83,7 +83,7 @@ class GatewayReview:
         body = {'model':self.route.model, 'reasoning_effort':self.route.effort,
                 'stream':False, 'max_tokens':MAX_OUTPUT_TOKENS,
                 'messages':[{'role':'system','content':system},{'role':'user','content':data}]}
-        if len(json.dumps(body, ensure_ascii=False, allow_nan=False).encode()) > MAX_INPUT_BYTES:
+        if len(json.dumps(body, ensure_ascii=True, allow_nan=False).encode()) > MAX_INPUT_BYTES:
             raise ReviewUnavailable('review_request_too_large')
         response, error = bounded_post(self.post or _streamed(time.monotonic()+DEADLINE_S),
                                       self.url, body, self.key, total_s=DEADLINE_S,

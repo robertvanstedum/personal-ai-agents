@@ -24,8 +24,13 @@ class Runtime:
         self.principal, self.lead, self.environment = principal, lead, environment
         self.host, self.reviewer, self.charters = host, reviewer, charters
         self.ledger_for, self.review_bound, self.review_reserve = ledger_for, review_bound, review_reserve
+        from core.lead_wake.inline import Inline
+        self.inline = Inline(inbox)
         with inbox._db() as db:
             db.execute('CREATE TABLE IF NOT EXISTS return_commands(operation_id TEXT PRIMARY KEY, command TEXT NOT NULL)')
+            # Older builds suppressed these without proving delivery. Reconcile
+            # them through existing acceptance, never a fresh inference.
+            db.execute("UPDATE entries SET state='queued' WHERE state='reviewed_elsewhere'")
 
     def publication(self, op):
         row = self.reader.get('outbox', 'OB-publish-'+op[8:])
@@ -35,8 +40,18 @@ class Runtime:
         if (row['operation'] != 'publish_return' or row['destination'] != 'lead_publication'
                 or row['bundle_digest'] != digest(p) or p['wake_operation_id'] != op
                 or p['principal'] != self.principal or p['lead'] != self.lead
-                or p['environment'] != self.environment or p['review'] != self.inbox.review(op)):
+                or p['environment'] != self.environment):
             raise Conflict('publication differs')
+        expected = self.inbox.review(op)
+        if expected is None:
+            with self.inbox._db() as db:
+                saved = db.execute('SELECT command FROM return_commands WHERE operation_id=?',(op,)).fetchone()
+            payload = json.loads(saved[0])['payload'] if saved else {}
+            expected = {k:payload[k] for k in ('verdict','reasons','answer')} if payload.get('existing_review_id') else None
+            if payload.get('existing_review_id') != p['review_id']:
+                raise Conflict('accepted review differs')
+        if expected != p['review']:
+            raise Conflict('publication review differs')
         return row
 
     def context(self, packet):
@@ -76,7 +91,7 @@ class Runtime:
         # Conservative bound remains charged until independently verified usage;
         # provider prose and token guesses never release spend.
 
-    def commit(self, op, packet, result):
+    def commit(self, op, packet, result, existing_review_id=None):
         with self.inbox._db() as db:
             row = db.execute('SELECT command FROM return_commands WHERE operation_id=?',(op,)).fetchone()
         if row:
@@ -84,7 +99,8 @@ class Runtime:
         else:
             task = self.reader.get('task',packet['task_id'])
             cmd = command('task.commit_helper_return','task',packet['task_id'],
-                dict(wake_operation_id=op,result_digest=packet['result_digest'],**result),
+                dict(wake_operation_id=op,result_digest=packet['result_digest'],**result,
+                     **({'existing_review_id':existing_review_id} if existing_review_id else {})),
                 command_id='cmd-return-'+op[8:],environment=self.environment,
                 scope=packet['data_scope'],expected_revision=task['revision'])
             raw = json.dumps(cmd,sort_keys=True)
@@ -96,7 +112,7 @@ class Runtime:
         result = self.committer.submit(cmd)  # client reconciles lost ACK by exact command
         if result['outcome'] != 'accepted':
             with self.inbox._db() as db:
-                db.execute("UPDATE entries SET state='commit_blocked' WHERE operation_id=? AND state='reviewed'",(op,))
+                db.execute("UPDATE entries SET state='commit_blocked' WHERE operation_id=? AND state IN ('reviewed','queued')",(op,))
                 db.execute("UPDATE reviews SET failure='commit_refused' WHERE operation_id=?",(op,))
             return False
         return self.publication(op) is not None
@@ -107,6 +123,9 @@ class Runtime:
             try:
                 # A committed result survives Stop. Never ask current wake
                 # authority before reconciling this immutable intent.
+                if self.inline.reconcile(op, self.host):
+                    report.append((op,'presented_inline'))
+                    continue
                 if self.publication(op):
                     report.append((op,'committed'))
                     continue
@@ -116,15 +135,47 @@ class Runtime:
                     if not admitted:
                         report.append((op,'busy'))
                         continue
+                    if self.publication(op):
+                        report.append((op,'committed'))
+                        continue
                     result = self.inbox.review(op)
                     if result is None:
                         task,charter,kind,context = self.context(packet)
                         if task['state']=='completed' or any(r['reviewer']==self.lead and r['reviewed_set_digest']==packet['result_digest'] for r in task['reviews']):
-                            # Inline review is not a canonical presentation receipt.
-                            # Avoid extra spend, but keep delivery unproven explicitly.
-                            with self.inbox._db() as db:
-                                db.execute("UPDATE entries SET state='reviewed_elsewhere' WHERE operation_id=? AND state='queued'",(op,))
-                            report.append((op,'reviewed_elsewhere'))
+                            from services.helper_seats.presentation import accepted_result
+                            from services.partnership_tasks.helper_return import displayed_text
+                            try:
+                                approved, rid = accepted_result(task, self.lead, self.reader.get)
+                            except ValueError:
+                                # Changes requested is not approved content to publish.
+                                with self.inbox._db() as db:
+                                    db.execute("UPDATE entries SET state='reviewed_elsewhere' WHERE operation_id=? AND state='queued'",(op,))
+                                report.append((op,'reviewed_elsewhere'))
+                                continue
+                            text = displayed_text(self.lead, task['holder'], approved['answer'])
+                            proved = False
+                            for candidate in self.inline.candidates(packet, self.principal, rid, text):
+                                # A review in another conversation cannot settle this destination.
+                                if candidate['source_ref']['id'].split(':')[0] != packet['source_ref']['id'].split(':')[0]:
+                                    continue
+                                saved = self.host.inline_answer(candidate)
+                                if saved and text in saved[1]:
+                                    admitted.check()
+                                    if self.inbox.resolve(op) != packet:
+                                        raise StaleWake('wake changed')
+                                    receipt = dict(store=candidate['source_ref']['store'], id=saved[0], result_digest=packet['result_digest'])
+                                    self.inline.proved(op, candidate, receipt, digest(saved[1]))
+                                    proved = True
+                                    break
+                            if proved:
+                                report.append((op,'presented_inline'))
+                            else:
+                                # No canonical proof: deliver the already accepted exact evidence,
+                                # never ask another model or claim the earlier answer contained it.
+                                admitted.check()
+                                if self.inbox.resolve(op) != packet:
+                                    raise StaleWake('wake changed')
+                                report.append((op,'committed' if self.commit(op,packet,approved,rid) else 'commit_refused'))
                             continue
                         claim=uuid.uuid4().hex
                         if not self.inbox.claim(op,claim):

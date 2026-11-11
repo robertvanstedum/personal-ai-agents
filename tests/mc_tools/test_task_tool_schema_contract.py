@@ -9,10 +9,10 @@ from core.mc_tools import catalogue, tasks_adapter
 
 SAMPLE = {"type_id": "repo-lookup", "set_digest": "sha256:" + "a" * 64, "verdict": "approve", "reasons": "Checked it.", "item_id": 8, "task_id": "TK-sample-0001", "child_id": "TK-sample-0002", "reviewed_child": "TK-sample-0003",
           "interpretation_id": "IN-sample-0001", "kind": "build", "holder": "codex", "outcome": "Some words.",
-          "done_when": "Some words."}
+          "done_when": "Some words.", "action":"find", "title":"Draft", "content":"Draft text", "unresolved":[], "expected_revision":0}
 SOURCE = Path(tasks_adapter.__file__).read_text()
 METHOD = {"minimoi_task_list": "list", "minimoi_task_delegate": "delegate", "minimoi_task_submit": "submit",
-          "minimoi_task_accept": "accept", "minimoi_task_adopt": "adopt", "minimoi_build_item": "build_item", "minimoi_helper_ask": "helper_ask", "minimoi_helper_result": "helper_result", "minimoi_helper_review": "helper_review"}
+          "minimoi_task_accept": "accept", "minimoi_task_adopt": "adopt", "minimoi_build_item": "build_item", "minimoi_helper_ask": "helper_ask", "minimoi_helper_result": "helper_result", "minimoi_helper_review": "helper_review", "minimoi_work_read":"work_read", "minimoi_work_save":"work_save"}
 
 
 def schema(name):
@@ -38,3 +38,18 @@ def test_the_adapter_reads_only_fields_the_schema_offers(name):
     read = set(re.findall(r"""args(?:\.get\(|\[)["']([a-z_]+)["']""", body))
     read |= {k for line in re.findall(r"for key in \(([^)]*)\)", body) for k in re.findall(r'"([a-z_]+)"', line)}
     assert read <= set(schema(name)["properties"]), read
+
+
+def test_plugin_config_accepts_actual_dev_w2_tools_and_full_declared_catalog():
+    import json
+    from jsonschema import Draft202012Validator
+    manifest=json.loads(Path('services/mc_operations/plugins/minimoi-tools/openclaw.plugin.json').read_text())
+    actual=json.loads(Path('tests/mc_tools/fixtures/dev_w2_tools_20261111.json').read_text())
+    assert len(actual)==50 and {'minimoi_work_read','minimoi_work_save'}<=set(actual)
+    validator=Draft202012Validator(manifest['configSchema'])
+    assert list(validator.iter_errors({'tools':actual}))==[]
+    declared=manifest['contracts']['tools']
+    assert set(actual)<=set(declared)
+    assert manifest['configSchema']['properties']['tools']['maxItems']==len(declared)
+    assert list(validator.iter_errors({'tools':declared}))==[]
+    assert list(validator.iter_errors({'tools':declared+[declared[0]]}))

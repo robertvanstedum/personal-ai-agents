@@ -70,3 +70,10 @@ def test_review_lengths_match_commit_contract(field,limit):
     assert g(PACKET,{})[field]=='x'*limit
     response['choices'][0]['message']['content']=json.dumps(dict(result,**{field:'x'*(limit+1)}))
     with pytest.raises(ReviewUnavailable):g(PACKET,{})
+
+
+def test_json_unicode_expansion_in_full_request_is_capped():
+    g,calls=gateway()
+    # UTF-8 context is <24KB, but the actual requests JSON wire encoding is >24KB.
+    with pytest.raises(ReviewUnavailable):g(PACKET,{'text':'😀'*2100})
+    assert calls==[]

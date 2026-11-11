@@ -258,3 +258,24 @@ def test_existing_authenticated_http_command_transport_has_same_gate(rig, tmp_pa
     assert response.status_code == 200, response.get_data(as_text=True)
     assert response.get_json()['outcome'] == 'accepted'
     assert publication(svc, wake)['state'] == 'pending'
+
+
+@pytest.mark.parametrize('change',[None,'answer','review_id','reasons','correction'])
+def test_existing_inline_review_return_is_exact_and_does_not_review_again(rig,tmp_path,change):
+    from tests.partnership.test_helper_ask import review
+    from tests.partnership.test_build_item import Client
+    from services.helper_seats.presentation import accepted_result
+    svc,wake,command=setup(rig,tmp_path)
+    assert review(rig,{'data':{'task_id':wake['task_id'],'set_digest':wake['packet']['result_digest']}})['status']=='done'
+    task=svc.get('task',wake['task_id'],'tok-mc')
+    result,rid=accepted_result(task,'mc',Client(svc,'tok-mc').get)
+    payload=dict(result,existing_review_id=rid,wake_operation_id=wake['operation_id'],result_digest=wake['packet']['result_digest'])
+    if change=='answer':payload['answer']='Fabricated replacement.'
+    if change=='review_id':payload['existing_review_id']='RV-unrelated'
+    if change=='reasons':payload['reasons']='Pretend it was freshly reviewed.'
+    if change=='correction':Flow(svc).source('SE-correction-inline','Changed intent.',correction_of=wake['packet']['source_event_id'])
+    c=cmd('task.commit_helper_return','task',task['task_id'],payload,expected=task['revision'])
+    out=svc.submit(c,'tok-return')
+    assert (out['outcome']=='accepted')==(change is None),out
+    assert svc.get('task',task['task_id'],'tok-mc')==task
+    assert (publication(svc,wake) is not None)==(change is None)

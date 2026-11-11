@@ -12,7 +12,7 @@ from services.partnership_tasks.service import path_of, wake_problem, SCHEMAS
 
 def displayed_text(lead,helper,answer):
     names={'mc':'MC','cos':'CoS','apprentice':'Apprentice','ea':'Executive Assistant'}
-    return names.get(lead,lead)+' reviewed '+names.get(helper,helper)+"'s result (committed for delivery):\n\n"+answer
+    return names.get(lead,lead)+' reviewed '+names.get(helper,helper)+"'s result:\n\n"+answer
 
 
 def commit(p):
@@ -66,7 +66,17 @@ def commit(p):
     review = {k: payload[k] for k in ('verdict', 'reasons', 'answer')}
     if any(not v.strip() for v in review.values()):
         raise Refused('payload_invalid', 'empty_review')
-    review_id = 'RV-return-' + payload['wake_operation_id'][8:]
+    existing = payload.get('existing_review_id')
+    if existing:
+        from services.helper_seats.presentation import accepted_result
+        try:
+            verified, review_id = accepted_result(task, b.seat, p.load, existing)
+        except (ValueError, KeyError, TypeError):
+            raise Refused('fenced', 'accepted_review_unavailable')
+        if verified != review:
+            raise Refused('payload_invalid', 'accepted_result_display_differs')
+    else:
+        review_id = 'RV-return-' + payload['wake_operation_id'][8:]
     packet = {'kind': 'helper_return_committed', 'wake_operation_id': wake['operation_id'],
               'task_id': task['task_id'], 'lead': b.seat, 'principal': b.principal,
               'environment': svc.environment, 'data_scope': task['data_scope'],
@@ -76,10 +86,13 @@ def commit(p):
               'result_digest': current['digest'], 'fence_generation': task['fence_generation'],
               'review': review, 'review_digest': digest(review), 'review_id': review_id,
               'accepted': review['verdict'] == 'approve', 'drafted_by': task['holder'],
-              'text': displayed_text(b.seat,task['holder'],review['answer']), 'committed_task_revision': task['revision'] + (2 if review['verdict'] == 'approve' else 1)}
+              'text': displayed_text(b.seat,task['holder'],review['answer']), 'committed_task_revision': task['revision'] if existing else task['revision'] + (2 if review['verdict'] == 'approve' else 1)}
     review_ref = {'store': 'task_service', 'id': opid, 'edition': '1', 'digest': digest(packet)}
     original = p.p
+    updated = task
     try:
+        if existing:
+            return _finish(p, task, packet, wake, opid, [])
         p.p = {'review_id': review_id, 'reviewed_set_digest': current['digest'],
                'input_digest': current['digest'], 'verdict': review['verdict'],
                'review_ref': review_ref, 'findings_ref': review_ref}
@@ -94,10 +107,13 @@ def commit(p):
             updated = next(w.record for w in accepted.writes if w.path == path_of('task', task['task_id']))
     finally:
         p.p = original
+    return _finish(p, updated, packet, wake, opid, [(path_of('task', task['task_id']), p.checked('task', updated))])
+
+
+def _finish(p, task, packet, wake, opid, writes):
     ob = {'schema': SCHEMAS['outbox'], 'operation_id': opid, 'task_id': task['task_id'],
           'destination': 'lead_publication', 'operation': 'publish_return', 'bundle_digest': digest(packet),
           'packet': packet, 'bundle_ref': wake['bundle_ref'], 'fence_generation': task['fence_generation'],
           'interpretation_ref': task['interpretation_ref'], 'state': 'pending', 'attempts': [],
           'destination_receipt': None, 'reason': 'helper_return_committed'}
-    return p.finish([(path_of('task', task['task_id']), p.checked('task', updated)),
-                     (path_of('outbox', opid), p.checked('outbox', p.stamp(ob, None)))], updated['revision'])
+    return p.finish(writes + [(path_of('outbox', opid), p.checked('outbox', p.stamp(ob, None)))], task['revision'])

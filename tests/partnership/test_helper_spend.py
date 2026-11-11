@@ -145,3 +145,35 @@ def test_worker_shared_partition_is_off_by_default(tmp_path):
     marker, bound = reserve_model_call(ledger, task_id='TK-old', key='old', task_cap=0.05, purpose='old', environ={})
     assert bound == 0.05 and 'part' not in json.loads(marker.read_text())
     assert not (tmp_path/'allocations').exists()
+
+
+@pytest.mark.parametrize('prompt',['x'*200_000,'😀'*20_000,'"'*100_000])
+def test_total_serialized_model_request_rejected_before_reserve_or_dispatch(tmp_path,prompt):
+    from services.helper_seats.worker import call_model,RequestTooLarge
+    ledger=Ledger(tmp_path/'spend',daily_cap=1)
+    calls=[]
+    with pytest.raises(RequestTooLarge):
+        call_model(ledger,prompt=prompt,purpose='large request',task_id='TK-large',key='large',task_cap=.05,
+                   environ={'HELPER_MODEL':'minimoi-test'},post=lambda *a,**kw:calls.append(kw))
+    assert calls==[] and ledger.spent_today()==0
+    assert not list((tmp_path/'spend').rglob('*.json'))
+
+
+def test_request_bytes_sent_are_exactly_the_bounded_bytes_and_output_is_capped(tmp_path):
+    from types import SimpleNamespace
+    from services.helper_seats.worker import call_model,MAX_REQUEST_BYTES
+    key=tmp_path/'key';key.write_text('synthetic')
+    env={'HELPER_MODEL':'minimoi-test','HELPER_GATEWAY_KEY_FILE':str(key),'HELPER_GATEWAY_URL':'http://test/v1',
+         'HELPER_LEAD_REVIEW_RESERVE_USD':'.005','HELPER_MODEL_CALL_BOUND_USD':'.025'}
+    ledger=Ledger(tmp_path/'spend',daily_cap=1)
+    calls=[]
+    def post(url,**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(raise_for_status=lambda:None,json=lambda:{'choices':[{'message':{'content':'answer'}}]})
+    assert call_model(ledger,prompt='A German question: Grüße 😀',purpose='bounded',task_id='TK-small',key='small',
+                      task_cap=.05,environ=env,post=post)=='answer'
+    raw=calls[0]['data']
+    assert isinstance(raw,bytes) and len(raw)<=MAX_REQUEST_BYTES and b'\\ud83d' in raw
+    assert json.loads(raw)['max_tokens']==400
+    assert calls[0]['allow_redirects'] is False
+    assert ledger.spent_today()==pytest.approx(.025)
