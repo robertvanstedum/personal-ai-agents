@@ -19,18 +19,18 @@ class Authority:
         self.service, self.token = service, token
         self.principal, self.lead, self.environment = principal, lead, environment
 
-    def __call__(self, operation_id):
+    def _current(self, operation_id, commit=None):
         svc = self.service
-        binding = svc.bindings.resolve(self.token, svc._clock())
-        if (binding is None or binding.seat != self.lead or binding.origin != 'agent'
-                or binding.principal != self.principal
-                or binding.environment != self.environment or svc.environment != self.environment):
-            raise PermissionError('wake authority binding unavailable')
         if (not isinstance(operation_id, str) or not operation_id.startswith('OB-wake-')
                 or len(operation_id) != 48 or not all(c in '0123456789abcdef' for c in operation_id[8:])):
             raise StaleWake('invalid operation')
 
         def read():
+            binding = svc.bindings.resolve(self.token, svc._clock())
+            if (binding is None or binding.seat != self.lead or binding.origin != 'agent'
+                    or binding.principal != self.principal
+                    or binding.environment != self.environment or svc.environment != self.environment):
+                raise PermissionError('wake authority binding unavailable')
             def record(kind, key):
                 value = svc.journal.read(path_of(kind, key))
                 if (value is None or value['environment'] != self.environment
@@ -43,6 +43,8 @@ class Authority:
                     or op['state'] not in ('attempted', 'unknown', 'acknowledged')):
                 raise StaleWake('wake is not dispatched')
             task = record('task', op['task_id'])
+            if commit is not None and task['data_scope'] not in binding.scopes:
+                raise PermissionError('wake publication scope unavailable')
             parent = record('task', task['parent_ref']) if task['parent_ref'] else task
             found = svc.charters.chartered(task.get('charter_ref'))
             if (found is None or parent['lead'] != self.lead
@@ -72,8 +74,41 @@ class Authority:
                     or operation_id != 'OB-wake-' + digest(packet)[7:47]
                     or op['fence_generation'] != task['fence_generation']):
                 raise StaleWake('wake superseded')
-            return deepcopy(packet)
+            return commit(deepcopy(packet)) if commit is not None else deepcopy(packet)
         try:
             return svc.journal.view(read)
+        except PermissionError:
+            raise
         except (JournalDamaged, OSError) as exc:
             raise StoreUnavailable(type(exc).__name__) from exc
+
+    def __call__(self, operation_id):
+        return self._current(operation_id)
+
+    def commit_current(self, operation_id, expected_packet, inbox, canonical_write):
+        """Server-local publication serialized with Stop and supersession.
+
+        Caller already holds the original conversation lane. canonical_write is
+        a bounded LOCAL idempotent write + readback using this pinned intent; no
+        inference, task-service recursion, or remote HTTP is allowed under the
+        global journal lock. A future network adapter must preserve this boundary,
+        not replace it with resolve-then-write. A saved note with lost ACK is
+        reconciled by the host's presentation lookup before another attempt.
+        """
+        intent = inbox.publication(operation_id)
+        if intent is None:
+            raise ValueError('durable publication intent required')
+        def publish(current):
+            if (current != expected_packet or intent['operation_id'] != operation_id
+                    or intent['packet_digest'] != digest(current)
+                    or intent['result_digest'] != current['result_digest']
+                    or intent['store'] != {'mc': 'mc-floor', 'cos': 'cos-history'}[self.lead]):
+                raise StaleWake('publication changed')
+            receipt = canonical_write(deepcopy(intent))
+            wanted = {k: intent[k] for k in ('store', 'id', 'result_digest')}
+            if receipt != wanted:
+                raise ValueError('canonical publication unconfirmed')
+            return receipt
+        receipt = self._current(operation_id, commit=publish)
+        inbox.mark_presented(operation_id, receipt)
+        return receipt

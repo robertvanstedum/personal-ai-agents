@@ -100,6 +100,27 @@ class Worker:
                              f"cmd-h-sub-{tid}-{round_no}", expected=task["revision"]))
 
 
+def reserve_model_call(ledger, *, task_id, key, task_cap, purpose, environ):
+    """Reserve before dispatch; opt-in review funds cannot lower an assumed cost.
+
+    A shared-budget rollout must supply a separately justified call bound. Merely
+    subtracting a review reserve from the old bound is not pricing evidence.
+    """
+    bound, part = task_cap, None
+    if "HELPER_LEAD_REVIEW_RESERVE_USD" in environ:
+        if "HELPER_MODEL_CALL_BOUND_USD" not in environ:
+            raise ValueError("shared review allowance requires a proved helper call bound")
+        bound = spend._amount(float(environ["HELPER_MODEL_CALL_BOUND_USD"]))
+        if bound <= 0:
+            raise spend.CapReached("helper")
+        ledger.allocate_task(task_id, task_cap=task_cap,
+                             review_reserve=float(environ["HELPER_LEAD_REVIEW_RESERVE_USD"]))
+        part = "helper"
+    marker = ledger.reserve(key, bound_usd=bound, task_spent=0.0, task_cap=task_cap,
+                            purpose=purpose, task_id=task_id, part=part)
+    return marker, bound
+
+
 def main(argv=None):
     from domains.guild.queue_store import QueueStore
     from services.partnership_tasks.charters import Charters
@@ -130,8 +151,9 @@ def main(argv=None):
 
         def ask_model(prompt, purpose):
             counter["n"] += 1
-            bound = kind["per_task_budget_usd"]
-            marker = ledger.reserve(f"{task['task_id']}-{round_no}-{counter['n']}", bound_usd=bound, task_spent=0.0 if counter["n"] == 1 else bound, task_cap=bound, purpose=purpose, task_id=task["task_id"])
+            marker, bound = reserve_model_call(ledger, task_id=task['task_id'],
+                key=f"{task['task_id']}-{round_no}-{counter['n']}", task_cap=kind["per_task_budget_usd"],
+                purpose=purpose, environ=os.environ)
             key = Path(os.environ["HELPER_GATEWAY_KEY_FILE"]).read_text().strip()
             r = requests.post(os.environ["HELPER_GATEWAY_URL"].rstrip("/") + "/chat/completions", timeout=(3, 25), headers={"Authorization": f"Bearer {key}"},
                               json={"model": os.environ["HELPER_MODEL"], "messages": [{"role": "user", "content": prompt}], "max_tokens": 400})

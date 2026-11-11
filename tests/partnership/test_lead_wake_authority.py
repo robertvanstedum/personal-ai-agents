@@ -153,3 +153,106 @@ def test_change_between_dispatch_record_and_delivery_eventually_fences(rig, tmp_
     assert run() == 'fenced'
     assert run() == 'fenced'
     assert len(calls) == 1
+
+
+def prepared_publication(rig, tmp_path):
+    answer, op, inbox = delivered(rig, tmp_path)
+    claim = 'publication-claim-original'
+    assert inbox.claim(op['operation_id'], claim)
+    result = {'verdict': 'approve', 'reasons': 'Checked the exact helper output.', 'answer': 'The helper found the source; MC checked it.'}
+    inbox.save_review(op['operation_id'], claim, result)
+    intent = inbox.prepare_publication(op['operation_id'], conversation_id='original-chat', created_at='2026-11-11T10:00:00+00:00')
+    return answer, op, inbox, intent
+
+
+def test_publication_intent_survives_restart_and_cannot_rerender_or_retarget(rig, tmp_path):
+    from core.lead_wake.inbox import Conflict
+    _, op, inbox, intent = prepared_publication(rig, tmp_path)
+    restarted = Inbox(inbox.path, authority(rig))
+    assert restarted.publication(op['operation_id']) == intent
+    assert restarted.prepare_publication(op['operation_id'], conversation_id='original-chat', created_at='2026-11-12T10:00:00+00:00') == intent
+    with pytest.raises(Conflict):
+        restarted.prepare_publication(op['operation_id'], conversation_id='another-chat', created_at=intent['created_at'])
+
+
+def test_stop_wins_before_publication_and_callback_never_runs(rig, tmp_path):
+    from tests.partnership.synth import Flow, ref
+    answer, op, inbox, _ = prepared_publication(rig, tmp_path)
+    assert Flow(rig.svc).transition(answer['data']['task_id'], 'canceled', token='tok-principal', reason='stop', evidence=[ref('records', 'stop')])['outcome'] == 'accepted'
+    calls = []
+    with pytest.raises(StaleWake):
+        authority(rig).commit_current(op['operation_id'], op['packet'], inbox, lambda intent: calls.append(intent))
+    assert calls == [] and inbox.status(op['operation_id']) != 'presented'
+
+
+def test_canonical_write_wins_task_lock_before_stop(rig, tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from tests.partnership.synth import Flow, ref
+    answer, op, inbox, intent = prepared_publication(rig, tmp_path)
+    entered, stopping, release = Event(), Event(), Event()
+    saved = {}
+    def canonical(value):
+        assert value == intent
+        entered.set()
+        assert release.wait(3)
+        saved[value['id']] = value
+        return {k: value[k] for k in ('store', 'id', 'result_digest')}
+    def stop():
+        stopping.set()
+        return Flow(rig.svc).transition(answer['data']['task_id'], 'canceled', token='tok-principal', reason='stop', evidence=[ref('records', 'stop')])
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        publication = pool.submit(authority(rig).commit_current, op['operation_id'], op['packet'], inbox, canonical)
+        assert entered.wait(3)
+        cancellation = pool.submit(stop)
+        assert stopping.wait(3)
+        assert not cancellation.done()
+        release.set()
+        assert publication.result(timeout=3)['id'] == intent['id']
+        assert cancellation.result(timeout=3)['outcome'] == 'accepted'
+    assert list(saved) == [intent['id']] and inbox.status(op['operation_id']) == 'presented'
+
+
+def test_lost_canonical_ack_keeps_exact_intent_for_readback_not_new_inference(rig, tmp_path):
+    from services.partnership_tasks.service import StoreUnavailable
+    _, op, inbox, intent = prepared_publication(rig, tmp_path)
+    saved = {}
+    def lost_ack(value):
+        saved[value['id']] = value
+        raise OSError('acknowledgement lost after durable canonical save')
+    with pytest.raises(StoreUnavailable):
+        authority(rig).commit_current(op['operation_id'], op['packet'], inbox, lost_ack)
+    assert inbox.publication(op['operation_id']) == intent
+    assert inbox.review(op['operation_id']) is not None
+    assert inbox.status(op['operation_id']) == 'reviewed'
+    receipt = {k: saved[intent['id']][k] for k in ('store', 'id', 'result_digest')}
+    inbox.mark_presented(op['operation_id'], receipt)  # host readback, no regenerated text or model call
+    assert inbox.status(op['operation_id']) == 'presented'
+
+
+def test_superseded_result_and_wrong_receipt_never_mark_presented(rig, tmp_path):
+    answer, op, inbox, _ = prepared_publication(rig, tmp_path)
+    with pytest.raises(ValueError, match='unconfirmed'):
+        authority(rig).commit_current(op['operation_id'], op['packet'], inbox, lambda intent: {'status': 'accepted'})
+    assert inbox.status(op['operation_id']) == 'reviewed'
+    review(rig, answer, verdict='changes_requested')
+    rig.worker.pass_once()
+    calls = []
+    with pytest.raises(StaleWake):
+        authority(rig).commit_current(op['operation_id'], op['packet'], inbox, lambda intent: calls.append(intent))
+    assert not calls
+
+
+def test_read_only_lead_can_resolve_but_cannot_publish(rig, tmp_path, monkeypatch):
+    from dataclasses import replace
+    _, op, inbox, _ = prepared_publication(rig, tmp_path)
+    original = rig.svc.bindings.resolve
+    def read_only(token, now):
+        binding = original(token, now)
+        return replace(binding, scopes=frozenset()) if token == 'tok-mc' else binding
+    monkeypatch.setattr(rig.svc.bindings, 'resolve', read_only)
+    assert authority(rig)(op['operation_id']) == op['packet']
+    calls = []
+    with pytest.raises(PermissionError, match='publication scope'):
+        authority(rig).commit_current(op['operation_id'], op['packet'], inbox, lambda intent: calls.append(intent))
+    assert not calls and inbox.status(op['operation_id']) == 'reviewed'
