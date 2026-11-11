@@ -744,7 +744,13 @@ async function streamMasterCraftsman(t, via) {
     li.dataset.stopping = 'true';
     setSlot(li, 'state', 'Stopping…');
     if (!li.turnId) { li.stopPending = true; return; }
-    await apiStop(`/mc/turns/${encodeURIComponent(li.turnId)}/stop`);
+    const r = await apiStop(`/mc/turns/${encodeURIComponent(li.turnId)}/stop`);
+    // 404 not_running: the turn had already ended; its own end line says how. Anything else unconfirmed may be retried.
+    if (!r.ok && r.status !== 404 && !ended) {
+      setSlot(li, 'state', 'Stop not confirmed · try again');
+      li.dataset.stopping = '';
+      stop.disabled = false;
+    }
   });
   const handle = (ev) => {
     if (ev.t === 'ack' && typeof ev.turn_id === 'string') {
@@ -760,11 +766,11 @@ async function streamMasterCraftsman(t, via) {
       follow();
       announce(mcSay('Master Craftsman is answering'));
     } else if (ev.t === 'progress' && typeof ev.text === 'string') {
-      setSlot(li, 'state', ev.text);
+      if (li.dataset.stopping !== 'true') setSlot(li, 'state', ev.text);      // never hide a Stop already asked for
       announce(ev.text);
     } else if (ev.t === 'delta' && typeof ev.text === 'string') {
       li.hasText = true;
-      if (!deltas.length) setSlot(li, 'state', 'Writing…');
+      if (!deltas.length && li.dataset.stopping !== 'true') setSlot(li, 'state', 'Writing…');
       deltas.push(ev.text);
       showTail();
       follow();
