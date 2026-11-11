@@ -113,6 +113,9 @@ def block(text,*,loader=None,now=None):
             lines.append(f"Source release version={manifest['version']}; source_commit={manifest['source_commit']}; generated_at={manifest['generated_at']}; manifest_source={manifest['source']}; source_notes_sha256={manifest['source_notes_sha256']}")
             lines.append('Public commit subject (DATA): '+manifest['subject'])
             lines.append(('Actual changed paths (DATA; '+manifest['changed_paths_status']+'): '+', '.join(manifest['changed_paths'])+('; truncated'if manifest['paths_truncated']else''))if manifest['changed_paths_status']!='unavailable_parent'else'Actual changed paths unavailable: first-parent ancestry could not be verified.')
+            if (manifest['changed_paths_status']=='first_parent_diff' and not manifest['paths_truncated']
+                    and 'config/release_notes.json' not in manifest['changed_paths']):
+                lines.append('Authored release notes were not changed in this commit. Their hash proves they are the notes in this commit, not that they describe this commit.')
             for c in manifest['capabilities']:
                 # Agent/gateway prefixed tags still identify the same source SHA.
                 installed=all(doc['current'][service]['image']is not None and doc['current'][service]['image'].rsplit(':',1)[-1]==(('agent-a-'if service=='cos-agent-a'else'model-gateway-'if service=='model-gateway'else'')+manifest['source_commit'][:7])for service in c['services'])
