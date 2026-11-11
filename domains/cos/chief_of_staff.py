@@ -2002,10 +2002,44 @@ def ui_send():
         body["_owner"] = resolve_user_id(request)
     if (body.get("channel") or "html_text") == "html_voice":
         body["_user_id"] = resolve_user_id(request)
+    if _history is not None and body.get("request_id") and (_request_binding() or {}).get("origin") == "owner":
+        _history.queue_remove(body["_owner"], str(body["request_id"]))     # a waiting message is now being sent
     if body.get("background") is True and (body.get("channel") or "html_text") == "html_text":
         return jsonify({"turn": _start_ui_turn(body, _request_binding()), "state": "running"}), 202
     payload, code = _ui_turn(body, _request_binding())
     return jsonify(payload), code
+
+
+@app.route("/ui/queue", methods=["GET", "POST"])
+def ui_queue():
+    """Messages Robert sent while CoS was busy, waiting for his page to send them in order (see History.queue)."""
+    if _history is None:
+        return jsonify({"items": [], "available": False})
+    owner = resolve_user_id(request)
+    if request.method == "GET":
+        cid = request.args.get("conversation_id") or None
+        return jsonify({"items": _history.queue(owner, cid), "available": True, "max": cos_history.QUEUE_MAX})
+    if (_request_binding() or {}).get("origin") != "owner":
+        return jsonify({"error": "owner_required"}), 403
+    body = request.get_json(silent=True) or {}
+    try:
+        outcome, items = _history.queue_add(owner, conversation_id=str(body.get("conversation_id") or ""),
+                                            request_id=str(body.get("request_id") or ""), text=body.get("text") or "",
+                                            attachments=body.get("attachments") if isinstance(body.get("attachments"), list) else [])
+    except cos_history.HistoryRefused as e:
+        return jsonify({"error": e.code}), 409 if e.code in ("queue_full", "already_sent", "request_mismatch") else 400
+    return jsonify({"outcome": outcome, "items": items})
+
+
+@app.route("/ui/queue/cancel", methods=["POST"])
+def ui_queue_cancel():
+    if _history is None:
+        return jsonify({"error": "unavailable"}), 503
+    if (_request_binding() or {}).get("origin") != "owner":
+        return jsonify({"error": "owner_required"}), 403
+    body = request.get_json(silent=True) or {}
+    removed = _history.queue_remove(resolve_user_id(request), str(body.get("request_id") or ""))
+    return jsonify({"removed": removed})
 
 
 @app.route("/ui/turn/<handle>")

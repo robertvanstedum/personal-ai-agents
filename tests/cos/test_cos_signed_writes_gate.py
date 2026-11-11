@@ -37,6 +37,8 @@ def signed(subject, path, body):
     ("/ui/history/conversations/owner/route", {"json": {"route_id": "plan-openai-mid", "revision": 0}}),
     ("/ui/history/selection", {"json": {"device": "desk", "conversation_id": "owner"}}),
     ("/ui/history/conversations/owner/turns/t-aaaaaaaa000040008000000000000001/stop", {"json": {}}),
+    ("/ui/queue", {"json": {"conversation_id": "owner", "request_id": "bbbbbbbb-0000-4000-8000-000000000001", "text": "x"}}),
+    ("/ui/queue/cancel", {"json": {"request_id": "bbbbbbbb-0000-4000-8000-000000000001"}}),
 ])
 def test_forwarded_owner_headers_alone_never_make_a_cos_write(cos, path, kwargs):
     r = cos.app.test_client().post(path, headers=UNSIGNED, **kwargs)
@@ -83,6 +85,8 @@ KNOWN_WRITES = {
     "/internal/model-gateway/receipt": "own token",
     "/internal/cos/v1/mc-reply": "signed service:mc, this exact path, by the portal's key only (test_cos_send_to_mc.py)",
     "/api/realtime-voice/confer/bootstrap": "signed owner",
+    "/ui/queue": "signed owner; a message waits for his page to send it, never sent by the server",
+    "/ui/queue/cancel": "signed owner",
 }
 SELF_GATED = ("/api/realtime-voice/managed/", "/api/realtime-voice/direct/", "/ui/api/in-flight/")
 

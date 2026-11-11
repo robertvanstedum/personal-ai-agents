@@ -50,10 +50,10 @@
     return button;
   }
   async function reload(earlier = false) {
-    if (!cid || busy || input.disabled || (viewingEarlier && !earlier)) return;
+    if (!cid || busy || input.disabled || window.cosTurnRunning || (viewingEarlier && !earlier)) return;
     const selected = cid, epoch = generation;
     const d = await api('history/conversations/' + encodeURIComponent(cid) + '/turns?limit=50' + (earlier && before ? '&before_seq=' + before : ''));
-    if (selected !== cid || epoch !== generation || input.disabled) return;
+    if (selected !== cid || epoch !== generation || input.disabled || window.cosTurnRunning) return;
     const sig = JSON.stringify(d); if (!earlier && sig === signature) return;
     signature = sig; before = d.next_before_seq; document.dispatchEvent(new CustomEvent('cos:turns-changed', {detail: {id: cid}}));
     const frag = document.createDocumentFragment();
@@ -69,6 +69,7 @@
       const p = pending();
       if (p && turn.turn_id === 't-' + p.id.replaceAll('-', '')) { state.textContent = 'Saved'; if (turn.status !== 'pending') { if (input.value === JSON.parse(p.key)[0]) { input.value=''; persistDraft(); } const sentIds=new Set((p.files||[]).map(f=>f.file_id)); attached=attached.filter(f=>!sentIds.has(f.file_id));renderTray();window.MiniMoiNotices?.clear('cos-chat:' + cid + ':' + p.id);clearPending(); } }
     }
+    if (!earlier) window.cosHistory.pendingTurn = d.items.some(t => t.status === 'pending');   // a turn still running (perhaps from before a reload)
     for (const note of d.notes || []) frag.append(row('CoS', note.text || note.body || 'Saved update'));
     const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
     if (earlier) { viewingEarlier = true; const h = log.scrollHeight; log.prepend(frag); log.scrollTop += log.scrollHeight - h; }
@@ -94,7 +95,7 @@
   async function select(id, doc, internal = false) {
     if (!internal && !window.cosHistory.ready) throw new Error("Wait for the conversation to open.");
     if (selecting) throw new Error('Wait for the conversation to open.');
-    if (input.disabled || uploading) throw new Error('Wait for the current message or upload.');
+    if (input.disabled || window.cosTurnRunning || uploading) throw new Error('Wait for the current message or upload.');
     const wasReady = window.cosHistory.ready;
     window.cosHistory.ready = false;
     selecting = true; window.cosVoiceSelecting = true;
@@ -140,6 +141,7 @@
   window.cosHistory = {ready:false, device, conversationId:null, persistDraft, stopButton,
     requestId(text, files) { const previous=pending(), key=JSON.stringify([text, files.map(f=>f.file_id)]); if(previous && previous.key!==key){state.textContent='Checking the previous message before sending another.';return null;} const id=previous?.id || crypto.randomUUID(); storage(pendingKey(),JSON.stringify({id,key,text,files})); state.textContent='Checking…'; return id; },
     confirm(h, operation) { const receipt = operation && ((['note_save','reminder_set'].includes(operation.type) && ['saved','deduplicated'].includes(operation.status) && operation.operation_id) || (operation.type==='session_reset' && operation.status==='reset')); if (h?.saved || receipt) {clearPending();state.textContent='Saved';} else state.textContent='Save not confirmed'; refreshList(); },
+    adopt(id, text, files) { const previous=pending(); if(previous && previous.id!==id){state.textContent='Checking the previous message before sending another.';return null;} storage(pendingKey(),JSON.stringify({id,key:JSON.stringify([text, files.map(f=>f.file_id)]),text,files})); state.textContent='Checking…'; return id; },
     uncertain(h) { if(h?.refused){clearPending();state.textContent='Not saved';}else state.textContent='Checking…'; }
   };
   log.addEventListener('scroll',()=>{if(cid)storage('cos-scroll:' + cid,String(log.scrollTop));});
@@ -151,7 +153,7 @@
   let creatingConversation = false;
   document.querySelectorAll('[data-new-conversation]').forEach(button => { button.onclick=async()=>{
     if(creatingConversation || selecting || !window.cosHistory.ready)return;
-    if(input.disabled||uploading){state.textContent='Wait for the current message or upload.';return;}
+    if(input.disabled||window.cosTurnRunning||uploading){state.textContent='Wait for the current message or upload.';return;}
     creatingConversation=true; window.cosHistory.ready=false;
     const controls=[...document.querySelectorAll('[data-new-conversation]')];controls.forEach(b=>b.disabled=true);
     try{const typedFrom=input.value;const c=await api('history/conversations',{title:'New conversation'});const late=input.value!==typedFrom&&input.value.startsWith(typedFrom)?input.value.slice(typedFrom.length):'';input.value=typedFrom;await select(c.conversation_id,c,true);if(late.trim()&&!input.value){input.value=late.trimStart();persistDraft();}closeDrawer();refreshList();document.getElementById('history-sheet').close();if(!document.getElementById('tab-confer').classList.contains('active'))document.querySelector('.tab-btn[data-tab="confer"]').click();input.focus();}

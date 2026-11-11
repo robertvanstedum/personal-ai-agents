@@ -16,7 +16,7 @@ function harness(ready=true) {
     input,sendInput:input, selecting:false, uploading:0, cid:'old', conversation:{}, generation:0,
     device:'test-device',signature:'',before:null,viewingEarlier:false,attached:[],voiceConversation:'voice',
     document:{getElementById:()=>button,querySelectorAll:()=>[button],
-      dispatchEvent(){},body:{dataset:{}}}, CustomEvent:class {},
+      dispatchEvent(){},addEventListener(){},body:{dataset:{}}}, CustomEvent:class {},
     persistDraft(){},releaseVoice:async()=>{},api:async(path,body)=>{calls.push([path,body]);await selection;return {};},
     storage:()=>null,draftKey:()=>'',pending:()=>null,renderTray(){},state:{},showTitle(){},markCurrent(){},
     reload:async()=>{},log:{scrollTop:0,scrollHeight:0,text:'old transcript',replaceChildren(){this.text='';}}};
