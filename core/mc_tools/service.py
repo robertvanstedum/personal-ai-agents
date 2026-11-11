@@ -31,7 +31,7 @@ from . import binding as binding_mod, catalogue, effects, host, offers
 from .binding import NotBound
 
 # Tools the task adapter answers that aren't named minimoi_task_*.
-TASK_ADAPTER_TOOLS = frozenset({"minimoi_build_item", "minimoi_helper_ask", "minimoi_helper_result", "minimoi_helper_review"})
+TASK_ADAPTER_TOOLS = frozenset({"minimoi_build_item", "minimoi_helper_ask", "minimoi_helper_result", "minimoi_helper_review", "minimoi_work_read", "minimoi_work_save"})
 
 _log = logging.getLogger("mc_tools")
 STATUSES = ("done", "needs_confirmation", "needs_clarification", "refused", "unknown")

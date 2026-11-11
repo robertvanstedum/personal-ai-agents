@@ -8,8 +8,8 @@ approve; ``reconcile`` finishes the job from the same key the next time anyone i
 
 The two clocks are reviewed constants: an offer lapses PROPOSAL_WINDOW after it was made (publication does not reset
 it); an approval accepted strictly before then fixes an execution deadline EXECUTION_GRACE later, and nothing new is
-dispatched at or after it. The exact grant's approval and lifetime both end at that deadline, so the C07 cap of
-fifteen minutes from issue is the most any approval can ever reach.
+dispatched at or after it. The exact grant's approval and lifetime both end at that deadline, the execution grant remains short-lived even though the owner has an hour to review.
+Changing the review window does not extend the five-minute execution grace.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ import json
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-PROPOSAL_WINDOW = timedelta(minutes=10)
+PROPOSAL_WINDOW = timedelta(minutes=60)
 EXECUTION_GRACE = timedelta(minutes=5)
 # An offer still unshown this long after it was made is not mid-publication: its admission ended or crashed.
 UNSHOWN_GRACE = timedelta(minutes=1)

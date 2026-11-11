@@ -436,3 +436,32 @@ def test_with_the_ledger_off_nothing_waits_and_send_is_unchanged(browser, server
     expect(page.locator("[data-mc-queue-bar]")).to_be_hidden()
     expect(page.locator("[data-queued-chip]")).to_have_count(0)
     ctx.close()
+
+
+def test_lost_stream_receipt_recovers_saved_answer_without_failure_or_redispatch(browser, server, queued):
+    import json
+    runtime = queued['runtime']
+    runtime.script = _script('The saved recovery answer.', *FINISH)
+    ctx, page = _context(browser, server, 1280, 900)
+    go(page, f"{server['url']}{BUILD}")
+    dropped = []
+    def lose_stream(route):
+        body = json.loads(route.request.post_data or '{}')
+        if body.get('stream') is True and not dropped:
+            route.fetch()  # The real server finishes and persists before transport is lost.
+            dropped.append(route.request.url)
+            route.abort()
+        else:
+            route.continue_()
+    page.route('**/api/v1/mc/turns/**', lose_stream)
+    _say(page, 'Recover the saved answer after losing the connection')
+    assert _wait(lambda: bool(dropped), page=page)
+    expect(page.locator('[data-note]').filter(has_text='The saved recovery answer.')).to_have_count(1, timeout=15000)
+    expect(page.locator('[data-interrupted-request]')).to_have_count(0, timeout=15000)
+    expect(page.locator('[data-turn-failure]')).to_have_count(0)
+    assert len(_chat_posts(runtime)) == 1
+    assert len(queued['ledger'].rows) == 1
+    go(page, page.url)
+    expect(page.locator('[data-note]').filter(has_text='The saved recovery answer.')).to_have_count(1)
+    assert len(_chat_posts(runtime)) == 1
+    ctx.close()

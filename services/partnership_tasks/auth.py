@@ -32,6 +32,7 @@ class Binding:
     operations: frozenset
     expires_at: str | None
     revoked_at: str | None
+    work_artifacts: frozenset = frozenset()
 
     @property
     def is_owner(self) -> bool:
@@ -61,7 +62,7 @@ class Bindings:
             self._by_hash[rec["token_sha256"]] = Binding(
                 rec["binding_id"], rec["seat"], rec["principal"], rec["environment"], rec["origin"],
                 frozenset(rec["scopes"]), frozenset(rec["read_scopes"]), frozenset(rec["operations"]),
-                rec.get("expires_at"), rec.get("revoked_at"))
+                rec.get("expires_at"), rec.get("revoked_at"), frozenset(rec.get("work_artifacts", [])))
 
     @classmethod
     def load(cls, path: Path | str) -> "Bindings":

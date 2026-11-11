@@ -19,6 +19,8 @@ lives here, and meeting turns carry the Records claim and generations that the s
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import json
 import os
 import re
@@ -335,6 +337,20 @@ class BindingStore:
                        row["audience"], row["owner_request_id"], row["run_id"], row["agent_entry"], row["claim_id"],
                        row["room_generation"], row["trigger_seq"], row["approval_generation"],
                        json.loads(row["source_ref"]) if row["source_ref"] else None, bool(row["read_only"]))
+
+    @contextmanager
+    def hold_live(self, binding, *, tool_call_id, instance_id, session_user):
+        """Serialize a private document dispatch with stop/runtime replacement.
+        A stop committed first refuses; a dispatched call is allowed to settle.
+        No identity or grant is taken from document arguments.
+        """
+        with self._tx():
+            current = self.resolve(run_id=binding.run_id, tool_call_id=tool_call_id,
+                                   instance_id=instance_id, agent_id=binding.agent_entry,
+                                   session_user=session_user, wait_s=0)
+            if current != binding:
+                raise NotBound("binding_changed")
+            yield
 
     def admit(self, binding: Binding, *, tool: str, tool_call_id: str, instance_id: str, session_user: str,
               limit: int) -> BoundCall:

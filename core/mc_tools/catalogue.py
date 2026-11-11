@@ -26,7 +26,7 @@ class ArgumentsRefused(ActionContractError):
 
 # Fields that hold written text (an issue body, a comment) may span lines: a line break and a tab are allowed there and
 # nowhere else (#395: every issue MC proposed in prod was refused for its line breaks). Mirrored in the minimoi-tools plugin.
-MULTILINE = frozenset({("minimoi_issue_create", "body"), ("minimoi_issue_update", "body"),
+MULTILINE = frozenset({("minimoi_work_save", "content"),("minimoi_issue_create", "body"), ("minimoi_issue_update", "body"),
                        ("minimoi_issue_comment", "summary")})
 
 

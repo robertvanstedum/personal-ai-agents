@@ -44,6 +44,7 @@ MIGRATIONS=(
   minimoi_portal/guild_ui/sql/006_agent_reply_size.sql
   minimoi_portal/guild_ui/sql/007_mc_turn_ledger.sql
   minimoi_portal/guild_ui/sql/008_board_operations.sql
+  minimoi_portal/guild_ui/sql/009_mc_lead_review_lane.sql
   core/minimoi_actions/sql/001_runtime_bindings.sql
   core/minimoi_actions/sql/002_standing_ingress.sql
   core/minimoi_actions/sql/003_standing_control.sql

@@ -69,12 +69,12 @@ class ServiceOverHttp:
 
 
 def one_pass(*, drainer, svc, harness, notices, door, token=None,
-             clock=lambda: datetime.now(timezone.utc)) -> dict:
+             clock=lambda: datetime.now(timezone.utc), lead_wake=None) -> dict:
     """``token`` is the drainer token for an in-process service; over HTTP the client already holds it."""
     report = {"drained": [], "door": []}
     for row in choose(drainer.outbox_pending(), clock()):
         try:
-            state = drain_once(svc, token, harness, row["operation_id"], notices)
+            state = drain_once(svc, token, harness, row["operation_id"], notices, lead_wake=lead_wake)
             report["drained"].append((row["operation_id"], state))
         except Exception:
             _log.exception("partnership worker: drain failed for %s", row["operation_id"])

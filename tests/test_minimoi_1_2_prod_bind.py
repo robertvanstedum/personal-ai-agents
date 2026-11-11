@@ -361,6 +361,27 @@ def test_a_reviewed_template_is_valid():
     assert bind.validate_inputs(_doc())
 
 
+def test_work_memory_permissions_are_explicit_lead_only_and_preserved(monkeypatch, tmp_path):
+    monkeypatch.setattr(bind, "read_private", lambda root, rel: str(rel))
+    doc = _doc()
+    assert all("work_artifacts" not in r for r in bind.seat_bindings(tmp_path, doc))
+    for seat in ("mc", "cos"):
+        doc["seats"][seat]["work_artifacts"] = ["read", "save"]
+    bind.validate_inputs(doc)
+    rows = bind.seat_bindings(tmp_path, doc)
+    assert {r["seat"] for r in rows if r.get("work_artifacts")} == {"mc", "cos"}
+    assert all(r["work_artifacts"] == ["read", "save"] for r in rows if r["seat"] in ("mc", "cos"))
+
+
+@pytest.mark.parametrize("seat,permissions", [("mc", ["dispatch"]), ("mc", ["read", "read"]),
+                                             ("mc", "read"), ("outbox-drainer", ["read"])])
+def test_invalid_work_memory_grant_is_refused(seat, permissions):
+    doc = _doc()
+    doc["seats"][seat]["work_artifacts"] = permissions
+    with pytest.raises(SystemExit, match="work_artifacts"):
+        bind.validate_inputs(doc)
+
+
 @pytest.mark.parametrize("kind", ["world_readable", "symlink", "absent", "not_json", "repeated_key"])
 def test_an_unsafe_input_file_is_refused(tmp_path, kind):
     path = tmp_path / "inputs.json"

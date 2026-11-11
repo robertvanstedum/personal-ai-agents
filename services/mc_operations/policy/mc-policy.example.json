@@ -919,6 +919,42 @@
       "undo": null,
       "egress": "none",
       "max_operations_per_turn": 5
+    },
+    {
+      "capability": "work.artifact.read",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "work_read_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 5
+    },
+    {
+      "capability": "work.artifact.save",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "work_save_v1",
+      "verify": "work_artifact_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 5
     }
   ]
 }

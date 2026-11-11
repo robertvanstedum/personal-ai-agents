@@ -70,14 +70,18 @@
     finally { clearTimeout(deadline); }
   }
   let selecting = false;
-  async function select(id, doc) {
+  async function select(id, doc, internal = false) {
+    if (!internal && !window.cosHistory.ready) throw new Error("Wait for the conversation to open.");
     if (selecting) throw new Error('Wait for the conversation to open.');
     if (input.disabled || uploading) throw new Error('Wait for the current message or upload.');
+    const wasReady = window.cosHistory.ready;
+    window.cosHistory.ready = false;
     selecting = true; window.cosVoiceSelecting = true;
     document.getElementById('btn-voice').disabled = true;
     try {
     if (cid && cid !== id) await releaseVoice();
     persistDraft(); await api('history/selection', {device, conversation_id:id});
+    if (cid !== id) log.replaceChildren(); // Never show the old transcript under a new chat title.
     cid = id; conversation = doc; document.dispatchEvent(new CustomEvent('cos:conversation', {detail: {id}})); generation++; signature = ''; before = null; viewingEarlier = false;
     input.value = storage(draftKey()) || '';
     const recover=pending();
@@ -93,11 +97,13 @@
     window.cosVoiceConversationAllowed = !doc?.private && !doc?.read_only;
     voice.disabled = !window.cosVoiceConversationAllowed;
     if (!window.cosVoiceConversationAllowed) { voice.title = 'Voice is unavailable in a private or read-only conversation.'; document.getElementById('voice-status').textContent = 'Voice is unavailable in a private or read-only conversation.'; }
-    await reload();
+    try { await reload(); }
+    catch (error) { state.textContent = 'This conversation could not be loaded. Your messages remain saved.'; throw error; }
     document.dispatchEvent(new CustomEvent('cos:conversation-selected'));
     log.scrollTop = Number(storage('cos-scroll:' + cid) || log.scrollHeight);
     } finally {
       selecting = false; window.cosVoiceSelecting = false;
+      window.cosHistory.ready = wasReady;
       document.dispatchEvent(new CustomEvent('cos:conversation-selected'));
     }
   }
@@ -120,13 +126,13 @@
   document.getElementById('history-earlier').onclick=()=>{if(viewingEarlier){viewingEarlier=false;signature='';document.getElementById('history-earlier').textContent='Earlier messages';reload().catch(()=>state.textContent='Could not load messages.');}else{reload(true).then(()=>{document.getElementById('history-earlier').hidden=false;document.getElementById('history-earlier').textContent='Return to latest';}).catch(()=>state.textContent='Could not load earlier messages.');}};
   let creatingConversation = false;
   document.querySelectorAll('[data-new-conversation]').forEach(button => { button.onclick=async()=>{
-    if(creatingConversation)return;
+    if(creatingConversation || selecting || !window.cosHistory.ready)return;
     if(input.disabled||uploading){state.textContent='Wait for the current message or upload.';return;}
-    creatingConversation=true;
+    creatingConversation=true; window.cosHistory.ready=false;
     const controls=[...document.querySelectorAll('[data-new-conversation]')];controls.forEach(b=>b.disabled=true);
-    try{const c=await api('history/conversations',{title:'New conversation'});await select(c.conversation_id,c);closeDrawer();refreshList();document.getElementById('history-sheet').close();if(!document.getElementById('tab-confer').classList.contains('active'))document.querySelector('.tab-btn[data-tab="confer"]').click();input.focus();}
+    try{const c=await api('history/conversations',{title:'New conversation'});await select(c.conversation_id,c,true);closeDrawer();refreshList();document.getElementById('history-sheet').close();if(!document.getElementById('tab-confer').classList.contains('active'))document.querySelector('.tab-btn[data-tab="confer"]').click();input.focus();}
     catch(_){state.textContent='Could not create a conversation.';}
-    finally{creatingConversation=false;controls.forEach(b=>b.disabled=false);}
+    finally{creatingConversation=false;window.cosHistory.ready=true;controls.forEach(b=>b.disabled=false);}
   };});
   document.getElementById('mc-page').href=location.origin + '/guild-next/guild/build';
   document.getElementById('existing-rooms').href=location.origin + '/guild-next/guild/rooms';
@@ -247,6 +253,6 @@
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshList(); });
   refreshList();
-  (async()=>{try{const d=await api('history/selection?device='+encodeURIComponent(device)); voiceConversation=d.voice_conversation_id; await select(d.conversation_id,d.conversation);window.cosHistory.ready=true;}catch(_){state.textContent='History is unavailable. Nothing will be sent until it returns.';}})();
+  (async()=>{try{const d=await api('history/selection?device='+encodeURIComponent(device)); voiceConversation=d.voice_conversation_id; await select(d.conversation_id,d.conversation,true);window.cosHistory.ready=true;}catch(_){state.textContent='History is unavailable. Nothing will be sent until it returns.';}})();
   setInterval(()=>{if(!document.hidden)reload().catch(()=>{state.textContent='History could not be refreshed.';});},5000);
 })();

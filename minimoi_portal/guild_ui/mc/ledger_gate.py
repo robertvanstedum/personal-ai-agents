@@ -216,11 +216,13 @@ class Turn:
         else:
             self._end("failed", outcome_of(body))
 
-    def finish_stream(self, status, failure_class, backend_kind, dispatched, stop_acknowledged=None):
+    def finish_stream(self, status, failure_class, backend_kind, dispatched, stop_acknowledged=None, *, reply_note_id=None):
         """The streamed turn ended (StreamRun._finish): only now does the claim end."""
         outcome = {"status": _code(status), "failure_class": _code(failure_class),
                    "backend_kind": backend_kind if backend_kind in _KINDS else None}
         outcome = {k: v for k, v in outcome.items() if v is not None}
+        if status == "answered" and type(reply_note_id) is int and reply_note_id > 0:
+            outcome["reply_note_id"] = reply_note_id
         if not dispatched and not self.started:
             self._not_sent(outcome)
         elif status == "answered":

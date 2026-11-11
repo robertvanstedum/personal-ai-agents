@@ -54,7 +54,9 @@
       "minimoi_build_item",
       "minimoi_helper_ask",
       "minimoi_helper_result",
-      "minimoi_helper_review"
+      "minimoi_helper_review",
+      "minimoi_work_read",
+      "minimoi_work_save"
     ]
   },
   "configSchema": {

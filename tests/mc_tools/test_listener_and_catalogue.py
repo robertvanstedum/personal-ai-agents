@@ -228,3 +228,14 @@ class ParseTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_multilingual_work_document_request_fits_listener():
+    t = ListenerTests()
+    service = FakeService()
+    body = {'arguments': {'title':'日本語の計画','content':'😀'*6000,
+                          'expected_revision':0,'unresolved':['😀'*300]*12}}
+    reply = t.post(t.client(service), body, name='minimoi_work_save')
+    assert reply.status_code == 200
+    assert len(service.calls) == 1
+    assert t.post(t.client(service),body,name='minimoi_guest_requests').status_code==413

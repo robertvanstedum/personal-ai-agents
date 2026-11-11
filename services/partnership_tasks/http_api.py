@@ -61,7 +61,7 @@ OWNER_HEADER = "X-Portal-Owner-Assertion"
 
 
 def create_app(svc: TaskService, *, owner_key=None, owner_env: str | None = None, owner_subject: str | None = None,
-               spend=None) -> Flask:
+               spend=None, work_artifacts_root=None) -> Flask:
     """``owner_key`` (kid, secret), ``owner_env``, ``owner_subject`` ("owner:<portal id>") and ``spend`` (a nonce
     store) configure the owner rule (B4 design v0.2 §2, v0.3 R-N1/R-N3): a request made with an owner_session
     binding is accepted only with a portal-signed assertion for this exact method, route and body, naming the
@@ -113,6 +113,24 @@ def create_app(svc: TaskService, *, owner_key=None, owner_env: str | None = None
         if request.mimetype != "application/json":
             return None
         return _strict_json(request.get_data(cache=True))
+
+    @app.post("/v1/work-artifacts")
+    def work_artifacts():
+        t = authenticated()
+        if t is None:
+            return jsonify(error="not_authenticated"), 401
+        if work_artifacts_root is None:
+            return jsonify(error="work_artifacts_disabled"), 503
+        from services.partnership_tasks.work_artifacts import execute
+        from core.workshop_journal.errors import JournalError
+        try:
+            return _json(execute(svc, t, work_artifacts_root, body()))
+        except PermissionError:
+            return jsonify(error="work_scope_unavailable"), 403
+        except ValueError:
+            return jsonify(error="work_arguments_invalid"), 400
+        except (JournalError, OSError, RuntimeError):
+            return jsonify(error="work_store_unavailable"), 503
 
     @app.get("/healthz")
     def health():
@@ -171,6 +189,28 @@ def create_app(svc: TaskService, *, owner_key=None, owner_env: str | None = None
                 or type(b["fence_generation"]) is not int or not isinstance(b["interpretation_id"], str)):
             return jsonify(error="payload_invalid"), 400
         return _json(svc.dispatch_check(task_id, b["fence_generation"], b["interpretation_id"], t))
+
+    @app.get("/v1/wakes/<operation_id>")
+    def resolve_wake(operation_id):
+        # Identity comes only from the authenticated seat. No forwarded principal,
+        # scope, lead or packet can widen this read.
+        from core.lead_wake.authority import Authority
+        from core.lead_wake.inbox import StaleWake
+        t = authenticated()
+        if t is None:
+            return jsonify(error="not_authenticated"), 401
+        binding = svc.bindings.resolve(t, svc._clock())
+        if binding is None or binding.origin != "agent" or binding.seat not in ("mc", "cos"):
+            return jsonify(error="not_found"), 404
+        try:
+            packet = Authority(svc, t, principal=binding.principal, lead=binding.seat,
+                               environment=svc.environment)(operation_id)
+        except StaleWake:
+            return jsonify(error="wake_not_current", principal=binding.principal,
+                           lead=binding.seat, environment=binding.environment), 409
+        except PermissionError:
+            return jsonify(error="not_authenticated"), 401
+        return _json({"principal": binding.principal, "packet": packet})
 
     @app.get("/v1/tasks/<task_id>/release-gate")
     def release_gate(task_id):
@@ -260,7 +300,9 @@ def main(argv=None) -> int:
     app = create_app(svc, owner_key=PA.load_key(os.environ.get("PARTNERSHIP_OWNER_KEY_FILE")),
                      owner_env=os.environ.get("PARTNERSHIP_OWNER_ENV"),
                      owner_subject=os.environ.get("PARTNERSHIP_OWNER_SUBJECT"),
-                     spend=PA.NonceFile(nonce_file) if nonce_file else None)
+                     spend=PA.NonceFile(nonce_file) if nonce_file else None,
+                     work_artifacts_root=(Path(root) / "private-work-artifacts")
+                     if os.environ.get("PARTNERSHIP_WORK_ARTIFACTS") == "1" else None)
     server = make_server(os.environ.get("PARTNERSHIP_HOST", "0.0.0.0"), int(os.environ.get("PARTNERSHIP_PORT", "8772")),
                          app, threaded=False)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

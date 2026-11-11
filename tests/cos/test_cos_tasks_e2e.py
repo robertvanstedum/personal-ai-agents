@@ -40,7 +40,10 @@ class Session:
 @pytest.fixture
 def rig(tmp_path):
     tasks = service(tmp_path / "tasks")
-    session = Session(tasks_app(tasks))
+    from dataclasses import replace
+    tasks.bindings._by_hash = {k: replace(b, work_artifacts=frozenset({'read','save'}))
+                              if b.seat in ('mc','cos') else b for k,b in tasks.bindings._by_hash.items()}
+    session = Session(tasks_app(tasks, work_artifacts_root=tmp_path / "private-work"))
     history = History(tmp_path / "conv", "dev")
     history.ensure_default()
     bindings = BindingStore(tmp_path / "b" / "b.sqlite3", "dev")
@@ -216,7 +219,7 @@ def test_naming_the_seats_is_the_same_proposal_as_leaving_them_out(rig, advertis
 def test_each_operations_required_fields_are_enough_to_pass_validation(rig, advertised, op):
     tasks, history, bindings, client = rig
     owner_turn(history, bindings, "Track a test task.")
-    sample = {"task_id": "TK-none-0001", "type_id": "recall-search", "verdict": "approve"}
+    sample = {"task_id": "TK-none-0001", "type_id": "recall-search", "verdict": "approve", "artifact_id": "wa-" + "a" * 32, "expected_revision": 0, "unresolved": []}
     args = {"operation": op, **{f: sample.get(f, "words") for f in REQUIRED[op]}}
     assert schema_allows(advertised, args)
     assert call(client, args)["code"] != "unexpected_or_missing_fields"
@@ -238,3 +241,50 @@ def test_any_seat_but_mc_is_still_refused_by_the_schema_and_the_server(rig, adve
     args = {**LIVE_CALL, seat: "claude-code"}
     assert not schema_allows(advertised, args)
     assert call(client, args)["code"] == "lead_and_holder_must_be"
+
+
+def test_private_document_save_and_later_bound_read(rig):
+    tasks, history, bindings, client = rig
+    owner_turn(history, bindings, "Keep a working draft of the conversation test plan.")
+    saved = call(client, {"operation":"work_save", "title":"Conversation test plan", "content":"Reload during an answer.",
+                         "unresolved":["Test voice too?"], "expected_revision":0})
+    assert saved["status"] == "done" and saved["data"]["status"] == "saved", saved
+    artifact_id = saved["data"]["artifact_id"]
+    owner_turn(history, bindings, "Resume the conversation test plan.", n=2)
+    found = call(client, {"operation":"work_find", "query":"conversation test"}, n=2)
+    assert found["data"]["items"][0]["artifact_id"] == artifact_id
+    read = call(client, {"operation":"work_read", "artifact_id":artifact_id}, n=2, call_id="read")
+    assert read["data"]["content"] == "Reload during an answer."
+    assert read["data"]["author"] == "cos" and read["data"]["authority"] == "working_draft"
+
+
+def test_multilingual_work_save_fits_bound_listener(rig):
+    tasks, history, bindings, client = rig
+    owner_turn(history, bindings, 'Save the multilingual working draft.')
+    content = '😀' * 6000
+    r = call(client, {'operation':'work_save', 'title':'日本語の計画', 'content':content,
+                      'expected_revision':0, 'unresolved':['😀'*300]*12})
+    assert r['status']=='done',r
+
+
+def test_stopped_turn_cannot_dispatch_work_save(rig):
+    tasks, history, bindings, client = rig
+    owner_turn(history, bindings, 'Save the draft.')
+    assert bindings.revoke('turn1')
+    r = call(client, {'operation':'work_save','title':'Stopped draft','content':'Never save',
+                      'expected_revision':0,'unresolved':[]})
+    assert r['status']=='refused',r
+    assert not list((tasks.journal.root/'source_events').glob('SE-work-*'))
+
+
+def test_bound_cos_committed_unverified_save_is_unknown(rig, monkeypatch):
+    from core.work_artifacts import Store
+    tasks, history, bindings, client = rig
+    owner_turn(history, bindings, 'Save the draft.')
+    def unavailable(*a, **k):
+        raise OSError('readback unavailable')
+    monkeypatch.setattr(Store,'read',unavailable)
+    r = call(client, {'operation':'work_save','title':'Committed draft','content':'Retain this',
+                      'expected_revision':0,'unresolved':[]})
+    assert r['status']=='unknown',r
+    assert r['data']['committed'] is True and r['data']['artifact_id'].startswith('wa-')

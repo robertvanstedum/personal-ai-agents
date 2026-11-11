@@ -231,7 +231,11 @@ class StreamRun:
             acknowledged = self.stop_acknowledged
             if getattr(self, "tool_admission", "none") == "unconfirmed":
                 acknowledged = False
-            on_end(status, failure_class, getattr(self.ctx.backend, "kind", None), dispatched, acknowledged)
+            args = (status, failure_class, getattr(self.ctx.backend, "kind", None), dispatched, acknowledged)
+            if status == "answered":
+                on_end(*args, reply_note_id=getattr(self, "_kept_reply_id", None))
+            else:
+                on_end(*args)
         except Exception:
             _log.exception("mc turn %s: the ledger end could not be recorded", self.ctx.turn_id)
 
@@ -404,6 +408,7 @@ class StreamRun:
         kind = ctx.backend.kind
         if answered is not None and reply_note is not None:
             status, cls = "answered", None
+            self._kept_reply_id = reply_note.get("id")
         elif answered is not None:
             status, cls = "error", "not_kept"
         else:

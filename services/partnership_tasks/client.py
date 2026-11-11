@@ -80,6 +80,44 @@ class TaskClient:
         return self.session.request(method, self.base + path, headers=headers, data=data, timeout=self.timeout,
                                     allow_redirects=False)
 
+    def work_artifacts(self, operation, arguments, *, scope):
+        """One attempt only. On uncertainty retain identity and read canonical state; no blind resend."""
+        try:
+            r = self._call("POST", "/v1/work-artifacts",
+                           {"operation": operation, "scope": scope, "arguments": arguments})
+            if r.status_code != 200:
+                raise TaskServiceUnavailable(f"work artifacts failed: HTTP {r.status_code}")
+            return r.json()
+        except (requests.RequestException, ValueError) as exc:
+            raise TaskServiceUnavailable("work artifact outcome unconfirmed") from exc
+
+    def resolve_wake(self, operation_id, *, principal, lead, environment):
+        """A current packet for this lead, or stale. Authentication/outage is never cancellation."""
+        from core.lead_wake.inbox import StaleWake
+        from urllib.parse import quote
+        if (not isinstance(operation_id, str) or len(operation_id) != 48
+                or not operation_id.startswith("OB-wake-")
+                or not all(c in "0123456789abcdef" for c in operation_id[8:])):
+            raise StaleWake("invalid operation")
+        try:
+            r = self._call("GET", "/v1/wakes/" + quote(operation_id, safe=""))
+            if r.status_code == 409:
+                response = r.json()
+                if (response.get("principal") != principal or response.get("lead") != lead
+                        or response.get("environment") != environment):
+                    raise TaskServiceUnavailable("wake authority binding differs")
+                raise StaleWake("wake no longer current")
+            if r.status_code != 200:
+                raise TaskServiceUnavailable(f"wake resolution failed: HTTP {r.status_code}")
+            response = r.json()
+            packet = response["packet"]
+            if (response["principal"] != principal or packet["lead"] != lead
+                    or packet["environment"] != environment):
+                raise TaskServiceUnavailable("wake authority binding differs")
+            return packet
+        except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
+            raise TaskServiceUnavailable("wake resolution unavailable") from exc
+
     def pending(self) -> list:
         r = self._call("GET", "/v1/pending")
         if r.status_code != 200:

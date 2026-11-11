@@ -20,9 +20,28 @@ import { takeTray, restoreTray, trayBusy, trayCount } from './attachments.js';
 import { initJobs } from './jobs.js';
 import { initAgentRequests } from './agent_requests.js';
 import { initQueue } from './mc_queue.js';
+import { interruptions } from './mc_interruption.js';
 import { initRoutePicker } from './route_picker.js';
 
 let page, panel, thread, pill;
+let latestStreamRequest = null;
+const interruptedRows = new Map();
+const interrupted = interruptions((id, state, text) => {
+  let row = interruptedRows.get(id);
+  if (state === 'recovered') {
+    if (row) row.remove();
+    interruptedRows.delete(id);
+    if (id === latestStreamRequest) answerArrived();
+    return;
+  }
+  const replacement = platformLine('Guild platform', text);
+  replacement.dataset.interruptedRequest = id;
+  replacement.dataset.interruptedState = state;
+  if (row) row.replaceWith(replacement);
+  else thread.append(replacement);
+  interruptedRows.set(id, replacement);
+});
+
 const inPage = () => document.body.dataset.page === 'floor';
 let mode = 'pill';
 
@@ -661,6 +680,7 @@ function endLine(li, state) {
 }
 
 async function streamMasterCraftsman(t, via) {
+  latestStreamRequest = t.note.request_id;
   const note = t.note;
   const li = streamLine();
   const controller = new AbortController();
@@ -674,9 +694,9 @@ async function streamMasterCraftsman(t, via) {
     window.removeEventListener('pagehide', onHide);
     endLine(li, 'unknown');
     const text = 'Unknown · it may have run; nothing was retried. Your note is kept.';
-    thread.append(platformLine('Guild platform', text));
+    li.remove();
+    interrupted.lost(note.request_id, t.conversationId);
     announce(text);
-    answerFailed(mcSay('Master Craftsman: unknown'));
     follow();
     return { answered: false, error: 'network' };
   }
@@ -794,13 +814,9 @@ async function streamMasterCraftsman(t, via) {
   }
   if (!ended) {
     endLine(li, acked ? '(interrupted)' : 'unknown');
-    if (!deltas.length) li.remove();
-    const text = acked
-      ? mcSay('The connection ended before the answer finished · if Master Craftsman finishes, its answer is kept: reload to see it.')
-      : 'Unknown · it may have run; nothing was retried. Your message is kept.';
-    thread.append(failureLine(text));
-    announce(text);
-    answerFailed(mcSay('Master Craftsman: connection ended'));
+    li.remove(); // the canonical saved answer is recovered; do not leave a duplicate partial bubble
+    interrupted.lost(note.request_id, t.conversationId, li.turnId);
+    announce('Connection interrupted. Completion is not yet confirmed.');
     follow();
     return { answered: false, error: 'network' };
   }
@@ -1242,17 +1258,23 @@ export function initConversation(p) {
         } finally { window.clearTimeout(timeout); }
       },
       insert: (note) => {
+        if (note.author_kind === 'agent') interrupted.recovered(note);
         if (thread.querySelector(`[data-note="${note.id}"]`)) return;
         const next = Array.from(thread.querySelectorAll('[data-note]')).find((n) => Number(n.dataset.note) > note.id);
         thread.insertBefore(noteLine(note), next || null);
-        if (note.author_kind === 'agent') {
-          applyHeader({ mc_header: mcSay('Master Craftsman answered · saved reply recovered') });
-          answerArrived();
-        }
         follow();
       },
     });
-    queue = initQueue({ page, thread, dispatch: dispatchQueued, follow,
+    queue = initQueue({ page, thread, dispatch: dispatchQueued, follow, onView: view => {
+      // Reload has no stream object. Bind recovery only to the ledger's current run,
+      // not an arbitrary older agent note encountered during history readback.
+      if (!latestStreamRequest && view.running?.conversation_id === conversationId
+          && view.running.note_request_id && !thread.querySelector('[data-live-turn]')) {
+        latestStreamRequest = view.running.note_request_id;
+        interrupted.track(latestStreamRequest, conversationId);
+      }
+      interrupted.reconcile(view);
+    },
       readBack: () => thread.querySelector('[data-live-turn]') ? Promise.resolve(true) : recovery.refresh() });
   }
   agentUi = initAgentRequests({ page, thread, noteLine, follow });

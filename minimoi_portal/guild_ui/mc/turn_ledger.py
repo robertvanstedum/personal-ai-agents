@@ -227,12 +227,12 @@ class TurnLedger:
 
     # ── admission ─────────────────────────────────────────────────────────────
     @staticmethod
-    def _validate(principal, conversation_id, note_request_id, turn_request_id, kind, attachment_ids, topic_refs):
+    def _validate(principal, conversation_id, note_request_id, turn_request_id, kind, attachment_ids, topic_refs, *, service_review=False):
         for name, value in (("principal", principal), ("conversation_id", conversation_id),
                             ("note_request_id", note_request_id), ("turn_request_id", turn_request_id)):
             if not isinstance(value, str) or not value or len(value) > 200:
                 raise ValueError(f"{name} is required")
-        if kind not in KINDS:
+        if kind not in KINDS and not (service_review and kind == "lead_review"):
             raise ValueError("unknown turn kind")
         return _clean_files(attachment_ids), _clean_refs(topic_refs)
 
@@ -279,16 +279,27 @@ class TurnLedger:
         return Admission("running" if earlier["state"] == "claimed" else "done", entry=earlier)
 
     def admit(self, *, principal: str, conversation_id: str, note_request_id: str, turn_request_id: str,
-              kind: str = "typed", attachment_ids: list | None = None, topic_refs: list | None = None) -> Admission:
+              kind: str = "typed", attachment_ids: list | None = None, topic_refs: list | None = None,
+              _service_source: str | None = None) -> Admission:
         """Record and claim this turn before dispatch, or say why not. A refusal records nothing.
         While the owner has waiting turns, a new immediate turn is refused (queue_pending): it
         would jump the queue."""
         files, refs = self._validate(principal, conversation_id, note_request_id, turn_request_id, kind,
-                                     attachment_ids, topic_refs)
+                                     attachment_ids, topic_refs, service_review=_service_source is not None)
+        if _service_source is not None and kind != "lead_review":
+            raise ValueError("service source requires service-origin kind")
         token = secrets.token_hex(16)
         with self._tx(principal) as cur:
             released = self._release_abandoned(cur, principal)
             self._expire_waiting(cur, principal)
+            if _service_source is not None:
+                cur.execute("SELECT state FROM guild.mc_turn_ledger WHERE principal=%s AND conversation_id=%s AND note_request_id=%s AND kind IN ('typed','voice')",
+                            (principal,conversation_id,_service_source))
+                origin = cur.fetchone()
+                # Continue lifts an owner pause; it does not prove that an
+                # unknown backend has stopped. Service work needs settlement.
+                if origin is None or origin[0] not in ("answered", "failed", "not_sent", "cancelled", "expired"):
+                    return Admission("busy", released=released)
             known = self._existing(cur, principal, conversation_id, note_request_id, turn_request_id, kind, files, refs)
             if known is not None:
                 known.released = released
@@ -315,6 +326,18 @@ class TurnLedger:
             entry = _entry(cur.fetchone())
             return Admission("claimed", entry=entry, claim=Claim(entry["id"], token, entry["claim_generation"]),
                              released=released)
+
+    def admit_service_review(self, *, principal, conversation_id, source_note_request_id, operation_id):
+        """Host-only continuation on the same owner-wide lane, behind queued owner turns.
+        The service-origin entry is not a note from Robert and creates no tool binding.
+        """
+        if not isinstance(operation_id,str) or not re.fullmatch(r'OB-wake-[0-9a-f]{40}',operation_id):
+            raise ValueError('invalid wake identity')
+        if not isinstance(source_note_request_id,str) or not source_note_request_id:
+            raise ValueError('kept owner source required')
+        return self.admit(principal=principal,conversation_id=conversation_id,
+                          note_request_id='service:'+operation_id,turn_request_id='wake:'+operation_id,
+                          kind='lead_review',_service_source=source_note_request_id)
 
     # ── the queue (P2): waiting turns, sent strictly in order ─────────────────
     def enqueue(self, *, principal: str, conversation_id: str, note_request_id: str, turn_request_id: str,
