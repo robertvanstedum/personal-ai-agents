@@ -639,3 +639,51 @@ def test_saved_route_warning_is_not_repeated_but_changed_signal_is(switching):
     assert "Answer." in second and "tries the OpenAI plan again" not in second
     changed, *_ = _run(switching, plan_down("plan_exhausted"), API_ANSWER)
     assert "quota is used up" in changed
+
+
+@pytest.mark.parametrize("buffered", [False, True])
+def test_pending_selection_is_rendered_after_answer_and_deduped_from_canonical_save(routed, monkeypatch, buffered):
+    import re
+    from minimoi_portal.guild_ui import action_waiting
+    from core.notice_selection import MARKER
+    line = '- W-1: Review this design. Answer: in the work item.'
+    def context(principal, owner_text='', *, notice_plan=None, **kwargs):
+        return notice_plan.offer('W-1', {'generation': 1}, line, explicit='W-1' in owner_text)
+    monkeypatch.setattr(action_waiting, 'context_block', context)
+    runtime = routed.runtime
+    actual_post = runtime.post
+    offered = []
+    def reply(url, data=None, **kwargs):
+        if url.endswith('/chat/completions'):
+            prompt = json.loads(data)['messages'][-1]['content']
+            match = re.search(r'Notice ID (W-1:[0-9a-f]+):', prompt)
+            offered.append(bool(match))
+            text = 'The answer first.'
+            if match:
+                nonce = re.search(r'"nonce": "([0-9a-f]{32})"', prompt).group(1)
+                text += '\n\n' + MARKER + json.dumps({'nonce': nonce, 'ids': [match.group(1)]})
+            if not kwargs.get('stream'):
+                from test_mc_turns import Resp
+                return Resp(200, json.dumps({'choices': [{'message': {'content': text}, 'finish_reason': 'stop'}]}))
+            runtime.script = [nd({'t': 'run', 'id': RUN_A}), nd({'t': 'delta', 'text': text}),
+                              nd({'t': 'finish', 'reason': 'stop'})]
+        return actual_post(url, data=data, **kwargs)
+    routed.extra['services'].mc._post = reply
+    client = routed.owner()
+    token = routed.csrf(client)
+    answers = []
+    for text in ('hello', 'another question', 'What about W-1?'):
+        note = _keep(client, token, text)
+        if buffered:
+            from test_mc_turns import _ask
+            done = _ask(client, token, note['request_id']).get_json()
+            assert MARKER not in json.dumps(done)
+        else:
+            raw = _stream(client, token, note['request_id'], request_id='rq-' + uuid.uuid4().hex).get_data(as_text=True)
+            assert MARKER not in raw
+            done = next(json.loads(row) for row in raw.splitlines() if json.loads(row).get('t') == 'done')
+        answers.append(done['reply_note']['text'])
+    assert offered == [True, False, True]
+    assert answers[0].startswith('The answer first.') and answers[0].count(line) == 1
+    assert answers[1] == 'The answer first.'
+    assert answers[2].count(line) == 1

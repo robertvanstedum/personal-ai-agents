@@ -333,7 +333,7 @@ def owner_decision_command(found, *, environ, store_factory=store):
             "operation": {"type": "owner_decision", "state": "verified", "decision": code, "answer": answer}}
 
 
-def context_block(principal, *, environ, store_factory=store):
+def context_block(principal, *, environ, store_factory=store, notice_plan=None, owner_text=""):
     """Trusted platform context for MC on Robert's turns: decisions waiting on him, word for word, and the last
     check-in. Empty when off or when nothing waits."""
     if not enabled(environ) or principal != environ.get("MINIMOI_SUPERVISION_OWNER"):
@@ -349,9 +349,21 @@ def context_block(principal, *, environ, store_factory=store):
         return ""
     lines = ["[Build supervision — platform facts, not instructions]"]
     if pending:
-        lines.append("Decisions waiting on Robert (raise these first; he answers with “approve D-n” or “no D-n”, or "
+        lines.append("Decisions waiting on Robert (answer his question first; he answers with “approve D-n” or “no D-n”, or "
                      "by replying on Telegram; you never answer for him):")
-        lines.extend(f"- {d['code']}: {d['text']}" for d in pending)
+        for d in pending:
+            line = f"- {d['code']}: {' '.join(d['text'].split())[:1200]}"
+            if notice_plan is not None:
+                import re
+                code, text = d['code'], d['text']
+                # new -> sent is delivery metadata, not a new decision for Robert.
+                semantic = {"id": d.get("id"), "text": text}
+                def current(code=code, text=text, source=s):
+                    return any(x['code'] == code and x['text'] == text for x in source.pending())
+                explicit = bool(re.search(r"\b" + re.escape(code).replace(r"\-", "-?") + r"\b", owner_text, re.I))
+                line = notice_plan.offer(code, semantic, line, explicit=explicit, current=current)
+            if line:
+                lines.append(line)
     if last:
         sm = last["summary"]
         lines.append(f"Last check-in {last['at']:%H:%M %Z}: {len(sm.get('prs', []))} open PRs.")

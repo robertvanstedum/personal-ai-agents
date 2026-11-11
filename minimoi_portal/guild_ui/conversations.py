@@ -343,6 +343,23 @@ class ConversationStore:
             selection["turns"] = (selection.get("turns") or [])[-(ROUTE_TURNS_KEPT - 1):] + [receipt]
         return self._change(cid, principal, fn)
 
+    def prepare_pending_notices(self, cid, principal, candidates, saved):
+        """At most a proven reference and an attempted reference per surfaced item.
+
+        Keep an older proven receipt across failed explicit repeats. Other items
+        cannot evict it; only that item's semantic change replaces its version.
+        """
+        def fn(c):
+            rows = c.get("pending_notice_candidates", [])
+            for candidate in candidates:
+                same = [r for r in rows if r.get("code") == candidate["code"]]
+                proven = next((r for r in reversed(same) if r["key"] == candidate["key"]
+                               and r["reference"] != candidate["reference"] and saved(r)), None)
+                rows = [r for r in rows if r.get("code") != candidate["code"]]
+                rows.extend(([proven] if proven else []) + [candidate])
+            c["pending_notice_candidates"] = rows
+        return self._change(cid, principal, fn)
+
     def prepare_route_notice(self, cid, principal, reference, route, line, answer):
         """Prepare only; canonical saved answers establish presentation, including after lost save ACK."""
         from core.model_routes.presentation import prepare

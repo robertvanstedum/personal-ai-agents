@@ -1658,11 +1658,14 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
 
     tools_binding = _tool_binder(services, ledger_turn, conv, principal, note_id)
 
-    route_notice = _route_notice(conversations, conv, principal, floor, reply_key, route)
+    from .pending_notices import Plan as PendingNotices
+    notice_plan = PendingNotices(conversations, conv, principal, floor, reply_key)
+    route_notice = _route_notice(conversations, conv, principal, floor, reply_key, route, notice_plan=notice_plan)
 
     def request_for(built):
+        notice_plan.reset()
         return TurnRequest(conversation_id=session_conversation_id(conv, principal), route=route,
-                           text=carried + _with_context(_with_agent(_with_files(sent_text, built), agent_state), sent_text, conv, principal),
+                           text=carried + _with_context(_with_agent(_with_files(sent_text, built), agent_state), sent_text, conv, principal, notice_plan=notice_plan),
                            note_request_id=note_id, correlation_id=turn_id,
                            context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")},
                            prepare_depth=getattr(tools_binding, "prepare_depth", None), route_notice=route_notice)
@@ -1705,6 +1708,7 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
         _mc_release(principal)
         DISPATCHED.forget(request_id)
         raise
+    events = notice_plan.events(events)
     events = _with_route_receipt(events, route, turn_id, _route_recorder(conversations, conv, principal), note.get("id"))
     if observe is not None:
         events = observe(events)
@@ -2040,7 +2044,7 @@ def _route_snapshot(services, conv, owner_text=""):
         return None, RouteRefused("route_unavailable", "The model routes could not be read. Nothing was sent.")
 
 
-def _route_notice(conversations, conv, principal, floor, reference, route):
+def _route_notice(conversations, conv, principal, floor, reference, route, *, notice_plan=None):
     """Owner-scoped presentation metadata; failure keeps notices visible, never fails chat."""
     def answer(key):
         note = floor.get_note(key)
@@ -2049,9 +2053,12 @@ def _route_notice(conversations, conv, principal, floor, reference, route):
 
     def notice(selected, line):
         try:
-            return conversations.prepare_route_notice(conv["id"], principal, reference, selected, line, answer)
+            show = conversations.prepare_route_notice(conv["id"], principal, reference, selected, line, answer)
         except Exception:
-            return bool(line)
+            show = bool(line)
+        if show and line and notice_plan is not None:
+            notice_plan.route_suffix = line
+        return show
 
     if route and conv:
         notice(route, "")
@@ -2456,9 +2463,11 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
                 _mc_log().warning("mc turn %s: Board proposal preparation unavailable", turn_id)
         from .mc.cos import MANAGED_VOICE_CHANNEL
         from .mc.openclaw import VOICE_MARKER
+        from .pending_notices import Plan as PendingNotices
+        notice_plan = PendingNotices(conversations, conv, principal, floor, reply_key)
         context_text = _with_context(_with_agent(_with_files(sent_text, files), agent_state), sent_text, conv, principal,
                                      current_voice=host_channel is MANAGED_VOICE_CHANNEL,
-                                     direct_voice=host_channel is VOICE_MARKER)
+                                     direct_voice=host_channel is VOICE_MARKER, notice_plan=notice_plan)
         if board_plan is not None:
             context_text += "\n\n" + board_plan.contract()
         if delivery:
@@ -2474,7 +2483,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             turn_context["host_channel"] = VOICE_MARKER          # the OpenClaw adapter translates it (Spec 164 §9)
         req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=carried + context_text, route=route,
                           note_request_id=note_id, correlation_id=turn_id, context=turn_context,
-                          route_notice=_route_notice(conversations, conv, principal, floor, reply_key, route))
+                          route_notice=_route_notice(conversations, conv, principal, floor, reply_key, route, notice_plan=notice_plan))
         _mc_log().info("mc turn %s start backend=%s files=%d", turn_id, services.mc.kind, len(files.report) if files else 0)
         _files_recorder(conversations, conv, principal, note_id, files)()
         started = time.monotonic()
@@ -2491,6 +2500,12 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             result = collect(services.mc, req, on_run=tools.attach_run)
         else:
             result = services.mc.turn(req)
+        if result.status == "answered":
+            rendered = notice_plan.transform(result.text, completed=(result.trace or {}).get("finish_reason", "stop") == "stop")
+            if rendered.strip():
+                result = replace(result, text=rendered)
+            else:
+                result = replace(result, status="error", text=None, failure_class="no_answer")
         _route_recorder(conversations, conv, principal)((result.trace or {}).get("route") or route, turn_id,
                                                         (result.trace or {}).get("served"), note.get("id"))
         duration_ms = int((time.monotonic() - started) * 1000)
@@ -2734,7 +2749,7 @@ def _with_agent(text: str, state) -> str:
     return f"{text}\n\n{state.text}" if state is not None else text
 
 
-def _with_context(text: str, owner_text: str, conv, principal: str, *, current_voice=False, direct_voice=False) -> str:
+def _with_context(text: str, owner_text: str, conv, principal: str, *, current_voice=False, direct_voice=False, notice_plan=None) -> str:
     """Then, as more marked DATA, what a quick question needs in the SAME turn (#298): the GitHub items the owner's words point at, and the true state of this
     conversation's jobs, plus explicitly referenced Board notes. Board read failure is explicit DATA; it never becomes completion. Never reached by a Private turn."""
     from . import mc_context
@@ -2765,7 +2780,7 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
         pass
     try:
         from . import supervision
-        waiting = supervision.context_block(principal, environ=feature_environ())
+        waiting = supervision.context_block(principal, environ=feature_environ(), notice_plan=notice_plan, owner_text=owner_text)
         if waiting:
             extra.append(waiting)
     except Exception:
@@ -2776,11 +2791,14 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
         env = _waiting_env()
         block = action_waiting.context_block(
             principal, owner_text, environ=env, guest_actions=_waiting_guest_actions(principal, env),
-            supervision_on=_supervision.enabled(env) and principal == env.get("MINIMOI_SUPERVISION_OWNER"))
+            supervision_on=_supervision.enabled(env) and principal == env.get("MINIMOI_SUPERVISION_OWNER"),
+            notice_plan=notice_plan)
         if block:
             extra.append(block)
     except Exception:
         pass
+    if notice_plan is not None and notice_plan.offers:
+        extra.append(notice_plan.instruction())
     from . import feature_environ as _fe
     if _fe().get("MINIMOI_MC_OPERATING_RULES") == "1":
         extra.append(MC_OPERATING_RULES_TOOLS if _tools_own_actions(principal) else MC_OPERATING_RULES)
