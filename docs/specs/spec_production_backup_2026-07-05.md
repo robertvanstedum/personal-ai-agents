@@ -1,6 +1,7 @@
 # Spec: Production Backup System
 **File:** `spec_production_backup_2026-07-05.md`
 **Status:** Backlog — build this week
+**Superseded in part (11 Nov 2026):** scope and backup classes by `spec_1_2_data_map_and_private_sync_v1.0_2026-11-11.md`. The three tiers stay; personal and secret stores are encrypted before any tier leaves the host.
 **Date:** 2026-07-05
 **Author:** Claude.ai design session
 **Motivated by:** Data loss incident 2026-07-05 — curator_archive and research_dives wiped by force-recreate without volume mounts. Mac was implicit backup pre-EC2. No production backup existed post-migration.
