@@ -123,7 +123,8 @@ class CosTaskTools:
                                                 "say": f"Drafted by {task['holder']}, accepted by you." if args["verdict"] == "approve" else "Sent back with your reasons."}}
                 if args["verdict"] == "approve" and os.environ.get("COS_HELPER_RETURN") == "1":
                     from core.lead_wake.inline import offer
-                    text = offer(lead="cos", principal=binding.principal, environment=self.environment,
+                    from domains.cos.lead_return import lead_principal
+                    text = offer(lead="cos", principal=lead_principal(binding.principal, os.environ), environment=self.environment,
                                  source_ref={"store": "cos-history", "id": turn_key}, task=task, reader=self.cos,
                                  review_id="RV-h-"+L.review_key(turn_key, args["task_id"], args["set_digest"], args["verdict"], str(args["reasons"])))
                     if text:

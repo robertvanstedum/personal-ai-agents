@@ -663,6 +663,10 @@ class TurnBinder:
 def helper_review_settled(store, source_ref, principal):
     """History failure/recovery is not proof of runtime termination.
 
+    ``principal`` is one owner principal or a tuple of the owner's account ids:
+    CoS records an owner turn under the portal account that signed it (a number
+    when the owner has an auth.users row), not under the task service's name.
+
     Only signed terminal receipts already verified at ingress settle attached
     runs. A missing run identity or proof keeps the return queued. Include all
     owner runs so a restarted process cannot ignore an older orphaned run.
@@ -673,7 +677,9 @@ def helper_review_settled(store, source_ref, principal):
             audit=db.execute('SELECT valid FROM terminal_audit_runs WHERE run_id=?',(run,)).fetchone()
             if audit is not None:return bool(audit['valid'])
             return db.execute('SELECT 1 FROM terminal_runs WHERE run_id=? AND valid=1',(run,)).fetchone() is not None
-        rows=db.execute("SELECT source_ref,run_id,turn_id,runtime_instance FROM bindings WHERE principal=? AND origin='owner'",(principal,)).fetchall()
+        accounts=(principal,) if isinstance(principal,str) else tuple(principal)
+        if not accounts:return False
+        rows=db.execute("SELECT source_ref,run_id,turn_id,runtime_instance FROM bindings WHERE principal IN (%s) AND origin='owner'"%','.join('?'*len(accounts)),accounts).fetchall()
         found=False
         for row in rows:
             source=json.loads(row['source_ref']) if row['source_ref'] else None

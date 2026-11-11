@@ -43,8 +43,8 @@ def store(tmp_path, clock):
     return s
 
 
-def owner_turn(store, turn="t1", run=1, key="dev:owner", **kw):
-    assert store.record(turn, principal="robert", origin="owner", scope="owner", audience="owner",
+def owner_turn(store, turn="t1", run=1, key="dev:owner", principal="robert", **kw):
+    assert store.record(turn, principal=principal, origin="owner", scope="owner", audience="owner",
                         agent_entry="cos-agent-a", session_user=USER, lifetime_s=600, owner_request_id="req-" + turn,
                         supersession_key=key, **kw)
     assert store.attach_run(turn, RUN.format(run))
@@ -388,3 +388,17 @@ def test_signed_terminal_after_stop_settles_return_without_restoring_tools(store
     assert code(lambda:resolve(store))=='stopped'
     assert not store.prepare_depth('t1',RUN.format(1),'c'*32)
     assert not store.attach_depth('t1',RUN.format(2))
+
+
+def test_return_settles_an_owner_turn_recorded_under_his_portal_account(store):
+    # Dev, 11 Nov: the portal signs owner:<auth.users id>, so CoS bound the turn to "7" while the task service
+    # names him "robert". Asking only for "robert" never found the turn and the return stayed queued.
+    from domains.cos.binding import helper_review_settled
+    source={'store':'cos-history','id':'cosc-source:t-original','position':1}
+    owner_turn(store,principal='7',source_ref={'conversation_id':'cosc-source','turn_id':'t-original'})
+    store.revoke('t1','owner_stop')
+    with pytest.raises(NotBound):store.record_terminal(terminal_receipt())
+    assert not helper_review_settled(store,source,'robert')
+    assert helper_review_settled(store,source,('robert','7'))
+    assert not helper_review_settled(store,source,('robert','8'))
+    assert not helper_review_settled(store,source,())
