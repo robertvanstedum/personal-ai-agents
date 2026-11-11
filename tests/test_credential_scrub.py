@@ -20,6 +20,10 @@ REPO = Path(__file__).resolve().parent.parent
     ("Authorization: Bearer abc.def.ghi", "abc.def.ghi"),
     ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIn0.sig", "eyJhbGci"),
     ("ghp_abcdefghijklmnop", "ghp_abcdefghijklmnop"),
+    ("gho_abcdefghijklmnop", "gho_abcdefghijklmnop"),
+    ("ghs_abcdefghijklmnop", "ghs_abcdefghijklmnop"),
+    ("ghu_abcdefghijklmnop", "ghu_abcdefghijklmnop"),
+    ("ghr_abcdefghijklmnop", "ghr_abcdefghijklmnop"),
     ("github_pat_11ABCDEF_xyz", "github_pat_11ABCDEF_xyz"),
     ("sk-ant-api03-abcdefghijkl", "sk-ant-api03"),
     ("sk-proj-abcdefghijkl", "sk-proj-abcdefghijkl"),
@@ -41,6 +45,7 @@ def test_each_credential_shape_is_removed(text, gone):
     "a secret santa at work",
     "call me at 3 pm about the key results",
     "see https://example.com/path",
+    "GitHub's gho_ prefix marks an OAuth token",
 ])
 def test_ordinary_speech_is_kept(text):
     assert scrub(text) == (text, False)
@@ -58,7 +63,8 @@ def test_it_covers_the_workshops_secret_patterns():
     """Every alternative of the Workshop's _SECRET (#266, minimoi_portal/
     workshop/record.py) is caught here, so that module can import this one."""
     samples = ["sk-abcdefgh", "xai-abcdefghijklmnop", "tvly-abcdefgh", "ghp_abcdefghij", "github_pat_",
-               "bearer x", "-----BEGIN", "eyJabcdefghijklmnopqrst.", "AKIAABCDEFGHIJKL", "https://u:p@h"]
+               "bearer x", "-----BEGIN", "eyJabcdefghijklmnopqrst.", "AKIAABCDEFGHIJKL", "https://u:p@h",
+               "gho_abcdefghij", "ghs_abcdefghij", "ghu_abcdefghij", "ghr_abcdefghij"]
     for sample in samples:
         assert SECRET.search(sample), sample
         assert scrub(sample)[1], sample
