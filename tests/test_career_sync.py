@@ -184,3 +184,16 @@ def test_unsafe_archive_member_refused(tmp_path):
     with pytest.raises(cs.Refused) as e:
         cs.safe_extract(arc, tmp_path / "out")
     assert e.value.code == "archive_unsafe"
+
+
+def test_local_ack_record_is_used_when_configured(env, tmp_path):
+    inbound = env["store"] / "career-inbound"
+    inbound.mkdir()
+    (inbound / "b2.tar.age").write_bytes(b"x")
+    acks = tmp_path / "acks"
+    cfg = {**env["mac"], "ack_dir": str(acks)}
+    with pytest.raises(cs.Refused):
+        cs.publish(cfg)
+    acks.mkdir()
+    (acks / "b2.json").write_text("{}")
+    assert cs.publish(cfg)["manifest_hash"]

@@ -289,7 +289,7 @@ def publish(cfg: dict, *, dry_run: bool = False) -> dict:
     manifest = collect(workspace, cfg["publish_set"], cfg.get("never_copy", []), repo)
     h = manifest["manifest_hash"]
     key = f"{PREFIX}/{h}.tar.age"
-    pending = unpulled_inbound(dest)
+    pending = unpulled_inbound(dest, cfg.get("ack_dir"))
     if pending:
         raise Refused("inbound_not_pulled", f"{len(pending)} inbound bundle(s); run pull first")
     result = {"manifest_hash": h, "files": len(manifest["files"]), "dirty": sum(f["dirty"] for f in manifest["files"]),
@@ -334,10 +334,17 @@ def current_pointer_hash(dest: Dest):
         return None
 
 
-def unpulled_inbound(dest: Dest) -> list:
-    """Inbound bundles the host wrote that the Mac has not acknowledged (spec §4: publish refuses until pulled)."""
+def unpulled_inbound(dest: Dest, ack_dir: str | None = None) -> list:
+    """Inbound bundles the host wrote that the Mac has not acknowledged (spec §4: publish refuses until pulled).
+
+    The Mac is the only writer of acknowledgements, so with ``ack_dir`` it reads its own local record of them and needs
+    no list access to the acknowledgement prefix; without it (tests, file:// stores) it lists that prefix."""
     bundles = {Path(k).name[:-len(".tar.age")] for k in dest.list("career-inbound/") if k.endswith(".tar.age")}
-    acks = {Path(k).stem for k in dest.list("career-inbound-acks/") if k.endswith(".json")}
+    if ack_dir:
+        d = Path(ack_dir).expanduser()
+        acks = {p.stem for p in d.glob("*.json")} if d.is_dir() else set()
+    else:
+        acks = {Path(k).stem for k in dest.list("career-inbound-acks/") if k.endswith(".json")}
     return sorted(bundles - acks)
 
 
