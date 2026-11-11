@@ -1234,7 +1234,8 @@
           "enum": [
             "harness",
             "notices",
-            "lead_wake"
+            "lead_wake",
+            "lead_publication"
           ]
         },
         "operation": {
@@ -1242,7 +1243,8 @@
             "admit_bundle",
             "set_fence",
             "notify",
-            "wake_lead"
+            "wake_lead",
+            "publish_return"
           ]
         },
         "bundle_digest": {

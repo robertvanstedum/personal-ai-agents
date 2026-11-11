@@ -141,7 +141,8 @@
             "external",
             "cos_in_flight",
             "build_log",
-            "lead_wake"
+            "lead_wake",
+            "lead_publication"
           ]
         },
         "id": {

@@ -63,10 +63,11 @@ def path_of(target_type: str, target_id: str) -> str:
 
 class TaskService:
     def __init__(self, root: Path | str, environment: str, bindings: Bindings, *, grants: Grants | None = None,
-                 clock: Callable[[], str] = _now, charters=None):
+                 clock: Callable[[], str] = _now, charters=None, helper_returns: bool = False):
         if environment not in ("synthetic", "dev", "staging", "prod"):
             raise ValueError("environment")
         self.environment = environment
+        self.helper_returns = helper_returns
         self.bindings = bindings
         self.grants = grants or Grants()
         from services.partnership_tasks.charters import Charters
@@ -93,8 +94,12 @@ class TaskService:
         if digest(command["payload"]) != command["payload_digest"]:
             return _result(command_id, "refused", code="payload_digest_mismatch")
         command_digest = digest({"command": command, "seat": binding.seat, "binding": binding.binding_id})
-        result = self.journal.run(command["command_id"], command_digest,
-                                  lambda: _Planner(self, command, binding).plan())
+        def plan():
+            # Publication authority must still exist after waiting for the writer lock.
+            if command["kind"] == "task.commit_helper_return" and self.bindings.resolve(token, self._clock()) != binding:
+                raise Refused("not_authenticated", "binding_changed")
+            return _Planner(self, command, binding).plan()
+        result = self.journal.run(command["command_id"], command_digest, plan)
         if result["outcome"] == "accepted" and command["kind"] in REPORTS_EFFECTS:
             # E07/Q05: a cancel, failure, reassignment or correction says which effects may already exist.
             result = dict(result, open_effects=self._open_effects(command, binding))
@@ -118,8 +123,8 @@ class TaskService:
             out = []
             for path in sorted(folder.glob("OB-*.json")) if folder.is_dir() else []:
                 ob = self.journal.read(f"{DIRS['outbox']}/{path.name}")
-                if ob and ob["task_id"] in task_ids and ob["operation"] == "admit_bundle" \
-                        and ob["state"] in ("attempted", "unknown", "conflict") \
+                if ob and ob["task_id"] in task_ids and ((ob["operation"] == "admit_bundle" and ob["state"] in ("attempted", "unknown", "conflict"))
+                             or (ob["operation"] == "publish_return" and ob["state"] in ("pending", "attempted", "unknown", "conflict"))) \
                         and ob["data_scope"] in binding.read_scopes:
                     out.append(ob["operation_id"])
             return out
@@ -656,7 +661,7 @@ class _Planner:
     def open_effects(self, task_id: str, states=("attempted", "unknown", "conflict")) -> list[str]:
         # A notice tells someone; it is not an effect to reconcile, so one that cannot be sent yet never holds work back.
         return [ob["operation_id"] for ob in self.outbox_entries(task_id)
-                if ob["state"] in states and ob["operation"] not in ("notify", "wake_lead")]
+                if ob["state"] in states and ob["operation"] not in ("notify", "wake_lead", "publish_return")]
 
     def actionable(self, interpretation_id, request) -> None:
         problem = interpretation_problem(self.svc.journal, self.b.read_scopes, interpretation_id,
@@ -998,7 +1003,9 @@ class _Planner:
     def k_task_accept(self) -> Plan:
         """E06/E07: only the current lead (or the owner's override) accepts, and only an exact artifact set that the
         cited reviews reviewed. A worker's report never reaches here."""
-        task = self.task_for_change()
+        return self._accept_task(self.task_for_change())
+
+    def _accept_task(self, task) -> Plan:
         lead = self.effective_lead(task)                         # E07: a child's lead is the parent's, now
         if not (self.b.seat == lead or self.b.is_owner):
             raise Refused("not_authorized", "only_the_lead_accepts")
@@ -1122,7 +1129,9 @@ class _Planner:
     def k_task_record_review(self) -> Plan:
         """E06/F04: a review names the exact set it reviewed. A late review of an older set is kept as history and
         does not apply to the current one. The reviewer may not be the author of the set it reviews."""
-        task = self.task_for_change()
+        return self._record_task_review(self.task_for_change())
+
+    def _record_task_review(self, task) -> Plan:
         if task["state"] in TERMINAL_TASK:
             raise Refused("transition_not_allowed", task["state"])
         reviewed = [s_ for s_ in task["artifact_sets"] if s_["digest"] == self.p["reviewed_set_digest"]]
@@ -1159,6 +1168,10 @@ class _Planner:
                                 "review_id": self.p["review_id"], "reviewer": self.b.seat,
                                 "reviewed_set": self.p["reviewed_set_digest"]})
         return self.finish([(path_of("task", task["task_id"]), self.checked("task", rec))] + note, rec["revision"])
+
+    def k_task_commit_helper_return(self) -> Plan:
+        from services.partnership_tasks.helper_return import commit
+        return commit(self)
 
     def k_task_delegate(self) -> Plan:
         """E07: the parent's lead delegates one bounded step to a holder. One level only (a child cannot delegate).

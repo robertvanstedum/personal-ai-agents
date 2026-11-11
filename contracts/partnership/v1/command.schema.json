@@ -27,7 +27,8 @@
         "task.submit_artifacts",
         "task.record_review",
         "task.delegate",
-        "task.lead_unavailable"
+        "task.lead_unavailable",
+        "task.commit_helper_return"
       ]
     },
     "command": {
@@ -665,6 +666,25 @@
             "properties": {
               "payload": {
                 "$ref": "#/$defs/payload.outbox.approve"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "task.commit_helper_return"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/payload.task.commit_helper_return"
               }
             }
           }
@@ -1480,7 +1500,7 @@
       }
     },
     "payload.outbox.approve": {
-      "description": "B4 execution design v0.4 §2 / v0.5 M2-M3: Robert's exact approval of one work card, recorded from his own session. It names the admission operation and the card digest he saw; it is used once, expires 15 minutes after it is recorded, and is spent by the first send.",
+      "description": "B4 execution design v0.4 \u00a72 / v0.5 M2-M3: Robert's exact approval of one work card, recorded from his own session. It names the admission operation and the card digest he saw; it is used once, expires 15 minutes after it is recorded, and is spent by the first send.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -1493,6 +1513,42 @@
         },
         "approval_event_id": {
           "$ref": "urn:minimoi:contract:partnership:common#/$defs/source_event_id"
+        }
+      }
+    },
+    "payload.task.commit_helper_return": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wake_operation_id",
+        "result_digest",
+        "verdict",
+        "reasons",
+        "answer"
+      ],
+      "properties": {
+        "wake_operation_id": {
+          "type": "string",
+          "pattern": "^OB-wake-[0-9a-f]{40}$"
+        },
+        "result_digest": {
+          "$ref": "urn:minimoi:contract:partnership:common#/$defs/digest"
+        },
+        "verdict": {
+          "enum": [
+            "approve",
+            "changes_requested"
+          ]
+        },
+        "reasons": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "answer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 7000
         }
       }
     }

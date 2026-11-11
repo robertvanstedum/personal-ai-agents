@@ -393,6 +393,10 @@
             ]
           },
           "uniqueItems": true
+        },
+        "helper_return_commit": {
+          "type": "boolean",
+          "description": "Dedicated lead-return service only. Absent grants none; requires agent MC/CoS and only task.commit_helper_return operation."
         }
       }
     },
