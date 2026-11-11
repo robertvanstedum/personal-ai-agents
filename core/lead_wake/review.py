@@ -79,7 +79,7 @@ class GatewayReview:
             'verdict is approve or changes_requested. reasons explains the evidence check. '
             'answer is the concise reply to the user with helper attribution and limitations. '
             'If support is insufficient, use changes_requested and explain what is missing. '
-            'Each text field must be nonempty and at most 8000 characters.')
+            'Both text fields must be nonempty; reasons at most 4000 characters and answer at most 7000.')
         body = {'model':self.route.model, 'reasoning_effort':self.route.effort,
                 'stream':False, 'max_tokens':MAX_OUTPUT_TOKENS,
                 'messages':[{'role':'system','content':system},{'role':'user','content':data}]}
@@ -105,7 +105,7 @@ class GatewayReview:
             raise ReviewUnavailable('malformed_review') from exc
         if (not isinstance(result,dict) or set(result)!={'verdict','reasons','answer'}
                 or result['verdict'] not in ('approve','changes_requested')
-                or any(not isinstance(result[k],str) or not result[k].strip() or len(result[k])>8000
+                or any(not isinstance(result[k],str) or not result[k].strip() or len(result[k])>{'reasons':4000,'answer':7000}[k]
                        for k in ('reasons','answer'))):
             raise ReviewUnavailable('malformed_review')
         return {k:prepare(v.encode(),source_class='conversation').data.decode() if k!='verdict' else v

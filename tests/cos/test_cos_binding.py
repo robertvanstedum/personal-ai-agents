@@ -358,3 +358,33 @@ def test_starting_leaves_an_existing_folders_mode_and_tightens_only_its_own_file
     new = tmp_path / "made-here" / "tool-bindings.sqlite3"
     BindingStore(new, "prod")
     assert stat.S_IMODE(os.stat(new.parent).st_mode) == 0o700
+
+
+def test_return_runtime_migration_requires_explicit_retired_instance_evidence(store):
+    from domains.cos.binding import helper_review_settled,reconcile_retired_return_runtime
+    source={'store':'cos-history','id':'cosc-source:t-original','position':1}
+    owner_turn(store,source_ref={'conversation_id':'cosc-source','turn_id':'t-original'})
+    assert not helper_review_settled(store,source,'robert')
+    with pytest.raises(ValueError):
+        reconcile_retired_return_runtime(store,INST,evidence_ref='dev-stop-proof-1')
+    store.register_instance(INST2,public_key=PUBLIC)
+    # Retirement itself is not permission to forget missing terminal proof.
+    assert not helper_review_settled(store,source,'robert')
+    reconcile_retired_return_runtime(store,INST,evidence_ref='dev-stop-proof-1')
+    assert helper_review_settled(store,source,'robert')
+    # A new current unknown run still blocks; migration did not grant a bypass.
+    owner_turn(store,turn='new-turn',run=2,key='new-key',source_ref={'conversation_id':'new','turn_id':'new'})
+    assert not helper_review_settled(store,source,'robert')
+
+
+def test_signed_terminal_after_stop_settles_return_without_restoring_tools(store):
+    from domains.cos.binding import helper_review_settled
+    source={'store':'cos-history','id':'cosc-source:t-original','position':1}
+    owner_turn(store,source_ref={'conversation_id':'cosc-source','turn_id':'t-original'})
+    store.revoke('t1','owner_stop')
+    assert not helper_review_settled(store,source,'robert')
+    with pytest.raises(NotBound):store.record_terminal(terminal_receipt())
+    assert helper_review_settled(store,source,'robert')
+    assert code(lambda:resolve(store))=='stopped'
+    assert not store.prepare_depth('t1',RUN.format(1),'c'*32)
+    assert not store.attach_depth('t1',RUN.format(2))

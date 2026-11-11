@@ -61,3 +61,12 @@ def test_redaction_expansion_and_system_overhead_are_in_final_budget(monkeypatch
     monkeypatch.setattr(module,'_scrub_evidence',lambda value:{'expanded':'x'*module.MAX_INPUT_BYTES})
     with pytest.raises(ReviewUnavailable):g(PACKET,{'small':'value'})
     assert calls==[]
+
+@pytest.mark.parametrize('field,limit',[('reasons',4000),('answer',7000)])
+def test_review_lengths_match_commit_contract(field,limit):
+    result=dict(RESULT,**{field:'x'*limit})
+    response={'choices':[{'message':{'role':'assistant','content':json.dumps(result)},'finish_reason':'stop'}]}
+    g,_=gateway(response)
+    assert g(PACKET,{})[field]=='x'*limit
+    response['choices'][0]['message']['content']=json.dumps(dict(result,**{field:'x'*(limit+1)}))
+    with pytest.raises(ReviewUnavailable):g(PACKET,{})

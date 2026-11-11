@@ -1494,6 +1494,9 @@ def _signed_writes_only():
     return jsonify({"error": "not_allowed", "message": "This needs the owner's signed request through mini-moi."}), 403
 
 
+from domains.cos.lead_return import install as _install_lead_return
+_install_lead_return(app,_history,os.environ,lambda:_bindings)
+
 if _history is not None:
     from domains.cos.history_api import create_blueprint as _history_blueprint
     app.register_blueprint(_history_blueprint(_history, resolve_owner=resolve_user_id))

@@ -294,7 +294,8 @@ def main(argv=None) -> int:
     grants = Grants(json.loads(Path(grants_file).read_text())) if grants_file else None
     from services.partnership_tasks.charters import load_if_approved
     charters = load_if_approved(os.environ)                                       # a mismatch refuses the start
-    svc = TaskService(root, environment, Bindings.load(os.environ["PARTNERSHIP_BINDINGS"]), grants=grants, charters=charters)
+    svc = TaskService(root, environment, Bindings.load(os.environ["PARTNERSHIP_BINDINGS"]), grants=grants, charters=charters,
+                      helper_returns=os.environ.get("PARTNERSHIP_HELPER_RETURNS") == "1")
     from core import portal_assertion as PA
     nonce_file = os.environ.get("PARTNERSHIP_OWNER_NONCE_FILE")
     app = create_app(svc, owner_key=PA.load_key(os.environ.get("PARTNERSHIP_OWNER_KEY_FILE")),

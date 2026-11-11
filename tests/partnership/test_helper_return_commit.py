@@ -41,7 +41,8 @@ def test_atomic_accept_and_exact_immutable_intent_restart_replay(rig, tmp_path):
     assert task['state'] == 'completed' and len(task['acceptances']) == 1
     assert task['reviews'][-1]['review_ref']['id'] == ob['operation_id']
     assert ob['packet']['source_ref'] == wake['packet']['source_ref']
-    assert ob['packet']['text'] == command['payload']['answer']
+    assert ob['packet']['text'].endswith(command['payload']['answer'])
+    assert ob['packet']['text'].startswith("MC reviewed Apprentice's result")
     assert ob['bundle_digest'] == digest(ob['packet'])
     assert ob['state'] == 'pending' and ob['destination_receipt'] is None
     restarted = TaskService(svc.journal.root, svc.environment, svc.bindings,
@@ -221,7 +222,8 @@ def test_crash_finishes_exact_review_acceptance_and_publication_together(rig, tm
     ob = publication(recovered, wake)
     assert task['state'] == 'completed' and len(task['reviews']) == len(task['acceptances']) == 1
     assert task['reviews'][0]['review_ref']['digest'] == ob['bundle_digest']
-    assert ob['packet']['text'] == command['payload']['answer']
+    assert ob['packet']['text'].endswith(command['payload']['answer'])
+    assert ob['packet']['text'].startswith("MC reviewed Apprentice's result")
 
 
 def test_unresolved_other_review_dissent_cannot_be_silently_accepted(rig, tmp_path):

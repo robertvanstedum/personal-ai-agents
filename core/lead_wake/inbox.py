@@ -158,7 +158,7 @@ class Inbox:
         """
         if (not isinstance(result, dict) or set(result) != {'verdict', 'reasons', 'answer'}
                 or result['verdict'] not in ('approve', 'changes_requested')
-                or any(not isinstance(result[k], str) or not result[k].strip() or len(result[k]) > 8000
+                or any(not isinstance(result[k], str) or not result[k].strip() or len(result[k]) > {'reasons':4000,'answer':7000}[k]
                        for k in ('reasons', 'answer'))):
             raise ValueError('invalid review result')
         current = self.resolve(operation_id)

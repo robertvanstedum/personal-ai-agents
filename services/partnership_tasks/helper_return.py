@@ -10,6 +10,11 @@ from services.partnership_tasks.journal import Refused
 from services.partnership_tasks.service import path_of, wake_problem, SCHEMAS
 
 
+def displayed_text(lead,helper,answer):
+    names={'mc':'MC','cos':'CoS','apprentice':'Apprentice','ea':'Executive Assistant'}
+    return names.get(lead,lead)+' reviewed '+names.get(helper,helper)+"'s result (committed for delivery):\n\n"+answer
+
+
 def commit(p):
     svc, b, payload = p.svc, p.b, p.p
     if not svc.helper_returns:
@@ -71,7 +76,7 @@ def commit(p):
               'result_digest': current['digest'], 'fence_generation': task['fence_generation'],
               'review': review, 'review_digest': digest(review), 'review_id': review_id,
               'accepted': review['verdict'] == 'approve', 'drafted_by': task['holder'],
-              'text': review['answer'], 'committed_task_revision': task['revision'] + (2 if review['verdict'] == 'approve' else 1)}
+              'text': displayed_text(b.seat,task['holder'],review['answer']), 'committed_task_revision': task['revision'] + (2 if review['verdict'] == 'approve' else 1)}
     review_ref = {'store': 'task_service', 'id': opid, 'edition': '1', 'digest': digest(packet)}
     original = p.p
     try:

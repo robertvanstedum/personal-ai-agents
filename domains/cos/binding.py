@@ -60,6 +60,8 @@ CREATE TABLE IF NOT EXISTS calls(
   command_id TEXT, receipt_id TEXT, PRIMARY KEY(turn_id, tool_call_id));
 CREATE TABLE IF NOT EXISTS served_runs(
   run_id TEXT PRIMARY KEY, at TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, api TEXT, harness TEXT);
+CREATE TABLE IF NOT EXISTS return_runtime_settlements(instance_id TEXT PRIMARY KEY, evidence_ref TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS terminal_audit_runs(run_id TEXT PRIMARY KEY, receipt TEXT NOT NULL, valid INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS terminal_runs(run_id TEXT PRIMARY KEY, receipt TEXT NOT NULL, valid INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS runtime_proof_keys(instance_id TEXT PRIMARY KEY, public_key TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS depth_continuations(turn_id TEXT PRIMARY KEY, old_run TEXT UNIQUE NOT NULL,
@@ -280,10 +282,35 @@ class BindingStore:
             row = db.execute("SELECT run_id FROM bindings WHERE turn_id=?", (turn_id,)).fetchone()
             return row is not None and row["run_id"] == run_id and not self._ran(db, turn_id, run_id)
 
+    def record_terminal_audit(self, receipt: dict) -> bool:
+        """Signed termination is an audit fact even after Stop; never authority.
+
+        A separate transaction preserves the fact when normal tool/depth binding
+        checks subsequently reject a stopped, expired or replaced owner turn.
+        """
+        from core.model_routes.runtime_proof import verified
+        with self._tx() as db:
+            key=db.execute('SELECT public_key FROM runtime_proof_keys WHERE instance_id=?',(receipt.get('instance'),)).fetchone()
+            if key is None or not verified(receipt,key['public_key']):return False
+            row=db.execute('SELECT * FROM bindings WHERE run_id=?',(receipt['run'],)).fetchone()
+            if (row is None or row['environment']!=self.environment or row['runtime_instance']!=receipt['instance']
+                    or row['agent_entry']!=receipt['agent']
+                    or receipt['session']!='agent:'+row['agent_entry']+':openai-user:'+row['session_user']):
+                return False
+            raw=json.dumps(receipt,sort_keys=True)
+            prior=db.execute('SELECT receipt,valid FROM terminal_audit_runs WHERE run_id=?',(receipt['run'],)).fetchone()
+            if prior and prior['receipt']!=raw:
+                db.execute('UPDATE terminal_audit_runs SET valid=0 WHERE run_id=?',(receipt['run'],))
+                return False
+            db.execute('INSERT OR IGNORE INTO terminal_audit_runs(run_id,receipt) VALUES(?,?)',(receipt['run'],raw))
+            return prior is None or bool(prior['valid'])
+
     def record_terminal(self, receipt: dict) -> bool:
         from core.model_routes.runtime_proof import valid_receipt, verified
         if not valid_receipt(receipt):
             return False
+        # Audit receipt survives a later authorization refusal without reopening tools.
+        self.record_terminal_audit(receipt)
         with self._tx() as db:
             key = db.execute("SELECT public_key FROM runtime_proof_keys WHERE instance_id=?", (receipt["instance"],)).fetchone()
             if key is None or not verified(receipt, key["public_key"]):
@@ -631,3 +658,52 @@ class TurnBinder:
 
     def stop(self, turn_id: str, reason: str = "owner_stop") -> bool:
         return self.store.revoke(turn_id, reason)
+
+
+def helper_review_settled(store, source_ref, principal):
+    """History failure/recovery is not proof of runtime termination.
+
+    Only signed terminal receipts already verified at ingress settle attached
+    runs. A missing run identity or proof keeps the return queued. Include all
+    owner runs so a restarted process cannot ignore an older orphaned run.
+    """
+    if store is None:return False
+    with store._tx() as db:
+        def terminal(run):
+            audit=db.execute('SELECT valid FROM terminal_audit_runs WHERE run_id=?',(run,)).fetchone()
+            if audit is not None:return bool(audit['valid'])
+            return db.execute('SELECT 1 FROM terminal_runs WHERE run_id=? AND valid=1',(run,)).fetchone() is not None
+        rows=db.execute("SELECT source_ref,run_id,turn_id,runtime_instance FROM bindings WHERE principal=? AND origin='owner'",(principal,)).fetchall()
+        found=False
+        for row in rows:
+            source=json.loads(row['source_ref']) if row['source_ref'] else None
+            if (isinstance(source,dict) and source_ref.get('store')=='cos-history'
+                    and source_ref.get('id')==str(source.get('conversation_id'))+':'+str(source.get('turn_id'))):found=True
+            if db.execute('SELECT 1 FROM return_runtime_settlements WHERE instance_id=?',(row['runtime_instance'],)).fetchone():
+                continue
+            if row['run_id'] is None or not terminal(row['run_id']):
+                return False
+            old=db.execute('SELECT old_run,state,new_run FROM depth_continuations WHERE turn_id=?',(row['turn_id'],)).fetchone()
+            if old and (old['state']!='attached' or old['new_run']!=row['run_id']
+                        or not terminal(old['old_run'])):
+                return False
+        return found
+
+
+def reconcile_retired_return_runtime(store, instance_id, *, evidence_ref):
+    """Operator-only migration after independently proving an old runtime stopped.
+
+    No HTTP/model route calls this function. Retirement alone is insufficient:
+    the operator records a durable deployment/stop verification evidence ref.
+    This does not manufacture a signed model receipt or a successful answer.
+    """
+    if not re.fullmatch(r'[0-9a-f]{32}',instance_id) or not isinstance(evidence_ref,str) or not 8<=len(evidence_ref)<=300:
+        raise ValueError('retired instance and operator evidence required')
+    with store._tx() as db:
+        row=db.execute('SELECT retired FROM instances WHERE instance_id=?',(instance_id,)).fetchone()
+        if row is None or row['retired'] is None:
+            raise ValueError('cannot reconcile current runtime')
+        existing=db.execute('SELECT evidence_ref FROM return_runtime_settlements WHERE instance_id=?',(instance_id,)).fetchone()
+        if existing and existing['evidence_ref']!=evidence_ref:
+            raise ValueError('settlement evidence changed')
+        db.execute('INSERT OR IGNORE INTO return_runtime_settlements VALUES(?,?)',(instance_id,evidence_ref))
