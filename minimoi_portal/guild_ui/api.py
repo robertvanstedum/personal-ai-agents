@@ -2682,7 +2682,8 @@ def _turn_files(conversations, conv, principal, ids, turn_id=None):
             raise LookupError(doc_id) from None
 
     staged, failed = _stage_for_mc(conv, ids, principal, turn_id)
-    built = build(conv, ids, load=load, scrub=lambda text: text, staged=staged, stage_failed=failed) if ids else Built()
+    # A document keeps its email and phone. A card, an IBAN or a routing number still goes.
+    built = build(conv, ids, load=load, scrub=lambda text: scrub(text, emails=False), staged=staged, stage_failed=failed) if ids else Built()
     built.staged = staged or None
     if refs:                                           # the owner's chosen topic items ride the same data block and report
         from .topic_context import build as build_context
