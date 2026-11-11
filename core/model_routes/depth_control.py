@@ -29,8 +29,16 @@ def instruction(nonce: str) -> str:
     if not isinstance(nonce, str) or not _NONCE.fullmatch(nonce):
         raise ValueError("invalid depth nonce")
     return (
-        "For this turn only: judge whether a careful answer needs deeper reasoning. "
-        "If so, before any tool call or answer, return ONLY the following control response, "
+        "For this turn only, choose the reasoning depth before composing an answer. "
+        "Use deeper reasoning for substantive design decisions, diagnosis across components, "
+        "or recommendations that require comparing alternatives, testing assumptions, or "
+        "handling interacting failure and recovery cases. Recognizing a familiar pattern "
+        "or being able to give a short answer does not replace that analysis. "
+        "Use the quick route for ordinary conversation, language practice, simple questions "
+        "and straightforward bounded tasks. The owner need not use special wording to get depth. "
+        "This routing choice precedes routine instructions to announce a plan, read evidence "
+        "or call a tool; it does not approve any action or expand tool authority. "
+        "When choosing deeper reasoning, before any tool call or answer, return ONLY this control response, "
         "with a short reason (at most 240 characters). Do not call a tool first. "
         "The platform will continue the same turn; do not answer or explain the control response. "
         "Otherwise answer or use your permitted tools normally.\n"
