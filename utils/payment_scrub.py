@@ -182,12 +182,11 @@ def _cards(match: re.Match) -> str:
     return "".join(out)
 
 
-_BEFORE = [
-    # IBAN first, before its digits are taken by a digit rule.
-    re.compile(r"(?<![A-Za-z0-9])[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){11,30}(?![A-Za-z0-9])"),
-    re.compile(r"(?<![A-Za-z0-9._%+\-])[A-Za-z0-9._%+\-]++@[A-Za-z0-9\-]++(?:\.[A-Za-z0-9\-]++)++"),
-    re.compile(r"(?<![A-Za-z])(?:routing|aba|rtn)(?:\s*+(?:number|no\.?|#))?\s*+[:#]?\s*+\d{9}(?!\d)", re.IGNORECASE),
-]
+_IBAN = re.compile(r"(?<![A-Za-z0-9])[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){11,30}(?![A-Za-z0-9])")
+_EMAIL = re.compile(r"(?<![A-Za-z0-9._%+\-])[A-Za-z0-9._%+\-]++@[A-Za-z0-9\-]++(?:\.[A-Za-z0-9\-]++)++")
+_ROUTING = re.compile(r"(?<![A-Za-z])(?:routing|aba|rtn)(?:\s*+(?:number|no\.?|#))?\s*+[:#]?\s*+\d{9}(?!\d)", re.IGNORECASE)
+# IBAN first, before its digits are taken by a digit rule. Email is a stored-note rule, not a document rule.
+_BEFORE = [_IBAN, _EMAIL, _ROUTING]
 _AFTER = [
     # Brand, then "ending in", a mask, or a separator, then four digits and the groups after them.
     re.compile(rf"(?<![A-Za-z]){_BRAND}(?![A-Za-z])(?:\s*+[:#\-–—•]\s*+|\s++ending\s++(?:in|with)\s++|\s*+{_MASK_RUN})"
@@ -220,16 +219,22 @@ _BRAND_BESIDE = re.compile(rf"(?<![A-Za-z]){_BRAND}[\s:#\-–—]*+{re.escape(RE
                            re.IGNORECASE)
 
 
-def scrub(text: str) -> str:
+def scrub(text: str, *, emails: bool = True) -> str:
     """Return ``text`` with every payment detail replaced; idempotent.
 
     Matching runs on a normalised copy (Unicode spaces, dashes, zero-width
     characters, fullwidth digits; see _NORMAL). Text with nothing to remove
-    comes back exactly as given; text with a removal comes back normalised."""
+    comes back exactly as given; text with a removal comes back normalised.
+    ``emails=False`` keeps an email address. Stored notes pass the default
+    and still remove one. A document the owner attached is his own text:
+    the address and a phone number stay, and a card, an IBAN or a routing
+    number still goes."""
     original = str(text)
     out = original.translate(_NORMAL)
     normalised = out
     for pattern in _BEFORE:
+        if pattern is _EMAIL and not emails:
+            continue
         out = pattern.sub(REMOVED, out)
     out = _DIGIT_RUN.sub(_cards, out)
     for pattern in _AFTER:

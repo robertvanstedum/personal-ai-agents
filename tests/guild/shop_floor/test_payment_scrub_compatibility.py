@@ -40,6 +40,14 @@ def test_existing_luhn_test_import(module):
     assert not module._luhn_ok("1727450000123")
 
 
+def test_a_document_keeps_an_email_and_a_phone_and_still_loses_a_card():
+    text = "Robert Van Stedum, robert@example.com, 512-555-0142. Card 5555 5555 5555 4444."
+    out = shared.scrub(text, emails=False)
+    assert "robert@example.com" in out and "512-555-0142" in out
+    assert "5555 5555 5555 4444" not in out and shared.REMOVED in out
+    assert shared.scrub(text) != out and "robert@example.com" not in shared.scrub(text)
+
+
 def test_portal_uses_the_shared_implementation():
     assert portal.scrub is shared.scrub
     assert portal.scrubbed is shared.scrubbed
