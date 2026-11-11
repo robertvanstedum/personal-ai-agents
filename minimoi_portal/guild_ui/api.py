@@ -1658,12 +1658,14 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
 
     tools_binding = _tool_binder(services, ledger_turn, conv, principal, note_id)
 
+    route_notice = _route_notice(conversations, conv, principal, floor, reply_key, route)
+
     def request_for(built):
         return TurnRequest(conversation_id=session_conversation_id(conv, principal), route=route,
                            text=carried + _with_context(_with_agent(_with_files(sent_text, built), agent_state), sent_text, conv, principal),
                            note_request_id=note_id, correlation_id=turn_id,
                            context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")},
-                           prepare_depth=getattr(tools_binding, "prepare_depth", None))
+                           prepare_depth=getattr(tools_binding, "prepare_depth", None), route_notice=route_notice)
 
     def refused_turn(exc):
         return "refused", {"error": "mc_unavailable", "reason": exc.failure_class,
@@ -2036,6 +2038,24 @@ def _route_snapshot(services, conv, owner_text=""):
     except (OSError, ValueError):
         _mc_log().exception("model routes: the catalogue could not be read")
         return None, RouteRefused("route_unavailable", "The model routes could not be read. Nothing was sent.")
+
+
+def _route_notice(conversations, conv, principal, floor, reference, route):
+    """Owner-scoped presentation metadata; failure keeps notices visible, never fails chat."""
+    def answer(key):
+        note = floor.get_note(key)
+        return (note.get("text") if note and note.get("who") == "master_craftsman"
+                and note.get("author_kind") == "agent" else None)
+
+    def notice(selected, line):
+        try:
+            return conversations.prepare_route_notice(conv["id"], principal, reference, selected, line, answer)
+        except Exception:
+            return bool(line)
+
+    if route and conv:
+        notice(route, "")
+    return notice
 
 
 def _route_recorder(conversations, conv, principal):
@@ -2453,7 +2473,8 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         elif services.mc.kind == "openclaw" and host_channel is VOICE_MARKER:
             turn_context["host_channel"] = VOICE_MARKER          # the OpenClaw adapter translates it (Spec 164 §9)
         req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=carried + context_text, route=route,
-                          note_request_id=note_id, correlation_id=turn_id, context=turn_context)
+                          note_request_id=note_id, correlation_id=turn_id, context=turn_context,
+                          route_notice=_route_notice(conversations, conv, principal, floor, reply_key, route))
         _mc_log().info("mc turn %s start backend=%s files=%d", turn_id, services.mc.kind, len(files.report) if files else 0)
         _files_recorder(conversations, conv, principal, note_id, files)()
         started = time.monotonic()

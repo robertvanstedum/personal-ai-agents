@@ -420,7 +420,10 @@ class OpenClawBackend:
             reply = self._reply_text(payload)
         state = turn_route.get()
         if state and state.get("switched"):
-            reply = f"{reply}\n\n{switch_words(state['switched'], self._served_evidence(context))}"
+            words = switch_words(state['switched'], self._served_evidence(context))
+            notice = state.get("route_notice")
+            if notice is None or notice(state["switched"], words):
+                reply = f"{reply}\n\n{words}"
         # OpenClaw adds its partial-text warning even when our only text is a
         # platform notice. Remove that exact duplicate only on trusted length;
         # real partial answers retain the native warning and all original text.

@@ -85,3 +85,26 @@ def record(history, conversation_id: str, route: dict, served: dict | None) -> N
     except Exception:       # evidence only
         import logging
         logging.getLogger("cos_routes").warning("cos route receipt not kept")
+
+
+def notice_for_turn(history, conversation_id, turn_id, route):
+    """Prepare before saving; only canonical history answers count as presented."""
+    from core.model_routes.presentation import prepare
+
+    def answer(reference):
+        saved = history.turn(conversation_id, reference)
+        return (saved.get("reply_text") if saved and saved.get("status") in ("answered", "recovered") else None)
+
+    def notice(selected, line):
+        try:
+            with history._locked():
+                selection = _selection(history, conversation_id)
+                rows, show = prepare(selection.get("notice_candidates", []), turn_id, selected, line, answer)
+                fsio.write_doc(_path(history, conversation_id), {**selection, "notice_candidates": rows})
+            return show
+        except Exception:
+            return bool(line)
+
+    if route:
+        notice(route, "")
+    return notice

@@ -74,6 +74,7 @@ class TurnRequest:
     context: dict = field(default_factory=dict)   # {about, item_ref, page}
     correlation_id: str | None = None          # the portal's turn id, echoed by the relay
     route: dict | None = None                  # the route fixed at admission (core.model_routes.snapshot); server-owned, never browser input
+    route_notice: object = None                 # host-only saved-answer presentation callback
     prepare_depth: object = None               # host-only callback, never serialized to the runtime
 
 

@@ -400,7 +400,9 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
                 answered = answered or isinstance(event, Delta)
                 yield event
         if answered and any(isinstance(event, Finish) for event in tail):
-            yield Delta("\n\n" + switch_words(moved, served))
+            words = switch_words(moved, served)
+            if req.route_notice is None or req.route_notice(moved, words):
+                yield Delta("\n\n" + words)
         yield from tail
 
     def _stream(self, payload: bytes, headers: dict, cancel):
@@ -489,7 +491,9 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
         trace = {**(second.trace or {}), "route": moved}
         if second.status == "answered":
             words = switch_words(moved, trace.get("served"))
-            return TurnResult("answered", self.kind, text=f"{second.text}\n\n{words}", usage=second.usage, trace=trace)
+            show = req.route_notice is None or req.route_notice(moved, words)
+            return TurnResult("answered", self.kind, text=f"{second.text}\n\n{words}" if show else second.text,
+                              usage=second.usage, trace=trace)
         if second.status in ("unavailable",) or trace.get("plan_signal"):
             return TurnResult("unavailable", self.kind, failure_class="plan_and_api_unavailable", trace=trace,
                               message="The plan and the API route are both unavailable")

@@ -690,3 +690,15 @@ class TestFailoverRuntimeConfig:
     def test_a_gateway_host_ignores_it(self, tmp_path):
         run, config = _apply(tmp_path, {"COS_FAILOVER_ROUTES": self.REF, "COS_GATEWAY_KEY_CAPPED": "1"})
         assert run.returncode == 0 and config == json.loads(CONFIG.read_text())
+
+
+def test_saved_presentation_callback_suppresses_only_the_platform_route_suffix(failover):
+    f = failover(_Sse(RUN_A, _error("rate_limit_error")), _ok())
+    checked = []
+    def already_presented(route, words):
+        checked.append((route, words))
+        return False
+    f.state["route_notice"] = already_presented
+    assert f.turn() == "Answer."
+    assert len(checked) == 1 and checked[0][0]["switched_from"] == ASTRA
+    assert "tries the OpenAI plan again" in checked[0][1]

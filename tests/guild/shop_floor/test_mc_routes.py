@@ -630,3 +630,12 @@ def test_the_internal_stream_binds_the_api_run_and_keeps_the_moved_route():
     runs = []
     result = collect(Backend(), _request(), on_run=runs.append, record_usage=lambda **kw: None)
     assert runs == [RUN_A, RUN_B] and result.trace["route"]["route_id"] == API_ROUTE
+
+
+def test_saved_route_warning_is_not_repeated_but_changed_signal_is(switching):
+    first, *_ = _run(switching, plan_down("rate_limit"), API_ANSWER)
+    assert "tries the OpenAI plan again" in first
+    second, *_ = _run(switching, plan_down("rate_limit"), API_ANSWER)
+    assert "Answer." in second and "tries the OpenAI plan again" not in second
+    changed, *_ = _run(switching, plan_down("plan_exhausted"), API_ANSWER)
+    assert "quota is used up" in changed

@@ -94,6 +94,44 @@ def test_runtime_key_cannot_be_replaced_on_existing_instance(store):
     assert code(lambda: store.register_instance(INST, public_key=key)) == "instance_key_changed"
 
 
+def test_late_terminal_is_audit_only_after_normal_close(store):
+    owner_turn(store)
+    store.end("t1")  # live HTTP completion precedes the callback by about 100 ms
+    assert store.record_terminal(terminal_receipt())
+    assert store.record_terminal(terminal_receipt())  # idempotent callback
+    assert code(lambda: resolve(store)) == "turn_ended"
+    assert code(lambda: store.prepare_depth("t1", RUN.format(1), "c" * 32)) == "turn_ended"
+    assert not store.attach_depth("t1", RUN.format(2))
+
+
+def test_stop_after_normal_close_still_refuses_late_terminal(store):
+    owner_turn(store)
+    store.end("t1")
+    store.revoke("t1", "owner_stop")
+    assert code(lambda: store.record_terminal(terminal_receipt())) == "stopped"
+
+
+@pytest.mark.parametrize("change", ["stop", "runtime", "epoch", "expiry", "identity"])
+def test_late_terminal_never_bypasses_other_binding_fences(store, clock, change):
+    owner_turn(store)
+    store.end("t1")
+    receipt = terminal_receipt()
+    if change == "stop":
+        owner_turn(store, turn="t2", run=2, key="second")
+        store.revoke("t2", "owner_stop")
+        receipt = terminal_receipt(run=RUN.format(2))
+    elif change == "runtime":
+        store.register_instance(INST2)
+    elif change == "epoch":
+        store.start_epoch("epoch-2")
+    elif change == "expiry":
+        clock.t += 601
+    else:
+        receipt = terminal_receipt(session=f"agent:cos-agent-a:openai-user:{USER}-foreign")
+    with pytest.raises(NotBound):
+        store.record_terminal(receipt)
+
+
 def test_depth_retires_quick_before_deep_and_cannot_dispatch_again(store):
     owner_turn(store)
     assert not store.prepare_depth("t1", RUN.format(1), "c" * 32)

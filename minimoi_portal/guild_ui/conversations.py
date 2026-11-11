@@ -343,6 +343,17 @@ class ConversationStore:
             selection["turns"] = (selection.get("turns") or [])[-(ROUTE_TURNS_KEPT - 1):] + [receipt]
         return self._change(cid, principal, fn)
 
+    def prepare_route_notice(self, cid, principal, reference, route, line, answer):
+        """Prepare only; canonical saved answers establish presentation, including after lost save ACK."""
+        from core.model_routes.presentation import prepare
+        show = bool(line)
+        def fn(c):
+            nonlocal show
+            c["route_notice_candidates"], show = prepare(
+                c.get("route_notice_candidates", []), reference, route, line, answer)
+        self._change(cid, principal, fn)
+        return show
+
     def set_work_item(self, cid, principal, work_item: dict | None) -> dict:
         """Attach, replace or clear the linked work. Only this changes it: no
         page view, note or browsing ever sets it."""

@@ -292,7 +292,16 @@ class BindingStore:
             if row is None:
                 return False
             user = receipt["session"].removeprefix(f"agent:{receipt['agent']}:openai-user:")
-            self._check(db, row, instance_id=receipt["instance"], agent_id=receipt["agent"], session_user=user)
+            # The HTTP answer can finish just before agent_end's callback arrives.
+            # Keep that signed audit evidence after a normal close, without
+            # reopening the binding. Stop/replacement/expiry still refuse it;
+            # prepare_depth and tool admission always check the original row.
+            audit_row = row
+            if row["revoked"] is not None and row["revoked_reason"] == "turn_ended":
+                if db.execute("SELECT 1 FROM stops WHERE turn_id=?", (row["turn_id"],)).fetchone():
+                    raise NotBound("stopped")
+                audit_row = dict(row, revoked=None)
+            self._check(db, audit_row, instance_id=receipt["instance"], agent_id=receipt["agent"], session_user=user)
             raw = json.dumps(receipt, sort_keys=True)
             prior = db.execute("SELECT receipt FROM terminal_runs WHERE run_id=?", (receipt["run"],)).fetchone()
             if prior and prior["receipt"] != raw:

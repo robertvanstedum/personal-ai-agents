@@ -1740,7 +1740,8 @@ def _ui_turn(body: dict, binding: dict | None = None) -> tuple[dict, int]:
             before = _cos_files.snapshot() if _cos_files is not None else None
             routed = model_route.for_turn(_history, kept["conversation_id"], owner_text) if kept else None
             model_token = openclaw_backend_module.turn_model.set(model_route.runtime_model(routed))
-            route_state = {"route": routed} if routed is not None else None
+            route_state = {"route": routed, "route_notice": model_route.notice_for_turn(
+                _history, kept["conversation_id"], kept["turn_id"], routed)} if routed is not None else None
             route_token = openclaw_backend_module.turn_route.set(route_state)
             result = _process_confer_turn(
                 text,
@@ -1823,7 +1824,8 @@ def _voice_owner_turn(text: str, *, conversation: str, request_id: str, on_dispa
     try:
         routed = model_route.for_turn(_history, kept["conversation_id"], text) if kept else None
         model_token = openclaw_backend_module.turn_model.set(model_route.runtime_model(routed))
-        route_state = {"route": routed} if routed is not None else None
+        route_state = {"route": routed, "route_notice": model_route.notice_for_turn(
+                _history, kept["conversation_id"], kept["turn_id"], routed)} if routed is not None else None
         route_token = openclaw_backend_module.turn_route.set(route_state)
         result = _process_confer_turn(
             text, channel="html_voice",
