@@ -215,6 +215,16 @@ def _repo(cfg):
     return default_repo({"MINIMOI_GITHUB_REPO": cfg["repo"]} if cfg["repo"] else {})
 
 
+def _issue_repo(cfg):
+    """Where an issue write goes. Dev may not name the production repository, or leave the name empty
+    and fall through to it. A read of the public repository is unchanged."""
+    from .mc_context import DEFAULT_REPO
+    chosen = _repo(cfg)
+    if cfg.get("environment") == "dev" and chosen == DEFAULT_REPO:
+        return None
+    return chosen
+
+
 def _github_post(cfg, path, payload, key, http_post, *, ok=201):
     """POST (or, with ``ok=200``, PATCH) one issue write. An ``ok`` answer carrying ``key`` (an int) is ``created``; an
     answer GitHub gives before writing anything (401/403/404/410/422) is ``refused``; anything else, including a
@@ -224,9 +234,12 @@ def _github_post(cfg, path, payload, key, http_post, *, ok=201):
     token = _private_token(cfg["issues_token_file"])
     if token is None:
         return "refused_credential_unavailable", None
+    repo = _issue_repo(cfg)
+    if repo is None:
+        return "refused_dev_production_repo", None
     send = http_post or (requests.post if ok == 201 else requests.patch)
     try:
-        r = send(f"{API}/repos/{_repo(cfg)}{path}", json=payload, timeout=(5, 15), allow_redirects=False,
+        r = send(f"{API}/repos/{repo}{path}", json=payload, timeout=(5, 15), allow_redirects=False,
                  headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
                           "X-GitHub-Api-Version": "2022-11-28"})
     except Exception:
@@ -249,7 +262,7 @@ def issue_filer(cfg, *, http_post=None):
     def file_issue(title, body, labels=()):
         payload = {"title": title, "body": body, **({"labels": list(labels)} if labels else {})}
         return _github_post(cfg, "/issues", payload, "number", http_post)
-    file_issue.repo = _repo(cfg)
+    file_issue.repo = _issue_repo(cfg)
     return file_issue
 
 

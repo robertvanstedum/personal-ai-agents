@@ -165,7 +165,7 @@ class IssueFilerTests(unittest.TestCase):
         os.chmod(self.token, 0o600)
         with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://unused"}):
             self.cfg = w.settings(dict(ON, MINIMOI_MC_TOOLS_TICKETS="1", MINIMOI_MC_ISSUES_TOKEN_FILE=self.token,
-                                       MINIMOI_GITHUB_REPO="robertvanstedum/personal-ai-agents"))
+                                       MINIMOI_GITHUB_REPO="robertvanstedum/minimoi-issues-test"))
 
     def filer(self, status, body=None, raises=False):
         sent = []
@@ -181,7 +181,7 @@ class IssueFilerTests(unittest.TestCase):
         file_issue, sent = self.filer(201, {"number": 123})
         self.assertEqual(file_issue("t", "b"), ("created", 123))
         url, kw = sent[0]
-        self.assertEqual(url, "https://api.github.com/repos/robertvanstedum/personal-ai-agents/issues")
+        self.assertEqual(url, "https://api.github.com/repos/robertvanstedum/minimoi-issues-test/issues")
         self.assertEqual(kw["json"], {"title": "t", "body": "b"})
         self.assertFalse(kw["allow_redirects"])
         self.assertEqual(self.filer(422)[0]("t", "b"), ("refused_http_422", None))
@@ -196,9 +196,27 @@ class IssueFilerTests(unittest.TestCase):
         comment = w.issue_commenter(cfg, http_post=lambda url, **kw: sent.append((url, kw)) or
                                     SimpleNamespace(status_code=201, json=lambda: {"id": 77}))
         self.assertEqual(comment(69, "text"), ("created", 77))
-        self.assertEqual(sent[0][0], "https://api.github.com/repos/robertvanstedum/personal-ai-agents/issues/69/comments")
+        self.assertEqual(sent[0][0], "https://api.github.com/repos/robertvanstedum/minimoi-issues-test/issues/69/comments")
         self.assertEqual(comment(0, "text"), ("refused", None))
         self.assertIsNone(w.issue_commenter(self.cfg))                    # comments not switched on
+
+    def test_dev_does_not_write_the_production_repository(self):
+        with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://unused"}):
+            named = w.settings(dict(ON, MINIMOI_MC_TOOLS_TICKETS="1", MINIMOI_MC_ISSUES_TOKEN_FILE=self.token,
+                                    MINIMOI_GITHUB_REPO="robertvanstedum/personal-ai-agents"))
+            empty = w.settings(dict(ON, MINIMOI_MC_TOOLS_TICKETS="1", MINIMOI_MC_ISSUES_TOKEN_FILE=self.token))
+            production = w.settings(dict(ON, MINIMOI_MC_TOOLS_ENV="prod", MINIMOI_MC_TOOLS_TICKETS="1",
+                                         MINIMOI_MC_ISSUES_TOKEN_FILE=self.token,
+                                         MINIMOI_GITHUB_REPO="robertvanstedum/personal-ai-agents"))
+        sent = []
+        for cfg in (named, empty):
+            file_issue = w.issue_filer(cfg, http_post=lambda *a, **k: sent.append(1))
+            self.assertEqual(file_issue("t", "b"), ("refused_dev_production_repo", None))
+            self.assertIsNone(file_issue.repo)
+        file_issue = w.issue_filer(production, http_post=lambda *a, **k: sent.append(1) or
+                                   SimpleNamespace(status_code=201, json=lambda: {"number": 9}))
+        self.assertEqual(file_issue("t", "b"), ("created", 9))
+        self.assertEqual(len(sent), 1)
 
     def test_new_issue_carries_its_labels(self):
         file_issue, sent = self.filer(201, {"number": 5})
@@ -212,7 +230,7 @@ class IssueFilerTests(unittest.TestCase):
                                  SimpleNamespace(status_code=200, json=lambda: {"number": 388}))
         self.assertEqual(update(388, {"state": "closed", "labels": ["ui"]}), ("created", 388))
         url, kw = sent[0]
-        self.assertEqual(url, "https://api.github.com/repos/robertvanstedum/personal-ai-agents/issues/388")
+        self.assertEqual(url, "https://api.github.com/repos/robertvanstedum/minimoi-issues-test/issues/388")
         self.assertEqual(kw["json"], {"state": "closed", "labels": ["ui"]})
         self.assertEqual(update(388, {"assignees": ["x"]}), ("refused", None))      # nothing beyond the four fields
         self.assertEqual(update(388, {}), ("refused", None))
