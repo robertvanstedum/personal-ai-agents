@@ -19,17 +19,18 @@ spec.loader.exec_module(cs)
 
 RECIPIENT = "age1" + "q" * 58
 
-# A stand-in with age's command line: "-r R... -o OUT IN" prefixes a marker; "-d -i ID -o OUT IN" checks and strips it.
+# A stand-in with age's command line: "-r R... -o OUT IN" prefixes a marker and a random nonce (so, like age, output
+# differs on every run); "-d -i ID -o OUT IN" checks and strips them.
 FAKE_AGE = """#!/bin/sh
 if [ "$1" = "--version" ]; then echo "v1.3.2-fake"; exit 0; fi
 if [ "$1" = "-d" ]; then
   out="$5"; in="$6"
-  head -c 9 "$in" | grep -q FAKEAGE1 || exit 1
-  tail -c +10 "$in" > "$out"; exit 0
+  head -c 8 "$in" | grep -q FAKEAGE1 || exit 1
+  tail -c +26 "$in" > "$out"; exit 0
 fi
 while [ "$1" = "-r" ]; do shift 2; done
 out="$2"; in="$3"
-{ printf 'FAKEAGE1\\n'; cat "$in"; } > "$out"
+{ printf 'FAKEAGE1%016x\\n' "$(od -An -N8 -tu8 /dev/urandom | tr -d ' ')"; cat "$in"; } > "$out"
 """
 
 
@@ -197,3 +198,28 @@ def test_local_ack_record_is_used_when_configured(env, tmp_path):
     acks.mkdir()
     (acks / "b2.json").write_text("{}")
     assert cs.publish(cfg)["manifest_hash"]
+
+
+def test_republishing_an_older_release_points_at_the_stored_ciphertext(env):
+    a = cs.publish(env["mac"])
+    (env["ws"] / "CV" / "resume.md").write_text("other\n")
+    cs.publish(env["mac"])
+    (env["ws"] / "CV" / "resume.md").write_text("resume canary line\n")
+    again = cs.publish(env["mac"])
+    assert again["manifest_hash"] == a["manifest_hash"] and again["stored_new_object"] is False
+    pointer = json.loads((env["store"] / "career-sync" / "latest.json").read_text())
+    stored = cs.sha256_file(env["store"] / again["object"])
+    assert pointer["ciphertext_sha256"] == stored == a["ciphertext_sha256"]
+    assert cs.apply(env["host"])["result"] == "applied"      # a fresh host accepts it
+
+
+def test_after_a_rollback_the_next_release_keeps_the_rolled_back_to_release(env):
+    h1 = cs.publish(env["mac"])["manifest_hash"]; cs.apply(env["host"])
+    (env["ws"] / "CV" / "resume.md").write_text("v2\n")
+    h2 = cs.publish(env["mac"])["manifest_hash"]; cs.apply(env["host"])
+    cs.rollback(env["host"])                                  # current h1, h2 kept
+    (env["ws"] / "CV" / "resume.md").write_text("v3\n")
+    h3 = cs.publish(env["mac"])["manifest_hash"]; cs.apply(env["host"])
+    rdir = env["private"] / "professional"
+    assert set(cs.retained(rdir)) == {h1, h3}                 # the previous current (h1) is the rollback target, not h2
+    assert cs.rollback(env["host"])["readers"][0]["to"] == h1

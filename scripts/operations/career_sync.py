@@ -9,8 +9,10 @@ Mac, ``publish``:
   * Collects the publish set (folders relative to ``workspace``): regular files only; symlinks refused; ``.git``,
     Office lock files (``~$*``), ``.DS_Store`` and the ``never_copy`` globs skipped.
   * ``MANIFEST.json``: per file path, sha256, size, mtime and ``dirty`` (uncommitted or untracked in the workspace's
-    git repo), plus that repo's HEAD. The manifest hash is the sha256 of the canonical JSON of the file list and HEAD
-    only, so an unchanged tree has the same hash.
+    git repo), plus that repo's HEAD. The manifest hash covers HEAD and each file's path, sha256, size and dirty bit
+    (not mtime), so an unchanged tree has the same hash.
+  * An existing release is never re-encrypted (age output differs on every run): the pointer always names the
+    ciphertext hash of the object actually stored.
   * A deterministic tar (sorted, fixed owner and times) holding ``MANIFEST.json`` and ``tree/…``, ``age``-encrypted to
     every configured recipient, stored as ``career-sync/<manifest-hash>.tar.age`` only if that key does not exist,
     then the small pointer ``career-sync/latest.json``. Plaintext scratch is wiped.
@@ -56,7 +58,6 @@ POINTER = "latest.json"
 RECIPIENT = re.compile(r"^age1[0-9a-z]{58}$")
 HASH = re.compile(r"^[0-9a-f]{64}$")
 ALWAYS_SKIP = ("~$*", ".DS_Store", "._*")
-KEEP = 2
 
 
 class Refused(Exception):
@@ -250,7 +251,14 @@ def collect(workspace: Path, publish_set: list, never_copy: list, repo: Path | N
     if not files:
         raise Refused("publish_set_empty")
     body = {"format": FORMAT, "head": head, "files": files}
-    return {**body, "manifest_hash": hashlib.sha256(canonical(body)).hexdigest()}
+    return {**body, "manifest_hash": manifest_hash(body)}
+
+
+def manifest_hash(body: dict) -> str:
+    """Identity of a release: format, HEAD and each file's path, sha256, size and dirty bit. ``mtime`` is recorded for
+    information only, so touching a file without changing it does not make a new release."""
+    files = [{k: f[k] for k in ("path", "sha256", "size", "dirty")} for f in body["files"]]
+    return hashlib.sha256(canonical({"format": body["format"], "head": body["head"], "files": files})).hexdigest()
 
 
 def build_tar(workspace: Path, manifest: dict, out: Path) -> None:
@@ -300,36 +308,44 @@ def publish(cfg: dict, *, dry_run: bool = False) -> dict:
     work = Path(tempfile.mkdtemp(prefix="career-sync-"))
     os.chmod(work, 0o700)
     try:
-        plain, enc = work / "bundle.tar.gz", work / "bundle.tar.gz.age"
-        build_tar(workspace, manifest, plain)
-        args = [age_bin]
-        for r in recipients:
-            args += ["-r", r]
-        done = subprocess.run(args + ["-o", str(enc), str(plain)], capture_output=True, text=True)
-        wipe(plain)
-        if done.returncode != 0:
-            raise Refused("encrypt_failed", done.stderr.strip()[-300:])
+        enc = work / "bundle.tar.gz.age"
         stored = False
-        if not dest.exists(key):
+        if dest.exists(key):
+            # age output differs on every run, so an existing release is never re-encrypted: the pointer must name the
+            # ciphertext hash of the object that is actually stored.
+            dest.get(key, enc)
+        else:
+            plain = work / "bundle.tar.gz"
+            build_tar(workspace, manifest, plain)
+            args = [age_bin]
+            for r in recipients:
+                args += ["-r", r]
+            done = subprocess.run(args + ["-o", str(enc), str(plain)], capture_output=True, text=True)
+            wipe(plain)
+            if done.returncode != 0:
+                raise Refused("encrypt_failed", done.stderr.strip()[-300:])
             dest.put(enc, key)
             stored = True
-        pointer = {"format": FORMAT, "manifest_hash": h, "object": key, "ciphertext_sha256": sha256_file(enc),
+        cipher = sha256_file(enc)
+        pointer = {"format": FORMAT, "manifest_hash": h, "object": key, "ciphertext_sha256": cipher,
                    "files": len(manifest["files"]), "head": manifest["head"], "published_at": now_utc()}
-        if stored or not dest.exists(f"{PREFIX}/{POINTER}") or current_pointer_hash(dest) != h:
+        if current_pointer(dest) != (h, cipher):
             ptr = work / POINTER
             ptr.write_bytes(canonical(pointer))
             dest.put(ptr, f"{PREFIX}/{POINTER}")
-        return {**result, "stored_new_object": stored, "ciphertext_sha256": pointer["ciphertext_sha256"]}
+        return {**result, "stored_new_object": stored, "ciphertext_sha256": cipher}
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
 
-def current_pointer_hash(dest: Dest):
+def current_pointer(dest: Dest):
+    """(manifest_hash, ciphertext_sha256) the stored pointer names, or None."""
     try:
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / POINTER
             dest.get(f"{PREFIX}/{POINTER}", p)
-            return json.loads(p.read_text()).get("manifest_hash")
+            d = json.loads(p.read_text())
+            return d.get("manifest_hash"), d.get("ciphertext_sha256")
     except (Refused, ValueError):
         return None
 
@@ -371,8 +387,7 @@ def safe_extract(archive: Path, target: Path) -> None:
 
 def verify_tree(build: Path, expect_hash: str) -> dict:
     manifest = json.loads((build / "MANIFEST.json").read_text())
-    body = {k: manifest[k] for k in ("format", "head", "files")}
-    if hashlib.sha256(canonical(body)).hexdigest() != expect_hash or manifest.get("manifest_hash") != expect_hash:
+    if manifest_hash(manifest) != expect_hash or manifest.get("manifest_hash") != expect_hash:
         raise Refused("manifest_hash_mismatch")
     tree = build / "tree"
     want = {f["path"]: f["sha256"] for f in manifest["files"]}
@@ -420,11 +435,13 @@ def retained(reader_dir: Path) -> list:
     return [p.name for p in sorted(entries, key=lambda p: p.stat().st_mtime)]
 
 
-def prune(reader_dir: Path, keep: int = KEEP) -> list:
-    cur, removed = current_release(reader_dir), []
-    names = retained(reader_dir)
-    for name in names[:-keep] if len(names) > keep else []:
-        if name != cur:
+def prune(reader_dir: Path, previous: str | None = None) -> list:
+    """Keep the current release and the one that was current just before it (the rollback target); remove the rest."""
+    cur = current_release(reader_dir)
+    keep = {cur, previous}
+    removed = []
+    for name in retained(reader_dir):
+        if name not in keep:
             shutil.rmtree(reader_dir / "releases" / name)
             removed.append(name)
     return removed
@@ -509,7 +526,7 @@ def apply(cfg: dict) -> dict:
             own(rdir / "RECEIPT.json", r["uid"], r["gid"])
             if r.get("work_roots"):
                 write_work_roots(cfg, rdir, h, r)
-            applied.append({"reader": r["name"], "previous": previous, "pruned": prune(rdir)})
+            applied.append({"reader": r["name"], "previous": previous, "pruned": prune(rdir, previous)})
         return {"result": "applied", "manifest_hash": h, "files": len(manifest["files"]), "readers": applied}
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -532,7 +549,9 @@ def rollback(cfg: dict, to: str | None = None) -> dict:
     for r in cfg["readers"]:
         rdir = Path(r["dir"])
         cur, names = current_release(rdir), retained(rdir)
-        target = to or next((n for n in reversed(names) if n != cur), None)
+        receipt = rdir / "RECEIPT.json"
+        recorded = json.loads(receipt.read_text()).get("previous") if receipt.exists() else None
+        target = to or (recorded if recorded in names and recorded != cur else next((n for n in reversed(names) if n != cur), None))
         if not target or target not in names:
             raise Refused("no_previous_release", r["name"])
         switch_current(rdir, target)
