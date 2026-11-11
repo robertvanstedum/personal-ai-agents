@@ -2871,6 +2871,14 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
                 extra.append(block)
     except Exception:
         pass
+    try:
+        from .mc_tools_wiring import proposal_status
+        if conv:
+            block = mc_context.proposals_block(proposal_status(feature_environ(), conv["id"]))
+            if block:
+                extra.append(block)
+    except Exception:
+        pass
     return "\n\n".join([text, *extra]) if extra else text
 
 

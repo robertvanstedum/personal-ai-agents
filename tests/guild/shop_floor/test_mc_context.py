@@ -169,6 +169,25 @@ def test_the_true_state_of_jobs_reaches_mc_a_finished_job_is_not_called_running(
     assert C.jobs_block([old]) == "" and C.jobs_block([]) == ""
 
 
+def test_an_expired_proposal_is_named_as_expired_and_an_open_one_stays_open():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    when = datetime(2026, 10, 27, 14, 7, tzinfo=ZoneInfo("UTC"))
+    text = C.proposals_block([
+        {"code": "P-PZZU", "expired": True, "expires_at": when},
+        {"code": "P-OPEN", "expired": False, "expires_at": when},
+        {"code": "not-a-code", "expired": True, "expires_at": when},
+    ])
+    assert "Proposal P-PZZU expired at 09:07 CDT" in text
+    assert "not still open" in text and "new code" in text
+    assert "Proposal P-OPEN is still open and expires at 09:07 CDT" in text
+    assert "not-a-code" not in text
+    assert "even if an earlier card says it is waiting" in text
+    assert C.proposals_block([]) == ""
+    from minimoi_portal.guild_ui.mc_tools_wiring import proposal_status
+    assert proposal_status({}, "c-1") == []
+
+
 # ── through a real turn ───────────────────────────────────────────────────────
 
 def test_a_turn_that_points_at_issues_carries_the_block_and_the_owners_words_are_still_first(lane, monkeypatch):
