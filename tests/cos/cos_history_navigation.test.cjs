@@ -58,5 +58,17 @@ function harness(ready=true) {
   assert.equal(failedCreate.ctx.window.cosHistory.conversationId,'old');
   assert.equal(failedCreate.ctx.log.text,'old transcript');
   assert.equal(failedCreate.ctx.window.cosHistory.ready,true);
+  // Dev, 11 Nov: words typed while New chat opened were saved as the OLD chat's draft and vanished from view.
+  const typed=harness();
+  const drafts={};
+  typed.input.value='old draft';
+  typed.ctx.persistDraft=()=>{drafts[typed.ctx.cid]=typed.input.value;};
+  typed.ctx.api=async(path)=>{if(path==='history/conversations'){typed.input.value='old draft'+'Hello new chat';return {conversation_id:'fresh'};}return {};};
+  typed.ctx.closeDrawer=()=>{};typed.ctx.refreshList=()=>{};
+  typed.ctx.document.getElementById=()=>({disabled:false,close(){},classList:{contains:()=>true},title:'',textContent:''});
+  await typed.button.onclick();
+  assert.equal(typed.ctx.window.cosHistory.conversationId,'fresh');
+  assert.equal(drafts.old,'old draft');
+  assert.equal(typed.input.value,'Hello new chat');
   console.log('navigation blocks sends and premature new-chat selection');
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -101,7 +101,9 @@
     document.getElementById('btn-voice').disabled = true;
     try {
     if (cid && cid !== id) await releaseVoice();
-    persistDraft(); await api('history/selection', {device, conversation_id:id});
+    persistDraft(); const typedFrom = input.value; await api('history/selection', {device, conversation_id:id});
+    // Words typed while the chat opens are meant for the chat being opened, never the old chat's draft.
+    const late = cid !== id && input.value !== typedFrom && input.value.startsWith(typedFrom) ? input.value.slice(typedFrom.length) : '';
     if (cid !== id) log.replaceChildren(); // Never show the old transcript under a new chat title.
     cid = id; conversation = doc; document.dispatchEvent(new CustomEvent('cos:conversation', {detail: {id}})); generation++; signature = ''; before = null; viewingEarlier = false;
     input.value = storage(draftKey()) || '';
@@ -109,6 +111,7 @@
     let draftFiles=[]; try {draftFiles=JSON.parse(storage(draftKey()+':files')||'[]');}catch(_){}
     attached=recover?.files || (Array.isArray(draftFiles)?draftFiles:[]);
     if(recover && !input.value) input.value=recover.text || '';
+    if(late.trim() && !input.value) input.value=late.trimStart();
     renderTray(); persistDraft();
     state.textContent = pending() ? 'Checking…' : 'Saved';
     window.cosHistory.conversationId = cid; showTitle(doc); markCurrent();
@@ -151,7 +154,7 @@
     if(input.disabled||uploading){state.textContent='Wait for the current message or upload.';return;}
     creatingConversation=true; window.cosHistory.ready=false;
     const controls=[...document.querySelectorAll('[data-new-conversation]')];controls.forEach(b=>b.disabled=true);
-    try{const c=await api('history/conversations',{title:'New conversation'});await select(c.conversation_id,c,true);closeDrawer();refreshList();document.getElementById('history-sheet').close();if(!document.getElementById('tab-confer').classList.contains('active'))document.querySelector('.tab-btn[data-tab="confer"]').click();input.focus();}
+    try{const typedFrom=input.value;const c=await api('history/conversations',{title:'New conversation'});const late=input.value!==typedFrom&&input.value.startsWith(typedFrom)?input.value.slice(typedFrom.length):'';input.value=typedFrom;await select(c.conversation_id,c,true);if(late.trim()&&!input.value){input.value=late.trimStart();persistDraft();}closeDrawer();refreshList();document.getElementById('history-sheet').close();if(!document.getElementById('tab-confer').classList.contains('active'))document.querySelector('.tab-btn[data-tab="confer"]').click();input.focus();}
     catch(_){state.textContent='Could not create a conversation.';}
     finally{creatingConversation=false;window.cosHistory.ready=true;controls.forEach(b=>b.disabled=false);}
   };});

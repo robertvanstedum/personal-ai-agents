@@ -100,7 +100,9 @@ function render(list, problem) {
   render.last = [];
   for (const box of BOXES) {
     const inChat = box === CHAT_BOX;
-    const visible = inChat ? list.filter(a => !a.conversation_id || a.conversation_id === window.cosHistory?.conversationId) : list;
+    // In a chat, only the cards that chat asked for. A card with no conversation (MC's delegated work) waits in Actions,
+    // so it never appears under an unrelated or brand-new chat.
+    const visible = inChat ? list.filter(a => a.conversation_id && a.conversation_id === window.cosHistory?.conversationId) : list;
     const follow = inChat && CHAT.scrollHeight - CHAT.clientHeight - CHAT.scrollTop < 48;
     const nextSignature = JSON.stringify([visible, problem]);
     const cards = box.querySelector('[data-wc-list]');
