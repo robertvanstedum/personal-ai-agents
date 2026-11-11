@@ -93,6 +93,7 @@ def test_the_cos_actions_page_carries_the_work_cards_section_and_script():
 def test_a_chat_shows_only_the_cards_it_asked_for():
     # Dev, 11 Nov: an old MC work card with no conversation showed under every new CoS chat. It belongs in Actions.
     from pathlib import Path
-    js = (Path(__file__).resolve().parents[3] / "domains/cos/static/cos-work-cards.js").read_text()
-    assert "a.conversation_id && a.conversation_id === window.cosHistory?.conversationId" in js
-    assert "!a.conversation_id ||" not in js
+    for name in ("cos-work-cards.js", "cos-task-proposals.js"):
+        js = (Path(__file__).resolve().parents[3] / "domains/cos/static" / name).read_text()
+        assert "a.conversation_id && a.conversation_id === window.cosHistory?.conversationId" in js
+        assert "!a.conversation_id ||" not in js
