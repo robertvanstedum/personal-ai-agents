@@ -12,12 +12,12 @@ from services.partnership_tasks.outbox import DestinationUnreachable, HarnessRef
 PATH='/internal/lead-return/v1'
 
 
-def blueprint(*, token, inbox, publication, access=None):
+def blueprint(*, token, inbox, publication, access=None, access_token=None):
     from flask import Blueprint, request, jsonify
     bp=Blueprint('lead_return',__name__)
     @bp.post(PATH+'/access/check')
     def access_check():
-        wanted=token() if callable(token) else token
+        wanted=access_token() if callable(access_token) else access_token
         if not wanted or not hmac.compare_digest(request.headers.get('Authorization',''),'Bearer '+wanted):
             return jsonify(error='not_authenticated'),401
         try:

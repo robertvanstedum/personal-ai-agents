@@ -90,6 +90,29 @@ def test_cos_inline_reads_only_saved_answer_and_current_access(tmp_path):
     with pytest.raises(PermissionError):host.inline_answer(candidate)
 
 
+def test_access_only_credential_cannot_deliver_or_lookup(tmp_path):
+    r=rig(tmp_path);app=Flask(__name__)
+    app.register_blueprint(blueprint(token='delivery-only',access_token='access-only',
+        inbox=r.inbox,publication=r.dest,access=lambda:r.allowed[0]))
+    c=app.test_client();base='/internal/lead-return/v1'
+    access={'Authorization':'Bearer access-only'}
+    delivery={'Authorization':'Bearer delivery-only'}
+    assert c.post(base+'/access/check',json={},headers=access).json=={'active':True}
+    r.allowed[0]=False
+    assert c.post(base+'/access/check',json={},headers=access).json=={'active':False}
+    assert c.post(base+'/access/check',json={},headers=delivery).status_code==401
+    for channel in ('wake','publication'):
+        for action in ('deliver','lookup'):
+            assert c.post(base+'/'+channel+'/'+action,json={},headers=access).status_code==401
+
+
+def test_access_endpoint_without_dedicated_credential_refuses(tmp_path):
+    r=rig(tmp_path);app=Flask(__name__)
+    app.register_blueprint(blueprint(token='delivery-only',inbox=r.inbox,publication=r.dest,access=lambda:True))
+    assert app.test_client().post('/internal/lead-return/v1/access/check',json={},
+        headers={'Authorization':'Bearer delivery-only'}).status_code==401
+
+
 def test_cos_inline_stop_and_pending_never_prove_presentation(tmp_path):
     r=rig(tmp_path)
     cid=r.p['conversation_id'];tid='t-000000000002'

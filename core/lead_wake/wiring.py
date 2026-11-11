@@ -44,8 +44,11 @@ def install(app,*,environ,lead,host,access,start=True):
         environment=environment,host=host,reviewer=reviewer,charters=charters,ledger_for=ledger_for,
         review_bound=float(env['LEAD_RETURN_CALL_BOUND_USD']),review_reserve=float(env['HELPER_LEAD_REVIEW_RESERVE_USD']))
     publication=Publication(journal=inbox,reader=reader,host=host,principal=principal,lead=lead,environment=environment)
+    # CoS needs only an owner-access check, never MC's delivery credential.
+    access_path=env['LEAD_RETURN_ACCESS_TOKEN_FILE'] if lead=='mc' else None
     app.register_blueprint(blueprint(token=lambda:read_token(env['LEAD_RETURN_INGRESS_TOKEN_FILE']),
-                                    inbox=WakeDestination(inbox,reader),publication=publication,access=access))
+                                    inbox=WakeDestination(inbox,reader),publication=publication,access=access,
+                                    access_token=(lambda:read_token(access_path)) if access_path else None))
     stop=threading.Event()
     def consume():
         while not stop.is_set():
