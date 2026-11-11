@@ -286,6 +286,9 @@ SHARED_SCRUB_FILES = frozenset({"utils/credential_scrub.py", "utils/payment_scru
 # (reminders). A change to one redeploys the portal too, so MC and CoS never run two grammars (A4 fix round, review N-8).
 # tests/test_release_classifier.py derives this set from the imports and fails when it drifts.
 PORTAL_COS_FILES = frozenset({
+    # Helper return's CoS host (core/lead_wake/hosts.py) reads CoS history from the portal's process too (W3, 11 Nov 2026).
+    "domains/cos/history.py",
+    "domains/cos/store/contracts.py",
     "domains/cos/confer_service.py",
     "domains/cos/owner_words.py",
     "domains/cos/claim_truth.py",
@@ -471,6 +474,10 @@ def classify(paths: list[str],
             services.add("portal")                                   # vault-ask shares the portal image
         elif path.startswith(WORKSHOP_BACKEND_PREFIXES) or path == "config/scheduled_jobs.json":
             services.add("portal")
+            if path.startswith("core/workshop_journal/"):
+                # The partnership task service and helper return use the journal's artifacts; in production the task
+                # service runs the cos-scheduler image (docker-compose.minimoi-1-2-production.yml), so it rebuilds too.
+                services.add("cos-scheduler")
         elif path == "core/limits.py":
             services.update(("portal", "cos-bot", "cos-scheduler"))
         elif path.startswith(GUILD_BACKEND_PREFIXES) or path in GUILD_BACKEND_FILES:
