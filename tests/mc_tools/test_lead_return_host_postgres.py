@@ -1,12 +1,15 @@
 """Canonical MC note and live claim fence in the same disposable PostgreSQL transaction."""
 import unittest
 from pathlib import Path
-from test_tool_path_postgres import Base,DSN,MIGRATIONS,OWNER,NOTE
+from test_tool_path_postgres import Base,DSN,MIGRATIONS,OWNER
 from test_board_postgres import BOARD_MIGRATIONS
 from core.lead_wake.hosts import MCHost
 from minimoi_portal.guild_ui.conversations import ConversationStore
 from minimoi_portal.guild_ui.stores import FloorStores,Author
 from minimoi_portal.guild_ui.mc.turn_ledger import TurnLedger
+
+# Base.setUp already admits its own note; this fixture is a separate owner turn.
+NOTE='note-return-owner-1'
 
 
 @unittest.skipUnless(DSN,'requires disposable MC_BINDING_TEST_DSN')
