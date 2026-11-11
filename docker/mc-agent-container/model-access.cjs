@@ -5,7 +5,7 @@ const ROUTE = 'minimoi-gateway-mc/minimoi-mc-agent';
 // allowed, never a fallback, and they reach the gateway with MC's own capped key. They are the primary only where a host
 // names one of them in MC_PRIMARY_ROUTE (primaryRef): a turn with a route still runs on that route.
 const METERED_PROVIDER = 'minimoi-gateway';
-const METERED = /^minimoi-gateway\/minimoi-xai-(?:strong|mid|low)$/;
+const METERED = /^minimoi-gateway\/minimoi-xai-(?:strong|strong-deep|mid|low)$/;
 function meteredRoutes(env) {
   const refs = String(env.MC_METERED_ROUTES || '').split(',').map(s => s.trim()).filter(Boolean);
   if (!refs.length) return refs;

@@ -990,3 +990,44 @@ def test_failed_admission_revocation_cannot_release_the_queue_as_confirmed():
     assert run.stop() is True
     run._notify_end("stopped", "stopped", True)
     assert terminal[0][-1] is False
+
+
+# ── narration between tool steps is shown live, not kept (Dev, 11 Nov) ──
+
+def test_the_kept_answer_is_the_runs_final_step_when_the_stream_ends_with_it():
+    from minimoi_portal.guild_ui.mc.streaming import answer_text
+    streamed = "I'll read the file first.Now the tests.The answer is 42."
+    assert answer_text(streamed, "The answer is 42.") == "The answer is 42."
+    assert answer_text(streamed + "\n", " The answer is 42. ") == "The answer is 42."
+
+
+def test_without_a_matching_answer_the_streamed_text_is_kept():
+    from minimoi_portal.guild_ui.mc.streaming import answer_text
+    streamed = "I'll read the file first.The answer is 42."
+    assert answer_text(streamed, None) == streamed
+    assert answer_text(streamed, "Something else.") == streamed                  # never keeps text the page did not see
+    assert answer_text(streamed, "") == streamed
+    assert answer_text("The answer is 42.", "The answer is 42.") == "The answer is 42."
+
+
+def test_the_relay_answer_line_is_parsed_only_with_text():
+    from minimoi_portal.guild_ui.mc.stream import Answer, parse_relay_line
+    assert parse_relay_line('{"t":"answer","text":"The answer."}') == Answer("The answer.")
+    assert parse_relay_line('{"t":"answer","text":"  "}') is None
+    assert parse_relay_line('{"t":"answer"}') is None
+
+
+def test_a_tool_using_turn_shows_its_narration_live_and_keeps_only_the_answer(streaming):
+    client = streaming.owner()
+    token = streaming.csrf(client)
+    note = _keep(client, token, "What is in build?")
+    streaming.extra["runtime"].script = [nd({"t": "delta", "text": "I'll read the board first."}),
+                                         nd({"t": "delta", "text": "Item **12** is in build."}),
+                                         nd({"t": "answer", "text": "Item **12** is in build."}),
+                                         nd({"t": "finish", "reason": "stop"}),
+                                         nd({"t": "usage", "prompt_tokens": 50, "completion_tokens": 9})]
+    events = _events(_stream(client, token, note["request_id"]))
+    assert [e["text"] for e in events if e["t"] == "delta"] == ["I'll read the board first.", "Item **12** is in build."]
+    assert not [e for e in events if e["t"] == "answer"]                            # the line itself never reaches the browser
+    done = events[-1]
+    assert done["status"] == "answered" and done["reply_note"]["text"] == "Item **12** is in build."

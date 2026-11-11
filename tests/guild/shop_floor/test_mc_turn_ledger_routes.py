@@ -478,3 +478,16 @@ def test_probe_entry_unchanged_when_the_ledger_is_off(monkeypatch):
     import minimoi_portal
     monkeypatch.setattr(minimoi_portal, "app", fake_app, raising=False)
     assert mc_cost_probe.main(["--yes-spend"]) == 3          # the probe's own next refusal: turns off
+
+
+@pytest.mark.parametrize('status,note_id,kept', [('answered', 7, True), ('answered', True, False),
+    ('answered', '7', False), ('answered', 0, False), ('error', 7, False)])
+def test_stream_receipt_links_only_an_answered_saved_note(status, note_id, kept):
+    turn, ledger = _turn()
+    turn.mark_started()
+    turn.finish_stream(status, None if status == 'answered' else 'not_kept', 'openclaw', True,
+                       reply_note_id=note_id)
+    outcome = ledger.finished[0][1]
+    assert ('reply_note_id' in outcome) is kept
+    if kept:
+        assert outcome['reply_note_id'] == 7

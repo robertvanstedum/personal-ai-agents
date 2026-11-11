@@ -1650,17 +1650,25 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
     ctx = note.get("context") or {}
     sent_text = note["text"]                    # the owner's own words, as he wrote them (#406)
     agent_state = _agent_state(conv)
-    route, route_refusal = _route_snapshot(services, conv)       # fixed for this whole turn; a later change is the next turn's
+    route, route_refusal = _route_snapshot(services, conv, sent_text)  # unaugmented owner words only
     if route_refusal is None:
         carried, route_refusal = _carried_history(services, conv, principal, route, note)
     if route_refusal is not None:
         return "refused", {"error": route_refusal.code, "message": route_refusal.message}, 409
 
+    tools_binding = _tool_binder(services, ledger_turn, conv, principal, note_id)
+
+    from .pending_notices import Plan as PendingNotices
+    notice_plan = PendingNotices(conversations, conv, principal, floor, reply_key)
+    route_notice = _route_notice(conversations, conv, principal, floor, reply_key, route, notice_plan=notice_plan)
+
     def request_for(built):
+        notice_plan.reset()
         return TurnRequest(conversation_id=session_conversation_id(conv, principal), route=route,
-                           text=carried + _with_context(_with_agent(_with_files(sent_text, built), agent_state), sent_text, conv, principal),
+                           text=carried + _with_context(_with_agent(_with_files(sent_text, built), agent_state), sent_text, conv, principal, notice_plan=notice_plan),
                            note_request_id=note_id, correlation_id=turn_id,
-                           context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
+                           context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")},
+                           prepare_depth=getattr(tools_binding, "prepare_depth", None), route_notice=route_notice)
 
     def refused_turn(exc):
         return "refused", {"error": "mc_unavailable", "reason": exc.failure_class,
@@ -1700,6 +1708,7 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
         _mc_release(principal)
         DISPATCHED.forget(request_id)
         raise
+    events = notice_plan.events(events)
     events = _with_route_receipt(events, route, turn_id, _route_recorder(conversations, conv, principal), note.get("id"))
     if observe is not None:
         events = observe(events)
@@ -1710,7 +1719,6 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
         with_html([reply])
 
     from .jobs_api import make_hook
-    tools_binding = _tool_binder(services, ledger_turn, conv, principal, note_id)
     run = StreamRun(StreamContext(
         turn_id=turn_id, principal=principal, backend=services.mc, events=events, floor=floor, reply_key=reply_key,
         job_hook=make_hook(services, conv, principal, note, note_id, attachment_ids),
@@ -2019,20 +2027,42 @@ def _route_agent(services=None):
     return agent_for_backend(getattr(mc, "kind", None))
 
 
-def _route_snapshot(services, conv):
+def _route_snapshot(services, conv, owner_text=""):
     """(route, refusal). The route is fixed here, at admission, once per turn. (None, None): no routes here. A waiting
     message is admitted when it is sent, so it takes the conversation's choice at that moment."""
-    from core.model_routes import RouteRefused, conversation_role, load_catalogue, snapshot
+    from core.model_routes import RouteRefused, conversation_role, load_catalogue
+    from core.model_routes.depth import for_owner_turn
     agent = _route_agent(services)
     if agent is None:
         return None, None
     try:
-        return snapshot(load_catalogue(), conversation_role(agent), conv), None
+        return for_owner_turn(load_catalogue(), conversation_role(agent), conv, owner_text), None
     except RouteRefused as exc:
         return None, exc
     except (OSError, ValueError):
         _mc_log().exception("model routes: the catalogue could not be read")
         return None, RouteRefused("route_unavailable", "The model routes could not be read. Nothing was sent.")
+
+
+def _route_notice(conversations, conv, principal, floor, reference, route, *, notice_plan=None):
+    """Owner-scoped presentation metadata; failure keeps notices visible, never fails chat."""
+    def answer(key):
+        note = floor.get_note(key)
+        return (note.get("text") if note and note.get("who") == "master_craftsman"
+                and note.get("author_kind") == "agent" else None)
+
+    def notice(selected, line):
+        try:
+            show = conversations.prepare_route_notice(conv["id"], principal, reference, selected, line, answer)
+        except Exception:
+            show = bool(line)
+        if show and line and notice_plan is not None:
+            notice_plan.route_suffix = line
+        return show
+
+    if route and conv:
+        notice(route, "")
+    return notice
 
 
 def _route_recorder(conversations, conv, principal):
@@ -2393,7 +2423,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
     if files is not None and files.report and not getattr(services.mc, "accepts_files", True):
         return {"error": "files_unsupported", "message": f"The {getattr(services.mc, 'display_name', 'assistant')} does not read "
                 "attached documents. Your note is kept; nothing was sent."}, 422
-    route, route_refusal = _route_snapshot(services, conv)       # fixed for this whole turn; a later change is the next turn's
+    route, route_refusal = _route_snapshot(services, conv, note["text"])  # before attachment/context augmentation
     if route_refusal is None:
         carried, route_refusal = _carried_history(services, conv, principal, route, note)
     if route_refusal is not None:
@@ -2433,9 +2463,11 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
                 _mc_log().warning("mc turn %s: Board proposal preparation unavailable", turn_id)
         from .mc.cos import MANAGED_VOICE_CHANNEL
         from .mc.openclaw import VOICE_MARKER
+        from .pending_notices import Plan as PendingNotices
+        notice_plan = PendingNotices(conversations, conv, principal, floor, reply_key)
         context_text = _with_context(_with_agent(_with_files(sent_text, files), agent_state), sent_text, conv, principal,
                                      current_voice=host_channel is MANAGED_VOICE_CHANNEL,
-                                     direct_voice=host_channel is VOICE_MARKER)
+                                     direct_voice=host_channel is VOICE_MARKER, notice_plan=notice_plan)
         if board_plan is not None:
             context_text += "\n\n" + board_plan.contract()
         if delivery:
@@ -2450,7 +2482,8 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         elif services.mc.kind == "openclaw" and host_channel is VOICE_MARKER:
             turn_context["host_channel"] = VOICE_MARKER          # the OpenClaw adapter translates it (Spec 164 §9)
         req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=carried + context_text, route=route,
-                          note_request_id=note_id, correlation_id=turn_id, context=turn_context)
+                          note_request_id=note_id, correlation_id=turn_id, context=turn_context,
+                          route_notice=_route_notice(conversations, conv, principal, floor, reply_key, route, notice_plan=notice_plan))
         _mc_log().info("mc turn %s start backend=%s files=%d", turn_id, services.mc.kind, len(files.report) if files else 0)
         _files_recorder(conversations, conv, principal, note_id, files)()
         started = time.monotonic()
@@ -2458,6 +2491,8 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             ledger_turn.mark_started()                  # from here the outcome can only be answered, failed or unknown
         tools = _tool_binder(services, ledger_turn, conv, principal, note_id)
         tools()
+        from dataclasses import replace
+        req = replace(req, prepare_depth=getattr(tools, "prepare_depth", None))
         from .mc_tools_wiring import NO_BINDING
         if tools is not NO_BINDING and hasattr(services.mc, "stream_turn"):
             # Tools on: stream internally so the run can be bound, then answer buffered as before (spec §7.1 step 1).
@@ -2465,6 +2500,12 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             result = collect(services.mc, req, on_run=tools.attach_run)
         else:
             result = services.mc.turn(req)
+        if result.status == "answered":
+            rendered = notice_plan.transform(result.text, completed=(result.trace or {}).get("finish_reason", "stop") == "stop")
+            if rendered.strip():
+                result = replace(result, text=rendered)
+            else:
+                result = replace(result, status="error", text=None, failure_class="no_answer")
         _route_recorder(conversations, conv, principal)((result.trace or {}).get("route") or route, turn_id,
                                                         (result.trace or {}).get("served"), note.get("id"))
         duration_ms = int((time.monotonic() - started) * 1000)
@@ -2682,7 +2723,8 @@ def _turn_files(conversations, conv, principal, ids, turn_id=None):
             raise LookupError(doc_id) from None
 
     staged, failed = _stage_for_mc(conv, ids, principal, turn_id)
-    built = build(conv, ids, load=load, scrub=lambda text: text, staged=staged, stage_failed=failed) if ids else Built()
+    # A document keeps its email and phone. A card, an IBAN or a routing number still goes.
+    built = build(conv, ids, load=load, scrub=lambda text: scrub(text, emails=False), staged=staged, stage_failed=failed) if ids else Built()
     built.staged = staged or None
     if refs:                                           # the owner's chosen topic items ride the same data block and report
         from .topic_context import build as build_context
@@ -2708,7 +2750,7 @@ def _with_agent(text: str, state) -> str:
     return f"{text}\n\n{state.text}" if state is not None else text
 
 
-def _with_context(text: str, owner_text: str, conv, principal: str, *, current_voice=False, direct_voice=False) -> str:
+def _with_context(text: str, owner_text: str, conv, principal: str, *, current_voice=False, direct_voice=False, notice_plan=None) -> str:
     """Then, as more marked DATA, what a quick question needs in the SAME turn (#298): the GitHub items the owner's words point at, and the true state of this
     conversation's jobs, plus explicitly referenced Board notes. Board read failure is explicit DATA; it never becomes completion. Never reached by a Private turn."""
     from . import mc_context
@@ -2739,7 +2781,7 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
         pass
     try:
         from . import supervision
-        waiting = supervision.context_block(principal, environ=feature_environ())
+        waiting = supervision.context_block(principal, environ=feature_environ(), notice_plan=notice_plan, owner_text=owner_text)
         if waiting:
             extra.append(waiting)
     except Exception:
@@ -2750,11 +2792,14 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
         env = _waiting_env()
         block = action_waiting.context_block(
             principal, owner_text, environ=env, guest_actions=_waiting_guest_actions(principal, env),
-            supervision_on=_supervision.enabled(env) and principal == env.get("MINIMOI_SUPERVISION_OWNER"))
+            supervision_on=_supervision.enabled(env) and principal == env.get("MINIMOI_SUPERVISION_OWNER"),
+            notice_plan=notice_plan)
         if block:
             extra.append(block)
     except Exception:
         pass
+    if notice_plan is not None and notice_plan.offers:
+        extra.append(notice_plan.instruction())
     from . import feature_environ as _fe
     if _fe().get("MINIMOI_MC_OPERATING_RULES") == "1":
         extra.append(MC_OPERATING_RULES_TOOLS if _tools_own_actions(principal) else MC_OPERATING_RULES)
@@ -2822,6 +2867,14 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
         mgr = cfg().get("jobs")
         if mgr is not None and conv:
             block = mc_context.jobs_block(mgr.views(conv["id"], principal))
+            if block:
+                extra.append(block)
+    except Exception:
+        pass
+    try:
+        from .mc_tools_wiring import proposal_status
+        if conv:
+            block = mc_context.proposals_block(proposal_status(feature_environ(), conv["id"]))
             if block:
                 extra.append(block)
     except Exception:

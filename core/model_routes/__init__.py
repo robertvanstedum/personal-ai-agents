@@ -69,6 +69,9 @@ def load_catalogue(path: Path | str | None = None) -> dict:
                 raise ValueError(f"role {name} must read a route available to {role['agent']}")
         for route in catalogue["routes"]:
             _check_failover(catalogue, route)
+        from .depth import validate_policy
+        for name in catalogue["roles"]:
+            validate_policy(catalogue, name)
     except (KeyError, TypeError, AttributeError) as exc:
         raise ValueError("the route catalogue has the wrong shape") from exc
     return catalogue
@@ -247,7 +250,8 @@ def served_receipt(route: dict | None, served: dict | None) -> dict | None:
     return {"route_id": route["route_id"], "role": route["role"], "tier": route["tier"], "provider": route["provider"],
             "model": route["model"], "reasoning_effort": route["reasoning_effort"], "billing_mode": billing,
             "billing_label": BILLING_WORDS[billing], "catalogue_revision": route["catalogue_revision"],
-            "runtime": route.get("runtime"), "served": served or None, "served_matches": matches, **switched}
+            "runtime": route.get("runtime"), "served": served or None, "served_matches": matches, **switched,
+            **({"attempts": route["attempts"]} if route.get("attempts") else {})}
 
 
 def relay_routes(catalogue: dict, agent: str = "mc") -> dict:

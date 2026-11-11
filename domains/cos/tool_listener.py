@@ -12,6 +12,7 @@
     POST /internal/cos/v1/instance                   the plugin announces its gateway process
     body: {"instance": "<32 hex>"}
 
+    POST /internal/cos/v1/answer                     the plugin reports a run's final assistant step (its answer without narration)
     POST /internal/cos/v1/served                     the plugin reports the model call a run completed (provider, model, api),
     body: {"provider": "...", "model": "..."}        from the runtime's model_call_ended hook. Evidence only.
 
@@ -42,6 +43,7 @@ from domains.cos.store import actions_v2
 
 PREFIX = "/internal/cos/v1"
 MAX_BODY = 16 * 1024
+MAX_WORK_BODY = 128 * 1024  # Bounded Unicode JSON for 6000 chars + unresolved questions.
 _DIGEST = re.compile(r"[0-9a-f]{64}")
 _SESSION_KEY = re.compile(r"agent:(?P<agent>[a-z][a-z0-9-]{0,63}):openai-user:(?P<user>cos-confer:[0-9a-f]{32})")
 STATUSES = ("done", "refused", "unknown")
@@ -51,7 +53,7 @@ LIMITS = {"cos_actions": 20, "cos_tasks": 5, "cos_board": 20, "cos_send_to_mc": 
 NATIVE_TOOLS = frozenset({"write", "edit", "exec", "apply_patch", "process"})
 # What a spoken lookup's turn may do (Robert, 8 Nov: reads need no yes, writes still do): read only. Anything else on
 # such a turn is refused before admission, so nothing changes and no quota is spent.
-READ_OPERATIONS = {"cos_actions": frozenset({"list", "get"}), "cos_board": frozenset({"read", "list", "result"})}
+READ_OPERATIONS = {"cos_tasks": frozenset({"status", "helper_result", "work_find", "work_read"}), "cos_actions": frozenset({"list", "get"}), "cos_board": frozenset({"read", "list", "result"})}
 READ_ONLY_REFUSAL = ("Robert asked by voice for a lookup only, so nothing was changed. Answer from what you can read, "
                      "and tell him that a change needs him to ask for it, so he can confirm it.")
 _log = logging.getLogger("cos_tools")
@@ -100,7 +102,24 @@ def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agen
         raise ValueError("cos_tools_listener_environment_mismatch")
     allowed = tuple(allowed_agents)
     app = Flask(__name__)
-    app.config["MAX_CONTENT_LENGTH"] = MAX_BODY
+    app.config["MAX_CONTENT_LENGTH"] = MAX_WORK_BODY
+
+    @app.before_request
+    def bound_work_body():
+        raw = request.get_data(cache=True)
+        if len(raw) <= MAX_BODY:
+            return None
+        if request.path == PREFIX + '/answer':
+            return None                     # a long final answer, up to MAX_WORK_BODY; its own route bounds the text
+        if request.path != '/internal/cos/v1/tools/cos_tasks':
+            raise RequestEntityTooLarge()
+        try:
+            body = json.loads(raw)
+            if not isinstance(body, dict) or not isinstance(body.get("arguments"), dict) or body["arguments"].get("operation") != "work_save":
+                raise RequestEntityTooLarge()
+        except (ValueError, UnicodeError, RecursionError):
+            raise RequestEntityTooLarge()
+        return None
 
     @app.errorhandler(RequestEntityTooLarge)
     def too_large(_error):
@@ -133,13 +152,29 @@ def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agen
         body, refused = preflight()
         if refused:
             return refused
-        if set(body) != {"instance"} or type(body["instance"]) is not str:
+        if set(body) - {"instance", "public_key"} or type(body.get("instance")) is not str:
             return jsonify(error="tool_request_invalid"), 400
         try:
-            bindings.register_instance(body["instance"])
+            bindings.register_instance(body["instance"], **({"public_key": body["public_key"]} if "public_key" in body else {}))
         except NotBound as exc:
             return jsonify(error=exc.code), 409
         return jsonify(status="recorded")
+
+    @app.post(PREFIX + "/terminal")
+    def terminal():
+        body, refused = preflight()
+        if refused:
+            return refused
+        ids = sealed()
+        from core.model_routes.runtime_proof import valid_receipt
+        if (not valid_receipt(body) or any(body[k] != ids[v] for k, v in
+                (("run", "run_id"), ("instance", "instance_id"), ("agent", "agent_id"), ("session", "session_key")))):
+            return jsonify(error="terminal_invalid"), 400
+        try:
+            kept = bindings.record_terminal(body)
+        except NotBound:
+            return jsonify(error="terminal_not_bound"), 409
+        return jsonify(status="kept" if kept else "refused"), 200 if kept else 409
 
     @app.post(PREFIX + "/served")
     def served():
@@ -153,6 +188,21 @@ def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agen
             known = bindings.record_served(run_id=sealed()["run_id"], fields=body)
         except Exception:
             _log.exception("cos served evidence: not kept")
+            return jsonify(status="not_kept"), 503
+        return jsonify(status="kept" if known else "ignored")
+
+    @app.post(PREFIX + "/answer")
+    def answer():
+        """The run's final assistant step, from the plugin's agent_end hook (only where it has conversation access)."""
+        body, refused = preflight()
+        if refused:
+            return refused
+        if set(body) != {"text"} or type(body["text"]) is not str or not body["text"].strip() or len(body["text"]) > 40_000:
+            return jsonify(error="tool_request_invalid"), 400
+        try:
+            known = bindings.record_answer(run_id=sealed()["run_id"], text=body["text"])
+        except Exception:
+            _log.exception("cos run answer: not kept")
             return jsonify(status="not_kept"), 503
         return jsonify(status="kept" if known else "ignored")
 
@@ -209,13 +259,20 @@ def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agen
             return _answer("refused", exc.code, "This call does not belong to a live CoS turn, so nothing was done.")
         if name == "cos_tasks":
             try:
-                out = task_tools.serve(binding, op, args)
+                if op == "work_save":
+                    with bindings.hold_live(binding, tool_call_id=ids["tool_call_id"],
+                                            instance_id=ids["instance_id"], session_user=user):
+                        out = task_tools.serve(binding, op, args)
+                else:
+                    out = task_tools.serve(binding, op, args)
             except Exception:
                 _log.exception("cos tool cos_tasks: outcome unconfirmed")
                 return _answer("unknown", "tool_outcome_unconfirmed",
                                "CoS could not confirm what happened. Do not repeat it; tell Robert.")
             if out["status"] == 200:
                 return _answer("done", "ok", out["body"].get("message", "Done."), out["body"])
+            if out["status"] == 503 or out["body"].get("committed") is True:
+                return _answer("unknown", "work_outcome_unconfirmed", "The save is not fully verified. Reconcile the canonical artifact before another write.", out["body"])
             return _answer("refused", str(out["body"].get("error", "refused")), "Nothing was recorded.", out["body"])
         if name == "cos_send_to_mc":
             try:

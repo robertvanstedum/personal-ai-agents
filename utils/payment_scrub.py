@@ -15,8 +15,10 @@ reviews' tightening to real card, account and routing shapes):
   digits. In a run of digit groups, every stretch of whole groups that holds
   13 to 19 digits and is a card is removed, so a card followed by a CVV, an
   expiry or another number is still caught (see _is_card):
-  * plain separators (one space or one dash), as before: it passes Luhn; a
-    mistyped card (a standard grouping that fails Luhn) needs a card word
+  * plain separators (one space or one dash): every group 3 digits or more
+    and the first 4 or more, and it passes Luhn. A group of only 3 digits
+    counts only in a standard card shape, so a phone written 4-3-3-4 stays.
+    A mistyped card (a standard grouping that fails Luhn) needs a card word
     near it ("card", "cc", "paid", a brand...);
   * wide separators (several spaces, a tab, a dot, a spaced dash): Luhn, one
     separator throughout, every group 3 digits or more and the first 4 or
@@ -117,7 +119,9 @@ def _is_card(groups: list[str], seps: list[str], card_word_near: bool = False) -
     - one group: it passes Luhn and starts like a card (or a card word is
       near); a single 15 or 16 digit group that fails Luhn (a mistyped card)
       needs a card word near;
-    - plain separators (main's rule): it passes Luhn; or it has a standard
+    - plain separators: card-like groups (every group 3 digits or more, the
+      first 4 or more) and Luhn; a group of only 3 digits counts only in a
+      standard card shape, so a phone's 4-3-3-4 window stays; or a standard
       card grouping and a card word is near (a mistyped card);
     - wide separators: the same one throughout, card-like groups (every group
       3 digits or more, the first 4 or more) and Luhn;
@@ -134,6 +138,12 @@ def _is_card(groups: list[str], seps: list[str], card_word_near: bool = False) -
         return len(digits) in (15, 16) and card_word_near
     kinds = {_sep_kind(s) for s in seps}
     if kinds == {"plain"}:
+        if any(n < 3 for n in shape) or shape[0] < 4:
+            return False
+        # A phone is 3-3-4. Two of them make a 4-3-3-4 window that can pass
+        # Luhn. A group of 3 is a card only in a standard card shape.
+        if any(n < 4 for n in shape) and shape not in _CARD_SHAPES:
+            return False
         return luhn or (shape in _CARD_SHAPES and card_word_near)
     if None in kinds or len(set(seps)) != 1 or not luhn:
         return False
@@ -182,12 +192,11 @@ def _cards(match: re.Match) -> str:
     return "".join(out)
 
 
-_BEFORE = [
-    # IBAN first, before its digits are taken by a digit rule.
-    re.compile(r"(?<![A-Za-z0-9])[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){11,30}(?![A-Za-z0-9])"),
-    re.compile(r"(?<![A-Za-z0-9._%+\-])[A-Za-z0-9._%+\-]++@[A-Za-z0-9\-]++(?:\.[A-Za-z0-9\-]++)++"),
-    re.compile(r"(?<![A-Za-z])(?:routing|aba|rtn)(?:\s*+(?:number|no\.?|#))?\s*+[:#]?\s*+\d{9}(?!\d)", re.IGNORECASE),
-]
+_IBAN = re.compile(r"(?<![A-Za-z0-9])[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){11,30}(?![A-Za-z0-9])")
+_EMAIL = re.compile(r"(?<![A-Za-z0-9._%+\-])[A-Za-z0-9._%+\-]++@[A-Za-z0-9\-]++(?:\.[A-Za-z0-9\-]++)++")
+_ROUTING = re.compile(r"(?<![A-Za-z])(?:routing|aba|rtn)(?:\s*+(?:number|no\.?|#))?\s*+[:#]?\s*+\d{9}(?!\d)", re.IGNORECASE)
+# IBAN first, before its digits are taken by a digit rule. Email is a stored-note rule, not a document rule.
+_BEFORE = [_IBAN, _EMAIL, _ROUTING]
 _AFTER = [
     # Brand, then "ending in", a mask, or a separator, then four digits and the groups after them.
     re.compile(rf"(?<![A-Za-z]){_BRAND}(?![A-Za-z])(?:\s*+[:#\-–—•]\s*+|\s++ending\s++(?:in|with)\s++|\s*+{_MASK_RUN})"
@@ -220,16 +229,22 @@ _BRAND_BESIDE = re.compile(rf"(?<![A-Za-z]){_BRAND}[\s:#\-–—]*+{re.escape(RE
                            re.IGNORECASE)
 
 
-def scrub(text: str) -> str:
+def scrub(text: str, *, emails: bool = True) -> str:
     """Return ``text`` with every payment detail replaced; idempotent.
 
     Matching runs on a normalised copy (Unicode spaces, dashes, zero-width
     characters, fullwidth digits; see _NORMAL). Text with nothing to remove
-    comes back exactly as given; text with a removal comes back normalised."""
+    comes back exactly as given; text with a removal comes back normalised.
+    ``emails=False`` keeps an email address. Stored notes pass the default
+    and still remove one. A document the owner attached is his own text:
+    the address and a phone number stay, and a card, an IBAN or a routing
+    number still goes."""
     original = str(text)
     out = original.translate(_NORMAL)
     normalised = out
     for pattern in _BEFORE:
+        if pattern is _EMAIL and not emails:
+            continue
         out = pattern.sub(REMOVED, out)
     out = _DIGIT_RUN.sub(_cards, out)
     for pattern in _AFTER:

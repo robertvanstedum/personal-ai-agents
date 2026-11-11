@@ -32,6 +32,8 @@ class Binding:
     operations: frozenset
     expires_at: str | None
     revoked_at: str | None
+    work_artifacts: frozenset = frozenset()
+    helper_return_commit: bool = False
 
     @property
     def is_owner(self) -> bool:
@@ -56,12 +58,15 @@ class Bindings:
                 raise ValueError(f"invalid seat binding {rec.get('binding_id')}: {problems}")
             if not set(rec["scopes"]) <= set(rec["read_scopes"]):
                 raise ValueError(f"binding {rec['binding_id']} writes a scope it cannot read")
+            if rec.get("helper_return_commit") and (rec["seat"] not in ("mc", "cos")
+                    or rec["origin"] != "agent" or set(rec["operations"]) != {"task.commit_helper_return"}):
+                raise ValueError("helper return requires a dedicated lead service binding")
             if rec["token_sha256"] in self._by_hash:
                 raise ValueError("two bindings share one token")
             self._by_hash[rec["token_sha256"]] = Binding(
                 rec["binding_id"], rec["seat"], rec["principal"], rec["environment"], rec["origin"],
                 frozenset(rec["scopes"]), frozenset(rec["read_scopes"]), frozenset(rec["operations"]),
-                rec.get("expires_at"), rec.get("revoked_at"))
+                rec.get("expires_at"), rec.get("revoked_at"), frozenset(rec.get("work_artifacts", [])), rec.get("helper_return_commit", False))
 
     @classmethod
     def load(cls, path: Path | str) -> "Bindings":

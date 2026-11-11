@@ -382,6 +382,21 @@
         },
         "revoked_at": {
           "$ref": "urn:minimoi:contract:partnership:common#/$defs/nullable_timestamp"
+        },
+        "work_artifacts": {
+          "description": "Explicit private working-document permissions; absent grants none. Does not grant task or action authority.",
+          "type": "array",
+          "items": {
+            "enum": [
+              "read",
+              "save"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "helper_return_commit": {
+          "type": "boolean",
+          "description": "Dedicated lead-return service only. Absent grants none; requires agent MC/CoS and only task.commit_helper_return operation."
         }
       }
     },

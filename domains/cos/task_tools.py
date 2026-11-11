@@ -18,6 +18,7 @@ binding's turn. Neither ever comes from tool arguments (S3).
 """
 from __future__ import annotations
 
+import os
 from core.canonical_json import digest
 from services.partnership_tasks.client import TaskServiceUnavailable, command
 
@@ -26,6 +27,10 @@ ARGS = {"propose": {"outcome", "lead", "holder", "done_when"}, "status": {"task_
         "ask_helper": {"type_id", "subject"}, "helper_result": {"task_id"}, "helper_review": {"task_id", "set_digest", "verdict", "reasons"}}
 REQUIRED = {"propose": {"outcome", "done_when"}, "status": {"task_id"},
             "ask_helper": {"type_id"}, "helper_result": {"task_id"}, "helper_review": {"task_id", "set_digest", "verdict", "reasons"}}
+ARGS.update(work_find={"query"}, work_read={"artifact_id", "revision"},
+            work_save={"artifact_id", "expected_revision", "title", "content", "unresolved"})
+REQUIRED.update(work_find={"query"}, work_read={"artifact_id"},
+                work_save={"expected_revision", "title", "content", "unresolved"})
 EXECUTOR_SEATS = frozenset({"mc"})          # leads/holders CoS may propose in B4; MC delegates further
 DEFAULT_SEAT = "mc"                         # the only seat there is, so leaving lead or holder out says the same thing
 RUNTIME = {"kind": "model", "model": None, "provider": "openclaw", "build": "cos-bound/1", "config_version": None}
@@ -48,6 +53,8 @@ class CosTaskTools:
             given = set(args) if isinstance(args, dict) else set()
             return _refuse(422, "unexpected_or_missing_fields", allowed=sorted(ARGS[op]),
                            required=sorted(REQUIRED[op]), missing=sorted(REQUIRED[op] - given))
+        if op.startswith("work_"):
+            return self._work(binding, op, args)
         if op == "propose":
             if binding.scope != "owner":
                 return _refuse(403, "scope_read_only")
@@ -57,6 +64,35 @@ class CosTaskTools:
                 return _refuse(403, "scope_read_only")
             return self._helper(binding, op, args)
         return self._status(args)
+
+    def _work(self, binding, op, args):
+        if binding.scope != "owner" or binding.origin != "owner":
+            return _refuse(403, "private_owner_conversation_required")
+        from services.partnership_tasks.work_artifact_source import prepare_source
+        try:
+            outgoing = dict(args)
+            if op == "work_save":
+                ref = binding.source_ref
+                if not isinstance(ref, dict):
+                    return _refuse(403, "kept_owner_turn_required")
+                turn = self.history.turn(ref["conversation_id"], ref["turn_id"])
+                if turn is None or not turn.get("user_text"):
+                    return _refuse(409, "owner_words_not_found")
+                sid, cmd = prepare_source(source={"store": "cos-history",
+                    "id": ref["conversation_id"] + ":" + ref["turn_id"], "position": int(turn.get("seq") or 1)},
+                    words=turn["user_text"], environment=self.environment, scope=self.scope)
+                if self.platform.submit(cmd).get("outcome") != "accepted":
+                    return _refuse(409, "source_not_recorded")
+                outgoing["source_event_id"] = sid
+            data = self.cos.work_artifacts(op.removeprefix("work_"), outgoing, scope=self.scope)
+            good = op != "work_save" or data.get("status") == "saved"
+            if not good:
+                return {"status": 409, "body": {"error": data.get("reason") or data.get("status", "not_verified"), **data}}
+            return {"status": 200, "body": {"message": "Private canonical working document. Draft, not action approval; indexing freshness is separate.", **data}}
+        except TaskServiceUnavailable:
+            return _refuse(503, "work_outcome_unconfirmed", message="Do not repeat an uncertain save; read the canonical artifact to reconcile.")
+        except (ValueError, KeyError):
+            return _refuse(422, "work_arguments_invalid")
 
     def _helper(self, binding, op, args):
         """CoS and its Executive Assistant (helper seats spec v0.4). Same chain as MC and its Apprentice."""
@@ -82,9 +118,21 @@ class CosTaskTools:
             if op == "helper_review":
                 if args["verdict"] not in ("approve", "changes_requested"):
                     return _refuse(422, "invalid", field="verdict")
-                task = L.review(self.cos, args["task_id"], args["set_digest"], args["verdict"], str(args["reasons"]), turn_key, self.environment, self.scope)
-                return {"status": 200, "body": {"schema": SCHEMA, "state": task["state"],
+                task = L.review(self.cos, args["task_id"], args["set_digest"], args["verdict"], str(args["reasons"]), turn_key, self.environment, self.scope, evidence_client=self.platform)
+                answer = {"status": 200, "body": {"schema": SCHEMA, "state": task["state"],
                                                 "say": f"Drafted by {task['holder']}, accepted by you." if args["verdict"] == "approve" else "Sent back with your reasons."}}
+                if args["verdict"] == "approve" and os.environ.get("COS_HELPER_RETURN") == "1":
+                    from core.lead_wake.inline import offer
+                    from domains.cos.lead_return import lead_principal
+                    text = offer(lead="cos", principal=lead_principal(binding.principal, os.environ), environment=self.environment,
+                                 source_ref={"store": "cos-history", "id": turn_key}, task=task, reader=self.cos,
+                                 review_id="RV-h-"+L.review_key(turn_key, args["task_id"], args["set_digest"], args["verdict"], str(args["reasons"])))
+                    if text:
+                        answer["body"]["presentation_text"] = text
+                        answer["body"]["say"] += " Include presentation_text verbatim in your final answer so MiniMoi can verify delivery."
+                    else:
+                        answer["body"]["say"] += " Acceptance is saved; presentation is unconfirmed. Do not repeat the review."
+                return answer
             inputs = {"subject": args["subject"]} if args.get("subject") else {}
             tid = L.ask(lead_client=self.cos, platform=self.platform, charter=self.charter, lead="cos", type_id=args["type_id"], inputs=inputs,
                         source={"store": "cos-history", "id": turn_key, "position": int(turn.get("seq") or 1)}, words=turn["user_text"], turn_key=turn_key,

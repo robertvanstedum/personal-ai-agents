@@ -14,7 +14,7 @@
 'use strict';
 const fs = require('node:fs');
 const REF = /^openai\/[a-zA-Z0-9._-]+$/;      // Claude needs its CLI in this image and its own limits first
-const METERED = /^minimoi-gateway\/minimoi-xai-(?:strong|mid|low)$/;
+const METERED = /^minimoi-gateway\/minimoi-xai-(?:strong|strong-deep|mid|low)$/;
 const GATEWAY = 'minimoi-gateway';
 
 function meteredRoutes(env) {

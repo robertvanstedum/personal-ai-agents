@@ -397,7 +397,17 @@ async function loadRoom(id) {
 
 async function loadAll({keepCurrent=false}={}) {
   const generation=++listGeneration, selectedView=archiveView;
-  if (cfg.state !== 'on') { $('[data-rm-new]').disabled = true; $('[data-rm-off]').hidden = false; $('[data-rm-send]').disabled = true; return; }
+  if (cfg.state !== 'on') {
+    $('[data-rm-new]').disabled = true;
+    $('[data-rm-start]').disabled = true;
+    const proxy = $('[data-rm-new-proxy]');
+    if (proxy) proxy.disabled = true;
+    $('[data-rm-off]').hidden = false;
+    $('[data-rm-send]').disabled = true;
+    const recorded = $('[data-rm-recorded]');
+    if (recorded) recorded.hidden = true;
+    return;
+  }
   if (cfg.access === 'no_access') { showBlocked('no_access'); renderList(); return; }       // the same live check the bridge makes; nothing is sent
   const r = await records(`/v1/rooms?view=${selectedView}`);
   if (generation !== listGeneration) return;

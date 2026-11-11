@@ -226,9 +226,45 @@ test('an answer failing the existing checks is still unknown and adds none of it
   assert.ok(!JSON.stringify(out).includes('SERVER WORDS'));
 });
 
-test('the plugin listens on the hook that needs no conversation access', () => {
-  const on = [];
+test('hooks that read conversation content are registered only where the host grants that access', () => {
   const source = readFileSync(new URL('../../docker/cos-agent-a/plugins/cos-bound/index.mjs', import.meta.url), 'utf8');
-  for (const m of source.matchAll(/api\.on\('([a-z_]+)'/g)) on.push(m[1]);
-  assert.deepEqual(on.sort(), ['before_tool_call', 'model_call_ended']);
+  const start = source.indexOf("if (process.env.MINIMOI_DEPTH_PROOF === '1') {"), end = source.indexOf("} else api.on('before_tool_call', toolsHook);");
+  assert.ok(start > 0 && end > start);
+  const hooks = text => [...text.matchAll(/api\.on\('([a-z_]+)'/g)].map(m => m[1]).sort();
+  // Outside the granted branch: only hooks that carry no conversation text.
+  assert.deepEqual(hooks(source.slice(0, start) + source.slice(end)), ['before_tool_call', 'model_call_ended']);
+  // agent_end (the run proof and the run answer) only inside it; apply-config.sh grants access exactly there.
+  assert.deepEqual(hooks(source.slice(start, end)), ['agent_end', 'agent_end', 'before_tool_call', 'model_call_started']);
+});
+
+// Dev, 11 Nov: CoS saved her narration between tool steps ("I'll review it first.") as part of her answer.
+import {answerHook, finalText} from '../../docker/cos-agent-a/plugins/cos-bound/index.mjs';
+
+test('the run answer is the last step that ended the run, text only', () => {
+  const step = (stopReason, ...content) => ({role: 'assistant', stopReason, content});
+  const messages = [{role: 'user', content: 'q'}, step('toolUse', {type: 'text', text: "I'll check first."}, {type: 'toolCall', id: 'c1'}),
+                    {role: 'toolResult', content: []}, step('stop', {type: 'thinking', thinking: 'hidden'}, {type: 'text', text: 'The answer.'})];
+  assert.equal(finalText(messages), 'The answer.');
+  assert.equal(finalText(messages.slice(0, 2)), null);                       // ended on a tool call: nothing
+  assert.equal(finalText([step('stop', {type: 'thinking', thinking: 'x'})]), null);
+  assert.equal(finalText([step('aborted', {type: 'text', text: 'partial'})]), null);
+  assert.equal(finalText(null), null);
+});
+
+test('the answer report goes for a successful run of an allowed agent only', () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => { calls.push({url: String(url), options}); return {body: null}; };
+  const report = answerHook({agents: ['cos-agent-a'], url: new URL(ENDPOINT), token: TOKEN, fetchImpl});
+  const ctx = {sessionKey: SESSION, runId: RUN};
+  const done = {success: true, messages: [{role: 'assistant', stopReason: 'stop', content: [{type: 'text', text: 'Final.'}]}]};
+  report(done, ctx);
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].url.endsWith('/answer'));
+  assert.deepEqual(JSON.parse(calls[0].options.body), {text: 'Final.'});
+  assert.equal(calls[0].options.headers['X-CoS-Run'], RUN);
+  report({...done, success: false}, ctx);
+  report(done, {...ctx, sessionKey: 'agent:someone-else:openai-user:x'});
+  report(done, {...ctx, runId: 'nope'});
+  report({success: true, messages: []}, ctx);
+  assert.equal(calls.length, 1);
 });

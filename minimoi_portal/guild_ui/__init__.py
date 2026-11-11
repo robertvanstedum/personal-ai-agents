@@ -300,6 +300,8 @@ def register_guild_ui(app, *, owner_guard, current_user, url_prefix: str, bluepr
     }
     _name_the_partner(bp, services)
     app.register_blueprint(bp, url_prefix=url_prefix)
+    from .lead_return import install as attach_lead_return
+    attach_lead_return(app,services,app.extensions[blueprint_name]['feature_environ'])
     from .jobs_wiring import attach_jobs
     attach_jobs(app, blueprint_name, services)         # Master Craftsman jobs: nothing happens unless MINIMOI_GUILD_JOBS is on
     from .agent_ask import attach as attach_agent_asks

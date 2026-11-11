@@ -227,12 +227,12 @@ class TurnLedger:
 
     # ── admission ─────────────────────────────────────────────────────────────
     @staticmethod
-    def _validate(principal, conversation_id, note_request_id, turn_request_id, kind, attachment_ids, topic_refs):
+    def _validate(principal, conversation_id, note_request_id, turn_request_id, kind, attachment_ids, topic_refs, *, service_review=False):
         for name, value in (("principal", principal), ("conversation_id", conversation_id),
                             ("note_request_id", note_request_id), ("turn_request_id", turn_request_id)):
             if not isinstance(value, str) or not value or len(value) > 200:
                 raise ValueError(f"{name} is required")
-        if kind not in KINDS:
+        if kind not in KINDS and not (service_review and kind == "lead_review"):
             raise ValueError("unknown turn kind")
         return _clean_files(attachment_ids), _clean_refs(topic_refs)
 
@@ -279,16 +279,27 @@ class TurnLedger:
         return Admission("running" if earlier["state"] == "claimed" else "done", entry=earlier)
 
     def admit(self, *, principal: str, conversation_id: str, note_request_id: str, turn_request_id: str,
-              kind: str = "typed", attachment_ids: list | None = None, topic_refs: list | None = None) -> Admission:
+              kind: str = "typed", attachment_ids: list | None = None, topic_refs: list | None = None,
+              _service_source: str | None = None) -> Admission:
         """Record and claim this turn before dispatch, or say why not. A refusal records nothing.
         While the owner has waiting turns, a new immediate turn is refused (queue_pending): it
         would jump the queue."""
         files, refs = self._validate(principal, conversation_id, note_request_id, turn_request_id, kind,
-                                     attachment_ids, topic_refs)
+                                     attachment_ids, topic_refs, service_review=_service_source is not None)
+        if _service_source is not None and kind != "lead_review":
+            raise ValueError("service source requires service-origin kind")
         token = secrets.token_hex(16)
         with self._tx(principal) as cur:
             released = self._release_abandoned(cur, principal)
             self._expire_waiting(cur, principal)
+            if _service_source is not None:
+                cur.execute("SELECT state FROM guild.mc_turn_ledger WHERE principal=%s AND conversation_id=%s AND note_request_id=%s AND kind IN ('typed','voice')",
+                            (principal,conversation_id,_service_source))
+                origin = cur.fetchone()
+                # Continue lifts an owner pause; it does not prove that an
+                # unknown backend has stopped. Service work needs settlement.
+                if origin is None or origin[0] not in ("answered", "failed", "not_sent", "cancelled", "expired"):
+                    return Admission("busy", released=released)
             known = self._existing(cur, principal, conversation_id, note_request_id, turn_request_id, kind, files, refs)
             if known is not None:
                 known.released = released
@@ -315,6 +326,18 @@ class TurnLedger:
             entry = _entry(cur.fetchone())
             return Admission("claimed", entry=entry, claim=Claim(entry["id"], token, entry["claim_generation"]),
                              released=released)
+
+    def admit_service_review(self, *, principal, conversation_id, source_note_request_id, operation_id):
+        """Host-only continuation on the same owner-wide lane, behind queued owner turns.
+        The service-origin entry is not a note from Robert and creates no tool binding.
+        """
+        if not isinstance(operation_id,str) or not re.fullmatch(r'OB-wake-[0-9a-f]{40}',operation_id):
+            raise ValueError('invalid wake identity')
+        if not isinstance(source_note_request_id,str) or not source_note_request_id:
+            raise ValueError('kept owner source required')
+        return self.admit(principal=principal,conversation_id=conversation_id,
+                          note_request_id='service:'+operation_id,turn_request_id='wake:'+operation_id,
+                          kind='lead_review',_service_source=source_note_request_id)
 
     # ── the queue (P2): waiting turns, sent strictly in order ─────────────────
     def enqueue(self, *, principal: str, conversation_id: str, note_request_id: str, turn_request_id: str,
@@ -469,6 +492,41 @@ class TurnLedger:
                             "ON CONFLICT (principal) DO NOTHING", (principal, entry["id"], state))
             return True
 
+    # ── a lost stream, settled on proof ───────────────────────────────────────
+    def settle_unknown(self, *, principal: str, conversation_id: str, note_request_id: str, run_end) -> bool:
+        """A turn whose stream was lost (its lease expired, e.g. a portal restart) is 'unknown': the run may still be
+        working. It settles as 'failed' (the answer was not delivered) only on the runtime's signed end receipt for its
+        exact bound run, verified against that runtime instance's registered key. ``run_end(run_id)`` fetches the
+        receipt (the relay). No receipt, a bad one, or any doubt leaves the turn unknown. The owner's pause stays until
+        his Continue; it now says the turn failed rather than that its outcome is unknown."""
+        with self._tx(principal) as cur:
+            cur.execute("""SELECT l.id, t.runtime_run_id, t.runtime_instance, t.runtime_agent, t.runtime_user, k.public_key
+                FROM guild.mc_turn_ledger l
+                JOIN guild.mc_tool_turns t ON t.ledger_id = l.id AND t.claim_generation = l.claim_generation
+                LEFT JOIN guild.mc_runtime_proof_keys k ON k.instance_id = t.runtime_instance
+                WHERE l.principal = %s AND l.conversation_id = %s AND l.note_request_id = %s
+                  AND l.kind IN ('typed', 'voice') AND l.state = 'unknown' AND l.outcome->>'reason' = 'lease_expired'""",
+                        (principal, conversation_id, note_request_id))
+            row = cur.fetchone()
+        if row is None or not row[1] or not row[5]:
+            return False
+        ledger_id, run, instance, agent, user, key = row
+        try:
+            receipt = run_end(run)
+        except Exception:
+            return False
+        if not run_end_proved(receipt, run=run, instance=instance, agent=agent, user=user, public_key=key):
+            return False
+        with self._tx(principal) as cur:
+            cur.execute("UPDATE guild.mc_turn_ledger SET state = 'failed', updated_at = now(), "
+                        "outcome = COALESCE(outcome, '{}'::jsonb) || %s::jsonb WHERE id = %s AND state = 'unknown'",
+                        (json.dumps({"status": "failed", "failure_class": "stream_lost_run_ended"}), ledger_id))
+            if cur.rowcount != 1:
+                return False
+            cur.execute("UPDATE guild.mc_turn_barrier SET reason = 'failed' WHERE ledger_id = %s AND reason = 'unknown'",
+                        (ledger_id,))
+        return True
+
     # ── owner view and Continue ───────────────────────────────────────────────
     def status(self, principal: str, *, recent: int = 10) -> dict:
         """The owner's running entry, pause, waiting entries in order and most recent entries (content-free)."""
@@ -504,3 +562,12 @@ class TurnLedger:
         return {"result": "continued", "ledger_id": int(row[0]), "reason": row[1],
                 "message": ("Continuing. The earlier message's outcome is still unknown: it may have run, "
                             "or may still be running.") if row[1] == "unknown" else "Continuing after the failed message."}
+
+
+def run_end_proved(receipt, *, run, instance, agent, user, public_key) -> bool:
+    """True only for the runtime's signed end receipt of exactly this run, instance, agent and runtime user."""
+    from core.model_routes.runtime_proof import valid_receipt, verified
+    return (valid_receipt(receipt) and receipt["run"] == run and receipt["instance"] == instance
+            and receipt["agent"] == agent and receipt["session"] == f"agent:{agent}:openai-user:{user}"
+            and verified(receipt, public_key))
+

@@ -1,0 +1,42 @@
+const assert = require('node:assert/strict');
+const {tracker} = require('../../core/model_routes/runtime_proof.cjs');
+const run = 'chatcmpl_11111111-1111-4111-8111-111111111111';
+const ctx = {runId: run, agentId: 'mc-chat', sessionKey: 'agent:mc-chat:openai-user:fixture'};
+const instance = 'a'.repeat(32);
+(async () => {
+  const states = new Map(), receipts = [];
+  const options = {instance, states, publish: async r => receipts.push(r)};
+  const a = tracker(options), b = tracker(options);
+  a.modelStarted({callId: 'call-1'}, ctx);
+  b.modelStarted({callId: 'call-1'}, ctx); // duplicate registration does not invent a second model call
+  await a.ended({success: true, messages: ['must never leave runtime']}, ctx);
+  await b.ended({success: true}, ctx);
+  assert.equal(receipts.length, 1);
+  assert.equal(receipts[0].model_calls, 1);
+  assert.equal(receipts[0].tool_calls, 0);
+  assert.equal(JSON.stringify(receipts).includes('must never'), false);
+  assert.equal(b.beforeTool({toolName: 'exec'}, {...ctx, toolCallId: 'late'}).block, true);
+  assert.equal(a.beforeTool({}, {}).block, true);
+  assert.equal(a.beforeTool({}, {...ctx, runId: 'broken'}).block, true);
+  const native = {...ctx, runId: '33333333-3333-4333-8333-333333333333'};
+  let sealed = false;
+  const existingSeal = () => {sealed = true;};
+  assert.equal(a.beforeTool({}, native) || existingSeal(), undefined);
+  assert.equal(sealed, true);
+  a.modelStarted({callId:'native'},native);
+  await a.ended({success:true},native);
+  assert.equal(receipts.length,1);
+  assert.equal(a.beforeTool({runId:run},native).block,true);
+  const other = {...ctx, runId: run.replace('11111111', '22222222')};
+  assert.equal(a.beforeTool({}, other).block, true); // no start evidence
+  a.modelStarted({callId: 'call-2'}, other);
+  assert.equal(a.beforeTool({runId:native.runId},other).block,true);
+  assert.equal(a.beforeTool({toolName: 'unlisted_native'}, {...other, toolCallId: 'tool-1'}), undefined);
+  await a.ended({success: true}, other);
+  assert.equal(receipts[1].tool_calls, 1);
+  const limited = tracker({instance, states: new Map(), limit: 0, publish: async () => assert.fail('untracked receipt')});
+  limited.modelStarted({callId: 'x'}, ctx);
+  assert.equal(limited.beforeTool({}, ctx).block, true);
+  await limited.ended({success: true}, ctx);
+  console.log('runtime proof: passed');
+})().catch(e => {console.error(e); process.exitCode = 1;});

@@ -336,3 +336,31 @@ def test_page_focus_only_when_valid_and_on(load_portal, svc, monkeypatch):
     monkeypatch.setattr(notices, "_SERVICE", None)
     off = portal.owner().get("/guild-next/guild/build?waiting=W-12").get_data(as_text=True)
     assert "waiting_focus" not in off
+
+
+def test_notice_semantics_ignore_age_and_delivery_but_explicit_owner_reference_survives(svc, tmp_path, clock):
+    from types import SimpleNamespace
+    from minimoi_portal.guild_ui.pending_notices import Plan
+    from minimoi_portal.guild_ui.conversations import ConversationStore
+    from core.notice_selection import MARKER
+    _agent(svc)
+    svc.sweep()
+    store = ConversationStore(str(tmp_path / 'chat'), base_floor='test')
+    conv, _ = store.create('robert', key='waiting-notice-test')
+    notes = {}
+    def plan(ref):
+        return Plan(store, conv, 'robert', SimpleNamespace(get_note=notes.get, floor=conv['notes_floor']), ref)
+    first = plan('reply-a')
+    block = mc.context_block('robert', 'hello', notice_plan=first)
+    assert 'Notice ID W-1:' in block and len(first.offers) == 1
+    raw = 'Hello.\n' + MARKER + json.dumps({'nonce': first.nonce, 'ids': list(first.offers)})
+    rendered = first.transform(raw)
+    notes['reply-a'] = {'who': 'master_craftsman', 'author_kind': 'agent', 'text': rendered}
+    clock.t += 180
+    svc.sweep()
+    repeat = plan('reply-b')
+    mc.context_block('robert', 'another unrelated question', notice_plan=repeat)
+    assert not repeat.offers
+    named = plan('reply-c')
+    mc.context_block('robert', 'What about w1?', notice_plan=named)
+    assert named.offers

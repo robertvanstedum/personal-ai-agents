@@ -15,7 +15,7 @@ const OTHER_SENDER = ['busy', 'not_next', 'not_queued'];
 // This tab may not send (Private, record mode unknown) or cannot (signed out): stop, and start again only when that changes.
 const may = () => live.known && !live.off;
 const QUEUE_ROUNDS = 6;          // at most five wait, so six rounds empty the queue
-export function initQueue({ page, thread, dispatch, follow, readBack = async () => true }) {
+export function initQueue({ page, thread, dispatch, follow, readBack = async () => true, onView = () => {} }) {
   const bar = $('[data-mc-queue-bar]');
   const text = $('[data-mc-queue-text]');
   const cont = $('[data-mc-queue-continue]');
@@ -47,6 +47,7 @@ export function initQueue({ page, thread, dispatch, follow, readBack = async () 
 
   function render(v) {
     view = v;
+    onView(v);
     const live = new Set();
     for (const e of v.queued) {
       const row = noteRow(e.note_request_id);
@@ -62,7 +63,7 @@ export function initQueue({ page, thread, dispatch, follow, readBack = async () 
       const row = words && noteRow(e.note_request_id);
       if (row && !row.querySelector('[data-not-sent]')) row.append(el('p', { class: 'mc-queued small', 'data-not-sent': e.state }, words));
     }
-    const line = barWords(v, here()) || (v.running?.conversation_id === here() && !thread.querySelector('[data-live-turn]')
+    const line = barWords(v, here()) || (v.running?.conversation_id === here() && !thread.querySelector('[data-live-turn]') && !thread.querySelector(`[data-interrupted-request="${CSS.escape(v.running.note_request_id || '')}"]`)
       ? 'An earlier reply is still running. Its saved answer will appear here.' : '');
     if (bar) {
       bar.hidden = !line;

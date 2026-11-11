@@ -156,24 +156,81 @@ def move_run(conn, *, ledger_id: int, claim_generation: int, old_run: str, new_r
         return cur.rowcount == 1
 
 
-def register_instance(conn, *, environment: str, instance_id: str) -> bool:
+def prepare_depth(conn, *, ledger_id, claim_generation, old_run, nonce, receipt, environment) -> bool:
+    """Consume continuation and retire quick before sending deep; never replay preparation."""
+    from core.model_routes.runtime_proof import unused_completed, verified
+    if (not unused_completed(receipt) or receipt["run"] != old_run
+            or not isinstance(nonce, str) or not re.fullmatch(r"[0-9a-f]{32}", nonce)):
+        return False
+    user = receipt["session"].removeprefix(f"agent:{receipt['agent']}:openai-user:")
+    with conn.cursor() as cur:
+        _lock_current(cur, environment, "SHARE")
+        cur.execute("SELECT public_key FROM guild.mc_runtime_proof_keys WHERE instance_id=%s", (receipt["instance"],))
+        key = cur.fetchone()
+        if key is None or not verified(receipt, key[0]):
+            return False
+        cur.execute("""UPDATE guild.mc_tool_turns t
+            SET runtime_run_id=NULL, depth_nonce=%s, depth_from_run=%s, depth_prepared_at=clock_timestamp()
+            FROM guild.mc_turn_ledger l, guild.mc_tool_runtime r, guild.mc_tool_portal_epoch e
+            WHERE t.ledger_id=%s AND t.claim_generation=%s AND t.runtime_run_id=%s
+              AND t.depth_nonce IS NULL AND t.revoked_at IS NULL
+              AND t.runtime_instance=%s AND t.runtime_agent=%s AND t.runtime_user=%s
+              AND r.environment=%s AND r.instance_id=t.runtime_instance
+              AND e.environment=r.environment AND e.epoch=t.portal_epoch
+              AND l.id=t.ledger_id AND l.state='claimed' AND l.claim_generation=t.claim_generation
+              AND l.lease_until > clock_timestamp()
+              AND NOT EXISTS (SELECT 1 FROM guild.mc_tool_admissions a WHERE a.ledger_id=t.ledger_id
+                              AND a.claim_generation=t.claim_generation)""",
+            (nonce, old_run, ledger_id, claim_generation, old_run, receipt["instance"], receipt["agent"], user, environment))
+        return cur.rowcount == 1
+
+
+def attach_depth(conn, *, ledger_id, claim_generation, run_id, environment) -> bool:
+    if not isinstance(run_id, str) or not RUN_ID.fullmatch(run_id):
+        return False
+    with conn.cursor() as cur:
+        _lock_current(cur, environment, "SHARE")
+        cur.execute("""UPDATE guild.mc_tool_turns t SET runtime_run_id=%s, run_bound_at=clock_timestamp()
+            FROM guild.mc_turn_ledger l, guild.mc_tool_runtime r, guild.mc_tool_portal_epoch e
+            WHERE t.ledger_id=%s AND t.claim_generation=%s AND t.runtime_run_id IS NULL
+              AND t.depth_nonce IS NOT NULL AND t.depth_from_run<>%s AND t.revoked_at IS NULL
+              AND r.environment=%s AND r.instance_id=t.runtime_instance
+              AND e.environment=r.environment AND e.epoch=t.portal_epoch
+              AND l.id=t.ledger_id AND l.state='claimed' AND l.claim_generation=t.claim_generation
+              AND l.lease_until>clock_timestamp()
+              AND NOT EXISTS (SELECT 1 FROM guild.mc_tool_turns o WHERE o.runtime_run_id=%s)""",
+            (run_id, ledger_id, claim_generation, run_id, environment, run_id))
+        return cur.rowcount == 1
+
+
+def register_instance(conn, *, environment: str, instance_id: str, public_key=None) -> bool:
     """The plugin's announcement of its gateway process (authenticated by the listener). A never-seen instance becomes
     current and the previous one is retired for good; a replacement revokes every turn bound to an earlier instance,
     or to none, at once (spec §7.4). A retired instance (a late or replayed announcement from a replaced process) is
     refused and changes nothing: no last-arrival-wins. True when it became current now, False when it already was."""
     if environment not in ("dev", "prod") or not isinstance(instance_id, str) or not INSTANCE_ID.fullmatch(instance_id):
         raise ActionContractError("tool_instance_invalid")
+    from core.model_routes.runtime_proof import valid_public_key
+    if public_key is not None and not valid_public_key(public_key):
+        raise ActionContractError("tool_instance_key_invalid")
     with conn.cursor() as cur:
         cur.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f'["mc-runtime","{environment}"]',))
         # Same order as every admitting path: the runtime row first (here exclusively: in-flight dispatches finish first).
         cur.execute("SELECT instance_id FROM guild.mc_tool_runtime WHERE environment=%s FOR UPDATE", (environment,))
         row = cur.fetchone()
         if row is not None and row[0] == instance_id:
+            if public_key is not None:
+                cur.execute("SELECT public_key FROM guild.mc_runtime_proof_keys WHERE instance_id=%s", (instance_id,))
+                key = cur.fetchone()
+                if key is None or key[0] != public_key:
+                    raise ActionContractError("tool_instance_key_changed")
             return False
         cur.execute("SELECT retired_at FROM guild.mc_tool_runtime_history WHERE instance_id=%s", (instance_id,))
         seen = cur.fetchone()
         if seen is not None:
             raise ActionContractError("tool_instance_retired")
+        if public_key is not None:
+            cur.execute("INSERT INTO guild.mc_runtime_proof_keys(instance_id,public_key) VALUES(%s,%s)", (instance_id, public_key))
         if row is not None:
             cur.execute("""INSERT INTO guild.mc_tool_runtime_history (instance_id, environment, retired_at)
                 VALUES (%s,%s,clock_timestamp()) ON CONFLICT (instance_id) DO UPDATE SET retired_at=clock_timestamp()""",

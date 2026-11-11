@@ -92,6 +92,8 @@
         <div class="confer-workspace"><div class="confer-chat">
         <div id="chat-log" aria-live="polite"><div id="cos-greeting" class="cos-hero"><div class="cos-hero-copy"><div class="cos-eyebrow">Chief of Staff</div><h1 data-greeting>Hello, Robert.</h1><p>Your conversations, kept here.</p></div></div></div>
         <button id="history-earlier" type="button" hidden>Earlier messages</button>
+        {# Messages sent while CoS works wait here, above the box, until they are sent in order (Robert, 11 Nov: as MC, shown like Claude's queued messages). #}
+        <div id="cos-queue" class="cos-queue" aria-live="polite" hidden></div>
         <div id="attach-tray" aria-live="polite"></div>
         <div class="input-row">
           <input id="attach-input" type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json,.html,.htm,.png,.jpg,.jpeg,.gif,.webp">
@@ -320,7 +322,9 @@ function appendMsg(role, text, files) {
 function appendThinking() {
   const el = document.createElement('div');
   el.className = 'msg-thinking';
-  el.textContent = 'Thinking…';
+  const dot = document.createElement('span'); dot.className = 'msg-thinking-dot'; dot.setAttribute('aria-hidden', 'true');
+  const words = document.createElement('span'); words.className = 'msg-thinking-text'; words.textContent = 'Working…';
+  el.append(dot, words);
   chatLog.appendChild(el);
   chatLog.scrollTop = chatLog.scrollHeight;
   return el;
@@ -404,7 +408,10 @@ async function runTurn(payload, thinking) {
   });
   const data = await resp.json().catch(() => ({}));
   if (resp.status !== 202 || !data.turn) return { resp, data };
+  const stop = window.cosHistory?.stopButton(payload.conversation_id, 't-' + payload.request_id.replaceAll('-', ''));
+  if (stop) thinking.append(stop);              // a small Stop inside the working line, not a bar of its own
   const started = Date.now();
+  try {
   while (Date.now() - started < 15 * 60 * 1000) {
     await sleep(2500);
     let r;
@@ -412,13 +419,14 @@ async function runTurn(payload, thinking) {
     catch (err) { continue; }            // a dropped poll is retried; the turn keeps running on the server
     const d = await r.json().catch(() => ({}));
     if (d.state === 'running') {
-      thinking.textContent = 'Working… ' + (d.seconds || 0) + ' s';
+      thinking.querySelector('.msg-thinking-text').textContent = d.progress || ('Working… ' + (d.seconds || 0) + ' s');
       continue;
     }
     return { resp: r, data: d };
   }
   return { resp: { ok: false, status: 504 },
            data: { reply: 'CoS is still working after 15 minutes. Check Files from CoS later.' } };
+  } finally { stop?.remove(); }
 }
 
 async function sendMessage() {
@@ -428,13 +436,21 @@ async function sendMessage() {
   if (!text && !attached.length) return;
   const files = attached;
   if (!window.cosHistory?.ready) return;
-  const conversationId = window.cosHistory.conversationId;
+  // While CoS works, or while others already wait, a new message joins the line: it never jumps it.
+  if (window.cosTurnRunning || window.cosHistory.pendingTurn || queued.length) return queueMessage(text, files);
   const requestId = window.cosHistory.requestId(text, files);
   if (!requestId) return;
   sendInput.value = '';
   window.cosHistory.persistDraft();
   attached = []; renderTray();
-  setInputDisabled(true);
+  await deliver(text, files, requestId);
+  drainQueue();
+}
+
+// One message through the ordinary send path. True when CoS answered and the answer was saved.
+async function deliver(text, files, requestId) {
+  const conversationId = window.cosHistory.conversationId;
+  window.cosTurnRunning = true;               // ＋ stays usable: a file can go with a queued message
   appendMsg('user', [text, ...files.map(f => '📎 ' + f.name)].filter(Boolean).join('\n'));
   window.cosVoiceTyped?.(text);
   const thinking = appendThinking();
@@ -462,7 +478,7 @@ async function sendMessage() {
         : (resp.status === 400 && typeof data?.reply === 'string' && data.reply.trim())
           ? data.reply + ' Your draft is preserved.'
           : 'Delivery is unconfirmed. Your draft is preserved; check the record before retrying.');
-      return;
+      return false;
     }
     window.cosHistory.confirm(data.history, data.operation);
     window.MiniMoiNotices?.clear('cos-chat:' + conversationId + ':' + requestId);
@@ -470,16 +486,115 @@ async function sendMessage() {
     window.cosVoiceTyped?.(data.reply, 'The chat answered him in writing during the call');
     if (Array.isArray(data.files) && data.files.length) loadCosFiles();
     document.dispatchEvent(new CustomEvent('cos:turn-completed', {detail: {id: conversationId}}));
+    return true;
   } catch(err) {
     thinking.remove();
     window.cosHistory.uncertain();
     restore();
     window.MiniMoiNotices?.show('cos-chat:' + conversationId + ':' + requestId, 'Delivery is unconfirmed. Your draft is preserved; check the record before retrying.');
+    return false;
   } finally {
-    setInputDisabled(false);
+    window.cosTurnRunning = false;
     sendInput.focus();
   }
 }
+
+// ── Waiting messages ──────────────────────────────────────────────────────────
+// Kept on CoS's server (GET/POST /ui/queue), so a reload or another device shows the same line. This page sends the
+// first one, through the ordinary send path with its own signed request, once CoS is free. Nothing sends while no page
+// is open: the messages simply wait.
+const queueBox = document.getElementById('cos-queue');
+let queued = [];
+window.cosTurnRunning = false;
+// Each write names its path inside fetch('…') itself: the portal prefixes only those literals (proxy._rewrite_js).
+const queueInit = body => ({ method: 'POST', headers: { 'Content-Type': 'application/json', ...cosWriteHeaders() }, body: JSON.stringify(body) });
+
+function renderQueue() {
+  queueBox.replaceChildren();
+  queueBox.hidden = !queued.length;
+  if (!queued.length) return;
+  const head = document.createElement('div');
+  head.className = 'cos-queue-head';
+  head.textContent = queued.length === 1 ? 'Queued · sends when CoS finishes' : queued.length + ' queued · sent in order when CoS finishes';
+  queueBox.append(head);
+  for (const q of queued) {
+    const row = document.createElement('div');
+    row.className = 'cos-queue-item';
+    const t = document.createElement('span');
+    t.className = 'cos-queue-text';
+    t.textContent = [q.text, ...(q.attachments || []).map(f => '📎 ' + f.name)].filter(Boolean).join('  ');
+    t.title = q.text;
+    const x = document.createElement('button');
+    x.type = 'button'; x.className = 'cos-queue-remove'; x.textContent = '×';
+    x.setAttribute('aria-label', 'Remove this queued message'); x.title = 'Remove';
+    x.onclick = async () => {
+      x.disabled = true;
+      try {
+        const r = await fetch('/ui/queue/cancel', queueInit({ request_id: q.request_id }));
+        if (!r.ok) throw new Error('refused');
+        if (!sendInput.value.trim()) { sendInput.value = q.text; window.cosHistory.persistDraft(); }   // back in the box, to edit or drop
+        await loadQueue();
+      } catch (_) {
+        x.disabled = false;
+        window.MiniMoiNotices?.show('cos-queue', 'That message could not be removed. It is still queued.');
+      }
+    };
+    row.append(t, x);
+    queueBox.append(row);
+  }
+}
+
+async function loadQueue() {
+  const cid = window.cosHistory?.conversationId;
+  if (!cid) return [];
+  try {
+    const d = await fetch('/ui/queue?conversation_id=' + encodeURIComponent(cid), { cache: 'no-store' }).then(r => r.json());
+    if (window.cosHistory.conversationId === cid) { queued = Array.isArray(d.items) ? d.items : []; renderQueue(); }
+  } catch (_) { /* the line stays as last shown; nothing is sent from a guess */ }
+  return queued;
+}
+
+async function queueMessage(text, files) {
+  const conversationId = window.cosHistory.conversationId;
+  const body = { conversation_id: conversationId, request_id: crypto.randomUUID(), text,
+                 attachments: files.map(f => ({ file_id: f.file_id, name: f.name })) };
+  sendInput.value = ''; attached = []; renderTray(); window.cosHistory.persistDraft();
+  try {
+    const r = await fetch('/ui/queue', queueInit(body));
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'refused');
+    window.MiniMoiNotices?.clear('cos-queue');
+    if (window.cosHistory.conversationId === conversationId) { queued = d.items; renderQueue(); }
+  } catch (e) {
+    if (!sendInput.value.trim()) sendInput.value = text;
+    if (!attached.length) { attached = files; renderTray(); }
+    window.cosHistory.persistDraft();
+    window.MiniMoiNotices?.show('cos-queue', e.message === 'queue_full'
+      ? 'Five messages are already queued. Your draft is kept.'
+      : 'That message could not be queued. Your draft is kept.');
+  }
+}
+
+let draining = false;
+async function drainQueue() {
+  if (draining) return;
+  draining = true;
+  try {
+    for (;;) {
+      if (window.cosTurnRunning || window.cosHistory?.pendingTurn || !window.cosHistory?.ready) break;
+      const next = (await loadQueue())[0];
+      if (!next || window.cosTurnRunning) break;
+      const id = window.cosHistory.adopt(next.request_id, next.text, next.attachments || []);
+      if (!id) break;
+      queued = queued.slice(1); renderQueue();
+      if (!(await deliver(next.text, next.attachments || [], id))) { await loadQueue(); break; }   // a failed send stops the line
+    }
+  } finally { draining = false; }
+}
+const resumeQueue = () => { if (window.cosHistory?.ready) loadQueue().then(drainQueue); };
+document.addEventListener('cos:conversation-selected', resumeQueue);
+document.addEventListener('cos:history-ready', resumeQueue);       // first load: the line waiting from before a reload
+document.addEventListener('cos:chat-rendered', () => { if (queued.length && !window.cosHistory?.pendingTurn) drainQueue(); });
 
 // ── Files from CoS (its outbox) ───────────────────────────────────────────────
 async function loadCosFiles() {
@@ -506,11 +621,6 @@ async function loadCosFiles() {
 }
 document.getElementById('cos-files').addEventListener('toggle', e => { if (e.target.open) loadCosFiles(); });
 
-function setInputDisabled(disabled) {
-  sendInput.disabled = disabled;
-  btnSend.disabled   = disabled;
-  btnAttach.disabled = disabled;
-}
 
 // ── Notes tab ─────────────────────────────────────────────────────────────────
 async function loadNotes() {

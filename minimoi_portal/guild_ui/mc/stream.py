@@ -50,11 +50,29 @@ class RunStarted:
     plan attempt this one takes over from, on a switched turn (openclaw.py)."""
     run_id: str
     replaces: str | None = None
+    required: bool = False
 
 
 @dataclass(frozen=True)
 class Finish:
     reason: str
+
+
+@dataclass(frozen=True)
+class Terminal:
+    receipt: dict
+
+
+@dataclass(frozen=True)
+class Progress:
+    text: str
+
+
+@dataclass(frozen=True)
+class Answer:
+    """The run's final step alone, from OpenClaw's record (relay ``{"t":"answer"}``), sent before the finish only when the
+    streamed text also carried narration between tool steps. The portal keeps it only if the stream ends with it."""
+    text: str
 
 
 @dataclass(frozen=True)
@@ -144,8 +162,13 @@ def parse_relay_line(line: str):
         return RunStarted(obj["id"])
     if kind == "delta" and isinstance(obj.get("text"), str) and obj["text"]:
         return Delta(obj["text"])
+    if kind == "answer" and isinstance(obj.get("text"), str) and obj["text"].strip():
+        return Answer(obj["text"])
     if kind == "finish" and isinstance(obj.get("reason"), str):
         return Finish(obj["reason"][:32])
+    if kind == "terminal":
+        from core.model_routes.runtime_proof import valid_receipt
+        return Terminal(obj["receipt"]) if valid_receipt(obj.get("receipt")) else None
     if kind == "usage":
         return Usage(_runtime_count(obj.get("prompt_tokens")), _runtime_count(obj.get("completion_tokens")))
     if kind == "served":

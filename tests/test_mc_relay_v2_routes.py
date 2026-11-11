@@ -83,6 +83,15 @@ def post(env, body, **headers):
         return e.code, dict(e.headers), e.read().decode()
 
 
+def test_deep_alias_is_forwarded_only_from_host_route_map(relay):
+    model = "minimoi-gateway/minimoi-xai-strong-deep"
+    env = relay(MC_RELAY_ROUTES=json.dumps({"api-xai-strong-deep": model}))
+    status, _, _ = post(env, chat("openclaw/mc-chat"), **{"X-MC-Route": "api-xai-strong-deep"})
+    assert status == 200
+    sent = env.gateway.seen[-1]
+    assert {k.lower(): v for k, v in sent["headers"].items()}["x-openclaw-model"] == model
+
+
 def test_a_known_route_goes_on_as_the_maps_model_and_a_callers_header_never_does(relay):
     env = relay()
     status, _, _ = post(env, chat("openclaw/mc-chat"), **{"X-MC-Route": "plan-openai-strong", "x-openclaw-model": "anthropic/evil"})
@@ -285,3 +294,77 @@ def test_rule_6_the_api_targets_go_on_as_the_maps_model(relay):
     env = relay(MC_RELAY_ROUTES=json.dumps({**ROUTES, "api-openai-strong": "minimoi-gateway/minimoi-openai-strong"}))
     assert post(env, chat("openclaw/mc-chat"), **{"X-MC-Route": "api-openai-strong"})[0] == 200
     assert {k.lower(): v for k, v in env.gateway.seen[-1]["headers"].items()}["x-openclaw-model"] == "minimoi-gateway/minimoi-openai-strong"
+
+
+def _steps_db(path, steps, *, run=RUN, last_stop="stop"):
+    """OpenClaw's record of a tool-using run: one assistant message per step, the last one ending the run."""
+    db = sqlite3.connect(path)
+    db.execute("CREATE TABLE session_windows (session_id TEXT, session_key TEXT, agent_harness_id TEXT, updated_at INT)")
+    db.execute("CREATE TABLE transcript_events (session_id TEXT, seq INT, event_json TEXT, event_zstd BLOB)")
+    db.execute("INSERT INTO session_windows VALUES ('s1', ?, 'openclaw', 1)", (KEY,))
+    for seq, text in enumerate(steps, 1):
+        last = seq == len(steps)
+        content = [{"type": "thinking", "thinking": "hidden"}, {"type": "text", "text": text}]
+        if not last:
+            content.append({"type": "toolCall", "id": f"c{seq}", "name": "read", "arguments": {}})
+        message = {"role": "assistant", "provider": "xai", "model": "grok-4.7", "content": content,
+                   "stopReason": last_stop if last else "toolUse", "__openclaw": {"runId": run}}
+        db.execute("INSERT INTO transcript_events VALUES ('s1', ?, ?, NULL)", (seq * 2, json.dumps({"type": "message", "message": message})))
+    db.commit()
+    db.close()
+
+
+def _stream_events(env):
+    status, _, text = post(env, chat("openclaw/mc-chat", user=USER) | {"stream": True})
+    assert status == 200
+    return [json.loads(line) for line in text.splitlines()]
+
+
+def test_a_tool_using_run_sends_its_final_step_as_the_answer_before_the_finish(relay, tmp_path):
+    steps = ["I'll read the file first.", "The answer is 42."]
+    _steps_db(tmp_path / "chat.sqlite", steps)
+    env = with_db(relay, tmp_path, "stream_steps")
+    env.gateway.steps = steps
+    events = _stream_events(env)
+    kinds = [e["t"] for e in events]
+    assert {"t": "answer", "text": "The answer is 42."} in events
+    assert kinds.index("answer") == kinds.index("finish") - 1
+    assert "".join(e["text"] for e in events if e["t"] == "delta") == "".join(steps)     # the page still sees every step live
+
+
+@pytest.mark.parametrize("case", ["one_step", "other_run", "ended_on_a_tool", "differs"])
+def test_no_answer_line_when_the_record_cannot_prove_it(relay, tmp_path, case):
+    steps = ["I'll read the file first.", "The answer is 42."]
+    recorded = {"one_step": ["I'll read the file first.The answer is 42."], "differs": ["I'll read it.", "Something else."]}.get(case, steps)
+    _steps_db(tmp_path / "chat.sqlite", recorded, run=OTHER_RUN if case == "other_run" else RUN,
+              last_stop="toolUse" if case == "ended_on_a_tool" else "stop")
+    env = with_db(relay, tmp_path, "stream_steps")
+    env.gateway.steps = steps
+    events = _stream_events(env)
+    assert not [e for e in events if e["t"] == "answer"]
+    assert [e["t"] for e in events].count("finish") == 1
+
+
+# A portal restart loses a turn's stream; the portal settles it only on the runtime's signed end receipt (Dev, 11 Nov).
+def _get(env, path, token=CALLER):
+    req = urllib.request.Request(env.base + path, headers={"authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.status, json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return e.code, None
+
+
+def test_the_relay_serves_a_runs_end_receipt_to_the_portal_only(relay, tmp_path):
+    proofs = tmp_path / "proofs"
+    proofs.mkdir()
+    receipt = {"instance": "a" * 32, "run": RUN, "session": "agent:mc-chat:openai-user:x", "agent": "mc-chat",
+               "success": True, "model_calls": 2, "tool_calls": 1, "signature": "s"}
+    (proofs / f"{RUN}.json").write_text(json.dumps(receipt))
+    (proofs / f"{OTHER_RUN}.json").write_text(json.dumps({**receipt, "run": RUN}))     # a file that names another run
+    env = relay(MC_RELAY_DEPTH_PROOFS=str(proofs))
+    assert _get(env, f"/v1/runs/{RUN}/terminal") == (200, {"receipt": receipt})
+    assert _get(env, f"/v1/runs/{OTHER_RUN}/terminal")[0] == 404
+    assert _get(env, "/v1/runs/chatcmpl_33333333-3333-4333-8333-333333333333/terminal")[0] == 404
+    assert _get(env, "/v1/runs/../terminal")[0] in (401, 403, 404)
+    assert _get(env, f"/v1/runs/{RUN}/terminal", token="wrong" * 8)[0] == 401

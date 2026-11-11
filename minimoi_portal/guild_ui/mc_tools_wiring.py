@@ -109,14 +109,15 @@ class _TurnBinding:
     runtime run the relay reports for it (spec v1.2 §7.1). Failures leave tools refused for this turn and never
     stop the turn itself."""
 
-    def __init__(self, record, attach, revoke):
+    def __init__(self, record, attach, revoke, prepare_depth=None):
         self._record, self._attach, self._revoke = record, attach, revoke
+        self.prepare_depth = prepare_depth
 
     def __call__(self):
         self._record()
 
     def attach_run(self, run_id):
-        self._attach(run_id)
+        return self._attach(run_id)
 
     def revoke(self):
         """The owner's Stop: fenced in this process first (cannot fail), then recorded durably. Returns "revoked"
@@ -156,14 +157,34 @@ def binder(services, ledger_turn, *, environ, principal, conversation_id, note_i
             _log.exception("mc tools: binding for ledger %s not recorded; tools refused for this turn", claim.ledger_id)
 
     attached = []                                     # the run this binding holds; a switched turn's API run moves it
+    depth_pending = []
+
+    def prepare(old_run, nonce, receipt):
+        from core.mc_tools.binding import prepare_depth
+        from core.mc_tools.fence import fenced
+        if not attached or attached[-1] != old_run or depth_pending or fenced(claim.ledger_id, claim.generation):
+            return False
+        conn = connect()
+        try:
+            with conn:
+                ok = prepare_depth(conn, ledger_id=claim.ledger_id, claim_generation=claim.generation,
+                                   old_run=old_run, nonce=nonce, receipt=receipt, environment=cfg["environment"])
+        finally:
+            conn.close()
+        if ok:
+            depth_pending.append(old_run)
+        return ok
 
     def attach(run_id):
-        from core.mc_tools.binding import attach_run, move_run
+        from core.mc_tools.binding import attach_run, move_run, attach_depth
         try:
             conn = connect()
             try:
                 with conn:
-                    if attached:
+                    if depth_pending:
+                        bound = attach_depth(conn, ledger_id=claim.ledger_id, claim_generation=claim.generation,
+                                             run_id=run_id, environment=cfg["environment"])
+                    elif attached:
                         bound = move_run(conn, ledger_id=claim.ledger_id, claim_generation=claim.generation, old_run=attached[-1],
                                          new_run=run_id, environment=cfg["environment"])
                     else:
@@ -175,8 +196,10 @@ def binder(services, ledger_turn, *, environ, principal, conversation_id, note_i
                 attached.append(run_id)
             if not bound:
                 _log.warning("mc tools: run for ledger %s not attached; tools refused for this turn", claim.ledger_id)
+            return bound
         except Exception:
             _log.exception("mc tools: run for ledger %s not attached; tools refused for this turn", claim.ledger_id)
+            return False
     def revoke():
         from core.mc_tools.binding import revoke as revoke_turn
         from core.mc_tools.fence import fence
@@ -193,7 +216,7 @@ def binder(services, ledger_turn, *, environ, principal, conversation_id, note_i
                        exc_info=True)
             return "fenced"
         return "revoked"
-    return _TurnBinding(bind, attach, revoke)
+    return _TurnBinding(bind, attach, revoke, prepare)
 
 
 def _guests_lookup(email):
@@ -215,6 +238,16 @@ def _repo(cfg):
     return default_repo({"MINIMOI_GITHUB_REPO": cfg["repo"]} if cfg["repo"] else {})
 
 
+def _issue_repo(cfg):
+    """Where an issue write goes. Dev may not name the production repository, or leave the name empty
+    and fall through to it. A read of the public repository is unchanged."""
+    from .mc_context import DEFAULT_REPO
+    chosen = _repo(cfg)
+    if cfg.get("environment") == "dev" and chosen == DEFAULT_REPO:
+        return None
+    return chosen
+
+
 def _github_post(cfg, path, payload, key, http_post, *, ok=201):
     """POST (or, with ``ok=200``, PATCH) one issue write. An ``ok`` answer carrying ``key`` (an int) is ``created``; an
     answer GitHub gives before writing anything (401/403/404/410/422) is ``refused``; anything else, including a
@@ -224,9 +257,12 @@ def _github_post(cfg, path, payload, key, http_post, *, ok=201):
     token = _private_token(cfg["issues_token_file"])
     if token is None:
         return "refused_credential_unavailable", None
+    repo = _issue_repo(cfg)
+    if repo is None:
+        return "refused_dev_production_repo", None
     send = http_post or (requests.post if ok == 201 else requests.patch)
     try:
-        r = send(f"{API}/repos/{_repo(cfg)}{path}", json=payload, timeout=(5, 15), allow_redirects=False,
+        r = send(f"{API}/repos/{repo}{path}", json=payload, timeout=(5, 15), allow_redirects=False,
                  headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
                           "X-GitHub-Api-Version": "2022-11-28"})
     except Exception:
@@ -249,7 +285,7 @@ def issue_filer(cfg, *, http_post=None):
     def file_issue(title, body, labels=()):
         payload = {"title": title, "body": body, **({"labels": list(labels)} if labels else {})}
         return _github_post(cfg, "/issues", payload, "number", http_post)
-    file_issue.repo = _repo(cfg)
+    file_issue.repo = _issue_repo(cfg)
     return file_issue
 
 
@@ -852,6 +888,26 @@ def invite_runner(send_email, notify, *, db=None):
             return sent
         return "done", {"username": state["username"]}, deliver
     return invite
+
+
+def proposal_status(environ, conversation_id):
+    """Pending proposals in this conversation, each marked against the database clock. [] when tools are off.
+    Read-only: asking about one does not close it. The yes/no path still does that."""
+    cfg = settings(environ)
+    if cfg is None or not conversation_id:
+        return []
+    from core.minimoi_actions.receipts import _cursor
+    conn = _connect(cfg["dsn"])()
+    try:
+        with conn, _cursor(conn) as cur:
+            cur.execute("""SELECT code, expires_at <= clock_timestamp() AS expired, expires_at
+                FROM guild.mc_tool_proposals
+                WHERE principal_id=%s AND environment=%s AND conversation_id=%s AND state='pending'
+                ORDER BY created_at LIMIT 5""",
+                        (cfg["principal"], cfg["environment"], conversation_id))
+            return [dict(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
 
 
 def proposals(environ, *, start_research, delivery, lessons=None, read_shown=None, start_build=None):

@@ -3,6 +3,10 @@ another turn's run; replaced runtime; restarted scheduler; Stop before the bindi
 import os
 import stat
 import threading
+import json
+import base64
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 import pytest
 
@@ -14,6 +18,8 @@ RUN = "chatcmpl_{:08x}-0000-0000-0000-000000000000"
 INST = "a" * 32
 INST2 = "b" * 32
 USER = "cos-confer:" + "0" * 32
+SIGNER = Ed25519PrivateKey.generate()
+PUBLIC = base64.b64encode(SIGNER.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)).decode()
 
 
 class Clock:
@@ -33,12 +39,12 @@ def clock():
 def store(tmp_path, clock):
     s = BindingStore(tmp_path / "private" / "bindings.sqlite3", "dev", clock=clock)
     s.start_epoch("epoch-1")
-    s.register_instance(INST)
+    s.register_instance(INST, public_key=PUBLIC)
     return s
 
 
-def owner_turn(store, turn="t1", run=1, key="dev:owner", **kw):
-    assert store.record(turn, principal="robert", origin="owner", scope="owner", audience="owner",
+def owner_turn(store, turn="t1", run=1, key="dev:owner", principal="robert", **kw):
+    assert store.record(turn, principal=principal, origin="owner", scope="owner", audience="owner",
                         agent_entry="cos-agent-a", session_user=USER, lifetime_s=600, owner_request_id="req-" + turn,
                         supersession_key=key, **kw)
     assert store.attach_run(turn, RUN.format(run))
@@ -63,6 +69,109 @@ def test_file_is_private(tmp_path, store):
     path = tmp_path / "private" / "bindings.sqlite3"
     assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
     assert stat.S_IMODE(os.stat(path.parent).st_mode) == 0o700
+
+
+def terminal_receipt(**changes):
+    value = {"instance": INST, "run": RUN.format(1), "session": f"agent:cos-agent-a:openai-user:{USER}",
+            "agent": "cos-agent-a", "success": True, "model_calls": 1, "tool_calls": 0, **changes}
+    message = json.dumps([value[k] for k in ("instance", "run", "session", "agent", "success", "model_calls", "tool_calls")],
+                         separators=(",", ":")).encode()
+    value["signature"] = base64.b64encode(SIGNER.sign(message)).decode()
+    return value
+
+
+def test_agent_writable_receipt_cannot_forge_zero_tools(store):
+    owner_turn(store)
+    forged = terminal_receipt(tool_calls=1)
+    forged["tool_calls"] = 0
+    assert not store.record_terminal(forged)
+    assert not store.prepare_depth("t1", RUN.format(1), "c" * 32)
+
+
+def test_runtime_key_cannot_be_replaced_on_existing_instance(store):
+    attacker = Ed25519PrivateKey.generate()
+    key = base64.b64encode(attacker.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)).decode()
+    assert code(lambda: store.register_instance(INST, public_key=key)) == "instance_key_changed"
+
+
+def test_late_terminal_is_audit_only_after_normal_close(store):
+    owner_turn(store)
+    store.end("t1")  # live HTTP completion precedes the callback by about 100 ms
+    assert store.record_terminal(terminal_receipt())
+    assert store.record_terminal(terminal_receipt())  # idempotent callback
+    assert code(lambda: resolve(store)) == "turn_ended"
+    assert code(lambda: store.prepare_depth("t1", RUN.format(1), "c" * 32)) == "turn_ended"
+    assert not store.attach_depth("t1", RUN.format(2))
+
+
+def test_stop_after_normal_close_still_refuses_late_terminal(store):
+    owner_turn(store)
+    store.end("t1")
+    store.revoke("t1", "owner_stop")
+    assert code(lambda: store.record_terminal(terminal_receipt())) == "stopped"
+
+
+@pytest.mark.parametrize("change", ["stop", "runtime", "epoch", "expiry", "identity"])
+def test_late_terminal_never_bypasses_other_binding_fences(store, clock, change):
+    owner_turn(store)
+    store.end("t1")
+    receipt = terminal_receipt()
+    if change == "stop":
+        owner_turn(store, turn="t2", run=2, key="second")
+        store.revoke("t2", "owner_stop")
+        receipt = terminal_receipt(run=RUN.format(2))
+    elif change == "runtime":
+        store.register_instance(INST2)
+    elif change == "epoch":
+        store.start_epoch("epoch-2")
+    elif change == "expiry":
+        clock.t += 601
+    else:
+        receipt = terminal_receipt(session=f"agent:cos-agent-a:openai-user:{USER}-foreign")
+    with pytest.raises(NotBound):
+        store.record_terminal(receipt)
+
+
+def test_depth_retires_quick_before_deep_and_cannot_dispatch_again(store):
+    owner_turn(store)
+    assert not store.prepare_depth("t1", RUN.format(1), "c" * 32)
+    assert store.record_terminal(terminal_receipt())
+    assert store.prepare_depth("t1", RUN.format(1), "c" * 32)
+    assert code(lambda: resolve(store)) == "run_unattached"
+    assert not store.prepare_depth("t1", RUN.format(1), "c" * 32)
+    assert not store.attach_depth("t1", RUN.format(1))
+    assert store.attach_depth("t1", RUN.format(2))
+    assert resolve(store, run=2).turn_id == "t1"
+    assert code(lambda: resolve(store)) == "run_unattached"
+
+
+@pytest.mark.parametrize("changes", [{"success": False}, {"tool_calls": 1}, {"model_calls": 2}])
+def test_depth_refuses_incomplete_or_used_attempt(store, changes):
+    owner_turn(store)
+    assert store.record_terminal(terminal_receipt(**changes))
+    assert not store.prepare_depth("t1", RUN.format(1), "c" * 32)
+
+
+def test_stop_after_preparation_prevents_deep_binding(store):
+    owner_turn(store)
+    store.record_terminal(terminal_receipt())
+    assert store.prepare_depth("t1", RUN.format(1), "c" * 32)
+    store.revoke("t1")
+    assert code(lambda: store.attach_depth("t1", RUN.format(2))) == "stopped"
+
+
+def test_conflicting_terminal_receipt_invalidates_permission(store):
+    owner_turn(store)
+    assert store.record_terminal(terminal_receipt())
+    assert not store.record_terminal(terminal_receipt(tool_calls=1))
+    assert not store.prepare_depth("t1", RUN.format(1), "c" * 32)
+
+
+def test_recorded_action_wins_over_zero_tool_receipt(store):
+    owner_turn(store)
+    admit(store, resolve(store))
+    store.record_terminal(terminal_receipt())
+    assert not store.prepare_depth("t1", RUN.format(1), "c" * 32)
 
 
 def test_live_turn_resolves_and_admits_with_identity_from_the_binding(store):
@@ -249,3 +358,47 @@ def test_starting_leaves_an_existing_folders_mode_and_tightens_only_its_own_file
     new = tmp_path / "made-here" / "tool-bindings.sqlite3"
     BindingStore(new, "prod")
     assert stat.S_IMODE(os.stat(new.parent).st_mode) == 0o700
+
+
+def test_return_runtime_migration_requires_explicit_retired_instance_evidence(store):
+    from domains.cos.binding import helper_review_settled,reconcile_retired_return_runtime
+    source={'store':'cos-history','id':'cosc-source:t-original','position':1}
+    owner_turn(store,source_ref={'conversation_id':'cosc-source','turn_id':'t-original'})
+    assert not helper_review_settled(store,source,'robert')
+    with pytest.raises(ValueError):
+        reconcile_retired_return_runtime(store,INST,evidence_ref='dev-stop-proof-1')
+    store.register_instance(INST2,public_key=PUBLIC)
+    # Retirement itself is not permission to forget missing terminal proof.
+    assert not helper_review_settled(store,source,'robert')
+    reconcile_retired_return_runtime(store,INST,evidence_ref='dev-stop-proof-1')
+    assert helper_review_settled(store,source,'robert')
+    # A new current unknown run still blocks; migration did not grant a bypass.
+    owner_turn(store,turn='new-turn',run=2,key='new-key',source_ref={'conversation_id':'new','turn_id':'new'})
+    assert not helper_review_settled(store,source,'robert')
+
+
+def test_signed_terminal_after_stop_settles_return_without_restoring_tools(store):
+    from domains.cos.binding import helper_review_settled
+    source={'store':'cos-history','id':'cosc-source:t-original','position':1}
+    owner_turn(store,source_ref={'conversation_id':'cosc-source','turn_id':'t-original'})
+    store.revoke('t1','owner_stop')
+    assert not helper_review_settled(store,source,'robert')
+    with pytest.raises(NotBound):store.record_terminal(terminal_receipt())
+    assert helper_review_settled(store,source,'robert')
+    assert code(lambda:resolve(store))=='stopped'
+    assert not store.prepare_depth('t1',RUN.format(1),'c'*32)
+    assert not store.attach_depth('t1',RUN.format(2))
+
+
+def test_return_settles_an_owner_turn_recorded_under_his_portal_account(store):
+    # Dev, 11 Nov: the portal signs owner:<auth.users id>, so CoS bound the turn to "7" while the task service
+    # names him "robert". Asking only for "robert" never found the turn and the return stayed queued.
+    from domains.cos.binding import helper_review_settled
+    source={'store':'cos-history','id':'cosc-source:t-original','position':1}
+    owner_turn(store,principal='7',source_ref={'conversation_id':'cosc-source','turn_id':'t-original'})
+    store.revoke('t1','owner_stop')
+    with pytest.raises(NotBound):store.record_terminal(terminal_receipt())
+    assert not helper_review_settled(store,source,'robert')
+    assert helper_review_settled(store,source,('robert','7'))
+    assert not helper_review_settled(store,source,('robert','8'))
+    assert not helper_review_settled(store,source,())

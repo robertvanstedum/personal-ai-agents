@@ -75,12 +75,19 @@ class NoticePort(Protocol):
     def lookup(self, operation_id: str, *, attempt: int) -> dict: ...
 
 
-def drain_once(svc, token: str, harness: HarnessPort, operation_id: str, notices: NoticePort | None = None) -> str:
-    """Advance one operation by at most one send or one lookup. Returns the entry's state afterwards."""
+def drain_once(svc, token: str, harness: HarnessPort, operation_id: str, notices: NoticePort | None = None, lead_wake: NoticePort | None = None,
+               publication: NoticePort | None = None) -> str:
+    """Advance one operation by at most one send or one lookup.
+
+    A publication port must acknowledge ONLY canonical note persistence/readback,
+    never an intermediate queue. It must independently validate current disclosure
+    access and source ownership, and fence absent attempts before answering lookup.
+    Committed publications deliberately survive later task cancellation.
+    """
     op = svc.get("outbox", operation_id, token)
     if op is None:
         return "not_found"
-    destination = notices if op["destination"] == "notices" else harness
+    destination = {"notices": notices, "harness": harness, "lead_wake": lead_wake, "lead_publication": publication}.get(op["destination"])
     if destination is None:
         return op["state"]                                  # no channel configured: it stays pending, never dropped
 
@@ -101,9 +108,10 @@ def drain_once(svc, token: str, harness: HarnessPort, operation_id: str, notices
         attempt = sends + 1
         op = svc.get("outbox", operation_id, token)
         try:
-            if op["operation"] == "notify":
+            if op["operation"] in ("notify", "wake_lead", "publish_return"):
                 answer = destination.deliver(operation_id, op["bundle_digest"], task_id=op["task_id"],
-                                             kind=op["reason"] or "notice", attempt=attempt)
+                                             kind=op["packet"]["kind"] if op["operation"] in ("wake_lead", "publish_return") else op["reason"] or "notice",
+                                             attempt=attempt)
             elif op["operation"] == "set_fence":
                 answer = harness.set_fence(operation_id, task_id=op["task_id"],
                                            fence_generation=op["fence_generation"], attempt=attempt)

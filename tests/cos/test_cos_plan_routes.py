@@ -101,6 +101,12 @@ def test_a_routed_turn_asks_for_its_model_and_an_unrouted_one_asks_for_nothing()
     assert "x-openclaw-model" not in _headers(None)
 
 
+def test_deep_alias_uses_existing_cos_transport():
+    model = "minimoi-gateway/minimoi-xai-strong-deep"
+    assert _headers(model)["x-openclaw-model"] == model
+    assert "x-openclaw-model" not in _headers(model, agent="cos-meeting")
+
+
 def test_a_meeting_agent_never_takes_a_conversations_choice():
     assert "x-openclaw-model" not in _headers("openai/gpt-6-sol", agent="cos-meeting")
 
@@ -684,3 +690,15 @@ class TestFailoverRuntimeConfig:
     def test_a_gateway_host_ignores_it(self, tmp_path):
         run, config = _apply(tmp_path, {"COS_FAILOVER_ROUTES": self.REF, "COS_GATEWAY_KEY_CAPPED": "1"})
         assert run.returncode == 0 and config == json.loads(CONFIG.read_text())
+
+
+def test_saved_presentation_callback_suppresses_only_the_platform_route_suffix(failover):
+    f = failover(_Sse(RUN_A, _error("rate_limit_error")), _ok())
+    checked = []
+    def already_presented(route, words):
+        checked.append((route, words))
+        return False
+    f.state["route_notice"] = already_presented
+    assert f.turn() == "Answer."
+    assert len(checked) == 1 and checked[0][0]["switched_from"] == ASTRA
+    assert "tries the OpenAI plan again" in checked[0][1]

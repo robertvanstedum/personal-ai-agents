@@ -48,6 +48,7 @@ TERMINAL_TASK = ("completed", "failed", "canceled", "rejected")
 SINGLE_HOLDER_ROLES = ("lead", "holder", "verifier", "duty")
 FENCE_OP_PREFIX = "OB-fence-"
 NOTICE_OP_PREFIX = "OB-notice-"
+WAKE_OP_PREFIX = "OB-wake-"
 MAX_CHILD_ROUNDS = 3          # J3: bounded revision of a delegated step
 REPORTS_EFFECTS = ("task.transition", "task.assign", "task.reopen", "task.adopt_interpretation", "correction.apply")
 
@@ -62,10 +63,11 @@ def path_of(target_type: str, target_id: str) -> str:
 
 class TaskService:
     def __init__(self, root: Path | str, environment: str, bindings: Bindings, *, grants: Grants | None = None,
-                 clock: Callable[[], str] = _now, charters=None):
+                 clock: Callable[[], str] = _now, charters=None, helper_returns: bool = False):
         if environment not in ("synthetic", "dev", "staging", "prod"):
             raise ValueError("environment")
         self.environment = environment
+        self.helper_returns = helper_returns
         self.bindings = bindings
         self.grants = grants or Grants()
         from services.partnership_tasks.charters import Charters
@@ -92,8 +94,12 @@ class TaskService:
         if digest(command["payload"]) != command["payload_digest"]:
             return _result(command_id, "refused", code="payload_digest_mismatch")
         command_digest = digest({"command": command, "seat": binding.seat, "binding": binding.binding_id})
-        result = self.journal.run(command["command_id"], command_digest,
-                                  lambda: _Planner(self, command, binding).plan())
+        def plan():
+            # Publication authority must still exist after waiting for the writer lock.
+            if command["kind"] == "task.commit_helper_return" and self.bindings.resolve(token, self._clock()) != binding:
+                raise Refused("not_authenticated", "binding_changed")
+            return _Planner(self, command, binding).plan()
+        result = self.journal.run(command["command_id"], command_digest, plan)
         if result["outcome"] == "accepted" and command["kind"] in REPORTS_EFFECTS:
             # E07/Q05: a cancel, failure, reassignment or correction says which effects may already exist.
             result = dict(result, open_effects=self._open_effects(command, binding))
@@ -117,8 +123,8 @@ class TaskService:
             out = []
             for path in sorted(folder.glob("OB-*.json")) if folder.is_dir() else []:
                 ob = self.journal.read(f"{DIRS['outbox']}/{path.name}")
-                if ob and ob["task_id"] in task_ids and ob["operation"] == "admit_bundle" \
-                        and ob["state"] in ("attempted", "unknown", "conflict") \
+                if ob and ob["task_id"] in task_ids and ((ob["operation"] == "admit_bundle" and ob["state"] in ("attempted", "unknown", "conflict"))
+                             or (ob["operation"] == "publish_return" and ob["state"] in ("pending", "attempted", "unknown", "conflict"))) \
                         and ob["data_scope"] in binding.read_scopes:
                     out.append(ob["operation_id"])
             return out
@@ -250,6 +256,30 @@ def interpretation_problem(journal: Journal, readable, interpretation_id, reques
     if unreconciled(journal, readable, interp["source_event_ids"], interp["correction_event_ids"]):
         return "unreconciled_correction"
     return None
+
+
+def wake_problem(svc, task, readable) -> str | None:
+    """Called only inside the journal lock by source admission and destination validation."""
+    parent = svc.journal.read(path_of("task", task["parent_ref"])) if task["parent_ref"] else task
+    if parent is None or parent["data_scope"] not in readable:
+        return "parent_unavailable"
+    if any(t["state"] not in ("working", "waiting", "completed") for t in (task, parent)):
+        return "task_not_active"
+    if any(t["waiting"] and t["waiting"]["reason"] == "lead_unavailable" for t in (task, parent)):
+        return "lead_unavailable"
+    found = svc.charters.chartered(task.get("charter_ref"))
+    if found is None or not task["artifact_sets"]:
+        return "charter_or_result_unavailable"
+    charter, kind = found
+    current = task["artifact_sets"][-1]
+    if (parent["lead"] not in charter.leads or task["data_scope"] not in charter.scopes
+            or task["holder"] != charter.seat or set(current["authored_by"]) != {charter.seat}
+            or kind["effects"] not in ("none", "internal")):
+        return "charter_no_longer_applicable"
+    request = svc.journal.read(path_of("request", task["request_ref"]))
+    if request is None or request["data_scope"] not in readable:
+        return "request_unavailable"
+    return interpretation_problem(svc.journal, readable, task["interpretation_ref"], lineage(request))
 
 
 def _result(command_id: str, outcome: str, **extra) -> dict:
@@ -485,6 +515,31 @@ class _Planner:
               "destination_receipt": None, "reason": kind}
         return [(path_of("outbox", op), self.checked("outbox", self.stamp(ob, None)))]
 
+    def helper_wake(self, task: dict) -> list[tuple[str, dict]]:
+        """Atomic intent only. No prompt/authority is supplied by the helper; the
+        destination must validate these references before a service-origin continuation.
+        """
+        if not task.get("charter_ref") or self.effective_lead(task) not in ("mc", "cos"):
+            return []
+        current = task["artifact_sets"][-1]
+        request = self.load("request", task["request_ref"])
+        source = self.load("source_event", request["source_event_id"])
+        packet = {"kind": "helper_result_ready", "task_id": task["task_id"],
+                  "lead": self.effective_lead(task), "source_ref": source["source"],
+                  "source_event_id": source["source_event_id"], "result_digest": current["digest"],
+                  "charter_ref": task["charter_ref"], "fence_generation": task["fence_generation"],
+                  "environment": self.cmd["environment"], "data_scope": self.cmd["data_scope"]}
+        op = WAKE_OP_PREFIX + digest(packet)[7:47]
+        if self.svc.journal.read(path_of("outbox", op)) is not None:
+            return []
+        ob = {"schema": SCHEMAS["outbox"], "operation_id": op, "task_id": task["task_id"],
+              "destination": "lead_wake", "operation": "wake_lead", "bundle_digest": digest(packet),
+              "packet": packet, "bundle_ref": {"store": "artifacts", "id": task["task_id"],
+              "edition": str(current["task_revision"]), "digest": current["digest"]},
+              "fence_generation": task["fence_generation"], "interpretation_ref": task["interpretation_ref"],
+              "state": "pending", "attempts": [], "destination_receipt": None, "reason": "helper_result_ready"}
+        return [(path_of("outbox", op), self.checked("outbox", self.stamp(ob, None)))]
+
     def attempt_row(self, observation, code, method, send_attempt=None) -> dict:
         return {"attempt": 0, "observation": observation, "drainer_seat": self.b.seat, "at": self.now, "code": code,
                 "method": method, "send_attempt": send_attempt}
@@ -606,7 +661,7 @@ class _Planner:
     def open_effects(self, task_id: str, states=("attempted", "unknown", "conflict")) -> list[str]:
         # A notice tells someone; it is not an effect to reconcile, so one that cannot be sent yet never holds work back.
         return [ob["operation_id"] for ob in self.outbox_entries(task_id)
-                if ob["state"] in states and ob["operation"] != "notify"]
+                if ob["state"] in states and ob["operation"] not in ("notify", "wake_lead", "publish_return")]
 
     def actionable(self, interpretation_id, request) -> None:
         problem = interpretation_problem(self.svc.journal, self.b.read_scopes, interpretation_id,
@@ -948,7 +1003,9 @@ class _Planner:
     def k_task_accept(self) -> Plan:
         """E06/E07: only the current lead (or the owner's override) accepts, and only an exact artifact set that the
         cited reviews reviewed. A worker's report never reaches here."""
-        task = self.task_for_change()
+        return self._accept_task(self.task_for_change())
+
+    def _accept_task(self, task) -> Plan:
         lead = self.effective_lead(task)                         # E07: a child's lead is the parent's, now
         if not (self.b.seat == lead or self.b.is_owner):
             raise Refused("not_authorized", "only_the_lead_accepts")
@@ -1065,12 +1122,16 @@ class _Planner:
         t2 = dict(task, artifact_sets=sets, reviews=task["reviews"] + new,
                   review_refs=task["review_refs"] + [r["review_ref"] for r in new])
         rec = self.stamp(dict(t2, reviews=self.reapply(t2)), task)
-        return self.finish([(path_of("task", task["task_id"]), self.checked("task", rec))], rec["revision"])
+        writes = [(path_of("task", task["task_id"]), self.checked("task", rec))]
+        writes.extend(self.helper_wake(rec))
+        return self.finish(writes, rec["revision"])
 
     def k_task_record_review(self) -> Plan:
         """E06/F04: a review names the exact set it reviewed. A late review of an older set is kept as history and
         does not apply to the current one. The reviewer may not be the author of the set it reviews."""
-        task = self.task_for_change()
+        return self._record_task_review(self.task_for_change())
+
+    def _record_task_review(self, task) -> Plan:
         if task["state"] in TERMINAL_TASK:
             raise Refused("transition_not_allowed", task["state"])
         reviewed = [s_ for s_ in task["artifact_sets"] if s_["digest"] == self.p["reviewed_set_digest"]]
@@ -1107,6 +1168,10 @@ class _Planner:
                                 "review_id": self.p["review_id"], "reviewer": self.b.seat,
                                 "reviewed_set": self.p["reviewed_set_digest"]})
         return self.finish([(path_of("task", task["task_id"]), self.checked("task", rec))] + note, rec["revision"])
+
+    def k_task_commit_helper_return(self) -> Plan:
+        from services.partnership_tasks.helper_return import commit
+        return commit(self)
 
     def k_task_delegate(self) -> Plan:
         """E07: the parent's lead delegates one bounded step to a holder. One level only (a child cannot delegate).
@@ -1237,7 +1302,7 @@ class _Planner:
         if self.open_effects(task["task_id"], ("unknown", "conflict")):
             raise Refused("fenced", "effects_unreconciled")     # Q05: no new admission over an uncertain one
         op = self.p["operation_id"]
-        if op.startswith((FENCE_OP_PREFIX, NOTICE_OP_PREFIX)):
+        if op.startswith((FENCE_OP_PREFIX, NOTICE_OP_PREFIX, WAKE_OP_PREFIX)):
             raise Refused("payload_invalid", "reserved_operation_id")
         if self.svc.journal.read(path_of("outbox", op)) is not None:
             raise Refused("id_taken", "operation")
@@ -1349,6 +1414,18 @@ class _Planner:
             raise Refused("transition_not_allowed", f"{state}+{obs}")
         admission = ob["operation"] == "admit_bundle"
         stale = task["fence_generation"] != ob["fence_generation"] or task["state"] not in ("submitted", "working")
+        wake = ob["operation"] == "wake_lead"
+        if wake:
+            packet = ob["packet"]
+            stale = (wake_problem(self.svc, task, self.b.read_scopes) is not None
+                     or task["fence_generation"] != ob["fence_generation"]
+                     or task["state"] not in ("working", "waiting", "completed")
+                     or self.effective_lead(task) != packet["lead"]
+                     or task.get("charter_ref") != packet["charter_ref"]
+                     or not task["artifact_sets"]
+                     or task["artifact_sets"][-1]["digest"] != packet["result_digest"])
+            if obs == "attempted" and stale:
+                raise Refused("fenced", "task_changed_since_enqueue")
         if obs == "attempted" and admission:
             if stale:
                 raise Refused("fenced", "task_changed_since_enqueue")
@@ -1357,19 +1434,19 @@ class _Planner:
             if not approval or approval["spent_at"] is not None or self.approval_expired(approval) \
                     or approval["card_digest"] != ob["bundle_digest"]:
                 raise Refused("not_authorized", "admission_needs_robert_approval")   # v0.5 M3: nothing is sent
-        if obs == "fenced" and not (admission and stale):
+        if obs == "fenced" and not ((admission or wake) and stale):
             raise Refused("transition_not_allowed", "not_stale")
         receipt = self.p["destination_receipt"]
         if obs == "read" and ob["operation"] != "notify":
             raise Refused("transition_not_allowed", "only_notices_are_read")
-        expected_store = "notices" if ob["destination"] == "notices" else "harness"
+        expected_store = ob["destination"]
         if obs == "applied" and (receipt is None or receipt["store"] != expected_store
                                  or receipt["id"] != ob["operation_id"] or receipt.get("digest") != ob["bundle_digest"]):
             raise Refused("payload_invalid", "receipt_not_for_this_operation")
         new_state = {"attempted": "attempted", "applied": "acknowledged", "refused": "refused", "unknown": "unknown",
                      "definitely_absent": "pending", "conflict": "conflict", "fenced": "fenced",
                      "abandoned": "abandoned", "read": "read", "declined": "declined"}[obs]
-        if obs == "definitely_absent" and admission and stale:
+        if obs == "definitely_absent" and (admission or wake) and stale:
             new_state = "fenced"                    # never arrived, and now stale: it must not be sent later
         sends = sum(1 for a in ob["attempts"] if a["observation"] == "attempted")
         method = {"applied": "destination_answer" if state == "attempted" and self.p["code"] != "lookup"

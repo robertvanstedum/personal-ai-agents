@@ -38,7 +38,7 @@ EXACT_CAPABILITIES = ("lessons.adopt", "guest.reject_request", "issue.comment", 
                       "access.invite_user")
 # Tier 2 (spec §8.2): ordinary private actions with read-back and undo, done at once under the owner-approved
 # installation policy for the current owner request; no exact approval, zero spend.
-STANDING_CAPABILITIES = ("host.career.synthetic", "agent.contact.existing", "agent.watch", "agent.ask.owner_note", "host.artifacts.create", "host.conversation.export", "lessons.keep_preference", "lessons.revoke_preference", "work.record_gap", "work.withdraw_gap",
+STANDING_CAPABILITIES = ("work.artifact.save", "host.career.synthetic", "agent.contact.existing", "agent.watch", "agent.ask.owner_note", "host.artifacts.create", "host.conversation.export", "lessons.keep_preference", "lessons.revoke_preference", "work.record_gap", "work.withdraw_gap",
                          "guild.build.publish_update", "guild.build_log.add", "guild.build_log.add_to", "agent.request.typed", "agent.request.withdraw",
                          "guild.board.note.create", "guild.board.note.update", "guild.board.operation.undo",
                          # Partnership v1.1: task records only; paid work is admitted by Robert's own card approval.

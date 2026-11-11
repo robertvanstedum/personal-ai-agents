@@ -16,7 +16,7 @@ from domains.cos.history import History, HistoryRefused
 _STATUS = {"conversation_not_found": 404, "identity_required": 401}
 
 
-def create_blueprint(history: History, *, resolve_owner: Callable) -> Blueprint:
+def create_blueprint(history: History, *, resolve_owner: Callable, stop_turn=None) -> Blueprint:
     bp = Blueprint("cos_history", __name__)
 
     def refused(exc: HistoryRefused):
@@ -24,6 +24,20 @@ def create_blueprint(history: History, *, resolve_owner: Callable) -> Blueprint:
 
     def unavailable():
         return jsonify({"error": "history_unavailable"}), 503
+
+    @bp.post("/ui/history/conversations/<conversation_id>/turns/<turn_id>/stop")
+    def stop(conversation_id, turn_id):
+        if resolve_owner(request) is None:
+            return refused(HistoryRefused("identity_required"))
+        if stop_turn is None:
+            return jsonify({"error": "stop_unavailable"}), 503
+        try:
+            turn = history.stop(conversation_id, turn_id, lambda: stop_turn(turn_id))
+        except HistoryRefused as exc:
+            return refused(exc)
+        except (OSError, RuntimeError):
+            return unavailable()
+        return jsonify({"turn": turn, "stop_requested": turn.get("failure_code") == "owner_stop"})
 
     def as_int(name: str, default: int | None) -> int | None:
         value = request.args.get(name, "")

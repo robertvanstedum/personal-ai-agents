@@ -206,6 +206,20 @@ class OfferTests(Base, unittest.TestCase):
 
     # ── A02+: the two clocks, on one offer ────────────────────────────────────────────────────────────────────────
 
+    def test_owner_has_one_hour_to_review_without_extending_execution_grace(self):
+        code = self.offer()["data"]["code"]
+        created, expires = self.one("SELECT created_at, expires_at FROM guild.mc_tool_proposals WHERE code=%s", (code,))
+        self.assertAlmostEqual((expires - created).total_seconds(), 3600, delta=2)
+        # Review at thirty minutes must be allowed. Backdate the offer rather than
+        # moving the real database/grant clock, so execution checks remain real.
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute("UPDATE guild.mc_tool_proposals SET created_at=created_at-interval '30 minutes', "
+                        "expires_at=expires_at-interval '30 minutes' WHERE code=%s", (code,))
+        out = self.say(self.props(), f"yes {code}", "note-hour-review")
+        self.assertEqual(out["operation"]["state"], "verified")
+        row = self.row(code)
+        self.assertEqual(row["deadline"] - row["approved_at"], timedelta(minutes=5))
+
     def at_offer_expiry(self, delta):
         """Approve by code with the approval clock exactly at the offer's expiry plus ``delta``. The offer's expiry is
         set to the database's now, so the grant (checked on the database clock) sees the same moment."""

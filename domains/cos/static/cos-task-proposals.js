@@ -106,7 +106,8 @@ function render(list, problem) {
   render.last = [];
   for (const box of BOXES) {
     const inChat = box === CHAT_BOX;
-    const visible = inChat ? list.filter(a => !a.conversation_id || a.conversation_id === window.cosHistory?.conversationId) : list;
+    // In a chat, only the proposals that chat made. One with no conversation waits in Actions, never under a new chat.
+    const visible = inChat ? list.filter(a => a.conversation_id && a.conversation_id === window.cosHistory?.conversationId) : list;
     const follow = inChat && CHAT.scrollHeight - CHAT.clientHeight - CHAT.scrollTop < 48;
     const nextSignature = JSON.stringify([visible, problem]);
     const cards = box.querySelector('[data-tp-list]');

@@ -20,9 +20,28 @@ import { takeTray, restoreTray, trayBusy, trayCount } from './attachments.js';
 import { initJobs } from './jobs.js';
 import { initAgentRequests } from './agent_requests.js';
 import { initQueue } from './mc_queue.js';
+import { interruptions } from './mc_interruption.js';
 import { initRoutePicker } from './route_picker.js';
 
 let page, panel, thread, pill;
+let latestStreamRequest = null;
+const interruptedRows = new Map();
+const interrupted = interruptions((id, state, text) => {
+  let row = interruptedRows.get(id);
+  if (state === 'recovered') {
+    if (row) row.remove();
+    interruptedRows.delete(id);
+    if (id === latestStreamRequest) answerArrived();
+    return;
+  }
+  const replacement = platformLine('Guild platform', text);
+  replacement.dataset.interruptedRequest = id;
+  replacement.dataset.interruptedState = state;
+  if (row) row.replaceWith(replacement);
+  else thread.append(replacement);
+  interruptedRows.set(id, replacement);
+});
+
 const inPage = () => document.body.dataset.page === 'floor';
 let mode = 'pill';
 
@@ -485,7 +504,7 @@ function showAnswer(holder, r, t) {
   }
   if (confirmedStop(body)) {
     if (holder.stopTicking) holder.stopTicking();
-    holder.replaceWith(platformLine('Guild platform', body.message || 'Stopped. Your message is kept.'));
+    { const n = stoppedNotice(body.message || 'Stopped. Your message is kept.'); if (n) holder.replaceWith(n); else holder.remove(); }
     answerStopped();
     announce(body.message || 'Stopped');
     follow();
@@ -530,6 +549,13 @@ function failureLine(text) {
   clearFailureLines();
   const li = platformLine('Guild platform', text);
   li.dataset.turnFailure = 'true';
+  return li;
+}
+// A confirmed Stop is said once: the live stream's end and the reconnect path can both report it.
+function stoppedNotice(text) {
+  if ([...thread.children].slice(-4).some((n) => n.dataset && n.dataset.stopNotice === text)) return null;
+  const li = platformLine('Guild platform', text);
+  li.dataset.stopNotice = text;
   return li;
 }
 function clearFailureLines() { for (const n of thread.querySelectorAll('[data-turn-failure]')) n.remove(); }
@@ -661,6 +687,7 @@ function endLine(li, state) {
 }
 
 async function streamMasterCraftsman(t, via) {
+  latestStreamRequest = t.note.request_id;
   const note = t.note;
   const li = streamLine();
   const controller = new AbortController();
@@ -674,9 +701,9 @@ async function streamMasterCraftsman(t, via) {
     window.removeEventListener('pagehide', onHide);
     endLine(li, 'unknown');
     const text = 'Unknown · it may have run; nothing was retried. Your note is kept.';
-    thread.append(platformLine('Guild platform', text));
+    li.remove();
+    interrupted.lost(note.request_id, t.conversationId);
     announce(text);
-    answerFailed(mcSay('Master Craftsman: unknown'));
     follow();
     return { answered: false, error: 'network' };
   }
@@ -710,26 +737,40 @@ async function streamMasterCraftsman(t, via) {
   let acked = false;
   let ended = false;
   const showTail = () => { tail.textContent = deltas.slice(upto).join(''); };
+  // A click always shows at once. Before the turn is acknowledged there is nothing to stop yet: the click is kept and sent
+  // the moment it is (Dev, 11 Nov 2026: an early Stop did nothing visible, so it was pressed twice).
   stop.addEventListener('click', async () => {
-    if (!li.turnId) return;
     stop.disabled = true;
     li.dataset.stopping = 'true';
     setSlot(li, 'state', 'Stopping…');
-    await apiStop(`/mc/turns/${encodeURIComponent(li.turnId)}/stop`);
+    if (!li.turnId) { li.stopPending = true; return; }
+    const r = await apiStop(`/mc/turns/${encodeURIComponent(li.turnId)}/stop`);
+    // 404 not_running: the turn had already ended; its own end line says how. Anything else unconfirmed may be retried.
+    if (!r.ok && r.status !== 404 && !ended) {
+      setSlot(li, 'state', 'Stop not confirmed · try again');
+      li.dataset.stopping = '';
+      stop.disabled = false;
+    }
   });
   const handle = (ev) => {
     if (ev.t === 'ack' && typeof ev.turn_id === 'string') {
       acked = true;
       li.turnId = ev.turn_id;
       // Receipt of this turn is confirmed; its intended scope comes from MC, not the transport.
-      setSlot(li, 'state', 'Received · starting');
+      if (li.stopPending) {
+        li.stopPending = false;
+        void apiStop(`/mc/turns/${encodeURIComponent(li.turnId)}/stop`);
+      } else setSlot(li, 'state', 'Received · starting');
       if (Array.isArray(ev.files)) showFiles(note.id, ev.files);
       stop.hidden = false;
       follow();
       announce(mcSay('Master Craftsman is answering'));
+    } else if (ev.t === 'progress' && typeof ev.text === 'string') {
+      if (li.dataset.stopping !== 'true') setSlot(li, 'state', ev.text);      // never hide a Stop already asked for
+      announce(ev.text);
     } else if (ev.t === 'delta' && typeof ev.text === 'string') {
       li.hasText = true;
-      if (!deltas.length) setSlot(li, 'state', 'Writing…');
+      if (!deltas.length && li.dataset.stopping !== 'true') setSlot(li, 'state', 'Writing…');
       deltas.push(ev.text);
       showTail();
       follow();
@@ -762,7 +803,8 @@ async function streamMasterCraftsman(t, via) {
       endLine(li, stopped ? 'Stopped · partial answer not saved' : '(interrupted)');
       if (!deltas.length) li.remove();          // partial text, if any, stays shown once and is never kept
       const text = ev.message || mcSay('Master Craftsman did not answer. Your message is kept.');
-      thread.append(stopped ? platformLine('Guild platform', text) : failureLine(text));
+      if (stopped) { const n = stoppedNotice(text); if (n) thread.append(n); }
+      else thread.append(failureLine(text));
       announce(text);
       if (stopped) answerStopped();
       else answerFailed(ev.mc_header || mcSay('Master Craftsman did not answer'));
@@ -794,13 +836,9 @@ async function streamMasterCraftsman(t, via) {
   }
   if (!ended) {
     endLine(li, acked ? '(interrupted)' : 'unknown');
-    if (!deltas.length) li.remove();
-    const text = acked
-      ? mcSay('The connection ended before the answer finished · if Master Craftsman finishes, its answer is kept: reload to see it.')
-      : 'Unknown · it may have run; nothing was retried. Your message is kept.';
-    thread.append(failureLine(text));
-    announce(text);
-    answerFailed(mcSay('Master Craftsman: connection ended'));
+    li.remove(); // the canonical saved answer is recovered; do not leave a duplicate partial bubble
+    interrupted.lost(note.request_id, t.conversationId, li.turnId);
+    announce('Connection interrupted. Completion is not yet confirmed.');
     follow();
     return { answered: false, error: 'network' };
   }
@@ -1242,17 +1280,23 @@ export function initConversation(p) {
         } finally { window.clearTimeout(timeout); }
       },
       insert: (note) => {
+        if (note.author_kind === 'agent') interrupted.recovered(note);
         if (thread.querySelector(`[data-note="${note.id}"]`)) return;
         const next = Array.from(thread.querySelectorAll('[data-note]')).find((n) => Number(n.dataset.note) > note.id);
         thread.insertBefore(noteLine(note), next || null);
-        if (note.author_kind === 'agent') {
-          applyHeader({ mc_header: mcSay('Master Craftsman answered · saved reply recovered') });
-          answerArrived();
-        }
         follow();
       },
     });
-    queue = initQueue({ page, thread, dispatch: dispatchQueued, follow,
+    queue = initQueue({ page, thread, dispatch: dispatchQueued, follow, onView: view => {
+      // Reload has no stream object. Bind recovery only to the ledger's current run,
+      // not an arbitrary older agent note encountered during history readback.
+      if (!latestStreamRequest && view.running?.conversation_id === conversationId
+          && view.running.note_request_id && !thread.querySelector('[data-live-turn]')) {
+        latestStreamRequest = view.running.note_request_id;
+        interrupted.track(latestStreamRequest, conversationId);
+      }
+      interrupted.reconcile(view);
+    },
       readBack: () => thread.querySelector('[data-live-turn]') ? Promise.resolve(true) : recovery.refresh() });
   }
   agentUi = initAgentRequests({ page, thread, noteLine, follow });

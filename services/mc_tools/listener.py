@@ -38,6 +38,7 @@ PATH = "/internal/mc/v1/tools/<name>"
 INSTANCE_PATH = "/internal/mc/v1/instance"
 HANDOFF_PATH = "/internal/mc/v1/handoffs"
 MAX_BODY = 16 * 1024
+MAX_WORK_BODY = 128 * 1024  # Bounded Unicode JSON for 6000 chars + unresolved questions.
 _DIGEST = re.compile(r"[0-9a-f]{64}")
 _log = logging.getLogger("mc_tools")
 
@@ -65,7 +66,16 @@ def create_app(service, *, token_sha256: str, handoff=None, handoff_token_sha256
     if agent_worker_token_sha256 is not None and (not _DIGEST.fullmatch(agent_worker_token_sha256) or
             agent_worker_token_sha256 in (token_sha256,handoff_token_sha256) or getattr(service,'agent_contact',None) is None):
         raise ValueError('mc_agent_worker_config_invalid')
-    app.config["MAX_CONTENT_LENGTH"] = MAX_BODY
+    app.config["MAX_CONTENT_LENGTH"] = MAX_WORK_BODY
+
+    @app.before_request
+    def bound_work_body():
+        raw = request.get_data(cache=True)
+        if len(raw) <= MAX_BODY:
+            return None
+        if request.path != '/internal/mc/v1/tools/minimoi_work_save':
+            raise RequestEntityTooLarge()
+        return None
 
     @app.errorhandler(RequestEntityTooLarge)
     def too_large(_error):
@@ -151,11 +161,11 @@ def create_app(service, *, token_sha256: str, handoff=None, handoff_token_sha256
         if request.mimetype != "application/json":
             return jsonify(error="json_required"), 415
         body = json_body()
-        if type(body) is not dict or set(body) != {"instance"} or type(body["instance"]) is not str:
+        if type(body) is not dict or set(body) - {"instance", "public_key"} or type(body.get("instance")) is not str:
             return jsonify(error="tool_request_invalid"), 400
         from core.minimoi_actions.context import ActionContractError
         try:
-            replaced = service.register_instance(body["instance"])
+            replaced = service.register_instance(body["instance"], **({"public_key": body["public_key"]} if "public_key" in body else {}))
         except ActionContractError as exc:
             _log.warning("mc tools: runtime instance %s refused (%s)", body["instance"][:8], exc)
             return jsonify(error=str(exc)), 409

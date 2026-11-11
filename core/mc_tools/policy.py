@@ -52,6 +52,8 @@ class Handler:
 # Code-owned. A capability that decides about a guest, changes access, writes publicly or starts paid/delegated work
 # is tier 3 only: an exact owner approval for each effect (spec §8.1 floors, §8.2 placement).
 HANDLERS = {
+    "work_read_v1": Handler("minimoi_work_read", "work.artifact.read", frozenset({1}), None, "none"),
+    "work_save_v1": Handler("minimoi_work_save", "work.artifact.save", frozenset({2}), "work_artifact_readback_v1", "none"),
     "recall_v1": Handler("minimoi_recall", "mc.records.read", frozenset({1}), None, "none"),
     "agent_contact_v1": Handler("minimoi_agent_contact", "agent.contact.existing", frozenset({2}), "native_agent_receipt_v1", "none"),
     "agent_status_v1": Handler("minimoi_agent_status", "agent.contact.status", frozenset({1}), None, "none"),

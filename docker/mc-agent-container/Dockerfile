@@ -31,6 +31,8 @@ COPY --chown=root:root services/mc_operations/handbook/v0.1.2/ /opt/minimoi/mc-a
 # Phase 2: the MiniMoi tools plugin (the same reviewed source native MC loads) and its two fixed host helpers, plus the
 # fixed TCP forwarder that is the plugin's only way to the portal (via the tools door).
 COPY --chown=root:root services/mc_operations/plugins/minimoi-tools/ /opt/minimoi/mc-agent/plugins/minimoi-tools/
+COPY --chown=root:root core/model_routes/runtime_proof.cjs /opt/minimoi/runtime-proof.cjs
+ENV MINIMOI_RUNTIME_PROOF_MODULE=/opt/minimoi/runtime-proof.cjs
 COPY --chown=root:root scripts/mc_host/inspect.py scripts/mc_host/artifact.py /opt/minimoi/mc-agent/helpers/
 COPY --chown=root:root docker/mc-agent-container/tcp-forward.mjs /opt/minimoi/mc-agent/tcp-forward.mjs
 # Bounded web search: MC's copy of CoS's reviewed provider (query only; fixed gateway route).

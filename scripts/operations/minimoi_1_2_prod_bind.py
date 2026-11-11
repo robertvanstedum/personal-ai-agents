@@ -309,8 +309,15 @@ def validate_inputs(doc) -> dict:
     if not isinstance(seats, dict) or set(seats) != set(SEAT_TOKENS):
         refuse(f"input seats: exactly {sorted(SEAT_TOKENS)}")
     for name, row in seats.items():
-        if not isinstance(row, dict) or set(row) != {"origin", "scopes", "read_scopes", "operations"}:
+        if not isinstance(row, dict) or set(row) - {"work_artifacts"} != {"origin", "scopes", "read_scopes", "operations"}:
             refuse(f"input seat {name}")
+        if "work_artifacts" in row:
+            permissions = row["work_artifacts"]
+            if (name not in ("mc", "cos") or row["origin"] != "agent"
+                    or not isinstance(permissions, list)
+                    or any(p not in ("read", "save") for p in permissions)
+                    or len(set(permissions)) != len(permissions)):
+                refuse(f"input seat {name}: work_artifacts")
         if row["origin"] == "owner_session":
             refuse(f"input seat {name}: no token may carry owner authority")
         if row["origin"] not in ("agent", "platform") or (name == "outbox-drainer" and row["origin"] != "platform"):
@@ -564,7 +571,9 @@ def seat_bindings(root: Path, doc: dict) -> list:
     return [{"binding_id": f"bind-prod-{seat}","token_sha256": sha256(read_private(root, rel)), "seat": seat,
              "principal": doc["owner_principal"], "environment": "prod", "origin": doc["seats"][seat]["origin"],
              "scopes": doc["seats"][seat]["scopes"], "read_scopes": doc["seats"][seat]["read_scopes"],
-             "operations": doc["seats"][seat]["operations"], "expires_at": None, "revoked_at": None}
+             "operations": doc["seats"][seat]["operations"], "expires_at": None, "revoked_at": None,
+             **({"work_artifacts": doc["seats"][seat]["work_artifacts"]}
+                if "work_artifacts" in doc["seats"][seat] else {})}
             for seat, rel in SEAT_TOKENS.items()] + [
             {"binding_id": "bind-prod-principal", "token_sha256": sha256(read_private(root, PORTAL_PRINCIPAL)), "seat": "principal",
              "principal": doc["owner_principal"], "environment": "prod", "origin": "owner_session", "scopes": ["personal"],

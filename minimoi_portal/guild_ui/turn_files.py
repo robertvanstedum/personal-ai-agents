@@ -1,7 +1,7 @@
 """The files that go with one Master Craftsman message (Guild 1.1, upload reading).
 
 What the owner attached to THIS message (explicit ids, each one in this conversation) is read from the portal's saved
-text, scrubbed like a note, fitted to a budget and placed after the owner's words as clearly marked DATA. The report
+text, scrubbed for a card, an IBAN or a routing number (an email address stays), fitted to a budget and placed after the owner's words as clearly marked DATA. The report
 that comes back is computed from the text that actually went into the request, so the page can say exactly which files
 reached the model, and never claims a read from storage alone. Images are reported "not read".
 

@@ -156,3 +156,19 @@
  .founders-cos[data-cos-tab=confer] .input-row>#btn-voice:not([aria-pressed=true]),
  .founders-cos[data-cos-tab=confer] .input-row>#btn-voice[aria-pressed=true]{height:44px;min-height:44px}
 }
+
+/* Working line and queued messages (Robert, 11 Nov: like Claude's). Quiet, small, above the box; the work stays the star. */
+.founders-cos .msg-thinking{display:flex;align-items:center;gap:10px;font-style:normal;color:#6b756c;font-size:14px;margin:4px 0 14px}
+.founders-cos .msg-thinking-dot{width:8px;height:8px;border-radius:50%;background:#9aa79b;animation:cos-pulse 1.4s ease-in-out infinite}
+@keyframes cos-pulse{0%,100%{opacity:.35}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.founders-cos .msg-thinking-dot{animation:none}}
+.founders-cos .msg-thinking .btn-mini{width:auto;min-width:0;margin:0 0 0 4px;padding:2px 12px;height:auto;border:1px solid #cbd4c8;border-radius:999px;background:#fff;color:#3d473e;font-size:13px;line-height:1.6;cursor:pointer}
+.founders-cos .msg-thinking .btn-mini:hover{border-color:#9aa79b}
+.founders-cos .cos-queue{width:min(760px,calc(100% - 48px));margin:0 auto 8px;display:flex;flex-direction:column;gap:6px}   /* the composer's width (founders.css) */
+.founders-cos .cos-queue[hidden]{display:none}
+.founders-cos .cos-queue-head{font-size:12px;letter-spacing:.02em;color:#6b756c;padding:0 4px}
+.founders-cos .cos-queue-item{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 14px;border:1px solid #dde3da;border-radius:12px;background:#f4f6f2;color:#4a544b}
+.founders-cos .cos-queue-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.founders-cos .cos-queue-remove{flex:none;width:28px;height:28px;min-height:28px;padding:0;border:0;border-radius:50%;background:transparent;color:#6b756c;font-size:18px;line-height:1;cursor:pointer}
+.founders-cos .cos-queue-remove:hover{background:#e6ebe3;color:#2f382f}
+@media (max-width:639px){.founders-cos .cos-queue{width:calc(100% - 20px)}}

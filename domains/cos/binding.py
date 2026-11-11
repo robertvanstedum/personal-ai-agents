@@ -19,6 +19,8 @@ lives here, and meeting turns carry the Records claim and generations that the s
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import json
 import os
 import re
@@ -58,6 +60,13 @@ CREATE TABLE IF NOT EXISTS calls(
   command_id TEXT, receipt_id TEXT, PRIMARY KEY(turn_id, tool_call_id));
 CREATE TABLE IF NOT EXISTS served_runs(
   run_id TEXT PRIMARY KEY, at TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, api TEXT, harness TEXT);
+CREATE TABLE IF NOT EXISTS run_answers(run_id TEXT PRIMARY KEY, at TEXT NOT NULL, text TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS return_runtime_settlements(instance_id TEXT PRIMARY KEY, evidence_ref TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS terminal_audit_runs(run_id TEXT PRIMARY KEY, receipt TEXT NOT NULL, valid INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS terminal_runs(run_id TEXT PRIMARY KEY, receipt TEXT NOT NULL, valid INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS runtime_proof_keys(instance_id TEXT PRIMARY KEY, public_key TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS depth_continuations(turn_id TEXT PRIMARY KEY, old_run TEXT UNIQUE NOT NULL,
+  nonce TEXT NOT NULL, state TEXT NOT NULL, new_run TEXT);
 CREATE TABLE IF NOT EXISTS native_calls(
   id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, turn_id TEXT, run_id TEXT, tool_call_id TEXT,
   tool TEXT NOT NULL, target TEXT, bound INTEGER NOT NULL);
@@ -167,14 +176,21 @@ class BindingStore:
             db.execute("UPDATE bindings SET revoked=?, revoked_reason='scheduler_restarted' "
                        "WHERE revoked IS NULL AND epoch<>?", (self._clock(), epoch))
 
-    def register_instance(self, instance_id: str) -> bool:
+    def register_instance(self, instance_id: str, public_key=None) -> bool:
         """The plugin's gateway process. A new one becomes current and retires the old for good, revoking every
         binding on another instance; a retired instance is refused (no last-arrival-wins)."""
         if not isinstance(instance_id, str) or not INSTANCE_ID.fullmatch(instance_id):
             raise NotBound("instance_invalid")
+        from core.model_routes.runtime_proof import valid_public_key
+        if public_key is not None and not valid_public_key(public_key):
+            raise NotBound("instance_key_invalid")
         with self._tx() as db:
             current = self._state(db, "instance")
             if current == instance_id:
+                if public_key is not None:
+                    key = db.execute("SELECT public_key FROM runtime_proof_keys WHERE instance_id=?", (instance_id,)).fetchone()
+                    if key is None or key["public_key"] != public_key:
+                        raise NotBound("instance_key_changed")
                 return False
             seen = db.execute("SELECT 1 FROM instances WHERE instance_id=?", (instance_id,)).fetchone()
             if seen is not None:
@@ -183,6 +199,8 @@ class BindingStore:
             if current is not None:
                 db.execute("UPDATE instances SET retired=? WHERE instance_id=?", (now, current))
             db.execute("INSERT INTO instances VALUES(?,?,NULL)", (instance_id, now))
+            if public_key is not None:
+                db.execute("INSERT INTO runtime_proof_keys VALUES(?,?)", (instance_id, public_key))
             db.execute("INSERT INTO state VALUES('instance',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                        (instance_id,))
             db.execute("UPDATE bindings SET revoked=?, revoked_reason='runtime_replaced' "
@@ -265,6 +283,102 @@ class BindingStore:
             row = db.execute("SELECT run_id FROM bindings WHERE turn_id=?", (turn_id,)).fetchone()
             return row is not None and row["run_id"] == run_id and not self._ran(db, turn_id, run_id)
 
+    def record_terminal_audit(self, receipt: dict) -> bool:
+        """Signed termination is an audit fact even after Stop; never authority.
+
+        A separate transaction preserves the fact when normal tool/depth binding
+        checks subsequently reject a stopped, expired or replaced owner turn.
+        """
+        from core.model_routes.runtime_proof import verified
+        with self._tx() as db:
+            key=db.execute('SELECT public_key FROM runtime_proof_keys WHERE instance_id=?',(receipt.get('instance'),)).fetchone()
+            if key is None or not verified(receipt,key['public_key']):return False
+            row=db.execute('SELECT * FROM bindings WHERE run_id=?',(receipt['run'],)).fetchone()
+            if (row is None or row['environment']!=self.environment or row['runtime_instance']!=receipt['instance']
+                    or row['agent_entry']!=receipt['agent']
+                    or receipt['session']!='agent:'+row['agent_entry']+':openai-user:'+row['session_user']):
+                return False
+            raw=json.dumps(receipt,sort_keys=True)
+            prior=db.execute('SELECT receipt,valid FROM terminal_audit_runs WHERE run_id=?',(receipt['run'],)).fetchone()
+            if prior and prior['receipt']!=raw:
+                db.execute('UPDATE terminal_audit_runs SET valid=0 WHERE run_id=?',(receipt['run'],))
+                return False
+            db.execute('INSERT OR IGNORE INTO terminal_audit_runs(run_id,receipt) VALUES(?,?)',(receipt['run'],raw))
+            return prior is None or bool(prior['valid'])
+
+    def record_terminal(self, receipt: dict) -> bool:
+        from core.model_routes.runtime_proof import valid_receipt, verified
+        if not valid_receipt(receipt):
+            return False
+        # Audit receipt survives a later authorization refusal without reopening tools.
+        self.record_terminal_audit(receipt)
+        with self._tx() as db:
+            key = db.execute("SELECT public_key FROM runtime_proof_keys WHERE instance_id=?", (receipt["instance"],)).fetchone()
+            if key is None or not verified(receipt, key["public_key"]):
+                return False
+            row = db.execute("SELECT * FROM bindings WHERE run_id=?", (receipt["run"],)).fetchone()
+            if row is None:
+                return False
+            user = receipt["session"].removeprefix(f"agent:{receipt['agent']}:openai-user:")
+            # The HTTP answer can finish just before agent_end's callback arrives.
+            # Keep that signed audit evidence after a normal close, without
+            # reopening the binding. Stop/replacement/expiry still refuse it;
+            # prepare_depth and tool admission always check the original row.
+            audit_row = row
+            if row["revoked"] is not None and row["revoked_reason"] == "turn_ended":
+                if db.execute("SELECT 1 FROM stops WHERE turn_id=?", (row["turn_id"],)).fetchone():
+                    raise NotBound("stopped")
+                audit_row = dict(row, revoked=None)
+            self._check(db, audit_row, instance_id=receipt["instance"], agent_id=receipt["agent"], session_user=user)
+            raw = json.dumps(receipt, sort_keys=True)
+            prior = db.execute("SELECT receipt FROM terminal_runs WHERE run_id=?", (receipt["run"],)).fetchone()
+            if prior and prior["receipt"] != raw:
+                db.execute("UPDATE terminal_runs SET valid=0 WHERE run_id=?", (receipt["run"],))
+                return False
+            db.execute("INSERT OR IGNORE INTO terminal_runs(run_id,receipt) VALUES(?,?)", (receipt["run"], raw))
+            return True
+
+    def prepare_depth(self, turn_id: str, run_id: str, nonce: str) -> bool:
+        """Consume the one continuation and retire quick BEFORE the next send.
+
+        A prepared row after a crash is uncertain, never permission to send again.
+        """
+        from core.model_routes.runtime_proof import unused_completed
+        if not isinstance(nonce, str) or not re.fullmatch(r"[0-9a-f]{32}", nonce):
+            return False
+        with self._tx() as db:
+            row = db.execute("SELECT * FROM bindings WHERE turn_id=? AND run_id=?", (turn_id, run_id)).fetchone()
+            evidence = db.execute("SELECT receipt FROM terminal_runs WHERE run_id=? AND valid=1", (run_id,)).fetchone()
+            if row is None or evidence is None:
+                return False
+            receipt = json.loads(evidence["receipt"])
+            if not unused_completed(receipt) or row["origin"] != "owner":
+                return False
+            self._check(db, row, instance_id=receipt["instance"], agent_id=receipt["agent"],
+                        session_user=receipt["session"].removeprefix(f"agent:{receipt['agent']}:openai-user:"))
+            if (db.execute("SELECT 1 FROM calls WHERE turn_id=?", (turn_id,)).fetchone()
+                    or db.execute("SELECT 1 FROM native_calls WHERE run_id=?", (run_id,)).fetchone()):
+                return False
+            inserted = db.execute("INSERT OR IGNORE INTO depth_continuations VALUES(?,?,?,'prepared',NULL)",
+                                  (turn_id, run_id, nonce)).rowcount
+            if not inserted:
+                return False
+            db.execute("UPDATE bindings SET run_id=NULL WHERE turn_id=?", (turn_id,))
+            return True
+
+    def attach_depth(self, turn_id: str, run_id: str) -> bool:
+        if not isinstance(run_id, str) or not RUN_ID.fullmatch(run_id):
+            return False
+        with self._tx() as db:
+            row = db.execute("SELECT * FROM bindings WHERE turn_id=? AND run_id IS NULL", (turn_id,)).fetchone()
+            attempt = db.execute("SELECT old_run FROM depth_continuations WHERE turn_id=? AND state='prepared'", (turn_id,)).fetchone()
+            if row is None or attempt is None or attempt["old_run"] == run_id:
+                return False
+            self._check(db, row, instance_id=row["runtime_instance"], agent_id=row["agent_entry"], session_user=row["session_user"])
+            db.execute("UPDATE bindings SET run_id=? WHERE turn_id=?", (run_id, turn_id))
+            db.execute("UPDATE depth_continuations SET state='attached',new_run=? WHERE turn_id=?", (run_id, turn_id))
+            return True
+
     def move_run(self, turn_id: str, old_run: str, new_run: str) -> bool:
         """Plan failover only: the plan run ended quiet, and the API run takes over this binding. The one exception to
         "never moved". A late call from the old run then finds no binding. False changes nothing, and the new run's tools
@@ -336,6 +450,20 @@ class BindingStore:
                        row["room_generation"], row["trigger_seq"], row["approval_generation"],
                        json.loads(row["source_ref"]) if row["source_ref"] else None, bool(row["read_only"]))
 
+    @contextmanager
+    def hold_live(self, binding, *, tool_call_id, instance_id, session_user):
+        """Serialize a private document dispatch with stop/runtime replacement.
+        A stop committed first refuses; a dispatched call is allowed to settle.
+        No identity or grant is taken from document arguments.
+        """
+        with self._tx():
+            current = self.resolve(run_id=binding.run_id, tool_call_id=tool_call_id,
+                                   instance_id=instance_id, agent_id=binding.agent_entry,
+                                   session_user=session_user, wait_s=0)
+            if current != binding:
+                raise NotBound("binding_changed")
+            yield
+
     def admit(self, binding: Binding, *, tool: str, tool_call_id: str, instance_id: str, session_user: str,
               limit: int) -> BoundCall:
         """Admit one resolved call: re-checks the binding inside the write transaction (so a Stop that committed
@@ -381,6 +509,29 @@ class BindingStore:
             db.execute("INSERT OR REPLACE INTO served_runs(run_id, at, provider, model, api, harness) VALUES(?,?,?,?,?,?)",
                        (run_id, _iso(self._clock()), fields["provider"], fields["model"], fields.get("api"), fields.get("harness")))
         return True
+
+    def record_answer(self, *, run_id, text) -> bool:
+        """The run's final assistant step, as the runtime reported it at the run's end: the answer without the narration
+        between tool steps. Evidence only, for the reply's text; the last report of a run wins."""
+        if not isinstance(run_id, str) or not RUN_ID.fullmatch(run_id) or not isinstance(text, str) or not text.strip():
+            return False
+        with self._tx() as db:
+            db.execute("INSERT OR REPLACE INTO run_answers(run_id, at, text) VALUES(?,?,?)", (run_id, _iso(self._clock()), text[:40_000]))
+        return True
+
+    def answer_for_run(self, run_id: str) -> str | None:
+        with self._tx() as db:
+            row = db.execute("SELECT text FROM run_answers WHERE run_id=?", (run_id,)).fetchone()
+        return row["text"] if row else None
+
+    def run_report(self, run_id: str) -> tuple[str | None, bool, bool]:
+        """(this run's final step or None, whether its end receipt has arrived, whether this host records end receipts)."""
+        with self._tx() as db:
+            row = db.execute("SELECT text FROM run_answers WHERE run_id=?", (run_id,)).fetchone()
+            ended = db.execute("SELECT 1 FROM terminal_runs WHERE run_id=? UNION SELECT 1 FROM terminal_audit_runs WHERE run_id=?",
+                               (run_id, run_id)).fetchone() is not None
+            receipts = ended or db.execute("SELECT 1 FROM terminal_runs LIMIT 1").fetchone() is not None
+        return (row["text"] if row else None), ended, receipts
 
     def served_for_turn(self, turn_id: str) -> dict | None:
         """The evidence for the run attached to this turn, or None. Never the selected route."""
@@ -508,8 +659,87 @@ class TurnBinder:
     def served(self, turn_id: str) -> dict | None:
         return self.store.served_for_turn(turn_id)
 
+    def answer(self, run_id: str) -> str | None:
+        return self.store.answer_for_run(run_id)
+
+    def run_report(self, run_id: str):
+        return self.store.run_report(run_id)
+
+    def prepare_depth(self, turn_id: str, run_id: str, nonce: str, wait_s: float = 5.0) -> bool:
+        deadline = time.monotonic() + wait_s
+        while True:
+            try:
+                if self.store.prepare_depth(turn_id, run_id, nonce):
+                    return True
+            except NotBound:
+                return False
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.05)
+
+    def attach_depth(self, turn_id: str, run_id: str) -> bool:
+        try:
+            return self.store.attach_depth(turn_id, run_id)
+        except NotBound:
+            return False
+
     def end(self, turn_id: str) -> None:
         self.store.end(turn_id)
 
     def stop(self, turn_id: str, reason: str = "owner_stop") -> bool:
         return self.store.revoke(turn_id, reason)
+
+
+def helper_review_settled(store, source_ref, principal):
+    """History failure/recovery is not proof of runtime termination.
+
+    ``principal`` is one owner principal or a tuple of the owner's account ids:
+    CoS records an owner turn under the portal account that signed it (a number
+    when the owner has an auth.users row), not under the task service's name.
+
+    Only signed terminal receipts already verified at ingress settle attached
+    runs. A missing run identity or proof keeps the return queued. Include all
+    owner runs so a restarted process cannot ignore an older orphaned run.
+    """
+    if store is None:return False
+    with store._tx() as db:
+        def terminal(run):
+            audit=db.execute('SELECT valid FROM terminal_audit_runs WHERE run_id=?',(run,)).fetchone()
+            if audit is not None:return bool(audit['valid'])
+            return db.execute('SELECT 1 FROM terminal_runs WHERE run_id=? AND valid=1',(run,)).fetchone() is not None
+        accounts=(principal,) if isinstance(principal,str) else tuple(principal)
+        if not accounts:return False
+        rows=db.execute("SELECT source_ref,run_id,turn_id,runtime_instance FROM bindings WHERE principal IN (%s) AND origin='owner'"%','.join('?'*len(accounts)),accounts).fetchall()
+        found=False
+        for row in rows:
+            source=json.loads(row['source_ref']) if row['source_ref'] else None
+            if (isinstance(source,dict) and source_ref.get('store')=='cos-history'
+                    and source_ref.get('id')==str(source.get('conversation_id'))+':'+str(source.get('turn_id'))):found=True
+            if db.execute('SELECT 1 FROM return_runtime_settlements WHERE instance_id=?',(row['runtime_instance'],)).fetchone():
+                continue
+            if row['run_id'] is None or not terminal(row['run_id']):
+                return False
+            old=db.execute('SELECT old_run,state,new_run FROM depth_continuations WHERE turn_id=?',(row['turn_id'],)).fetchone()
+            if old and (old['state']!='attached' or old['new_run']!=row['run_id']
+                        or not terminal(old['old_run'])):
+                return False
+        return found
+
+
+def reconcile_retired_return_runtime(store, instance_id, *, evidence_ref):
+    """Operator-only migration after independently proving an old runtime stopped.
+
+    No HTTP/model route calls this function. Retirement alone is insufficient:
+    the operator records a durable deployment/stop verification evidence ref.
+    This does not manufacture a signed model receipt or a successful answer.
+    """
+    if not re.fullmatch(r'[0-9a-f]{32}',instance_id) or not isinstance(evidence_ref,str) or not 8<=len(evidence_ref)<=300:
+        raise ValueError('retired instance and operator evidence required')
+    with store._tx() as db:
+        row=db.execute('SELECT retired FROM instances WHERE instance_id=?',(instance_id,)).fetchone()
+        if row is None or row['retired'] is None:
+            raise ValueError('cannot reconcile current runtime')
+        existing=db.execute('SELECT evidence_ref FROM return_runtime_settlements WHERE instance_id=?',(instance_id,)).fetchone()
+        if existing and existing['evidence_ref']!=evidence_ref:
+            raise ValueError('settlement evidence changed')
+        db.execute('INSERT OR IGNORE INTO return_runtime_settlements VALUES(?,?)',(instance_id,evidence_ref))

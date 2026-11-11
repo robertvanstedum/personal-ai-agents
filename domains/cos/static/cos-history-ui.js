@@ -33,21 +33,43 @@
     if (!mine) window.MiniMoiMessageText?.render(words, text);
     item.append(who, words); return item;
   }
+  function stopButton(conversationId, turnId) {
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'btn-mini'; button.textContent = 'Stop';
+    button.onclick = async () => {
+      button.disabled = true;
+      try {
+        const result = await api('history/conversations/' + encodeURIComponent(conversationId) + '/turns/' + encodeURIComponent(turnId) + '/stop', {});
+        button.textContent = result.stop_requested ? 'Stop requested' : 'Answer already saved';
+        state.textContent = result.stop_requested ? 'Stop requested; already-started work may still finish.' : 'Saved';
+        signature = ''; await reload();
+      } catch (_) {
+        button.disabled = false; state.textContent = 'Stop not confirmed. You can try Stop again.';
+      }
+    };
+    return button;
+  }
   async function reload(earlier = false) {
-    if (!cid || busy || input.disabled || (viewingEarlier && !earlier)) return;
+    if (!cid || busy || input.disabled || window.cosTurnRunning || (viewingEarlier && !earlier)) return;
     const selected = cid, epoch = generation;
     const d = await api('history/conversations/' + encodeURIComponent(cid) + '/turns?limit=50' + (earlier && before ? '&before_seq=' + before : ''));
-    if (selected !== cid || epoch !== generation || input.disabled) return;
+    if (selected !== cid || epoch !== generation || input.disabled || window.cosTurnRunning) return;
     const sig = JSON.stringify(d); if (!earlier && sig === signature) return;
     signature = sig; before = d.next_before_seq; document.dispatchEvent(new CustomEvent('cos:turns-changed', {detail: {id: cid}}));
     const frag = document.createDocumentFragment();
     for (const turn of d.items) {
       frag.append(row('You', turn.user_text, turn.turn_id, turn.created_at));
       if (turn.reply_text) frag.append(row('CoS', turn.reply_text, turn.turn_id, turn.answered_at || turn.created_at));
-      else frag.append(row('CoS', turn.status === 'pending' ? 'Working on it' : 'This reply was interrupted. Your message is saved.', turn.turn_id, turn.created_at));
+      else {
+        const stopped = turn.failure_code === 'owner_stop';
+        const reply = row('CoS', stopped ? 'Stop requested. No late answer will be saved. Already-started work may still finish and incur cost.' : turn.status === 'pending' ? 'Working on it' : 'This reply was interrupted. Your message is saved.', turn.turn_id, turn.created_at);
+        if (turn.status === 'pending' && turn.channel !== 'voice') reply.append(stopButton(cid, turn.turn_id));
+        frag.append(reply);
+      }
       const p = pending();
       if (p && turn.turn_id === 't-' + p.id.replaceAll('-', '')) { state.textContent = 'Saved'; if (turn.status !== 'pending') { if (input.value === JSON.parse(p.key)[0]) { input.value=''; persistDraft(); } const sentIds=new Set((p.files||[]).map(f=>f.file_id)); attached=attached.filter(f=>!sentIds.has(f.file_id));renderTray();window.MiniMoiNotices?.clear('cos-chat:' + cid + ':' + p.id);clearPending(); } }
     }
+    if (!earlier) window.cosHistory.pendingTurn = d.items.some(t => t.status === 'pending');   // a turn still running (perhaps from before a reload)
     for (const note of d.notes || []) frag.append(row('CoS', note.text || note.body || 'Saved update'));
     const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
     if (earlier) { viewingEarlier = true; const h = log.scrollHeight; log.prepend(frag); log.scrollTop += log.scrollHeight - h; }
@@ -70,20 +92,27 @@
     finally { clearTimeout(deadline); }
   }
   let selecting = false;
-  async function select(id, doc) {
+  async function select(id, doc, internal = false) {
+    if (!internal && !window.cosHistory.ready) throw new Error("Wait for the conversation to open.");
     if (selecting) throw new Error('Wait for the conversation to open.');
-    if (input.disabled || uploading) throw new Error('Wait for the current message or upload.');
+    if (input.disabled || window.cosTurnRunning || uploading) throw new Error('Wait for the current message or upload.');
+    const wasReady = window.cosHistory.ready;
+    window.cosHistory.ready = false;
     selecting = true; window.cosVoiceSelecting = true;
     document.getElementById('btn-voice').disabled = true;
     try {
     if (cid && cid !== id) await releaseVoice();
-    persistDraft(); await api('history/selection', {device, conversation_id:id});
+    persistDraft(); const typedFrom = input.value; await api('history/selection', {device, conversation_id:id});
+    // Words typed while the chat opens are meant for the chat being opened, never the old chat's draft.
+    const late = cid !== id && input.value !== typedFrom && input.value.startsWith(typedFrom) ? input.value.slice(typedFrom.length) : '';
+    if (cid !== id) log.replaceChildren(); // Never show the old transcript under a new chat title.
     cid = id; conversation = doc; document.dispatchEvent(new CustomEvent('cos:conversation', {detail: {id}})); generation++; signature = ''; before = null; viewingEarlier = false;
     input.value = storage(draftKey()) || '';
     const recover=pending();
     let draftFiles=[]; try {draftFiles=JSON.parse(storage(draftKey()+':files')||'[]');}catch(_){}
     attached=recover?.files || (Array.isArray(draftFiles)?draftFiles:[]);
     if(recover && !input.value) input.value=recover.text || '';
+    if(late.trim() && !input.value) input.value=late.trimStart();
     renderTray(); persistDraft();
     state.textContent = pending() ? 'Checking…' : 'Saved';
     window.cosHistory.conversationId = cid; showTitle(doc); markCurrent();
@@ -93,11 +122,13 @@
     window.cosVoiceConversationAllowed = !doc?.private && !doc?.read_only;
     voice.disabled = !window.cosVoiceConversationAllowed;
     if (!window.cosVoiceConversationAllowed) { voice.title = 'Voice is unavailable in a private or read-only conversation.'; document.getElementById('voice-status').textContent = 'Voice is unavailable in a private or read-only conversation.'; }
-    await reload();
+    try { await reload(); }
+    catch (error) { state.textContent = 'This conversation could not be loaded. Your messages remain saved.'; throw error; }
     document.dispatchEvent(new CustomEvent('cos:conversation-selected'));
     log.scrollTop = Number(storage('cos-scroll:' + cid) || log.scrollHeight);
     } finally {
       selecting = false; window.cosVoiceSelecting = false;
+      window.cosHistory.ready = wasReady;
       document.dispatchEvent(new CustomEvent('cos:conversation-selected'));
     }
   }
@@ -107,9 +138,10 @@
     for (const c of d.items) { const b = document.createElement('button'); b.type='button'; b.className='history-row'; b.textContent=(c.title || 'Conversation') + (c.private ? ' · Private' : ''); b.onclick=async()=>{try { await select(c.conversation_id,c); activateTab('confer',true); document.getElementById('history-sheet').close(); } catch (_) { state.textContent='Could not open that conversation.'; }}; el.append(b); }
     next=d.next; document.getElementById('history-more').hidden=!next;
   }
-  window.cosHistory = {ready:false, device, conversationId:null, persistDraft,
+  window.cosHistory = {ready:false, device, conversationId:null, persistDraft, stopButton,
     requestId(text, files) { const previous=pending(), key=JSON.stringify([text, files.map(f=>f.file_id)]); if(previous && previous.key!==key){state.textContent='Checking the previous message before sending another.';return null;} const id=previous?.id || crypto.randomUUID(); storage(pendingKey(),JSON.stringify({id,key,text,files})); state.textContent='Checking…'; return id; },
     confirm(h, operation) { const receipt = operation && ((['note_save','reminder_set'].includes(operation.type) && ['saved','deduplicated'].includes(operation.status) && operation.operation_id) || (operation.type==='session_reset' && operation.status==='reset')); if (h?.saved || receipt) {clearPending();state.textContent='Saved';} else state.textContent='Save not confirmed'; refreshList(); },
+    adopt(id, text, files) { const previous=pending(); if(previous && previous.id!==id){state.textContent='Checking the previous message before sending another.';return null;} storage(pendingKey(),JSON.stringify({id,key:JSON.stringify([text, files.map(f=>f.file_id)]),text,files})); state.textContent='Checking…'; return id; },
     uncertain(h) { if(h?.refused){clearPending();state.textContent='Not saved';}else state.textContent='Checking…'; }
   };
   log.addEventListener('scroll',()=>{if(cid)storage('cos-scroll:' + cid,String(log.scrollTop));});
@@ -120,13 +152,13 @@
   document.getElementById('history-earlier').onclick=()=>{if(viewingEarlier){viewingEarlier=false;signature='';document.getElementById('history-earlier').textContent='Earlier messages';reload().catch(()=>state.textContent='Could not load messages.');}else{reload(true).then(()=>{document.getElementById('history-earlier').hidden=false;document.getElementById('history-earlier').textContent='Return to latest';}).catch(()=>state.textContent='Could not load earlier messages.');}};
   let creatingConversation = false;
   document.querySelectorAll('[data-new-conversation]').forEach(button => { button.onclick=async()=>{
-    if(creatingConversation)return;
-    if(input.disabled||uploading){state.textContent='Wait for the current message or upload.';return;}
-    creatingConversation=true;
+    if(creatingConversation || selecting || !window.cosHistory.ready)return;
+    if(input.disabled||window.cosTurnRunning||uploading){state.textContent='Wait for the current message or upload.';return;}
+    creatingConversation=true; window.cosHistory.ready=false;
     const controls=[...document.querySelectorAll('[data-new-conversation]')];controls.forEach(b=>b.disabled=true);
-    try{const c=await api('history/conversations',{title:'New conversation'});await select(c.conversation_id,c);closeDrawer();refreshList();document.getElementById('history-sheet').close();if(!document.getElementById('tab-confer').classList.contains('active'))document.querySelector('.tab-btn[data-tab="confer"]').click();input.focus();}
+    try{const typedFrom=input.value;const c=await api('history/conversations',{title:'New conversation'});const late=input.value!==typedFrom&&input.value.startsWith(typedFrom)?input.value.slice(typedFrom.length):'';input.value=typedFrom;await select(c.conversation_id,c,true);if(late.trim()&&!input.value){input.value=late.trimStart();persistDraft();}closeDrawer();refreshList();document.getElementById('history-sheet').close();if(!document.getElementById('tab-confer').classList.contains('active'))document.querySelector('.tab-btn[data-tab="confer"]').click();input.focus();}
     catch(_){state.textContent='Could not create a conversation.';}
-    finally{creatingConversation=false;controls.forEach(b=>b.disabled=false);}
+    finally{creatingConversation=false;window.cosHistory.ready=true;controls.forEach(b=>b.disabled=false);}
   };});
   document.getElementById('mc-page').href=location.origin + '/guild-next/guild/build';
   document.getElementById('existing-rooms').href=location.origin + '/guild-next/guild/rooms';
@@ -247,6 +279,6 @@
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshList(); });
   refreshList();
-  (async()=>{try{const d=await api('history/selection?device='+encodeURIComponent(device)); voiceConversation=d.voice_conversation_id; await select(d.conversation_id,d.conversation);window.cosHistory.ready=true;}catch(_){state.textContent='History is unavailable. Nothing will be sent until it returns.';}})();
+  (async()=>{try{const d=await api('history/selection?device='+encodeURIComponent(device)); voiceConversation=d.voice_conversation_id; await select(d.conversation_id,d.conversation,true);window.cosHistory.ready=true;document.dispatchEvent(new CustomEvent('cos:history-ready'));}catch(_){state.textContent='History is unavailable. Nothing will be sent until it returns.';}})();
   setInterval(()=>{if(!document.hidden)reload().catch(()=>{state.textContent='History could not be refreshed.';});},5000);
 })();

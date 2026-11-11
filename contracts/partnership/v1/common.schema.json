@@ -140,7 +140,9 @@
             "billing_fixture",
             "external",
             "cos_in_flight",
-            "build_log"
+            "build_log",
+            "lead_wake",
+            "lead_publication"
           ]
         },
         "id": {

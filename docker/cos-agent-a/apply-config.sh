@@ -41,6 +41,12 @@ if [ "${COS_RUNTIME_MODEL_ACCESS:-gateway}" = gateway ] && [ -n "${COS_METERED_R
   node /opt/minimoi/cos-agent-a/plan-access.cjs "$dest" || { echo "cos-agent-a: metered route refused; refusing to start" >&2; exit 1; }
 fi
 
+if [ "${MINIMOI_DEPTH_PROOF:-0}" = 1 ]; then
+  node -e 'const fs=require("fs"),p=process.argv[1],c=JSON.parse(fs.readFileSync(p));
+  c.plugins.entries["cos-bound"].hooks={...c.plugins.entries["cos-bound"].hooks,allowConversationAccess:true};
+  fs.writeFileSync(p,JSON.stringify(c,null,2)+"\n",{mode:0o600});' "$dest"
+fi
+
 # Existing volumes must receive the reviewed owner-directed runtime policy too.
 # Preserve adaptable SOUL/MEMORY/USER files, credentials and sessions.
 PINNED_POLICY=/opt/minimoi/cos-agent-a/AGENTS.md

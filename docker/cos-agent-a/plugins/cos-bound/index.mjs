@@ -13,6 +13,7 @@
  */
 import {runBoundSealer, backendCallId, tokenFromFile, boundedJson, RUN_ID, CALL_ID} from './shared.mjs';
 import {randomBytes} from 'node:crypto';
+import {createRequire} from 'node:module';
 
 export const ENDPOINT_PATH = '/internal/cos/v1';
 export const NATIVE = new Set(['write', 'edit', 'exec', 'apply_patch', 'process']);
@@ -47,11 +48,15 @@ export const ACTIONS_SPEC = {
 
 export const TASKS_SPEC = {
   name: 'cos_tasks', label: 'CoS Tasks',
-  description: 'ask_helper: give type_id (recall-search with a subject, or actions-upkeep) to hand a routine job to your Executive Assistant. helper_result: give task_id to read a job that was still running. helper_review: give task_id, set_digest, verdict and reasons for the set you read, and say who drafted it. You cannot come back on your own: if it is still running, say it will be there when he asks. Propose tracked work from what Robert asked in this conversation, or check a task. propose: give the outcome and done_when; MC leads and holds it, so lead and holder are optional and can only be mc. It records your proposal only. Nothing starts until Robert confirms it in his task view, so say exactly that and never claim the task started. One proposal per Robert message. status: give a task_id to read its state. In a meeting you can only use status.',
+  description: 'work_find: give query to search private named working documents shared with MC. work_read: give artifact_id to resume exact current content and report supersession. work_save: give expected_revision (0 for new), title, content and unresolved questions to keep a private draft. Read first before updating, supply artifact_id and current revision; resolve conflicts without overwriting. Saved drafts grant no action authority. ask_helper: give type_id (recall-search with a subject, or actions-upkeep) to hand a routine job to your Executive Assistant. helper_result: give task_id to read a job that was still running. helper_review: give task_id, set_digest, verdict and reasons for the set you read, and say who drafted it. You cannot come back on your own: if it is still running, say it will be there when he asks. Propose tracked work from what Robert asked in this conversation, or check a task. propose: give the outcome and done_when; MC leads and holds it, so lead and holder are optional and can only be mc. It records your proposal only. Nothing starts until Robert confirms it in his task view, so say exactly that and never claim the task started. One proposal per Robert message. status: give a task_id to read its state. In a meeting you can only use status.',
   parameters: {type: 'object', additionalProperties: false, required: ['operation'], properties: {
-    operation: {type: 'string', enum: ['propose', 'status', 'ask_helper', 'helper_result', 'helper_review']},
+    operation: {type: 'string', enum: ['propose', 'status', 'ask_helper', 'helper_result', 'helper_review', 'work_find', 'work_read', 'work_save']},
     outcome: {type: 'string', maxLength: 500}, done_when: {type: 'string', maxLength: 500},
     lead: {type: 'string', enum: ['mc']}, holder: {type: 'string', enum: ['mc']},
+    query: {type: 'string', minLength: 1, maxLength: 200}, artifact_id: {type: 'string', pattern: '^wa-[0-9a-f]{32}$'},
+    revision: {type: 'integer', minimum: 1, maximum: 1000000}, expected_revision: {type: 'integer', minimum: 0, maximum: 999999},
+    title: {type: 'string', minLength: 1, maxLength: 160}, content: {type: 'string', minLength: 1, maxLength: 6000},
+    unresolved: {type: 'array', maxItems: 12, items: {type: 'string', minLength: 1, maxLength: 300}},
     task_id: {type: 'string', maxLength: 80},
     type_id: {type: 'string', enum: ['recall-search', 'actions-upkeep']}, subject: {type: 'string', maxLength: 400},
     set_digest: {type: 'string', maxLength: 80}, verdict: {type: 'string', enum: ['approve', 'changes_requested']}, reasons: {type: 'string', maxLength: 1000}}},
@@ -102,6 +107,8 @@ function headers(token, {sessionKey, agentId, run, toolCallId, instance}) {
 const ANNOUNCERS = new Map();
 
 export function announcer({url, token, instance = INSTANCE, fetchImpl = fetch, schedule = setTimeout}) {
+  const publicKey = process.env.MINIMOI_DEPTH_PROOF === '1'
+    ? createRequire(import.meta.url)(process.env.MINIMOI_RUNTIME_PROOF_MODULE || '../../../../core/model_routes/runtime_proof.cjs').identity(instance).publicKey : null;
   const target = `${url.href}/instance`;
   const key = `${target}\0${token.length}:${instance}`;
   if (ANNOUNCERS.has(key)) return ANNOUNCERS.get(key);
@@ -112,7 +119,7 @@ export function announcer({url, token, instance = INSTANCE, fetchImpl = fetch, s
         try {
           const r = await fetchImpl(target, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000),
             headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
-            body: JSON.stringify({instance})});
+            body: JSON.stringify({instance, ...(publicKey ? {public_key: publicKey} : {})})});
           terminal = r.status >= 400 && r.status < 500 && ![408, 429].includes(r.status);
           await r.body?.cancel().catch(() => {});
           return r.status === 200;
@@ -236,6 +243,31 @@ export function servedHook({agents, url, token, instance = INSTANCE, fetchImpl =
   };
 }
 
+/** agent_end: send the run's final assistant step to the listener, so CoS keeps her answer and not the narration between
+ *  tool steps ("I'll check that first.") that the stream runs together with it. Registered only where the host grants this
+ *  plugin conversation access. Only a last step that ended the run ("stop") with no tool call counts; anything else sends
+ *  nothing and the streamed text stands. Fire and forget. */
+export function finalText(messages) {
+  const last = Array.isArray(messages) ? [...messages].reverse().find(m => m && m.role === 'assistant') : null;
+  if (!last || last.stopReason !== 'stop' || !Array.isArray(last.content)) return null;
+  if (last.content.some(p => p && p.type === 'toolCall')) return null;
+  const text = last.content.filter(p => p && p.type === 'text' && typeof p.text === 'string').map(p => p.text).join('');
+  return text.trim() && text.length <= 40000 ? text : null;
+}
+export function answerHook({agents, url, token, instance = INSTANCE, fetchImpl = fetch}) {
+  const allowed = new Set(agents);
+  return (event, ctx) => {
+    const sessionKey = ctx?.sessionKey ?? event?.sessionKey, runId = ctx?.runId ?? event?.runId;
+    const agentId = ctx?.agentId ?? (typeof sessionKey === 'string' ? sessionKey.match(SESSION_AGENT)?.[1] : undefined);
+    if (event?.success !== true || !allowed.has(agentId) || !url || typeof runId !== 'string' || !RUN_ID.test(runId)) return;
+    const text = finalText(event.messages);
+    if (!text) return;
+    fetchImpl(`${url.href}/answer`, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000),
+      headers: headers(token, {sessionKey: sessionKey || '', agentId, run: runId, toolCallId: '', instance}),
+      body: JSON.stringify({text})}).then(r => r.body?.cancel().catch(() => {}), () => {});
+  };
+}
+
 export default {id: 'cos-bound', name: 'CoS bound tools', register(api) {
   const config = api.pluginConfig || {};
   if (config.enabled !== true) return;
@@ -250,7 +282,20 @@ export default {id: 'cos-bound', name: 'CoS bound tools', register(api) {
     (api.logger?.warn ?? console.warn).call(api.logger ?? console, 'cos-bound: not registered (credential or configuration unavailable)');
     return;
   }
-  api.on('before_tool_call', hook({agents, url, token}));
+  const toolsHook = hook({agents, url, token});
+  if (process.env.MINIMOI_DEPTH_PROOF === '1') {
+    const {tracker} = createRequire(import.meta.url)(process.env.MINIMOI_RUNTIME_PROOF_MODULE || '../../../../core/model_routes/runtime_proof.cjs');
+    const proof = tracker({instance: INSTANCE, publish: async evidence => {
+      const response = await fetch(`${url.href}/terminal`, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000),
+        headers: headers(token, {sessionKey: evidence.session, agentId: evidence.agent, run: evidence.run, toolCallId: '', instance: INSTANCE}),
+        body: JSON.stringify(evidence)});
+      await response.body?.cancel();
+    }});
+    api.on('model_call_started', proof.modelStarted);
+    api.on('agent_end', proof.ended);
+    api.on('agent_end', answerHook({agents, url, token}));     // same conversation-access grant as the proof
+    api.on('before_tool_call', (event, ctx) => proof.beforeTool(event, ctx) || toolsHook(event, ctx));
+  } else api.on('before_tool_call', toolsHook);
   api.on('model_call_ended', servedHook({agents, url, token}));
   announcer({url, token}).start();          // before any turn's first call (review M3)
   api.registerTool(factory, {names: ['cos_actions', 'cos_tasks', 'cos_board', 'cos_send_to_mc']});

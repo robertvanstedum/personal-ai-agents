@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "persona": "mc-chat",
+  "version": "0.1.31",
+  "base": "0.1.30",
+  "spec": "0.1.30 plus Robert's 11 Nov Mac-check report (Dev)",
+  "status": "candidate",
+  "target": "mc-agent container",
+  "files": {
+    "SOUL.md": "34a086b539224de91a7e5e8d3034c4852dacb07825429a0dd52f625ad3a68a95",
+    "AGENTS.md": "481aef79d36a76743b92fb56df3c7fad4a63c154b2cc73710c9f4b8154b293c2",
+    "RUNTIME.openclaw.md": "12ab1e702f2f796477ddb5e8f2549bf48cd143bfe43655e8a4ff8d4886433db8",
+    "CHANGES.md": "d6675b51507e41a196881d8fec020eba94978c428709840b2aa32dec8d9b2509",
+    "voice.json": "75aefa0ffa3876cebab3232fa28f391cac44e6dbb4c842f80e46f9c136e2e733"
+  },
+  "handbook": {
+    "version": "0.1.2",
+    "manifest": "services/mc_operations/handbook/manifest.json",
+    "manifest_sha256": "5033cb04af14cbbb9d264c9249d3075865586bfb27c360a6e3754e73dbcabcd3"
+  },
+  "projection": "SOUL verbatim; AGENTS + runtime binding + handbook block",
+  "projection_budget_chars": 16000,
+  "config_change": false
+}

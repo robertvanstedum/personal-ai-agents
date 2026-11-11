@@ -69,12 +69,12 @@ class ServiceOverHttp:
 
 
 def one_pass(*, drainer, svc, harness, notices, door, token=None,
-             clock=lambda: datetime.now(timezone.utc)) -> dict:
+             clock=lambda: datetime.now(timezone.utc), lead_wake=None, publication=None) -> dict:
     """``token`` is the drainer token for an in-process service; over HTTP the client already holds it."""
     report = {"drained": [], "door": []}
     for row in choose(drainer.outbox_pending(), clock()):
         try:
-            state = drain_once(svc, token, harness, row["operation_id"], notices)
+            state = drain_once(svc, token, harness, row["operation_id"], notices, lead_wake=lead_wake, publication=publication)
             report["drained"].append((row["operation_id"], state))
         except Exception:
             _log.exception("partnership worker: drain failed for %s", row["operation_id"])
@@ -121,12 +121,15 @@ def main() -> int:  # pragma: no cover - wiring, exercised on Dev by the package
     door = RunnerDoor(connect, principal=principal, environment=delegation_env, reader=drainer, seats=seats,
                       task_environment=task_env)
     svc = ServiceOverHttp(drainer, task_env)
+    from core.lead_wake.transport import configured_ports
+    wake_port, publication_port = configured_ports(env, drainer)
     _log.info("partnership worker up (%s; runner seats %s; notices %s)", task_env, sorted(seats),
               "on" if notices else "off")
     delay = 5.0
     while True:
         try:
-            report = one_pass(drainer=drainer, svc=svc, harness=harness, notices=notices, door=door)
+            report = one_pass(drainer=drainer, svc=svc, harness=harness, notices=notices, door=door,
+                              lead_wake=wake_port, publication=publication_port)
             if report["drained"] or report["door"] or report.get("revoked"):
                 _log.info("pass: %s", json.dumps(report, default=str)[:2000])
             delay = 5.0

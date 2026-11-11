@@ -123,3 +123,32 @@ def test_keep_here_hands_nothing_over(rig):
 def test_off_without_a_charter(rig):
     rig.adapter.charters = None
     assert ask(rig)["status"] == "refused"
+
+
+@pytest.mark.parametrize("path", ["mc_adapter", "shared_lead"])
+def test_review_reasons_are_retained_and_retries_reuse_the_evidence(rig, path):
+    from core.canonical_json import digest
+    from services.helper_seats import lead
+
+    response = ask(rig)
+    tid = response["data"]["task_id"]
+
+    def submit_review():
+        if path == "mc_adapter":
+            assert review(rig, response)["status"] == "done"
+        else:
+            lead.review(rig.adapter.client, tid, response["data"]["set_digest"],
+                        "approve", "I checked the file.", "retained-review", "synthetic", evidence_client=rig.adapter.platform)
+
+    submit_review()
+    task = rig.svc.get("task", tid, "tok-mc")
+    retained = task["reviews"][-1]["review_ref"]
+    assert retained["store"] == "task_service"
+    source = rig.svc.get("source_event", retained["id"], "tok-mc")
+    assert source["content"] == "I checked the file."
+    assert retained["digest"] == digest(source["content"])
+    assert source["producer"] == "platform"
+    submit_review()
+    retried = rig.svc.get("task", tid, "tok-mc")
+    assert retried["reviews"] == task["reviews"]
+    assert retried["acceptances"] == task["acceptances"]

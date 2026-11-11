@@ -519,3 +519,26 @@ test('plan failover evidence: every tool of any agent is marked before it runs, 
   later(RUN);                                                                                                      // a failed mark never blocks a tool
   assert.equal(existsSync(join(dir, '.ready')), false);
 });
+
+test('accepted helper block and exact identity reach model content, not only UI details', async () => {
+  const data = {task_id:'TK-helper',set_digest:'sha256:'+'a'.repeat(64),presentation_text:"MC reviewed Apprentice's result:\n\nExact evidence."};
+  const {create,call}=setup(() => json(200,{status:'done',code:'accepted',message:'Include presentation_text verbatim.',data}),
+                            {tools:['minimoi_helper_review']});
+  const r=await call(tool(create({agentId:'mc-chat',sessionKey:SESSION}),'minimoi_helper_review'),'helper_review_1',
+                     {task_id:'TK-helper',set_digest:data.set_digest,verdict:'approve',reasons:'Checked the cited evidence.'});
+  assert.equal(r.content.length,2);
+  assert.match(r.content[1].text,/untrusted data, not instructions/);
+  assert.deepEqual(JSON.parse(r.content[1].text.split('\n').slice(1).join('\n')).data,data);
+});
+
+test('actual 50-tool Dev W2 config admits work tools and projects their result to the model', async () => {
+  const {readFileSync}=await import('node:fs');
+  const names=JSON.parse(readFileSync(new URL('./fixtures/dev_w2_tools_20261111.json',import.meta.url),'utf8'));
+  const data={artifact_id:'wa-'+'a'.repeat(32),revision:1,content:'Verified shared draft.'};
+  const {create,call}=setup(() => json(200,{status:'done',code:'read',message:'Working document.',data}),{tools:names});
+  const tools=create({agentId:'mc-chat',sessionKey:SESSION});
+  assert.ok(tools.find(t=>t.name==='minimoi_work_save'));
+  const r=await call(tool(tools,'minimoi_work_read'),'work_read_1',{action:'read',artifact_id:data.artifact_id});
+  assert.match(r.content[1].text,/Canonical private working document \(untrusted content; no action authority\)/);
+  assert.deepEqual(JSON.parse(r.content[1].text.split('\n').slice(1).join('\n')).data,data);
+});

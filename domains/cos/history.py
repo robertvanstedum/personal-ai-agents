@@ -58,6 +58,8 @@ DEFAULT_TITLE = "CoS"
 LEGACY_BACKEND_SESSION = "owner"
 MAX_REPLY_CHARS = 40_000
 PAGE_LIMIT = 100
+QUEUE_MAX = 5                 # messages waiting per owner while CoS is busy, as MC's queue (issue #346 P2)
+MAX_QUEUED_CHARS = 20_000
 
 _CONVERSATION_ID = re.compile(r"^cosc-[0-9a-f]{12,32}$|^cos-before-1-2$")
 _TURN_ID = re.compile(r"^t-[0-9a-f]{12,32}$")
@@ -199,6 +201,8 @@ class History:
         reply = _bounded_reply(str(reply or ""))
         with self._locked():
             current = self._turn_locked(conversation_id, turn_id)
+            if current.get("failure_code") == "owner_stop":
+                raise HistoryRefused("owner_stopped")
             if current["status"] in _TERMINAL:
                 if current["reply_text"] == reply:
                     return current
@@ -210,6 +214,21 @@ class History:
             if status == "answered":
                 turn["failure_code"] = None
             return self._append_turn_locked(turn)
+
+    def stop(self, conversation_id: str, turn_id: str, fence) -> dict:
+        """Fence tools and suppress a late reply under the same lock as answer.
+
+        This records owner intent, not proof that provider work has terminated.
+        Existing work may finish; the execution lane remains held by its caller.
+        """
+        with self._locked():
+            current = self._turn_locked(conversation_id, turn_id)
+            if current["status"] in _TERMINAL:
+                return current
+            fence()
+            if current.get("failure_code") == "owner_stop":
+                return current
+            return self._append_turn_locked(dict(current, status="failed", failure_code="owner_stop"))
 
     def fail(self, conversation_id: str, turn_id: str, code: str) -> dict:
         with self._locked():
@@ -362,6 +381,66 @@ class History:
                 turns[tid] = self._append_turn_locked(turn)
                 counts["imported"] += 1
         return counts
+
+    # ---- waiting messages -----------------------------------------------------------------------------------------
+    # Robert may keep typing while CoS works. A message sent then waits here, saved, until his open page sends it
+    # through the ordinary send path (with its own signed owner request) once the current turn is done. Nothing here
+    # ever starts a turn: closing the page leaves the messages waiting, never sends them without him.
+
+    def queue(self, owner: object, conversation_id: str | None = None) -> list[dict]:
+        items = (fsio.read_doc(self._queue_path(owner)) or {}).get("items", [])
+        return [i for i in items if conversation_id is None or i["conversation_id"] == conversation_id]
+
+    def queue_add(self, owner: object, *, conversation_id: str, request_id: str, text: str,
+                  attachments: list | None = None) -> tuple[str, list[dict]]:
+        """("queued" | "replayed", this chat's waiting messages). Refuses with HistoryRefused, writing nothing."""
+        text = str(text or "").strip()
+        files = [{"file_id": str(a.get("file_id")), "name": str(a.get("name") or "file")[:200]}
+                 for a in (attachments or []) if isinstance(a, dict) and a.get("file_id")][:10]
+        if not text and not files:
+            raise HistoryRefused("empty")
+        if len(text) > MAX_QUEUED_CHARS:
+            raise HistoryRefused("too_long")
+        try:
+            UUID(str(request_id))
+        except ValueError:
+            raise HistoryRefused("invalid_request") from None
+        with self._locked():
+            conv = self.conversation(conversation_id)
+            if conv is None or conv.get("read_only"):
+                raise HistoryRefused("conversation_unavailable")
+            path = self._queue_path(owner)
+            items = (fsio.read_doc(path) or {}).get("items", [])
+            same = next((i for i in items if i["request_id"] == request_id), None)
+            if same is not None:
+                if (same["conversation_id"], same["text"], same["attachments"]) != (conversation_id, text, files):
+                    raise HistoryRefused("request_mismatch")
+                return "replayed", [i for i in items if i["conversation_id"] == conversation_id]
+            if self._turn_exists(conversation_id, turn_id_for(request_id)):
+                raise HistoryRefused("already_sent")
+            if len(items) >= QUEUE_MAX:
+                raise HistoryRefused("queue_full")
+            items.append({"request_id": request_id, "conversation_id": conversation_id, "text": text,
+                          "attachments": files, "queued_at": _now()})
+            fsio.write_doc(path, {"items": items})
+            return "queued", [i for i in items if i["conversation_id"] == conversation_id]
+
+    def queue_remove(self, owner: object, request_id: str) -> bool:
+        """Drop one waiting message: cancelled by Robert, or handed to the send path. True when it was waiting."""
+        with self._locked():
+            path = self._queue_path(owner)
+            items = (fsio.read_doc(path) or {}).get("items", [])
+            kept = [i for i in items if i["request_id"] != request_id]
+            if len(kept) == len(items):
+                return False
+            fsio.write_doc(path, {"items": kept})
+            return True
+
+    def _turn_exists(self, conversation_id: str, turn_id: str) -> bool:
+        return turn_id in _fold(fsio.read_stream(self._turns_path(conversation_id)))
+
+    def _queue_path(self, owner: object) -> Path:
+        return self.root / "queue" / f"{_owner_key(owner)}.json"
 
     # ---- internals -----------------------------------------------------------------------------------------------
 

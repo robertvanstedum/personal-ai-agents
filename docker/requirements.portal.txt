@@ -74,3 +74,4 @@ attrs==26.1.0
 
 # CoS contracts require date-time format validation in clean images.
 rfc3339-validator==0.1.4
+cryptography==46.0.4

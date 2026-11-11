@@ -157,9 +157,11 @@ def test_production_builds_exactly_the_classifier_services():
 
 
 def test_the_workshop_backend_deploys_the_portal_only():
-    """The Workshop backend's one consumer is the portal; its laptop tools run in no service."""
+    """The Workshop backend's consumer is the portal (and, for the journal alone, the scheduler image that runs the task
+    service: see the test below); its laptop tools run in no service."""
+    assert classify(["core/workshop_journal/journal.py"]) == ("domain", ("portal", "cos-scheduler"))
     backend = [
-        "core/workshop_journal/journal.py", "core/vault_t1/reader.py",
+        "core/vault_t1/reader.py",
         "minimoi_portal/workshop/record.py", "scripts/workshop/workshop.py", "scripts/vault/vault.py",
         "tests/workshop_journal/test_journal.py", "tests/test_credential_scrub.py",
     ]
@@ -231,6 +233,12 @@ BACKEND_IMPORT_EXPECTED = {
     "core/mc_learning/floor_source.py": ("utils.credential_scrub", "utils.payment_scrub"),
     "core/mc_learning/statement_journal.py": ("core.workshop_journal.errors", "core.workshop_journal.fsutil"),
     "core/mc_learning/statement_shelf.py": ("core.vault_t1.reader", "core.workshop_journal.errors", "core.workshop_journal.fsutil"),
+    # Work artifacts and helper return (W3, 11 Nov 2026): the portal and the cos-scheduler image, which in production also
+    # runs the partnership task service. A journal change rebuilds both (classify_release: core/workshop_journal/).
+    "core/lead_wake/review.py": ("core.workshop_journal.artifacts",),
+    "core/work_artifacts.py": ("core.workshop_journal",),
+    "services/partnership_tasks/http_api.py": ("core.workshop_journal.errors",),
+    "services/partnership_tasks/work_artifact_source.py": ("core.workshop_journal",),
 }
 SKIPPED_DIRS = {".git", "node_modules", "venv", "ai-env", ".venv", "_working", ".claude", "__pycache__"}
 
@@ -1100,3 +1108,9 @@ def test_canonical_records_changes_keep_conservative_full_release():
     for path in ("domains/records/app.py", "domains/records/store.py",
                  "domains/records/static/style.css"):
         assert classify([path]) == ("full", ALL_SERVICES)
+
+
+def test_a_workshop_journal_change_also_rebuilds_the_scheduler_image_that_runs_the_task_service():
+    assert set(classify(["core/workshop_journal/artifacts.py"])[1]) == {"portal", "cos-scheduler"}
+    assert classify(["core/jobs/judge.py"])[1] == ("portal",)
+    assert "portal" in classify(["domains/cos/history.py"])[1]

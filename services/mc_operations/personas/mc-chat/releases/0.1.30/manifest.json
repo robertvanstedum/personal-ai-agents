@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "persona": "mc-chat",
+  "version": "0.1.30",
+  "base": "0.1.29",
+  "spec": "Issue #485 work-modes v1; owner-approved Dev rules, 10 November 2026",
+  "status": "candidate",
+  "target": "mc-agent container",
+  "files": {
+    "SOUL.md": "34a086b539224de91a7e5e8d3034c4852dacb07825429a0dd52f625ad3a68a95",
+    "AGENTS.md": "8b407e798bfa7f1be541173fb47f2cefe1c1c93d6f4ca10f603ba1045d87285e",
+    "RUNTIME.openclaw.md": "12ab1e702f2f796477ddb5e8f2549bf48cd143bfe43655e8a4ff8d4886433db8",
+    "CHANGES.md": "3cfc2032567272885fa4acd69f541dfe01e79702cb45363e1175053472f72c2a",
+    "voice.json": "75aefa0ffa3876cebab3232fa28f391cac44e6dbb4c842f80e46f9c136e2e733"
+  },
+  "handbook": {
+    "version": "0.1.2",
+    "manifest": "services/mc_operations/handbook/manifest.json",
+    "manifest_sha256": "5033cb04af14cbbb9d264c9249d3075865586bfb27c360a6e3754e73dbcabcd3"
+  },
+  "projection": "SOUL verbatim; AGENTS + runtime binding + handbook block",
+  "projection_budget_chars": 16000,
+  "config_change": false
+}
