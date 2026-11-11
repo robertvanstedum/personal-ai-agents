@@ -86,6 +86,22 @@ export function rebase(direct, base) {
   return out;
 }
 
+// What the thread shows of a consult and its receipt (Robert, 11 Nov: the turn id and the answer twice). The record and
+// the download keep the line whole; the thread drops machine detail, as MC's reveal does (mc_voice_reveal.RECEIPTS, UI
+// review D1). A consult answered as a turn of this chat already shows that answer as the chat's own reply, so the receipt
+// says where it is instead of repeating it. A line that is not a receipt is shown as kept.
+const RECEIPT_LINE = /^(?<head>Answered|Saved|Not saved|Not answered \([^)]*\)|Outcome unknown \([^)]*\))\.(?: (?<kind>[A-Z][a-z]+) (?<ref>\S+)\.)?(?: Spoken:(?: (?<spoken>[\s\S]*))?)?$/;
+export function shownText(role, text) {
+  const words = String(text ?? '');
+  if (role === 'consult') return words.replace(/^consult:\s*/, '');
+  if (role !== 'receipt') return text;
+  const m = RECEIPT_LINE.exec(words.trim());
+  if (!m) return text;
+  const { head, kind, spoken } = m.groups;
+  if (head === 'Answered' && kind === 'Turn') return 'Answered in this chat.';
+  return spoken ? spoken.trim() : `${head}.`;
+}
+
 function maker(doc) {
   return (tag, attrs = {}, text) => {
     const node = doc.createElement(tag);
@@ -149,7 +165,7 @@ export function conferSessions(d) {
       if (why) label.append(' · ', make('span', { 'data-voice-not-acted-why': '' }, why));
     }
     const text = late && String(rec.text || '').startsWith(LATE_MARK) ? String(rec.text).slice(LATE_MARK.length) : rec.text;
-    box.append(label, make('div', { class: 'msg-text' }, text));
+    box.append(label, make('div', { class: 'msg-text' }, shownText(role, text)));
     return box;
   }
   function download(view) {

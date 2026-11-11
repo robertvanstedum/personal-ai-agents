@@ -24,6 +24,7 @@ import re
 
 import nh3
 from markdown_it import MarkdownIt
+from markdown_it.token import Token
 
 TAGS = {"p", "br", "strong", "em", "s", "del", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li",
         "code", "pre", "blockquote", "hr", "a", "table", "thead", "tbody", "tr", "th", "td"}
@@ -67,6 +68,64 @@ def _separate_blocks(text: str) -> str:
 
 _MD = (MarkdownIt("commonmark", {"html": False, "breaks": True, "linkify": False, "typographer": False})
        .enable("table").enable("strikethrough"))
+
+# A bare http(s) address in a reply is a link (Robert, 11 Nov: he could not click the job links an agent sent). markdown-it's
+# own linkify needs linkify-it-py, which the image lacks; this core rule only splits plain text tokens, so code spans,
+# fenced code and existing Markdown links are never touched, and the href still passes the nh3 allow-list below.
+_BARE_URL = re.compile(r"https?://[^\s<>\"'`]+", re.IGNORECASE)
+
+
+def _trim_url(url: str) -> str:
+    """Sentence punctuation after an address is not part of it; a closing bracket is, when the address opened one."""
+    while url:
+        last = url[-1]
+        if last in ".,;:!?'\"*_" or (last == ")" and url.count("(") < url.count(")")) \
+                or (last == "]" and url.count("[") < url.count("]")):
+            url = url[:-1]
+            continue
+        break
+    return url
+
+
+def _bare_links(state) -> None:
+    for block in state.tokens:
+        if block.type != "inline" or not block.children:
+            continue
+        out = []
+        depth = 0
+        for tok in block.children:
+            if tok.type == "link_open":
+                depth += 1
+            elif tok.type == "link_close":
+                depth -= 1
+            if tok.type != "text" or depth or "://" not in tok.content:
+                out.append(tok)
+                continue
+            text, pos = tok.content, 0
+            for match in _BARE_URL.finditer(text):
+                url = _trim_url(match.group(0))
+                if not _SAFE_HREF.match(url):
+                    continue
+                if match.start() > pos:
+                    before = Token("text", "", 0)
+                    before.content = text[pos:match.start()]
+                    out.append(before)
+                link_open = Token("link_open", "a", 1)
+                link_open.attrs = {"href": url}
+                label = Token("text", "", 0)
+                label.content = url
+                out.extend([link_open, label, Token("link_close", "a", -1)])
+                pos = match.start() + len(url)
+            if pos == 0:
+                out.append(tok)
+            elif pos < len(text):
+                rest = Token("text", "", 0)
+                rest.content = text[pos:]
+                out.append(rest)
+        block.children = out
+
+
+_MD.core.ruler.push("bare_links", _bare_links)
 
 
 def _attribute_filter(tag: str, attr: str, value: str):

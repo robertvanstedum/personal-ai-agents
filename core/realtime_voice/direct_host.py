@@ -436,7 +436,8 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False):
               "in this call), your briefing and this conversation. "
               f"When {owner} only asks to look something else up (facts, status, counts, whether something happened), "
               "never ask him to confirm: the app looks it up at once; give at most a short human beat such as \"Hm, one "
-              "moment.\", and never say what you think the answer is. Never narrate the machinery: never say you are "
+              "moment.\", and never say what you think the answer is. Never promise or start anything in words: no \"On "
+              "it\", \"Will do\" or \"I'll do that\"; work he asks for waits for his confirmation. Never narrate the machinery: never say you are "
               "checking, waiting on a result, or that a result has not arrived. If an answer has not reached you by his "
               "next words, say plainly that you couldn't get it just now, and carry on with him. "
               f"A written record of this call is kept: after the call {owner} can download its transcript from the chat. ")

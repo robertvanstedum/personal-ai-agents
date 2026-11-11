@@ -30,7 +30,7 @@ def test_a_relay_cancellation_says_the_relay_cancelled_and_that_commands_may_sti
     text = MESSAGES[failure]
     assert "the relay cancelled the run" in text and "may already have" in text and "check before asking again" in text
     assert "a shell command it started may still be running" in text      # a cancelled run is not a killed process
-    assert "on this Mac" in text                                           # the honest scope of what a tool run can touch
+    assert "in its workspace" in text and "this Mac" not in text           # MC runs on its host (AWS), not on Robert's Mac
 
 
 def test_a_local_timeout_says_the_outcome_is_unknown_and_never_claims_a_cancellation():

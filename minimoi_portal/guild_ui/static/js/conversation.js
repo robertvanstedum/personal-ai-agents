@@ -34,7 +34,10 @@ const interrupted = interruptions((id, state, text) => {
     if (id === latestStreamRequest) answerArrived();
     return;
   }
+  const same = sameNotice(text);                         // the live stream already said it: one line, not two (Dev, 11 Nov)
+  if (same && !row) { same.dataset.interruptedRequest = id; same.dataset.interruptedState = state; interruptedRows.set(id, same); return; }
   const replacement = platformLine('Guild platform', text);
+  replacement.dataset.noticeText = text;
   replacement.dataset.interruptedRequest = id;
   replacement.dataset.interruptedState = state;
   if (row) row.replaceWith(replacement);
@@ -547,9 +550,16 @@ function showFiles(noteId, files) {
 // state and never as a stack of identical lines. The kept message stays in the thread; only the notice is replaced.
 function failureLine(text) {
   clearFailureLines();
+  const same = sameNotice(text);                         // the interruption watcher already said it (Dev, 11 Nov: shown twice)
+  if (same) { same.dataset.turnFailure = 'true'; return same; }   // moved, not repeated
   const li = platformLine('Guild platform', text);
   li.dataset.turnFailure = 'true';
+  li.dataset.noticeText = text;
   return li;
+}
+// The same platform notice among the thread's last few lines, from either path that reports a turn's end.
+function sameNotice(text) {
+  return [...thread.children].slice(-4).find((n) => n.dataset && n.dataset.noticeText === text) || null;
 }
 // A confirmed Stop is said once: the live stream's end and the reconnect path can both report it.
 function stoppedNotice(text) {

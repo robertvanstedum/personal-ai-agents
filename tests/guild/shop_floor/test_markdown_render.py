@@ -200,3 +200,17 @@ def test_board_receipt_links_keep_the_exact_read_only_destination(note_id):
 ])
 def test_board_link_exception_does_not_admit_other_relative_actions(href):
     assert 'href=' not in render_markdown(f"[note]({href})")
+
+
+def test_a_bare_address_becomes_a_new_tab_link_without_its_sentence_punctuation():
+    html = render_markdown("See https://jobs.example/a/123. Or (https://x.example/a_(b)), and https://b.example/x?q=1&r=2")
+    assert 'href="https://jobs.example/a/123"' in html and "</a>. Or" in html
+    assert 'href="https://x.example/a_(b)"' in html
+    assert 'href="https://b.example/x?q=1&amp;r=2"' in html
+    assert html.count('target="_blank"') == 3 and html.count('rel="noopener noreferrer"') == 3
+
+
+def test_bare_addresses_in_code_and_existing_links_are_left_alone():
+    assert "<a" not in render_markdown("`https://code.example` and\n```\nhttps://fenced.example\n```")
+    html = render_markdown("[Jobs](https://a.example) javascript:alert(1)")
+    assert html.count("<a ") == 1 and 'href="https://a.example"' in html

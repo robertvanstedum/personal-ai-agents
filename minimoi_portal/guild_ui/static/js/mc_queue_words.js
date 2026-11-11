@@ -3,8 +3,9 @@
 const ORD = ['next', '2nd', '3rd', '4th', '5th'];
 export const place = (position) => (position === 1 ? 'next to send' : `${ORD[position - 1] || `${position}th`} in line`);
 
+// While MC is answering, the chip says what it waits for (Dev, 11 Nov 2026: a note typed during a long turn looked stuck).
 export function chipWords(position, running) {
-  return `Not sent · ${place(position)}`;
+  return `Not sent · ${place(position)}${running ? " · waits for MC's current answer" : ''}`;
 }
 
 // When it paused, what is uncertain, and what Continue does (Dev, 11 Nov 2026: the earlier wording did not say).
@@ -13,7 +14,7 @@ export function pauseWords(pause, waiting) {
   const at = timeOf(pause.created_at);
   const head = `Paused${at ? ` at ${at}` : ''}: `;
   const what = pause.reason === 'unknown'
-    ? 'an earlier message lost its connection. It may have run, or may still be running.'
+    ? "an earlier message didn't finish. It may have run, or may still be running."
     : "an earlier message didn't get an answer (it failed, or could not be sent as it was).";
   const next = waiting
     ? ` ${waiting === 1 ? '1 waiting message is' : `${waiting} waiting messages are`} held; Continue sends ${waiting === 1 ? 'it' : 'them'}.`

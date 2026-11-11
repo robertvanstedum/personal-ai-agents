@@ -758,7 +758,11 @@ await t.check('E S2: the list names a check still running at End, and one that l
     await p.click(row.querySelector('[data-voice-open]')); await flush();
     const receipt = all(row, '[data-voice-item="kt0"]').at(-1);
     assert.equal(textOf(receipt.elements[0]), 'Result · arrived after the voice ended');
-    assert.equal(textOf(receipt.elements[1]), 'Answered. Turn 9. Spoken: Two items are stuck on 12.');
+    assert.equal(textOf(receipt.elements[1]), 'Answered in this chat.');                // no turn id, not the answer twice
+    assert.equal(PAGE.shownText('receipt', 'Answered. Reply mc-1. Spoken: Done.'), 'Done.');
+    assert.equal(PAGE.shownText('receipt', 'Not answered (busy). Spoken:'), 'Not answered (busy).');
+    assert.equal(PAGE.shownText('consult', 'consult: What is stuck on 12?'), 'What is stuck on 12?');
+    assert.equal(PAGE.shownText('receipt', 'free words'), 'free words');
     assert.equal(PAGE.lateLabel({ summary: 'proposed' }), 'arrived after the summary');
   } finally { p.done(); }
 });

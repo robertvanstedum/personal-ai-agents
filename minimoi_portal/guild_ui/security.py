@@ -27,7 +27,7 @@ from .. import csrf as _csrf
 CSRF_SESSION_KEY = "guild_floor_csrf"
 REDIRECTS = (301, 302, 303, 307, 308)
 OFF_RECORD_TEXT = ("Private · your messages go to Master Craftsman and he answers. MiniMoi keeps no notes, history, files or memory "
-                   "of them, and this page forgets the conversation when you leave it. The agent runtime on this Mac keeps its own "
+                   "of them, and this page forgets the conversation when you leave it. The agent runtime on its host keeps its own "
                    "session record, and Master Craftsman can read the project's files as in any conversation. Save, notes and "
                    "post-its are paused.")
 
