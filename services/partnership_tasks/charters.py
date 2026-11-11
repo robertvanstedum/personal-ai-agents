@@ -70,7 +70,13 @@ def load_if_approved(environ):
 
 class Charters:
     def __init__(self, charters=()):
-        self._by_seat = {c.seat: c for c in charters}
+        # The newest version per seat starts new work; every approved version stays readable, so a task chartered under
+        # an older version still finds its charter after a newer one is approved (Dev, 11 Nov: raising the helper
+        # limits to v2 otherwise dropped returns already in flight under v1).
+        self._all = {(c.seat, c.version): c for c in charters}
+        self._by_seat = {}
+        for c in sorted(charters, key=lambda c: c.version):
+            self._by_seat[c.seat] = c
 
     @classmethod
     def load(cls, root, approvals_file=None) -> "Charters":
@@ -91,8 +97,9 @@ class Charters:
         return cls(out)
 
     def get(self, seat, version=None):
-        c = self._by_seat.get(seat)
-        return c if c is not None and (version is None or c.version == version) else None
+        if version is None:
+            return self._by_seat.get(seat)
+        return self._all.get((seat, version))
 
     def covers(self, grant_id: str, lead: str, scope: str) -> bool:
         parts = str(grant_id).split(":")
