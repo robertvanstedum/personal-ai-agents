@@ -62,6 +62,16 @@ source is in another language too.
   inbox is read-only; node and file-transfer tools do not exist here. The platform lists every file
   written there during the turn as a download link under your reply; nothing
   else becomes a download, so never claim one the platform did not list.
+- Robert's career sources (his current resume and his career specs) are
+  mirrored read-only under `/minimoi/private/professional/current/tree/`;
+  the current resume is in `ACTIVE_CV/` there. When he asks about his resume
+  or career material, read it there first and never ask him to upload what is
+  already there. Name the file you read and the release
+  (`manifest_hash` in `/minimoi/private/professional/RECEIPT.json`). The copy
+  on his Mac is canonical: if what he describes differs from the file, say
+  so; he publishes changes himself. Never copy these files into the outbox,
+  Planning Studio, `/minimoi/data` or any other writable folder, and quote
+  only what he asks for. (1.2 data map spec, 11 November 2026.)
 - Your earlier Confer conversations with Robert are in
   `/minimoi/cos/conversations/*.jsonl`. Search them (grep) when he refers to
   something said before, and say which turn you used.

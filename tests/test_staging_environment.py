@@ -67,6 +67,7 @@ EXPECTED_PROD_MOUNTS = [
     ("cos-agent-a", "/opt/minimoi/mc/work", "/minimoi/mc/work"),
     ("cos-agent-a", "/opt/minimoi/mc/workshops", "/minimoi/mc/workshops"),
     ("cos-agent-a", "/opt/minimoi/mc/artifacts", "/minimoi/mc/artifacts"),
+    ("cos-agent-a", "/opt/minimoi/private/professional-agent-a", "/minimoi/private/professional"),
     ("cos-agent-a", "/opt/minimoi/cos/agent-key", "/run/cos-key"),
     ("cos-bot", "/opt/minimoi/cos_memory.md", "/app/data/cos_memory.md"),
     ("cos-bot", "/opt/minimoi/cos_reminders", "/app/data/cos_reminders"),
@@ -75,6 +76,7 @@ EXPECTED_PROD_MOUNTS = [
     ("cos-scheduler", "/opt/minimoi/data/guild/limits", "/app/runtime/guild/limits"),
     # Chief of Staff's voice records (Spec 165 §6.5): cos-scheduler only, never cos-agent-a; in the daily backup.
     ("cos-scheduler", "/opt/minimoi/cos_voice", "/app/data/cos-voice"),
+    ("cos-scheduler", "/opt/minimoi/private/professional", "/minimoi/private/professional"),
     ("cos-scheduler", "/opt/minimoi/cos_memory.md", "/app/data/cos_memory.md"),
     ("cos-scheduler", "/opt/minimoi/cos_reminders", "/app/data/cos_reminders"),
     ("cos-scheduler", "/opt/minimoi/data/model_gateway_receipts.jsonl", "/app/data/model_gateway_receipts.jsonl"),
