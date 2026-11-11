@@ -34,7 +34,7 @@ role, never by content. Nothing personal is in this repo.
 |---|---|---|
 | `<P>` | `/opt/minimoi-staging` | `/opt/minimoi` |
 | tools / keys | `/opt/minimoi-staging-tools`, `/opt/minimoi-staging-keys` | `/opt/minimoi-tools`, `/opt/minimoi-keys` |
-| `<bucket>` | `minimoi-dev-private-sync` (versioned, SSE-S3, noncurrent 90 days) | `minimoi-backups` (after the D7 lifecycle change) |
+| `<bucket>` | `minimoi-dev-private-sync` (versioned, SSE-S3, noncurrent 90 days) | `minimoi-backups` (versioned; current kept, noncurrent 90 days) |
 | Reached by | SSM to the staging instance | SSM to the production instance |
 
 ## 2. Who writes, who reads
@@ -118,8 +118,8 @@ last receipt.
 | Step | Dev | Production |
 |---|---|---|
 | Host prepared (age, key, `private/` layout, tool) | done | done |
-| Bucket and access | done | waits on the owner's CloudShell steps (#502) |
-| First publish and apply | done; all 44 files hash-identical | waits on bucket access |
-| Mounts and CoS guidance | done (operator overlay) | in PR #501; merges after the first production apply |
-| T1: CoS reads the resume with nothing uploaded | passed | after deploy |
+| Bucket and access | done | done (D7 lifecycle applied) |
+| First publish and apply | done; all 44 files hash-identical | done; same combined hash as the Mac and Dev |
+| Mounts and CoS guidance | done (operator overlay) | deployed in `7acb3037` (PR #501) |
+| T1: CoS reads the resume with nothing uploaded | passed | passed |
 | Inbound filing (S5), planning mirror (S6), data map (S2), backup closure (S3) | next | after Dev |
