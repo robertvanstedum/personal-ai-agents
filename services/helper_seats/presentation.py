@@ -26,8 +26,55 @@ def accepted_result(task, lead, get, review_id=None):
             raise ValueError('helper attribution differs')
         outcome = value['outcome']
         # Preserve every evidence/limitation field. Never silently shorten accepted evidence.
-        parts.append(json.dumps(outcome, ensure_ascii=False, sort_keys=True, indent=2))
+        parts.append(readable(outcome))
     answer = '\n\n'.join(parts)
     if not answer or len(answer) > 7000:
         raise ValueError('accepted display exceeds bounded return')
     return dict(verdict='approve', reasons=REASONS, answer=answer), reviews[-1]['review_id']
+
+
+# Readable display (Dev, 11 Nov 2026: Robert saw the raw JSON block in CoS's answer). Every field of the accepted outcome
+# is kept, in a fixed order, so the lead's verbatim copy and the task service's check still compute the same text.
+_FIRST = ("summary", "answer", "result", "found", "records", "items", "evidence", "searched", "not_searched",
+          "limitations", "stopped", "note")
+_ITEM_FIRST = ("title", "name", "path", "item_id", "status", "when")
+
+
+def _label(key):
+    return str(key).replace("_", " ").strip().capitalize() or "Value"
+
+
+def _plain(value):
+    if value is True:
+        return "yes"
+    if value is False:
+        return "no"
+    if value is None:
+        return "none"
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return str(value)
+
+
+def _ordered(mapping, first):
+    return sorted(mapping, key=lambda k: (first.index(k) if k in first else len(first), str(k)))
+
+
+def readable(outcome):
+    """The accepted outcome as short labelled lines and bullets, deterministically."""
+    if not isinstance(outcome, dict):
+        return _plain(outcome)
+    lines = []
+    for key in _ordered(outcome, _FIRST):
+        value = outcome[key]
+        if isinstance(value, list) and value and all(isinstance(v, dict) for v in value):
+            lines.append(_label(key) + ":")
+            lines += ["- " + "; ".join(f"{_label(k)}: {_plain(item[k])}" for k in _ordered(item, _ITEM_FIRST)) for item in value]
+        elif isinstance(value, list):
+            lines.append(f"{_label(key)}: {', '.join(_plain(v) for v in value) or 'none'}")
+        elif isinstance(value, dict):
+            lines.append(_label(key) + ":")
+            lines += [f"- {_label(k)}: {_plain(value[k])}" for k in _ordered(value, _ITEM_FIRST)]
+        else:
+            lines.append(f"{_label(key)}: {_plain(value)}")
+    return "\n".join(lines)
