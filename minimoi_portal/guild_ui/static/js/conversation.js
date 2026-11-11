@@ -504,7 +504,7 @@ function showAnswer(holder, r, t) {
   }
   if (confirmedStop(body)) {
     if (holder.stopTicking) holder.stopTicking();
-    holder.replaceWith(platformLine('Guild platform', body.message || 'Stopped. Your message is kept.'));
+    { const n = stoppedNotice(body.message || 'Stopped. Your message is kept.'); if (n) holder.replaceWith(n); else holder.remove(); }
     answerStopped();
     announce(body.message || 'Stopped');
     follow();
@@ -549,6 +549,13 @@ function failureLine(text) {
   clearFailureLines();
   const li = platformLine('Guild platform', text);
   li.dataset.turnFailure = 'true';
+  return li;
+}
+// A confirmed Stop is said once: the live stream's end and the reconnect path can both report it.
+function stoppedNotice(text) {
+  if ([...thread.children].slice(-4).some((n) => n.dataset && n.dataset.stopNotice === text)) return null;
+  const li = platformLine('Guild platform', text);
+  li.dataset.stopNotice = text;
   return li;
 }
 function clearFailureLines() { for (const n of thread.querySelectorAll('[data-turn-failure]')) n.remove(); }
@@ -730,11 +737,13 @@ async function streamMasterCraftsman(t, via) {
   let acked = false;
   let ended = false;
   const showTail = () => { tail.textContent = deltas.slice(upto).join(''); };
+  // A click always shows at once. Before the turn is acknowledged there is nothing to stop yet: the click is kept and sent
+  // the moment it is (Dev, 11 Nov 2026: an early Stop did nothing visible, so it was pressed twice).
   stop.addEventListener('click', async () => {
-    if (!li.turnId) return;
     stop.disabled = true;
     li.dataset.stopping = 'true';
     setSlot(li, 'state', 'Stopping…');
+    if (!li.turnId) { li.stopPending = true; return; }
     await apiStop(`/mc/turns/${encodeURIComponent(li.turnId)}/stop`);
   });
   const handle = (ev) => {
@@ -742,7 +751,10 @@ async function streamMasterCraftsman(t, via) {
       acked = true;
       li.turnId = ev.turn_id;
       // Receipt of this turn is confirmed; its intended scope comes from MC, not the transport.
-      setSlot(li, 'state', 'Received · starting');
+      if (li.stopPending) {
+        li.stopPending = false;
+        void apiStop(`/mc/turns/${encodeURIComponent(li.turnId)}/stop`);
+      } else setSlot(li, 'state', 'Received · starting');
       if (Array.isArray(ev.files)) showFiles(note.id, ev.files);
       stop.hidden = false;
       follow();
@@ -785,7 +797,8 @@ async function streamMasterCraftsman(t, via) {
       endLine(li, stopped ? 'Stopped · partial answer not saved' : '(interrupted)');
       if (!deltas.length) li.remove();          // partial text, if any, stays shown once and is never kept
       const text = ev.message || mcSay('Master Craftsman did not answer. Your message is kept.');
-      thread.append(stopped ? platformLine('Guild platform', text) : failureLine(text));
+      if (stopped) { const n = stoppedNotice(text); if (n) thread.append(n); }
+      else thread.append(failureLine(text));
       announce(text);
       if (stopped) answerStopped();
       else answerFailed(ev.mc_header || mcSay('Master Craftsman did not answer'));

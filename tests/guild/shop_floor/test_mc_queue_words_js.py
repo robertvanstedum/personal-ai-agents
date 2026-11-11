@@ -28,9 +28,15 @@ def test_chip_words_say_waiting_and_place_only():
 
 def test_pause_words_never_claim_an_outcome():
     unknown, failed, none = run("return [W.pauseWords({reason:'unknown'}, 2), W.pauseWords({reason:'failed'}, 1), W.pauseWords({reason:'unknown'}, 0)];")
-    assert "may have run, or may still be running" in unknown and "2 messages wait until you continue" in unknown
-    assert "failed, or could not be sent" in failed and "1 message waits" in failed
-    assert none.endswith("Nothing more is sent until you continue.")
+    assert "may have run, or may still be running" in unknown and "2 waiting messages are held; Continue sends them" in unknown
+    assert "failed, or could not be sent" in failed and "1 waiting message is held; Continue sends it" in failed
+    assert none.endswith("Continue lets new messages go through again.")
+
+
+def test_pause_words_say_when_it_paused():
+    at = run("return W.pauseWords({reason:'failed', created_at:'2026-11-11T15:41:00Z'}, 0);")
+    assert at.startswith("Paused at ") and "didn't get an answer" in at
+    assert run("return W.pauseWords({reason:'failed', created_at:'nonsense'}, 0);").startswith("Paused: ")
 
 
 def test_not_sent_words_keep_their_own_reason():
@@ -51,7 +57,7 @@ def test_bar_words():
     assert out[0] == ""
     assert out[1] == "1 message waiting"
     assert out[2] == "2 messages waiting (1 in another conversation)"
-    assert out[3].startswith("Paused: an earlier message failed")
+    assert out[3].startswith("Paused: an earlier message didn't get an answer")
     joined = " ".join(out).lower()
     for claim in ("will see", "steer", "while it answers", "received", "added to"):
         assert claim not in joined

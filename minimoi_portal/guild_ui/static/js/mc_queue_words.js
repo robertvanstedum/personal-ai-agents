@@ -7,11 +7,18 @@ export function chipWords(position, running) {
   return `Not sent · ${place(position)}`;
 }
 
+// When it paused, what is uncertain, and what Continue does (Dev, 11 Nov 2026: "a strange message ... not clear to me").
+const timeOf = (iso) => { const d = new Date(iso || ''); return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
 export function pauseWords(pause, waiting) {
-  const held = waiting ? ` ${waiting === 1 ? '1 message waits' : `${waiting} messages wait`} until you continue.` : ' Nothing more is sent until you continue.';
-  return pause.reason === 'unknown'
-    ? `Paused: an earlier message's outcome is unknown. It may have run, or may still be running.${held}`
-    : `Paused: an earlier message failed, or could not be sent as it was.${held}`;
+  const at = timeOf(pause.created_at);
+  const head = `Paused${at ? ` at ${at}` : ''}: `;
+  const what = pause.reason === 'unknown'
+    ? 'an earlier message lost its connection. It may have run, or may still be running.'
+    : "an earlier message didn't get an answer (it failed, or could not be sent as it was).";
+  const next = waiting
+    ? ` ${waiting === 1 ? '1 waiting message is' : `${waiting} waiting messages are`} held; Continue sends ${waiting === 1 ? 'it' : 'them'}.`
+    : ' Continue lets new messages go through again.';
+  return head + what + next;
 }
 
 export function notSentWords(entry) {
