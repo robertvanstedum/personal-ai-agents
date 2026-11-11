@@ -37,6 +37,14 @@ _MODEL_REF = re.compile(r"(?:openai|anthropic)/[A-Za-z0-9._-]{1,64}|minimoi-gate
 # None: no route on this turn, so no failover (Telegram, the MC lane, meetings, a host without routes).
 turn_route = contextvars.ContextVar("cos_turn_route", default=None)
 turn_progress = contextvars.ContextVar("cos_turn_progress", default=None)
+def answer_text(streamed: str, answer: str | None) -> str:
+    """What is kept: the run's final step when the stream ends with it exactly, so narration between tool steps is not
+    saved as the answer (the same rule as MC's, minimoi_portal/guild_ui/mc/streaming.answer_text). Otherwise the stream."""
+    if answer and answer.strip() and streamed.rstrip().endswith(answer.strip()) and len(answer.strip()) < len(streamed.strip()):
+        return answer.strip()
+    return streamed
+
+
 _TOOL_REPORT_GRACE_S = 0.5    # the plugin's reports are fire and forget: they get this long to land before they are read
 turn_timeout_seconds = contextvars.ContextVar("cos_turn_timeout_seconds", default=_TURN_TIMEOUT_SECONDS)
 _EMPTY_OUTPUT_NOTICE = (
@@ -418,6 +426,8 @@ class OpenClawBackend:
             reply = _EMPTY_OUTPUT_NOTICE
         else:
             reply = self._reply_text(payload)
+            if finish == "stop":
+                reply = answer_text(reply, self._run_answer(payload.get("id")))
         state = turn_route.get()
         if state and state.get("switched"):
             words = switch_words(state['switched'], self._served_evidence(context))
@@ -438,6 +448,24 @@ class OpenClawBackend:
                 "state": "cut_off", "reason": "output_limit", "source": "openclaw_connector",
             }
         return reply
+
+    def _run_answer(self, run_id) -> str | None:
+        """The run's final step as the plugin reported it at the run's end, or None (fire and forget: a short look)."""
+        if self._binder is None or not isinstance(run_id, str):
+            return None
+        # Look once; wait one grace period only where the hook is known to report, so a host without it pays nothing.
+        for attempt in range(2):
+            try:
+                found = self._binder.answer(run_id)
+            except Exception:
+                return None
+            if found:
+                type(self)._answers_reported = True
+                return found
+            if attempt or not getattr(type(self), "_answers_reported", False):
+                return None
+            time.sleep(_TOOL_REPORT_GRACE_S)
+        return None
 
     def _served_evidence(self, context: dict) -> dict | None:
         """The runtime's record of the switched run, for the words only. It is reported fire and forget, so a short look."""

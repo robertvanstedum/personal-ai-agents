@@ -243,6 +243,31 @@ export function servedHook({agents, url, token, instance = INSTANCE, fetchImpl =
   };
 }
 
+/** agent_end: send the run's final assistant step to the listener, so CoS keeps her answer and not the narration between
+ *  tool steps ("I'll check that first.") that the stream runs together with it. Registered only where the host grants this
+ *  plugin conversation access. Only a last step that ended the run ("stop") with no tool call counts; anything else sends
+ *  nothing and the streamed text stands. Fire and forget. */
+export function finalText(messages) {
+  const last = Array.isArray(messages) ? [...messages].reverse().find(m => m && m.role === 'assistant') : null;
+  if (!last || last.stopReason !== 'stop' || !Array.isArray(last.content)) return null;
+  if (last.content.some(p => p && p.type === 'toolCall')) return null;
+  const text = last.content.filter(p => p && p.type === 'text' && typeof p.text === 'string').map(p => p.text).join('');
+  return text.trim() && text.length <= 40000 ? text : null;
+}
+export function answerHook({agents, url, token, instance = INSTANCE, fetchImpl = fetch}) {
+  const allowed = new Set(agents);
+  return (event, ctx) => {
+    const sessionKey = ctx?.sessionKey ?? event?.sessionKey, runId = ctx?.runId ?? event?.runId;
+    const agentId = ctx?.agentId ?? (typeof sessionKey === 'string' ? sessionKey.match(SESSION_AGENT)?.[1] : undefined);
+    if (event?.success !== true || !allowed.has(agentId) || !url || typeof runId !== 'string' || !RUN_ID.test(runId)) return;
+    const text = finalText(event.messages);
+    if (!text) return;
+    fetchImpl(`${url.href}/answer`, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000),
+      headers: headers(token, {sessionKey: sessionKey || '', agentId, run: runId, toolCallId: '', instance}),
+      body: JSON.stringify({text})}).then(r => r.body?.cancel().catch(() => {}), () => {});
+  };
+}
+
 export default {id: 'cos-bound', name: 'CoS bound tools', register(api) {
   const config = api.pluginConfig || {};
   if (config.enabled !== true) return;
@@ -268,6 +293,7 @@ export default {id: 'cos-bound', name: 'CoS bound tools', register(api) {
     }});
     api.on('model_call_started', proof.modelStarted);
     api.on('agent_end', proof.ended);
+    api.on('agent_end', answerHook({agents, url, token}));     // same conversation-access grant as the proof
     api.on('before_tool_call', (event, ctx) => proof.beforeTool(event, ctx) || toolsHook(event, ctx));
   } else api.on('before_tool_call', toolsHook);
   api.on('model_call_ended', servedHook({agents, url, token}));

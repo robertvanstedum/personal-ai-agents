@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS calls(
   command_id TEXT, receipt_id TEXT, PRIMARY KEY(turn_id, tool_call_id));
 CREATE TABLE IF NOT EXISTS served_runs(
   run_id TEXT PRIMARY KEY, at TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, api TEXT, harness TEXT);
+CREATE TABLE IF NOT EXISTS run_answers(run_id TEXT PRIMARY KEY, at TEXT NOT NULL, text TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS return_runtime_settlements(instance_id TEXT PRIMARY KEY, evidence_ref TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS terminal_audit_runs(run_id TEXT PRIMARY KEY, receipt TEXT NOT NULL, valid INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS terminal_runs(run_id TEXT PRIMARY KEY, receipt TEXT NOT NULL, valid INTEGER NOT NULL DEFAULT 1);
@@ -509,6 +510,20 @@ class BindingStore:
                        (run_id, _iso(self._clock()), fields["provider"], fields["model"], fields.get("api"), fields.get("harness")))
         return True
 
+    def record_answer(self, *, run_id, text) -> bool:
+        """The run's final assistant step, as the runtime reported it at the run's end: the answer without the narration
+        between tool steps. Evidence only, for the reply's text; the last report of a run wins."""
+        if not isinstance(run_id, str) or not RUN_ID.fullmatch(run_id) or not isinstance(text, str) or not text.strip():
+            return False
+        with self._tx() as db:
+            db.execute("INSERT OR REPLACE INTO run_answers(run_id, at, text) VALUES(?,?,?)", (run_id, _iso(self._clock()), text[:40_000]))
+        return True
+
+    def answer_for_run(self, run_id: str) -> str | None:
+        with self._tx() as db:
+            row = db.execute("SELECT text FROM run_answers WHERE run_id=?", (run_id,)).fetchone()
+        return row["text"] if row else None
+
     def served_for_turn(self, turn_id: str) -> dict | None:
         """The evidence for the run attached to this turn, or None. Never the selected route."""
         with self._tx() as db:
@@ -634,6 +649,9 @@ class TurnBinder:
 
     def served(self, turn_id: str) -> dict | None:
         return self.store.served_for_turn(turn_id)
+
+    def answer(self, run_id: str) -> str | None:
+        return self.store.answer_for_run(run_id)
 
     def prepare_depth(self, turn_id: str, run_id: str, nonce: str, wait_s: float = 5.0) -> bool:
         deadline = time.monotonic() + wait_s

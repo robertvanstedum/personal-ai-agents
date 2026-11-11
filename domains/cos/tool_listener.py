@@ -12,6 +12,7 @@
     POST /internal/cos/v1/instance                   the plugin announces its gateway process
     body: {"instance": "<32 hex>"}
 
+    POST /internal/cos/v1/answer                     the plugin reports a run's final assistant step (its answer without narration)
     POST /internal/cos/v1/served                     the plugin reports the model call a run completed (provider, model, api),
     body: {"provider": "...", "model": "..."}        from the runtime's model_call_ended hook. Evidence only.
 
@@ -108,6 +109,8 @@ def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agen
         raw = request.get_data(cache=True)
         if len(raw) <= MAX_BODY:
             return None
+        if request.path == PREFIX + '/answer':
+            return None                     # a long final answer, up to MAX_WORK_BODY; its own route bounds the text
         if request.path != '/internal/cos/v1/tools/cos_tasks':
             raise RequestEntityTooLarge()
         try:
@@ -185,6 +188,21 @@ def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agen
             known = bindings.record_served(run_id=sealed()["run_id"], fields=body)
         except Exception:
             _log.exception("cos served evidence: not kept")
+            return jsonify(status="not_kept"), 503
+        return jsonify(status="kept" if known else "ignored")
+
+    @app.post(PREFIX + "/answer")
+    def answer():
+        """The run's final assistant step, from the plugin's agent_end hook (only where it has conversation access)."""
+        body, refused = preflight()
+        if refused:
+            return refused
+        if set(body) != {"text"} or type(body["text"]) is not str or not body["text"].strip() or len(body["text"]) > 40_000:
+            return jsonify(error="tool_request_invalid"), 400
+        try:
+            known = bindings.record_answer(run_id=sealed()["run_id"], text=body["text"])
+        except Exception:
+            _log.exception("cos run answer: not kept")
             return jsonify(status="not_kept"), 503
         return jsonify(status="kept" if known else "ignored")
 
