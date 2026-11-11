@@ -56,3 +56,14 @@ test('agent formatting supports emphasis and code without evaluating markup',()=
  assert.match(el.textContent, /```/);
  window.MiniMoiMessageText.render(el,'Replacement');assert.equal(el.textContent,'Replacement');
 });
+test('a bare http(s) address becomes a new-tab link; code, punctuation and other schemes do not',()=>{
+ const {document,window}=page('message-text.js'),el=document.createElement('p');
+ window.MiniMoiMessageText.render(el,'Open https://jobs.example/a/123. Or (https://x.example/a_(b)), not `https://code.example` or javascript:alert(1).');
+ const links=walk(el,'a');
+ assert.deepEqual(links.map(a=>a.attrs.href),['https://jobs.example/a/123','https://x.example/a_(b)']);
+ assert.equal(links.every(a=>a.attrs.target==='_blank'&&a.attrs.rel==='noopener noreferrer'),true);
+ assert.equal(el.textContent,'Open https://jobs.example/a/123. Or (https://x.example/a_(b)), not https://code.example or javascript:alert(1).');
+ window.MiniMoiMessageText.render(el,'**See https://bold.example** now');
+ assert.deepEqual(walk(el,'a').map(a=>a.attrs.href),['https://bold.example']);
+ window.MiniMoiMessageText.render(el,'No links here.');assert.equal(walk(el,'a').length,0);assert.equal(el.textContent,'No links here.');
+});
