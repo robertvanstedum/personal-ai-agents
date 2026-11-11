@@ -23,7 +23,7 @@ DENIED = {'.ssh', '.aws', '.gnupg', '.azure', '.kube', '.docker', '.config', '.c
           'chrome', 'chromium', 'firefox', '.mozilla', 'bravesoftware', 'microsoft edge', 'safari',
           'containers', 'group containers', 'auth-profiles.json', 'auth.json', '.netrc', '.npmrc', '.pypirc', '.git-credentials', '.gitconfig', '.bash_history', '.zsh_history',
           '.bashrc', '.zshrc', '.bash_profile', '.zprofile', '.profile'}
-SECRET = re.compile(r'-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{16,}|github_pat_[A-Za-z0-9_]{16,}|AKIA[A-Z0-9]{16})|(?i:(?<![\w])\s*["\']?(?:[\w.-]*(?:password|passwd|secret|token|api[_-]?key|private[_-]?key))["\']?\s*[:=]\s*\S)|(?i:authorization\s*:\s*(?:bearer|basic)\s+\S+)|\beyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+')
+SECRET = re.compile(r'-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:sk-[A-Za-z0-9_-]{16,}|gh[posur]_[A-Za-z0-9]{10,}|github_pat_[A-Za-z0-9_]{16,}|xai-[A-Za-z0-9]{16,}|tvly-[A-Za-z0-9]{8,}|AKIA[A-Z0-9]{16})|(?i:(?<![\w])\s*["\']?(?:[\w.-]*(?:password|passwd|secret|token|api[_-]?key|private[_-]?key))["\']?\s*[:=]\s*\S)|(?i:authorization\s*:\s*(?:bearer|basic)\s+\S+)|\beyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+')
 
 class Refused(Exception):
     pass

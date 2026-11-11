@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 from core.workshop_journal import reducer
 from core.workshop_journal.errors import JournalError
 from core.workshop_journal.journal import LOCK, Journal, Result
+from utils.credential_scrub import SECRET as _SECRET
 
 VERSION = 1
 ACTORS = ("claude-code", "codex", "robert", "host", "mc")
@@ -29,9 +30,6 @@ TEXT_MAX = 280
 LINE_MAX = 4000
 STALE_AFTER = timedelta(minutes=15)
 CLOCK_AHEAD = timedelta(minutes=2)          # a reading dated further ahead than this is untrustworthy
-_SECRET = re.compile(r"(sk-[A-Za-z0-9_\-]{8,}|xai-[A-Za-z0-9]{16,}|tvly-[A-Za-z0-9]{8,}|ghp_[A-Za-z0-9]{10,}|"
-                     r"github_pat_|bearer\s+\S+|-----BEGIN|eyJ[A-Za-z0-9_\-]{20,}\.|AKIA[0-9A-Z]{12,}|"
-                     r"[a-z]+://[^\s/:@]+:[^\s/@]+@)", re.IGNORECASE)
 
 
 def now() -> datetime:
