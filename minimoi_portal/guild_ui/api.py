@@ -1656,11 +1656,14 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
     if route_refusal is not None:
         return "refused", {"error": route_refusal.code, "message": route_refusal.message}, 409
 
+    tools_binding = _tool_binder(services, ledger_turn, conv, principal, note_id)
+
     def request_for(built):
         return TurnRequest(conversation_id=session_conversation_id(conv, principal), route=route,
                            text=carried + _with_context(_with_agent(_with_files(sent_text, built), agent_state), sent_text, conv, principal),
                            note_request_id=note_id, correlation_id=turn_id,
-                           context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
+                           context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")},
+                           prepare_depth=getattr(tools_binding, "prepare_depth", None))
 
     def refused_turn(exc):
         return "refused", {"error": "mc_unavailable", "reason": exc.failure_class,
@@ -1710,7 +1713,6 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
         with_html([reply])
 
     from .jobs_api import make_hook
-    tools_binding = _tool_binder(services, ledger_turn, conv, principal, note_id)
     run = StreamRun(StreamContext(
         turn_id=turn_id, principal=principal, backend=services.mc, events=events, floor=floor, reply_key=reply_key,
         job_hook=make_hook(services, conv, principal, note, note_id, attachment_ids),
@@ -2459,6 +2461,8 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             ledger_turn.mark_started()                  # from here the outcome can only be answered, failed or unknown
         tools = _tool_binder(services, ledger_turn, conv, principal, note_id)
         tools()
+        from dataclasses import replace
+        req = replace(req, prepare_depth=getattr(tools, "prepare_depth", None))
         from .mc_tools_wiring import NO_BINDING
         if tools is not NO_BINDING and hasattr(services.mc, "stream_turn"):
             # Tools on: stream internally so the run can be bound, then answer buffered as before (spec §7.1 step 1).

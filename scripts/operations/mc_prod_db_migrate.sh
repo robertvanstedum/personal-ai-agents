@@ -73,6 +73,7 @@ MIGRATIONS=(
   core/mc_tools/sql/018_status_reply_protocol.sql
   core/mc_tools/sql/019_delegate_build.sql
   core/mc_tools/sql/020_issue_create_update.sql
+  core/mc_tools/sql/021_depth_continuation.sql
   core/mc_delegation_dispatcher/sql/001_delegations.sql
   core/supervision/sql/001_supervision.sql
   core/supervision/sql/002_grok_and_exchanges.sql

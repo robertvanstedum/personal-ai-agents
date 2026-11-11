@@ -747,6 +747,9 @@ async function streamMasterCraftsman(t, via) {
       stop.hidden = false;
       follow();
       announce(mcSay('Master Craftsman is answering'));
+    } else if (ev.t === 'progress' && typeof ev.text === 'string') {
+      setSlot(li, 'state', ev.text);
+      announce(ev.text);
     } else if (ev.t === 'delta' && typeof ev.text === 'string') {
       li.hasText = true;
       if (!deltas.length) setSlot(li, 'state', 'Writing…');

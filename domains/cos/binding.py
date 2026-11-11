@@ -60,6 +60,10 @@ CREATE TABLE IF NOT EXISTS calls(
   command_id TEXT, receipt_id TEXT, PRIMARY KEY(turn_id, tool_call_id));
 CREATE TABLE IF NOT EXISTS served_runs(
   run_id TEXT PRIMARY KEY, at TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, api TEXT, harness TEXT);
+CREATE TABLE IF NOT EXISTS terminal_runs(run_id TEXT PRIMARY KEY, receipt TEXT NOT NULL, valid INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS runtime_proof_keys(instance_id TEXT PRIMARY KEY, public_key TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS depth_continuations(turn_id TEXT PRIMARY KEY, old_run TEXT UNIQUE NOT NULL,
+  nonce TEXT NOT NULL, state TEXT NOT NULL, new_run TEXT);
 CREATE TABLE IF NOT EXISTS native_calls(
   id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, turn_id TEXT, run_id TEXT, tool_call_id TEXT,
   tool TEXT NOT NULL, target TEXT, bound INTEGER NOT NULL);
@@ -169,14 +173,21 @@ class BindingStore:
             db.execute("UPDATE bindings SET revoked=?, revoked_reason='scheduler_restarted' "
                        "WHERE revoked IS NULL AND epoch<>?", (self._clock(), epoch))
 
-    def register_instance(self, instance_id: str) -> bool:
+    def register_instance(self, instance_id: str, public_key=None) -> bool:
         """The plugin's gateway process. A new one becomes current and retires the old for good, revoking every
         binding on another instance; a retired instance is refused (no last-arrival-wins)."""
         if not isinstance(instance_id, str) or not INSTANCE_ID.fullmatch(instance_id):
             raise NotBound("instance_invalid")
+        from core.model_routes.runtime_proof import valid_public_key
+        if public_key is not None and not valid_public_key(public_key):
+            raise NotBound("instance_key_invalid")
         with self._tx() as db:
             current = self._state(db, "instance")
             if current == instance_id:
+                if public_key is not None:
+                    key = db.execute("SELECT public_key FROM runtime_proof_keys WHERE instance_id=?", (instance_id,)).fetchone()
+                    if key is None or key["public_key"] != public_key:
+                        raise NotBound("instance_key_changed")
                 return False
             seen = db.execute("SELECT 1 FROM instances WHERE instance_id=?", (instance_id,)).fetchone()
             if seen is not None:
@@ -185,6 +196,8 @@ class BindingStore:
             if current is not None:
                 db.execute("UPDATE instances SET retired=? WHERE instance_id=?", (now, current))
             db.execute("INSERT INTO instances VALUES(?,?,NULL)", (instance_id, now))
+            if public_key is not None:
+                db.execute("INSERT INTO runtime_proof_keys VALUES(?,?)", (instance_id, public_key))
             db.execute("INSERT INTO state VALUES('instance',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                        (instance_id,))
             db.execute("UPDATE bindings SET revoked=?, revoked_reason='runtime_replaced' "
@@ -266,6 +279,68 @@ class BindingStore:
         with self._tx() as db:
             row = db.execute("SELECT run_id FROM bindings WHERE turn_id=?", (turn_id,)).fetchone()
             return row is not None and row["run_id"] == run_id and not self._ran(db, turn_id, run_id)
+
+    def record_terminal(self, receipt: dict) -> bool:
+        from core.model_routes.runtime_proof import valid_receipt, verified
+        if not valid_receipt(receipt):
+            return False
+        with self._tx() as db:
+            key = db.execute("SELECT public_key FROM runtime_proof_keys WHERE instance_id=?", (receipt["instance"],)).fetchone()
+            if key is None or not verified(receipt, key["public_key"]):
+                return False
+            row = db.execute("SELECT * FROM bindings WHERE run_id=?", (receipt["run"],)).fetchone()
+            if row is None:
+                return False
+            user = receipt["session"].removeprefix(f"agent:{receipt['agent']}:openai-user:")
+            self._check(db, row, instance_id=receipt["instance"], agent_id=receipt["agent"], session_user=user)
+            raw = json.dumps(receipt, sort_keys=True)
+            prior = db.execute("SELECT receipt FROM terminal_runs WHERE run_id=?", (receipt["run"],)).fetchone()
+            if prior and prior["receipt"] != raw:
+                db.execute("UPDATE terminal_runs SET valid=0 WHERE run_id=?", (receipt["run"],))
+                return False
+            db.execute("INSERT OR IGNORE INTO terminal_runs(run_id,receipt) VALUES(?,?)", (receipt["run"], raw))
+            return True
+
+    def prepare_depth(self, turn_id: str, run_id: str, nonce: str) -> bool:
+        """Consume the one continuation and retire quick BEFORE the next send.
+
+        A prepared row after a crash is uncertain, never permission to send again.
+        """
+        from core.model_routes.runtime_proof import unused_completed
+        if not isinstance(nonce, str) or not re.fullmatch(r"[0-9a-f]{32}", nonce):
+            return False
+        with self._tx() as db:
+            row = db.execute("SELECT * FROM bindings WHERE turn_id=? AND run_id=?", (turn_id, run_id)).fetchone()
+            evidence = db.execute("SELECT receipt FROM terminal_runs WHERE run_id=? AND valid=1", (run_id,)).fetchone()
+            if row is None or evidence is None:
+                return False
+            receipt = json.loads(evidence["receipt"])
+            if not unused_completed(receipt) or row["origin"] != "owner":
+                return False
+            self._check(db, row, instance_id=receipt["instance"], agent_id=receipt["agent"],
+                        session_user=receipt["session"].removeprefix(f"agent:{receipt['agent']}:openai-user:"))
+            if (db.execute("SELECT 1 FROM calls WHERE turn_id=?", (turn_id,)).fetchone()
+                    or db.execute("SELECT 1 FROM native_calls WHERE run_id=?", (run_id,)).fetchone()):
+                return False
+            inserted = db.execute("INSERT OR IGNORE INTO depth_continuations VALUES(?,?,?,'prepared',NULL)",
+                                  (turn_id, run_id, nonce)).rowcount
+            if not inserted:
+                return False
+            db.execute("UPDATE bindings SET run_id=NULL WHERE turn_id=?", (turn_id,))
+            return True
+
+    def attach_depth(self, turn_id: str, run_id: str) -> bool:
+        if not isinstance(run_id, str) or not RUN_ID.fullmatch(run_id):
+            return False
+        with self._tx() as db:
+            row = db.execute("SELECT * FROM bindings WHERE turn_id=? AND run_id IS NULL", (turn_id,)).fetchone()
+            attempt = db.execute("SELECT old_run FROM depth_continuations WHERE turn_id=? AND state='prepared'", (turn_id,)).fetchone()
+            if row is None or attempt is None or attempt["old_run"] == run_id:
+                return False
+            self._check(db, row, instance_id=row["runtime_instance"], agent_id=row["agent_entry"], session_user=row["session_user"])
+            db.execute("UPDATE bindings SET run_id=? WHERE turn_id=?", (run_id, turn_id))
+            db.execute("UPDATE depth_continuations SET state='attached',new_run=? WHERE turn_id=?", (run_id, turn_id))
+            return True
 
     def move_run(self, turn_id: str, old_run: str, new_run: str) -> bool:
         """Plan failover only: the plan run ended quiet, and the API run takes over this binding. The one exception to
@@ -523,6 +598,24 @@ class TurnBinder:
 
     def served(self, turn_id: str) -> dict | None:
         return self.store.served_for_turn(turn_id)
+
+    def prepare_depth(self, turn_id: str, run_id: str, nonce: str, wait_s: float = 5.0) -> bool:
+        deadline = time.monotonic() + wait_s
+        while True:
+            try:
+                if self.store.prepare_depth(turn_id, run_id, nonce):
+                    return True
+            except NotBound:
+                return False
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.05)
+
+    def attach_depth(self, turn_id: str, run_id: str) -> bool:
+        try:
+            return self.store.attach_depth(turn_id, run_id)
+        except NotBound:
+            return False
 
     def end(self, turn_id: str) -> None:
         self.store.end(turn_id)

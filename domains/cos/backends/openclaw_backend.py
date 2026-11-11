@@ -15,7 +15,7 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -36,6 +36,7 @@ _MODEL_REF = re.compile(r"(?:openai|anthropic)/[A-Za-z0-9._-]{1,64}|minimoi-gate
 # This owner turn's route, as {"route": snapshot}; a turn that moves to its declared API route adds {"switched": route}.
 # None: no route on this turn, so no failover (Telegram, the MC lane, meetings, a host without routes).
 turn_route = contextvars.ContextVar("cos_turn_route", default=None)
+turn_progress = contextvars.ContextVar("cos_turn_progress", default=None)
 _TOOL_REPORT_GRACE_S = 0.5    # the plugin's reports are fire and forget: they get this long to land before they are read
 turn_timeout_seconds = contextvars.ContextVar("cos_turn_timeout_seconds", default=_TURN_TIMEOUT_SECONDS)
 _EMPTY_OUTPUT_NOTICE = (
@@ -321,7 +322,7 @@ class OpenClawBackend:
         """Assemble an OpenAI-style SSE stream into the non-streaming payload shape the callers already check. The
         run id is taken from the first chunk and handed to ``on_run`` at once. A tool-call delta is kept as a
         tool_calls marker, so callers refuse it exactly as before."""
-        run_id = model = None
+        run_id = model = usage = None
         parts, finish, tool_calls, refusal, role = [], None, False, False, None
         # Review S4: the read timeout is per chunk once streaming; the turn as a whole gets the same limit the
         # non-streaming read had.
@@ -351,6 +352,8 @@ class OpenClawBackend:
                     on_run(run_id)
                 elif chunk.get("id") != run_id:
                     raise ValueError("run id changed mid-stream")
+                if isinstance(chunk.get("usage"), dict):
+                    usage = chunk["usage"]
                 for choice in chunk.get("choices") or []:
                     delta = choice.get("delta") or {}
                     role = delta.get("role") or role
@@ -374,7 +377,7 @@ class OpenClawBackend:
             message["tool_calls"] = [{"type": "unexpected"}]
         if refusal:
             message["refusal"] = True
-        return {"id": run_id, "object": "chat.completion", "model": model,
+        return {"id": run_id, "object": "chat.completion", "model": model, "usage": usage,
                 "choices": [{"index": 0, "message": message, "finish_reason": finish}]}
 
     def reset_conversation(self, conversation_id: str) -> bool:
@@ -583,9 +586,35 @@ class OpenClawBackend:
                                    binding=context.get("binding"))
         context["tool_binding"] = "bound" if bound else "unbound"
         attached = {}
+        state = turn_route.get() or {}
+        depth = (state.get("route") or {}).get("depth") or {}
+        automatic = bool(bound and depth.get("allow_continuation") and scope is None)
+        nonce = uuid4().hex if automatic else None
+        original_messages = messages
+        if automatic:
+            from core.model_routes.depth_control import instruction
+            messages = [{"role": "system", "content": instruction(nonce)}, *messages]
+        progress = turn_progress.get()
+        if depth.get("kind") == "deep" and progress:
+            progress("I’ll take a closer look at this.")
+
+        attempts = []
+        active_attempt = None
+        if depth:
+            active_attempt = {"route_id": state["route"]["route_id"], "run_id": None, "outcome": "started"}
+            attempts.append(active_attempt)
+            state["route"]["attempts"] = attempts
+            state["attempts"] = attempts
+
+        def record_result(result):
+            if active_attempt is not None:
+                active_attempt.update(usage=result.get("usage"), model=result.get("model"),
+                    outcome=(result.get("choices") or [{}])[0].get("finish_reason"))
 
         def on_run(run_id):
             attached["run"] = run_id
+            if active_attempt is not None:
+                active_attempt["run_id"] = run_id
             if bound and not self._binder.attach(bound, run_id):
                 context["tool_binding"] = "attach_refused"
         try:
@@ -593,9 +622,45 @@ class OpenClawBackend:
                 result = self._post_turn(messages=messages, conversation_id=conversation_id, agent_id=agent,
                                          on_run=on_run)
             except PlanUnavailable as down:
+                if depth:
+                    raise AgentRuntimeError("The selected reasoning route is unavailable. No automatic retry was made.") from down
                 result = self._fail_over(down, messages=messages, conversation_id=conversation_id, agent=agent,
                                          bound=bound, attached=attached, context=context)
+            record_result(result)
+            if automatic:
+                from core.model_routes.depth_control import ControlBuffer, InvalidDepthControl
+                control = ControlBuffer(nonce)
+                try:
+                    control.feed(self._reply_text(result))
+                    choice = result["choices"][0]
+                    signal = control.finish(completed=choice.get("finish_reason") == "stop"
+                        and not choice.get("message", {}).get("tool_calls"))
+                except (InvalidDepthControl, KeyError, IndexError, TypeError) as exc:
+                    raise AgentRuntimeError("The reasoning continuation could not be verified. Nothing was sent again.") from exc
+                if signal is not None:
+                    run_id = attached.get("run")
+                    if not run_id or not self._binder.prepare_depth(bound, run_id, nonce):
+                        raise AgentRuntimeError("The first attempt could not be confirmed complete without actions. Nothing was sent again.")
+                    deep = {**depth["continuation_route"], "failover": None}
+                    state["deepened"] = deep
+                    active_attempt["outcome"] = "depth_requested"
+                    active_attempt = {"route_id": deep["route_id"], "run_id": None, "outcome": "started"}
+                    attempts.append(active_attempt)
+                    deep["attempts"] = attempts
+                    if progress:
+                        progress("I’ll take a closer look at this.")
+
+                    def on_deep_run(next_run):
+                        active_attempt["run_id"] = next_run
+                        if not self._binder.attach_depth(bound, next_run):
+                            raise AgentRuntimeError("The deeper attempt could not acquire this turn. Do not repeat it automatically.")
+
+                    result = self._post_turn(messages=original_messages, conversation_id=conversation_id, agent_id=agent,
+                        on_run=on_deep_run, model=f"{deep['provider']}/{deep['model']}")
+                    record_result(result)
         except Exception:
+            if active_attempt is not None:
+                active_attempt["outcome"] = "uncertain"
             timing.emit("gateway_request_failed")
             raise
         finally:

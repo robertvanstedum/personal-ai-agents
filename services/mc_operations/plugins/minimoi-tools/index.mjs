@@ -5,7 +5,8 @@
  * No identity, turn, grant or approval is ever taken from the model. The credential is read from a
  * private file; it never enters a tool result.
  */
-import {openSync, closeSync, fstatSync, readSync, lstatSync, readFileSync, statfsSync, constants, mkdirSync, writeFileSync, readdirSync, statSync, rmSync} from 'node:fs';
+import {openSync, closeSync, fstatSync, readSync, lstatSync, readFileSync, statfsSync, constants, mkdirSync, writeFileSync, readdirSync, statSync, rmSync, renameSync} from 'node:fs';
+import {createRequire} from 'node:module';
 import {execFile} from 'node:child_process';
 import {createHmac, createHash, randomBytes, timingSafeEqual} from 'node:crypto';
 import {totalmem, freemem} from 'node:os';
@@ -418,6 +419,8 @@ export const INSTANCE = globalThis[PROCESS_STATE].instance;
 const ANNOUNCERS = new Map();                      // one state/loop per endpoint, credential and instance
 
 export function announcer({url, token, instance = INSTANCE, fetchImpl = fetch, schedule = setTimeout}) {
+  const publicKey = process.env.MINIMOI_DEPTH_PROOF === '1'
+    ? createRequire(import.meta.url)(process.env.MINIMOI_RUNTIME_PROOF_MODULE || '../../../../core/model_routes/runtime_proof.cjs').identity(instance).publicKey : null;
   const target = new URL('/internal/mc/v1/instance', url);
   const key = `${target.href}\0${createHmac('sha256', token).update(instance).digest('hex')}`;
   if (ANNOUNCERS.has(key)) return ANNOUNCERS.get(key);
@@ -428,7 +431,7 @@ export function announcer({url, token, instance = INSTANCE, fetchImpl = fetch, s
         try {
           const r = await fetchImpl(target.href, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000),
             headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
-            body: JSON.stringify({instance})});
+            body: JSON.stringify({instance, ...(publicKey ? {public_key: publicKey} : {})})});
           // Authentication/configuration refusals and retired instances must not
           // become an endless background retry or a way to reclaim an old identity.
           terminal = r.status >= 400 && r.status < 500 && ![408, 429].includes(r.status);
@@ -644,7 +647,22 @@ export default {id: 'minimoi-tools', name: 'MiniMoi tools', register(api) {
     return;
   }
   const state = process.env.OPENCLAW_STATE_DIR;
-  api.on('before_tool_call', sealHook({sealer, tools, agents, mark: state ? toolStartMarker(`${state}/mc-tool-starts`) : undefined}));
+  const seal = sealHook({sealer, tools, agents, mark: state ? toolStartMarker(`${state}/mc-tool-starts`) : undefined});
+  if (process.env.MINIMOI_DEPTH_PROOF === '1') {
+    const {tracker} = createRequire(import.meta.url)(process.env.MINIMOI_RUNTIME_PROOF_MODULE || '../../../../core/model_routes/runtime_proof.cjs');
+    if (!state) throw Error('Depth proof requires private runtime state');
+    const dir = `${state}/mc-depth-proof`;
+    mkdirSync(dir, {recursive: true});
+    writeFileSync(`${dir}/instance`, INSTANCE);
+    const proof = tracker({instance: INSTANCE, publish: async evidence => {
+      const temp = `${dir}/${evidence.run}.tmp`;
+      writeFileSync(temp, JSON.stringify(evidence), {mode: 0o644});
+      renameSync(temp, `${dir}/${evidence.run}.json`);
+    }});
+    api.on('model_call_started', proof.modelStarted);
+    api.on('agent_end', proof.ended);
+    api.on('before_tool_call', (event, ctx) => proof.beforeTool(event, ctx) || seal(event, ctx));
+  } else api.on('before_tool_call', seal);
   announce.start();                                // recover a failed startup announcement without sacrificing a user turn
   api.registerTool(factory, {names: tools});
 }};

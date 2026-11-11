@@ -305,6 +305,29 @@ async function served(body, runId) {
   await new Promise((resolve) => { setTimeout(resolve, 500); });      // the transcript row can land just after the stream ends: one more look
   return readServed(CHAT_DB, key, runId);
 }
+
+export function readTerminal(dir, body, runId) {
+  if (!dir || !RUN_ID.test(String(runId))) return null;
+  try {
+    const evidence = JSON.parse(fs.readFileSync(path.join(dir, `${runId}.json`), 'utf8'));
+    const instance = fs.readFileSync(path.join(dir, 'instance'), 'utf8').trim();
+    const agent = String(body.model || '').split('/')[1];
+    if (evidence.run !== runId || evidence.instance !== instance || evidence.agent !== agent
+        || evidence.session !== `agent:${agent}:openai-user:${body.user}`) return null;
+    return evidence;
+  } catch { return null; }
+}
+
+async function terminal(body, runId) {
+  const dir = process.env.MC_RELAY_DEPTH_PROOFS;
+  if (!dir) return null;
+  for (let i = 0; i < 100; i++) {
+    const evidence = readTerminal(dir, body, runId);
+    if (evidence) return evidence;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  return null;
+}
 function runIdOfReply(text) {
   try {
     const id = JSON.parse(text)?.id;
@@ -520,6 +543,8 @@ async function streamTurn(res, body, correlation, echo, started, routeHeader = {
     if (streaming && !why) {
       const evidence = await served(body, runId);
       if (evidence) send({ t: "served", ...evidence });
+      const completed = await terminal(body, runId);
+      if (completed) send({t: 'terminal', receipt: completed});
     }
   } catch (error) {
     const reason = why || (error?.name === "TimeoutError" ? "deadline" : "upstream");

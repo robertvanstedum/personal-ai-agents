@@ -1756,7 +1756,7 @@ def _ui_turn(body: dict, binding: dict | None = None) -> tuple[dict, int]:
             )
             payload = result.public_dict()
             if routed is not None:
-                model_route.record(_history, kept["conversation_id"], route_state.get("switched") or routed,
+                model_route.record(_history, kept["conversation_id"], route_state.get("deepened") or route_state.get("switched") or routed,
                                    _bindings.served_for_turn(_receipt_turn_id(kept["turn_id"])) if _bindings is not None else None)
             if before is not None:
                 delivered = _cos_files.delivered_since(before)
@@ -1769,6 +1769,9 @@ def _ui_turn(body: dict, binding: dict | None = None) -> tuple[dict, int]:
                 payload["history"] = _history_answer(kept, payload, channel, owner_text, attachment_names)
         except BaseException as exc:
             if kept:
+                if route_state and route_state.get("attempts"):
+                    model_route.record(_history, kept["conversation_id"],
+                                       route_state.get("deepened") or route_state["route"], None)
                 _history_fail(kept, exc)
             raise
         finally:
@@ -1831,12 +1834,15 @@ def _voice_owner_turn(text: str, *, conversation: str, request_id: str, on_dispa
             if kept else binding,
         )
         if routed is not None:
-            model_route.record(_history, kept["conversation_id"], route_state.get("switched") or routed,
+            model_route.record(_history, kept["conversation_id"], route_state.get("deepened") or route_state.get("switched") or routed,
                                _bindings.served_for_turn(_receipt_turn_id(kept["turn_id"])) if _bindings is not None else None)
         if kept:
             _history_answer(kept, result.public_dict(), "html_voice", text, [])
     except BaseException as exc:
         if kept:
+            if route_state and route_state.get("attempts"):
+                model_route.record(_history, kept["conversation_id"],
+                                   route_state.get("deepened") or route_state["route"], None)
             _history_fail(kept, exc)
         raise
     finally:
@@ -1866,6 +1872,10 @@ def _start_ui_turn(body: dict, binding: dict | None = None) -> str:
     def run():
         from domains.cos.backends import openclaw_backend
         openclaw_backend.turn_timeout_seconds.set(openclaw_backend.BACKGROUND_TURN_TIMEOUT_SECONDS)
+        def progress(text):
+            with _ui_turns_lock:
+                _ui_turns[handle]["progress"] = text
+        openclaw_backend.turn_progress.set(progress)
         payload, code = _ui_turn(body, binding)
         with _ui_turns_lock:
             _ui_turns[handle] = {"state": "done", "status": code, "payload": payload, "done_at": time.time()}
@@ -1985,7 +1995,8 @@ def ui_turn_status(handle):
     if turn is None:
         return jsonify({"state": "unknown", "reply": "This turn is not known here (CoS may have restarted)."}), 404
     if turn["state"] == "running":
-        return jsonify({"state": "running", "seconds": int(time.time() - turn["started_at"])})
+        return jsonify({"state": "running", "seconds": int(time.time() - turn["started_at"]),
+                        **({"progress": turn["progress"]} if turn.get("progress") else {})})
     return jsonify({"state": "done", **turn["payload"]}), turn["status"]
 
 

@@ -68,6 +68,9 @@ const base=JSON.parse(fs.readFileSync(img)),L=JSON.parse(fs.readFileSync(live));
 const isObj=v=>v&&typeof v==="object"&&!Array.isArray(v);
 const merge=(i,l)=>{if(!isObj(i)||!isObj(l))return i;const o={...l};for(const k of Object.keys(i))o[k]=merge(i[k],l[k]);return o;};
 const I=merge(policy.overlay(process.env),base);
+if (process.env.MINIMOI_DEPTH_PROOF === "1") {
+  I.plugins.entries["minimoi-tools"].hooks = {...I.plugins.entries["minimoi-tools"].hooks, allowConversationAccess: true};
+}
 const retired=policy.retire(L,process.env);
 const out=merge(I,L);
 policy.validate(out,process.env);

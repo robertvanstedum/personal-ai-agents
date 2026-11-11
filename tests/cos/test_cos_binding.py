@@ -3,6 +3,10 @@ another turn's run; replaced runtime; restarted scheduler; Stop before the bindi
 import os
 import stat
 import threading
+import json
+import base64
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 import pytest
 
@@ -14,6 +18,8 @@ RUN = "chatcmpl_{:08x}-0000-0000-0000-000000000000"
 INST = "a" * 32
 INST2 = "b" * 32
 USER = "cos-confer:" + "0" * 32
+SIGNER = Ed25519PrivateKey.generate()
+PUBLIC = base64.b64encode(SIGNER.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)).decode()
 
 
 class Clock:
@@ -33,7 +39,7 @@ def clock():
 def store(tmp_path, clock):
     s = BindingStore(tmp_path / "private" / "bindings.sqlite3", "dev", clock=clock)
     s.start_epoch("epoch-1")
-    s.register_instance(INST)
+    s.register_instance(INST, public_key=PUBLIC)
     return s
 
 
@@ -63,6 +69,71 @@ def test_file_is_private(tmp_path, store):
     path = tmp_path / "private" / "bindings.sqlite3"
     assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
     assert stat.S_IMODE(os.stat(path.parent).st_mode) == 0o700
+
+
+def terminal_receipt(**changes):
+    value = {"instance": INST, "run": RUN.format(1), "session": f"agent:cos-agent-a:openai-user:{USER}",
+            "agent": "cos-agent-a", "success": True, "model_calls": 1, "tool_calls": 0, **changes}
+    message = json.dumps([value[k] for k in ("instance", "run", "session", "agent", "success", "model_calls", "tool_calls")],
+                         separators=(",", ":")).encode()
+    value["signature"] = base64.b64encode(SIGNER.sign(message)).decode()
+    return value
+
+
+def test_agent_writable_receipt_cannot_forge_zero_tools(store):
+    owner_turn(store)
+    forged = terminal_receipt(tool_calls=1)
+    forged["tool_calls"] = 0
+    assert not store.record_terminal(forged)
+    assert not store.prepare_depth("t1", RUN.format(1), "c" * 32)
+
+
+def test_runtime_key_cannot_be_replaced_on_existing_instance(store):
+    attacker = Ed25519PrivateKey.generate()
+    key = base64.b64encode(attacker.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)).decode()
+    assert code(lambda: store.register_instance(INST, public_key=key)) == "instance_key_changed"
+
+
+def test_depth_retires_quick_before_deep_and_cannot_dispatch_again(store):
+    owner_turn(store)
+    assert not store.prepare_depth("t1", RUN.format(1), "c" * 32)
+    assert store.record_terminal(terminal_receipt())
+    assert store.prepare_depth("t1", RUN.format(1), "c" * 32)
+    assert code(lambda: resolve(store)) == "run_unattached"
+    assert not store.prepare_depth("t1", RUN.format(1), "c" * 32)
+    assert not store.attach_depth("t1", RUN.format(1))
+    assert store.attach_depth("t1", RUN.format(2))
+    assert resolve(store, run=2).turn_id == "t1"
+    assert code(lambda: resolve(store)) == "run_unattached"
+
+
+@pytest.mark.parametrize("changes", [{"success": False}, {"tool_calls": 1}, {"model_calls": 2}])
+def test_depth_refuses_incomplete_or_used_attempt(store, changes):
+    owner_turn(store)
+    assert store.record_terminal(terminal_receipt(**changes))
+    assert not store.prepare_depth("t1", RUN.format(1), "c" * 32)
+
+
+def test_stop_after_preparation_prevents_deep_binding(store):
+    owner_turn(store)
+    store.record_terminal(terminal_receipt())
+    assert store.prepare_depth("t1", RUN.format(1), "c" * 32)
+    store.revoke("t1")
+    assert code(lambda: store.attach_depth("t1", RUN.format(2))) == "stopped"
+
+
+def test_conflicting_terminal_receipt_invalidates_permission(store):
+    owner_turn(store)
+    assert store.record_terminal(terminal_receipt())
+    assert not store.record_terminal(terminal_receipt(tool_calls=1))
+    assert not store.prepare_depth("t1", RUN.format(1), "c" * 32)
+
+
+def test_recorded_action_wins_over_zero_tool_receipt(store):
+    owner_turn(store)
+    admit(store, resolve(store))
+    store.record_terminal(terminal_receipt())
+    assert not store.prepare_depth("t1", RUN.format(1), "c" * 32)
 
 
 def test_live_turn_resolves_and_admits_with_identity_from_the_binding(store):

@@ -109,14 +109,15 @@ class _TurnBinding:
     runtime run the relay reports for it (spec v1.2 §7.1). Failures leave tools refused for this turn and never
     stop the turn itself."""
 
-    def __init__(self, record, attach, revoke):
+    def __init__(self, record, attach, revoke, prepare_depth=None):
         self._record, self._attach, self._revoke = record, attach, revoke
+        self.prepare_depth = prepare_depth
 
     def __call__(self):
         self._record()
 
     def attach_run(self, run_id):
-        self._attach(run_id)
+        return self._attach(run_id)
 
     def revoke(self):
         """The owner's Stop: fenced in this process first (cannot fail), then recorded durably. Returns "revoked"
@@ -156,14 +157,34 @@ def binder(services, ledger_turn, *, environ, principal, conversation_id, note_i
             _log.exception("mc tools: binding for ledger %s not recorded; tools refused for this turn", claim.ledger_id)
 
     attached = []                                     # the run this binding holds; a switched turn's API run moves it
+    depth_pending = []
+
+    def prepare(old_run, nonce, receipt):
+        from core.mc_tools.binding import prepare_depth
+        from core.mc_tools.fence import fenced
+        if not attached or attached[-1] != old_run or depth_pending or fenced(claim.ledger_id, claim.generation):
+            return False
+        conn = connect()
+        try:
+            with conn:
+                ok = prepare_depth(conn, ledger_id=claim.ledger_id, claim_generation=claim.generation,
+                                   old_run=old_run, nonce=nonce, receipt=receipt, environment=cfg["environment"])
+        finally:
+            conn.close()
+        if ok:
+            depth_pending.append(old_run)
+        return ok
 
     def attach(run_id):
-        from core.mc_tools.binding import attach_run, move_run
+        from core.mc_tools.binding import attach_run, move_run, attach_depth
         try:
             conn = connect()
             try:
                 with conn:
-                    if attached:
+                    if depth_pending:
+                        bound = attach_depth(conn, ledger_id=claim.ledger_id, claim_generation=claim.generation,
+                                             run_id=run_id, environment=cfg["environment"])
+                    elif attached:
                         bound = move_run(conn, ledger_id=claim.ledger_id, claim_generation=claim.generation, old_run=attached[-1],
                                          new_run=run_id, environment=cfg["environment"])
                     else:
@@ -175,8 +196,10 @@ def binder(services, ledger_turn, *, environ, principal, conversation_id, note_i
                 attached.append(run_id)
             if not bound:
                 _log.warning("mc tools: run for ledger %s not attached; tools refused for this turn", claim.ledger_id)
+            return bound
         except Exception:
             _log.exception("mc tools: run for ledger %s not attached; tools refused for this turn", claim.ledger_id)
+            return False
     def revoke():
         from core.mc_tools.binding import revoke as revoke_turn
         from core.mc_tools.fence import fence
@@ -193,7 +216,7 @@ def binder(services, ledger_turn, *, environ, principal, conversation_id, note_i
                        exc_info=True)
             return "fenced"
         return "revoked"
-    return _TurnBinding(bind, attach, revoke)
+    return _TurnBinding(bind, attach, revoke, prepare)
 
 
 def _guests_lookup(email):

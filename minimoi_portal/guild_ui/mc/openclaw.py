@@ -47,6 +47,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from uuid import uuid4
 from urllib.parse import urlparse
 
 from collections import namedtuple
@@ -55,7 +56,7 @@ from core.model_routes import switch_words, switched_route
 
 from .backend import Health, MasterCraftsmanBackend, TurnResult
 from .stream import (PLAN_SIGNAL_WORDS, Delta, Failure, Finish, Limits, RunStarted, Served, StreamRefused, Switched, Usage, read_stream,
-                     served_fields)
+                     served_fields, Terminal, Progress)
 
 # What the header needs to remember about the last turn: its status and failure class, never its reply text, usage or trace
 # (a Private answer must not stay in this process's memory after the request ends; Codex review, 7 Oct).
@@ -256,7 +257,110 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
         payload = self._payload(req, stream=True)
         if isinstance(payload, TurnResult):
             raise StreamRefused(payload.failure_class, payload.message)
+        if (req.route or {}).get("depth"):
+            return self._stream_depth(req, payload, cancel)
         return self._stream_with_failover(req, payload, cancel)
+
+    def _stream_depth(self, req, payload, cancel):
+        from core.model_routes.depth_control import ControlBuffer, InvalidDepthControl, instruction
+        from core.model_routes.runtime_proof import unused_completed
+        depth = req.route["depth"]
+        if not depth.get("allow_continuation"):
+            if depth["kind"] == "deep":
+                yield Progress("I’ll take a closer look at this.")
+            yield from self._stream(payload, self._headers(req), cancel)
+            return
+        if not callable(req.prepare_depth):
+            yield Failure("depth_binding_unavailable", "unavailable")
+            return
+        nonce = uuid4().hex
+        body = json.loads(payload)
+        body["messages"].insert(0, {"role": "system", "content": instruction(nonce)})
+        first = json.dumps(body, ensure_ascii=False).encode()
+        if len(first) > MAX_REQUEST_BODY_BYTES:
+            yield Failure("request_too_large", "refused")
+            return
+        control = ControlBuffer(nonce)
+        run_id, proof, finished, tail = None, None, False, []
+        quick_attempt = {"route_id": req.route["route_id"], "run_id": None, "outcome": "dispatch_started",
+                         "input_tokens": None, "output_tokens": None, "served": None}
+        req.route["attempts"] = [quick_attempt]
+        try:
+            for event in self._stream(first, self._headers(req), cancel):
+                if isinstance(event, RunStarted):
+                    run_id = event.run_id
+                    quick_attempt["run_id"] = run_id
+                    yield event
+                elif isinstance(event, Delta):
+                    text = control.feed(event.text)
+                    if text:
+                        yield Delta(text)
+                elif isinstance(event, Terminal):
+                    proof = event.receipt
+                elif isinstance(event, Failure):
+                    quick_attempt["outcome"] = "uncertain"
+                    yield event
+                    return
+                elif isinstance(event, Finish):
+                    finished = event.reason == "stop"
+                    quick_attempt["outcome"] = event.reason
+                    tail.append(event)
+                else:
+                    if isinstance(event, Usage):
+                        quick_attempt.update(input_tokens=event.prompt_tokens, output_tokens=event.completion_tokens)
+                    elif isinstance(event, Served):
+                        quick_attempt["served"] = event.fields
+                    tail.append(event)
+            signal = control.finish(completed=finished)
+        except InvalidDepthControl:
+            quick_attempt["outcome"] = "invalid_control"
+            yield Failure("invalid_depth_control", "error")
+            return
+        if signal is None:
+            yield from tail
+            return
+        quick_attempt["outcome"] = "depth_requested"
+        if (not run_id or not unused_completed(proof) or proof["run"] != run_id
+                or (cancel is not None and cancel.is_set())):
+            yield Failure("depth_completion_uncertain", "error")
+            return
+        try:
+            prepared = req.prepare_depth(run_id, nonce, proof)
+        except Exception:
+            prepared = False
+        if not prepared:
+            yield Failure("depth_transition_refused", "error")
+            return
+        if cancel is not None and cancel.is_set():
+            yield Failure("stopped", "cancelled")
+            return
+        deep = {**depth["continuation_route"], "failover": None}
+        first_usage = next((e for e in tail if isinstance(e, Usage)), None)
+        deep["attempts"] = req.route["attempts"]
+        deep["attempts"].append({"route_id": deep["route_id"], "run_id": None, "outcome": "dispatch_started",
+                                 "input_tokens": None, "output_tokens": None, "served": None})
+        yield Progress("I’ll take a closer look at this.")
+        yield Switched(deep)
+        second_usage = None
+        for event in self._stream(payload, self._headers(req, deep), cancel):
+            if isinstance(event, RunStarted):
+                deep["attempts"][-1].update(run_id=event.run_id, outcome="started")
+                yield RunStarted(event.run_id, replaces=run_id, required=True)
+            elif isinstance(event, Usage):
+                second_usage = event
+                deep["attempts"][-1].update(input_tokens=event.prompt_tokens, output_tokens=event.completion_tokens)
+            else:
+                if isinstance(event, Served):
+                    deep["attempts"][-1]["served"] = event.fields
+                elif isinstance(event, Finish):
+                    deep["attempts"][-1]["outcome"] = event.reason
+                elif isinstance(event, Failure):
+                    deep["attempts"][-1]["outcome"] = "uncertain"
+                yield event
+        def total(field):
+            values = [getattr(u, field) if u else None for u in (first_usage, second_usage)]
+            return sum(values) if all(v is not None for v in values) else None
+        yield Usage(total("prompt_tokens"), total("completion_tokens"))
 
     def _stream_with_failover(self, req, payload: bytes, cancel):
         """One attempt, and at most one more. Nothing here can start a third: the moved route has no failover."""

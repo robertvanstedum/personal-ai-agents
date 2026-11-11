@@ -34,8 +34,15 @@ def collect(backend, req, *, on_run, record_usage=None, clock=time.monotonic) ->
                 if not run_seen or event.replaces:
                     run_seen = True
                     try:
-                        on_run(event.run_id)
+                        attached = on_run(event.run_id)
+                        if event.required and attached is not True:
+                            raise RuntimeError("depth run binding refused")
                     except Exception:
+                        if event.required:
+                            try:
+                                backend.stop(req.correlation_id)
+                            finally:
+                                raise
                         _log.warning("mc turn %s: run binding not recorded; tools refused for this turn",
                                      req.correlation_id)
             elif isinstance(event, Delta):

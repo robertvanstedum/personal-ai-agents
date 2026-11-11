@@ -318,10 +318,10 @@ class ToolService:
             return None, None, refused("tool_not_in_policy")
         return compiled, rule, None
 
-    def register_instance(self, instance_id) -> bool:
+    def register_instance(self, instance_id, public_key=None) -> bool:
         """The plugin's announcement of its gateway process (spec §7.1 step 5, §7.4): see binding.register_instance."""
         with self._tx() as conn:
-            return binding_mod.register_instance(conn, environment=self.environment, instance_id=instance_id)
+            return binding_mod.register_instance(conn, environment=self.environment, instance_id=instance_id, public_key=public_key)
 
     def call(self, name, arguments, *, session_key, agent_id, run_id=None, tool_call_id=None, instance_id=None,
              observation=None, offered_tools=None, host_completion=None, artifact_request=None) -> dict:

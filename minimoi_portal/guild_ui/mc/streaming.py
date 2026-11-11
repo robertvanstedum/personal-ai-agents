@@ -45,7 +45,7 @@ from typing import Callable
 from ..adapters.contract import now_iso
 from .backend import REAL_KINDS, NotAnAnswer, TurnResult, keep_reply
 from .openclaw import OPENCLAW_NO_RESPONSE
-from .stream import STREAM_ANSWER_FINISH_REASONS, Delta, Failure, Finish, RunStarted, Usage
+from .stream import STREAM_ANSWER_FINISH_REASONS, Delta, Failure, Finish, RunStarted, Usage, Progress
 
 PING_S = 10.0
 RENDER_EVERY_S = 0.5
@@ -317,12 +317,22 @@ class StreamRun:
             _log.warning("mc turn %s files report not saved", ctx.turn_id)
         try:
             for event in ctx.events:
+                if isinstance(event, Progress):
+                    self._put(("progress", {"t": "progress", "text": event.text}))
+                    continue
                 if isinstance(event, RunStarted):
                     if not run_seen or event.replaces:
                         run_seen = True
                         try:
-                            ctx.on_run(event.run_id)
+                            attached = ctx.on_run(event.run_id)
+                            if event.required and attached is not True:
+                                raise RuntimeError("depth run binding refused")
                         except Exception:
+                            if event.required:
+                                try:
+                                    ctx.backend.stop(ctx.turn_id)
+                                finally:
+                                    raise
                             _log.warning("mc turn %s: run binding not recorded; tools refused for this turn", ctx.turn_id)
                     continue
                 if isinstance(event, Delta):
@@ -524,6 +534,9 @@ def browser_events(run: StreamRun, *, render: Callable[[str], str], clock=time.m
                 kind, payload = run.queue.get(timeout=ping_s)
             except queue.Empty:
                 yield _line({"t": "ping"})
+                continue
+            if kind == "progress":
+                yield _line(payload)
                 continue
             if kind == "delta":
                 text += payload

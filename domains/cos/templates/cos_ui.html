@@ -412,7 +412,7 @@ async function runTurn(payload, thinking) {
     catch (err) { continue; }            // a dropped poll is retried; the turn keeps running on the server
     const d = await r.json().catch(() => ({}));
     if (d.state === 'running') {
-      thinking.textContent = 'Working… ' + (d.seconds || 0) + ' s';
+      thinking.textContent = d.progress || ('Working… ' + (d.seconds || 0) + ' s');
       continue;
     }
     return { resp: r, data: d };

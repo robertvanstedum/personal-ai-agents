@@ -13,6 +13,7 @@
  */
 import {runBoundSealer, backendCallId, tokenFromFile, boundedJson, RUN_ID, CALL_ID} from './shared.mjs';
 import {randomBytes} from 'node:crypto';
+import {createRequire} from 'node:module';
 
 export const ENDPOINT_PATH = '/internal/cos/v1';
 export const NATIVE = new Set(['write', 'edit', 'exec', 'apply_patch', 'process']);
@@ -106,6 +107,8 @@ function headers(token, {sessionKey, agentId, run, toolCallId, instance}) {
 const ANNOUNCERS = new Map();
 
 export function announcer({url, token, instance = INSTANCE, fetchImpl = fetch, schedule = setTimeout}) {
+  const publicKey = process.env.MINIMOI_DEPTH_PROOF === '1'
+    ? createRequire(import.meta.url)(process.env.MINIMOI_RUNTIME_PROOF_MODULE || '../../../../core/model_routes/runtime_proof.cjs').identity(instance).publicKey : null;
   const target = `${url.href}/instance`;
   const key = `${target}\0${token.length}:${instance}`;
   if (ANNOUNCERS.has(key)) return ANNOUNCERS.get(key);
@@ -116,7 +119,7 @@ export function announcer({url, token, instance = INSTANCE, fetchImpl = fetch, s
         try {
           const r = await fetchImpl(target, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000),
             headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
-            body: JSON.stringify({instance})});
+            body: JSON.stringify({instance, ...(publicKey ? {public_key: publicKey} : {})})});
           terminal = r.status >= 400 && r.status < 500 && ![408, 429].includes(r.status);
           await r.body?.cancel().catch(() => {});
           return r.status === 200;
@@ -254,7 +257,19 @@ export default {id: 'cos-bound', name: 'CoS bound tools', register(api) {
     (api.logger?.warn ?? console.warn).call(api.logger ?? console, 'cos-bound: not registered (credential or configuration unavailable)');
     return;
   }
-  api.on('before_tool_call', hook({agents, url, token}));
+  const toolsHook = hook({agents, url, token});
+  if (process.env.MINIMOI_DEPTH_PROOF === '1') {
+    const {tracker} = createRequire(import.meta.url)(process.env.MINIMOI_RUNTIME_PROOF_MODULE || '../../../../core/model_routes/runtime_proof.cjs');
+    const proof = tracker({instance: INSTANCE, publish: async evidence => {
+      const response = await fetch(`${url.href}/terminal`, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000),
+        headers: headers(token, {sessionKey: evidence.session, agentId: evidence.agent, run: evidence.run, toolCallId: '', instance: INSTANCE}),
+        body: JSON.stringify(evidence)});
+      await response.body?.cancel();
+    }});
+    api.on('model_call_started', proof.modelStarted);
+    api.on('agent_end', proof.ended);
+    api.on('before_tool_call', (event, ctx) => proof.beforeTool(event, ctx) || toolsHook(event, ctx));
+  } else api.on('before_tool_call', toolsHook);
   api.on('model_call_ended', servedHook({agents, url, token}));
   announcer({url, token}).start();          // before any turn's first call (review M3)
   api.registerTool(factory, {names: ['cos_actions', 'cos_tasks', 'cos_board', 'cos_send_to_mc']});

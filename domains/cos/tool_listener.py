@@ -149,13 +149,29 @@ def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agen
         body, refused = preflight()
         if refused:
             return refused
-        if set(body) != {"instance"} or type(body["instance"]) is not str:
+        if set(body) - {"instance", "public_key"} or type(body.get("instance")) is not str:
             return jsonify(error="tool_request_invalid"), 400
         try:
-            bindings.register_instance(body["instance"])
+            bindings.register_instance(body["instance"], **({"public_key": body["public_key"]} if "public_key" in body else {}))
         except NotBound as exc:
             return jsonify(error=exc.code), 409
         return jsonify(status="recorded")
+
+    @app.post(PREFIX + "/terminal")
+    def terminal():
+        body, refused = preflight()
+        if refused:
+            return refused
+        ids = sealed()
+        from core.model_routes.runtime_proof import valid_receipt
+        if (not valid_receipt(body) or any(body[k] != ids[v] for k, v in
+                (("run", "run_id"), ("instance", "instance_id"), ("agent", "agent_id"), ("session", "session_key")))):
+            return jsonify(error="terminal_invalid"), 400
+        try:
+            kept = bindings.record_terminal(body)
+        except NotBound:
+            return jsonify(error="terminal_not_bound"), 409
+        return jsonify(status="kept" if kept else "refused"), 200 if kept else 409
 
     @app.post(PREFIX + "/served")
     def served():
