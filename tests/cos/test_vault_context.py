@@ -187,3 +187,33 @@ def test_production_scope_limits_the_vault_to_guild_mc_conversations(conversatio
 def test_unset_scope_keeps_every_conversation_as_before():
     from domains.cos import vault_context as V
     assert V.in_scope({"confer": {"conversation_id": "owner"}}, {}) is True
+
+
+@pytest.mark.parametrize("flag", [True, None, "yes", RuntimeError])
+def test_a_private_or_unreadable_cos_conversation_never_queries_the_vault(flag):
+    """#509 review: a Private CoS conversation is marked on its own record, not by record_mode. Anything but private
+    False (an unreadable record, a lookup that fails) keeps the turn away from the Vault service, which logs queries."""
+    backend = Backend()
+    context = {"system_prompt": "S", "confer": {"conversation_id": "cosc-" + "a" * 24}}
+
+    def lookup(_):
+        if flag is RuntimeError:
+            raise RuntimeError("history unreadable")
+        return flag
+
+    def forbidden(_, **kwargs):
+        pytest.fail("retrieval must not run")
+
+    assert call_with_vault(backend, "Owner's words", context, {}, retrieve=forbidden, environ=CONFIG,
+                           is_private=lookup) == "The agent's answer."
+    assert call_with_vault(backend, "Owner's words", context, {}, retrieve=forbidden, environ=CONFIG) == "The agent's answer."
+
+
+def test_an_on_record_cos_conversation_still_asks_the_vault():
+    backend = Backend()
+    context = {"system_prompt": "S", "confer": {"conversation_id": "cosc-" + "b" * 24}}
+    asked = []
+    result = SimpleNamespace(prompt_block="", built=None, report={"hook_status": "ok"})
+    call_with_vault(backend, "Why?", context, {}, retrieve=lambda q, **k: (asked.append(q), result)[1], environ=CONFIG,
+                    is_private=lambda cid: False)
+    assert asked == ["Why?"]

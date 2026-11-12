@@ -807,7 +807,13 @@ def call_backend(prompt: str, context: dict, tool_policy: dict) -> str:
     if _backend is None:
         raise RuntimeError("Backend not initialized — init_backend() was not called in main()")
     from domains.cos.vault_context import call_with_vault
-    return call_with_vault(_backend, prompt, context, tool_policy)
+    return call_with_vault(_backend, prompt, context, tool_policy, is_private=_conversation_private)
+
+
+def _conversation_private(conversation_id: str):
+    """The conversation's own private flag (True, False), or None when its record can't be read (then: private)."""
+    doc = _history.conversation(conversation_id) if _history is not None else None
+    return doc.get("private") if isinstance(doc, dict) and isinstance(doc.get("private"), bool) else None
 
 
 def _build_confer_context() -> dict:
