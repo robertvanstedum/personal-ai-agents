@@ -4,12 +4,14 @@ names, laid out by start.sh.
 The projection is produced by start.sh's own persona step (steps 1-2, run unchanged), with only the image directory
 redirected to a copy of what the Dockerfile copies (the persona release, the handbook, handbook.mjs and
 model-access.cjs). Needs node on PATH, like tests/test_mc_persona_loader.py."""
+import atexit
 import hashlib
 import json
 import os
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -70,6 +72,9 @@ def image_copy(tmp_path: Path, release: str | None = None) -> Path:
     return image
 
 
+SHORT_STATE: dict[Path, Path] = {}
+
+
 def run_steps(tmp_path: Path, image: Path, start: Path = START):
     sh = start.read_text()
     cut = sh.index("\n# 3. Config")
@@ -77,9 +82,16 @@ def run_steps(tmp_path: Path, image: Path, start: Path = START):
     script = tmp_path / "persona-step.sh"
     script.write_text(sh[:cut].replace("IMAGE_DIR=/opt/minimoi/mc-agent\n", f"IMAGE_DIR={image}\n") + "\n")
     env = {k: v for k, v in os.environ.items() if k not in PROVIDER_KEYS}
-    env["OPENCLAW_STATE_DIR"] = str(tmp_path / "state")
+    # start.sh counts the projection with the real state path in it. pytest's tmp_path is three times the container's
+    # /home/node/.openclaw, which made a release within budget look 700 characters over; a short directory measures close
+    # to the container (container_chars gives the exact figure).
+    if tmp_path not in SHORT_STATE:                     # one per test, so a second start sees the first one's state
+        SHORT_STATE[tmp_path] = Path(tempfile.mkdtemp(prefix="mc", dir="/tmp")) / "state"
+        atexit.register(shutil.rmtree, SHORT_STATE[tmp_path].parent, True)
+    state = SHORT_STATE[tmp_path]
+    env["OPENCLAW_STATE_DIR"] = str(state)
     r = subprocess.run(["/bin/sh", str(script)], env=env, capture_output=True, text=True, timeout=20)
-    return r, tmp_path / "state/workspace-mc"
+    return r, state / "workspace-mc"
 
 
 def lay_out(tmp_path: Path, release: str | None = None):
@@ -397,9 +409,19 @@ def test_persona_0132_says_how_guildhall_works_and_what_a_harness_defect_is(tmp_
     for said in ("permission loops, missing tools or capabilities, integration failures", "(example:",
                  "A product bug or a model mistake", "don't count it"):
         assert said in agents, said
-    # Only those two changes: every other line of 0.1.31 is kept, and the collector's phrase is unchanged.
+    # FF-16 (12 Nov): short answers lead the answer-style guidance, with the before-and-after example.
+    short = "## How to answer (Robert, 26 Oct; short, 12 Nov)\nLead with the answer in two or three lines; most replies end there."
+    assert agents.count(short) == 1 and agents.index(short) < agents.index("## Front door")
+    for said in ("come only when he asks, or when the short answer would be wrong without them",
+                 'One short "couldn\'t check X" line is fine', "Not a page of every issue, source and caveat", "Want the list?"):
+        assert said in agents, said
+    assert "the options and where you looked on request" in agents and "say where you looked." not in agents
+    # Only these changes: every other line of 0.1.31 is kept, and the collector's phrase is unchanged.
+    rewritten = ("Then one line:", "## How to answer (Robert, 26 Oct)", "Lead with the answer in one to three sentences", "Read and reason first:",
+                 "Use this conversation and supplied context first.", "A change to the site:")
     before = (old / "AGENTS.md").read_text().split("\n")[1:]
-    assert [line for line in before if line not in agents.split("\n") and "+1 defect noted" not in line] == []
+    gone = [line for line in before if line not in agents.split("\n")]
+    assert len(gone) == len(rewritten) and all(any(line.startswith(r) for line in gone) for r in rewritten), gone
     assert 'write "+1 defect noted" instead.' in agents
     manifest = json.loads((new / "manifest.json").read_text())
     assert manifest["version"] == "0.1.32" and manifest["base"] == "0.1.31"
