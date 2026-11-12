@@ -22,7 +22,7 @@ class BadQuery(ValueError):
 
 def ask(query: str, *, shelf_root, embedder: Embedder, caller: policy.Caller | None = None, k: int = search.DEFAULT_K,
         index_path=None, log_path=None, created_after: str | None = None, created_before: str | None = None,
-        clock=None) -> dict:
+        clock=None, private: bool = False) -> dict:
     if not isinstance(query, str) or not query.strip():
         raise BadQuery("empty_query")
     if not isinstance(k, int) or isinstance(k, bool) or not 1 <= k <= MAX_K:
@@ -33,7 +33,8 @@ def ask(query: str, *, shelf_root, embedder: Embedder, caller: policy.Caller | N
     result = search.search(query, shelf_root=shelf_root, embedder=embedder, index_path=index_path, caller=caller, k=k,
                            adjacent=True, created_after=created_after, created_before=created_before)
     try:
-        querylog.record_query(Path(log_path) if log_path else querylog.path_for(index_path), query, result, clock=clock)
+        querylog.record_query(Path(log_path) if log_path else querylog.path_for(index_path), query, result, clock=clock,
+                             private=private is True)
         result["status"]["log"] = "ok"
     except Exception:                                    # noqa: BLE001 - the answer stands; the failure is visible
         result["status"]["log"] = "failed"

@@ -6,6 +6,9 @@ One append-only JSONL file beside the index (``<index folder>/ask-log.jsonl``, 0
 
 * **Passages are never logged**, only chunk ids (which name a record, an edition and an ordinal). The query text is the
   asker's own words, payment- and credential-scrubbed and capped before it is written.
+* **A private query keeps no words** (#532, 12 Nov 2026): a query asked from a Private conversation is logged with
+  ``private: true``, no ``query`` text and only hit *counts* (no chunk ids, which would name the records it touched). It
+  still counts in ``summary``; ``opened`` and ``mark`` are refused for it, since there is nothing to tie them to.
 * Each line is one ``write`` (``fsio.append_jsonl``), so concurrent askers never interleave.
 * ``opened`` and ``mark`` are accepted only for a query that is in the log, and ``opened`` only for a chunk that query
   returned; anything else is refused, so the log cannot be filled with invented evidence.
@@ -47,7 +50,16 @@ def _hit_ids(result: dict) -> dict:
             "adjacent": slot.get("chunk_id")}
 
 
-def record_query(path: Path, query: str, result: dict, *, clock=None) -> None:
+def record_query(path: Path, query: str, result: dict, *, clock=None, private: bool = False) -> None:
+    if private:
+        hits = _hit_ids(result)
+        fsio.append_jsonl(path, {
+            "v": VERSION, "event": "query", "at": _now(clock), "query_id": result["query_id"], "private": True,
+            "caller": result["caller"], "tier": result["tier"],
+            "hits": {"keyword": len(hits["keyword"]), "meaning": len(hits["meaning"]), "adjacent": bool(hits["adjacent"])},
+            "unresolved": len(result["unresolved"]),
+            "status": {"meaning": result["status"]["meaning"], "ms": result["status"]["ms"]}})
+        return
     text, scrubbed = cap_and_scrub(query, MAX_QUERY)
     fsio.append_jsonl(path, {
         "v": VERSION, "event": "query", "at": _now(clock), "query_id": result["query_id"], "query": text,
@@ -71,6 +83,8 @@ def record_opened(path: Path, query_id: str, chunk_id: str, *, clock=None) -> No
     row = _query_row(path, query_id)
     if row is None:
         raise LogRefused("unknown_query")
+    if row.get("private"):
+        raise LogRefused("private_query")
     shown = [c for c in (row["hits"].get("keyword", []) + row["hits"].get("meaning", []) + [row["hits"].get("adjacent")]) if c]
     if chunk_id not in shown:
         raise LogRefused("not_a_hit_of_that_query")
@@ -84,6 +98,8 @@ def record_mark(path: Path, query_id: str, value: str, *, clock=None) -> None:
     row = _query_row(path, query_id)
     if row is None:
         raise LogRefused("unknown_query")
+    if row.get("private"):
+        raise LogRefused("private_query")
     fsio.append_jsonl(path, {"v": VERSION, "event": "mark", "at": _now(clock), "query_id": query_id, "value": value,
                              "caller": row["caller"]})
 

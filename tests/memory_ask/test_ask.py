@@ -423,3 +423,40 @@ def test_a_claim_whose_citation_sits_in_the_next_sentence_stays_unsupported():
     text = "The notebook was indigo and contained 17 sketches. The original conversation records this at s/source.md:12,15."
     states = [c["state"] for c in citation.check(text, PASSAGE)]
     assert states == ["unsupported", "supported"]
+
+
+# ── private queries (#532): same results, no words or record ids in the log ──
+
+def test_a_private_query_gets_the_same_results_but_the_log_keeps_no_words_or_record_ids(shelf_world):
+    shelf, ids, emb = shelf_world
+    normal = run(shelf, emb, "sourdough rise")
+    private = run(shelf, emb, "sourdough rise", private=True)
+    assert [h["chunk_id"] for h in private["keyword"]] == [h["chunk_id"] for h in normal["keyword"]]
+    assert private["status"]["log"] == "ok"
+    rows = log_rows(shelf)
+    assert "query" in rows[0] and "private" not in rows[0]
+    row = rows[1]
+    assert row["private"] is True and "query" not in row and "sanitized" not in row
+    assert row["hits"]["keyword"] == len(private["keyword"]) and isinstance(row["hits"]["adjacent"], bool)
+    text = json.dumps(row)
+    assert "sourdough" not in text and not any(h["chunk_id"] in text for h in private["keyword"])
+    assert querylog.summary(querylog.path_for(indexer.default_index_path(shelf.root)))["queries"] == 2
+
+
+def test_opened_and_mark_are_refused_for_a_private_query(shelf_world):
+    shelf, ids, emb = shelf_world
+    r = run(shelf, emb, "sourdough rise", private=True)
+    index_path = indexer.default_index_path(shelf.root)
+    with pytest.raises(querylog.LogRefused) as e:
+        ask_mod.opened(r["query_id"], r["keyword"][0]["chunk_id"], index_path=index_path)
+    assert e.value.code == "private_query"
+    with pytest.raises(querylog.LogRefused) as e:
+        ask_mod.mark(r["query_id"], "useful", index_path=index_path)
+    assert e.value.code == "private_query"
+
+
+def test_the_model_facing_tool_schema_cannot_set_private(shelf_world):
+    shelf, ids, emb = shelf_world
+    assert "private" not in tool.SPEC["input_schema"]["properties"]
+    assert tool.call({"query": "sourdough", "private": True}, agent="mc", shelf_root=shelf.root, embedder=emb) == \
+        {"error": "bad_arguments"}

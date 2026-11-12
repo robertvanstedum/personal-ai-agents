@@ -48,7 +48,9 @@ _ALLOWED = set(SPEC["input_schema"]["properties"])
 
 
 def call(arguments: dict, *, agent: str, entry_point: str = "tool", shelf_root, embedder, index_path=None, log_path=None,
-         clock=None, scopes: tuple[str, ...] | None = None) -> dict:
+         clock=None, scopes: tuple[str, ...] | None = None, private: bool = False) -> dict:
+    """``private`` is set by the host for a query from a Private conversation (#532); it is not in ``SPEC``, so a model
+    can never choose it. It only changes what the query log keeps (no words, no record ids), never what is searched."""
     try:
         if not isinstance(arguments, dict) or set(arguments) - _ALLOWED or "query" not in arguments:
             return {"error": "bad_arguments"}
@@ -62,7 +64,7 @@ def call(arguments: dict, *, agent: str, entry_point: str = "tool", shelf_root, 
         result = ask_mod.ask(arguments["query"], shelf_root=shelf_root, embedder=embedder, caller=caller,
                              k=arguments.get("k", search.DEFAULT_K), index_path=index_path, log_path=log_path,
                              created_after=arguments.get("created_after"), created_before=arguments.get("created_before"),
-                             clock=clock)
+                             clock=clock, private=private is True)
     except ask_mod.BadQuery as exc:
         return {"error": str(exc)}
     except ValueError:                                       # a malformed caller token (host bug), never the model's
