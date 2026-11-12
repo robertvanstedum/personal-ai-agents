@@ -151,17 +151,37 @@
   document.getElementById('history-more').onclick=()=>list(true).catch(()=>state.textContent='Could not load more history.');
   document.getElementById('history-earlier').onclick=()=>{if(viewingEarlier){viewingEarlier=false;signature='';document.getElementById('history-earlier').textContent='Earlier messages';reload().catch(()=>state.textContent='Could not load messages.');}else{reload(true).then(()=>{document.getElementById('history-earlier').hidden=false;document.getElementById('history-earlier').textContent='Return to latest';}).catch(()=>state.textContent='Could not load earlier messages.');}};
   let creatingConversation = false;
-  document.querySelectorAll('[data-new-conversation]').forEach(button => { button.onclick=async()=>{
+  // New chat and the Private lock (#510) start a conversation the same way; only the private flag, set once at creation, differs.
+  async function startConversation(isPrivate){
     if(creatingConversation || selecting || !window.cosHistory.ready)return;
     if(input.disabled||window.cosTurnRunning||uploading){state.textContent='Wait for the current message or upload.';return;}
     creatingConversation=true; window.cosHistory.ready=false;
-    const controls=[...document.querySelectorAll('[data-new-conversation]')];controls.forEach(b=>b.disabled=true);
-    try{const typedFrom=input.value;const c=await api('history/conversations',{title:'New conversation'});const late=input.value!==typedFrom&&input.value.startsWith(typedFrom)?input.value.slice(typedFrom.length):'';input.value=typedFrom;await select(c.conversation_id,c,true);if(late.trim()&&!input.value){input.value=late.trimStart();persistDraft();}closeDrawer();refreshList();document.getElementById('history-sheet').close();if(!document.getElementById('tab-confer').classList.contains('active'))document.querySelector('.tab-btn[data-tab="confer"]').click();input.focus();}
-    catch(_){state.textContent='Could not create a conversation.';}
+    const controls=[...document.querySelectorAll('[data-new-conversation],[data-cos-private],[data-private-exit]')];controls.forEach(b=>b.disabled=true);
+    try{const typedFrom=input.value;const c=await api('history/conversations',isPrivate?{title:'New conversation',private:true}:{title:'New conversation'});const late=input.value!==typedFrom&&input.value.startsWith(typedFrom)?input.value.slice(typedFrom.length):'';input.value=typedFrom;await select(c.conversation_id,c,true);if(late.trim()&&!input.value){input.value=late.trimStart();persistDraft();}closeDrawer();refreshList();document.getElementById('history-sheet').close();if(!document.getElementById('tab-confer').classList.contains('active'))document.querySelector('.tab-btn[data-tab="confer"]').click();input.focus();}
+    catch(_){state.textContent=isPrivate?'Could not start a private conversation.':'Could not create a conversation.';}
     finally{creatingConversation=false;window.cosHistory.ready=true;controls.forEach(b=>b.disabled=false);}
-  };});
+  }
+  document.querySelectorAll('[data-new-conversation]').forEach(button => { button.onclick=()=>startConversation(false); });
   document.getElementById('mc-page').href=location.origin + '/guild-next/guild/build';
   document.getElementById('existing-rooms').href=location.origin + '/guild-next/guild/rooms';
+  // ── Private (#510), as the Guildhall's 🔒: the lock in ••• goes Private (a new private chat) or, in one, back on the record
+  // (a new chat); the chip above the box says so while the chat showing is private, with its own Exit. A conversation's flag
+  // never changes after creation, so nothing here switches the chat that is showing.
+  const lock = document.querySelector('[data-cos-private]'), privateChip = document.querySelector('[data-private-chip]');
+  const isPrivateNow = () => document.body.dataset.historyPrivate === 'true';
+  function paintPrivate() {
+    const on = isPrivateNow();
+    if (privateChip) privateChip.hidden = !on;
+    if (!lock) return;
+    lock.setAttribute('aria-pressed', String(on));
+    lock.setAttribute('aria-label', on ? 'Exit Private' : 'Go Private');
+    lock.title = on ? 'Exit Private: go back on the record (starts a new chat)' : 'Go Private: a new chat that CoS answers and keeps, but nothing from it goes to MC or to memory';
+    const words = lock.querySelector('.cos-lock-text'); if (words) words.textContent = on ? 'Exit Private' : 'Go Private';
+  }
+  if (lock) lock.addEventListener('click', () => startConversation(!isPrivateNow()));
+  const exitPrivate = document.querySelector('[data-private-exit]');
+  if (exitPrivate) exitPrivate.addEventListener('click', () => startConversation(false));
+  document.addEventListener('cos:conversation-selected', paintPrivate); paintPrivate();
   document.getElementById('both-open').onclick=async()=>{
     const frame=document.getElementById('mc-both'), button=document.getElementById('both-open'), open=frame.hidden;
     button.disabled=true;

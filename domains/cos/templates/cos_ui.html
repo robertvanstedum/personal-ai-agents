@@ -94,6 +94,8 @@
         <button id="history-earlier" type="button" hidden>Earlier messages</button>
         {# Messages sent while CoS works wait here, above the box, until they are sent in order (Robert, 11 Nov: as MC, shown like Claude's queued messages). #}
         <div id="cos-queue" class="cos-queue" aria-live="polite" hidden></div>
+        {# A state, not a setting, so it stays in view above the box, on a phone too (#510). #}
+        <p class="cos-private-chip" data-private-chip role="status" hidden title="Kept in your CoS history. Nothing from it goes to MC, to memory or to proactive notes. Voice and dictation are off."><span aria-hidden="true">🔒</span> Private · stays out of MC and memory <button type="button" class="cos-private-exit" data-private-exit title="Exit Private: go back on the record (starts a new chat)">Exit</button></p>
         <div id="attach-tray" aria-live="polite"></div>
         <div class="input-row">
           <input id="attach-input" type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json,.html,.htm,.png,.jpg,.jpeg,.gif,.webp">
@@ -107,6 +109,9 @@
               <span id="voice-provider" class="conv-menu-provider"></span>
               {# This chat's model (cos-route-picker.js): shown only where routes are on. #}
               <label id="cos-route-control" class="conv-menu-route" hidden><span>Model</span><select id="cos-route" aria-label="Model for this conversation"></select><small id="cos-route-note"></small></label>
+              {# Private (#510), as the Guildhall's 🔒. A conversation is private from its creation and stays so (the backend
+                 sets the flag once), so the lock starts a new private chat, and Exit Private starts a new chat on the record. #}
+              <button id="cos-private" class="cos-lock" type="button" data-cos-private aria-pressed="false" aria-label="Go Private" title="Go Private: a new chat that CoS answers and keeps, but nothing from it goes to MC or to memory"><span aria-hidden="true">🔒</span><span class="cos-lock-text">Go Private</span></button>
               <p class="conv-menu-note">Voice is AI-generated.</p>
             </div>
           </details>
@@ -832,13 +837,15 @@ function stopVoice(reason){
 function updateVoiceAvailability(){
   adoptDirect();
   const availability=conferVoiceAvailability({legacyReady,realtimeReady:Boolean(mode),mode});
-  if(window.cosVoiceSelecting || window.cosVoiceConversationAllowed===false){button.disabled=true;dictation.setAvailable(availability.dictationReady);return;}
-  if(direct){dictation.setAvailable(availability.dictationReady);direct.paint();return;}
-  if(window.cosVoiceConversationId && window.cosVoiceConversationId!=='owner'){button.disabled=true;status.textContent='Conversational voice is unavailable here right now.';dictation.setAvailable(availability.dictationReady);return;}
-  if(directRefusal){button.disabled=false;dictation.setAvailable(availability.dictationReady);provider.textContent='Voice unavailable · typing still works';return;}
+  // Dictation is off in a Private conversation, like voice (#510): nothing spoken goes to a voice provider there.
+  const dictationReady=availability.dictationReady&&document.body.dataset.historyPrivate!=='true';
+  if(window.cosVoiceSelecting || window.cosVoiceConversationAllowed===false){button.disabled=true;dictation.setAvailable(dictationReady);return;}
+  if(direct){dictation.setAvailable(dictationReady);direct.paint();return;}
+  if(window.cosVoiceConversationId && window.cosVoiceConversationId!=='owner'){button.disabled=true;status.textContent='Conversational voice is unavailable here right now.';dictation.setAvailable(dictationReady);return;}
+  if(directRefusal){button.disabled=false;dictation.setAvailable(dictationReady);provider.textContent='Voice unavailable · typing still works';return;}
   button.disabled=!availability.voiceReady||Boolean(stopping)||voiceRestartBlocked;
   if(mode)mode.disabled=active||Boolean(stopping)||voiceRestartBlocked;
-  dictation.setAvailable(availability.dictationReady);
+  dictation.setAvailable(dictationReady);
   provider.textContent=availability.voiceReady?'Voice with Chief of Staff':'Voice unavailable · typing still works';
 }
 updateVoiceAvailability();
