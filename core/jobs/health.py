@@ -17,6 +17,10 @@ Severity:
     fine          not due yet, a first run in progress
 
 Never any content: a report holds job ids, names from the registry, fixed codes and times only.
+
+Across hosts (FF-19 follow-up): every host's watchdog pushes its report to ``<dest>/health/<host>/health-<host>.json`` in
+the Vault bucket (``push``), and production pulls the other hosts' reports into MC's folder hourly (``pull``). Each report
+carries its own ``checked_at``, so a host that stops reporting reads "no new watchdog report, for N h", never silence.
 """
 from __future__ import annotations
 
@@ -33,12 +37,14 @@ RED_CODES = ("failed", "missed", "stuck", "never_ran", "no_success")
 WATCH_CODES = ("late", "warn", "skew", "report_stale", "report_missing", "report_unreadable")
 TAIL_BYTES = 4096
 TAIL_LINES = 5
-REPORT_STALE_S = 36 * 3600          # a host's watchdog report older than this is itself a problem
+REPORT_STALE_S = 3 * 3600           # a host's watchdog report older than this is itself a problem (hourly watchdogs)
+STALE_AFTER_S = {"mac": 36 * 3600}  # the Mac's watchdog runs daily at 09:00 Chicago, and only while the Mac is awake
+SILENT_ACTION_S = 72 * 3600         # no report for this long: needs action (a host or its watchdog is down)
 HOW = {"failed": "last run failed", "missed": "no completed run in time", "stuck": "stuck, still running",
        "never_ran": "never ran", "no_success": "no completed run on record", "late": "late",
        "warn": "last run finished with warnings", "skew": "status time is in the future (clock skew)",
        "not_due": "not due yet", "first_run": "first run in progress", "not_tracked": "not watched yet",
-       "report_stale": "watchdog report is stale", "report_missing": "no watchdog report",
+       "report_stale": "no new watchdog report", "report_missing": "no watchdog report has arrived",
        "report_unreadable": "watchdog report unreadable", "ok": "ok"}
 
 
@@ -131,6 +137,8 @@ def severity(item: dict) -> str:
     code = item.get("code")
     if code in RED_CODES or item.get("light") == "red":
         return NEEDS_ACTION
+    if code == "report_stale" and (item.get("off_for_s") or 0) > SILENT_ACTION_S:
+        return NEEDS_ACTION
     if code in WATCH_CODES or item.get("light") == "yellow":
         return WATCH
     return FINE
@@ -142,13 +150,11 @@ def off_for_s(item: dict, now: datetime) -> int | None:
 
 
 def duration(seconds: int | None) -> str:
-    """"2 days", "5 h", "40 min"; None -> "" (unknown)."""
+    """"2 days", "40 h", "40 min"; None -> "" (unknown). Hours up to two days, so a day and a half reads "36 h"."""
     if seconds is None:
         return ""
     if seconds >= 2 * 86400:
         return f"{seconds // 86400} days"
-    if seconds >= 86400:
-        return "1 day"
     if seconds >= 3600:
         return f"{seconds // 3600} h"
     return f"{max(1, seconds // 60)} min"
@@ -178,7 +184,7 @@ def daily_items(reports: dict, now: datetime, expected_hosts=()) -> list[dict]:
                         "light": "unknown", "code": "report_missing", "off_since": None})
             continue
         age = (now - status.parse_time(report["checked_at"])).total_seconds()
-        if age > REPORT_STALE_S:
+        if age > STALE_AFTER_S.get(host, REPORT_STALE_S):
             out.append({"id": f"watchdog-{host}", "name": f"Watchdog report from {host}", "host": host,
                         "light": "unknown", "code": "report_stale", "off_since": report["checked_at"]})
         for item in report["items"]:
@@ -186,9 +192,9 @@ def daily_items(reports: dict, now: datetime, expected_hosts=()) -> list[dict]:
                 continue
             out.append(dict(item))
     for item in out:
-        item["severity"] = severity(item)
         item["off_for_s"] = off_for_s(item, now)
         item["off_for"] = duration(item["off_for_s"])
+        item["severity"] = severity(item)
     out.sort(key=lambda i: (SEVERITY_ORDER[i["severity"]], -(i["off_for_s"] or 0), i["host"], i["id"]))
     return out
 
@@ -222,6 +228,70 @@ def words(items: list[dict], *, hosts=(), not_tracked: int = 0, limit: int = 12)
     return text
 
 
+def remote_key(host: str) -> str:
+    return f"health/{host}/{report_name(host)}"
+
+
+def _aws(run, args, timeout=60):
+    import subprocess
+    try:
+        return run(["aws", *args, "--only-show-errors"], capture_output=True, text=True, timeout=timeout).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def push(path, dest: str, host: str, *, run=None, dest_factory=None) -> str:
+    """``"ok"`` or ``"failed"``: this host's report to ``<dest>/health/<host>/``. On the Mac the pinned Vault principal
+    writes it (core.memory_backup.backup.Dest: identity proven first, SSE); on EC2 and Dev, the instance role through the
+    aws CLI. Never raises; nothing about the failure but the word."""
+    import subprocess
+    if not dest.startswith(("s3://", "file://")):
+        return "failed"
+    try:
+        if dest_factory is None:
+            try:
+                from core.memory_backup import backup as B                   # the Mac's runtime pin carries it
+                dest_factory = B.Dest
+            except ImportError:
+                dest_factory = None
+        if dest_factory is not None:
+            dest_factory(dest).put(Path(path), remote_key(host), replace=True)
+            return "ok"
+        if dest.startswith("file://"):
+            return "failed"
+        ok = _aws(run or subprocess.run, ["s3", "cp", str(path), f"{dest.rstrip('/')}/{remote_key(host)}", "--sse", "AES256"])
+        return "ok" if ok else "failed"
+    except Exception:                                   # noqa: BLE001
+        return "failed"
+
+
+def pull(dest: str, host: str, folder, now: datetime, *, run=None, fetch=None) -> str:
+    """Fetch ``host``'s report from ``<dest>/health/<host>/`` into ``folder``: ``"ok"``, ``"missing"`` (nothing there
+    yet, or not readable) or ``"invalid"`` (not a report of that host, or dated in the future). The previous copy stays
+    when a fetch fails, so its own ``checked_at`` shows how old it is."""
+    import json
+    import subprocess
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        local = Path(tmp) / report_name(host)
+        if fetch is not None:
+            got = fetch(remote_key(host), local)
+        else:
+            got = _aws(run or subprocess.run, ["s3", "cp", f"{dest.rstrip('/')}/{remote_key(host)}", str(local)])
+        if not got or not local.is_file():
+            return "missing"
+        doc = read_report(tmp, host)
+        if doc is None or status.parse_time(doc["checked_at"]) > now + _skew():
+            return "invalid"
+        publish(folder, report_name(host), doc)
+        return "ok"
+
+
+def _skew():
+    from datetime import timedelta
+    return timedelta(seconds=judge.SKEW_S)
+
+
 def publish(folder, name: str, obj: object) -> Path:
     """Write ``obj`` where another reader (the portal, as its own user) can read it: atomic, the file 0644, owned like
     the folder it lands in. Only reports go here: job ids, registry names, fixed codes and times, never content."""
@@ -229,7 +299,7 @@ def publish(folder, name: str, obj: object) -> Path:
     target = Path(folder)
     target.mkdir(mode=0o755, parents=True, exist_ok=True)
     tmp = target / f".{name}.tmp-{os.getpid()}"
-    tmp.write_text(json.dumps(obj, sort_keys=True, indent=1) + "\n", "utf-8")
+    tmp.write_text(json.dumps(obj, sort_keys=True, indent=1) + "\n", encoding="utf-8")
     os.chmod(tmp, 0o644)
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         st = target.stat()

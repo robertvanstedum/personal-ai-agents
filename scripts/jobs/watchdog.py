@@ -22,6 +22,9 @@ its last run failed, it has been ``running`` longer than ``stuck_after_s``, or i
   root and, when ``MINIMOI_JOBS_HEALTH_DIR`` is set, a copy there for MC (on EC2: inside the portal's mc-observations
   volume). A job whose status lives in another folder names its ``status_root``; the host maps it with
   ``MINIMOI_JOBS_ROOT_<TOKEN>`` (``mc-observations`` -> ``MINIMOI_JOBS_ROOT_MC_OBSERVATIONS``).
+* ``MINIMOI_JOBS_HEALTH_PUSH=<dest>`` (the Vault bucket, ``s3://minimoi-backups/vault``) also sends the report to
+  ``<dest>/health/<host>/`` so production MC sees this host (``core.jobs.health.push``). A failed push makes the run
+  ``warn`` (result ``health-push: failed``); the report itself is still written here.
 * ``MINIMOI_JOBS_ALERT=off`` judges and reports without sending anything: on EC2 and Dev the daily check
   (``scripts/jobs/daily_health.py``) is the one that sends, and only for ``needs action``.
 
@@ -124,22 +127,22 @@ def check(jobs_root, jobs, state: dict, sender, now, roots=None, alerts=True) ->
     return codes, delivered
 
 
-def write_health(reg, host, roots, now, jobs_root, health_dir, own_id, alerts=True) -> dict:
+def write_health(reg, host, roots, now, jobs_root, health_dir, own_id, alerts=True, push_dest=None) -> str | None:
     """``health-<host>.json`` in the jobs root (0600) and, for MC, in ``health_dir`` (0644). The watchdog judges itself
     nowhere else, so its own line is left out; the daily check sees a stale report instead."""
     name = health.report_name(host)
     previous = health.read_report(jobs_root, host)
     report = health.host_report(reg, host, roots, now, previous, exclude=(own_id,))
     report["alerts"] = "on" if alerts else "off"
-    status.write_json_atomic(jobs_root, name, report)
+    local = status.write_json_atomic(jobs_root, name, report)
     if health_dir:
         health.publish(health_dir, name, report)
-    return report
+    return health.push(local, push_dest, host) if push_dest else None
 
 
 def run(*, jobs_root, host="mac", registry_path=None, sender=alert.send,
         now: Callable[[], datetime] = lambda: datetime.now(timezone.utc), out=sys.stdout, err=sys.stderr,
-        roots=None, alerts=True, health_dir=None) -> int:
+        roots=None, alerts=True, health_dir=None, push_dest=None) -> int:
     started = now()
     own_id = watchdog_id(host)
     roots = roots or {"jobs": str(jobs_root)}
@@ -184,7 +187,11 @@ def run(*, jobs_root, host="mac", registry_path=None, sender=alert.send,
             results, ok = check(jobs_root, judged, state, sender, started, roots=roots, alerts=alerts)
             delivered = delivered and ok
             outcome = "ok" if delivered else "warn"
-            write_health(reg, host, roots, started, jobs_root, health_dir, own_id, alerts)
+            pushed = write_health(reg, host, roots, started, jobs_root, health_dir, own_id, alerts, push_dest)
+            if pushed is not None:
+                results["health-push"] = pushed
+                if pushed != "ok":
+                    outcome = "warn"
         if reg is not None:                     # a job removed from the registry has nothing left to track
             known = {j.id for j in reg.jobs} | {REGISTRY_KEY}
             for stale_id in [k for k in state if k not in known]:
@@ -198,10 +205,13 @@ def run(*, jobs_root, host="mac", registry_path=None, sender=alert.send,
         next_due = schedule.next_fire(own.schedule, finished)
     except Exception:                           # noqa: BLE001
         next_due = None
+    checked = len([k for k in results if k != "health-push"])
     if outcome == "ok":
-        summary = f"{len(results)} jobs checked"
+        summary = f"{checked} jobs checked"
+    elif outcome == "warn":
+        summary = f"{checked} jobs checked, " + ("alert not sent" if not delivered else "report not sent to production")
     else:
-        summary = f"{len(results)} jobs checked, alert not sent" if outcome == "warn" else "watchdog could not finish"
+        summary = "watchdog could not finish"
     code = 0 if outcome == "ok" else 1
     try:
         status.finish_run(jobs_root, own, running, state=outcome, now=finished,
@@ -219,7 +229,8 @@ def main() -> int:
     return run(jobs_root=root, host=os.environ.get("MINIMOI_JOBS_HOST") or "mac",
                registry_path=os.environ.get("MINIMOI_JOBS_REGISTRY") or None, roots=roots_from_env(root),
                alerts=(os.environ.get("MINIMOI_JOBS_ALERT") or "on") != "off",
-               health_dir=os.environ.get("MINIMOI_JOBS_HEALTH_DIR") or None)
+               health_dir=os.environ.get("MINIMOI_JOBS_HEALTH_DIR") or None,
+               push_dest=os.environ.get("MINIMOI_JOBS_HEALTH_PUSH") or None)
 
 
 if __name__ == "__main__":

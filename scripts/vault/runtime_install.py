@@ -136,6 +136,8 @@ def environment(pin, cfg):
             'MOI_SHELF_ROOT': cfg['shelf_root'], 'MOI_VAULT_BACKUP_DEST': cfg['backup_dest'],
             'VAULT_BACKUP_AGE_RECIPIENT': cfg['public_recipient'], 'MOI_AGE_BIN': cfg['age_bin'],
             'MOI_AGE_VERSION': cfg['age_version'], 'MOI_RESERVE_GIB': '5', 'MOI_VAULT_PUBLISH_DEST': cfg['backup_dest'],
+            # the watchdog's report also reaches production MC, via the Vault bucket's health/mac/ prefix (FF-19)
+            'MINIMOI_JOBS_HEALTH_PUSH': cfg['backup_dest'],
             'PATH': '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'}
 
 

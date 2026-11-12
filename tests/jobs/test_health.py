@@ -118,7 +118,7 @@ def test_severity_and_duration_words():
     assert health.severity({"code": "late", "light": "yellow"}) == health.WATCH
     assert health.severity({"code": "report_stale", "light": "unknown"}) == health.WATCH
     assert health.severity({"code": "not_due", "light": "unknown"}) == health.FINE
-    assert health.duration(2 * 86400 + 5) == "2 days" and health.duration(86400) == "1 day"
+    assert health.duration(2 * 86400 + 5) == "2 days" and health.duration(86400) == "24 h"
     assert health.duration(5 * 3600) == "5 h" and health.duration(30) == "1 min" and health.duration(None) == ""
 
 
@@ -354,3 +354,129 @@ def test_mc_block_never_fails_the_turn(tmp_path):
 def test_mc_turn_context_carries_the_block():
     src = (REPO / "minimoi_portal/guild_ui/api.py").read_text()
     assert "jobs_health.block(principal, environ=feature_environ())" in src
+
+
+# ---- across hosts: push, pull, silence (FF-19 follow-up) -----------------------------------------------------------
+
+pull_mod = load("pull_health_h", "scripts/jobs/pull_health.py")
+
+
+class FakeDest:
+    puts = []
+
+    def __init__(self, url):
+        self.url = url
+
+    def put(self, local, key, replace=False):
+        FakeDest.puts.append((self.url, key, replace, json.loads(Path(local).read_text())["host"]))
+
+
+def test_push_uses_the_pinned_vault_principal_when_present(tmp_path):
+    FakeDest.puts = []
+    report = tmp_path / "health-mac.json"
+    report.write_text(json.dumps({"host": "mac"}))
+    assert health.push(report, "s3://minimoi-backups/vault", "mac", dest_factory=FakeDest) == "ok"
+    assert FakeDest.puts == [("s3://minimoi-backups/vault", "health/mac/health-mac.json", True, "mac")]
+
+    class Broken(FakeDest):
+        def put(self, *a, **k):
+            raise RuntimeError("denied")
+    assert health.push(report, "s3://b/v", "mac", dest_factory=Broken) == "failed"
+    assert health.push(report, "http://elsewhere", "mac", dest_factory=FakeDest) == "failed"
+
+
+def test_push_on_a_linux_host_uses_the_cli_with_sse(tmp_path):
+    calls = []
+
+    def run(cmd, **kw):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0)
+    report = tmp_path / "health-dev.json"
+    report.write_text("{}")
+    # core.memory_backup is importable in this checkout, so hide it to take the Linux hosts' CLI path:
+    import builtins
+    real = builtins.__import__
+
+    def no_backup(name, *a, **k):
+        if name == "core.memory_backup":
+            raise ImportError(name)
+        return real(name, *a, **k)
+    builtins.__import__ = no_backup
+    try:
+        calls.clear()
+        assert health.push(report, "s3://minimoi-backups/vault", "dev", run=run) == "ok"
+    finally:
+        builtins.__import__ = real
+    assert calls[0][:3] == ["aws", "s3", "cp"] and "s3://minimoi-backups/vault/health/dev/health-dev.json" in calls[0]
+    assert "--sse" in calls[0] and "AES256" in calls[0]
+
+
+def test_watchdog_push_failure_warns_but_still_reports(tmp_path):
+    jobs = tmp_path / "jobs"
+    path = registry_file(tmp_path, job(id="a", host="dev", status_file="a.json"))
+    put(jobs, registry.load(path).get("a"))
+    original = health.push
+    health.push = lambda *a, **k: "failed"
+    try:
+        code = wd.run(jobs_root=jobs, host="dev", registry_path=path, sender=lambda t: "sent", now=lambda: NOW,
+                      out=io.StringIO(), err=io.StringIO(), alerts=False, push_dest="s3://b/v")
+    finally:
+        health.push = original
+    own = status.read_status(jobs, "jobs-watchdog-dev.json", "jobs-watchdog-dev")
+    assert code == 1 and own["state"] == "warn" and own["results"]["health-push"] == "failed"
+    assert own["summary"] == "1 jobs checked, report not sent to production"
+    assert (jobs / "health-dev.json").is_file()
+
+
+def report_for(host, checked):
+    return {"schema_version": 1, "host": host, "checked_at": status.iso(checked), "worst": "green",
+            "counts": {}, "items": []}
+
+
+def test_pull_places_valid_reports_and_refuses_the_rest(tmp_path):
+    folder = tmp_path / "health"
+    remote = {"health/mac/health-mac.json": report_for("mac", NOW - H),
+              "health/dev/health-dev.json": report_for("ec2", NOW)}           # claims another host: refused
+
+    def fetch(key, local):
+        if key not in remote:
+            return False
+        Path(local).write_text(json.dumps(remote[key]))
+        return True
+    path = registry_file(tmp_path, job(id="m", host="mac", status_file="m.json"), job(id="d", host="dev", status_file="d.json"),
+                         job(id="e", status_file="e.json"), job(id="g", host="github", status_file=None,
+                                                                evidence={"kind": "none", "why": "w"}))
+    out = pull_mod.run(dest="s3://b/v", health_dir=folder, this_host="ec2", registry_path=path, now=NOW, fetch=fetch)
+    assert out == {"mac": "ok", "dev": "invalid"}
+    assert health.read_report(folder, "mac")["checked_at"] == status.iso(NOW - H)
+    remote["health/mac/health-mac.json"] = report_for("mac", NOW + D)                                  # from the future
+    assert health.pull("s3://b/v", "mac", folder, NOW, fetch=fetch) == "invalid"
+    assert health.pull("s3://b/v", "nope", folder, NOW, fetch=fetch) == "missing"
+    assert health.read_report(folder, "mac")["checked_at"] == status.iso(NOW - H)                      # the old copy stays
+
+
+def test_a_silent_host_reads_no_report_for_n_hours_and_turns_needs_action_after_three_days():
+    mac = report_for("mac", NOW - 40 * H)
+    dev = report_for("dev", NOW - 5 * H)
+    items = {i["host"]: i for i in health.daily_items({"mac": mac, "dev": dev, "ec2": report_for("ec2", NOW)}, NOW)}
+    assert items["mac"]["code"] == "report_stale" and items["mac"]["severity"] == "watch"
+    assert health.line(items["mac"]) == "[watch] Watchdog report from mac (mac): no new watchdog report, for 40 h"
+    assert items["dev"]["severity"] == "watch" and "ec2" not in items          # hourly hosts: stale after 3 h
+    gone = health.daily_items({"mac": report_for("mac", NOW - 4 * D)}, NOW)[0]
+    assert gone["severity"] == "needs action" and gone["off_for"] == "4 days"
+    assert health.daily_items({"mac": report_for("mac", NOW - 20 * H)}, NOW) == []                     # daily Mac: fine
+
+
+def test_mc_sees_the_macs_pulled_report(tmp_path):
+    folder = tmp_path / "health"
+    health.publish(folder, "health-mac.json", {**report_for("mac", NOW - 2 * H), "items": [
+        {"id": "private-repo-sync", "name": "Private repo sync", "host": "mac", "light": "red", "code": "failed",
+         "off_since": status.iso(NOW - 3 * D)}]})
+    registry_file(tmp_path, job(id="m", host="mac", status_file="m.json"))
+    text = mc_block(tmp_path, {"MINIMOI_SUPERVISION_OWNER": "robert"})
+    assert "[needs action] Private repo sync (mac): last run failed, not working for 3 days" in text
+
+
+def test_the_mac_runtime_pushes_its_report():
+    src = (REPO / "scripts/vault/runtime_install.py").read_text()
+    assert "'MINIMOI_JOBS_HEALTH_PUSH': cfg['backup_dest']" in src

@@ -17,7 +17,7 @@ host="${1:-}"; shift || true
 etc="${MINIMOI_ETC:-/etc}"
 systemctl_bin="${SYSTEMCTL:-systemctl}"
 FILES="core/__init__.py core/jobs/__init__.py core/jobs/alert.py core/jobs/health.py core/jobs/judge.py
-core/jobs/registry.py core/jobs/schedule.py core/jobs/status.py scripts/jobs/watchdog.py scripts/jobs/daily_health.py
+core/jobs/registry.py core/jobs/schedule.py core/jobs/status.py scripts/jobs/watchdog.py scripts/jobs/daily_health.py scripts/jobs/pull_health.py
 scripts/jobs/host_watchdog.sh config/scheduled_jobs.json"
 
 case "$host" in
