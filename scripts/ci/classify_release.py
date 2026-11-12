@@ -474,9 +474,10 @@ def classify(paths: list[str],
             services.add("portal")                                   # vault-ask shares the portal image
         elif path.startswith(WORKSHOP_BACKEND_PREFIXES) or path == "config/scheduled_jobs.json":
             services.add("portal")
-            if path.startswith("core/workshop_journal/"):
-                # The partnership task service and helper return use the journal's artifacts; in production the task
-                # service runs the cos-scheduler image (docker-compose.minimoi-1-2-production.yml), so it rebuilds too.
+            if path.startswith(("core/workshop_journal/", "core/jobs/")):
+                # The partnership task service and helper return use the journal's artifacts, and the Apprentice's
+                # scheduled health check reads core.jobs.health (FF-19, #537); in production the task service and the
+                # helpers run the cos-scheduler image (docker-compose.minimoi-1-2-production.yml), so it rebuilds too.
                 services.add("cos-scheduler")
         elif path == "core/limits.py":
             services.update(("portal", "cos-bot", "cos-scheduler"))
