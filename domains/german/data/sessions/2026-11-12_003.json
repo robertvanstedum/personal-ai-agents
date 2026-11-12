@@ -1,0 +1,36 @@
+{
+  "session_id": "session_2026-11-12_003",
+  "user_id": 7,
+  "date": "2026-11-12",
+  "created_at": "2026-11-12T11:12:42-06:00",
+  "persona": "",
+  "scenario": "",
+  "duration_estimate_min": 1,
+  "source": "html",
+  "raw_transcript": [
+    {
+      "speaker": "Tutor",
+      "text": "Hallo"
+    },
+    {
+      "speaker": "Ich",
+      "text": "Hallo"
+    }
+  ],
+  "reviewer_output": {
+    "overall_summary": "The session was extremely brief, consisting only of a single greeting exchange. No meaningful language practice or errors could be assessed from this transcript.",
+    "errors": [],
+    "strengths": [
+      "Learner responded appropriately with a standard German greeting 'Hallo'."
+    ],
+    "next_focus": "Practice basic introductions and small talk phrases such as 'Wie heißt du?', 'Woher kommst du?', and 'Wie geht es dir?' to build a foundation for conversation.",
+    "topics": [
+      "greetings"
+    ],
+    "vocabulary": [
+      "Hallo"
+    ]
+  },
+  "anki_generated": false,
+  "next_lesson_generated": false
+}

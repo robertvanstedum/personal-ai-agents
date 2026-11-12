@@ -217,5 +217,57 @@
       "rapport_level": "neutral"
     },
     "archived_rounds": []
+  },
+  "7_": {
+    "user": "7",
+    "persona": "",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 2,
+      "last_seen": "2026-11-12",
+      "topics_discussed": [
+        "greetings"
+      ],
+      "errors_noted": [],
+      "strengths": [
+        "Learner correctly used 'Hallo' as a greeting response.",
+        "Learner responded appropriately with a standard German greeting 'Hallo'."
+      ],
+      "vocabulary_introduced": [
+        "Hallo"
+      ],
+      "notes": "The session was extremely brief, consisting only of a single greeting exchange. No meaningful language practice or errors could be assessed from this transcript.",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "7_tutor": {
+    "user": "7",
+    "persona": "tutor",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 2,
+      "last_seen": "2026-11-12",
+      "topics_discussed": [],
+      "errors_noted": [
+        "Artikel: der/die",
+        "Verbstellung"
+      ],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "Gut",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
   }
 }
