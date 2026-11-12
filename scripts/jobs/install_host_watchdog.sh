@@ -10,7 +10,8 @@
 #   install_host_watchdog.sh ec2|dev --remove    removes the schedule; status files, reports and tools stay.
 #
 # Schedules: watch hourly (judging is cheap and MC's answer stays fresh); daily at 09:10 Chicago (the report for MC and,
-# on production only, Telegram for "needs action"). Test hooks: MINIMOI_ETC (default /etc), SYSTEMCTL.
+# on production only, Telegram for "needs action"); production at 09:15 Chicago, MC's Apprentice writes the daily note
+# (scripts/jobs/helper_check.py, inside the portal, which holds the task-service tokens). Test hooks: MINIMOI_ETC (default /etc), SYSTEMCTL.
 set -eu
 
 host="${1:-}"; shift || true
@@ -31,7 +32,8 @@ case "$host" in
       printf '%s\n' "# minimoi-jobs-health (FF-19 #537): installed by scripts/jobs/install_host_watchdog.sh; edit the repo, not this file" \
         "7 * * * * root $w ec2 watch >> /opt/minimoi/logs/jobs-watchdog.log 2>&1" \
         "CRON_TZ=America/Chicago" \
-        "10 9 * * * root $w ec2 daily >> /opt/minimoi/logs/jobs-daily-health.log 2>&1" > "$tmp" )
+        "10 9 * * * root $w ec2 daily >> /opt/minimoi/logs/jobs-daily-health.log 2>&1" \
+        "15 9 * * * root /usr/bin/docker exec minimoi-portal python /app/scripts/jobs/helper_check.py >> /opt/minimoi/logs/jobs-helper-check.log 2>&1" > "$tmp" )
     mv "$tmp" "$cron"
     echo "installed $cron"
     ;;
