@@ -228,13 +228,22 @@ const SESSION_AGENT = /^agent:([a-z][a-z0-9-]{0,63}):/;
  *  forget, it changes nothing about the turn. This hook carries no conversation text and needs no conversation access,
  *  unlike llm_output, which the runtime withholds from a plugin without that grant. Its context names no agent, so the
  *  host's session key does. An unknown value is left out rather than guessed. */
+/** The W3C trace id of the runtime's diagnostic trace for this call (#507). The runtime sends the same trace as the
+ *  traceparent header on the provider request, so the gateway's usage record and this run join exactly. */
+export function traceIdOf(trace) {
+  const raw = typeof trace === 'string' ? trace : (trace && typeof trace === 'object' ? (trace.traceId ?? trace.trace_id) : undefined);
+  if (typeof raw !== 'string') return undefined;
+  const m = raw.trim().toLowerCase().match(/^(?:00-)?([0-9a-f]{32})(?:-[0-9a-f]{16}-[0-9a-f]{2})?$/);
+  return m && m[1] !== '0'.repeat(32) ? m[1] : undefined;
+}
+
 export function servedHook({agents, url, token, instance = INSTANCE, fetchImpl = fetch}) {
   const allowed = new Set(agents);
   return (event, ctx) => {
     const sessionKey = ctx?.sessionKey ?? event?.sessionKey, runId = ctx?.runId ?? event?.runId;
     const agentId = ctx?.agentId ?? (typeof sessionKey === 'string' ? sessionKey.match(SESSION_AGENT)?.[1] : undefined);
     if (event?.outcome !== 'completed' || !allowed.has(agentId) || !url || typeof runId !== 'string' || !RUN_ID.test(runId)) return;
-    const fields = {provider: event.provider, model: event.model, api: event.api};
+    const fields = {provider: event.provider, model: event.model, api: event.api, trace: traceIdOf(ctx?.trace ?? event?.trace)};
     const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => typeof v === 'string' && SERVED_FIELD.test(v)));
     if (!body.provider || !body.model) return;
     fetchImpl(`${url.href}/served`, {method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000),

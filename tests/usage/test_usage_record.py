@@ -371,3 +371,15 @@ def test_finite_measurements_keep_zero_null_and_rounding():
     rec = ur.validate(_rec(cost_usd=0, latency_ms=None, units={'seconds': 0, 'calls': 2}))
     assert rec['cost_usd'] == 0 and rec['latency_ms'] is None and rec['units'] == {'seconds': 0, 'calls': 2}
     assert ur.validate(_rec(cost_usd=0.123456789123))['cost_usd'] == 0.123456789
+
+
+def test_the_callers_traceparent_becomes_the_correlation_id(store):
+    """#507: OpenClaw sends a W3C traceparent on every provider call and CoS records the same trace id for the turn."""
+    kw = _kwargs("minimoi-cos-agent")
+    kw["litellm_params"]["metadata"] = {"headers": {"Traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"}}
+    rec = recorder_mod.from_logging_event(kw, datetime.now(timezone.utc), datetime.now(timezone.utc), ok=True)
+    assert rec["correlation_id"] == "4bf92f3577b34da6a3ce929d0e0e4736"
+    kw["litellm_params"]["metadata"] = {"headers": {"traceparent": "garbage"}}
+    assert recorder_mod.from_logging_event(kw, datetime.now(timezone.utc), datetime.now(timezone.utc), ok=True)["correlation_id"] is None
+    plain = _kwargs("minimoi-cos-agent")
+    assert recorder_mod.from_logging_event(plain, datetime.now(timezone.utc), datetime.now(timezone.utc), ok=True)["correlation_id"] is None

@@ -22,6 +22,7 @@ import asyncio
 import collections
 import logging
 import os
+import re
 import sys
 import uuid
 
@@ -69,6 +70,25 @@ def _alias_from(slp_meta: dict, kwargs: dict) -> str | None:
         meta = ((kwargs.get("litellm_params") or {}).get("metadata") or {})
         alias = meta.get("user_api_key_alias")
     return alias if isinstance(alias, str) and alias else None
+
+
+_TRACEPARENT = re.compile(r"00-([0-9a-f]{32})-[0-9a-f]{16}-[0-9a-f]{2}")
+
+
+def _trace_id(kwargs: dict) -> str | None:
+    """The W3C trace id of the caller's ``traceparent`` header (#507). OpenClaw sends one on every provider request, and
+    CoS records the same id against the run and turn, so a usage record joins its chat turn exactly. None when absent."""
+    params = kwargs.get("litellm_params") or {}
+    places = (((params.get("metadata") or {}).get("headers")), ((params.get("proxy_server_request") or {}).get("headers")),
+              ((kwargs.get("proxy_server_request") or {}).get("headers")))
+    for headers in places:
+        if isinstance(headers, dict):
+            for key, value in headers.items():
+                if isinstance(key, str) and key.lower() == "traceparent" and isinstance(value, str):
+                    m = _TRACEPARENT.fullmatch(value.strip().lower())
+                    if m and m.group(1) != "0" * 32:
+                        return m.group(1)
+    return None
 
 
 def from_logging_event(kwargs: dict, start_time, end_time, *, ok: bool) -> dict:
@@ -121,7 +141,7 @@ def from_logging_event(kwargs: dict, start_time, end_time, *, ok: bool) -> dict:
         "cost_usd": cost,
         "cost_source": "price_table" if cost is not None else "none",
         "key_ref": alias,
-        "correlation_id": None,
+        "correlation_id": _trace_id(kwargs),
     }
 
 

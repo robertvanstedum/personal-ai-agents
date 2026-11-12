@@ -235,6 +235,18 @@ def test_strange_evidence_is_refused(rig, body):
     assert _served(client, body).status_code == 400 and bindings.served_for_turn("t1") is None
 
 
+def test_the_runs_trace_id_is_kept_so_usage_records_join_the_turn(rig):
+    """#507: the gateway's usage record carries the runtime trace id as correlation_id; the turn finds it here."""
+    client, bindings, _ = rig
+    live(bindings, turn="t1", run=1)
+    trace = "4bf92f3577b34da6a3ce929d0e0e4736"
+    assert _served(client, {"provider": "minimoi-gateway", "model": "minimoi-cos-agent", "trace": trace}).json["status"] == "kept"
+    assert bindings.trace_for_turn("t1") == trace
+    assert "trace" not in bindings.served_for_turn("t1")                     # the route evidence shown to the owner is unchanged
+    assert bindings.trace_for_turn("missing") is None
+    assert _served(client, {"provider": "a", "model": "b", "trace": "NOT-A-TRACE"}).status_code == 400
+
+
 def test_evidence_needs_the_listener_credential(rig):
     client, bindings, _ = rig
     live(bindings, turn="t1", run=1)
