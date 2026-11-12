@@ -22,7 +22,7 @@ START = REPO / "docker/mc-agent-container/start.sh"
 LOADER = REPO / "docker/mc-agent-container/handbook.mjs"
 MODEL_ACCESS = REPO / "docker/mc-agent-container/model-access.cjs"
 WORKFLOW = REPO / ".github/workflows/deploy-mc-agent.yml"
-HANDBOOK_REF = HANDBOOK / "v0.1.2/skills/minimoi-engineering/references/build-and-deploy.md"
+HANDBOOK_REF = HANDBOOK / "v0.1.3/skills/minimoi-engineering/references/build-and-deploy.md"
 PROVIDER_KEYS = {"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY", "MC_ANTHROPIC_API_KEY", "MC_MODEL_GATEWAY_KEY"}
 HEADING = "## Outside reports and GitHub issues\n"
 # Where the image's state lives (start.sh's default OPENCLAW_STATE_DIR): the block names paths under it.
@@ -86,6 +86,16 @@ def lay_out(tmp_path: Path, release: str | None = None):
     return run_steps(tmp_path, image_copy(tmp_path, release))
 
 
+def pinned_text(release: str) -> str:
+    """What a release's projection carries, without start.sh: AGENTS, the runtime binding and the engineering SKILL.md of
+    the handbook it pins. A release that pins an earlier handbook can't be laid out once the one handbook manifest moves
+    on (handbook 0.1.3, persona 0.1.32), so its lines are checked here; the pinned release is laid out for real below."""
+    d = RELEASES / release
+    version = json.loads((d / "manifest.json").read_text())["handbook"]["version"]
+    return "\n".join([(d / "AGENTS.md").read_text(), (d / "RUNTIME.openclaw.md").read_text(),
+                      (HANDBOOK / f"v{version}/skills/minimoi-engineering/SKILL.md").read_text()])
+
+
 def container_chars(loaded: str, ws: Path) -> int:
     """The projection's size in the image, where the block names /home/node/.openclaw/workspace-mc, not tmp_path."""
     return len(loaded.replace(str(ws), CONTAINER_WORKSPACE))
@@ -143,10 +153,8 @@ def test_the_merged_persona_carries_both_lines(tmp_path):
         assert (merged / f).read_bytes() == (outside / f).read_bytes() == (voice / f).read_bytes()
     assert (merged / "voice.json").read_bytes() == (voice / "voice.json").read_bytes()
     assert m["files"]["voice.json"] == json.loads((voice / "manifest.json").read_text())["files"]["voice.json"]
-    # Every line of 0.1.17's contract is in what the container loads (its outside-reports section via the handbook).
-    r, ws = lay_out(tmp_path, "0.1.28")
-    assert r.returncode == 0, r.stderr
-    loaded = (ws / "AGENTS.md").read_text()
+    # Every line of 0.1.17's contract is in what 0.1.28 loads (its outside-reports section via the handbook).
+    loaded = pinned_text("0.1.28")
     contract = (outside / "AGENTS.md").read_text().split("\n")[1:]
     assert [line for line in contract if line not in loaded.split("\n")] == []
     # The voice line came in byte for byte: each release verifies against its own manifest.
@@ -347,10 +355,8 @@ def test_0_1_28_adds_only_the_answer_now_section():
     assert json.loads((new / "manifest.json").read_text())["version"] == "0.1.28"
 
 
-def test_0_1_29_is_within_12000_with_the_handbook_and_keeps_the_rules(tmp_path):
-    r, ws = lay_out(tmp_path, "0.1.29")
-    assert r.returncode == 0, r.stderr
-    assert container_chars((ws / "AGENTS.md").read_text(), ws) <= 12000
+def test_0_1_29_keeps_the_rules():
+    # Its 12,000-character layout was checked while handbook 0.1.2 was pinned (git history); see pinned_text.
     new, old = RELEASES / "0.1.29", RELEASES / "0.1.28"
     for name in ("SOUL.md", "voice.json"):
         assert (new / name).read_bytes() == (old / name).read_bytes(), name
@@ -361,14 +367,56 @@ def test_0_1_29_is_within_12000_with_the_handbook_and_keeps_the_rules(tmp_path):
         assert kept in agents, kept
 
 
-def test_persona_0131_lays_out_within_budget_and_offers_an_agent_for_mac_checks(tmp_path):
+def test_persona_0131_offers_an_agent_for_mac_checks():
     """0.1.31 is 0.1.30 plus one line: checks on Robert's Mac go to Claude Code, Codex or Grok, sent only once he names one."""
-    r, ws = lay_out(tmp_path, "0.1.31")
-    assert r.returncode == 0, r.stderr
-    loaded = (ws / "AGENTS.md").read_text()
-    assert "persona 0.1.31 laid out" in r.stderr
+    # Laid out within budget while handbook 0.1.2 was pinned (git history); see pinned_text.
+    loaded = pinned_text("0.1.31")
     assert "Claude Code, Codex and Grok run on Robert's Mac" in loaded and "only after he names one" in loaded
-    assert container_chars(loaded, ws) <= 16000
     new, old = RELEASES / "0.1.31", RELEASES / "0.1.30"
     for name in ("SOUL.md", "RUNTIME.openclaw.md", "voice.json"):
         assert (new / name).read_bytes() == (old / name).read_bytes(), name
+
+
+def test_persona_0132_says_how_guildhall_works_and_what_a_harness_defect_is(tmp_path):
+    """0.1.32 is 0.1.31 plus a Guildhall section and a definition of the harness (FF-10, FF-08); it pins handbook 0.1.3."""
+    assert pinned_release() == "0.1.32" and pinned_handbook() == "0.1.3"
+    r, ws = lay_out(tmp_path, "0.1.32")
+    assert r.returncode == 0, r.stderr
+    loaded = (ws / "AGENTS.md").read_text()
+    assert "persona 0.1.32 laid out" in r.stderr and "handbook 0.1.3 loaded" in r.stderr
+    assert container_chars(loaded, ws) <= 16000
+    new, old = RELEASES / "0.1.32", RELEASES / "0.1.31"
+    for name in ("SOUL.md", "RUNTIME.openclaw.md", "voice.json"):
+        assert (new / name).read_bytes() == (old / name).read_bytes(), name
+    agents = (new / "AGENTS.md").read_text()
+    assert agents.startswith("# MC conversation contract — persona 0.1.32\n")
+    assert agents.count("\n## Guildhall (Robert, 12 Nov)\n") == 1
+    for fact in ("Every meeting is kept", "deletes nothing", "Continue the conversation", "(continued)",
+                 "Download transcript", "notes can be added after closing", "30 days", "Restore", "Prove turn"):
+        assert fact in agents, fact
+    for said in ("permission loops, missing tools or capabilities, integration failures", "(example:",
+                 "A product bug or a model mistake", "don't count it"):
+        assert said in agents, said
+    # Only those two changes: every other line of 0.1.31 is kept, and the collector's phrase is unchanged.
+    before = (old / "AGENTS.md").read_text().split("\n")[1:]
+    assert [line for line in before if line not in agents.split("\n") and "+1 defect noted" not in line] == []
+    assert 'write "+1 defect noted" instead.' in agents
+    manifest = json.loads((new / "manifest.json").read_text())
+    assert manifest["version"] == "0.1.32" and manifest["base"] == "0.1.31"
+    for f, want in manifest["files"].items():
+        assert sha((new / f).read_bytes()) == want, f
+
+
+def test_handbook_0_1_3_adds_only_the_guildhall_row():
+    old, new = HANDBOOK / "v0.1.2", HANDBOOK / "v0.1.3"
+    hm = json.loads((HANDBOOK / "manifest.json").read_text())
+    assert hm["candidate_version"] == "0.1.3" and hm["release_path"] == "v0.1.3" and hm["predecessor"] == "0.1.2"
+    for name in hm["files"]:
+        rel = name.removeprefix("v0.1.3/")
+        a, b = (old / rel).read_text().splitlines(), (new / rel).read_text().splitlines()
+        changed = [line for line in b if line not in a]
+        if rel == "PROJECT.md":
+            assert len(changed) == 2 and changed[0].startswith("Version: 0.1.3 · 12 November 2026")
+            assert changed[1].startswith("| Guildhall | ") and "Every meeting is kept" in changed[1]
+        else:
+            assert len(changed) == 1 and changed[0].startswith("Version: 0.1.3"), rel
