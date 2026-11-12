@@ -302,3 +302,21 @@
   (async()=>{try{const d=await api('history/selection?device='+encodeURIComponent(device)); voiceConversation=d.voice_conversation_id; await select(d.conversation_id,d.conversation,true);window.cosHistory.ready=true;document.dispatchEvent(new CustomEvent('cos:history-ready'));}catch(_){state.textContent='History is unavailable. Nothing will be sent until it returns.';}})();
   setInterval(()=>{if(!document.hidden)reload().catch(()=>{state.textContent='History could not be refreshed.';});},5000);
 })();
+// ── One voice at a time beside MC (FF-04, #526). With MC open in #mc-both both pages have a microphone. MC's pane posts a
+// claim when its Voice or Dictate starts: CoS's voice and dictation end here (cos:companion-mic-claim, handled by the
+// Confer script). CoS's voice or dictation starting calls window.cosClaimMic, which posts a claim into the pane: MC's
+// Voice and Dictate end there. Only the pane's own window at this page's origin is heard, a claim goes only to this
+// origin, and it carries nothing but its type. A pane never loaded is not told (it has no microphone open).
+(() => {
+  const CLAIM = 'minimoi:mic-claim', origin = location.origin, frame = document.getElementById('mc-both');
+  if (!frame || !origin || origin === 'null') return;
+  window.addEventListener('message', (e) => {
+    if (e.origin !== origin || !e.source || e.source !== frame.contentWindow) return;
+    if (!e.data || typeof e.data !== 'object' || e.data.type !== CLAIM) return;
+    document.dispatchEvent(new CustomEvent('cos:companion-mic-claim'));
+  });
+  window.cosClaimMic = () => {
+    if (!frame.getAttribute('src')) return;
+    try { frame.contentWindow?.postMessage({ type: CLAIM }, origin); } catch (_) { /* the pane is going away: nothing to stop */ }
+  };
+})();
