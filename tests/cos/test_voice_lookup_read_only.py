@@ -65,4 +65,6 @@ def test_an_older_bindings_file_gains_the_column(tmp_path):
 
 
 def test_only_reading_operations_pass_on_a_lookup():
-    assert tool_listener.READ_OPERATIONS == {"cos_actions": {"list", "get"}, "cos_board": {"read", "list", "result"}}
+    # cos_tasks reads joined on 10 Nov (0690fcf3, work modes): status, helper results and work lookups change nothing.
+    assert tool_listener.READ_OPERATIONS == {"cos_tasks": {"status", "helper_result", "work_find", "work_read"},
+                                             "cos_actions": {"list", "get"}, "cos_board": {"read", "list", "result"}}
