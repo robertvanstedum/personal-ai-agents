@@ -37,6 +37,8 @@ body.gu.mm-chat[data-page=rooms] .rm-main::before{display:none}
 body.mm-chat [hidden]{display:none!important}
 @media(min-width:1200px){body.gu.mm-chat[data-page=rooms] .rm[data-panel=open]{grid-template-columns:var(--chat-column) minmax(0,1fr) 300px}body.gu.mm-chat[data-page=rooms] .rm-participants{grid-column:3;grid-row:1}}
 @media(max-width:899px){body.gu.mm-chat[data-page=floor] [data-history-toggle],body.gu.mm-chat[data-page=rooms] .rm .rm-list-open{display:inline-flex}}
+/* FF-01: the rail's ☰ opens the list wherever the rail shows (640 px and up); the MC header's ☰ is a phone's only way in. */
+@media(min-width:640px){body.gu.mm-chat[data-page=floor] .mc-floorbar [data-history-toggle]{display:none}}
 @media(max-width:639px){
  body.mm-chat{--chat-column:0px!important}
  body.mm-chat .mm-chat-rail{display:none!important}

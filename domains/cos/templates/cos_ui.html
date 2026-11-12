@@ -38,11 +38,10 @@
   <dialog id="files-sheet"><header><h2>Files</h2><button type="button" data-close-sheet>Close</button></header><div id="files-sheet-content"></div></dialog>
   <div class="cos-body">
   {# The conversation list (the canonical history). ‹ folds it to the rail; below 900 px the rail stays and ☰ opens the list
-     over the chat. #}
+     over the chat; search is the filter box inside the list (FF-01). #}
   <nav class="cos-rail" aria-label="Conversations">
     <button class="cos-rail-btn" type="button" data-list-open aria-label="Open the conversation list" title="Conversations">☰</button>
     <button class="cos-rail-btn cos-rail-new" type="button" data-new-conversation aria-label="New chat" title="New chat">＋</button>
-    <button class="cos-rail-btn" type="button" data-list-search aria-label="Search conversations" title="Search">⌕</button>
   </nav>
   <div class="cos-scrim" data-list-close hidden></div>
   <aside class="cos-list" aria-label="Conversations">

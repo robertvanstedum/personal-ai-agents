@@ -91,3 +91,10 @@ def test_a_new_chat_beside_cos_opens_on_the_workshop_greeting_like_the_full_page
     normal, embedded = client.get('/guild-next/guild/build'), client.get('/guild-next/guild/companion/cos')
     for page in (normal, embedded):
         assert 'data-craft-hero' in page.text and 'Ask, plan or build with the' in page.text
+
+
+def test_the_side_pane_stylesheet_is_addressed_by_this_deploys_fingerprint(host):
+    """FF-13: the companion look cannot come from an old cache; its address changes with every deploy, like the scripts'."""
+    from minimoi_portal.guild_ui import asset_version
+    embedded = host.owner().get('/guild-next/guild/companion/cos').text
+    assert re.search(rf'href="[^"]*/ui-assets/_v/{asset_version()}/companion_embed\.css"', embedded)
