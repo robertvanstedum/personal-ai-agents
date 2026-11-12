@@ -38,6 +38,19 @@ vm.runInContext(String.raw`
   const participant={id:'mc',label:'Master Craftsman',rsvp:'accepted',reach:{state:'reachable'}};
   assert.equal(participantState(participant),'Available');
   assert.equal(participantState({...participant,waiting:true}),'Waiting');
+  // FF-05: a teammate no connector reaches on this host reads "Not available here" and is not offered an invite.
+  assert.equal(participantState({id:'claude-code',label:'Claude Code',rsvp:'no_response',available_here:false}),'Not available here');
+  assert.equal(participantState({id:'claude-code',label:'Claude Code',rsvp:'no_response',available_here:true}),'Invite timed out: no answer, it may not be connected here');
+  assert.equal(participantState({...participant,available_here:false}),'Available');   // already in the meeting: unchanged
+  room={state:'open'};
+  cards=[{principal:'claude-code',label:'Claude Code',connected:true,proven_at:null,available_here:false},
+         {principal:'mc',label:'Master Craftsman',connected:true,proven_at:null,reachable:true,available_here:true}];
+  renderCards();
+  const cardRows=$('[data-rm-cards]').children;
+  assert.equal(cardRows[0].find('[data-rm-invite-card]').length,0);
+  assert.equal(cardRows[0].find('[data-rm-prove]').length,0);
+  assert.ok(cardRows[0].find('[data-rm-card-state]')[0].textContent.startsWith('Not available here'));
+  assert.equal(cardRows[1].find('[data-rm-invite-card]').length,1);
   meeting.turns=[{id:'working',addressee:'mc',state:'running'}];
   assert.equal(participantState({...participant,waiting:true}),'Working');
   assert.deepEqual([...turnLine(meeting.turns[0]).actions],['stop']);

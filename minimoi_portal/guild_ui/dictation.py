@@ -21,7 +21,11 @@ ENV = "MINIMOI_DICTATION"
 _STATIC_OK = ("realtime-memo-controller.js", "adapters/openai-transcription-webrtc-adapter.js")
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "core", "realtime_voice", "static")
 # A hint about the setting. It is a transcription session (no turn detection, no tools, no assistant output): the wording is not what keeps it that way.
-PROMPT = "Dictation into a draft message for a team workspace. Transcribe the speaker's words verbatim with natural punctuation; keep names and product terms as spoken."
+# FF-11: the names it kept mishearing. Short on purpose: transcription prompts work best brief.
+GLOSSARY = ("Chief of Staff (CoS), Master Craftsman (MC), Guildhall, Mein Deutsch, Meu Português, Curator, Bibliothek, "
+            "Claude Code, Codex, Grok, MiniMoi, Robert")
+PROMPT = ("Dictation into a draft message for a team workspace. Transcribe the speaker's words verbatim with natural punctuation; "
+          "keep names and product terms as spoken. Names: " + GLOSSARY + ".")
 
 
 def enabled(environ=None) -> bool:

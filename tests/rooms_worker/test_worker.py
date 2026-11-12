@@ -240,6 +240,7 @@ def test_unreadable_journal_is_uncertainty_not_nothing(env, monkeypatch):
 
 
 def test_reachable_only_after_proof_and_unproven_invite_is_not_accepted(env):
+    env.worker.housekeeping()                          # FF-05: its worker has checked in, so MC is invitable before proof
     assert env.call("POST", f"/rooms/{env.room}/invite", {"actor": "mc"})[0] == 201
     env.worker.housekeeping()
     status = env.call("GET", f"/rooms/{env.room}/turns")[1]
