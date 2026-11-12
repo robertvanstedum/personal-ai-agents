@@ -3,7 +3,7 @@
     "docker-compose.prod.yml",
     "docker-compose.staging.yml"
   ],
-  "deploy_scoped_release_base_sha256": "412b970374f38ef493804584f6276ab9a6b17e6373a15fdb04a4cb4bba384f85",
+  "deploy_scoped_release_base_sha256": "1ecb4eeeb889a77da45a5f2f253d9c5734693cc2c2195474c9eafac0bc3d5fc1",
   "digests": {
     "docker-compose.prod.yml": "e5dc91047c12654bafe53ab79f65ab171e015d5d722c8b0bed6f4bb8cc5f31b1",
     "docker-compose.yml": "7d2d96081327078db2182f48f36e56d06ef42968dbef0b2e0f6e8d1596c29e01",
