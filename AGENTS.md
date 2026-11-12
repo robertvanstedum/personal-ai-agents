@@ -53,6 +53,7 @@ The roles are durable even as which agent fills them changes:
     reminders, its to-do list, summaries, and GitHub items when warranted).
     Don't open issues from notes yourself.
   - Skip routine go-aheads on steps that were already agreed.
+- A new scheduled job ships with its entry in `config/scheduled_jobs.json`.
 
 ## Protected files
 
