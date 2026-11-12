@@ -134,7 +134,7 @@ test('meeting entries: cos-meeting may use only bound actions and search; cos-cl
 });
 
 // The ChatGPT route: arguments stay clean under a strict schema, and code mode's long nested ids still bind.
-import {servedHook} from '../../docker/cos-agent-a/plugins/cos-bound/index.mjs';
+import {servedHook, traceIdOf} from '../../docker/cos-agent-a/plugins/cos-bound/index.mjs';
 import {runBoundSealer, backendCallId, SEAL} from '../../docker/cos-agent-a/plugins/cos-bound/shared.mjs';
 
 const NESTED = 'tool_search_code:' + 'c'.repeat(37) + '_' + 'f'.repeat(53) + ':cos_github_issues:1234567890123';
@@ -267,4 +267,20 @@ test('the answer report goes for a successful run of an allowed agent only', () 
   report(done, {...ctx, runId: 'nope'});
   report({success: true, messages: []}, ctx);
   assert.equal(calls.length, 1);
+});
+
+
+test('the served report carries the runtime trace id, the same id the gateway records for the call (#507)', () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => { calls.push({url: String(url), options}); return {body: null}; };
+  const report = servedHook({agents: ['cos-agent-a'], url: new URL(ENDPOINT), token: TOKEN, fetchImpl});
+  const trace = {traceId: '4bf92f3577b34da6a3ce929d0e0e4736', spanId: '00f067aa0ba902b7'};
+  const event = {outcome: 'completed', provider: 'minimoi-gateway', model: 'minimoi-cos-agent', api: 'openai-completions'};
+  report(event, {sessionKey: SESSION, runId: RUN, trace});
+  assert.equal(JSON.parse(calls[0].options.body).trace, '4bf92f3577b34da6a3ce929d0e0e4736');
+  report(event, {sessionKey: SESSION, runId: RUN, trace: {traceId: 'not-hex'}});
+  assert.ok(!('trace' in JSON.parse(calls[1].options.body)));
+  assert.equal(traceIdOf('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'), '4bf92f3577b34da6a3ce929d0e0e4736');
+  assert.equal(traceIdOf({traceId: '0'.repeat(32)}), undefined);
+  assert.equal(traceIdOf(undefined), undefined);
 });

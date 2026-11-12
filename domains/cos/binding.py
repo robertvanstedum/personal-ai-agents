@@ -134,6 +134,9 @@ class BindingStore:
         # to write things"): its bound tools may only read. Added to a file made before the column existed.
         if "read_only" not in {row["name"] for row in db.execute("PRAGMA table_info(bindings)")}:
             db.execute("ALTER TABLE bindings ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0")
+        # #507: the runtime's trace id for the run, the same id the gateway's usage record carries as correlation_id.
+        if "trace_id" not in {row["name"] for row in db.execute("PRAGMA table_info(served_runs)")}:
+            db.execute("ALTER TABLE served_runs ADD COLUMN trace_id TEXT")
 
     # ── plumbing ─────────────────────────────────────────────────────────────
     def _db(self) -> sqlite3.Connection:
@@ -506,8 +509,9 @@ class BindingStore:
         if not isinstance(run_id, str) or not RUN_ID.fullmatch(run_id):
             return False
         with self._tx() as db:
-            db.execute("INSERT OR REPLACE INTO served_runs(run_id, at, provider, model, api, harness) VALUES(?,?,?,?,?,?)",
-                       (run_id, _iso(self._clock()), fields["provider"], fields["model"], fields.get("api"), fields.get("harness")))
+            db.execute("INSERT OR REPLACE INTO served_runs(run_id, at, provider, model, api, harness, trace_id) VALUES(?,?,?,?,?,?,?)",
+                       (run_id, _iso(self._clock()), fields["provider"], fields["model"], fields.get("api"), fields.get("harness"),
+                        fields.get("trace")))
         return True
 
     def record_answer(self, *, run_id, text) -> bool:
@@ -539,6 +543,14 @@ class BindingStore:
             row = db.execute("SELECT s.provider, s.model, s.api, s.harness FROM bindings b JOIN served_runs s ON s.run_id = b.run_id "
                              "WHERE b.turn_id=?", (turn_id,)).fetchone()
         return {k: row[k] for k in ("provider", "model", "api", "harness") if row[k]} if row else None
+
+    def trace_for_turn(self, turn_id: str) -> str | None:
+        """The runtime trace id of the run attached to this turn (#507): usage records with this correlation_id are its
+        model calls."""
+        with self._tx() as db:
+            row = db.execute("SELECT s.trace_id FROM bindings b JOIN served_runs s ON s.run_id = b.run_id WHERE b.turn_id=?",
+                             (turn_id,)).fetchone()
+        return row["trace_id"] if row and row["trace_id"] else None
 
     def log_native(self, *, run_id, tool_call_id, tool: str, target: str | None) -> bool:
         """Record one native OpenClaw call (write, edit, exec) in an owner turn, bound or not. Never refuses the call

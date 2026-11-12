@@ -181,7 +181,8 @@ def create_app(*, bindings, writer, token_sha256: str, allowed_agents=("cos-agen
         body, refused = preflight()
         if refused:
             return refused
-        if set(body) - {"provider", "model", "api", "harness"} or not all(
+        if set(body) - {"provider", "model", "api", "harness", "trace"} or ("trace" in body and not (
+                type(body["trace"]) is str and re.fullmatch(r"[0-9a-f]{32}", body["trace"]))) or not all(
                 type(v) is str and _SERVED_FIELD.fullmatch(v) for v in body.values()) or not {"provider", "model"} <= set(body):
             return jsonify(error="tool_request_invalid"), 400
         try:
