@@ -17,6 +17,9 @@ concurrency:
 jobs:
   classify:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read        # to find the last push that deployed successfully (see "Classify release contents")
     outputs:
       release_class: ${{ steps.changes.outputs.release_class }}
       services: ${{ steps.changes.outputs.services }}
@@ -39,6 +42,8 @@ jobs:
       - name: Classify release contents
         id: changes
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Manual runs are explicit application deployments. A normal push
           # can take the lightweight document-release path when every changed
@@ -56,8 +61,20 @@ jobs:
           # PRs compare cumulative changes against their target merge-base;
           # pushes use before when available, with conservative fallbacks.
           # Exit 3: no trusted PR base or rewritten main history; classify all.
+          # A push compares against the last push to main that deployed successfully, not just the previous push:
+          # with one deploy at a time, a queued run can be replaced by a newer one, and the newer one must restart the
+          # services of every change since the last good deploy (12 Nov 2026: #516's run was replaced by #512's).
+          PUSH_BEFORE="${{ github.event.before }}"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            LAST=$(gh api "repos/${{ github.repository }}/actions/workflows/deploy.yml/runs?branch=main&event=push&status=success&per_page=1" \
+              -q '.workflow_runs[0].head_sha' 2>/dev/null || true)
+            if [ -n "$LAST" ] && git merge-base --is-ancestor "$LAST" "${{ github.sha }}" 2>/dev/null && [ "$LAST" != "${{ github.sha }}" ]; then
+              echo "release base: last successful deploy $LAST (event before was $PUSH_BEFORE)"
+              PUSH_BEFORE="$LAST"
+            fi
+          fi
           rc=0
-          BEFORE=$(bash scripts/ci/release_base.sh "${{ github.event.before }}" "${{ github.sha }}" "${{ github.base_ref }}") || rc=$?
+          BEFORE=$(bash scripts/ci/release_base.sh "$PUSH_BEFORE" "${{ github.sha }}" "${{ github.base_ref }}") || rc=$?
           if [ "$rc" = 3 ]; then
             echo "release_class=full" >> "$GITHUB_OUTPUT"
             echo "services=$ALL_SERVICES" >> "$GITHUB_OUTPUT"
