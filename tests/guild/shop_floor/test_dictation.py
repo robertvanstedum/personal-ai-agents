@@ -113,6 +113,18 @@ def test_bootstrap_is_a_guarded_on_the_record_write_and_rate_limited(turned, pro
     assert client.post(f"{API}/dictation/bootstrap", json={}, headers=write_headers(token)).status_code == 429
 
 
+def test_ff11_the_transcription_prompt_carries_the_short_name_glossary(turned, provider, monkeypatch):
+    """FF-11: dictation misheard the team's names; the prompt lists them, and stays brief."""
+    _on(monkeypatch)
+    client = turned.owner()
+    assert client.post(f"{API}/dictation/bootstrap", json={}, headers=write_headers(turned.csrf(client))).status_code == 200
+    prompt = provider[-1]["transcription_prompt"]
+    for name in ("Chief of Staff (CoS)", "Master Craftsman (MC)", "Guildhall", "Mein Deutsch", "Meu Português", "Curator",
+                 "Bibliothek", "Claude Code", "Codex", "Grok", "MiniMoi", "Robert"):
+        assert name in prompt
+    assert len(prompt) < 400
+
+
 def test_a_missing_key_is_a_bounded_error_with_no_key_in_it(turned, monkeypatch, tmp_path):
     import core.realtime_voice.providers.openai_realtime as rt
     from core.realtime_voice.bootstrap import _rate_limit_state

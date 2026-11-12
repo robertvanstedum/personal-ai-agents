@@ -33,7 +33,8 @@ def test_the_shipped_registry_loads_and_names_memory_watch_as_briefed():
     reg = registry.load()
     job = reg.get("memory-watch")
     assert job is not None and job.host == "mac"
-    assert job.schedule == {"text": "daily 04:00 Chicago", "kind": "daily", "at": "04:00", "tz": "America/Chicago"}
+    # 00:15: what the runtime install has run since 15 Oct (scripts/vault/runtime_install.py TIMES); the list says so (FF-19)
+    assert job.schedule == {"text": "daily 00:15 Chicago", "kind": "daily", "at": "00:15", "tz": "America/Chicago"}
     assert (job.expected_every_s, job.missed_after_s, job.stuck_after_s) == (86400, 50 * 3600, 2 * 3600)
     assert job.status_file == "memory-watch.json" and job.active_from is not None
     ZoneInfo(job.schedule["tz"])          # the shipped zone exists in the zone database

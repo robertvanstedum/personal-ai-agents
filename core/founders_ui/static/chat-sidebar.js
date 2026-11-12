@@ -23,7 +23,6 @@
         const sync = () => { proxy.disabled = create.disabled; }; sync();
         new MutationObserver(sync).observe(create, {attributes:true, attributeFilter:['disabled']});
       }
-      const searcher = button('Search chats', '⌕', () => open(true)); searcher.dataset.sidebarToggle = ''; rail.append(searcher);
       panel.before(rail);
     }
     rail.classList.add('mm-chat-rail');

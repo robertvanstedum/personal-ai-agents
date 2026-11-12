@@ -220,8 +220,10 @@ def _unavailable(code: str) -> Retrieved:
     return Retrieved("unavailable", code if isinstance(code, str) else "unavailable", context.build({"error": shown}))
 
 
-def retrieve(query, config: Config | None = None, *, post=default_post, max_chars=context.MAX_CHARS, max_bytes=context.MAX_BYTES) -> Retrieved:
+def retrieve(query, config: Config | None = None, *, post=default_post, max_chars=context.MAX_CHARS, max_bytes=context.MAX_BYTES,
+             private: bool = False) -> Retrieved:
     """Ask the Vault on the caller's behalf and return the bounded DATA block. Never raises: every step, including reading the settings, is inside the boundary.
+    ``private=True`` (a Private conversation, #532) asks the service to log the query without its words or record ids.
     Not configured at all -> ``disabled`` (nothing is said); configured but unusable or unsafe -> ``unavailable`` with code ``bad_config``."""
     try:
         config = config or Config.from_env()
@@ -248,6 +250,8 @@ def retrieve(query, config: Config | None = None, *, post=default_post, max_char
                 ask["created_before"] = window[1]               # exclusive: the first day after the period
         if getattr(config, "include_raw", False) is True:       # the owner's deployment setting; the service still enforces the grant
             ask["include_raw"] = True
+        if private is True:
+            ask["private"] = True
         body = json.dumps(ask).encode()
         headers = {"Authorization": f"Bearer {config.token}", "Content-Type": "application/json", "Accept": "application/json"}
         try:

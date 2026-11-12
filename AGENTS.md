@@ -38,6 +38,22 @@ The roles are durable even as which agent fills them changes:
   non-trivial build.
 - **One agent active on the repo at a time** — not simultaneous editing.
 - **Working cycle:** spec → approve → build → confirm → ship.
+- **Leave MC a note when Robert settles something with you directly** (12 Nov 2026).
+  MC must stay in the loop even when Robert works with Claude Code, Codex or Grok
+  outside MC. When he decides, approves, restates or changes something in your
+  chat, write a short note in the same turn, without being asked:
+  `scripts/mc_notes.py add --by <you> --topic "<few words>" --text "<what Robert said or decided, in 1–3 lines>"`.
+  - Use `--for remind` when MC should remind people of it, and `--for act`
+    when it belongs on MC's to-do list. The default is `remember`.
+  - The register is a protected, lasting record. Every entry is immutable:
+    never edit, move or delete a note. A change of mind is a new note with
+    `--replaces <note id>`, and both stay.
+  - Run `scripts/mc_notes.py list` at the start of work to see current notes.
+  - Keep each note light: a few lines. MC builds on the register (memory,
+    reminders, its to-do list, summaries, and GitHub items when warranted).
+    Don't open issues from notes yourself.
+  - Skip routine go-aheads on steps that were already agreed.
+- A new scheduled job ships with its entry in `config/scheduled_jobs.json`.
 
 ## Protected files
 

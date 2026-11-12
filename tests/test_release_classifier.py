@@ -169,7 +169,9 @@ def test_the_workshop_backend_deploys_the_portal_only():
     assert classify(["scripts/workshop/workshop.py", "scripts/vault/vault.py"]) == ("documents", ())
     # The Guild screens' own helpers (agent-turn writer and scheduled-job judge) are portal-only too, and the
     # laptop tools that drive them run in no service.
-    assert classify(["core/agent_turns/writer.py", "core/jobs/judge.py"]) == ("domain", ("portal",))
+    assert classify(["core/agent_turns/writer.py"]) == ("domain", ("portal",))
+    # core/jobs also reaches the helpers (the Apprentice's scheduled health check, FF-19), which run the scheduler image.
+    assert classify(["core/jobs/judge.py"]) == ("domain", ("portal", "cos-scheduler"))
     assert classify(["tools/workshop/topic_inbox.py", "scripts/release/exclude_reserve_pages.py"]) == ("documents", ())
     # Neighbours keep their old ownership: only these exact places moved.
     assert classify(["core/other_module.py"]) == ("domain", ("portal", "curator", "german", "portuguese", "system-bot", "cos-bot", "cos-scheduler"))
@@ -223,6 +225,12 @@ BACKEND_IMPORT_EXPECTED = {
     "core/memory_shelf/render.py": ("utils.credential_scrub", "utils.payment_scrub"),
     "core/memory_shelf/report.py": ("core.jobs",),
     "scripts/jobs/watchdog.py": ("core.jobs",),
+    # FF-19 (#537): the daily health check and the cross-host pull read job status only; host tools, not a release image.
+    "scripts/jobs/daily_health.py": ("core.jobs",),
+    "scripts/jobs/pull_health.py": ("core.jobs",),
+    "scripts/jobs/helper_check.py": ("core.jobs",),
+    # The Apprentice's scheduled health check (FF-19): helpers run the cos-scheduler image, which a core/jobs change rebuilds.
+    "services/helper_seats/types.py": ("core.jobs",),
     "scripts/memory/daily_watch.py": ("core.jobs",),
     "scripts/memory/index_job.py": ("core.jobs",),
     # MC learning (Codex's MC runtime work, 24 Oct): portal-owned, reached through mc_tools_wiring and the MC tools
@@ -614,7 +622,10 @@ def _vault_runtime_importers(root):
                                                                "core.memory_shelf.ulid"),
                      "core/mc_learning/statement_shelf.py": ("core.memory_shelf.bundle", "core.memory_shelf.codes", "core.memory_shelf.render",
                                                              "core.memory_shelf.sessions", "core.memory_shelf.shelf", "core.memory_shelf.ulid"),
-                     "core/mc_learning/statements.py": ("core.memory_shelf.render",)}
+                     "core/mc_learning/statements.py": ("core.memory_shelf.render",),
+                     # FF-19 (#537): the Mac push of its health report uses the Vault Dest; the import runs only on the Mac,
+                     # from its runtime pin, never in a release image or on EC2/Dev (they push with the instance role).
+                     "core/jobs/health.py": ("core.memory_backup.backup",)}
     report_dependencies = {
         "core/memory_ask/regression.py": ("core.memory_ask.runner",),
         "core/memory_ask/runner.py": ("core.memory_ask.consumer", "core.memory_ask.context", "core.memory_ask.citation"),
@@ -1112,5 +1123,5 @@ def test_canonical_records_changes_keep_conservative_full_release():
 
 def test_a_workshop_journal_change_also_rebuilds_the_scheduler_image_that_runs_the_task_service():
     assert set(classify(["core/workshop_journal/artifacts.py"])[1]) == {"portal", "cos-scheduler"}
-    assert classify(["core/jobs/judge.py"])[1] == ("portal",)
+    assert set(classify(["core/jobs/judge.py"])[1]) == {"portal", "cos-scheduler"}     # FF-19: the helpers read core.jobs.health
     assert "portal" in classify(["domains/cos/history.py"])[1]

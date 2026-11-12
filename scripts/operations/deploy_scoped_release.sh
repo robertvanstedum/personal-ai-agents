@@ -506,9 +506,22 @@ if [[ "$WITNESS_RECREATED" == "1" ]]; then
 fi
 
 /opt/minimoi/scripts/install_lesen_refresh_cron.sh
+# MC's GitHub feed (#535). The host-script step ships the installer before this runs; a host that has not
+# received it yet says so instead of failing the release.
+if [[ -x /opt/minimoi/scripts/install_mc_github_awareness_cron.sh ]]; then
+  /opt/minimoi/scripts/install_mc_github_awareness_cron.sh
+else
+  echo "mc-github-awareness: installer not on this host yet; schedule unchanged"
+fi
 runuser -u ec2-user -- /opt/minimoi/scripts/setup_ec2_cron.sh
 
 # Prune only after the selected immutable release is healthy.
 docker image prune -af
 
 python3 /opt/minimoi/scripts/release_status.py finish "$IMAGE_TAG" "${SERVICES[@]}"
+# What production runs, for MC and CoS to read at /minimoi/docs/delivery/PRODUCTION.md (#536). Written only after
+# the finish observation confirms the selected images; a failure here never undoes a healthy release.
+if [[ -f /opt/minimoi/scripts/write_production_delivery_record.py ]]; then
+  python3 -I -B /opt/minimoi/scripts/write_production_delivery_record.py ||
+    echo "delivery record: not written (the release itself is healthy)"
+fi

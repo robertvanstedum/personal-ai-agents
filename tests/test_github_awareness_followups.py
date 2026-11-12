@@ -262,8 +262,10 @@ def test_cli_runs_by_path_without_pythonpath_from_any_directory(tmp_path, args, 
     assert 'ModuleNotFoundError' not in result.stderr, result.stderr
     assert result.returncode == code, result.stdout + result.stderr
     out = json.loads(result.stdout.strip().splitlines()[-1])
+    if args:
+        assert out.pop('at').endswith('Z')                                # each log line says when it ran
     assert (out['plan_only'] is True and out['writes'] == 0) if not args else out == {
-        'state': 'held', 'error_class': 'FileNotFoundError'}            # no cache here: refused, nothing written
+        'state': 'held', 'error_class': 'FileNotFoundError', 'reason': 'FileNotFoundError'}   # no cache: nothing written
 
 
 @pytest.fixture
@@ -335,3 +337,89 @@ def test_runs_full_smaller_page_preserves_gap_warning():
     assert client.calls[0][1]['per_page'] == 25
     assert out['streams']['runs']['gap'] == 'possible_poll_gap'
     assert out['streams']['runs']['health'] == 'ok'
+
+
+# ── #535: a host reboot no longer stops the feed until someone runs --rebind ──
+
+def test_the_scheduled_sync_rebinds_itself_after_a_host_restart(cli, cache, monkeypatch):
+    cli._poll(None, NOW)
+    monkeypatch.setattr(C.files, 'writer_domain', lambda: 'boot-2')          # the host rebooted (25 Oct 2026)
+    out = cli._poll(None, NOW + timedelta(minutes=5))
+    assert out['rebound_after_restart'] is True and out['job_status_written'] is True
+    doc = C.load(cache)
+    assert doc['writer_domain'] == 'boot-2'
+    receipt = json.loads(cli.status_path.read_text())
+    assert receipt['state'] in ('ok', 'warn') and receipt['summary'].startswith('rebound after a host restart')
+    # Rebinding never claims coverage of the downtime: streams the poll did not reach stay gapped.
+    assert any(r['gap'] == 'possible_poll_gap' for r in doc['streams'].values())
+    later = cli._poll(None, NOW + timedelta(minutes=10))
+    assert later['rebound_after_restart'] is False
+
+
+def test_a_held_poll_records_its_fixed_refusal_code_not_just_the_class(cli, monkeypatch):
+    monkeypatch.setattr(C.shutil, 'disk_usage', lambda p: type('Space', (), {'free': 1 << 30})())
+    with pytest.raises(C.Refused, match='disk_low'):
+        cli._poll(None, NOW)
+    receipt = json.loads(cli.status_path.read_text())
+    assert receipt['state'] == 'failed' and receipt['summary'] == 'poll held: disk_low'
+
+
+def test_held_reason_never_echoes_free_text_from_other_errors(cli):
+    assert cli.held_reason(C.Refused('writer_domain_changed')) == 'writer_domain_changed'
+    assert cli.held_reason(C.Refused('https://x/?token=abc')) == 'Refused'
+    assert cli.held_reason(OSError('Authorization: Bearer abc')) == 'OSError'
+
+
+# ── #535: the cron is installed from the repo and keeps its output ──
+
+INSTALLER = ROOT / 'scripts/operations/install_mc_github_awareness_cron.sh'
+
+
+@pytest.fixture
+def fake_crontab(tmp_path):
+    bin_dir, store = tmp_path / 'bin', tmp_path / 'crontab.txt'
+    bin_dir.mkdir()
+    (bin_dir / 'crontab').write_text(
+        '#!/bin/bash\nS="%s"\nif [[ "$1" == "-l" ]]; then [[ -f "$S" ]] && cat "$S" || exit 1; else cp "$1" "$S"; fi\n' % store)
+    (bin_dir / 'crontab').chmod(0o755)
+    env = {**os.environ, 'PATH': f'{bin_dir}:{os.environ["PATH"]}', 'MINIMOI_LOG_DIR': str(tmp_path / 'logs'),
+           'MINIMOI_CRONTAB_BACKUP_DIR': str(tmp_path / 'backups'),
+           'MINIMOI_LOGROTATE_FILE': str(tmp_path / 'logrotate')}
+    return store, env, tmp_path
+
+
+def _install(env):
+    return subprocess.run(['bash', str(INSTALLER)], env=env, capture_output=True, text=True, timeout=30)
+
+
+def test_installer_replaces_the_dev_null_line_and_keeps_every_other_entry(fake_crontab):
+    store, env, tmp = fake_crontab
+    store.write_text('5 * * * * other-job # minimoi:lesen-refresh\n'
+                     '*/5 * * * * docker exec -e MINIMOI_JOBS_ROOT=/app/runtime/mc-observations/jobs minimoi-portal '
+                     'python3 /app/scripts/mc/github_awareness.py --sync >/dev/null 2>&1\n')
+    result = _install(env)
+    assert result.returncode == 0, result.stderr
+    lines = store.read_text().splitlines()
+    assert '5 * * * * other-job # minimoi:lesen-refresh' in lines
+    ours = [l for l in lines if 'github_awareness.py --sync' in l]
+    assert len(ours) == 1 and '/dev/null' not in ours[0]
+    assert ours[0].startswith('*/5 * * * * docker exec -e MINIMOI_JOBS_ROOT=/app/runtime/mc-observations/jobs minimoi-portal')
+    assert f'>> {tmp}/logs/mc_github_awareness.log 2>&1 # minimoi:mc-github-awareness' in ours[0]
+    assert (tmp / 'logs').is_dir() and 'mc_github_awareness.log' in (tmp / 'logrotate').read_text()
+    assert list((tmp / 'backups').iterdir())                                 # the old crontab is kept
+
+
+def test_installer_is_idempotent(fake_crontab):
+    store, env, tmp = fake_crontab
+    assert _install(env).returncode == 0
+    first = store.read_text()
+    again = _install(env)
+    assert again.returncode == 0 and 'already current' in again.stdout
+    assert store.read_text() == first
+
+
+def test_deploys_ship_and_run_the_installer():
+    entries = {e['repo']: e for e in json.loads((ROOT / 'config/host_scripts.json').read_text())['entries']}
+    assert entries['scripts/operations/install_mc_github_awareness_cron.sh']['ship'] is True
+    deploy = (ROOT / 'scripts/operations/deploy_scoped_release.sh').read_text()
+    assert '/opt/minimoi/scripts/install_mc_github_awareness_cron.sh' in deploy

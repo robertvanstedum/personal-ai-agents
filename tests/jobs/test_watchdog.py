@@ -58,8 +58,11 @@ def test_a_healthy_job_sends_nothing_and_the_watchdog_records_its_own_run(tmp_pa
     assert code == 0 and s.sent == []
     own = own_status(tmp_path)
     # vault-sync, vault-mc-pull and vault-cos-pull: registered, not installed yet; the EC2 exports are never judged here
-    assert own["state"] == "ok" and own["results"] == {"memory-watch": "ok", "vault-sync": "not_due", "vault-mc-pull": "not_due",
-                                                       "vault-cos-pull": "not_due"}
+    status_jobs = {j.id for j in registry.load().for_host("mac") if j.evidence["kind"] == "status_file"} - {"jobs-watchdog"}
+    assert own["state"] == "ok" and {k: v for k, v in own["results"].items() if k in status_jobs} == {
+        "memory-watch": "ok", "vault-sync": "not_due", "vault-mc-pull": "not_due", "vault-cos-pull": "not_due",
+        "memory-index": "not_due", "vault-backup": "not_due"}
+    assert own["results"]["supervision-sync"] == "not_tracked"          # listed, writes nothing a watchdog can read yet
     assert own["next_due_by"] == "2026-10-07T14:00:00Z"
 
 

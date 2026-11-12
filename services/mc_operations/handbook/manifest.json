@@ -1,22 +1,22 @@
 {
   "format": "minimoi-mc-handbook/1",
-  "candidate_version": "0.1.2",
-  "release_path": "v0.1.2",
+  "candidate_version": "0.1.3",
+  "release_path": "v0.1.3",
   "status": "review_candidate",
   "active_runtime_version": null,
-  "predecessor": "0.1.1",
-  "predecessor_reason": "where official temporary plans live (Robert, 6 Nov)",
-  "date": "2026-11-06",
-  "author": "Claude Code (1.2 Beta build)",
+  "predecessor": "0.1.2",
+  "predecessor_reason": "Guildhall row in the product map (Robert, 12 Nov)",
+  "date": "2026-11-12",
+  "author": "Claude Code (1.2 fast-follow, lane C)",
   "decision_owner": "Robert",
   "runtime_activation_included": false,
   "source_basis": "Existing MC role and working agreement plus owner direction; not a replacement for runtime authority.",
   "files": {
-    "v0.1.2/ADOPTION.md": "40068b8df7c9531f3156480f5d7144fb564565e1490d349a6b6bf04d37437f19",
-    "v0.1.2/PROJECT.md": "c1b8ac415b7fb9060e2a54dab2b588118c8cbaa9059d1d338e3c1050bbf60f6a",
-    "v0.1.2/skills/minimoi-engineering/SKILL.md": "447f19369e1c600290896d376a42a6aa229dbf0c9238b455bca31479650ea107",
-    "v0.1.2/skills/minimoi-engineering/references/board-and-services.md": "e136b284d5607854baf39641345e9e1a77421abc44ab9eadca2f437ddf933f0b",
-    "v0.1.2/skills/minimoi-engineering/references/build-and-deploy.md": "57d8d850d57727008effc780ae99501a98d763ee59674a486687a92b642e7d28",
-    "v0.1.2/skills/minimoi-engineering/references/regression.md": "6c2e13c482b703094c75d7d32b1cc724f83ff3365e1a594b0bcb4deabdfb3a2d"
+    "v0.1.3/ADOPTION.md": "a478803e28a7d47f5da8d1e6e2aa464e1d1556e0ba3672f1a0eccab7b40870d3",
+    "v0.1.3/PROJECT.md": "11f5b47e2b6d6116e109f8ac225be5e4b79c0fde492aabb4f802ea0551ed0e84",
+    "v0.1.3/skills/minimoi-engineering/SKILL.md": "689dbe3588b5d6a91419699b37d44f629abc570e87bf47328829d749578402a7",
+    "v0.1.3/skills/minimoi-engineering/references/board-and-services.md": "fb1ed69bd13452e17aa809dc0c948125c05adbf27db43e237a1dd79d7fc1ead3",
+    "v0.1.3/skills/minimoi-engineering/references/build-and-deploy.md": "4d7c13eef55b003de48abc5f2a02dda50401adc0bf71ddaa47578457ef3a4f1e",
+    "v0.1.3/skills/minimoi-engineering/references/regression.md": "bedb1d3fc55ac087f30d107a986441830979a2502290abefd8b4b9a8c63d6e86"
   }
 }

@@ -43,7 +43,8 @@ def rows(e):
 def test_open_question_is_independent_and_explicit_picker_wins(pair):
     e = pair
     e.say('What should we work on today?')
-    assert {r['addressee'] for r in rows(e) if r['state']=='queued'} == {'mc','cos'}
+    # FF-09: Automatic with nobody named is one responder; planning goes to CoS.
+    assert {r['addressee'] for r in rows(e) if r['state']=='queued'} == {'cos'}
     code, _ = e.call('POST', f'/rooms/{e.room}/events', {'body':'MC is unavailable; can you help?', 'target':'cos'})
     assert code == 201
     assert [r['addressee'] for r in rows(e) if r['state']=='queued'] == ['cos']
@@ -99,15 +100,15 @@ def test_unaddressed_action_cannot_reach_either_executor(pair):
     e.cos.discussion=FakeRelay()
     e.say('File an issue about this')
     assert e.worker.run_once()
-    assert e.cos.run_once()
+    assert not e.cos.run_once()          # FF-09: build work goes to MC alone; CoS stays quiet
     assert not e.relay.calls
     assert not e.cos_relay.calls
-    assert len(e.discussion.calls)==len(e.cos.discussion.calls)==1
+    assert len(e.discussion.calls)==1 and not e.cos.discussion.calls
 
 
 def test_old_worker_cannot_claim_discussion_and_retry_cannot_change_mode(pair):
     e=pair
-    e.say('What should we check?')
+    e.call('POST', f'/rooms/{e.room}/events', {'body':'What should we check?', 'recipients':['mc','cos']})
     status,data=e.worker.work.call('POST','/turns/claim', {'addressees':['mc']},key='old-worker-claim')
     assert status==200 and data['turn'] is None
     discussion=next(r for r in rows(e) if r['addressee']=='mc')
@@ -122,7 +123,7 @@ def test_old_worker_cannot_claim_discussion_and_retry_cannot_change_mode(pair):
 
 def test_owner_correction_after_claim_prevents_obsolete_discussion_dispatch(pair):
     e = pair
-    e.say('What should we check first?')
+    e.call('POST', f'/rooms/{e.room}/events', {'body':'What should we check first?', 'recipients':['mc','cos']})
     status, data = e.worker.work.call('POST', '/turns/claim',
         {'addressees': ['mc'], 'discussion_protocol': 1}, key='claim-before-correction')
     assert status == 200 and data['turn']
@@ -390,7 +391,10 @@ def test_voice_shaped_text_uses_normal_authority_rules(pair, body, actors, targe
     with pair.store.connect() as db:
         actions={r['addressee'] for r in queued if not db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?',(r['id'],)).fetchone()}
     assert actions==actors
-    assert {r['addressee'] for r in queued} == (actors or {'mc','cos'})
+    if actors or target or body.startswith('Everyone'):
+        assert {r['addressee'] for r in queued} == (actors or {'mc','cos'})
+    else:
+        assert len(queued) == 1          # FF-09: unaddressed under Automatic is one responder
 
 
 @pytest.mark.parametrize('body', ['Thanks, CoS.', 'Hi CoS', 'CoS thanks', 'Thank you CoS'])
@@ -643,3 +647,126 @@ def test_stacked_names_reach_every_named_teammate(pair, body):
         queued = [r for r in rows(pair) if r['state'] == 'queued']
         assert {r['addressee'] for r in queued} == {'mc', 'cos'}
         assert not any(db.execute('SELECT 1 FROM discussion_turns WHERE turn_id=?', (r['id'],)).fetchone() for r in queued)
+
+
+# ---- FF-09 (1.2 fast-follow, A6): "To: Automatic" makes one agent answer, not both (see #472, #471) -------------
+
+def _queued(e):
+    return {r['addressee'] for r in rows(e) if r['state'] == 'queued'}
+
+
+@pytest.mark.parametrize('body', ['What should we work on today?', 'Can you help me plan next week?',
+                                  'How does the meeting record work?', 'What are our priorities this week?'])
+def test_ff09_automatic_planning_and_how_things_work_go_to_cos_alone(pair, body):
+    pair.say(body)
+    assert _queued(pair) == {'cos'}
+    assert not pair.worker.run_once()
+
+
+@pytest.mark.parametrize('body', ['Is the build green?', 'The deploy failed again, can someone look at the logs?',
+                                  'Open a defect for the flicker', "What's the CI status?"])
+def test_ff09_automatic_build_and_technical_go_to_mc_alone(pair, body):
+    pair.say(body)
+    assert _queued(pair) == {'mc'}
+    assert not pair.cos.run_once()
+
+
+@pytest.mark.parametrize('body', ['Any thoughts?', 'Hmm.', 'Good morning'])
+def test_ff09_automatic_unclear_goes_to_cos(pair, body):
+    pair.say(body)
+    assert _queued(pair) == {'cos'}
+
+
+def test_ff09_automatic_pick_stays_discussion_only(pair):
+    """A keyword pick is not someone being named: it answers, but gets no action turn."""
+    pair.say('Open a defect for the flicker')
+    assert pair.worker.run_once()
+    assert not pair.relay.calls and len(pair.discussion.calls) == 1
+
+
+@pytest.mark.parametrize('body,target,expected', [
+    ('MC, what should we plan for tomorrow?', None, {'mc'}),             # named wins over the topic
+    ('CoS, is the build green?', None, {'cos'}),
+    ('Is the build green?', 'cos', {'cos'}),                              # To: one name
+    ('What should we plan today?', 'mc', {'mc'}),
+])
+def test_ff09_explicit_addressing_is_unchanged(pair, body, target, expected):
+    pair.say(body, target=target)
+    assert _queued(pair) == expected
+
+
+@pytest.mark.parametrize('body,recipients', [
+    ('What should we work on today?', ['mc', 'cos']),                    # To: Everyone (both)
+    ('Is the build green?', ['mc', 'cos']),
+    ('What does everyone think?', None),                                  # said in the message
+    ('Both of you, any thoughts?', None),
+])
+def test_ff09_everyone_or_both_still_asks_both(pair, body, recipients):
+    payload = {'body': body}
+    if recipients: payload['recipients'] = recipients
+    assert pair.call('POST', f'/rooms/{pair.room}/events', payload)[0] == 201
+    assert _queued(pair) == {'mc', 'cos'}
+
+
+def test_ff09_automatic_falls_back_to_the_other_when_the_pick_is_waiting(pair):
+    pair.say('MC, wait.')
+    pair.say('Is the build green?')
+    assert _queued(pair) == {'cos'}                                       # sole available, as before
+    with pair.store.connect() as db:
+        assert db.execute("SELECT 1 FROM meeting_waits WHERE room=? AND actor='mc'", (pair.room,)).fetchone()
+
+
+def test_ff09_auto_responder_is_deterministic_and_prefers_cos_on_ties():
+    from domains.records.meetings import auto_responder
+    assert auto_responder('Plan the deploy', ['mc', 'cos']) == 'cos'      # one each: unclear, so CoS
+    assert auto_responder('Fix the failing tests', ['mc', 'cos']) == 'mc'
+    assert auto_responder('Fix the failing tests', ['cos', 'codex']) == 'cos'
+    assert auto_responder('Plan tomorrow', ['mc', 'codex']) == 'mc'
+    assert auto_responder('Anything', ['codex', 'claude-code']) == 'codex'
+    assert auto_responder('> deploy the build\nWhat do you think?', ['mc', 'cos']) == 'cos'   # quoted text does not count
+
+
+# ---- FF-05 (1.2 part): a teammate with no route on this host is "not available here", not an invite that times out ----
+
+def _claude_card(e, tmp_path, *, hosted=True):
+    manage = _load('records_poc_manage_for_tests', 'manage.py')
+    manage.provision_rooms(e.store, 'claude-code', 'Claude Code', tmp_path / 'claude-secrets', worker='rooms-connector')
+    if not hosted:
+        with e.store.connect() as db:
+            db.execute("DELETE FROM hosted_teammates WHERE principal='claude-code'")
+
+
+def _teammate(e, principal):
+    return next(c for c in e.call('GET', '/teammates')[1]['teammates'] if c['principal'] == principal)
+
+
+@pytest.mark.parametrize('hosted', [True, False])
+def test_ff05_claude_with_no_live_route_is_not_offered(pair, tmp_path, hosted):
+    """Production: Claude Code has a card, but no connector ever answered or checks in there."""
+    _claude_card(pair, tmp_path, hosted=hosted)
+    assert _teammate(pair, 'claude-code')['available_here'] is False
+    assert _teammate(pair, 'mc')['available_here'] is True and _teammate(pair, 'cos')['available_here'] is True
+    code, body = pair.call('POST', f'/rooms/{pair.room}/invite', {'actor': 'claude-code'})
+    assert code == 409 and 'not available here' in str(body)
+    with pair.store.connect() as db:
+        assert not db.execute("SELECT 1 FROM members WHERE room=? AND actor='claude-code'", (pair.room,)).fetchone()
+
+
+def test_ff05_claude_checking_in_or_proven_is_invited_as_today(pair, tmp_path):
+    """Dev and the Mac: the connector checks in (or Claude is proven), so the invite works as before."""
+    from domains.records.meetings import set_presence
+    _claude_card(pair, tmp_path)
+    with pair.store.connect() as db:
+        set_presence(db, '*', 'claude-code', 'reachable', 180, 'worker_readyz')
+    assert _teammate(pair, 'claude-code')['available_here'] is True
+    assert pair.call('POST', f'/rooms/{pair.room}/invite', {'actor': 'claude-code'})[0] == 201
+    with pair.store.connect() as db:
+        db.execute("DELETE FROM presence WHERE actor='claude-code'")
+        db.execute("UPDATE teammates SET proven_at=? WHERE principal='claude-code'", (datetime.now(timezone.utc).isoformat(),))
+    assert _teammate(pair, 'claude-code')['available_here'] is True       # proven: a route exists even while the Mac sleeps
+    with pair.store.connect() as db:
+        db.execute("UPDATE teammates SET proven_at=NULL WHERE principal='claude-code'")
+        set_presence(db, '*', 'claude-code', 'checked_in', 180, 'worker_readyz')
+    assert _teammate(pair, 'claude-code')['available_here'] is True       # unproven but its connector checks in: Prove works
+    status = pair.call('GET', f'/rooms/{pair.room}/turns')[1]
+    assert next(p for p in status['participants'] if p['id'] == 'claude-code')['available_here'] is True

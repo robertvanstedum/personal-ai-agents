@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "_about": "Every scheduled job MiniMoi runs, on any host. Status contract: docs/jobs_status_contract.md. Loader: core/jobs/registry.py. Each job writes <jobs root>/<status_file>.",
+  "_about": "Every scheduled or background job MiniMoi runs, on any host (the master list, FF-19 #537). A new scheduled job ships with its entry here (AGENTS.md; tests/jobs/test_registry_coverage.py fails otherwise). Status contract: docs/jobs_status_contract.md. Loader: core/jobs/registry.py. Each host's watchdog (scripts/jobs/watchdog.py) judges its own jobs and writes health-<host>.json. Each entry's defined_in names where the repo schedules it (path or path::text on the line); not_jobs lists matches that are not jobs.",
   "jobs": [
     {
       "id": "memory-watch",
       "name": "Memory capture (daily watch)",
       "host": "mac",
       "schedule": {
-        "text": "daily 04:00 Chicago",
+        "text": "daily 00:15 Chicago",
         "kind": "daily",
-        "at": "04:00",
+        "at": "00:15",
         "tz": "America/Chicago"
       },
       "expected_every_s": 86400,
@@ -19,7 +19,12 @@
       "active_from": "2026-10-04T09:00:00Z",
       "status_file": "memory-watch.json",
       "owner": "robert",
-      "runbook": "OPERATIONS.md#scheduled-jobs-and-launchd-on-the-mac"
+      "runbook": "OPERATIONS.md#scheduled-jobs-and-launchd-on-the-mac",
+      "healthy": "ran by 02:15 Chicago; last run ok (warn = a source is behind, read the results)",
+      "defined_in": [
+        "infrastructure/launchd/com.vanstedum.minimoi-memory-watch.plist::StartCalendarInterval",
+        "scripts/vault/runtime_install.py::TIMES[job]"
+      ]
     },
     {
       "id": "jobs-watchdog",
@@ -38,7 +43,12 @@
       "active_from": "2026-10-04T14:00:00Z",
       "status_file": "jobs-watchdog.json",
       "owner": "robert",
-      "runbook": "OPERATIONS.md#scheduled-jobs-and-launchd-on-the-mac"
+      "runbook": "OPERATIONS.md#scheduled-jobs-and-launchd-on-the-mac",
+      "healthy": "ran today at 09:00 Chicago; judged every Mac job",
+      "defined_in": [
+        "infrastructure/launchd/com.vanstedum.minimoi-jobs-watchdog.plist::StartCalendarInterval",
+        "scripts/vault/runtime_install.py::TIMES[job]"
+      ]
     },
     {
       "id": "vault-sync",
@@ -54,7 +64,14 @@
       "stuck_after_s": 3600,
       "status_file": "vault-sync.json",
       "owner": "robert",
-      "runbook": "core/memory_sync/sync.py"
+      "runbook": "core/memory_sync/sync.py",
+      "healthy": "a completed sync every 2 h while the Mac is awake; backlog reaches 0",
+      "defined_in": [
+        "core/memory_sync/sync.py::StartInterval",
+        "scripts/vault/vault_sync.py::StartInterval",
+        "scripts/vault/runtime_install.py::vault_sync.py",
+        "scripts/vault/runtime_install.py::SYNC_INTERVAL_S"
+      ]
     },
     {
       "id": "vault-apply",
@@ -70,7 +87,11 @@
       "stuck_after_s": 3600,
       "status_file": "vault-apply.json",
       "owner": "robert",
-      "runbook": "core/memory_sync/apply.py"
+      "runbook": "core/memory_sync/apply.py",
+      "healthy": "a completed apply every 15 min",
+      "defined_in": [
+        "core/memory_sync/apply.py::vault_apply.py"
+      ]
     },
     {
       "id": "vault-mc-pull",
@@ -86,7 +107,13 @@
       "stuck_after_s": 3600,
       "status_file": "vault-mc-pull.json",
       "owner": "robert",
-      "runbook": "core/memory_sync/mc_pull.py"
+      "runbook": "core/memory_sync/mc_pull.py",
+      "healthy": "a completed pull every 2 h while the Mac is awake",
+      "defined_in": [
+        "core/memory_sync/mc_pull.py::StartInterval",
+        "scripts/vault/vault_mc_pull.py::StartInterval",
+        "scripts/vault/runtime_install.py::SYNC_INTERVAL_S"
+      ]
     },
     {
       "id": "vault-mc-export",
@@ -102,7 +129,11 @@
       "stuck_after_s": 3600,
       "status_file": "vault-mc-export.json",
       "owner": "robert",
-      "runbook": "core/memory_sync/mc_export.py"
+      "runbook": "core/memory_sync/mc_export.py",
+      "healthy": "a completed export every 2 h",
+      "defined_in": [
+        "scripts/vault/vault_mc_export.py::25 */2"
+      ]
     },
     {
       "id": "vault-cos-pull",
@@ -118,7 +149,12 @@
       "stuck_after_s": 3600,
       "status_file": "vault-cos-pull.json",
       "owner": "robert",
-      "runbook": "core/memory_sync/cos_pull.py"
+      "runbook": "core/memory_sync/cos_pull.py",
+      "healthy": "a completed pull every 2 h while the Mac is awake",
+      "defined_in": [
+        "scripts/vault/vault_cos_pull.py::StartInterval",
+        "scripts/vault/runtime_install.py::SYNC_INTERVAL_S"
+      ]
     },
     {
       "id": "vault-cos-export",
@@ -134,7 +170,11 @@
       "stuck_after_s": 3600,
       "status_file": "vault-cos-export.json",
       "owner": "robert",
-      "runbook": "core/memory_sync/cos_export.py"
+      "runbook": "core/memory_sync/cos_export.py",
+      "healthy": "a completed export every 2 h",
+      "defined_in": [
+        "scripts/vault/vault_cos_export.py"
+      ]
     },
     {
       "id": "mc-github-awareness",
@@ -151,7 +191,14 @@
       "grace_s": 300,
       "status_file": "mc-github-awareness.json",
       "owner": "robert",
-      "runbook": "scripts/mc/github_awareness.py"
+      "runbook": "scripts/mc/github_awareness.py",
+      "healthy": "a completed sync every 5 min; the feed MC reads is under 45 min old",
+      "status_root": "mc-observations",
+      "defined_in": [
+        "scripts/mc/github_awareness.py",
+        "scripts/operations/install_mc_github_awareness_cron.sh::CRON_LINE="
+      ],
+      "active_from": "2026-11-13T15:00:00Z"
     },
     {
       "id": "dev-memory-feed",
@@ -169,7 +216,805 @@
       "active_from": "2026-11-05T09:10:00Z",
       "status_file": "dev-memory-feed.json",
       "owner": "robert",
-      "runbook": "planning-studio/initiatives/INIT-2026-0013-partnership-and-team-workflow/handoffs/CODEX_VAULT_DEV_RELEASE_2026-11-05.md"
+      "runbook": "planning-studio/initiatives/INIT-2026-0013-partnership-and-team-workflow/handoffs/CODEX_VAULT_DEV_RELEASE_2026-11-05.md",
+      "healthy": "a completed capture every 5 min on Dev",
+      "defined_in": [
+        "scripts/vault/dev_install.py::OnUnitInactiveSec"
+      ]
+    },
+    {
+      "id": "memory-index",
+      "name": "Vault index update (Mac)",
+      "host": "mac",
+      "schedule": {
+        "text": "daily 02:30 Chicago",
+        "kind": "daily",
+        "at": "02:30",
+        "tz": "America/Chicago"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 7200,
+      "status_file": "memory-index.json",
+      "healthy": "ran by 04:30 Chicago; records current, none held",
+      "owner": "robert",
+      "runbook": "scripts/vault/runtime_install.py",
+      "defined_in": [
+        "scripts/vault/runtime_install.py::TIMES[job]"
+      ]
+    },
+    {
+      "id": "vault-backup",
+      "name": "Vault encrypted external backup (Mac)",
+      "host": "mac",
+      "schedule": {
+        "text": "daily 04:30 Chicago",
+        "kind": "daily",
+        "at": "04:30",
+        "tz": "America/Chicago"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 7200,
+      "status_file": "vault-backup.json",
+      "healthy": "an encrypted backup reached S3 today",
+      "owner": "robert",
+      "runbook": "docs/vault/RECOVERY.md",
+      "defined_in": [
+        "scripts/vault/runtime_install.py::TIMES[job]"
+      ]
+    },
+    {
+      "id": "private-repo-sync",
+      "name": "Private repo sync (Mac, com.user.private-sync)",
+      "host": "mac",
+      "schedule": {
+        "text": "daily 02:00 Chicago",
+        "kind": "daily",
+        "at": "02:00",
+        "tz": "America/Chicago"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 3600,
+      "evidence": {
+        "kind": "mtime",
+        "path": "/Users/vanstedum/Projects/personal-ai-agents/logs/private_sync_stdout.log",
+        "fail_marker": "ERROR"
+      },
+      "active_from": "2026-11-13T15:00:00Z",
+      "healthy": "ran at 02:00; no ERROR in its last lines",
+      "owner": "robert",
+      "runbook": "scripts/sync_private_repo.sh",
+      "defined_in": [
+        "scripts/sync_private_repo.sh"
+      ]
+    },
+    {
+      "id": "supervision-sync",
+      "name": "Build supervision sync, Mac to production (ai.minimoi.supervision-sync)",
+      "host": "mac",
+      "schedule": {
+        "text": "every 30 s (launchd StartInterval)",
+        "kind": "interval",
+        "every_s": 30
+      },
+      "expected_every_s": 30,
+      "missed_after_s": 3600,
+      "stuck_after_s": 600,
+      "grace_s": 300,
+      "evidence": {
+        "kind": "none",
+        "why": "its log is written only when something moves; no run record yet"
+      },
+      "healthy": "production sees the Mac's sync within minutes",
+      "owner": "robert",
+      "runbook": "scripts/mc_host/install_supervision_sync.sh",
+      "defined_in": [
+        "scripts/mc_host/install_supervision_sync.sh::StartInterval"
+      ]
+    },
+    {
+      "id": "supervision-sync-dev",
+      "name": "Build supervision relay, Mac to Dev (ai.minimoi.supervision-sync.dev)",
+      "host": "mac",
+      "schedule": {
+        "text": "every 30 s (launchd StartInterval)",
+        "kind": "interval",
+        "every_s": 30
+      },
+      "expected_every_s": 30,
+      "missed_after_s": 3600,
+      "stuck_after_s": 600,
+      "grace_s": 300,
+      "evidence": {
+        "kind": "none",
+        "why": "its log is written only when something moves; no run record yet"
+      },
+      "healthy": "Dev sees the Mac's relay within minutes",
+      "owner": "robert",
+      "runbook": "scripts/mc_host/install_supervision_sync_dev.sh",
+      "defined_in": [
+        "scripts/mc_host/install_supervision_sync_dev.sh::StartInterval"
+      ]
+    },
+    {
+      "id": "rooms-archive",
+      "name": "Rooms archive (Mac Dev stack)",
+      "host": "mac",
+      "schedule": {
+        "text": "daily 05:00 Chicago",
+        "kind": "daily",
+        "at": "05:00",
+        "tz": "America/Chicago"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 3600,
+      "status_file": "rooms-archive.json",
+      "retired": true,
+      "retired_on": "2026-11-12",
+      "retired_why": "the Mac Dev stack it archives is gone (Dev moved to AWS staging 30-31 Oct); production archive job is #523",
+      "owner": "robert",
+      "runbook": "scripts/rooms/archive.py",
+      "defined_in": [
+        "scripts/rooms/archive.py"
+      ]
+    },
+    {
+      "id": "vault-production-refresh",
+      "name": "Vault production refresh (EC2)",
+      "host": "ec2",
+      "schedule": {
+        "text": "daily 06:15 Chicago",
+        "kind": "daily",
+        "at": "06:15",
+        "tz": "America/Chicago"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 7200,
+      "status_file": "vault-production-refresh.json",
+      "healthy": "the production Vault copy refreshed today",
+      "owner": "robert",
+      "runbook": "core/memory_backup/production.py",
+      "defined_in": [
+        "core/memory_backup/production.py::production_refresh.py"
+      ]
+    },
+    {
+      "id": "backup-local",
+      "name": "Production backup, tier 1 local (backup_local.sh)",
+      "host": "ec2",
+      "schedule": {
+        "text": "daily 02:00 UTC (root cron)",
+        "kind": "daily",
+        "at": "02:00",
+        "tz": "UTC"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 7200,
+      "evidence": {
+        "kind": "mtime",
+        "path": "/opt/minimoi/logs/backup.log",
+        "fail_marker": "ERROR"
+      },
+      "active_from": "2026-11-13T15:00:00Z",
+      "healthy": "ran at 02:00 UTC; no ERROR in its last lines",
+      "owner": "robert",
+      "runbook": "OPERATIONS.md#scheduled-jobs",
+      "defined_in": [
+        "scripts/setup_backup_cron.sh::backup_local.sh"
+      ]
+    },
+    {
+      "id": "backup-s3",
+      "name": "Production backup, tier 2 S3 (backup_s3.sh)",
+      "host": "ec2",
+      "schedule": {
+        "text": "daily 03:00 UTC (root cron)",
+        "kind": "daily",
+        "at": "03:00",
+        "tz": "UTC"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 7200,
+      "evidence": {
+        "kind": "mtime",
+        "path": "/opt/minimoi/logs/backup_s3.log",
+        "fail_marker": "ERROR"
+      },
+      "active_from": "2026-11-13T15:00:00Z",
+      "healthy": "ran at 03:00 UTC; no ERROR in its last lines",
+      "owner": "robert",
+      "runbook": "OPERATIONS.md#scheduled-jobs",
+      "defined_in": [
+        "scripts/setup_backup_cron.sh::backup_s3.sh"
+      ]
+    },
+    {
+      "id": "backup-dropbox",
+      "name": "Production backup, tier 3 Dropbox weekly (backup_dropbox.sh)",
+      "host": "ec2",
+      "schedule": {
+        "text": "Sundays 04:00 UTC (root cron)",
+        "kind": "interval",
+        "every_s": 604800
+      },
+      "expected_every_s": 604800,
+      "missed_after_s": 1209600,
+      "stuck_after_s": 7200,
+      "grace_s": 86400,
+      "evidence": {
+        "kind": "mtime",
+        "path": "/opt/minimoi/logs/backup_dropbox.log",
+        "fail_marker": "ERROR"
+      },
+      "active_from": "2026-11-13T15:00:00Z",
+      "healthy": "ran last Sunday; no ERROR in its last lines (OPERATIONS.md: rclone missing, so it has failed silently)",
+      "owner": "robert",
+      "runbook": "OPERATIONS.md#scheduled-jobs",
+      "defined_in": [
+        "scripts/setup_backup_cron.sh::backup_dropbox.sh"
+      ]
+    },
+    {
+      "id": "host-script-parity",
+      "name": "Host scripts match the deployed commit (host_script_parity.py)",
+      "host": "ec2",
+      "schedule": {
+        "text": "daily 05:20 UTC (root cron)",
+        "kind": "daily",
+        "at": "05:20",
+        "tz": "UTC"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 3600,
+      "evidence": {
+        "kind": "mtime",
+        "path": "/opt/minimoi/logs/host_script_parity.log",
+        "fail_marker": "\"ok\": false"
+      },
+      "active_from": "2026-11-13T15:00:00Z",
+      "healthy": "ran today; every listed host script matches the deployed commit",
+      "owner": "robert",
+      "runbook": "scripts/operations/host_script_parity.py",
+      "defined_in": [
+        "scripts/operations/host_script_parity.py::CRON_LINE"
+      ]
+    },
+    {
+      "id": "lesen-refresh",
+      "name": "German Lesen refresh (hourly check, one refresh a day)",
+      "host": "ec2",
+      "schedule": {
+        "text": "5 past each hour (root cron); refreshes once a day, 06:00-22:00 Chicago",
+        "kind": "interval",
+        "every_s": 3600
+      },
+      "expected_every_s": 3600,
+      "missed_after_s": 21600,
+      "stuck_after_s": 3600,
+      "grace_s": 1800,
+      "evidence": {
+        "kind": "mtime",
+        "path": "/opt/minimoi/logs/lesen_refresh.log"
+      },
+      "active_from": "2026-11-13T15:00:00Z",
+      "healthy": "the hourly check ran within the last few hours",
+      "owner": "robert",
+      "runbook": "scripts/operations/install_lesen_refresh_cron.sh",
+      "defined_in": [
+        "scripts/operations/install_lesen_refresh_cron.sh::lesen_refresh_cli"
+      ]
+    },
+    {
+      "id": "curator-daily",
+      "name": "Curator daily briefing (run_curator_cron_ec2.sh)",
+      "host": "ec2",
+      "schedule": {
+        "text": "hourly (ec2-user cron); fires once a day 12:00-20:00 UTC",
+        "kind": "interval",
+        "every_s": 3600
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 7200,
+      "evidence": {
+        "kind": "mtime",
+        "path": "/opt/minimoi/logs/curator_cron.log",
+        "fail_marker": "ERROR"
+      },
+      "active_from": "2026-11-13T15:00:00Z",
+      "healthy": "the briefing went out today; no ERROR in the last lines",
+      "owner": "robert",
+      "runbook": "scripts/setup_ec2_cron.sh",
+      "defined_in": [
+        "scripts/setup_ec2_cron.sh::run_curator_cron_ec2"
+      ]
+    },
+    {
+      "id": "intelligence-daily",
+      "name": "AI Observations daily (run_intelligence_cron_ec2.sh)",
+      "host": "ec2",
+      "schedule": {
+        "text": "15 past each hour (ec2-user cron); runs once a day",
+        "kind": "interval",
+        "every_s": 3600
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 7200,
+      "evidence": {
+        "kind": "mtime",
+        "path": "/opt/minimoi/logs/intelligence_cron.log",
+        "fail_marker": "ERROR"
+      },
+      "active_from": "2026-11-13T15:00:00Z",
+      "healthy": "today's observations ran; no ERROR in the last lines",
+      "owner": "robert",
+      "runbook": "scripts/setup_ec2_cron.sh",
+      "defined_in": [
+        "scripts/setup_ec2_cron.sh::run_intelligence_cron_ec2"
+      ]
+    },
+    {
+      "id": "mc-repo-refresh",
+      "name": "MC repo clone refresh (git pull, /etc/cron.d/minimoi-mc-judgment)",
+      "host": "ec2",
+      "schedule": {
+        "text": "daily 04:40 Chicago",
+        "kind": "daily",
+        "at": "04:40",
+        "tz": "America/Chicago"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 3600,
+      "evidence": {
+        "kind": "mtime",
+        "path": "/opt/minimoi/mc/repo/.git/FETCH_HEAD"
+      },
+      "active_from": "2026-11-13T15:00:00Z",
+      "healthy": "MC's clone fetched from GitHub today",
+      "owner": "robert",
+      "runbook": "scripts/operations/deploy_mc_container_ec2.sh",
+      "defined_in": [
+        "scripts/operations/deploy_mc_container_ec2.sh::pull -q --ff-only"
+      ]
+    },
+    {
+      "id": "mc-judgment-collect",
+      "name": "MC judgment collection (/etc/cron.d/minimoi-mc-judgment)",
+      "host": "ec2",
+      "schedule": {
+        "text": "daily 04:50 Chicago",
+        "kind": "daily",
+        "at": "04:50",
+        "tz": "America/Chicago"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 3600,
+      "evidence": {
+        "kind": "mtime",
+        "path": "/opt/minimoi/logs/mc-judgment-collect.log",
+        "fail_marker": "REFUSED"
+      },
+      "active_from": "2026-11-13T15:00:00Z",
+      "healthy": "collected today; no REFUSED in the last lines",
+      "owner": "robert",
+      "runbook": "scripts/operations/deploy_mc_container_ec2.sh",
+      "defined_in": [
+        "scripts/operations/deploy_mc_container_ec2.sh::collect >>"
+      ]
+    },
+    {
+      "id": "jobs-watchdog-ec2",
+      "name": "Scheduled-jobs watchdog (production)",
+      "host": "ec2",
+      "schedule": {
+        "text": "hourly at :07 (root, /etc/cron.d/minimoi-jobs-health)",
+        "kind": "interval",
+        "every_s": 3600
+      },
+      "expected_every_s": 3600,
+      "missed_after_s": 21600,
+      "stuck_after_s": 1800,
+      "grace_s": 1800,
+      "status_file": "jobs-watchdog-ec2.json",
+      "healthy": "judged every production job within the last hour",
+      "owner": "robert",
+      "runbook": "scripts/jobs/host_watchdog.sh",
+      "defined_in": [
+        "scripts/jobs/install_host_watchdog.sh::ec2 watch"
+      ],
+      "active_from": "2026-11-13T15:00:00Z"
+    },
+    {
+      "id": "jobs-daily-health",
+      "name": "Daily health check for MC (every host)",
+      "host": "ec2",
+      "schedule": {
+        "text": "daily 09:10 Chicago (root, /etc/cron.d/minimoi-jobs-health)",
+        "kind": "daily",
+        "at": "09:10",
+        "tz": "America/Chicago"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 1800,
+      "status_file": "jobs-daily-health.json",
+      "healthy": "filed today's report for MC; needs-action items reached Telegram",
+      "owner": "robert",
+      "runbook": "scripts/jobs/daily_health.py",
+      "defined_in": [
+        "scripts/jobs/install_host_watchdog.sh::ec2 daily"
+      ],
+      "active_from": "2026-11-13T15:00:00Z"
+    },
+    {
+      "id": "jobs-helper-check",
+      "name": "Apprentice's daily job-health note for MC",
+      "host": "ec2",
+      "schedule": {
+        "text": "daily 09:15 Chicago (root cron, docker exec into the portal)",
+        "kind": "daily",
+        "at": "09:15",
+        "tz": "America/Chicago"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 1800,
+      "status_file": "jobs-helper-check.json",
+      "status_root": "mc-observations",
+      "healthy": "the Apprentice's note was accepted by MC today (a deterministic note filed instead is a warn)",
+      "owner": "robert",
+      "runbook": "scripts/jobs/helper_check.py",
+      "defined_in": [
+        "scripts/jobs/install_host_watchdog.sh::helper_check.py"
+      ]
+    },
+    {
+      "id": "cos-loop-f",
+      "name": "CoS loop F: build-discipline check",
+      "host": "ec2",
+      "schedule": {
+        "text": "daily 07:30 (APScheduler in minimoi-cos-scheduler)",
+        "kind": "interval",
+        "every_s": 86400
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 259200,
+      "stuck_after_s": 3600,
+      "evidence": {
+        "kind": "none",
+        "why": "in-process scheduler; writes no run record a watchdog can read yet"
+      },
+      "healthy": "ran on its schedule (the CoS log shows each loop run)",
+      "owner": "robert",
+      "runbook": "domains/cos/chief_of_staff.py",
+      "defined_in": [
+        "domains/cos/chief_of_staff.py::id=\"loop_f\""
+      ]
+    },
+    {
+      "id": "cos-loop-g",
+      "name": "CoS loop G: guest-access staleness nudge",
+      "host": "ec2",
+      "schedule": {
+        "text": "hourly (APScheduler)",
+        "kind": "interval",
+        "every_s": 3600
+      },
+      "expected_every_s": 3600,
+      "missed_after_s": 10800,
+      "stuck_after_s": 3600,
+      "evidence": {
+        "kind": "none",
+        "why": "in-process scheduler; writes no run record a watchdog can read yet"
+      },
+      "healthy": "ran on its schedule (the CoS log shows each loop run)",
+      "owner": "robert",
+      "runbook": "domains/cos/chief_of_staff.py",
+      "defined_in": [
+        "domains/cos/chief_of_staff.py::id=\"loop_g\""
+      ]
+    },
+    {
+      "id": "cos-loop-h",
+      "name": "CoS loop H: EC2 health check",
+      "host": "ec2",
+      "schedule": {
+        "text": "every 30 min (APScheduler)",
+        "kind": "interval",
+        "every_s": 1800
+      },
+      "expected_every_s": 1800,
+      "missed_after_s": 5400,
+      "stuck_after_s": 3600,
+      "evidence": {
+        "kind": "none",
+        "why": "in-process scheduler; writes no run record a watchdog can read yet"
+      },
+      "healthy": "ran on its schedule (the CoS log shows each loop run)",
+      "owner": "robert",
+      "runbook": "domains/cos/chief_of_staff.py",
+      "defined_in": [
+        "domains/cos/chief_of_staff.py::id=\"loop_h\""
+      ]
+    },
+    {
+      "id": "cos-loop-i",
+      "name": "CoS loop I: gateway cost and fallback checkpoint",
+      "host": "ec2",
+      "schedule": {
+        "text": "daily 07:45 (APScheduler)",
+        "kind": "interval",
+        "every_s": 86400
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 259200,
+      "stuck_after_s": 3600,
+      "evidence": {
+        "kind": "none",
+        "why": "in-process scheduler; writes no run record a watchdog can read yet"
+      },
+      "healthy": "ran on its schedule (the CoS log shows each loop run)",
+      "owner": "robert",
+      "runbook": "domains/cos/chief_of_staff.py",
+      "defined_in": [
+        "domains/cos/chief_of_staff.py::id=\"loop_i\""
+      ]
+    },
+    {
+      "id": "cos-loop-r",
+      "name": "CoS loop R: reminders due",
+      "host": "ec2",
+      "schedule": {
+        "text": "every minute (APScheduler)",
+        "kind": "interval",
+        "every_s": 60
+      },
+      "expected_every_s": 60,
+      "missed_after_s": 180,
+      "stuck_after_s": 3600,
+      "evidence": {
+        "kind": "none",
+        "why": "in-process scheduler; writes no run record a watchdog can read yet"
+      },
+      "healthy": "ran on its schedule (the CoS log shows each loop run)",
+      "owner": "robert",
+      "runbook": "domains/cos/chief_of_staff.py",
+      "defined_in": [
+        "domains/cos/chief_of_staff.py::id=\"loop_r\""
+      ]
+    },
+    {
+      "id": "cos-loop-b",
+      "name": "CoS loop B: German watch",
+      "host": "ec2",
+      "schedule": {
+        "text": "Sundays 09:00 (APScheduler)",
+        "kind": "interval",
+        "every_s": 604800
+      },
+      "expected_every_s": 604800,
+      "missed_after_s": 1814400,
+      "stuck_after_s": 3600,
+      "evidence": {
+        "kind": "none",
+        "why": "in-process scheduler; writes no run record a watchdog can read yet"
+      },
+      "healthy": "ran on its schedule (the CoS log shows each loop run)",
+      "owner": "robert",
+      "runbook": "domains/cos/chief_of_staff.py",
+      "defined_in": [
+        "domains/cos/chief_of_staff.py::id=\"loop_b\""
+      ]
+    },
+    {
+      "id": "cos-loop-c",
+      "name": "CoS loop C: Curator watch",
+      "host": "ec2",
+      "schedule": {
+        "text": "Sundays 10:00 (APScheduler)",
+        "kind": "interval",
+        "every_s": 604800
+      },
+      "expected_every_s": 604800,
+      "missed_after_s": 1814400,
+      "stuck_after_s": 3600,
+      "evidence": {
+        "kind": "none",
+        "why": "in-process scheduler; writes no run record a watchdog can read yet"
+      },
+      "healthy": "ran on its schedule (the CoS log shows each loop run)",
+      "owner": "robert",
+      "runbook": "domains/cos/chief_of_staff.py",
+      "defined_in": [
+        "domains/cos/chief_of_staff.py::id=\"loop_c\""
+      ]
+    },
+    {
+      "id": "cos-loop-d",
+      "name": "CoS loop D: novelty watch",
+      "host": "ec2",
+      "schedule": {
+        "text": "1st and 15th 08:00 (APScheduler)",
+        "kind": "interval",
+        "every_s": 1296000
+      },
+      "expected_every_s": 1296000,
+      "missed_after_s": 3888000,
+      "stuck_after_s": 3600,
+      "evidence": {
+        "kind": "none",
+        "why": "in-process scheduler; writes no run record a watchdog can read yet"
+      },
+      "healthy": "ran on its schedule (the CoS log shows each loop run)",
+      "owner": "robert",
+      "runbook": "domains/cos/chief_of_staff.py",
+      "defined_in": [
+        "domains/cos/chief_of_staff.py::id=\"loop_d\""
+      ]
+    },
+    {
+      "id": "nightly-tests",
+      "name": "Nightly test suite (GitHub Actions)",
+      "host": "github",
+      "schedule": {
+        "text": "daily 09:50 UTC (.github/workflows/nightly-tests.yml)",
+        "kind": "daily",
+        "at": "09:50",
+        "tz": "UTC"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 7200,
+      "evidence": {
+        "kind": "none",
+        "why": "runs on GitHub; its result is on the Actions page, not on a MiniMoi host"
+      },
+      "healthy": "last night's run passed",
+      "owner": "robert",
+      "runbook": ".github/workflows/nightly-tests.yml",
+      "defined_in": [
+        ".github/workflows/nightly-tests.yml::cron:"
+      ]
+    },
+    {
+      "id": "jobs-watchdog-dev",
+      "name": "Scheduled-jobs watchdog (Dev)",
+      "host": "dev",
+      "schedule": {
+        "text": "hourly (systemd minimoi-jobs-watchdog.timer)",
+        "kind": "interval",
+        "every_s": 3600
+      },
+      "expected_every_s": 3600,
+      "missed_after_s": 21600,
+      "stuck_after_s": 1800,
+      "grace_s": 1800,
+      "status_file": "jobs-watchdog-dev.json",
+      "healthy": "judged every Dev job within the last hour",
+      "owner": "robert",
+      "runbook": "scripts/jobs/host_watchdog.sh",
+      "defined_in": [
+        "scripts/jobs/install_host_watchdog.sh::*:07:00"
+      ],
+      "active_from": "2026-11-13T15:00:00Z"
+    },
+    {
+      "id": "jobs-daily-health-dev",
+      "name": "Daily health check for Dev's MC",
+      "host": "dev",
+      "schedule": {
+        "text": "daily 09:10 Chicago (systemd minimoi-jobs-daily-health.timer)",
+        "kind": "daily",
+        "at": "09:10",
+        "tz": "America/Chicago"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 1800,
+      "status_file": "jobs-daily-health-dev.json",
+      "healthy": "filed today's Dev report for Dev's MC (no Telegram from Dev)",
+      "owner": "robert",
+      "runbook": "scripts/jobs/daily_health.py",
+      "defined_in": [
+        "scripts/jobs/install_host_watchdog.sh::09:10:00 America/Chicago"
+      ],
+      "active_from": "2026-11-13T15:00:00Z"
+    },
+    {
+      "id": "curator-mac",
+      "name": "Curator pipeline on the Mac (com.vanstedum.curator)",
+      "host": "mac",
+      "schedule": {
+        "text": "hourly (launchd StartInterval 3600)",
+        "kind": "interval",
+        "every_s": 3600
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 7200,
+      "evidence": {
+        "kind": "none",
+        "why": "retired"
+      },
+      "retired": true,
+      "retired_on": "2026-09-26",
+      "retired_why": "Curator moved to production (curator-daily); the launch agent is disabled",
+      "owner": "robert",
+      "runbook": "scripts/operations/run_curator_cron.sh",
+      "defined_in": [
+        "scripts/operations/run_curator_cron.sh::StartInterval"
+      ]
+    },
+    {
+      "id": "intelligence-mac",
+      "name": "AI Observations on the Mac (com.vanstedum.curator-intelligence)",
+      "host": "mac",
+      "schedule": {
+        "text": "daily 18:00 (launchd)",
+        "kind": "daily",
+        "at": "18:00",
+        "tz": "America/Chicago"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 7200,
+      "evidence": {
+        "kind": "none",
+        "why": "retired"
+      },
+      "retired": true,
+      "retired_on": "2026-09-26",
+      "retired_why": "moved to production (intelligence-daily); the launch agent is disabled",
+      "owner": "robert",
+      "runbook": "scripts/operations/run_intelligence_cron.sh",
+      "defined_in": [
+        "scripts/operations/run_intelligence_cron.sh::StartCalendarInterval"
+      ]
+    },
+    {
+      "id": "priority-feed-mac",
+      "name": "Curator priority feed on the Mac (com.vanstedum.curator-priority-feed)",
+      "host": "mac",
+      "schedule": {
+        "text": "hourly (launchd StartInterval 3600)",
+        "kind": "interval",
+        "every_s": 3600
+      },
+      "expected_every_s": 3600,
+      "missed_after_s": 21600,
+      "stuck_after_s": 3600,
+      "evidence": {
+        "kind": "none",
+        "why": "retired"
+      },
+      "retired": true,
+      "retired_on": "2026-09-27",
+      "retired_why": "the launch agent is disabled; no production replacement",
+      "owner": "robert",
+      "runbook": "scripts/operations/run_priority_feed_cron.sh",
+      "defined_in": [
+        "scripts/operations/run_priority_feed_cron.sh::StartInterval"
+      ]
+    }
+  ],
+  "not_jobs": [
+    {
+      "defined_in": "docker-compose.records-production.yml::restart:",
+      "why": "minimoi-records is a long-running service (healthcheck), default off; restart \"no\" is a safety choice, not a one-shot job"
+    },
+    {
+      "defined_in": "scripts/vault/pin_manifest.py::StartCalendarInterval",
+      "why": "reads a plist's schedule into a manifest; defines no job"
     }
   ]
 }

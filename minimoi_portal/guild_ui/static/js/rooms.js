@@ -913,6 +913,8 @@ function participantState(p) {
   if ((meeting?.turns || []).some(t => t.addressee === p.id && t.state === 'uncertain')) return p.waiting ? 'Waiting · reply outcome unknown' : 'Reply outcome unknown';
   if (p.waiting) return 'Waiting';
   if (active.length) return 'Queued';
+  // FF-05: Records says no connector reaches this teammate on this host (production has no Claude Code route yet).
+  if (p.rsvp !== 'accepted' && p.available_here === false) return 'Not available here';
   if (p.rsvp === 'no_response') return 'Invite timed out: no answer, it may not be connected here';
   if (p.rsvp !== 'accepted') return p.rsvp === 'invited' ? 'Invited' : 'Not joined';
   return ['here','reachable','answering'].includes(p.reach?.state) ? 'Available' : 'Not reachable';
@@ -1120,10 +1122,12 @@ function renderTo() {
     type: 'button', class: 'rm-chip', 'data-rm-to-chip': p.id, 'aria-pressed': String(targets.has(p.id)),
     title: `${targets.has(p.id) ? 'Remove' : 'Add'} ${p.label}` }, p.label));
   const all = mates.length > 0 && selected.length === mates.length;
-  const said = !selected.length ? (requireRecipient ? 'Choose recipient' : 'Automatic') : all ? (mates.length > 1 ? 'Everyone' : shortName(mates[0].id, mates[0].label))
+  // FF-09: with two teammates, "Everyone" reads as "Both": the one way (besides naming them) to have both answer.
+  const everyone = mates.length === 2 ? 'Both' : 'Everyone';
+  const said = !selected.length ? (requireRecipient ? 'Choose recipient' : 'Automatic') : all ? (mates.length > 1 ? everyone : shortName(mates[0].id, mates[0].label))
     : selected.map((p) => shortName(p.id, p.label)).join(', ');
   const controls = [el('button', { type: 'button', class: 'rm-chip rm-to-all', 'data-rm-to-all': true,
-      'aria-pressed': String(all) }, 'Everyone')];
+      'aria-pressed': String(all) }, everyone)];
   if (mates.length > 5) {
     const picker = el('details', { 'data-rm-picker': true, class: 'rm-picker' });
     picker.open = !!wasOpen;
@@ -1137,8 +1141,10 @@ function renderTo() {
   } else controls.push(...chips);
   controls.push(el('button', { type: 'button', class: 'rm-btn rm-to-clear', 'data-rm-to-clear': true }, 'Automatic'));
   controls.push(el('span', { class: 'small rm-to-hint', 'aria-live': 'polite' }, selected.length
-    ? (all ? 'Everyone discusses. Name someone — typed or spoken — to have them act.' : `${selected.map((p) => p.label).join(', ')} selected to answer.`)
-    : requireRecipient ? 'Choose who should answer before sending. Your draft is kept.' : 'Address a teammate by name, or ask the room. Everyone discusses. Name someone — typed or spoken — to have them act.'));
+    ? (all ? `${everyone} answer and discuss. Name someone — typed or spoken — to have them act.` : `${selected.map((p) => p.label).join(', ')} selected to answer.`)
+    : requireRecipient ? 'Choose who should answer before sending. Your draft is kept.'
+      : mates.length > 1 ? `Automatic: one teammate answers — CoS for planning and how things work, MC for build and technical. Name someone, or choose ${everyone}, for more.`
+        : 'Address a teammate by name, or ask the room. Name someone — typed or spoken — to have them act.'));
   const menu = el('details', { class: 'rm-to-menu', 'data-rm-to-menu': true });
   menu.open = !!menuWasOpen;
   const sum = el('summary', { class: 'rm-to-sum', 'aria-label': `Send to: ${said}`, title: 'Who hears you' });
@@ -1218,9 +1224,13 @@ function renderCards() {
   list.replaceChildren(...cards.map((c) => {
     const li = el('li', { class: 'rm-card-row', 'data-rm-card': c.principal });
     const member = inRoom.get(c.principal);
-    li.append(el('strong', {}, c.label), el('span', { class: 'small', 'data-rm-card-state': true }, c.connected ? cardState(c) : 'No connector in Rooms yet'));
-    if (c.connected && !c.proven_at) li.append(el('button', { type: 'button', class: 'rm-btn', 'data-rm-prove': c.principal }, 'Prove first'));
+    // FF-05: a teammate no connector reaches on this host is shown, not offered: its invite could only time out.
+    const unavailable = c.available_here === false;
+    li.append(el('strong', {}, c.label), el('span', { class: 'small', 'data-rm-card-state': true },
+      unavailable ? 'Not available here: no connector reaches it on this host' : c.connected ? cardState(c) : 'No connector in Rooms yet'));
+    if (c.connected && !c.proven_at && !unavailable) li.append(el('button', { type: 'button', class: 'rm-btn', 'data-rm-prove': c.principal }, 'Prove first'));
     const invited = member && member.rsvp !== 'declined';
+    if (unavailable && !invited) return li;
     li.append(el('button', { type: 'button', class: 'rm-btn', 'data-rm-invite-card': c.principal, disabled: invited || !room || room.state === 'closed' ? '' : null },
       invited ? (member.rsvp === 'accepted' ? 'In this meeting' : 'Invited') : 'Invite'));
     return li;

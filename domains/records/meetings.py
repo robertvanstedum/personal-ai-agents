@@ -179,6 +179,17 @@ def hosted(db, principal):
     return bool(db.execute("SELECT 1 FROM hosted_teammates WHERE principal=?", (principal,)).fetchone())
 
 
+def route_here(db, principal):
+    """FF-05: can a turn for this teammate reach anyone on this Records host? A connector or worker is bound here
+    (hosted_teammates) AND it has shown it works here: proven by a committed reply, or its worker checking in
+    right now (any readyz report, ready or not). Production has a Claude Code card but no connector runs against
+    it, so Claude is never proven or checked in there: it reads "not available here" without any environment
+    check, and turns available the day a route checks in."""
+    record = card(db, principal)
+    return bool(record and hosted(db, principal) and (record["proven_at"] or fresh(db, "*", principal, "reachable")
+                                                      or fresh(db, "*", principal, "checked_in")))
+
+
 def label_of(db, principal):
     row = db.execute("SELECT label FROM principals WHERE id=?", (principal,)).fetchone()
     return row["label"] if row else principal
@@ -248,6 +259,26 @@ LEAD = r"(?:(?:okay|ok|hey|hi|hello|so)[, \t]+)*"
 IMPERATIVE = re.compile(r"^(?:double[- ]?check|verify|track|register|set up|setup|handle|own|lead|follow up|look into|open|create|add|help|ask|discuss|listen|answer|investigate|report|check|inspect|review|read|file|summarise|summarize|tell|show|find|explain|compare|draft|write|update|remove|delete|cancel|stop|wait|pause|resume|hold|stay|run|test|deploy|fix|build|plan|schedule|search|look|confirm|give|take|make|continue|proceed|retry|prove|send|start|end|save|record)\b", re.I)
 QUESTION = re.compile(r"^(?:what|how|why|when|where|who|which)\b|^(?:can|could|would|will|should|did|do|have|are)\s+you\b|^you\s+(?:here|there)\b", re.I)
 COURTESY = re.compile(r"^(?:thanks|thank you|hello|hi|hey|great|well done)\b", re.I)
+# FF-09 (1.2 fast-follow, answer A6): "To: Automatic" with nobody named gets ONE answer, not one from everyone.
+# Deterministic keyword rules, no model call: MC for build and technical work, CoS for planning and how things work,
+# CoS whenever it is unclear. Saying "everyone"/"both of you" in the message, or choosing Everyone in To, still asks all.
+BUILD_TOPICS = re.compile(r"\b(?:build|builds|built|deploy\w*|release|ship|bug|bugs|defect\w*|issue|issues|fix\w*|code|coding|"
+                          r"test|tests|testing|ci|pipeline|pr|prs|pull request|merge\w*|commit\w*|branch\w*|error\w*|crash\w*|"
+                          r"logs?|server\w*|container\w*|docker|database|db|postgres|api|endpoint\w*|git|github|"
+                          r"health|healthy|outage|broken|failing|failed|install\w*|config\w*|migration\w*|script\w*|"
+                          r"latency|performance|production|prod|staging|worker\w*|connector\w*|flicker|refactor\w*|repo\w*)\b", re.I)
+PLANNING_TOPICS = re.compile(r"\b(?:plan|plans|planning|priorit\w*|schedule\w*|roadmap\w*|strateg\w*|goals?|decide|decision\w*|"
+                             r"agenda|focus|next steps?|today|tomorrow|this week|next week|career|meeting\w*|"
+                             r"how (?:does|do|did|is|are|should|would)|explain\w*|work on|walk me through)\b", re.I)
+EVERYONE_SPOKEN = re.compile(r"(?<!\w)@?(?:everyone|everybody)\b|(?<!\w)@all\b|\b(?:all|both) of you\b|\byou (?:both|two|all)\b", re.I)
+
+
+def auto_responder(text, available):
+    """The one teammate who answers an unaddressed message: CoS unless the message is plainly build or technical."""
+    prose = owner_prose(text)
+    build, planning = len(BUILD_TOPICS.findall(prose)), len(PLANNING_TOPICS.findall(prose))
+    preferred = ("mc", "cos") if build > planning else ("cos", "mc")
+    return next((p for p in preferred if p in available), available[0])
 
 
 def aliases(row):
@@ -396,6 +427,13 @@ def routing_names(db, room, body, target, meeting):
             # The sole available teammate is the chat recipient. Preserve the
             # full audience so waiting participants still get explanatory notes.
             return selected or ['everyone'], set(available)
+        if len(available) > 1 and not selected and not EVERYONE_SPOKEN.search(prose):
+            # FF-09: Automatic picks one responder (see auto_responder). It stays discussion, like the open question it
+            # replaces: a keyword pick is not someone being named, so it gets no action turn. Waiting teammates stay in
+            # the audience only so their waiting note still shows; the others step back unless named or Everyone is chosen.
+            chosen = auto_responder(body, available)
+            waiting = [row["actor"] for row in db.execute("SELECT actor FROM meeting_waits WHERE room=?", (room,))]
+            return [chosen, *waiting], set()
     # Naming someone, typed or spoken, makes them the audience: the others step back rather than discuss
     # (Robert, Dev 4 Nov: "I would need to say MC do this and you pick it up and CoS steps back").
     if spoken:
@@ -773,6 +811,10 @@ class Meetings:
             record = card(db, target)
             if not record:
                 raise Problem("Only a teammate with a card can be invited here", 404)
+            existing_member = db.execute("SELECT 1 FROM members WHERE room=? AND actor=?", (room, target)).fetchone()
+            if not existing_member and not route_here(db, target):
+                # FF-05: an invite nobody can answer only times out ("Invite timed out") two minutes later.
+                raise Problem(f"{label_of(db, target)} is not available here: no connector reaches it on this host", 409)
             db.execute("INSERT INTO members VALUES(?,?,?) ON CONFLICT(room,actor) DO UPDATE SET role=excluded.role",
                        (room, target, role))
             self.ensure_meeting(db, room, facilitator=target)
@@ -851,6 +893,7 @@ class Meetings:
                 participants.append({"id": m["id"], "label": m["label"], "kind": m["kind"], "role": m["role"],
                                      **rsvp, "reach": self.reach(db, room, m["id"], m["kind"], record),
                                      "proven_at": record["proven_at"] if record else None,
+                                     "available_here": route_here(db, m["id"]) if record else None,
                                      "teammate": bool(record), "waiting": bool(db.execute(
                                          "SELECT 1 FROM meeting_waits WHERE room=? AND actor=?", (room, m["id"])).fetchone())})
             turns = [self.public_turn(db, dict(r)) for r in db.execute(
@@ -1050,6 +1093,7 @@ class Meetings:
                 record = dict(row)
                 record["connected"] = hosted(db, record["principal"])
                 record["reachable"] = fresh(db, "*", record["principal"], "reachable")
+                record["available_here"] = route_here(db, record["principal"])
                 record["auto_accept"] = bool(record["auto_accept"])
                 out.append(record)
             return out
@@ -1216,6 +1260,8 @@ class Meetings:
             bound = self.require_work(db, auth)
             if principal not in bound:
                 raise Problem("Teammate not hosted by this worker", 404)
+            # FF-05: a live worker is a route here even before its teammate is proven or ready (invite, then Prove).
+            set_presence(db, "*", principal, "checked_in", REACHABLE_TTL_S, "worker_readyz")
             try:
                 checked = datetime.fromisoformat(payload.get("readyz_at", ""))
                 if checked.tzinfo is None:

@@ -55,7 +55,7 @@ BASES = {"portal": "8481940d", "cos": "8481940d", "domains": "8481940d", "record
 OLDEST_ACCEPTED = "8481940d"                         # A live file may be any committed version since here: never a hand edit.
 
 MC_DIR, COS_DIR, PLUGINS = "/opt/minimoi/mc-agent/", "/opt/minimoi/cos-agent-a/", "/opt/minimoi/openclaw-plugins/"
-HANDBOOK, PERSONA = "services/mc_operations/handbook/", "services/mc_operations/personas/mc-chat/releases/0.1.31/"
+HANDBOOK, PERSONA = "services/mc_operations/handbook/", "services/mc_operations/personas/mc-chat/releases/0.1.32/"
 VOICE_JS = "core/realtime_voice/static/realtime-voice-controller.js"
 TEXT = (".py", ".js", ".mjs", ".cjs", ".json", ".html", ".css")
 
@@ -130,7 +130,7 @@ TARGETS = {
                             ("docker/mc-agent-container/handbook.mjs", MC_DIR + "handbook.mjs"), ("docker/mc-agent/relay_v2.mjs", MC_DIR + "relay_v2.mjs"),
                             ("services/mc_operations/plugins/minimoi-tools/", MC_DIR + "plugins/minimoi-tools/"),
                             (PERSONA, MC_DIR + "persona/"), (HANDBOOK + "manifest.json", MC_DIR + "handbook/manifest.json"),
-                            (HANDBOOK + "v0.1.2/", MC_DIR + "handbook/v0.1.2/"),
+                            (HANDBOOK + "v0.1.3/", MC_DIR + "handbook/v0.1.3/"),
                             ("scripts/ops/mc_container_security_test.py", "/opt/minimoi/mc-release/mc_container_security_test.py")),
                      always=(("docker/mc-agent-container/openclaw.json", MC_DIR + "openclaw.json"),),   # the plugin's tool list: start.sh applies it each start
                      replaces=(MC_DIR + "persona/", MC_DIR + "handbook/"), executables=(MC_DIR + "start.sh",), down="6 to 12 minutes (owner lease plus a 3-minute healthcheck)"),
@@ -294,7 +294,7 @@ def dockerfile_for(spec: dict, base_id: str, user: str, base_env=()) -> str:
     lines += [f"ENV {name}={value}" for name, value in missing_image_env(base_env, spec.get("image_env", ()))]
     if build == "mc":
         lines.append(f"RUN chmod 0755 {MC_DIR}start.sh && sh {MC_DIR}.beta-check-6c.sh && rm -f {MC_DIR}.beta-check-6c.sh")
-        lines.append("LABEL minimoi.persona=0.1.31 minimoi.handbook=0.1.2")
+        lines.append("LABEL minimoi.persona=0.1.32 minimoi.handbook=0.1.3")
     if build == "cos":
         lines.append(f"RUN node {COS_DIR}build-mc-role.mjs {COS_DIR}AGENTS.md {COS_DIR}owner-role {COS_DIR}mc-role-lock.json {COS_DIR}AGENTS.md {COS_DIR}ROLE_LOAD.json")
         lines.append(f"RUN node {COS_DIR}build-mc-handbook.mjs {COS_DIR}AGENTS.md {COS_DIR}handbook {COS_DIR}AGENTS.md {COS_DIR}ROLE_LOAD.json")
@@ -1044,7 +1044,7 @@ class RealHost:                                     # pragma: no cover  (exercis
                 else:
                     self.layout_report[key] = json.loads(self._sealed(new_id, "python", "-c", LAYOUT_CHECK, input=json.dumps(spec.get("layout_files", {}))).strip().splitlines()[-1])
             if spec.get("build") == "cos":
-                self._sealed(new_id, "grep", "-q", "BEGIN_MINIMOI_MC_HANDBOOK 0.1.2", COS_DIR + "AGENTS.md")
+                self._sealed(new_id, "grep", "-q", "BEGIN_MINIMOI_MC_HANDBOOK 0.1.3", COS_DIR + "AGENTS.md")
                 self._sealed(new_id, "test", "-f", COS_DIR + "ROLE_LOAD.json")
                 env = [x for e in self.O.inspect(spec["container"])["Config"]["Env"] if e.split("=")[0] in AGENT_ENV for x in ("-e", e)]
                 self._run("docker", "run", "--rm", "--network", "none", "--cap-drop", "ALL", *env, "--entrypoint", "sh", new_id, "-c",

@@ -24,10 +24,10 @@ ENV DISABLE_AUTOUPDATER=1 \
 COPY --chown=root:root docker/mc-agent-container/openclaw.json docker/mc-agent-container/start.sh docker/mc-agent-container/model-access.cjs docker/mc-agent-container/egress-proxy.mjs docker/mc-agent-container/handbook.mjs /opt/minimoi/mc-agent/
 # The reviewed portal relay (relay v2; byte-identical to the pinned native relay source). Runs as the mc-relay service.
 COPY --chown=root:root docker/mc-agent/relay_v2.mjs /opt/minimoi/mc-agent/relay_v2.mjs
-COPY --chown=root:root services/mc_operations/personas/mc-chat/releases/0.1.31/ /opt/minimoi/mc-agent/persona/
+COPY --chown=root:root services/mc_operations/personas/mc-chat/releases/0.1.32/ /opt/minimoi/mc-agent/persona/
 # The handbook the persona release pins (its manifest.json "handbook"); start.sh checks it and lays it out on every start.
 COPY --chown=root:root services/mc_operations/handbook/manifest.json /opt/minimoi/mc-agent/handbook/manifest.json
-COPY --chown=root:root services/mc_operations/handbook/v0.1.2/ /opt/minimoi/mc-agent/handbook/v0.1.2/
+COPY --chown=root:root services/mc_operations/handbook/v0.1.3/ /opt/minimoi/mc-agent/handbook/v0.1.3/
 # Phase 2: the MiniMoi tools plugin (the same reviewed source native MC loads) and its two fixed host helpers, plus the
 # fixed TCP forwarder that is the plugin's only way to the portal (via the tools door).
 COPY --chown=root:root services/mc_operations/plugins/minimoi-tools/ /opt/minimoi/mc-agent/plugins/minimoi-tools/
@@ -59,4 +59,4 @@ USER node
 ENTRYPOINT ["tini", "-g", "--", "/opt/minimoi/mc-agent/start.sh"]
 ARG MINIMOI_RELEASE_SHA=unknown
 ENV MINIMOI_RELEASE_SHA=${MINIMOI_RELEASE_SHA}
-LABEL minimoi.runtime.role=guild-mc minimoi.runtime.implementation=openclaw minimoi.persona=0.1.31 minimoi.handbook=0.1.2
+LABEL minimoi.runtime.role=guild-mc minimoi.runtime.implementation=openclaw minimoi.persona=0.1.32 minimoi.handbook=0.1.3

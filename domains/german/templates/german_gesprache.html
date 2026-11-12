@@ -426,6 +426,26 @@ document.body.classList.add('parch-mode');
     }
   }
 
+  // ── A new session starts clean (#474) ─────────────────────────────────────
+  // Nothing from an earlier session stays on the page once a new one starts:
+  // its transcript, the paste field, feedback and session cards are cleared,
+  // so Analysieren can only ever see the new session and never mix two. An
+  // earlier session that was not analysed yet is discarded only on a yes.
+  function beginNewSession() {
+    const unanalysed = savedSessions.filter(s => !s.feedbackData);
+    if (unanalysed.length && !window.confirm(
+      'Die vorige Sitzung wurde noch nicht analysiert. Verwerfen und eine neue Sitzung beginnen?'
+    )) {
+      return false;
+    }
+    resetNachDerSitzung();
+    const cardsList = document.getElementById('session-cards-list');
+    if (cardsList) cardsList.innerHTML = '';
+    savedSessions = [];
+    return true;
+  }
+  window.gespracheBeginNewSession = beginNewSession;
+
   // ── Nach der Sitzung — state reset ────────────────────────────────────────
 
   function resetNachDerSitzung() {
@@ -918,6 +938,53 @@ document.body.classList.add('parch-mode');
     container.prepend(card);
   }
 
+
+  // <analysis-response-reader> (#474) — tests/test_language_analysis_ff07.py runs this block in node.
+  // Every analysis answer is read here, so the page never shows a raw JSON
+  // parse error ("Unexpected token '<'"): an HTML page (sign-in, proxy or
+  // server error) becomes a plain sentence saying what happened.
+  const ANALYSIS_MESSAGES = {
+    signedOut: 'Ihre Anmeldung ist abgelaufen oder wurde nicht erkannt. Bitte laden Sie die Seite neu und melden Sie sich an. Ihr Text wurde nicht analysiert.',
+    tooLong: 'Der Text ist zu lang für eine Analyse (höchstens 60.000 Zeichen). Bitte kürzen Sie ihn und versuchen Sie es erneut.',
+    timeout: 'Keine Antwort innerhalb der Wartezeit. Die Analyse läuft vielleicht noch und wird dann gespeichert. Bitte schauen Sie in einer Minute unter „Letzte Sitzungen“ nach, bevor Sie es erneut versuchen.',
+    notJson: (status) => `Der Server hat eine Webseite statt einer Antwort geschickt (HTTP ${status}). Es wurde nichts analysiert. Bitte später erneut versuchen.`,
+    failed: (detail) => `Analyse fehlgeschlagen: ${detail}`,
+  };
+
+  function analysisError(message, status, retryable) {
+    const error = new Error(message);
+    error.status = status;
+    error.retryable = retryable;
+    return error;
+  }
+
+  async function readAnalysisResponse(res) {
+    const type = ((res.headers && res.headers.get('content-type')) || '').toLowerCase();
+    const sentToSignIn = !!(res.redirected && /\/login(\?|$|\/)/.test(res.url || ''));
+    let data = null;
+    if (type.includes('application/json') && !sentToSignIn) {
+      try { data = await res.json(); } catch (_) { data = null; }
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      let message = ANALYSIS_MESSAGES.notJson(res.status);
+      if (sentToSignIn || res.status === 401) message = ANALYSIS_MESSAGES.signedOut;
+      else if (res.status === 413) message = ANALYSIS_MESSAGES.tooLong;
+      else if (res.status === 504) message = ANALYSIS_MESSAGES.timeout;
+      throw analysisError(message, res.status, false);
+    }
+    if (!res.ok || data.ok === false) {
+      let message = ANALYSIS_MESSAGES.failed(data.message || data.error || `HTTP ${res.status}`);
+      if (res.status === 401) message = ANALYSIS_MESSAGES.signedOut;
+      else if (res.status === 413) message = ANALYSIS_MESSAGES.tooLong;
+      else if (res.status === 504) message = ANALYSIS_MESSAGES.timeout;
+      // Only a provider failure is retried: nothing was saved. A timeout is
+      // never retried, because the first request may still finish and save.
+      throw analysisError(message, res.status, res.status === 502 || res.status === 503);
+    }
+    return data;
+  }
+  // </analysis-response-reader>
+
   async function analyseSession(session, card) {
     const analyseBtn = card.querySelector('.btn-session-card-analyse');
     analyseBtn.disabled = true;
@@ -935,15 +1002,15 @@ document.body.classList.add('parch-mode');
           source: session.source || 'ki_sitzung',
         }),
       });
-      const data = await res.json();
-      if (!data.ok) {
-        if (attempt < 2 && res.status >= 500) {
+      try {
+        return await readAnalysisResponse(res);
+      } catch (err) {
+        if (attempt < 2 && err.retryable) {
           await new Promise(r => setTimeout(r, 1500));
           return doSubmit(attempt + 1);
         }
-        throw new Error(data.error || 'Fehler');
+        throw err;
       }
-      return data;
     };
 
     try {
@@ -1135,6 +1202,7 @@ document.body.classList.add('parch-mode');
       alert('Bitte zuerst Persona und Szene auswählen.');
       return;
     }
+    if (!beginNewSession()) return;
 
     // Ask the browser to unlock audio while the user gesture is active, but do
     // not block session startup on it. Some browsers leave resume() pending
@@ -1511,16 +1579,16 @@ document.body.classList.add('parch-mode');
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transcript, persona_name: personaName, scene, model, source: getSelectedSource() }),
       });
-      const data = await res.json();
-      if (!data.ok) {
-        if (attempt < 2 && res.status >= 500) {
+      try {
+        return await readAnalysisResponse(res);
+      } catch (err) {
+        if (attempt < 2 && err.retryable) {
           status.textContent = `${model} fehlgeschlagen — versuche erneut…`;
           await new Promise(r => setTimeout(r, 1500));
           return doSubmit(attempt + 1);
         }
-        throw new Error(data.error || 'Fehler');
+        throw err;
       }
-      return data;
     };
 
     try {
@@ -1780,19 +1848,22 @@ document.body.classList.add('parch-mode');
           scene: 'human_session',
         }),
       });
-      const data = await res.json();
+      const data = await readAnalysisResponse(res);
       if (data.session_id) {
         // Success: collapse tools, show analysiert row
         document.getElementById('konv-transcript-input-wrap').style.display = 'none';
         document.getElementById('konv-transcript-analysiert-row').style.display = '';
         status.textContent = `✓ Gespeichert als ${data.session_id}`;
       } else {
-        status.textContent = `Fehler: ${data.error || 'Unbekannt'}`;
+        status.textContent = data.guest
+          ? 'Gastzugang: Transkripte werden nicht analysiert oder gespeichert.'
+          : 'Analyse fehlgeschlagen: keine Sitzung gespeichert.';
         btn.textContent = 'Transkript analysieren →';
         btn.disabled = false;
       }
     } catch (e) {
-      status.textContent = 'Netzwerkfehler';
+      // A network failure has no status; everything else comes from readAnalysisResponse.
+      status.textContent = e && e.status !== undefined ? e.message : 'Netzwerkfehler — bitte Verbindung prüfen und erneut versuchen.';
       btn.textContent = 'Transkript analysieren →';
       btn.disabled = false;
     }
@@ -1991,11 +2062,14 @@ startBtn?.addEventListener('click', async () => {
     setStatus('Bitte zuerst Persona und Szene wählen.');
     return;
   }
+  // A new session starts clean (#474): the earlier transcript, paste field and
+  // session cards go, so Analysieren cannot pick up the previous session.
+  if (window.gespracheBeginNewSession && !window.gespracheBeginNewSession()) return;
   if (transcriptWrap) transcriptWrap.style.display = 'none';
   if (transcriptEl) transcriptEl.textContent = '';
 
   providerError = '';
-  controller = new RealtimeVoiceController({
+  const thisController = new RealtimeVoiceController({
     bootstrapUrl: './api/realtime-voice/bootstrap',
     onStateChange(state) {
       setStatus(`Status: ${state}`);
@@ -2024,8 +2098,11 @@ startBtn?.addEventListener('click', async () => {
       providerError = info.detail || info.reason;
       setStatus(`Fehler beim Anbieter: ${providerError}. Es wird nicht automatisch neu verbunden. Wenn das Gespräch nicht weitergeht, beenden Sie die Sitzung und starten Sie neu.`);
     },
-    onFinalize: finalizeAndSave,
+    // A late finalize from an earlier controller must not land in this
+    // session's view (#474).
+    onFinalize: (result) => { if (controller === thisController) return finalizeAndSave(result); },
   });
+  controller = thisController;
 
   setStatus('Verbinde…');
   await controller.startSession({
