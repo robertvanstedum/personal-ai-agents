@@ -2,7 +2,10 @@
 compose entry, no wiring into an agent. This is the frozen contract and its implementation, for review.
 
     POST /v1/ask        Authorization: Bearer <agent token>     Content-Type: application/json
-        {"query": str, "include_raw": bool?, "created_after": "YYYY-MM-DD"?, "created_before": "YYYY-MM-DD"?, "k": int?}
+        {"query": str, "include_raw": bool?, "created_after": "YYYY-MM-DD"?, "created_before": "YYYY-MM-DD"?, "k": int?,
+         "private": bool?}
+        ``private`` (#532): the asking host marks a query from a Private conversation; the query log then keeps no words and no
+        record ids. It never widens tier, scope or k.
         200 -> the Ask result (two lists, adjacent slot, unresolved, status, citation_rule), exactly ``tool.call``'s
     GET  /v1/health     -> {"ok": true}   (no auth, no detail)
 
@@ -105,8 +108,13 @@ def create_app(*, registry_path, shelf_root, embedder_factory=None, index_path=N
         include_raw = body.get("include_raw", False)
         if include_raw is True and "all" not in grant.tiers:
             return refuse(403, "tier_not_permitted", grant.name)
+        private = body.get("private", False)
+        if not isinstance(private, bool):
+            return refuse(400, "bad_arguments", grant.name)
+        body = {key: value for key, value in body.items() if key != "private"}
         result = tool.call(body, agent=grant.name, entry_point=grant.entry_point, scopes=grant.scopes, shelf_root=shelf_root,
-                           embedder=(embedder_factory or _embedder)(), index_path=index_path, log_path=log_path, clock=clock)
+                           embedder=(embedder_factory or _embedder)(), index_path=index_path, log_path=log_path, clock=clock,
+                           private=private)
         if "error" in result:
             return refuse(_STATUS.get(result["error"], 400), result["error"], grant.name)
         print(f"[ask_service] who={grant.name} status=200", file=sys.stderr, flush=True)

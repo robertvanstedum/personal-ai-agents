@@ -438,3 +438,23 @@ def test_an_unauthenticated_giant_body_is_never_read_at_all(world):
     stream = CountingStream()
     response = _open(client, stream, content_length="")
     assert response.status_code == 401 and stream.read_bytes == 0
+
+
+# ── private queries (#532) ───────────────────────────────────────────────────
+
+def test_a_private_request_is_answered_and_logged_without_its_words(world):
+    shelf, _, tokens, client = world
+    r = post(client, tokens["cos"], {"query": "sourdough starter", "include_raw": True, "private": True})
+    assert r.status_code == 200 and r.get_json()["keyword"]
+    row = log_rows(shelf)[-1]
+    assert row["private"] is True and "query" not in row and "sourdough" not in json.dumps(row)
+    assert row["caller"]["agent"] == "cos"
+
+
+def test_private_never_widens_the_grant_and_must_be_a_boolean(world):
+    shelf, _, tokens, client = world
+    r = post(client, tokens["mc"], {"query": "sourdough", "include_raw": True, "private": True})
+    assert r.status_code == 403 and r.get_json() == {"error": "tier_not_permitted"}
+    bad = post(client, tokens["cos"], {"query": "sourdough", "private": "yes"})
+    assert bad.status_code == 400 and bad.get_json() == {"error": "bad_arguments"}
+    assert log_rows(shelf) == []

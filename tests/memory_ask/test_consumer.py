@@ -196,3 +196,10 @@ def test_default_transport_concurrent_calls_do_not_share_sessions(monkeypatch):
         results=list(pool.map(lambda _:C.default_post("http://localhost/v1/ask",{},b"{}",8),range(2)))
     assert all(code==200 for code,_ in results)
     assert len(sessions)==2 and all(s.closed and len(s.calls)==1 for s in sessions)
+
+
+def test_a_private_ask_carries_the_private_mark_and_an_ordinary_one_does_not():
+    p = Post()
+    C.retrieve("backup decision", CFG, post=p, private=True)
+    C.retrieve("backup decision", CFG, post=p)
+    assert p.calls[0]["body"]["private"] is True and "private" not in p.calls[1]["body"]

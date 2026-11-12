@@ -60,11 +60,14 @@ def private_conversation(context, is_private) -> bool:
 def call_with_vault(backend, prompt, context, tool_policy, *, retrieve=None, environ=None, is_private=None):
     environ = os.environ if environ is None else environ
     configured = any(environ.get(k) for k in ("MINIMOI_VAULT_ASK_URL", "MINIMOI_VAULT_ASK_TOKEN"))
-    # Private turns must not reach a service that logs retrieval queries; out-of-scope conversations never ask. A
-    # Private CoS conversation is marked on its own record, not by record_mode, so that is checked too.
+    # Off-record turns and closed meetings never ask; out-of-scope conversations never ask. A Private CoS conversation
+    # (its own record says so, or it cannot be read) DOES ask, so CoS keeps Robert's history, but marks the query private:
+    # the service then logs it without its words or record ids (#532, Robert 12 Nov 2026). Private conversations are still
+    # never exported to the Vault (vault_cos_export takes private: false only).
     if (not configured or context.get("record_mode") == "off_record" or context.get("meeting_scope") == "closed"
-            or not in_scope(context, environ) or private_conversation(context, is_private)):
+            or not in_scope(context, environ)):
         return backend.call_backend(prompt, context, tool_policy)
+    private = private_conversation(context, is_private)
 
     built = None
     has_passages = False
@@ -73,7 +76,8 @@ def call_with_vault(backend, prompt, context, tool_policy, *, retrieve=None, env
     try:
         if retrieve is None:
             from core.memory_ask.consumer import retrieve
-        result = retrieve(prompt, max_chars=6000, max_bytes=12000)
+        result = (retrieve(prompt, max_chars=6000, max_bytes=12000, private=True) if private
+                  else retrieve(prompt, max_chars=6000, max_bytes=12000))
         candidate = result.prompt_block
         if candidate:
             if not isinstance(candidate, str):
