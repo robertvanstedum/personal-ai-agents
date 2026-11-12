@@ -22,3 +22,5 @@ def test_a_push_compares_against_the_last_successful_deploy():
     assert step["env"]["GH_TOKEN"] == "${{ github.token }}"
     assert "status=success" in step["run"] and 'release_base.sh "$PUSH_BEFORE"' in step["run"]
     assert "merge-base --is-ancestor" in step["run"]
+    # A run that succeeded without deploying (tests or docs only) is not a deploy (12 Nov: #519's run).
+    assert 'select(.name == "deploy") | .conclusion' in step["run"] and '"$DEPLOY" = "success"' in step["run"]
