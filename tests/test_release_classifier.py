@@ -223,6 +223,9 @@ BACKEND_IMPORT_EXPECTED = {
     "core/memory_shelf/render.py": ("utils.credential_scrub", "utils.payment_scrub"),
     "core/memory_shelf/report.py": ("core.jobs",),
     "scripts/jobs/watchdog.py": ("core.jobs",),
+    # FF-19 (#537): the daily health check and the cross-host pull read job status only; host tools, not a release image.
+    "scripts/jobs/daily_health.py": ("core.jobs",),
+    "scripts/jobs/pull_health.py": ("core.jobs",),
     "scripts/memory/daily_watch.py": ("core.jobs",),
     "scripts/memory/index_job.py": ("core.jobs",),
     # MC learning (Codex's MC runtime work, 24 Oct): portal-owned, reached through mc_tools_wiring and the MC tools
@@ -614,7 +617,10 @@ def _vault_runtime_importers(root):
                                                                "core.memory_shelf.ulid"),
                      "core/mc_learning/statement_shelf.py": ("core.memory_shelf.bundle", "core.memory_shelf.codes", "core.memory_shelf.render",
                                                              "core.memory_shelf.sessions", "core.memory_shelf.shelf", "core.memory_shelf.ulid"),
-                     "core/mc_learning/statements.py": ("core.memory_shelf.render",)}
+                     "core/mc_learning/statements.py": ("core.memory_shelf.render",),
+                     # FF-19 (#537): the Mac push of its health report uses the Vault Dest; the import runs only on the Mac,
+                     # from its runtime pin, never in a release image or on EC2/Dev (they push with the instance role).
+                     "core/jobs/health.py": ("core.memory_backup.backup",)}
     report_dependencies = {
         "core/memory_ask/regression.py": ("core.memory_ask.runner",),
         "core/memory_ask/runner.py": ("core.memory_ask.consumer", "core.memory_ask.context", "core.memory_ask.citation"),
