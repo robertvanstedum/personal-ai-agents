@@ -62,10 +62,16 @@ else
     log "WARNING: ${PRESERVE_DIR} not found — skipping Curator preservation sync"
 fi
 
-# Postgres dump piped directly to S3 (no EC2 disk pressure)
-log "Dumping Postgres personal_agents → ${S3_BUCKET}/${DATE}/postgres.dump"
-docker exec postgres-ai-agents pg_dump -U postgres personal_agents | \
-    aws s3 cp - "${S3_BUCKET}/${DATE}/postgres.dump"
-log "Postgres dump complete"
+# Postgres dumps piped directly to S3 (no EC2 disk pressure), encrypted in the pipe (#508, spec 1.2 D13): S3 only ever
+# holds ciphertext of the databases. Restore: age -d -i <Vault backup identity> postgres.dump.age | psql ...
+AGE="/opt/minimoi-tools/age-v1.3.2/age"
+RECIPIENTS="/opt/minimoi/backup.recipients"
+for DB in personal_agents litellm_keys; do
+    NAME="postgres.dump"; [ "$DB" = "personal_agents" ] || NAME="postgres-${DB}.dump"
+    log "Dumping Postgres ${DB} → ${S3_BUCKET}/${DATE}/${NAME}.age"
+    docker exec postgres-ai-agents pg_dump -U postgres "$DB" | "$AGE" -R "$RECIPIENTS" | \
+        aws s3 cp - "${S3_BUCKET}/${DATE}/${NAME}.age"
+done
+log "Postgres dumps complete"
 
 log "=== S3 backup complete: ${S3_BUCKET}/${DATE}/ ==="

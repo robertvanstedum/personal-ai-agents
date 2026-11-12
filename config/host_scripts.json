@@ -5,6 +5,7 @@
     {"host": "/opt/minimoi/scripts/backup_local.sh", "repo": "scripts/backup_local.sh", "ship": true, "mode": "0755"},
     {"host": "/opt/minimoi/scripts/backup_s3.sh", "repo": "scripts/backup_s3.sh", "ship": true, "mode": "0755"},
     {"host": "/opt/minimoi/scripts/backup_dropbox.sh", "repo": "scripts/backup_dropbox.sh", "ship": true, "mode": "0755"},
+    {"host": "/opt/minimoi/scripts/backup_seal.py", "repo": "scripts/operations/backup_seal.py", "ship": true, "mode": "0755"},
     {"host": "/opt/minimoi/scripts/host_script_parity.py", "repo": "scripts/operations/host_script_parity.py", "ship": true, "mode": "0755"},
     {"host": "/opt/minimoi-tools/career-sync/career_sync.py", "repo": "scripts/operations/career_sync.py", "ship": true, "mode": "0500"},
     {"host": "/opt/minimoi/scripts/run_curator_cron_ec2.sh", "repo": "scripts/run_curator_cron_ec2.sh", "ship": false},

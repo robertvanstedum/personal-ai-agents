@@ -106,6 +106,25 @@ else
     rsync_path "/opt/minimoi/cos/store/"        "cos-store/"
 fi
 rsync_path "/opt/minimoi/cos/conversations/"    "cos-conversations/"
+# #508: owner uploads, the files CoS wrote, and the 1.2 state (per-call usage records, partnership state).
+rsync_path "/opt/minimoi/cos/inbox/"            "cos-inbox/"
+rsync_path "/opt/minimoi/cos/outbox/"           "cos-outbox/"
+rsync_path "/opt/minimoi/state/1-2/"            "state-1-2/"
+
+# #508: the chat agent's own Docker volumes (its session database and its runtime credentials), copied consistently
+# (SQLite online backup; tmp/ skipped) by the helper the deploy installs beside this script.
+SEAL="/opt/minimoi/scripts/backup_seal.py"
+log "Capturing the cos-agent-a volumes"
+python3 -I -B "$SEAL" capture-volumes --dest "$LOCAL_BACKUP" --volume cos-agent-a-state --volume cos-agent-a-auth | tee -a "$LOG_FILE"
+
+# #508, spec 1.2 D13: personal and secret stores leave this host only as ciphertext. Each becomes <item>.tar.gz.age,
+# encrypted with the pinned age to the public keys in /opt/minimoi/backup.recipients (the Vault backup key, whose
+# identity is in Parameter Store), and its plaintext is removed from the dated folder before S3 (03:00) and Dropbox
+# (Sundays) copy it. On any failure the helper moves the plaintext out of the dated folder and exits 3 (ERR alert).
+log "Sealing personal stores"
+python3 -I -B "$SEAL" seal --dir "$LOCAL_BACKUP" --recipients /opt/minimoi/backup.recipients \
+    --item auth --item cos_memory.md --item cos_reminders --item cos_voice --item cos-store --item cos-conversations \
+    --item cos-inbox --item cos-outbox --item vol-cos-agent-a-state --item vol-cos-agent-a-auth | tee -a "$LOG_FILE"
 
 log "=== Local backup complete: ${LOCAL_BACKUP} ==="
 
