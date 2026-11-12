@@ -66,8 +66,13 @@ jobs:
           # services of every change since the last good deploy (12 Nov 2026: #516's run was replaced by #512's).
           PUSH_BEFORE="${{ github.event.before }}"
           if [ "${{ github.event_name }}" = "push" ]; then
-            LAST=$(gh api "repos/${{ github.repository }}/actions/workflows/deploy.yml/runs?branch=main&event=push&status=success&per_page=1" \
-              -q '.workflow_runs[0].head_sha' 2>/dev/null || true)
+            # Only a run whose deploy job succeeded counts: a tests-only or docs-only run succeeds without deploying.
+            LAST=""
+            for RUN in $(gh api "repos/${{ github.repository }}/actions/workflows/deploy.yml/runs?branch=main&event=push&status=success&per_page=20" \
+                -q '.workflow_runs[] | "\(.id):\(.head_sha)"' 2>/dev/null || true); do
+              DEPLOY=$(gh api "repos/${{ github.repository }}/actions/runs/${RUN%%:*}/jobs" -q '.jobs[] | select(.name == "deploy") | .conclusion' 2>/dev/null || true)
+              if [ "$DEPLOY" = "success" ]; then LAST="${RUN#*:}"; break; fi
+            done
             if [ -n "$LAST" ] && git merge-base --is-ancestor "$LAST" "${{ github.sha }}" 2>/dev/null && [ "$LAST" != "${{ github.sha }}" ]; then
               echo "release base: last successful deploy $LAST (event before was $PUSH_BEFORE)"
               PUSH_BEFORE="$LAST"
