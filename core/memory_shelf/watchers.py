@@ -51,7 +51,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from core.memory_shelf import approvals, codes, coverage, fsio, ledger, mc, render, review, rooms, sessions, capture_limits
+from core.memory_shelf import approvals, codes, coverage, cos, fsio, ledger, mc, render, review, rooms, sessions, capture_limits
 from core.memory_shelf import bundle as bundles
 from core.memory_shelf.config import SourceCfg, never_copied
 
@@ -198,9 +198,11 @@ def stream_lines(handle, limit: int, line_limit: int, code: str = SOURCE_OVER_CE
         yield oversized_placeholder(size)
 
 
-PARSERS = {"claude-code": sessions.parse_claude_code, "codex": sessions.parse_codex, mc.KIND: mc.parse}
+PARSERS = {"claude-code": sessions.parse_claude_code, "codex": sessions.parse_codex, mc.KIND: mc.parse, cos.KIND: cos.parse}
 # A watcher kind whose records carry another provider name (the parser-version tables are keyed by provider).
-KIND_PROVIDER = {mc.KIND: mc.PROVIDER}
+KIND_PROVIDER = {mc.KIND: mc.PROVIDER, cos.KIND: cos.PROVIDER}
+# Kinds whose file is one export document that carries its own counts (the parser sets coverage; one JSON document per file).
+EXPORT_KINDS = (mc.KIND, cos.KIND)
 
 
 def normalizer_for(kind: str) -> int:
@@ -222,6 +224,8 @@ def _wanted(kind: str, rel: str) -> bool:
     parts = rel.split("/")
     if kind == mc.KIND:                         # <instance>--<conversation id>.json at the top of the export folder
         return mc.wanted(rel)
+    if kind == cos.KIND:                        # <environment>--<conversation id>.json at the top of the export folder (#509)
+        return cos.wanted(rel)
     if kind == "claude-code":                   # <project>/<session>.jsonl; subfolders (sidechains) are not sessions
         return len(parts) == 2 and parts[1].endswith(".jsonl")
     return parts[-1].startswith("rollout-") and parts[-1].endswith((".jsonl", ".jsonl" + COMPRESSED_SUFFIX))
@@ -541,10 +545,10 @@ def _capture(shelf, cfg: SourceCfg, cand: Candidate, lkey: str, prev: dict, now:
             else:
                 # An MC export is one JSON document (indented); its own bound is the line limit, so no placeholder
                 # can ever replace part of it.
-                lines = stream_lines(handle, max_source_bytes, mc.MAX_BYTES + 1 if cfg.kind == mc.KIND else line_limit)
+                lines = stream_lines(handle, max_source_bytes, mc.MAX_BYTES + 1 if cfg.kind in EXPORT_KINDS else line_limit)
             # The kept turn text is charged as it is added: over ``normalized_limit`` the read stops at once.
             with sessions.retained_budget(normalized_limit):
-                if cfg.kind == mc.KIND:
+                if cfg.kind in EXPORT_KINDS:
                     parsed = PARSERS[cfg.kind](lines)         # the export carries its own counts: the parser sets coverage
                 else:
                     parsed = coverage.parse_with_coverage(cfg.kind, lines, PARSERS)
@@ -568,7 +572,7 @@ def _capture(shelf, cfg: SourceCfg, cand: Candidate, lkey: str, prev: dict, now:
     except OSError:
         ledger.record(shelf, name, lkey, codes.FAILED, reason="read_failed", now=now)
         return codes.FAILED, None, None, None
-    except mc.BadExport as exc:                          # the message is a fixed code (bad_export | too_large)
+    except mc.BadExport as exc:                          # a fixed code (bad_export | too_large; cos also private, scope, bad_turn ...)
         ledger.record(shelf, name, lkey, codes.FAILED, reason=str(exc), now=now)
         return codes.FAILED, None, None, None
     except Exception:                                    # noqa: BLE001 - fixed code only, never the message

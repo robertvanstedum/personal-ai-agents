@@ -105,6 +105,38 @@
       "runbook": "core/memory_sync/mc_export.py"
     },
     {
+      "id": "vault-cos-pull",
+      "name": "Vault CoS pull from production (Mac)",
+      "host": "mac",
+      "schedule": {
+        "text": "every 2 h while awake (launchd StartInterval, RunAtLoad)",
+        "kind": "interval",
+        "every_s": 7200
+      },
+      "expected_every_s": 7200,
+      "missed_after_s": 21600,
+      "stuck_after_s": 3600,
+      "status_file": "vault-cos-pull.json",
+      "owner": "robert",
+      "runbook": "core/memory_sync/cos_pull.py"
+    },
+    {
+      "id": "vault-cos-export",
+      "name": "Vault CoS export from production (EC2)",
+      "host": "ec2",
+      "schedule": {
+        "text": "every 2 h (cron)",
+        "kind": "interval",
+        "every_s": 7200
+      },
+      "expected_every_s": 7200,
+      "missed_after_s": 21600,
+      "stuck_after_s": 3600,
+      "status_file": "vault-cos-export.json",
+      "owner": "robert",
+      "runbook": "core/memory_sync/cos_export.py"
+    },
+    {
       "id": "mc-github-awareness",
       "name": "MC GitHub awareness (rotating public observations)",
       "host": "ec2",

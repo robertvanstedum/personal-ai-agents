@@ -57,8 +57,9 @@ def test_a_healthy_job_sends_nothing_and_the_watchdog_records_its_own_run(tmp_pa
     code, _ = go(tmp_path, s)
     assert code == 0 and s.sent == []
     own = own_status(tmp_path)
-    # vault-sync and vault-mc-pull: registered, not installed yet; vault-mc-export runs on EC2 and is never judged here
-    assert own["state"] == "ok" and own["results"] == {"memory-watch": "ok", "vault-sync": "not_due", "vault-mc-pull": "not_due"}
+    # vault-sync, vault-mc-pull and vault-cos-pull: registered, not installed yet; the EC2 exports are never judged here
+    assert own["state"] == "ok" and own["results"] == {"memory-watch": "ok", "vault-sync": "not_due", "vault-mc-pull": "not_due",
+                                                       "vault-cos-pull": "not_due"}
     assert own["next_due_by"] == "2026-10-07T14:00:00Z"
 
 

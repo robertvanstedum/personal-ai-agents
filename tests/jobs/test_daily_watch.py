@@ -41,7 +41,7 @@ class Fakes:
 
     def __init__(self, approvals=None, outputs=None, send_result="sent"):
         self.approvals = {"claude-code": "approved", "codex": "approved", "rooms": "not_configured",
-                          "minimoi-mc": "not_configured", **(approvals or {})}
+                          "minimoi-mc": "not_configured", "minimoi-cos": "not_configured", **(approvals or {})}
         self.outputs = outputs or {}
         self.watched, self.sent, self.send_result = [], [], send_result
         self.reports, self.report_out = [], (0, "report\tr1\toverall=current\nreport\tpublished={}\n")

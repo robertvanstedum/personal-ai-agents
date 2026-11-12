@@ -49,6 +49,10 @@ Job status ``vault-mc-pull``: ``pull`` (ok | busy | a fixed code), ``batches``, 
 ``capture``, ``captured``, ``editions_added``, ``temp_swept``, ``oldest_unpulled_age_s`` (from the batch id time of the oldest COMPLETE batch still not
 pulled; 0 when none). ``warn`` on rejections, a capture that is not ok, or short space; ``failed`` with a Telegram alert on errors.
 ``last_success_at`` advances on every run whose pull finished ``ok`` (a capture waiting for approval is yellow, not missed).
+
+**Families (11 Nov 2026, #509).** ``vault-cos-pull`` (``core/memory_sync/cos_pull.py``) is this same run for production CoS conversations:
+a ``PullFamily`` names its job, batch family, file instance, watch folder, state folder and capture source (``minimoi-cos``, kind ``cos``).
+Every entry point takes an optional ``fam``; without one it is MC's, exactly as before. Both share the one ``vault-batch`` lock.
 """
 from __future__ import annotations
 
@@ -90,6 +94,22 @@ TEMP = re.compile(r"^\.(" + MB.FILE.pattern[1:-1] + r")\.tmp-[0-9]+-[0-9a-f]{8}$
 IDENTITY_KINDS = ("file", "keychain", "ssm", "cmd")
 
 
+class PullFamily:
+    """What differs between the families this job pulls (see the module doc)."""
+
+    __slots__ = ("job_id", "job_name", "runbook", "batch", "instance", "source", "source_kind", "default_watch", "default_state", "temp")
+
+    def __init__(self, *, job_id, job_name, runbook, batch, instance, source, source_kind, default_watch, default_state):
+        self.job_id, self.job_name, self.runbook = job_id, job_name, runbook
+        self.batch, self.instance, self.source, self.source_kind = batch, instance, source, source_kind
+        self.default_watch, self.default_state = default_watch, default_state
+        self.temp = re.compile(r"^\.(" + batch.file.pattern[1:-1] + r")\.tmp-[0-9]+-[0-9a-f]{8}$")
+
+
+MC_PULL = PullFamily(job_id=JOB_ID, job_name="Vault MC pull from production (Mac)", runbook="core/memory_sync/mc_pull.py", batch=MB.MC,
+                     instance=INSTANCE, source=SOURCE, source_kind="mc", default_watch=DEFAULT_WATCH, default_state=DEFAULT_STATE)
+
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -115,18 +135,19 @@ def batch_time(batch_id: str) -> datetime | None:
         return None
 
 
-def job_definition(path=None):
+def job_definition(path=None, fam: PullFamily | None = None):
+    fam = fam or MC_PULL
     try:
-        job = registry.load(path).get(JOB_ID)
+        job = registry.load(path).get(fam.job_id)
         if job:
             return job
     except registry.RegistryError:
         pass
     return registry.parse({"schema_version": 1, "jobs": [{
-        "id": JOB_ID, "name": "Vault MC pull from production (Mac)", "host": "mac",
+        "id": fam.job_id, "name": fam.job_name, "host": "mac",
         "schedule": {"text": "every 2 h while awake", "kind": "interval", "every_s": 7200},
         "expected_every_s": 7200, "missed_after_s": 21600, "stuck_after_s": 3600,
-        "status_file": f"{JOB_ID}.json", "owner": "robert", "runbook": "core/memory_sync/mc_pull.py"}]}).jobs[0]
+        "status_file": f"{fam.job_id}.json", "owner": "robert", "runbook": fam.runbook}]}).jobs[0]
 
 
 # ── state ──
@@ -142,7 +163,7 @@ def load_pulled(path: Path) -> dict:
     return doc
 
 
-def load_placed(path: Path) -> dict:
+def load_placed(path: Path, fam: PullFamily | None = None) -> dict:
     """``{name: {"sha256", "batch_id"}}``; none yet is empty. Unreadable is ``placed_unreadable`` (failed): forgetting which batch placed a
     name would let an older batch overwrite newer bytes."""
     path = Path(path)
@@ -150,7 +171,7 @@ def load_placed(path: Path) -> dict:
         return {}
     doc = None if path.is_symlink() else V.read_json(path)
     try:
-        ok = isinstance(doc, dict) and all(MB.name_ok(k) and isinstance(v, dict) and V.HEX64.match(str(v.get("sha256", "")))
+        ok = isinstance(doc, dict) and all(MB.name_ok(k, None, (fam or MC_PULL).batch) and isinstance(v, dict) and V.HEX64.match(str(v.get("sha256", "")))
                                            and B.ATTEMPT.match(str(v.get("batch_id", ""))) for k, v in doc.items())
     except TypeError:
         ok = False
@@ -221,12 +242,13 @@ def place(src: Path, watch: Path, name: str, sha: str, size: int) -> str:
     return "placed"
 
 
-def sweep_temps(watch: Path) -> int:
+def sweep_temps(watch: Path, fam: PullFamily | None = None) -> int:
     """Remove ``place``'s temp files left in the watch folder by a run killed mid-place (plain text that would otherwise stay forever).
     Only names matching ``TEMP`` exactly, only files or links (a link itself, never its target), never a folder or any other name. Runs at
     the start of every run under the batch lock, so no placement is in flight. Returns how many were removed."""
+    temp = TEMP if fam is None else fam.temp
     with os.scandir(watch) as it:
-        stale = [e.name for e in it if TEMP.fullmatch(e.name) and not e.is_dir(follow_symlinks=False)]
+        stale = [e.name for e in it if temp.fullmatch(e.name) and not e.is_dir(follow_symlinks=False)]
     n = 0
     for name in stale:
         try:
@@ -253,18 +275,19 @@ def waiting_files(shelf, cfg) -> int:
     return n
 
 
-def capture(watch: Path, config_path, placed_now: int, now: datetime) -> tuple[str, int, int]:
+def capture(watch: Path, config_path, placed_now: int, now: datetime, fam: PullFamily | None = None) -> tuple[str, int, int]:
     """(capture code, captured, editions added). The approval gate is ``run_source``'s own; this never approves anything."""
     from core.memory_shelf import codes, config, watchers
     from core.memory_shelf.shelf import Shelf
+    fam = fam or MC_PULL
     try:
         cfg = config.load(config_path or None)
     except config.ConfigError:
         raise BackupError("shelf_config_unreadable") from None
-    src = cfg.sources.get(SOURCE)
+    src = cfg.sources.get(fam.source)
     if src is None:
         return "not_configured", 0, 0
-    if src.kind != "mc" or Path(src.root).expanduser().resolve() != watch.resolve():
+    if src.kind != fam.source_kind or Path(src.root).expanduser().resolve() != watch.resolve():
         return "source_root_mismatch", 0, 0             # placed files would never be read by this source
     shelf = Shelf(cfg.shelf_root, min_free_bytes=cfg.min_free_bytes, min_free_fraction=cfg.min_free_fraction)
     if not placed_now and not waiting_files(shelf, src):
@@ -279,7 +302,8 @@ def capture(watch: Path, config_path, placed_now: int, now: datetime) -> tuple[s
 
 # ── one run ──
 class _Run:
-    def __init__(self, *, dest, identity_spec, age_bin, expect_age, watch, state_dir, config_path, now, usage, fetch_identity):
+    def __init__(self, *, dest, identity_spec, age_bin, expect_age, watch, state_dir, config_path, now, usage, fetch_identity, fam=None):
+        self.fam = fam or MC_PULL
         self.dest, self.identity_spec, self.age_bin, self.expect_age = dest, identity_spec, age_bin, expect_age
         self.watch, self.state_dir, self.config_path = Path(watch), Path(state_dir), config_path
         self.work = self.state_dir / WORK_NAME
@@ -302,7 +326,7 @@ class _Run:
             raise BackupError("cleanup_failed")
         self.work.mkdir(mode=0o700)
         try:
-            self.counts["temp_swept"] = sweep_temps(self.watch)
+            self.counts["temp_swept"] = sweep_temps(self.watch, self.fam)
         except OSError:
             raise BackupError("cleanup_failed") from None
 
@@ -320,10 +344,10 @@ class _Run:
     def go(self) -> None:
         self.prepare()
         self.pulled = load_pulled(self.pulled_path)
-        self.placed = load_placed(self.placed_path)
+        self.placed = load_placed(self.placed_path, self.fam)
         self.ready = True
         d = B.Dest(self.dest)
-        listed = MB.complete_batches(d)
+        listed = MB.complete_batches(d, self.fam.batch)
         self.remaining = [b for b in listed if b not in self.pulled]
         for bid in list(self.remaining):
             self._batch(d, bid)
@@ -347,17 +371,17 @@ class _Run:
         cipher, plain, extracted = scratch / MB.BATCH_OBJECT, scratch / "batch.tar.gz", scratch / "x"
         try:
             try:
-                m = MB.fetch_chain(d, bid, scratch, INSTANCE)
+                m = MB.fetch_chain(d, bid, scratch, self.fam.instance, self.fam.batch)
                 obj = m["objects"]["batch"]
                 files_bytes = sum(z for _n, _s, z in m["files"])             # each bounded by fetch_chain; extracted, then copied
                 B.ensure_space(self.work, int(obj["bytes"]) + int(obj["plaintext_bytes"]) + 2 * files_bytes + SLACK, usage=self.usage)
-                MB.fetch_ciphertext(d, bid, m, cipher)
+                MB.fetch_ciphertext(d, bid, m, cipher, self.fam.batch)
                 B.decrypt(self.age_bin, self._identity(), cipher, plain, scratch)
                 B.wipe_file(cipher)
                 if plain.stat().st_size != int(obj["plaintext_bytes"]) or B.sha256_file(plain) != obj["plaintext_sha256"]:
                     raise BackupError("plaintext_mismatch")
                 try:
-                    MB.extract(plain, extracted, m)
+                    MB.extract(plain, extracted, m, self.fam.batch)
                 except (tarfile.TarError, EOFError, zlib.error):
                     raise BackupError("archive_unsafe") from None   # a corrupt stream, not only a hostile one
                 except OSError:                                     # a local fault (disk, permission) is not the batch's: retry
@@ -371,7 +395,7 @@ class _Run:
                 return
             acks, newly = [], {}
             for name, sha, size in m["files"]:
-                bad = MB.check_file(extracted, name, sha, size)
+                bad = MB.check_file(extracted, name, sha, size, self.fam.batch)
                 if bad:
                     acks.append([name, sha, f"{MB.REJECTED}:{bad}"])
                     self.counts["rejected"] += 1
@@ -393,8 +417,7 @@ class _Run:
             if not B.remove_tree(scratch):
                 raise BackupError("cleanup_failed")
 
-    @staticmethod
-    def _manifest_names(m, scratch: Path) -> list:
+    def _manifest_names(self, m, scratch: Path) -> list:
         """The files to reject: the verified manifest's, else whatever well-formed entries the downloaded (unverified) manifest lists, so EC2
         learns the verdict for its files rather than waiting out its backoff. Names and hashes only."""
         if m is None:
@@ -404,7 +427,7 @@ class _Run:
             entries = m["files"]
         out = []
         for e in entries if isinstance(entries, list) else []:
-            if isinstance(e, list) and len(e) == 3 and MB.name_ok(str(e[0]), INSTANCE) and V.HEX64.match(str(e[1])):
+            if isinstance(e, list) and len(e) == 3 and MB.name_ok(str(e[0]), self.fam.instance, self.fam.batch) and V.HEX64.match(str(e[1])):
                 out.append((str(e[0]), str(e[1])))
         return sorted(set(out))
 
@@ -412,8 +435,8 @@ class _Run:
         """Every placement above is already durable (fsync + rename + folder fsync). The ack first, then the local state."""
         at = self.now()
         local = self.work / f"ack-{bid}.json"
-        V.write_json_atomic(local, MB.ack_doc(bid, files, at))
-        d.put(local, f"{MB.ACK_PREFIX}/{bid}.json", replace=True)
+        V.write_json_atomic(local, MB.ack_doc(bid, files, at, self.fam.batch))
+        d.put(local, f"{self.fam.batch.ack_prefix}/{bid}.json", replace=True)
         local.unlink(missing_ok=True)
         if newly:
             self.placed.update(newly)
@@ -427,9 +450,9 @@ class _Run:
         return max(0, int((now - min(times)).total_seconds())) if times else 0
 
 
-def run_pull(*, dest, identity_spec, age_bin, expect_age, jobs_root, watch=DEFAULT_WATCH, state_dir=DEFAULT_STATE, config_path=None,
+def run_pull(*, dest, identity_spec, age_bin, expect_age, jobs_root, watch=None, state_dir=None, config_path=None,
              registry_path=None, take_lock: bool = True, now=utcnow, usage=shutil.disk_usage, fetch_identity=B.fetch_identity,
-             alert_send=None) -> dict:
+             alert_send=None, fam: PullFamily | None = None) -> dict:
     """One ``vault-mc-pull`` run. Returns ``{"exit", "state", "results", "summary"}``; writes the job status throughout. ``config_path`` is
     the shelf config (``MOI_CONFIG``; ``None`` is ``config.load``'s own default). ``now``, ``usage``, ``fetch_identity`` and ``alert_send``
     are injected in tests.
@@ -439,6 +462,9 @@ def run_pull(*, dest, identity_spec, age_bin, expect_age, jobs_root, watch=DEFAU
     competitor refused at the lock writes nothing at all, not even a status: it returns ``state`` None and ``pull=busy`` (exit 0); the next
     2-hourly run catches up."""
     alert_send = alert_send or alert.send
+    fam = fam or MC_PULL
+    watch = fam.default_watch if watch is None else watch
+    state_dir = fam.default_state if state_dir is None else state_dir
     if not identity_spec_ok(identity_spec):
         return {"exit": EXIT_REFUSED, "state": None, "results": {}, "summary": "refused: identity_spec_invalid"}
     fd = None
@@ -456,16 +482,17 @@ def run_pull(*, dest, identity_spec, age_bin, expect_age, jobs_root, watch=DEFAU
     try:
         return _run_admitted(dest=dest, identity_spec=identity_spec, age_bin=age_bin, expect_age=expect_age, jobs_root=jobs_root,
                              watch=watch, state_dir=state_dir, config_path=config_path, registry_path=registry_path, now=now, usage=usage,
-                             fetch_identity=fetch_identity, alert_send=alert_send)
+                             fetch_identity=fetch_identity, alert_send=alert_send, fam=fam)
     finally:
         if fd is not None:
             os.close(fd)
 
 
 def _run_admitted(*, dest, identity_spec, age_bin, expect_age, jobs_root, watch, state_dir, config_path, registry_path, now, usage,
-                  fetch_identity, alert_send) -> dict:
+                  fetch_identity, alert_send, fam: PullFamily | None = None) -> dict:
     """The run itself, for a caller that holds the admission: status start, work, status finish."""
-    job = job_definition(registry_path)
+    fam = fam or MC_PULL
+    job = job_definition(registry_path, fam)
     started = now()
     run_id = f"{started.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}-{secrets.token_hex(3)}"
     try:
@@ -474,7 +501,7 @@ def _run_admitted(*, dest, identity_spec, age_bin, expect_age, jobs_root, watch,
         return {"exit": EXIT_REFUSED, "state": None, "results": {}, "summary": "refused: status_file_not_writable"}
     r = _Run(dest=dest, identity_spec=identity_spec, age_bin=os.path.expanduser(age_bin), expect_age=expect_age,
              watch=Path(os.path.expanduser(str(watch))), state_dir=Path(os.path.expanduser(str(state_dir))), config_path=config_path,
-             now=now, usage=usage, fetch_identity=fetch_identity)
+             now=now, usage=usage, fetch_identity=fetch_identity, fam=fam)
     failed = capture_failed = False
     try:
         r.go()
@@ -488,7 +515,7 @@ def _run_admitted(*, dest, identity_spec, age_bin, expect_age, jobs_root, watch,
         r.code, failed = "cleanup_failed", True
     if r.ready:                         # files already in the folder are durable whatever happened to a later batch: capture them
         try:
-            r.capture_code, r.counts["captured"], r.counts["editions_added"] = capture(r.watch, config_path, r.counts["placed"], now())
+            r.capture_code, r.counts["captured"], r.counts["editions_added"] = capture(r.watch, config_path, r.counts["placed"], now(), fam)
         except BackupError as exc:
             r.capture_code, capture_failed = exc.code, True
         except Exception as exc:                                            # noqa: BLE001
@@ -530,19 +557,22 @@ def _finish(jobs_root, job, running, run_id, finished, state, results, summary, 
 
 
 # ── read-only plan ──
-def plan_pull(*, dest, watch=DEFAULT_WATCH, state_dir=DEFAULT_STATE, config_path=None, now=utcnow) -> dict:
+def plan_pull(*, dest, watch=None, state_dir=None, config_path=None, now=utcnow, fam: PullFamily | None = None) -> dict:
     """What a run would do, writing nothing and decrypting nothing: unpulled COMPLETE batches (ids only), the watch folder, the source's
     approval state."""
+    fam = fam or MC_PULL
+    watch = fam.default_watch if watch is None else watch
+    state_dir = fam.default_state if state_dir is None else state_dir
     state_dir, watch = Path(os.path.expanduser(str(state_dir))), Path(os.path.expanduser(str(watch)))
-    out = {"job": JOB_ID, "watch_exists": watch.is_dir(), "state_dir_exists": state_dir.is_dir()}
+    out = {"job": fam.job_id, "watch_exists": watch.is_dir(), "state_dir_exists": state_dir.is_dir()}
     try:
         pulled = load_pulled(state_dir / PULLED_NAME)
-        out["placed_names"] = len(load_placed(state_dir / PLACED_NAME))
+        out["placed_names"] = len(load_placed(state_dir / PLACED_NAME, fam))
     except BackupError as exc:
         out["state"] = exc.code
         return out
     try:
-        waiting = [b for b in MB.complete_batches(B.Dest(dest)) if b not in pulled]
+        waiting = [b for b in MB.complete_batches(B.Dest(dest), fam.batch) if b not in pulled]
         out["unpulled_batches"] = len(waiting)
         times = [t for t in (batch_time(b) for b in waiting) if t]
         out["oldest_unpulled_age_s"] = max(0, int((now() - min(times)).total_seconds())) if times else 0
@@ -551,13 +581,13 @@ def plan_pull(*, dest, watch=DEFAULT_WATCH, state_dir=DEFAULT_STATE, config_path
     try:
         from core.memory_shelf import approvals, config
         cfg = config.load(config_path or None)
-        src = cfg.sources.get(SOURCE)
+        src = cfg.sources.get(fam.source)
         if src is None:
             out["capture_source"] = "not_configured"
         else:
             from core.memory_shelf.shelf import Shelf
             shelf = Shelf(cfg.shelf_root, min_free_bytes=cfg.min_free_bytes, min_free_fraction=cfg.min_free_fraction)
-            out["capture_source"] = approvals.source_status(shelf, SOURCE, src.fingerprint())
+            out["capture_source"] = approvals.source_status(shelf, fam.source, src.fingerprint())
             out["capture_root_matches_watch"] = Path(src.root).expanduser().resolve() == watch.resolve()
     except Exception as exc:                                                # noqa: BLE001
         out["capture_source"] = f"unreadable_{type(exc).__name__.lower()}"[:40]

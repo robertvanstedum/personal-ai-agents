@@ -53,20 +53,24 @@ NO_SUCH_ETAG = '"00000000000000000000000000000000"'
 
 # ACTIVATION_HANDOFF section 3. The Mac's nightly backup goes to the external Files and Photos volume, not S3, so the Mac principal
 # has no daily/ or monthly/ grant (its deletes there stay denied). ``put_allow`` is listed for the report, never probed.
+# The production CoS capture path (11 Nov 2026, #509) adds sync/cos-export/ (EC2 writes, the Mac reads) and sync/cos-export-acks/ (the
+# Mac writes, EC2 reads), split exactly like MC's: until the IAM grants for them exist, this check reports those cells and fails.
 MATRIX = {
     "mac": {
-        "put_allow": ["production/", "sync/batches/", "sync/mc-export-acks/"],
-        "put_deny": ["sync/acks/", "sync/mc-export/"],
-        "get_allow": ["sync/acks/", "sync/mc-export/"],
-        "list_allow": ["sync/acks/", "sync/mc-export/"],
-        "delete_deny": ["production/", "sync/batches/", "sync/acks/", "sync/mc-export/", "sync/mc-export-acks/", "daily/", "monthly/"],
+        "put_allow": ["production/", "sync/batches/", "sync/mc-export-acks/", "sync/cos-export-acks/"],
+        "put_deny": ["sync/acks/", "sync/mc-export/", "sync/cos-export/"],
+        "get_allow": ["sync/acks/", "sync/mc-export/", "sync/cos-export/"],
+        "list_allow": ["sync/acks/", "sync/mc-export/", "sync/cos-export/"],
+        "delete_deny": ["production/", "sync/batches/", "sync/acks/", "sync/mc-export/", "sync/mc-export-acks/", "sync/cos-export/",
+                        "sync/cos-export-acks/", "daily/", "monthly/"],
     },
     "ec2": {
-        "put_allow": ["sync/acks/", "sync/mc-export/"],
-        "put_deny": ["sync/batches/", "production/", "sync/mc-export-acks/"],
-        "get_allow": ["sync/batches/", "production/", "sync/mc-export-acks/"],
-        "list_allow": ["sync/batches/", "sync/mc-export-acks/"],
-        "delete_deny": ["production/", "sync/batches/", "sync/acks/", "sync/mc-export/", "sync/mc-export-acks/", "daily/", "monthly/"],
+        "put_allow": ["sync/acks/", "sync/mc-export/", "sync/cos-export/"],
+        "put_deny": ["sync/batches/", "production/", "sync/mc-export-acks/", "sync/cos-export-acks/"],
+        "get_allow": ["sync/batches/", "production/", "sync/mc-export-acks/", "sync/cos-export-acks/"],
+        "list_allow": ["sync/batches/", "sync/mc-export-acks/", "sync/cos-export-acks/"],
+        "delete_deny": ["production/", "sync/batches/", "sync/acks/", "sync/mc-export/", "sync/mc-export-acks/", "sync/cos-export/",
+                        "sync/cos-export-acks/", "daily/", "monthly/"],
     },
 }
 # An If-Match write is authorized only with read rights too: a forgery check is meaningful only where this side may read.

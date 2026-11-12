@@ -82,7 +82,8 @@ RUNBOOK (exact commands; nothing below has been run against real S3 or EC2).
   scripts/vault/production_refresh.py; for the incremental sync (``vault-apply``) also core/memory_sync/{__init__,versions,batch,apply}.py and
   scripts/vault/vault_apply.py (with ``--index-runner docker:<image>`` the index is written inside the image; ``--index-runner host`` also needs
   core/memory_index/ and core/memory_shelf/ and SQLite >= 3.43 on the host); for the production MC capture (``vault-mc-export``) also
-  core/memory_sync/{mc_batch,mc_export}.py and scripts/vault/vault_mc_export.py.
+  core/memory_sync/{mc_batch,mc_export}.py and scripts/vault/vault_mc_export.py; for the production CoS capture (``vault-cos-export``,
+  #509) also core/memory_sync/{cos_batch,cos_export}.py and scripts/vault/vault_cos_export.py.
 
   Once ``vault-apply`` has built a release (``RELEASE.json`` format ``vault-production-sync/1``), ``refresh`` refuses (``incremental_active``,
   a quiet warn) so an old daily refresh cannot replace the incrementally updated shelf with an older snapshot. A deliberate reseed (disaster

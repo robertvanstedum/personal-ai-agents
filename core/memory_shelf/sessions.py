@@ -117,6 +117,8 @@ def with_time(attrs: dict | None, at: str | None) -> dict | None:
 # with client_id proves client dialogue in that chat; its same-task replies can be recalled. Unproven prompts
 # and replies stay coordination/subagent evidence. Version 3 remains safe for retrieval (it over-excludes).
 # minimoi-mc 1: Master Craftsman conversation exports (core/memory_shelf/mc.py), watcher kind "mc".
+# minimoi-cos 1: CoS history (core/memory_shelf/cos.py): the Dev feed's direct read and, since 11 Nov 2026 (#509), the production
+# export files of watcher kind "cos". It has always written 1; the table entry only names it for the watcher.
 # Turn times (17 Oct 2026): every turn whose source line or message carries its own time keeps it as the frame attribute
 # ``ts`` (``YYYY-MM-DDTHH:MM:SSZ``, ``turn_time``), the convention Rooms already uses: Claude Code 3 and Codex 5 (the JSONL
 # line's ``timestamp``), Claude.ai 3 (message ``created_at``), Grok 2 and ChatGPT 2 (``create_time``), minimoi-mc 2 (the note's
@@ -126,7 +128,8 @@ def with_time(attrs: dict | None, at: str | None) -> dict | None:
 # carries ``ts``; a paste has no times). The retrieval minimum below is NOT raised: an edition without turn times has no
 # misattribution, it is only dated by its start, and holding it would drop every record whose source is gone (Claude Code
 # prunes old session files) from retrieval for good.
-NORMALIZER_VERSION = {"claude-code": 3, "codex": 5, "rooms": 1, "claude-ai": 3, "grok": 2, "chatgpt": 2, "paste": 1, "minimoi-mc": 2}
+NORMALIZER_VERSION = {"claude-code": 3, "codex": 5, "rooms": 1, "claude-ai": 3, "grok": 2, "chatgpt": 2, "paste": 1, "minimoi-mc": 2,
+                      "minimoi-cos": 1}
 DEFAULT_NORMALIZER = 1                      # a record or state entry written before versions existed
 # The lowest normalizer version whose current editions are fit for retrieval (read by core/memory_index/policy.py). A record
 # below it is held (awaiting_reprocess) and never indexed, so legacy misattributed text cannot reach retrieval. Owned here:
