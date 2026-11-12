@@ -7,6 +7,13 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+# One production deploy at a time (incident 12 Nov 2026, 03:28-03:39 UTC): three merges in a minute started three runs,
+# their compose ups on EC2 collided, and the portal, CoS and the language domains sat in "Created" beside renamed stray
+# containers until the last run was re-run alone. Later pushes queue; none is cancelled mid-deploy.
+concurrency:
+  group: production-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   classify:
     runs-on: ubuntu-latest
