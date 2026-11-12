@@ -416,6 +416,8 @@ def test_persona_0132_says_how_guildhall_works_and_what_a_harness_defect_is(tmp_
                  'One short "couldn\'t check X" line is fine', "Not a page of every issue, source and caveat", "Want the list?"):
         assert said in agents, said
     assert "the options and where you looked on request" in agents and "say where you looked." not in agents
+    # FF-19 (#537): "how are things" is answered from the job-health block, problems first, short when all is green.
+    assert 'answer from the "MiniMoi job health" block: problems first' in agents and "one line if all is green" in agents
     # FF-18 (#536): production reads its own delivery record; DEV.md exists only on Dev.
     assert "On production, read `/minimoi/docs/delivery/PRODUCTION.md`" in agents and "`DEV.md` exists only on Dev" in agents
     # Only these changes: every other line of 0.1.31 is kept, and the collector's phrase is unchanged.

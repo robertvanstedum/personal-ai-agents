@@ -528,6 +528,14 @@ def test_cos_words_say_what_it_can_do_and_drop_the_stale_path():
     assert "check the file exists" in words
 
 
+def test_cos_reads_the_delivery_record_of_the_host_it_is_on():
+    """FF-18 (#536): production writes PRODUCTION.md on each deploy; DEV.md exists only on Dev."""
+    words = (ROOT / "docker/cos-agent-a/COS_AGENTS.md").read_text()
+    section = words[words.index("## What was delivered"):words.index("\n## ", words.index("## What was delivered") + 3)]
+    assert "`/minimoi/docs/delivery/PRODUCTION.md`" in section and "`/minimoi/docs/delivery/DEV.md`" in section
+    assert "`DEV.md` exists only on\nDev" in section and "If the file is missing, say so plainly" in section
+
+
 def test_the_switch_is_off_by_default_in_production_and_every_new_file_reaches_its_image():
     compose = (ROOT / "docker-compose.minimoi-1-2-production.yml").read_text()
     assert compose.count("MINIMOI_COS_TO_MC: ${MINIMOI_COS_TO_MC:-0}") == 2
