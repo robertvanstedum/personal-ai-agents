@@ -10,6 +10,11 @@
 Run it by path from anywhere (no PYTHONPATH needed), e.g. in the portal container:
   docker exec minimoi-portal python3 /app/scripts/mc/github_awareness.py --sync
 
+After a host reboot --sync rebinds the cache to the new boot itself (every stream marked
+possible_poll_gap) and says so in its status summary; --rebind stays as the manual step.
+The cron that runs it is installed by scripts/operations/install_mc_github_awareness_cron.sh,
+which keeps its output in /opt/minimoi/logs/mc_github_awareness.log.
+
 --sync holds the cache's one writer admission for the whole run: the job-status start, the
 poll and the job-status finish. A competitor refused at admission (sync_busy) writes no
 status, so it never replaces the active run's receipt. A run that is not yet due (300 s)
@@ -19,16 +24,28 @@ exits 0 with "not_due" and writes no status either.
 entry with id JOB_ID; until that reviewed entry exists the job is unregistered and reports
 nothing. The status file holds stream names and health codes only, never GitHub text.
 """
-import argparse, json, os, sys, uuid
+import argparse, json, os, re, sys, uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from core.github_awareness import Admission, due, initialize, sync_admitted, health, rebind, PublicClient, REPO
+from core.github_awareness import (Admission, due, initialize, sync_admitted, health, rebind, rebind_admitted,
+                                   writer_domain_changed, PublicClient, Refused, REPO)
 
 ROOT = '/app/runtime/mc-observations/github-awareness'
 JOB_ID = 'mc-github-awareness'
 INTERVAL_S = 300
+_CODE = re.compile(r'[a-z][a-z0-9_]{0,59}')
+
+
+def held_reason(error):
+    """A fixed refusal code (e.g. writer_domain_changed) when there is one, else the class name.
+
+    Refused codes are literals from core.github_awareness.need(); anything else may carry URLs,
+    headers or credentials, so only its class name is ever recorded."""
+    if isinstance(error, Refused) and _CODE.fullmatch(str(error)):
+        return str(error)
+    return type(error).__name__[:60]
 
 
 def _registered_job():
@@ -53,12 +70,18 @@ def _poll_admitted(admission, token, now):
     running = None
     if job is not None and jobs_root:
         running = status.start_run(jobs_root, job, uuid.uuid4().hex[:32], now)
+    rebound = False
     try:
+        # A host reboot changes the kernel boot id the cache records as its writer. The scheduled
+        # run adopts the new boot itself (marking every stream gapped) instead of holding forever.
+        if writer_domain_changed(admission):
+            rebind_admitted(admission, now=now)
+            rebound = True
         result = sync_admitted(admission, PublicClient(token=token), now=now)
     except Exception as error:
         if running is not None:
             status.finish_run(jobs_root, job, running, state='failed', now=datetime.now(timezone.utc), exit_code=1,
-                              summary='poll held: ' + type(error).__name__[:60],
+                              summary='poll held: ' + held_reason(error),
                               results={}, next_due_by=now + timedelta(seconds=INTERVAL_S))
         raise
     healths = {name: row['health'] for name, row in result['streams'].items()}
@@ -66,10 +89,11 @@ def _poll_admitted(admission, token, now):
         attempted = [h for h in healths.values() if h != 'never_synced']
         state = 'ok' if attempted and all(h == 'ok' for h in attempted) else 'warn'
         status.finish_run(jobs_root, job, running, state=state, now=datetime.now(timezone.utc), exit_code=0,
-                          summary='rotating poll; see per-stream health', results=healths,
+                          summary=('rebound after a host restart; ' if rebound else '') + 'rotating poll; see per-stream health',
+                          results=healths,
                           next_due_by=now + timedelta(seconds=INTERVAL_S))
     return {'generation': result['generation'], 'stream_health': healths, 'job_status_written': running is not None,
-            'provider_calls': 0}
+            'rebound_after_restart': rebound, 'provider_calls': 0}
 
 
 def main():
@@ -92,7 +116,7 @@ def main():
         token = os.environ.get('MINIMOI_GITHUB_READ_TOKEN') if a.use_configured_read_token else None
         if a.use_configured_read_token and not token:
             raise ValueError('configured_read_token_unavailable')
-        print(json.dumps(_poll(token, now), sort_keys=True))
+        print(json.dumps({'at': now.strftime('%Y-%m-%dT%H:%M:%SZ'), **_poll(token, now)}, sort_keys=True))
     else:
         print(json.dumps({'plan_only': True, 'repo': REPO, 'interval_seconds': INTERVAL_S,
                           'anonymous_max_requests_per_poll': 3, 'anonymous_nominal_max_requests_per_hour': 36,
@@ -105,5 +129,6 @@ if __name__ == '__main__':
         main()
     except Exception as error:
         # Safe class only: network exceptions may contain URLs/headers/credentials.
-        print(json.dumps({'state': 'held', 'error_class': type(error).__name__}))
+        print(json.dumps({'at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'), 'state': 'held',
+                          'error_class': type(error).__name__, 'reason': held_reason(error)}, sort_keys=True))
         raise SystemExit(1)

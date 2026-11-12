@@ -111,6 +111,13 @@ class HostReaderTests(unittest.TestCase):
             z.writestr('word/_rels/document.xml.rels','external target never fetched')
         return self.read('ordinary.docx',format='docx')
 
+    def test_a_missing_file_is_reported_missing_not_refused(self):
+        # #536: production MC's delivery record did not exist, and MC could only say "refused".
+        self.assertEqual(self.read('delivery/DEV.md'), {'status':'refused','code':'host_not_found','data':{}})
+        self.assertEqual(self.read('absent', op='list')['code'], 'host_not_found')
+        # A denied spelling is refused before any lookup, so "missing" never answers for a protected path.
+        self.assertEqual(self.read('.ssh/absent')['code'], 'host_path_refused')
+
     def test_docx_structural_only_and_bounds(self):
         xml='<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Hello table</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="100" w:h="80" w:orient="landscape"/></w:sectPr></w:body></w:document>'
         xml=xml.replace('<w:sectPr>', '<w:tbl><w:tblGrid>'+''.join('<w:gridCol w:w="'+str(w)+'"/>' for w in [14,28,20,20,18])+'</w:tblGrid><w:tr>'+''.join('<w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc>' for _ in range(5))+'</w:tr></w:tbl><w:sectPr>')

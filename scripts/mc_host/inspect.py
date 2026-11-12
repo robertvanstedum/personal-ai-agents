@@ -158,7 +158,12 @@ def inspect(request):
         raise Refused('host_request_invalid')
     if offset and not re.fullmatch('[0-9a-f]{64}', str(args.get('sha256', ''))):
         raise Refused('host_page_hash_required')
-    fd = open_path(args.get('path'), op == 'list', denied)
+    try:
+        fd = open_path(args.get('path'), op == 'list', denied)
+    except FileNotFoundError:
+        # Only reached after safe_path admitted the spelling, so it says nothing about a denied path. A missing file
+        # is reported as missing, not as a refusal (#536: MC called its absent delivery record "refused").
+        raise Refused('host_not_found') from None
     try:
         before = stamp(os.fstat(fd))
         if op == 'list':
