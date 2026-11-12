@@ -93,7 +93,7 @@ def test_both_sources_approved_and_ok(tmp_path):
     assert f.watched == ["claude-code", "codex"] and f.sent == []
     assert without_report(doc["results"]) == {"claude-code": "ok", "codex": "ok"} and doc["alert"] == "not_needed"
     assert doc["summary"] == "2 of 2 sources ok"
-    assert doc["last_success_at"] == doc["finished_at"] and doc["next_due_by"] == "2026-10-05T09:00:00Z"
+    assert doc["last_success_at"] == doc["finished_at"] and doc["next_due_by"] == "2026-10-05T05:15:00Z"
     assert "memory-watch ok" in out
 
 

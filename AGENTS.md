@@ -38,6 +38,7 @@ The roles are durable even as which agent fills them changes:
   non-trivial build.
 - **One agent active on the repo at a time** — not simultaneous editing.
 - **Working cycle:** spec → approve → build → confirm → ship.
+- A new scheduled job ships with its entry in `config/scheduled_jobs.json`.
 
 ## Protected files
 

@@ -2779,6 +2779,14 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
                 extra.append(awareness)
     except Exception:
         pass
+    # Job health on every host that reports (FF-19, #537): the owner's turn only, never able to fail it.
+    try:
+        from . import jobs_health
+        job_health = jobs_health.block(principal, environ=feature_environ())
+        if job_health:
+            extra.append(job_health)
+    except Exception:
+        pass
     try:
         from . import supervision
         waiting = supervision.context_block(principal, environ=feature_environ(), notice_plan=notice_plan, owner_text=owner_text)

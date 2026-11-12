@@ -9,7 +9,9 @@ listed entry, the sha256 it must have at this commit. On the host, as root:
     and mode; a new one gets the listed mode, root-owned) and saves the manifest beside this tool.
   * ``check`` compares every listed host file with the manifest. A mismatch or a missing file exits 1, and with
     ``--notify`` sends one Telegram line (an alert means action is needed).
-  * ``install-cron`` adds the daily check to root's crontab once (marker ``# minimoi-host-script-parity``).
+  * ``install-cron`` adds the daily check to root's crontab once (marker ``# minimoi-host-script-parity``), and installs
+    the scheduled-jobs watchdog and daily health check (/etc/cron.d/minimoi-jobs-health, FF-19 #537) when the deploy has
+    shipped their tools, so every deploy keeps them in place.
 
 Why: the deploy copied a fixed list of scripts, so the hand-installed backup script stayed old and the CoS store had no
 backup in production (#505). Standard library only; nothing here reads file contents beyond hashing.
@@ -36,6 +38,7 @@ CRON_MARKER = "# minimoi-host-script-parity"
 CRON_LINE = ("20 5 * * * /usr/bin/python3 -I -B /opt/minimoi/scripts/host_script_parity.py check --notify "
              ">> /opt/minimoi/logs/host_script_parity.log 2>&1 " + CRON_MARKER)
 TELEGRAM_CHAT_ID = "8379221702"
+JOBS_HEALTH_INSTALLER = "/opt/minimoi/jobs-tools/scripts/jobs/install_host_watchdog.sh"
 
 
 def sha256_file(path: Path) -> str:
@@ -153,6 +156,14 @@ def install_cron() -> str:
     return "added"
 
 
+def install_jobs_health(installer: str = JOBS_HEALTH_INSTALLER) -> str:
+    """The jobs watchdog's cron file, rewritten from the shipped installer each deploy. Never fatal to the deploy."""
+    if not os.path.isfile(installer):
+        return "not_shipped"
+    done = subprocess.run(["/bin/sh", installer, "ec2"], capture_output=True, text=True)
+    return "installed" if done.returncode == 0 else "failed"
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -182,7 +193,7 @@ def main(argv=None) -> int:
         if not res["ok"] and a.notify:
             notify(res)
         return 0 if res["ok"] else 1
-    print(json.dumps({"cron": install_cron()}))
+    print(json.dumps({"cron": install_cron(), "jobs_health": install_jobs_health()}))
     return 0
 
 

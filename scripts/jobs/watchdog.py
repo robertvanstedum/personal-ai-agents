@@ -17,6 +17,13 @@ its last run failed, it has been ``running`` longer than ``stuck_after_s``, or i
 * Only jobs whose ``host`` is this host (MINIMOI_JOBS_HOST, default ``mac``) are judged, and the watchdog never judges
   itself (the Guild Operate tile does that, from its own status file).
 * Messages carry the job id, a fixed condition word and an age in hours; never content.
+* **Every host (FF-19, #537).** The Mac's id is ``jobs-watchdog``; another host's is ``jobs-watchdog-<host>``. Each run
+  also writes ``health-<host>.json`` (``core.jobs.health``: every job's light, code and since when it is off) in the jobs
+  root and, when ``MINIMOI_JOBS_HEALTH_DIR`` is set, a copy there for MC (on EC2: inside the portal's mc-observations
+  volume). A job whose status lives in another folder names its ``status_root``; the host maps it with
+  ``MINIMOI_JOBS_ROOT_<TOKEN>`` (``mc-observations`` -> ``MINIMOI_JOBS_ROOT_MC_OBSERVATIONS``).
+* ``MINIMOI_JOBS_ALERT=off`` judges and reports without sending anything: on EC2 and Dev the daily check
+  (``scripts/jobs/daily_health.py``) is the one that sends, and only for ``needs action``.
 
 Exit codes: 0 done (all alerts delivered or none needed); 1 an alert could not be sent, or the registry is unreadable;
 2 the watchdog's own status file could not be written.
@@ -35,7 +42,7 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from core.jobs import alert, judge, registry, schedule, status  # noqa: E402
+from core.jobs import alert, health, judge, registry, schedule, status  # noqa: E402
 
 JOB_ID = "jobs-watchdog"
 DEFAULT_JOBS_ROOT = "~/minimoi-staging/data/jobs"
@@ -73,13 +80,29 @@ def _send(sender, text) -> bool:
         return False
 
 
-def check(jobs_root, jobs, state: dict, sender, now) -> tuple[dict[str, str], bool]:
+def watchdog_id(host: str) -> str:
+    return JOB_ID if host == "mac" else f"{JOB_ID}-{host}"
+
+
+def roots_from_env(jobs_root, environ=None) -> dict:
+    """{status_root token: folder}: "jobs" is the jobs root; MINIMOI_JOBS_ROOT_<TOKEN> adds another."""
+    environ = os.environ if environ is None else environ
+    roots = {"jobs": str(jobs_root)}
+    for key, value in environ.items():
+        if key.startswith("MINIMOI_JOBS_ROOT_") and value:
+            roots[key[len("MINIMOI_JOBS_ROOT_"):].lower().replace("_", "-")] = value
+    return roots
+
+
+def check(jobs_root, jobs, state: dict, sender, now, roots=None, alerts=True) -> tuple[dict[str, str], bool]:
     """Judge ``jobs``; send what must be sent; update ``state`` in place. Returns ({job id: code}, all delivered)."""
     codes, delivered = {}, True
+    roots = roots or {"jobs": str(jobs_root)}
     for job in jobs:
-        doc = status.read_status(jobs_root, job.status_file, job.id)
-        verdict = judge.judge(job, doc, now)
+        doc, verdict = health.observe(job, roots, now)
         codes[job.id] = verdict.code
+        if not alerts:
+            continue
         prior = state.get(job.id)
         if verdict.state == "red":
             mark = {"condition": verdict.code, "key": verdict.key}
@@ -101,26 +124,43 @@ def check(jobs_root, jobs, state: dict, sender, now) -> tuple[dict[str, str], bo
     return codes, delivered
 
 
+def write_health(reg, host, roots, now, jobs_root, health_dir, own_id, alerts=True) -> dict:
+    """``health-<host>.json`` in the jobs root (0600) and, for MC, in ``health_dir`` (0644). The watchdog judges itself
+    nowhere else, so its own line is left out; the daily check sees a stale report instead."""
+    name = health.report_name(host)
+    previous = health.read_report(jobs_root, host)
+    report = health.host_report(reg, host, roots, now, previous, exclude=(own_id,))
+    report["alerts"] = "on" if alerts else "off"
+    status.write_json_atomic(jobs_root, name, report)
+    if health_dir:
+        health.publish(health_dir, name, report)
+    return report
+
+
 def run(*, jobs_root, host="mac", registry_path=None, sender=alert.send,
-        now: Callable[[], datetime] = lambda: datetime.now(timezone.utc), out=sys.stdout, err=sys.stderr) -> int:
+        now: Callable[[], datetime] = lambda: datetime.now(timezone.utc), out=sys.stdout, err=sys.stderr,
+        roots=None, alerts=True, health_dir=None) -> int:
     started = now()
+    own_id = watchdog_id(host)
+    roots = roots or {"jobs": str(jobs_root)}
     try:
         reg = registry.load(registry_path)
     except registry.RegistryError:
         reg = None
-    own = reg.get(JOB_ID) if reg else None
+    own = reg.get(own_id) if reg else None
     if own is None:
         own = registry.parse({"schema_version": 1, "jobs": [{
-            "id": JOB_ID, "name": "Scheduled-jobs watchdog", "host": host,
+            "id": own_id, "name": "Scheduled-jobs watchdog", "host": host,
             "schedule": {"text": "daily 09:00 Chicago", "kind": "daily", "at": "09:00", "tz": "America/Chicago"},
             "expected_every_s": 86400, "missed_after_s": 180000, "stuck_after_s": 3600,
-            "status_file": f"{JOB_ID}.json", "owner": "robert", "runbook": "OPERATIONS.md"}]}).jobs[0]
+            "status_file": f"{own_id}.json", "owner": "robert", "runbook": "OPERATIONS.md"}]}).jobs[0]
     run_id = f"{started.strftime('%Y%m%dT%H%M%SZ')}-{secrets.token_hex(3)}"
     try:
         running = status.start_run(jobs_root, own, run_id, started)
     except Exception as exc:                    # noqa: BLE001
-        print(f"{JOB_ID}: cannot write the status file ({type(exc).__name__})", file=err)
-        _send(sender, f"minimoi job {JOB_ID} on {host}: status file not writable")
+        print(f"{own_id}: cannot write the status file ({type(exc).__name__})", file=err)
+        if alerts:
+            _send(sender, f"minimoi job {own_id} on {host}: status file not writable")
         return 2
     state = load_state(jobs_root)
     results: dict[str, str] = {}
@@ -128,22 +168,23 @@ def run(*, jobs_root, host="mac", registry_path=None, sender=alert.send,
     try:
         if reg is None:
             results["registry"] = "unreadable"
-            if REGISTRY_KEY not in state:
-                if _send(sender, f"minimoi job {JOB_ID} on {host}: the job registry cannot be read"):
+            if REGISTRY_KEY not in state and alerts:
+                if _send(sender, f"minimoi job {own_id} on {host}: the job registry cannot be read"):
                     state[REGISTRY_KEY] = {"condition": "registry", "key": "unreadable"}
                 else:
                     delivered = False
             outcome = "failed"
         else:
-            if REGISTRY_KEY in state:
-                if _send(sender, f"minimoi job {JOB_ID} on {host}: the job registry is readable again"):
+            if REGISTRY_KEY in state and alerts:
+                if _send(sender, f"minimoi job {own_id} on {host}: the job registry is readable again"):
                     state.pop(REGISTRY_KEY)
                 else:
                     delivered = False
-            judged = [j for j in reg.for_host(host) if j.id != JOB_ID]
-            results, ok = check(jobs_root, judged, state, sender, started)
+            judged = [j for j in reg.for_host(host) if j.id != own_id]
+            results, ok = check(jobs_root, judged, state, sender, started, roots=roots, alerts=alerts)
             delivered = delivered and ok
             outcome = "ok" if delivered else "warn"
+            write_health(reg, host, roots, started, jobs_root, health_dir, own_id, alerts)
         if reg is not None:                     # a job removed from the registry has nothing left to track
             known = {j.id for j in reg.jobs} | {REGISTRY_KEY}
             for stale_id in [k for k in state if k not in known]:
@@ -167,16 +208,18 @@ def run(*, jobs_root, host="mac", registry_path=None, sender=alert.send,
                           exit_code=code, summary=summary, results=results, next_due_by=next_due,
                           alert="not_needed")
     except Exception as exc:                    # noqa: BLE001
-        print(f"{JOB_ID}: cannot write the final status ({type(exc).__name__})", file=err)
+        print(f"{own_id}: cannot write the final status ({type(exc).__name__})", file=err)
         return 2
-    print(f"{JOB_ID} {outcome} {json.dumps(results, sort_keys=True)}", file=out)
+    print(f"{own_id} {outcome} {json.dumps(results, sort_keys=True)}", file=out)
     return code
 
 
 def main() -> int:
     root = Path(os.environ.get("MINIMOI_JOBS_ROOT") or DEFAULT_JOBS_ROOT).expanduser()
     return run(jobs_root=root, host=os.environ.get("MINIMOI_JOBS_HOST") or "mac",
-               registry_path=os.environ.get("MINIMOI_JOBS_REGISTRY") or None)
+               registry_path=os.environ.get("MINIMOI_JOBS_REGISTRY") or None, roots=roots_from_env(root),
+               alerts=(os.environ.get("MINIMOI_JOBS_ALERT") or "on") != "off",
+               health_dir=os.environ.get("MINIMOI_JOBS_HEALTH_DIR") or None)
 
 
 if __name__ == "__main__":

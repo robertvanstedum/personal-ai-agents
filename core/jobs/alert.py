@@ -1,7 +1,8 @@
 """One Telegram message, from a Mac job, with the same credentials telegram_bot.py uses.
 
 Token and chat id: macOS Keychain (service ``telegram``: ``bot_token`` and ``chat_id``), then the
-``TELEGRAM_BOT_TOKEN`` / ``TELEGRAM_CHAT_ID`` environment. The token is never printed, logged or put in an
+``TELEGRAM_BOT_TOKEN`` / ``TELEGRAM_CHAT_ID`` environment, then (a Linux host, FF-19) the token from the SSM parameter
+named by ``MINIMOI_TELEGRAM_SSM_PARAM``, read with the host's own role through the aws CLI. The token is never printed, logged or put in an
 error: every failure becomes the word ``not_sent``. Messages carry a job id, a state and fixed codes only;
 anything outside a narrow character set is dropped before sending, so a message cannot carry content.
 """
@@ -30,6 +31,17 @@ def _keychain(account: str) -> str | None:
         return None
 
 
+def _ssm(name: str) -> str | None:
+    import subprocess
+    try:
+        out = subprocess.run(["aws", "ssm", "get-parameter", "--name", name, "--with-decryption", "--query",
+                              "Parameter.Value", "--output", "text", "--region", "us-east-1"],
+                             capture_output=True, text=True, timeout=30)
+    except Exception:                                   # noqa: BLE001 - no CLI, no role: not sent
+        return None
+    return (out.stdout.strip() or None) if out.returncode == 0 else None
+
+
 def _post(url: str, payload: dict, timeout: float) -> int:
     request = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
                                      headers={"Content-Type": "application/json"}, method="POST")
@@ -38,11 +50,14 @@ def _post(url: str, payload: dict, timeout: float) -> int:
 
 
 def send(text: str, *, env=None, keychain: Callable[[str], str | None] = _keychain,
-         post: Callable[[str, dict, float], int] = _post, timeout: float = 15.0) -> str:
+         post: Callable[[str, dict, float], int] = _post, timeout: float = 15.0,
+         ssm: Callable[[str], str | None] = _ssm) -> str:
     """``"sent"`` or ``"not_sent"``. Never raises, never echoes the token."""
     env = os.environ if env is None else env
     try:
         token = keychain("bot_token") or env.get("TELEGRAM_BOT_TOKEN")
+        if not token and env.get("MINIMOI_TELEGRAM_SSM_PARAM"):
+            token = ssm(env["MINIMOI_TELEGRAM_SSM_PARAM"])
         chat_id = keychain("chat_id") or env.get("TELEGRAM_CHAT_ID")
         if not token or not chat_id:
             return NOT_SENT
