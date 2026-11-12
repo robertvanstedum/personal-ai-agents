@@ -137,6 +137,26 @@ def test_new_publish_keeps_one_previous_and_rollback(env):
     assert h2 in json.loads((rdir / "work_source_roots.json").read_text())["career"]["active_cv"]["path"]
 
 
+
+def test_rollback_rewrites_the_receipt_so_cos_names_the_release_it_reads(env):
+    """Production E2E, 11 Nov 2026: rollback moved ``current`` but left RECEIPT.json naming the newer release, and CoS cites the receipt."""
+    h1 = cs.publish(env["mac"])["manifest_hash"]
+    cs.apply(env["host"])
+    (env["ws"] / "CV" / "resume.md").write_text("resume v2\n")
+    h2 = cs.publish(env["mac"])["manifest_hash"]
+    cs.apply(env["host"])
+    cs.rollback(env["host"])
+    for name in ("professional", "professional-agent-a"):
+        rdir = env["private"] / name
+        receipt = json.loads((rdir / "RECEIPT.json").read_text())
+        manifest = json.loads((rdir / "releases" / h1 / "MANIFEST.json").read_text())
+        assert cs.current_release(rdir) == h1
+        assert receipt["manifest_hash"] == h1 and receipt["previous"] == h2 and receipt["result"] == "rolled_back"
+        assert receipt["head"] == manifest["head"] and receipt["files"] == len(manifest["files"])
+        assert stat.S_IMODE((rdir / "RECEIPT.json").stat().st_mode) == 0o600
+    assert cs.rollback(env["host"])["readers"][0]["to"] == h2     # a second rollback undoes the first
+    assert json.loads((env["private"] / "professional" / "RECEIPT.json").read_text())["manifest_hash"] == h2
+
 def test_tampered_object_is_quarantined_and_current_stays(env):
     h1 = cs.publish(env["mac"])["manifest_hash"]
     cs.apply(env["host"])
