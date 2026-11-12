@@ -46,7 +46,8 @@ from core.jobs import alert, registry, schedule, status, batch_window  # noqa: E
 
 JOB_ID = "memory-watch"
 SOURCES = ("claude-code", "codex")              # the approved-memory sources; the inbox is deliberately absent
-OPTIONAL_SOURCES = ("rooms", "minimoi-mc")      # Rooms bundles, MC conversation exports: run only when configured (same approval gate)
+OPTIONAL_SOURCES = ("rooms", "minimoi-mc", "minimoi-cos")   # Rooms bundles, MC and CoS conversation exports: run only when configured
+#                                                             (same approval gate)
 DEFAULT_JOBS_ROOT = "~/minimoi-staging/data/jobs"
 WATCH_TIMEOUT_S = 3600
 OK, WARN, FAILED = "ok", "warn", "failed"

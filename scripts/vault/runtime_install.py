@@ -18,6 +18,12 @@ source (kind ``mc``, rooted at ``~/minimoi-staging/mc-export``, the pull's watch
 approves it (``moi approve-source minimoi-mc``), and until then the nightly memory-watch shows ``minimoi-mc`` yellow (``not_approved``);
 the MANIFEST limitations say so. Without the key the source is not configured, so memory-watch is not turned yellow every night by a
 source that nothing feeds.
+
+The production CoS pull (``vault-cos-pull``, 11 Nov 2026, #509) follows the same rule with its own optional key ``cos_pull_identity`` (a
+spec; usually the same identity as ``mc_pull_identity``): with it, the candidate ``com.vanstedum.minimoi-vault-cos-pull.plist`` runs
+``scripts/vault/vault_cos_pull.py run --execute --identity <spec>`` every 2 h and at load, and the shelf config gains the ``minimoi-cos``
+source (kind ``cos``, rooted at ``~/minimoi-staging/cos-export``), which captures nothing until ``moi approve-source minimoi-cos``.
+Without it, neither exists.
 """
 from __future__ import annotations
 import argparse
@@ -40,7 +46,7 @@ FILES = ('core/__init__.py', 'core/agent_turns/__init__.py', 'core/agent_turns/w
          'utils/__init__.py', 'utils/credential_scrub.py', 'utils/payment_scrub.py',
          'scripts/moi', 'scripts/jobs/watchdog.py', 'scripts/vault/backup.py',
          'scripts/vault/runtime_install.py', 'scripts/vault/query_suite.py',
-         'scripts/vault/assets.py', 'scripts/vault/vault_sync.py', 'scripts/vault/vault_mc_pull.py',
+         'scripts/vault/assets.py', 'scripts/vault/vault_sync.py', 'scripts/vault/vault_mc_pull.py', 'scripts/vault/vault_cos_pull.py',
          'scripts/vault/aws_keychain_credentials.py', 'scripts/vault/check_s3_access.py', 'scripts/vault/publish_production.py',
          'requirements-vault.txt')
 LABELS = {'capture': 'com.vanstedum.minimoi-memory-watch', 'index': 'com.vanstedum.minimoi-memory-index',
@@ -49,11 +55,14 @@ LABELS = {'capture': 'com.vanstedum.minimoi-memory-watch', 'index': 'com.vansted
           'mc_pull': 'com.vanstedum.minimoi-vault-mc-pull'}
 SYNC_INTERVAL_S = 7200
 MC_WATCH = 'minimoi-staging/mc-export'          # under the home folder; == core/memory_sync/mc_pull.py DEFAULT_WATCH
+COS_WATCH = 'minimoi-staging/cos-export'        # under the home folder; == core/memory_sync/cos_pull.py DEFAULT_WATCH
+# Optional agents beyond LABELS: written only when the profile names their identity spec.
+COS_PULL_LABEL = 'com.vanstedum.minimoi-vault-cos-pull'
 INTERVAL_JOBS = ('sync', 'mc_pull')
 TIMES = {'capture': (0, 15), 'index': (2, 30), 'backup': (4, 30), 'watchdog': (9, 0)}
 KEYS = {'python', 'shelf_root', 'inbox_root', 'jobs_root', 'logs_root', 'ask_registry',
         'age_bin', 'age_version', 'backup_dest', 'public_recipient', 'launch_agents'}
-OPTIONAL_KEYS = {'mc_pull_identity', 'aws_profile', 'aws_principal_arn', 'aws_keychain_service'}
+OPTIONAL_KEYS = {'mc_pull_identity', 'cos_pull_identity', 'aws_profile', 'aws_principal_arn', 'aws_keychain_service'}
 IDENTITY_SPEC = re.compile(r'(file|keychain|ssm|cmd):\S[^\r\n]{0,500}')
 # The Mac Vault jobs' own AWS principal (18 Oct 2026): all three or none. Names only, never keys: the keys stay in the Keychain.
 AWS_KEYS = ('aws_profile', 'aws_principal_arn', 'aws_keychain_service')
@@ -77,6 +86,8 @@ def profile(path):
         raise ValueError('invalid_profile')
     if 'mc_pull_identity' in doc and not identity_spec_ok(doc['mc_pull_identity']):
         raise ValueError('invalid_mc_pull_identity')
+    if 'cos_pull_identity' in doc and not identity_spec_ok(doc['cos_pull_identity']):
+        raise ValueError('invalid_cos_pull_identity')
     present = [k for k in AWS_KEYS if k in doc]
     if present and len(present) != len(AWS_KEYS):
         raise ValueError('aws_settings_incomplete')
@@ -108,6 +119,8 @@ def commands(pin, cfg, job):
         return [py, str(pin / 'scripts/vault/vault_sync.py'), 'run', '--execute']
     if job == 'mc_pull':
         return [py, str(pin / 'scripts/vault/vault_mc_pull.py'), 'run', '--execute', '--identity', cfg['mc_pull_identity']]
+    if job == 'cos_pull':
+        return [py, str(pin / 'scripts/vault/vault_cos_pull.py'), 'run', '--execute', '--identity', cfg['cos_pull_identity']]
     paths = {'capture': 'scripts/memory/daily_watch.py', 'index': 'scripts/memory/index_job.py',
              'watchdog': 'scripts/jobs/watchdog.py', 'backup': 'scripts/vault/backup.py'}
     result = [py, str(pin / paths[job])]
@@ -167,6 +180,8 @@ def prepare(repo, cfg, out):
                'codex': {'kind': 'codex', 'root': str(Path.home() / '.codex/sessions'), 'never_copy': []}}
     if 'mc_pull_identity' in cfg:                           # only the mc pull feeds this folder: no pull, no source (no nightly yellow)
         sources['minimoi-mc'] = {'kind': 'mc', 'root': str(Path.home() / MC_WATCH), 'never_copy': []}
+    if 'cos_pull_identity' in cfg:                          # likewise: only the cos pull feeds this folder
+        sources['minimoi-cos'] = {'kind': 'cos', 'root': str(Path.home() / COS_WATCH), 'never_copy': []}
     shelf = {'schema_version': 1, 'shelf_root': cfg['shelf_root'], 'inbox_root': cfg['inbox_root'],
              'repo_root': str(pin), 'headroom': {'min_free_bytes': 5 << 30}, 'never_copy': [], 'sources': sources}
     (config / 'memory_shelf.json').write_text(json.dumps(shelf, indent=2) + '\n')
@@ -216,6 +231,20 @@ def prepare(repo, cfg, out):
         else:
             h, minute = TIMES[job]; doc.update({'RunAtLoad': False, 'StartCalendarInterval': {'Hour': h, 'Minute': minute}})
         (candidates / (label + '.plist')).write_bytes(plistlib.dumps(doc))
+    if 'cos_pull_identity' in cfg:                          # the production CoS pull: same shape as the mc pull's agent
+        old = Path(cfg['launch_agents']) / (COS_PULL_LABEL + '.plist')
+        if old.is_symlink():
+            raise ValueError('existing_plist_is_link')
+        originals[COS_PULL_LABEL] = old.is_file()
+        if old.is_file():
+            shutil.copyfile(old, previous / old.name)
+            (previous / old.name).chmod(0o600)
+        doc = {'Label': COS_PULL_LABEL, 'ProgramArguments': commands(pin, cfg, 'cos_pull'), 'WorkingDirectory': str(pin),
+               'EnvironmentVariables': environment(pin, cfg),
+               'StandardOutPath': str(Path(cfg['logs_root']) / (COS_PULL_LABEL + '.log')),
+               'StandardErrorPath': str(Path(cfg['logs_root']) / (COS_PULL_LABEL + '.log')),
+               'RunAtLoad': True, 'StartInterval': SYNC_INTERVAL_S}
+        (candidates / (COS_PULL_LABEL + '.plist')).write_bytes(plistlib.dumps(doc))
     manifest = {'format': 'vault-runtime/1', 'source_commit': head, 'source_files': hashes, 'source_inputs': input_hashes, 'source_tree': tree,
                 'runtime': str(pin), 'dependency_receipt': receipt,
                 'runtime_file_hashes': {str(p.relative_to(pin)): hashlib.sha256(p.read_bytes()).hexdigest() for p in pin.rglob('*') if p.is_file()},
@@ -234,7 +263,13 @@ def prepare(repo, cfg, out):
                                    'yellow (not_approved) until `moi approve-source minimoi-mc`']
                                   if 'mc_pull_identity' in cfg else
                                   ['vault-mc-pull plist not written and minimoi-mc source not configured: the profile has no '
-                                   'mc_pull_identity'])]}
+                                   'mc_pull_identity']),
+                                *(['vault-cos-pull reads the private identity named by cos_pull_identity (a spec, not the key)',
+                                   'minimoi-cos source configured; it captures nothing until approved, and memory-watch shows minimoi-cos '
+                                   'yellow (not_approved) until `moi approve-source minimoi-cos`']
+                                  if 'cos_pull_identity' in cfg else
+                                  ['vault-cos-pull plist not written and minimoi-cos source not configured: the profile has no '
+                                   'cos_pull_identity'])]}
     (out / 'MANIFEST.json').write_text(json.dumps(manifest, indent=2) + '\n')
     for p in config.iterdir():
         p.chmod(0o400)

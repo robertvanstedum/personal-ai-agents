@@ -4,9 +4,9 @@
     moi approve <id> [--under <m>]   the ONLY path to approval events
     moi approve-source <source>      switch a source on after its dry run
     moi designate <id> [<id> ...]    designate records as curated (one typed "yes"); short or full ids
-    moi list [<source>] [--canary]   your records for one source (claude-ai | grok | chatgpt | claude-code | codex | paste | minimoi-mc); titles shown,
+    moi list [<source>] [--canary]   your records for one source (claude-ai | grok | chatgpt | claude-code | codex | paste | minimoi-mc | minimoi-cos); titles shown,
                                      so it runs only at a real terminal
-    moi dry-run <source>             write the dry-run listing (claude-code | codex | minimoi-mc | inbox | backfill-guild | backfill-curator)
+    moi dry-run <source>             write the dry-run listing (claude-code | codex | minimoi-mc | minimoi-cos | inbox | backfill-guild | backfill-curator)
     moi watch <source>               one watcher pass (dry run only until approved)
     moi watch codex --id UUID --bounded-codex --max-source-bytes N
                                      explicit bounded targeted refresh; never changes whole-source freshness
@@ -122,7 +122,7 @@ def cmd_review(cfg, shelf, out) -> int:
     return OK
 
 
-LIST_SOURCES = ("claude-ai", "grok", "chatgpt", "claude-code", "codex", "paste", "minimoi-mc")
+LIST_SOURCES = ("claude-ai", "grok", "chatgpt", "claude-code", "codex", "paste", "minimoi-mc", "minimoi-cos")
 
 
 def cmd_list(shelf, out, source: str | None, canary_flag: bool) -> int:

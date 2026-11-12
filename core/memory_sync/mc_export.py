@@ -67,6 +67,11 @@ The three newer maps are optional on read (a state written before them reads as 
 What leaves the host in plain text (manifest, COMPLETE, the job status, the alert) is conversation ids, hashes, sizes, counts and fixed codes:
 never a title or a note. This module is stdlib plus the EC2 tools bundle (``memory_backup``, ``memory_sync``); the job status lives in the
 script. It never changes the frozen sync's state or files.
+
+**Families (11 Nov 2026, #509).** Production CoS conversations use this same run (``core/memory_sync/cos_export.py``): steps 2-7 are
+shared, step 1 is the family's own exporter. An ``ExportFamily`` names what differs (the batch family, the file instance, the provider of
+the source key, the state file, the lock, the scratch prefix, the busy code and the exporter's extra counts). ``run_export`` is MC's, with
+exactly its old arguments and results; ``run_family_export`` is the shared run.
 """
 from __future__ import annotations
 
@@ -108,6 +113,27 @@ CONTAINER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 SENDING, SENT = "sending", "sent"
 
 
+class ExportFamily:
+    """What differs between the families this run exports. ``extra_counts(export_counts) -> dict`` adds the exporter's own exclusion counts
+    to the result (MC: ``other_principal``, ``off_record``)."""
+
+    __slots__ = ("batch", "instance", "provider", "state_format", "state_name", "lock_name", "scratch_prefix", "busy", "extra_counts")
+
+    def __init__(self, *, batch, instance, provider, state_format, state_name, lock_name, scratch_prefix, busy, extra_counts):
+        self.batch, self.instance, self.provider = batch, instance, provider
+        self.state_format, self.state_name, self.lock_name = state_format, state_name, lock_name
+        self.scratch_prefix, self.busy, self.extra_counts = scratch_prefix, busy, extra_counts
+
+
+def _mc_extra(ec: dict) -> dict:
+    return {"other_principal": int(ec.get("other_principal", 0)),
+            "off_record": int(ec.get("off_record", 0)) + int(ec.get("off_record_note", 0))}
+
+
+MC_EXPORT = ExportFamily(batch=MB.MC, instance=INSTANCE, provider=PROVIDER, state_format=STATE_FORMAT, state_name=STATE_NAME,
+                         lock_name=LOCK_NAME, scratch_prefix=SCRATCH_PREFIX, busy="mc_export_busy", extra_counts=_mc_extra)
+
+
 def _utc(t: datetime) -> str:
     return t.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -124,10 +150,11 @@ def backoff(attempts: int) -> timedelta:
     return BACKOFF[min(max(int(attempts), 1), len(BACKOFF)) - 1]
 
 
-def source_key(name: str) -> str:
+def source_key(name: str, fam: ExportFamily | None = None) -> str:
     """``production--c-0123456789ab.json`` -> ``minimoi-mc:production:c-0123456789ab`` (the record's source, as the watcher writes it)."""
-    m = MB.FILE.match(name)
-    return f"{PROVIDER}:{m.group(1)}:{m.group(2)}"
+    fam = fam or MC_EXPORT
+    m = fam.batch.file.match(name)
+    return f"{fam.provider}:{m.group(1)}:{m.group(2)}"
 
 
 # ── the exporter ──
@@ -146,9 +173,10 @@ def subprocess_runner(argv: list, stdout) -> int:
         raise BackupError("export_failed") from None
 
 
-def read_export(archive: Path, target: Path) -> tuple[dict, dict]:
+def read_export(archive: Path, target: Path, fam: ExportFamily | None = None) -> tuple[dict, dict]:
     """``({name: (path, sha256, size)}, EXPORT.json)`` from the exporter's stream, read strictly (see the module doc); else ``export_failed``.
     Each member is written exactly at its declared size into a new file (exclusive create, no link followed), hashed as written."""
+    fam = fam or MC_EXPORT
     target.mkdir(mode=0o700)
     files, doc, done = {}, None, False
     try:
@@ -163,7 +191,7 @@ def read_export(archive: Path, target: Path) -> tuple[dict, dict]:
                     doc = json.loads(tar.extractfile(member).read().decode("utf-8"))
                     done = True
                     continue
-                if not MB.name_ok(name, INSTANCE) or member.size > MB.MAX_FILE_BYTES:
+                if not MB.name_ok(name, fam.instance, fam.batch) or member.size > fam.batch.max_file_bytes:
                     raise BackupError("export_failed")
                 src, h, n = tar.extractfile(member), hashlib.sha256(), 0
                 path = target / name
@@ -187,13 +215,13 @@ def read_export(archive: Path, target: Path) -> tuple[dict, dict]:
             or not all(isinstance(k, str) and isinstance(v, int) and not isinstance(v, bool) for k, v in doc["counts"].items()):
         raise BackupError("export_failed")
     for name, (_path, sha, size) in files.items():
-        if MB.check_file(target, name, sha, size) is not None:
+        if MB.check_file(target, name, sha, size, fam.batch) is not None:
             raise BackupError("export_failed")
     return files, doc
 
 
 # ── the serving Vault ──
-def serving_hashes(vault_root, names) -> dict:
+def serving_hashes(vault_root, names, fam: ExportFamily | None = None) -> dict:
     """``{name: source_hash | None}`` for the given export names, from the serving release (``current`` resolved once, so a switch during the
     read cannot mix two releases). No release installed: every name is ``None``. An unreadable source index is ``vault_unreadable``; a
     record whose main file cannot be read, or names another source, counts as missing."""
@@ -213,7 +241,7 @@ def serving_hashes(vault_root, names) -> dict:
     except V.Damaged:
         raise BackupError("vault_unreadable") from None
     for name in names:
-        key = source_key(name)
+        key = source_key(name, fam)
         entry = index.get(key)
         folder = entry.get("dir") if isinstance(entry, dict) else None
         if not isinstance(folder, str) or not BT.NAME.match(folder):
@@ -239,30 +267,32 @@ def reconcile(exported: dict, held: dict) -> dict:
 OPTIONAL_MAPS = ("behind_since", "behind_held", "unacked_since", "requeued")
 
 
-def empty_state() -> dict:
-    return {"format": STATE_FORMAT, "acked": {}, "pending": {}, "first_seen": {}, **{k: {} for k in OPTIONAL_MAPS}}
+def empty_state(fam: ExportFamily | None = None) -> dict:
+    return {"format": (fam or MC_EXPORT).state_format, "acked": {}, "pending": {}, "first_seen": {}, **{k: {} for k in OPTIONAL_MAPS}}
 
 
-def read_state(path: Path) -> dict:
+def read_state(path: Path, fam: ExportFamily | None = None) -> dict:
+    fam = fam or MC_EXPORT
     if not path.exists():
-        return empty_state()
+        return empty_state(fam)
     if path.is_symlink() or not path.is_file():
         raise BackupError("state_unreadable")
     doc = V.read_json(path)
+    name_ok = (lambda n: MB.name_ok(n, None, fam.batch))
     try:
-        ok = isinstance(doc, dict) and doc.get("format") == STATE_FORMAT
-        ok = ok and all(MB.name_ok(n) and V.HEX64.match(str(e["sha256"])) and _parse_utc(e["acked_utc"]) for n, e in doc["acked"].items())
-        ok = ok and all(MB.name_ok(n) and V.HEX64.match(str(e["sha256"])) and _parse_utc(e["utc"]) for n, e in doc["first_seen"].items())
+        ok = isinstance(doc, dict) and doc.get("format") == fam.state_format
+        ok = ok and all(name_ok(n) and V.HEX64.match(str(e["sha256"])) and _parse_utc(e["acked_utc"]) for n, e in doc["acked"].items())
+        ok = ok and all(name_ok(n) and V.HEX64.match(str(e["sha256"])) and _parse_utc(e["utc"]) for n, e in doc["first_seen"].items())
         for bid, p in doc["pending"].items():
             ok = ok and bool(B.ATTEMPT.match(bid)) and p["state"] in (SENDING, SENT) and isinstance(p["attempts"], int) \
                 and _parse_utc(p["sent_utc"]) is not None and _parse_utc(p["next_retry_utc"]) is not None \
-                and all(MB.name_ok(n) and V.HEX64.match(str(s)) for n, s in p["files"].items())
+                and all(name_ok(n) and V.HEX64.match(str(s)) for n, s in p["files"].items())
         for key in OPTIONAL_MAPS:                           # absent in a state written before them: empty
             doc.setdefault(key, {})
-        ok = ok and all(MB.name_ok(n) and _parse_utc(u) for n, u in doc["behind_since"].items())
-        ok = ok and all(MB.name_ok(n) and _parse_utc(u) for n, u in doc["unacked_since"].items())
-        ok = ok and all(MB.name_ok(n) and V.HEX64.match(str(s)) for n, s in doc["requeued"].items())
-        ok = ok and all(MB.name_ok(n) and (s == "" or V.HEX64.match(str(s))) for n, s in doc["behind_held"].items())
+        ok = ok and all(name_ok(n) and _parse_utc(u) for n, u in doc["behind_since"].items())
+        ok = ok and all(name_ok(n) and _parse_utc(u) for n, u in doc["unacked_since"].items())
+        ok = ok and all(name_ok(n) and V.HEX64.match(str(s)) for n, s in doc["requeued"].items())
+        ok = ok and all(name_ok(n) and (s == "" or V.HEX64.match(str(s))) for n, s in doc["behind_held"].items())
     except (KeyError, TypeError, AttributeError):
         ok = False
     if not ok:
@@ -295,13 +325,14 @@ def wipe_tree(path: Path) -> bool:
 class Paths:
     """``<vault>-sync`` (state, lock: root 0700, the frozen sync's own folder) and ``<vault>-work`` (r3's root-only scratch)."""
 
-    def __init__(self, vault_root):
+    def __init__(self, vault_root, fam: ExportFamily | None = None):
+        fam = fam or MC_EXPORT
         root = Path(vault_root)
         self.vault = root
         self.sync = root.parent / f"{root.name}-sync"
         self.work = root.parent / f"{root.name}-work"
-        self.state = self.sync / STATE_NAME
-        self.lock = self.sync / LOCK_NAME
+        self.state = self.sync / fam.state_name
+        self.lock = self.sync / fam.lock_name
 
 
 class Admission:
@@ -310,8 +341,9 @@ class Admission:
     nothing at all (Codex, 17 Oct; the pattern of ``production.Admission``). Raises ``mc_export_busy`` (or ``sync_state_unsafe``).
     ``run_export(admission=...)`` then does not lock again."""
 
-    def __init__(self, vault_root, *, owner_uid: int = 0):
-        self.paths = Paths(vault_root)
+    def __init__(self, vault_root, *, owner_uid: int = 0, fam: ExportFamily | None = None):
+        self.fam = fam or MC_EXPORT
+        self.paths = Paths(vault_root, self.fam)
         self.owner_uid = owner_uid
         self._lock = None
 
@@ -326,7 +358,7 @@ class Admission:
         try:
             self._lock = P._Lock(self.paths.lock).__enter__()
         except BackupError as exc:
-            raise BackupError("mc_export_busy" if exc.code == "refresh_busy" else exc.code) from None
+            raise BackupError(self.fam.busy if exc.code == "refresh_busy" else exc.code) from None
         except OSError:                                     # the lock file itself cannot be opened (a link, permissions): a fixed code
             raise BackupError("lock_not_openable") from None
         return self
@@ -340,13 +372,13 @@ class Admission:
         return self._lock is not None and self.paths.lock.resolve() == paths.lock.resolve()
 
 
-def plan_export(*, vault_root: str) -> dict:
+def plan_export(*, vault_root: str, fam: ExportFamily | None = None) -> dict:
     """Read-only: what the state says (counts only). Never reads the identity, never runs the exporter."""
-    paths = Paths(vault_root)
+    paths = Paths(vault_root, fam)
     out = {"running_as_root": os.geteuid() == 0, "state_exists": paths.state.is_file(), "vault_root_exists": paths.vault.is_dir()}
     if paths.state.is_file():
         try:
-            st = read_state(paths.state)
+            st = read_state(paths.state, fam)
             out.update(acked=len(st["acked"]), pending_batches=len(st["pending"]),
                        pending_files=sum(len(p["files"]) for p in st["pending"].values()))
         except BackupError as exc:
@@ -370,6 +402,24 @@ def run_export(*, dest: str, vault_root: str, recipient: str, principal: str, ru
     if max_batch_bytes < 1 or gap_grace < timedelta(0):
         raise BackupError("bad_arguments")
     argv = exporter_argv(principal, container=container, docker_bin=docker_bin)
+    return run_family_export(fam=MC_EXPORT, argv=argv, runner=runner or subprocess_runner, dest=dest, vault_root=vault_root,
+                             recipient=recipient, age_bin=age_bin, expect_age=expect_age, aws_bin=aws_bin, owner_uid=owner_uid,
+                             require_root=require_root, gap_grace=gap_grace, max_batch_bytes=max_batch_bytes, run=run, usage=usage, now=now,
+                             put=put, hooks=hooks, admission=admission)
+
+
+def run_family_export(*, fam: ExportFamily, argv: list, runner, dest: str, vault_root: str, recipient: str, age_bin: str = "age",
+                      expect_age: str | None = None, aws_bin: str = "aws", owner_uid: int = 0, require_root: bool = True,
+                      gap_grace: timedelta = DEFAULT_GAP_GRACE, max_batch_bytes: int = DEFAULT_MAX_BATCH_BYTES, run=subprocess.run,
+                      usage=None, now=None, put=None, hooks: dict | None = None, admission: Admission | None = None) -> dict:
+    """The shared run (module doc, steps 1-7) for one family. ``runner(argv, stdout) -> exit code`` writes the family's export stream
+    (``<instance>--<id>.json`` files, then ``EXPORT.json`` last) into ``stdout``: 0 ok, 1 partial, anything else a failed export."""
+    if require_root and os.geteuid() != 0:
+        raise BackupError("root_required")
+    if not B.RECIPIENT.match(recipient or ""):
+        raise BackupError("recipient_malformed")
+    if max_batch_bytes < 1 or gap_grace < timedelta(0):
+        raise BackupError("bad_arguments")
     clock = now or (lambda: datetime.now(timezone.utc))
     hook = lambda name, *args: (hooks or {}).get(name, lambda *a: None)(*args)
     usage = usage or shutil.disk_usage
@@ -377,25 +427,25 @@ def run_export(*, dest: str, vault_root: str, recipient: str, principal: str, ru
     try:
         age_ver = B.check_age(age_bin, expect_age)
         d = B.Dest(dest, aws_bin=aws_bin, run=run)
-        paths = Paths(vault_root)
+        paths = Paths(vault_root, fam)
         _private_dir(paths.sync, owner_uid, "sync_state_unsafe")
         _private_dir(paths.work, owner_uid, "work_unsafe")
         if admission is None:
-            lock = Admission(vault_root, owner_uid=owner_uid).__enter__()     # raises mc_export_busy
+            lock = Admission(vault_root, owner_uid=owner_uid, fam=fam).__enter__()     # raises the family's busy code
         elif not admission.covers(paths):
             raise BackupError("admission_mismatch")
         else:
             lock = None                                                         # the caller holds it for the whole run
         try:
             for p in paths.work.iterdir():                  # a killed run's plaintext: wiped before anything else
-                if p.name.startswith(SCRATCH_PREFIX) and p.is_dir() and not p.is_symlink() and not wipe_tree(p):
+                if p.name.startswith(fam.scratch_prefix) and p.is_dir() and not p.is_symlink() and not wipe_tree(p):
                     raise BackupError("cleanup_failed")
-            state = read_state(paths.state)
+            state = read_state(paths.state, fam)
             B.ensure_space(paths.work, EXPORT_RESERVE, usage=usage)
-            scratch = Path(tempfile.mkdtemp(prefix=SCRATCH_PREFIX, dir=paths.work))
+            scratch = Path(tempfile.mkdtemp(prefix=fam.scratch_prefix, dir=paths.work))
             try:
                 os.chmod(scratch, 0o700)
-                return _run_locked(d, paths, state, scratch, argv=argv, runner=runner or subprocess_runner, recipient=recipient,
+                return _run_locked(d, paths, state, scratch, fam=fam, argv=argv, runner=runner, recipient=recipient,
                                    age_bin=age_bin, age_ver=age_ver, gap_grace=gap_grace, max_batch_bytes=max_batch_bytes, usage=usage, clock=clock,
                                    put=put, hook=hook)
             finally:
@@ -431,7 +481,8 @@ def _track_unacked(state: dict) -> None:
         unacked.setdefault(name, utc)
 
 
-def _run_locked(d, paths, state, scratch, *, argv, runner, recipient, age_bin, age_ver, gap_grace, max_batch_bytes, usage, clock, put, hook) -> dict:
+def _run_locked(d, paths, state, scratch, *, fam, argv, runner, recipient, age_bin, age_ver, gap_grace, max_batch_bytes, usage, clock, put,
+                hook) -> dict:
     now = clock()
     # 1. Export: stdout straight into a 0600 file in the 0700 scratch.
     tar_path = scratch / "export.tar"
@@ -449,7 +500,7 @@ def _run_locked(d, paths, state, scratch, *, argv, runner, recipient, age_bin, a
 
     # 2. Strict read; the stream itself is wiped as soon as its files are out.
     B.ensure_space(paths.work, tar_path.stat().st_size + P.SLACK, usage=usage)
-    files, doc = read_export(tar_path, scratch / "x")
+    files, doc = read_export(tar_path, scratch / "x", fam)
     if not B.wipe_file(tar_path):
         raise BackupError("cleanup_failed")
     exported = {name: sha for name, (_p, sha, _z) in files.items()}
@@ -463,7 +514,7 @@ def _run_locked(d, paths, state, scratch, *, argv, runner, recipient, age_bin, a
     counts = {"acked": 0, "rejected": 0, "superseded": 0, "ack_malformed": 0}
     for bid in sorted(pending):
         try:
-            ack = MB.read_ack(d, bid, scratch)
+            ack = MB.read_ack(d, bid, scratch, fam.batch)
         except BackupError as exc:
             if exc.code != "ack_malformed":
                 raise
@@ -512,7 +563,7 @@ def _run_locked(d, paths, state, scratch, *, argv, runner, recipient, age_bin, a
             behind_since.pop(name, None)
             behind_held.pop(name, None)
     try:
-        held = serving_hashes(paths.vault, sorted(exported))
+        held = serving_hashes(paths.vault, sorted(exported), fam)
         where = reconcile(exported, held)
     except BackupError as exc:
         if exc.code != "vault_unreadable":
@@ -569,16 +620,16 @@ def _run_locked(d, paths, state, scratch, *, argv, runner, recipient, age_bin, a
         os.mkdir(bdir, 0o700)
         plain, cipher = bdir / "batch.tar.gz", bdir / MB.BATCH_OBJECT
         B.ensure_space(paths.work, 2 * size + (len(chosen) + 2) * 4 * B.BLOCK + P.SLACK, usage=usage)
-        res = MB.write_tar([(n, files[n][0], files[n][1], files[n][2]) for n in chosen], bid, INSTANCE, plain)
+        res = MB.write_tar([(n, files[n][0], files[n][1], files[n][2]) for n in chosen], bid, fam.instance, plain, fam.batch)
         B.encrypt(age_bin, recipient, plain, cipher)
         plain_sha, plain_bytes = B.sha256_file(plain), plain.stat().st_size
         if not B.wipe_file(plain):
             raise BackupError("cleanup_failed")
-        m = MB.manifest(bid, INSTANCE, res["files"], created=now, cipher=cipher, plain_sha=plain_sha, plain_bytes=plain_bytes,
-                        age_version=age_ver, recipient=recipient)
+        m = MB.manifest(bid, fam.instance, res["files"], created=now, cipher=cipher, plain_sha=plain_sha, plain_bytes=plain_bytes,
+                        age_version=age_ver, recipient=recipient, fam=fam.batch)
         mp, cp = bdir / B.MANIFEST, bdir / B.COMPLETE
         mp.write_text(json.dumps(m, indent=2, sort_keys=True) + "\n")
-        cp.write_text(json.dumps(MB.complete(m, B.sha256_file(mp)), indent=2, sort_keys=True) + "\n")
+        cp.write_text(json.dumps(MB.complete(m, B.sha256_file(mp), fam.batch), indent=2, sort_keys=True) + "\n")
         attempts = max([prior.get(n, 0) for n in chosen] or [0]) + 1
         for other in list(pending):                         # the new batch carries these names now
             for name in chosen:
@@ -590,7 +641,7 @@ def _run_locked(d, paths, state, scratch, *, argv, runner, recipient, age_bin, a
         _track_unacked(state)
         V.write_json_atomic(paths.state, state)
         hook("before_upload", bid)
-        MB.upload(d, bid, cipher, mp, cp, put=put)          # COMPLETE last; a failure leaves "sending": the next run re-sends
+        MB.upload(d, bid, cipher, mp, cp, put=put, fam=fam.batch)   # COMPLETE last; a failure leaves "sending": the next run re-sends
         pending[bid]["state"] = SENT
         sent_batch = bid
     _track_unacked(state)
@@ -611,5 +662,4 @@ def _run_locked(d, paths, state, scratch, *, argv, runner, recipient, age_bin, a
             "in_vault_current": tally(CURRENT), "in_vault_stale": tally(STALE), "missing_in_vault": tally(MISSING), "lag_oldest_s": lag,
             "behind_past_grace": sum(1 for a in ages if a > grace_s),
             "oldest_unacked_s": int(max(waits)) if waits else 0, "unacked_past_grace": sum(1 for x in waits if x > grace_s),
-            "other_principal": int(ec.get("other_principal", 0)), "off_record": int(ec.get("off_record", 0)) + int(ec.get("off_record_note", 0)),
-            "batch": sent_batch}
+            **fam.extra_counts(ec), "batch": sent_batch}

@@ -18,6 +18,10 @@ the EC2 role writes ``sync/mc-export/``, the Mac writes ``sync/mc-export-acks/``
 
 The export file names are the exporter's own (``<instance>--<c-12 hex | legacy-16 hex>.json``); the pattern below is kept equal to
 ``core/memory_shelf/mc.py`` ``FILE`` by a test (this module stays stdlib-only for the EC2 tools bundle).
+
+**Families (11 Nov 2026, #509).** Production CoS conversations travel the same path (``core/memory_sync/cos_batch.py``). What differs is
+a ``Family``: its formats, its two S3 prefixes, its file-name pattern and the export shape each file must have. Every function below takes
+an optional ``fam``; without one it is MC's, byte for byte as before.
 """
 from __future__ import annotations
 
@@ -49,19 +53,42 @@ MAX_FILE_BYTES = 48 * 1024 * 1024                                               
 MAX_DOC_BYTES = 16 << 20
 
 
-def name_ok(name: str, instance: str | None = None) -> bool:
-    m = FILE.fullmatch(name or "") if isinstance(name, str) else None     # fullmatch: "$" alone would also accept a trailing newline
+class Family:
+    """What differs between the conversation families that travel this path. ``file`` names ``<instance>--<conversation id>.json`` with
+    the instance as group 1 and the conversation id as group 2; ``doc_ok(doc, instance, conversation_id)`` is the export shape a file must
+    have for its own name (content is read, never logged)."""
+
+    __slots__ = ("name", "format", "ack_format", "export_prefix", "ack_prefix", "file", "doc_ok", "max_file_bytes")
+
+    def __init__(self, *, name, fmt, ack_fmt, export_prefix, ack_prefix, file, doc_ok, max_file_bytes=MAX_FILE_BYTES):
+        self.name, self.format, self.ack_format = name, fmt, ack_fmt
+        self.export_prefix, self.ack_prefix = export_prefix, ack_prefix
+        self.file, self.doc_ok, self.max_file_bytes = file, doc_ok, max_file_bytes
+
+
+def _mc_doc_ok(doc, instance: str, conversation_id: str) -> bool:
+    return isinstance(doc, dict) and doc.get("schema") == "minimoi.mc-conversation/1" and doc.get("instance") == instance \
+        and doc.get("conversation_id") == conversation_id
+
+
+MC = Family(name="mc", fmt=FORMAT, ack_fmt=ACK_FORMAT, export_prefix=EXPORT_PREFIX, ack_prefix=ACK_PREFIX, file=FILE, doc_ok=_mc_doc_ok)
+
+
+def name_ok(name: str, instance: str | None = None, fam: Family | None = None) -> bool:
+    fam = fam or MC
+    m = fam.file.fullmatch(name or "") if isinstance(name, str) else None     # fullmatch: "$" alone would also accept a trailing newline
     return bool(m) and (instance is None or m.group(1) == instance)
 
 
 # ── EC2: writing a batch ──
-def write_tar(files: list, batch_id: str, instance: str, out: Path) -> dict:
+def write_tar(files: list, batch_id: str, instance: str, out: Path, fam: Family | None = None) -> dict:
     """``files`` = [(name, path, sha256, size)]. The tar holds ``BATCH.json`` then each file, its bytes hashed as written; a file whose
     bytes no longer match is refused (``export_changed_during_batch``): the caller exports again next run."""
+    fam = fam or MC
     for name, _path, sha, size in files:
-        if not name_ok(name, instance) or not V.HEX64.match(sha) or int(size) > MAX_FILE_BYTES:
+        if not name_ok(name, instance, fam) or not V.HEX64.match(sha) or int(size) > fam.max_file_bytes:
             raise BackupError("export_file_malformed")
-    doc = json.dumps({"format": FORMAT, "batch_id": batch_id, "instance": instance,
+    doc = json.dumps({"format": fam.format, "batch_id": batch_id, "instance": instance,
                       "files": [[n, s, int(z)] for n, _p, s, z in files]}, sort_keys=True, indent=1).encode("utf-8")
     with tarfile.open(out, "w:gz", format=tarfile.PAX_FORMAT, compresslevel=6) as tar:
         info = tarfile.TarInfo(BATCH_DOC)
@@ -83,8 +110,8 @@ def write_tar(files: list, batch_id: str, instance: str, out: Path) -> dict:
 
 
 def manifest(batch_id: str, instance: str, files: list, *, created: datetime, cipher: Path, plain_sha: str, plain_bytes: int,
-             age_version: str, recipient: str) -> dict:
-    return {"format": FORMAT, "batch_id": batch_id, "instance": instance,
+             age_version: str, recipient: str, fam: Family | None = None) -> dict:
+    return {"format": (fam or MC).format, "batch_id": batch_id, "instance": instance,
             "created_utc": created.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "count": len(files),
             "file_bytes": sum(int(z) for _n, _s, z in files), "files": sorted([n, s, int(z)] for n, s, z in files),
             "objects": {"batch": {"name": BATCH_OBJECT, "sha256": B.sha256_file(cipher), "bytes": cipher.stat().st_size,
@@ -92,33 +119,37 @@ def manifest(batch_id: str, instance: str, files: list, *, created: datetime, ci
             "age": {"version": age_version, "recipient_fingerprint": B.fingerprint(recipient)}}
 
 
-def complete(m: dict, manifest_sha: str) -> dict:
-    return {"format": FORMAT, "batch_id": m["batch_id"], "created_utc": m["created_utc"], "manifest_sha256": manifest_sha,
+def complete(m: dict, manifest_sha: str, fam: Family | None = None) -> dict:
+    return {"format": (fam or MC).format, "batch_id": m["batch_id"], "created_utc": m["created_utc"], "manifest_sha256": manifest_sha,
             "objects": {"batch": {"sha256": m["objects"]["batch"]["sha256"], "bytes": m["objects"]["batch"]["bytes"]}}}
 
 
-def upload(d: B.Dest, batch_id: str, cipher: Path, manifest_path: Path, complete_path: Path, *, put=None) -> None:
+def upload(d: B.Dest, batch_id: str, cipher: Path, manifest_path: Path, complete_path: Path, *, put=None,
+           fam: Family | None = None) -> None:
     put = put or d.put
-    folder = f"{EXPORT_PREFIX}/{batch_id}"
+    folder = f"{(fam or MC).export_prefix}/{batch_id}"
     put(cipher, f"{folder}/{BATCH_OBJECT}")
     put(manifest_path, f"{folder}/{B.MANIFEST}")
     put(complete_path, f"{folder}/{B.COMPLETE}")                    # last
 
 
-def read_ack(d: B.Dest, batch_id: str, work: Path) -> dict | None:
+def read_ack(d: B.Dest, batch_id: str, work: Path, fam: Family | None = None) -> dict | None:
     """The Mac's acknowledgement for one batch, or ``None`` when there is none yet. ``ack_malformed`` when it does not parse."""
-    local = work / f"mc-ack-{batch_id}.json"
-    if not d.get_optional(f"{ACK_PREFIX}/{batch_id}.json", local):
+    fam = fam or MC
+    local = work / f"{fam.name}-ack-{batch_id}.json"
+    if not d.get_optional(f"{fam.ack_prefix}/{batch_id}.json", local):
         return None
     doc = V.read_json(local)
     local.unlink(missing_ok=True)
-    return parse_ack(doc, batch_id)
+    return parse_ack(doc, batch_id, fam)
 
 
-def parse_ack(doc, batch_id: str) -> dict:
+def parse_ack(doc, batch_id: str, fam: Family | None = None) -> dict:
+    fam = fam or MC
     try:
-        ok = (isinstance(doc, dict) and doc.get("format") == ACK_FORMAT and doc.get("batch_id") == batch_id and isinstance(doc.get("files"), list)
-              and all(isinstance(e, list) and len(e) == 3 and name_ok(str(e[0])) and V.HEX64.match(str(e[1])) and _status_ok(e[2])
+        ok = (isinstance(doc, dict) and doc.get("format") == fam.ack_format and doc.get("batch_id") == batch_id
+              and isinstance(doc.get("files"), list)
+              and all(isinstance(e, list) and len(e) == 3 and name_ok(str(e[0]), None, fam) and V.HEX64.match(str(e[1])) and _status_ok(e[2])
                       for e in doc["files"]))
     except TypeError:
         ok = False
@@ -134,18 +165,19 @@ def _status_ok(value) -> bool:
 
 
 # ── Mac: reading a batch ──
-def complete_batches(d: B.Dest) -> list[str]:
+def complete_batches(d: B.Dest, fam: Family | None = None) -> list[str]:
     ids = set()
-    for key in d.list_keys(EXPORT_PREFIX):
+    for key in d.list_keys((fam or MC).export_prefix):
         parts = key.split("/")
         if len(parts) == 4 and parts[3] == B.COMPLETE and B.ATTEMPT.match(parts[2]):
             ids.add(parts[2])
     return sorted(ids)
 
 
-def fetch_chain(d: B.Dest, batch_id: str, scratch: Path, instance: str) -> dict:
+def fetch_chain(d: B.Dest, batch_id: str, scratch: Path, instance: str, fam: Family | None = None) -> dict:
     """COMPLETE -> manifest, each hash checked against the one before; returns the manifest. Raises a fixed code."""
-    folder = f"{EXPORT_PREFIX}/{batch_id}"
+    fam = fam or MC
+    folder = f"{fam.export_prefix}/{batch_id}"
     cpath, mpath = scratch / B.COMPLETE, scratch / B.MANIFEST
     d.get(f"{folder}/{B.COMPLETE}", cpath)
     comp = BT._json(cpath, "complete_unreadable")
@@ -154,14 +186,14 @@ def fetch_chain(d: B.Dest, batch_id: str, scratch: Path, instance: str) -> dict:
         raise BackupError("manifest_mismatch")
     m = BT._json(mpath, "manifest_unreadable")
     try:
-        if m.get("format") != FORMAT or comp.get("format") != FORMAT or m["batch_id"] != batch_id or comp["batch_id"] != batch_id \
+        if m.get("format") != fam.format or comp.get("format") != fam.format or m["batch_id"] != batch_id or comp["batch_id"] != batch_id \
                 or m.get("instance") != instance:
             raise BackupError("manifest_format")
         if comp["objects"]["batch"] != {"sha256": m["objects"]["batch"]["sha256"], "bytes": m["objects"]["batch"]["bytes"]}:
             raise BackupError("manifest_mismatch")
         for name, sha, size in m["files"]:
-            if not name_ok(str(name), instance) or not V.HEX64.match(str(sha)) or isinstance(size, bool) or not isinstance(size, int) \
-                    or not 0 <= size <= MAX_FILE_BYTES:
+            if not name_ok(str(name), instance, fam) or not V.HEX64.match(str(sha)) or isinstance(size, bool) \
+                    or not isinstance(size, int) or not 0 <= size <= fam.max_file_bytes:
                 raise BackupError("manifest_format")
         int(m["objects"]["batch"]["plaintext_bytes"])
     except (KeyError, TypeError, ValueError):
@@ -169,24 +201,24 @@ def fetch_chain(d: B.Dest, batch_id: str, scratch: Path, instance: str) -> dict:
     return m
 
 
-def fetch_ciphertext(d: B.Dest, batch_id: str, m: dict, local: Path) -> None:
-    d.get(f"{EXPORT_PREFIX}/{batch_id}/{BATCH_OBJECT}", local)
+def fetch_ciphertext(d: B.Dest, batch_id: str, m: dict, local: Path, fam: Family | None = None) -> None:
+    d.get(f"{(fam or MC).export_prefix}/{batch_id}/{BATCH_OBJECT}", local)
     want = m["objects"]["batch"]
     if local.stat().st_size != int(want["bytes"]) or B.sha256_file(local) != want["sha256"]:
         raise BackupError("ciphertext_mismatch")
 
 
-def extract(archive: Path, target: Path, m: dict) -> dict:
+def extract(archive: Path, target: Path, m: dict, fam: Family | None = None) -> dict:
     """See ``_extract``. A stream that is not a whole gzip tar (truncated, corrupt) is ``archive_unsafe`` (a fixed integrity code), never a
     raw exception that would fail every run without a verdict. A local fault while writing the output (full disk, permission) is the
     TRANSIENT ``extract_write_failed``: the same bytes may well extract next run, so the batch must not be rejected for it."""
     try:
-        return _extract(archive, target, m)
+        return _extract(archive, target, m) if fam is None else _extract(archive, target, m, fam)
     except (tarfile.TarError, EOFError, zlib.error, gzip.BadGzipFile):
         raise BackupError("archive_unsafe") from None
 
 
-def _extract(archive: Path, target: Path, m: dict) -> dict:
+def _extract(archive: Path, target: Path, m: dict, fam: Family | None = None) -> dict:
     """Strict: ``BATCH.json`` first and equal to the manifest's files; then exactly those files, each at its declared size, nothing
     else (no links, folders or duplicates), so the bytes written are bounded by the manifest. Returns ``BATCH.json``.
     Raises ``archive_unsafe`` / ``batch_doc_unreadable`` / ``batch_doc_mismatch``, or the transient ``extract_write_failed``.
@@ -213,7 +245,7 @@ def _extract(archive: Path, target: Path, m: dict) -> dict:
                     doc = json.loads(tar.extractfile(member).read().decode("utf-8"))
                 except (ValueError, UnicodeDecodeError):
                     raise BackupError("batch_doc_unreadable") from None
-                if not isinstance(doc, dict) or doc.get("format") != FORMAT or doc.get("batch_id") != m["batch_id"] \
+                if not isinstance(doc, dict) or doc.get("format") != (fam or MC).format or doc.get("batch_id") != m["batch_id"] \
                         or doc.get("instance") != m["instance"] or sorted(doc.get("files") or []) != m["files"]:
                     raise BackupError("batch_doc_mismatch")
                 declared = {n: z for n, _s, z in m["files"]}
@@ -253,8 +285,9 @@ def _write_error(exc: OSError) -> BackupError:
     return BackupError("extract_write_failed")
 
 
-def check_file(extracted: Path, name: str, sha: str, size: int) -> str | None:
+def check_file(extracted: Path, name: str, sha: str, size: int, fam: Family | None = None) -> str | None:
     """``None`` when one extracted file is present, exactly the declared bytes, and the export shape for its own name; else a code."""
+    fam = fam or MC
     path = extracted / name
     if not path.is_file() or path.is_symlink():
         return "file_missing"
@@ -262,18 +295,17 @@ def check_file(extracted: Path, name: str, sha: str, size: int) -> str | None:
         return "file_size_mismatch"
     if V.sha256_file(path) != sha:
         return "file_hash_mismatch"
-    m = FILE.match(name)
+    m = fam.file.match(name)
     try:
         doc = json.loads(path.read_text("utf-8"))
     except (ValueError, UnicodeDecodeError):
         return "not_an_export"
-    if not isinstance(doc, dict) or doc.get("schema") != "minimoi.mc-conversation/1" or doc.get("instance") != m.group(1) \
-            or doc.get("conversation_id") != m.group(2):
+    if not fam.doc_ok(doc, m.group(1), m.group(2)):
         return "not_an_export"
     return None
 
 
-def ack_doc(batch_id: str, files: list, at: datetime) -> dict:
+def ack_doc(batch_id: str, files: list, at: datetime, fam: Family | None = None) -> dict:
     """``files`` = [[name, sha256, status]]."""
-    return {"format": ACK_FORMAT, "batch_id": batch_id, "acked_utc": at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    return {"format": (fam or MC).ack_format, "batch_id": batch_id, "acked_utc": at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "files": sorted([n, s, st] for n, s, st in files)}
