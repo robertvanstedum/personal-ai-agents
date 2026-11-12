@@ -42,12 +42,28 @@ def in_scope(context, environ) -> bool:
     return isinstance(conversation, str) and any(conversation.startswith(p) for p in prefixes)
 
 
-def call_with_vault(backend, prompt, context, tool_policy, *, retrieve=None, environ=None):
+def private_conversation(context, is_private) -> bool:
+    """A CoS page conversation (``cosc-…``) is private unless its own record says ``private: false``. Fails closed: no
+    lookup, an unreadable record or anything but False counts as private (#509 review, 11 Nov 2026)."""
+    confer = context.get("confer") if isinstance(context.get("confer"), dict) else {}
+    conversation = confer.get("conversation_id")
+    if not (isinstance(conversation, str) and conversation.startswith("cosc-")):
+        return False
+    if is_private is None:
+        return True
+    try:
+        return is_private(conversation) is not False
+    except Exception:
+        return True
+
+
+def call_with_vault(backend, prompt, context, tool_policy, *, retrieve=None, environ=None, is_private=None):
     environ = os.environ if environ is None else environ
     configured = any(environ.get(k) for k in ("MINIMOI_VAULT_ASK_URL", "MINIMOI_VAULT_ASK_TOKEN"))
-    # Private turns must not reach a service that logs retrieval queries; out-of-scope conversations never ask.
+    # Private turns must not reach a service that logs retrieval queries; out-of-scope conversations never ask. A
+    # Private CoS conversation is marked on its own record, not by record_mode, so that is checked too.
     if (not configured or context.get("record_mode") == "off_record" or context.get("meeting_scope") == "closed"
-            or not in_scope(context, environ)):
+            or not in_scope(context, environ) or private_conversation(context, is_private)):
         return backend.call_backend(prompt, context, tool_policy)
 
     built = None
