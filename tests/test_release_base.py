@@ -78,10 +78,14 @@ def test_a_push_to_main_with_a_missing_before_is_a_full_release(tmp_path):
 
 def test_the_workflow_uses_the_script_and_never_diffs_the_raw_before():
     text = (REPO / ".github/workflows/deploy.yml").read_text()
-    assert 'BEFORE=$(bash scripts/ci/release_base.sh "${{ github.event.before }}" "${{ github.sha }}" "${{ github.base_ref }}") || rc=$?' in text
+    # A push's starting point is the last successful deploy when there is one (#518), else event.before; either way
+    # it goes through release_base.sh, never straight into the diff.
+    assert 'PUSH_BEFORE="${{ github.event.before }}"' in text
+    assert 'BEFORE=$(bash scripts/ci/release_base.sh "$PUSH_BEFORE" "${{ github.sha }}" "${{ github.base_ref }}") || rc=$?' in text
     assert 'if [ "$rc" = 3 ]; then\n            echo "release_class=full"' in text
     assert '[ "$rc" = 0 ] || exit "$rc"' in text
-    assert 'BEFORE="${{ github.event.before }}"' not in text
+    assert '\n          BEFORE="${{ github.event.before }}"' not in text
+    assert 'git diff --name-only "${{ github.event.before }}"' not in text
     assert 'git diff --name-only "$BEFORE" "${{ github.sha }}"' in text
 
 
