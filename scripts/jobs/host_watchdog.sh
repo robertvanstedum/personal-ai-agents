@@ -35,15 +35,26 @@ if [ -n "$obs" ]; then
 else
   export MINIMOI_JOBS_HEALTH_DIR="$jobs/health"    # portal down: still judged; MC sees a stale report, which is itself reported
 fi
+# Every host's report goes to the Vault bucket's health/<host>/ prefix; production pulls the others' (FF-19 follow-up).
+# Production only reads (its own report is already where MC is); Dev only writes.
+export AWS_DEFAULT_REGION=us-east-1
+vault="${MINIMOI_JOBS_HEALTH_DEST:-s3://minimoi-backups/vault}"
 if [ "$host" = ec2 ]; then
   export MINIMOI_TELEGRAM_SSM_PARAM=/minimoi/production/telegram_bot_token TELEGRAM_CHAT_ID=8379221702
+  export MINIMOI_JOBS_HEALTH_PULL="$vault"
+else
+  export MINIMOI_JOBS_HEALTH_PUSH="$vault"
 fi
 mkdir -p "$logs"
 case "$mode" in
-  watch) exec /usr/bin/python3 -I -B "$tools/scripts/jobs/watchdog.py" ;;
+  watch)
+    # production: the Mac's and Dev's latest reports first, so MC's answer covers every host
+    [ "$host" = ec2 ] && /usr/bin/python3 -I -B "$tools/scripts/jobs/pull_health.py" || true
+    exec /usr/bin/python3 -I -B "$tools/scripts/jobs/watchdog.py" ;;
   daily)
     # Dev reports for Dev's MC only; Telegram stays production's (its token is production's)
     [ "$host" = ec2 ] || export MINIMOI_JOBS_NOTIFY=off
+    [ "$host" = ec2 ] && /usr/bin/python3 -I -B "$tools/scripts/jobs/pull_health.py" || true
     exec /usr/bin/python3 -I -B "$tools/scripts/jobs/daily_health.py" ;;
   *) echo "usage: $0 ec2|dev watch|daily" >&2; exit 2 ;;
 esac

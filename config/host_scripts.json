@@ -20,6 +20,7 @@
     {"host": "/opt/minimoi/jobs-tools/core/jobs/status.py", "repo": "core/jobs/status.py", "ship": true, "mode": "0644"},
     {"host": "/opt/minimoi/jobs-tools/scripts/jobs/watchdog.py", "repo": "scripts/jobs/watchdog.py", "ship": true, "mode": "0755"},
     {"host": "/opt/minimoi/jobs-tools/scripts/jobs/daily_health.py", "repo": "scripts/jobs/daily_health.py", "ship": true, "mode": "0755"},
+    {"host": "/opt/minimoi/jobs-tools/scripts/jobs/pull_health.py", "repo": "scripts/jobs/pull_health.py", "ship": true, "mode": "0755"},
     {"host": "/opt/minimoi/jobs-tools/scripts/jobs/host_watchdog.sh", "repo": "scripts/jobs/host_watchdog.sh", "ship": true, "mode": "0755"},
     {"host": "/opt/minimoi/jobs-tools/scripts/jobs/install_host_watchdog.sh", "repo": "scripts/jobs/install_host_watchdog.sh", "ship": true, "mode": "0755"},
     {"host": "/opt/minimoi/jobs-tools/config/scheduled_jobs.json", "repo": "config/scheduled_jobs.json", "ship": true, "mode": "0644"},
