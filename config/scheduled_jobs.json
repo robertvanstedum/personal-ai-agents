@@ -91,7 +91,8 @@
       "healthy": "a completed apply every 15 min",
       "defined_in": [
         "core/memory_sync/apply.py::vault_apply.py"
-      ]
+      ],
+      "active_from": "2026-11-13T15:00:00Z"
     },
     {
       "id": "vault-mc-pull",
@@ -133,7 +134,8 @@
       "healthy": "a completed export every 2 h",
       "defined_in": [
         "scripts/vault/vault_mc_export.py::25 */2"
-      ]
+      ],
+      "active_from": "2026-11-13T15:00:00Z"
     },
     {
       "id": "vault-cos-pull",
@@ -174,7 +176,8 @@
       "healthy": "a completed export every 2 h",
       "defined_in": [
         "scripts/vault/vault_cos_export.py"
-      ]
+      ],
+      "active_from": "2026-11-13T15:00:00Z"
     },
     {
       "id": "mc-github-awareness",
@@ -195,8 +198,10 @@
       "healthy": "a completed sync every 5 min; the feed MC reads is under 45 min old",
       "status_root": "mc-observations",
       "defined_in": [
-        "scripts/mc/github_awareness.py"
-      ]
+        "scripts/mc/github_awareness.py",
+        "scripts/operations/install_mc_github_awareness_cron.sh::CRON_LINE="
+      ],
+      "active_from": "2026-11-13T15:00:00Z"
     },
     {
       "id": "dev-memory-feed",
@@ -378,7 +383,8 @@
       "runbook": "core/memory_backup/production.py",
       "defined_in": [
         "core/memory_backup/production.py::production_refresh.py"
-      ]
+      ],
+      "active_from": "2026-11-13T15:00:00Z"
     },
     {
       "id": "backup-local",
@@ -629,7 +635,8 @@
       "runbook": "scripts/jobs/host_watchdog.sh",
       "defined_in": [
         "scripts/jobs/install_host_watchdog.sh::ec2 watch"
-      ]
+      ],
+      "active_from": "2026-11-13T15:00:00Z"
     },
     {
       "id": "jobs-daily-health",
@@ -650,7 +657,8 @@
       "runbook": "scripts/jobs/daily_health.py",
       "defined_in": [
         "scripts/jobs/install_host_watchdog.sh::ec2 daily"
-      ]
+      ],
+      "active_from": "2026-11-13T15:00:00Z"
     },
     {
       "id": "cos-loop-f",
@@ -879,7 +887,8 @@
       "runbook": "scripts/jobs/host_watchdog.sh",
       "defined_in": [
         "scripts/jobs/install_host_watchdog.sh::*:07:00"
-      ]
+      ],
+      "active_from": "2026-11-13T15:00:00Z"
     },
     {
       "id": "jobs-daily-health-dev",
@@ -900,7 +909,8 @@
       "runbook": "scripts/jobs/daily_health.py",
       "defined_in": [
         "scripts/jobs/install_host_watchdog.sh::09:10:00 America/Chicago"
-      ]
+      ],
+      "active_from": "2026-11-13T15:00:00Z"
     },
     {
       "id": "curator-mac",
