@@ -4,7 +4,7 @@ as this seat's own source events, so no new store is needed and the lead reads t
 
 python -m services.helper_seats.worker --seat apprentice
 Env: PARTNERSHIP_TASKS_URL, PARTNERSHIP_ENVIRONMENT, HELPER_TOKEN_FILE, HELPER_CHARTER_APPROVALS, HELPER_STATE_DIR, HELPER_REPO_ROOT,
-GUILD_QUEUE_PATH, HELPER_GATEWAY_URL, HELPER_GATEWAY_KEY_FILE, HELPER_MODEL."""
+GUILD_QUEUE_PATH, HELPER_GATEWAY_URL, HELPER_GATEWAY_KEY_FILE, HELPER_MODEL, HELPER_HEALTH_DIR (health.read, FF-19)."""
 from __future__ import annotations
 
 import argparse
@@ -184,7 +184,8 @@ def main(argv=None):
             return call_model(ledger, prompt=prompt, purpose=purpose, task_id=task['task_id'],
                 key=f"{task['task_id']}-{round_no}-{counter['n']}", task_cap=kind["per_task_budget_usd"],
                 environ=os.environ)
-        return T.Ctx(repo_root=os.environ.get("HELPER_REPO_ROOT"), read_items=queue.read_items if queue else None, ask_model=ask_model)
+        return T.Ctx(repo_root=os.environ.get("HELPER_REPO_ROOT"), read_items=queue.read_items if queue else None, ask_model=ask_model,
+                     health_dir=os.environ.get("HELPER_HEALTH_DIR") or None)
 
     worker = Worker(client, args.seat, charter, environment=os.environ["PARTNERSHIP_ENVIRONMENT"], ledger=ledger, ctx_for=ctx_for)
     while True:

@@ -14,9 +14,14 @@ from core.canonical_json import digest
 
 EFFECTS = ("none", "internal")
 # What a helper may be given. Reads only. Anything else, including an unknown name, refuses the charter.
-READ_ONLY_TOOLS = frozenset({"repo.read", "build_log.read", "github.read", "records.read", "recall.read", "actions.read", "tasks.read"})
+READ_ONLY_TOOLS = frozenset({"repo.read", "build_log.read", "github.read", "records.read", "recall.read", "actions.read", "tasks.read",
+                             "health.read"})
 RETURNS = ("in_turn", "background")
 TYPE_FIELDS = {"purpose", "inputs", "outputs", "evidence", "effects", "model", "per_task_budget_usd", "max_revisions", "escalation", "return", "tools"}
+# Optional: a type its lead may start on a clock, without a note from Robert (FF-19; Robert, 12 Nov 2026: MC's helper may run the
+# daily job-health check on its own schedule). The approved charter is the authority; its words say when, for the record.
+OPTIONAL_TYPE_FIELDS = {"schedule"}
+SCHEDULE_STORE = "schedule"
 SEAT_FIELDS = {"seat", "version", "leads", "scopes", "readers", "daily_budget_usd", "types"}
 MAX_REVISIONS = 3
 
@@ -46,8 +51,10 @@ def _check(doc: dict, name: str) -> None:
     if not doc["types"] or not doc["leads"] or not doc["scopes"] or not isinstance(doc["version"], int):
         raise CharterRefused(f"{name}: incomplete")
     for type_id, t in doc["types"].items():
-        if not isinstance(t, dict) or set(t) != TYPE_FIELDS:
+        if not isinstance(t, dict) or not TYPE_FIELDS <= set(t) <= TYPE_FIELDS | OPTIONAL_TYPE_FIELDS:
             raise CharterRefused(f"{name}/{type_id}: wrong fields")
+        if "schedule" in t and (not isinstance(t["schedule"], str) or not t["schedule"].strip() or t["effects"] != "none"):
+            raise CharterRefused(f"{name}/{type_id}: a scheduled type needs its schedule in words and no effects")
         if t["effects"] not in EFFECTS:
             raise CharterRefused(f"{name}/{type_id}: effects must be none or internal; anything else goes through the harness")
         unknown = set(t["tools"]) - READ_ONLY_TOOLS
@@ -81,7 +88,9 @@ class Charters:
     @classmethod
     def load(cls, root, approvals_file=None) -> "Charters":
         """Every <seat>/v<N>.json under ``root``, each matching an approval. The approvals file is a host record, like a policy's
-        authority file, not part of the image. A mismatch refuses the whole start: a changed charter with an old approval must not run."""
+        authority file, not part of the image. A mismatch refuses the whole start: a changed charter with an old approval must not run.
+        A version with no approval entry at all is not loaded: a newer charter can ship in the image ahead of its approval
+        without turning the approved versions off (FF-19, apprentice@3). It starts nothing until its approval is on the host."""
         root = Path(root)
         approvals = json.loads(Path(approvals_file or root / "approvals.json").read_text("utf-8"))
         out = []
@@ -91,6 +100,8 @@ class Charters:
             _check(doc, name)
             want = digest(doc)
             approval = approvals.get(name)
+            if name not in approvals:
+                continue                                      # not approved yet: inert, never a changed charter
             if not approval or approval.get("digest") != want or not approval.get("approved_by") or not approval.get("ref"):
                 raise CharterRefused(f"{name}: no approval for this exact charter")
             out.append(Charter(doc["seat"], doc["version"], want, frozenset(doc["leads"]), frozenset(doc["scopes"]), doc["types"], doc["daily_budget_usd"]))

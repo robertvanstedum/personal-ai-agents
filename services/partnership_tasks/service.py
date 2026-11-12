@@ -25,6 +25,7 @@ from typing import Callable
 from core.canonical_json import digest
 from services.partnership_tasks import contracts
 from services.partnership_tasks.auth import Binding, Bindings, Grants
+from services.partnership_tasks.charters import SCHEDULE_STORE
 from services.partnership_tasks.journal import Conflict, Journal, JournalDamaged, Plan, Refused, Write
 
 
@@ -70,7 +71,7 @@ class TaskService:
         self.helper_returns = helper_returns
         self.bindings = bindings
         self.grants = grants or Grants()
-        from services.partnership_tasks.charters import Charters
+        from services.partnership_tasks.charters import SCHEDULE_STORE, Charters
         self.charters = charters or Charters()              # helper seats spec v0.4 §3.1: none until a charter is loaded
         self._clock = clock
         self.journal = Journal(root, result_schema=RESULT, clock=clock, doc_dirs=tuple(DIRS.values()))
@@ -849,7 +850,7 @@ class _Planner:
         found = self.svc.charters.chartered(ref)
         if found is None:
             raise Refused("not_authorized", "not_chartered")
-        charter, _ = found
+        charter, kind = found
         if interp["authority"]["ref"]["id"] != charter.grant_id:
             raise Refused("not_authorized", "not_this_charter")
         if self.p["holder"] != charter.seat or self.p["lead"] not in charter.leads or self.cmd["data_scope"] not in charter.scopes:
@@ -858,8 +859,16 @@ class _Planner:
             raise Refused("not_authorized", "only_its_lead_starts_it")
         for sid in interp["source_event_ids"]:
             source = self.load("source_event", sid)
-            if source["producer"] != "platform" or source["source"]["store"] not in self.OWNER_NOTE_STORES:
+            if source["producer"] != "platform":
                 raise Refused("not_authorized", "not_the_owners_kept_note")
+            store = source["source"]["store"]
+            if store in self.OWNER_NOTE_STORES:
+                continue
+            # A scheduled start (FF-19): only for a type its approved charter marks as scheduled, from the platform's schedule
+            # record for that very type. The lead still cannot promote its own words: it holds no platform token.
+            if store == SCHEDULE_STORE and kind.get("schedule") and str(source["source"]["id"]).startswith(ref["type_id"] + ":"):
+                continue
+            raise Refused("not_authorized", "not_the_owners_kept_note")
 
     def k_request_link_source(self) -> Plan:
         """B4 design v0.3 R-M2: the owner attaches a source event (a meeting message) to a request, explicitly. The

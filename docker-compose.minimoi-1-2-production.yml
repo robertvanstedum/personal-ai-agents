@@ -252,10 +252,13 @@ services:
     environment:
       <<: *helper-env
       HELPER_REPO_ROOT: /repo
+      # health.read (charter v3, FF-19): every host's job-health reports, which the watchdogs write into the portal's volume.
+      HELPER_HEALTH_DIR: /mc-observations/health
     volumes:
       - {type: bind, source: "${MINIMOI_1_2_SECRETS:?}/helper-apprentice", target: /run/helper, read_only: true, bind: {create_host_path: false}}
       - {type: bind, source: "${MINIMOI_1_2_STATE:?}/helper-apprentice", target: /state, bind: {create_host_path: false}}
       - {type: bind, source: "${MINIMOI_ROOT:-/opt/minimoi}/mc/repo", target: /repo, read_only: true, bind: {create_host_path: false}}
+      - {type: volume, source: mc-observations, target: /mc-observations, read_only: true}
       # The folder, not the file: the portal replaces the file on each save, and a file mount would keep reading the old one.
       - {type: bind, source: "${MINIMOI_ROOT:-/opt/minimoi}/data/guild", target: /guild, read_only: true, bind: {create_host_path: false}}
 

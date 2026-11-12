@@ -657,6 +657,28 @@
       "active_from": "2026-11-13T15:00:00Z"
     },
     {
+      "id": "jobs-helper-check",
+      "name": "Apprentice's daily job-health note for MC",
+      "host": "ec2",
+      "schedule": {
+        "text": "daily 09:15 Chicago (root cron, docker exec into the portal)",
+        "kind": "daily",
+        "at": "09:15",
+        "tz": "America/Chicago"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 1800,
+      "status_file": "jobs-helper-check.json",
+      "status_root": "mc-observations",
+      "healthy": "the Apprentice's note was accepted by MC today (a deterministic note filed instead is a warn)",
+      "owner": "robert",
+      "runbook": "scripts/jobs/helper_check.py",
+      "defined_in": [
+        "scripts/jobs/install_host_watchdog.sh::helper_check.py"
+      ]
+    },
+    {
       "id": "cos-loop-f",
       "name": "CoS loop F: build-discipline check",
       "host": "ec2",
