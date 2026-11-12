@@ -2026,6 +2026,29 @@ def _next_session_filename(date_str: str) -> str:
     return _next_session_id(date_str, _SESSIONS_DIR)
 
 
+class AnalysisUnavailable(RuntimeError):
+    """No analysis came back from the model, so nothing was saved (#474)."""
+
+
+def _feedback_error_notes(errors) -> list:
+    """Explanations from the model's error list, tolerating plain strings."""
+    notes = []
+    for item in errors if isinstance(errors, list) else []:
+        if isinstance(item, dict):
+            text = item.get("explanation", "")
+        elif isinstance(item, str):
+            text = item
+        else:
+            text = ""
+        if text:
+            notes.append(text)
+    return notes
+
+
+def _feedback_list(value) -> list:
+    return value if isinstance(value, list) else []
+
+
 def analyse_session(
     transcript: str,
     persona_name: str,
@@ -2056,19 +2079,28 @@ def analyse_session(
 
     feedback = {"overall_summary": "", "errors": [], "strengths": [], "next_focus": ""}
     raw_text = None
+    api_key = _get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key")
+    if not api_key:
+        raise AnalysisUnavailable(
+            "analysis unavailable: the Anthropic API key is not configured; nothing was saved"
+        )
     try:
-        api_key = _get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key")
-        if api_key:
-            client = _anthropic.Anthropic(api_key=api_key)
-            resp = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=2000,
-                system=build_review_system_prompt(learner_name),
-                messages=[{"role": "user", "content": user_prompt}],
-            )
-            raw_text = resp.content[0].text.strip()
-    except Exception:
-        pass
+        client = _anthropic.Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2000,
+            system=build_review_system_prompt(learner_name),
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        raw_text = resp.content[0].text.strip()
+    except Exception as e:
+        # Before #474 a provider failure was swallowed and an empty analysis
+        # was saved and reported as success.
+        raise AnalysisUnavailable(
+            f"analysis unavailable: the provider call failed ({type(e).__name__}); nothing was saved"
+        ) from e
+    if not raw_text:
+        raise AnalysisUnavailable("analysis unavailable: the provider returned no text; nothing was saved")
 
     if raw_text:
         try:
@@ -2078,13 +2110,15 @@ def analyse_session(
                 if text.startswith("json"):
                     text = text[4:]
             parsed = json.loads(text.strip())
+            if not isinstance(parsed, dict):
+                raise ValueError("review is not a JSON object")
             feedback = {
                 "overall_summary": parsed.get("overall_summary", ""),
-                "errors": parsed.get("errors", []),
-                "strengths": parsed.get("strengths", []),
+                "errors": _feedback_list(parsed.get("errors")),
+                "strengths": _feedback_list(parsed.get("strengths")),
                 "next_focus": parsed.get("next_focus", ""),
-                "topics": parsed.get("topics", []),
-                "vocabulary": parsed.get("vocabulary", []),
+                "topics": _feedback_list(parsed.get("topics")),
+                "vocabulary": _feedback_list(parsed.get("vocabulary")),
             }
         except Exception:
             feedback["overall_summary"] = raw_text[:500]
@@ -2113,7 +2147,7 @@ def analyse_session(
         updates={
             "last_seen": date_str,
             "topics_discussed": feedback.get("topics", []),
-            "errors_noted": [e.get("explanation", "") for e in feedback.get("errors", []) if e.get("explanation")],
+            "errors_noted": _feedback_error_notes(feedback.get("errors", [])),
             "strengths": feedback.get("strengths", []),
             "vocabulary_introduced": feedback.get("vocabulary", []),
             "notes": feedback.get("overall_summary", ""),

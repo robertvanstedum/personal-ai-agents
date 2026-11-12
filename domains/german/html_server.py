@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 from flask import Flask, render_template, redirect, request, jsonify, session
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from core.identity import resolve_user_display_name, resolve_user_id
@@ -43,6 +44,7 @@ from german_domain import (
     get_drill_pool,
     save_drill_result,
     analyse_session,
+    AnalysisUnavailable,
     save_review_session,
     get_gesprache_sessions,
     persona_to_slug,
@@ -100,6 +102,63 @@ app = Flask(
 )
 CORS(app)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400  # cache static files for 1 day
+
+
+# ── API answers are always JSON (#474) ───────────────────────────────────────
+# The Gespräche page reads every /api/ answer as JSON. Flask's own error pages
+# are HTML, so a malformed body or an unexpected exception reached the browser
+# as "Unexpected token '<' ... is not valid JSON". Page routes keep Flask's
+# normal behaviour.
+
+MAX_TRANSCRIPT_CHARS = 60_000
+
+_API_HTTP_ERRORS = {
+    400: "the request body could not be read as JSON",
+    413: "the request is too large",
+}
+
+
+@app.errorhandler(Exception)
+def _api_errors_as_json(error):
+    if not request.path.startswith("/api/"):
+        if isinstance(error, HTTPException):
+            return error
+        raise error
+    if isinstance(error, HTTPException):
+        status = error.code or 500
+        message = _API_HTTP_ERRORS.get(status, error.name.lower())
+        return jsonify({"ok": False, "error": message}), status
+    app.logger.exception(
+        "German API request failed: path=%s error_type=%s",
+        request.path,
+        type(error).__name__,
+    )
+    return jsonify({
+        "ok": False,
+        "error": f"the server could not finish this request ({type(error).__name__})",
+    }), 500
+
+
+def _json_object_body():
+    """The request's JSON object, or ``None`` when the body is not one."""
+    body = request.get_json(force=True, silent=True)
+    return body if isinstance(body, dict) else None
+
+
+def _transcript_problem(transcript: str):
+    """A JSON error response when the transcript cannot be analysed, else None."""
+    if not transcript:
+        return jsonify({"ok": False, "error": "transcript required"}), 400
+    if len(transcript) > MAX_TRANSCRIPT_CHARS:
+        return jsonify({
+            "ok": False,
+            "error": (
+                f"transcript too long: {len(transcript)} characters, "
+                f"the limit is {MAX_TRANSCRIPT_CHARS}"
+            ),
+            "limit": MAX_TRANSCRIPT_CHARS,
+        }), 413
+    return None
 
 
 def _get_realtime_persona(persona_slug: str):
@@ -551,24 +610,31 @@ def api_anki_export():
 
 @app.route("/api/analyse-transcript", methods=["POST"])
 def api_analyse_transcript():
-    body = request.get_json(force=True)
-    transcript = body.get("transcript", "").strip()
-    persona_name = body.get("persona_name", "").strip()
-    scene = body.get("scene", "").strip()
-    if not transcript:
-        return jsonify({"ok": False, "error": "transcript required"}), 400
+    body = _json_object_body()
+    if body is None:
+        return jsonify({"ok": False, "error": "the request body must be a JSON object"}), 400
+    transcript = str(body.get("transcript") or "").strip()
+    persona_name = str(body.get("persona_name") or "").strip()
+    scene = str(body.get("scene") or "").strip()
+    problem = _transcript_problem(transcript)
+    if problem:
+        return problem
     if _de_is_guest():
         return jsonify({"ok": True, "guest": True})
     user_id = _de_numeric_user_id()
     if user_id is None:
         return _identity_required_response()
-    result = analyse_session(
-        transcript,
-        persona_name,
-        scene,
-        user_id=user_id,
-        learner_name=resolve_user_display_name(request),
-    )
+    try:
+        result = analyse_session(
+            transcript,
+            persona_name,
+            scene,
+            user_id=user_id,
+            learner_name=resolve_user_display_name(request),
+        )
+    except AnalysisUnavailable as e:
+        # Nothing is saved when no analysis came back (#474).
+        return jsonify({"ok": False, "saved": False, "error": str(e)}), 502
     return jsonify({"ok": True, "saved": True, **result})
 
 
@@ -607,14 +673,17 @@ def api_transcribe():
 
 @app.route("/api/review", methods=["POST"])
 def api_review():
-    body = request.get_json(force=True)
-    transcript  = body.get("transcript", "").strip()
-    model       = body.get("model", "grok" if grok_text_on() else "claude").strip()
-    persona_name = body.get("persona_name", "").strip()
-    scene       = body.get("scene", "").strip()
-    source      = body.get("source", "ki_sitzung").strip()
-    if not transcript:
-        return jsonify({"ok": False, "error": "transcript required"}), 400
+    body = _json_object_body()
+    if body is None:
+        return jsonify({"ok": False, "error": "the request body must be a JSON object"}), 400
+    transcript  = str(body.get("transcript") or "").strip()
+    model       = str(body.get("model") or ("grok" if grok_text_on() else "claude")).strip()
+    persona_name = str(body.get("persona_name") or "").strip()
+    scene       = str(body.get("scene") or "").strip()
+    source      = str(body.get("source") or "ki_sitzung").strip()
+    problem = _transcript_problem(transcript)
+    if problem:
+        return problem
 
     is_guest = _de_is_guest()
     user_id = None if is_guest else _de_numeric_user_id()

@@ -17,6 +17,7 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template, request
 from flask import Response as FlaskResponse
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 
 BASE_DIR  = Path(__file__).parent
 REPO_ROOT = BASE_DIR.parent.parent
@@ -35,6 +36,63 @@ app = Flask(
 )
 CORS(app)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 86400
+
+
+# ── API answers are always JSON (#474) ───────────────────────────────────────
+# The Conversas page reads every /api/ answer as JSON. Flask's own error pages
+# are HTML, so a malformed body or an unexpected exception reached the browser
+# as "Unexpected token '<' ... is not valid JSON". Page routes keep Flask's
+# normal behaviour. Mirrors domains/german/html_server.py.
+
+MAX_TRANSCRIPT_CHARS = 60_000
+
+_API_HTTP_ERRORS = {
+    400: "the request body could not be read as JSON",
+    413: "the request is too large",
+}
+
+
+@app.errorhandler(Exception)
+def _api_errors_as_json(error):
+    if not request.path.startswith("/api/"):
+        if isinstance(error, HTTPException):
+            return error
+        raise error
+    if isinstance(error, HTTPException):
+        status = error.code or 500
+        message = _API_HTTP_ERRORS.get(status, error.name.lower())
+        return jsonify({"ok": False, "error": message}), status
+    app.logger.exception(
+        "Portuguese API request failed: path=%s error_type=%s",
+        request.path,
+        type(error).__name__,
+    )
+    return jsonify({
+        "ok": False,
+        "error": f"the server could not finish this request ({type(error).__name__})",
+    }), 500
+
+
+def _json_object_body():
+    """The request's JSON object, or ``None`` when the body is not one."""
+    body = request.get_json(force=True, silent=True)
+    return body if isinstance(body, dict) else None
+
+
+def _transcript_problem(transcript: str):
+    """A JSON error response when the transcript cannot be analysed, else None."""
+    if not transcript:
+        return jsonify({"ok": False, "error": "transcript required"}), 400
+    if len(transcript) > MAX_TRANSCRIPT_CHARS:
+        return jsonify({
+            "ok": False,
+            "error": (
+                f"transcript too long: {len(transcript)} characters, "
+                f"the limit is {MAX_TRANSCRIPT_CHARS}"
+            ),
+            "limit": MAX_TRANSCRIPT_CHARS,
+        }), 413
+    return None
 
 _PERSONA_VOICES = {
     "Maria":    {"legacy": "nova", "openai": "marin", "xai": "ara"},
@@ -1144,16 +1202,19 @@ def api_pt_transcribe():
 
 @app.route("/api/pt/review", methods=["POST"])
 def api_pt_review():
-    body         = request.get_json(force=True)
-    transcript   = body.get("transcript", "").strip()
-    model        = body.get("model", "grok" if _grok_text_on() else "claude").strip()
-    persona_name = body.get("persona_name", "").strip()
-    scene        = body.get("scene", "").strip()
-    source       = body.get("source", "ki_sessao").strip()
-    if not transcript:
-        return jsonify({"ok": False, "error": "transcript required"}), 400
+    body = _json_object_body()
+    if body is None:
+        return jsonify({"ok": False, "error": "the request body must be a JSON object"}), 400
+    transcript   = str(body.get("transcript") or "").strip()
+    model        = str(body.get("model") or ("grok" if _grok_text_on() else "claude")).strip()
+    persona_name = str(body.get("persona_name") or "").strip()
+    scene        = str(body.get("scene") or "").strip()
+    source       = str(body.get("source") or "ki_sessao").strip()
+    problem = _transcript_problem(transcript)
+    if problem:
+        return problem
     try:
-        from review_router import run_review, ProviderError
+        from review_router import run_review
         result = run_review(
             transcript,
             persona_name,
@@ -1161,7 +1222,13 @@ def api_pt_review():
             model,
             learner_name=resolve_user_display_name(request),
         )
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "model": model}), 502
 
+    # The review succeeded. A failure to keep history must not turn it into a
+    # provider error the page would retry (and pay for) again (#474); say
+    # plainly that history was not saved, as Mein Deutsch does.
+    try:
         date_str = _dt.datetime.now().strftime("%Y-%m-%d")
         duration_min = max(1, len(transcript) // 300)
         uid = _request_user_id()
@@ -1199,10 +1266,17 @@ def api_pt_review():
 
         if uid and persona_name:
             _update_persona_progress(uid, _name_to_slug(persona_name))
+    except Exception:
+        # The log intentionally excludes transcript and feedback text.
+        app.logger.exception("Portuguese review history persistence failed")
+        return jsonify({
+            "ok": True,
+            "saved": False,
+            "save_error": "history persistence failed",
+            **result,
+        })
 
-        return jsonify({"ok": True, **result})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e), "model": model}), 502
+    return jsonify({"ok": True, "saved": True, **result})
 
 
 # ── API: KI-Sessão chat turn ──────────────────────────────────────────────────
