@@ -491,9 +491,12 @@ def staged_callbacks_of(config):
 
 def test_staging_gateway_keeps_production_names_and_settings():
     prod, staging = _load(GATEWAY_PROD), _load(GATEWAY_STAGING)
-    # Production's names (MC's discussion route last) plus the explicitly requested local regression route.
-    assert [m["model_name"] for m in staging["model_list"]] == \
+    # Production's names (MC's discussion route last) plus the explicitly requested local regression route, and the
+    # Dev-only deep route of the opt-in depth policy (0a60e6de, 10 Nov), which production does not carry yet.
+    dev_only = {"minimoi-xai-strong-deep"}
+    assert [m["model_name"] for m in staging["model_list"] if m["model_name"] not in dev_only] == \
         [m["model_name"] for m in prod["model_list"]] + ["minimoi-cos-agent-local"]
+    assert not dev_only & {m["model_name"] for m in prod["model_list"]}
     for block in ("router_settings", "general_settings"):
         assert staging[block] == prod[block], block
     # litellm_settings: production's, and both now carry the usage recorder (usage-record U1).
@@ -517,8 +520,8 @@ def test_staging_cos_agent_route_matches_production_and_other_routes_stay_stable
                "os.environ/GATEWAY_OPENAI_API_KEY": "os.environ/OPENAI_API_KEY",
                "os.environ/GATEWAY_XAI_API_KEY": "os.environ/XAI_API_KEY"}
     for name in staging:
-        if name in ("minimoi-cos-agent", "minimoi-cos-agent-anthropic") or name.startswith("minimoi-mc-"):
-            continue
+        if name in ("minimoi-cos-agent", "minimoi-cos-agent-anthropic", "minimoi-xai-strong-deep") or name.startswith("minimoi-mc-"):
+            continue                                   # the deep route is Dev-only (0a60e6de) and not in the local config
         route = __import__("copy").deepcopy(staging[name])
         if name != "minimoi-cos-agent-local":
             route["litellm_params"]["api_key"] = renamed[route["litellm_params"]["api_key"]]
