@@ -253,7 +253,8 @@ def test_prove_then_answer_attributed_to_claude_code(env):
 
 
 def test_unready_reason_reaches_the_reach_badge(env):
-    env.call("POST", f"/rooms/{env.room}/invite", {"actor": "claude-code"})
+    env.worker.housekeeping()                                        # FF-05: an unready connector still checks in
+    assert env.call("POST", f"/rooms/{env.room}/invite", {"actor": "claude-code"})[0] == 201
     env.worker.housekeeping()                                        # not proven with this runner
     mc = [p for p in env.call("GET", f"/rooms/{env.room}/turns")[1]["participants"] if p["id"] == "claude-code"][0]
     assert mc["reach"] == {"state": "away", "reason": "not yet proven on this connector — Prove first"}
