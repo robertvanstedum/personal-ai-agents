@@ -28,7 +28,31 @@ const WORDS = {
 };
 const STATUS_CLEAR_MS = 5000;        // #420: "Voice ended…" clears after about five seconds, or at the next send
 
+// One voice at a time beside CoS (FF-04, #526). When this page is MC's pane inside the CoS page (#mc-both), the
+// microphone hand-off (guild:mic-claim) crosses the frame both ways: MC Voice or Dictate starting here tells the parent,
+// which ends CoS's voice and dictation; CoS voice or dictation starting there posts a claim in, which ends both here as
+// guild:mic-claim does. Only a same-origin parent is told or heard (targetOrigin and event.origin are this page's own
+// origin, event.source the parent window), and the message carries nothing but its type. Not framed: nothing happens.
+// Installed by every guild page (main.js always calls initMcVoice), so Dictate takes part even where MC Voice is off.
+const MIC_CLAIM_MESSAGE = 'minimoi:mic-claim';
+function relayMicClaimAcrossFrame(win = window, doc = document) {
+  const host = win.parent, origin = win.location?.origin;
+  if (!host || host === win || !origin || origin === 'null' || win.__minimoiMicRelay) return false;
+  win.__minimoiMicRelay = true;
+  doc.addEventListener('guild:mic-claim', (e) => {
+    const who = e.detail?.who;
+    if (who !== 'voice' && who !== 'dictation') return;          // a claim from the host itself, or the pane closing, stays here
+    try { host.postMessage({ type: MIC_CLAIM_MESSAGE }, origin); } catch (_) { /* the host went away: nothing to tell */ }
+  });
+  win.addEventListener('message', (e) => {
+    if (e.source !== host || e.origin !== origin || !e.data || typeof e.data !== 'object' || e.data.type !== MIC_CLAIM_MESSAGE) return;
+    doc.dispatchEvent(new CustomEvent('guild:mic-claim', { detail: { who: 'host' } }));   // MC Voice and Dictate yield, as to each other
+  });
+  return true;
+}
+
 export function initMcVoice(page) {
+  relayMicClaimAcrossFrame();
   const button = $('[data-mc-voice-btn]');
   const status = $('[data-mc-voice-status]');
   if (!button || !status || document.body.dataset.mcVoice !== 'true') return;

@@ -820,7 +820,7 @@ const realtime=new RealtimeVoiceController({
 const dictation=bindConferDictation({
   button:document.getElementById('btn-dictate'),input:document.getElementById('send-input'),
   bootstrapUrl:'../api/realtime-voice/confer/bootstrap',requestHeaders:csrfHeaders,
-  beforeStart:async()=>{await stopVoice('dictation_started');if(voiceRestartBlocked)throw new Error('Earlier voice termination needs verification; typing still works');},
+  beforeStart:async()=>{await stopVoice('dictation_started');if(voiceRestartBlocked)throw new Error('Earlier voice termination needs verification; typing still works');window.cosClaimMic?.();},
   onStatus:text=>{status.textContent=text;},
   onBusy:busy=>{document.getElementById('btn-send').disabled=busy||document.getElementById('send-input').disabled;},
 });
@@ -863,6 +863,7 @@ button.addEventListener('click',async()=>{
   if(stopping||voiceRestartBlocked)return;
   if(active){await stopVoice('user_ended');return;}
   await dictation.stop('voice_started');
+  window.cosClaimMic?.();   // MC's pane beside her yields its microphone (FF-04)
   active=true;
   try {activeController=mode?.value==='realtime'?realtime:controller;
     if(activeController===realtime)await realtime.startSession({provider:'openai',conversation_id:'owner'});
@@ -878,6 +879,12 @@ document.addEventListener('minimoi:companion-opening', event => {
   })());
 });
 window.addEventListener('pagehide',()=>{direct?.pagehide();dictation.stop('pagehide');controller.stop('pagehide');realtime.endSession('pagehide');});
+// One voice at a time beside MC (FF-04, #526): MC's Voice or Dictate starting in the pane beside her ends her voice and
+// dictation here, as an ordinary stop (its normal ended state, not an error); cos-history-ui.js hears the pane's claim.
+document.addEventListener('cos:companion-mic-claim',()=>{
+  Promise.resolve(dictation.stop('companion_voice_started')).catch(()=>{});
+  Promise.resolve(stopVoice('companion_voice_started')).catch(()=>{});
+});
 void refreshLegacyAvailability();
 // Her direct voice (Spec 165 v0.3 §6.6, §11.1). One capabilities read; its code is loaded only when the answer offers the
 // direct path. Admitted (direct_voice): one Voice button on the direct path, with no mode select and no "Hearing: …"; a
@@ -930,7 +937,7 @@ async function readDirect(){
         fetch:(...a)=>fetch(...a),warn:(...a)=>console.warn(...a),
         setInterval:(fn,ms)=>window.setInterval(fn,ms),clearInterval:t=>window.clearInterval(t),
         loadController:()=>import(`../static/realtime-voice/realtime-voice-controller.js?v=${DIRECT_KEY}`),
-        beforeStart:()=>dictation.stop('voice_started')});
+        beforeStart:()=>{window.cosClaimMic?.();return dictation.stop('voice_started');}});
       voiceRecords=pendingDirect.records;
       window.cosVoiceTyped=pendingDirect.typed;
       updateVoiceAvailability();

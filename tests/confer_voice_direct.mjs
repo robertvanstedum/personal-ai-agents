@@ -81,7 +81,7 @@ function page({ caps = CAPS, path = '/ui/confer', managed = true, routes = {}, s
   for (const id of ids) node(id);
   const chat = fdoc.createElement('div');
   chat.scrollTop = 0; chat.scrollHeight = 100;
-  const document = { getElementById: (id) => (ids.includes(id) ? node(id) : null), createElement: fdoc.createElement,
+  const document = { body: { dataset: {} }, getElementById: (id) => (ids.includes(id) ? node(id) : null), createElement: fdoc.createElement,
     createTextNode: fdoc.createTextNode, querySelector: () => ({ content: 'csrf-synthetic' }),
     addEventListener: (k, fn) => (docEvents[k] ||= []).push(fn), dispatch: (k, e) => (docEvents[k] || []).map((fn) => fn(e)) };
   const store = new Map(saved ? [['minimoi.cos.voice.provider', saved]] : []);
@@ -888,5 +888,68 @@ await t.check('selected chat binds voice start and records; switching locks new 
     assert.equal(p.c.args.conversation_id, 'cosc-123456789abc');
     assert.ok(p.gets('/sessions?conversation_id=cosc-123456789abc').length);
   } finally { p.done(); }
+});
+// ── FF-04 (#526): one voice at a time beside MC. cos-history-ui.js turns the pane's claim into cos:companion-mic-claim and
+// gives the page window.cosClaimMic to post a claim into the pane; here both are stood in for. ────────────────────────
+const companionClaim = (p) => (p.docEvents['cos:companion-mic-claim'] || []).map((fn) => fn());
+const claimSpy = (p) => { const spy = { calls: 0, at: [] }; p.window.cosClaimMic = () => { spy.calls += 1; spy.at.push(p.direct.instances.length); }; return spy; };
+await scenario('FF-04: her voice starting claims the microphone from MC\'s pane before the session starts; ending it claims nothing', {}, async (p) => {
+  const spy = claimSpy(p);
+  await p.voice();
+  assert.equal(spy.calls, 1);
+  assert.deepEqual(spy.at, [0], 'the pane was told only after the session had started');
+  await p.voice();                                             // Voice again: End, not another claim
+  assert.equal(spy.calls, 1);
+});
+await scenario('FF-04: MC\'s voice starting in the pane ends her live voice as an ordinary stop: End sent, microphone released, no error', {}, async (p) => {
+  const spy = claimSpy(p);
+  await p.voice();
+  const c = p.c;
+  assert.equal(c.mic, true);
+  companionClaim(p); await flush();
+  assert.deepEqual(c.ended, ['companion_voice_started']);
+  assert.equal(c.mic, false);
+  assert.equal(p.posts('/end').length, 1);
+  assert.equal(p.dictation.stops.at(-1), 'companion_voice_started');
+  assert.ok(!/unavailable|could not|failed|attention/i.test(p.line()), `a stop for MC read as a failure: ${p.line()}`);
+  assert.equal(spy.calls, 1, 'stopping for MC claimed the pane back');
+  await p.voice();                                             // and Voice starts again afterwards, taking the microphone back
+  assert.equal(p.direct.instances.length, 2);
+  assert.equal(p.c.mic, true);
+  assert.equal(spy.calls, 2);
+});
+await scenario('FF-04: MC\'s voice starting while hers is still connecting: it never goes live', {}, async (p) => {
+  let connect;
+  p.direct.gate = new Promise((r) => { connect = r; });
+  const starting = p.voice(); await flush();
+  const c = p.c;
+  companionClaim(p);
+  connect(); await starting; await flush();
+  assert.deepEqual(c.ended, ['companion_voice_started']);
+  assert.equal(c.mic, false);
+});
+await scenario('FF-04: a claim from the pane with nothing live here sends nothing and shows nothing', {}, async (p) => {
+  companionClaim(p); await flush();
+  assert.equal(p.posts('/end').length, 0);
+  assert.deepEqual(p.direct.instances, []);
+  assert.equal(p.line(), '');
+});
+await scenario('FF-04: Dictate starting here claims the pane; MC starting in the pane ends Dictate here', {}, async (p) => {
+  const spy = claimSpy(p);
+  await p.dictation.press();
+  assert.equal(spy.calls, 1);
+  assert.equal(p.dictation.on, true);
+  companionClaim(p); await flush();
+  assert.equal(p.dictation.stops.at(-1), 'companion_voice_started');
+  assert.equal(p.dictation.on, false);
+});
+await scenario('FF-04, not admitted (today\'s modes): Voice starting claims the pane; MC starting there ends today\'s session', { caps: null }, async (p) => {
+  const spy = claimSpy(p);
+  await p.voice();
+  assert.equal(p.today.managed[0].args.provider, 'openai');
+  assert.equal(spy.calls, 1);
+  companionClaim(p); await flush();
+  assert.deepEqual(p.today.ended, ['companion_voice_started']);
+  assert.equal(p.nodes('btn-voice').textContent, '🎤');
 });
 t.done();
