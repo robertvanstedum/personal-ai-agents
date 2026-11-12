@@ -1,0 +1,31 @@
+{
+  "format": "host-scripts/1",
+  "about": "Every script a production host runs from outside an image. ship=true: the deploy installs it from this commit. ship=false: an operator or another deploy step installs it; the daily parity check still compares it with this commit and alerts on drift (#505, #506). Pinned, versioned installs (vault-tools-<hash>) carry their own pin and are not listed.",
+  "entries": [
+    {"host": "/opt/minimoi/scripts/backup_local.sh", "repo": "scripts/backup_local.sh", "ship": true, "mode": "0755"},
+    {"host": "/opt/minimoi/scripts/backup_s3.sh", "repo": "scripts/backup_s3.sh", "ship": true, "mode": "0755"},
+    {"host": "/opt/minimoi/scripts/backup_dropbox.sh", "repo": "scripts/backup_dropbox.sh", "ship": true, "mode": "0755"},
+    {"host": "/opt/minimoi/scripts/host_script_parity.py", "repo": "scripts/operations/host_script_parity.py", "ship": true, "mode": "0755"},
+    {"host": "/opt/minimoi-tools/career-sync/career_sync.py", "repo": "scripts/operations/career_sync.py", "ship": true, "mode": "0500"},
+    {"host": "/opt/minimoi/scripts/run_curator_cron_ec2.sh", "repo": "scripts/run_curator_cron_ec2.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/run_intelligence_cron_ec2.sh", "repo": "scripts/run_intelligence_cron_ec2.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/setup_ec2_cron.sh", "repo": "scripts/setup_ec2_cron.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh", "repo": "scripts/credentials/sync_cos_runtime_secrets_from_ssm.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/install_lesen_refresh_cron.sh", "repo": "scripts/operations/install_lesen_refresh_cron.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/deploy_scoped_release.sh", "repo": "scripts/operations/deploy_scoped_release.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/release_status.py", "repo": "scripts/operations/release_status.py", "ship": false},
+    {"host": "/opt/minimoi/scripts/seed_build_queue.sh", "repo": "scripts/operations/seed_build_queue.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/deploy_mc_container_ec2.sh", "repo": "scripts/operations/deploy_mc_container_ec2.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/cos_prod.sh", "repo": "scripts/operations/cos_prod.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/guildhall_prod.sh", "repo": "scripts/operations/guildhall_prod.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/check_curator_mounts.sh", "repo": "scripts/operations/check_curator_mounts.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/check_queue_mount.sh", "repo": "scripts/operations/check_queue_mount.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/curator_bind_preflight.sh", "repo": "scripts/operations/curator_bind_preflight.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/curator_preserve.sh", "repo": "scripts/operations/curator_preserve.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/curator_seed_state.sh", "repo": "scripts/operations/curator_seed_state.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/mc_prod_db_migrate.sh", "repo": "scripts/operations/mc_prod_db_migrate.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/production_activation.py", "repo": "scripts/operations/production_activation.py", "ship": false},
+    {"host": "/opt/minimoi/scripts/setup_backup_cron.sh", "repo": "scripts/setup_backup_cron.sh", "ship": false},
+    {"host": "/opt/minimoi/scripts/judgment_store.py", "repo": "scripts/judgment/judgment_store.py", "ship": false}
+  ]
+}
