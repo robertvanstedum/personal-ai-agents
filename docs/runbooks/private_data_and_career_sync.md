@@ -88,8 +88,9 @@ The result is `applied` (with `previous` and `pruned`) or `unchanged`.
 **Check:** `career_sync.py status --config …` shows each reader's current release, the retained releases, the quarantine count and the
 last receipt.
 
-**Roll back:** `career_sync.py rollback --config …` points `current` back at the release that was current before
-(or `--to <hash>`), for both readers, and rewrites the Work roots file. Restart cos-scheduler.
+**Roll back:** `career_sync.py rollback --config …` checks and points `current` back at the release that was current before
+(or `--to <hash>`), for both readers, and rewrites `RECEIPT.json` (with `result: rolled_back`) and the Work roots file,
+so CoS names the release it actually reads. Restart cos-scheduler.
 
 ## 5. What can go wrong
 

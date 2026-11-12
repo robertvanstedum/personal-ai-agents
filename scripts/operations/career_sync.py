@@ -29,7 +29,7 @@ Host, ``apply`` (as root):
     path of each configured root (``roots.py`` drops a path that contains a symlink). Loading it into cos-scheduler is a
     separate, gated step: this tool restarts nothing.
 
-``rollback`` points ``current`` back at the previous retained release, for every reader. ``status`` prints state.
+``rollback`` checks the previous retained release, points ``current`` back at it and rewrites ``RECEIPT.json``, for every reader. ``status`` prints state.
 Exit codes: 0 ok or no-op, 2 refused (with a reason code on stderr), 3 failed.
 """
 from __future__ import annotations
@@ -554,7 +554,13 @@ def rollback(cfg: dict, to: str | None = None) -> dict:
         target = to or (recorded if recorded in names and recorded != cur else next((n for n in reversed(names) if n != cur), None))
         if not target or target not in names:
             raise Refused("no_previous_release", r["name"])
+        manifest = verify_tree(rdir / "releases" / target, target)
         switch_current(rdir, target)
+        # The receipt names what `current` now points at: CoS cites it (production E2E, 11 Nov 2026).
+        new = {"format": FORMAT, "manifest_hash": target, "head": manifest["head"], "files": len(manifest["files"]),
+               "previous": cur, "result": "rolled_back", "rolled_back_at": now_utc(), "reader": r["name"], "uid": r["uid"]}
+        write_whole(receipt, canonical(new), 0o600)
+        own(receipt, r["uid"], r["gid"])
         if r.get("work_roots"):
             write_work_roots(cfg, rdir, target, r)
         out.append({"reader": r["name"], "from": cur, "to": target})
