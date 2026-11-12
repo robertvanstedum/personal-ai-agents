@@ -416,9 +416,12 @@ def test_persona_0132_says_how_guildhall_works_and_what_a_harness_defect_is(tmp_
                  'One short "couldn\'t check X" line is fine', "Not a page of every issue, source and caveat", "Want the list?"):
         assert said in agents, said
     assert "the options and where you looked on request" in agents and "say where you looked." not in agents
+    # FF-18 (#536): production reads its own delivery record; DEV.md exists only on Dev.
+    assert "On production, read `/minimoi/docs/delivery/PRODUCTION.md`" in agents and "`DEV.md` exists only on Dev" in agents
     # Only these changes: every other line of 0.1.31 is kept, and the collector's phrase is unchanged.
     rewritten = ("Then one line:", "## How to answer (Robert, 26 Oct)", "Lead with the answer in one to three sentences", "Read and reason first:",
-                 "Use this conversation and supplied context first.", "A change to the site:")
+                 "Use this conversation and supplied context first.", "A change to the site:",
+                 "Read `/minimoi/docs/delivery/DEV.md` first")
     before = (old / "AGENTS.md").read_text().split("\n")[1:]
     gone = [line for line in before if line not in agents.split("\n")]
     assert len(gone) == len(rewritten) and all(any(line.startswith(r) for line in gone) for r in rewritten), gone

@@ -8,9 +8,9 @@
   "target": "mc-agent container",
   "files": {
     "SOUL.md": "34a086b539224de91a7e5e8d3034c4852dacb07825429a0dd52f625ad3a68a95",
-    "AGENTS.md": "37283b074641bb263108358e822a9292e48452558cb439f10855b19e62080eb8",
+    "AGENTS.md": "a9c7b9902bcfba54bb2f9c2e7cc6ccb15cbe8e9908678c11caef096ff68bcfa2",
     "RUNTIME.openclaw.md": "12ab1e702f2f796477ddb5e8f2549bf48cd143bfe43655e8a4ff8d4886433db8",
-    "CHANGES.md": "ebb60ad467a673739430abd68a58c95b83d4a5fa4c1ed8d2d296a15b4b735f70",
+    "CHANGES.md": "19fe63d5f0dae6863b9fa46bf2ebc75bef2fa99ec0b8a781db23072329e7be35",
     "voice.json": "75aefa0ffa3876cebab3232fa28f391cac44e6dbb4c842f80e46f9c136e2e733"
   },
   "handbook": {
