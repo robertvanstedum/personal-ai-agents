@@ -414,3 +414,13 @@ def test_missing_area_conversation_cannot_write_into_legacy(floored):
                          headers=write_headers(token))
     assert result.status_code == 503
     assert floored.extra['floor'].rows('floor_messages') == []
+
+
+def test_the_more_menu_archives_this_chat_and_the_list_keeps_the_archived_view(floored):
+    """FF-02: ⋯ › Archive used to be a link to the archived view, which looked like nothing happened with the list folded.
+    It is now "Archive this chat" (conversations.js does the write and Undo); archived chats stay one link away in the list."""
+    page = floored.owner().get("/guild-next/guild/build").get_data(as_text=True)
+    menu = page[page.index("data-fb-more"):page.index("</details>", page.index("data-fb-more"))]
+    assert "data-fb-archive" in menu and "Archive this chat" in menu
+    assert "view=archived" not in menu
+    assert 'data-conv-view="archived"' in page and "Archived chats" in page

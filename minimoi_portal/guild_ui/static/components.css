@@ -1090,6 +1090,9 @@ body.gu[data-page="floor"] .mc-panel { position: relative; }
 .job-flagged { font-weight: 600; }
 .gu-toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 24px; z-index: 90; max-width: min(92vw, 560px); padding: 10px 14px; border-radius: var(--gu-radius); background: var(--gu-text, #2a2118); color: var(--gu-surface, #f5f0e7); font-size: 14px; line-height: 1.35; box-shadow: var(--gu-shadow-float, 0 6px 20px rgba(0,0,0,.25)); }
 .gu-toast[hidden] { display: none; }
+.gu-undo-toast { display: flex; align-items: center; gap: 6px; }
+.gu-undo-toast .gu-undo { font: 600 14px/1 inherit; min-height: 32px; padding: 4px 10px; border: 1px solid currentColor; border-radius: var(--gu-radius-pill, 999px); background: transparent; color: inherit; cursor: pointer; }
+.gu-undo-toast .gu-undo:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 @media (max-width: 640px) { .gu-toast { bottom: 76px; } }
 .msg-job[data-flagged="true"] { border-left-color: var(--gu-unknown-border, var(--gu-border)); }
 .job-audit summary { cursor: pointer; min-height: 24px; }

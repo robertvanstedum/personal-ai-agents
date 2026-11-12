@@ -97,8 +97,8 @@
       <summary class="fb-btn" aria-label="More for this conversation" title="More">⋯</summary>
       <div class="fb-menu" role="group" aria-label="This conversation">
         <button type="button" data-fb-rename>Rename</button>
-
-        <a href="{{ urls.floor }}?view=archived">Archive</a>
+        {# FF-02: archives this chat in place (conversations.js), lands on the next chat or a new one, with Undo. Archived chats are under the list's own Archived link. #}
+        {% if fb_conv and not fb_conv.archived %}<button type="button" data-fb-archive>Archive this chat</button>{% endif %}
         <a href="/app/cos/ui/confer">Chief of Staff ↗</a>
       </div>
     </details>{% endif %}
