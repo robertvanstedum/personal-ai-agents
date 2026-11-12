@@ -224,12 +224,29 @@ def rebind(root,*,now):
  polls. Every stream is marked possible_poll_gap: nothing was observed meanwhile.
  """
  root=root_check(root);fd=_lock(root)
- try:
-  doc=load(root);current=files.writer_domain();need(doc['writer_domain']!=current,'writer_domain_unchanged')
-  doc['writer_domain']=current;doc['generation']+=1
-  for row in doc['streams'].values():row['gap']='possible_poll_gap'
-  files.atomic(root/'state.json',encoded(validate(doc)));return doc
+ try:return _rebind_locked(root)
  finally:os.close(fd)
+
+def _rebind_locked(root):
+ doc=load(root);current=files.writer_domain();need(doc['writer_domain']!=current,'writer_domain_unchanged')
+ doc['writer_domain']=current;doc['generation']+=1
+ for row in doc['streams'].values():row['gap']='possible_poll_gap'
+ files.atomic(root/'state.json',encoded(validate(doc)));return doc
+
+def writer_domain_changed(admission):
+ """Inside an admission: whether the kernel restarted since the cache's last write."""
+ need(admission.fd is not None,'admission_required')
+ return load(admission.root)['writer_domain']!=files.writer_domain()
+
+def rebind_admitted(admission,*,now):
+ """rebind for a caller that already holds the admission (the scheduled sync after a reboot).
+
+ The admission's lock already makes this the one writer on this host, and the cache is
+ rebuildable public observations: holding every poll until an operator runs --rebind
+ stopped MC's feed for 18 days after the 25 Oct 2026 restart (#535). Every stream is
+ still marked possible_poll_gap, so nothing claims coverage of the time it was down.
+ """
+ need(admission.fd is not None,'admission_required');return _rebind_locked(admission.root)
 
 class Admission:
  """One writer admission for the cache: held across a whole run (its job-status start,
