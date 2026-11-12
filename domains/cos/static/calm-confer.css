@@ -172,3 +172,19 @@
 .founders-cos .cos-queue-remove{flex:none;width:28px;height:28px;min-height:28px;padding:0;border:0;border-radius:50%;background:transparent;color:#6b756c;font-size:18px;line-height:1;cursor:pointer}
 .founders-cos .cos-queue-remove:hover{background:#e6ebe3;color:#2f382f}
 @media (max-width:639px){.founders-cos .cos-queue{width:calc(100% - 20px)}}
+
+/* Private (#510), as the Guildhall's 🔒: the lock is a quiet row in •••; while the chat showing is private, a small dark chip
+   sits above the box (the composer's width) with its own Exit. Phone: the same chip, with a finger-sized Exit. */
+.founders-cos .cos-options-body>.cos-lock{display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:7px 10px;border:0;border-radius:6px;background:transparent;color:var(--ink);font:14.5px var(--sans);text-align:left;cursor:pointer}
+.founders-cos .cos-options-body>.cos-lock:hover{background:var(--paper-mid)}
+.founders-cos .cos-options-body>.cos-lock:disabled{opacity:.55;cursor:default}
+.founders-cos .cos-private-chip{width:min(760px,calc(100% - 48px));margin:0 auto 8px;box-sizing:border-box;display:flex;align-items:center;gap:6px;padding:3px 4px 3px 12px;border-radius:999px;background:#3e3b37;color:#f2eee8;font:13px var(--sans)}
+.founders-cos .cos-private-chip[hidden]{display:none}
+.founders-cos .cos-private-exit{margin-left:auto;flex:none;min-height:24px;padding:2px 12px;border:0;border-radius:999px;background:rgba(255,255,255,.18);color:inherit;font:inherit;cursor:pointer}
+.founders-cos .cos-private-exit:hover{background:rgba(255,255,255,.28)}
+.founders-cos .cos-private-exit:disabled{opacity:.55;cursor:default}
+@media(max-width:639px){
+  .founders-cos .cos-private-chip{width:calc(100% - 20px)}
+  .founders-cos .cos-private-exit{min-height:36px;padding:0 14px}
+  .founders-cos .cos-options-body>.cos-lock{min-height:44px}
+}
