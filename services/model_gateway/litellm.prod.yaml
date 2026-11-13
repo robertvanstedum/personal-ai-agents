@@ -163,6 +163,8 @@ litellm_settings:
   set_verbose: false
   callbacks:
     - receipt_callback.receipt_callback
+    # One warm xAI cache per conversation (#553): the request's prompt_cache_key becomes x-grok-conv-id on xAI calls.
+    - cache_affinity.cache_affinity
     # One standard usage record per call, written only where the environment sets MINIMOI_USAGE_DIR.
     - usage_recorder.usage_recorder
 
