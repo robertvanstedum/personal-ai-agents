@@ -39,13 +39,16 @@
 {% if n.voice and n.voice.kind in ('owner_turn', 'assistant_turn', 'consult_receipt', 'consult_reply', 'consult_note', 'consult_request') %}{{ voice_row(n) }}{% else -%}
 <li class="msg {{ 'msg-platform' if n.author_kind == 'platform' else 'msg-note' }}" data-kind="{{ 'platform' if n.author_kind == 'platform' else 'note' }}" data-author-kind="{{ n.author_kind }}" data-note="{{ n.id }}"{% if n.request_id %} data-note-request="{{ n.request_id }}"{% endif %}{% if n.voice %} data-voice-kind="{{ n.voice.kind }}" data-voice-session="{{ n.voice.session_id }}"{% endif %}>
   <p class="msg-meta"{% if n.author_kind != 'platform' %} title="Kept as a note{% if n.context.area %} · {{ n.context.area }}{% endif %}{% if n.context.item_ref %} · #{{ n.context.item_ref }}{% endif %}"{% endif %}><span class="msg-label">{{ n.author_label }}</span> · <span data-iso="{{ n.created_at }}">{{ hhmm(n.created_at) }}</span><span class="msg-extra">{% if n.context.area %} · {{ n.context.area }}{% endif %}{% if n.context.item_ref %} · #{{ n.context.item_ref }}{% endif %}{% if n.author_kind != 'platform' %} · kept as a note{% endif %}</span></p>
+  {%- if n.turn and n.turn.steps %}{# What the turn did (issue #545): plain step names only, folded; never what a tool was given or returned. #}
+  <details class="msg-steps" data-turn-steps><summary data-turn-steps-headline>{{ n.turn.steps.headline }}</summary><ol class="msg-steps-list">{% for label in n.turn.steps.labels %}<li>{{ label }}</li>{% endfor %}</ol></details>
+  {%- endif %}
   {%- if n.html %}
   <div class="msg-text msg-md">{{ n.html|safe }}</div>{# sanitised server-side (markdown_render.py) #}
   {%- else %}
   <p class="msg-text">{{ n.text }}</p>
   {%- endif %}
   {%- if n.turn %}
-  <p class="msg-foot" data-turn-foot{% if "not saved" not in n.turn.done_text %} hidden{% endif %}><span data-turn-done>{{ n.turn.done_text }}</span><span data-turn-usage hidden>{% if n.turn.tokens_text %} · {{ n.turn.tokens_text }}{% endif %}</span></p>
+  <p class="msg-foot" data-turn-foot><span data-turn-done>{{ n.turn.done_text }}</span><span data-turn-usage>{% if n.turn.tokens_text and n.turn.tokens_text != 'tokens unknown' %} · {{ n.turn.tokens_text }}{% endif %}</span></p>
   {%- endif %}
   {%- set sent = ((conversation.turn_files or {}).get(n.request_id) if conversation else none) %}
   {%- if sent %}
@@ -222,7 +225,10 @@
   </li>
 </template>
 <template id="tpl-note-foot">
-  <p class="msg-foot" data-turn-foot hidden><span data-turn-done></span><span data-turn-usage hidden></span></p>
+  <p class="msg-foot" data-turn-foot><span data-turn-done></span><span data-turn-usage></span></p>
+</template>
+<template id="tpl-turn-steps">
+  <details class="msg-steps" data-turn-steps><summary data-turn-steps-headline></summary><ol class="msg-steps-list"></ol></details>
 </template>
 <template id="tpl-mc-waiting">
   <li class="msg msg-waiting" data-kind="mc-waiting" data-mc-waiting>
@@ -235,6 +241,7 @@
 <template id="tpl-mc-stream">
   <li class="msg msg-note msg-stream" data-kind="mc-stream" data-mc-stream-line aria-busy="true">
     <p class="msg-meta"><span class="mc-mark" aria-hidden="true">MC</span> <span class="msg-label" data-slot="label"></span> · <span data-slot="state">…</span> <span class="mc-elapsed" data-slot="elapsed" aria-hidden="true">0s</span></p>
+    <details class="msg-steps" data-slot="steps" hidden><summary data-turn-steps-headline></summary><ol class="msg-steps-list"></ol></details>
     <div class="msg-text msg-md" data-slot="rendered"></div>
     <div class="msg-text msg-stream-tail" data-slot="tail"></div>
     <p class="msg-foot" data-slot="controls"><button type="button" class="btn-mini" data-mc-stop hidden title="Stop this reply">Stop</button></p>

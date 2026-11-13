@@ -45,6 +45,8 @@
 //                 tool calls to the owner's turn; MC spec v1.2 §7.1)
 //               {"t":"delta","text":…} {"t":"finish","reason":…}
 //               {"t":"usage","prompt_tokens":…,"completion_tokens":…}
+//               {"t":"step","n":…,"name":…,"phase":"start"|"end","ok":…,"ms":…}  (issue #545: a tool step's
+//                 name and timing from OpenClaw's record, never its arguments or result; needs MC_RELAY_CHAT_DB)
 //               {"t":"error","class":deadline|idle|too_large|upstream|stopped}
 //             Limits: the 300 s deadline, 300 s idle (any upstream byte resets
 //             it), 256 KB of emitted text, a 64 KB pending line. A caller that
@@ -343,6 +345,98 @@ async function served(body, runId) {
   return readServed(CHAT_DB, key, runId);
 }
 
+// The run's tool steps (issue #545), from OpenClaw's own record, so the portal can show "Ran 2 commands" while MC works and
+// keep the step names with the answer. A step is only a tool's NAME (a plain word), its place in the run, and when it began
+// and ended: its arguments, its result and any text never leave here. A call belongs to this run only when the assistant
+// message that made it is stamped with this run's id; a result counts only for a call already found that way.
+const STEP_NAME = /^[A-Za-z0-9_.:-]{1,64}$/;
+const STEPS_MAX = 50;
+const STEPS_ROWS = 400;
+const STEP_POLL_MS = Number(process.env.MC_RELAY_STEP_POLL_MS || 700);
+function stepTime(value) {
+  const t = typeof value === "number" ? value : typeof value === "string" ? Date.parse(value) : NaN;
+  return Number.isFinite(t) && t > 0 ? t : null;
+}
+export function readSteps(dbPath, sessionKey, runId) {
+  if (!DatabaseSync || !dbPath || !RUN_ID.test(String(runId))) return null;
+  let db = null;
+  try {
+    db = new DatabaseSync(dbPath, { readOnly: true });
+    db.exec("PRAGMA busy_timeout = 200");
+    const session = db.prepare("SELECT session_id FROM session_windows WHERE session_key = ? ORDER BY updated_at DESC LIMIT 1").get(sessionKey);
+    if (!session) return null;
+    const rows = db.prepare("SELECT event_json, event_zstd FROM transcript_events WHERE session_id = ? ORDER BY seq DESC LIMIT ?").all(session.session_id, STEPS_ROWS);
+    const calls = new Map();
+    for (const row of rows.reverse()) {
+      let event = null;
+      try { event = eventOf(row); } catch { continue; }
+      const message = event && event.type === "message" ? event.message : null;
+      if (!message || typeof message !== "object") continue;
+      if (message.role === "assistant" && Array.isArray(message.content)
+          && (message.__openclaw?.runId === runId || message.idempotencyKey === `cli-assistant:${runId}`)) {
+        for (const part of message.content) {
+          if (!part || part.type !== "toolCall" || typeof part.id !== "string" || calls.has(part.id) || calls.size >= STEPS_MAX) continue;
+          const name = String(part.name || "");
+          if (STEP_NAME.test(name)) calls.set(part.id, { name, startedAt: stepTime(message.timestamp), ended: false, endedAt: null, ok: null });
+        }
+      } else if (message.role === "toolResult" && typeof message.toolCallId === "string" && calls.has(message.toolCallId)) {
+        const call = calls.get(message.toolCallId);
+        call.ended = true;
+        call.endedAt = stepTime(message.timestamp);
+        call.ok = message.isError !== true;
+      }
+    }
+    return [...calls.entries()].map(([id, call]) => ({ id, ...call }));
+  } catch {
+    return null;
+  } finally {
+    try { db?.close(); } catch { /* read-only */ }
+  }
+}
+// Watches the record while the stream runs and sends each step once as it begins and once as it ends:
+//   {"t":"step","n":1,"name":"exec","phase":"start"}  {"t":"step","n":1,"name":"exec","phase":"end","ok":true,"ms":1200}
+function stepWatch(body, send) {
+  const agent = String(body.model || "").split("/")[1];
+  const dbPath = agent === "mc-agent" ? (AGENT_DB || CHAT_DB) : CHAT_DB;
+  const key = `agent:${agent}:openai-user:${body.user}`;
+  const seen = new Map();
+  let runId = null;
+  let timer = null;
+  const poll = () => {
+    if (!runId) return;
+    const calls = readSteps(dbPath, key, runId);
+    if (!calls) return;
+    const now = Date.now();
+    for (const call of calls) {
+      let step = seen.get(call.id);
+      if (!step) {
+        step = { n: seen.size + 1, ended: false, seenAt: now };
+        seen.set(call.id, step);
+        send({ t: "step", n: step.n, name: call.name, phase: "start" });
+      }
+      if (call.ended && !step.ended) {
+        step.ended = true;
+        const ms = call.startedAt !== null && call.endedAt !== null ? call.endedAt - call.startedAt : now - step.seenAt;
+        send({ t: "step", n: step.n, name: call.name, phase: "end", ok: call.ok !== false, ms: Math.max(0, Math.round(ms)) });
+      }
+    }
+  };
+  return {
+    start(id) {
+      if (!DatabaseSync || !dbPath || !id || timer) return;
+      runId = id;
+      timer = setInterval(poll, STEP_POLL_MS);
+      timer.unref?.();
+    },
+    async last() {                              // the last result's row can land just after the stream ends
+      if (!runId) return;
+      poll();
+      if ([...seen.values()].some((s) => !s.ended)) { await new Promise((resolve) => { setTimeout(resolve, 300); }); poll(); }
+    },
+    stop() { clearInterval(timer); timer = null; },
+  };
+}
+
 export function readTerminal(dir, body, runId) {
   if (!dir || !RUN_ID.test(String(runId))) return null;
   try {
@@ -540,6 +634,7 @@ async function streamTurn(res, body, correlation, echo, started, routeHeader = {
   res.on("close", () => { if (!res.writableFinished) callerGone = true; });
   const send = (event) => { if (streaming && !callerGone && res.writable) res.write(`${JSON.stringify(event)}\n`); };
   let outcome = "ended";
+  let steps = null;
   try {
     touch();
     const clean = JSON.stringify({ model: body.model, user: body.user, stream: true, stream_options: { include_usage: true },
@@ -567,6 +662,7 @@ async function streamTurn(res, body, correlation, echo, started, routeHeader = {
     let streamed = "";
     let finish = null;          // held, with what follows it, until the stream ends, so the run's answer line can go first
     const after = [];
+    steps = stepWatch(body, send);
     const flush = () => { if (finish) send(finish); for (const e of after) send(e); finish = null; after.length = 0; };
     read: for (;;) {
       const { value, done } = await reader.read();
@@ -579,7 +675,7 @@ async function streamTurn(res, body, correlation, echo, started, routeHeader = {
         pending = pending.slice(nl + 1);
         if (!runId) {
           runId = runIdOf(line);
-          if (runId) send({ t: "run", id: runId });
+          if (runId) { send({ t: "run", id: runId }); steps.start(runId); }
         }
         for (const event of sseEvents(line)) {
           if (event.t === "done") break read;
@@ -601,6 +697,8 @@ async function streamTurn(res, body, correlation, echo, started, routeHeader = {
       }
       if (pending.length > LINE_MAX) { abort("too_large"); break; }
     }
+    if (!why && outcome !== "upstream") await steps.last();      // every step the record shows goes out before the finish
+    steps.stop();
     if (finish && !why && outcome !== "upstream") {
       // Only when the streamed text holds more than the answer (narration between tool steps) and ends with it exactly.
       const answer = await answerOf(body, runId);
@@ -623,6 +721,7 @@ async function streamTurn(res, body, correlation, echo, started, routeHeader = {
     else if (reason === "deadline" || reason === "idle") reply(res, 504, "relay_timeout", "Master Craftsman did not answer within the deadline", echo);
     else reply(res, 502, "relay_upstream_down", "Master Craftsman's runtime is not answering", echo);
   } finally {
+    steps?.stop();
     clearTimeout(deadline);
     clearTimeout(idle);
     if (!controller.signal.aborted && why) controller.abort();

@@ -56,8 +56,8 @@ from collections import namedtuple
 from core.model_routes import switch_words, switched_route
 
 from .backend import Health, MasterCraftsmanBackend, TurnResult
-from .stream import (PLAN_SIGNAL_WORDS, Delta, Failure, Finish, Limits, RunStarted, Served, StreamRefused, Switched, Usage, read_stream,
-                     served_fields, Terminal, Progress)
+from .stream import (PLAN_SIGNAL_WORDS, Delta, Failure, Finish, Limits, RunStarted, Served, Step, StreamRefused, Switched, Usage,
+                     read_stream, served_fields, Terminal, Progress)
 
 # What the header needs to remember about the last turn: its status and failure class, never its reply text, usage or trace
 # (a Private answer must not stay in this process's memory after the request ends; Codex review, 7 Oct).
@@ -307,6 +307,8 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
                     text = control.feed(event.text)
                     if text:
                         yield Delta(text)
+                elif isinstance(event, Step):                 # shown as it happens, not held with the finish
+                    yield event
                 elif isinstance(event, Terminal):
                     proof = event.receipt
                 elif isinstance(event, Failure):

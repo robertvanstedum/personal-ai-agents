@@ -399,6 +399,9 @@ body.gu[data-page=floor] .mc-thread .msg[data-author-kind=owner]{align-self:flex
 body.gu[data-page=floor] .mc-thread .msg[data-author-kind=owner] .msg-meta{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 body.gu[data-page=floor] .mc-thread .msg-platform{padding:8px 12px;border:1px solid var(--r6-line);border-radius:10px;background:rgba(251,247,240,.8);font-size:14px}
 body.gu[data-page=floor] .mc-thread .msg-foot{margin-top:4px;font-size:12.5px;color:var(--r6-mute)}
+body.gu[data-page=floor] .mc-thread .msg-steps{font-size:12.5px;color:var(--r6-mute)}
+body.gu[data-page=floor] .mc-thread .msg-steps>summary{color:inherit}
+body.gu[data-page=floor] .mc-thread .msg-steps>summary:hover{color:var(--r6-ink)}
 
 /* A new conversation: the workshop's card (the original hero, H1), first in the thread; it scrolls away with it. */
 body.gu[data-page=floor] .mc-thread>.craft-hero{width:min(1040px,100%);margin:8px 0}

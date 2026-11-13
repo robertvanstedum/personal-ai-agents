@@ -68,6 +68,33 @@ class Progress:
     text: str
 
 
+STEP_NAME = re.compile(r"[A-Za-z0-9_.:-]{1,64}")
+STEP_MS_MAX = 24 * 60 * 60 * 1000
+
+
+@dataclass(frozen=True)
+class Step:
+    """One tool step of the run (relay ``{"t":"step"}``, issue #545): the tool's name, its place in the run, whether it
+    began or ended, and how long it took. Never its arguments or result: the relay sends none, and nothing else is read."""
+    n: int
+    name: str
+    phase: str                                 # "start" or "end"
+    ok: bool | None = None
+    ms: int | None = None
+
+
+def _step(obj: dict):
+    n, name, phase = obj.get("n"), obj.get("name"), obj.get("phase")
+    if not (isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= 1000):
+        return None
+    if not (isinstance(name, str) and STEP_NAME.fullmatch(name)) or phase not in ("start", "end"):
+        return None
+    ms = obj.get("ms")
+    ms = ms if isinstance(ms, int) and not isinstance(ms, bool) and 0 <= ms <= STEP_MS_MAX else None
+    ok = obj.get("ok") if isinstance(obj.get("ok"), bool) else None
+    return Step(n, name, phase, ok if phase == "end" else None, ms if phase == "end" else None)
+
+
 @dataclass(frozen=True)
 class Answer:
     """The run's final step alone, from OpenClaw's record (relay ``{"t":"answer"}``), sent before the finish only when the
@@ -162,6 +189,8 @@ def parse_relay_line(line: str):
         return RunStarted(obj["id"])
     if kind == "delta" and isinstance(obj.get("text"), str) and obj["text"]:
         return Delta(obj["text"])
+    if kind == "step":
+        return _step(obj)
     if kind == "answer" and isinstance(obj.get("text"), str) and obj["text"].strip():
         return Answer(obj["text"])
     if kind == "finish" and isinstance(obj.get("reason"), str):
@@ -277,5 +306,5 @@ def read_stream(chunks: Iterable[bytes], *, limits: Limits, fmt: str = "ndjson",
             yield Failure("upstream")
 
 
-__all__ = ["Delta", "RunStarted", "Finish", "Usage", "Failure", "Served", "Switched", "StreamRefused", "Limits", "read_stream", "parse_relay_line",
+__all__ = ["Delta", "Step", "RunStarted", "Finish", "Usage", "Failure", "Served", "Switched", "StreamRefused", "Limits", "read_stream", "parse_relay_line",
            "parse_sse_line", "STREAM_ANSWER_FINISH_REASONS", "FAILURE_CLASSES"]
