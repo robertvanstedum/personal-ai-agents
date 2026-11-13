@@ -39,7 +39,7 @@ def test_the_deploy_waits_for_the_worker_build_but_runs_when_it_was_not_needed()
     job = workflow()["jobs"]["deploy"]
     assert job["needs"] == ["classify", "test", "build-push", "build-worker"]
     condition = job["if"]
-    assert condition.startswith("always()")
+    assert condition.startswith("!cancelled()")     # a skipped worker build still deploys; a cancelled run never does
     for need in ("classify", "test", "build-push"):
         assert f"needs.{need}.result == 'success'" in condition
     assert "(needs.build-worker.result == 'success' || needs.build-worker.result == 'skipped')" in condition

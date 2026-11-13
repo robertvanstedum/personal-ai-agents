@@ -51,9 +51,10 @@ def test_the_mac_jobs_and_their_launchd_files_redeploy_nothing():
         assert classify([path]) == ("documents", ()), path
 
 
-def test_the_registry_and_status_contract_redeploy_only_the_portal():
+def test_the_registry_and_status_contract_redeploy_the_portal_and_the_helper_image():
     from scripts.ci.classify_release import classify
-    assert classify(["core/jobs/status.py"]) == ("domain", ("portal",))
+    # core/jobs also reaches the helpers' scheduler image since the Apprentice reads job health (FF-19, c82827b1).
+    assert classify(["core/jobs/status.py"]) == ("domain", ("portal", "cos-scheduler"))
     assert classify(["config/scheduled_jobs.json"]) == ("domain", ("portal",))
-    assert classify(["core/jobs/judge.py", "scripts/jobs/watchdog.py"]) == ("domain", ("portal",))
+    assert classify(["core/jobs/judge.py", "scripts/jobs/watchdog.py"]) == ("domain", ("portal", "cos-scheduler"))
     assert "curator" in classify(["core/other_thing.py"])[1]          # other core/ files keep their wider rule

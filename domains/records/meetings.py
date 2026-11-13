@@ -266,7 +266,10 @@ def archive_finished_proofs(db, moment=None):
                       TERMINAL).fetchall()
     for row in rows:
         through = db.execute("SELECT COALESCE(MAX(seq),0) FROM events WHERE room=?", (row["room"],)).fetchone()[0]
-        last = db.execute("SELECT updated FROM rooms WHERE id=?", (row["room"],)).fetchone()["updated"]
+        found = db.execute("SELECT updated FROM rooms WHERE id=?", (row["room"],)).fetchone()
+        if found is None:                      # a proof room without its rooms row: leave it, never fail the read
+            continue
+        last = found["updated"]
         db.execute("""INSERT INTO room_archive(room,version,archived_at,archived_by,last_activity,through_seq,
             restored_at,restored_by) VALUES(?,?,?,?,?,?,NULL,NULL)""", (row["room"], 1, moment, "records", last, through))
 
