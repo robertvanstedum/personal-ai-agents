@@ -100,6 +100,7 @@ class GitHubRepoReader:
             words = _WORDS["rate_limited"] + (f" The allowance resets at {reset}." if reset else "")
             words += (" MiniMoi read with its read token." if self.authenticated else
                       " MiniMoi read without a credential, so it shares the address's small anonymous allowance.")
+            words += RATE_LIMITED_NEXT
             return "rate_limited", words, {"reset_at": reset, "authenticated": self.authenticated}
         if code == 403:
             return "not_permitted", _WORDS["not_permitted"], {}
@@ -202,6 +203,12 @@ def _next_page(link: str):
                 return int(m.group(1))
     return None
 
+
+# #561 (13 Nov 2026): rate-limited, MC fell back on the cached awareness snapshot and read a finished deploy as still running.
+# What MC does instead, said with the refusal itself so it holds on every model route.
+RATE_LIMITED_NEXT = (" Say so in one short line, then answer from the delivery record: for whether a deploy finished or what "
+                     "runs, read /minimoi/docs/delivery/PRODUCTION.md (DEV.md on Dev). Cached GitHub observations are only "
+                     "as current as the time they state; never present one as live.")
 
 _WORDS = {
     "path_invalid": "That path is not a plain GitHub API path. Send one like /repos/{repo}/actions/runs, with query "

@@ -149,6 +149,11 @@ const READY_PLAY_MS = 8000;              // "Your summary is ready" plays out by
 // A slow consult's holding lines (Spec 165 v0.3 §12.4): one by 8 s and a second by 17 s, and the server answers pending at
 // 25 s, so there is never more than 10 s of silence. Each says only what is true, never a result, and waits for a pause.
 const HOLDING = [[8000, 'Still checking.'], [17000, 'Still working on it.']];
+// A spoken lookup (a status question, #542) already said once that it is checking (#561, 13 Nov 2026: the voice guessed
+// "finished" while MC's lookup ran, then read out MC's "not finished"). Its holding lines keep the same times and never say
+// "checking" again, and never a status.
+export const CHECKING = 'Let me check.';
+const LOOKUP_HOLDING = [[8000, 'Still working on it.'], [17000, 'One more moment.']];
 const QUIET_WAIT_MS = 8000;               // a line for the voice waits this long for a pause, then is sent (the pause was missed)
 const SUMMARY_WAIT_MS = 45000;            // the summary's answer is awaited this long (Spec 165 §5.3); then it may still appear
 const FLUSH_WAIT_MS = 5000;               // the barrier waits this long for the last posts' answers; after it, unanswered is not kept
@@ -594,9 +599,9 @@ export function directVoice(d) {
   }
   // A consult's holding lines (G2): each at its time, said at a pause; a line not yet said gives way to the next, and the
   // one still waiting is let go when the consult answers. Returns the stop.
-  function holding() {
+  function holding(steps = HOLDING) {
     let waiting = null;
-    const timers = HOLDING.map(([ms, line]) => later(() => { letGo(waiting); waiting = sayAtPause(line); }, ms));
+    const timers = steps.map(([ms, line]) => later(() => { letGo(waiting); waiting = sayAtPause(line); }, ms));
     return () => { timers.forEach(cancel); letGo(waiting); };
   }
   // The summary waits for a pause too (review FR N3): once nothing is under way and no line is waiting, or at most
@@ -773,7 +778,8 @@ export function directVoice(d) {
     if (lifecycle !== 'live') return { skip: true };
     switch (x.decision) {
       case 'ask': return { instruction: x.goodbye ? GOODBYE_LINE : x.kind === 'end' ? END_LINE : ASK_LINE };
-      case 'confirm': return { skip: true, quiet: true };  // no reply follows his yes: the outcome is said when it answers
+      // No reply follows his yes: the outcome is said when it answers. A lookup (no yes) says once that it is checking (#561).
+      case 'confirm': return x.lookup ? { instruction: SAY + CHECKING } : { skip: true, quiet: true };
       case 'read_back': return { instruction: readBackLine(x.text) };
       case 'nothing_waiting': return { instruction: SAY + NOTHING_WAITING };
       case 'summary_later': return { instruction: SAY + SUMMARY_LATER };
@@ -809,7 +815,8 @@ export function directVoice(d) {
           if (commits.get(pid) !== waits) return;
           // Decided before this commit: what follow() has already said is not said twice (only an ask still needs the
           // item's own response as its question; a chat gets its conversational one, with CHAT_LINE).
-          const followed = x.followed === true && x.decision !== 'ask';
+          // A lookup's checking line is the response's own (follow() says nothing for a confirm), so it is still said.
+          const followed = x.followed === true && x.decision !== 'ask' && !(x.decision === 'confirm' && x.lookup);
           x.via = 'response';
           waits(followed ? (x.decision === 'chat' ? { instruction: CHAT_LINE } : { skip: true }) : wordFor(x));
         });
@@ -1068,9 +1075,16 @@ export function directVoice(d) {
     if (waiting && waiting.action_id === x.action_id) clearWaiting();
     kinds.set(x.owner_item_id, kind);
     const body = await post({ session_id: sessionId(), call_id: `confirm-${x.action_id}`, action_id: x.action_id,
-      confirm_item_id: x.confirm_item_id, owner_item_id: x.owner_item_id, text_sha256: x.text_sha256 }, x.owner_item_id);
+      confirm_item_id: x.confirm_item_id, owner_item_id: x.owner_item_id, text_sha256: x.text_sha256 }, x.owner_item_id,
+      x.lookup ? holding(LOOKUP_HOLDING) : null);
     if (finalized) return;
+    answered(x.owner_item_id, body);
     sayAtPause(outcomeSay(kind, body));
+  }
+  // An answer said here is its one answer (#561): the same result reported later as finished is acknowledged, never said
+  // again. Pending and unknown are not answers, so a later finished result is still said once.
+  function answered(item, body) {
+    if (typeof item === 'string' && body && (body.outcome === 'done' || body.outcome === 'not_done')) told.add(item);
   }
 
   // Check with <person>: a tap. With an action waiting it confirms that action, through the server's same consumption (the
@@ -1100,6 +1114,7 @@ export function directVoice(d) {
           owner_item_id: owner.item, arguments: {} }, owner.item);
       }
       if (finalized) return;
+      answered(action ? action.item : owner.item, body);
       sayAtPause(outcomeSay(action ? action.kind : (body && body.kind) || 'consult', body));
       ui.phase('listening');
     } finally { checking = false; ui.checking?.(false, owner.text); }

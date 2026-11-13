@@ -21,6 +21,11 @@ STREAMS=('events','issues','issue_comments','review_comments','commits','runs','
 LIMITATION=('Public REST observations only. Deleted/transient events and edits outside endpoint windows may be missing; '
  'events are limited to 300/30 days and may arrive 30 seconds to six hours late; workflow/deployment lists are bounded current windows, not complete historical journals. '
  'Texts are bounded excerpts; full source remains on GitHub. GitHub CI/deployment claims are not actual MiniMoi production image, data or feature acceptance evidence.')
+# #561 (13 Nov 2026): MC read a cached run as "still on the health check, two minutes in" 45 minutes after it had finished.
+# Every cached fact states when it was observed, and a cached in-progress run or deployment older than this is never
+# presented as running: MINIMOI_MC_GITHUB_STALE_RUNNING_SECONDS overrides it (60 s to one day).
+STALE_RUNNING_S=600
+RUNNING=frozenset({'queued','in_progress','waiting','requested','pending'})
 class Refused(ValueError):pass
 class FetchError(Refused):
  def __init__(self,code,retry_at=None):super().__init__(code);self.retry_at=retry_at
@@ -32,6 +37,24 @@ def stamp(value):
 def iso(value):return value.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 def encoded(value):return (json.dumps(value,sort_keys=True,ensure_ascii=False)+'\n').encode()
 def clean(value,n=200):return re.sub(r'[\x00-\x1f\x7f]',' ',str(value or ''))[:n]
+def stale_running_after(environ=None):
+ """Seconds after which a cached in-progress state is unconfirmed (#561); the default on any unusable setting."""
+ try:value=int((environ or {}).get('MINIMOI_MC_GITHUB_STALE_RUNNING_SECONDS',STALE_RUNNING_S))
+ except (TypeError,ValueError):return STALE_RUNNING_S
+ return min(86400,max(60,value))
+def as_of(when,now):
+ """When a cached fact was observed, in words MC can say: "as of 05:17 UTC, 46 min ago" (#561)."""
+ if when is None:return 'never observed'
+ at=stamp(when);now=now.astimezone(timezone.utc);age=max(0,int((now-at).total_seconds()))
+ ago=('just now'if age<60 else f'{age//60} min ago'if age<3600 else f'{age//3600} h {age%3600//60} min ago'if age<86400
+      else f'{age//86400} days ago')
+ day=''if at.date()==now.date()else at.strftime(' on %d %b')
+ return f"as of {at.strftime('%H:%M')} UTC{day}, {ago}"
+def unconfirmed_running(item,observed,now,stale_after=STALE_RUNNING_S):
+ """Whether a cached run or deployment says in progress but was last observed more than stale_after ago (or never):
+ then nobody can say it is still running, and MC must not."""
+ if item.get('kind')not in ('runs','deployments')or str(item.get('state','')).lower()not in RUNNING:return False
+ return observed is None or(now-stamp(observed)).total_seconds()>stale_after
 def root_check(root):
  root=Path(root);need(root.is_absolute(),'absolute_root_required')
  for p in (root,*root.parents):

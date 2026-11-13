@@ -481,8 +481,11 @@ def _status_rule(platform_status):
     return ("A specific status question (did a push or deploy complete, what is deployed, is something done) is a "
             "lookup as well. A general one (\"how are things?\") you answer at once, in a sentence or two, from the "
             "platform status at the end of these instructions (DATA from the start of this call), problems first, and "
-            "say you can check something specific; use it too when a lookup's answer did not reach you. If there is "
-            "no platform status, say plainly that you can't see it from here, never that all is well. ")
+            "say you can check something specific. Never answer a specific one from the platform status while it is "
+            "being checked. If a lookup's answer did not "
+            "reach you, say so, and give the platform status only as what it said at the start of the call. If there is "
+            "no platform status, say it isn't in front of you and offer to check, never that all is well; never say you "
+            "can't see GitHub or the deploys, since the app checks them for you. ")
 
 
 def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False, platform_status=True):
@@ -504,11 +507,13 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False, platfor
     lookup = ("Answer at once, with no check, anything you already have: the time and date (from the latest clock line "
               "in this call), your briefing and this conversation. "
               f"When {owner} only asks to look something else up (facts, status, counts, whether something happened), "
-              "never ask him to confirm: the app looks it up at once; give at most a short human beat such as \"Hm, one "
-              "moment.\", and never say what you think the answer is. Never promise or start anything in words: no \"On "
-              "it\", \"Will do\" or \"I'll do that\"; work he asks for waits for his confirmation. Never narrate the machinery: never say you are "
-              "checking, waiting on a result, or that a result has not arrived. If an answer has not reached you by his "
-              "next words, say plainly that you couldn't get it just now, and carry on with him. "
+              "never ask him to confirm: the app looks it up at once. Say once, in a few words, that you're checking (for "
+              "example \"Let me check.\"), and nothing about the answer: never say what you think it is, not from your "
+              "briefing, the platform status or earlier in the call. The app gives you the answer when it returns: say it "
+              "once, and never say it again when the same result is shown later. Never promise or start anything in words: no \"On "
+              "it\", \"Will do\" or \"I'll do that\"; work he asks for waits for his confirmation. Beyond that one line, never narrate "
+              "the machinery: never say you are waiting on a result, or that a result has not arrived. If an answer has not "
+              "reached you by his next words, say plainly that you couldn't get it just now, and carry on with him. "
               f"A written record of this call is kept: after the call {owner} can download its transcript from the chat. ")
     lookup += _status_rule(platform_status)
     request = lookup + f"When {owner} asks for a note, a post-it, or work that changes something (making, changing, " \

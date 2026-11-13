@@ -77,8 +77,16 @@ def test_0_1_34_is_the_pinned_release_and_loads_the_handbook_as_a_skill():
                                          *[f"skills/{s}/SKILL.md" for s in OWN_SKILLS]])
     for f, want in m["files"].items():
         assert sha((NEW / f).read_bytes()) == want, f
-    for f in ("RUNTIME.openclaw.md", "voice.json"):                  # binding and voice card unchanged
-        assert (NEW / f).read_bytes() == (OLD / f).read_bytes(), f
+    assert (NEW / "RUNTIME.openclaw.md").read_bytes() == (OLD / "RUNTIME.openclaw.md").read_bytes()   # binding unchanged
+    # The voice card changes one line only (#561, 13 Nov): no "can't see it from here", and no guessing while it is checked.
+    card, before = (json.loads((d / "voice.json").read_text()) for d in (NEW, OLD))
+    assert {k: v for k, v in card.items() if k != "card"} == {k: v for k, v in before.items() if k != "card"}
+    was = " With no platform status, say plainly that you can't see it from here."
+    now = (" While it is being checked, say once that you're checking and nothing about the answer; never guess it from the"
+           " platform status. With no platform status, say it isn't in front of you and that you can check; never say you"
+           " can't see GitHub or the deploys, because the app checks them for you.")
+    assert before["card"].count(was) == 1 and card["card"] == before["card"].replace(was, now)
+    assert "can't see it from here" not in card["card"]
     assert (NEW / "AGENTS.md").read_text().startswith("# MC conversation contract — persona 0.1.34\n")
 
 
@@ -182,6 +190,16 @@ def test_each_dated_section_moved_verbatim_into_its_skill():
     for moved, card in (("only successful receipts establish actions", "mc-building"), ("Board pointers", "mc-building"),
                         ("Never invent dispatch syntax or delivery", "mc-building"), ("Cards loaded: <name>@<hash>", "mc-corrections")):
         assert moved not in base and moved in _skill(card), moved
+
+
+def test_mc_delivery_answers_deploy_status_from_the_delivery_record_first():
+    """#561: the delivery record, then live GitHub, then the cache with its age; rate-limited said in one line."""
+    card = _skill("mc-delivery")
+    section = card[card.index("## Did the deploy finish? (Robert, 13 Nov, #561)"):]
+    record, live, cache = (section.index(w) for w in ("`PRODUCTION.md`", "minimoi_github_get", "repository-awareness block"))
+    assert record < live < cache
+    assert "rate_limited, say so in one short line and answer from the delivery record" in section
+    assert "never present a cached in-progress run as current" in section and '"as of 05:17 UTC, 46 min ago"' in section
 
 
 def test_start_refuses_a_tampered_skill_and_replaces_the_skills_folder_each_start(tmp_path):

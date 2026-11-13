@@ -127,6 +127,7 @@ def block(text,*,loader=None,now=None):
     except Exception:return head+'\nRelease metadata unavailable or invalid; version, installed changes and deployment completion are unverified.'
 
 
+STALE_IN_PROGRESS_S=2700   # a deploy observed in progress longer ago than this has stopped reporting, not "still in progress"
 _STATE={'selected_images_observed':'finished, its images confirmed running','deployment_in_progress':'still in progress',
         'selected_image_check_failed':'FAILED its image check, so do not call it installed'}
 
@@ -144,5 +145,9 @@ def summary(*,loader=None,now=None):
     where='Production' if doc['environment']=='production' else 'Dev'
     manifest=doc['manifest']
     what=f"release {doc['requested_tag']}"+(f" (version {manifest['version']}, commit {manifest['source_commit'][:8]}: {manifest['subject']})" if manifest else '')
-    return (f"{where}'s last deployment, {what}, {_STATE[doc['status']]}; services {', '.join(doc['selected'])}; "
+    state=_STATE[doc['status']]
+    if doc['status']=='deployment_in_progress' and age>STALE_IN_PROGRESS_S:
+        # #561: a start with no finish recorded since is never said to be running now.
+        state="recorded as started with no finish since, so it can't be confirmed as still running"
+    return (f"{where}'s last deployment, {what}, {state}; services {', '.join(doc['selected'])}; "
             f"observed {_ago(max(0,int(age)))}.")
