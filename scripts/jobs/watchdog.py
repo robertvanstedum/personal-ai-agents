@@ -25,6 +25,8 @@ its last run failed, it has been ``running`` longer than ``stuck_after_s``, or i
 * ``MINIMOI_JOBS_HEALTH_PUSH=<dest>`` (the Vault bucket, ``s3://minimoi-backups/vault``) also sends the report to
   ``<dest>/health/<host>/`` so production MC sees this host (``core.jobs.health.push``). A failed push makes the run
   ``warn`` (result ``health-push: failed``); the report itself is still written here.
+* Its own status file lists each judged job's code while they fit the contract's 20 result parts. A host with more
+  (production judges 24) keeps the problems by name and counts the rest (``fit_results``); the full list is in the report.
 * ``MINIMOI_JOBS_ALERT=off`` judges and reports without sending anything: on EC2 and Dev the daily check
   (``scripts/jobs/daily_health.py``) is the one that sends, and only for ``needs action``.
 
@@ -127,6 +129,27 @@ def check(jobs_root, jobs, state: dict, sender, now, roots=None, alerts=True) ->
     return codes, delivered
 
 
+QUIET = ("ok", "not_tracked", "not_due")             # dropped first when the codes do not fit the status file
+
+
+def fit_results(codes: dict[str, str], room: int = status.RESULTS_MAX) -> dict[str, str]:
+    """The per-job codes for the watchdog's own status file, which holds at most ``room`` parts (the contract's limit).
+    When every job fits they all go in. Otherwise the problems stay, by name, and the rest become counts:
+    ``jobs-ok`` (how many were ``ok``), ``jobs-quiet`` (not tracked or not yet due) and, if even the problems do not fit,
+    ``jobs-more`` (how many problems are left out). The full list is always in ``health-<host>.json``."""
+    if len(codes) <= room:
+        return dict(codes)
+    ok = sum(1 for c in codes.values() if c == "ok")
+    quiet = sum(1 for c in codes.values() if c in QUIET and c != "ok")
+    problems = [(k, c) for k, c in codes.items() if c not in QUIET]
+    counts = {"jobs-ok": str(ok), "jobs-quiet": str(quiet)}
+    keep = room - len(counts)
+    if len(problems) > keep:
+        keep -= 1
+        counts["jobs-more"] = str(len(problems) - keep)
+    return {**dict(problems[:keep]), **counts}
+
+
 def write_health(reg, host, roots, now, jobs_root, health_dir, own_id, alerts=True, push_dest=None) -> str | None:
     """``health-<host>.json`` in the jobs root (0600) and, for MC, in ``health_dir`` (0644). The watchdog judges itself
     nowhere else, so its own line is left out; the daily check sees a stale report instead."""
@@ -167,6 +190,7 @@ def run(*, jobs_root, host="mac", registry_path=None, sender=alert.send,
         return 2
     state = load_state(jobs_root)
     results: dict[str, str] = {}
+    checked = 0
     delivered = True
     try:
         if reg is None:
@@ -184,7 +208,9 @@ def run(*, jobs_root, host="mac", registry_path=None, sender=alert.send,
                 else:
                     delivered = False
             judged = [j for j in reg.for_host(host) if j.id != own_id]
-            results, ok = check(jobs_root, judged, state, sender, started, roots=roots, alerts=alerts)
+            codes, ok = check(jobs_root, judged, state, sender, started, roots=roots, alerts=alerts)
+            checked = len(codes)
+            results = fit_results(codes, status.RESULTS_MAX - 1)          # one part kept for health-push
             delivered = delivered and ok
             outcome = "ok" if delivered else "warn"
             pushed = write_health(reg, host, roots, started, jobs_root, health_dir, own_id, alerts, push_dest)
@@ -205,7 +231,6 @@ def run(*, jobs_root, host="mac", registry_path=None, sender=alert.send,
         next_due = schedule.next_fire(own.schedule, finished)
     except Exception:                           # noqa: BLE001
         next_due = None
-    checked = len([k for k in results if k != "health-push"])
     if outcome == "ok":
         summary = f"{checked} jobs checked"
     elif outcome == "warn":
