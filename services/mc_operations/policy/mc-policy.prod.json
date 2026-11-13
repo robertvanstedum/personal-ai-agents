@@ -1,6 +1,6 @@
 {
   "schema": "mc-policy/1",
-  "revision": "mc-prod-20261109-helpers",
+  "revision": "mc-prod-20261112-github-get",
   "rules": [
     {
       "capability": "host.health",
@@ -51,6 +51,24 @@
       "approval": "none",
       "source_requirement": "current_owner_turn",
       "handler": "github_read_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "github_read",
+      "max_operations_per_turn": 10
+    },
+    {
+      "capability": "github.repo.read",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "github_get_v1",
       "verify": null,
       "undo": null,
       "egress": "github_read",

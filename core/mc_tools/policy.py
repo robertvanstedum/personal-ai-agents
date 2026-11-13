@@ -89,6 +89,8 @@ HANDLERS = {
     "gap_withdraw_v1": Handler("minimoi_withdraw_gap", "work.withdraw_gap", frozenset({2}), "register_readback_v1",
                                "none"),
     "github_read_v1": Handler("minimoi_github_issues", "github.issues.read", frozenset({1}), None, "github_read"),
+    # #543: any GET under the one repository (workflow runs, jobs, deployments...), refusing secret-bearing paths.
+    "github_get_v1": Handler("minimoi_github_get", "github.repo.read", frozenset({1}), None, "github_read"),
     "guest_reject_v1": Handler("minimoi_guest_request_reject", "guest.reject_request", frozenset({3}),
                                "guest_readback_v1", "none"),
     "issue_comment_v1": Handler("minimoi_issue_comment", "issue.comment", frozenset({3}), "github_receipt_v1",
