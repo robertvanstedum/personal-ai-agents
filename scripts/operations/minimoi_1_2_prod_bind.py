@@ -99,7 +99,8 @@ COMMAND_KINDS = frozenset((
     "source_event.record", "interpretation.record", "interpretation.dispose", "request.record", "request.refine",
     "request.answer", "request.set_state", "request.promote", "request.link_source", "task.transition", "task.assign",
     "task.accept", "task.reopen", "correction.apply", "task.request_admission", "outbox.record", "outbox.approve",
-    "task.adopt_interpretation", "task.submit_artifacts", "task.record_review", "task.delegate", "task.lead_unavailable"))
+    "task.adopt_interpretation", "task.submit_artifacts", "task.record_review", "task.delegate", "task.lead_unavailable",
+    "task.commit_helper_return"))
 # domains/cos/board_tool.py OPS; a test holds them equal.
 BOARD_CAPABILITIES = ("guild.board.notes.read", "guild.board.note.create", "guild.board.note.update",
                       "guild.board.operations.read", "guild.board.operation.undo", "guild.board.capabilities.read")
