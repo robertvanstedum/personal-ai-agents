@@ -27,7 +27,7 @@ services:
     container_name: minimoi-model-gateway
     restart: unless-stopped
     # mc-portal: MC's tools door reaches the gateway's search route here (MC's own capped key; MC itself is not on it).
-    networks: [default, mc-portal]
+    networks: [default, mc-portal, cos-agent]
     command:
       - --config
       - /app/config.yaml
@@ -82,6 +82,8 @@ services:
       # Fewer glibc malloc arenas: about -60 MB idle, the only measured lever.
       - MALLOC_ARENA_MAX=2
       - TZ=${COS_AGENT_TIMEZONE:-America/Chicago}
+      # SDKs skip the instance role; the host rule below is what actually blocks it.
+      - AWS_EC2_METADATA_DISABLED=true
     volumes:
       - cos-agent-a-state:/home/node/.openclaw
       - cos-agent-a-auth:/home/node/.config/openclaw
@@ -117,6 +119,11 @@ services:
     # of 17 starts); cap it so it can never starve the rest of the host. The
     # staging override inherits this limit. NODE_OPTIONS stays unset: a heap
     # cap measured no idle gain and risks fatal heap exhaustion mid-turn.
+    # Its own network with a fixed address, so one host rule can keep it away from the EC2 instance role
+    # (169.254.169.254) while the services that need the role keep it. See scripts/operations/cos_agent_imds_block.sh.
+    networks:
+      cos-agent:
+        ipv4_address: 192.168.250.2
     mem_limit: 1400m
     # The image's own check runs only every 180 s; the deploy waits 360 s.
     # Probe the unauthenticated liveness endpoint with the image's node.
@@ -406,6 +413,7 @@ services:
       - german
 
   cos-bot:
+    networks: [default, cos-agent]
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-bot:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-cos-bot
     restart: unless-stopped
@@ -502,6 +510,7 @@ services:
     networks:
       - default
       - vault-internal
+      - cos-agent
     depends_on:
       - postgres
       - cos-agent-a
@@ -609,3 +618,10 @@ networks:
   # Only cos-scheduler and vault-ask: no route out, no other service.
   vault-internal:
     internal: true
+  # Only cos-agent-a and the three services it talks to. A normal bridge (CoS fetches pages and signs in to its plan);
+  # the host's DOCKER-USER rule drops 192.168.250.2 -> 169.254.169.254.
+  cos-agent:
+    name: minimoi-cos-agent
+    ipam:
+      config:
+        - subnet: 192.168.250.0/28
