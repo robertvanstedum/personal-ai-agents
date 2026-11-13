@@ -211,6 +211,8 @@ litellm_settings:
   set_verbose: false
   callbacks:
     - receipt_callback.receipt_callback
+    # One warm xAI cache per conversation (#553): the request's prompt_cache_key becomes x-grok-conv-id on xAI calls.
+    - cache_affinity.cache_affinity
     # Staging only (usage-record U1): one standard usage record per call, on
     # every route and outcome, to $MINIMOI_USAGE_DIR. Mounted from
     # services/usage/ by docker-compose.staging.yml; the production image and

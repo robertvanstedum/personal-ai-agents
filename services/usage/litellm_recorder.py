@@ -38,7 +38,11 @@ except ImportError:                              # tests without LiteLLM install
 _log = logging.getLogger("minimoi.usage")
 _NS = uuid.UUID("6f1b8c1e-2c7a-4f0e-9a51-3b8f0d6c9e21")
 REFUSAL_DELAY_S = 2.0        # let a deployment-level failure record first
-ALIAS_ACTORS = (("mc-agent-", "mc"), ("cos-agent-", "cos"))
+# Key alias prefixes, as scripts/staging/mc_keys.sh and beta_dev_routes.py mint them. MC holds four kinds of capped key:
+# mc-agent- (its gateway route), mc-routes- (the chat tiers it runs on), mc-grok- and mc-failover-. Before #555 only the
+# first was mapped, so MC's chat calls were recorded as actor "unknown" and never joined its turns (usage_join filters "mc").
+# CoS's route key is cos-agent-routes-, which cos-agent- already covers.
+ALIAS_ACTORS = (("mc-agent-", "mc"), ("mc-routes-", "mc"), ("mc-grok-", "mc"), ("mc-failover-", "mc"), ("cos-agent-", "cos"))
 ROUTE_ACTORS = (("minimoi-mc-", "mc"), ("minimoi-cos-", "cos"))
 
 

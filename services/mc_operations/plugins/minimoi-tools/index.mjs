@@ -24,6 +24,7 @@ const ARTIFACT_TOOLS = ['minimoi_working_write', 'minimoi_conversation_export', 
 const AGENT_TOOLS = ['minimoi_agent_contact', 'minimoi_agent_status', 'minimoi_agent_watch'];
 const HOST_TOOLS = ['minimoi_host_read', 'minimoi_host_list'];
 const GITHUB_READS = ['minimoi_github_issues', 'minimoi_github_get'];
+const CARD_UNKNOWN = 'The card could not be opened. Nothing was changed. You may retry; do not answer the procedure from memory.';
 const HOST_UNKNOWN = 'Host read could not be confirmed. No file mutation was requested. You may retry this read in a new call.';
 const UNKNOWN = 'MiniMoi could not confirm what happened. Do not repeat it; tell Robert.';
 
@@ -545,7 +546,7 @@ export function toolFactory({endpoint, token, tokenFile, agents, tools, diskPath
             body: JSON.stringify(body)});
         } catch {
           // Once a send has started it may have reached MiniMoi: unknown, never a silent retry.
-          return text(spec.name === 'minimoi_recall' ? RECALL_UNKNOWN : GITHUB_READS.includes(spec.name) ? READ_UNKNOWN : HOST_TOOLS.includes(spec.name) ? HOST_UNKNOWN : UNKNOWN, {status: 'unknown', code: 'transport'});
+          return text(spec.name === 'minimoi_open_card' ? CARD_UNKNOWN : spec.name === 'minimoi_recall' ? RECALL_UNKNOWN : GITHUB_READS.includes(spec.name) ? READ_UNKNOWN : HOST_TOOLS.includes(spec.name) ? HOST_UNKNOWN : UNKNOWN, {status: 'unknown', code: 'transport'});
         }
         let result = await boundedJson(response);
         if (response.status !== 200) {
@@ -553,12 +554,12 @@ export function toolFactory({endpoint, token, tokenFile, agents, tools, diskPath
           if (result && Object.keys(result).join() === 'error' && result.error === before[response.status]) {
             return text('MiniMoi refused this call before doing anything.', {status: 'refused', code: result.error});
           }
-          return text(spec.name === 'minimoi_recall' ? RECALL_UNKNOWN : GITHUB_READS.includes(spec.name) ? READ_UNKNOWN : HOST_TOOLS.includes(spec.name) ? HOST_UNKNOWN : UNKNOWN, {status: 'unknown', code: 'http_' + response.status});
+          return text(spec.name === 'minimoi_open_card' ? CARD_UNKNOWN : spec.name === 'minimoi_recall' ? RECALL_UNKNOWN : GITHUB_READS.includes(spec.name) ? READ_UNKNOWN : HOST_TOOLS.includes(spec.name) ? HOST_UNKNOWN : UNKNOWN, {status: 'unknown', code: 'http_' + response.status});
         }
         if (!result || Object.keys(result).sort().join() !== 'code,data,message,status' || !STATUSES.includes(result.status)
             || typeof result.message !== 'string' || typeof result.code !== 'string'
             || result.message.includes(token) || JSON.stringify(result.data).includes(token)) {
-          return text(spec.name === 'minimoi_recall' ? RECALL_UNKNOWN : GITHUB_READS.includes(spec.name) ? READ_UNKNOWN : HOST_TOOLS.includes(spec.name) ? HOST_UNKNOWN : UNKNOWN, {status: 'unknown', code: 'malformed'});
+          return text(spec.name === 'minimoi_open_card' ? CARD_UNKNOWN : spec.name === 'minimoi_recall' ? RECALL_UNKNOWN : GITHUB_READS.includes(spec.name) ? READ_UNKNOWN : HOST_TOOLS.includes(spec.name) ? HOST_UNKNOWN : UNKNOWN, {status: 'unknown', code: 'malformed'});
         }
         if (HOST_TOOLS.includes(spec.name) && result.code === 'host_read_admitted' && result.status === 'done') {
           const d = result.data?.host_descriptor;

@@ -4,6 +4,8 @@ FROM ghcr.io/berriai/litellm-non_root@sha256:6363e53f135dafbf4a68fac25f77aec3f2b
 # config mounts. Provider credentials remain runtime environment variables.
 COPY services/model_gateway/litellm.prod.yaml /app/config.yaml
 COPY services/model_gateway/receipt_callback.py /app/receipt_callback.py
+# One warm xAI cache per conversation (#553), named by the config above.
+COPY services/model_gateway/cache_affinity.py /app/cache_affinity.py
 # The usage recorder, named by the config above. It writes nothing unless the environment sets MINIMOI_USAGE_DIR.
 COPY services/usage/usage_record.py /app/usage_record.py
 COPY services/usage/litellm_recorder.py /app/usage_recorder.py

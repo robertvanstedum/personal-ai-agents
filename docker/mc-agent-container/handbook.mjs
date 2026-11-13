@@ -1,5 +1,14 @@
-// Master Craftsman's handbook, loaded at start (start.sh step 2). Run by start.sh only:
-//   node handbook.mjs <image handbook dir> <workspace> <version> <manifest sha256>
+// Master Craftsman's handbook and skills, loaded at start (start.sh step 2). Run by start.sh only:
+//   node handbook.mjs <image handbook dir> <workspace> <version> <manifest sha256> [<persona release dir>]
+//
+// Skill mode (#553; a persona release whose manifest says "handbook": {"load": "skill"}, given as the fifth argument):
+// MC's procedures are OpenClaw workspace skills, read on demand. Only each skill's name and one-line description sit in
+// the system prompt (OpenClaw docs, tools/skills: <workspace>/skills is the highest-precedence skill root). This replaces
+// <workspace>/skills wholesale with the release's own skills (every file under skills/ in its manifest, checked again
+// against its hash) plus the handbook's engineering skill folder, all read-only, and prints a short block naming the
+// project brief and the manifest instead of pasting SKILL.md. Without the fifth argument, or for a release without
+// "load": "skill", the earlier projection below is unchanged.
+//
 // The persona release names the handbook it loads (manifest.json "handbook": version and manifest hash). This checks
 // the image's root-owned handbook against that pin and every file against the handbook's own manifest, lays the
 // release out under <workspace>/handbook/ (mc-chat's file tools are workspace-only, so the files MC is told to read must
@@ -23,9 +32,9 @@ function boundedRead(file) {
   return fs.readFileSync(file);
 }
 
-const [src, workspace, version, pin] = process.argv.slice(2);
-if (process.argv.length !== 6 || !/^[0-9]+\.[0-9]+\.[0-9]+$/.test(version) || !/^[0-9a-f]{64}$/.test(pin))
-  refuse('usage: handbook.mjs <image handbook dir> <workspace> <version> <manifest sha256>');
+const [src, workspace, version, pin, personaDir] = process.argv.slice(2);
+if (![6, 7].includes(process.argv.length) || !/^[0-9]+\.[0-9]+\.[0-9]+$/.test(version) || !/^[0-9a-f]{64}$/.test(pin))
+  refuse('usage: handbook.mjs <image handbook dir> <workspace> <version> <manifest sha256> [<persona release dir>]');
 
 const manifestBytes = boundedRead(path.join(src, 'manifest.json'));
 if (sha(manifestBytes) !== pin) refuse(`manifest.json is ${sha(manifestBytes).slice(0, 12)}, the persona pins ${pin.slice(0, 12)}`);
@@ -53,21 +62,58 @@ function removable(p) {
   fs.chmodSync(p, 0o700);
   for (const name of fs.readdirSync(p)) removable(path.join(p, name));
 }
+function replace(dir) {
+  if (fs.lstatSync(dir, {throwIfNoEntry: false})) {
+    removable(dir);
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
+}
+function writeAll(dir, entries) {
+  for (const [name, bytes] of entries) {
+    const out = path.join(dir, name);
+    fs.mkdirSync(path.dirname(out), {recursive: true, mode: 0o755});
+    fs.writeFileSync(out, bytes, {mode: 0o444, flag: 'wx'});
+  }
+}
 const root = path.join(path.resolve(workspace), 'handbook');
-if (fs.lstatSync(root, {throwIfNoEntry: false})) {
-  removable(root);
-  fs.rmSync(root, {recursive: true, force: true});
-}
-for (const [name, bytes] of [['manifest.json', manifestBytes], ...files]) {
-  const out = path.join(root, name);
-  fs.mkdirSync(path.dirname(out), {recursive: true, mode: 0o755});
-  fs.writeFileSync(out, bytes, {mode: 0o444, flag: 'wx'});
-}
+replace(root);
+writeAll(root, [['manifest.json', manifestBytes], ...files]);
 
 const pinned = path.join(root, release);
 const begin = `BEGIN_MINIMOI_MC_HANDBOOK ${version}`, end = `END_MINIMOI_MC_HANDBOOK ${version}`;
 const skill = files.find(([name]) => name === `${release}/${SKILL}`)[1].toString('utf8');
 if (skill.includes('BEGIN_MINIMOI_MC_HANDBOOK') || skill.includes('END_MINIMOI_MC_HANDBOOK')) refuse('SKILL.md holds a block marker');
+
+// Skill mode: the persona release's skills plus the handbook's engineering skill, under <workspace>/skills.
+const persona = personaDir ? JSON.parse(boundedRead(path.join(personaDir, 'manifest.json'))) : null;
+if (persona && persona.handbook?.load === 'skill') {
+  const SKILL_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
+  const own = Object.keys(persona.files || {}).filter(n => n.startsWith('skills/'));
+  const skillFiles = own.map(name => {
+    const parts = name.split('/');
+    if (parts.length !== 3 || parts[2] !== 'SKILL.md' || !SKILL_NAME.test(parts[1])) refuse(`${name} is not skills/<name>/SKILL.md`);
+    const bytes = boundedRead(path.join(personaDir, name));
+    if (sha(bytes) !== persona.files[name]) refuse(`persona ${name} differs from its manifest`);
+    const head = bytes.toString('utf8').match(/^---\nname: ([a-z0-9-]+)\ndescription: ([^\n]{1,300})\n---\n/);
+    if (!head || head[1] !== parts[1]) refuse(`${name} has no name and description frontmatter for ${parts[1]}`);
+    return [name.slice('skills/'.length), bytes];
+  });
+  const engineering = `${release}/skills/minimoi-engineering/`;
+  if (own.some(n => n.startsWith('skills/minimoi-engineering/'))) refuse('the persona may not ship the handbook\'s own skill');
+  const handbookSkill = files.filter(([name]) => name.startsWith(engineering))
+    .map(([name, bytes]) => [`minimoi-engineering/${name.slice(engineering.length)}`, bytes]);
+  const skillsRoot = path.join(path.resolve(workspace), 'skills');
+  replace(skillsRoot);
+  writeAll(skillsRoot, [...skillFiles, ...handbookSkill]);
+  process.stdout.write(`${begin}\n` +
+    `Handbook ${version} (${manifest.status}), every file listed with its SHA-256 in ${path.join(root, 'manifest.json')}\n` +
+    `(SHA-256 ${pin}). Loading is not behaviour verification or owner acceptance.\n` +
+    `Project brief, read before engineering or operations work: ${pinned}/PROJECT.md (adoption notes: ADOPTION.md beside it).\n` +
+    `Engineering procedures are the minimoi-engineering skill: ${path.join(skillsRoot, 'minimoi-engineering/SKILL.md')}\n` +
+    `${end}\n`);
+  process.exit(0);
+}
+
 process.stdout.write(`${begin}\n` +
   `Pinned handbook: ${pinned}/\n` +
   `Manifest: ${path.join(root, 'manifest.json')}\n` +
