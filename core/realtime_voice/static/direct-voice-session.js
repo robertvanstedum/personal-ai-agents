@@ -996,9 +996,13 @@ export function directVoice(d) {
     if (x.decision === 'summary_now') { Promise.resolve().then(sumUp); return; }     // he asked for it: now it is made
     if (x.dropped && waiting && waiting.action_id === x.dropped) clearWaiting(NOT_DONE_SCREEN);   // anything else drops it
   }
-  // He said he is done: one short goodbye, then the call ends. Anything he says first keeps it going.
+  // He said he is done: one short goodbye, then the call ends. Anything he says first keeps it going: a request already
+  // heard, and his speech starting again before its words are heard (#570, 13 Nov 2026: "Geh." was taken as goodbye, he
+  // said "make a note that …" over the goodbye line, and the call ended 2 s later, before his note was heard).
   async function goodbye(x, i) {
-    const moved = () => finalized || lifecycle !== 'live' || [...decisions.keys()].some((k) => k > i);
+    const base = speechAt.has(i) ? speechAt.get(i) : speeches;
+    const moved = () => finalized || lifecycle !== 'live' || speaking || speeches > base
+      || [...decisions.keys()].some((k) => k > i);
     clearWaiting(x.replaced && waiting && waiting.action_id === x.replaced && waiting.kind !== 'end' ? NOT_DONE_SCREEN : null);
     let start = await questionStart(i);
     if (moved()) return;

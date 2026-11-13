@@ -454,6 +454,20 @@ for (const provider of ['openai', 'xai']) {
     assert.equal(t.s.proposing(), false);
   }, { routes: table({ "We're done.": { decision: 'ask', kind: 'end', goodbye: true, action_id: 'e1', owner_item_id: 't0' } }) }));
 }
+// #570 (13 Nov 2026, production): "Geh." taken as goodbye; his next words began over the goodbye line and the call ended
+// before they were heard. Speech starting again after the goodbye keeps the call going, even before its words arrive.
+for (const provider of ['openai', 'xai']) {
+  await check(`${provider}: his speech starting after the goodbye keeps the call going`, () => run(provider, async (t) => {
+    await t.speak('a', 'Geh.');
+    if (provider === 'openai') { t.asked('RA'); await quiet(); }
+    else { t.created('XA'); await quiet(); }
+    t.ev({ type: 'input_audio_buffer.speech_started', item_id: 'b' });          // "make a note that …", still being said
+    if (provider === 'openai') t.replied('RA', D.GOODBYE);
+    for (let i = 0; i < 4; i++) await t.advance(5000);
+    for (let i = 0; i < 8; i++) await flush();
+    assert.equal(t.posts('/end').length, 0);
+  }, { routes: table({ 'Geh.': { decision: 'ask', kind: 'end', goodbye: true, action_id: 'e1', owner_item_id: 't0' } }) }));
+}
 await check('openai: asking for the recap makes it now', () => run('openai', async (t) => {
   await t.speak('a', 'Sum it up.');
   assert.equal(t.lines().at(-1), `Say this briefly, adding nothing: ${D.ALL_RIGHT}`);
