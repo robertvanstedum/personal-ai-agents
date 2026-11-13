@@ -88,7 +88,9 @@ def test_layers_create_nothing_and_carry_no_dev_values():
                 assert item != "dev" and "minimoi-staging" not in str(item)
         for service in value["services"].values():
             for volume in service.get("volumes") or []:
-                if isinstance(volume, dict):
+                # A bind mount never creates its host path. A named volume (type: volume, e.g. mc-observations since
+                # 8d81c0bf) has no host path and no bind options.
+                if isinstance(volume, dict) and volume.get("type", "bind") == "bind":
                     assert volume["bind"]["create_host_path"] is False
         for service in value["services"].values():
             image = service.get("image")
