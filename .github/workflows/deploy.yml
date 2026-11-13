@@ -25,6 +25,12 @@ jobs:
       services: ${{ steps.changes.outputs.services }}
       test_scope: ${{ steps.changes.outputs.test_scope }}
       test_targets: ${{ steps.changes.outputs.test_targets }}
+      # The stacks this release refreshes (#550): main (the services above), guildhall (Records and its two workers; see
+      # classify_release.guildhall), and whether the workers' image must be built for it.
+      stacks: ${{ steps.changes.outputs.stacks }}
+      guildhall: ${{ steps.changes.outputs.guildhall }}
+      guildhall_reasons: ${{ steps.changes.outputs.guildhall_reasons }}
+      rooms_worker_image: ${{ steps.changes.outputs.rooms_worker_image }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,11 +56,14 @@ jobs:
           # file is documentation, generated documentation, or the release
           # plumbing/tests that govern that path.
           ALL_SERVICES="portal curator german portuguese system-bot cos-bot cos-scheduler cos-agent-a model-gateway"
+          # A full release moves the portal, so Records follows it; the workers keep their image unless their files changed.
+          FULL_STACKS=$'stacks=main guildhall\nguildhall=true\nrooms_worker_image=false\nguildhall_reasons=full release (new portal image)'
           # A full release runs the whole test suite; select_tests.py says so too.
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "release_class=full" >> "$GITHUB_OUTPUT"
             echo "services=$ALL_SERVICES" >> "$GITHUB_OUTPUT"
             echo "test_scope=full" >> "$GITHUB_OUTPUT"
+            echo "$FULL_STACKS" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -84,6 +93,7 @@ jobs:
             echo "release_class=full" >> "$GITHUB_OUTPUT"
             echo "services=$ALL_SERVICES" >> "$GITHUB_OUTPUT"
             echo "test_scope=full" >> "$GITHUB_OUTPUT"
+            echo "$FULL_STACKS" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           [ "$rc" = 0 ] || exit "$rc"
@@ -246,10 +256,26 @@ jobs:
             docker push "$REGISTRY/minimoi/$repository:$latest_tag"
           done
 
+  # Guildhall's workers run their own image (#550): built here when a release changes its files, instead of by a manual
+  # dispatch. The same workflow a person can still dispatch by hand; the deploy job hands its digest to the refresh.
+  build-worker:
+    needs: [classify]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.classify.outputs.rooms_worker_image == 'true'
+    uses: ./.github/workflows/rooms-worker-image.yml
+    with:
+      commit: ${{ github.sha }}
+    secrets: inherit
+
   deploy:
-    needs: [classify, test, build-push]
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [classify, test, build-push, build-worker]
+    # build-worker is skipped on most releases; a skipped need would otherwise skip this job, so each result is named.
+    if: >-
+      always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+      && needs.classify.result == 'success' && needs.test.result == 'success' && needs.build-push.result == 'success'
+      && (needs.build-worker.result == 'success' || needs.build-worker.result == 'skipped')
     runs-on: ubuntu-latest
+    env:
+      EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -382,7 +408,8 @@ jobs:
       # Code support only: host-owned binding/state/keys are never uploaded.
       - name: Push optional Records deployment support to EC2
         run: |
-          RECORDS_DEPLOY_KIT=$(tar -czf - scripts/rooms/production_plan.py scripts/rooms/deployment.py docker-compose.records-production.yml docker-compose.records-production-portal.yml | base64 -w 0)
+          # The workers' project file too (#550): guildhall_prod.sh refresh, below, runs the workers from it.
+          RECORDS_DEPLOY_KIT=$(tar -czf - scripts/rooms/production_plan.py scripts/rooms/deployment.py docker-compose.records-production.yml docker-compose.records-production-portal.yml docker-compose.guildhall-production.yml | base64 -w 0)
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
             --document-name "AWS-RunShellScript" \
@@ -434,7 +461,10 @@ jobs:
           done
           [ "$STATUS" = Success ] || { echo "Layer refresh unconfirmed"; exit 1; }
 
+      # A release that changes only Guildhall (release class "guildhall") names no main service: nothing to recreate here.
       - name: Deploy on EC2
+        id: deploy_main
+        if: needs.classify.outputs.services != ''
         run: |
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
@@ -517,6 +547,105 @@ jobs:
             echo "Queue check FAILED ($STATUS): the portal is not attached to the live Build Queue"
             exit 1
           fi
+
+      # The Guildhall stack (#550, #548): minimoi-records runs the portal image and the two workers their own image.
+      # Once Guildhall is switched on (by hand, guildhall_prod.sh start), every release that moves either image refreshes it
+      # here, in this job, so the one-deploy-at-a-time queue covers it. The script is the one the host scripts step just
+      # installed from this commit: every gate first (production_internal only, no public Records port, the tokens agreeing,
+      # the binding and network), Records' preflight on the new image, health and Robert's Rooms access verified after, and
+      # what it changed put back if a step fails. A failure fails this deploy, with the script's own words.
+      - name: Refresh the Guildhall stack
+        id: guildhall
+        if: needs.classify.outputs.guildhall == 'true'
+        env:
+          WORKER_IMAGE: ${{ needs.build-worker.outputs.image }}
+          REASONS: ${{ needs.classify.outputs.guildhall_reasons }}
+        run: |
+          echo "Guildhall: $REASONS"
+          if [[ -n "$WORKER_IMAGE" && ! "$WORKER_IMAGE" =~ ^332704997792\.dkr\.ecr\.us-east-1\.amazonaws\.com/minimoi/cos-scheduler@sha256:[a-f0-9]{64}$ ]]; then
+            echo "result=refused" >> "$GITHUB_OUTPUT"
+            echo "::error title=Guildhall refresh refused::the worker image is not an immutable digest"; exit 1
+          fi
+          python3 -c 'import json, sys; print(json.dumps({"commands": ["cd /opt/minimoi", "GUILDHALL_PROD_APPROVED=1 MINIMOI_RELEASE_COMMIT=%s MINIMOI_ROOMS_WORKER_IMAGE=%s /opt/minimoi/scripts/guildhall_prod.sh refresh" % (sys.argv[1], sys.argv[2])], "executionTimeout": ["1500"]}))' \
+            "${{ github.sha }}" "$WORKER_IMAGE" > "$RUNNER_TEMP/guildhall.json"
+          rc=0
+          SSM_STDOUT="$RUNNER_TEMP/guildhall.out" bash scripts/ci/ssm_run.sh "Guildhall refresh" 1500 "$RUNNER_TEMP/guildhall.json" || rc=$?
+          RESULT=$(sed -n 's/^guildhall-result: //p' "$RUNNER_TEMP/guildhall.out" 2>/dev/null | tail -1)
+          echo "result=${RESULT:-unknown}" >> "$GITHUB_OUTPUT"
+          case "${RESULT:-unknown}" in
+            refreshed|current|skipped) [ "$rc" = 0 ] && exit 0 ;;
+            refused) echo "::error title=Guildhall refresh refused::a gate refused; Guildhall is unchanged on its previous images. Read the gates above." ;;
+            rolled_back) echo "::error title=Guildhall refresh failed and was put back::Guildhall runs its previous images and verifies; this release's Guildhall part is not live." ;;
+            rollback_failed) echo "::error title=Guildhall is NOT verified::the refresh failed and could not put everything back. Act now: guildhall_prod.sh status on the host." ;;
+            *) echo "::error title=Guildhall refresh unconfirmed::no result line came back; check guildhall_prod.sh status on the host." ;;
+          esac
+          exit 1
+
+      # MC's own image releases on an mc-agent-v* tag (deploy-mc-agent.yml). Not automatic: the tag is MC's release name,
+      # chosen with its persona release, and a tag pushed with this workflow's token would start no workflow. So every
+      # release compares the tag production runs with this commit and says loudly when MC's image is behind.
+      - name: Check MC's own image against this release
+        id: mc
+        if: always()
+        run: |
+          printf '%s' '{"commands": ["docker inspect --format {{.Config.Image}} minimoi-mc-agent 2>/dev/null || true"], "executionTimeout": ["60"]}' > "$RUNNER_TEMP/mc.json"
+          SSM_STDOUT="$RUNNER_TEMP/mc.out" bash scripts/ci/ssm_run.sh "MC agent read" 120 "$RUNNER_TEMP/mc.json" >/dev/null || true
+          LIVE=$(sed -n 's/.*:\(mc-agent-v[0-9]*\.[0-9]*\.[0-9]*[A-Za-z0-9.-]*\)$/\1/p' "$RUNNER_TEMP/mc.out" 2>/dev/null | head -1)
+          echo "live=$LIVE" >> "$GITHUB_OUTPUT"
+          # Just that tag's commit: a diff of two commits needs no shared history.
+          [ -z "$LIVE" ] || git fetch -q --no-tags --depth=1 origin "refs/tags/$LIVE:refs/tags/$LIVE" || true
+          if [ -z "$LIVE" ] || ! git rev-parse -q --verify "refs/tags/$LIVE" >/dev/null; then
+            echo "needed=unknown" >> "$GITHUB_OUTPUT"
+            echo "::warning title=MC agent release unknown::could not read the MC release tag production runs (${LIVE:-none}); check deploy-mc-agent.yml by hand"
+            exit 0
+          fi
+          git diff --name-only "$LIVE" "${{ github.sha }}" | python3 scripts/ci/classify_release.py --mc-agent > "$RUNNER_TEMP/mc-changes.json"
+          COUNT=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["count"])' "$RUNNER_TEMP/mc-changes.json")
+          echo "changes=$COUNT" >> "$GITHUB_OUTPUT"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "needed=yes" >> "$GITHUB_OUTPUT"
+            echo "::warning title=MC agent release needed::$COUNT file(s) MC's image holds changed since $LIVE. Tag an mc-agent-v* release (deploy-mc-agent.yml)."
+            python3 -c 'import json, sys; print("\n".join(json.load(open(sys.argv[1]))["mc_agent_changes"][:20]))' "$RUNNER_TEMP/mc-changes.json"
+          else
+            echo "needed=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      # PRODUCTION.md says what every stack runs (#536): the release script wrote the main part; this adds the Guildhall
+      # refresh (guildhall_prod.sh's own observation) and MC's tag. Never fails the deploy.
+      - name: Record every stack in the production delivery record
+        if: always()
+        env:
+          LIVE: ${{ steps.mc.outputs.live }}
+          NEEDED: ${{ steps.mc.outputs.needed }}
+          CHANGES: ${{ steps.mc.outputs.changes }}
+        run: |
+          python3 -c '
+          import json, re, sys
+          live, needed, changes = sys.argv[1:4]
+          argv = ["python3", "-I", "-B", "/opt/minimoi/scripts/write_production_delivery_record.py"]
+          if re.fullmatch(r"mc-agent-v[0-9A-Za-z.-]{1,40}", live):
+              argv += ["--mc-agent-live", live]
+          if needed in ("yes", "no", "unknown"):
+              argv += ["--mc-agent-needed", needed]
+          if changes.isdigit():
+              argv += ["--mc-agent-changes", changes]
+          print(json.dumps({"commands": [" ".join(argv) + " || echo delivery record: not written"], "executionTimeout": ["60"]}))
+          ' "$LIVE" "$NEEDED" "$CHANGES" > "$RUNNER_TEMP/record.json"
+          bash scripts/ci/ssm_run.sh "Delivery record" 120 "$RUNNER_TEMP/record.json" || echo "delivery record: not confirmed"
+
+      - name: Say which stacks this release refreshed
+        if: always()
+        env:
+          SERVICES: ${{ needs.classify.outputs.services }}
+          MAIN: ${{ steps.deploy_main.outcome }}
+          GUILDHALL_NAMED: ${{ needs.classify.outputs.guildhall }}
+          GUILDHALL: ${{ steps.guildhall.outputs.result }}
+          GUILDHALL_STEP: ${{ steps.guildhall.outcome }}
+          WORKER_IMAGE: ${{ needs.build-worker.outputs.image }}
+          MC_LIVE: ${{ steps.mc.outputs.live }}
+          MC_NEEDED: ${{ steps.mc.outputs.needed }}
+          MC_CHANGES: ${{ steps.mc.outputs.changes }}
+        run: python3 scripts/ci/release_summary.py >> "$GITHUB_STEP_SUMMARY"
 
   deploy-docs:
     needs: [classify, test]

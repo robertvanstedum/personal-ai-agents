@@ -1,9 +1,9 @@
 name: Rooms worker image
 
 # Guildhall's two meeting workers on production (docker-compose.guildhall-production.yml) need an immutable image digest.
-# This builds and pushes that one image, by hand, for a commit already on main. It never runs on a push, never touches
-# the host and restarts nothing, so it adds no risk to the main release. Starting the workers is
-# scripts/operations/guildhall_prod.sh, which takes the digest printed here.
+# This builds and pushes that one image for a commit already on main. It never touches the host and restarts nothing.
+# deploy.yml calls it (workflow_call) when a release changes the worker's files (#550), and its deploy job hands the digest
+# to scripts/operations/guildhall_prod.sh refresh; by hand (workflow_dispatch) it serves a first start.
 #
 # The image goes in the existing minimoi/cos-scheduler repository under a rooms-worker- tag, the way agent-a-,
 # model-gateway- and mc-agent- images do, so it needs no new repository or permission on the host.
@@ -14,13 +14,19 @@ on:
       commit:
         description: 'Full 40-character commit on main to build'
         required: true
+  workflow_call:
+    inputs:
+      commit:
+        description: 'Full 40-character commit on main to build'
+        required: true
+        type: string
+    outputs:
+      image:
+        description: 'MINIMOI_ROOMS_WORKER_IMAGE: the immutable digest built from the commit'
+        value: ${{ jobs.build-push.outputs.image }}
 
 permissions:
   contents: read
-
-concurrency:
-  group: rooms-worker-image
-  cancel-in-progress: false
 
 env:
   REPOSITORY: minimoi/cos-scheduler
@@ -29,10 +35,17 @@ env:
 jobs:
   build-push:
     runs-on: ubuntu-latest
+    # One build per commit at a time (a second would move its tag). Per commit, so a queued release's build never cancels
+    # another commit's pending one. Job level: it holds the same way when deploy.yml calls this workflow.
+    concurrency:
+      group: rooms-worker-image-${{ inputs.commit }}
+      cancel-in-progress: false
+    outputs:
+      image: ${{ steps.print.outputs.image }}
     steps:
       - name: The commit is a full hash
         env:
-          COMMIT: ${{ github.event.inputs.commit }}
+          COMMIT: ${{ inputs.commit }}
         run: |
           [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "commit must be a full 40-character hash"; exit 1; }
           echo "TAG=rooms-worker-${COMMIT::7}" >> "$GITHUB_ENV"
@@ -108,6 +121,7 @@ jobs:
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
       - name: The digest pulls, and print it
+        id: print
         env:
           EXISTING: ${{ steps.existing.outputs.digest }}
           PUSHED: ${{ steps.pushed.outputs.digest }}
@@ -118,4 +132,5 @@ jobs:
           revision=$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image")
           [[ "$revision" == "$COMMIT" ]] || { echo "the digest was not built from this commit"; exit 1; }
           echo "MINIMOI_ROOMS_WORKER_IMAGE=$image"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
           echo "\`MINIMOI_ROOMS_WORKER_IMAGE=$image\`" >> "$GITHUB_STEP_SUMMARY"

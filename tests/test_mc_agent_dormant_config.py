@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -104,7 +105,12 @@ def test_production_never_builds_or_runs_mc():
         assert "mc-agent" not in code, name
     for name in ("Dockerfile.cos-agent-a",):
         assert "mc-agent" not in (REPO / "docker" / name).read_text()
-    assert "mc-agent" not in (REPO / ".github/workflows/deploy.yml").read_text()
+    # deploy.yml may read the tag MC's own container runs, to say "MC agent release needed" (#550); it never builds,
+    # pulls or deploys MC's image.
+    deploy = (REPO / ".github/workflows/deploy.yml").read_text()
+    assert "docker/mc-agent" not in deploy and "cos-scheduler:mc-agent" not in deploy and "deploy_mc_container_ec2" not in deploy
+    deploy = re.sub(r"minimoi-mc-agent|deploy-mc-agent\.yml|mc-agent-v[^\s\"']*|--mc-agent[-a-z]*", "", deploy)
+    assert "mc-agent" not in deploy
     assert "MINIMOI_GUILD_MC" not in (REPO / "docker-compose.prod.yml").read_text()
 
 
