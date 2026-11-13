@@ -58,6 +58,11 @@ export const PENDING = "That's taking longer; the answer will be in the conversa
 // the turn is already being handled, never promised an answer of its own; the first call's outcome is said once. The
 // server's words when it gives them (core direct_host.HANDLING), else these.
 export const HANDLING = 'That turn is already being handled; its answer will be said once it is back. Ask anything else in it on its own.';
+// #566 fault 1 (Robert, 13 Nov 2026): what he says while the person is still answering waits in line and is sent after it
+// (core direct_host.QUEUED): never "did not go through". Only when the line itself gives up (the person still on one turn
+// long after) is it not sent, and that is said plainly (the host's STILL_BUSY), never as a failure.
+export const QUEUED = "I'll take that next.";
+export const STILL_BUSY = "I'm still on the earlier question, so I didn't take that one. Say it again in a moment.";
 // The summary's words, each true for what the server is doing (review R1 P3-7). The server's own call is bounded under 45 s
 // (core/realtime_voice/summary_gateway.py), so after the page's bound nothing is still being written: unavailable. An answer
 // lost on the way back (no answer, or a proxy's 502/504) may still have kept a proposal: it may still appear.
@@ -626,10 +631,10 @@ export function directVoice(d) {
     for (const done of Array.isArray(completed) ? completed : []) {
       const key = done && typeof done.owner_item_id === 'string' ? done.owner_item_id : null;
       if (!key || told.has(key)) continue;
-      told.add(key);
       // v3: the outcome, or the consult's own answer, never his words (a note's late result is "Saved.", not its text).
       const kind = kinds.get(key) || (done.tool === 'save_note' ? 'note' : 'consult');
-      sayAtPause(outcomeSay(kind, done, 'About what you asked earlier: '));
+      sayResult(key, kind, done, 'About what you asked earlier: ');
+      told.add(key);                                                   // acknowledged whatever its outcome (FR N7)
     }
   }
   // A promise, or its fallback after `ms` (fake timers in the tests): what a bounded wait resolves to.
@@ -733,9 +738,10 @@ export function directVoice(d) {
     if (outcome === 'done' && note && body.saved === true) return kind === 'postit' ? POSTED : SAVED;
     if (outcome === 'done' && note && body.saved === false) return NOT_SAVED;
     if (outcome === 'done') return own || 'It is done.';
-    if (outcome === 'pending') return body.same_turn ? HANDLING : PENDING;
+    if (outcome === 'pending') return body.same_turn ? HANDLING : body.queued ? QUEUED : PENDING;
     if (outcome === 'unknown') return UNKNOWN;
     if (body && body.error === 'end_waiting') return END_ON_SCREEN;
+    if (body && body.error === 'busy') return STILL_BUSY;
     return body && body.error === 'confirmation' ? NOTHING_WAITING : NOT_DONE;
   }
 
@@ -1081,13 +1087,21 @@ export function directVoice(d) {
       confirm_item_id: x.confirm_item_id, owner_item_id: x.owner_item_id, text_sha256: x.text_sha256 }, x.owner_item_id,
       x.lookup ? holding(LOOKUP_HOLDING) : null, x.lookup ? LOOKUP_POST_MS : CONSULT_POST_MS);
     if (finalized) return;
-    answered(x.owner_item_id, body);
-    sayAtPause(outcomeSay(kind, body));
+    sayResult(x.owner_item_id, kind, body);
   }
-  // An answer said here is its one answer (#561): the same result reported later as finished is acknowledged, never said
-  // again. Pending and unknown are not answers, so a later finished result is still said once.
-  function answered(item, body) {
-    if (typeof item === 'string' && body && (body.outcome === 'done' || body.outcome === 'not_done')) told.add(item);
+  // An owner turn's answer is said once (#561; #566 fault 3, 13 Nov 2026: MC's first answer was said, then said again when
+  // Robert's next question came in). Every path that says a result (a confirmed action, Check, a finished result the server
+  // reports) goes through here, keyed by the owner turn: once its done or not-done answer has been said, the same turn's
+  // result arriving again by another path (a retried post's replay, the heartbeat's finished list, a second call on the
+  // turn) is acknowledged and never said again. Pending and unknown are not answers, so a later finished result is said
+  // once. Returns the line, or null when that turn's answer was already said.
+  function sayResult(item, kind, body, lead = '') {
+    const final = Boolean(body) && (body.outcome === 'done' || body.outcome === 'not_done');
+    if (typeof item === 'string' && final) {
+      if (told.has(item)) return null;
+      told.add(item);
+    }
+    return sayAtPause(outcomeSay(kind, body, lead));
   }
 
   // Check with <person>: a tap. With an action waiting it confirms that action, through the server's same consumption (the
@@ -1117,8 +1131,9 @@ export function directVoice(d) {
           owner_item_id: owner.item, arguments: {} }, owner.item);
       }
       if (finalized) return;
-      answered(action ? action.item : owner.item, body);
-      sayAtPause(outcomeSay(action ? action.kind : (body && body.kind) || 'consult', body));
+      if (!sayResult(action ? action.item : owner.item, action ? action.kind : (body && body.kind) || 'consult', body)) {
+        ui.say(ALREADY_CHECKED, { transient: true });                  // its answer was already said: once is enough
+      }
       ui.phase('listening');
     } finally { checking = false; ui.checking?.(false, owner.text); }
   }

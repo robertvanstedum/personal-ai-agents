@@ -49,6 +49,9 @@ PENDING = "That's taking longer; the answer will be in the conversation."       
 # call's outcome is the one said, once.
 HANDLING = "That turn is already being handled; its answer will be said once it is back. Ask anything else in it on its own."
 UNKNOWN = "I didn't get the result back. Check it in writing before asking again."  # unknown
+# #566 fault 1: an owner turn said while the person was answering another waits in line and is sent after it; its pending
+# answer says so, and its result is said once when it lands (the pending path).
+QUEUED = "I'll take that next."
 HEARTBEAT_SECONDS = 20
 # The page's transcript posts (§6): bounded per request and per session. Nothing is kept from a refused post.
 POST_MAX_BYTES = 64 * 1024
@@ -1032,6 +1035,11 @@ class DirectVoiceAdapter:
         the owner turn's capture id; with the session it is the consult's key, from which the backend's operation id
         derives (operation_id, or the host's own form), so the backend's dedup holds too."""
         raise NotImplementedError
+
+    def in_line(self, sid, item):
+        """Whether this owner turn is waiting for the person to finish another one (#566 fault 1: MC answers one note at
+        a time, and what he says meanwhile waits in line). Its pending answer then says it is next, not "taking longer"."""
+        return False
 
     def card(self):
         """The person's pinned card (voice_card.load_pinned); OSError or ValueError when unavailable."""
@@ -2030,6 +2038,12 @@ def run(adapter, sessions, principal, handle, sid, call_id, name, text, item, n,
         if state["result"] is not None:
             return state["result"]
         state["told_pending"] = True
+    try:
+        queued = bool(adapter.in_line(sid, item))
+    except Exception:                                    # a hook that fails says the usual pending words
+        queued = False
+    if queued:
+        return {"ok": False, "call_id": call_id, "outcome": "pending", "queued": True, "spoken": QUEUED}
     return {"ok": False, "call_id": call_id, "outcome": "pending", "spoken": PENDING}
 
 
