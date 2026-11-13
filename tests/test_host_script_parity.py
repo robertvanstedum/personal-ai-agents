@@ -35,6 +35,13 @@ def test_the_backup_scripts_are_shipped_by_the_deploy():
     assert "host_script_parity.py check --notify || echo parity: drift reported" in DEPLOY   # never fatal
 
 
+def test_the_hand_installed_copies_the_first_watchdog_run_found_now_ship():
+    """#537 first run: parity failed on two hand-installed copies (Guildhall's kit, a July backup-cron installer)."""
+    by_host = {e["host"]: e for e in hsp.load_config(CONFIG)}
+    for host in ("/opt/minimoi/scripts/guildhall_prod.sh", "/opt/minimoi/scripts/setup_backup_cron.sh"):
+        assert by_host[host]["ship"] is True and by_host[host]["mode"] == "0755"
+
+
 def test_every_script_the_backup_cron_runs_is_listed():
     listed = {e["host"] for e in hsp.load_config(CONFIG)}
     cron = (ROOT / "scripts" / "setup_backup_cron.sh").read_text()

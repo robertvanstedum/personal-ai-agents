@@ -366,7 +366,7 @@
       "name": "Vault production refresh (EC2)",
       "host": "ec2",
       "schedule": {
-        "text": "daily 06:15 Chicago",
+        "text": "by hand only (disaster-recovery reseed); never scheduled",
         "kind": "daily",
         "at": "06:15",
         "tz": "America/Chicago"
@@ -375,7 +375,10 @@
       "missed_after_s": 180000,
       "stuck_after_s": 7200,
       "status_file": "vault-production-refresh.json",
-      "healthy": "the production Vault copy refreshed today",
+      "retired": true,
+      "retired_on": "2026-11-13",
+      "retired_why": "the one-time seed of the production Vault (run by hand 19 Oct); vault-sync (Mac) and vault-apply (EC2) carry the records since, and refresh refuses once vault-apply serves (incremental_active); kept for a deliberate --reseed",
+      "healthy": "not judged: a by-hand reseed, not a scheduled job",
       "owner": "robert",
       "runbook": "core/memory_backup/production.py",
       "defined_in": [
