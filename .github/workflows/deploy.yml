@@ -270,7 +270,7 @@ jobs:
     needs: [classify, test, build-push, build-worker]
     # build-worker is skipped on most releases; a skipped need would otherwise skip this job, so each result is named.
     if: >-
-      always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+      !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
       && needs.classify.result == 'success' && needs.test.result == 'success' && needs.build-push.result == 'success'
       && (needs.build-worker.result == 'success' || needs.build-worker.result == 'skipped')
     runs-on: ubuntu-latest

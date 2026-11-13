@@ -132,3 +132,14 @@ def test_check_cli_exits_one_on_drift(repo, tmp_path):
 def test_the_real_config_bundles(tmp_path):
     m = hsp.bundle(ROOT, CONFIG, "test", tmp_path / "real.tgz")
     assert len(m["files"]) == len(hsp.load_config(CONFIG))
+
+
+def test_the_host_scripts_ssm_command_stays_under_the_limit(tmp_path):
+    """The deploy ships the bundle base64 inside one SSM command; AWS refuses commands over ~97 KB (release review, 13 Nov)."""
+    import base64, subprocess
+    from pathlib import Path as _P
+    repo = _P(__file__).resolve().parents[1]
+    out = tmp_path / "host-scripts.tgz"
+    subprocess.run([sys.executable, str(repo / "scripts/operations/host_script_parity.py"), "bundle", "--commit", "0" * 40,
+                    "--out", str(out)], cwd=repo, check=True, capture_output=True)
+    assert len(base64.b64encode(out.read_bytes())) < 95_000, "host-scripts bundle near AWS's 97 KB SSM limit: trim or split it"

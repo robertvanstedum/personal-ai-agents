@@ -839,7 +839,8 @@ refresh_records() {   # TARGET portal digest
     say "passed: Records preflight on the release's portal image"
     R_RECORDS_MOVED=1; R_RECORDS="$target"; R_CHANGED="records"
     backend_plan start | H run_plan start || refresh_failed "Records did not start on the release's portal image"
-  elif [[ "$(records_health)" != healthy ]]; then
+  else
+    # Same image: still apply the plan, so a change to Records' compose files alone takes effect (an idempotent up -d).
     backend_plan start | H run_plan start || refresh_failed "Records did not start"
   fi
   wait_records_healthy || refresh_failed "Records did not become healthy"
