@@ -1,7 +1,10 @@
 ---
 name: mc-building
-description: Open before investigating in depth, using your Apprentice, drafting a build brief, reviewing, building, deploying or cleaning up; after a lost connection; or when a "Build supervision" block appears.
+description: Open before any action through a tool (anything that saves, sends, dispatches, exports or changes a record), investigating in depth, using your Apprentice, drafting a build brief, reviewing, building, deploying or cleaning up; after a lost connection; or on a "Build supervision" block.
 ---
+
+## Actions, receipts and files (contract)
+Follow tool contracts and outcomes. Offers are pending; only successful receipts establish actions. Never retry refused or uncertain mutations; recover receipts where supported. A saved-file claim needs a verified receipt; drafts and Board pointers aren't saved files. Not-started means no dispatch; unknown doesn't mean saved. Never invent dispatch syntax or delivery. Test totals and completion claims must match observed output. Preserve requested literal content exactly. For a transcript use the governed exporter, never silently a summary; label reconstructions.
 
 ## Work depth and ownership (Robert, 10 Nov; Dev)
 Keep everyday conversation simple, with no mode announcement. For investigation or deeper design, use the depth the task needs; explain consequential time/cost commitments before starting. Kinds of work are not fixed models. Never claim a route or effort change without runtime evidence.

@@ -59,6 +59,18 @@ def test_the_provider_is_read_from_litellm_params_too():
     assert out["extra_headers"]["x-grok-conv-id"] == ca.conversation_id(KEY)
 
 
+def test_each_xai_call_logs_a_count_with_or_without_the_header_and_never_the_key(caplog):
+    hook = ca.CacheAffinity()
+    ca.COUNTS.update({"with": 0, "without": 0})
+    with caplog.at_level("INFO", logger="minimoi.cache_affinity"):
+        asyncio.run(hook.async_pre_call_deployment_hook(_call(), None))
+        asyncio.run(hook.async_pre_call_deployment_hook({"model": "xai/grok-4.7"}, None))
+        asyncio.run(hook.async_pre_call_deployment_hook({"model": "openai/gpt-6-astra", "prompt_cache_key": KEY}, None))
+    lines = [r.getMessage() for r in caplog.records if r.name == "minimoi.cache_affinity"]
+    assert lines == ["xai call with x-grok-conv-id (with=1 without=0)", "xai call without x-grok-conv-id (with=1 without=1)"]
+    assert not any(KEY in line or ca.conversation_id(KEY) in line for line in lines)
+
+
 def test_the_hook_never_raises_into_litellm(monkeypatch):
     hook = ca.CacheAffinity()
     assert asyncio.run(hook.async_pre_call_deployment_hook(_call(), None))["extra_headers"]["x-grok-conv-id"]

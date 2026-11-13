@@ -36,9 +36,10 @@ function failoverRoutes(env) {
 // - compat.supportsPromptCacheKey: OpenClaw sends its stable per-session prompt_cache_key, which an OpenAI-compatible proxy
 //   must opt in to (OpenClaw docs, reference/prompt-caching); the gateway turns it into xAI's x-grok-conv-id
 //   (services/model_gateway/cache_affinity.py), so a conversation's turns stay on a warm cache.
-// - contextTokens: the active-input budget OpenClaw derives compaction from (the provider's 131k window stays declared).
-//   80k with OpenClaw's 20k reserve compacts a conversation near 60k instead of letting it run to the window.
-const GATEWAY_MODEL = {input: ['text','image'], contextWindow: 131072, contextTokens: 80000, maxTokens: 8192, compat: {supportsPromptCacheKey: true}};
+// No contextTokens cap for now: OpenClaw derives preflight compaction from it, and until MiniMoi can capture and recall
+// (#553 step 2) a compaction would make a long chat forget silently. Compaction is off (openclaw.json); overflow recovery
+// at the declared 131k window still works.
+const GATEWAY_MODEL = {input: ['text','image'], contextWindow: 131072, maxTokens: 8192, compat: {supportsPromptCacheKey: true}};
 function meteredProvider(refs) {
   return {baseUrl: 'http://127.0.0.1:4000/v1', apiKey: '${MC_MODEL_GATEWAY_KEY}', api: 'openai-completions',
     models: refs.map(r => r.split('/')[1]).map(id => ({id, name: id, ...GATEWAY_MODEL}))};

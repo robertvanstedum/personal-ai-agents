@@ -318,7 +318,7 @@ console.log(h.version+" "+h.manifest_sha256);
 block=$(node "$D/handbook.mjs" "$D/handbook" "$S/ws" $hb "$D/persona")
 { cat "$D/persona/AGENTS.md"; printf '\n'; cat "$D/persona/RUNTIME.openclaw.md"; printf '\n%s\n' "$block"; } > "$S/AGENTS.md"
 chars=$(node -e 'console.log([...require("fs").readFileSync(process.argv[1],"utf8")].length)' "$S/AGENTS.md")
-[ "$chars" -le 16000 ] || { echo "projected AGENTS.md is $chars characters (budget 16000)" >&2; exit 1; }
+[ "$chars" -le 8000 ] || { echo "projected AGENTS.md is $chars characters (budget 8000)" >&2; exit 1; }
 cp "$D/handbook/manifest.json" "$S/manifest.good"
 printf '{"format": "minimoi-mc-handbook/1", "files": {}}\n' > "$D/handbook/manifest.json"
 limit=""; command -v timeout >/dev/null 2>&1 && limit="timeout 60"

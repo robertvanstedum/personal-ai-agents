@@ -94,8 +94,21 @@ def run_steps(tmp_path: Path, image: Path, start: Path = START):
     return r, state / "workspace-mc"
 
 
+CAP = '[ "$chars" -le 8000 ] || die "projected AGENTS.md is $chars characters (budget 8000)"'
+
+
 def lay_out(tmp_path: Path, release: str | None = None):
     return run_steps(tmp_path, image_copy(tmp_path, release))
+
+
+def lay_out_legacy(tmp_path: Path, release: str):
+    """A release from before 0.1.34 under the start script's earlier 16,000-character cap: its projection mechanism is
+    unchanged, but today's start (8,000, #553) refuses it on size, which test_persona_0134 checks."""
+    sh = START.read_text()
+    assert sh.count(CAP) == 1
+    start = tmp_path / "start-16k.sh"
+    start.write_text(sh.replace(CAP, CAP.replace("8000", "16000")))
+    return run_steps(tmp_path, image_copy(tmp_path, release), start)
 
 
 def pinned_text(release: str) -> str:
@@ -119,7 +132,7 @@ def test_a_release_without_skill_load_still_gets_the_handbook_pasted_in(tmp_path
     persona = RELEASES / release
     manifest = json.loads((persona / "manifest.json").read_text())
     assert "load" not in manifest["handbook"]
-    r, ws = lay_out(tmp_path, release)
+    r, ws = lay_out_legacy(tmp_path, release)
     assert r.returncode == 0, r.stderr
     loaded = (ws / "AGENTS.md").read_text()
     assert (ws / "SOUL.md").read_bytes() == (persona / "SOUL.md").read_bytes()
@@ -395,7 +408,7 @@ def test_persona_0131_offers_an_agent_for_mac_checks():
 def test_persona_0132_says_how_guildhall_works_and_what_a_harness_defect_is(tmp_path):
     """0.1.32 is 0.1.31 plus a Guildhall section and a definition of the harness (FF-10, FF-08); it pins handbook 0.1.3."""
     assert pinned_handbook() == "0.1.3"                       # 0.1.33 is pinned now (below); 0.1.32 still lays out
-    r, ws = lay_out(tmp_path, "0.1.32")
+    r, ws = lay_out_legacy(tmp_path, "0.1.32")
     assert r.returncode == 0, r.stderr
     loaded = (ws / "AGENTS.md").read_text()
     assert "persona 0.1.32 laid out" in r.stderr and "handbook 0.1.3 loaded" in r.stderr
@@ -441,7 +454,7 @@ def test_persona_0133_changes_only_the_voice_card_status_line(tmp_path):
     """0.1.33 (#542) is 0.1.32 with one voice card line (answer status questions from the platform status digest, say
     plainly when it is missing) and the AGENTS header version; it is pinned and lays out within budget."""
     assert pinned_handbook() == "0.1.3"                       # 0.1.34 is pinned now (test_persona_0134.py)
-    r, ws = lay_out(tmp_path, "0.1.33")
+    r, ws = lay_out_legacy(tmp_path, "0.1.33")
     assert r.returncode == 0, r.stderr
     assert "persona 0.1.33 laid out" in r.stderr and "handbook 0.1.3 loaded" in r.stderr
     assert container_chars((ws / "AGENTS.md").read_text(), ws) <= 16000

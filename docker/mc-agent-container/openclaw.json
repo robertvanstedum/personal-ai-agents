@@ -195,6 +195,7 @@
       },
       "skipBootstrap": true,
       "compaction": {
+        "enabled": false,
         "mode": "safeguard",
         "keepRecentTokens": 20000,
         "memoryFlush": {
@@ -203,7 +204,10 @@
       },
       "contextPruning": {
         "mode": "cache-ttl",
-        "ttl": "30m"
+        "ttl": "30m",
+        "hardClear": {
+          "enabled": false
+        }
       }
     },
     "entries": {

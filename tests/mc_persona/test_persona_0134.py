@@ -7,8 +7,8 @@ import os
 import re
 import shutil
 
-from tests.mc_persona.test_container_persona import (CONTAINER_WORKSPACE, HANDBOOK, RELEASES, REPO, image_copy, lay_out,
-                                                     pinned_handbook, pinned_release, run_steps, sha)
+from tests.mc_persona.test_container_persona import (CONTAINER_WORKSPACE, HANDBOOK, RELEASES, REPO, START, image_copy,
+                                                     lay_out, pinned_handbook, pinned_release, run_steps, sha)
 
 NEW, OLD = RELEASES / "0.1.34", RELEASES / "0.1.33"
 OWN_SKILLS = ["mc-building", "mc-corrections", "mc-delivery", "mc-front-door", "mc-guildhall"]
@@ -85,12 +85,12 @@ def test_0_1_34_is_the_pinned_release_and_loads_the_handbook_as_a_skill():
 def test_the_base_is_small_and_the_projection_far_under_the_16k_check(tmp_path):
     base = len((NEW / "AGENTS.md").read_text()) + len((NEW / "SOUL.md").read_text())
     was = len((OLD / "AGENTS.md").read_text()) + len((OLD / "SOUL.md").read_text())
-    assert base <= 6800 and was > 2 * base                          # 13.8k -> 6.7k
+    assert base <= 6300 and was > 2 * base                          # 13.8k -> 6.1k
     r, ws = lay_out(tmp_path)
     assert r.returncode == 0, r.stderr
     loaded = (ws / "AGENTS.md").read_text()
     chars = len(loaded.replace(str(ws), CONTAINER_WORKSPACE))
-    assert chars <= 6000                                             # 0.1.33: 15,942 of the 16,000 budget
+    assert chars <= 6000                                             # 0.1.33: 15,942 of the old 16,000 budget
     injected = chars + len((ws / "SOUL.md").read_text())
     assert injected <= 8600                                          # 0.1.33 in production: 21,449 with the templates
     assert "workspace files injected each turn:" in r.stderr and "skills: " in r.stderr
@@ -175,9 +175,13 @@ def test_each_dated_section_moved_verbatim_into_its_skill():
     base = (NEW / "AGENTS.md").read_text()
     assert "sense of humor" in (NEW / "SOUL.md").read_text()          # Robert's review, 12 Nov
     for rule in ("Every owner correction is a capture event", "You never read or write the private judgment store",
-                 '"Cards loaded: <name>@<hash>"', 'answer from the "MiniMoi job health" block',
-                 "Lead with the answer in two or three lines", "only successful receipts establish actions"):
+                 'answer from the "MiniMoi job health" block', "Lead with the answer in two or three lines",
+                 "say briefly what you can't retrieve"):
         assert rule in base, rule
+    # #553 review: receipt, Board and dispatch rules and the "Cards loaded" opener are out of the base, kept in cards.
+    for moved, card in (("only successful receipts establish actions", "mc-building"), ("Board pointers", "mc-building"),
+                        ("Never invent dispatch syntax or delivery", "mc-building"), ("Cards loaded: <name>@<hash>", "mc-corrections")):
+        assert moved not in base and moved in _skill(card), moved
 
 
 def test_start_refuses_a_tampered_skill_and_replaces_the_skills_folder_each_start(tmp_path):
@@ -215,3 +219,28 @@ def test_start_removes_openclaws_empty_starter_templates(tmp_path):
     assert (ws / "MEMORY.md").read_text() == "kept\n"
     cfg = json.loads(CONFIG.read_text())
     assert cfg["agents"]["defaults"]["skipBootstrap"] is True        # and OpenClaw does not make them again
+
+
+def test_the_agents_cap_is_8k_so_dated_sections_cant_grow_back(tmp_path):
+    """#553 review: start.sh and the beta overlay's check 6c refuse a projection over 8,000 characters (it was 16,000);
+    0.1.33's projection, dated sections and pasted handbook included, is refused."""
+    assert '[ "$chars" -le 8000 ] || die "projected AGENTS.md is $chars characters (budget 8000)"' in START.read_text()
+    assert "16000" not in START.read_text()
+    beta = (REPO / "scripts/staging/beta_dev_deploy.py").read_text()
+    assert '[ "$chars" -le 8000 ]' in beta and "-le 16000" not in beta
+    assert json.loads((NEW / "manifest.json").read_text())["projection_budget_chars"] == 8000
+    r, ws = lay_out(tmp_path, "0.1.33")
+    assert r.returncode == 78 and "(budget 8000)" in r.stderr
+
+
+def test_every_card_shipped_is_allowed_and_every_allowed_card_ships(tmp_path):
+    """An explicit skills list replaces OpenClaw's defaults: a card laid out but missing from it would never load, and a
+    name on it with no card is dead. The handbook's SKILL.md mentions a minimoi-operations skill as not included in this
+    artifact; it is not shipped, so it is not allowed."""
+    r, ws = lay_out(tmp_path)
+    assert r.returncode == 0, r.stderr
+    shipped = sorted(p.parent.name for p in (ws / "skills").rglob("SKILL.md"))
+    cfg = json.loads(CONFIG.read_text())
+    for agent in ("mc-agent", "mc-chat"):
+        assert sorted(cfg["agents"]["entries"][agent]["skills"]) == shipped == ALL_SKILLS
+    assert "minimoi-operations" not in shipped

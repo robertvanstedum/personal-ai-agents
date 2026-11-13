@@ -53,7 +53,8 @@ cp "$PERSONA/SOUL.md" "$WORKSPACE/SOUL.md"
 rm -f "$WORKSPACE/IDENTITY.md" "$WORKSPACE/USER.md" "$WORKSPACE/BOOTSTRAP.md"
 { cat "$PERSONA/AGENTS.md"; printf '\n'; cat "$PERSONA/RUNTIME.openclaw.md"; printf '\n%s\n' "$block"; } > "$WORKSPACE/AGENTS.md"
 chars=$(node -e 'console.log([...require("fs").readFileSync(process.argv[1],"utf8")].length)' "$WORKSPACE/AGENTS.md")
-[ "$chars" -le 16000 ] || die "projected AGENTS.md is $chars characters (budget 16000)"
+# 8,000 since persona 0.1.34 (#553): the base is ~5.5k here, so dated procedures can't grow back in; they belong in skills.
+[ "$chars" -le 8000 ] || die "projected AGENTS.md is $chars characters (budget 8000)"
 log "handbook ${hb%% *} loaded (manifest ${hb#* }) into $WORKSPACE/handbook"
 log "persona $(node -e 'console.log(require(process.argv[1]).version)' "$PERSONA/manifest.json") laid out ($chars chars)"
 injected=$(node -e 'const fs=require("fs");console.log(process.argv.slice(1).reduce((n,f)=>n+(fs.existsSync(f)?[...fs.readFileSync(f,"utf8")].length:0),0))' \

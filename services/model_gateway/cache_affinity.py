@@ -30,7 +30,16 @@ except ImportError:                              # tests without LiteLLM install
         pass
 
 _log = logging.getLogger("minimoi.cache_affinity")
+if not _log.handlers:                            # LiteLLM leaves the root logger at WARNING; these lines are INFO
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
+    _log.addHandler(_handler)
+    _log.setLevel(logging.INFO)
+    _log.propagate = False
 HEADER = "x-grok-conv-id"
+# xAI calls seen by this gateway process, with and without a conversation id (counts only: never a key or an id). The
+# log line per xAI call lets Dev count cold starts per conversation before and after (#553 measurement plan).
+COUNTS = {"with": 0, "without": 0}
 PREFIX = "minimoi-"
 MAX_KEY = 1024
 
@@ -68,10 +77,21 @@ def with_conversation_id(kwargs: dict) -> dict | None:
     return out
 
 
+def _count(kwargs, out) -> None:
+    if not isinstance(kwargs, dict) or not _is_xai(kwargs):
+        return
+    sent = out is not None or any(isinstance(h, dict) and any(isinstance(k, str) and k.lower() == HEADER for k in h)
+                                  for h in (kwargs.get("extra_headers"), kwargs.get("headers")))
+    COUNTS["with" if sent else "without"] += 1
+    _log.info("xai call %s x-grok-conv-id (with=%d without=%d)", "with" if sent else "without", COUNTS["with"], COUNTS["without"])
+
+
 class CacheAffinity(CustomLogger):
     async def async_pre_call_deployment_hook(self, kwargs, call_type):
         try:
-            return with_conversation_id(kwargs)
+            out = with_conversation_id(kwargs)
+            _count(kwargs, out)
+            return out
         except Exception:                        # never fail a call over a cache hint
             _log.debug("cache affinity skipped", exc_info=True)
             return None
