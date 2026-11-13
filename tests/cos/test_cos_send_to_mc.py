@@ -528,12 +528,15 @@ def test_cos_words_say_what_it_can_do_and_drop_the_stale_path():
     assert "check the file exists" in words
 
 
-def test_cos_reads_the_delivery_record_of_the_host_it_is_on():
-    """FF-18 (#536): production writes PRODUCTION.md on each deploy; DEV.md exists only on Dev."""
+def test_cos_hands_what_was_delivered_to_mc():
+    """Robert, 12 Nov: deployment status is not CoS's job to know. The 7 Nov delivery-record reading (FF-18, #536) is
+    gone from CoS; what was delivered goes to MC, through cos_send_to_mc only when he tells her to ask."""
     words = (ROOT / "docker/cos-agent-a/COS_AGENTS.md").read_text()
+    assert words.count("## What was delivered") == 1 and "## What was delivered (Robert, 7 November 2026)" not in words
     section = words[words.index("## What was delivered"):words.index("\n## ", words.index("## What was delivered") + 3)]
-    assert "`/minimoi/docs/delivery/PRODUCTION.md`" in section and "`/minimoi/docs/delivery/DEV.md`" in section
-    assert "`DEV.md` exists only on\nDev" in section and "If the file is missing, say so plainly" in section
+    assert "/minimoi/docs/delivery/" not in words and "PRODUCTION.md" not in words and "DEV.md" not in words
+    assert "not yours to know" in section and 'Say "Let me check\nwith Master Craftsman"' in section
+    assert "when Robert tells you to ask" in section and "`cos_send_to_mc`" in section
 
 
 def test_the_switch_is_off_by_default_in_production_and_every_new_file_reaches_its_image():
