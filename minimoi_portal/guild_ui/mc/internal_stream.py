@@ -5,7 +5,8 @@ The tool path binds calls to the exact runtime run, which the portal learns only
 A buffered frontend (the non-streaming /mc/turns route) therefore reads the backend's own stream to the end here,
 attaches the run as soon as it appears, and returns the same TurnResult the buffered route already handles: nothing
 is shown before the turn is complete. The answer rules are the streaming path's (a cut or empty reply is not an
-answer), and the runtime-stream usage record is written exactly as for a streamed turn, so cost stays attributed.
+answer; a tool-using run keeps only its final step, never the working notes between tool calls, issue #566), and
+the runtime-stream usage record is written exactly as for a streamed turn, so cost stays attributed.
 If the backend refuses to stream before dispatch, the turn goes the ordinary buffered way and its tools stay refused.
 """
 from __future__ import annotations
@@ -15,7 +16,8 @@ import time
 
 from .backend import TurnResult
 from .openclaw import OPENCLAW_NO_RESPONSE
-from .stream import STREAM_ANSWER_FINISH_REASONS, Delta, Failure, Finish, RunStarted, StreamRefused, Served, Switched, Usage
+from .stream import STREAM_ANSWER_FINISH_REASONS, Answer, Delta, Failure, Finish, RunStarted, StreamRefused, Served, Switched, Usage
+from .streaming import answer_text
 
 _log = logging.getLogger("guild_ui.mc")
 
@@ -28,6 +30,7 @@ def collect(backend, req, *, on_run, record_usage=None, clock=time.monotonic) ->
     if record_usage is None:
         from .stream_usage import record_run as record_usage
     started, parts, finish, usage, failure, run_seen, served, switched = clock(), [], None, None, None, False, None, None
+    answer_only = None
     try:
         for event in events:
             if isinstance(event, RunStarted):
@@ -47,6 +50,8 @@ def collect(backend, req, *, on_run, record_usage=None, clock=time.monotonic) ->
                                      req.correlation_id)
             elif isinstance(event, Delta):
                 parts.append(event.text)
+            elif isinstance(event, Answer):
+                answer_only = event.text
             elif isinstance(event, Finish):
                 finish = finish or event.reason
             elif isinstance(event, Usage):
@@ -62,7 +67,7 @@ def collect(backend, req, *, on_run, record_usage=None, clock=time.monotonic) ->
         _log.exception("mc turn %s: the internal stream failed", req.correlation_id)
         failure = failure or Failure("upstream")
     duration_ms = int((clock() - started) * 1000)
-    text = "".join(parts)
+    text = answer_text("".join(parts), answer_only)
     trace = {"finish_reason": finish or "none", "internal_stream": True, **({"served": served} if served else {}),
              **({"route": switched} if switched else {})}
     if failure is None and not (finish in STREAM_ANSWER_FINISH_REASONS and text.strip()
