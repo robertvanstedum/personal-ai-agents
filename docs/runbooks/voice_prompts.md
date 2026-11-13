@@ -2,10 +2,14 @@
 
 Robert's MC and CoS voices read rules plus a versioned card. Change them here, not in a summary somewhere else.
 
-**Current.** MC 0.1.25, CoS 0.1.5: each voice is Robert's longtime partner, not a task taker. This persona is the card's
-job. Opinion and pushback are speech only, with no added authority: the rules still decide what acts, and when.
+**Current.** MC 0.1.33, CoS 0.1.6: each voice is Robert's longtime partner, not a task taker. This persona is the card's
+job. Opinion and pushback are speech only, with no added authority: the rules still decide what acts, and when. Since
+#542 each card also says to answer status questions from the platform status, and to say plainly when it is missing.
 
-**The direct path (Dev and production).** `direct_host.compose_instructions`: rules, then card, then data.
+**The direct path (Dev and production).** `direct_host.compose_instructions`: rules, then card, then data, then the
+platform status digest (#542, `core/realtime_voice/status_digest.py`; at most 800 characters, never on a Private
+conversation, left out when it cannot be built). Status questions ("how are things", "what's deployed", "is X done") are
+lookups by the closed grammar (`direct_host.status_question`): read-only, through the person's work runtime.
 
 - Cards: MC `services/mc_operations/personas/mc-chat/releases/<v>/voice.json`, CoS `domains/cos/voice/releases/<v>/voice.json`.
   Each folder's `pin.json` names the release in use. Manner, language and pronunciation belong on the card.

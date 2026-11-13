@@ -228,6 +228,16 @@ def words(items: list[dict], *, hosts=(), not_tracked: int = 0, limit: int = 12)
     return text
 
 
+def overview(folder, hosts, now: datetime) -> dict:
+    """Every host's report in ``folder`` read and judged once, for MC's typed block and the voices' status digest (#542):
+    {items (daily_items over the hosts reporting), reporting {host: report}, missing [hosts with no report here],
+    not_tracked (count)}. Reads files only; raises nothing a missing or unreadable report causes."""
+    reports = {h: read_report(folder, h) for h in hosts}
+    reporting = {h: r for h, r in reports.items() if r is not None}
+    return {"items": daily_items(reporting, now), "reporting": reporting,
+            "missing": sorted(set(hosts) - set(reporting)), "not_tracked": len(untracked(reporting))}
+
+
 def remote_key(host: str) -> str:
     return f"health/{host}/{report_name(host)}"
 

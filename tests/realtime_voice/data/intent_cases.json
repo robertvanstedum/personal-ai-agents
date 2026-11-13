@@ -30,8 +30,8 @@
       "lang": "en",
       "waiting": null,
       "text": "What's the status of item twelve?",
-      "label": "consult",
-      "path": "model"
+      "label": "lookup",
+      "path": "grammar"
     },
     {
       "lang": "en",

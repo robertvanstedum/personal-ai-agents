@@ -242,7 +242,7 @@ def test_the_session_text_is_composed_here_rules_then_card_then_this_conversatio
     start(r)
     first, second = r.mints[0]["instructions"], r.mints[1]["instructions"]
     pinned = load_pinned(direct.CARD_ROOT)                     # MC's card is pinned by data (Spec 165 §4.5)
-    assert pinned["release"] == "0.1.32" and r.config["mc_direct_voice"]["card_release"] == "0.1.32"
+    assert pinned["release"] == "0.1.33" and r.config["mc_direct_voice"]["card_release"] == "0.1.33"
     card = pinned["card"]
     rules, who, now = second.index(INSTRUCTIONS), second.index(card), second.index("THIS CONVERSATION SO FAR (DATA)")
     assert second.startswith("=== OPERATING RULES ===") and rules < who < now

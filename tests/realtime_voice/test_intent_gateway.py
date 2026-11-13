@@ -122,7 +122,8 @@ def wait_for(r, sid, kind):
 
 
 EXPECTED = {"note": "ask", "postit": "ask", "consult": "ask", "end": "ask", "yes": "confirm", "no": "dropped",
-            "read_back": "read_back", "chat": "chat"}
+            "read_back": "read_back", "chat": "chat",
+            "lookup": "confirm"}       # a status question (#542): the grammar's lookup, confirmed by its own words
 
 
 @pytest.mark.parametrize("case", TABLE["cases"], ids=lambda c: f"{c['lang']}:{c['waiting']}:{c['text'][:40]}")

@@ -125,3 +125,24 @@ def block(text,*,loader=None,now=None):
         if doc['status']!='selected_images_observed':lines.append('Deployment outcome is incomplete/failed; do not present the requested tag as the installed release.')
         return '\n'.join(lines)
     except Exception:return head+'\nRelease metadata unavailable or invalid; version, installed changes and deployment completion are unverified.'
+
+
+_STATE={'selected_images_observed':'finished, its images confirmed running','deployment_in_progress':'still in progress',
+        'selected_image_check_failed':'FAILED its image check, so do not call it installed'}
+
+
+def _ago(seconds):
+    return f"{seconds//86400} days ago" if seconds>=2*86400 else f"{seconds//3600} h ago" if seconds>=3600 else f"{max(1,seconds//60)} min ago"
+
+
+def summary(*,loader=None,now=None):
+    """One line for the voices' status digest (#542), from the same validated observation as ``block``: the last recorded
+    deployment's release, commit and outcome, and how long ago it was observed. Raises when the observation is missing or
+    invalid (the digest leaves the part out)."""
+    doc=(loader or read)();observed=validated(doc);now=now or datetime.now(timezone.utc)
+    age=(now-observed).total_seconds();need(age>=-60)
+    where='Production' if doc['environment']=='production' else 'Dev'
+    manifest=doc['manifest']
+    what=f"release {doc['requested_tag']}"+(f" (version {manifest['version']}, commit {manifest['source_commit'][:8]}: {manifest['subject']})" if manifest else '')
+    return (f"{where}'s last deployment, {what}, {_STATE[doc['status']]}; services {', '.join(doc['selected'])}; "
+            f"observed {_ago(max(0,int(age)))}.")

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "card": "chief-of-staff voice",
+  "version": "0.1.6",
+  "status": "candidate",
+  "spec": "0.1.5 plus one line (#542, Robert 12 Nov 2026): answer status questions from the platform status digest, and say plainly when it is missing. Voices, accents, language, transcription and the restated persona as 0.1.5",
+  "persona": {
+    "source": "MASTER_CRAFTSMAN_PERSONA.md",
+    "version": "1.1",
+    "sha256": "f07078f5c913323f1098381faf44d38f77223258e48498ddd0552f53042c4f1b"
+  },
+  "files": {
+    "voice.json": "28ef506712453d1555bd9d82538952880f269fe679267164bb4fe0444e0bc85f"
+  }
+}

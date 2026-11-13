@@ -368,6 +368,46 @@ def explicit_consult(grammar, text):
     return match is not None and re.search(r"\w", match["rest"]) is not None
 
 
+# Status questions (#542): Robert, 12 Nov 2026, by voice: "How are things?" got small talk and "the deployment went out"
+# got "I can't confirm that from here", because the understanding call heard both as chat and the voice answered alone.
+# These are lookups by the closed grammar, with no model call: the app asks the person's work runtime, read-only, as for
+# any lookup (typed MC adds job health and the release record to that turn). A short utterance only, matched whole after
+# a filler or polite word, so a sentence that merely contains "done" stays the understanding call's.
+_STATUS_LEAD = r"(?:(?:so|ok|okay|well|and|hey|hi|right|alright|all right|now|then|quick question|tell me)\s+)*"
+_SUBJECT = (r"(?:the\s+|our\s+|that\s+|this\s+|my\s+)?(?:deploy(?:ment)?s?|releases?|roll\s?outs?|jobs?|platform|minimoi|"
+            r"production|prod|portal|curator|site|services?|backups?|builds?|everything|things)")
+_STATUS = re.compile(
+    r"\A" + _STATUS_LEAD + r"(?:"
+    r"how(?:'s|\s+is|\s+are|\s+r)\s+(?:things|everything|it\s+going|it\s+looking|we\s+doing|we\s+looking|"
+    r"(?:the\s+)?(?:platform|minimoi|production|prod|jobs|job\s+health|deploy(?:ment)?|release|system))"
+    r"(?:\s+(?:going|looking|now|today|then|at\s+the\s+moment|on\s+the\s+platform|with\s+minimoi|in\s+production))*"
+    r"|how\s+are\s+we\s+(?:doing|looking)(?:\s+(?:now|today))?"
+    r"|(?:what(?:'s|\s+is)\s+the\s+|give\s+me\s+(?:a\s+|the\s+)?|any\s+)?status(?:\s+(?:update|report|check))?"
+    r"(?:\s+(?:of|on|for)\s+[\w\s-]{1,40})?"
+    r"|(?:any|are\s+there\s+any)\s+(?:problems|issues|failures|failing\s+jobs|alerts)(?:\s+[\w\s-]{1,40})?"
+    r"|what(?:'s|\s+is)\s+(?:deployed|running|live|in\s+production|in\s+prod|on\s+production|on\s+prod)"
+    r"(?:\s+(?:now|right\s+now|in\s+production|in\s+prod|on\s+production|on\s+prod|on\s+minimoi))?"
+    r"|(?:which|what)\s+(?:release|version|commit|build)\s+(?:is\s+|'s\s+)?(?:deployed|running|live|out|in\s+production|"
+    r"in\s+prod|on\s+production)(?:\s+(?:now|right\s+now|in\s+production|in\s+prod|on\s+production))?"
+    r"|(?:is|are|has|have|did)\s+" + _SUBJECT + r"(?:\s+[\w-]+){0,3}?\s+(?:done|finished|complete|completed|deployed|"
+    r"live|out|through|gone\s+out|go\s+out|go\s+through|succeed|succeeded|work|worked|ok|okay|fine|healthy|running|"
+    r"working|failing|failed|broken|green)"
+    r"|(?:is|are|has|have)\s+(?:the|our|that|this|my)\s+(?:[\w-]+\s+){0,4}?(?:been\s+)?(?:done|finished|complete|completed|"
+    r"deployed|live|merged|shipped|fixed)"
+    r"|(?:is|has|did)\s+it\s+(?:done|finished|deployed|live|out|through|gone\s+out|go\s+out|go\s+through|work|worked|"
+    r"succeed|succeeded)"
+    r"|" + _SUBJECT + r"(?:\s+[\w-]+){0,2}?\s+(?:went|has\s+gone|is|was|has\s+been)\s+(?:out|through|live|done|deployed|finished)"
+    r"|wie\s+(?:läuft's|läufts|läuft\s+es|steht's|stehts|steht\s+es|geht's\s+der\s+plattform)(?:\s+(?:gerade|heute|jetzt))?"
+    r")\Z", re.I)
+
+
+def status_question(text):
+    """Whether his words are only a question about how the platform is, what is deployed, or whether some work is done
+    (_STATUS, closed and anchored), politely or not: a lookup (#542)."""
+    said = _bare_request(text)
+    return bool(said) and len(said.split()) <= 14 and _STATUS.match(said) is not None
+
+
 def fast_label(adapter, grammar, text, waiting):
     """The grammar fast path (no model call): his words heard as a label, or None for the understanding call. With an
     action waiting, a bare yes or no and a read-back come first; "we're done" is the end (done_intent, as before); then
@@ -395,6 +435,8 @@ def fast_label(adapter, grammar, text, waiting):
         return kind
     if explicit_consult(grammar, text):
         return "consult"
+    if status_question(text):
+        return "lookup"                                 # #542: read-only, at once, through the person's work runtime
     if waiting is None and (bare_answer(text) == "yes" or read_back_request(text)):
         return "yes" if bare_answer(text) == "yes" else "read_back"
     return None
@@ -440,6 +482,11 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False):
               "it\", \"Will do\" or \"I'll do that\"; work he asks for waits for his confirmation. Never narrate the machinery: never say you are "
               "checking, waiting on a result, or that a result has not arrived. If an answer has not reached you by his "
               "next words, say plainly that you couldn't get it just now, and carry on with him. "
+              # #542: a status question is a lookup too; the session's status digest is what the voice itself knows.
+              f"How things are, what is deployed and whether work is done are lookups as well. Where {owner} talks "
+              "about them otherwise, or a lookup's answer did not reach you, use the platform status at the end of these "
+              "instructions (DATA from the start of this call); if there is none, say plainly that you can't see the "
+              "platform's status from here, never that all is well. "
               f"A written record of this call is kept: after the call {owner} can download its transcript from the chat. ")
     request = lookup + f"When {owner} asks for a note, a post-it, or work that changes something (making, changing, " \
               "closing or sending anything, files, jobs, any work), "
@@ -459,12 +506,17 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False):
             "session's kept record only when he asks.")
 
 
-def compose_instructions(operating_rules, card, data):
+def compose_instructions(operating_rules, card, data, status=""):
     """A session's text in Spec 164 §7's order: (1) the operating rules, (2) who the voice is (the card), (3) bounded
-    DATA from this conversation. Never the language-practice text German and Portuguese use."""
-    return "\n\n".join(("=== OPERATING RULES ===\n\n" + operating_rules,
-                        "=== WHO YOU ARE ===\n\n" + card,
-                        "=== THIS CONVERSATION SO FAR (DATA) ===\n\n" + data))
+    DATA from this conversation, then (4) the host's platform status digest when it has one (#542,
+    core.realtime_voice.status_digest: bounded DATA, never on a Private conversation). Never the language-practice text
+    German and Portuguese use."""
+    parts = ["=== OPERATING RULES ===\n\n" + operating_rules,
+             "=== WHO YOU ARE ===\n\n" + card,
+             "=== THIS CONVERSATION SO FAR (DATA) ===\n\n" + data]
+    if status:
+        parts.append("=== PLATFORM STATUS (DATA) ===\n\n" + status)
+    return "\n\n".join(parts)
 
 
 # ── receipts ──────────────────────────────────────────────────────────────────────────────────────────────────────

@@ -391,7 +391,7 @@ def test_persona_0131_offers_an_agent_for_mac_checks():
 
 def test_persona_0132_says_how_guildhall_works_and_what_a_harness_defect_is(tmp_path):
     """0.1.32 is 0.1.31 plus a Guildhall section and a definition of the harness (FF-10, FF-08); it pins handbook 0.1.3."""
-    assert pinned_release() == "0.1.32" and pinned_handbook() == "0.1.3"
+    assert pinned_handbook() == "0.1.3"                       # 0.1.33 is pinned now (below); 0.1.32 still lays out
     r, ws = lay_out(tmp_path, "0.1.32")
     assert r.returncode == 0, r.stderr
     loaded = (ws / "AGENTS.md").read_text()
@@ -430,6 +430,31 @@ def test_persona_0132_says_how_guildhall_works_and_what_a_harness_defect_is(tmp_
     assert 'write "+1 defect noted" instead.' in agents
     manifest = json.loads((new / "manifest.json").read_text())
     assert manifest["version"] == "0.1.32" and manifest["base"] == "0.1.31"
+    for f, want in manifest["files"].items():
+        assert sha((new / f).read_bytes()) == want, f
+
+
+def test_persona_0133_changes_only_the_voice_card_status_line(tmp_path):
+    """0.1.33 (#542) is 0.1.32 with one voice card line (answer status questions from the platform status digest, say
+    plainly when it is missing) and the AGENTS header version; it is pinned and lays out within budget."""
+    assert pinned_release() == "0.1.33" and pinned_handbook() == "0.1.3"
+    r, ws = lay_out(tmp_path, "0.1.33")
+    assert r.returncode == 0, r.stderr
+    assert "persona 0.1.33 laid out" in r.stderr and "handbook 0.1.3 loaded" in r.stderr
+    assert container_chars((ws / "AGENTS.md").read_text(), ws) <= 16000
+    new, old = RELEASES / "0.1.33", RELEASES / "0.1.32"
+    for name in ("SOUL.md", "RUNTIME.openclaw.md"):
+        assert (new / name).read_bytes() == (old / name).read_bytes(), name
+    assert (new / "AGENTS.md").read_text().split("\n")[1:] == (old / "AGENTS.md").read_text().split("\n")[1:]
+    assert (new / "AGENTS.md").read_text().startswith("# MC conversation contract — persona 0.1.33\n")
+    card, before = (json.loads((d / "voice.json").read_text()) for d in (new, old))
+    assert {k: v for k, v in card.items() if k != "card"} == {k: v for k, v in before.items() if k != "card"}
+    line = (" When he asks how things are, what is deployed or whether something is done, answer from the platform status"
+            " you were given or the answer the app brings back, problems first, in two or three sentences; when you have"
+            " neither, say plainly that you can't see the platform's status from here.")
+    assert card["card"].replace(line, "") == before["card"] and card["card"].count(line) == 1
+    manifest = json.loads((new / "manifest.json").read_text())
+    assert manifest["version"] == "0.1.33" and manifest["base"] == "0.1.32"
     for f, want in manifest["files"].items():
         assert sha((new / f).read_bytes()) == want, f
 

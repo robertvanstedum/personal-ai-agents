@@ -493,6 +493,19 @@ services:
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos_voice:/app/data/cos-voice
       # The career mirror for CoS Work, read-only, root-owned 0700 (1.2 data map spec; #502). Never the private/ parent.
       - ${MINIMOI_ROOT:-/opt/minimoi}/private/professional:/minimoi/private/professional:ro
+      # Her voice's status digest (#542; core/realtime_voice/status_digest.py), both read-only and nonsecret: the hosts'
+      # job-health reports the portal's MC reads (the mc-observations volume, health/) and the root-written release
+      # observation the portal mounts the same way (release_context.read checks its owner and mode).
+      - type: volume
+        source: mc-observations
+        target: /app/runtime/mc-observations
+        read_only: true
+      - type: bind
+        source: ${MINIMOI_ROOT:-/opt/minimoi}/release-status
+        target: /app/runtime/release
+        read_only: true
+        bind:
+          create_host_path: false
     ports:
       - "127.0.0.1:8769:8769"
     # Vault retrieval for MC/CoS turns (owner decisions 17 Oct 2026). Off until the Vault

@@ -159,6 +159,29 @@ def context_block(principal, owner_text="", *, environ=None, guest_actions=False
     return "\n".join(lines)
 
 
+VOICE_NAMED = 2
+
+
+def voice_summary(principal, *, supervision_on=False) -> str:
+    """What waits on Robert, in a line, for MC's voice status digest (#542): the same notices service and store as
+    ``context_block``, the owner only. Off, for anyone else, or nothing waiting: "". A store that cannot be read says so,
+    never "nothing waiting"."""
+    svc = notices.current()
+    if svc is None or not principal or principal != svc.settings.owner:
+        return ""
+    try:
+        data = svc.store.read()
+    except st.StoreUnavailable:
+        return "the waiting list cannot be read right now; do not say nothing is waiting."
+    items = [i for i in st.open_items(data) if not words.for_information(i)
+             and not (supervision_on and i.get("kind") == "decision")]
+    if not items:
+        return ""
+    named = "; ".join(f"{i['code']} {_cut(words.headline(i), 90)}" for i in items[:VOICE_NAMED])
+    more = f"; and {len(items) - VOICE_NAMED} more" if len(items) > VOICE_NAMED else ""
+    return f"{len(items)} open: {named}{more}."
+
+
 def owner_command(found):
     """Robert's own kept note "dismiss W-n" / "done W-n". Returns a platform result dict, or None (not ours, or the
     service is off: then MC answers the message as today). It only closes the notice; it never answers an agent."""
