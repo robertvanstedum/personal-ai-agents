@@ -448,6 +448,17 @@ body.gu[data-page="floor"] .mc-pill { display: none; }
 .mc-elapsed { font-variant-numeric: tabular-nums; }
 .mc-still { font-size: var(--gu-size-xs); color: var(--gu-text-muted); }
 .msg-foot { margin-top: 2px; font-size: var(--gu-size-xs); color: var(--gu-text-muted); }
+/* What a turn did (issue #545): one quiet folded line above the answer, "Ran 2 commands ›", opening to the plain step
+   names. Small and muted so the answer stays the star; a tap target tall enough for a phone, no box. */
+.msg-steps { margin: 2px 0 4px; font-size: var(--gu-size-xs); color: var(--gu-text-muted); }
+.msg-steps > summary { list-style: none; cursor: pointer; width: fit-content; min-height: 24px; display: inline-flex; align-items: center; gap: 4px; border-radius: 4px; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+.msg-steps > summary::-webkit-details-marker { display: none; }
+.msg-steps > summary::after { content: '›'; display: inline-block; transition: transform .15s ease; }
+.msg-steps[open] > summary::after { transform: rotate(90deg); }
+.msg-steps > summary:hover { color: var(--gu-text); }
+.msg-steps > summary:focus-visible { outline: 2px solid var(--gu-border-strong); outline-offset: 2px; }
+.msg-steps-list { margin: 2px 0 4px; padding-left: 1.4em; line-height: 1.6; }
+@media (prefers-reduced-motion: reduce) { .msg-steps > summary::after { transition: none; } }
 
 /* Markdown in thread entries (MC's replies, Robert's notes), rendered and
    sanitised on the server (markdown_render.py). Headings are scaled down to

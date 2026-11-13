@@ -16,6 +16,12 @@ mc/turn_capture.py, the separate ``MC_TURNS_DIR`` log): written only when a
 capture was meant (true or false), never when none was. A reply whose capture
 failed shows "Done in 1.2s · not saved", live and after a reload.
 
+A streamed turn that used tools also keeps its steps (issue #545): ``steps`` is turn_steps' versioned block (tool names,
+plain labels, how long each took; never arguments or results), so a reload shows "Ran 2 commands" above the answer. A line
+without it, or with a block this code does not know, shows no steps. The stream's own output count is kept beside it
+(``output_tokens``, the same runtime count the stream's usage record holds), so the footer after a reload reads as it did
+live; without it the footer joins the usage store as before.
+
 Never blocking, never failing a turn: a write or read problem is logged and
 ignored; the footer is simply not shown.
 """
@@ -67,7 +73,8 @@ class TurnLog:
 
     def record(self, *, turn_id: str, status: str, backend_kind: str | None, duration_ms: int,
                reply_request_id: str | None = None, failure_class: str | None = None,
-               mode: str | None = None, history_saved: bool | None = None) -> None:
+               mode: str | None = None, history_saved: bool | None = None, steps: dict | None = None,
+               output_tokens: int | None = None) -> None:
         """One line per turn. ``mode`` is "stream" for a streamed turn, whose
         interrupted and stopped turns get a line too (streaming spec v0.3 §6),
         with no reply id; ``duration_ms`` is then the time to the final text.
@@ -87,6 +94,10 @@ class TurnLog:
             line["mode"] = mode
         if isinstance(history_saved, bool):
             line["history_saved"] = history_saved
+        if isinstance(steps, dict):
+            line["steps"] = steps
+        if isinstance(output_tokens, int) and not isinstance(output_tokens, bool) and output_tokens > 0:
+            line["output_tokens"] = output_tokens
         try:
             with _LOCK:
                 fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
@@ -124,6 +135,13 @@ class TurnLog:
                                   "window": _window(line, ms), "turn_id": line.get("turn_id")}
                     if saved is not None:
                         found[rid]["history_saved"] = saved
+                    from .turn_steps import view
+                    shown = view(line.get("steps"))
+                    if shown is not None:
+                        found[rid]["steps"] = shown
+                    kept = line.get("output_tokens")
+                    if isinstance(kept, int) and not isinstance(kept, bool) and kept > 0:
+                        found[rid]["kept_tokens"] = kept
         return found
 
     def annotate(self, notes):
