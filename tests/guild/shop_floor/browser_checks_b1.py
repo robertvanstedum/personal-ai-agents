@@ -3975,6 +3975,7 @@ def test_r1_desktop_new_conversation_prove_inline_reply_stop_end_continue(browse
     page.click("[data-rm-new]")
     expect(page.locator("[data-rm-new-dialog]")).to_be_visible()
     page.fill("[data-rm-new-title]", "Planning Rooms")
+    page.click("[data-rm-new-dialog] details > summary")                   # purpose and members sit under Meeting details
     page.fill("[data-rm-new-purpose]", "Decide the first slice together")
     expect(page.locator("[data-rm-new-card='mc']")).to_be_checked()
     with page.expect_navigation():
@@ -3988,11 +3989,14 @@ def test_r1_desktop_new_conversation_prove_inline_reply_stop_end_continue(browse
     page.fill("[data-rm-input]", "Hello MC")
     page.click("[data-rm-send]")
     expect(page.locator("[data-rm-turns]")).to_contain_text("not yet proven. Use Invite → Prove first.")
+    # #548: the meeting says what joins MC (a proof, at a stated cost), not a two-minute silent wait.
+    expect(page.locator("[data-rm-proof-needed]")).to_contain_text("one paid turn, needs your OK")
+    expect(mc.locator(".rm-rsvp")).to_have_text("needs proof")
     # Prove inline from Invite; the draft is kept and the room stays open.
     page.fill("[data-rm-input]", "my unsent draft")
     page.click("[data-rm-invite]")
     card = page.locator("[data-rm-card='mc']")
-    expect(card).to_contain_text("Not yet proven — Prove first (one turn, needs your OK)")
+    expect(card).to_contain_text("Not yet proven here — Prove first (one paid turn, needs your OK)")
     _r1_shot(page, "r1-1-invite-prove-first")
     page.click("[data-rm-prove='mc']")
     expect(page.locator("[data-rm-prove='mc']")).to_have_text("Confirm: use one paid turn")
@@ -4046,6 +4050,38 @@ def test_r1_desktop_new_conversation_prove_inline_reply_stop_end_continue(browse
     expect(page.locator("[data-person='mc']")).to_have_attribute("data-rsvp", "accepted", timeout=15000)
     assert _no_page_overflow(page)
     assert not [e for e in errors if "401" not in e and "409" not in e], errors
+    ctx.close()
+
+
+def test_548_prove_first_from_the_meeting_then_mc_joins_and_the_proof_room_is_tidied(browser, server, rooms_r1):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/rooms")
+    page.click("[data-rm-new]")
+    page.fill("[data-rm-new-title]", "Monday sync")
+    expect(page.locator("[data-rm-new-cards]")).to_contain_text("needs a proof first (one paid turn, needs your OK)")
+    with page.expect_navigation():
+        page.click("[data-rm-new-create]")
+    page.wait_for_selector("body[data-ready=true]")
+    mc = page.locator("[data-person='mc']")
+    expect(mc).to_have_attribute("data-rsvp", "invited")
+    ask = page.locator("[data-rm-proof-for='mc']")
+    expect(ask).to_contain_text("one paid turn, needs your OK")
+    _r1_shot(page, "548-1-prove-first-in-meeting")
+    ask.locator("[data-rm-prove='mc']").click()
+    expect(ask.locator("[data-rm-prove='mc']")).to_have_text("Confirm: use one paid turn")
+    ask.locator("[data-rm-prove='mc']").click()
+    expect(mc).to_have_attribute("data-rsvp", "accepted", timeout=20000)
+    expect(page.locator("[data-rm-proof-needed]")).to_be_hidden()
+    expect(page.locator("[data-rm-status]")).to_contain_text("is proven")
+    # Only Robert's meeting is in the Active list; the proof room is archived, its record kept.
+    go(page, f"{server['url']}/guild-next/guild/rooms")
+    expect(page.locator("[data-rm-room]")).to_have_count(1)
+    expect(page.locator("[data-rm-room]")).to_contain_text("Monday sync")
+    archived = _records_fetch(page, "/v1/rooms?view=archived")
+    assert any(r["title"].startswith("Proof: Master Craftsman") for r in archived["body"]["rooms"]), archived
+    # 404s here come from the MC chat rail's conversation route on this page, not from Rooms.
+    assert not [e for e in errors if not any(code in e for code in ("401", "404", "409"))], errors
     ctx.close()
 
 

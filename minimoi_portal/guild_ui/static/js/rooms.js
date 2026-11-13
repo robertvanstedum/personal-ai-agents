@@ -835,6 +835,7 @@ async function loadMeeting() {
   meeting = r.body;
   renderPeople();
   renderParticipation();
+  renderProofNeeded();
   renderTurns();
   renderTo();
   renderControls();
@@ -869,7 +870,7 @@ function renderPeople() {
     const key = faceKey(p.id, p.label);
     chip.append(key ? el('img', { class: 'rm-av rm-av-face', src: FACES[key], alt: '', 'aria-hidden': 'true' }) : el('span', { class: 'rm-av', 'data-kind': p.kind, 'aria-hidden': 'true' }, initial(p.label)),
       el('span', { class: 'rm-dot', 'aria-hidden': 'true' }), el('span', { class: 'rm-pname' }, p.label));
-    if (p.rsvp && p.rsvp !== 'accepted') chip.append(el('span', { class: 'rm-rsvp' }, p.rsvp === 'no_response' ? 'no response' : p.rsvp));
+    if (p.rsvp && p.rsvp !== 'accepted') chip.append(el('span', { class: 'rm-rsvp' }, p.needs_proof ? 'needs proof' : p.rsvp === 'no_response' ? 'no response' : p.rsvp));
     chip.append(el('span', { class: 'visually-hidden' }, `: ${why}`));
     return chip;
   }));
@@ -915,6 +916,8 @@ function participantState(p) {
   if (active.length) return 'Queued';
   // FF-05: Records says no connector reaches this teammate on this host (production has no Claude Code route yet).
   if (p.rsvp !== 'accepted' && p.available_here === false) return 'Not available here';
+  // #548: an unproven teammate never answers its invite; say what joins it instead of a silent two-minute wait.
+  if (p.rsvp !== 'accepted' && p.needs_proof) return `Needs a proof first — ${PROOF_COST}`;
   if (p.rsvp === 'no_response') return 'Invite timed out: no answer, it may not be connected here';
   if (p.rsvp !== 'accepted') return p.rsvp === 'invited' ? 'Invited' : 'Not joined';
   return ['here','reachable','answering'].includes(p.reach?.state) ? 'Available' : 'Not reachable';
@@ -1207,8 +1210,19 @@ async function loadCards() {
   return cards;
 }
 
+const PROOF_COST = 'one paid turn, needs your OK';
+const proofState = new Map();     // principal -> 'armed' | 'running' (#548: the same button in the dialog and the meeting)
+let proofNote = null;             // { room, text }: the meeting page's line about a proof in progress or one that failed
+
 function cardState(c) {
-  return c.proven_at ? `Proven ${when(c.proven_at)}` : 'Not yet proven — Prove first (one turn, needs your OK)';
+  return c.proven_at ? `Proven ${when(c.proven_at)}` : `Not yet proven here — Prove first (${PROOF_COST})`;
+}
+
+function proveButton(principal, label, thenInvite = false) {
+  const state = proofState.get(principal);
+  return el('button', { type: 'button', class: 'rm-btn', 'data-rm-prove': principal, 'data-rm-then-invite': thenInvite ? 'yes' : null,
+    disabled: state === 'running' ? '' : null },
+  state === 'armed' ? 'Confirm: use one paid turn' : state === 'running' ? 'Proving…' : label);
 }
 
 async function openInvite() {
@@ -1221,6 +1235,7 @@ async function openInvite() {
 function renderCards() {
   const list = $('[data-rm-cards]');
   const inRoom = new Map((meeting?.participants || []).map((p) => [p.id, p]));
+  const open = Boolean(room) && room.state !== 'closed';
   list.replaceChildren(...cards.map((c) => {
     const li = el('li', { class: 'rm-card-row', 'data-rm-card': c.principal });
     const member = inRoom.get(c.principal);
@@ -1228,10 +1243,16 @@ function renderCards() {
     const unavailable = c.available_here === false;
     li.append(el('strong', {}, c.label), el('span', { class: 'small', 'data-rm-card-state': true },
       unavailable ? 'Not available here: no connector reaches it on this host' : c.connected ? cardState(c) : 'No connector in Rooms yet'));
-    if (c.connected && !c.proven_at && !unavailable) li.append(el('button', { type: 'button', class: 'rm-btn', 'data-rm-prove': c.principal }, 'Prove first'));
     const invited = member && member.rsvp !== 'declined';
     if (unavailable && !invited) return li;
-    li.append(el('button', { type: 'button', class: 'rm-btn', 'data-rm-invite-card': c.principal, disabled: invited || !room || room.state === 'closed' ? '' : null },
+    if (c.connected && !c.proven_at && !unavailable) {
+      // #548: an unproven teammate is never invited into a silent wait. One button proves it (with Robert's OK for
+      // the paid turn) and invites it in the same flow; it joins as soon as the proof is answered.
+      if (invited && member.rsvp !== 'accepted') { li.append(proveButton(c.principal, 'Prove first')); return li; }
+      if (!invited && open) { li.append(proveButton(c.principal, 'Prove first, then invite', true)); return li; }
+      if (!invited) { li.append(proveButton(c.principal, 'Prove first')); return li; }
+    }
+    li.append(el('button', { type: 'button', class: 'rm-btn', 'data-rm-invite-card': c.principal, disabled: invited || !open ? '' : null },
       invited ? (member.rsvp === 'accepted' ? 'In this meeting' : 'Invited') : 'Invite'));
     return li;
   }));
@@ -1245,24 +1266,66 @@ async function inviteCard(principal) {
   const rsvp = r.body.result.rsvp;
   const name = (cards.find((c) => c.principal === principal) || {}).label || principal;
   out.textContent = rsvp.rsvp === 'accepted' ? `${name} joined.` : rsvp.rsvp_reason === 'not_proven'
-    ? `${name} is invited and answers once proven. Prove first.` : `${name} is invited and joins within a few seconds.`;
+    ? `${name} is invited and joins once proven: Prove first (${PROOF_COST}).` : `${name} is invited and joins within a few seconds.`;
   await loadMeeting();
   renderCards();
 }
 
-async function prove(button) {
+// #548: in the meeting itself, an invited teammate that is not proven says so and offers Prove first right here.
+function renderProofNeeded() {
+  const box = $('[data-rm-proof-needed]');
+  if (!box) return;
+  const waiting = meeting?.room === current && room?.id === current && room.state !== 'closed' && !signedOut
+    ? meeting.participants.filter((p) => p.teammate && p.needs_proof && p.available_here !== false) : [];
+  const said = proofNote && proofNote.room === current ? proofNote.text : '';
+  box.hidden = !waiting.length && !said;
+  box.replaceChildren(...waiting.map((p) => {
+    const row = el('p', { class: 'rm-proof-row', 'data-rm-proof-for': p.id });
+    row.append(el('span', {}, `${p.label} has not been proven on this host yet, so it cannot join. Proving it asks one question: ${PROOF_COST}. `),
+      proveButton(p.id, 'Prove first'));
+    return row;
+  }), el('p', { class: 'small', 'data-rm-proof-status': true, role: 'status' }, said));
+}
+
+function rerenderProof() {
+  if ($('[data-rm-invite-dialog]').open) renderCards();
+  renderProofNeeded();
+}
+
+function proofReport(fromDialog) {
+  const roomId = current;
+  return (text, done = false) => {
+    if (fromDialog) { $('[data-rm-invite-status]').textContent = text; return; }
+    // On the meeting page a success is said once in the status line; progress and failures stay by the button.
+    proofNote = done ? null : { room: roomId, text };
+    if (done && current === roomId) status(text);
+    renderProofNeeded();
+  };
+}
+
+async function prove(button, fromDialog = true) {
   const principal = button.dataset.rmProve;
-  if (button.dataset.armed !== 'yes') {
-    button.dataset.armed = 'yes';
-    button.textContent = 'Confirm: use one paid turn';
-    return;
-  }
-  button.disabled = true;
-  const out = $('[data-rm-invite-status]');
+  if (proofState.get(principal) === 'running') return;
+  if (proofState.get(principal) !== 'armed') { proofState.set(principal, 'armed'); rerenderProof(); return; }
+  proofState.set(principal, 'running');
+  rerenderProof();
+  const report = proofReport(fromDialog);
+  try { await runProof(principal, button.dataset.rmThenInvite === 'yes', report); }
+  finally { proofState.delete(principal); await loadCards(); rerenderProof(); }
+}
+
+async function runProof(principal, thenInvite, report) {
   const name = (cards.find((c) => c.principal === principal) || {}).label || principal;
+  const roomId = current;
+  if (thenInvite && roomId) {
+    // Invite first: the invitation waits on the proof, so the teammate joins the moment it is proven.
+    const inv = await records(`/v1/rooms/${encodeURIComponent(roomId)}/invite`, { method: 'POST', body: { actor: principal }, key: keyFor(`invite:${roomId}:${principal}`) });
+    if (inv.status !== 201 && inv.status !== 200) { report(`Not invited: ${inv.body.error || 'Rooms answered with an error'}. No proof was started.`); return; }
+    await loadMeeting();
+  }
   const r = await records(`/v1/teammates/${encodeURIComponent(principal)}/prove`, { method: 'POST', body: { confirm: true }, key: keyFor(`prove:${principal}`) });
-  if (r.status !== 202 && r.status !== 200) { out.textContent = `Proof not started: ${r.body.error || 'Rooms answered with an error'}.`; button.disabled = false; return; }
-  out.textContent = `Proving ${name}: one question, one reply…`;
+  if (r.status !== 202 && r.status !== 200) { report(`Proof not started: ${r.body.error || 'Rooms answered with an error'}.`); return; }
+  report(`Proving ${name}: one question, one reply…`);
   const until = Date.now() + 240000;              // the turn limit (180 s) plus recovery
   while (Date.now() < until) {
     await new Promise((done) => { window.setTimeout(done, 2000); });
@@ -1270,19 +1333,20 @@ async function prove(button) {
     if (s.status !== 200) continue;
     if (s.body.proven_at) {
       keys.delete(`prove:${principal}`);
-      out.textContent = `${name} is proven (${when(s.body.proven_at)}). It joins this meeting on its next check-in.`;
-      await loadCards(); renderCards(); await loadMeeting();
+      const inMeeting = roomId && (meeting?.participants || []).some((p) => p.id === principal && p.rsvp !== 'declined');
+      report(inMeeting ? `${name} is proven (${when(s.body.proven_at)}) and joins this meeting in a few seconds.`
+        : `${name} is proven (${when(s.body.proven_at)}). Invite it to a meeting when you need it.`, true);
+      await loadMeeting();
       return;
     }
     const t = s.body.turn;
     if (t && ['failed', 'cancelled', 'expired', 'uncertain', 'abandoned'].includes(t.state)) {
       keys.delete(`prove:${principal}`);
-      out.textContent = `The proof did not finish. ${failureText(name, t.disposition || t.state, principal)} You can try again.`;
-      await loadCards(); renderCards();
+      report(`The proof did not finish. ${failureText(name, t.disposition || t.state, principal)} You can try again.`);
       return;
     }
   }
-  out.textContent = `${name} has not answered the proof yet. Its worker may be away; you can close this and check later.`;
+  report(`${name} has not answered the proof yet. Its worker may be away; you can close this and check later.`);
 }
 
 // ── New conversation and Continue conversation ──────────────────────────────
@@ -1295,7 +1359,7 @@ async function openNew() {
   box.replaceChildren(...cards.filter((c) => ['mc','cos'].includes(c.principal)).map((c) => {
     const label = el('label', { class: 'rm-new-card' });
     label.append(el('input', { type: 'checkbox', value: c.principal, 'data-rm-new-card': c.principal, checked: '', hidden: '' }),
-      el('span', {}, ` ${c.label} · ${c.connected && c.proven_at ? 'available' : 'connection pending'}`));
+      el('span', {}, ` ${c.label} · ${!c.connected ? 'connection pending' : c.proven_at ? 'available' : `needs a proof first (${PROOF_COST}); you can prove it in the meeting`}`));
     return label;
   }));
   if (!box.children.length) box.append(el('p', { class: 'small' }, 'No teammate is connected yet; you can still record a conversation.'));
@@ -1390,6 +1454,10 @@ function bindMeeting() {
   $('[data-rm-new-form]').addEventListener('submit', (e) => { e.preventDefault(); createNew(); });
   $('[data-rm-invite]').addEventListener('click', openInvite);
   $('[data-rm-dialog-close]').addEventListener('click', () => $('[data-rm-invite-dialog]').close());
+  $('[data-rm-proof-needed]').addEventListener('click', (e) => {
+    const p = e.target.closest('[data-rm-prove]');
+    if (p) prove(p, false);
+  });
   $('[data-rm-cards]').addEventListener('click', (e) => {
     const p = e.target.closest('[data-rm-prove]');
     if (p) { prove(p); return; }

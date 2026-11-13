@@ -248,6 +248,27 @@ def sweep(db):
     db.execute("UPDATE turns SET state='expired',disposition='not_answered_busy',updated=? "
                "WHERE state='queued' AND expires<=?", (moment, moment))
     round_progress(db, moment)
+    archive_finished_proofs(db, moment)
+
+
+def archive_finished_proofs(db, moment=None):
+    """#548: a proof meeting is Records' own one-question room, not one of Robert's meetings. Once its turn is
+    finished (answered, failed or expired) it leaves the Active list. Archive here is the same visibility-only
+    flag the owner's Archive sets: the record is kept, nothing is closed, and any new activity in the room brings
+    it back. A proof room Robert wrote more in, or one already archived or restored once, is left alone."""
+    moment = moment or now()
+    marks = ",".join("?" for _ in TERMINAL)
+    rows = db.execute(f"""SELECT m.room FROM meetings m WHERE m.kind='proof'
+        AND NOT EXISTS(SELECT 1 FROM room_archive a WHERE a.room=m.room)
+        AND EXISTS(SELECT 1 FROM turns t WHERE t.room=m.room)
+        AND NOT EXISTS(SELECT 1 FROM turns t WHERE t.room=m.room AND t.state NOT IN ({marks}))
+        AND (SELECT COUNT(*) FROM events e WHERE e.room=m.room AND e.actor='robert' AND e.kind='message') <= 1""",
+                      TERMINAL).fetchall()
+    for row in rows:
+        through = db.execute("SELECT COALESCE(MAX(seq),0) FROM events WHERE room=?", (row["room"],)).fetchone()[0]
+        last = db.execute("SELECT updated FROM rooms WHERE id=?", (row["room"],)).fetchone()["updated"]
+        db.execute("""INSERT INTO room_archive(room,version,archived_at,archived_by,last_activity,through_seq,
+            restored_at,restored_by) VALUES(?,?,?,?,?,?,NULL,NULL)""", (row["room"], 1, moment, "records", last, through))
 
 
 # Spoken aliases are directory data, shared by requests, waits and resolution.
@@ -578,6 +599,7 @@ class Meetings:
             if meeting and meeting["kind"] == "proof":
                 db.execute("UPDATE teammates SET proven_at=?,updated=? WHERE principal=?",
                            (now(), now(), turn["addressee"]))
+        archive_finished_proofs(db)    # #548: the proof room tidies itself away once answered
 
     def on_human_message(self, db, room, event, target=None):
         """Schedule from Robert's message (spec §3.6). Deterministic; no model."""
@@ -887,13 +909,17 @@ class Meetings:
                 if m["kind"] != "human" and not record:
                     continue    # the strip lists teammate cards and people only (S4)
                 rsvp = rsvp_of(db, room, m["id"])
-                if (rsvp["rsvp"] == "invited" and record and rsvp["rsvp_at"]
+                # #548: an unproven teammate's worker never answers its invite, so the invite waits on Robert's
+                # Prove first, not on a two-minute timeout. Derived at read time, like no_response.
+                needs_proof = bool(record and rsvp["rsvp"] == "invited" and not proven_or_proof(db, room, m["id"]))
+                if (rsvp["rsvp"] == "invited" and record and rsvp["rsvp_at"] and not needs_proof
                         and rsvp["rsvp_at"] <= stamp(-record["rsvp_timeout_s"])):
                     rsvp = {**rsvp, "rsvp": "no_response"}    # derived at read time, never stored
                 participants.append({"id": m["id"], "label": m["label"], "kind": m["kind"], "role": m["role"],
                                      **rsvp, "reach": self.reach(db, room, m["id"], m["kind"], record),
                                      "proven_at": record["proven_at"] if record else None,
                                      "available_here": route_here(db, m["id"]) if record else None,
+                                     "needs_proof": needs_proof,
                                      "teammate": bool(record), "waiting": bool(db.execute(
                                          "SELECT 1 FROM meeting_waits WHERE room=? AND actor=?", (room, m["id"])).fetchone())})
             turns = [self.public_turn(db, dict(r)) for r in db.execute(
