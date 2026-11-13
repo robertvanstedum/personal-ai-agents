@@ -1335,3 +1335,87 @@ def test_mc_end_settles_the_allowance_from_how_long_the_session_ran(ready):
     now[0] += timedelta(minutes=5)
     assert r.client.post(BASE + f"/session/{sid}/end", headers=r.headers).status_code == 200
     assert r.budget.status()["reserved_usd"] == 0.10
+
+
+# ── #566 fault 1: what Robert says while MC is still answering waits in line, never "did not go through" ─────────────
+# Production, 13 Nov 2026 08:37 (Craft on the phone): "Check with CoS", confirmed while MC's lookup still ran, came back
+# "Master Craftsman is still answering your previous note. Nothing new was sent." and was spoken as a failure.
+
+def _busy_then_answer(r, monkeypatch, busy_times):
+    """MC's typed turn refusing busy (his in-flight guard, api.run_mc_turn) ``busy_times`` times, then answering."""
+    calls = []
+
+    def typed_turn(actual, **kw):
+        calls.append(kw)
+        if len(calls) <= busy_times:
+            return {"error": "busy", "message": api.MC_WORDS["busy"], "mc_state": "ready"}, 409
+        r.turns.append(kw)
+        return {"status": "answered", "reply_note": {"text": "Item **12** is in build.", "request_id": "reply-1"}}, 200
+    monkeypatch.setattr(api, "run_mc_turn", typed_turn)
+    monkeypatch.setattr(direct, "LINE_POLL_S", 0.01, raising=False)
+    return calls
+
+
+def test_566_a_turn_said_while_mc_answers_waits_in_line_and_is_sent_when_he_is_free(ready, monkeypatch):
+    r = ready
+    calls = _busy_then_answer(r, monkeypatch, busy_times=3)
+    sid = start(r)["voice_session_id"]
+    result = call(r, sid, words="Check with CoS.").get_json()
+    assert result["outcome"] == "done" and result["answered"] is True and result["spoken"] == "Item 12 is in build."
+    assert len(calls) == 4 and len(r.turns) == 1                 # refused three times before anything ran, then sent once
+    assert "did not go through" not in str(r.notes.rows) and "still answering" not in str(r.notes.rows)
+
+
+def test_566_a_turn_the_ledger_finds_busy_waits_in_line_too(ready, monkeypatch):
+    from minimoi_portal.guild_ui.mc.ledger_gate import BUSY_WORDS, Refusal
+    r = ready
+    monkeypatch.setattr(direct, "LINE_POLL_S", 0.01, raising=False)
+    refusals = []
+
+    def ledger(found, kind="typed"):
+        if len(refusals) < 2:
+            refusals.append(kind)
+            raise Refusal("busy", BUSY_WORDS, 409)
+        return None
+    monkeypatch.setattr(api, "_ledger_turn", ledger)
+    sid = start(r)["voice_session_id"]
+    result = call(r, sid, words="Check with CoS.").get_json()
+    assert refusals == ["voice", "voice"] and result["outcome"] == "done" and result["spoken"] == "Item 12 is in build."
+    assert len(r.turns) == 1
+
+
+def test_566_a_turn_waiting_in_line_answers_pending_as_next_and_its_answer_lands_later(ready, monkeypatch):
+    import threading
+    r = ready
+    free = threading.Event()
+    monkeypatch.setattr(direct, "LINE_POLL_S", 0.01, raising=False)
+    monkeypatch.setattr(direct_host, "CONSULT_WAIT_S", 0.3)
+
+    def typed_turn(actual, **kw):
+        if not free.is_set():
+            return {"error": "busy", "message": api.MC_WORDS["busy"], "mc_state": "ready"}, 409
+        r.turns.append(kw)
+        return {"status": "answered", "reply_note": {"text": "Item **12** is in build.", "request_id": "reply-1"}}, 200
+    monkeypatch.setattr(api, "run_mc_turn", typed_turn)
+    sid = start(r)["voice_session_id"]
+    pending = call(r, sid, words="Check with CoS.").get_json()
+    assert pending["outcome"] == "pending" and pending.get("queued") is True and pending["spoken"] == "I'll take that next."
+    free.set()
+    heard = {}
+    for _ in range(200):
+        heard = post(r, sid, []).get_json()
+        if heard.get("completed"):
+            break
+        time.sleep(0.02)
+    assert [(d["outcome"], d["spoken"]) for d in heard["completed"]] == [("done", "Item 12 is in build.")]
+    assert len(r.turns) == 1
+
+
+def test_566_a_turn_the_line_gives_up_on_is_said_plainly_and_nothing_was_sent(ready, monkeypatch):
+    r = ready
+    calls = _busy_then_answer(r, monkeypatch, busy_times=10 ** 6)
+    monkeypatch.setattr(direct, "LINE_WAIT_S", 0.1, raising=False)
+    sid = start(r)["voice_session_id"]
+    result = call(r, sid, words="Check with CoS.").get_json()
+    assert result["outcome"] == "not_done" and result["error"] == "busy" and result["spoken"] == getattr(direct, "STILL_BUSY", None)
+    assert r.turns == [] and calls                               # never sent; refused before anything ran each time

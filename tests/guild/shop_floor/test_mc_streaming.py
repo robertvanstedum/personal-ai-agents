@@ -906,6 +906,17 @@ def test_the_internal_stream_keeps_the_streaming_answer_rules(events, cls):
     assert usage[0]["status"] == "error" and usage[0]["error_class"] == cls
 
 
+def test_the_internal_stream_keeps_only_the_runs_final_step_not_its_working_notes():
+    # Issue #566 (voice, 13 Nov): a buffered (voice) turn spoke MC's notes between tool calls as its answer.
+    notes = "The run record came back thin. I'll read the rest of the delivery file. "
+    answer = "As of the last check, the stack is up, but the pipeline itself failed."
+    result, _, _, _ = _collect([st.RunStarted(RUN), st.Delta(notes), st.Delta(answer), st.Answer(answer),
+                                st.Finish("stop"), st.Usage(50, 7)])
+    assert (result.status, result.text) == ("answered", answer)
+    kept, _, _, _ = _collect([st.Delta(notes), st.Delta(answer), st.Answer("Not what was streamed."), st.Finish("stop")])
+    assert kept.text == notes + answer                                         # never keeps text the stream did not carry
+
+
 def test_a_backend_that_will_not_stream_goes_the_ordinary_buffered_way_with_no_run():
     result, backend, runs, usage = _collect([], refuse=True)
     assert (result.text, backend.turned, runs, usage) == ("buffered", 1, [], [])

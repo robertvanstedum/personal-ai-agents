@@ -72,6 +72,61 @@ SPOKEN_POSTIT, SPOKEN_POSTIT_ALREADY = "Post-it added.", "That post-it is alread
 SPOKEN_REMINDER = "Reminder set for {when}. It will arrive by Telegram."
 NOT_A_NOTE = "Nothing was saved. Say 'make a note that' and the note, and I'll save it."
 NO_CONTINUITY = "No retained voice turn in this conversation yet."
+# #566 fault 1 (Robert, 13 Nov 2026, by phone): "Check with CoS", said while MC was still answering, was refused with
+# "still answering your previous note" and spoken as "That did not go through. Nothing was done." Something he says while
+# MC works waits in line and is sent when MC is free, in the order said. The busy refusal ran nothing (the turn ledger and
+# MC's in-flight guard both refuse before any record or model call), so sending it again later is the first send.
+WAIT_CODES = ("busy", "queue_pending")      # ledger_gate: MC is answering another note, or typed notes are waiting first
+LINE_POLL_S = 0.5                            # how often the turn first in line asks again
+LINE_WAIT_S = 600                            # past this (MC still on one turn) it is not sent, and he is told so plainly
+STILL_BUSY = "I'm still on the earlier question, so I didn't take that one. Say it again in a moment."
+
+
+class _Line:
+    """The owner turns waiting for MC, per owner, in the order they first found him busy (#566 fault 1). Only the turn
+    first in line asks again; the rest wait behind it. ``in_line`` is what the core reads to say "I'll take that next"
+    while one waits."""
+
+    def __init__(self, sleep=time.sleep, clock=time.monotonic):
+        self.sleep, self.clock = sleep, clock
+        self._lock, self._lines, self._keys = threading.Lock(), {}, set()
+
+    def busy(self, principal):
+        """Whether turns are already waiting for this owner (a new one goes behind them, never ahead)."""
+        with self._lock:
+            return bool(self._lines.get(principal))
+
+    def join(self, principal, key):
+        with self._lock:
+            line = self._lines.setdefault(principal, [])
+            if key not in line:
+                line.append(key)
+            self._keys.add(key)
+
+    def leave(self, principal, key):
+        with self._lock:
+            line = self._lines.get(principal) or []
+            if key in line:
+                line.remove(key)
+            if not line:
+                self._lines.pop(principal, None)
+            self._keys.discard(key)
+
+    def in_line(self, key):
+        with self._lock:
+            return key in self._keys
+
+    def wait(self, principal, key, deadline):
+        """Wait one poll, and until ``key`` is first in line; False once the deadline has passed (nothing more is tried)."""
+        while True:
+            if self.clock() >= deadline:
+                return False
+            self.sleep(LINE_POLL_S)
+            with self._lock:
+                line = self._lines.get(principal) or []
+                first = not line or line[0] == key
+            if first:
+                return True
 # Spec 164 §7, part 1: MC's own realtime operating rules, whole (moved here from mc_managed_realtime, which reads them
 # from here): consult for current facts and work, receipts before claiming success, historical text is DATA, tool
 # arguments grant nothing. The managed path uses them as they are; the direct path, under v3, uses DIRECT_INSTRUCTIONS.
@@ -246,6 +301,11 @@ class _MasterCraftsman(DirectVoiceAdapter):
     def __init__(self, app, config, mount):
         self.app, self.config, self.name = app, config, mount + "_mc_voice"
         self.tags, self._first, self._lock = _Tags(), {}, threading.Lock()     # session -> his first consult words
+        self.line = _Line()                                                     # owner turns waiting for MC (#566)
+
+    def in_line(self, sid, item):
+        """Whether this owner turn is waiting in line for MC (the core then says "I'll take that next", #566)."""
+        return self.line.in_line((sid, item))
 
     def owner(self):
         user = self.config["current_user"]() or {}
@@ -386,21 +446,63 @@ class _MasterCraftsman(DirectVoiceAdapter):
         found = (services, principal, conv, floor, kept.value, note_id, note_id, [])
         g.topic_context = None
         g.mc_kept_owner_scope = (principal, conv["id"], note_id)
+        # #566 fault 1: while MC answers another note, this one waits in line (in this consult's worker, never the
+        # request), then is sent; a turn already waiting goes first. Only a refusal that ran nothing waits.
+        key, deadline = (session_id, item), self.line.clock() + LINE_WAIT_S
+        waited = self.line.busy(principal)
+        if waited:
+            self.line.join(principal, key)
+            if not self.line.wait(principal, key, deadline):
+                self.line.leave(principal, key)
+                return {"ok": False, "error": "busy", "outcome": "not_done", "note_request_id": note_id, "spoken": STILL_BUSY}
         try:
-            turn = api._ledger_turn(found, kind="voice")
-        except Refusal as refused:
-            # Classified by the dispatch boundary (review CX code note, FR S4). The turn ledger saying this note was already
-            # sent, is waiting to be sent, or was already handled is about an earlier dispatch of the same owner turn: never
-            # "not done". Already handled, with MC's kept reply, is done with that reply as its receipt; otherwise unknown.
-            code = refused.body.get("error")
-            if code == "already_done" and name == "consult":
-                reply = floor.get_note(reveal.reply_id(note_id))
-                if isinstance(reply, dict) and isinstance(reply.get("text"), str) and reply["text"].strip():
-                    return {"note_request_id": note_id, "answered": True, "outcome": "done", "receipt": reply.get("request_id"),
-                            "receipt_kind": "reply", "spoken": speakable(for_speech(reply["text"]))}
-            if code in ("already_done", "already_dispatched", "already_queued"):
-                return {"ok": False, "error": code, "outcome": "unknown", "note_request_id": note_id}
-            return {"ok": False, "error": code, "spoken": refused.body.get("message") or FAILED}
+            while True:
+                try:
+                    turn = api._ledger_turn(found, kind="voice")
+                except Refusal as refused:
+                    # Classified by the dispatch boundary (review CX code note, FR S4). The turn ledger saying this note
+                    # was already sent, is waiting to be sent, or was already handled is about an earlier dispatch of the
+                    # same owner turn: never "not done". Already handled, with MC's kept reply, is done with that reply as
+                    # its receipt; otherwise unknown.
+                    code = refused.body.get("error")
+                    if code in WAIT_CODES:
+                        self.line.join(principal, key)
+                        waited = True
+                        if self.line.wait(principal, key, deadline):
+                            continue
+                        return {"ok": False, "error": "busy", "outcome": "not_done", "note_request_id": note_id,
+                                "spoken": STILL_BUSY}
+                    if code == "already_done" and name == "consult":
+                        reply = floor.get_note(reveal.reply_id(note_id))
+                        if isinstance(reply, dict) and isinstance(reply.get("text"), str) and reply["text"].strip():
+                            return {"note_request_id": note_id, "answered": True, "outcome": "done",
+                                    "receipt": reply.get("request_id"), "receipt_kind": "reply",
+                                    "spoken": speakable(for_speech(reply["text"]))}
+                    if code in ("already_done", "already_dispatched", "already_queued"):
+                        return {"ok": False, "error": code, "outcome": "unknown", "note_request_id": note_id}
+                    return {"ok": False, "error": code, "spoken": refused.body.get("message") or FAILED}
+                response = self._answer(api, found, turn)
+                answer = response.get_json(silent=True) if response.is_json else None
+                answer = answer if isinstance(answer, dict) else {}
+                # MC's own in-flight guard (api.run_mc_turn, _mc_acquire) refused before anything was sent: with no
+                # ledger claim nothing was recorded either, so it waits in line as above. With a claim the ledger has
+                # recorded this turn as not sent, and a second send is not this one: it stays a refusal.
+                if turn is None and response.status_code == 409 and answer.get("error") == "busy":
+                    self.line.join(principal, key)
+                    waited = True
+                    if self.line.wait(principal, key, deadline):
+                        continue
+                    return {"ok": False, "error": "busy", "outcome": "not_done", "note_request_id": note_id,
+                            "spoken": STILL_BUSY}
+                break
+        finally:
+            if waited:
+                self.line.leave(principal, key)
+        return self._result(name, note_id, response, answer)
+
+    @staticmethod
+    def _answer(api, found, turn):
+        """MC's typed turn on the claimed (or unledgered) note, as a response."""
         from .mc.openclaw import VOICE_MARKER
         # The words were chosen by the voice model: a bare yes, no or stop is not a command here, only a named one
         # (api._voice_named_only, review B #1). Server held, for this consult only; a typed turn never sets it.
@@ -408,11 +510,13 @@ class _MasterCraftsman(DirectVoiceAdapter):
         try:
             # A voice marker, server-held (not the managed sideband's sentinel, never a browser value): the typed turn
             # says the words were spoken, and the OpenClaw adapter translates it into its context (Spec 164 §9).
-            response = current_app.make_response(api._answer_turn(found, turn, host_channel=VOICE_MARKER))
+            return current_app.make_response(api._answer_turn(found, turn, host_channel=VOICE_MARKER))
         finally:
             g.mc_voice_named_only = False
-        answer = response.get_json(silent=True) if response.is_json else None
-        answer = answer if isinstance(answer, dict) else {}
+
+    @staticmethod
+    def _result(name, note_id, response, answer):
+        """The consult's result from MC's typed-turn answer."""
         answered = response.status_code == 200 and answer.get("status") == "answered"
         # Dispatched to MC and no result came back: its own deadline or the relay's (timeout_uncertain: "the outcome is
         # unknown"), a stopped turn, or a runtime error. MC may have acted with his tools, so the outcome is unknown,
