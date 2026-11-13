@@ -310,10 +310,11 @@ function noteLine(note) {
   // images). Without it, the note's own text is shown as plain text.
   if (typeof note.html === 'string' && note.html) body.innerHTML = note.html;
   else body.textContent = note.text;
+  const steps = stepsFold(note.turn && note.turn.steps);
+  if (steps) body.before(steps);
   if (note.turn && note.turn.done_text) {      // a live MC reply: "Done in 1.2s · 96 output tokens"
     const foot = clone('tpl-note-foot');
     foot.querySelector('[data-turn-done]').textContent = note.turn.done_text;
-    foot.hidden = !note.turn.done_text.includes('not saved');
     setTokens(foot, note.turn);
     li.append(foot);
     if (note.turn.tokens_text == null) askForTokens();
@@ -327,7 +328,31 @@ function noteLine(note) {
 // unknown" once the turn is old enough).
 function setTokens(scope, turn) {
   const span = scope.querySelector('[data-turn-usage]');
-  if (span) span.textContent = turn && turn.tokens_text ? ` · ${turn.tokens_text}` : '';
+  if (span) span.textContent = turn && turn.tokens_text && turn.tokens_text !== 'tokens unknown' ? ` · ${turn.tokens_text}` : '';   // what is unknown is left out
+}
+
+// What a turn did (issue #545): "Ran 2 commands", folded, opening to the plain step names. Labels come from the server
+// (made from tool names only) and are set as text.
+function fillSteps(fold, headline, labels) {
+  fold.querySelector('[data-turn-steps-headline]').textContent = headline;
+  const list = fold.querySelector('ol');
+  list.replaceChildren(...labels.map((label) => el('li', {}, label)));
+}
+
+function stepsFold(steps) {
+  if (!steps || typeof steps.headline !== 'string' || !Array.isArray(steps.labels) || !steps.labels.length) return null;
+  const fold = clone('tpl-turn-steps');
+  fillSteps(fold, steps.headline, steps.labels.filter((l) => typeof l === 'string'));
+  return fold;
+}
+
+// The model's own first sentence ("Checking GitHub Actions on your repos now."), for the status line while it works.
+function firstSentence(text) {
+  const flat = String(text || '').replace(/[#*_`>]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!flat) return '';
+  const m = flat.match(/^(.+?[.!?…:])(\s|$)/);
+  const one = m ? m[1] : flat;
+  return one.length > 120 ? `${one.slice(0, 117).trimEnd()}…` : one;
 }
 
 let tokenAsks = 0;
@@ -742,6 +767,9 @@ async function streamMasterCraftsman(t, via) {
   const rendered = slot(li, 'rendered');
   const tail = slot(li, 'tail');
   const stop = li.querySelector('[data-mc-stop]');
+  const stepFold = slot(li, 'steps');
+  const stepLabels = [];
+  let status = '';            // the model's first sentence, once it has said what it is doing
   const deltas = [];
   let upto = 0;
   let acked = false;
@@ -778,6 +806,22 @@ async function streamMasterCraftsman(t, via) {
     } else if (ev.t === 'progress' && typeof ev.text === 'string') {
       if (li.dataset.stopping !== 'true') setSlot(li, 'state', ev.text);      // never hide a Stop already asked for
       announce(ev.text);
+    } else if (ev.t === 'step' && Number.isInteger(ev.n) && typeof ev.label === 'string' && typeof ev.headline === 'string') {
+      if (ev.phase === 'start') {
+        // What it said before this step is what it is doing: one status line, and the text clears for what comes next.
+        status = status || firstSentence(deltas.join('')) || 'Working…';
+        deltas.length = 0;
+        upto = 0;
+        rendered.replaceChildren();
+        tail.textContent = '';
+        if (li.dataset.stopping !== 'true') setSlot(li, 'state', status);
+      }
+      stepLabels[ev.n - 1] = ev.label;
+      if (stepFold) {
+        fillSteps(stepFold, ev.headline, stepLabels.filter((l) => typeof l === 'string'));
+        stepFold.hidden = false;
+      }
+      follow();
     } else if (ev.t === 'delta' && typeof ev.text === 'string') {
       li.hasText = true;
       if (!deltas.length && li.dataset.stopping !== 'true') setSlot(li, 'state', 'Writing…');
@@ -797,7 +841,15 @@ async function streamMasterCraftsman(t, via) {
       if (ev.reply_note && !$(`[data-note="${ev.reply_note.id}"]`)) {
         const done = noteLine(ev.reply_note);
         const meta = done.querySelector('.msg-meta');
-        if (meta) meta.append(' · ', el('span', { class: 'mc-elapsed', 'data-turn-time': '' }, clock(Math.floor((Date.now() - li.startedAt) / 1000))));   // the time it took, nothing else
+        // The time it took: in the footer when the turn has one ("Done in 39s"), else on the meta line.
+        if (meta && !done.querySelector('[data-turn-foot]')) meta.append(' · ', el('span', { class: 'mc-elapsed', 'data-turn-time': '' }, clock(Math.floor((Date.now() - li.startedAt) / 1000))));
+        if (!done.querySelector('[data-turn-steps]') && stepFold && !stepFold.hidden) {
+          const kept = stepFold.cloneNode(true);       // the server kept no trace (no turn log): still show what it did
+          kept.removeAttribute('data-slot');
+          kept.dataset.turnSteps = '';
+          kept.open = false;
+          done.querySelector('.msg-text')?.before(kept);
+        }
         li.replaceWith(done);
       } else li.remove();
       if (ev.job) jobsUi.accepted({ job: ev.job });             // the reply proposed a job and the server started it

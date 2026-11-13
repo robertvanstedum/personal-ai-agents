@@ -50,13 +50,10 @@ def block(principal, *, environ, now=None, root=ROOT, registry_loader=None) -> s
         from core.jobs import health, registry
         reg = (registry_loader or registry.load)()
         now = now or datetime.now(timezone.utc)
-        hosts = [h for h in reg.hosts() if h != "github"]
-        reports = {h: health.read_report(root, h) for h in hosts}
-        reporting = {h: r for h, r in reports.items() if r is not None}
-        items = health.daily_items(reporting, now)
-        text = health.words(items, hosts=sorted(reporting), not_tracked=len(health.untracked(reporting)))
+        seen = health.overview(root, [h for h in reg.hosts() if h != "github"], now)
+        reporting, missing = seen["reporting"], seen["missing"]
+        text = health.words(seen["items"], hosts=sorted(reporting), not_tracked=seen["not_tracked"])
         when = ", ".join(f"{h} {r['checked_at']}" for h, r in sorted(reporting.items()))
-        missing = sorted(set(hosts) - set(reporting))
         lines = [HEAD, text]
         if when:
             lines.append(f"Checked: {when}.")
@@ -67,3 +64,11 @@ def block(principal, *, environ, now=None, root=ROOT, registry_loader=None) -> s
         return out if len(out) <= MAX_CHARS else out[:MAX_CHARS - 20].rsplit("\n", 1)[0] + "\n... (more on request)"
     except Exception:                                   # noqa: BLE001 - the turn goes on; MC says it cannot see health
         return HEAD + "\nJob health reports could not be read; job health is unverified right now."
+
+
+def voice_summary(principal, *, environ, now=None, root=ROOT, registry_loader=None) -> str:
+    """The same health, in a few words, for MC's voice status digest (#542): the owner only, under the same switch."""
+    if environ.get("MINIMOI_MC_JOBS_HEALTH") == "0" or not principal or principal != _owner(environ):
+        return ""
+    from core.realtime_voice.status_digest import jobs_summary
+    return jobs_summary(root, now=now, registry_loader=registry_loader)

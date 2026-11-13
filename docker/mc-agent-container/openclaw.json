@@ -77,6 +77,7 @@
             "minimoi_describe_domain",
             "minimoi_describe_house",
             "minimoi_github_issues",
+            "minimoi_github_get",
             "minimoi_guest_request_reject",
             "minimoi_guest_requests",
             "minimoi_host_health",

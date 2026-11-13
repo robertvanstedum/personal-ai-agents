@@ -46,6 +46,27 @@ def local_day() -> str:
 
 MEETING_TITLE = "Guildhall · "       # mc_rooms_bridge: the working conversation behind one meeting turn (Robert, 7 Nov 2026)
 
+# An empty chat (Robert's production test, 12 Nov 2026): created by New chat or by an area page's daily chat, and nothing
+# kept in it since. Only touch() moves updated_at, and every kept note or reply touches, so "never touched, still the
+# default title, nothing pinned, attached or turned" is the shell. Anything else on the record keeps it a real chat.
+EMPTY_PRUNE_AFTER_S = 24 * 3600
+_SHELL_KEYS = frozenset({"id", "principal", "title", "title_source", "created_at", "updated_at", "pinned", "archived",
+                         "archived_at", "work_item", "legacy", "notes_floor", "created_key", "scope", "scope_day", "routes"})
+
+
+def is_empty_chat(conv: dict) -> bool:
+    """True only for a chat with nothing in it: no message from Robert or anyone, no rename, pin, file or turn."""
+    if not isinstance(conv, dict) or conv.get("legacy") or conv.get("id") == LEGACY_ID:
+        return False
+    if conv.get("title_source") != "default" or conv.get("pinned"):
+        return False
+    if not conv.get("created_at") or conv.get("updated_at") != conv.get("created_at"):
+        return False
+    if any(v for k, v in conv.items() if k not in _SHELL_KEYS):            # attachments, documents, notices, turn files...
+        return False
+    routes = conv.get("routes") or {}
+    return not any(isinstance(r, dict) and (r.get("turns") or r.get("last_turn")) for r in routes.values())
+
 
 class ConversationStoreUnavailable(RuntimeError):
     """The conversations folder cannot be read or written."""
@@ -224,12 +245,14 @@ class ConversationStore:
             self._write(self._legacy(principal))
 
     # ── reads ──────────────────────────────────────────────────────────
-    def list(self, principal: str, *, archived: bool = False) -> list[dict]:
-        """Newest first, pinned on top; archived ones only in the Archive view."""
+    def list(self, principal: str, *, archived: bool = False, hide_empty: bool = False, keep: str | None = None) -> list[dict]:
+        """Newest first, pinned on top; archived ones only in the Archive view. hide_empty leaves out chats with
+        nothing in them (is_empty_chat), except ``keep``: the chat the page has open is always listed."""
         with self._lock():
             self._migrate(principal)
             rows = [c for c in self._all() if c.get("principal") == principal and bool(c.get("archived")) == archived
-                    and not str(c.get("title") or "").startswith(MEETING_TITLE)]   # a meeting's turns stay in Guildhall
+                    and not str(c.get("title") or "").startswith(MEETING_TITLE)   # a meeting's turns stay in Guildhall
+                    and not (hide_empty and c.get("id") != keep and is_empty_chat(c))]
         rows.sort(key=lambda c: c.get("updated_at") or "", reverse=True)
         rows.sort(key=lambda c: not c.get("pinned"))
         return rows
@@ -632,10 +655,44 @@ class ConversationStore:
                     pass                               # the marker stays; a retry finds nothing to release and clears it
             return conv, released
 
+    def prune_empty(self, principal: str, *, has_notes, keep: str | None = None,
+                    older_than_s: int = EMPTY_PRUNE_AFTER_S, now: datetime | None = None) -> list[str]:
+        """Delete this owner's empty chats that are older than a day. A chat is removed only when it is empty by its
+        own record (is_empty_chat) AND ``has_notes(conv)`` answers a firm False (its floor holds no message). Any doubt
+        (an unreadable file, a notes read that fails or says anything else, the chat the page has open) keeps it.
+        Runs under the store lock, so a note kept meanwhile (touch) either lands first and saves it, or finds no
+        chat; never half of each. Returns the ids removed."""
+        cutoff = (now or datetime.now(timezone.utc)).timestamp() - older_than_s
+        removed = []
+        with self._lock():
+            for conv in self._all():
+                cid = conv.get("id")
+                if conv.get("principal") != principal or cid == keep or not is_empty_chat(conv):
+                    continue
+                try:
+                    made = datetime.fromisoformat(str(conv["created_at"]).replace("Z", "+00:00"))
+                except (ValueError, OverflowError):
+                    continue
+                if made.tzinfo is None:
+                    made = made.replace(tzinfo=timezone.utc)
+                if made.timestamp() > cutoff:
+                    continue
+                try:
+                    if has_notes(conv) is not False:
+                        continue
+                except Exception:                     # a notes read that fails is doubt: keep the chat
+                    continue
+                try:
+                    os.unlink(self._path(cid, principal))
+                    removed.append(cid)
+                except OSError:
+                    pass
+        return removed
+
     def touch(self, cid, principal, *, first_text: str | None = None) -> dict:
         """A note or reply was kept: bump updated_at; the first message titles it."""
         def fn(c):
-            c["updated_at"] = now_iso()
+            c["updated_at"] = c["kept_at"] = now_iso()        # kept_at: something is on the record (never an empty chat)
             if first_text and c.get("title_source") == "default":
                 c["title"], c["title_source"] = title_from(first_text), "first_message"
         return self._change(cid, principal, fn)
@@ -681,5 +738,6 @@ def session_conversation_id(conv: dict, principal: str, *, day: str | None = Non
 
 
 __all__ = ["ConversationStore", "ConversationStoreUnavailable", "ConversationNotFound", "TooManyAttachments",
+           "is_empty_chat",
            "ASSET_ID_RE", "ATTACHMENTS_MAX", "clean_file_name", "LEGACY_ID",
            "title_from", "clean_title", "public", "conversations_of", "session_conversation_id", "KEY_RE"]

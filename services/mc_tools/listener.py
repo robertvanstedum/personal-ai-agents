@@ -219,7 +219,7 @@ def create_app(service, *, token_sha256: str, handoff=None, handoff_token_sha256
             _log.exception("mc tool %s: outcome unconfirmed", name[:64])
             answer = {"status": "unknown", "code": "tool_outcome_unconfirmed",
                       "message": ("Read could not be confirmed. No mutation was requested. You may retry this read; do not infer its result."
-                                  if name == "minimoi_github_issues" or name in HOST_TOOLS else
+                                  if name in ("minimoi_github_issues", "minimoi_github_get") or name in HOST_TOOLS else
                                   "MiniMoi could not confirm what happened. Do not repeat it; tell Robert."), "data": {}}
         _log.info("mc tool %s -> %s/%s", name[:64], answer["status"], answer["code"])
         encoded = json.dumps(answer, ensure_ascii=False, separators=(",", ":"), default=str)

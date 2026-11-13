@@ -2621,6 +2621,89 @@ def test_s1_a_streamed_reply_works_writes_and_ends_with_its_footer(browser, serv
     ctx.close()
 
 
+def _step(n, name, phase, **extra):
+    return {"t": "step", "n": n, "name": name, "phase": phase, **extra}
+
+
+def test_545_the_chat_shows_its_work_a_status_line_folded_steps_the_answer_then_how_long(browser, server, streaming_mc):
+    """Issue #545 (Robert, 12 Nov): while MC works, one status line in its own words; then "Ran 2 steps", folded, opening
+    to plain step names; then the answer; then a quiet "Done in … · 1.1k output tokens". A reload shows the same."""
+    streaming_mc["runtime"].script = _script(
+        "Checking GitHub Actions on your repos now. ", 0.3,
+        _step(1, "minimoi_github_issues", "start"), _step(1, "minimoi_github_issues", "end", ok=True, ms=800),
+        _step(2, "exec", "start"), 1.2, _step(2, "exec", "end", ok=True, ms=1500),
+        "All **green**.", 0.2, {"t": "answer", "text": "All **green**."},      # the run's last step, as the relay reads it
+        {"t": "finish", "reason": "stop"}, {"t": "usage", "prompt_tokens": 50, "completion_tokens": 1100})
+    ctx, page = _context(browser, server)
+    errors = _errors(page)
+    line = _send(page, server, "Are the deploys green?")
+    expect(line.locator('[data-slot="state"]')).to_have_text("Checking GitHub Actions on your repos now.", timeout=4000)
+    fold = line.locator('[data-slot="steps"]')
+    expect(fold.locator("summary")).to_have_text("Ran 2 steps")
+    assert "Checking GitHub" not in line.locator('[data-slot="tail"]').inner_text()     # said once, as the status line
+    reply = page.locator('[data-mc-thread] [data-kind="note"]').last
+    expect(reply).to_contain_text("All green.", timeout=8000)
+    expect(line).to_have_count(0)
+
+    def check(row):
+        steps = row.locator("[data-turn-steps]")
+        expect(steps).to_have_count(1)
+        expect(steps.locator("summary")).to_have_text("Ran 2 steps")
+        expect(steps.locator("li").first).to_be_hidden()                                 # folded
+        steps.locator("summary").click()
+        expect(steps.locator("li")).to_have_text(["Looked up GitHub issues", "Ran a command"])
+        expect(steps.locator("li").first).to_be_visible()
+        steps.locator("summary").click()
+        expect(steps.locator("li").first).to_be_hidden()
+        foot = row.locator("[data-turn-foot]")
+        expect(foot).to_be_visible()
+        expect(foot).to_have_text(re.compile(r"^Done in [\d.]+s · 1\.1k output tokens$"))
+        text = row.inner_text()
+        assert "minimoi_" not in text and "exec" not in text                              # names, never tool ids
+        assert text.index("Ran 2 steps") < text.index("All green.") < text.index("Done in")  # steps, answer, footer
+        assert "Checking GitHub" not in text                                                # the status line is not the answer
+
+    check(reply)
+    if SHOTS:
+        page.screenshot(path=f"{SHOTS}/545-desktop-steps.png")
+    page.reload()
+    page.wait_for_selector("body[data-ready=true]")
+    page.click("[data-mc-pill]") if page.locator("[data-mc-pill]").is_visible() else None
+    check(page.locator('[data-mc-thread] [data-kind="note"]').filter(has_text="All green.").last)
+    assert not [e for e in errors if "404" not in e], errors      # the route control's 404 on this test server is not ours
+    ctx.close()
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_545_the_steps_fit_a_phone_in_light_and_dark(browser, server, streaming_mc, scheme):
+    streaming_mc["runtime"].script = _script(_step(1, "exec", "start"), _step(1, "exec", "end", ok=True, ms=10),
+                                             _step(2, "exec", "start"), _step(2, "exec", "end", ok=True, ms=10),
+                                             "Both ran.", *FINISH)
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, color_scheme=scheme)
+    page = ctx.new_page()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    page.fill("#mc-input", "Run them")
+    page.click("[data-mc-send]")
+    reply = page.locator('[data-mc-thread] [data-kind="note"]').filter(has_text="Both ran.").last
+    expect(reply).to_have_count(1, timeout=8000)
+    steps = reply.locator("[data-turn-steps]")
+    expect(steps.locator("summary")).to_have_text("Ran 2 commands")
+    steps.locator("summary").tap()
+    expect(steps.locator("li")).to_have_text(["Ran a command", "Ran a command"])
+    box = steps.locator("summary").bounding_box()
+    assert box and box["height"] >= 24                                                    # a tap target, still small
+    assert page.evaluate("document.scrollingElement.scrollWidth <= window.innerWidth")    # no sideways scroll
+    color = page.evaluate("getComputedStyle(document.querySelector('[data-turn-steps] summary')).color")
+    background = page.evaluate("getComputedStyle(document.body).backgroundColor")
+    assert color != background
+    if SHOTS:
+        page.screenshot(path=f"{SHOTS}/545-phone-{scheme}.png")
+    assert not [e for e in errors if "404" not in e], errors
+    ctx.close()
+
+
 def test_s1_stop_ends_it_and_says_what_it_cannot_save(browser, server, streaming_mc):
     runtime = streaming_mc["runtime"]
     runtime.script = _script("A partial ", "WAIT", "answer.", *FINISH)
@@ -3892,6 +3975,7 @@ def test_r1_desktop_new_conversation_prove_inline_reply_stop_end_continue(browse
     page.click("[data-rm-new]")
     expect(page.locator("[data-rm-new-dialog]")).to_be_visible()
     page.fill("[data-rm-new-title]", "Planning Rooms")
+    page.click("[data-rm-new-dialog] details > summary")                   # purpose and members sit under Meeting details
     page.fill("[data-rm-new-purpose]", "Decide the first slice together")
     expect(page.locator("[data-rm-new-card='mc']")).to_be_checked()
     with page.expect_navigation():
@@ -3905,11 +3989,14 @@ def test_r1_desktop_new_conversation_prove_inline_reply_stop_end_continue(browse
     page.fill("[data-rm-input]", "Hello MC")
     page.click("[data-rm-send]")
     expect(page.locator("[data-rm-turns]")).to_contain_text("not yet proven. Use Invite → Prove first.")
+    # #548: the meeting says what joins MC (a proof, at a stated cost), not a two-minute silent wait.
+    expect(page.locator("[data-rm-proof-needed]")).to_contain_text("one paid turn, needs your OK")
+    expect(mc.locator(".rm-rsvp")).to_have_text("needs proof")
     # Prove inline from Invite; the draft is kept and the room stays open.
     page.fill("[data-rm-input]", "my unsent draft")
     page.click("[data-rm-invite]")
     card = page.locator("[data-rm-card='mc']")
-    expect(card).to_contain_text("Not yet proven — Prove first (one turn, needs your OK)")
+    expect(card).to_contain_text("Not yet proven here — Prove first (one paid turn, needs your OK)")
     _r1_shot(page, "r1-1-invite-prove-first")
     page.click("[data-rm-prove='mc']")
     expect(page.locator("[data-rm-prove='mc']")).to_have_text("Confirm: use one paid turn")
@@ -3963,6 +4050,38 @@ def test_r1_desktop_new_conversation_prove_inline_reply_stop_end_continue(browse
     expect(page.locator("[data-person='mc']")).to_have_attribute("data-rsvp", "accepted", timeout=15000)
     assert _no_page_overflow(page)
     assert not [e for e in errors if "401" not in e and "409" not in e], errors
+    ctx.close()
+
+
+def test_548_prove_first_from_the_meeting_then_mc_joins_and_the_proof_room_is_tidied(browser, server, rooms_r1):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/rooms")
+    page.click("[data-rm-new]")
+    page.fill("[data-rm-new-title]", "Monday sync")
+    expect(page.locator("[data-rm-new-cards]")).to_contain_text("needs a proof first (one paid turn, needs your OK)")
+    with page.expect_navigation():
+        page.click("[data-rm-new-create]")
+    page.wait_for_selector("body[data-ready=true]")
+    mc = page.locator("[data-person='mc']")
+    expect(mc).to_have_attribute("data-rsvp", "invited")
+    ask = page.locator("[data-rm-proof-for='mc']")
+    expect(ask).to_contain_text("one paid turn, needs your OK")
+    _r1_shot(page, "548-1-prove-first-in-meeting")
+    ask.locator("[data-rm-prove='mc']").click()
+    expect(ask.locator("[data-rm-prove='mc']")).to_have_text("Confirm: use one paid turn")
+    ask.locator("[data-rm-prove='mc']").click()
+    expect(mc).to_have_attribute("data-rsvp", "accepted", timeout=20000)
+    expect(page.locator("[data-rm-proof-needed]")).to_be_hidden()
+    expect(page.locator("[data-rm-status]")).to_contain_text("is proven")
+    # Only Robert's meeting is in the Active list; the proof room is archived, its record kept.
+    go(page, f"{server['url']}/guild-next/guild/rooms")
+    expect(page.locator("[data-rm-room]")).to_have_count(1)
+    expect(page.locator("[data-rm-room]")).to_contain_text("Monday sync")
+    archived = _records_fetch(page, "/v1/rooms?view=archived")
+    assert any(r["title"].startswith("Proof: Master Craftsman") for r in archived["body"]["rooms"]), archived
+    # 404s here come from the MC chat rail's conversation route on this page, not from Rooms.
+    assert not [e for e in errors if not any(code in e for code in ("401", "404", "409"))], errors
     ctx.close()
 
 
@@ -4274,7 +4393,8 @@ def test_b18_while_it_works_only_the_time_shows_and_the_answer_keeps_how_long_it
     assert "Waiting for a response" not in visible and "Still working" not in visible    # no wording about what for
     answer = _thread_note(page, "Noted.")
     expect(answer).to_have_count(1, timeout=10000)
-    expect(answer.locator("[data-turn-time]")).to_have_text(re.compile(r"^\d+s$"))        # and it keeps how long it took
+    # And it keeps how long it took: in the footer ("Done in 2.3s", #545), or on the meta line when the turn has no footer.
+    expect(answer.locator("[data-turn-done], [data-turn-time]").first).to_have_text(re.compile(r"^(Done in [\d.]+s|\d+s)$"))
     assert not errors, errors
     ctx.close()
 

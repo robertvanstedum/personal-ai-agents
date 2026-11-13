@@ -38,6 +38,8 @@ def _is_release_only(path: str) -> bool:
         "scripts/ci/release_base.sh",
         # Chooses which tests CI runs; CI only, never in a service image.
         "scripts/ci/select_tests.py",
+        # The deploy job's SSM runner and its stacks summary (#550); CI only, never in a service image.
+        "scripts/ci/ssm_run.sh", "scripts/ci/release_summary.py",
         # A nightly full-suite run on GitHub's runners; it deploys nothing.
         ".github/workflows/nightly-tests.yml",
     }
@@ -91,9 +93,12 @@ OPS_ONLY_FILES = frozenset({"scripts/operations/deploy_mc_container_ec2.sh",
                             # MC's 1.2 layer: travels in MC's own image and is refreshed by MC's tag release, only where
                             # an operator already placed it. No service in this pipeline reads it.
                             "docker-compose.mc-1-2-production.yml",
-                            # Guildhall on production: a by-hand image build and a host operator run on Robert's word.
+                            # Guildhall on production (#550): no main service runs these. They name the guildhall
+                            # target instead (GUILDHALL_DEPLOY_FILES below), which deploy.yml refreshes on its own.
                             ".github/workflows/rooms-worker-image.yml",
-                            "scripts/operations/guildhall_prod.sh"})
+                            "scripts/operations/guildhall_prod.sh",
+                            "docker-compose.guildhall-production.yml",
+                            "docker-compose.records-production.yml"})
 # The host runtime's installer (host runtime spec v0.5 R3.4-a; S1-H): run by an operator on the Mac (launchd) or on
 # the staging host (the systemd templates), on Robert's word, from a checkout; it installs a bundle outside any
 # checkout and is in no service image's command, compose file, Dockerfile or workflow (the test guards this). Without
@@ -271,6 +276,9 @@ LOCAL_TOOL_FILES = frozenset({"scripts/mc/morning.py", "scripts/mc/regression.py
 # The two exact scrub modules also serve the CoS Vault context renderer below;
 # changing them must rebuild all three production consumers. Import guards keep
 # expected laptop homes separate from any newly introduced production consumer.
+# Portal files the cos-scheduler image copies and loads by path (docker/Dockerfile.cos-scheduler): the upload reader for
+# Confer attachments (domains/cos/files.py). A change to it rebuilds both images.
+SCHEDULER_PORTAL_FILES = frozenset({"minimoi_portal/guild_ui/doc_reader.py"})
 WORKSHOP_BACKEND_PREFIXES = ("core/workshop_journal/", "core/vault_t1/", "core/agent_turns/", "core/jobs/")
 SHARED_SCRUB_FILES = frozenset({"utils/credential_scrub.py", "utils/payment_scrub.py"})
 
@@ -393,6 +401,68 @@ MC_RUNNER_LOCAL_FILES = frozenset({"core/mc_delegation_runner/cli.py", "core/mc_
                                    "core/mc_delegation_runner/otel.py", "core/mc_delegation_runner/claude_hook.py"})
 
 
+# The Guildhall stack (#550): minimoi-records runs the portal image (so every portal release moves it onto the new digest),
+# and the guildhall-cos and guildhall-mc workers run the rooms-worker image, which CI builds when its files change
+# (docker/Dockerfile.rooms-worker copies exactly these). guildhall_prod.sh refresh, run by deploy.yml's deploy job,
+# applies both. None of these files restarts a main service: the main project never reads them.
+GUILDHALL_WORKER_IMAGE_PREFIXES = ("services/rooms_worker/", "services/records_door/")
+GUILDHALL_WORKER_IMAGE_FILES = frozenset({"services/__init__.py", "docker/Dockerfile.rooms-worker",
+                                          "docker/requirements.rooms-worker.txt", ".github/workflows/rooms-worker-image.yml"})
+# How Guildhall is deployed: the refresh itself, the workers' project and Records' own project.
+GUILDHALL_DEPLOY_FILES = frozenset({"scripts/operations/guildhall_prod.sh", "docker-compose.guildhall-production.yml",
+                                    "docker-compose.records-production.yml"})
+# What Records runs from the portal image. These already release the portal (a full fallback), which names guildhall; listed
+# so the reason says Records.
+GUILDHALL_RECORDS_PREFIXES = ("domains/records/", "services/records_runtime.py", "services/records_prepare.py")
+
+
+def guildhall(paths: list[str], services: tuple[str, ...]) -> dict:
+    """{"guildhall": bool, "rooms_worker_image": bool, "reasons": [...]}: whether this release refreshes the Guildhall stack."""
+    paths = [item.strip() for item in paths if item.strip()]
+    worker = [p for p in paths if p.startswith(GUILDHALL_WORKER_IMAGE_PREFIXES) or p in GUILDHALL_WORKER_IMAGE_FILES]
+    reasons = []
+    if worker:
+        reasons.append("worker image files changed")
+    if any(p.startswith(GUILDHALL_RECORDS_PREFIXES) for p in paths):
+        reasons.append("Records code changed")
+    if any(p in GUILDHALL_DEPLOY_FILES for p in paths):
+        reasons.append("Guildhall deployment files changed")
+    if "portal" in services:
+        reasons.append("new portal image (Records runs it)")
+    return {"guildhall": bool(reasons), "rooms_worker_image": bool(worker), "reasons": reasons}
+
+
+def release_class_with_stacks(release_class: str, stacks: dict) -> str:
+    """A release that changes only Guildhall still deploys: 'guildhall' rather than 'documents'."""
+    return "guildhall" if release_class == "documents" and stacks["guildhall"] else release_class
+
+
+# Master Craftsman's own image (deploy-mc-agent.yml, on an mc-agent-v* tag). What it holds is what its Dockerfile copies,
+# plus the persona pin; deploy.yml compares the tag production runs with the release and says so loudly when MC is behind.
+MC_DOCKERFILE = "docker/mc-agent-container/Dockerfile"
+MC_PIN = "services/mc_operations/personas/mc-chat/pin.json"
+
+
+def mc_image_sources(root: Optional[Path] = None) -> tuple[str, ...]:
+    """Repository paths the MC image copies (a trailing / is a folder), read from its Dockerfile."""
+    root = root or Path(__file__).resolve().parents[2]
+    text = (root / MC_DOCKERFILE).read_text(encoding="utf-8").replace("\\\n", " ")
+    sources = {MC_DOCKERFILE, MC_PIN}
+    for line in text.splitlines():
+        words = line.split()
+        if not words or words[0].upper() not in ("COPY", "ADD") or any(w.startswith("--from") for w in words):
+            continue
+        operands = [w for w in words[1:] if not w.startswith("--")]
+        sources.update(operands[:-1])
+    return tuple(sorted(sources))
+
+
+def mc_agent_changes(paths: list[str], sources: tuple[str, ...]) -> list[str]:
+    """Changed paths the MC image holds."""
+    return sorted({p.strip() for p in paths if p.strip() and any(p.strip() == s or (s.endswith("/") and p.strip().startswith(s))
+                                                                    for s in sources)})
+
+
 def _is_staging_only(path: str) -> bool:
     return path in STAGING_ONLY_FILES or path.startswith(STAGING_ONLY_PREFIXES)
 
@@ -439,6 +509,8 @@ def classify(paths: list[str],
                 services.add("portal")                               # the portal runs these too (PORTAL_COS_FILES)
         elif path.startswith("domains/guild/"):
             services.update(("portal", "cos-bot", "cos-scheduler"))
+        elif path in SCHEDULER_PORTAL_FILES:
+            services.update(("portal", "cos-scheduler"))             # the scheduler image copies these (by path)
         elif path.startswith("minimoi_portal/"):
             services.add("portal")
         elif path.startswith(MC_PERSONA_PREFIXES):
@@ -520,13 +592,24 @@ def main() -> int:
     parser.add_argument("--github-output", type=Path)
     parser.add_argument("--base", help="commit the paths were diffed from (reads docker-compose.prod.yml per service)")
     parser.add_argument("--head", default="HEAD")
+    parser.add_argument("--mc-agent", action="store_true",
+                        help="print only the changed paths MC's own image holds (paths diffed from the tag production runs)")
     args = parser.parse_args()
     paths = args.paths or sys.stdin.read().splitlines()
+    if args.mc_agent:
+        changes = mc_agent_changes(paths, mc_image_sources())
+        print(json.dumps({"mc_agent_changes": changes, "count": len(changes)}))
+        return 0
     release_class, services = classify(paths, git_compose_diff(args.base, args.head) if args.base else None)
+    stacks = guildhall(paths, services)
     result = {
-        "release_class": release_class,
+        "release_class": release_class_with_stacks(release_class, stacks),
         "services": " ".join(services),
         "services_json": json.dumps(services),
+        "guildhall": "true" if stacks["guildhall"] else "false",
+        "rooms_worker_image": "true" if stacks["rooms_worker_image"] else "false",
+        "guildhall_reasons": "; ".join(stacks["reasons"]),
+        "stacks": " ".join(name for name, on in (("main", bool(services)), ("guildhall", stacks["guildhall"])) if on),
     }
     if args.github_output:
         with args.github_output.open("a", encoding="utf-8") as stream:

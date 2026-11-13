@@ -45,7 +45,8 @@ from typing import Callable
 from ..adapters.contract import now_iso
 from .backend import REAL_KINDS, NotAnAnswer, TurnResult, keep_reply
 from .openclaw import OPENCLAW_NO_RESPONSE
-from .stream import STREAM_ANSWER_FINISH_REASONS, Answer, Delta, Failure, Finish, RunStarted, Usage, Progress
+from .stream import STREAM_ANSWER_FINISH_REASONS, Answer, Delta, Failure, Finish, RunStarted, Step, Usage, Progress
+from .turn_steps import StepTally
 
 PING_S = 10.0
 RENDER_EVERY_S = 0.5
@@ -199,6 +200,7 @@ class StreamRun:
         self._stop_lock = threading.Lock()
         self.stop_acknowledged: bool | None = None      # None: Stop was never pressed
         self.job: dict | None = None                    # the job this reply started (a view), when the lane proposed one and the server agreed
+        self.steps = StepTally()                        # the run's tool steps, names only (issue #545)
         if record_usage is None:
             from .stream_usage import record_run as record_usage
         self._record_usage = record_usage
@@ -324,7 +326,14 @@ class StreamRun:
                 if isinstance(event, Answer):
                     answer_only = event.text
                     continue
+                if isinstance(event, Step):
+                    shown = self.steps.add(event)
+                    if shown is not None:
+                        self._put(("step", shown))
+                    continue
                 if isinstance(event, RunStarted):
+                    if event.replaces:
+                        self.steps.new_run()
                     if not run_seen or event.replaces:
                         run_seen = True
                         try:
@@ -456,7 +465,9 @@ class StreamRun:
         if ctx.turn_log is not None:
             ctx.turn_log.record(turn_id=ctx.turn_id, status=status, backend_kind=kind, duration_ms=duration_ms,
                                 failure_class=cls, reply_request_id=ctx.reply_key if status == "answered" else None,
-                                mode="stream", history_saved=history_saved)
+                                mode="stream", history_saved=history_saved, steps=self.steps.record(),
+                                output_tokens=(usage.completion_tokens if status == "answered" and usage is not None
+                                               and usage.source != "stub" else None))
         # Not dispatched: the relay was never reached (not_ready), or it refused
         # before calling MC (a caller, body or busy refusal). A 409 (stopped
         # before MC's headers), 502 or 504 comes after the relay called MC, so
@@ -490,6 +501,11 @@ class StreamRun:
                 turn["output_tokens"], turn["tokens_text"] = output, tokens_text(output)
                 if usage.source == "stub":
                     turn["tokens_text"] += " (stub)"
+            if turn is not None and "steps" not in turn:
+                from .turn_steps import view
+                shown = view(self.steps.record())
+                if shown is not None:
+                    turn["steps"] = shown
             outcome = {**base, "t": "done", "status": "answered", "reply_note": reply_note,
                        "elapsed_s": round(duration_ms / 1000, 1), "output_tokens": output,
                        "message": MESSAGES["answered"]}
@@ -548,6 +564,14 @@ def browser_events(run: StreamRun, *, render: Callable[[str], str], clock=time.m
                 yield _line({"t": "ping"})
                 continue
             if kind == "progress":
+                yield _line(payload)
+                continue
+            if kind == "step":
+                # A step begins: the text so far was the model saying what it is about to do. The page lifts its first
+                # sentence into the status line and clears the text, so only what follows the last step is shown live
+                # (the kept answer replaces it all at the end). The renders count from here again, as the page does.
+                if payload.get("phase") == "start":
+                    text, deltas, last_render, rendered = "", 0, None, -1
                 yield _line(payload)
                 continue
             if kind == "delta":

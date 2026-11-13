@@ -348,6 +348,11 @@ body.gu[data-page=floor] .fh-more{opacity:0;color:var(--r6-mute)}
 body.gu[data-page=floor] .fh-row:hover .fh-more,body.gu[data-page=floor] .fh-row:focus-within .fh-more,body.gu[data-page=floor] .fh-more[aria-expanded=true]{opacity:1}
 body.gu[data-page=floor] .fh-view{margin:10px 10px 0;font-size:13px}
 body.gu[data-page=floor] .fh-view a{color:var(--r6-soft)}
+body.gu[data-page=floor] .fh-more-row{display:flex;flex-wrap:wrap;gap:4px 16px;margin:6px 10px 0}
+body.gu[data-page=floor] .fh-more-row:not(:has(button:not([hidden]))){display:none}
+body.gu[data-page=floor] :is(.fh-older,.fh-top){padding:4px 0;border:0;background:none;color:var(--r6-soft);font:13px var(--r6-sans);cursor:pointer}
+body.gu[data-page=floor] :is(.fh-older,.fh-top):hover{color:var(--r6-ink);text-decoration:underline;text-underline-offset:3px}
+body.gu[data-page=floor] .fh-older:disabled{opacity:.6;cursor:default;text-decoration:none}
 body.gu[data-page=floor] .phone-places{display:none}
 
 /* The conversation: no card; the workshop scene faint behind it (⋯ → Picture: Faded, the default, or Hidden). */
@@ -399,6 +404,9 @@ body.gu[data-page=floor] .mc-thread .msg[data-author-kind=owner]{align-self:flex
 body.gu[data-page=floor] .mc-thread .msg[data-author-kind=owner] .msg-meta{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 body.gu[data-page=floor] .mc-thread .msg-platform{padding:8px 12px;border:1px solid var(--r6-line);border-radius:10px;background:rgba(251,247,240,.8);font-size:14px}
 body.gu[data-page=floor] .mc-thread .msg-foot{margin-top:4px;font-size:12.5px;color:var(--r6-mute)}
+body.gu[data-page=floor] .mc-thread .msg-steps{font-size:12.5px;color:var(--r6-mute)}
+body.gu[data-page=floor] .mc-thread .msg-steps>summary{color:inherit}
+body.gu[data-page=floor] .mc-thread .msg-steps>summary:hover{color:var(--r6-ink)}
 
 /* A new conversation: the workshop's card (the original hero, H1), first in the thread; it scrolls away with it. */
 body.gu[data-page=floor] .mc-thread>.craft-hero{width:min(1040px,100%);margin:8px 0}

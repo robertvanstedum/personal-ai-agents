@@ -458,7 +458,7 @@ def test_the_footer_joins_mcs_gateway_records_inside_the_turn_window(turned, tmp
     assert turn["output_tokens"] == 96 and turn["tokens_text"] == "96 output tokens"
     assert "window" not in turn
     page = client.get("/guild-next/guild/build").get_data(as_text=True)
-    assert f'{turn["done_text"]}</span><span data-turn-usage hidden> · 96 output tokens</span>' in page
+    assert f'{turn["done_text"]}</span><span data-turn-usage> · 96 output tokens</span>' in page
 
 
 def test_the_footer_says_tokens_unknown_with_no_store_or_no_match_once_the_turn_is_old(turned, tmp_path, monkeypatch):

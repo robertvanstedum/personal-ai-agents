@@ -66,7 +66,12 @@ def _mc_records(folder: str, emitter: str = "gateway") -> list[tuple[datetime, d
 
 
 def tokens_text(output_tokens: int) -> str:
-    return f"{output_tokens} output token{'s' if output_tokens != 1 else ''}"
+    """96 output tokens · 1.1k output tokens · 23k output tokens."""
+    if output_tokens < 1000:
+        return f"{output_tokens} output token{'s' if output_tokens != 1 else ''}"
+    k = output_tokens / 1000
+    short = f"{k:.1f}".removesuffix(".0") if k < 10 else f"{round(k)}"
+    return f"{short}k output tokens"
 
 
 def add_tokens(turns: dict, *, now: datetime | None = None, folder: str | None = None) -> dict:
@@ -88,7 +93,11 @@ def add_tokens(turns: dict, *, now: datetime | None = None, folder: str | None =
     for turn in turns.values():
         window = turn.pop("window", None)
         turn_id = turn.pop("turn_id", None)
+        kept = turn.pop("kept_tokens", None)
         turn["output_tokens"], turn["tokens_text"] = None, "tokens unknown"
+        if kept is not None:                          # kept with the turn's own record (turn_log.py)
+            turn["output_tokens"], turn["tokens_text"] = kept, tokens_text(kept)
+            continue
         if turn_id in streamed:
             turn["output_tokens"] = streamed[turn_id]
             turn["tokens_text"] = tokens_text(streamed[turn_id])

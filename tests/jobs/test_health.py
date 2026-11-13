@@ -187,6 +187,49 @@ def test_ec2_watchdog_writes_health_for_mc_and_sends_nothing_with_alerts_off(tmp
     assert (jobs / "health-ec2.json").is_file()
 
 
+def test_ec2_watchdog_with_more_jobs_than_a_status_file_holds_still_writes_its_final_status(tmp_path):
+    """Production's first run (13 Nov): 24 jobs judged, the contract holds 20 result parts, the final write raised
+    StatusError and the watchdog's file stayed "running". Problems stay by name; the rest become counts."""
+    jobs = tmp_path / "jobs"
+    rows = [job(id=f"fine-{n}", status_file=f"fine-{n}.json") for n in range(20)]
+    rows += [job(id="broken", status_file="broken.json"), job(id="silent", status_file="silent.json")]
+    rows += [job(id=f"untracked-{n}", evidence={"kind": "none", "why": "x"}, status_file=None) for n in range(3)]
+    path = registry_file(tmp_path, *rows)
+    r = registry.load(path)
+    for n in range(20):
+        put(jobs, r.get(f"fine-{n}"))
+    put(jobs, r.get("broken"), state="failed", success=NOW - 3 * D)
+    err = io.StringIO()
+    code = wd.run(jobs_root=jobs, host="ec2", registry_path=path, sender=lambda t: "sent", now=lambda: NOW,
+                  out=io.StringIO(), err=err, alerts=False)
+    assert code == 0 and err.getvalue() == ""
+    own = status.read_status(jobs, "jobs-watchdog-ec2.json", "jobs-watchdog-ec2")
+    assert own["state"] == "ok" and own["summary"] == "25 jobs checked"
+    assert own["results"]["broken"] == "failed" and own["results"]["jobs-ok"] == "20"
+    assert own["results"]["jobs-quiet"] == "4"                         # three not tracked, one not yet due
+    assert not any(k.startswith("fine-") for k in own["results"])
+    assert len(health.read_report(jobs, "ec2")["items"]) == 25        # the full list stays in the report
+
+
+def test_fit_results_keeps_every_code_that_fits_and_counts_problems_that_do_not():
+    few = {"a": "ok", "b": "failed"}
+    assert wd.fit_results(few, 19) == few
+    many = {f"p{n}": "missed" for n in range(25)}
+    fitted = wd.fit_results(many, 19)
+    assert len(fitted) == 19 and fitted["jobs-more"] == "9" and fitted["jobs-ok"] == "0"
+    status.build(job_id="x", host="ec2", run_id="r", state="ok", started_at=NOW, finished_at=NOW,
+                 results={**fitted, "health-push": "ok"})                # the contract accepts it
+
+
+def test_the_one_time_production_refresh_is_on_the_list_but_never_judged():
+    """#537 first run: vault-production-refresh read "missed". It was the by-hand seed (19 Oct); vault-sync and
+    vault-apply carry the records now, and refresh refuses once vault-apply serves."""
+    r = registry.load()
+    assert r.get("vault-production-refresh").retired
+    assert "vault-production-refresh" not in {j.id for j in r.for_host("ec2")}
+    assert {"vault-apply"} <= {j.id for j in r.for_host("ec2")} and "vault-sync" in {j.id for j in r.for_host("mac")}
+
+
 def test_watchdog_id_per_host():
     assert wd.watchdog_id("mac") == "jobs-watchdog" and wd.watchdog_id("dev") == "jobs-watchdog-dev"
 

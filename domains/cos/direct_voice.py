@@ -125,6 +125,13 @@ _WRITING = ("Set reminders in writing: you cannot set a reminder by voice, so if
             "writing in Confer. Commands such as /new are done in writing too.")
 
 
+# #542 (Robert, 12 Nov 2026: "not it's job to know deployment status"): what replaces MC's status rule in her session.
+STATUS_TO_MC = ("Deployments, what production runs and job health are Master Craftsman's to know, not yours: never guess "
+                "or report them. Say \"Let me check with Master Craftsman\", and when Robert asks you to (\"ask MC whether "
+                "the push finished\"), his question goes to MC through the app; MC's answer comes back as a note in this "
+                "chat, not in this call. ")
+
+
 def her_rules(actions=False, *, page_asks=False):
     """Her own operating rules for this session (§6.2, §6.4) under v3 (``actions`` is ignored, kept for its callers): no
     tools; the app consults her after Robert's yes. ``page_asks``: the page's line is the question (OpenAI, S6)."""
@@ -315,7 +322,8 @@ class ChiefOfStaff(DirectVoiceAdapter):
         bounded continuity, within INSTRUCTIONS_MAX_BYTES. ``page_asks``: OpenAI's page asks (review v3 S6)."""
         token = "\x00cos-voice-memory\x00"
         built = self._briefing(token)                     # once: it reads files and asks for live status
-        rules = (direct_rules(PERSON, OWNER_NAME, actions, page_asks=page_asks) + "\n\n"
+        # #542: deployments, production and job health are MC's, not hers: no status digest, and she defers to MC.
+        rules = (direct_rules(PERSON, OWNER_NAME, actions, page_asks=page_asks, platform_status=STATUS_TO_MC) + "\n\n"
                  + her_rules(actions, page_asks=page_asks))
         return bounded(rules, card, lambda memory: built.replace(token, memory), self._memory(), self._continuity(handle))
 

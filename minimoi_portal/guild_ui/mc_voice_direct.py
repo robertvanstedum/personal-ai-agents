@@ -236,6 +236,7 @@ class _MasterCraftsman(DirectVoiceAdapter):
     summary_key = "voice-summary-mc"        # MC's capped model-gateway key for the summary (Spec 165 §5.4, D22 (a))
     owner_name = "Robert"                    # the core's words name the owner as MC's always have (review R1 P3-12)
     board = True                             # MC has the Board: a post-it may wait as one (review v3 M1)
+    status_lookups = True                    # #542: a specific status question is a read-only lookup at once
     words = {"no_conversation": "Open a saved conversation before using voice.",                      # the Guild's words
              "not_listening": "Voice is on the record only. Go back on the record to use it.",
              "invalid": "Voice unavailable: open a saved conversation, on the record."}
@@ -303,7 +304,22 @@ class _MasterCraftsman(DirectVoiceAdapter):
         from .mc_voice_transcripts import block
         continuity = block("", api._conv_floor(conv), scrub=api.scrub, include_recent=True) if conv is not None else ""
         rules = DIRECT_INSTRUCTIONS + "\n\n" + direct_rules(PERSON, self.owner_name, page_asks=page_asks)
-        return compose_instructions(rules, card, continuity or NO_CONTINUITY)
+        # The platform status digest (#542): only for a saved conversation on the record, never Private (may_keep is the
+        # Guild write guard, which refuses off the record), as the typed path's context blocks.
+        status = self._status() if conv is not None and self.may_keep() else ""
+        return compose_instructions(rules, card, continuity or NO_CONTINUITY, status)
+
+    def _status(self):
+        """Job health, what production last deployed, and what waits on Robert, each from the builder MC's typed turn
+        uses (jobs_health, release_context, action_waiting), bounded and fail-safe (core.realtime_voice.status_digest)."""
+        from core.realtime_voice import status_digest
+        from . import action_waiting, feature_environ, jobs_health, release_context
+        who = (self.owner() or ("",))[0]
+        env = feature_environ()
+        return status_digest.safe(lambda: status_digest.compose([
+            ("Jobs", lambda: jobs_health.voice_summary(who, environ=env)),
+            ("Deploys", release_context.summary),
+            ("Waiting on Robert", lambda: action_waiting.voice_summary(who))]))
 
     def forget(self, sids):
         """Sessions that ended long ago (the core prunes them): their tags and first consult words go too."""

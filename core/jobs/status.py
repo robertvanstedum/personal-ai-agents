@@ -27,6 +27,7 @@ COMPLETED = ("ok", "warn")                 # a run that finished; counts for "la
 ALERT_VALUES = ("sent", "not_sent", "not_needed")
 FILE_MODE, DIR_MODE = 0o600, 0o700
 SUMMARY_MAX = 120
+RESULTS_MAX = 20                            # parts in ``results``; a writer with more must summarise
 _SUMMARY = re.compile(r"^[A-Za-z0-9 _:.,;=()+-]{0,%d}$" % SUMMARY_MAX)
 _PART = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
 _CODE = re.compile(r"^[a-z0-9][a-z0-9_:.-]{0,39}$")
@@ -77,7 +78,7 @@ def build(*, job_id: str, host: str, run_id: str, state: str, started_at: dateti
     for part, code in results.items():
         if not isinstance(part, str) or not _PART.match(part) or not isinstance(code, str) or not _CODE.match(code):
             raise StatusError("results")
-    if len(results) > 20:
+    if len(results) > RESULTS_MAX:
         raise StatusError("results")
     if state == "running" and (finished_at is not None or exit_code is not None):
         raise StatusError("running run has no finish")

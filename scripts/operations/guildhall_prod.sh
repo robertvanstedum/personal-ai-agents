@@ -1,10 +1,16 @@
 #!/bin/bash
-# guildhall_prod.sh: Guildhall on production's own host, on Robert's word. Opt-in; nothing else calls this.
+# guildhall_prod.sh: Guildhall on production's own host, on Robert's word. Switching it on or off is by hand; once it is on,
+# every production release keeps it current (refresh, called by .github/workflows/deploy.yml, #550).
 #
 #   guildhall_prod.sh [check]   read-only. Every gate by name, then what comes next. Exit 0: the next step may run.
 #   guildhall_prod.sh status    read-only. Exit 0 only when Guildhall is fully up and verified.
 #   guildhall_prod.sh start     GUILDHALL_PROD_APPROVED=1. Resumable: each run continues from what already exists.
 #   guildhall_prod.sh stop      GUILDHALL_PROD_APPROVED=1. Keeps state, keys, journals and the network.
+#   guildhall_prod.sh refresh   GUILDHALL_PROD_APPROVED=1. The release's step: Records onto the running portal's digest, the
+#                               workers onto MINIMOI_ROOMS_WORKER_IMAGE (when given), every gate first, verified after, and
+#                               anything it changed put back if a step fails. A host where Guildhall is not on is skipped.
+#                               Exit 0 refreshed, current or skipped; 1 refused, nothing changed; 5 failed and put back;
+#                               6 failed and NOT fully put back (act now: status, then stop or start).
 #
 # start waits at one point (exit 3): the worker tokens are issued by Records itself, so Records must be up before
 # scripts/operations/minimoi_1_2_prod_bind.py can write them. Run that, then run start again.
@@ -32,6 +38,7 @@ ROOT="$S/opt/minimoi"
 ETC="$S/etc/minimoi"
 BINDING="$ETC/records-production.json"
 STOPPED_BINDING="$ETC/records-production.stopped.json"
+PREVIOUS_BINDING="$ETC/records-production.previous.json"
 NETWORK=minimoi-records-production-1
 KEYS="$ROOT/secrets/records-production"
 STATE_PARENT="$ROOT/state/records-production"
@@ -40,6 +47,8 @@ INPUTS="$KEYS/prepare-inputs.json"
 SECRETS="$ROOT/secrets/1-2"
 STATE12="$ROOT/state/1-2"
 ENV_FILE="$ROOT/guildhall.env"
+PREVIOUS_ENV_FILE="$ROOT/guildhall.env.previous"
+OBSERVATION="$ROOT/release-status/guildhall.json"
 MAIN_ENV="$ROOT/.env"
 WORKERS_FILE="$ROOT/docker-compose.guildhall-production.yml"
 MAIN_LAYER="$ROOT/docker-compose.guildhall-production-main.yml"
@@ -53,6 +62,7 @@ RECORDS_PORTAL_FILE="$ROOT/docker-compose.records-production-portal.yml"
 LOG_DIR="$ROOT/operators/guildhall-logs"
 WORKER_PROJECT=minimoi-guildhall-production
 TRIES=30; [[ -n "$S" ]] && TRIES=1
+GATE_MODE=start
 
 # Written by minimoi_1_2_prod_setup.py apply.
 SETUP_TOKENS="cos-guildhall/cos-service.token guildhall-mc/mc-service.token"
@@ -206,6 +216,41 @@ def main(command, *args):
             fail()
     elif command == "binding_receipt":
         print(json.load(open(args[0], encoding="utf-8"))["inputs"]["backup_receipt"])
+    elif command == "binding_image":   # A digest: not a secret.
+        image = json.load(open(args[0], encoding="utf-8"))["inputs"]["image"]
+        if not PORTAL_DIGEST.fullmatch(image):
+            fail()
+        print(image)
+    elif command == "rebind":          # The same binding on another reviewed portal digest; every other input kept.
+        path, image = args
+        if not PORTAL_DIGEST.fullmatch(image):
+            fail()
+        document = json.load(open(path, encoding="utf-8"))
+        document["inputs"]["image"] = image
+        write_private(path, json.dumps(document, sort_keys=True).encode())
+    elif command == "env_image":
+        image = read_env(args[0]).get("MINIMOI_ROOMS_WORKER_IMAGE", "")
+        if not WORKER_DIGEST.fullmatch(image):
+            fail()
+        print(image)
+    elif command == "observe":         # Nonsecret: what the delivery record shows for Guildhall. Digests, a tag, a result.
+        path, result, tag, records, worker, changed = args
+        commit = os.environ.get("MINIMOI_RELEASE_COMMIT", "")
+        body = {"format": "minimoi.guildhall-observation/1", "result": result, "release_tag": tag,
+                "release_commit": commit if re.fullmatch(r"[0-9a-f]{40}", commit) else "",
+                "records_image": records.rpartition("@")[2], "worker_image": worker.rpartition("@")[2],
+                "changed": [c for c in changed.split(",") if c],
+                "observed_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(timespec="seconds")}
+        if not os.path.isdir(os.path.dirname(path)):
+            return
+        temporary = path + ".tmp"
+        if os.path.lexists(temporary):
+            os.unlink(temporary)
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(json.dumps(body, sort_keys=True) + "\n")
+        os.chmod(temporary, 0o644)
+        os.rename(temporary, path)
     elif command == "write_env":
         path, root, network, image = args
         if not WORKER_DIGEST.fullmatch(image):
@@ -426,6 +471,9 @@ gates() {
     sched=$(inspect minimoi-cos-scheduler | H scheduler_tag) || sched=""
     if [[ -n "$tag" ]]; then ok "portal runs an immutable release tag"; else bad "portal is not on a release tag"; fi
     if [[ -n "$tag" && "$tag" == "$sched" ]]; then ok "CoS scheduler is on the same release"
+    elif [[ "$GATE_MODE" == refresh && -n "$sched" ]]; then
+      # start redeploys both on the portal's tag; a refresh redeploys neither, and a scoped release may move one alone.
+      info "pending  CoS scheduler is on another release tag: a refresh redeploys neither"
     else bad "CoS scheduler is not on the portal's release"; fi
     if portal_digest >/dev/null; then ok "portal digest"; else bad "portal digest not found in minimoi/portal"; fi
     if portal_wired; then wired=yes; fi
@@ -650,7 +698,7 @@ deploy_main_project() {
 
 # Robert's own row in Rooms' access list, through the portal that reads it. seed_owner never overwrites a list that exists,
 # so a re-run, or a list changed since, stays as it is. Without this row he is refused Rooms on a working Guildhall.
-ensure_owner_access() {
+owner_access_ok() {
   docker exec -w /app minimoi-portal python3 -c '
 import os
 from minimoi_portal import rooms_identity as R
@@ -659,24 +707,33 @@ os.makedirs(folder, mode=0o700, exist_ok=True)
 access = R.RoomsAccess(folder)
 access.seed_owner("account:robert", "robert", granted_by="guildhall_prod-start")
 raise SystemExit(0 if access.decide("account:robert").ok else 1)
-' >/dev/null 2>&1 || die "Robert's Rooms access could not be confirmed. Nothing was undone: read the access list, or run stop." 6
+' >/dev/null 2>&1
+}
+ensure_owner_access() {
+  owner_access_ok || die "Robert's Rooms access could not be confirmed. Nothing was undone: read the access list, or run stop." 6
   say "confirmed: Robert's Rooms access"
 }
 
+WORKER_LOG=""
+workers_up() {   # 1: ECR login failed. 2: compose refused. Output goes to a private log only.
+  WORKER_LOG=$(private_log workers)
+  if ! aws ecr get-login-password --region us-east-1 2>/dev/null | docker login --username AWS --password-stdin "$REGISTRY" >"$WORKER_LOG" 2>&1; then
+    return 1
+  fi
+  docker-compose --project-name "$WORKER_PROJECT" --project-directory "$ROOT" --env-file "$ENV_FILE" \
+    -f "$WORKERS_FILE" --profile guildhall-production up -d >>"$WORKER_LOG" 2>&1 || return 2
+}
+
 start_workers() {
-  local log
+  local code=0
   if [[ ! -e "$ENV_FILE" ]]; then
     H write_env "$ENV_FILE" "$ROOT" "$NETWORK" "${MINIMOI_ROOMS_WORKER_IMAGE:-}" || die "could not write guildhall.env"
     say "wrote: guildhall.env"
   fi
   H check_env "$ENV_FILE" "$ROOT" "$NETWORK" || die "guildhall.env is not this host's"
-  log=$(private_log workers)
-  if ! aws ecr get-login-password --region us-east-1 2>/dev/null | docker login --username AWS --password-stdin "$REGISTRY" >"$log" 2>&1; then
-    die "ECR login failed"
-  fi
-  docker-compose --project-name "$WORKER_PROJECT" --project-directory "$ROOT" --env-file "$ENV_FILE" \
-    -f "$WORKERS_FILE" --profile guildhall-production up -d >>"$log" 2>&1 ||
-    die "the workers did not start; log in $(short "$log")"
+  workers_up || code=$?
+  (( code == 1 )) && die "ECR login failed"
+  (( code == 2 )) && die "the workers did not start; log in $(short "$WORKER_LOG")"
   say "up: workers"
 }
 
@@ -719,6 +776,127 @@ cmd_start() {
   start_workers
   wait_verified || die "started, but not verified. Nothing was undone. Read status, or run stop." 6
   say "result: Guildhall is up. Prove it with one real meeting: named turn, open question, stop, reload."
+}
+
+# ---- refresh: the release's own step, once Guildhall is on (#550) -------------------------------------------------------
+# The merge that starts the release is Robert's word for this. It changes only what the release changed: Records follows
+# the portal's digest (Records runs that image), the workers follow the worker image CI built. Every gate runs first; a
+# refusal changes nothing. Once something moved, any failure puts it back and verifies, so a release never leaves a
+# half-refreshed Guildhall behind silently: the deploy fails with what happened, and guildhall.json records it.
+R_TAG=""; R_RECORDS=""; R_WORKER=""; R_CHANGED=""; R_RECORDS_MOVED=0; R_WORKERS_MOVED=0
+
+short_digest() { local d="${1##*@}"; printf '%s' "${d:0:19}"; }
+
+finish() {   # RESULT EXIT-CODE MESSAGE. The one way out of a refresh.
+  H observe "$OBSERVATION" "$1" "$R_TAG" "$R_RECORDS" "$R_WORKER" "$R_CHANGED" || say "  (could not write $(short "$OBSERVATION"))"
+  say "guildhall-result: $1"
+  say "result: $3"
+  exit "$2"
+}
+
+put_back() {   # Newest change first. 0: what moved is back, and Guildhall verifies.
+  local fails=0 code=0
+  if (( R_WORKERS_MOVED )); then
+    if mv -f "$PREVIOUS_ENV_FILE" "$ENV_FILE" && { workers_up || code=$?; (( code == 0 )); }; then
+      R_WORKER=$(H env_image "$ENV_FILE") || R_WORKER=""
+      say "put back: workers on $(short_digest "$R_WORKER")"
+    else
+      say "  REFUSED  the workers could not be put back${WORKER_LOG:+; log in $(short "$WORKER_LOG")}"; fails=1
+    fi
+  fi
+  if (( R_RECORDS_MOVED )); then
+    if mv -f "$PREVIOUS_BINDING" "$BINDING" && backend_plan start | H run_plan start && wait_records_healthy && portal_env_ok; then
+      R_RECORDS=$(H binding_image "$BINDING") || R_RECORDS=""
+      say "put back: Records on $(short_digest "$R_RECORDS")"
+    else
+      say "  REFUSED  Records could not be put back on its previous image"; fails=1
+    fi
+  fi
+  (( fails == 0 )) && wait_verified && return 0
+  return 1
+}
+
+refresh_failed() {   # MESSAGE
+  say "  FAILED   $1"
+  if put_back; then
+    finish rolled_back 5 "the refresh failed ($1). What it changed is back and Guildhall verifies; the release is not fully done."
+  fi
+  finish rollback_failed 6 "the refresh failed ($1) and Guildhall is NOT verified. Act now: guildhall_prod.sh status, then stop or start."
+}
+
+refresh_records() {   # TARGET portal digest
+  local target="$1"
+  if [[ "$R_RECORDS" != "$target" ]]; then
+    cp -p "$BINDING" "$PREVIOUS_BINDING" || finish refused 1 "could not keep the previous binding; nothing changed"
+    if ! H rebind "$BINDING" "$target"; then
+      mv -f "$PREVIOUS_BINDING" "$BINDING"
+      finish refused 1 "could not write the binding for the new image; nothing changed"
+    fi
+    if ! backend_plan preflight | H run_plan preflight; then
+      mv -f "$PREVIOUS_BINDING" "$BINDING"
+      finish refused 1 "Records' preflight refused the release's portal image; Records stays on $(short_digest "$R_RECORDS"), nothing changed"
+    fi
+    say "passed: Records preflight on the release's portal image"
+    R_RECORDS_MOVED=1; R_RECORDS="$target"; R_CHANGED="records"
+    backend_plan start | H run_plan start || refresh_failed "Records did not start on the release's portal image"
+  else
+    # Same image: still apply the plan, so a change to Records' compose files alone takes effect (an idempotent up -d).
+    backend_plan start | H run_plan start || refresh_failed "Records did not start"
+  fi
+  wait_records_healthy || refresh_failed "Records did not become healthy"
+  portal_env_ok || refresh_failed "deployment.py --portal-env refuses Records"
+  say "up: Records on $(short_digest "$R_RECORDS")"
+}
+
+refresh_workers() {   # IMAGE worker digest
+  local image="$1" code=0
+  if [[ "$image" != "$R_WORKER" ]]; then
+    cp -p "$ENV_FILE" "$PREVIOUS_ENV_FILE" || refresh_failed "could not keep the previous guildhall.env"
+    R_WORKERS_MOVED=1
+    H write_env "$ENV_FILE" "$ROOT" "$NETWORK" "$image" || refresh_failed "could not write guildhall.env"
+    R_WORKER="$image"; R_CHANGED="${R_CHANGED:+$R_CHANGED,}workers"
+  fi
+  H check_env "$ENV_FILE" "$ROOT" "$NETWORK" || refresh_failed "guildhall.env is not this host's"
+  workers_up || code=$?
+  (( code == 1 )) && refresh_failed "ECR login failed"
+  (( code == 2 )) && refresh_failed "the workers did not start; log in $(short "$WORKER_LOG")"
+  say "up: workers on $(short_digest "$R_WORKER")"
+}
+
+cmd_refresh() {
+  require_approved
+  GATE_MODE=refresh
+  local report failures target worker
+  # Not on here: a release never switches Guildhall on or back on. That stays start's, by hand.
+  if [[ ! -e "$BINDING" && ! -f "$MAIN_LAYER" ]] && ! container_exists minimoi-records \
+     && ! container_exists minimoi-guildhall-cos && ! container_exists minimoi-guildhall-mc; then
+    if [[ -e "$STOPPED_BINDING" ]]; then finish skipped 0 "Guildhall was stopped on this host; start switches it back on. Nothing changed."; fi
+    finish skipped 0 "Guildhall is not switched on on this host. Nothing changed."
+  fi
+  R_TAG=$(release_tag) || R_TAG=""
+  report=$(gates)
+  printf '%s\n' "$report"
+  failures=$(grep 'REFUSED' <<< "$report" || true)
+  [[ -z "$failures" ]] || finish refused 1 "the gates refused; nothing changed"
+  [[ -e "$BINDING" && -f "$MAIN_LAYER" ]] || finish refused 1 "Guildhall is only partly on (binding or main layer missing): run check. Nothing changed."
+  [[ -z "$(missing_tokens)" ]] || finish refused 1 "worker tokens are missing: run check. Nothing changed."
+  tokens_agree || finish refused 1 "guildhall-cos and cos-guildhall hold different cos-service tokens. Nothing changed."
+  guildhall_on_main_project ||
+    finish refused 1 "the portal or CoS scheduler runs without Guildhall's layer: the main release dropped it. Nothing changed."
+  target=$(portal_digest) || finish refused 1 "portal digest not found. Nothing changed."
+  R_RECORDS=$(H binding_image "$BINDING") || finish refused 1 "the binding holds no portal digest. Nothing changed."
+  R_WORKER=$(H env_image "$ENV_FILE") || finish refused 1 "guildhall.env holds no worker digest. Nothing changed."
+  worker="${MINIMOI_ROOMS_WORKER_IMAGE:-$R_WORKER}"
+  H worker_image "$worker" || finish refused 1 "MINIMOI_ROOMS_WORKER_IMAGE is not an immutable production digest. Nothing changed."
+
+  say "refresh"
+  refresh_records "$target"
+  refresh_workers "$worker"
+  owner_access_ok || refresh_failed "Robert's Rooms access could not be confirmed"
+  say "confirmed: Robert's Rooms access"
+  wait_verified || refresh_failed "Guildhall did not verify after the refresh"
+  if [[ -n "$R_CHANGED" ]]; then finish refreshed 0 "Guildhall refreshed ($R_CHANGED) and verified."; fi
+  finish current 0 "Guildhall was already on this release's images; verified."
 }
 
 cmd_stop() {
@@ -781,8 +959,8 @@ cmd_stop() {
 main() {
   local command="${1:-check}"
   case "$command" in
-    check|status|start|stop) ;;
-    *) die "usage: guildhall_prod.sh [check|status|start|stop]" 2 ;;
+    check|status|start|stop|refresh) ;;
+    *) die "usage: guildhall_prod.sh [check|status|start|stop|refresh]" 2 ;;
   esac
   require_root_and_production
   case "$command" in
@@ -790,6 +968,7 @@ main() {
     status) cmd_status ;;
     start) cmd_start ;;
     stop) cmd_stop ;;
+    refresh) cmd_refresh ;;
   esac
 }
 

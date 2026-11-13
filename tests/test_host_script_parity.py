@@ -35,6 +35,13 @@ def test_the_backup_scripts_are_shipped_by_the_deploy():
     assert "host_script_parity.py check --notify || echo parity: drift reported" in DEPLOY   # never fatal
 
 
+def test_the_hand_installed_copies_the_first_watchdog_run_found_now_ship():
+    """#537 first run: parity failed on two hand-installed copies (Guildhall's kit, a July backup-cron installer)."""
+    by_host = {e["host"]: e for e in hsp.load_config(CONFIG)}
+    for host in ("/opt/minimoi/scripts/guildhall_prod.sh", "/opt/minimoi/scripts/setup_backup_cron.sh"):
+        assert by_host[host]["ship"] is True and by_host[host]["mode"] == "0755"
+
+
 def test_every_script_the_backup_cron_runs_is_listed():
     listed = {e["host"] for e in hsp.load_config(CONFIG)}
     cron = (ROOT / "scripts" / "setup_backup_cron.sh").read_text()
@@ -125,3 +132,14 @@ def test_check_cli_exits_one_on_drift(repo, tmp_path):
 def test_the_real_config_bundles(tmp_path):
     m = hsp.bundle(ROOT, CONFIG, "test", tmp_path / "real.tgz")
     assert len(m["files"]) == len(hsp.load_config(CONFIG))
+
+
+def test_the_host_scripts_ssm_command_stays_under_the_limit(tmp_path):
+    """The deploy ships the bundle base64 inside one SSM command; AWS refuses commands over ~97 KB (release review, 13 Nov)."""
+    import base64, subprocess
+    from pathlib import Path as _P
+    repo = _P(__file__).resolve().parents[1]
+    out = tmp_path / "host-scripts.tgz"
+    subprocess.run([sys.executable, str(repo / "scripts/operations/host_script_parity.py"), "bundle", "--commit", "0" * 40,
+                    "--out", str(out)], cwd=repo, check=True, capture_output=True)
+    assert len(base64.b64encode(out.read_bytes())) < 95_000, "host-scripts bundle near AWS's 97 KB SSM limit: trim or split it"
