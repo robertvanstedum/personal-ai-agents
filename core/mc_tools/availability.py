@@ -15,6 +15,14 @@ def offered_list(value):
     return frozenset(value)
 
 
+def _cards_readable() -> bool:
+    from . import cards
+    try:
+        return bool(cards.catalogue())
+    except cards.Unavailable:
+        return False
+
+
 def snapshot(service, policy_tools, offered_tools):
     """Intersect the admitted policy, configured handler dependencies and plugin factory list.
 
@@ -27,6 +35,7 @@ def snapshot(service, policy_tools, offered_tools):
         "minimoi_guest_request_reject": [(service.guest_rejects, "guest_actions_off")],
         "minimoi_github_issues": [(service.github is not None, "github_reader_unavailable")],
         "minimoi_github_get": [(getattr(service, "github_api", None) is not None, "github_reader_unavailable")],
+        "minimoi_open_card": [(_cards_readable(), "cards_unavailable")],
         "minimoi_issue_comment": [(service.comments, "issue_comments_unavailable")],
         "minimoi_data_repair_ticket": [(service.tickets, "issue_filer_unavailable")],
         "minimoi_issue_create": [(service.tickets, "issue_filer_unavailable")],

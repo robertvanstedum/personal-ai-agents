@@ -38,3 +38,30 @@ def test_the_conversation_lane_keeps_its_safety_limits():
     chat = CONFIG["agents"]["entries"]["mc-chat"]["tools"]
     assert "group:runtime" in chat["deny"] and chat["fs"]["workspaceOnly"] is True
     assert CONFIG["agents"]["entries"]["mc-chat"]["memory"]["search"]["enabled"] is False
+
+
+BUILT_INS_KEPT = ["read", "ls", "web_search", "view_image", "session_status"]
+BUILT_INS_DROPPED = ["write", "edit", "apply_patch", "skill_workshop", "sessions", "sessions_list", "sessions_history",
+                     "sessions_search", "sessions_yield", "agents_wait", "conversations_list", "conversations_send",
+                     "conversations_turn", "progress_card", "create_goal", "get_goal", "update_goal", "intent", "ask_user",
+                     "tts", "github_identity_status"]
+
+
+def test_the_conversation_lane_runs_cos_s_minimal_pattern_with_every_minimoi_tool():
+    """Robert, 12 Nov ("Yes, both"): OpenClaw's built-ins trimmed to five, every MiniMoi tool kept (no usage data yet),
+    the open-card tool included. Measured on 9.6: 77 tools / 67,036 schema chars -> 57 / 40,451."""
+    chat = CONFIG["agents"]["entries"]["mc-chat"]["tools"]
+    minimoi = CONFIG["plugins"]["entries"]["minimoi-tools"]["config"]["tools"]
+    assert chat["profile"] == "minimal"
+    assert chat["alsoAllow"] == BUILT_INS_KEPT + minimoi
+    assert "minimoi_open_card" in minimoi and len(minimoi) == 52
+    assert not set(BUILT_INS_DROPPED) & set(chat["alsoAllow"])
+    # The cards, the persona and the handbook name no dropped tool.
+    texts = [p.read_text() for p in (REPO / "services/mc_operations/personas/mc-chat/releases/0.1.34").rglob("*.md")]
+    texts += [p.read_text() for p in (REPO / "services/mc_operations/handbook/v0.1.3").rglob("*.md")]
+    for name in BUILT_INS_DROPPED:
+        if name in ("write", "edit", "intent", "sessions"):        # ordinary English words; check them as tool names
+            name = f"`{name}`"
+        assert not any(name in t for t in texts), name
+    # The plan/agent lane is unchanged by this trim.
+    assert CONFIG["agents"]["entries"]["mc-agent"]["tools"]["profile"] == "full"

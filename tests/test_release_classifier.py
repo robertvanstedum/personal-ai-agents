@@ -1025,8 +1025,10 @@ def test_mc_persona_folder_and_tools_have_no_unclassified_production_reader():
             if "mc_persona" in text.replace("mc_operations/personas", ""):
                 tool_users.add(rel)
     # The portal's card root, the loader's docstring naming it, and MC's own image (tag-only, deploy-mc-agent.yml).
+    # core/mc_tools/cards.py (#553): the portal's MC tools service opens a card of the pinned release; persona changes
+    # already redeploy the portal.
     assert readers == {"minimoi_portal/guild_ui/mc_voice_direct.py", "core/realtime_voice/voice_card.py",
-                       "docker/mc-agent-container/Dockerfile"}
+                       "docker/mc-agent-container/Dockerfile", "core/mc_tools/cards.py"}
     assert tool_users <= {"core/realtime_voice/voice_card.py"}                         # its docstring names the tools
     for path in (root / "docker-compose.prod.yml", root / "scripts/operations/deploy_scoped_release.sh",
                  root / ".github/workflows/deploy.yml"):

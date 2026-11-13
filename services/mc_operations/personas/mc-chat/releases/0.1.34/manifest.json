@@ -8,9 +8,9 @@
   "target": "mc-agent container",
   "files": {
     "SOUL.md": "dfe279acf7c5ee9b38ab607aeda9f9a7b5cf35a2b2baa3c8379e273affdb2bca",
-    "AGENTS.md": "1611cc110a2aa182581b5ebb043ca9470da07cac915d49647153614436a869ff",
+    "AGENTS.md": "25c2d816af770ee44b24e6be2c4831f8caa0e931a03f2a7b5b32e399fbedcb4c",
     "RUNTIME.openclaw.md": "12ab1e702f2f796477ddb5e8f2549bf48cd143bfe43655e8a4ff8d4886433db8",
-    "CHANGES.md": "e0be86bece531ba6fd4899dadd670d8fc46905052644e0480f3bcadee8224cb5",
+    "CHANGES.md": "2ca327af14f1638985fe3a883235a79f43add0628d829847e51558a3412e8c5b",
     "voice.json": "ceed7a8999dc5da1742881f81a0c58cdd7e86d6e0e08eea884da93731b9074b6",
     "skills/mc-building/SKILL.md": "88ed20862a8cc6f716dabafdb7b3d22c6845358e75002b68aad5b7138e0c8c27",
     "skills/mc-corrections/SKILL.md": "c88b8753d8900b9e059e502dda7693a28f4b200ebd9c743f7fbb1aeab9fb7b74",

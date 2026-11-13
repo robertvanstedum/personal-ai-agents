@@ -1,6 +1,6 @@
 {
   "schema": "mc-policy/1",
-  "revision": "mc-prod-20261112-github-get",
+  "revision": "mc-prod-20261113-open-card",
   "rules": [
     {
       "capability": "host.health",
@@ -72,6 +72,24 @@
       "verify": null,
       "undo": null,
       "egress": "github_read",
+      "max_operations_per_turn": 10
+    },
+    {
+      "capability": "mc.skill.read",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "open_card_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
       "max_operations_per_turn": 10
     },
     {

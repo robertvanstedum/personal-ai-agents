@@ -241,6 +241,34 @@
       }
     },
     {
+      "name": "minimoi_open_card",
+      "capability": "mc.skill.read",
+      "label": "Open one of your cards",
+      "description": "Open one of your cards (skills): returns that card's full text, read-only. Use it whenever a card's \"Open when...\" line matches the message, before you act or answer, on any model route. name is the card's name exactly as listed; nothing else is accepted.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "mc-building",
+              "mc-corrections",
+              "mc-delivery",
+              "mc-front-door",
+              "mc-guildhall",
+              "minimoi-engineering"
+            ],
+            "minLength": 3,
+            "maxLength": 64
+          }
+        }
+      }
+    },
+    {
       "name": "minimoi_issue_comment",
       "capability": "issue.propose_comment",
       "label": "Propose a comment on an issue",

@@ -511,6 +511,21 @@ class ToolService:
         state, message, data = self.github_api.get(path, {k: v for k, v in args.items() if k != "path"})
         return result("done" if state == "ok" else "refused", "read" if state == "ok" else state, message, data)
 
+    def _open_card(self, args, caller, observation):
+        """#553: one of MC's cards (its pinned persona's skills, the handbook's engineering skill), read-only, by name only.
+        The one way MC opens a card on every model route, including the Claude plan route where its Read is off."""
+        from . import cards
+        with self._tx() as conn:
+            self._bind(conn, caller)
+        name = args.get("name")
+        state, text = cards.open_card(name)
+        if state != "ok":
+            words = {"card_unknown": "No card by that name. Open only a card from your list, by its exact name.",
+                     "cards_unavailable": "Your cards can't be read right now. Say so; don't answer the procedure from memory.",
+                     "card_unverified": "That card failed its integrity check and was not opened. Tell Robert."}
+            return result("refused", state, words[state], {})
+        return result("done", "card_read", f"Card {name}: follow it.\n\n{text}", {"name": name})
+
     def _public_text_refusal(self, conn, text):
         """The reason this text must not go to the public repository, or None (review P2-4):
         - ASCII letters after NFKC, with a narrow punctuation mapping for screening only; look-alike letters

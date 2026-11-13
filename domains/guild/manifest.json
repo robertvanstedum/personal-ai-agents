@@ -54,6 +54,13 @@
       "status": "implemented"
     },
     {
+      "id": "mc.skill.read",
+      "kind": "read",
+      "label": "Open one of MC's cards (its procedures)",
+      "mc_tool": "minimoi_open_card",
+      "status": "implemented"
+    },
+    {
       "id": "issue.comment",
       "kind": "action",
       "label": "Comment on an issue (with Robert's yes)",
