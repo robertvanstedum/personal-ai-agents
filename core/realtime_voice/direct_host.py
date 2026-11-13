@@ -63,6 +63,10 @@ GOODBYE = "All right. Talk soon."      # Robert, 7 Nov 2026: done means done; a 
 SUMMARY_UNAVAILABLE = "Summary unavailable."
 SPEECH_MAX_CHARS = 3500              # a longer reply is read in part and the page says so aloud
 CONSULT_WAIT_S = 25                  # a consult is waited for this long, under every proxy and portal timeout, then pending
+# A spoken lookup on a host that sets ``lookup_wait_s`` (MC) is waited for that long instead (#561). Production MC turns,
+# 12-13 Nov 2026 (mc_turns.jsonl, 18 answered): median 20 s, p90 45 s, max 56 s; at 25 s about four in ten lookups answered
+# "pending" and the voice filled the gap. Bounded under nginx's 120 s and the page's LOOKUP_POST_MS (90 s).
+LOOKUP_WAIT_MAX_S = 80
 CONSULT_MAX_BYTES = 32 * 1024        # a consult body (review R1 P3-10), like the summary's
 CHECK_CALL = "host-"                 # the call id of Check with the person: the page's own consult, never the model's
 PRUNE_AFTER_S = 3600                 # a session's memory here is let go this long after its maximum duration
@@ -135,8 +139,11 @@ def speakable(text: str) -> str:
     t = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", t)
     t = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", t)
     t = re.sub(r"[`*_#>]+", "", t)
-    t = re.sub(r"\n{2,}", ". ", t)
+    # A paragraph break is a sentence break: one full stop, never a second after the paragraph's own (#561: "..").
+    t = re.sub(r"([.!?:;])?[ \t]*\n{2,}", lambda m: (m.group(1) or ".") + " ", t)
     t = re.sub(r"\s+", " ", t).strip()
+    from core.realtime_voice.spoken import single_stops
+    t = single_stops(t)
     if len(t) > SPEECH_MAX_CHARS:
         cut = t[:SPEECH_MAX_CHARS]
         stop = max(cut.rfind(". "), cut.rfind("? "), cut.rfind("! "))
@@ -482,8 +489,7 @@ def _status_rule(platform_status):
             "lookup as well. A general one (\"how are things?\") you answer at once, in a sentence or two, from the "
             "platform status at the end of these instructions (DATA from the start of this call), problems first, and "
             "say you can check something specific. Never answer a specific one from the platform status while it is "
-            "being checked. If a lookup's answer did not "
-            "reach you, say so, and give the platform status only as what it said at the start of the call. If there is "
+            "being checked, and never give a guess of your own in its place. If there is "
             "no platform status, say it isn't in front of you and offer to check, never that all is well; never say you "
             "can't see GitHub or the deploys, since the app checks them for you. ")
 
@@ -507,13 +513,14 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False, platfor
     lookup = ("Answer at once, with no check, anything you already have: the time and date (from the latest clock line "
               "in this call), your briefing and this conversation. "
               f"When {owner} only asks to look something else up (facts, status, counts, whether something happened), "
-              "never ask him to confirm: the app looks it up at once. Say once, in a few words, that you're checking (for "
-              "example \"Let me check.\"), and nothing about the answer: never say what you think it is, not from your "
+              "never ask him to confirm: the app looks it up at once, and a real check can take a minute. Say once, in a word "
+              "or two, that you're checking (for example \"Checking.\"), then stay quiet, and say nothing about the answer: never say what you think it is, not from your "
               "briefing, the platform status or earlier in the call. The app gives you the answer when it returns: say it "
               "once, and never say it again when the same result is shown later. Never promise or start anything in words: no \"On "
               "it\", \"Will do\" or \"I'll do that\"; work he asks for waits for his confirmation. Beyond that one line, never narrate "
-              "the machinery: never say you are waiting on a result, or that a result has not arrived. If an answer has not "
-              "reached you by his next words, say plainly that you couldn't get it just now, and carry on with him. "
+              "the machinery: never say you are waiting on a result, or that a result has not arrived. Never say you couldn't get "
+              "an answer: the app tells you when a check could not be done or is taking longer. If he says something else "
+              "meanwhile, answer that, and if he asks about the check, say only that it is still running. "
               f"A written record of this call is kept: after the call {owner} can download its transcript from the chat. ")
     lookup += _status_rule(platform_status)
     request = lookup + f"When {owner} asks for a note, a post-it, or work that changes something (making, changing, " \
@@ -960,6 +967,9 @@ class DirectVoiceAdapter:
     # Whether a specific status question (status_question) is a lookup by the grammar (#542): MC, whose platform it is.
     # CoS defers such questions to MC (Robert, 12 Nov 2026: "not it's job to know deployment status").
     status_lookups = False
+    # How long a spoken lookup's request waits for its turn before answering pending (consult_wait, #561): None is
+    # CONSULT_WAIT_S. MC's lookups are real turns with GitHub reads; CoS keeps 25 s, under her proxy's 40 s bound.
+    lookup_wait_s = None
     # Whether the host has a Board for post-its (MC). Review v3 M1: on a host with none (CoS) the understanding call is not
     # offered postit, and a post-it heard anyway waits as a request to the person's typed turn (consult).
     board = False
@@ -1973,6 +1983,15 @@ def same_key(adapter, sessions, handle, sid, call_id, item, words, existing, nam
     return answer, 200
 
 
+def consult_wait(adapter, read_only):
+    """How long a consult request waits for its turn before answering pending: CONSULT_WAIT_S, or for a spoken lookup the
+    host's own ``lookup_wait_s`` (MC: a real turn with GitHub reads), never past LOOKUP_WAIT_MAX_S."""
+    wait = getattr(adapter, "lookup_wait_s", None) if read_only else None
+    if isinstance(wait, (int, float)) and not isinstance(wait, bool) and wait > CONSULT_WAIT_S:
+        return min(float(wait), LOOKUP_WAIT_MAX_S)
+    return CONSULT_WAIT_S
+
+
 def run(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began, *, read_only=False):
     """The admitted owner turn runs in a worker (Spec 165 §5.1). This request waits CONSULT_WAIT_S for it: the result if
     it finishes, else pending ("the answer will be in the conversation"). The worker keeps the outcome record and the
@@ -2006,7 +2025,7 @@ def run(adapter, sessions, principal, handle, sid, call_id, name, text, item, n,
                                     **({"saved": result["saved"]} if isinstance(result.get("saved"), bool) else {})})
     worker = copy_current_request_context(work) if has_request_context() else work
     threading.Thread(target=worker, name=f"voice-consult-{item}", daemon=True).start()
-    finished.wait(CONSULT_WAIT_S)
+    finished.wait(consult_wait(adapter, read_only))
     with lock:
         if state["result"] is not None:
             return state["result"]

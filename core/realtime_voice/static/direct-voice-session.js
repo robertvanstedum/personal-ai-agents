@@ -149,11 +149,14 @@ const READY_PLAY_MS = 8000;              // "Your summary is ready" plays out by
 // A slow consult's holding lines (Spec 165 v0.3 §12.4): one by 8 s and a second by 17 s, and the server answers pending at
 // 25 s, so there is never more than 10 s of silence. Each says only what is true, never a result, and waits for a pause.
 const HOLDING = [[8000, 'Still checking.'], [17000, 'Still working on it.']];
-// A spoken lookup (a status question, #542) already said once that it is checking (#561, 13 Nov 2026: the voice guessed
-// "finished" while MC's lookup ran, then read out MC's "not finished"). Its holding lines keep the same times and never say
-// "checking" again, and never a status.
-export const CHECKING = 'Let me check.';
-const LOOKUP_HOLDING = [[8000, 'Still working on it.'], [17000, 'One more moment.']];
+// A spoken lookup (a status question, #542) says once that it is checking, then stays quiet until its one answer (#561,
+// 13 Nov 2026: the voice guessed "finished" while MC's lookup ran, said it couldn't get the answer seconds before it came,
+// then read out MC's answer twice). No holding lines: each was one more thing for the voice to talk around.
+export const CHECKING = 'Checking.';
+const LOOKUP_HOLDING = [];
+// A lookup's request waits this long (a real MC turn with GitHub reads: core direct_host LOOKUP_WAIT_MAX_S, 80 s, is the
+// most a host waits before answering pending), under nginx's 120 s.
+const LOOKUP_POST_MS = 90000;
 const QUIET_WAIT_MS = 8000;               // a line for the voice waits this long for a pause, then is sent (the pause was missed)
 const SUMMARY_WAIT_MS = 45000;            // the summary's answer is awaited this long (Spec 165 §5.3); then it may still appear
 const FLUSH_WAIT_MS = 5000;               // the barrier waits this long for the last posts' answers; after it, unanswered is not kept
@@ -674,21 +677,21 @@ export function directVoice(d) {
   // §4 under v3: the action path. Only a confirmed waiting action, or a tap on Check, is sent; the server checks the
   // confirmation and acts on the action's own owner item and words (the (session, owner_item_id) key, receipts, one effect
   // per owner item, reconcile and retry, all unchanged). Whatever comes back is said in content-free words (outcomeLine).
-  async function post(request, item, held = null) {
+  async function post(request, item, held = null, timeoutMs = CONSULT_POST_MS) {
     const stopHolding = held || holding();
     consultedItem = item;                                             // by a confirmation or by Check with <person>
     consulted.add(item);
     const lost = (x) => x.status === 0 || x.status >= 500;
     const inFlight = (x) => x.status === 409 && x.body.error === 'in flight';
     try {
-      let r = await postJson(direct.consult_url, request, { timeoutMs: CONSULT_POST_MS });
+      let r = await postJson(direct.consult_url, request, { timeoutMs });
       // No answer within the bound, which sits above the server's own 25 s wait: the consult may be running, so its outcome is
       // unknown, and the server is asked once what became of it; never not done, and never posted again (review F3).
       if (r.timedOut) return reconcile(item);
       // No answer (the network, or the server failing): the same call once more. The server runs a call once and keeps its
       // answer, so this runs it for the first time or returns what it did, never twice (a retried confirm: the same receipt).
       const retried = lost(r);
-      if (retried) r = await postJson(direct.consult_url, request, { timeoutMs: CONSULT_POST_MS });
+      if (retried) r = await postJson(direct.consult_url, request, { timeoutMs });
       if ((r.status === 409 && r.body.error === 'session ended') || r.status === 403) {
         const code = r.status === 409 ? 'session_ended' : String(r.body.error || 'refused').replace(/ /g, '_');
         Promise.resolve().then(() => heard({ failed: code, status: r.status }));
@@ -1076,7 +1079,7 @@ export function directVoice(d) {
     kinds.set(x.owner_item_id, kind);
     const body = await post({ session_id: sessionId(), call_id: `confirm-${x.action_id}`, action_id: x.action_id,
       confirm_item_id: x.confirm_item_id, owner_item_id: x.owner_item_id, text_sha256: x.text_sha256 }, x.owner_item_id,
-      x.lookup ? holding(LOOKUP_HOLDING) : null);
+      x.lookup ? holding(LOOKUP_HOLDING) : null, x.lookup ? LOOKUP_POST_MS : CONSULT_POST_MS);
     if (finalized) return;
     answered(x.owner_item_id, body);
     sayAtPause(outcomeSay(kind, body));
