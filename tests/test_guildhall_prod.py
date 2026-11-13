@@ -128,7 +128,12 @@ if project == "minimoi-records-production":
     join(state, NETWORK, "minimoi-records")
 elif project == "minimoi-guildhall-production":
     env_file = dict(line.split("=", 1) for line in open(argv[argv.index("--env-file") + 1]).read().splitlines() if "=" in line)
-    image = env_file.get("MINIMOI_ROOMS_WORKER_IMAGE", "worker")
+    # Like real Compose: a variable in the shell's environment wins over --env-file, even when empty, and an
+    # empty value fails the file's ${MINIMOI_ROOMS_WORKER_IMAGE:?} check (the 13 Nov 2026 production refresh failure).
+    image = os.environ.get("MINIMOI_ROOMS_WORKER_IMAGE", env_file.get("MINIMOI_ROOMS_WORKER_IMAGE", "worker"))
+    if not image:
+        print("required variable MINIMOI_ROOMS_WORKER_IMAGE is missing a value", file=sys.stderr)
+        sys.exit(1)
     if image in state.get("refused_worker_images", []):
         sys.exit(1)
     for name in ("minimoi-guildhall-cos", "minimoi-guildhall-mc"):
@@ -1045,6 +1050,15 @@ def test_refresh_moves_the_workers_onto_the_image_ci_built(running):
     assert binding_image(running) == PORTAL_DIGEST
 
 
+def test_refresh_when_ci_built_no_worker_image_keeps_the_workers_on_guildhall_env(running):
+    # deploy.yml passes an empty MINIMOI_ROOMS_WORKER_IMAGE when build-worker is skipped; the env file must still decide.
+    before = env_image(running)
+    result = refresh(running, MINIMOI_ROOMS_WORKER_IMAGE="")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert env_image(running) == before
+    assert {running.load()["containers"][n]["Config"]["Image"] for n in ("minimoi-guildhall-cos", "minimoi-guildhall-mc")} == {before}
+
+
 def test_refresh_with_nothing_new_is_current_and_changes_no_input(running):
     binding, env = running.binding.read_bytes(), (running.root / "guildhall.env").read_bytes()
     result = refresh(running)
@@ -1166,3 +1180,11 @@ def test_refresh_never_prints_a_value(running):
     text = "".join(o.stdout + o.stderr for o in outputs) + json.dumps(running.calls()) + json.dumps(observation(running))
     for value in values:
         assert value and value not in text
+
+
+def test_the_workers_start_clears_every_key_guildhall_env_owns():
+    import re
+    text = (ROOT / "scripts/operations/guildhall_prod.sh").read_text()
+    owned = set(re.findall(r'"(MINIMOI_[A-Z_]+)"', text.split("ENV_KEYS = {", 1)[1].split("}", 1)[0]))
+    start = text.split("workers_up() {", 1)[1].split("\n}", 1)[0]
+    assert set(re.findall(r"-u (MINIMOI_[A-Z_]+)", start)) == owned
