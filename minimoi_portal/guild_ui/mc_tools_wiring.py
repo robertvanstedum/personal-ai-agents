@@ -323,6 +323,16 @@ def github_reader(cfg, *, http_get=None):
     return GitHubIssues(http_get or requests.get, repo=_repo(cfg), token=_private_token(cfg.get("read_token_file", "")))
 
 
+def github_api_reader(cfg, *, http_get=None):
+    """MC's generic read-only GitHub API reader (#543), on the same switch and read token as ``github_reader``."""
+    if not cfg["github_read"]:
+        return None
+    import requests
+    from core.mc_tools.github_api import GitHubRepoReader
+    return GitHubRepoReader(http_get or requests.get, repo=_repo(cfg),
+                            token=_private_token(cfg.get("read_token_file", "")))
+
+
 def _guest_people():
     """Display names and emails of every guest login, expired too: names that must never appear in public text."""
     from minimoi_portal import auth
@@ -637,7 +647,7 @@ def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, sho
                        build_jobs=cfg["build_jobs"],
                        invites=cfg["invites"] if invites is None else invites,
                        tickets=issue_filer(cfg) is not None, comments=issue_commenter(cfg) is not None,
-                       guest_rejects=cfg["guest_rejects"], github=github_reader(cfg), show=show, read_shown=read_shown,
+                       guest_rejects=cfg["guest_rejects"], github=github_reader(cfg), github_api=github_api_reader(cfg), show=show, read_shown=read_shown,
                        isolated_runtime=cfg["isolated_runtime"], people=_guest_people,
                        standard_changes=cfg["standard_changes"],
                        guests_lookup=_guests_lookup, policy=policy_source(cfg), read_owner_note=read_owner_note,

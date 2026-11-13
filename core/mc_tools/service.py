@@ -194,7 +194,7 @@ def refused(code) -> dict:
 class ToolService:
     def __init__(self, connect, *, principal: str, environment: str, allowed_agents=("mc-chat",),
                  lessons=None, delegation: bool = False, invites: bool = False, tickets: bool = False,
-                 comments: bool = False, guest_rejects: bool = False, github=None, show=None, read_shown=None,
+                 comments: bool = False, guest_rejects: bool = False, github=None, github_api=None, show=None, read_shown=None,
                  isolated_runtime: bool = False, worker: str = "mc-tools", guests_lookup=None, people=None,
                  standard_changes=None, display_tz: str = offers.DISPLAY_TZ, policy=None, read_owner_note=None,
                  domain_health=None, registers=None, board=None, tasks=None, export_conversation=None, artifact_root=None, agent_contact=None, recall_source=None,
@@ -210,6 +210,7 @@ class ToolService:
         self.build_jobs = bool(build_jobs)                 # the code-gated build job; off on Dev (MC front door spec §3)
         self.tickets, self.comments, self.guest_rejects = bool(tickets), bool(comments), bool(guest_rejects)
         self.github = github                          # core.mc_tools.github.GitHubIssues, or None: GitHub reads off
+        self.github_api = github_api                  # core.mc_tools.github_api.GitHubRepoReader, or None (#543)
         # show(conversation_id, note_key, text) -> bool: the platform posts a proposal verbatim in the conversation;
         # read_shown(conversation_id, note_key) -> note dict | None reads that note back (spec §9.1). Both or no offers.
         self.show, self.read_shown, self.display_tz = show, read_shown, display_tz
@@ -486,6 +487,28 @@ class ToolService:
             state, message, data = self.github.issue(**options)
         else:
             state, message, data = getattr(self.github, op)(**options)
+        return result("done" if state == "ok" else "refused", "read" if state == "ok" else state, message, data)
+
+    def _github_get(self, args, caller, observation):
+        """#543: one GET under the fixed repository (core.mc_tools.github_api). Refused paths cost no GitHub call."""
+        if self.github_api is None:
+            return refused("tool_unavailable")
+        from .github_api import check_path
+        path = args.get("path")
+        refusal = check_path(path, self.github_api.repo)
+        if refusal:
+            state, message, data = self.github_api.get(path)        # words only; check_path refuses before any call
+            return result("refused", state, message, data)
+        with self._tx() as conn:
+            b = self._bind(conn, caller)
+            with _cursor(conn) as cur:                # anyone can write on GitHub: the turn and conversation are tainted
+                cur.execute("""UPDATE guild.mc_tool_turns SET untrusted_read=true WHERE ledger_id=%s
+                    AND claim_generation=%s""", (b.ledger_id, b.generation))
+                cur.execute("""INSERT INTO guild.mc_tool_conversation_taint (principal_id, environment, conversation_id)
+                    VALUES (%s,%s,%s) ON CONFLICT (principal_id, environment, conversation_id)
+                    DO UPDATE SET last_read_at = clock_timestamp()""",
+                    (self.principal, self.environment, b.conversation_id))
+        state, message, data = self.github_api.get(path, {k: v for k, v in args.items() if k != "path"})
         return result("done" if state == "ok" else "refused", "read" if state == "ok" else state, message, data)
 
     def _public_text_refusal(self, conn, text):

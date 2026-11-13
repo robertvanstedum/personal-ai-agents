@@ -26,6 +26,7 @@ def snapshot(service, policy_tools, offered_tools):
         "minimoi_conversation_export": [(getattr(service,"export_conversation",None) is not None,"conversation_export_unavailable")],
         "minimoi_guest_request_reject": [(service.guest_rejects, "guest_actions_off")],
         "minimoi_github_issues": [(service.github is not None, "github_reader_unavailable")],
+        "minimoi_github_get": [(getattr(service, "github_api", None) is not None, "github_reader_unavailable")],
         "minimoi_issue_comment": [(service.comments, "issue_comments_unavailable")],
         "minimoi_data_repair_ticket": [(service.tickets, "issue_filer_unavailable")],
         "minimoi_issue_create": [(service.tickets, "issue_filer_unavailable")],

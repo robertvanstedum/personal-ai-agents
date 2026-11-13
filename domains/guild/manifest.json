@@ -47,6 +47,13 @@
       "status": "implemented"
     },
     {
+      "id": "github.repo.read",
+      "kind": "read",
+      "label": "Read GitHub: workflow runs, deploys, PRs and commits",
+      "mc_tool": "minimoi_github_get",
+      "status": "implemented"
+    },
+    {
       "id": "issue.comment",
       "kind": "action",
       "label": "Comment on an issue (with Robert's yes)",

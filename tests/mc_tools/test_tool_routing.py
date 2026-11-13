@@ -27,6 +27,10 @@ class Routing(unittest.TestCase):
                                                 or hasattr(S.ToolService, "_" + n.removeprefix("minimoi_")))]
         self.assertEqual(missing, [])
 
+    def test_the_generic_github_read_routes_to_its_own_handler(self):
+        self.assertIn("minimoi_github_get", offered())
+        self.assertTrue(callable(getattr(S.ToolService, "_github_get", None)))
+
     def test_the_task_adapter_answers_each_tool_routed_to_it(self):
         adapter = TasksAdapter.__new__(TasksAdapter)
         seen = []
