@@ -480,6 +480,7 @@ jobs:
               "cd /opt/minimoi",
               "/opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/.env",
               "/opt/minimoi/scripts/cos_prod.sh prepare",
+              "R=/opt/minimoi/mc/repo; S=/opt/minimoi/mc/work/REPO_COPY_STATUS.txt; O=$(stat -c %U $R 2>/dev/null || echo root); if [ -d $R/.git ] && runuser -u $O -- git -C $R fetch -q --depth=1 origin ${{ github.sha }} && runuser -u $O -- git -C $R checkout -q --detach FETCH_HEAD; then echo status=ok commit=$(runuser -u $O -- git -C $R rev-parse HEAD) wanted=${{ github.sha }} at=$(date -u +%FT%TZ) > $S; echo MC repo copy refreshed to ${{ github.sha }}; else echo status=skipped commit=$(runuser -u $O -- git -C $R rev-parse HEAD 2>/dev/null) wanted=${{ github.sha }} at=$(date -u +%FT%TZ) > $S; echo WARN: MC repo copy not refreshed, see issue 567; fi; chown $O $S || true",
               "MINIMOI_RELEASE_COMMIT=${{ github.sha }} /opt/minimoi/scripts/deploy_scoped_release.sh ${{ needs.build-push.outputs.image_tag }} ${{ needs.classify.outputs.services }}"
             ],executionTimeout=["1800"]' \
             --query 'Command.CommandId' \
