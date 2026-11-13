@@ -10,6 +10,68 @@ import { newKey } from './actions.js';
 
 let page;
 const chatTitle = title => !title || title === 'New conversation' ? 'New chat' : title;
+// A row's time: today's time, "Yesterday", else the short date, in Robert's zone (chat-sidebar.js; the server renders the same).
+const chatWhen = iso => window.MiniMoiChatSidebar?.when ? window.MiniMoiChatSidebar.when(iso) : { label: '', full: '' };
+function relabelTimes(root = document) {
+  if (!window.MiniMoiChatSidebar?.when) return;
+  for (const t of root.querySelectorAll('[data-chat-when]')) {
+    const w = chatWhen(t.dataset.chatWhen);
+    if (w.label) { t.textContent = w.label; t.title = w.full; }
+  }
+}
+
+// A list row, the same markup floor.html renders, for the rows "Show older chats" brings in.
+function listRowFor(conv, view) {
+  const title = chatTitle(conv.title);
+  const li = el('li', { class: 'fh-row', 'data-conv': conv.id, 'data-pinned': conv.pinned ? 'true' : 'false' });
+  const link = el('a', { class: 'fh-link', href: `${page.urls.floor}?c=${encodeURIComponent(conv.id)}`, 'data-conv-link': true });
+  const name = el('span', { class: 'fh-title', 'data-conv-title': true });
+  if (conv.pinned) name.append(el('span', { class: 'fh-pin', 'aria-label': 'Pinned' }, '📌 '));
+  name.append(document.createTextNode(title));
+  const w = chatWhen(conv.updated_at);
+  const meta = el('span', { class: 'fh-meta small' });
+  meta.append(el('time', { 'data-chat-when': conv.updated_at, datetime: conv.updated_at, title: w.full }, w.label));
+  link.append(name, meta);
+  const more = el('button', { type: 'button', class: 'fh-more', 'data-conv-menu': true, 'aria-haspopup': 'true',
+    'aria-expanded': 'false', 'aria-label': `Actions for ${title}` }, '⋯');
+  const menu = el('div', { class: 'fh-menu', 'data-conv-actions': true, role: 'menu', hidden: true });
+  const item = (act, label) => el('button', { type: 'button', role: 'menuitem', 'data-conv-act': act }, label);
+  if (view === 'archived') menu.append(item('restore', 'Restore'));
+  else menu.append(item('rename', 'Rename'), item(conv.pinned ? 'unpin' : 'pin', conv.pinned ? 'Unpin' : 'Pin'), item('archive', 'Remove from list'));
+  li.append(link, more, menu);
+  return li;
+}
+
+// "Show older chats" (12 Nov 2026): the next ten join the bottom of the list in place; "Back to top" shows once it has grown.
+function initOlder(list) {
+  const older = $('[data-conv-older]'), top = $('[data-conv-top]');
+  if (!older) return;
+  older.addEventListener('click', async () => {
+    const view = list.dataset.view === 'archived' ? 'archived' : 'active';
+    const shown = Number(list.dataset.shown) || $$('[data-conv]', list).length;
+    const keep = page.conversation?.id ? `&keep=${encodeURIComponent(page.conversation.id)}` : '';
+    const label = older.textContent;
+    older.disabled = true;
+    older.textContent = 'Loading…';
+    const r = await apiGet(`/conversations?view=${view}&offset=${shown}&limit=10&hide_empty=1${keep}`);
+    older.disabled = false;
+    older.textContent = label;
+    if (!r.ok || !Array.isArray(r.body?.conversations)) { notice('Older chats could not be loaded. Nothing was changed.'); return; }
+    const have = new Set($$('[data-conv]', list).map(n => n.dataset.conv));
+    const fresh = r.body.conversations.filter(c => !have.has(c.id)).map(c => listRowFor(c, view));
+    list.append(...fresh);
+    list.dataset.shown = String(shown + r.body.conversations.length);
+    older.hidden = !r.body.more;
+    if (top) top.hidden = false;
+    const first = fresh[0]?.querySelector('[data-conv-link]');
+    if (first) { first.focus({ preventScroll: true }); first.scrollIntoView({ block: 'nearest' }); }
+    else if (older.hidden && top) top.focus();
+  });
+  if (top) top.addEventListener('click', () => {
+    for (const box of [list.closest('[data-floor-history]'), list]) box?.scrollTo?.({ top: 0, behavior: 'smooth' });
+    $('[data-conv-link]', list)?.focus({ preventScroll: true });
+  });
+}
 
 function floorUrl(cid) {
   if (page.chat_scope) {
@@ -24,32 +86,36 @@ function floorUrl(cid) {
 function initPicker() {
   const picker = $('[data-conv-picker]'), body = $('[data-conv-picker-body]');
   if (!picker || !body) return;
-  let rows = [], offset = 0, archived = false, generation = 0;
+  let rows = [], shown = 10, archived = false, generation = 0;
   const button = (label, action) => { const b = el('button', {type: 'button', class: 'btn-quiet'}, label); b.addEventListener('click', action); return b; };
-  function draw() {
+  function draw(focusAt = -1) {
     const list = el('ol', {class: 'mc-history-list', 'aria-label': archived ? 'Archived conversations' : 'Recent conversations'});
-    for (const conv of rows.slice(offset, offset + 10)) {
-      const link = el('a', {href: floorUrl(conv.id), 'data-conv-pick': conv.id}, conv.title);
+    for (const conv of rows.slice(0, shown)) {
+      const link = el('a', {href: floorUrl(conv.id), 'data-conv-pick': conv.id}, chatTitle(conv.title));
       if (conv.id === page.conversation?.id) link.setAttribute('aria-current', 'true');
+      const w = chatWhen(conv.updated_at);
+      if (w.label) link.append(' · ', el('time', {class: 'mc-history-when', datetime: conv.updated_at, title: w.full, 'data-chat-when': conv.updated_at}, w.label));
       const row = el('li'); row.append(link); list.append(row);
     }
     body.replaceChildren(list);
     if (!rows.length) body.append(el('p', {}, archived ? 'Nothing archived.' : 'No conversations yet.'));
     const controls = el('div', {class: 'mc-history-controls'});
-    if (offset) controls.append(button('Newer', () => { offset -= 10; draw(); }));
-    if (offset + 10 < rows.length) controls.append(button('Older', () => { offset += 10; draw(); }));
+    // One "Show older chats" (12 Nov 2026): the next ten join the list, so it never reads as a sort order.
+    if (shown < rows.length) controls.append(button('Show older chats', () => { const at = shown; shown += 10; draw(at); }));
     controls.append(button(archived ? 'Recent' : 'Archived', () => { archived = !archived; load(); }));
     body.append(controls);
+    if (focusAt >= 0) body.querySelectorAll('[data-conv-pick]')[focusAt]?.focus();
   }
   async function load() {
     const current = ++generation;
     body.replaceChildren(el('p', {role: 'status'}, 'Loading…'));
-    const r = await apiGet(`/conversations?view=${archived ? 'archived' : 'active'}`);
+    const keep = page.conversation?.id ? `&keep=${encodeURIComponent(page.conversation.id)}` : '';
+    const r = await apiGet(`/conversations?view=${archived ? 'archived' : 'active'}&hide_empty=1${keep}`);
     if (current !== generation) return;
     if (!r.ok || !Array.isArray(r.body?.conversations)) {
       body.replaceChildren(el('p', {role: 'status'}, 'History is unavailable right now.'), button('Retry', load)); return;
     }
-    rows = r.body.conversations; offset = 0; draw();
+    rows = r.body.conversations; shown = 10; draw();
     if (r.body.unreadable) body.append(el('p', {role: 'status'}, 'Some conversations could not be read.'));
   }
   picker.addEventListener('toggle', () => { if (picker.open) load(); });
@@ -204,8 +270,11 @@ export function initConversations(p) {
       }
     });
   }
+  relabelTimes();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) relabelTimes(); });   // "today" moves at midnight
   const list = $('[data-conv-list]');
   if (!list) return;
+  initOlder(list);
   list.addEventListener('click', async (e) => {
     const menuBtn = e.target.closest('[data-conv-menu]');
     if (menuBtn) {

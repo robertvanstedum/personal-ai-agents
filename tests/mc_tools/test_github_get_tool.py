@@ -315,3 +315,12 @@ class Wiring(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class SecretBearingSegments(unittest.TestCase):
+    def test_secret_and_variable_bearing_segments_are_refused(self):
+        from core.mc_tools import github_api
+        for seg in ("secret-scanning", "organization-variables", "dependabot-secrets"):
+            with self.subTest(seg=seg):
+                self.assertEqual(github_api.check_path(f"/repos/{DEFAULT_REPO}/{seg}/alerts"), "path_denied")

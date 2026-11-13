@@ -1,4 +1,6 @@
 """Contextual chat history stays with the Board; real browser, synthetic local records."""
+import re
+
 import pytest
 from playwright.sync_api import expect
 from browser_checks_b1 import browser, server, fresh_queue, floor, _context, go, _wt, _no_page_overflow  # noqa:F401
@@ -9,8 +11,9 @@ def test_history_picker_keeps_board_and_panel_mode_with_ten_recent_chats(browser
     ctx, page = _context(browser, server, width, height)
     go(page, server['url'] + '/guild-next/guild/board')
     for index in range(12):
-        answer = _wt(page, '/conversations', {'title': f'History check {index}'})
+        answer = _wt(page, '/conversations', {})
         assert answer['conversation']['id']
+        _wt(page, f"/conversations/{answer['conversation']['id']}/rename", {'title': f'History check {index}'})   # named: listed
     page.click('[data-mc-pill]')
     expect(page.locator('[data-mc-invite]')).to_have_count(0)
     page.locator('[data-conv-picker] summary').click()
@@ -24,11 +27,12 @@ def test_history_picker_keeps_board_and_panel_mode_with_ten_recent_chats(browser
     assert send_box['y'] + send_box['height'] <= min(height, panel_box['y'] + panel_box['height'])
     page.screenshot(path=f'/private/tmp/mc-history-{width}x{height}.png')
     first_recent = page.locator('[data-conv-pick]').first.get_attribute('data-conv-pick')
-    page.locator('[data-conv-picker-body]').get_by_role('button', name='Older', exact=True).click()
-    expect(page.locator('[data-conv-pick]').first).not_to_have_attribute('data-conv-pick', first_recent)
-    assert 0 < page.locator('[data-conv-pick]').count() <= 10
-    selected = page.locator('[data-conv-pick]').first.get_attribute('data-conv-pick')
-    page.locator('[data-conv-pick]').first.click()
+    expect(page.locator('[data-conv-picker-body]').get_by_role('button', name=re.compile('^(Newer|Older)$'))).to_have_count(0)
+    page.locator('[data-conv-picker-body]').get_by_role('button', name='Show older chats', exact=True).click()   # 12 Nov 2026
+    expect(page.locator('[data-conv-pick]').first).to_have_attribute('data-conv-pick', first_recent)          # added below, in place
+    assert 10 < page.locator('[data-conv-pick]').count() <= 20
+    selected = page.locator('[data-conv-pick]').nth(10).get_attribute('data-conv-pick')
+    page.locator('[data-conv-pick]').nth(10).click()
     expect(page).to_have_url(__import__('re').compile(r'/guild-next/guild/board\?.*c=' + selected))
     expect(page.locator('[data-mc-panel]')).to_have_attribute('data-mode', 'floating')
     expect(page.locator('[data-bd-grid]')).to_be_attached()
@@ -51,8 +55,10 @@ def test_drafts_follow_their_conversation_and_never_persist_private_text(browser
     ctx, page = _context(browser, server, 1440, 900)
     base = server['url'] + '/guild-next/guild/board'
     go(page, base)
-    first = _wt(page, '/conversations', {'title': 'Draft one'})['conversation']['id']
-    second = _wt(page, '/conversations', {'title': 'Draft two'})['conversation']['id']
+    first = _wt(page, '/conversations', {})['conversation']['id']
+    second = _wt(page, '/conversations', {})['conversation']['id']
+    for cid, name in ((first, 'Draft one'), (second, 'Draft two')):           # named, so the history lists them (12 Nov 2026)
+        _wt(page, f'/conversations/{cid}/rename', {'title': name})
     go(page, base + '?c=' + first + '&chat=floating')
     box = page.locator('[data-mc-input]')
     box.fill('On-record draft for one')

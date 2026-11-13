@@ -55,6 +55,8 @@ CORE_TESTS = (
     "tests/test_immutable_production_deploy.py",
     "tests/test_deploy_keeps_live_queue.py",
     "tests/test_guild_queue_deploy_config.py",
+    # Every stack deploys with the release: Guildhall's refresh, the worker build, MC's check (#550).
+    "tests/test_guildhall_release_pipeline.py",
     # Fails when a new image enters git, whatever else the release touches.
     "tests/test_photo_inventory.py",
 )

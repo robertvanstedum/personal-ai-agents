@@ -670,6 +670,7 @@ body.gu[data-off-record="true"] .sel-bar, body.gu[data-record-known="false"] .se
 .mc-history-list { list-style: none; margin: 0; padding: 0; }
 .mc-history-list a { display: block; padding: 8px 4px; overflow-wrap: anywhere; }
 .mc-history-list a[aria-current] { font-weight: 700; }
+.mc-history-when { color: var(--gu-text-muted); font-size: 12px; font-weight: 400; white-space: nowrap; }
 .mc-voice[aria-pressed="true"] { font-weight: 700; color: var(--gu-accent); }
 .mc-voice-status { margin: 4px var(--gu-s3) 0; color: var(--gu-text-muted); overflow-wrap: anywhere; }
 .mc-voice-status[hidden], .mc-voice[hidden] { display: none; }

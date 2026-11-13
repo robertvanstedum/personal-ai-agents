@@ -60,7 +60,7 @@ def check_path(path, repo: str = DEFAULT_REPO):
     parts = rest.split("/") if rest else []
     if any(p in ("", ".", "..") or not _SEGMENT.fullmatch(p) for p in parts):
         return "path_invalid"
-    if any(p.lower() in DENIED_SEGMENTS for p in parts):
+    if any(p.lower() in DENIED_SEGMENTS or "secret" in p.lower() or "variable" in p.lower() for p in parts):
         return "path_denied"
     return None
 

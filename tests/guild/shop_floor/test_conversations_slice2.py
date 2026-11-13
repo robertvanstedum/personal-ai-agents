@@ -286,21 +286,22 @@ def test_the_page_shows_the_conversation_list_and_actions(floored):
 
 
 def test_history_is_ten_at_a_time_without_archiving_or_losing_the_current_chat(floored):
-    import html
-    import re
+    """Ten chats on the page, one "Show older chats" for the next ten (12 Nov 2026: Newer · Older read like a sort)."""
     client = floored.owner()
     token = floored.csrf(client)
     for index in range(13):
-        _new(client, token, title=f"Conversation {index}")
+        _act(client, token, _new(client, token)["id"], "rename", title=f"Conversation {index}")   # named: not empty
     all_rows = _listing(client)
     cid = all_rows[0]["id"]
-    page = client.get(f"/guild-next/guild/build?c={cid}&history_page=0").get_data(as_text=True)
+    page = client.get(f"/guild-next/guild/build?c={cid}").get_data(as_text=True)
     assert page.count('data-conv-link') == 10
-    older = html.unescape(re.search(r'href="([^"]+)" data-conv-older', page)[1])
-    assert f'c={cid}' in older
-    next_page = client.get(older).get_data(as_text=True)
-    assert next_page.count('data-conv-link') == len(all_rows) - 10
-    assert 'data-conv-newer' in next_page and 'data-conv-older' not in next_page
+    assert 'data-conv-older' in page and 'Show older chats' in page and 'data-conv-newer' not in page
+    older = client.get(f"{API}/conversations?offset=10&limit=10&hide_empty=1&keep={cid}").get_json()
+    shown = {r["id"] for r in _listing(client)[:10]}
+    assert older["more"] is False and not shown & {r["id"] for r in older["conversations"]}
+    oldest = all_rows[-1]["id"]                                    # an older open chat is on the page with all above it
+    page = client.get(f"/guild-next/guild/build?c={oldest}").get_data(as_text=True)
+    assert f'data-conv="{oldest}"' in page
     assert len(_listing(client)) == len(all_rows) and _listing(client, 'archived') == []
 
 

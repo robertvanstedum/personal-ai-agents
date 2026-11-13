@@ -1951,13 +1951,27 @@ def conversations_list():
     view = request.args.get("view", "active")
     if view not in ("active", "archived"):
         return json_error("invalid", "view is active or archived.", 422)
+    # ?hide_empty=1 (the chat lists, 12 Nov 2026) leaves out chats with nothing in them, except ?keep=<id>, the chat the
+    # page has open. ?offset=&limit= give one slice for "Show older chats". Without them, the whole list, as before.
+    offset = request.args.get("offset", type=int)
+    limit = request.args.get("limit", type=int)
+    if (offset is not None and offset < 0) or (limit is not None and not 0 < limit <= 100):
+        return json_error("invalid", "offset is 0 or more; limit is 1 to 100.", 422)
     try:
         store = _conversations()
-        rows = store.list(_principal(), archived=view == "archived")
+        rows = store.list(_principal(), archived=view == "archived", hide_empty=request.args.get("hide_empty") == "1",
+                           keep=request.args.get("keep"))
     except ConversationStoreUnavailable:
         return json_error("unavailable", CONV_WORDS["unavailable"], 503)
+    total = len(rows)
+    if offset is not None or limit is not None:
+        start = offset or 0
+        rows = rows[start:start + limit] if limit is not None else rows[start:]
+        more = (offset or 0) + len(rows) < total
+    else:
+        more = False
     return jsonify({"view": view, "conversations": [public(c) for c in rows], "unreadable": store.unreadable,
-                    "observed_at": now_iso()})
+                    "total": total, "more": more, "observed_at": now_iso()})
 
 
 def _conv_write(action):
