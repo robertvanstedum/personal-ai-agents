@@ -445,7 +445,14 @@ def test_persona_0133_changes_only_the_voice_card_status_line(tmp_path):
     new, old = RELEASES / "0.1.33", RELEASES / "0.1.32"
     for name in ("SOUL.md", "RUNTIME.openclaw.md"):
         assert (new / name).read_bytes() == (old / name).read_bytes(), name
-    assert (new / "AGENTS.md").read_text().split("\n")[1:] == (old / "AGENTS.md").read_text().split("\n")[1:]
+    # #543 item 3: one AGENTS line, under "What was delivered", for the read-only GitHub tool (#547); nothing else moves.
+    github = ("To see deployments or CI, read `/repos/robertvanstedum/personal-ai-agents/actions/runs?status=in_progress`"
+              " and recent runs with minimoi_github_get; answer short, with the run link. You can read GitHub; you cannot"
+              " start or cancel anything there.")
+    agents, was = (new / "AGENTS.md").read_text().split("\n"), (old / "AGENTS.md").read_text().split("\n")
+    assert agents.count(github) == 1 and [line for line in agents[1:] if line != github] == was[1:]
+    delivered = agents.index("## What was delivered (Robert, 7 Nov)")
+    assert agents.index(github) == delivered + 2
     assert (new / "AGENTS.md").read_text().startswith("# MC conversation contract — persona 0.1.33\n")
     card, before = (json.loads((d / "voice.json").read_text()) for d in (new, old))
     assert {k: v for k, v in card.items() if k != "card"} == {k: v for k, v in before.items() if k != "card"}

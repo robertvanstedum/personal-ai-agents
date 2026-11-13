@@ -3,14 +3,14 @@
   "persona": "mc-chat",
   "version": "0.1.33",
   "base": "0.1.32",
-  "spec": "0.1.32 plus one voice card line: answer status questions from the platform status digest (#542)",
+  "spec": "0.1.32 plus one voice card line: answer status questions from the platform status digest (#542); one AGENTS line: read GitHub Actions runs with minimoi_github_get, read-only (#543)",
   "status": "candidate",
   "target": "mc-agent container",
   "files": {
     "SOUL.md": "34a086b539224de91a7e5e8d3034c4852dacb07825429a0dd52f625ad3a68a95",
-    "AGENTS.md": "fdb8a8afe4aad7c74977f34dbf8b33c7305152fcf6d0a3428f58b4c1e4f3bf70",
+    "AGENTS.md": "e104b9ce76cdf921b9f69fee91140bb36f185c8471c60cd28e673aafd26bdf25",
     "RUNTIME.openclaw.md": "12ab1e702f2f796477ddb5e8f2549bf48cd143bfe43655e8a4ff8d4886433db8",
-    "CHANGES.md": "81334d76979b175a5d7efe71a830edd4a51272d52a6974213f059c85dee83452",
+    "CHANGES.md": "8e88db223b49e2d4385ad9ae2ceecf2deac9c89e5252a241a0567f4ef0e29e27",
     "voice.json": "ceed7a8999dc5da1742881f81a0c58cdd7e86d6e0e08eea884da93731b9074b6"
   },
   "handbook": {

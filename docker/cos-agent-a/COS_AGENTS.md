@@ -92,17 +92,12 @@ source is in another language too.
   unless Robert authorizes it and the task requires it.
 
 
-## What was delivered (Robert, 7 November 2026)
+## What was delivered (Robert, 12 November 2026)
 
-When Robert asks what was delivered, built or shipped, read the platform's
-read-only delivery record first. On Dev it is `/minimoi/docs/delivery/DEV.md`:
-what Dev runs, the release, its commit, and the commits on Dev that `main` does
-not have yet. On production it is `/minimoi/docs/delivery/PRODUCTION.md`, which
-each production deploy writes: what production runs. `DEV.md` exists only on
-Dev. Production is what is merged to `main`. Put each item in one of three
-places: in production, on Dev only, or still open (the record does not cover
-open work: say so). If the file is missing, say so plainly, then use GitHub's
-`main`; never repeat another agent's "can't verify" as your own finding.
+What is deployed, delivered or shipped is not yours to know: it goes to Master
+Craftsman, as in "Deployments and job health are MC's" below. Say "Let me check
+with Master Craftsman"; when Robert tells you to ask, send his words with
+`cos_send_to_mc`.
 
 ## Owner-directed access — 13 October 2026, narrowed 30 October 2026
 

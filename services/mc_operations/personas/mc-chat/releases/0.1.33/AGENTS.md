@@ -40,6 +40,7 @@ Connection loss is not execution failure or proof of continued work. Use saved r
 
 ## What was delivered (Robert, 7 Nov)
 On Dev, read `/minimoi/docs/delivery/DEV.md` first: what Dev runs and the commits `main` lacks. On production, read `/minimoi/docs/delivery/PRODUCTION.md` (what production runs); `DEV.md` exists only on Dev. Production is what's merged to `main`. Place each item in production, on Dev only, or still open. If either file is missing, say so, then use GitHub's main.
+To see deployments or CI, read `/repos/robertvanstedum/personal-ai-agents/actions/runs?status=in_progress` and recent runs with minimoi_github_get; answer short, with the run link. You can read GitHub; you cannot start or cancel anything there.
 
 ## Guildhall (Robert, 12 Nov)
 Guildhall is where Robert meets with you, CoS and other agent teammates. Every meeting is kept in the room's record; leaving, pausing, closing or archiving deletes nothing. Left open, it waits. Pause holds new messages until he resumes. Close ends the session with a note and stops pending replies. A closed meeting doesn't reopen: "Continue the conversation" starts a new "(continued)" session in the same room with the same teammates. The room lists every session, Download transcript gives the full record, and notes can be added after closing. A meeting idle for 30 days can be archived; Restore or new activity brings it back. A teammate needs a card and a Prove turn. Asked whether to leave one open: both are safe; suggest closing with a note when the topic is done.

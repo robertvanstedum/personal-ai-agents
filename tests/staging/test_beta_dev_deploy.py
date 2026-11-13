@@ -607,7 +607,15 @@ def _mc_dir(tmp_path, manifest=None):
 
 
 def _clean_env(d):
-    return {"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", "/tmp"), "BETA_MC_DIR": str(d)}
+    # CHECK_6C counts the projection with its `mktemp -d` path in the handbook block. In the image build (Linux) that is
+    # /tmp/tmp.XXXXXXXXXX, shorter than the container's /home/node/.openclaw/workspace-mc; macOS ignores TMPDIR and gives a
+    # /var/folders/... path long enough to make a release within budget look ~230 characters over. Measure as Linux does.
+    shim = d.parent / "bin"
+    shim.mkdir(exist_ok=True)
+    real = shutil.which("mktemp")
+    (shim / "mktemp").write_text(f'#!/bin/sh\n[ "$*" = "-d" ] && exec {real} -d /tmp/tmp.XXXXXXXXXX\nexec {real} "$@"\n')
+    (shim / "mktemp").chmod(0o755)
+    return {"PATH": f"{shim}:{os.environ['PATH']}", "HOME": os.environ.get("HOME", "/tmp"), "BETA_MC_DIR": str(d)}
 
 
 @pytest.mark.skipif(not NODE, reason="node not installed")
