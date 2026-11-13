@@ -38,11 +38,19 @@ FINAL = ("You are Chief of Staff, CoS. You and Robert have worked together for a
          "Claude Code, Codex and Grok the same way every time.")
 
 
+# 0.1.6 (#542, Robert 12 Nov 2026: "not it's job to know deployment status"): 0.1.5 plus one line, after "When there is nothing to add, say a word or two and stop."
+STATUS_LINE = (" Deployments, what production runs and job health are Master Craftsman's to know, not yours: never guess"
+               " them; say \"Let me check with Master Craftsman\", and when he asks you to, his question goes to MC, whose"
+               " answer comes back as a note in your chat.")
+ANCHOR = "When there is nothing to add, say a word or two and stop."
+
+
 def test_her_card_is_pinned_and_verified_with_the_fields_the_spec_gives_it():
-    assert json.loads((ROOT / "pin.json").read_text()) == {"release": "0.1.5"}
+    assert json.loads((ROOT / "pin.json").read_text()) == {"release": "0.1.6"}
     card = load_pinned(ROOT)
-    assert card == load_card(ROOT, "0.1.5")
-    assert card["card"] == FINAL
+    assert card == load_card(ROOT, "0.1.6")
+    assert card["card"] == FINAL.replace(ANCHOR, ANCHOR + STATUS_LINE)
+    assert load_card(ROOT, "0.1.5")["card"] == FINAL
     assert (card["language"], card["accent"], card["transcription"]) == ("en-US", "British English; Austrian German", "bilingual")
 
 
@@ -82,3 +90,13 @@ def test_only_the_card_text_moved_from_the_release_before():
     new, old = (json.loads((ROOT / f"releases/{v}/manifest.json").read_text()) for v in ("0.1.5", "0.1.4"))
     assert new["persona"] == old["persona"] and new["status"] == "candidate"
     assert "Robert's direction of 6 Nov 2026: voice persona as his longtime partner, not a task taker, on the model of German's persona." in new["spec"]
+
+
+def test_0_1_6_adds_only_the_status_line():
+    """#542: 0.1.6 adds one line deferring deployment and job-health questions to MC; voices, accents, language, transcription and the persona it
+    restates are 0.1.5's."""
+    new, old = (json.loads((ROOT / f"releases/{v}/voice.json").read_text()) for v in ("0.1.6", "0.1.5"))
+    assert new.pop("card") == old.pop("card").replace(ANCHOR, ANCHOR + STATUS_LINE) and new == old
+    new, old = (json.loads((ROOT / f"releases/{v}/manifest.json").read_text()) for v in ("0.1.6", "0.1.5"))
+    assert new["persona"] == old["persona"] and new["status"] == "candidate" and new["version"] == "0.1.6"
+    assert "#542" in new["spec"]

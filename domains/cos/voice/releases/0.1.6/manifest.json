@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "card": "chief-of-staff voice",
+  "version": "0.1.6",
+  "status": "candidate",
+  "spec": "0.1.5 plus one line (#542, Robert 12 Nov 2026: \"not it's job to know deployment status\"): deployments, production and job health are MC's to know; she says \"Let me check with Master Craftsman\" and sends his question to MC when he asks. Voices, accents, language, transcription and the restated persona as 0.1.5",
+  "persona": {
+    "source": "MASTER_CRAFTSMAN_PERSONA.md",
+    "version": "1.1",
+    "sha256": "f07078f5c913323f1098381faf44d38f77223258e48498ddd0552f53042c4f1b"
+  },
+  "files": {
+    "voice.json": "8febbc26197c01b541a6f2fa9813cb2248c5264e54ea1ef384a307c2fb83f700"
+  }
+}

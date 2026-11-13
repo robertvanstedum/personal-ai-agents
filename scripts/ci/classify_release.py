@@ -271,6 +271,9 @@ LOCAL_TOOL_FILES = frozenset({"scripts/mc/morning.py", "scripts/mc/regression.py
 # The two exact scrub modules also serve the CoS Vault context renderer below;
 # changing them must rebuild all three production consumers. Import guards keep
 # expected laptop homes separate from any newly introduced production consumer.
+# Portal files the cos-scheduler image copies and loads by path (docker/Dockerfile.cos-scheduler): the upload reader for
+# Confer attachments (domains/cos/files.py). A change to it rebuilds both images.
+SCHEDULER_PORTAL_FILES = frozenset({"minimoi_portal/guild_ui/doc_reader.py"})
 WORKSHOP_BACKEND_PREFIXES = ("core/workshop_journal/", "core/vault_t1/", "core/agent_turns/", "core/jobs/")
 SHARED_SCRUB_FILES = frozenset({"utils/credential_scrub.py", "utils/payment_scrub.py"})
 
@@ -439,6 +442,8 @@ def classify(paths: list[str],
                 services.add("portal")                               # the portal runs these too (PORTAL_COS_FILES)
         elif path.startswith("domains/guild/"):
             services.update(("portal", "cos-bot", "cos-scheduler"))
+        elif path in SCHEDULER_PORTAL_FILES:
+            services.update(("portal", "cos-scheduler"))             # the scheduler image copies these (by path)
         elif path.startswith("minimoi_portal/"):
             services.add("portal")
         elif path.startswith(MC_PERSONA_PREFIXES):
