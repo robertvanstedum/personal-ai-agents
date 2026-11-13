@@ -210,16 +210,9 @@
     const text = titleOf(doc) + (doc?.private ? ' · Private' : '');
     for (const el of document.querySelectorAll('[data-conv-title],[data-conv-title-short]')) el.textContent = text;
   }
-  const dayStart = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const daysAgo = d => Math.round((dayStart(new Date()) - dayStart(d)) / 864e5);
-  function when(iso) {
-    const d = new Date(iso || ''); if (isNaN(d)) return '';
-    const n = daysAgo(d);
-    if (n <= 0) return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
-    if (n < 7) return d.toLocaleDateString([], {weekday:'short'});
-    return d.toLocaleDateString([], {day:'numeric', month:'short'});
-  }
-  function groupOf(iso) { const d = new Date(iso || ''); if (isNaN(d)) return 'Earlier'; const n = daysAgo(d); return n <= 0 ? 'Today' : n === 1 ? 'Yesterday' : 'Earlier'; }
+  // A row's time and its group, the same rule as MC's and Guildhall's lists (chat-sidebar.js, Robert's zone, 12 Nov 2026).
+  const when = iso => window.MiniMoiChatSidebar.when(iso);
+  const groupOf = iso => window.MiniMoiChatSidebar.group(iso);
   function markCurrent() {
     let found = false;
     for (const b of rows.querySelectorAll('[data-conversation-id]')) { const on = b.dataset.conversationId === cid; found ||= on; b.setAttribute('aria-current', String(on)); }
@@ -233,7 +226,8 @@
       if (g !== group) { group = g; const h = document.createElement('div'); h.className = 'cos-list-group'; h.textContent = g; rows.append(h); }
       const b = document.createElement('button'); b.type = 'button'; b.className = 'cos-list-row'; b.dataset.conversationId = c.conversation_id;
       const t = document.createElement('span'); t.className = 't'; t.textContent = titleOf(c) + (c.private ? ' · Private' : '');
-      const w = document.createElement('span'); w.className = 'w'; w.textContent = when(c.last_activity_at || c.created_at);
+      const at = when(c.last_activity_at || c.created_at);
+      const w = document.createElement('time'); w.className = 'w'; w.textContent = at.label; w.title = at.full; w.dateTime = c.last_activity_at || c.created_at || '';
       b.append(t, w); b.title = t.textContent;
       b.onclick = async () => { try { await select(c.conversation_id, c); activateTab('confer',true); closeDrawer(); } catch (_) { state.textContent = 'Could not open that conversation.'; } };
       rows.append(b);
