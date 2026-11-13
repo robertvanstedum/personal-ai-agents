@@ -351,6 +351,7 @@ def test_production_chat_mc_admits_voice_like_cos_but_never_the_cos_shared_files
 # ── MC's direct voice in production (Spec 165 §11.1): installing is separate from admission ──────────────────────────────
 
 DIRECT_INSTALL, DIRECT_SWITCH = "MINIMOI_MC_VOICE_DIRECT", "MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION"
+VOICE_PATH = "MINIMOI_MC_VOICE_PATH"          # #567: "chained" (the default, MC's voice is MC) or "direct"
 COS_FILES = {"MINIMOI_MC_COS_FILES_DIR": "/app/runtime/guild/mc-evidence",
              "MINIMOI_MC_COS_FILES_AGENT_DIR": "/minimoi/data/guild/mc-evidence",
              "MINIMOI_MC_COS_FILES_UID": "1000", "MINIMOI_MC_COS_FILES_GID": "1000"}
@@ -425,7 +426,7 @@ DIRECT = API + "/mc/voice/direct/api/realtime-voice"
 THREAD_JS = "/guild-next/guild/ui-assets/js/mc_voice_direct.js"
 
 
-def _production_voice(load_portal, monkeypatch, tmp_path, *, install, switch):
+def _production_voice(load_portal, monkeypatch, tmp_path, *, install, switch, path="direct"):
     """The real portal on minimoi.ai with today's production voice (CoS partner, MINIMOI_MC_VOICE=1), MC's direct install
     switch and its production switch as given, and a raw admission key that must not count. The provider mint is a stub."""
     from minimoi_portal.guild_ui import voice_release
@@ -442,7 +443,7 @@ def _production_voice(load_portal, monkeypatch, tmp_path, *, install, switch):
                         "MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO": "2000000", ADMITTED: "1"}.items():
         monkeypatch.setenv(name, value)
     monkeypatch.delenv("MINIMOI_MC_MANAGED_REALTIME", raising=False)
-    for name, value in ((DIRECT_INSTALL, "1" if install else None), (DIRECT_SWITCH, switch)):
+    for name, value in ((DIRECT_INSTALL, "1" if install else None), (DIRECT_SWITCH, switch), (VOICE_PATH, path)):
         if value is None:
             monkeypatch.delenv(name, raising=False)
         else:
@@ -495,6 +496,20 @@ def test_s2_in_production_the_switch_admits_mc_direct_voice(load_portal, monkeyp
     assert "wss://api.x.ai" in html.headers["Content-Security-Policy"]
 
 
+@pytest.mark.parametrize("path", [None, "chained", "something-else"])
+def test_in_production_mcs_voice_is_mc_by_default_even_with_the_direct_switch_on(load_portal, monkeypatch, tmp_path, path):
+    """#567 (Robert, 13 Nov 2026: "MC's voice is MC"): with no path set, or "chained", or a stray value, MC's Voice takes
+    the chained path (speech to text, MC's own turn, his kept reply read aloud). The direct path stays installed, not
+    admitted (S1/S3): its records still reveal, and a start is refused before anything is minted or reserved."""
+    client, html, boot, minted, budget = _production_voice(load_portal, monkeypatch, tmp_path, install=True, switch="1",
+                                                           path=path)
+    caps = client.get(API + "/mc/voice/capabilities").get_json()
+    assert caps["direct_voice"] is None and caps["direct_records"]["path"] == "direct"
+    assert client.get(API + "/mc/voice/static/realtime-confer-controller.js").status_code == 200
+    assert boot.status_code == 503 and not minted and budget.status()["reserved_usd"] == 0
+    assert "wss://api.x.ai" not in html.headers["Content-Security-Policy"]
+
+
 @pytest.mark.parametrize("switch", [None, "1"])
 def test_not_installed_in_production_mc_voice_is_exactly_todays(load_portal, monkeypatch, tmp_path, switch):
     client, html, boot, minted, budget = _production_voice(load_portal, monkeypatch, tmp_path, install=False, switch=switch)
@@ -528,7 +543,7 @@ def test_s3_on_the_real_portal_end_closes_a_session_started_before_the_restart(l
     for name, value in {"MINIMOI_GUILD_PRODUCTION": "1", "COS_BACKEND": "http://cos-scheduler:8769",
                         "MINIMOI_GUILD_CHAT": "cos", "MINIMOI_GUILD_VOICE_PRODUCTION": "1", "MINIMOI_MC_VOICE": "1",
                         "MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO": "2000000", DIRECT_INSTALL: "1",
-                        DIRECT_SWITCH: "1"}.items():
+                        DIRECT_SWITCH: "1", VOICE_PATH: "direct"}.items():
         monkeypatch.setenv(name, value)
     monkeypatch.delenv("MINIMOI_MC_MANAGED_REALTIME", raising=False)
     floor = SqliteFloor(tmp_path / "floor")

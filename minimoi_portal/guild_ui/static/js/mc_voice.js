@@ -28,6 +28,34 @@ const WORDS = {
 };
 const STATUS_CLEAR_MS = 5000;        // #420: "Voice ended…" clears after about five seconds, or at the next send
 
+// #567 (Robert, 13 Nov 2026): while MC works on what was said (8–28 s), one soft tone says it was heard. No words that are
+// not MC's. The audio context is made on the Voice tap itself, since an iPhone plays sound only after a gesture.
+let cueContext = null;
+function primeCue() {
+  try {
+    const Context = window.AudioContext || window.webkitAudioContext;
+    if (!Context) return;
+    cueContext = cueContext || new Context();
+    if (cueContext.state === 'suspended') cueContext.resume().catch(() => {});
+  } catch (e) { cueContext = null; }         // no tone, and nothing else changes
+}
+function heardCue(ctx = cueContext) {
+  if (!ctx) return false;
+  try {
+    const t = ctx.currentTime, tone = ctx.createOscillator(), level = ctx.createGain();
+    tone.type = 'sine';
+    tone.frequency.setValueAtTime(660, t);
+    tone.frequency.exponentialRampToValueAtTime(880, t + 0.12);
+    level.gain.setValueAtTime(0.0001, t);
+    level.gain.exponentialRampToValueAtTime(0.06, t + 0.02);   // quiet: a cue, not an alert
+    level.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    tone.connect(level).connect(ctx.destination);
+    tone.start(t);
+    tone.stop(t + 0.27);
+    return true;
+  } catch (e) { return false; }
+}
+
 // One voice at a time beside CoS (FF-04, #526). When this page is MC's pane inside the CoS page (#mc-both), the
 // microphone hand-off (guild:mic-claim) crosses the frame both ways: MC Voice or Dictate starting here tells the parent,
 // which ends CoS's voice and dictation; CoS voice or dictation starting there posts a claim in, which ends both here as
@@ -180,6 +208,7 @@ export function initMcVoice(page) {
     const current = () => mine === session;
     setPhase('connecting');
     paint(true);
+    if (!direct && !managed) primeCue();             // on the tap, before any await (the chained path's tone)
     if (direct) {await startDirect(mine,current);return;}
     if (managed) {await startManaged(mine,current);return;}
     // Neither offered (production today: MINIMOI_MC_VOICE=1, direct not installed or not admitted, managed off): today's chained
@@ -196,6 +225,7 @@ export function initMcVoice(page) {
           if (!this._active || !current()) return;       // a queued utterance of a stopped attempt is dropped, not sent
           this._onUserTurn(text);
           this._onStateChange('thinking');
+          heardCue();                                    // one soft tone: heard, MC is working
           const result = await submitVoiceUtterance(text, requestId);
           if (!this._active || !current()) return;       // stopped, minimized, Private, or a new attempt since: nothing is spoken
           if (!result.ok) {
