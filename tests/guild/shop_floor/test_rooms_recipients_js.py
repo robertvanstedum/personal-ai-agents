@@ -50,7 +50,38 @@ vm.runInContext(String.raw`
   assert.equal(cardRows[0].find('[data-rm-invite-card]').length,0);
   assert.equal(cardRows[0].find('[data-rm-prove]').length,0);
   assert.ok(cardRows[0].find('[data-rm-card-state]')[0].textContent.startsWith('Not available here'));
-  assert.equal(cardRows[1].find('[data-rm-invite-card]').length,1);
+  // #548: an unproven teammate is not invited into a silent wait; one button proves it (one paid turn, Robert's OK) and invites it.
+  assert.equal(cardRows[1].find('[data-rm-invite-card]').length,0);
+  const proveInvite=cardRows[1].find('[data-rm-prove]');
+  assert.equal(proveInvite.length,1);
+  assert.equal(proveInvite[0].textContent,'Prove first, then invite');
+  assert.equal(proveInvite[0].attrs['data-rm-then-invite'],'yes');
+  assert.ok(cardRows[1].find('[data-rm-card-state]')[0].textContent.includes('one paid turn, needs your OK'));
+  proofState.set('mc','armed'); renderCards();
+  assert.equal($('[data-rm-cards]').children[1].find('[data-rm-prove]')[0].textContent,'Confirm: use one paid turn');
+  proofState.clear();
+  // A proven teammate keeps its plain Invite.
+  cards[1]={...cards[1],proven_at:'2026-11-13T02:23:11+00:00'}; renderCards();
+  assert.equal($('[data-rm-cards]').children[1].find('[data-rm-invite-card]').length,1);
+  assert.equal($('[data-rm-cards]').children[1].find('[data-rm-prove]').length,0);
+  // An invited, unproven teammate says what joins it, never "Invite timed out".
+  assert.equal(participantState({id:'mc',label:'Master Craftsman',rsvp:'invited',needs_proof:true,available_here:true}),'Needs a proof first — one paid turn, needs your OK');
+  // ... and the meeting page offers Prove first right there.
+  current='room-548'; room={id:'room-548',state:'active'};
+  meeting={room:'room-548',turns:[],participants:[{id:'mc',label:'Master Craftsman',teammate:true,rsvp:'invited',needs_proof:true,available_here:true},
+                                                  {id:'cos',label:'Chief of Staff',teammate:true,rsvp:'accepted',needs_proof:false,available_here:true}]};
+  renderProofNeeded();
+  const proofBox=$('[data-rm-proof-needed]');
+  assert.equal(proofBox.hidden,false);
+  const asks=proofBox.find('[data-rm-proof-for]');
+  assert.equal(asks.length,1);
+  assert.equal(asks[0].attrs['data-rm-proof-for'],'mc');
+  assert.ok(asks[0].children[0].textContent.includes('one paid turn, needs your OK'));
+  assert.equal(asks[0].find('[data-rm-prove]')[0].textContent,'Prove first');
+  meeting.participants[0]={...meeting.participants[0],needs_proof:false};
+  renderProofNeeded();
+  assert.equal(proofBox.hidden,true);
+  room={state:'open'};
   meeting.turns=[{id:'working',addressee:'mc',state:'running'}];
   assert.equal(participantState({...participant,waiting:true}),'Working');
   assert.deepEqual([...turnLine(meeting.turns[0]).actions],['stop']);

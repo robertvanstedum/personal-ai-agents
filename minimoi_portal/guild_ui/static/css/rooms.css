@@ -425,4 +425,10 @@ body.gu[data-page=rooms] .rm-participation[hidden],body.gu[data-page=rooms] .rm-
 body.gu[data-page=rooms] .rm-participant-state{display:flex;align-items:center;gap:8px}
 body.gu[data-page=rooms] .rm-participant-state .rm-btn{padding:3px 9px;min-height:32px}
 body.gu[data-page=rooms] .rm-connection{padding:8px 12px;box-sizing:border-box;background:#fff4df;border-radius:8px;font-size:14px}
+body.gu[data-page=rooms] .rm-proof-needed{width:calc(100% - 40px);max-width:760px;margin:0 auto 6px;padding:8px 12px;box-sizing:border-box;background:#fff4df;border-radius:8px;font-size:14px}
+body.gu[data-page=rooms] .rm-proof-needed[hidden]{display:none}
+body.gu[data-page=rooms] .rm-proof-row{margin:0 0 4px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+body.gu[data-page=rooms] .rm-proof-needed [data-rm-proof-status]{margin:0}
+body.gu[data-page=rooms] .rm-proof-needed [data-rm-proof-status]:empty{display:none}
+@media(max-width:600px){body.gu[data-page=rooms] .rm-proof-needed{width:calc(100% - 20px)}body.gu[data-page=rooms] .rm-proof-row .rm-btn{min-height:44px}}
 @media(max-width:600px){body.gu[data-page=rooms] .rm-participation,body.gu[data-page=rooms] .rm-connection{width:calc(100% - 20px)}body.gu[data-page=rooms] .rm-participant-state .rm-btn{min-height:44px}}
