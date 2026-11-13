@@ -176,7 +176,8 @@ def test_large_observations_shrink_but_stream_health_stays_visible():
     block = H.block('robert', {'principal': 'robert', 'record_mode': 'on_record'}, environ=env, now=NOW,
                     loader=lambda root: doc)
     assert 'cache unavailable' not in block
-    payload = json.loads(block.split('\n')[2])
+    lines = block.split('\n')                                   # #561: the order line now sits before the fence
+    payload = json.loads(lines[[i for i, line in enumerate(lines) if line.startswith('BEGIN ')][0] + 1])
     assert len(block) < 13000 and set(payload['stream_status']) == set(C.STREAMS)
     assert 0 < len(payload['recent_observations']) < 8          # the bound really applied
     assert payload['omitted_cached_items'] == 29 - len(payload['recent_observations'])

@@ -44,7 +44,8 @@ function failoverRoutes(env) {
 }
 
 function meteredModels(refs) {
-  return refs.map(r => r.split('/')[1]).map(id => ({id, name: id, input: ['text', 'image'], contextWindow: 131072, maxTokens: 8192}));
+  return refs.map(r => r.split('/')[1]).map(id => ({id, name: id, input: ['text', 'image'], contextWindow: 131072, maxTokens: 8192,
+    compat: {supportsPromptCacheKey: true}}));   // OpenClaw sends its session cache key; the gateway keeps xAI warm (#553)
 }
 
 function gatewayProvider(refs) {

@@ -162,6 +162,14 @@ class Requests(unittest.TestCase):
         self.assertIn("read token", message)
         self.assertNotIn(TOKEN, message)
 
+    def test_rate_limited_sends_mc_to_the_delivery_record_never_the_cache_as_live(self):
+        # #561: rate-limited, MC presented the cached snapshot as current. The refusal itself says what to do instead.
+        state, message, _ = GitHubRepoReader(Stub(Reply({}, 429, {"Retry-After": "60"}))).get(REPO + "/actions/runs")
+        self.assertEqual(state, "rate_limited")
+        self.assertIn("Say so in one short line, then answer from the delivery record", message)
+        self.assertIn("/minimoi/docs/delivery/PRODUCTION.md", message)
+        self.assertIn("never present one as live", message)
+
     def test_an_oversized_download_is_refused(self):
         big = Reply(None, 200, raw=b"x" * 3_000_001)
         self.assertEqual(GitHubRepoReader(Stub(big)).get(REPO + "/actions/runs")[0], "too_large")

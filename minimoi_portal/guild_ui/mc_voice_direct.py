@@ -46,6 +46,7 @@ from flask import current_app, g
 
 from core.realtime_voice.direct_host import (FAILED, DirectVoiceAdapter, DirectVoiceStore, Kept, compose_instructions,
                                              direct_rules, install_direct_voice, speakable)
+from core.realtime_voice.spoken import for_speech
 from core.realtime_voice.voice_card import load_pinned
 
 from ..guild_mounts import DIRECT_VOICE_ADMITTED
@@ -237,6 +238,7 @@ class _MasterCraftsman(DirectVoiceAdapter):
     owner_name = "Robert"                    # the core's words name the owner as MC's always have (review R1 P3-12)
     board = True                             # MC has the Board: a post-it may wait as one (review v3 M1)
     status_lookups = True                    # #542: a specific status question is a read-only lookup at once
+    lookup_wait_s = 75                       # #561: a lookup is a real MC turn with GitHub reads (p90 45 s, max 56 s)
     words = {"no_conversation": "Open a saved conversation before using voice.",                      # the Guild's words
              "not_listening": "Voice is on the record only. Go back on the record to use it.",
              "invalid": "Voice unavailable: open a saved conversation, on the record."}
@@ -395,7 +397,7 @@ class _MasterCraftsman(DirectVoiceAdapter):
                 reply = floor.get_note(reveal.reply_id(note_id))
                 if isinstance(reply, dict) and isinstance(reply.get("text"), str) and reply["text"].strip():
                     return {"note_request_id": note_id, "answered": True, "outcome": "done", "receipt": reply.get("request_id"),
-                            "receipt_kind": "reply", "spoken": speakable(reply["text"])}
+                            "receipt_kind": "reply", "spoken": speakable(for_speech(reply["text"]))}
             if code in ("already_done", "already_dispatched", "already_queued"):
                 return {"ok": False, "error": code, "outcome": "unknown", "note_request_id": note_id}
             return {"ok": False, "error": code, "spoken": refused.body.get("message") or FAILED}
@@ -451,7 +453,7 @@ class _MasterCraftsman(DirectVoiceAdapter):
             kind, receipt = "job", job.get("id") if isinstance(job.get("id"), str) and job.get("id") else None
         receipt_line = spoken_receipt(operation) if answered else None      # his words stay in the written receipt
         result.update(receipt=receipt, receipt_kind=kind,
-                      spoken=receipt_line or (speakable(said or "") if isinstance(said, str) and said.strip() else FAILED))
+                      spoken=receipt_line or (speakable(for_speech(said)) if isinstance(said, str) and said.strip() else FAILED))
         if (answered and operation.get("type") == "cos_note" and operation.get("saved") is True
                 and isinstance(operation.get("operation_id"), str) and operation["operation_id"]):
             result["saved"] = True             # a consult on "make a note that …" saved it: its receipt says so (R1 P2-3)

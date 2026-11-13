@@ -115,7 +115,11 @@ def test_the_release_line_names_release_commit_outcome_and_age():
 
 def test_an_unfinished_or_failed_deployment_is_never_called_installed():
     begun = W.observation("begin", "a" * 7, ["portal"], current("a" * 7), now=NOW - timedelta(hours=3))
-    assert "still in progress" in RC.summary(loader=lambda: begun, now=NOW) and "3 h ago" in RC.summary(loader=lambda: begun, now=NOW)
+    stale = RC.summary(loader=lambda: begun, now=NOW)
+    # #561: three hours with no finish is never "still in progress".
+    assert "still in progress" not in stale and "can't be confirmed as still running" in stale and "3 h ago" in stale
+    fresh = W.observation("begin", "a" * 7, ["portal"], current("a" * 7), now=NOW - timedelta(minutes=5))
+    assert "still in progress" in RC.summary(loader=lambda: fresh, now=NOW)
     bad = current("a" * 7)
     bad["portal"]["running"] = False
     failed_doc = W.observation("finish", "a" * 7, ["portal"], bad, now=NOW)

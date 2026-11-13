@@ -75,6 +75,24 @@
       "max_operations_per_turn": 10
     },
     {
+      "capability": "mc.skill.read",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "open_card_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 10
+    },
+    {
       "capability": "guest.reject_request",
       "version": 1,
       "actors": [

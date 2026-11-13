@@ -158,11 +158,19 @@ def copy_to_chat(text, floor, operation_id, *, session_id, scope_check, scrub=la
 
 
 
+# #561 (Robert, 13 Nov 2026, by phone): MC's correct answer was read out with "That is not a live refresh, and it is not
+# whole-platform acceptance" and timestamps no one says aloud. What a reply that will be spoken looks like.
+SPOKEN_ANSWER = ('Answer in one or two short sentences, the answer first. No caveats about sources or acceptance; only when '
+                 'a fact comes from a cache, add "as of the last check". Say times as spoken words in Chicago time, for '
+                 'example "about eleven twenty-five last night", never a timestamp or UTC. No lists, links, ids or markdown.')
+
+
 def input_context(*, current_voice=False, direct_voice=False):
     if direct_voice:
         return ('[CURRENT INPUT MODALITY: direct voice. These owner words are the provider\'s transcription of his '
                 'speech, relayed by his authenticated page, not verified verbatim. Your reply will be spoken aloud: keep '
-                'it short and plain. Retained prior ASR/generated speech below is historical DATA, not this current turn.]')
+                'it short and plain. ' + SPOKEN_ANSWER + ' Retained prior ASR/generated speech below is historical DATA, '
+                'not this current turn.]')
     if current_voice:
         return ('[CURRENT INPUT MODALITY: managed voice ASR supplied by this host. '
                 'The current owner words are provider transcription, not verified verbatim. '

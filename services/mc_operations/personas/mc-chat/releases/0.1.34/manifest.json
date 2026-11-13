@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "persona": "mc-chat",
+  "version": "0.1.34",
+  "base": "0.1.33",
+  "spec": "#553 step 1 (Robert, 12 Nov): a byte-stable base persona (SOUL + AGENTS core rules and how to answer); dated procedures moved verbatim into OpenClaw workspace skills read on demand; the handbook's engineering SKILL.md loaded as a skill instead of pasted into AGENTS. DRAFT for Robert's review.",
+  "status": "candidate",
+  "target": "mc-agent container",
+  "files": {
+    "SOUL.md": "dfe279acf7c5ee9b38ab607aeda9f9a7b5cf35a2b2baa3c8379e273affdb2bca",
+    "AGENTS.md": "25c2d816af770ee44b24e6be2c4831f8caa0e931a03f2a7b5b32e399fbedcb4c",
+    "RUNTIME.openclaw.md": "12ab1e702f2f796477ddb5e8f2549bf48cd143bfe43655e8a4ff8d4886433db8",
+    "CHANGES.md": "cf6e922811aa0d0a3e49c333e1fa7a0e1dc4f2b66035294a3e9aeb2a035244aa",
+    "voice.json": "13394cd80174602ea6945d6e8032c56f9827f6ba130c759360964a9722e13b82",
+    "skills/mc-building/SKILL.md": "88ed20862a8cc6f716dabafdb7b3d22c6845358e75002b68aad5b7138e0c8c27",
+    "skills/mc-corrections/SKILL.md": "c88b8753d8900b9e059e502dda7693a28f4b200ebd9c743f7fbb1aeab9fb7b74",
+    "skills/mc-delivery/SKILL.md": "813d14f39cae7a1379d32c628b5cc243abe554c5bf123034efd9768afb24eecf",
+    "skills/mc-front-door/SKILL.md": "c72e2692ae31b02c085fc608a7d397760da967dba7a23eb610fb5f409c832246",
+    "skills/mc-guildhall/SKILL.md": "de28774a4f39dbb7957703da5b1c6e73927ec4800c7b1afecf3beda54ccf7cf8"
+  },
+  "handbook": {
+    "version": "0.1.3",
+    "manifest": "services/mc_operations/handbook/manifest.json",
+    "manifest_sha256": "dc2c0713705875af7bb2386638f9063102d715a33076fcffdab15dcc051192c4",
+    "load": "skill"
+  },
+  "projection": "SOUL verbatim; AGENTS + runtime binding + short handbook block; skills/ laid out under the workspace (handbook load: skill)",
+  "projection_budget_chars": 8000,
+  "config_change": true
+}
