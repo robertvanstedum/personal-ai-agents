@@ -200,6 +200,25 @@ def test_actor_of():
     assert recorder_mod.actor_of(None, "gpt-4o") == "unknown"
 
 
+def test_mcs_chat_keys_are_actor_mc_so_its_turns_join_their_usage():
+    """#555: MC's chat runs on its mc-routes- key (and Grok/failover keys), on the shared tier routes. Each is actor mc."""
+    for alias in ("mc-routes-a1b2c3", "mc-grok-a1b2c3", "mc-failover-a1b2c3", "mc-agent-a1b2c3"):
+        assert recorder_mod.actor_of(alias, "minimoi-xai-strong") == "mc", alias
+    assert recorder_mod.actor_of("cos-agent-routes-a1b2c3", "minimoi-xai-strong") == "cos"
+    assert recorder_mod.actor_of("voice-summary-mc", "minimoi-voice-summary") == "unknown"   # not a chat key
+    assert recorder_mod.actor_of("mcx-routes-1", "minimoi-xai-strong") == "unknown"
+
+
+def test_an_mc_chat_call_on_a_tier_route_joins_mcs_turn(store, tmp_path):
+    """The recorded row is the one usage_join reads for MC's footer: actor mc, gateway, ok."""
+    from minimoi_portal.guild_ui.mc import usage_join
+    rec = recorder_mod.UsageRecorder()
+    asyncio.run(rec.async_log_success_event(_kwargs("minimoi-xai-strong", alias="mc-routes-3f9a1c"), None, T0, T0 + timedelta(seconds=1.2)))
+    got = _records(store)
+    assert [(r["actor"], r["route"], r["key_ref"]) for r in got] == [("mc", "minimoi-xai-strong", "mc-routes-3f9a1c")]
+    assert len(usage_join._mc_records(str(store))) == 1
+
+
 # ── staging only ──────────────────────────────────────────────────────────────
 
 def test_production_writes_usage_only_through_its_1_2_layer():

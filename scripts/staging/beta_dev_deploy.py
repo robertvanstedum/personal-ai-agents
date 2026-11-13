@@ -55,7 +55,7 @@ BASES = {"portal": "8481940d", "cos": "8481940d", "domains": "8481940d", "record
 OLDEST_ACCEPTED = "8481940d"                         # A live file may be any committed version since here: never a hand edit.
 
 MC_DIR, COS_DIR, PLUGINS = "/opt/minimoi/mc-agent/", "/opt/minimoi/cos-agent-a/", "/opt/minimoi/openclaw-plugins/"
-HANDBOOK, PERSONA = "services/mc_operations/handbook/", "services/mc_operations/personas/mc-chat/releases/0.1.33/"
+HANDBOOK, PERSONA = "services/mc_operations/handbook/", "services/mc_operations/personas/mc-chat/releases/0.1.34/"
 VOICE_JS = "core/realtime_voice/static/realtime-voice-controller.js"
 TEXT = (".py", ".js", ".mjs", ".cjs", ".json", ".html", ".css")
 
@@ -294,7 +294,7 @@ def dockerfile_for(spec: dict, base_id: str, user: str, base_env=()) -> str:
     lines += [f"ENV {name}={value}" for name, value in missing_image_env(base_env, spec.get("image_env", ()))]
     if build == "mc":
         lines.append(f"RUN chmod 0755 {MC_DIR}start.sh && sh {MC_DIR}.beta-check-6c.sh && rm -f {MC_DIR}.beta-check-6c.sh")
-        lines.append("LABEL minimoi.persona=0.1.33 minimoi.handbook=0.1.3")
+        lines.append("LABEL minimoi.persona=0.1.34 minimoi.handbook=0.1.3")
     if build == "cos":
         lines.append(f"RUN node {COS_DIR}build-mc-role.mjs {COS_DIR}AGENTS.md {COS_DIR}owner-role {COS_DIR}mc-role-lock.json {COS_DIR}AGENTS.md {COS_DIR}ROLE_LOAD.json")
         lines.append(f"RUN node {COS_DIR}build-mc-handbook.mjs {COS_DIR}AGENTS.md {COS_DIR}handbook {COS_DIR}AGENTS.md {COS_DIR}ROLE_LOAD.json")
@@ -315,7 +315,7 @@ if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(h.version||"")||!/^[0-9a-f]{64}$/.test(h.ma
 console.log(h.version+" "+h.manifest_sha256);
 ' "$D/persona/manifest.json")
 # shellcheck disable=SC2086
-block=$(node "$D/handbook.mjs" "$D/handbook" "$S/ws" $hb)
+block=$(node "$D/handbook.mjs" "$D/handbook" "$S/ws" $hb "$D/persona")
 { cat "$D/persona/AGENTS.md"; printf '\n'; cat "$D/persona/RUNTIME.openclaw.md"; printf '\n%s\n' "$block"; } > "$S/AGENTS.md"
 chars=$(node -e 'console.log([...require("fs").readFileSync(process.argv[1],"utf8")].length)' "$S/AGENTS.md")
 [ "$chars" -le 16000 ] || { echo "projected AGENTS.md is $chars characters (budget 16000)" >&2; exit 1; }

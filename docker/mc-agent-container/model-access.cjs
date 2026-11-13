@@ -32,9 +32,16 @@ function failoverRoutes(env) {
   if (!env.MC_PLAN_MODEL) throw Error('A failover route needs an explicit plan default');
   return CAPPED_KEY.test(env.MC_MODEL_GATEWAY_KEY || '') ? refs : [];
 }
+// Every model MC reaches through the gateway (#553):
+// - compat.supportsPromptCacheKey: OpenClaw sends its stable per-session prompt_cache_key, which an OpenAI-compatible proxy
+//   must opt in to (OpenClaw docs, reference/prompt-caching); the gateway turns it into xAI's x-grok-conv-id
+//   (services/model_gateway/cache_affinity.py), so a conversation's turns stay on a warm cache.
+// - contextTokens: the active-input budget OpenClaw derives compaction from (the provider's 131k window stays declared).
+//   80k with OpenClaw's 20k reserve compacts a conversation near 60k instead of letting it run to the window.
+const GATEWAY_MODEL = {input: ['text','image'], contextWindow: 131072, contextTokens: 80000, maxTokens: 8192, compat: {supportsPromptCacheKey: true}};
 function meteredProvider(refs) {
   return {baseUrl: 'http://127.0.0.1:4000/v1', apiKey: '${MC_MODEL_GATEWAY_KEY}', api: 'openai-completions',
-    models: refs.map(r => r.split('/')[1]).map(id => ({id, name: id, input: ['text','image'], contextWindow: 131072, maxTokens: 8192}))};
+    models: refs.map(r => r.split('/')[1]).map(id => ({id, name: id, ...GATEWAY_MODEL}))};
 }
 function mode(env) {
   for (const name of ['ANTHROPIC_API_KEY','OPENAI_API_KEY','XAI_API_KEY','MC_ANTHROPIC_API_KEY']) {
@@ -110,7 +117,7 @@ function overlay(env) {
   return {
     models: {providers: {'minimoi-gateway-mc': {
       baseUrl: 'http://127.0.0.1:4000/v1', apiKey: '${MC_MODEL_GATEWAY_KEY}', api: 'openai-completions',
-      models: [{id: 'minimoi-mc-agent', name: 'Master Craftsman gateway', input: ['text','image'], contextWindow: 131072, maxTokens: 8192}]
+      models: [{id: 'minimoi-mc-agent', name: 'Master Craftsman gateway', ...GATEWAY_MODEL}]
     }}},
     agents: {defaults: {model, modelPolicy: policy, utilityModel: '', decisionModel: ''}, entries: Object.fromEntries(['mc-agent','mc-chat'].map(id => [id, {model, modelPolicy: policy, utilityModel: '', decisionModel: ''}]))}
   };

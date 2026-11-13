@@ -113,11 +113,13 @@ def container_chars(loaded: str, ws: Path) -> int:
     return len(loaded.replace(str(ws), CONTAINER_WORKSPACE))
 
 
-def test_the_container_loads_the_handbook_the_persona_pins(tmp_path):
-    release = pinned_release()
+def test_a_release_without_skill_load_still_gets_the_handbook_pasted_in(tmp_path):
+    """The projection every release up to 0.1.33 uses (handbook SKILL.md verbatim in AGENTS): unchanged by skill mode."""
+    release = "0.1.33"
     persona = RELEASES / release
     manifest = json.loads((persona / "manifest.json").read_text())
-    r, ws = lay_out(tmp_path)
+    assert "load" not in manifest["handbook"]
+    r, ws = lay_out(tmp_path, release)
     assert r.returncode == 0, r.stderr
     loaded = (ws / "AGENTS.md").read_text()
     assert (ws / "SOUL.md").read_bytes() == (persona / "SOUL.md").read_bytes()
@@ -155,6 +157,7 @@ def test_the_container_loads_the_handbook_the_persona_pins(tmp_path):
     assert f"persona {release} laid out ({len(loaded)} chars)" in r.stderr
     assert len(loaded) <= manifest["projection_budget_chars"] == 16000
     assert container_chars(loaded, ws) <= 16000
+    assert not (ws / "skills").exists()
 
 
 def test_the_merged_persona_carries_both_lines(tmp_path):
@@ -339,7 +342,7 @@ def test_every_container_pin_names_the_same_release():
 def test_the_loaded_handbook_points_to_the_operations_practice(tmp_path):
     r, ws = lay_out(tmp_path)
     assert r.returncode == 0, r.stderr
-    loaded = (ws / "AGENTS.md").read_text()
+    loaded = (ws / "skills/minimoi-engineering/SKILL.md").read_text()       # the handbook skill (persona 0.1.34, #553)
     assert loaded.count("planning-studio/operations/OPS-YYYY-MM-DD-slug") == 1
     assert "`operations/WORKLIST.md` as\nthe index" in loaded
     # The earlier release stays for provenance, and only the pointer and version lines differ from it.
@@ -437,7 +440,7 @@ def test_persona_0132_says_how_guildhall_works_and_what_a_harness_defect_is(tmp_
 def test_persona_0133_changes_only_the_voice_card_status_line(tmp_path):
     """0.1.33 (#542) is 0.1.32 with one voice card line (answer status questions from the platform status digest, say
     plainly when it is missing) and the AGENTS header version; it is pinned and lays out within budget."""
-    assert pinned_release() == "0.1.33" and pinned_handbook() == "0.1.3"
+    assert pinned_handbook() == "0.1.3"                       # 0.1.34 is pinned now (test_persona_0134.py)
     r, ws = lay_out(tmp_path, "0.1.33")
     assert r.returncode == 0, r.stderr
     assert "persona 0.1.33 laid out" in r.stderr and "handbook 0.1.3 loaded" in r.stderr

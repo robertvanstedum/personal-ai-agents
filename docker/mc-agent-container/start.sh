@@ -43,14 +43,23 @@ if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(h.version||"")||!/^[0-9a-f]{64}$/.test(h.ma
 console.log(h.version+" "+h.manifest_sha256);
 ' "$PERSONA/manifest.json") || die "persona release names no handbook (manifest.json handbook.version, handbook.manifest_sha256)"
 # The block is held in memory, not a file MC could replace. $(...) drops its final newline; printf puts it back.
+# A release that loads the handbook as a skill (#553) also gets its own skills laid out under $WORKSPACE/skills, read on demand.
 # shellcheck disable=SC2086
-block=$(node "$IMAGE_DIR/handbook.mjs" "$IMAGE_DIR/handbook" "$WORKSPACE" $hb) || die "handbook ${hb%% *} failed verification"
+block=$(node "$IMAGE_DIR/handbook.mjs" "$IMAGE_DIR/handbook" "$WORKSPACE" $hb "$PERSONA") || die "handbook ${hb%% *} failed verification"
 cp "$PERSONA/SOUL.md" "$WORKSPACE/SOUL.md"
+# OpenClaw injects every bootstrap file it finds, every turn. It created empty IDENTITY.md and USER.md starter templates
+# here (2.5k characters of "fill this in"); MC never uses them. agents.defaults.skipBootstrap stops them being created
+# again (openclaw.json); this removes the ones already made. MEMORY.md is left alone.
+rm -f "$WORKSPACE/IDENTITY.md" "$WORKSPACE/USER.md" "$WORKSPACE/BOOTSTRAP.md"
 { cat "$PERSONA/AGENTS.md"; printf '\n'; cat "$PERSONA/RUNTIME.openclaw.md"; printf '\n%s\n' "$block"; } > "$WORKSPACE/AGENTS.md"
 chars=$(node -e 'console.log([...require("fs").readFileSync(process.argv[1],"utf8")].length)' "$WORKSPACE/AGENTS.md")
 [ "$chars" -le 16000 ] || die "projected AGENTS.md is $chars characters (budget 16000)"
 log "handbook ${hb%% *} loaded (manifest ${hb#* }) into $WORKSPACE/handbook"
 log "persona $(node -e 'console.log(require(process.argv[1]).version)' "$PERSONA/manifest.json") laid out ($chars chars)"
+injected=$(node -e 'const fs=require("fs");console.log(process.argv.slice(1).reduce((n,f)=>n+(fs.existsSync(f)?[...fs.readFileSync(f,"utf8")].length:0),0))' \
+  "$WORKSPACE/AGENTS.md" "$WORKSPACE/SOUL.md" "$WORKSPACE/IDENTITY.md" "$WORKSPACE/USER.md" "$WORKSPACE/MEMORY.md")
+log "workspace files injected each turn: $injected chars"
+if [ -d "$WORKSPACE/skills" ]; then log "skills: $(ls "$WORKSPACE/skills" | tr '\n' ' ')"; fi
 
 # 3. Config: merge the image's policy into the live config, refuse a metered route, validate.
 #    The image config is authoritative for every key it sets (objects merge recursively; image scalars and arrays win),

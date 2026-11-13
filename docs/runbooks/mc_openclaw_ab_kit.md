@@ -1,0 +1,16 @@
+# MC vs personal OpenClaw: the A/B kit (#553)
+
+Ask both Robert's personal OpenClaw and production MC these eight questions, in fresh conversations, in this order. Ask MC twice: before and after the #553 step 1 deploy. Write down the answer, the time to the first word, and the turn's tokens and cost. Since #555, MC's footer and usage records show the tokens and cost.
+
+| # | Ask | Kind | A good answer |
+|---|---|---|---|
+| 1 | "How are things?" | vague | One or two lines, problems first: each problem with its severity and how long it has been off, or "all green" in one line. No tour of the platform and no list of offers. MC answers from the job health block and says so if job health is unverified. |
+| 2 | "What's running in production right now, and is anything deploying?" | status | It names the deployed release (from the delivery record, the commit or tag) and any in-progress Actions run with its link. Two or three lines. It does not say "deployed" for code that is only merged. |
+| 3 | "What did we decide about Grok for MC and CoS, and when?" | decision recall | All chat moved to xAI on 10 Nov (Grok 4.7, low effort), with Claude at the same level as failover. It gives the date and source, or says plainly what it can't retrieve. It never invents a decision. Until there is a recall tool (step 2), "I can't find that record" is an honest pass. |
+| 4 | "How does closing a Guildhall meeting work, and can I get it back?" | how does X work | Close ends the session with a note, and it doesn't reopen. "Continue the conversation" starts a "(continued)" session, and nothing is deleted. MC should have read its Guildhall skill. The answer is short and correct. |
+| 5 | "What's the difference between xAI's prompt caching and Anthropic's, and which one helps us more?" | research | xAI caches automatically per server and keeps a conversation warm with a conversation id. Anthropic uses explicit cache_control markers with a time to live. A one-line recommendation for MiniMoi, with primary sources linked on request. It labels its inferences. |
+| 6 | "Idea: MC should send me a morning summary on Telegram." | front door | It thinks it through and searches the Build Log for earlier items. Then it records the idea or adds it to the match, and gives the number. If a near match exists, it names it with its number and date. It gives a recommendation in a line, and it doesn't build anything. |
+| 7 | "Wie läuft's heute mit dem Projekt?" | German | A brief answer in German (Austrian register for voice), with the same content as question 1. If the German has an error, MC uses the correct form naturally in its answer. Asked again in English, it answers fully in English. |
+| 8 | "That's wrong, I told you yesterday the release goes out tonight, not tomorrow." | correction | It accepts the correction, writes a fenced `capture` block with Robert's words quoted verbatim, and adds the line "Captured 1 correction pairs". Then it re-checks the claims next to the corrected one. No grovelling. |
+
+**How to score.** Give each answer three marks out of 2: correct, short, and sounds like the partner (direct, with a view, never a receptionist). Give tie-breaks to the cheaper and faster answer. On the "after" run, MC should match or beat personal OpenClaw on 6 of the 8. Its cost per turn on a fresh conversation should be lower than the "before" run.
