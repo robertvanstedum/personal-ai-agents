@@ -99,3 +99,39 @@ def test_craft_after_a_turn_keeps_the_composer_against_the_status_strip(browser,
         expect(page.locator('body')).to_have_attribute('data-craft-picture', 'hidden')
         _assert_composer_sits_on_the_status(_composer_gap(page))
     ctx.close()
+
+
+def _picture_band(page):
+    return page.evaluate('''() => {
+      const aside = document.querySelector('.calm-craft-picture');
+      const img = aside.querySelector('img');
+      const a = aside.getBoundingClientRect(), i = img.getBoundingClientRect();
+      const input = document.querySelector('[data-mc-input]').getBoundingClientRect();
+      const s = getComputedStyle(img);
+      return {shown: getComputedStyle(aside).display !== 'none', left: i.left, right: i.right, width: innerWidth,
+        imgHeight: i.height, asideHeight: a.height, gapTop: i.top - a.top, gapBottom: a.bottom - i.bottom,
+        fit: s.objectFit, height: innerHeight, inputTop: input.top, inputBottom: input.bottom,
+        loaded: img.complete && img.naturalWidth > 0};
+    }''')
+
+
+def test_craft_phone_art_is_a_full_width_band_and_the_toggle_still_hides_it(browser, server, floor, monkeypatch):
+    """#566: on the iPhone the workshop art was a 130px portrait thumbnail letterboxed in a beige band."""
+    monkeypatch.setenv('MINIMOI_MC_EVERYWHERE', '1')
+    ctx, page = _context(browser, server, 390, 844)
+    go(page, server['url'] + '/guild-next/guild/build')
+    page.wait_for_function("() => { const i = document.querySelector('.calm-craft-picture img'); return i && i.complete && i.naturalWidth > 0; }")
+    band = _picture_band(page)
+    assert band['shown'] and band['loaded'], band
+    assert band['left'] <= 0.5 and band['right'] >= band['width'] - 0.5, band          # edge to edge, no side letterbox
+    assert band['fit'] == 'cover', band
+    assert 0.27 * band['height'] <= band['imgHeight'] <= 0.36 * band['height'], band     # about 30dvh, not a thumbnail
+    assert abs(band['gapTop']) <= 0.5 and band['gapBottom'] <= 1.5, band                 # the art fills the band (1px rule)
+    assert 0 <= band['inputTop'] < band['inputBottom'] <= band['height'], band           # the chat stays usable
+    page.screenshot(path='/private/tmp/beta-craft-phone-art-390.png')
+    page.locator('[data-craft-picture-toggle]').click()
+    expect(page.locator('body')).to_have_attribute('data-craft-picture', 'hidden')
+    expect(page.locator('.calm-craft-picture')).to_be_hidden()
+    page.locator('[data-craft-picture-toggle]').click()
+    expect(page.locator('.calm-craft-picture')).to_be_visible()
+    ctx.close()

@@ -42,9 +42,11 @@ body.gu[data-page=floor] .mc-floorbar .fb-rail:not([data-count="0"]){display:inl
  body.gu[data-page=floor] .calm-craft-workspace{grid-template-columns:minmax(0,1fr) 220px}
 }
 @media(max-width:639px){
- body.gu[data-page=floor] .calm-craft-workspace{grid-template-columns:minmax(0,1fr);grid-template-rows:clamp(64px,20dvh,150px) minmax(0,1fr)}
- body.gu[data-page=floor] .calm-craft-picture{grid-row:1;border-left:0;border-bottom:1px solid var(--r6-line);padding:8px}
- body.gu[data-page=floor] .calm-craft-picture img{max-height:clamp(48px,calc(20dvh - 16px),130px)}
+ /* Phone art is a full-width band, edge to edge, never a letterboxed thumbnail (#566): art stays prominent, the chat keeps the rest. */
+ body.gu[data-page=floor] .calm-craft-workspace{grid-template-columns:minmax(0,1fr);grid-template-rows:clamp(160px,30dvh,320px) minmax(0,1fr)}
+ body.gu[data-page=floor] .calm-craft-picture{grid-row:1;border-left:0;border-bottom:1px solid var(--r6-line);padding:0;overflow:hidden;background:none}
+ body.gu[data-page=floor] .calm-craft-picture a{height:100%}
+ body.gu[data-page=floor] .calm-craft-picture img{width:100%;height:100%;max-height:none;object-fit:cover;object-position:50% 45%;border-radius:0}
  body.gu[data-page=floor] .calm-craft-picture span{display:none}
  body.gu[data-page=floor] .calm-craft-chat{grid-row:2}
  body.gu[data-page=floor][data-craft-picture=hidden] .calm-craft-workspace{grid-template-rows:minmax(0,1fr)}
