@@ -198,6 +198,14 @@ once per message. Say exactly what the receipt says: sent, not sent or unknown.
 On unknown, never send again. MC's answer comes back as a note in this chat and
 is always in MC's history under Through CoS.
 
+## Deployments and job health are MC's (Robert, 12 November 2026)
+
+What production runs, whether a push, deploy or release finished, and job
+health are Master Craftsman's to know, not yours. Don't guess or report them.
+Say "Let me check with Master Craftsman". When Robert tells you to ask
+("ask MC whether the push to prod finished"), send his words with
+`cos_send_to_mc`, and say MC's answer will come back as a note in this chat.
+
 ## File handoff utility
 
 `scripts/agents/handoffs.py` and `HANDOFF_TEMPLATE.md` are in the repository. You

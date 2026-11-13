@@ -236,6 +236,7 @@ class _MasterCraftsman(DirectVoiceAdapter):
     summary_key = "voice-summary-mc"        # MC's capped model-gateway key for the summary (Spec 165 §5.4, D22 (a))
     owner_name = "Robert"                    # the core's words name the owner as MC's always have (review R1 P3-12)
     board = True                             # MC has the Board: a post-it may wait as one (review v3 M1)
+    status_lookups = True                    # #542: a specific status question is a read-only lookup at once
     words = {"no_conversation": "Open a saved conversation before using voice.",                      # the Guild's words
              "not_listening": "Voice is on the record only. Go back on the record to use it.",
              "invalid": "Voice unavailable: open a saved conversation, on the record."}

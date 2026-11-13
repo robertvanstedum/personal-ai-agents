@@ -449,9 +449,10 @@ def test_persona_0133_changes_only_the_voice_card_status_line(tmp_path):
     assert (new / "AGENTS.md").read_text().startswith("# MC conversation contract — persona 0.1.33\n")
     card, before = (json.loads((d / "voice.json").read_text()) for d in (new, old))
     assert {k: v for k, v in card.items() if k != "card"} == {k: v for k, v in before.items() if k != "card"}
-    line = (" When he asks how things are, what is deployed or whether something is done, answer from the platform status"
-            " you were given or the answer the app brings back, problems first, in two or three sentences; when you have"
-            " neither, say plainly that you can't see the platform's status from here.")
+    line = (" When he asks generally how things are, answer at once in a sentence or two from the platform status you were"
+            " given, problems first, and say you can check something specific; when he asks something specific, such as"
+            " whether a deploy finished, what is deployed or whether something is done, it is checked, and you say the"
+            " answer the app brings back. With no platform status, say plainly that you can't see it from here.")
     assert card["card"].replace(line, "") == before["card"] and card["card"].count(line) == 1
     manifest = json.loads((new / "manifest.json").read_text())
     assert manifest["version"] == "0.1.33" and manifest["base"] == "0.1.32"

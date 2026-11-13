@@ -272,9 +272,8 @@ LOCAL_TOOL_FILES = frozenset({"scripts/mc/morning.py", "scripts/mc/regression.py
 # changing them must rebuild all three production consumers. Import guards keep
 # expected laptop homes separate from any newly introduced production consumer.
 # Portal files the cos-scheduler image copies and loads by path (docker/Dockerfile.cos-scheduler): the upload reader for
-# Confer attachments (domains/cos/files.py) and the release observation reader for her voice status digest (#542,
-# domains/cos/direct_voice.py). A change to either rebuilds both images.
-SCHEDULER_PORTAL_FILES = frozenset({"minimoi_portal/guild_ui/doc_reader.py", "minimoi_portal/guild_ui/release_context.py"})
+# Confer attachments (domains/cos/files.py). A change to it rebuilds both images.
+SCHEDULER_PORTAL_FILES = frozenset({"minimoi_portal/guild_ui/doc_reader.py"})
 WORKSHOP_BACKEND_PREFIXES = ("core/workshop_journal/", "core/vault_t1/", "core/agent_turns/", "core/jobs/")
 SHARED_SCRUB_FILES = frozenset({"utils/credential_scrub.py", "utils/payment_scrub.py"})
 
@@ -480,8 +479,7 @@ def classify(paths: list[str],
             services.add("portal")                                   # vault-ask shares the portal image
         elif path.startswith(WORKSHOP_BACKEND_PREFIXES) or path == "config/scheduled_jobs.json":
             services.add("portal")
-            if path.startswith(("core/workshop_journal/", "core/jobs/")) or path == "config/scheduled_jobs.json":
-                # (#542: CoS's voice status digest reads core.jobs.health and the registry, which the image copies.)
+            if path.startswith(("core/workshop_journal/", "core/jobs/")):
                 # The partnership task service and helper return use the journal's artifacts, and the Apprentice's
                 # scheduled health check reads core.jobs.health (FF-19, #537); in production the task service and the
                 # helpers run the cos-scheduler image (docker-compose.minimoi-1-2-production.yml), so it rebuilds too.

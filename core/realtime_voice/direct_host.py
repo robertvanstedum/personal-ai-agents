@@ -368,44 +368,56 @@ def explicit_consult(grammar, text):
     return match is not None and re.search(r"\w", match["rest"]) is not None
 
 
-# Status questions (#542): Robert, 12 Nov 2026, by voice: "How are things?" got small talk and "the deployment went out"
-# got "I can't confirm that from here", because the understanding call heard both as chat and the voice answered alone.
-# These are lookups by the closed grammar, with no model call: the app asks the person's work runtime, read-only, as for
-# any lookup (typed MC adds job health and the release record to that turn). A short utterance only, matched whole after
-# a filler or polite word, so a sentence that merely contains "done" stays the understanding call's.
-_STATUS_LEAD = r"(?:(?:so|ok|okay|well|and|hey|hi|right|alright|all right|now|then|quick question|tell me)\s+)*"
-_SUBJECT = (r"(?:the\s+|our\s+|that\s+|this\s+|my\s+)?(?:deploy(?:ment)?s?|releases?|roll\s?outs?|jobs?|platform|minimoi|"
-            r"production|prod|portal|curator|site|services?|backups?|builds?|everything|things)")
+# Status questions (#542): Robert, 12 Nov 2026, by voice: "the deployment went out" got "I can't confirm that from here",
+# because the understanding call heard it as chat and the voice answered alone. A SPECIFIC status question (did the push or
+# deploy complete, what is deployed, is X done, is a deploy running, "the deployment went out") is a lookup by this closed
+# grammar, with no model call: the app asks the person's work runtime, read-only, as for any lookup. A VAGUE one ("how are
+# things", "how's it going", "everything ok?") stays chat on purpose (Robert, 12 Nov: "if question is vague, I don't mind a
+# quick response and then I clarify"): the voice answers at once from the session's platform status digest and offers to
+# check something specific. Short utterances only, matched whole after a filler or polite word.
+_STATUS_LEAD = r"(?:(?:so|ok|okay|well|and|hey|hi|right|alright|all right|now|then|quick question|tell me|no|i mean|actually|sorry|just)\s+)*"
+_SUBJECT = (r"(?:the\s+|our\s+|that\s+|this\s+|my\s+|a\s+|today's\s+|last\s+night's\s+)?(?:[\w-]+\s+){0,2}?"
+            r"(?:deploy(?:ment)?s?|releases?|roll\s?outs?|push(?:es)?|jobs?|backups?|builds?|migrations?|merges?|fix(?:es)?|"
+            r"prs?|pull\s+requests?)")
+_STATUS_DONE = (r"(?:done|finished|finish|complete|completed|deployed|live|out|through|gone\s+out|go\s+out|go\s+through|"
+         r"go\s+live|succeed|succeeded|work|worked|land|landed|merged|shipped|fixed|running|still\s+running|healthy|"
+         r"failing|failed|broken|green)")
 _STATUS = re.compile(
     r"\A" + _STATUS_LEAD + r"(?:"
-    r"how(?:'s|\s+is|\s+are|\s+r)\s+(?:things|everything|it\s+going|it\s+looking|we\s+doing|we\s+looking|"
-    r"(?:the\s+)?(?:platform|minimoi|production|prod|jobs|job\s+health|deploy(?:ment)?|release|system))"
-    r"(?:\s+(?:going|looking|now|today|then|at\s+the\s+moment|on\s+the\s+platform|with\s+minimoi|in\s+production))*"
-    r"|how\s+are\s+we\s+(?:doing|looking)(?:\s+(?:now|today))?"
-    r"|(?:what(?:'s|\s+is)\s+the\s+|give\s+me\s+(?:a\s+|the\s+)?|any\s+)?status(?:\s+(?:update|report|check))?"
-    r"(?:\s+(?:of|on|for)\s+[\w\s-]{1,40})?"
-    r"|(?:any|are\s+there\s+any)\s+(?:problems|issues|failures|failing\s+jobs|alerts)(?:\s+[\w\s-]{1,40})?"
+    # did / has / is / are <subject> <done word>: "did the push to prod complete", "is a deploy running"
+    r"(?:is|are|has|have|did|was|were)\s+" + _SUBJECT + r"(?:\s+[\w-]+){0,4}?\s+(?:been\s+)?" + _STATUS_DONE +
+    r"(?:\s+(?:yet|now|already|okay|ok|fine|successfully))?"
+    r"|(?:is|has|did)\s+it\s+(?:done|finished|complete|completed|deployed|live|gone\s+out|go\s+out|go\s+through|"
+    r"succeed|succeeded)(?:\s+(?:yet|now))?"
+    # "is there a deploy running", "is anything deploying"
+    r"|is\s+(?:there\s+)?(?:a|any)\s+(?:deploy(?:ment)?|release|build|job)\s+(?:running|in\s+progress|going)(?:\s+now)?"
+    # "the deployment went out": effectively "confirm it"
+    r"|" + _SUBJECT + r"(?:\s+[\w-]+){0,3}?\s+(?:went|has\s+gone|is|was|has\s+been|completed|finished|succeeded)"
+    r"(?:\s+(?:out|through|live|done|deployed|finished|complete))?"
+    # what is deployed / running / live
     r"|what(?:'s|\s+is)\s+(?:deployed|running|live|in\s+production|in\s+prod|on\s+production|on\s+prod)"
-    r"(?:\s+(?:now|right\s+now|in\s+production|in\s+prod|on\s+production|on\s+prod|on\s+minimoi))?"
+    r"(?:\s+(?:now|right\s+now|in\s+production|in\s+prod|on\s+production|on\s+prod|on\s+minimoi|on\s+dev))?"
     r"|(?:which|what)\s+(?:release|version|commit|build)\s+(?:is\s+|'s\s+)?(?:deployed|running|live|out|in\s+production|"
-    r"in\s+prod|on\s+production)(?:\s+(?:now|right\s+now|in\s+production|in\s+prod|on\s+production))?"
-    r"|(?:is|are|has|have|did)\s+" + _SUBJECT + r"(?:\s+[\w-]+){0,3}?\s+(?:done|finished|complete|completed|deployed|"
-    r"live|out|through|gone\s+out|go\s+out|go\s+through|succeed|succeeded|work|worked|ok|okay|fine|healthy|running|"
-    r"working|failing|failed|broken|green)"
-    r"|(?:is|are|has|have)\s+(?:the|our|that|this|my)\s+(?:[\w-]+\s+){0,4}?(?:been\s+)?(?:done|finished|complete|completed|"
-    r"deployed|live|merged|shipped|fixed)"
-    r"|(?:is|has|did)\s+it\s+(?:done|finished|deployed|live|out|through|gone\s+out|go\s+out|go\s+through|work|worked|"
-    r"succeed|succeeded)"
-    r"|" + _SUBJECT + r"(?:\s+[\w-]+){0,2}?\s+(?:went|has\s+gone|is|was|has\s+been)\s+(?:out|through|live|done|deployed|finished)"
-    r"|wie\s+(?:läuft's|läufts|läuft\s+es|steht's|stehts|steht\s+es|geht's\s+der\s+plattform)(?:\s+(?:gerade|heute|jetzt))?"
+    r"in\s+prod|on\s+production|on\s+dev)(?:\s+(?:now|right\s+now|in\s+production|in\s+prod|on\s+production))?"
+    # a named thing's status: "what's the status of the deploy", "how's the release going"
+    r"|what(?:'s|\s+is)\s+the\s+status\s+(?:of|on)\s+[\w\s'-]{1,40}"
+    r"|how(?:'s|\s+is|\s+are)\s+" + _SUBJECT + r"(?:\s+(?:going|looking|doing|coming\s+along|now|today))*"
     r")\Z", re.I)
 
 
 def status_question(text):
-    """Whether his words are only a question about how the platform is, what is deployed, or whether some work is done
-    (_STATUS, closed and anchored), politely or not: a lookup (#542)."""
-    said = _bare_request(text)
-    return bool(said) and len(said.split()) <= 14 and _STATUS.match(said) is not None
+    """Whether his words are only a SPECIFIC status question (_STATUS, closed and anchored), politely or not: a lookup
+    (#542). A vague "how are things" is not: the voice answers it from the status digest."""
+    if not isinstance(text, str) or len(text) > 200:
+        return False
+    # His clarification after a vague answer (Robert, 12 Nov: "No, not if you are fine, but did the push to prod
+    # complete…"): the last clause, after a comma or "but", is the question.
+    clauses = [text] + [c for c in re.split(r"[,;:.!?]+|\bbut\b", text, flags=re.I) if re.search(r"\w", c)][-1:]
+    for clause in clauses:
+        said = _bare_request(clause)
+        if said and len(said.split()) <= 14 and _STATUS.match(said) is not None:
+            return True
+    return False
 
 
 def fast_label(adapter, grammar, text, waiting):
@@ -435,8 +447,8 @@ def fast_label(adapter, grammar, text, waiting):
         return kind
     if explicit_consult(grammar, text):
         return "consult"
-    if status_question(text):
-        return "lookup"                                 # #542: read-only, at once, through the person's work runtime
+    if getattr(adapter, "status_lookups", False) and status_question(text):
+        return "lookup"                                 # #542 (MC only): read-only, at once, through his work runtime
     if waiting is None and (bare_answer(text) == "yes" or read_back_request(text)):
         return "yes" if bare_answer(text) == "yes" else "read_back"
     return None
@@ -458,7 +470,22 @@ def clock_line(now=None):
     return f"Clock: it is {when.strftime('%A, %d %B %Y, %I:%M %p').replace(' 0', ' ')} Central time in Chicago."
 
 
-def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False):
+def _status_rule(platform_status):
+    """#542. True (MC): a specific status question is a lookup, a general one is answered at once from the session's
+    platform status digest. A string: the host's own rule instead (CoS: deployments and job health are another person's
+    to know, not hers; the host names that person, the core names none). False: nothing."""
+    if isinstance(platform_status, str):
+        return platform_status
+    if not platform_status:
+        return ""
+    return ("A specific status question (did a push or deploy complete, what is deployed, is something done) is a "
+            "lookup as well. A general one (\"how are things?\") you answer at once, in a sentence or two, from the "
+            "platform status at the end of these instructions (DATA from the start of this call), problems first, and "
+            "say you can check something specific; use it too when a lookup's answer did not reach you. If there is "
+            "no platform status, say plainly that you can't see it from here, never that all is well. ")
+
+
+def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False, platform_status=True):
     """Spec 164 §7, part 1, as confirm by voice v3 makes it (V3_BUILD_BRIEF "The voice side"): what a direct session adds to
     the host's own operating rules. The model has no tools: it cannot act, the app does, and only after the owner
     confirms; it never repeats his words; it never says anything is done; outcomes come from the app; and "Shall I sum
@@ -482,12 +509,8 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False):
               "it\", \"Will do\" or \"I'll do that\"; work he asks for waits for his confirmation. Never narrate the machinery: never say you are "
               "checking, waiting on a result, or that a result has not arrived. If an answer has not reached you by his "
               "next words, say plainly that you couldn't get it just now, and carry on with him. "
-              # #542: a status question is a lookup too; the session's status digest is what the voice itself knows.
-              f"How things are, what is deployed and whether work is done are lookups as well. Where {owner} talks "
-              "about them otherwise, or a lookup's answer did not reach you, use the platform status at the end of these "
-              "instructions (DATA from the start of this call); if there is none, say plainly that you can't see the "
-              "platform's status from here, never that all is well. "
               f"A written record of this call is kept: after the call {owner} can download its transcript from the chat. ")
+    lookup += _status_rule(platform_status)
     request = lookup + f"When {owner} asks for a note, a post-it, or work that changes something (making, changing, " \
               "closing or sending anything, files, jobs, any work), "
     ask = (request + "never ask him to confirm it yourself and never say it is done: the app hears what he asks for, and "
@@ -929,6 +952,9 @@ class DirectVoiceAdapter:
     # Whether a provider the card names no voice for speaks in that provider's default, said in voice_notices (MC's card
     # names none yet, D3), or is refused before anything is recorded, with NO_VOICE (CoS, D2 (a): no silent fallback).
     default_voices = True
+    # Whether a specific status question (status_question) is a lookup by the grammar (#542): MC, whose platform it is.
+    # CoS defers such questions to MC (Robert, 12 Nov 2026: "not it's job to know deployment status").
+    status_lookups = False
     # Whether the host has a Board for post-its (MC). Review v3 M1: on a host with none (CoS) the understanding call is not
     # offered postit, and a post-it heard anyway waits as a request to the person's typed turn (consult).
     board = False

@@ -43,7 +43,6 @@ from core.realtime_voice import direct_host as core
 from core.realtime_voice.direct_host import (FAILED, DirectVoiceAdapter, Receipts, compose_instructions, direct_rules,
                                              install_direct_voice, operation_id, refusal, speakable)
 from core.realtime_voice.errors import VoiceUnavailable
-from core.realtime_voice.status_digest import compose, jobs_summary, safe
 from core.realtime_voice.transcripts import SPEAKERS
 from core.realtime_voice.voice_card import load_pinned
 from domains.cos import voice_store, history as cos_history
@@ -126,6 +125,13 @@ _WRITING = ("Set reminders in writing: you cannot set a reminder by voice, so if
             "writing in Confer. Commands such as /new are done in writing too.")
 
 
+# #542 (Robert, 12 Nov 2026: "not it's job to know deployment status"): what replaces MC's status rule in her session.
+STATUS_TO_MC = ("Deployments, what production runs and job health are Master Craftsman's to know, not yours: never guess "
+                "or report them. Say \"Let me check with Master Craftsman\", and when Robert asks you to (\"ask MC whether "
+                "the push finished\"), his question goes to MC through the app; MC's answer comes back as a note in this "
+                "chat, not in this call. ")
+
+
 def her_rules(actions=False, *, page_asks=False):
     """Her own operating rules for this session (§6.2, §6.4) under v3 (``actions`` is ignored, kept for its callers): no
     tools; the app consults her after Robert's yes. ``page_asks``: the page's line is the question (OpenAI, S6)."""
@@ -158,13 +164,12 @@ def may_start(environ):
     return env.get(INSTALL) == "1"
 
 
-def bounded(rules, card, briefing, memory, continuity, limit=INSTRUCTIONS_MAX_BYTES, status=""):
+def bounded(rules, card, briefing, memory, continuity, limit=INSTRUCTIONS_MAX_BYTES):
     """Her session text within ``limit`` bytes (§6.3): rules, card, then as DATA her briefing (``briefing(memory)``) and
-    continuity, then the platform status digest (#542; at most status_digest.MAX_CHARS, never cut). Over it, continuity
-    is cut first (oldest turns first), then memory (its oldest lines first), each marked as cut; rules and card never.
-    Still over: VoiceUnavailable, which says so."""
+    continuity. Over it, continuity is cut first (oldest turns first), then memory (its oldest lines first), each marked
+    as cut; rules and card never. Still over: VoiceUnavailable, which says so."""
     def text(mem, cont):
-        return compose_instructions(rules, card, BRIEFING_HEAD + briefing(mem) + "\n\n" + CONTINUITY_HEAD + cont, status)
+        return compose_instructions(rules, card, BRIEFING_HEAD + briefing(mem) + "\n\n" + CONTINUITY_HEAD + cont)
 
     def fits(value):
         return len(value.encode()) <= limit
@@ -186,25 +191,6 @@ def bounded(rules, card, briefing, memory, continuity, limit=INSTRUCTIONS_MAX_BY
         if fits(candidate):
             return candidate
     raise VoiceUnavailable(TOO_LONG)
-
-
-# Her status digest's sources (#542), read-only in cos-scheduler: the watchdogs' health reports (the mc-observations volume)
-# and the release observation (/opt/minimoi/release-status), both mounted read-only (docker-compose.prod.yml), and the
-# portal's release_context, loaded by path as files.py loads the portal's doc reader (the image copies that one file).
-RELEASE_CONTEXT = Path(__file__).resolve().parents[2] / "minimoi_portal" / "guild_ui" / "release_context.py"
-
-
-def _release_summary():
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("cos_release_context", RELEASE_CONTEXT)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.summary()
-
-
-def status_digest():
-    """Job health first, then what production last deployed: bounded DATA (core.realtime_voice.status_digest)."""
-    return compose([("Jobs", jobs_summary), ("Deploys", _release_summary)])
 
 
 class _Boundary:
@@ -247,9 +233,8 @@ class ChiefOfStaff(DirectVoiceAdapter):
              "kept_in": "in Chief of Staff's voice records, which she can recall"}
 
     def __init__(self, *, store, process_turn, briefing, memory, files=None, card_root=CARD_ROOT, clock=time.time, history=None,
-                 owner_turn=None, request_binding=None, status=None):
+                 owner_turn=None, request_binding=None):
         self.store, self._process, self._briefing, self._memory = store, process_turn, briefing, memory
-        self._status = status or status_digest
         self._history = history
         # A spoken action runs as an owner turn, like a typed one (Dev, 7 Nov: every Board and card call from voice was
         # refused run_unattached). request_binding reads THIS request's signed assertion, in the request's own thread;
@@ -337,13 +322,10 @@ class ChiefOfStaff(DirectVoiceAdapter):
         bounded continuity, within INSTRUCTIONS_MAX_BYTES. ``page_asks``: OpenAI's page asks (review v3 S6)."""
         token = "\x00cos-voice-memory\x00"
         built = self._briefing(token)                     # once: it reads files and asks for live status
-        rules = (direct_rules(PERSON, OWNER_NAME, actions, page_asks=page_asks) + "\n\n"
+        # #542: deployments, production and job health are MC's, not hers: no status digest, and she defers to MC.
+        rules = (direct_rules(PERSON, OWNER_NAME, actions, page_asks=page_asks, platform_status=STATUS_TO_MC) + "\n\n"
                  + her_rules(actions, page_asks=page_asks))
-        # The platform status digest (#542) only for a conversation conversation() admitted (hers, or a writable, non-private
-        # chat): never Private, as the typed path. A failure leaves it out (status_digest.safe); voice goes on.
-        status = safe(self._status) if handle is not None else ""
-        return bounded(rules, card, lambda memory: built.replace(token, memory), self._memory(), self._continuity(handle),
-                       status=status)
+        return bounded(rules, card, lambda memory: built.replace(token, memory), self._memory(), self._continuity(handle))
 
     def _continuity(self, conversation=voice_store.HANDLE):
         """His and her last turns from her latest settled sessions (never a live one), oldest first: DATA, at most
@@ -471,8 +453,7 @@ class ChiefOfStaff(DirectVoiceAdapter):
 
 
 def install(app, *, environ, process_turn, briefing, memory, files=None, recall=None, budget=None,
-            clock=time.time, summary_http=None, card_root=CARD_ROOT, history=None, owner_turn=None, request_binding=None,
-            status=None):
+            clock=time.time, summary_http=None, card_root=CARD_ROOT, history=None, owner_turn=None, request_binding=None):
     """Register her direct voice on cos-scheduler's app when MINIMOI_COS_VOICE_DIRECT=1: the core's routes under PREFIX,
     with this adapter. Returns the core's metadata, or None (nothing registered). ``recall``: Confer's recall folder
     (conversation_log.folder), where settled sessions are projected (D6 (a)). A start is allowed only where may_start()
@@ -484,8 +465,7 @@ def install(app, *, environ, process_turn, briefing, memory, files=None, recall=
         log.error("cos direct voice: %s is not a usable folder; voice is refused until it is", voice_store.ENV)
     adapter = ChiefOfStaff(store=voice_store.FileStore(root, recall=recall, clock=clock), process_turn=process_turn,
                            briefing=briefing, memory=memory, files=files, card_root=card_root,
-                           clock=clock, history=history, owner_turn=owner_turn, request_binding=request_binding,
-                           status=status)
+                           clock=clock, history=history, owner_turn=owner_turn, request_binding=request_binding)
 
     def admitted():
         if not may_start(environ):

@@ -145,22 +145,7 @@
     "${MINIMOI_ROOT:-/opt/minimoi}/cos/outbox:/app/data/cos-files/outbox:ro",
     "${MINIMOI_ROOT:-/opt/minimoi}/cos/conversations:/app/data/cos-conversations",
     "${MINIMOI_ROOT:-/opt/minimoi}/cos_voice:/app/data/cos-voice",
-    "${MINIMOI_ROOT:-/opt/minimoi}/private/professional:/minimoi/private/professional:ro",
-    {
-     "read_only": true,
-     "source": "mc-observations",
-     "target": "/app/runtime/mc-observations",
-     "type": "volume"
-    },
-    {
-     "bind": {
-      "create_host_path": false
-     },
-     "read_only": true,
-     "source": "${MINIMOI_ROOT:-/opt/minimoi}/release-status",
-     "target": "/app/runtime/release",
-     "type": "bind"
-    }
+    "${MINIMOI_ROOT:-/opt/minimoi}/private/professional:/minimoi/private/professional:ro"
    ]
   },
   "curator": {

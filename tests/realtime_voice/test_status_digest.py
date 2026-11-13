@@ -162,29 +162,34 @@ def test_the_session_text_gets_its_own_status_section_only_when_there_is_one():
 
 def test_the_shared_rules_say_status_questions_are_lookups_and_the_digest_is_the_fallback():
     rules = direct_host.direct_rules({"name": "Master Craftsman", "short": "MC"}, "Robert")
-    assert "How things are, what is deployed and whether work is done are lookups as well." in rules
-    assert "say plainly that you can't see the platform's status from here, never that all is well" in rules
+    assert "A specific status question (did a push or deploy complete, what is deployed, is something done) is a lookup" in rules
+    assert "A general one (\"how are things?\") you answer at once, in a sentence or two, from the platform status" in rules
+    assert "say you can check something specific" in rules and "never that all is well" in rules
 
 
 # ── status questions are lookups by the grammar ─────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("text", [
-    "How are things?", "How are things now?", "So how are things going?", "How's everything?", "how are we doing",
-    "What's deployed?", "What is running in production?", "Which release is running?", "What's the status?",
-    "Status update, please", "Any problems?", "How are the jobs?", "Are the jobs healthy?", "Is everything okay?",
-    "Is the deployment done?", "Did the deploy go out?", "The deployment went out.", "Has the release gone out?",
-    "Is the nightly backup job finished?", "Is the Guildhall fix done?", "Has the voice PR been merged?",
-    "Is it done?", "Did it work?", "Wie läuft's?"])
-def test_a_status_question_is_a_lookup(text):
+    "Did the push to prod complete?", "Did the deploy complete?", "Did the release finish?", "Did the deployment go out?",
+    "Did the deploy succeed?", "Has the release gone out?", "Is the deployment done?", "Is the Guildhall fix done?",
+    "Has the voice PR been merged?", "Is the nightly backup job finished?", "Is a deploy running?",
+    "Is there a deploy running?", "The deployment went out.", "The push completed.", "What's deployed?",
+    "What is running in production?", "Which release is running?", "What's the status of the deploy?",
+    "How's the release going?", "Is it done?", "Did it go through?", "Are the jobs healthy?",
+    "No, not if you are fine, but did the push to prod complete?", "No, I mean did the deploy finish"])
+def test_a_specific_status_question_is_a_lookup(text):
     assert direct_host.status_question(text), text
 
 
 @pytest.mark.parametrize("text", [
+    # Vague ones stay chat (Robert, 12 Nov): the voice answers at once from the status digest; he clarifies if he wants.
+    "How are things?", "How are things now?", "How's it going?", "Everything ok?", "Is everything okay?",
+    "how are we doing", "What's the status?", "Any problems?", "Wie läuft's?",
+    # and anything that is not a status question at all
     "How are you?", "Is it okay if I go out for lunch?", "Is that fine?", "Are you there?", "Did you hear me?",
     "Make a note that the deployment went out", "Ask MC how things are", "Things are going well", "we're done",
-    "How are things with your family and the kids this week, anything new?", "Is the plan good?",
-    "The deployment of the new kitchen is next week and I need to plan it", "yes"])
-def test_other_words_are_not(text):
+    "How are things with your family and the kids this week, anything new?", "Is the plan good?", "yes"])
+def test_vague_or_other_words_are_not(text):
     assert not direct_host.status_question(text), text
 
 
@@ -194,17 +199,18 @@ def mc_ready(monkeypatch, tmp_path):
     return mc, mc.build(monkeypatch, tmp_path, dict(mc.ON))
 
 
-def test_how_are_things_runs_at_once_as_a_read_only_lookup_with_no_understanding_call(mc_ready):
+def test_a_specific_question_runs_at_once_as_a_lookup_and_a_vague_one_stays_the_voices(mc_ready):
     mc, r = mc_ready
     r.cos.intent = lambda body: "chat"                               # the call would have heard chat (12 Nov)
     sid = mc.start(r)["voice_session_id"]
     before = len(r.cos.intents)
-    got = mc.utter(r, sid, "t1", "How are things?").get_json()
+    got = mc.utter(r, sid, "t1", "Did the push to prod complete?").get_json()
     assert got["decision"] == "confirm" and got["lookup"] is True and got["heard"] == "lookup", got
     assert len(r.cos.intents) == before                               # the grammar heard it: no model call
     told = mc.utter(r, sid, "t3", "The deployment went out.").get_json()
     assert told["decision"] == "confirm" and told["lookup"] is True, told
-    assert mc.utter(r, sid, "t5", "How are you?").get_json()["decision"] == "chat"   # small talk stays the voice's
+    vague = mc.utter(r, sid, "t5", "How are things?").get_json()     # answered at once from the digest
+    assert vague["decision"] == "chat", vague
 
 
 def test_a_status_lookup_runs_mcs_turn_read_only(mc_ready):
@@ -263,34 +269,45 @@ def test_a_failing_digest_never_blocks_mcs_voice(mc_ready, monkeypatch):
     assert "PLATFORM STATUS" not in r.mints[-1]["instructions"]
 
 
-# ── CoS: the same digest, in her briefing's place ───────────────────────────────────────────────────────────────────────
+# ── CoS: no digest; deployments and job health are MC's (Robert, 12 Nov: "not it's job to know deployment status") ──────
 
-def test_her_session_starts_with_the_status_digest_and_a_failure_leaves_it_out(monkeypatch, tmp_path):
+def test_her_session_has_no_platform_status_and_defers_to_mc(monkeypatch, tmp_path):
     import cos_voice_rig as rig
-    r = rig.build(monkeypatch, tmp_path, status=lambda: "[Platform status …]\nDeploys: release e6017b5.")
+    from domains.cos import direct_voice
+    r = rig.build(monkeypatch, tmp_path)
     rig.start(r)
     text = r.mints[-1]["instructions"]
-    assert text.index("THIS CONVERSATION SO FAR (DATA)") < text.index("=== PLATFORM STATUS (DATA) ===")
-    assert text.endswith("Deploys: release e6017b5.")
-    broken = rig.build(monkeypatch, tmp_path / "b", status=lambda: 1 / 0)
-    rig.start(broken)
-    assert "PLATFORM STATUS" not in broken.mints[-1]["instructions"]
+    assert "PLATFORM STATUS" not in text and "Platform status at session start" not in text
+    assert 'Say \"Let me check with Master Craftsman\"' in text and "MC's answer comes back as a note in this chat" in text
+    assert "A specific status question" not in text                     # MC's rule, not hers
+    assert "Let me check with Master Craftsman" in text[text.index("=== WHO YOU ARE ==="):]     # her card says it too
+    assert not hasattr(direct_voice, "status_digest") and not direct_voice.ChiefOfStaff.status_lookups
 
 
-def test_her_digest_reads_job_health_then_the_release(monkeypatch):
-    from domains.cos import direct_voice
-    monkeypatch.setattr(direct_voice, "jobs_summary", lambda: "All watched jobs are green on ec2.")
-    monkeypatch.setattr(direct_voice, "_release_summary", lambda: "Production's last deployment, release e6017b5.")
-    text = direct_voice.status_digest()
-    assert text.index("Jobs: All watched jobs are green") < text.index("Deploys: Production's last deployment")
-    assert direct_voice.RELEASE_CONTEXT.is_file()                      # the file the image copies, loaded by path
+def test_mcs_rules_keep_the_digest_and_routing():
+    rules = direct_host.direct_rules({"name": "Master Craftsman", "short": "MC"}, "Robert")
+    assert "Let me check with Master Craftsman" not in rules and "A specific status question" in rules
 
 
-def test_her_digest_is_never_built_for_a_conversation_she_refused(monkeypatch, tmp_path):
-    from domains.cos import direct_voice
-    called = []
-    adapter = direct_voice.ChiefOfStaff(store=None, process_turn=None, briefing=lambda memory: "b", memory=lambda: "",
-                                        status=lambda: called.append(1) or "DIGEST")
-    monkeypatch.setattr(direct_voice.ChiefOfStaff, "_continuity", lambda self, handle=None: "")
-    text = adapter.instructions("card", None)                          # a private or unknown chat: no handle
-    assert "PLATFORM STATUS" not in text and called == []
+class _Host:
+    person = {"domain": "t", "short": "MC", "name": "Master Craftsman"}
+
+    def __init__(self, lookups):
+        self.status_lookups = lookups
+
+    def explicit_request(self, text):
+        return None
+
+
+def test_only_mcs_grammar_turns_a_specific_status_question_into_a_lookup():
+    grammar = direct_host.consult_grammar(_Host.person)
+    assert direct_host.fast_label(_Host(True), grammar, "Did the push to prod complete?", None) == "lookup"
+    assert direct_host.fast_label(_Host(False), grammar, "Did the push to prod complete?", None) is None   # CoS: the call hears it
+    assert direct_host.fast_label(_Host(True), grammar, "How are things?", None) is None
+
+
+def test_her_persona_sends_status_questions_to_mc_only_when_asked():
+    agents = (ROOT / "docker/cos-agent-a/COS_AGENTS.md").read_text()
+    section = agents[agents.index("## Deployments and job health are MC's"):agents.index("## File handoff utility")]
+    assert 'Say "Let me check with Master Craftsman"' in section and "`cos_send_to_mc`" in section
+    assert "Don't guess or report them" in section and "come back as a note in this chat" in section

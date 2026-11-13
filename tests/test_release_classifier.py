@@ -231,8 +231,7 @@ BACKEND_IMPORT_EXPECTED = {
     "scripts/jobs/helper_check.py": ("core.jobs",),
     # The Apprentice's scheduled health check (FF-19): helpers run the cos-scheduler image, which a core/jobs change rebuilds.
     "services/helper_seats/types.py": ("core.jobs",),
-    # The voices' status digest (#542): MC's in the portal, CoS's in the cos-scheduler image, both of which a core/jobs
-    # change rebuilds.
+    # MC's voice status digest (#542), in the portal, which a core/jobs change rebuilds.
     "core/realtime_voice/status_digest.py": ("core.jobs.health", "core.jobs.registry"),
     "scripts/memory/daily_watch.py": ("core.jobs",),
     "scripts/memory/index_job.py": ("core.jobs",),
@@ -1124,15 +1123,14 @@ def test_canonical_records_changes_keep_conservative_full_release():
         assert classify([path]) == ("full", ALL_SERVICES)
 
 
-def test_the_portal_files_the_scheduler_image_copies_rebuild_it_too():
-    """#542: cos-scheduler copies the release observation reader (CoS's voice status digest) and the upload reader, and
-    loads both by path; it copies the scheduled-jobs registry too. A change to any of them rebuilds it with the portal."""
+def test_the_upload_reader_the_scheduler_image_copies_rebuilds_it_too():
+    """cos-scheduler copies the portal's upload reader and loads it by path (domains/cos/files.py): a change to it
+    rebuilds both images (#542 found the gap)."""
     dockerfile = (Path(__file__).resolve().parent.parent / "docker" / "Dockerfile.cos-scheduler").read_text()
-    for path in ("minimoi_portal/guild_ui/release_context.py", "minimoi_portal/guild_ui/doc_reader.py",
-                 "config/scheduled_jobs.json"):
-        assert f"COPY {path} {path}" in dockerfile
-        assert classify([path]) == ("domain", ("portal", "cos-scheduler"))
-    assert classify(["minimoi_portal/guild_ui/jobs_health.py"]) == ("domain", ("portal",))
+    path = "minimoi_portal/guild_ui/doc_reader.py"
+    assert f"COPY {path} {path}" in dockerfile
+    assert classify([path]) == ("domain", ("portal", "cos-scheduler"))
+    assert classify(["minimoi_portal/guild_ui/release_context.py"]) == ("domain", ("portal",))
 
 
 def test_a_workshop_journal_change_also_rebuilds_the_scheduler_image_that_runs_the_task_service():
