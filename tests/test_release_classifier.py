@@ -1,7 +1,7 @@
 """The release classifier must minimize restarts without guessing ownership."""
 
 from pathlib import Path
-from scripts.ci.classify_release import ALL_SERVICES, classify
+from scripts.ci.classify_release import ALL_SERVICES, classify, guildhall
 
 
 def test_document_only_release_has_no_services():
@@ -126,9 +126,15 @@ def test_dormant_master_craftsman_files_redeploy_nothing_until_a_service_uses_th
     # test fails and that change must classify them as a real service.
     root = Path(__file__).resolve().parent.parent
     users = []
+    import re
     for path in (root / ".github/workflows/deploy.yml", root / "scripts/operations/deploy_scoped_release.sh",
                  root / "docker-compose.prod.yml", root / "docker-compose.yml", root / "scripts/staging/build.sh"):
         text = path.read_text()
+        if path.name == "deploy.yml":
+            # The one MC reference the release may hold (#550): a read of the tag MC's own container runs, compared with
+            # the release, to say "MC agent release needed". It never builds, pulls or deploys MC's image.
+            assert "docker/mc-agent" not in text and "deploy_mc_container_ec2" not in text and "cos-scheduler:mc-agent" not in text
+            text = re.sub(r"minimoi-mc-agent|deploy-mc-agent\.yml|mc-agent-v[^\s\"']*|--mc-agent[-a-z]*", "", text)
         if "docker/mc-agent" in text or "Dockerfile.mc-agent" in text or "mc-agent" in text:
             users.append(path.name)
     assert users == []
@@ -425,8 +431,14 @@ def test_guild_runtime_has_no_unclassified_production_consumer():
                "core.agent_requests", "core/agent_requests", "core.limits", "core/limits.py",
                "rooms_worker", "rooms_connector", "rooms-worker", "rooms-connector")
     # A new production entrypoint/mount must update service ownership too.
-    paths = [root / ".github/workflows/deploy.yml", root / "docker-compose.prod.yml",
-             root / "docker-compose.yml", root / "scripts/operations/deploy_scoped_release.sh"]
+    paths = [root / "docker-compose.prod.yml", root / "docker-compose.yml", root / "scripts/operations/deploy_scoped_release.sh"]
+    # deploy.yml builds the rooms-worker image and refreshes Guildhall (#550): allowed because the classifier owns those
+    # paths as the guildhall target, which this checks; the other markers stay out of it.
+    assert guildhall(["services/rooms_worker/worker.py"], ())["rooms_worker_image"] is True
+    deploy = (root / ".github/workflows/deploy.yml").read_text()
+    assert "uses: ./.github/workflows/rooms-worker-image.yml" in deploy and "guildhall_prod.sh refresh" in deploy
+    deploy = deploy.replace("rooms-worker-image.yml", "").replace("rooms_worker_image", "")
+    assert not [m for m in markers if m in deploy]
     paths.extend(p for p in (root / "docker").rglob("*") if p.is_file()
                  and p.name not in {"Dockerfile.rooms-worker", "Dockerfile.rooms-codex", "requirements.rooms-worker.txt"}
                  and "mc-agent" not in str(p))
@@ -1137,3 +1149,97 @@ def test_a_workshop_journal_change_also_rebuilds_the_scheduler_image_that_runs_t
     assert set(classify(["core/workshop_journal/artifacts.py"])[1]) == {"portal", "cos-scheduler"}
     assert set(classify(["core/jobs/judge.py"])[1]) == {"portal", "cos-scheduler"}     # FF-19: the helpers read core.jobs.health
     assert "portal" in classify(["domains/cos/history.py"])[1]
+
+
+# ---- the Guildhall stack and MC's own image (#550) ----------------------------------------------------------------------
+from scripts.ci.classify_release import mc_agent_changes, mc_image_sources, release_class_with_stacks
+
+
+def test_guildhall_is_named_whenever_the_portal_image_moves():
+    services = classify(["minimoi_portal/app.py"])[1]
+    assert services == ("portal",)
+    assert guildhall(["minimoi_portal/app.py"], services) == {
+        "guildhall": True, "rooms_worker_image": False, "reasons": ["new portal image (Records runs it)"]}
+    # A release without the portal leaves Records where it is.
+    assert guildhall(["domains/german/app.py"], classify(["domains/german/app.py"])[1])["guildhall"] is False
+
+
+def test_records_code_names_guildhall_and_still_releases_the_portal_it_runs_in():
+    for path in ("domains/records/store.py", "services/records_runtime.py", "services/records_prepare.py"):
+        release_class, services = classify([path])
+        assert "portal" in services
+        stacks = guildhall([path], services)
+        assert stacks["guildhall"] and "Records code changed" in stacks["reasons"] and not stacks["rooms_worker_image"]
+
+
+def test_worker_files_build_the_worker_image_and_restart_no_main_service():
+    for path in ("services/rooms_worker/cos.py", "services/records_door/door.py", "docker/Dockerfile.rooms-worker",
+                 "docker/requirements.rooms-worker.txt", ".github/workflows/rooms-worker-image.yml"):
+        release_class, services = classify([path])
+        assert (release_class, services) == ("documents", ()), path
+        stacks = guildhall([path], services)
+        assert stacks["guildhall"] and stacks["rooms_worker_image"], path
+        assert release_class_with_stacks(release_class, stacks) == "guildhall"
+    # What the worker image copies is exactly what names it.
+    dockerfile = (Path(__file__).resolve().parent.parent / "docker/Dockerfile.rooms-worker").read_text()
+    copied = {line.split()[1] for line in dockerfile.splitlines() if line.startswith("COPY ") and not line.split()[1].startswith("docker/")}
+    assert copied == {"services/__init__.py", "services/rooms_worker/", "services/records_door/"}
+
+
+def test_guildhall_deployment_files_refresh_guildhall_alone():
+    for path in ("scripts/operations/guildhall_prod.sh", "docker-compose.guildhall-production.yml",
+                 "docker-compose.records-production.yml"):
+        release_class, services = classify([path])
+        assert services == (), path
+        stacks = guildhall([path], services)
+        assert stacks == {"guildhall": True, "rooms_worker_image": False, "reasons": ["Guildhall deployment files changed"]}
+        assert release_class_with_stacks(release_class, stacks) == "guildhall"
+    # The main project's own Records and Guildhall layers still release the main services.
+    assert classify(["docker-compose.records-production-portal.yml"]) == ("full", ALL_SERVICES)
+    assert classify(["docker-compose.guildhall-production-main.yml"]) == ("full", ALL_SERVICES)
+
+
+def test_documents_alone_name_no_stack():
+    stacks = guildhall(["docs/x.md"], ())
+    assert stacks["guildhall"] is False and release_class_with_stacks("documents", stacks) == "documents"
+    assert release_class_with_stacks("domain", guildhall(["minimoi_portal/x.py"], ("portal",))) == "domain"
+
+
+def test_the_cli_writes_the_stack_outputs_the_workflow_reads(tmp_path):
+    import json, subprocess, sys
+    root = Path(__file__).resolve().parent.parent
+    output = tmp_path / "out"
+    result = subprocess.run([sys.executable, str(root / "scripts/ci/classify_release.py"), "--github-output", str(output)],
+                            input="services/rooms_worker/cos.py\nminimoi_portal/app.py\n", capture_output=True, text=True, cwd=root)
+    values = dict(line.split("=", 1) for line in output.read_text().splitlines())
+    assert values["stacks"] == "main guildhall" and values["guildhall"] == "true" and values["rooms_worker_image"] == "true"
+    assert values["release_class"] == "domain" and values["services"] == "portal"
+    assert json.loads(result.stdout)["guildhall_reasons"] == "worker image files changed; new portal image (Records runs it)"
+    workflow = (root / ".github/workflows/deploy.yml").read_text()
+    for key in ("stacks", "guildhall", "guildhall_reasons", "rooms_worker_image"):
+        assert f"{key}: ${{{{ steps.changes.outputs.{key} }}}}" in workflow
+
+
+def test_mc_image_sources_are_what_its_dockerfile_copies():
+    sources = mc_image_sources()
+    assert "docker/mc-agent-container/Dockerfile" in sources and "services/mc_operations/personas/mc-chat/pin.json" in sources
+    assert "docker/mc-agent/relay_v2.mjs" in sources and "services/mc_operations/plugins/minimoi-tools/" in sources
+    # The pinned persona release folder, whatever its number is.
+    assert any(s.startswith("services/mc_operations/personas/mc-chat/releases/") and s.endswith("/") for s in sources)
+    # A continuation line's sources count too.
+    assert "scripts/operations/mc_prod_db_migrate.sh" in sources
+
+
+def test_mc_agent_changes_match_files_and_folders_only():
+    sources = ("docker/mc-agent/relay_v2.mjs", "services/mc_operations/plugins/minimoi-tools/")
+    paths = ["docker/mc-agent/relay_v2.mjs", "services/mc_operations/plugins/minimoi-tools/index.js",
+             "docker/mc-agent/relay_v2.mjs.bak", "services/mc_operations/plugins/minimoi-toolsX/a", "minimoi_portal/app.py"]
+    assert mc_agent_changes(paths, sources) == ["docker/mc-agent/relay_v2.mjs", "services/mc_operations/plugins/minimoi-tools/index.js"]
+
+
+def test_mc_agent_cli_mode(tmp_path):
+    import json, subprocess, sys
+    root = Path(__file__).resolve().parent.parent
+    result = subprocess.run([sys.executable, str(root / "scripts/ci/classify_release.py"), "--mc-agent"],
+                            input="services/mc_operations/personas/mc-chat/pin.json\ndocs/a.md\n", capture_output=True, text=True, cwd=root)
+    assert json.loads(result.stdout) == {"mc_agent_changes": ["services/mc_operations/personas/mc-chat/pin.json"], "count": 1}

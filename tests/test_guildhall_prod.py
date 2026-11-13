@@ -90,6 +90,8 @@ elif argv[:2] == ["network", "create"]:
 elif argv[0] == "logs":
     print(state["logs"].get(argv[1], ""))
 elif argv[0] == "run":
+    if "services.records_runtime" in argv and any(image in argv for image in state.get("preflight_refuses", [])):
+        sys.exit(1)
     if "services.records_prepare" in argv:
         if state.get("prepare_fails"):
             sys.exit(1)
@@ -120,14 +122,20 @@ record("docker-compose", argv)
 state = load()
 project = argv[argv.index("--project-name") + 1]
 if project == "minimoi-records-production":
-    state["containers"]["minimoi-records"] = container("minimoi-records", "portal-digest", (NETWORK := os.environ["MINIMOI_RECORDS_NETWORK"],), health="healthy")
+    image = os.environ["MINIMOI_RECORDS_IMAGE"]
+    health = "unhealthy" if image in state.get("unhealthy_images", []) else "healthy"
+    state["containers"]["minimoi-records"] = container("minimoi-records", image, (NETWORK := os.environ["MINIMOI_RECORDS_NETWORK"],), health=health)
     join(state, NETWORK, "minimoi-records")
 elif project == "minimoi-guildhall-production":
+    env_file = dict(line.split("=", 1) for line in open(argv[argv.index("--env-file") + 1]).read().splitlines() if "=" in line)
+    image = env_file.get("MINIMOI_ROOMS_WORKER_IMAGE", "worker")
+    if image in state.get("refused_worker_images", []):
+        sys.exit(1)
     for name in ("minimoi-guildhall-cos", "minimoi-guildhall-mc"):
-        state["containers"][name] = container(name, "worker", ("minimoi-records-production-1", "minimoi_default"))
+        state["containers"][name] = container(name, image, ("minimoi-records-production-1", "minimoi_default"))
         join(state, "minimoi-records-production-1", name)
-        if not state.get("workers_silent"):
-            state["logs"][name] = '{"event": "started", "profile": "production_internal"}'
+        silent = state.get("workers_silent") or image in state.get("silent_worker_images", [])
+        state["logs"][name] = "" if silent else '{"event": "started", "profile": "production_internal"}'
 save(state)
 '''
 
@@ -148,14 +156,16 @@ if not os.path.exists(BINDING):
     if args[0] == "--backend-plan":
         sys.exit(1)
     sys.exit(0)
+image = json.load(open(BINDING))["inputs"]["image"]
 if args[0] == "--portal-env":
-    if records is None or records["State"].get("Health", {}).get("Status") != "healthy":
+    # The real rule (deployment.portal_ready): Records healthy, and on the binding's image.
+    if records is None or records["State"].get("Health", {}).get("Status") != "healthy" or records["Config"]["Image"] != image:
         sys.exit(1)
     print("MINIMOI_RECORDS_NETWORK=minimoi-records-production-1")
     sys.exit(0)
-references = {"MINIMOI_RECORDS_IMAGE": "image", "MINIMOI_RECORDS_STATE": "state", "MINIMOI_RECORDS_PORTAL_KEY": "key",
+references = {"MINIMOI_RECORDS_IMAGE": image, "MINIMOI_RECORDS_STATE": "state", "MINIMOI_RECORDS_PORTAL_KEY": "key",
               "MINIMOI_RECORDS_NETWORK": "minimoi-records-production-1"}
-argv = {"preflight": ["docker", "run", "--rm", "--pull=never", "--network=none", "image", "python", "-m", "services.records_runtime"],
+argv = {"preflight": ["docker", "run", "--rm", "--pull=never", "--network=none", image, "python", "-m", "services.records_runtime"],
         "start": ["docker-compose", "--project-name", "minimoi-records-production", "up", "-d", "--pull", "never", "minimoi-records"],
         "status": ["docker-compose", "ps"]}[args[1]]
 print(json.dumps({"plan_only": True, "activated": False, "argv": argv, "environment_references": references}))
@@ -884,7 +894,9 @@ def _workflow():
 def test_worker_image_workflow_never_runs_on_a_push_or_touches_the_host():
     workflow = _workflow()
     triggers = workflow.get("on", workflow.get(True))
-    assert set(triggers) == {"workflow_dispatch"}
+    # By hand, or called by deploy.yml's release (#550); never on a push of its own.
+    assert set(triggers) == {"workflow_dispatch", "workflow_call"}
+    assert triggers["workflow_call"]["outputs"]["image"]["value"] == "${{ jobs.build-push.outputs.image }}"
     assert set(workflow["jobs"]) == {"build-push"}
     text = (ROOT / ".github/workflows/rooms-worker-image.yml").read_text()
     for word in ("ssm", "deploy_scoped", "EC2_INSTANCE_ID", ":latest"):
@@ -936,8 +948,221 @@ def test_the_expected_token_files_are_what_the_setup_script_tracks():
 def test_the_new_files_alone_never_restart_a_service():
     result = subprocess.run([sys.executable, str(ROOT / "scripts/ci/classify_release.py")], cwd=ROOT, capture_output=True, text=True,
                             input=".github/workflows/rooms-worker-image.yml\nscripts/operations/guildhall_prod.sh\nservices/rooms_worker/cos.py\n", timeout=60)
-    assert json.loads(result.stdout)["services"] == ""
+    out = json.loads(result.stdout)
+    assert out["services"] == ""
+    # ...but they do name the Guildhall stack, and the worker image (#550).
+    assert out["release_class"] == "guildhall" and out["guildhall"] == "true" and out["rooms_worker_image"] == "true"
 
 
 def test_the_script_is_valid_bash():
     assert subprocess.run(["/bin/bash", "-n", str(SCRIPT)]).returncode == 0
+
+
+# ---- refresh: every release keeps a switched-on Guildhall current (#550) -----------------------------------------------
+
+NEW_PORTAL_TAGGED = f"{REGISTRY}/minimoi/portal:def5678"
+NEW_PORTAL_DIGEST = f"{REGISTRY}/minimoi/portal@sha256:{'c' * 64}"
+NEW_WORKER_DIGEST = f"{REGISTRY}/minimoi/cos-scheduler@sha256:{'d' * 64}"
+
+
+def release_portal(host, scheduler=True):
+    """What the main deploy leaves behind: the portal (and usually the scheduler) on a new tag, with Guildhall's layer."""
+    state = host.load()
+    state["portal_image"] = NEW_PORTAL_TAGGED
+    state["images"][NEW_PORTAL_TAGGED] = {"RepoDigests": [NEW_PORTAL_DIGEST]}
+    state["containers"]["minimoi-portal"]["Config"]["Image"] = NEW_PORTAL_TAGGED
+    if scheduler:
+        state["containers"]["minimoi-cos-scheduler"]["Config"]["Image"] = f"{REGISTRY}/minimoi/cos-scheduler:def5678"
+    host.save(state)
+
+
+def refresh(host, **extra):
+    return host.run("refresh", **{"GUILDHALL_PROD_APPROVED": "1", "MINIMOI_RELEASE_COMMIT": "def5678" + "0" * 33, **extra})
+
+
+def binding_image(host):
+    return json.loads(host.binding.read_text())["inputs"]["image"]
+
+
+def env_image(host):
+    return dict(l.split("=", 1) for l in (host.root / "guildhall.env").read_text().splitlines())["MINIMOI_ROOMS_WORKER_IMAGE"]
+
+
+def observation(host):
+    return json.loads((host.root / "release-status/guildhall.json").read_text())
+
+
+@pytest.fixture
+def running(host):
+    host.up()
+    (host.root / "release-status").mkdir(mode=0o755)
+    host.clear_calls()
+    return host
+
+
+def test_refresh_needs_approval_and_changes_nothing_without_it(running):
+    release_portal(running)
+    before, state = running.snapshot(), running.load()
+    result = running.run("refresh")
+    assert result.returncode == 2 and "GUILDHALL_PROD_APPROVED=1" in result.stderr
+    assert_read_only(running, before, state)
+
+
+def test_refresh_moves_records_onto_the_new_portal_digest_and_verifies(running):
+    release_portal(running)
+    result = refresh(running)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "guildhall-result: refreshed" in result.stdout
+    assert binding_image(running) == NEW_PORTAL_DIGEST
+    assert running.load()["containers"]["minimoi-records"]["Config"]["Image"] == NEW_PORTAL_DIGEST
+    # The previous binding is kept, private, for the way back.
+    previous = running.etc / "records-production.previous.json"
+    assert json.loads(previous.read_text())["inputs"]["image"] == PORTAL_DIGEST
+    assert stat.S_IMODE(previous.stat().st_mode) == 0o600 and stat.S_IMODE(running.binding.stat().st_mode) == 0o600
+    # Every other binding input is unchanged.
+    inputs = json.loads(running.binding.read_text())["inputs"]
+    assert {k: v for k, v in inputs.items() if k != "image"} == {k: v for k, v in json.loads(previous.read_text())["inputs"].items() if k != "image"}
+    calls = running.calls()
+    preflight = docker_call(calls, "services.records_runtime", NEW_PORTAL_DIGEST)
+    start = position(calls, lambda c: c["tool"] == "docker-compose" and "minimoi-records-production" in c["argv"])
+    assert preflight < start
+    # Never the main release, never a stop: a refresh redeploys neither the portal nor the scheduler.
+    assert not [c for c in calls if c["tool"] == "release"]
+    assert not [c for c in calls if c["tool"] == "docker" and c["argv"][0] in {"stop", "rm"}]
+    seen = observation(running)
+    assert seen["result"] == "refreshed" and seen["changed"] == ["records"] and seen["release_tag"] == "def5678"
+    assert seen["records_image"] == "sha256:" + "c" * 64 and seen["release_commit"].startswith("def5678")
+    assert running.run("status").returncode == 0
+
+
+def test_refresh_moves_the_workers_onto_the_image_ci_built(running):
+    result = refresh(running, MINIMOI_ROOMS_WORKER_IMAGE=NEW_WORKER_DIGEST)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert env_image(running) == NEW_WORKER_DIGEST
+    assert stat.S_IMODE((running.root / "guildhall.env").stat().st_mode) == 0o600
+    assert {running.load()["containers"][n]["Config"]["Image"] for n in ("minimoi-guildhall-cos", "minimoi-guildhall-mc")} == {NEW_WORKER_DIGEST}
+    assert observation(running)["changed"] == ["workers"]
+    assert binding_image(running) == PORTAL_DIGEST
+
+
+def test_refresh_with_nothing_new_is_current_and_changes_no_input(running):
+    binding, env = running.binding.read_bytes(), (running.root / "guildhall.env").read_bytes()
+    result = refresh(running)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "guildhall-result: current" in result.stdout
+    assert running.binding.read_bytes() == binding and (running.root / "guildhall.env").read_bytes() == env
+    assert not [c for c in running.calls() if c["tool"] == "docker" and "services.records_runtime" in c["argv"]]
+
+
+def test_refresh_after_a_portal_only_release_does_not_need_the_scheduler_on_the_same_tag(running):
+    release_portal(running, scheduler=False)
+    assert running.check().returncode == 1          # start's rule: both on one tag
+    result = refresh(running)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert binding_image(running) == NEW_PORTAL_DIGEST
+
+
+def test_refresh_refused_by_records_preflight_changes_nothing(running):
+    release_portal(running)
+    running.update(preflight_refuses=[NEW_PORTAL_DIGEST])
+    binding = running.binding.read_bytes()
+    result = refresh(running)
+    assert result.returncode == 1, result.stdout
+    assert "guildhall-result: refused" in result.stdout and "nothing changed" in result.stdout
+    assert running.binding.read_bytes() == binding
+    assert running.load()["containers"]["minimoi-records"]["Config"]["Image"] == PORTAL_DIGEST
+    assert not [c for c in running.calls() if c["tool"] == "docker-compose"]
+
+
+def test_records_unhealthy_on_the_new_image_is_put_back_and_fails_the_release(running):
+    release_portal(running)
+    running.update(unhealthy_images=[NEW_PORTAL_DIGEST])
+    result = refresh(running)
+    assert result.returncode == 5, result.stdout
+    assert "guildhall-result: rolled_back" in result.stdout and "put back: Records" in result.stdout
+    assert binding_image(running) == PORTAL_DIGEST
+    records = running.load()["containers"]["minimoi-records"]
+    assert records["Config"]["Image"] == PORTAL_DIGEST and records["State"]["Health"]["Status"] == "healthy"
+    assert observation(running)["result"] == "rolled_back" and observation(running)["records_image"] == "sha256:" + "a" * 64
+    assert running.run("status").returncode == 0
+
+
+def test_workers_that_never_log_their_profile_are_put_back_with_records(running):
+    release_portal(running)
+    running.update(silent_worker_images=[NEW_WORKER_DIGEST])
+    result = refresh(running, MINIMOI_ROOMS_WORKER_IMAGE=NEW_WORKER_DIGEST)
+    assert result.returncode == 5, result.stdout
+    assert env_image(running) == WORKER_DIGEST and binding_image(running) == PORTAL_DIGEST
+    state = running.load()
+    assert state["containers"]["minimoi-guildhall-cos"]["Config"]["Image"] == WORKER_DIGEST
+    assert state["containers"]["minimoi-records"]["Config"]["Image"] == PORTAL_DIGEST
+    assert running.run("status").returncode == 0
+
+
+def test_a_failure_that_cannot_be_put_back_says_act_now(running):
+    running.update(refused_worker_images=[NEW_WORKER_DIGEST, WORKER_DIGEST])
+    result = refresh(running, MINIMOI_ROOMS_WORKER_IMAGE=NEW_WORKER_DIGEST)
+    assert result.returncode == 6, result.stdout
+    assert "guildhall-result: rollback_failed" in result.stdout and "Act now" in result.stdout
+    assert observation(running)["result"] == "rollback_failed"
+
+
+def test_a_gate_refusal_changes_nothing(running):
+    release_portal(running)
+    state = running.load()
+    state["containers"]["minimoi-records"]["HostConfig"]["PortBindings"] = {"18880/tcp": [{"HostPort": "18880"}]}
+    running.save(state)
+    binding = running.binding.read_bytes()
+    result = refresh(running)
+    assert result.returncode == 1 and "REFUSED  Records publishes a port" in result.stdout
+    assert running.binding.read_bytes() == binding
+    assert not [c for c in running.calls() if c["tool"] == "docker-compose"]
+
+
+def test_refresh_refuses_different_service_tokens_and_a_mutable_worker_image(running):
+    running.token("guildhall-cos/cos-service.token", "another")
+    assert refresh(running).returncode == 1
+    running.token("guildhall-cos/cos-service.token", f"{TOKEN_PREFIX}-cos-guildhall/cos-service.token")
+    result = refresh(running, MINIMOI_ROOMS_WORKER_IMAGE=f"{REGISTRY}/minimoi/cos-scheduler:rooms-worker-abc1234")
+    assert result.returncode == 1 and env_image(running) == WORKER_DIGEST
+
+
+def test_refresh_refuses_when_the_main_release_dropped_guildhalls_layer(running):
+    state = running.load()
+    state["containers"]["minimoi-portal"]["Config"]["Env"] = [e for e in state["containers"]["minimoi-portal"]["Config"]["Env"]
+                                                              if e != "MINIMOI_MC_ROOMS_PRODUCTION=1"]
+    running.save(state)
+    result = refresh(running)
+    assert result.returncode == 1 and "without Guildhall's layer" in result.stdout
+
+
+def test_refresh_skips_a_host_where_guildhall_is_not_on(host):
+    (host.root / "release-status").mkdir(mode=0o755)
+    before_state = host.load()
+    result = refresh(host)
+    assert result.returncode == 0 and "guildhall-result: skipped" in result.stdout
+    assert host.load() == before_state and not host.binding.exists()
+    assert observation(host)["result"] == "skipped"
+
+
+def test_refresh_never_switches_a_stopped_guildhall_back_on(running):
+    assert running.run("stop", GUILDHALL_PROD_APPROVED="1").returncode == 0
+    running.clear_calls()
+    result = refresh(running)
+    assert result.returncode == 0 and "stopped on this host" in result.stdout
+    assert not running.binding.exists()
+    assert not [c for c in running.calls() if c["tool"] in {"docker-compose", "release"}]
+
+
+def test_refresh_never_prints_a_value(running):
+    release_portal(running)
+    outputs = [refresh(running, MINIMOI_ROOMS_WORKER_IMAGE=NEW_WORKER_DIGEST)]
+    running.update(unhealthy_images=[NEW_PORTAL_DIGEST + "x"])
+    outputs.append(refresh(running))
+    values = [PORTAL_SECRET, TOKEN_PREFIX, "ecr-password-not-a-real-one"]
+    for name in ("owner.key", "session.key", "portal-bridge.key"):
+        raw = (running.keys / name).read_text().strip()
+        values += [raw, raw.rpartition(":")[2]]
+    text = "".join(o.stdout + o.stderr for o in outputs) + json.dumps(running.calls()) + json.dumps(observation(running))
+    for value in values:
+        assert value and value not in text
