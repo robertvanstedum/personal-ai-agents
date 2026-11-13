@@ -117,6 +117,8 @@ const shortWhen = (iso) => {
   return d.toDateString() === now.toDateString() ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
     : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 };
+// A room row's time in the list: the same rule as MC's and CoS's chat lists (chat-sidebar.js, Robert's zone, 12 Nov 2026).
+const listWhen = (iso) => window.MiniMoiChatSidebar?.when ? window.MiniMoiChatSidebar.when(iso).label : shortWhen(iso);
 // Who is who, at a glance: MC's portrait, CoS's mark, everyone else their initials; MC and CoS by their short names.
 const FACES = { mc: '/static/guild/guild-mc-portrait.jpg', cos: '/static/guild/cos-mark-96.webp' };
 const faceKey = (id, label) => (id === 'mc' || /^Master Craftsman/.test(label || '') ? 'mc' : id === 'cos' || /^Chief of Staff/.test(label || '') ? 'cos' : null);
@@ -203,7 +205,7 @@ function renderList() {
     const a = el('a', { href: `?view=${archiveView}&room=${encodeURIComponent(r.id)}`, 'data-rm-room': r.id,
       title: `${r.state === 'active' ? 'Join' : 'View'} · ${r.archived_at ? 'archived' : r.state === 'active' ? 'recording' : r.state} · ${when(r.updated)}` });
     // Review 06: the row is the title and its time; a meeting that is not recording says so in the time's place.
-    a.append(el('span', { class: 'rm-row-t' }, r.title), el('small', { class: 'rm-row-w' }, r.archived_at ? 'archived' : r.state === 'active' ? shortWhen(r.updated) : r.state));
+    a.append(el('span', { class: 'rm-row-t' }, r.title), el('small', { class: 'rm-row-w' }, r.archived_at ? 'archived' : r.state === 'active' ? listWhen(r.updated) : r.state));
     if (r.id === current) a.setAttribute('aria-current', 'true');
     return h('li', {}, a);
   }));

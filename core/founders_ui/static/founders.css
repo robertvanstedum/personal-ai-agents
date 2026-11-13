@@ -348,6 +348,11 @@ body.gu[data-page=floor] .fh-more{opacity:0;color:var(--r6-mute)}
 body.gu[data-page=floor] .fh-row:hover .fh-more,body.gu[data-page=floor] .fh-row:focus-within .fh-more,body.gu[data-page=floor] .fh-more[aria-expanded=true]{opacity:1}
 body.gu[data-page=floor] .fh-view{margin:10px 10px 0;font-size:13px}
 body.gu[data-page=floor] .fh-view a{color:var(--r6-soft)}
+body.gu[data-page=floor] .fh-more-row{display:flex;flex-wrap:wrap;gap:4px 16px;margin:6px 10px 0}
+body.gu[data-page=floor] .fh-more-row:not(:has(button:not([hidden]))){display:none}
+body.gu[data-page=floor] :is(.fh-older,.fh-top){padding:4px 0;border:0;background:none;color:var(--r6-soft);font:13px var(--r6-sans);cursor:pointer}
+body.gu[data-page=floor] :is(.fh-older,.fh-top):hover{color:var(--r6-ink);text-decoration:underline;text-underline-offset:3px}
+body.gu[data-page=floor] .fh-older:disabled{opacity:.6;cursor:default;text-decoration:none}
 body.gu[data-page=floor] .phone-places{display:none}
 
 /* The conversation: no card; the workshop scene faint behind it (⋯ → Picture: Faded, the default, or Hidden). */

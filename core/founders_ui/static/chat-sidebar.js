@@ -1,7 +1,24 @@
 /* Shared presentation controller. Agent APIs and conversation state stay with their owners. */
 (() => {
   'use strict';
-  window.MiniMoiChatSidebar = { mount(c) {
+  // A chat list row's time, the same on every page (Robert, 12 Nov 2026), in his zone like the server (pages.chat_when):
+  // the time today, "Yesterday", else "Tue 11 Nov" (with the year when it isn't this year). full is for the tooltip.
+  const ZONE = 'America/Chicago';
+  const dayParts = new Intl.DateTimeFormat('en-GB', {timeZone: ZONE, weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'});
+  const clockOf = new Intl.DateTimeFormat('en-US', {timeZone: ZONE, hour: 'numeric', minute: '2-digit'});
+  const parts = d => Object.fromEntries(dayParts.formatToParts(d).map(p => [p.type, p.value]));
+  const dayNumber = p => Date.UTC(Number(p.year), ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(p.month.slice(0, 3)), Number(p.day)) / 864e5;
+  function when(iso, now = new Date()) {
+    const d = new Date(iso || '');
+    if (!iso || Number.isNaN(d.getTime())) return {label: iso ? String(iso) : '', full: iso ? String(iso) : '', days: null};
+    const p = parts(d), today = parts(now instanceof Date ? now : new Date(now));
+    const days = Math.round(dayNumber(today) - dayNumber(p)), clock = clockOf.format(d).replace(/\u202f/g, ' ');
+    const date = `${p.weekday} ${p.day} ${p.month.slice(0, 3)}`, full = `${date} ${p.year}, ${clock}`;
+    const label = days <= 0 ? clock : days === 1 ? 'Yesterday' : p.year === today.year ? date : `${date} ${p.year}`;
+    return {label, full, days};
+  }
+  const group = (iso, now) => { const n = when(iso, now).days; return n === null ? 'Earlier' : n <= 0 ? 'Today' : n === 1 ? 'Yesterday' : 'Earlier'; };
+  window.MiniMoiChatSidebar = { when, group, mount(c) {
     if (!c.panel) return {open() {}, closeDrawer() {}};
     const body = document.body, panel = c.panel, media = matchMedia('(min-width: 900px)');
     const all = s => s ? [...document.querySelectorAll(s)] : [];

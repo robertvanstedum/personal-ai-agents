@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from flask import render_template, request, url_for, Response, redirect
 
@@ -31,6 +32,53 @@ def hhmm(iso) -> str:
         return datetime.fromisoformat(str(iso).replace("Z", "+00:00")).astimezone(timezone.utc).strftime("%H:%M UTC")
     except (ValueError, OverflowError):                  # OverflowError: a date at the edge of the calendar
         return str(iso)
+
+
+OWNER_ZONE = ZoneInfo("America/Chicago")      # Robert's day: the chat list's "today" and "yesterday" (chat-sidebar.js matches)
+CHAT_PAGE = 10                                  # chats per "Show older chats"
+
+
+def _clock(moment) -> str:
+    return f"{moment.hour % 12 or 12}:{moment.minute:02d} {'AM' if moment.hour < 12 else 'PM'}"
+
+
+def chat_when(iso, now=None) -> dict:
+    """A chat list row's time in Robert's zone (12 Nov 2026): the time today, "Yesterday", else a short date
+    ("Tue 11 Nov", with the year when it isn't this year). ``full`` is the exact moment, for the row's tooltip.
+    The same rule runs in the browser (MiniMoiChatSidebar.when) for rows loaded later."""
+    if not iso:
+        return {"label": "", "full": ""}
+    try:
+        moment = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except (ValueError, OverflowError):
+        return {"label": str(iso), "full": str(iso)}
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    local = moment.astimezone(OWNER_ZONE)
+    today = (now or datetime.now(timezone.utc)).astimezone(OWNER_ZONE).date()
+    days = (today - local.date()).days
+    date = f"{local:%a} {local.day} {local:%b}"
+    full = f"{date} {local.year}, {_clock(local)}"
+    if days <= 0:
+        return {"label": _clock(local), "full": full}
+    if days == 1:
+        return {"label": "Yesterday", "full": full}
+    return {"label": date if local.year == today.year else f"{date} {local.year}", "full": full}
+
+
+def _notes_probe(floor):
+    """has_notes for ConversationStore.prune_empty: a firm False only when the conversation's own floor reads fine and
+    holds no message; None (doubt, so the chat is kept) on any read that isn't a plain OK."""
+    def has_notes(conv):
+        if floor is None:
+            return None
+        nf = conv.get("notes_floor")
+        store = floor if not nf or nf == getattr(floor, "floor", None) else floor.for_floor(nf)
+        res = store.list_notes(limit=1)
+        if getattr(res, "status", None) != "ok" or not isinstance(res.data, dict):
+            return None
+        return bool(res.data.get("notes"))
+    return has_notes
 
 
 def age(iso) -> str:
@@ -309,24 +357,26 @@ def floor(*, embedded=False, domain=None):
         ctx["page_json"]["waiting_focus"] = focus      # a notice's link: MC opens with W-n in view (notices spec §3.7)
     view = "archived" if request.args.get("view") == "archived" else "active"
     principal = (cfg()["current_user"]() or {}).get("username") or "owner"
+    current_id = (ctx.get("conversation") or {}).get("id")
     try:
         store = conversations_of(cfg()["services"])
-        rows = store.list(principal, archived=view == "archived")
-        # A short recent list, with older conversations still reachable. No archival or deletion is implied.
-        page_number = request.args.get("history_page", type=int)
-        if page_number is None:
-            current_id = (ctx.get("conversation") or {}).get("id")
-            page_number = next((i // 10 for i, row in enumerate(rows) if row["id"] == current_id), 0)
-        page_number = max(0, min(page_number, max(0, (len(rows) - 1) // 10)))
-        def history_url(index):
-            return url_for(".companion" if embedded else ".floor", **({"domain": domain} if embedded else {}), view=view, history_page=index, c=(ctx.get("conversation") or {}).get("id"))
-        conv_list = {"state": "ok", "rows": rows[page_number * 10:(page_number + 1) * 10], "unreadable": store.unreadable,
-                     "newer": history_url(page_number - 1) if page_number else None,
-                     "older": history_url(page_number + 1) if (page_number + 1) * 10 < len(rows) else None}
+        if view == "active":
+            # Empty chats (nothing from Robert, nothing kept) are not listed, and after a day they go (12 Nov 2026).
+            try:
+                store.prune_empty(principal, has_notes=_notes_probe(getattr(cfg()["services"], "floor", None)), keep=current_id)
+            except Exception:                          # housekeeping never costs the page
+                pass
+        rows = store.list(principal, archived=view == "archived", hide_empty=True, keep=current_id)
+        # The newest chats first, with the open one always on the page; "Show older chats" adds the next ones in place
+        # (conversations.js). No archival or deletion is implied.
+        at = next((i for i, row in enumerate(rows) if row["id"] == current_id), -1)
+        shown = max(CHAT_PAGE, (at // CHAT_PAGE + 1) * CHAT_PAGE)
+        conv_list = {"state": "ok", "rows": rows[:shown], "unreadable": store.unreadable,
+                     "more": len(rows) > shown, "shown": min(shown, len(rows))}
     except ConversationStoreUnavailable:
         conv_list = {"state": "unavailable", "rows": [], "unreadable": 0}
     return render_template("guild_floor/floor.html", floor_cfg=ctx["layout"]["floor"], conv_list=conv_list,
-                           conv_view=view, topic_link=_topic_link(ctx, principal), bare=embedded, embedded=embedded, **ctx)
+                           conv_view=view, chat_when=chat_when, topic_link=_topic_link(ctx, principal), bare=embedded, embedded=embedded, **ctx)
 
 
 def _waiting_focus():
