@@ -720,7 +720,11 @@ workers_up() {   # 1: ECR login failed. 2: compose refused. Output goes to a pri
   if ! aws ecr get-login-password --region us-east-1 2>/dev/null | docker login --username AWS --password-stdin "$REGISTRY" >"$WORKER_LOG" 2>&1; then
     return 1
   fi
-  docker-compose --project-name "$WORKER_PROJECT" --project-directory "$ROOT" --env-file "$ENV_FILE" \
+  # guildhall.env decides every value it holds. Compose lets the caller's environment win over --env-file, even an
+  # empty value, so those keys are cleared first: a release that built no new worker image passes an empty one.
+  env -u MINIMOI_ROOMS_WORKER_IMAGE -u MINIMOI_GUILDHALL_COS_SECRETS -u MINIMOI_GUILDHALL_COS_JOURNAL \
+      -u MINIMOI_GUILDHALL_MC_SECRETS -u MINIMOI_GUILDHALL_MC_JOURNAL -u MINIMOI_RECORDS_NETWORK \
+    docker-compose --project-name "$WORKER_PROJECT" --project-directory "$ROOT" --env-file "$ENV_FILE" \
     -f "$WORKERS_FILE" --profile guildhall-production up -d >>"$WORKER_LOG" 2>&1 || return 2
 }
 
