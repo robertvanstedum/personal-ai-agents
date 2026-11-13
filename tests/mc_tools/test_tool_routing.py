@@ -34,12 +34,14 @@ class Routing(unittest.TestCase):
     def test_the_task_adapter_answers_each_tool_routed_to_it(self):
         adapter = TasksAdapter.__new__(TasksAdapter)
         seen = []
-        for method in ("build_item", "helper_ask", "helper_result", "helper_review"):
+        # Every tool in TASK_ADAPTER_TOOLS, including the work-artifact pair added with work modes (0690fcf3).
+        methods = ("build_item", "helper_ask", "helper_result", "helper_review", "work_read", "work_save")
+        for method in methods:
             setattr(adapter, method, lambda host, args, caller, m=method: seen.append(m) or "ok")
         host = SimpleNamespace(_tier2=lambda caller: True)
         for name in S.TASK_ADAPTER_TOOLS:
             self.assertEqual(adapter.call(host, name, {}, None), "ok")
-        self.assertEqual(sorted(seen), ["build_item", "helper_ask", "helper_result", "helper_review"])
+        self.assertEqual(sorted(seen), sorted(methods))
 
 
 if __name__ == "__main__":
