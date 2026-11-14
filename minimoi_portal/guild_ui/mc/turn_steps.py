@@ -28,7 +28,7 @@ LABELS = {
     "web_search": "Searched the web", "web_fetch": "Read a web page", "browser": "Used the browser",
     "memory_search": "Searched memory", "memory_get": "Read from memory", "image": "Looked at an image",
     "message": "Sent a message", "cron": "Checked the schedule",
-    "minimoi_github_issues": "Looked up GitHub issues", "minimoi_github_get": "Read GitHub",
+    "minimoi_github_issues": "Looked up GitHub issues", "minimoi_github_get": "Read GitHub", "minimoi_web_fetch": "Read a web page",
     "minimoi_issue_comment": "Proposed an issue comment", "minimoi_issue_create": "Proposed a new issue",
     "minimoi_issue_update": "Proposed an issue change",
     "minimoi_host_health": "Checked the host's health", "minimoi_host_read": "Read a file",
@@ -66,7 +66,7 @@ KINDS = {
     "read": "file_read", "minimoi_host_read": "file_read",
     "write": "file_change", "edit": "file_change", "apply_patch": "file_change", "minimoi_working_write": "file_change",
     "web_search": "web_search", "web_fetch": "web_page",
-    "minimoi_github_issues": "github", "minimoi_github_get": "github",
+    "minimoi_github_issues": "github", "minimoi_github_get": "github", "minimoi_web_fetch": "web_page",
 }
 HEADLINES = {
     "command": ("Ran a command", "Ran {n} commands"),
