@@ -557,3 +557,14 @@ def test_the_switch_is_off_by_default_in_production_and_every_new_file_reaches_i
         for name in targets:
             spec_row = deploy.TARGETS[name]
             assert deploy.files_for(spec_row, [path]), (path, name)
+
+
+def test_cos_asks_when_vague_and_looks_when_concrete_like_mc():
+    # MC and CoS are twins (#567 wave 2): MC's ask-or-look rule (persona 0.1.35/0.1.36) holds for CoS too.
+    words = (ROOT / "docker/cos-agent-a/COS_AGENTS.md").read_text()
+    assert "## Ask or look (Robert, 13 November 2026; MC's twin rule)" in words
+    flat = " ".join(words.split())
+    assert 'question back ("Thoughts on what?"), no tools; state attached to the turn is not his topic.' in flat
+    assert "A concrete question: look (plus one adjacent fact if it matters), then answer; a concrete question is asking." in flat
+    assert "your view, and an offer to keep a document (not to file it)." in flat
+    assert 'go deep only on "think hard" or "go deep".' in flat
