@@ -29,7 +29,7 @@ def _shipped():
 
 def test_the_template_loads_and_is_not_the_installed_catalogue():
     loaded = load_catalogue(TEMPLATE_PATH)
-    assert loaded["revision"] == "2026-11-14.production-template"
+    assert loaded["revision"] == "2026-11-14.2.production-template"
     assert TEMPLATE_PATH.resolve() != CATALOGUE_PATH.resolve()
     assert loaded["revision"] != _shipped()["revision"]
 
@@ -53,12 +53,14 @@ def test_grok_is_offered_to_mc_and_cos_as_paid_api():
 
 
 GROK_FAILOVER = {"api-xai-strong": "api-anthropic-strong", "api-xai-mid": "api-anthropic-mid", "api-xai-low": "api-anthropic-low"}
+# #593: MC's light route keeps the quick route's failover, so a short turn is never worse off than an ordinary one.
+LIGHT_FAILOVER = {"api-xai-strong-light": "api-anthropic-strong"}
 
 
 def test_failover_is_the_openai_plan_routes_and_grok_onto_claude():
     catalogue = _template()
     declared = {route["route_id"]: route["failover"] for route in catalogue["routes"] if "failover" in route}
-    assert declared == {**OPENAI_FAILOVER, **GROK_FAILOVER}
+    assert declared == {**OPENAI_FAILOVER, **GROK_FAILOVER, **LIGHT_FAILOVER}
     by_id = {route["route_id"]: route for route in catalogue["routes"]}
     for plan, target in OPENAI_FAILOVER.items():
         assert by_id[plan]["provider"] == "openai"
@@ -66,7 +68,7 @@ def test_failover_is_the_openai_plan_routes_and_grok_onto_claude():
         assert by_id[target]["billing_mode"] == "metered_api"
         assert by_id[target]["provider"] == "minimoi-gateway"
         assert "failover" not in by_id[target]
-    for grok, target in GROK_FAILOVER.items():
+    for grok, target in {**GROK_FAILOVER, **LIGHT_FAILOVER}.items():
         assert by_id[grok]["billing_mode"] == by_id[target]["billing_mode"] == "metered_api"
         assert by_id[grok]["tier"] == by_id[target]["tier"]
         assert "failover" not in by_id[target]
@@ -118,6 +120,10 @@ def test_the_template_changes_only_revision_claude_failover_cos_plan_and_the_gro
         elif new["route_id"] == "api-xai-strong-deep":      # #586: MC's deep route, chosen only by depth_routes' phrases
             assert old["offered"] == {} and new["offered"] == {"mc": "available"}
             assert {k: v for k, v in new.items() if k != "offered"} == {k: v for k, v in old.items() if k != "offered"}
+        elif new["route_id"] == "api-xai-strong-light":     # #593: MC's light route, chosen only by depth_routes' short-turn test
+            assert old["offered"] == {} and new["offered"] == {"mc": "available"}
+            assert new["failover"] == LIGHT_FAILOVER[new["route_id"]] and "failover" not in old
+            assert {k: v for k, v in new.items() if k not in {"offered", "failover"}} == {k: v for k, v in old.items() if k != "offered"}
         else:
             assert new == old
 

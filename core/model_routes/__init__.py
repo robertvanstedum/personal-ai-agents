@@ -36,7 +36,7 @@ PLAN_SIGNALS = {"rate_limit_error": "rate_limit", "insufficient_quota": "plan_ex
 SIGNAL_WORDS = {"rate_limit": "The plan hit its rate or usage limit", "plan_exhausted": "The plan's quota is used up",
                 "signin_expired": "The plan's sign-in has expired"}
 _API_MODEL = re.compile(r"minimoi-(openai|anthropic)-(?:strong|mid|low)")
-_XAI_MODEL = re.compile(r"minimoi-xai-(?:strong|mid|low)")
+_XAI_MODEL = re.compile(r"minimoi-xai-(?:strong|mid|low)(?:-light)?")   # -light: #593's short-turn route
 
 
 class RouteRefused(ValueError):
@@ -251,6 +251,7 @@ def served_receipt(route: dict | None, served: dict | None) -> dict | None:
             "model": route["model"], "reasoning_effort": route["reasoning_effort"], "billing_mode": billing,
             "billing_label": BILLING_WORDS[billing], "catalogue_revision": route["catalogue_revision"],
             "runtime": route.get("runtime"), "served": served or None, "served_matches": matches, **switched,
+            **({"depth": route["depth"]["kind"]} if (route.get("depth") or {}).get("kind") else {}),
             **({"attempts": route["attempts"]} if route.get("attempts") else {})}
 
 

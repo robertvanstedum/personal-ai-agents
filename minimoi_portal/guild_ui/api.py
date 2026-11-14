@@ -1650,7 +1650,8 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
     ctx = note.get("context") or {}
     sent_text = note["text"]                    # the owner's own words, as he wrote them (#406)
     agent_state = _agent_state(conv)
-    route, route_refusal = _route_snapshot(services, conv, sent_text)  # unaugmented owner words only
+    route, route_refusal = _route_snapshot(services, conv, sent_text,  # unaugmented owner words only
+                                           attached=_turn_attached(files, ctx))
     if route_refusal is None:
         carried, route_refusal = _carried_history(services, conv, principal, route, note)
     if route_refusal is not None:
@@ -2041,16 +2042,23 @@ def _route_agent(services=None):
     return agent_for_backend(getattr(mc, "kind", None))
 
 
-def _route_snapshot(services, conv, owner_text=""):
+def _turn_attached(files, context) -> bool:
+    """Whether a turn carries anything beyond the owner's words: chosen documents, topic refs, or a page item (#593).
+    Such a turn never takes the light route."""
+    return files is not None or bool((context or {}).get("item_ref"))
+
+
+def _route_snapshot(services, conv, owner_text="", attached=None):
     """(route, refusal). The route is fixed here, at admission, once per turn. (None, None): no routes here. A waiting
-    message is admitted when it is sent, so it takes the conversation's choice at that moment."""
+    message is admitted when it is sent, so it takes the conversation's choice at that moment. ``attached`` unknown
+    (None) keeps a short turn off the light route."""
     from core.model_routes import RouteRefused, conversation_role, load_catalogue
     from core.model_routes.depth import for_owner_turn
     agent = _route_agent(services)
     if agent is None:
         return None, None
     try:
-        return for_owner_turn(load_catalogue(), conversation_role(agent), conv, owner_text), None
+        return for_owner_turn(load_catalogue(), conversation_role(agent), conv, owner_text, attached=attached), None
     except RouteRefused as exc:
         return None, exc
     except (OSError, ValueError):
@@ -2437,7 +2445,8 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
     if files is not None and files.report and not getattr(services.mc, "accepts_files", True):
         return {"error": "files_unsupported", "message": f"The {getattr(services.mc, 'display_name', 'assistant')} does not read "
                 "attached documents. Your note is kept; nothing was sent."}, 422
-    route, route_refusal = _route_snapshot(services, conv, note["text"])  # before attachment/context augmentation
+    route, route_refusal = _route_snapshot(services, conv, note["text"],  # before attachment/context augmentation
+                                           attached=_turn_attached(files, note.get("context")))
     if route_refusal is None:
         carried, route_refusal = _carried_history(services, conv, principal, route, note)
     if route_refusal is not None:

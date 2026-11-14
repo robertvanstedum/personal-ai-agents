@@ -148,6 +148,57 @@ line of scope, then an answer, on `api-xai-strong`.
 The next turn is quick, with nothing restarted. Then take the alias out of steps 3 to 5 and restart; nothing then names it
 (`tests/model_routes/test_depth.py::test_revert_leaves_nothing_naming_the_deep_alias`).
 
+## Short turns take the light route (#593)
+
+A third route in the same pair: `minimoi-xai-strong-light` is Grok 4.7 with **no reasoning** (`reasoning_effort: none`).
+The portal's admission step (`core/model_routes/depth.py`, `short_turn`) sends a turn there only when all of these hold:
+
+- the conversation is on the quick route (not set to deep or to another model under Options);
+- the turn carries nothing but Robert's words: no attached document, no topic reference, no page item;
+- no "think hard", "go deep", "this is important" or "quick answer" at the start;
+- it is one plain line of at most 80 characters and 12 words, with no digits, links, paths, code or quotes;
+- and it is either a social line on its own ("Good morning!", "thanks", "how are you?") or a general question of at least
+  3 words that names nothing MC would have to look up, recall or act on (no "we", "my", "it", "that", "prod", "check",
+  "latest", "today", "which", "better", ...; the full list is `_LOOKUP`). A question of four words or fewer with "the"
+  in it ("What are the risks?") is about the thread and stays quick.
+
+Everything else, including "yes", "go ahead" and "why?", stays on `minimoi-xai-strong`. The light route keeps MC's
+tools and Grok's failover to Claude; it only reasons less, so a wrong "light" costs depth on one turn, never an action.
+The turn's `routes.mc.last_turn` shows `route_id: api-xai-strong-light` and `depth: light` (an ordinary turn shows
+`depth: quick`).
+
+**On, per host.** As for deep, all five:
+
+1. The gateway serves `minimoi-xai-strong-light` (`litellm.prod.yaml` / `litellm.staging.yaml`).
+2. The host's catalogue: copy in the `api-xai-strong-light` route with `"offered": {"mc": "available"}` and
+   `"failover": "api-anthropic-strong"`, and add `"light": "api-xai-strong-light"` to `mc-conversation`'s `depth_routes`
+   (as in `scripts/operations/production_route_catalogue.json`). Replace the file atomically; the next turn reads it.
+3. MC's capped key allows `minimoi-xai-strong-light` (`/key/update` inside the gateway, its other models unchanged).
+4. `mc-agent`: `MC_METERED_ROUTES` ends `,minimoi-gateway/minimoi-xai-strong-light`.
+5. `mc-relay`: `MC_RELAY_ROUTES` gains `"api-xai-strong-light":"minimoi-gateway/minimoi-xai-strong-light"`.
+   Restart `mc-agent` and `mc-relay`.
+
+On Dev, steps 3 to 5 come from `scripts/staging/beta_dev_routes.py --default xai` once step 2 is in the host's catalogue.
+On production they are `docker-compose.mc-1-2-production.yml` (4, 5) and a host key update (3).
+
+**CoS (twin).** The same policy and transport serve `cos-conversation`; CoS's runtime and backend accept the alias. CoS
+is on once its host catalogue pairs `depth_routes` for `cos-conversation` with a `light` entry. That pair also needs a
+`deep` entry, which CoS does not have yet, so turning CoS on is a decision of its own.
+
+**Prove it.** First, before step 2, check that xAI takes no-reasoning on Grok 4.7: one completion through the gateway on
+`minimoi-xai-strong-light` with MC's key returns 200. Then, in a labelled chat: "Good morning!" and "What is a race
+condition?" record `api-xai-strong-light`; "What are the risks?", "Can you check the logs?" and a greeting with a
+document attached record `api-xai-strong`.
+
+**Measure.** Time to first words, before and after, five turns each: the same greeting and the same short question, in
+a fresh labelled chat each time, the light pair off, then on. Read the first `delta` time against the send time from the
+turn's stream record (or the browser's network timing for the turn's stream), and the route from `routes.mc.last_turn`.
+
+**Off.** Delete `"light"` from `mc-conversation`'s `depth_routes` and set the light route back to `"offered": {}` in the
+host's catalogue. The next turn is quick, with nothing restarted, and the deep route is untouched. Then take the alias out
+of steps 3 to 5 and restart; nothing then names it
+(`tests/model_routes/test_depth.py::test_revert_leaves_nothing_naming_the_light_alias`).
+
 ## Limits
 
 - **Effort:** every MC plan route runs at the runtime's `thinkingDefault` (high), whatever its tier.
