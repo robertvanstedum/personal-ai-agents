@@ -64,7 +64,7 @@ def read_tools() -> list[dict]:
 
 def persona_excerpt(release: str | None = None, root: str | None = None) -> str:
     """The master persona in the portal tree, not the OpenClaw container's copy."""
-    release = release or os.environ.get("MINIMOI_MC_PERSONA_RELEASE", "0.1.35")
+    release = release or os.environ.get("MINIMOI_MC_PERSONA_RELEASE", "0.1.36")
     base = Path(root) if root else Path(__file__).resolve().parents[3]
     soul = base / "services" / "mc_operations" / "personas" / "mc-chat" / "releases" / release / "SOUL.md"
     if not soul.is_file():
