@@ -53,6 +53,15 @@ def test_confer_bootstrap_transcribes_instead_of_minting_a_second_assistant(voic
     assert voice_ledger.status()["reserved_usd"]==1.02
 
 
+def test_confer_bootstrap_uses_the_same_hour_as_craft(monkeypatch):
+    monkeypatch.delenv("VOICE_CONFER_WARNING_MINUTES", raising=False)
+    monkeypatch.delenv("VOICE_CONFER_MAX_MINUTES", raising=False)
+    with patch("core.realtime_voice.confer.openai_realtime.mint_confer_transcription_credential", return_value={"provider": "openai", "client_secret": "ephemeral"}):
+        response = _client().post("/api/realtime-voice/confer/bootstrap", json={"provider": "openai"}, headers={"X-Minimoi-Auth-Id": "42"})
+    body = response.get_json()
+    assert response.status_code == 200 and body["warning_minutes"] == 45 and body["max_minutes"] == 60
+
+
 def test_confer_bootstrap_returns_configured_session_duration(monkeypatch):
     monkeypatch.setenv("VOICE_CONFER_WARNING_MINUTES","18")
     monkeypatch.setenv("VOICE_CONFER_MAX_MINUTES","20")
