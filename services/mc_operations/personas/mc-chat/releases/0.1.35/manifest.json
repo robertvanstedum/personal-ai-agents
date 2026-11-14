@@ -8,9 +8,9 @@
   "target": "mc-agent container",
   "files": {
     "SOUL.md": "dfe279acf7c5ee9b38ab607aeda9f9a7b5cf35a2b2baa3c8379e273affdb2bca",
-    "AGENTS.md": "02a31be1541fbb1175ce3cb493fe3666307c4b26cfd4df8f5af901e322bc9b2e",
-    "RUNTIME.openclaw.md": "e61928b7f9f70bf31a68a17fa6cebc8acda8d008379bcfc5fd191c4ee42a45e4",
-    "CHANGES.md": "777190af4d06c560f6c2ded7b5c3dbfc16e44089ef2586fda757f34ecdf7c462",
+    "AGENTS.md": "ff9fd6e5c708ea6276dc5e3d1f2f373d70f2ba13e67bd54a0431621fa05a6e4d",
+    "RUNTIME.openclaw.md": "44542163e144a3c5e4f997c5c072963717221f0888ba48b7da167bb3b20405db",
+    "CHANGES.md": "faea895b389518784e82e4eac2bb4355308b267fd729192bbea306ed04467d5f",
     "voice.json": "13394cd80174602ea6945d6e8032c56f9827f6ba130c759360964a9722e13b82",
     "skills/mc-building/SKILL.md": "88ed20862a8cc6f716dabafdb7b3d22c6845358e75002b68aad5b7138e0c8c27",
     "skills/mc-corrections/SKILL.md": "c88b8753d8900b9e059e502dda7693a28f4b200ebd9c743f7fbb1aeab9fb7b74",
