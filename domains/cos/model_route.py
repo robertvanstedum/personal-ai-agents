@@ -41,13 +41,14 @@ def _catalogue() -> dict:
         raise RouteRefused("route_unavailable", "The model routes could not be read. Nothing was sent.") from exc
 
 
-def for_turn(history, conversation_id: str, owner_text: str = "") -> dict | None:
-    """This turn's route, or None where routes are off. Refuses (a ValueError) rather than substitutes."""
+def for_turn(history, conversation_id: str, owner_text: str = "", attached: bool | None = None) -> dict | None:
+    """This turn's route, or None where routes are off. Refuses (a ValueError) rather than substitutes. ``attached``
+    False (known: no files) lets a short turn take a light route the host's catalogue pairs (#593)."""
     if not enabled():
         return None
     with history._locked():
         selection = _selection(history, conversation_id)
-    return for_owner_turn(_catalogue(), ROLE, {"routes": {AGENT: selection}}, owner_text)
+    return for_owner_turn(_catalogue(), ROLE, {"routes": {AGENT: selection}}, owner_text, attached=attached)
 
 
 def runtime_model(route: dict | None) -> str | None:

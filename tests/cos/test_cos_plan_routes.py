@@ -107,6 +107,11 @@ def test_deep_alias_uses_existing_cos_transport():
     assert "x-openclaw-model" not in _headers(model, agent="cos-meeting")
 
 
+def test_light_alias_uses_existing_cos_transport():
+    model = "minimoi-gateway/minimoi-xai-strong-light"      # #593
+    assert _headers(model)["x-openclaw-model"] == model
+
+
 def test_a_meeting_agent_never_takes_a_conversations_choice():
     assert "x-openclaw-model" not in _headers("openai/gpt-6-sol", agent="cos-meeting")
 

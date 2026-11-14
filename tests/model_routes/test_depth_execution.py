@@ -162,3 +162,29 @@ def test_mc_phrase_only_quick_turn_still_fails_over(monkeypatch):
     assert len(posts) == 2
     assert any(isinstance(e, Switched) for e in events)
     assert not any(isinstance(e, Failure) for e in events)
+
+
+def test_mc_light_turn_goes_out_on_the_light_route_with_no_closer_look_line(monkeypatch):
+    """#593: a short turn chosen at admission is sent once, as the light route, with nothing added to the prompt; if Grok
+    can't serve it, it moves to Claude like an ordinary turn."""
+    from pathlib import Path
+    from core.model_routes import load_catalogue
+    from core.model_routes.depth import for_owner_turn
+    from minimoi_portal.guild_ui.mc.stream import Progress, Switched
+    template = Path(__file__).resolve().parents[2] / "scripts/operations/production_route_catalogue.json"
+    route = for_owner_turn(load_catalogue(template), "mc-conversation", {}, "Good morning!", attached=False)
+    backend = OpenClawMasterCraftsman("http://relay/v1", "synthetic-token")
+    posts = []
+    def stream(payload, headers, cancel):
+        posts.append((headers.get("X-MC-Route"), json.loads(payload)))
+        if len(posts) == 1:
+            yield Failure("rate_limited", plan_signal="rate_limit", tools="none")
+        else:
+            yield Delta("Morning!")
+            yield Finish("stop")
+    monkeypatch.setattr(backend, "_stream", stream)
+    events = list(backend.stream_turn(TurnRequest("conversation", "Good morning!", "note", route=route)))
+    assert [p[0] for p in posts] == ["api-xai-strong-light", "api-anthropic-strong"]
+    assert all(m.get("content") != DEEP_ANSWER_INSTRUCTION for m in posts[0][1]["messages"])
+    assert not any(isinstance(e, Progress) for e in events)
+    assert any(isinstance(e, Switched) for e in events)
