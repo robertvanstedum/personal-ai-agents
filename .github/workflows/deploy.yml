@@ -111,8 +111,10 @@ jobs:
   test:
     needs: classify
     runs-on: ubuntu-latest
-    # A release waits on this job: past 15 minutes it fails rather than holds the deploy.
-    timeout-minutes: 15
+    # A release waits on this job. Two runs of 48abbb09 were still passing at 92%
+    # when 15 minutes cancelled them, so the deploy never started. 25 lets that
+    # suite finish. A hung run still stops here instead of holding the deploy.
+    timeout-minutes: 25
     # A throwaway PostgreSQL for the opt-in database tests (MC_BINDING_TEST_DSN):
     # trust auth, synthetic data only, gone when the job ends. It is the image
     # production runs (docker-compose.prod.yml). Without it those tests skip.
