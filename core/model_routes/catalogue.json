@@ -1,5 +1,5 @@
 {
-  "revision": "2026-11-06.2",
+  "revision": "2026-11-14.1",
   "tiers": {
     "strong": {"letter": "A", "use": "Difficult reasoning, design and review"},
     "mid": {"letter": "B", "use": "Ordinary drafting and multi-step work"},
@@ -60,6 +60,10 @@
      "capabilities": ["chat", "tools"],
      "offered": {}},
     {"route_id": "api-xai-strong", "tier": "strong", "provider": "minimoi-gateway", "model": "minimoi-xai-strong", "label": "Grok 4.7 (pay per use)",
+     "reasoning_effort": "high", "billing_mode": "metered_api", "runtime": "openclaw", "auth_profile_ref": null,
+     "capabilities": ["chat", "tools"],
+     "offered": {}},
+    {"route_id": "api-xai-strong-deep", "tier": "strong", "provider": "minimoi-gateway", "model": "minimoi-xai-strong-deep", "label": "Grok 4.7 deep (pay per use)",
      "reasoning_effort": "high", "billing_mode": "metered_api", "runtime": "openclaw", "auth_profile_ref": null,
      "capabilities": ["chat", "tools"],
      "offered": {}},

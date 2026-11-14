@@ -60,7 +60,12 @@ def test_mc_plan_settings_are_required_and_have_no_compose_default():
         assert env[key] == f"${{{variable}:?{env[key].split(':?', 1)[1]}"
         assert ":-" not in env[key]
     assert "openai/gpt-6-astra" in env["MC_PLAN_MODEL"]
-    assert env["MC_METERED_ROUTES"] == XAI_TIERS
+    # The Grok tiers, then the deep alias the production template pairs for mc-conversation (#586). The revert takes it
+    # out here, out of MC_RELAY_ROUTES, and out of the template's depth_routes together.
+    from core.model_routes import load_catalogue, route_of
+    template = load_catalogue(_Path(__file__).resolve().parents[1] / "scripts/operations/production_route_catalogue.json")
+    deep = route_of(template, template["roles"]["mc-conversation"]["depth_routes"]["deep"])
+    assert env["MC_METERED_ROUTES"] == XAI_TIERS + f",{deep['provider']}/{deep['model']}"
     assert env["MC_PRIMARY_ROUTE"] == "minimoi-gateway/minimoi-xai-strong"
     assert "xai" not in env["MC_FAILOVER_ROUTES"]
     assert env["MC_FAILOVER_ROUTES"].split(",") == FAILOVER_TIERS
