@@ -77,6 +77,14 @@ def test_generic_rules_load_and_match_career_words_not_engineering_ones():
         assert not f.matches(text), text
 
 
+def test_the_default_rules_keep_cos_conversations_out_of_mc_s_index():
+    """Robert, 14 Nov: restrict now, open later. One value in the rules file, no code."""
+    f = career_filter.load()
+    assert f.exclude_providers == {"minimoi-cos"} and f.record_threshold == 3
+    assert f.record_reason({"id": "X", "source": "minimoi-cos:prod:cosc-1"}) == career_filter.CAREER_EXCLUDED
+    assert f.record_reason({"id": "X", "source": "minimoi-mc:production:c-1"}) is None
+
+
 def test_private_rules_merge_stricter_and_must_be_owner_only(tmp_path):
     base = rules(tmp_path, "base.json", terms=["recruiter"], record_threshold=3, record_fraction=0.2, turn_window=1)
     private = rules(tmp_path, "private.json", terms=["Acme Rockets"], record_threshold=2, record_fraction=0.1, turn_window=2,

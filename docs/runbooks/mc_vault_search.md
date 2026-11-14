@@ -18,7 +18,7 @@ Same schema as the default file: `{"schema": "minimoi.career-filter.v1", "terms"
 - **Terms** are regex fragments, matched case-insensitively as whole words.
 - **Merging with the default file:** lists are united, `record_threshold` and `record_fraction` take the lower value, `turn_window` the wider.
 - **Permissions:** root-owned, mode 0600. A file readable by group or others is refused (`filter_insecure`).
-- **Exclude CoS conversations entirely:** add `"minimoi-cos"` to `exclude_providers`.
+- **CoS's conversations are excluded by default** (Robert, 14 Nov: "better to restrict now and open later if needed"). The default file has `"exclude_providers": ["minimoi-cos"]`. To open them to MC later, set it to `[]`: a one-value edit, no code. The new digest forces a full rebuild on the next run.
 
 ## Dev bring-up
 
@@ -35,12 +35,13 @@ Same schema as the default file: `{"schema": "minimoi.career-filter.v1", "terms"
 ## Dev checks
 
 1. **MC cites source and date.** Ask MC something only the Vault knows, for example a topic from a Dev MC or CoS conversation. MC calls `minimoi_vault_search` and cites the source and date. The portal log shows `mc tool minimoi_vault_search -> done/vault_read`.
-2. **Career material stays out of MC's reach.** In a Dev CoS conversation, write a career line, for example "rewrite my resume for the recruiter call". After the next feed run (5 minutes):
+2. **Career material stays out of MC's reach.** In a Dev **MC** conversation, write a career line between two ordinary ones, for example "rewrite my resume for the recruiter call". After the next feed run (5 minutes):
    - CoS's Ask finds it: `minimoi-dev-vault`, grant `production-mc`.
-   - MC's search does not find it: ask MC to search "recruiter resume", and the result is empty.
+   - MC's search does not find it: ask MC to search "recruiter resume", and the result is empty. A line two or more turns away from the career line is still found.
    - Directly: `POST http://minimoi-dev-vault-mc:8772/v1/ask` with MC's token returns no passage.
-3. **CoS's search is unchanged.** Run the same query against `minimoi-dev-vault` before and after this release; the results are identical.
-4. **The profile guard works.** Point `minimoi-dev-vault-mc` at the full index by mistake (`--index .../memory.sqlite`). Every request answers `503 index_unfiltered`.
+3. **CoS's conversations are not in MC's index.** A phrase from a Dev CoS conversation is found by CoS's Ask and not by MC's.
+4. **CoS's search is unchanged.** Run the same query against `minimoi-dev-vault` before and after this release; the results are identical.
+5. **The profile guard works.** Point `minimoi-dev-vault-mc` at the full index by mistake (`--index .../memory.sqlite`). Every request answers `503 index_unfiltered`.
 
 ## Production activation (on Robert's word; production writes)
 

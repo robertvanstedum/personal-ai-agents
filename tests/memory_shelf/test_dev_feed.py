@@ -232,6 +232,18 @@ def test_mc_index_is_published_with_career_turns_filtered_and_served_by_the_mc_p
         f.write(json.dumps(career) + "\n")
     mc_root = tmp_path / "mc"
     mc_export(mc_root)
+    export = mc_root / "dev--c-0123456789ab.json"
+    doc = json.loads(export.read_text())
+    doc["turns"] += [{"note_id": 2, "created_at": AT, "author_kind": "owner", "who": "robert", "label": "Robert",
+                      "text": "Neighbour turn, dropped with the next one"},
+                     {"note_id": 3, "created_at": AT, "author_kind": "owner", "who": "robert", "label": "Robert",
+                      "text": "Also, the cover letter for the hiring manager needs a pass"},
+                     {"note_id": 4, "created_at": AT, "author_kind": "owner", "who": "robert", "label": "Robert",
+                      "text": "Unrelated aside about sourdough"},
+                     {"note_id": 5, "created_at": AT, "author_kind": "owner", "who": "robert", "label": "Robert",
+                      "text": "Then wire the green kestrel gauge into health"}]
+    export.write_text(json.dumps(doc))
+    manifest(mc_root)
     data = tmp_path / "vault"
     args = dict(cos_root=root, mc_root=mc_root, shelf_root=data / "memory", index_path=data / "memory-index" / "memory.sqlite",
                 jobs_root=data / "jobs", min_free=0, mc_index_path=data / "memory-index" / "memory-mc.sqlite")
@@ -240,9 +252,13 @@ def test_mc_index_is_published_with_career_turns_filtered_and_served_by_the_mc_p
     caller = policy.Caller(tier="all", scopes=("robert",))
     def hits(index, q):
         return search.search(q, shelf_root=args["shelf_root"], index_path=index, embedder=NoModel(), caller=caller)["keyword"]
-    assert hits(args["index_path"], "recruiter")                                   # CoS's index: unchanged
+    assert hits(args["index_path"], "recruiter") and hits(args["index_path"], "amber otter")   # CoS's index: unchanged
     assert hits(args["mc_index_path"], "recruiter") == []                          # MC's: never
+    assert hits(args["mc_index_path"], "amber otter") == []                        # CoS's conversations: excluded by default
+    assert hits(args["index_path"], "cover letter")
+    assert hits(args["mc_index_path"], "cover letter") == []                       # a career turn in an MC conversation
     assert hits(args["mc_index_path"], "blue heron meeting")                       # MC's: everything else
+    assert hits(args["mc_index_path"], "green kestrel gauge")
     from scripts.memory.dev_ask import app_for
     from core.memory_ask.identity import add_agent
     token = add_agent(data / "memory-ask" / "agents-mc.json", "mc", tiers=("curated", "all"))

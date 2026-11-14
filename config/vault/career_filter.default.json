@@ -36,6 +36,6 @@
  "record_threshold": 3,
  "record_fraction": 0.1,
  "turn_window": 1,
- "exclude_providers": [],
+ "exclude_providers": ["minimoi-cos"],
  "exclude_records": []
 }

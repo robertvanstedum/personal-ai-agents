@@ -16,7 +16,9 @@ Rules (``minimoi.career-filter.v1``, JSON):
      "exclude_providers": [],                            hold every record of these providers (e.g. "minimoi-cos")
      "exclude_records": []}                              hold these record ids (the owner's list)
 
-The public repository ships only generic career words (``config/vault/career_filter.default.json``). Each host keeps a
+The public repository ships only generic career words (``config/vault/career_filter.default.json``), and holds CoS's
+conversations out of MC's index entirely (``exclude_providers: ["minimoi-cos"]``; Robert, 14 Nov: restrict now, open later
+if needed: set it to ``[]``, no code). Each host keeps a
 PRIVATE rules file beside it (root-only, never in git) with the names that make career material recognisable: employers,
 recruiters, people, target roles. The two are merged: terms and exclusion lists are united, the threshold and fraction
 are the lower (stricter) of the two and the window the wider. ``require_private`` (production) refuses to build without it.
