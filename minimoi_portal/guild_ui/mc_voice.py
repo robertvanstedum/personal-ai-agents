@@ -88,11 +88,14 @@ def capabilities():
         mode, default, listed = _providers()
     except ProviderUnavailableError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 503
+    from .mc_voice_direct import voice_path
     direct, records = cfg().get("mc_direct_voice"), cfg().get("mc_direct_voice_records")
     # direct_voice: MC's direct path admitted here (mc_voice_direct.install). direct_records: installed, not admitted (Spec 165
     # §11.1 S1, S3): its record routes' metadata, so the page paints the thread and earlier proposals can be decided, while
     # Voice keeps today's path. Not installed: neither, as before.
+    # voice_path is chained unless the host env names direct or realtime. The page uses it to choose the walk.
     return jsonify({"ok": True, "mode": mode, "default_provider": default.provider, "providers": [p.public_dict() for p in listed], "budget": budget.public_status(), "managed_realtime": cfg().get("mc_managed_realtime"),
+                    "voice_path": voice_path(os.environ),
                     "direct_voice": direct, **({"direct_records": records} if records and not direct else {})})
 
 
@@ -115,6 +118,10 @@ def bootstrap():
     if not check_voice_rate_limit(principal):
         return jsonify({"ok": False, "error": "rate limited"}), 429
     guard = session_guard()
+    from .mc_voice_direct import voice_path
+    from core.realtime_voice.devices import device_class
+    if voice_path(os.environ) == "realtime":
+        return _bootstrap_walk(principal, guard, device_class(request.headers.get("User-Agent")))
     try:
         _mode, _default, _listed = _providers()
         # Reserve the provider-bound exposure (the provider's 60-minute maximum at the live-transcription rate) before the provider is contacted. The page's 15-minute timer is a browser timer, not a billing cap, and the browser talks to the provider directly, so there is no early-end rebate.
@@ -132,7 +139,6 @@ def bootstrap():
     except openai_realtime.OpenAIRealtimeError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 502
     # #570: the path, provider and device of each call, kept durably (the portal drops INFO logs).
-    from core.realtime_voice.devices import device_class
     from .mc.voice_calls import voice_calls_of
     voice_calls_of(cfg().get("services")).record(path="chained", provider="openai",
                                                  device=device_class(request.headers.get("User-Agent")))
@@ -182,6 +188,114 @@ def speech(note_request_id):
     return out
 
 
+def _bootstrap_walk(principal, guard, device):
+    """A talking session. The model is MC. The server still writes the note. Production never reaches this unless the env says realtime."""
+    import uuid
+    from core.realtime_voice.providers import openai_realtime
+    from core.realtime_voice.standards import conversation_turn_detection
+    from .mc.voice_calls import voice_calls_of
+    from .mc.voice_walk import instructions, open_session, read_tools, talking_reservation
+    session = uuid.uuid4().hex
+    open_session(session, principal)
+    kind, amount = talking_reservation(guard.max_minutes)
+    try:
+        with budget.admit(kind=kind, domain="mc", principal=principal, required=True, amount_micro=amount):
+            credential = openai_realtime.mint_ephemeral_credential(
+                instructions=instructions(),
+                voice="marin",
+                turn_detection=conversation_turn_detection("openai"),
+                transcription_language="en",
+                user_id_for_safety_identifier=principal,
+                tools=read_tools(),
+            )
+    except budget.VoiceBudgetError as exc:
+        return _budget_refusal(exc)
+    except openai_realtime.OpenAIRealtimeError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 502
+    voice_calls_of(cfg().get("services")).record(path="realtime", provider="openai", device=device, session=session)
+    return jsonify({"ok": True, "voice_session_id": session, "voice_path": "realtime",
+                    **credential, "warning_minutes": guard.warning_minutes, "max_minutes": guard.max_minutes})
+
+
+def _notes_add(**kwargs):
+    from core.mc_notes import register
+    return register.add(os.environ.get("MINIMOI_MC_NOTES_DIR") or None, **kwargs)
+
+
+def walk_hold():
+    if not enabled():
+        return _off()
+    refusal = check_write(cfg()["base_url"])
+    if refusal is not None:
+        return refusal
+    from .api import _principal
+    from .mc.voice_walk import hold
+    body = request.get_json(force=True, silent=True) or {}
+    return jsonify(hold(str(body.get("session") or ""), str(body.get("sentence") or ""), _principal()))
+
+
+def walk_utterance():
+    if not enabled():
+        return _off()
+    refusal = check_write(cfg()["base_url"])
+    if refusal is not None:
+        return refusal
+    from .api import _principal
+    from .mc.voice_walk import confirm
+    body = request.get_json(force=True, silent=True) or {}
+    return jsonify(confirm(
+        str(body.get("session") or ""), str(body.get("text") or ""),
+        hold_id=str(body.get("hold") or ""), principal=_principal(), notes_add=_notes_add,
+    ))
+
+
+def walk_tool():
+    if not enabled():
+        return _off()
+    refusal = check_write(cfg()["base_url"])
+    if refusal is not None:
+        return refusal
+    from .mc.voice_walk import run_read
+    body = request.get_json(force=True, silent=True) or {}
+    return jsonify(run_read(str(body.get("name") or ""), str(body.get("query") or ""), readers=_walk_readers()))
+
+
+def walk_end():
+    if not enabled():
+        return _off()
+    refusal = check_write(cfg()["base_url"])
+    if refusal is not None:
+        return refusal
+    from .api import _principal
+    from .mc.voice_walk import transcript_note
+    body = request.get_json(force=True, silent=True) or {}
+    turns = body.get("turns") if isinstance(body.get("turns"), list) else []
+    return jsonify(transcript_note(str(body.get("session") or ""), turns, principal=_principal(), notes_add=_notes_add))
+
+
+def _walk_readers():
+    """Reads that say when they have nothing. They do not invent a fact."""
+    def notes(_query):
+        from core.mc_notes import register
+        root = os.environ.get("MINIMOI_MC_NOTES_DIR") or None
+        rows = register.current(register.all_notes(root))
+        if not rows:
+            return {"found": False, "text": "There is no current note."}
+        last = rows[-3:]
+        return {"found": True, "text": "\n".join(n.get("text", "")[:400] for n in last)}
+
+    def deploy(_query):
+        path = "/minimoi/docs/delivery/PRODUCTION.md"
+        if os.path.isfile(path):
+            return {"found": True, "text": open(path, encoding="utf-8", errors="replace").read()[:800]}
+        return {"found": False, "text": "The delivery record is not on this call."}
+
+    def issues(query):
+        return {"found": False, "text": f"Issue lookup is not on this call ({query[:40]})."}
+
+    return {"notes_recall": notes, "deploy_status": deploy, "issues": issues}
+
+
 def static_file(name):
     """The shared controller and its transport adapter, served from the one shared copy (never a second copy), only while voice is on.
     The direct path's controller only while it is admitted here; its session module while it is installed, admitted or not
@@ -190,7 +304,11 @@ def static_file(name):
         return _off()
     direct = bool(cfg().get("mc_direct_voice"))
     installed = direct or bool(cfg().get("mc_direct_voice_records"))
-    if (name not in _STATIC_OK and not ((cfg().get("mc_managed_realtime") or direct) and name in _MANAGED_STATIC)
+    from .mc_voice_direct import voice_path
+    walk_names = {"realtime-voice-controller.js", "adapters/openai-webrtc-adapter.js", "adapters/xai-websocket-adapter.js"}
+    walk_static = voice_path(os.environ) == "realtime" and name in walk_names
+    if (name not in _STATIC_OK and not walk_static
+            and not ((cfg().get("mc_managed_realtime") or direct) and name in _MANAGED_STATIC)
             and not (installed and name in _DIRECT_STATIC)):
         return json_error("not_found", "No such file.", 404)
     return send_from_directory(_STATIC_DIR, name, mimetype="text/javascript")
@@ -201,4 +319,8 @@ RULES = [
     ("/mc/voice/bootstrap", "api_mc_voice_bootstrap", bootstrap, ["POST"]),
     ("/mc/voice/speech/<note_request_id>", "api_mc_voice_speech", speech, ["GET"]),
     ("/mc/voice/static/<path:name>", "api_mc_voice_static", static_file, ["GET"]),
+    ("/mc/voice/walk/hold", "api_mc_voice_walk_hold", walk_hold, ["POST"]),
+    ("/mc/voice/walk/utterance", "api_mc_voice_walk_utterance", walk_utterance, ["POST"]),
+    ("/mc/voice/walk/tool", "api_mc_voice_walk_tool", walk_tool, ["POST"]),
+    ("/mc/voice/walk/end", "api_mc_voice_walk_end", walk_end, ["POST"]),
 ]

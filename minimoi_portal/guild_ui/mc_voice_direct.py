@@ -592,11 +592,17 @@ def may_start(environ):
 # "direct": the realtime voice model with MC behind each consult (Spec 164/165), today's behaviour until 13 Nov; the
 # rollback is MINIMOI_MC_VOICE_PATH=direct in the host's .env (env_file reaches the portal) and a restart.
 PATH_ENV = "MINIMOI_MC_VOICE_PATH"
-PATHS = ("direct", "chained")
+PATHS = ("direct", "chained", "realtime")
 
 
 def voice_path(environ) -> str:
-    """MC's voice path: "chained" (the default: MC's voice is MC) or "direct", never a third thing."""
+    """MC's voice path.
+
+    "chained" is the default (speech to text, a full MC turn, the reply read aloud).
+    "direct" is the older realtime path. "realtime" is the walk (spec v1.1): the
+    model is MC, and the server writes a note only after a bare yes. Anything else
+    stays "chained". Production compose sets "realtime". Unset stays chained.
+    """
     value = str(environ.get(PATH_ENV, "") or "").strip().lower()
     return value if value in PATHS else "chained"
 
