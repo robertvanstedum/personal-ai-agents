@@ -132,13 +132,40 @@ def test_no_host_python_file_copies_the_cores_ledger_flow_or_widens_its_hooks():
     assert copies == {}
 
 
+# Hosts allowed one bridge word, each with its reason (#578 S1). Nothing else in that file is allowed, and every other
+# host is scanned as before. Until 14 Nov the talking call's page built this hook's name from pieces so the scan
+# could not see it; that was a way through this test, merged with PR 572, and is replaced by this explicit entry.
+ALLOWED_BRIDGE = {
+    "minimoi_portal/guild_ui/static/js/mc_voice_walk.js": (
+        {"onFunctionCall"},
+        "MC's talking call registers the shared controller's hook for its three read tools; the controller sends the "
+        "tool result, and this page never calls sendFunctionResult itself."),
+}
+
+
+def bridge_findings(rel, text):
+    allowed = ALLOWED_BRIDGE.get(rel, (set(), ""))[0]
+    return [f for f in script_copies(text) if f[1] not in {f"browser bridge ({word})" for word in allowed}]
+
+
 def test_no_host_page_or_script_defines_a_browser_bridge():
     copies = {}
     for path in host_files({".js", ".mjs", ".html"}):
-        found = script_copies(path.read_text(encoding="utf-8", errors="replace"))
+        rel = str(path.relative_to(ROOT))
+        found = bridge_findings(rel, path.read_text(encoding="utf-8", errors="replace"))
         if found:
-            copies[str(path.relative_to(ROOT))] = found
+            copies[rel] = found
     assert copies == {}
+
+
+def test_the_allowance_is_one_word_in_one_file_and_written_plainly():
+    walk = "minimoi_portal/guild_ui/static/js/mc_voice_walk.js"
+    text = (ROOT / walk).read_text(encoding="utf-8")
+    assert "hooks.onFunctionCall" in text and "'Function'" not in text            # the plain name, no pieces
+    assert bridge_findings(walk, text + "\nadapter.sendFunctionResult(id, out);") != []   # other words still fail there
+    assert bridge_findings("minimoi_portal/guild_ui/static/js/other.js", "hooks.onFunctionCall = f;") != []
+    for rel, (words, reason) in ALLOWED_BRIDGE.items():
+        assert (ROOT / rel).is_file() and words and len(reason) > 40
 
 
 def test_mcs_adapter_and_store_are_hosts_that_import_the_core_and_define_only_its_hooks():
