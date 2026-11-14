@@ -29,8 +29,7 @@ from .security import check_write, json_error
 
 ENV = "MINIMOI_MC_VOICE"
 # A short call ends when Robert hangs up. These bounds only stop an unattended session.
-# 45/60, not Confer's 13/15: a 15-minute talk must not be warned at 13 or cut at 15.
-# The provider's own realtime cap is 60 minutes, and the daily allowance already reserves that hour.
+# Craft and Confer share them. The provider's own realtime cap is 60 minutes.
 MC_WARNING_MINUTES = 45
 MC_MAX_MINUTES = 60
 _NOTE_ID = re.compile(r"[A-Za-z0-9_-]{8,64}")
@@ -47,10 +46,9 @@ SPEAKING_INSTRUCTIONS = (
 
 
 def session_guard() -> DurationGuard:
-    """How long one MC call may run. Confer and Mein Deutsch keep their own shorter caps."""
-    warning = int(os.environ.get("VOICE_MC_WARNING_MINUTES", MC_WARNING_MINUTES))
-    maximum = int(os.environ.get("VOICE_MC_MAX_MINUTES", MC_MAX_MINUTES))
-    return DurationGuard(warning_minutes=warning, max_minutes=maximum)
+    """How long one Craft call may run. Confer uses the same bounds. Mein Deutsch keeps its own."""
+    from core.realtime_voice.duration_guard import colleague_guard
+    return colleague_guard("VOICE_MC_WARNING_MINUTES", "VOICE_MC_MAX_MINUTES")
 
 
 def enabled(environ=None) -> bool:
