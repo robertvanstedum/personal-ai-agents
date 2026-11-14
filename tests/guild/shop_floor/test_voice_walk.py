@@ -1,7 +1,9 @@
 """Spec v1.1 walk: the server writes, the model only reads, unset stays chained."""
 from __future__ import annotations
 
+from core.realtime_voice.confer import _duration_guard
 from minimoi_portal.guild_ui.mc.voice_calls import call_record_folder
+from minimoi_portal.guild_ui.mc_voice import MC_MAX_MINUTES, MC_WARNING_MINUTES, session_guard
 from minimoi_portal.guild_ui.mc.voice_walk import (
     READ_TOOLS, confirm, drop, hold, instructions, read_tools, run_read, transcript_note,
 )
@@ -11,6 +13,21 @@ from minimoi_portal.guild_ui.mc_voice_direct import PATH_ENV, may_start, voice_p
 class _Store:
     def __init__(self, folder, path="x"):
         self.store = type("S", (), {"folder": folder, "path": path})()
+
+
+def test_a_fifteen_minute_call_is_inside_the_cap_and_a_short_one_is_not_held_open(monkeypatch):
+    monkeypatch.delenv("VOICE_MC_WARNING_MINUTES", raising=False)
+    monkeypatch.delenv("VOICE_MC_MAX_MINUTES", raising=False)
+    guard = session_guard()
+    assert (guard.warning_minutes, guard.max_minutes) == (MC_WARNING_MINUTES, MC_MAX_MINUTES)
+    assert guard.status(15 * 60) == "ok"
+    assert guard.status(1 * 60) == "ok"
+    assert guard.status(45 * 60) == "warning"
+    assert guard.status(60 * 60) == "stop"
+    monkeypatch.delenv("VOICE_CONFER_WARNING_MINUTES", raising=False)
+    monkeypatch.delenv("VOICE_CONFER_MAX_MINUTES", raising=False)
+    confer = _duration_guard()
+    assert (confer.warning_minutes, confer.max_minutes) == (13, 15)
 
 
 def test_mc_turns_dir_wins_when_it_is_a_directory(tmp_path, monkeypatch):

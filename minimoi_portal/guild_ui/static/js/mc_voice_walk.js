@@ -56,13 +56,33 @@ export async function startMcWalk({ api, headers, current, say, setPhase }) {
   adapter.prepareSession(cred);
   await adapter.connect(cred);
   await adapter.start();
+  const startedAt = Date.now();
+  const warnMs = (cred.warning_minutes || 45) * 60 * 1000;
+  const maxMs = (cred.max_minutes || 60) * 60 * 1000;
+  let warned = false;
+  let timer = null;
+  function stop(reason) {
+    if (!active) return;
+    active = false;
+    if (timer) clearInterval(timer);
+    try { adapter._wakeLock?.release?.(); } catch (_) { /* already released */ }
+    adapter.end(reason);
+    if (sessionId) post('end', { session: sessionId, turns });
+  }
+  timer = setInterval(() => {
+    if (!active) { clearInterval(timer); return; }
+    const elapsed = Date.now() - startedAt;
+    if (elapsed >= maxMs) stop('duration_limit');
+    else if (!warned && elapsed >= warnMs) {
+      warned = true;
+      if (current()) say('This call will close itself after an hour.');
+      adapter.sendContinuationInstruction(
+        'Say one short sentence, then go on with the conversation: this call will close itself after an hour.',
+        'duration_warning',
+        'system',
+      );
+    }
+  }, 5000);
 
-  return {
-    stop(reason) {
-      active = false;
-      try { adapter._wakeLock?.release?.(); } catch (_) { /* already released */ }
-      adapter.end(reason);
-      if (sessionId) post('end', { session: sessionId, turns });
-    },
-  };
+  return { stop };
 }

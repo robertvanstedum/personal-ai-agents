@@ -20,6 +20,7 @@ import re
 from flask import Response, jsonify, request, send_from_directory, stream_with_context
 
 from core.realtime_voice import budget
+from core.realtime_voice.duration_guard import DurationGuard
 # MC's reply as plain speech, cut at SPEECH_MAX_CHARS with a spoken pointer to the chat: the direct path's too (Spec 165 §4.2).
 from core.realtime_voice.direct_host import SPEECH_MAX_CHARS, speakable as _speakable  # noqa: F401
 
@@ -27,6 +28,11 @@ from . import cfg, feature_enabled, voice_release
 from .security import check_write, json_error
 
 ENV = "MINIMOI_MC_VOICE"
+# A short call ends when Robert hangs up. These bounds only stop an unattended session.
+# 45/60, not the confer page's 13/15: a 15-minute walk must not be warned at 13 or cut at 15.
+# The provider's own realtime cap is 60 minutes, and the daily allowance already reserves that hour.
+MC_WARNING_MINUTES = 45
+MC_MAX_MINUTES = 60
 _NOTE_ID = re.compile(r"[A-Za-z0-9_-]{8,64}")
 _STATIC_OK = ("realtime-confer-controller.js", "adapters/openai-transcription-webrtc-adapter.js")
 _MANAGED_STATIC = ("realtime-voice-controller.js","adapters/openai-webrtc-adapter.js","adapters/xai-websocket-adapter.js")
@@ -38,6 +44,13 @@ SPEAKING_INSTRUCTIONS = (
     "Speak naturally and clearly as Master Craftsman, an AI build partner. "
     "Use a calm, warm, conversational voice. Do not add, omit, or paraphrase content."
 )
+
+
+def session_guard() -> DurationGuard:
+    """How long one MC call may run. Confer and Mein Deutsch keep their own shorter caps."""
+    warning = int(os.environ.get("VOICE_MC_WARNING_MINUTES", MC_WARNING_MINUTES))
+    maximum = int(os.environ.get("VOICE_MC_MAX_MINUTES", MC_MAX_MINUTES))
+    return DurationGuard(warning_minutes=warning, max_minutes=maximum)
 
 
 def enabled(environ=None) -> bool:
@@ -102,12 +115,11 @@ def bootstrap():
     from .api import _principal
     from core.realtime_voice.bootstrap import check_voice_rate_limit
     from core.realtime_voice.capabilities import ProviderUnavailableError
-    from core.realtime_voice.duration_guard import DurationGuard
     from core.realtime_voice.providers import openai_realtime
     principal = _principal()
     if not check_voice_rate_limit(principal):
         return jsonify({"ok": False, "error": "rate limited"}), 429
-    guard = DurationGuard(warning_minutes=int(os.environ.get("VOICE_CONFER_WARNING_MINUTES", 13)), max_minutes=int(os.environ.get("VOICE_CONFER_MAX_MINUTES", 15)))
+    guard = session_guard()
     from .mc_voice_direct import voice_path
     from core.realtime_voice.devices import device_class
     if voice_path(os.environ) == "realtime":
