@@ -250,3 +250,21 @@ def test_bundle_is_xz_and_the_deploy_extracts_xz(tmp_path):
     step = (ROOT / ".github/workflows/deploy.yml").read_text().split("- name: Install host scripts and check parity on EC2", 1)[1]
     step = step.split("- name:", 1)[0]
     assert "--out /tmp/host-scripts.txz" in step and "tar -xJf - --no-same-owner" in step and "tar -xzf" not in step
+
+
+def test_index_lists_each_now_md_newest_first_and_git_ignores_it(host):
+    # #608: MC walked the tree folder by folder and gave up; the index names every NOW.md with its last change date.
+    commit(host["src"], {"initiatives/INIT-2026-0001-old/NOW.md": "old\n"}, "older initiative")
+    time.sleep(1.1)
+    commit(host["src"], {NOW_MD: "this week\n"}, "this week")
+    assert refresh(host).returncode == 0
+    ix = (host["root"] / "tree/PLANNING_INDEX.txt")
+    assert oct(ix.stat().st_mode & 0o777) == "0o644"
+    lines = ix.read_text().splitlines()
+    assert lines[0].startswith("# NOW.md files, newest first")
+    paths = [l.split(" ", 1)[1] for l in lines[1:]]
+    assert set(paths) == {NOW_MD, "initiatives/INIT-2026-0001-old/NOW.md"}
+    assert all(len(l.split(" ", 1)[0]) == 10 for l in lines[1:])   # YYYY-MM-DD
+    assert "scorers-only" not in ix.read_text()
+    assert "PLANNING_INDEX" not in git("--git-dir", str(host["root"] / "git"), "--work-tree", str(host["root"] / "tree"),
+                                       "status", "--porcelain", cwd=host["tmp"])

@@ -2,7 +2,7 @@
 
 Appended to AGENTS.md. Descriptions grant nothing; check actual tools and results.
 
-You run in your own container (`ls /minimoi` shows its folders): `/minimoi/repo` is a clone at production's last deployed commit with no network to GitHub, and your changes reach main only through a reviewed branch; `/minimoi/planning`, if present, is the planning record (read-only; start at `initiatives/*/NOW.md`); cite either with the commit in `/minimoi/work/REPO_COPY_STATUS.txt` or `/minimoi/planning/PLANNING_STATUS.txt`; `/minimoi/work`, `/minimoi/workshops`, `/minimoi/inbox` are read-write. Robert's Mac and the host are unreachable. Network reaches model services via an allowlisting proxy; web pages via a fetch tool if you have one.
+You run in your own container (read it with `minimoi_host_list` and `minimoi_host_read`, not `ls`): `/minimoi/repo` is a clone at production's last deployed commit with no network to GitHub, and your changes reach main only through a reviewed branch; `/minimoi/planning`, if present, is the planning record (read-only; start at `PLANNING_INDEX.txt`); cite either with the commit in `/minimoi/work/REPO_COPY_STATUS.txt` or `/minimoi/planning/PLANNING_STATUS.txt`; `/minimoi/work`, `/minimoi/workshops`, `/minimoi/inbox` are read-write. Robert's Mac and the host are unreachable. Network: model services via an allowlisting proxy; web pages via your fetch tool.
 
 MiniMoi tools are offered as `mcp__openclaw__minimoi_*`: call that exact name. There is no tool search; every tool you have is in your list, and an off tool says so. To know whether something works, call it, and say what a refusal actually said.
 

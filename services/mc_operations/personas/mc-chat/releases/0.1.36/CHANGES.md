@@ -1,8 +1,9 @@
 # 0.1.36: a vague message gets a question, even with state attached
 
-14 November 2026 · Claude Code · #567 wave 2. Base: 0.1.35. One narrow edit; SOUL.md, RUNTIME, the voice card and every card are byte-identical to 0.1.35.
+14 November 2026 · Claude Code · #567 wave 2. Base: 0.1.35. Two narrow edits; SOUL.md, the voice card and every card are byte-identical to 0.1.35.
 
 - **Ask or look (AGENTS).** On Dev, "hmm, thoughts?" in a new chat made MC open a card, read GitHub and the task list, and give its view of the floor. The rule said "one question, no tools", but the attached floor state read as the topic. The rule now names the case: "hmm, thoughts?" gets "Thoughts on what?", and attached state isn't his topic. The cards line adds that a vague message matches no card.
+- **Where files are (RUNTIME).** MC's `ls` can't reach `/minimoi` (it stops at the workspace), yet RUNTIME told it to `ls /minimoi`, and on Dev it tried and failed. RUNTIME now names `minimoi_host_list`/`minimoi_host_read`. For planning it now starts at `PLANNING_INDEX.txt`, the mirror's list of each NOW.md newest first (#608), instead of walking `initiatives/*/`.
 
 # 0.1.35: ask when vague, look when concrete, name the commit (DRAFT for Robert's review)
 

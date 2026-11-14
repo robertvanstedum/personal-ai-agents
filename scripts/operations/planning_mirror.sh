@@ -11,7 +11,7 @@ REMOTE="${MINIMOI_PLANNING_REMOTE:-https://github.com/robertvanstedum/minimoi-pl
 BRANCH="${MINIMOI_PLANNING_BRANCH:-main}"
 PARAM="${MINIMOI_PLANNING_TOKEN_PARAM:-/minimoi/production/planning_read_token}"
 REGION="${AWS_REGION:-us-east-1}"
-GD="$ROOT/git"; TREE="$ROOT/tree"; SN=PLANNING_STATUS.txt; STATUS="$TREE/$SN"
+GD="$ROOT/git"; TREE="$ROOT/tree"; SN=PLANNING_STATUS.txt; STATUS="$TREE/$SN"; IX=PLANNING_INDEX.txt
 ETC="${MINIMOI_ETC:-/etc}"; SCTL="${SYSTEMCTL:-systemctl}"
 unset GIT_TRACE GIT_TRACE_CURL GIT_TRACE_PACKET GIT_CURL_VERBOSE GIT_TRACE2 GIT_TRACE2_EVENT GIT_TRACE2_PERF
 export GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/false
@@ -57,7 +57,7 @@ core.sparseCheckout true
 core.sparseCheckoutCone false
 gc.auto 0
 EOF
-  mkdir -p "$GD/info"; printf '/%s\n/.%s.tmp\n' "$SN" "$SN" > "$GD/info/exclude"
+  mkdir -p "$GD/info"; printf '/%s\n/.%s.tmp\n' "$SN" "$SN" "$IX" "$IX" > "$GD/info/exclude"
   local want re=0
   want="$(rules)"
   if [[ "$(cat "$GD/info/sparse-checkout" 2>/dev/null)" != "$want" ]]; then
@@ -77,7 +77,16 @@ EOF
   if [[ "$new" != "$cur" ]]; then g checkout -q -f --detach "$new" || skip checkout_failed
   elif [[ "$re" == 1 ]]; then g read-tree -mu HEAD || skip reapply_failed; fi
   H=""
+  index
   put "status=ok commit=$new fetched=$(now)"
+}
+
+index() {  # MC's starting point (#608): each NOW.md with its last commit date, newest first; no blob is fetched
+  local f
+  { echo "# NOW.md files, newest first (date of last change, path)"
+    (cd "$TREE" && find initiatives operations -name NOW.md 2>/dev/null || true) | while read -r f; do
+      printf '%s %s\n' "$(g log -1 --format=%cs -- ":(top)$f")" "$f"; done | sort -r; } > "$TREE/.$IX.tmp"
+  chmod 0644 "$TREE/.$IX.tmp"; mv -f "$TREE/.$IX.tmp" "$TREE/$IX"
 }
 
 install_ec2() {

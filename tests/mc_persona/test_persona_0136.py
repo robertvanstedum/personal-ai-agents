@@ -22,7 +22,7 @@ def test_only_agents_and_changes_differ():
     files = sorted(p.relative_to(NEW).as_posix() for p in NEW.rglob("*") if p.is_file())
     assert files == sorted(p.relative_to(OLD).as_posix() for p in OLD.rglob("*") if p.is_file())
     for name in files:
-        if name not in ("AGENTS.md", "CHANGES.md", "manifest.json"):
+        if name not in ("AGENTS.md", "RUNTIME.openclaw.md", "CHANGES.md", "manifest.json"):
             assert (NEW / name).read_bytes() == (OLD / name).read_bytes(), name
 
 
@@ -35,3 +35,10 @@ def test_a_vague_message_gets_a_question_even_with_state_attached():
     new_lines = a.splitlines()
     changed = [l for l in (OLD / "AGENTS.md").read_text().splitlines()[1:] if l not in new_lines]
     assert len(changed) == 2 and changed[0].startswith("Vague or two words") and changed[1].startswith("Your procedures are cards")
+
+
+def test_runtime_names_the_host_reader_and_the_planning_index():
+    r = (NEW / "RUNTIME.openclaw.md").read_text()
+    assert "(read it with `minimoi_host_list` and `minimoi_host_read`, not `ls`)" in r
+    assert "start at `PLANNING_INDEX.txt`" in r
+    assert "`ls /minimoi` shows its folders" not in r and "initiatives/*/NOW.md" not in r
