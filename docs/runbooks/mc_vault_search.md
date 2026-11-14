@@ -54,7 +54,7 @@ Same schema as the default file: `{"schema": "minimoi.career-filter.v1", "terms"
    `docker run --rm -it -v /opt/minimoi/vault-mc/memory-ask:/r <portal image> python -m core.memory_ask.agents_cli --registry /r/agents-mc.json add mc --raw`.
    Write the token to `/opt/minimoi/mc/portal/vault-ask-mc-token` (root 0600).
 4. **Start the service:** add `vault-mc` to `COMPOSE_PROFILES`, set `MINIMOI_MC_VAULT_ASK_URL=http://vault-ask-mc:8772` in `/opt/minimoi/.env`, start `vault-ask-mc`, recreate the portal. Later portal releases recreate `vault-ask-mc` beside it (`deploy_scoped_release.sh`).
-5. **Policy:** `deploy_mc_container_ec2.sh approve-policy "<Robert's words>"` for revision `mc-prod-20261114-vault-search`.
+5. **Policy:** `deploy_mc_container_ec2.sh approve-policy "<Robert's words>"` for revision `mc-prod-20261114-web-fetch-vault-search` (one approval covers #589's web fetch rule and this one).
 
 ## CoS's held records in production (`unknown_provider`)
 
