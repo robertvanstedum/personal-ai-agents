@@ -152,6 +152,7 @@ EXPECTED = {
     "/guild-next/api/v1/mc/voice/walk/utterance",
     "/guild-next/api/v1/mc/voice/walk/tool",
     "/guild-next/api/v1/mc/voice/walk/end",
+    "/guild-next/api/v1/mc/voice/walk/transcript/<session>",
     # Dictation (12 Oct): owner-only; every one answers "not switched on" (404) unless MINIMOI_DICTATION=1; the bootstrap is a CSRF-checked on-the-record write.
     "/guild-next/api/v1/dictation/capabilities",
     "/guild-next/api/v1/dictation/bootstrap",

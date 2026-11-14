@@ -17,8 +17,9 @@ Decisions, recorded with the code (13 Nov 2026, while Robert tests Mein Deutsch 
   a seat token and a card, and a wrong command would open work he has not seen.
   The desk is the act-note. A later turn of the full MC picks it up even if the
   phone is locked, because the note is already on disk.
-- A call transcript is written at the end, topic ``voice-transcript``, and the text
-  says it is not a decision. Nothing is shown during the call.
+- The whole call is saved at the end as one file, like a Mein Deutsch session: every
+  turn, no length cap, in MC's turns folder (#578). It is not a note and not a decision.
+  Nothing is shown during the call.
 - Production compose sets ``MINIMOI_MC_VOICE_PATH=realtime`` so this deploy
   turns the talking call on. Removing that line restores the chained path.
 """
@@ -193,23 +194,68 @@ def confirm(session: str, utterance: str, *, hold_id: str, principal: str, notes
     return {"ok": True, "confirmed": True, "receipt": receipt, "say": "Noted.", "for": _kind(sentence)}
 
 
-def transcript_note(session: str, turns: list, *, principal: str, notes_add) -> dict:
-    """History at the end of the call. Labelled as a transcript, not a decision. An unknown session is refused."""
+SESSIONS_DIR = "voice-sessions"
+
+
+def _call_path(folder: str, session: str, when: datetime) -> Path:
+    """``<folder>/voice-sessions/<year>/<date>_<session>.json``: one file per call, a year folder as for MC's turns."""
+    safe = re.sub(r"[^0-9a-f]", "", (session or "").lower())[:32] or "unknown"
+    return Path(folder) / SESSIONS_DIR / when.strftime("%Y") / f"{when.strftime('%Y-%m-%d')}_{safe}.json"
+
+
+def save_call(session: str, turns: list, *, principal: str, folder: str | None, now: datetime | None = None) -> dict:
+    """The whole call as one file, the way Mein Deutsch keeps a session (``sessions/<date>_<nnn>.json``).
+
+    Every turn, in order, with no length cap: this is the record of what was said, not a note and not a decision.
+    Written atomically into MC's turns folder (``MC_TURNS_DIR``, kept across restarts on production). An unknown
+    session or a missing folder writes nothing and says so."""
     if _owned(session, principal) is None:
         return {"ok": False, "error": "unknown_session"}
-    lines = []
+    if not folder:
+        return {"ok": False, "error": "no_folder"}
+    kept = []
     for turn in turns or []:
         if not isinstance(turn, dict):
             continue
-        role = "Robert" if turn.get("role") == "user" else "MC"
         said = " ".join(str(turn.get("text") or "").split())
         if said:
-            lines.append(f"{role}: {said}")
-    if not lines:
+            kept.append({"role": "robert" if turn.get("role") == "user" else "mc", "text": said})
+    if not kept:
         return {"ok": True, "written": False}
-    body = "Transcript, not a decision.\n\n" + "\n".join(lines)
-    note = notes_add(by="mc", said_by="mc", what_for="remember", topic="voice-transcript", text=body[:2000], ref=(session or "")[:8])
-    return {"ok": True, "written": True, "receipt": note.get("id")}
+    when = now or datetime.now(timezone.utc)
+    path = _call_path(folder, session, when)
+    record = {
+        "schema_version": 1, "record_type": "mc_voice_call", "agent": "mc", "path": "realtime",
+        "session_id": session, "principal": principal, "date": when.strftime("%Y-%m-%d"),
+        "saved_at": when.strftime("%Y-%m-%dT%H:%M:%SZ"), "label": "Transcript of a voice call, not decisions.",
+        "turn_count": len(kept), "raw_transcript": kept,
+    }
+    from core.durable_files import write_doc
+    try:
+        write_doc(path, record)
+    except OSError as exc:
+        return {"ok": False, "error": f"not_written ({type(exc).__name__})"}
+    return {"ok": True, "written": True, "turns": len(kept), "file": path.name}
+
+
+def call_text(session: str, *, principal: str, folder: str | None) -> str | None:
+    """The saved call as plain text for its owner, or None. Reads the file, so it works after a restart."""
+    if not folder:
+        return None
+    safe = re.sub(r"[^0-9a-f]", "", (session or "").lower())[:32]
+    if not safe:
+        return None
+    from core.durable_files import read_doc
+    for path in sorted((Path(folder) / SESSIONS_DIR).glob(f"*/*_{safe}.json")):
+        record = read_doc(path)
+        if not isinstance(record, dict) or record.get("principal") != principal:
+            continue
+        lines = [f"MC voice call, {record.get('saved_at', '')} (UTC). {record.get('label', '')}", ""]
+        for turn in record.get("raw_transcript") or []:
+            who = "Robert" if turn.get("role") == "robert" else "MC"
+            lines.append(f"{who}: {turn.get('text', '')}")
+        return "\n".join(lines) + "\n"
+    return None
 
 
 def run_read(name: str, query: str, *, readers: dict) -> dict:

@@ -7,7 +7,7 @@ from minimoi_portal.guild_ui.mc_voice import MC_MAX_MINUTES, MC_WARNING_MINUTES,
 from core.realtime_voice.direct_host import _BARE_NO
 from minimoi_portal.guild_ui.mc.voice_walk import (
     READ_TOOLS, confirm, drop, hold, instructions, open_session, read_tools, run_read,
-    talking_reservation, transcript_note,
+    talking_reservation, save_call, call_text,
 )
 from minimoi_portal.guild_ui.mc_voice_direct import PATH_ENV, may_start, voice_path
 
@@ -149,18 +149,33 @@ def test_a_partial_tool_name_is_refused_and_a_read_can_miss():
     assert run_read("issues", "570", readers={})["found"] is False
 
 
-def test_the_transcript_is_not_a_decision():
-    saved = {}
+def test_the_whole_call_is_one_file_with_no_cap_and_its_owner_can_download_it(tmp_path):
+    from datetime import datetime, timezone
+    from minimoi_portal.guild_ui.mc.voice_walk import SESSIONS_DIR
+    open_session("ab12cd34ef", "robert")
+    long = "word " * 900                                      # far past the old 2,000-character note
+    turns = [{"role": "user", "text": "Good morning."}, {"role": "mc", "text": long}, {"role": "user", "text": "and I'd like you to review it"}]
+    out = save_call("ab12cd34ef", turns, principal="robert", folder=str(tmp_path),
+                    now=datetime(2026, 11, 14, 14, 57, tzinfo=timezone.utc))
+    assert out == {"ok": True, "written": True, "turns": 3, "file": "2026-11-14_ab12cd34ef.json"}
+    saved = tmp_path / SESSIONS_DIR / "2026" / "2026-11-14_ab12cd34ef.json"
+    import json
+    record = json.loads(saved.read_text())
+    assert record["raw_transcript"][1]["text"] == long.strip() and record["turn_count"] == 3
+    assert record["principal"] == "robert" and "not decisions" in record["label"]
+    text = call_text("ab12cd34ef", principal="robert", folder=str(tmp_path))
+    assert text.endswith("Robert: and I'd like you to review it\n") and long.strip() in text
+    assert call_text("ab12cd34ef", principal="someone-else", folder=str(tmp_path)) is None
+    assert call_text("../../etc", principal="robert", folder=str(tmp_path)) is None
 
-    def add(**kwargs):
-        saved.update(kwargs)
-        return {"id": "n-tr"}
 
-    open_session("s5", "robert")
-    out = transcript_note("s5", [{"role": "user", "text": "hello"}, {"role": "mc", "text": "here"}], principal="robert", notes_add=add)
-    assert out["written"] is True
-    assert saved["topic"] == "voice-transcript"
-    assert saved["text"].startswith("Transcript, not a decision.")
+def test_a_call_is_not_saved_for_an_unknown_session_or_without_a_folder(tmp_path):
+    turns = [{"role": "user", "text": "hello"}]
+    assert save_call("never-issued", turns, principal="robert", folder=str(tmp_path))["error"] == "unknown_session"
+    open_session("feed01", "robert")
+    assert save_call("feed01", turns, principal="robert", folder=None)["error"] == "no_folder"
+    assert save_call("feed01", [], principal="robert", folder=str(tmp_path)) == {"ok": True, "written": False}
+    assert not (tmp_path / "voice-sessions").exists()
 
 
 def test_drop_clears_a_replaced_sentence():
