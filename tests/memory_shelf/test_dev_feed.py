@@ -221,3 +221,32 @@ def test_platform_only_evidence_is_saved_but_not_owner_dialogue(tmp_path):
                            index_path=tmp_path / "index/memory.sqlite", embedder=NoModel(),
                            caller=policy.Caller(tier="all", scopes=("robert",)))
     assert not result["keyword"]
+
+
+def test_mc_index_is_published_with_career_turns_filtered_and_served_by_the_mc_profile(tmp_path):
+    """#594: the feed also publishes MC's career-filtered index; dev_ask's MC profile serves only that index."""
+    root, turns, row = source(tmp_path)
+    career = dict(row, seq=2, turn_id="t-0123456789abcdee", user_text="Rewrite my resume for the recruiter call",
+                  reply_text="Here is a tighter resume summary", status="answered", answered_at=AT)
+    with turns.open("a") as f:
+        f.write(json.dumps(career) + "\n")
+    mc_root = tmp_path / "mc"
+    mc_export(mc_root)
+    data = tmp_path / "vault"
+    args = dict(cos_root=root, mc_root=mc_root, shelf_root=data / "memory", index_path=data / "memory-index" / "memory.sqlite",
+                jobs_root=data / "jobs", min_free=0, mc_index_path=data / "memory-index" / "memory-mc.sqlite")
+    report = run(**args)
+    assert report["state"] == "ok" and report["mc_index"]["code"] == "ok", report
+    caller = policy.Caller(tier="all", scopes=("robert",))
+    def hits(index, q):
+        return search.search(q, shelf_root=args["shelf_root"], index_path=index, embedder=NoModel(), caller=caller)["keyword"]
+    assert hits(args["index_path"], "recruiter")                                   # CoS's index: unchanged
+    assert hits(args["mc_index_path"], "recruiter") == []                          # MC's: never
+    assert hits(args["mc_index_path"], "blue heron meeting")                       # MC's: everything else
+    from scripts.memory.dev_ask import app_for
+    from core.memory_ask.identity import add_agent
+    token = add_agent(data / "memory-ask" / "agents-mc.json", "mc", tiers=("curated", "all"))
+    client = app_for(data, "mc").test_client()
+    answer = client.post("/v1/ask", json={"query": "blue heron", "include_raw": True},
+                         headers={"Authorization": f"Bearer {token}"})
+    assert answer.status_code == 200 and answer.get_json()["keyword"]

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Existing authenticated Ask API, gated on a fresh verified Dev feed run."""
+"""Existing authenticated Ask API, gated on a fresh verified Dev feed run.
+
+``DEV_VAULT_PROFILE=mc`` (#594, container ``minimoi-dev-vault-mc``, port 8772): Master Craftsman's Ask on the same Dev data, opened
+only on ``memory-index/memory-mc.sqlite`` (the feed's career-filtered index) with its own registry ``memory-ask/agents-mc.json`` and
+query log, and ``require_profile="mc"``: any index without the MC profile and a career-filter digest is refused."""
 import os
 import sys
 from datetime import datetime, timezone
@@ -19,10 +23,17 @@ class NoModel:
         raise RuntimeError("dev_keyword_only_required")
 
 
-def app_for(data: Path):
-    app = create_app(registry_path=data / "memory-ask/agents.json", shelf_root=data / "memory",
-                     index_path=data / "memory-index/memory.sqlite", log_path=data / "memory-ask/queries.jsonl",
-                     embedder_factory=NoModel)
+def app_for(data: Path, profile: str | None = None):
+    if profile == "mc":
+        app = create_app(registry_path=data / "memory-ask/agents-mc.json", shelf_root=data / "memory",
+                         index_path=data / "memory-index/memory-mc.sqlite", log_path=data / "memory-ask/queries-mc.jsonl",
+                         embedder_factory=NoModel, require_profile="mc")
+    elif profile:
+        raise SystemExit("unknown DEV_VAULT_PROFILE")
+    else:
+        app = create_app(registry_path=data / "memory-ask/agents.json", shelf_root=data / "memory",
+                         index_path=data / "memory-index/memory.sqlite", log_path=data / "memory-ask/queries.jsonl",
+                         embedder_factory=NoModel)
 
     @app.before_request
     def require_fresh_feed():
@@ -40,4 +51,6 @@ def app_for(data: Path):
 
 if __name__ == "__main__":
     os.umask(0o077)
-    app_for(Path(os.environ.get("DEV_VAULT_DATA", "/vault"))).run(host="0.0.0.0", port=8771, threaded=False)
+    profile = os.environ.get("DEV_VAULT_PROFILE") or None
+    app_for(Path(os.environ.get("DEV_VAULT_DATA", "/vault")), profile).run(
+        host="0.0.0.0", port=8772 if profile == "mc" else 8771, threaded=False)

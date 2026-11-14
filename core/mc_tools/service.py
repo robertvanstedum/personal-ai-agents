@@ -194,7 +194,7 @@ def refused(code) -> dict:
 class ToolService:
     def __init__(self, connect, *, principal: str, environment: str, allowed_agents=("mc-chat",),
                  lessons=None, delegation: bool = False, invites: bool = False, tickets: bool = False,
-                 comments: bool = False, guest_rejects: bool = False, github=None, github_api=None, show=None, read_shown=None,
+                 comments: bool = False, guest_rejects: bool = False, github=None, github_api=None, vault_search=None, show=None, read_shown=None,
                  isolated_runtime: bool = False, worker: str = "mc-tools", guests_lookup=None, people=None,
                  standard_changes=None, display_tz: str = offers.DISPLAY_TZ, policy=None, read_owner_note=None,
                  domain_health=None, registers=None, board=None, tasks=None, export_conversation=None, artifact_root=None, agent_contact=None, recall_source=None,
@@ -211,6 +211,7 @@ class ToolService:
         self.tickets, self.comments, self.guest_rejects = bool(tickets), bool(comments), bool(guest_rejects)
         self.github = github                          # core.mc_tools.github.GitHubIssues, or None: GitHub reads off
         self.github_api = github_api                  # core.mc_tools.github_api.GitHubRepoReader, or None (#543)
+        self.vault_search = vault_search              # core.mc_tools.vault_search.VaultSearch, or None (#594)
         # show(conversation_id, note_key, text) -> bool: the platform posts a proposal verbatim in the conversation;
         # read_shown(conversation_id, note_key) -> note dict | None reads that note back (spec §9.1). Both or no offers.
         self.show, self.read_shown, self.display_tz = show, read_shown, display_tz
@@ -510,6 +511,23 @@ class ToolService:
                     (self.principal, self.environment, b.conversation_id))
         state, message, data = self.github_api.get(path, {k: v for k, v in args.items() if k != "path"})
         return result("done" if state == "ok" else "refused", "read" if state == "ok" else state, message, data)
+
+    def _vault_search(self, args, caller, observation):
+        """#594: one keyword search of MC's career-filtered Vault index through vault-ask-mc (core.mc_tools.vault_search).
+        Recorded conversations include other people's words and pasted pages: the turn and conversation are tainted."""
+        if self.vault_search is None:
+            return refused("tool_unavailable")
+        with self._tx() as conn:
+            b = self._bind(conn, caller)
+            with _cursor(conn) as cur:
+                cur.execute("""UPDATE guild.mc_tool_turns SET untrusted_read=true WHERE ledger_id=%s
+                    AND claim_generation=%s""", (b.ledger_id, b.generation))
+                cur.execute("""INSERT INTO guild.mc_tool_conversation_taint (principal_id, environment, conversation_id)
+                    VALUES (%s,%s,%s) ON CONFLICT (principal_id, environment, conversation_id)
+                    DO UPDATE SET last_read_at = clock_timestamp()""",
+                    (self.principal, self.environment, b.conversation_id))
+        state, message, data = self.vault_search.search(args)
+        return result("done" if state == "ok" else "refused", "vault_read" if state == "ok" else state, message, data)
 
     def _open_card(self, args, caller, observation):
         """#553: one of MC's cards (its pinned persona's skills, the handbook's engineering skill), read-only, by name only.

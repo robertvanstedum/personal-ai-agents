@@ -4,6 +4,12 @@
 Requires explicit operator paths. CoS history and current MC exports are read
 only. Each run replays snapshots through the shelf's idempotent edition writer.
 This is chat coverage, not a claim to ingest Records or task/work journals.
+
+``--mc-index-path`` (#594): after the full index is published, the same admitted records are indexed again into Master Craftsman's
+index with the career filter (``core/memory_index/career_filter.py``; generic rules from the repository plus
+``--career-rules-private`` when given), checked (profile and digest) and published atomically. Its outcome is reported under
+``mc_index`` and never fails the feed: CoS's Ask must not stop because MC's index could not be built (MC's then keeps the last
+filtered one, or has none).
 """
 from __future__ import annotations
 
@@ -25,7 +31,7 @@ from core.jobs import status
 from core.memory_shelf import cos, mc, codes
 from core.memory_shelf.bundle import from_parsed
 from core.memory_shelf.shelf import Shelf, read_front_matter
-from core.memory_index import indexer, store, resolver, policy
+from core.memory_index import career_filter, indexer, mc_index, store, resolver, policy
 
 MAX_FILES = 2000
 MAX_SECONDS = 240
@@ -68,7 +74,34 @@ def verify(shelf_root, index_path, limit=20):
         con.close()
 
 
-def run(*, cos_root, mc_root, shelf_root, index_path, jobs_root, min_free=MIN_FREE):
+def build_mc_index(shelf_root, mc_index_path, record_ids, career_rules_private=None, min_free=MIN_FREE) -> dict:
+    """Index ``record_ids`` into a fresh career-filtered candidate, verify it, publish it over ``mc_index_path``."""
+    try:
+        career = career_filter.load(None, career_rules_private)
+    except career_filter.FilterError as exc:
+        return {"code": exc.code}
+    target = Path(mc_index_path)
+    candidate = target.with_name(".dev-feed-mc-" + secrets.token_hex(8) + ".sqlite")
+    try:
+        out = indexer.update(shelf_root, None, index_path=candidate, keyword_only=True, min_free_bytes=min_free,
+                             only=list(record_ids), career=career)
+        if out.get("code") != "ok":
+            return {"code": out.get("code")}
+        reason = mc_index.verify(candidate, career)
+        if reason:
+            return {"code": reason}
+        os.replace(candidate, target)
+        return {"code": "ok", "indexed": out.get("indexed", 0), "held": out.get("held", {}),
+                "career_turns_excluded": out.get("career_turns_excluded", 0), "career_filter": career.digest[:12]}
+    except Exception:
+        return {"code": "mc_index_failed"}
+    finally:
+        candidate.unlink(missing_ok=True)
+        candidate.with_name(candidate.name + ".lock").unlink(missing_ok=True)
+
+
+def run(*, cos_root, mc_root, shelf_root, index_path, jobs_root, min_free=MIN_FREE, mc_index_path=None,
+        career_rules_private=None):
     jobs_root = Path(jobs_root)
     jobs_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     # Never overwrite another live run's status or take its lock.
@@ -80,6 +113,7 @@ def run(*, cos_root, mc_root, shelf_root, index_path, jobs_root, min_free=MIN_FR
         running = status.start_run(jobs_root, JOB, secrets.token_hex(12), utc())
         started = time.monotonic()
         counts, errors, receipts = Counter(), Counter(), []
+        mc_built = {"code": "not_configured"} if not mc_index_path else {"code": "not_run"}
         shelf = Shelf(shelf_root, min_free_bytes=min_free, min_free_fraction=None)
         candidate = Path(index_path).with_name(".dev-feed-" + secrets.token_hex(8) + ".sqlite")
         try:
@@ -172,6 +206,9 @@ def run(*, cos_root, mc_root, shelf_root, index_path, jobs_root, min_free=MIN_FR
             if not checked["chunks"] or checked["failed"]:
                 errors["citation_not_ready"] += 1
             os.replace(candidate, index_path)
+            if mc_index_path and not errors:
+                mc_built = build_mc_index(shelf_root, mc_index_path, [r["record_id"] for r in receipts],
+                                          career_rules_private, min_free)
         except Exception:
             # No raw exceptions or content in operational status.
             errors["run_failed"] += 1
@@ -183,7 +220,7 @@ def run(*, cos_root, mc_root, shelf_root, index_path, jobs_root, min_free=MIN_FR
         state = "failed" if errors else "ok"
         report = {"schema": "minimoi.dev-memory-feed/1", "at": utc().isoformat(), "state": state,
                   "coverage": "cos_turns_and_mc_exports_only", "counts": dict(counts), "errors": dict(errors),
-                  "index": indexed, "verification": checked, "receipts": receipts,
+                  "index": indexed, "verification": checked, "receipts": receipts, "mc_index": mc_built,
                   "pruning": "disabled_no_source_or_edition_deletion"}
         status.write_json_atomic(jobs_root, "dev-memory-feed-report.json", report)
         status.finish_run(jobs_root, JOB, running, state=state, now=utc(), exit_code=int(bool(errors)),
@@ -198,10 +235,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("cos-root", "mc-root", "shelf-root", "index-path", "jobs-root"):
         parser.add_argument("--" + name, required=True, type=Path)
+    parser.add_argument("--mc-index-path", type=Path, help="also publish MC's career-filtered index here (#594)")
+    parser.add_argument("--career-rules-private", type=Path, help="the host's private career rules (0600, never in git)")
     args = parser.parse_args()
     os.umask(0o077)
     result = run(**vars(args))
-    print(json.dumps({"state": result["state"], "counts": result.get("counts", {}), "errors": result.get("errors", {})}))
+    print(json.dumps({"state": result["state"], "counts": result.get("counts", {}), "errors": result.get("errors", {}),
+                      "mc_index": result.get("mc_index", {}).get("code")}))
     return 0 if result["state"] == "ok" else 1
 
 

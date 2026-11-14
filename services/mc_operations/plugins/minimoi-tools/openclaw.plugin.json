@@ -12,6 +12,7 @@
       "minimoi_github_issues",
       "minimoi_github_get",
       "minimoi_open_card",
+      "minimoi_vault_search",
       "minimoi_issue_comment",
       "minimoi_issue_create",
       "minimoi_issue_update",
@@ -84,7 +85,7 @@
       },
       "tools": {
         "type": "array",
-        "maxItems": 55,
+        "maxItems": 56,
         "items": {
           "type": "string"
         }

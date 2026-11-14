@@ -48,6 +48,9 @@ def settings(environ) -> dict | None:
             "issues_token_file": environ.get("MINIMOI_MC_ISSUES_TOKEN_FILE") or "",
             "read_token_file": environ.get("MINIMOI_MC_GITHUB_READ_TOKEN_FILE") or "/run/secrets/mc/github-read-token",
             "repo": environ.get("MINIMOI_GITHUB_REPO") or "",
+            # MC's Vault search (#594): vault-ask-mc on its internal network, and MC's own grant token (owner-only file).
+            "vault_url": (environ.get("MINIMOI_MC_VAULT_ASK_URL") or "").strip(),
+            "vault_token_file": environ.get("MINIMOI_MC_VAULT_ASK_TOKEN_FILE") or "/run/secrets/mc/vault-ask-mc-token",
             "delegation": environ.get("MINIMOI_MC_DELEGATION") == "1",
             # The code-gated build job can't run on Dev (MC front door spec §3): off there unless said otherwise.
             "build_jobs": environ.get("MINIMOI_MC_BUILD_JOBS", "0" if environ.get("MINIMOI_MC_TOOLS_ENV") == "dev" else "1") == "1",
@@ -331,6 +334,20 @@ def github_api_reader(cfg, *, http_get=None):
     from core.mc_tools.github_api import GitHubRepoReader
     return GitHubRepoReader(http_get or requests.get, repo=_repo(cfg),
                             token=_private_token(cfg.get("read_token_file", "")))
+
+
+def vault_searcher(cfg, *, http_post=None):
+    """MC's Vault search (#594), or None (the tool reads unavailable) while the URL is unset or not internal. The token is
+    re-read on every call, so a rotation applies without a restart; a missing token answers ``vault_unauthorized``."""
+    if not cfg.get("vault_url"):
+        return None
+    from core.mc_tools.vault_search import VaultSearch
+    token_file = cfg.get("vault_token_file", "")
+    try:
+        return VaultSearch(cfg["vault_url"], lambda: _private_token(token_file), http_post=http_post)
+    except ValueError:
+        _log.warning("mc tools: MINIMOI_MC_VAULT_ASK_URL is not an internal http address; Vault search off")
+        return None
 
 
 def _guest_people():
@@ -647,7 +664,8 @@ def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, sho
                        build_jobs=cfg["build_jobs"],
                        invites=cfg["invites"] if invites is None else invites,
                        tickets=issue_filer(cfg) is not None, comments=issue_commenter(cfg) is not None,
-                       guest_rejects=cfg["guest_rejects"], github=github_reader(cfg), github_api=github_api_reader(cfg), show=show, read_shown=read_shown,
+                       guest_rejects=cfg["guest_rejects"], github=github_reader(cfg), github_api=github_api_reader(cfg),
+                       vault_search=vault_searcher(cfg), show=show, read_shown=read_shown,
                        isolated_runtime=cfg["isolated_runtime"], people=_guest_people,
                        standard_changes=cfg["standard_changes"],
                        guests_lookup=_guests_lookup, policy=policy_source(cfg), read_owner_note=read_owner_note,

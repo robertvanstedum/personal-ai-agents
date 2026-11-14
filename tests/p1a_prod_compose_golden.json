@@ -310,6 +310,8 @@
     "MINIMOI_MC_ISSUES_TOKEN_FILE=/run/secrets/mc/github-issues-token",
     "MINIMOI_MC_TURN_LEDGER=${MINIMOI_MC_TOOLS:-0}",
     "MINIMOI_MC_POLICY_FILE=/run/secrets/mc/mc-policy.prod.json",
+    "MINIMOI_MC_VAULT_ASK_URL=${MINIMOI_MC_VAULT_ASK_URL:-}",
+    "MINIMOI_MC_VAULT_ASK_TOKEN_FILE=/run/secrets/mc/vault-ask-mc-token",
     "MINIMOI_MC_POLICY_AUTHORITY_FILE=/run/secrets/mc/mc-policy.prod.authority.json",
     "MINIMOI_MC_STATUS_PROTOCOL_VERSION=2",
     "MINIMOI_MC_ARTIFACT_ROOT=/opt/minimoi/mc/artifacts",
@@ -347,7 +349,8 @@
    "networks": [
     "default",
     "iotconnect-edge",
-    "mc-portal"
+    "mc-portal",
+    "vault-mc-internal"
    ],
    "ports": [
     "127.0.0.1:5001:5001"
@@ -559,6 +562,101 @@
      "read_only": true,
      "source": "${MINIMOI_ROOT:-/opt/minimoi}/vault",
      "target": "/vault",
+     "type": "bind"
+    },
+    {
+     "bind": {
+      "create_host_path": false
+     },
+     "source": "${MINIMOI_ROOT:-/opt/minimoi}/vault-log",
+     "target": "/vault-log",
+     "type": "bind"
+    }
+   ]
+  },
+  "vault-ask-mc": {
+   "cap_drop": [
+    "ALL"
+   ],
+   "command": [
+    "python",
+    "-m",
+    "core.memory_ask.service",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    "8772",
+    "--shelf-root",
+    "/vault/current/shelf",
+    "--index",
+    "/vault-mc/index/memory-mc.sqlite",
+    "--registry",
+    "/vault-mc/memory-ask/agents-mc.json",
+    "--log",
+    "/vault-log/ask-mc-log.jsonl",
+    "--require-profile",
+    "mc"
+   ],
+   "container_name": "minimoi-vault-ask-mc",
+   "cpus": 0.5,
+   "environment": [
+    "MINIMOI_ROLE=production",
+    "PYTHONDONTWRITEBYTECODE=1",
+    "MOI_OLLAMA_URL=http://127.0.0.1:9"
+   ],
+   "healthcheck": {
+    "interval": "60s",
+    "retries": 3,
+    "test": [
+     "CMD",
+     "python",
+     "-c",
+     "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:8772/v1/health', timeout=3); assert all(os.path.isfile(p) for p in ('/vault-mc/index/memory-mc.sqlite','/vault/current/shelf/_ledger/source_index.json','/vault-mc/memory-ask/agents-mc.json'))"
+    ],
+    "timeout": "5s"
+   },
+   "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}",
+   "mem_limit": "384m",
+   "networks": [
+    "vault-mc-internal"
+   ],
+   "profiles": [
+    "vault-mc"
+   ],
+   "read_only": true,
+   "restart": "unless-stopped",
+   "security_opt": [
+    "no-new-privileges:true"
+   ],
+   "tmpfs": [
+    "/tmp:size=16m,mode=1777"
+   ],
+   "volumes": [
+    {
+     "bind": {
+      "create_host_path": false
+     },
+     "read_only": true,
+     "source": "${MINIMOI_ROOT:-/opt/minimoi}/vault",
+     "target": "/vault",
+     "type": "bind"
+    },
+    {
+     "bind": {
+      "create_host_path": false
+     },
+     "read_only": true,
+     "source": "${MINIMOI_ROOT:-/opt/minimoi}/vault-mc/index",
+     "target": "/vault-mc/index",
+     "type": "bind"
+    },
+    {
+     "bind": {
+      "create_host_path": false
+     },
+     "read_only": true,
+     "source": "${MINIMOI_ROOT:-/opt/minimoi}/vault-mc/memory-ask",
+     "target": "/vault-mc/memory-ask",
      "type": "bind"
     },
     {

@@ -142,7 +142,7 @@ def _meaning(con, vector: list[float], caller: policy.Caller, n: int, window: tu
 
 
 def _take(shelf_root: Path, rows: list[dict], caller: policy.Caller, k: int, label: str, unresolved: list,
-          parsed: dict | None = None) -> list:
+          parsed: dict | None = None, successor: bool = True) -> list:
     hits, seen = [], set()
     for row in rows:
         if len(hits) >= k:
@@ -152,7 +152,7 @@ def _take(shelf_root: Path, rows: list[dict], caller: policy.Caller, k: int, lab
         key = (row["record_id"], row["turn"])
         if key in seen:
             continue
-        hit, bad = resolver.resolve(shelf_root, row, caller, label, parsed)
+        hit, bad = resolver.resolve(shelf_root, row, caller, label, parsed, successor=successor)
         if bad:
             unresolved.append(bad)
             continue
@@ -265,6 +265,7 @@ def search(query: str, *, shelf_root: str | Path, embedder: Embedder, index_path
         if indexer.check_compatible(con, None):
             raise store.IndexIncompatible("index made by another schema, policy or chunker version")
         meta = store.get_meta(con)
+        successor = not meta.get("career_filter_digest")      # a career-filtered index reads nothing beyond its own rows (#594)
         meaning_status, vector = "ok", None
         try:
             if sqlite_vec is None or store.is_keyword_only(con):   # no vectors here: never call an embedder for a list we cannot rank
@@ -287,20 +288,22 @@ def search(query: str, *, shelf_root: str | Path, embedder: Embedder, index_path
         overview = None
         if window[1] and not topic_terms(query):
             pool, overview = _overview(con, caller, k * OVERFETCH, created_after, created_before)
-            keyword = _take(shelf_root, pool, caller, k, "keyword", unresolved, parsed)
+            keyword = _take(shelf_root, pool, caller, k, "keyword", unresolved, parsed, successor)
             vector = None                                   # an overview is not a meaning search
             meaning_status = OVERVIEW if meaning_status == "ok" else meaning_status
         else:
-            keyword = _take(shelf_root, _keyword(con, query, caller, k * OVERFETCH, window), caller, k, "keyword", unresolved, parsed)
+            keyword = _take(shelf_root, _keyword(con, query, caller, k * OVERFETCH, window), caller, k, "keyword", unresolved, parsed,
+                            successor)
         pool = (_meaning(con, vector, caller, max(k * OVERFETCH, ADJACENT_POOL if adjacent else 0) * reach, window)
                 if vector is not None else [])
-        meaning = _take(shelf_root, pool[:k * OVERFETCH], caller, k, "meaning", unresolved, parsed) if vector is not None else []
+        meaning = (_take(shelf_root, pool[:k * OVERFETCH], caller, k, "meaning", unresolved, parsed, successor)
+                   if vector is not None else [])
         if not adjacent:
             slot = dict(ADJACENT_NOT_ASKED)
         elif vector is None:
             slot = {"none": "meaning_unavailable"}
         else:
-            slot = adjacent_slot.pick(con, shelf_root, pool, keyword + meaning, caller, unresolved, parsed)
+            slot = adjacent_slot.pick(con, shelf_root, pool, keyword + meaning, caller, unresolved, parsed, successor=successor)
     finally:
         con.close()
     return {

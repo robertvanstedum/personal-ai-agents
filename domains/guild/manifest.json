@@ -61,6 +61,13 @@
       "status": "implemented"
     },
     {
+      "id": "vault.mc.search",
+      "kind": "read",
+      "label": "Search the Vault (career material filtered out)",
+      "mc_tool": "minimoi_vault_search",
+      "status": "implemented"
+    },
+    {
       "id": "issue.comment",
       "kind": "action",
       "label": "Comment on an issue (with Robert's yes)",

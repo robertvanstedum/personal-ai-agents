@@ -135,7 +135,7 @@ MC_PERSONA_TOOL_PREFIXES = ("scripts/mc_persona/",)
 # scoped deploy never recreates it (--no-deps), so its block keeps the full
 # fallback, as does any other service or top-level key (networks, volumes).
 PROD_COMPOSE = "docker-compose.prod.yml"
-COMPOSE_SERVICE_OWNERS = {**{service: (service,) for service in ALL_SERVICES}, "vault-ask": ("portal",),
+COMPOSE_SERVICE_OWNERS = {**{service: (service,) for service in ALL_SERVICES}, "vault-ask": ("portal",), "vault-ask-mc": ("portal",),
                           "supervisor": ("portal",)}
 
 
@@ -316,6 +316,7 @@ VAULT_SERVER_FILES = frozenset({
     "core/memory_ask/tool.py",
     "core/memory_index/__init__.py",
     "core/memory_index/adjacent.py",
+    "core/memory_index/career_filter.py",
     "core/memory_index/chunker.py",
     "core/memory_index/cli.py",
     "core/memory_index/embedder.py",
@@ -349,7 +350,10 @@ VAULT_SYNC_PREFIXES = ("core/memory_sync/",)
 # The production MC capture path (17 Oct 2026): the EC2 host's vault-mc-export runs the MC exporter INSIDE the portal container
 # (``docker exec minimoi-portal python3 /app/scripts/vault/export_mc_conversations.py --stdout-tar``), so a change to the exporter must
 # rebuild and redeploy the portal image it runs from. (vault_mc_export.py itself runs on the host from the tools bundle: no image.)
-VAULT_SYNC_IMAGE_FILES = frozenset({"scripts/vault/vault_apply.py", "scripts/vault/export_mc_conversations.py"})
+# MC's Vault index (#594): the EC2 host's vault-mc-index cron runs ``python -m core.memory_index.mc_index`` INSIDE the portal image,
+# reading the generic career rules the image carries, so both rebuild the portal image.
+VAULT_SYNC_IMAGE_FILES = frozenset({"scripts/vault/vault_apply.py", "scripts/vault/export_mc_conversations.py",
+                                    "core/memory_index/mc_index.py", "config/vault/career_filter.default.json"})
 # The portal metadata view loads regression -> runner -> existing remote
 # consumer/context/citation. Assessment is the coupled report-family reader;
 # it currently depends on that pair, rather than being imported by the host.
