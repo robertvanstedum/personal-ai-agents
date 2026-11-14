@@ -22,8 +22,9 @@ Settings (flag, else environment, else default):
   --keep                                    3       previous releases kept for rollback
   --max-run-mib                             2048    plaintext batch bytes one run applies (the rest waits for the next run)
   --jobs-root    MINIMOI_JOBS_ROOT          /opt/minimoi/jobs
-  --index-runner                            docker:<image> | host   REQUIRED for run: where the keyword index is written and probed; use the
-                                                                   portal image (the host SQLite may be < 3.43 and cannot write the index)
+  --index-runner                            docker-container:<name> | docker:<image> | host   REQUIRED for run: where the keyword index is
+                                            written and probed. Use docker-container:minimoi-portal (#594): the running portal's image,
+                                            resolved each run, so the indexer follows every release (the host SQLite may be < 3.43)
   --force-inventory                         write sync/acks/inventory.json this run even when nothing changed (gap repair)
   --rebuild-index                           rebuild the keyword index from the shelf in a new release this run, batch or not (an index
                                             the image's indexer reports rebuild_needed is rebuilt automatically when a batch applies)

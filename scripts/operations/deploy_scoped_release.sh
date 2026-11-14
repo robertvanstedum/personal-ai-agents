@@ -357,6 +357,12 @@ if [[ " ${SERVICES[*]} " == *" portal "* ]] && docker container inspect minimoi-
   "${COMPOSE[@]}" --profile vault up -d --no-deps vault-ask
   VAULT_RECREATED=1
 fi
+# MC's Vault Ask (#594, profile `vault-mc`): the same rule. Once activated, a portal release recreates it on the same tag.
+VAULT_MC_RECREATED=0
+if [[ " ${SERVICES[*]} " == *" portal "* ]] && docker container inspect minimoi-vault-ask-mc >/dev/null 2>&1; then
+  "${COMPOSE[@]}" --profile vault-mc up -d --no-deps vault-ask-mc
+  VAULT_MC_RECREATED=1
+fi
 # The build supervisor (#365) also runs the portal image (profile `supervisor`); same rule as the Vault: once
 # activated by supervisor_ec2.sh, a portal release recreates it on the same tag.
 SUPERVISOR_RECREATED=0
@@ -489,6 +495,14 @@ if [[ "$VAULT_RECREATED" == "1" ]]; then
   [[ "$(docker inspect --format='{{.State.Running}}' minimoi-vault-ask)" == "true" ]] || { echo "minimoi-vault-ask is not running"; exit 1; }
   wait_for_container_health minimoi-vault-ask 24
   echo "vault-ask: recreated on $actual and healthy"
+fi
+
+if [[ "$VAULT_MC_RECREATED" == "1" ]]; then
+  actual=$(docker inspect --format='{{.Config.Image}}' minimoi-vault-ask-mc)
+  [[ "$actual" == "$(expected_image portal)" ]] || { echo "minimoi-vault-ask-mc uses $actual; expected $(expected_image portal)"; exit 1; }
+  [[ "$(docker inspect --format='{{.State.Running}}' minimoi-vault-ask-mc)" == "true" ]] || { echo "minimoi-vault-ask-mc is not running"; exit 1; }
+  wait_for_container_health minimoi-vault-ask-mc 24
+  echo "vault-ask-mc: recreated on $actual and healthy"
 fi
 
 if [[ "$SUPERVISOR_RECREATED" == "1" ]]; then

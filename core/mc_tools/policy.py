@@ -96,6 +96,8 @@ HANDLERS = {
     "web_fetch_v1": Handler("minimoi_web_fetch", "web.page.read", frozenset({1}), None, "web_read"),
     # #553: one of MC's own cards (its pinned persona's skills), by name; read-only, no egress.
     "open_card_v1": Handler("minimoi_open_card", "mc.skill.read", frozenset({1}), None, "none"),
+    # #594: keyword search of MC's own Vault index (career material filtered out at index time); read-only, internal only.
+    "vault_search_v1": Handler("minimoi_vault_search", "vault.mc.search", frozenset({1}), None, "none"),
     "guest_reject_v1": Handler("minimoi_guest_request_reject", "guest.reject_request", frozenset({3}),
                                "guest_readback_v1", "none"),
     "issue_comment_v1": Handler("minimoi_issue_comment", "issue.comment", frozenset({3}), "github_receipt_v1",

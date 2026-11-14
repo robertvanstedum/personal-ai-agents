@@ -205,8 +205,32 @@ def _checked(out: dict) -> dict:
     return out
 
 
+CONTAINER_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
+IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+
+def container_image(name: str, *, run=subprocess.run, docker_bin: str = "docker") -> str:
+    """The image id (``sha256:...``) the named running container was created from, or ``BackupError``."""
+    if not CONTAINER_NAME.match(name):
+        raise BackupError("bad_arguments")
+    try:
+        done = run([docker_bin, "inspect", "--type", "container", "--format", "{{.Image}}", name], capture_output=True, text=True,
+                   timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        raise BackupError("index_runner_container_unavailable") from None
+    image = (done.stdout or "").strip()
+    if done.returncode != 0 or not IMAGE_ID.match(image):
+        raise BackupError("index_runner_container_unavailable")
+    return image
+
+
 def make_index_runner(spec: str | None, *, reader_uid: int = 0, reader_gid: int = 0, run=subprocess.run, docker_bin: str = "docker"):
-    """``host`` | ``docker:<image>``. Required: the EC2 host's SQLite may be too old to write the index, so the operator says where."""
+    """``host`` | ``docker:<image>`` | ``docker-container:<name>``. Required: the EC2 host's SQLite may be too old to write the index,
+    so the operator says where.
+
+    ``docker-container:minimoi-portal`` (#594) runs the index step in the image the running portal was created from, resolved at each
+    run, so the indexer follows every portal release. A fixed ``docker:<image>`` froze production's indexer at its install: it predated
+    the ``minimoi-cos`` provider, so CoS's records were held ``unknown_provider`` while the Mac indexed them."""
     if not spec:
         raise BackupError("index_runner_required")
     if spec == "host":
@@ -217,6 +241,9 @@ def make_index_runner(spec: str | None, *, reader_uid: int = 0, reader_gid: int 
         image = spec[len("docker:"):]
         if not APPLY_IMAGE.match(image):
             raise BackupError("bad_arguments")
+        return DockerRunner(image, reader_uid, reader_gid, run=run, docker_bin=docker_bin)
+    if spec.startswith("docker-container:"):
+        image = container_image(spec[len("docker-container:"):], run=run, docker_bin=docker_bin)
         return DockerRunner(image, reader_uid, reader_gid, run=run, docker_bin=docker_bin)
     raise BackupError("bad_arguments")
 

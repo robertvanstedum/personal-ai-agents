@@ -118,6 +118,10 @@ EXPECTED_PROD_MOUNTS = [
     ("system-bot", "/opt/minimoi/data/german", "/app/domains/german/data"),
     ("vault-ask", "/opt/minimoi/vault", "/vault"),
     ("vault-ask", "/opt/minimoi/vault-log", "/vault-log"),
+    ("vault-ask-mc", "/opt/minimoi/vault", "/vault"),
+    ("vault-ask-mc", "/opt/minimoi/vault-mc/index", "/vault-mc/index"),
+    ("vault-ask-mc", "/opt/minimoi/vault-mc/memory-ask", "/vault-mc/memory-ask"),
+    ("vault-ask-mc", "/opt/minimoi/vault-log", "/vault-log"),
 ]
 EXPECTED_ENV_FILES = {
     name: "/opt/minimoi/.env"
@@ -130,7 +134,7 @@ IMAGE_MAP = {
     "cos-scheduler": ("cos-scheduler", ""), "cos-agent-a": ("cos-scheduler", "agent-a-"),
     "model-gateway": ("cos-scheduler", "model-gateway-"),
 }
-PYTHON_SERVICES = ("curator", "german", "portuguese", "portal", "system-bot", "cos-bot", "cos-scheduler", "vault-ask",
+PYTHON_SERVICES = ("curator", "german", "portuguese", "portal", "system-bot", "cos-bot", "cos-scheduler", "vault-ask", "vault-ask-mc",
                    "supervisor")
 
 
