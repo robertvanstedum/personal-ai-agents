@@ -110,7 +110,7 @@ def host_command(text, *, environ, principal, origin, conversation, operation_id
         return refusal
 
 
-def host_context(text, *, environ, principal, origin, conversation):
+def host_context(text, *, environ, principal, origin, conversation, startup=True):
     if (not isinstance(conversation, dict) or conversation.get('principal') != principal
             or conversation.get('archived') or conversation.get('record_mode') != 'on_record'):
         return ''
@@ -120,6 +120,7 @@ def host_context(text, *, environ, principal, origin, conversation):
             return ''
         # Fresh bounded standing context each admitted turn, including first turn.
         # No claim of a cross-kernel atomic multi-card snapshot.
-        return clean(context(store, startup=True, owner_text=text))
+        # startup=False (#592, MC's tools on): only when Robert's words ask about the register.
+        return clean(context(store, startup=startup, owner_text=text))
     except (OSError, ValueError, KeyError, TypeError):
         return '[MC work register unavailable; no filing or responsibility verified.]'

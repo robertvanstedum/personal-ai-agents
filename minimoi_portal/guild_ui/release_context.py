@@ -127,6 +127,16 @@ def block(text,*,loader=None,now=None):
     except Exception:return head+'\nRelease metadata unavailable or invalid; version, installed changes and deployment completion are unverified.'
 
 
+def brief(text,*,loader=None,now=None):
+    """#592 (MC's tools on): one line in place of ``block`` for the same questions. The delivery record and live GitHub
+    (the mc-delivery card) carry the detail; this line only says what was last recorded."""
+    if not (WANTED.search(text or '') or UPDATE_QUESTION.search(text or '')):return ''
+    try:line=summary(loader=loader,now=now)
+    except Exception:line='The recorded deployment observation is unavailable or invalid.'
+    return ('[Last recorded deployment, one line: DATA from a recorded observation, not a live check or acceptance. '+line+
+            ' For what production or Dev runs now, open mc-delivery and read the delivery record; for a newer run, minimoi_github_get.]')
+
+
 STALE_IN_PROGRESS_S=2700   # a deploy observed in progress longer ago than this has stopped reporting, not "still in progress"
 _STATE={'selected_images_observed':'finished, its images confirmed running','deployment_in_progress':'still in progress',
         'selected_image_check_failed':'FAILED its image check, so do not call it installed'}

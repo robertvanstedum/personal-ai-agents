@@ -2764,28 +2764,42 @@ def _with_agent(text: str, state) -> str:
     return f"{text}\n\n{state.text}" if state is not None else text
 
 
+def _backend_kind():
+    """The chat partner serving this mount ("openclaw" is MC's own container, "cos" the Chief of Staff), or None."""
+    try:
+        return getattr(getattr(cfg().get("services"), "mc", None), "kind", None)
+    except RuntimeError:
+        return None
+
+
 def _with_context(text: str, owner_text: str, conv, principal: str, *, current_voice=False, direct_voice=False, notice_plan=None) -> str:
     """Then, as more marked DATA, what a quick question needs in the SAME turn (#298): the GitHub items the owner's words point at, and the true state of this
     conversation's jobs, plus explicitly referenced Board notes. Board read failure is explicit DATA; it never becomes completion. Never reached by a Private turn."""
-    from . import mc_context
+    from . import mc_context, context_trim, feature_environ as _trim_env
     from .mc_voice_transcripts import input_context
-    extra = [input_context(current_voice=current_voice, direct_voice=direct_voice)]
+    # #592: with MC's tools on, a fact a tool returns is not attached, standing rules live in MC's persona, and live
+    # detail comes in full only when Robert's words ask for it. CoS has no such persona: its static lines stay.
+    trim = context_trim.active(_trim_env(), _tools_own_actions(principal))
+    rules_in_persona = trim and _backend_kind() == "openclaw"
+    asks_status = context_trim.asks_status(owner_text)
+    voiced = current_voice or direct_voice
+    extra = [] if rules_in_persona and not voiced else [input_context(current_voice=current_voice, direct_voice=direct_voice)]
     from . import release_context
-    release = release_context.block(owner_text)
+    release = release_context.brief(owner_text) if trim else release_context.block(owner_text)
     if release:
         extra.append(release)
     from . import mc_registers, feature_environ
     try:
         fresh_register_conv = _fresh_context_conversation(conv, principal, current_voice) if conv and feature_environ().get('MINIMOI_GUILD_REGISTERS') == '1' else None
         register_context = mc_registers.host_context(owner_text, environ=feature_environ(),
-            principal=principal, origin=cfg()['base_url'], conversation=fresh_register_conv)
+            principal=principal, origin=cfg()['base_url'], conversation=fresh_register_conv, startup=not trim)
         if register_context:
             extra.append(register_context)
     except Exception:
         pass
     # Off by default; imported only when switched on, and never able to fail the turn.
     try:
-        if conv and feature_environ().get('MINIMOI_MC_GITHUB_AWARENESS') == '1':
+        if conv and not trim and feature_environ().get('MINIMOI_MC_GITHUB_AWARENESS') == '1':   # trimmed: minimoi_github_get
             from . import github_awareness
             awareness = github_awareness.block(principal, _fresh_context_conversation(conv, principal, current_voice),
                                                environ=feature_environ(), scrub=scrub)
@@ -2796,14 +2810,15 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
     # Job health on every host that reports (FF-19, #537): the owner's turn only, never able to fail it.
     try:
         from . import jobs_health
-        job_health = jobs_health.block(principal, environ=feature_environ())
+        job_health = jobs_health.block(principal, environ=feature_environ(), daily_note=not trim or asks_status)
         if job_health:
             extra.append(job_health)
     except Exception:
         pass
     try:
         from . import supervision
-        waiting = supervision.context_block(principal, environ=feature_environ(), notice_plan=notice_plan, owner_text=owner_text)
+        waiting = supervision.context_block(principal, environ=feature_environ(), notice_plan=notice_plan, owner_text=owner_text,
+                                            detail=not trim or asks_status)
         if waiting:
             extra.append(waiting)
     except Exception:
@@ -2823,9 +2838,9 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
     if notice_plan is not None and notice_plan.offers:
         extra.append(notice_plan.instruction())
     from . import feature_environ as _fe
-    if _fe().get("MINIMOI_MC_OPERATING_RULES") == "1":
+    if _fe().get("MINIMOI_MC_OPERATING_RULES") == "1" and not rules_in_persona:
         extra.append(MC_OPERATING_RULES_TOOLS if _tools_own_actions(principal) else MC_OPERATING_RULES)
-    if _fe().get("MINIMOI_BOARD_ACTIONS") == "1" and _tools_own_actions(principal):
+    if _fe().get("MINIMOI_BOARD_ACTIONS") == "1" and _tools_own_actions(principal) and not rules_in_persona:
         extra.append(MC_BOARD_PARTNERSHIP_RULES)
     from flask import has_app_context
     outcome = getattr(g, "mc_platform_outcome", None) if has_app_context() else None   # probes/workers have none
@@ -2868,7 +2883,8 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
             if (fresh.get('principal') == principal and not fresh.get('archived')
                     and fresh.get('record_mode', 'on_record') == 'on_record'
                     and fresh.get('notes_floor') == conv.get('notes_floor')):
-                block = mc_voice_transcripts.block(owner_text, _conv_floor(fresh), scrub=scrub, include_recent=True)
+                block = mc_voice_transcripts.block(owner_text, _conv_floor(fresh), scrub=scrub, include_recent=True,
+                                                   since_last_reply=trim)
                 if block:
                     extra.append(block)
         except Exception:
@@ -2880,7 +2896,7 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
     except Exception:
         pass
     try:
-        block = mc_context.github_block(owner_text, scrub=scrub)
+        block = mc_context.github_block(owner_text, scrub=scrub, bodies=not trim)
         if block:
             extra.append(block)
     except Exception:
