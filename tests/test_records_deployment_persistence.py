@@ -141,7 +141,8 @@ def test_real_offline_render_proves_project_isolation_and_future_portal_tag(tmp_
     assert 'minimoi-records'not in main['services'] and set(backend['services'])=={'minimoi-records'}
     assert main['services']['portal']['image'].endswith(':future-release')
     assert backend['services']['minimoi-records']['image']==inputs['image']
-    assert set(main['services']['portal']['networks'])=={'default','iotconnect-edge','mc-portal','records-production'}
+    # vault-mc-internal (#594): the portal's tools door is the only client of MC's Vault Ask (vault-ask-mc).
+    assert set(main['services']['portal']['networks'])=={'default','iotconnect-edge','mc-portal','records-production','vault-mc-internal'}
 
 def test_incomplete_attempt_is_never_an_active_binding(inputs):
     marker=Path(inputs['state'])/'INCOMPLETE';marker.write_text('{}')
