@@ -283,7 +283,9 @@ export function initMcVoice(page) {
     text.textContent = turns.map((t) => `${t.role === 'user' ? 'You' : 'MC'}: ${t.text}`).join('\n\n');
     box.hidden = false;
     box.open = false;
-    if (exportLink && url) { exportLink.setAttribute('href', url); exportLink.hidden = false; }
+    // Its own link inside the box: the options menu's export link is hidden on this path and repainted per conversation.
+    const link = box.querySelector('[data-mc-voice-call-download]');
+    if (link && url) { link.setAttribute('href', url); link.hidden = false; }
   }
   async function startWalk(mine, current) {
     say('Connecting…');

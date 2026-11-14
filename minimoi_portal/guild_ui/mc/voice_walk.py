@@ -203,16 +203,46 @@ def _call_path(folder: str, session: str, when: datetime) -> Path:
     return Path(folder) / SESSIONS_DIR / when.strftime("%Y") / f"{when.strftime('%Y-%m-%d')}_{safe}.json"
 
 
+def _find_call(folder: str, session: str) -> Path | None:
+    safe = re.sub(r"[^0-9a-f]", "", (session or "").lower())[:32]
+    if len(safe) < 8:
+        return None
+    found = sorted((Path(folder) / SESSIONS_DIR).glob(f"*/*_{safe}.json"))
+    return found[0] if found else None
+
+
+def open_call(session: str, principal: str, *, folder: str | None, now: datetime | None = None) -> bool:
+    """At the start of a call: its file, with its owner and no turns yet. End can then be checked against the file
+    even after a portal restart has emptied the in-memory session table."""
+    if not folder:
+        return False
+    when = now or datetime.now(timezone.utc)
+    record = {"schema_version": 1, "record_type": "mc_voice_call", "agent": "mc", "path": "realtime",
+              "session_id": session, "principal": principal, "date": when.strftime("%Y-%m-%d"),
+              "started_at": when.strftime("%Y-%m-%dT%H:%M:%SZ"), "label": "Transcript of a voice call, not decisions.",
+              "turn_count": 0, "raw_transcript": []}
+    from core.durable_files import write_doc
+    try:
+        write_doc(_call_path(folder, session, when), record)
+        return True
+    except OSError:
+        return False
+
+
 def save_call(session: str, turns: list, *, principal: str, folder: str | None, now: datetime | None = None) -> dict:
     """The whole call as one file, the way Mein Deutsch keeps a session (``sessions/<date>_<nnn>.json``).
 
     Every turn, in order, with no length cap: this is the record of what was said, not a note and not a decision.
-    Written atomically into MC's turns folder (``MC_TURNS_DIR``, kept across restarts on production). An unknown
-    session or a missing folder writes nothing and says so."""
-    if _owned(session, principal) is None:
-        return {"ok": False, "error": "unknown_session"}
+    Written atomically into MC's turns folder (``MC_TURNS_DIR``; production sets it in the 1.2 layer). The caller must
+    own the call: the live session table, or after a restart the owner the call's file was opened with. An unknown
+    call or a missing folder writes nothing and says so."""
     if not folder:
         return {"ok": False, "error": "no_folder"}
+    from core.durable_files import read_doc, write_doc
+    existing = _find_call(folder, session)
+    opened = read_doc(existing) if existing else None
+    if _owned(session, principal) is None and not (isinstance(opened, dict) and opened.get("principal") == principal):
+        return {"ok": False, "error": "unknown_session"}
     kept = []
     for turn in turns or []:
         if not isinstance(turn, dict):
@@ -223,14 +253,12 @@ def save_call(session: str, turns: list, *, principal: str, folder: str | None, 
     if not kept:
         return {"ok": True, "written": False}
     when = now or datetime.now(timezone.utc)
-    path = _call_path(folder, session, when)
-    record = {
+    path = existing or _call_path(folder, session, when)
+    record = dict(opened) if isinstance(opened, dict) else {
         "schema_version": 1, "record_type": "mc_voice_call", "agent": "mc", "path": "realtime",
         "session_id": session, "principal": principal, "date": when.strftime("%Y-%m-%d"),
-        "saved_at": when.strftime("%Y-%m-%dT%H:%M:%SZ"), "label": "Transcript of a voice call, not decisions.",
-        "turn_count": len(kept), "raw_transcript": kept,
-    }
-    from core.durable_files import write_doc
+        "label": "Transcript of a voice call, not decisions."}
+    record.update({"saved_at": when.strftime("%Y-%m-%dT%H:%M:%SZ"), "turn_count": len(kept), "raw_transcript": kept})
     try:
         write_doc(path, record)
     except OSError as exc:
@@ -239,23 +267,20 @@ def save_call(session: str, turns: list, *, principal: str, folder: str | None, 
 
 
 def call_text(session: str, *, principal: str, folder: str | None) -> str | None:
-    """The saved call as plain text for its owner, or None. Reads the file, so it works after a restart."""
-    if not folder:
-        return None
-    safe = re.sub(r"[^0-9a-f]", "", (session or "").lower())[:32]
-    if not safe:
+    """The saved call as plain text for its owner, or None. Reads the file, so it works after a restart. The full
+    session id only (32 hex characters), so a short id never matches by suffix."""
+    if not folder or not re.fullmatch(r"[0-9a-f]{32}", (session or "").lower()):
         return None
     from core.durable_files import read_doc
-    for path in sorted((Path(folder) / SESSIONS_DIR).glob(f"*/*_{safe}.json")):
-        record = read_doc(path)
-        if not isinstance(record, dict) or record.get("principal") != principal:
-            continue
-        lines = [f"MC voice call, {record.get('saved_at', '')} (UTC). {record.get('label', '')}", ""]
-        for turn in record.get("raw_transcript") or []:
-            who = "Robert" if turn.get("role") == "robert" else "MC"
-            lines.append(f"{who}: {turn.get('text', '')}")
-        return "\n".join(lines) + "\n"
-    return None
+    path = _find_call(folder, session)
+    record = read_doc(path) if path else None
+    if not isinstance(record, dict) or record.get("principal") != principal or not record.get("raw_transcript"):
+        return None
+    lines = [f"MC voice call, {record.get('saved_at', '')} (UTC). {record.get('label', '')}", ""]
+    for turn in record.get("raw_transcript") or []:
+        who = "Robert" if turn.get("role") == "robert" else "MC"
+        lines.append(f"{who}: {turn.get('text', '')}")
+    return "\n".join(lines) + "\n"
 
 
 def run_read(name: str, query: str, *, readers: dict) -> dict:

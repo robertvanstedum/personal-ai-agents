@@ -7,9 +7,13 @@ export async function startMcWalk({ api, headers, current, say, setPhase, saved 
   let sessionId = null;
   let holdId = null;
   let active = true;
-  const post = (path, body) => fetch(`${api}/mc/voice/walk/${path}`, {
-    method: 'POST', credentials: 'same-origin', headers: headers(), body: JSON.stringify(body),
-  }).then((r) => r.json().catch(() => ({})));
+  const post = (path, body) => {
+    const data = JSON.stringify(body);
+    // keepalive lets End finish when the tab is closing; browsers cap such a body at 64 KiB, so a long call goes plainly.
+    return fetch(`${api}/mc/voice/walk/${path}`, {
+      method: 'POST', credentials: 'same-origin', headers: headers(), body: data, keepalive: data.length < 60000,
+    }).then((r) => r.json().catch(() => ({})));
+  };
 
   let ready;
   let failed;

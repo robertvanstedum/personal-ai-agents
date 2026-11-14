@@ -194,9 +194,11 @@ def _bootstrap_walk(principal, guard, device):
     from core.realtime_voice.providers import openai_realtime
     from core.realtime_voice.standards import conversation_turn_detection
     from .mc.voice_calls import voice_calls_of
-    from .mc.voice_walk import instructions, open_session, read_tools, talking_reservation
+    from .mc.voice_calls import call_record_folder
+    from .mc.voice_walk import instructions, open_call, open_session, read_tools, talking_reservation
     session = uuid.uuid4().hex
     open_session(session, principal)
+    open_call(session, principal, folder=call_record_folder(cfg().get("services")))
     kind, amount = talking_reservation(guard.max_minutes)
     try:
         with budget.admit(kind=kind, domain="mc", principal=principal, required=True, amount_micro=amount):
