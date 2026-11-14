@@ -28,8 +28,11 @@ EXCLUDED = [
     "operations/threads/START_CAREER_2026-10-28.md",
     "initiatives/INIT-2026-0007-interaction-vision/documents/resume-blurb-revision-notes-2026-10-18.md",
     "library/records/Cover-Letter-draft.md",
+    "initiatives/INIT-2026-0007-interaction-vision/screens/home-1280.PNG",
+    "archive/export-2026-09.zip",
+    "library/sources/paper.pdf",
 ]
-KEPT = [NOW_MD, "README.md", "initiatives/INIT-2026-0007-interaction-vision/partner-interaction-2026-11-13/partner-test-set-TEST/larkspur/q1.md"]
+KEPT = [NOW_MD, "README.md", "library/sources/notes.docx", "registry/index.json", "initiatives/INIT-2026-0007-interaction-vision/partner-interaction-2026-11-13/partner-test-set-TEST/larkspur/q1.md"]
 
 
 def git(*args, cwd=None, env=None):
