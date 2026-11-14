@@ -73,7 +73,14 @@ def test_generic_rules_load_and_match_career_words_not_engineering_ones():
     f = career_filter.load()
     for text in ("Talked to a recruiter", "updated my resume for them", "the CV is ready", "job applications", "cover letter"):
         assert f.matches(text), text
-    for text in ("resume the build", "CVE fix", "career-sync mounts", "background check job", "HTTP interview handler"):
+    # Shapes that reached MC's index on Dev, 14 Nov (synthetic paraphrases): a resume named or qualified, not the verb.
+    for text in ("Compare my new resume to my old resume", "01-resume-new.docx", "is there a section in this resume",
+                 "log a spec on career resume updates", "[Original Resume B](/x)", "I have Resume A (July)",
+                 "workspace/_NewDomains/resume/package-lock.json"):
+        assert f.matches(text), text
+    for text in ("resume the build", "CVE fix", "career-sync mounts", "background check job", "HTTP interview handler",
+                 "the build will resume after the deploy", "could not resume a lead-blocked task", "resume a task",
+                 "enough for iCloud to resume downloading", "resume-from-checkpoint flag"):
         assert not f.matches(text), text
 
 
