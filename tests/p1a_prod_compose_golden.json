@@ -83,10 +83,12 @@
     "COS_REMINDERS_DIR=/app/data/cos_reminders"
    ],
    "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-bot:${MINIMOI_IMAGE_TAG:-latest}",
-   "networks": [
-    "default",
-    "cos-agent"
-   ],
+   "networks": {
+    "cos-agent": {
+     "ipv4_address": "192.168.250.5"
+    },
+    "default": null
+   },
    "restart": "unless-stopped",
    "volumes": [
     "${MINIMOI_ROOT:-/opt/minimoi}/cos_memory.md:/app/data/cos_memory.md",
@@ -136,11 +138,13 @@
     "MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS=${MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_COS:-}"
    ],
    "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:${MINIMOI_IMAGE_TAG:-latest}",
-   "networks": [
-    "default",
-    "vault-internal",
-    "cos-agent"
-   ],
+   "networks": {
+    "cos-agent": {
+     "ipv4_address": "192.168.250.4"
+    },
+    "default": null,
+    "vault-internal": null
+   },
    "ports": [
     "127.0.0.1:8769:8769"
    ],
@@ -257,11 +261,13 @@
     "timeout": "5s"
    },
    "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:model-gateway-${MINIMOI_IMAGE_TAG:-latest}",
-   "networks": [
-    "default",
-    "mc-portal",
-    "cos-agent"
-   ],
+   "networks": {
+    "cos-agent": {
+     "ipv4_address": "192.168.250.3"
+    },
+    "default": null,
+    "mc-portal": null
+   },
    "restart": "unless-stopped",
    "security_opt": [
     "no-new-privileges:true"
