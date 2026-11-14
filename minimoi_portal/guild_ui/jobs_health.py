@@ -43,7 +43,9 @@ def _helper_note(root, now) -> list:
     return [head, doc["note"][:1500]]
 
 
-def block(principal, *, environ, now=None, root=ROOT, registry_loader=None) -> str:
+def block(principal, *, environ, now=None, root=ROOT, registry_loader=None, daily_note=True) -> str:
+    """``daily_note=False`` (#592): the Apprentice's daily note is left out, with one line saying it comes when Robert
+    asks how things are; the health itself is always there."""
     if environ.get("MINIMOI_MC_JOBS_HEALTH") == "0" or not principal or principal != _owner(environ):
         return ""
     try:
@@ -59,7 +61,11 @@ def block(principal, *, environ, now=None, root=ROOT, registry_loader=None) -> s
             lines.append(f"Checked: {when}.")
         if missing:
             lines.append(f"No report here from: {', '.join(missing)}; their health is not visible to MC on this host.")
-        lines.extend(_helper_note(root, now))
+        note = _helper_note(root, now)
+        if daily_note:
+            lines.extend(note)
+        elif note:
+            lines.append("(Today's daily note is shown when Robert asks how things are.)")
         out = "\n".join(lines)
         return out if len(out) <= MAX_CHARS else out[:MAX_CHARS - 20].rsplit("\n", 1)[0] + "\n... (more on request)"
     except Exception:                                   # noqa: BLE001 - the turn goes on; MC says it cannot see health
