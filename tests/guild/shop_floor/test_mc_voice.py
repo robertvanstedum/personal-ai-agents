@@ -94,7 +94,7 @@ def test_bootstrap_mints_a_transcription_only_credential_for_this_owner(turned, 
     token = turned.csrf(client)
     r = client.post(f"{API}/mc/voice/bootstrap", json={"provider": "openai"}, headers=write_headers(token))
     body = r.get_json()
-    assert r.status_code == 200 and body["ok"] and body["client_secret"] == "ek_test_secret" and body["warning_minutes"] == 13 and body["max_minutes"] == 15
+    assert r.status_code == 200 and body["ok"] and body["client_secret"] == "ek_test_secret" and body["warning_minutes"] == 45 and body["max_minutes"] == 60
     [call] = provider.minted
     assert call["transcription_prompt"] == V.TRANSCRIBE_ONLY_PROMPT and call["transcription_language"] == "en" and call["user_id_for_safety_identifier"] == "robert"
     assert "tools" not in call and "instructions" not in call
