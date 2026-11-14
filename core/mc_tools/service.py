@@ -205,7 +205,7 @@ class ToolService:
                  isolated_runtime: bool = False, worker: str = "mc-tools", guests_lookup=None, people=None,
                  standard_changes=None, display_tz: str = offers.DISPLAY_TZ, policy=None, read_owner_note=None,
                  domain_health=None, registers=None, board=None, tasks=None, export_conversation=None, artifact_root=None, agent_contact=None, recall_source=None,
-                 agent_ask=None, activity_update=None, build_log=None, build_jobs=True, issue_repo=None):
+                 agent_ask=None, activity_update=None, build_log=None, build_jobs=True, issue_repo=None, web_fetch=None):
         """``connect()`` returns a new psycopg2 connection to the guild database (autocommit off).
         ``lessons`` is a LessonLedger (or None: lessons off). ``guests_lookup(email)`` returns an existing
         guest login with that email (or None); invites are refused while it is missing."""
@@ -222,6 +222,7 @@ class ToolService:
         self.issue_repo = issue_repo if isinstance(issue_repo, str) and re.fullmatch(r"[\w.-]+/[\w.-]+", issue_repo) else None
         self.github = github                          # core.mc_tools.github.GitHubIssues, or None: GitHub reads off
         self.github_api = github_api                  # core.mc_tools.github_api.GitHubRepoReader, or None (#543)
+        self.web_fetch = web_fetch                    # core.mc_tools.web_fetch.WebFetcher, or None: web fetch off (#584)
         # show(conversation_id, note_key, text) -> bool: the platform posts a proposal verbatim in the conversation;
         # read_shown(conversation_id, note_key) -> note dict | None reads that note back (spec §9.1). Both or no offers.
         self.show, self.read_shown, self.display_tz = show, read_shown, display_tz
@@ -520,6 +521,29 @@ class ToolService:
                     DO UPDATE SET last_read_at = clock_timestamp()""",
                     (self.principal, self.environment, b.conversation_id))
         state, message, data = self.github_api.get(path, {k: v for k, v in args.items() if k != "path"})
+        return result("done" if state == "ok" else "refused", "read" if state == "ok" else state, message, data)
+
+    def _web_fetch(self, args, caller, observation):
+        """#584: one public HTTPS page through the mc-fetch container (core.mc_tools.web_fetch). Read-only, but the text
+        is public and anyone can write it: the turn and the conversation are tainted before the fetch, exactly like a
+        GitHub read, so a later outward effect in this conversation needs Robert's card and code."""
+        if self.web_fetch is None:
+            return refused("tool_unavailable")
+        from .web_fetch import pre_check
+        code = pre_check(args.get("url"))
+        if code:                                        # never fetchable: no taint, no call
+            state, message, data = self.web_fetch.fetch(args.get("url"))
+            return result("refused", state, message, data)
+        with self._tx() as conn:
+            b = self._bind(conn, caller)
+            with _cursor(conn) as cur:                  # public text: proposals need a code from now on
+                cur.execute("""UPDATE guild.mc_tool_turns SET untrusted_read=true WHERE ledger_id=%s
+                    AND claim_generation=%s""", (b.ledger_id, b.generation))
+                cur.execute("""INSERT INTO guild.mc_tool_conversation_taint (principal_id, environment, conversation_id)
+                    VALUES (%s,%s,%s) ON CONFLICT (principal_id, environment, conversation_id)
+                    DO UPDATE SET last_read_at = clock_timestamp()""",
+                    (self.principal, self.environment, b.conversation_id))
+        state, message, data = self.web_fetch.fetch(args["url"], args.get("max_chars"))
         return result("done" if state == "ok" else "refused", "read" if state == "ok" else state, message, data)
 
     def _open_card(self, args, caller, observation):

@@ -26,7 +26,8 @@ TARGETS = {
     "prod": {"agent": "minimoi-mc-agent", "image": None,                        # the image the running container uses
              "ro": ["/minimoi/docs", "/minimoi/apprenticeship"],
              "unreachable": [["minimoi-portal", 5001], ["postgres-ai-agents", 5432], ["minimoi-model-gateway", 4000],
-                             ["cos-agent-a", 18789], ["cos-scheduler", 8769], ["169.254.169.254", 80]],
+                             ["cos-agent-a", 18789], ["cos-scheduler", 8769], ["169.254.169.254", 80],
+                             ["mc-fetch", 8791], ["minimoi-mc-fetch", 8791]],          # #584: only the portal reaches it
              "absent": ["/minimoi/private", "/opt/minimoi/private", "/opt/minimoi/mc/mc.env"],   # the judgment store and MC's tokens
              "tmp": "/root/mc-security-tmp"},
 }
@@ -82,11 +83,41 @@ def _():
     return "CONNECTED" not in out, out
 
 
-@check("2c", "the proxy refuses a non-provider destination")
+@check("2c", "the proxy refuses non-provider, private, loopback, metadata, CGNAT and internal-name destinations (#584)")
+def _():
+    # Judged on the resolved address: 2852039166 is 169.254.169.254 in decimal; mc-tools-door resolves to a Docker
+    # (172.16/12) address; port 80 and plain HTTP stay refused.
+    targets = ["169.254.169.254:443", "2852039166:443", "10.0.0.1:443", "127.0.0.1:443", "100.64.0.1:443",
+               "[fd00:ec2::254]:443", "[::ffff:169.254.169.254]:443", "mc-tools-door:443", "example.com:80"]
+    js = ("const h=require('http');const t=" + json.dumps(targets) + ";let left=t.length,got=[];"
+          "for(const p of t){const r=h.request({host:'mc-egress',port:3128,method:'CONNECT',path:p});"
+          "const done=(s)=>{got.push(p+'='+s);if(--left===0){console.log(got.join(' '));}};"
+          "r.on('connect',(res,sock)=>{sock.destroy();done(res.statusCode)});r.on('error',e=>done(e.code));r.end()}")
+    code, out = node(AGENT, js, timeout=40)
+    return out.strip() != "" and all(part.endswith("=403") for part in out.split()), out
+
+
+@check("2c2", "MC's container cannot tunnel to a public non-provider host (example.com): exec gains no open web (#584)")
 def _():
     code, out = node(AGENT, "const h=require('http');const r=h.request({host:'mc-egress',port:3128,method:'CONNECT',path:'example.com:443'});"
-                            "r.on('connect',(res)=>{console.log(res.statusCode);process.exit(0)});r.on('error',e=>{console.log(e.code);process.exit(1)});r.end()")
+                            "r.on('connect',(res,s)=>{console.log(res.statusCode);s.destroy();process.exit(0)});r.on('error',e=>{console.log(e.code);process.exit(1)});r.end()",
+                     timeout=40)
     return out.strip() == "403", out
+
+
+@check("2c3", "mc-fetch (prod) refuses the metadata address and a redirect to it, and reads a public page (#584)")
+def _():
+    if T is not TARGETS["prod"]:
+        return True, "skipped: mc-fetch runs on prod only"
+    js = ("const t=process.env.MC_FETCH_TOKEN;const go=u=>fetch('http://127.0.0.1:8791/v1/fetch',{method:'POST',"
+          "headers:{authorization:'Bearer '+t,'content-type':'application/json'},body:JSON.stringify({url:u})}).then(r=>r.json());"
+          "Promise.all([go('https://169.254.169.254/latest/meta-data/'),go('https://2852039166/'),"
+          "go('https://postman-echo.com/redirect-to?url=https%3A%2F%2F169.254.169.254%2F'),go('https://example.com/')])"
+          ".then(a=>console.log(a.map(x=>x.ok?'ok':x.code).join(' '))).catch(e=>console.log('error '+e.message))")
+    code, out = node("minimoi-mc-fetch", js, timeout=60)
+    parts = out.split()
+    return parts[:2] == ["address_refused", "address_refused"] and parts[2] in ("address_refused", "fetch_failed") \
+        and parts[3:] == ["ok"], out
 
 
 @check("2d", "the proxy tunnels to a provider host (api.anthropic.com)")

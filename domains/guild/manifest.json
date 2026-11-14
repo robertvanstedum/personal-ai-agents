@@ -54,6 +54,13 @@
       "status": "implemented"
     },
     {
+      "id": "web.page.read",
+      "kind": "read",
+      "label": "Read a public web page",
+      "mc_tool": "minimoi_web_fetch",
+      "status": "implemented"
+    },
+    {
       "id": "mc.skill.read",
       "kind": "read",
       "label": "Open one of MC's cards (its procedures)",
