@@ -89,6 +89,8 @@ def github_refusal(state):
         "refused_http_410": " GitHub returned HTTP 410: this resource is no longer available.",
         "refused_http_422": " GitHub returned HTTP 422: the submitted issue fields were rejected.",
         "refused_credential_unavailable": " The configured issue credential was unavailable; no request was sent.",
+        "refused_repo_changed": " The repository it would go to is not the one on the card you approved; nothing was sent.",
+        "refused_dev_production_repo": " Dev may not write to the production repository; no request was sent.",
     }.get(state, " The write service did not retain a more specific failure reason.")
 
 
@@ -142,9 +144,19 @@ def create_text(payload, operation_id):
     return payload["title"], payload["body"] + _footer(payload, operation_id, "Opened"), list(payload["labels"])
 
 
+def destination(payload, number=None):
+    """The card's destination line (#585): the repository the approved write goes to, and the issue when there is one."""
+    repo = payload.get("repo") or "(none set)"
+    where = f"https://github.com/{repo}/issues/{number}" if number else f"https://github.com/{repo}/issues"
+    return f"Destination: {repo} ({where})"
+
+
 def create_preview(payload):
+    """The full title, labels and body as the issue will read, footer included (only the operation id is filled in
+    after the yes)."""
     labels = ", ".join(payload["labels"]) or "none"
-    return f"Title: {payload['title']}\nLabels: {labels}\n\n{payload['body']}"
+    return (f"Title: {payload['title']}\nLabels: {labels}\n\nFull body, as it will be posted:\n\n{payload['body']}"
+            + _footer(payload, "<operation id>", "Opened"))
 
 
 def update_fields(payload, operation_id):
@@ -164,13 +176,20 @@ def update_preview(payload):
     if "labels" in payload:
         lines.append("Labels become: " + (", ".join(payload["labels"]) or "none"))
     if "body" in payload:
-        lines.append(f"New body:\n\n{payload['body']}")
+        lines.append(f"New body, as it will be posted:\n\n{payload['body']}" + _footer(payload, "<operation id>", "Edited"))
     return "\n".join(lines)
 
 
 def _db_now(cur):
     cur.execute("SELECT clock_timestamp() AS now")
     return cur.fetchone()["now"]
+
+
+def _repo_changed(writer, p) -> bool:
+    """True when the card Robert approved named a repository and the writer would now send it to another (#585). A
+    writer that names none (a test fake) or an older offer without one is left to the writer's own checks."""
+    approved, have = p["payload"].get("repo"), getattr(writer, "repo", None)
+    return approved is not None and have is not None and approved != have
 
 
 def _reply(text, state, **extra):
@@ -569,7 +588,8 @@ class ToolProposals:
     def _run_create(self, effect, p):
         title, body, labels = create_text(p["payload"], effect.operation_id)
         try:
-            state, number = self.file_issue(title, body, labels)
+            state, number = ("refused_repo_changed", None) if _repo_changed(self.file_issue, p) \
+                else self.file_issue(title, body, labels)
         except Exception:
             _log.exception("mc tool issue create: outcome unknown")
             state, number = "unknown", None
@@ -589,7 +609,8 @@ class ToolProposals:
     def _run_update(self, effect, p):
         number = p["payload"]["number"]
         try:
-            state, _ = self.update_issue(number, update_fields(p["payload"], effect.operation_id))
+            state, _ = ("refused_repo_changed", None) if _repo_changed(self.update_issue, p) \
+                else self.update_issue(number, update_fields(p["payload"], effect.operation_id))
         except Exception:
             _log.exception("mc tool issue update: outcome unknown")
             state = "unknown"
@@ -606,7 +627,8 @@ class ToolProposals:
     def _run_comment(self, effect, p):
         number = p["payload"]["number"]
         try:
-            state, comment_id = self.comment_issue(number, comment_text(p["payload"], effect.operation_id))
+            state, comment_id = ("refused_repo_changed", None) if _repo_changed(self.comment_issue, p) \
+                else self.comment_issue(number, comment_text(p["payload"], effect.operation_id))
         except Exception:
             _log.exception("mc tool issue comment: outcome unknown")
             state, comment_id = "unknown", None
@@ -636,7 +658,8 @@ class ToolProposals:
     def _run_ticket(self, effect, p):
         title, body = issue_text(p["payload"], effect.operation_id)
         try:
-            state, number = self.file_issue(title, body)
+            state, number = ("refused_repo_changed", None) if _repo_changed(self.file_issue, p) \
+                else self.file_issue(title, body)
         except Exception:
             _log.exception("mc tool data repair: filing outcome unknown")
             state, number = "unknown", None

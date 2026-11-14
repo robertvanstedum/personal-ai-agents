@@ -826,8 +826,9 @@ class TurnState:
     """What the next MC turn carries about this conversation's agent requests: ``text`` is appended after the owner's words (and any files), and
     ``mark()`` is called only when MC's answer to the turn is confirmed (a complete, kept answer), never at dispatch, so a refused, failed, timed-out or cancelled turn consumes nothing."""
 
-    def __init__(self, svc, conversation_id, text, included):
+    def __init__(self, svc, conversation_id, text, included, finished=()):
         self.svc, self.conversation_id, self.text, self.included = svc, conversation_id, text, included
+        self.finished = list(finished)          # #585: MC's finished handoffs, across conversations, named in ``text``
 
     def mark(self):
         try:
@@ -835,6 +836,12 @@ class TurnState:
         except Exception:
             import logging
             logging.getLogger("guild_ui.agent_ask").warning("agent status not marked as told")
+        try:
+            from .handoff_status import mark_seen
+            mark_seen(self.svc.root, self.finished)
+        except Exception:
+            import logging
+            logging.getLogger("guild_ui.agent_ask").warning("finished handoffs not marked as told")
 
 
 def turn_state(conv) -> TurnState | None:
@@ -846,7 +853,13 @@ def turn_state(conv) -> TurnState | None:
             return None
         from .api import _tools_own_actions
         text, included = svc.status_block(conv["id"], teach=not _tools_own_actions(conv.get("principal")))
-        return TurnState(svc, conv["id"], text, included) if text else None
+        try:
+            from .handoff_status import line as finished_line
+            finished, finished_ids = finished_line(svc.root, conversation_id=conv["id"])
+        except Exception:
+            finished, finished_ids = "", []          # the turn goes on exactly as before
+        joined = "\n\n".join(x for x in (text, finished) if x)   # after this conversation's status; MC opens its answer with it
+        return TurnState(svc, conv["id"], joined, included, finished_ids) if joined else None
     except Exception:
         return None
 

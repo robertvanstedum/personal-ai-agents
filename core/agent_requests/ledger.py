@@ -487,6 +487,20 @@ def open_typed(root: str, to: str, *, within_s: int = 24 * 3600) -> list[dict]:
     return out
 
 
+def sent_by(root: str, frm: str, *, changed_since: float | None = None) -> list[dict]:
+    """Requests ``frm`` sent, newest first (at most LIST_MAX by request time). With ``changed_since`` (a Unix time), only
+    those whose event log changed since then: nothing older can hold a new result. MC reads this at the start of each
+    turn to report its finished handoffs (#585); files only, no model."""
+    out = []
+    for rid in _all_ids(root):
+        if changed_since is not None and _mtime(os.path.join(_dirs(root, rid), "events.jsonl")) < changed_since:
+            continue
+        doc = load(root, rid)
+        if doc and doc["request"].get("from") == frm:
+            out.append(doc)
+    return out
+
+
 def for_conversation(root: str, conversation_id: str) -> list[dict]:
     """Every request tied to a conversation, oldest first (the portal reads this to show waiting, picked up, and results)."""
     if not valid_conversation(conversation_id):
