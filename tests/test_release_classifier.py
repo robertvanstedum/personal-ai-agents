@@ -208,6 +208,7 @@ BACKEND_IMPORT_EXPECTED = {
     # Dev Vault's feed and ask (04481770): read job status only, and they run on the Dev host, not in a release image.
     "scripts/memory/dev_ask.py": ("core.jobs.status",),
     "scripts/memory/dev_feed.py": ("core.jobs",),
+    "scripts/staging/backup_staging.py": ("core.jobs",),     # the daily staging backup reports to the Dev watchdog
     # Pure Board text policy moved from the portal; all classified Guild consumers ship utils.
     "domains/guild/board_text.py": ("utils.payment_scrub",),
     "core/memory_ask/context.py": ("utils.credential_scrub", "utils.payment_scrub"),

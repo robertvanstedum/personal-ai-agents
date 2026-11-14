@@ -9,6 +9,9 @@
 #                                                systemd timers (Dev has no cron).
 #   install_host_watchdog.sh ec2|dev --remove    removes the schedule; status files, reports and tools stay.
 #
+# On Dev it also installs the daily staging backup (job staging-backup, scripts/staging/backup_staging.py; Robert,
+# 13 Nov 2026: staging had no backups) at 04:40 Chicago, inside the standing batch window.
+#
 # Schedules: watch hourly (judging is cheap and MC's answer stays fresh); daily at 09:10 Chicago (the report for MC and,
 # on production only, Telegram for "needs action"); production at 09:15 Chicago, MC's Apprentice writes the daily note
 # (scripts/jobs/helper_check.py, inside the portal, which holds the task-service tokens). Test hooks: MINIMOI_ETC (default /etc), SYSTEMCTL.
@@ -20,6 +23,7 @@ systemctl_bin="${SYSTEMCTL:-systemctl}"
 FILES="core/__init__.py core/jobs/__init__.py core/jobs/alert.py core/jobs/health.py core/jobs/judge.py
 core/jobs/registry.py core/jobs/schedule.py core/jobs/status.py scripts/jobs/watchdog.py scripts/jobs/daily_health.py scripts/jobs/pull_health.py
 scripts/jobs/host_watchdog.sh config/scheduled_jobs.json"
+DEV_FILES="scripts/staging/backup_staging.py"           # Dev only: production never runs the staging backup
 
 case "$host" in
   ec2)
@@ -40,7 +44,7 @@ case "$host" in
   dev)
     units="$etc/systemd/system"
     if [ "${1:-}" = --remove ]; then
-      for t in minimoi-jobs-watchdog minimoi-jobs-daily-health; do
+      for t in minimoi-jobs-watchdog minimoi-jobs-daily-health minimoi-staging-backup; do
         "$systemctl_bin" disable --now "$t.timer" >/dev/null 2>&1 || true
         rm -f "$units/$t.timer" "$units/$t.service"
       done
@@ -49,10 +53,10 @@ case "$host" in
     fi
     [ "${1:-}" = --from ] && [ -n "${2:-}" ] || { echo "usage: $0 dev --from DIR" >&2; exit 2; }
     src="$2"; tools=/opt/minimoi-staging/jobs-tools
-    for f in $FILES; do
+    for f in $FILES $DEV_FILES; do
       [ -f "$src/$f" ] || { echo "missing $src/$f" >&2; exit 1; }
     done
-    for f in $FILES; do
+    for f in $FILES $DEV_FILES; do
       mkdir -p "$tools/$(dirname "$f")"
       cp "$src/$f" "$tools/$f.tmp" && mv "$tools/$f.tmp" "$tools/$f"
     done
@@ -63,8 +67,10 @@ case "$host" in
     printf '[Unit]\nDescription=MiniMoi scheduled-jobs watchdog, hourly\n[Timer]\nOnCalendar=*-*-* *:07:00\nPersistent=true\n[Install]\nWantedBy=timers.target\n' > "$units/minimoi-jobs-watchdog.timer"
     printf '[Unit]\nDescription=MiniMoi daily health check (Dev)\nAfter=docker.service\n[Service]\nType=oneshot\nUser=root\nExecStart=%s dev daily\n' "$w" > "$units/minimoi-jobs-daily-health.service"
     printf '[Unit]\nDescription=MiniMoi daily health check, 09:10 Chicago\n[Timer]\nOnCalendar=*-*-* 09:10:00 America/Chicago\nPersistent=true\n[Install]\nWantedBy=timers.target\n' > "$units/minimoi-jobs-daily-health.timer"
+    printf '[Unit]\nDescription=MiniMoi staging backup to S3 (Dev)\nAfter=docker.service\n[Service]\nType=oneshot\nUser=root\nExecStart=/usr/bin/python3 %s/scripts/staging/backup_staging.py\n' "$tools" > "$units/minimoi-staging-backup.service"
+    printf '[Unit]\nDescription=MiniMoi staging backup to S3, daily 04:40 Chicago\n[Timer]\nOnCalendar=*-*-* 04:40:00 America/Chicago\nPersistent=true\n[Install]\nWantedBy=timers.target\n' > "$units/minimoi-staging-backup.timer"
     "$systemctl_bin" daemon-reload
-    "$systemctl_bin" enable --now minimoi-jobs-watchdog.timer minimoi-jobs-daily-health.timer
+    "$systemctl_bin" enable --now minimoi-jobs-watchdog.timer minimoi-jobs-daily-health.timer minimoi-staging-backup.timer
     echo "installed the Dev jobs timers"
     ;;
   *) echo "usage: $0 ec2 | dev --from DIR | ec2|dev --remove" >&2; exit 2 ;;
