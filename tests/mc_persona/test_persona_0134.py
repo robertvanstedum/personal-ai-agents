@@ -99,10 +99,11 @@ def test_the_base_is_small_and_the_projection_far_under_the_16k_check(tmp_path):
     assert r.returncode == 0, r.stderr
     loaded = (ws / "AGENTS.md").read_text()
     chars = len(loaded.replace(str(ws), CONTAINER_WORKSPACE))
-    assert chars <= 6000                                             # 0.1.33: 15,942 of the old 16,000 budget
+    # 7,200 since 0.1.35 (#583, #592): the operating rules moved here from every message (about 14k attached per message removed).
+    assert chars <= 7200                                             # 0.1.33: 15,942 of the old 16,000 budget
     injected = chars + len((ws / "SOUL.md").read_text())
-    # 8,800 since 0.1.35 (#583): ask-or-look and finished-handoff lines, +~400 characters over 0.1.34s 8,317.
-    assert injected <= 8800                                          # 0.1.33 in production: 21,449 with the templates
+    # 10,000 since 0.1.35 (#583, #592): ask-or-look, finished handoffs, planning, and the operating rules moved from every message.
+    assert injected <= 10000                                          # 0.1.33 in production: 21,449 with the templates
     assert "workspace files injected each turn:" in r.stderr and "skills: " in r.stderr
 
 
