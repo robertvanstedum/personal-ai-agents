@@ -15,8 +15,8 @@ from . import RouteRefused, check_selectable, selection_of, snapshot
 
 # Deliberately anchored: quoted documents and earlier conversation are not routing
 # instructions. Unrecognized important questions belong to the lead's judgement.
-# "Look into this" is not here (#586): it first states its scope on the quick route,
-# and the owner's "go deep" then pays for the deep call.
+# "Look into this" is not here (#586): on the quick route MC says its scope in a line,
+# then looks; only "think hard" or "go deep" pays for the deep call.
 _QUICK = re.compile(r"^\s*(?:please\s+)?quick answer\b", re.I)
 _DEEP = re.compile(
     r"^\s*(?:please\s+)?(?:think hard(?:er)?(?: about this)?|this is important|go deep)\b", re.I

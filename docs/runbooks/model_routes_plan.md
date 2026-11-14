@@ -117,8 +117,8 @@ the conversation picker, with Claude still selected. Unset or anything else: off
 
 Same model, two efforts: `minimoi-xai-strong` (Grok 4.7, low effort) answers every turn, and `minimoi-xai-strong-deep`
 (Grok 4.7, high effort) answers only when Robert's message **starts** with "think hard", "think harder", "go deep" or
-"this is important" (`core/model_routes/depth.py`). "Quick answer" keeps a turn quick. "Look into this" is not a trigger: MC
-states its scope on the quick route first, and "go deep" then pays for the deep call. Words inside quotes, quoted lines or
+"this is important" (`core/model_routes/depth.py`). "Quick answer" keeps a turn quick. "Look into this" is not a trigger: on
+the quick route MC says its scope in a line, then looks (persona 0.1.35); only "think hard" or "go deep" goes deep. Words inside quotes, quoted lines or
 code blocks never route. The deep turn shows "I'll take a closer look at this." and carries `depth.kind = deep` in its
 `routes.mc.last_turn`. The deep route has no failover: if it can't run, the turn stops. The quick turn keeps Grok's
 failover to Claude.
@@ -141,7 +141,8 @@ On Dev, steps 3 to 5 come from `scripts/staging/beta_dev_routes.py --default xai
 On production they are `docker-compose.mc-1-2-production.yml` (4, 5) and a host key update (3).
 
 **Prove it.** In a labelled chat: "think hard about X" shows the closer-look line and records `api-xai-strong-deep`; reload the
-page during that turn and the answer still lands. An ordinary question records `api-xai-strong`.
+page during that turn and the answer still lands. An ordinary question records `api-xai-strong`. "Look into this: X" gives one
+line of scope, then an answer, on `api-xai-strong`.
 
 **Off.** Delete `depth_routes` from `mc-conversation` and set the deep route back to `"offered": {}` in the host's catalogue.
 The next turn is quick, with nothing restarted. Then take the alias out of steps 3 to 5 and restart; nothing then names it
