@@ -210,11 +210,16 @@ def failover_refs(catalogue: dict, agent: str, provider=None) -> list:
 
 
 def depth_refs(catalogue: dict, agent: str) -> list:
-    """The deep gateway route the host's catalogue pairs for this agent's conversation (depth_routes, #586), or none. The
-    runtime's allowlist and its capped key must name it; removing depth_routes from the catalogue takes it off both."""
+    """The deep (#586) and light (#593) gateway routes the host's catalogue pairs for this agent's conversation
+    (depth_routes), or none. The runtime's allowlist and its capped key must name them; removing depth_routes from the
+    catalogue, or its "light" entry, takes them off both."""
     pair = (catalogue["roles"].get(f"{agent}-conversation") or {}).get("depth_routes") or {}
-    deep = next((r for r in catalogue["routes"] if r["route_id"] == pair.get("deep")), None)
-    return [_ref(deep)] if deep and deep.get("provider") == GATEWAY else []
+    out = []
+    for kind in ("deep", "light"):
+        route = next((r for r in catalogue["routes"] if r["route_id"] == pair.get(kind)), None)
+        if route and route.get("provider") == GATEWAY:
+            out.append(_ref(route))
+    return out
 
 
 def route_env(catalogue: dict, xai: bool = False) -> dict:
