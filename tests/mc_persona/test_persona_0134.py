@@ -69,7 +69,8 @@ def _skill(name: str) -> str:
 
 
 def test_0_1_34_is_the_pinned_release_and_loads_the_handbook_as_a_skill():
-    assert pinned_release() == "0.1.34" and pinned_handbook() == "0.1.3"
+    # Pinned until 0.1.35 (#583); test_persona_0135.py checks the pin now. Its release folder stays as reviewed.
+    assert pinned_release() in ("0.1.34", "0.1.35") and pinned_handbook() == "0.1.3"
     m = json.loads((NEW / "manifest.json").read_text())
     assert m["version"] == "0.1.34" and m["base"] == "0.1.33" and m["status"] == "candidate" and "DRAFT" in m["spec"]
     assert m["handbook"] == {**json.loads((OLD / "manifest.json").read_text())["handbook"], "load": "skill"}
@@ -107,8 +108,9 @@ def test_the_base_is_small_and_the_projection_far_under_the_16k_check(tmp_path):
 def test_the_projection_names_the_handbook_and_pastes_no_skill(tmp_path):
     r, ws = lay_out(tmp_path)
     assert r.returncode == 0, r.stderr
+    pin = RELEASES / pinned_release()                                 # 0.1.35 since #583; same projection mechanism
     loaded = (ws / "AGENTS.md").read_text()
-    head = (NEW / "AGENTS.md").read_text() + "\n" + (NEW / "RUNTIME.openclaw.md").read_text() + "\n"
+    head = (pin / "AGENTS.md").read_text() + "\n" + (pin / "RUNTIME.openclaw.md").read_text() + "\n"
     assert loaded.startswith(head)
     block = loaded[len(head):]
     hb = json.loads((NEW / "manifest.json").read_text())["handbook"]
@@ -127,7 +129,7 @@ def test_the_skills_are_laid_out_read_only_from_the_release_and_the_handbook(tmp
     root = ws / "skills"
     assert sorted(p.name for p in root.iterdir()) == ALL_SKILLS
     for name in OWN_SKILLS:
-        assert (root / name / "SKILL.md").read_bytes() == (NEW / "skills" / name / "SKILL.md").read_bytes()
+        assert (root / name / "SKILL.md").read_bytes() == (RELEASES / pinned_release() / "skills" / name / "SKILL.md").read_bytes()
     hm = json.loads((HANDBOOK / "manifest.json").read_text())
     engineering = [n for n in hm["files"] if n.startswith("v0.1.3/skills/minimoi-engineering/")]
     got = sorted(str(p.relative_to(root / "minimoi-engineering")) for p in (root / "minimoi-engineering").rglob("*") if p.is_file())

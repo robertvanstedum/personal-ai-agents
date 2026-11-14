@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "persona": "mc-chat",
+  "version": "0.1.35",
+  "base": "0.1.34",
+  "spec": "#567 step 3 / #583 (Robert approved v0.2, 13 Nov): ask when vague, look when concrete, keep-a-document offer on design questions, fetched pages and mounted files are evidence, name the repo commit from REPO_COPY_STATUS.txt; front-door card matches. DRAFT for Robert's review.",
+  "status": "candidate",
+  "target": "mc-agent container",
+  "files": {
+    "SOUL.md": "dfe279acf7c5ee9b38ab607aeda9f9a7b5cf35a2b2baa3c8379e273affdb2bca",
+    "AGENTS.md": "f2c75863948727160ce6885d0a3997c9a88ac26a94bdac56e65042d10ad9a16a",
+    "RUNTIME.openclaw.md": "e61928b7f9f70bf31a68a17fa6cebc8acda8d008379bcfc5fd191c4ee42a45e4",
+    "CHANGES.md": "56b36c6a29b4bfc606a2155dc0d418fcfd47be6f4116842a66583f837b0e611e",
+    "voice.json": "13394cd80174602ea6945d6e8032c56f9827f6ba130c759360964a9722e13b82",
+    "skills/mc-building/SKILL.md": "88ed20862a8cc6f716dabafdb7b3d22c6845358e75002b68aad5b7138e0c8c27",
+    "skills/mc-corrections/SKILL.md": "c88b8753d8900b9e059e502dda7693a28f4b200ebd9c743f7fbb1aeab9fb7b74",
+    "skills/mc-delivery/SKILL.md": "813d14f39cae7a1379d32c628b5cc243abe554c5bf123034efd9768afb24eecf",
+    "skills/mc-front-door/SKILL.md": "0d0e686058559eef084564a7d0f4b6d8f9aae5befb1e8feae1ab0392cffeafb5",
+    "skills/mc-guildhall/SKILL.md": "de28774a4f39dbb7957703da5b1c6e73927ec4800c7b1afecf3beda54ccf7cf8"
+  },
+  "handbook": {
+    "version": "0.1.3",
+    "manifest": "services/mc_operations/handbook/manifest.json",
+    "manifest_sha256": "dc2c0713705875af7bb2386638f9063102d715a33076fcffdab15dcc051192c4",
+    "load": "skill"
+  },
+  "projection": "SOUL verbatim; AGENTS + runtime binding + short handbook block; skills/ laid out under the workspace (handbook load: skill)",
+  "projection_budget_chars": 8000,
+  "config_change": true
+}
