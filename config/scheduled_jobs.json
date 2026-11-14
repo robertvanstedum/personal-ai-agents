@@ -201,6 +201,58 @@
       "active_from": "2026-11-13T15:00:00Z"
     },
     {
+      "id": "planning-mirror",
+      "name": "MC's read-only planning copy (sparse, no answer key or career material)",
+      "host": "ec2",
+      "schedule": {
+        "text": "every 5 min (root, /etc/cron.d/minimoi-planning-mirror)",
+        "kind": "interval",
+        "every_s": 300
+      },
+      "expected_every_s": 300,
+      "missed_after_s": 1800,
+      "stuck_after_s": 600,
+      "grace_s": 300,
+      "evidence": {
+        "kind": "mtime",
+        "path": "/opt/minimoi/planning/tree/PLANNING_STATUS.txt",
+        "fail_marker": "status=skipped"
+      },
+      "healthy": "checked against planning main in the last 30 min; the status line says ok",
+      "owner": "robert",
+      "runbook": "scripts/operations/planning_mirror.sh",
+      "defined_in": [
+        "scripts/operations/planning_mirror.sh::*/5 * * * * root /opt/minimoi/scripts/planning_mirror.sh refresh"
+      ],
+      "active_from": "2026-11-15T00:00:00Z"
+    },
+    {
+      "id": "planning-mirror-dev",
+      "name": "MC's read-only planning copy on Dev",
+      "host": "dev",
+      "schedule": {
+        "text": "every 5 min (systemd timer minimoi-planning-mirror.timer)",
+        "kind": "interval",
+        "every_s": 300
+      },
+      "expected_every_s": 300,
+      "missed_after_s": 1800,
+      "stuck_after_s": 600,
+      "grace_s": 300,
+      "evidence": {
+        "kind": "mtime",
+        "path": "/opt/minimoi-staging/planning/tree/PLANNING_STATUS.txt",
+        "fail_marker": "status=skipped"
+      },
+      "healthy": "checked against planning main in the last 30 min; the status line says ok",
+      "owner": "robert",
+      "runbook": "scripts/operations/planning_mirror.sh",
+      "defined_in": [
+        "scripts/operations/planning_mirror.sh::OnCalendar=*:0/5"
+      ],
+      "active_from": "2026-11-15T00:00:00Z"
+    },
+    {
       "id": "dev-memory-feed",
       "name": "Dev memory feed (Vault: CoS and MC chats into the Dev shelf and index)",
       "host": "dev",
