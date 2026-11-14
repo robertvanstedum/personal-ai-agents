@@ -6,6 +6,10 @@ are tallied, and the turn's record keeps them (``mc_turns.jsonl``, turn_log.py) 
 
     {"v": 1, "items": [{"tool": "exec", "label": "Ran a command", "ok": true, "ms": 1200}, ...], "more": 0}
 
+A step that ended without success says so (#599): ``ok`` is false, and a MiniMoi tool that refused or could not confirm
+adds ``"outcome": "refused"`` or ``"unknown"``. Its label then reads "Saved a working document (refused)", and the row's
+headline counts it ("Ran 3 steps, 1 refused"), so a refused call never reads as done.
+
 A turn without the block (every turn before this) renders exactly as before. A block of another version, or anything
 malformed, is no steps, never a guess. Labels are made from the tool name alone, so nothing a tool was given or returned
 can reach the page.
@@ -78,24 +82,40 @@ HEADLINES = {
 }
 
 
-def label_for(name: str) -> str:
-    """A plain label from the tool's name alone."""
+# How a step that ended without success is said (#599), after its label and in the headline's count.
+OUTCOME_WORDS = {"refused": "refused", "unknown": "not confirmed", "failed": "failed"}
+
+
+def outcome_of(item: dict) -> str | None:
+    """"refused", "unknown" or "failed" for a step that ended without success; None for a success or a step still open."""
+    if not isinstance(item, dict) or item.get("ok") is not False:
+        return None
+    return item.get("outcome") if item.get("outcome") in ("refused", "unknown") else "failed"
+
+
+def label_for(name: str, outcome: str | None = None) -> str:
+    """A plain label from the tool's name alone, and how it ended when it did not succeed."""
     name = str(name or "")
     if not STEP_NAME.fullmatch(name):
-        return "Used a tool"
-    if name in LABELS:
-        return LABELS[name]
-    words = re.sub(r"[_.:-]+", " ", re.sub(r"^minimoi_", "", name)).strip()
-    return f"Used {words}"[:LABEL_MAX] if words else "Used a tool"
+        label = "Used a tool"
+    elif name in LABELS:
+        label = LABELS[name]
+    else:
+        words = re.sub(r"[_.:-]+", " ", re.sub(r"^minimoi_", "", name)).strip()
+        label = f"Used {words}"[:LABEL_MAX] if words else "Used a tool"
+    return f"{label} ({OUTCOME_WORDS[outcome]})" if outcome in OUTCOME_WORDS else label
 
 
-def headline(tools: list[str], more: int = 0) -> str:
+def headline(tools: list[str], more: int = 0, outcomes=()) -> str:
     n = len(tools) + max(0, more)
     kinds = {KINDS.get(t) for t in tools}
     if n and not more and len(kinds) == 1 and None not in kinds:
         one, many = HEADLINES[kinds.pop()]
-        return one if n == 1 else many.format(n=n)
-    return "Ran 1 step" if n == 1 else f"Ran {n} steps"
+        words = one if n == 1 else many.format(n=n)
+    else:
+        words = "Ran 1 step" if n == 1 else f"Ran {n} steps"
+    counts = [(sum(1 for o in outcomes if o == key), said) for key, said in OUTCOME_WORDS.items()]
+    return ", ".join([words] + [f"{k} {said}" for k, said in counts if k])
 
 
 class StepTally:
@@ -119,14 +139,18 @@ class StepTally:
                 if step.phase == "start":
                     self.more += 1
                 return None
-            known = self._steps[n] = {"tool": step.name, "label": label_for(step.name), "ok": None, "ms": None}
+            known = self._steps[n] = {"tool": step.name, "label": label_for(step.name), "ok": None, "ms": None,
+                                      "outcome": None}
         elif known["tool"] != step.name:
             return None                              # the same place, another tool: not this run's step
         if step.phase == "end":
             known["ok"], known["ms"] = step.ok, step.ms
+            known["outcome"] = step.outcome if step.ok is False else None
+            known["label"] = label_for(step.name, outcome_of(known))
         tools = [s["tool"] for s in self._steps.values()]
+        outcomes = [outcome_of(s) for s in self._steps.values()]
         return {"t": "step", "n": n, "label": known["label"], "phase": step.phase,
-                "count": len(tools) + self.more, "headline": headline(tools, self.more)}
+                "count": len(tools) + self.more, "headline": headline(tools, self.more, outcomes)}
 
     def __len__(self):
         return len(self._steps)
@@ -144,13 +168,15 @@ def view(block) -> dict | None:
     version or anything malformed."""
     if not isinstance(block, dict) or block.get("v") != VERSION or not isinstance(block.get("items"), list):
         return None
-    tools = [i["tool"] for i in block["items"][:ITEMS_MAX]
+    items = [i for i in block["items"][:ITEMS_MAX]
              if isinstance(i, dict) and isinstance(i.get("tool"), str) and STEP_NAME.fullmatch(i["tool"])]
-    if not tools:
+    if not items:
         return None
     more = block.get("more") if isinstance(block.get("more"), int) and not isinstance(block.get("more"), bool) else 0
     more = max(0, more)
-    return {"headline": headline(tools, more), "labels": [label_for(t) for t in tools], "count": len(tools) + more}
+    tools, outcomes = [i["tool"] for i in items], [outcome_of(i) for i in items]
+    return {"headline": headline(tools, more, outcomes), "labels": [label_for(t, o) for t, o in zip(tools, outcomes)],
+            "count": len(tools) + more}
 
 
-__all__ = ["StepTally", "label_for", "headline", "view", "VERSION"]
+__all__ = ["StepTally", "label_for", "headline", "outcome_of", "view", "VERSION"]
