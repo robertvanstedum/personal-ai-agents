@@ -13,7 +13,7 @@ from test_mc_turns import _keep
 
 from minimoi_portal.guild_ui.mc import stream as st
 from minimoi_portal.guild_ui.mc.turn_log import TurnLog, done_text
-from minimoi_portal.guild_ui.mc.turn_steps import StepTally, headline, label_for, view
+from minimoi_portal.guild_ui.mc.turn_steps import StepTally, headline, label_for, outcome_of, view
 from minimoi_portal.guild_ui.mc.usage_join import tokens_text
 
 API = "/guild-next/api/v1"
@@ -95,6 +95,59 @@ def test_a_kept_block_is_relabelled_from_the_tool_name_not_the_stored_words():
     assert shown == {"headline": "Ran 2 commands", "labels": ["Ran a command", "Ran a command"], "count": 2}
 
 
+
+# ── a refused step reads as refused (#599) ────────────────────────────────────
+
+def test_a_step_line_carries_a_refusal_only_on_an_end_that_was_not_ok():
+    refused = st.parse_relay_line(json.dumps({"t": "step", "n": 2, "name": "minimoi_work_save", "phase": "end",
+                                              "ok": False, "outcome": "refused", "ms": 11_000}))
+    assert refused == st.Step(2, "minimoi_work_save", "end", False, 11_000, "refused")
+    for line in ({"ok": True, "outcome": "refused"}, {"ok": False, "outcome": "tool_not_in_policy"}, {"outcome": "refused"}):
+        assert st.parse_relay_line(json.dumps({"t": "step", "n": 1, "name": "minimoi_work_save", "phase": "end",
+                                               **line})).outcome is None
+    assert st.parse_relay_line(json.dumps({"t": "step", "n": 1, "name": "minimoi_work_save", "phase": "start",
+                                           "ok": False, "outcome": "refused"})).outcome is None
+
+
+def test_a_step_that_did_not_succeed_says_how_and_the_headline_counts_it():
+    assert label_for("minimoi_work_save", "refused") == "Saved a working document (refused)"
+    assert label_for("minimoi_agent_status", "unknown") == "Checked a builder's reply (not confirmed)"
+    assert label_for("exec", "failed") == "Ran a command (failed)"
+    assert label_for("minimoi_work_save", "made up") == "Saved a working document"
+    assert outcome_of({"ok": False, "outcome": "refused"}) == "refused"
+    assert outcome_of({"ok": False}) == "failed" and outcome_of({"ok": False, "outcome": "<b>"}) == "failed"
+    assert outcome_of({"ok": True, "outcome": "refused"}) is None and outcome_of({"tool": "exec"}) is None
+    assert headline(["minimoi_open_card", "minimoi_work_save", "minimoi_working_write"],
+                    outcomes=[None, "refused", None]) == "Ran 3 steps, 1 refused"
+    assert headline(["exec", "exec"], outcomes=["failed", "failed"]) == "Ran 2 commands, 2 failed"
+    assert headline(["exec"], outcomes=[None]) == "Ran a command"
+
+
+def test_the_production_turn_of_14_nov_shows_the_refused_save_as_refused():
+    """The turn #599 found: MiniMoi refused minimoi_work_save (tool_not_in_policy), and the step read "Saved"."""
+    tally = StepTally()
+    tally.add(st.Step(1, "minimoi_open_card", "start"))
+    tally.add(st.Step(1, "minimoi_open_card", "end", True, 3990))
+    started = tally.add(st.Step(2, "minimoi_work_save", "start"))
+    assert started["label"] == "Saved a working document"                    # while it runs, the tool's name alone
+    ended = tally.add(st.Step(2, "minimoi_work_save", "end", False, 10_999, "refused"))
+    assert ended["label"] == "Saved a working document (refused)" and ended["headline"] == "Ran 2 steps, 1 refused"
+    tally.add(st.Step(3, "minimoi_working_write", "start"))
+    tally.add(st.Step(3, "minimoi_working_write", "end", True, 7399))
+    record = tally.record()
+    assert record["items"][1] == {"tool": "minimoi_work_save", "label": "Saved a working document (refused)",
+                                  "ok": False, "ms": 10_999, "outcome": "refused"}
+    assert "outcome" not in record["items"][0] and "outcome" not in record["items"][2]
+    assert view(record) == {"headline": "Ran 3 steps, 1 refused", "count": 3, "labels": [
+        "Used open card", "Saved a working document (refused)", "Saved a working file"]}
+
+
+def test_a_kept_step_that_failed_reads_failed_and_a_kept_refusal_reads_refused():
+    assert view({"v": 1, "items": [{"tool": "exec", "ok": False}, {"tool": "exec", "ok": True}]}) == {
+        "headline": "Ran 2 commands, 1 failed", "labels": ["Ran a command (failed)", "Ran a command"], "count": 2}
+    assert view({"v": 1, "items": [{"tool": "minimoi_work_save", "ok": False, "outcome": "refused",
+                                    "label": "Saved a working document"}]})["labels"] == ["Saved a working document (refused)"]
+
 # ── the footer ────────────────────────────────────────────────────────────────
 
 def test_the_footer_words():
@@ -159,6 +212,27 @@ def test_a_tool_using_turn_streams_labels_then_keeps_steps_and_footer_for_a_relo
     assert '<li>Looked up GitHub issues</li><li>Ran a command</li>' in page
     assert "<details class=\"msg-steps\" data-turn-steps>" in page and "data-turn-steps open" not in page    # folded
 
+
+
+def test_a_refused_step_streams_and_reloads_as_refused(streaming):
+    """#599 end to end: a refusal from the relay reaches the browser's label, the kept turn and the page as refused."""
+    client = streaming.owner()
+    token = streaming.csrf(client)
+    note = _keep(client, token, "Save this as a working document.")
+    streaming.extra["runtime"].script = [
+        step(1, "minimoi_work_save", "start"), step(1, "minimoi_work_save", "end", ok=False, outcome="refused", ms=11_000),
+        nd({"t": "delta", "text": "It was refused."}), nd({"t": "answer", "text": "It was refused."}),
+        nd({"t": "finish", "reason": "stop"})]
+    events = _events(_stream(client, token, note["request_id"]))
+    ends = [e for e in events if e["t"] == "step" and e["phase"] == "end"]
+    assert [(e["label"], e["headline"]) for e in ends] == [("Saved a working document (refused)", "Ran 1 step, 1 refused")]
+    done = events[-1]
+    assert done["reply_note"]["turn"]["steps"] == {"headline": "Ran 1 step, 1 refused",
+                                                   "labels": ["Saved a working document (refused)"], "count": 1}
+    _wait_idle()
+    page = client.get("/guild-next/guild/build").get_data(as_text=True)
+    assert "<summary data-turn-steps-headline>Ran 1 step, 1 refused</summary>" in page
+    assert "<li>Saved a working document (refused)</li>" in page
 
 def test_a_turn_without_tools_renders_as_before(streaming):
     client = streaming.owner()

@@ -45,8 +45,9 @@
 //                 tool calls to the owner's turn; MC spec v1.2 §7.1)
 //               {"t":"delta","text":…} {"t":"finish","reason":…}
 //               {"t":"usage","prompt_tokens":…,"completion_tokens":…}
-//               {"t":"step","n":…,"name":…,"phase":"start"|"end","ok":…,"ms":…}  (issue #545: a tool step's
-//                 name and timing from OpenClaw's record, never its arguments or result; needs MC_RELAY_CHAT_DB)
+//               {"t":"step","n":…,"name":…,"phase":"start"|"end","ok":…,"outcome":…,"ms":…}  (issue #545: a tool
+//                 step's name and timing from OpenClaw's record, never its arguments or result; needs MC_RELAY_CHAT_DB.
+//                 #599: a MiniMoi tool that refused or could not confirm is ok:false with outcome "refused"/"unknown")
 //               {"t":"error","class":deadline|idle|too_large|upstream|stopped}
 //             Limits: the 300 s deadline, 300 s idle (any upstream byte resets
 //             it), 256 KB of emitted text, a 64 KB pending line. A caller that
@@ -357,6 +358,7 @@ function stepTime(value) {
   const t = typeof value === "number" ? value : typeof value === "string" ? Date.parse(value) : NaN;
   return Number.isFinite(t) && t > 0 ? t : null;
 }
+const MINIMOI_TOOL = /^minimoi_[a-z][a-z0-9_]*$/;    // MiniMoi's own tools (the minimoi-tools plugin)
 export function readSteps(dbPath, sessionKey, runId) {
   if (!DatabaseSync || !dbPath || !RUN_ID.test(String(runId))) return null;
   let db = null;
@@ -377,13 +379,18 @@ export function readSteps(dbPath, sessionKey, runId) {
         for (const part of message.content) {
           if (!part || part.type !== "toolCall" || typeof part.id !== "string" || calls.has(part.id) || calls.size >= STEPS_MAX) continue;
           const name = String(part.name || "");
-          if (STEP_NAME.test(name)) calls.set(part.id, { name, startedAt: stepTime(message.timestamp), ended: false, endedAt: null, ok: null });
+          if (STEP_NAME.test(name)) calls.set(part.id, { name, startedAt: stepTime(message.timestamp), ended: false, endedAt: null, ok: null, outcome: null });
         }
       } else if (message.role === "toolResult" && typeof message.toolCallId === "string" && calls.has(message.toolCallId)) {
         const call = calls.get(message.toolCallId);
         call.ended = true;
         call.endedAt = stepTime(message.timestamp);
-        call.ok = message.isError !== true;
+        // A MiniMoi tool says a refusal in its result's details, not as an error (#599): its status is one of the
+        // plugin's fixed words (minimoi-tools STATUSES). Only "refused" and "unknown" leave the plugin's own tools;
+        // nothing else of the result is read.
+        const status = MINIMOI_TOOL.test(call.name) && message.details && typeof message.details === "object" ? message.details.status : undefined;
+        call.outcome = status === "refused" || status === "unknown" ? status : null;
+        call.ok = message.isError !== true && call.outcome === null;
       }
     }
     return [...calls.entries()].map(([id, call]) => ({ id, ...call }));
@@ -417,7 +424,8 @@ function stepWatch(body, send) {
       if (call.ended && !step.ended) {
         step.ended = true;
         const ms = call.startedAt !== null && call.endedAt !== null ? call.endedAt - call.startedAt : now - step.seenAt;
-        send({ t: "step", n: step.n, name: call.name, phase: "end", ok: call.ok !== false, ms: Math.max(0, Math.round(ms)) });
+        send({ t: "step", n: step.n, name: call.name, phase: "end", ok: call.ok !== false,
+               ...(call.outcome ? { outcome: call.outcome } : {}), ms: Math.max(0, Math.round(ms)) });
       }
     }
   };
