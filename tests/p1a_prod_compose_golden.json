@@ -18,7 +18,8 @@
     "OPENCLAW_DISABLE_BONJOUR=1",
     "OPENCLAW_NO_AUTO_UPDATE=1",
     "MALLOC_ARENA_MAX=2",
-    "TZ=${COS_AGENT_TIMEZONE:-America/Chicago}"
+    "TZ=${COS_AGENT_TIMEZONE:-America/Chicago}",
+    "AWS_EC2_METADATA_DISABLED=true"
    ],
    "healthcheck": {
     "interval": "15s",
@@ -34,6 +35,11 @@
    },
    "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:agent-a-${MINIMOI_IMAGE_TAG:-latest}",
    "mem_limit": "1400m",
+   "networks": {
+    "cos-agent": {
+     "ipv4_address": "192.168.250.2"
+    }
+   },
    "restart": "unless-stopped",
    "security_opt": [
     "no-new-privileges:true"
@@ -77,6 +83,10 @@
     "COS_REMINDERS_DIR=/app/data/cos_reminders"
    ],
    "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-bot:${MINIMOI_IMAGE_TAG:-latest}",
+   "networks": [
+    "default",
+    "cos-agent"
+   ],
    "restart": "unless-stopped",
    "volumes": [
     "${MINIMOI_ROOT:-/opt/minimoi}/cos_memory.md:/app/data/cos_memory.md",
@@ -128,7 +138,8 @@
    "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:${MINIMOI_IMAGE_TAG:-latest}",
    "networks": [
     "default",
-    "vault-internal"
+    "vault-internal",
+    "cos-agent"
    ],
    "ports": [
     "127.0.0.1:8769:8769"
@@ -248,7 +259,8 @@
    "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:model-gateway-${MINIMOI_IMAGE_TAG:-latest}",
    "networks": [
     "default",
-    "mc-portal"
+    "mc-portal",
+    "cos-agent"
    ],
    "restart": "unless-stopped",
    "security_opt": [
