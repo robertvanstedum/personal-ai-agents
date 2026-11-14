@@ -200,8 +200,11 @@ def _bootstrap_walk(principal, guard, device):
     open_session(session, principal)
     open_call(session, principal, folder=call_record_folder(cfg().get("services")))
     kind, amount = talking_reservation(guard.max_minutes)
+    _settle_stale_walks()
     try:
-        with budget.admit(kind=kind, domain="mc", principal=principal, required=True, amount_micro=amount):
+        # #578 S5: reserved under the session's own ledger id, so End (or the sweep) can settle it to the minutes used.
+        with budget.admit(kind=kind, domain="mc", principal=principal, required=True, amount_micro=amount,
+                          entry_id=budget.direct_entry_id(session)):
             credential = openai_realtime.mint_ephemeral_credential(
                 instructions=instructions(),
                 voice="marin",
@@ -262,6 +265,23 @@ def walk_tool():
     return jsonify(run_read(str(body.get("name") or ""), str(body.get("query") or ""), readers=_walk_readers()))
 
 
+def _settle_stale_walks():
+    """Talking calls that never said End, settled at the maximum before a new one is admitted. Never raises."""
+    try:
+        budget.default_budget().settle_stale(domain="mc")
+    except Exception:
+        pass
+
+
+def _settle_walk(session, principal):
+    """The call's allowance down to the minutes it ran, on the ledger's clock. Bound to its owner by the ledger row, so it
+    works after a portal restart. Returns what was settled, or None. Never raises: a failure leaves the reservation."""
+    try:
+        return budget.default_budget().settle_session(budget.direct_entry_id(session), principal=principal)
+    except Exception:
+        return None
+
+
 def walk_end():
     if not enabled():
         return _off()
@@ -272,10 +292,13 @@ def walk_end():
     from .mc.voice_calls import call_record_folder
     from .mc.voice_walk import save_call
     body = request.get_json(force=True, silent=True) or {}
+    session = str(body.get("session") or "")
+    settled = _settle_walk(session, _principal()) if session else None
     turns = body.get("turns") if isinstance(body.get("turns"), list) else []
     # #578: the whole call as one file (as Mein Deutsch keeps a session), in MC's turns folder; not a 2,000-character note.
-    return jsonify(save_call(str(body.get("session") or ""), turns, principal=_principal(),
-                             folder=call_record_folder(cfg().get("services"))))
+    out = save_call(session, turns, principal=_principal(), folder=call_record_folder(cfg().get("services")))
+    out["settled"] = bool(settled)
+    return jsonify(out)
 
 
 def walk_transcript(session):
