@@ -1,54 +1,227 @@
-// MC's only way out (spec_mc_agent_container v0.2 §4): an HTTP CONNECT proxy that tunnels TLS to an exact allowlist of
-// model-provider hostnames and refuses everything else. MC's container sits on an internal network with no route out, so
-// this allowlist is enforced by the network, not by MC's cooperation. Plain HTTP and non-443 ports are refused.
-// Logs one line per decision (host and verdict only). Node standard library only.
+// MC's only way out (spec_mc_agent_container v0.2 §4; #584): an HTTP CONNECT proxy. MC's container sits on an internal
+// network with no route out, so what this proxy admits is enforced by the network, not by MC's cooperation.
+//
+// Rule (#584, Robert 13 Nov: web access like CoS, domain focus from MC's instructions, not an allowlist):
+//   * CONNECT to any host on port 443 whose name resolves ONLY to public addresses. The proxy resolves the name itself,
+//     checks every address it gets back, and connects to the address it checked (never resolves twice, so a DNS answer
+//     that changes between check and connect cannot slip through).
+//   * Refused: private (RFC 1918), loopback, link-local (169.254.0.0/16, so 169.254.169.254 metadata), CGNAT
+//     (100.64.0.0/10), "this network", multicast, reserved, documentation and benchmarking ranges; IPv6 loopback,
+//     unspecified, ULA (fc00::/7, so EC2's fd00:ec2::254), link-local, site-local, multicast, anything outside 2000::/3;
+//     and the IPv4-mapped / NAT64 / 6to4 forms that carry an IPv4 address inside IPv6.
+//   * Redirects: OpenClaw's web_fetch (tools.web.fetch.useTrustedEnvProxy) opens a fresh tunnel for every redirect
+//     hop, so each hop is a new CONNECT and gets the same check. Plain HTTP and non-443 ports are refused.
+// EGRESS_MODE=allowlist restores the earlier exact model-provider allowlist (the address check still applies).
+// Logs one JSON line per decision: host, verdict, and for refusals the reason (never paths or bodies).
+// Node standard library only.
+import dns from 'node:dns';
 import http from 'node:http';
 import net from 'node:net';
 
-const PORT = Number(process.env.EGRESS_PORT || 3128);
-const ALLOW = new Set((process.env.EGRESS_ALLOW || [
+const PROVIDER_HOSTS = [
   // Anthropic: Claude Code on the plan (API, OAuth token exchange)
   'api.anthropic.com', 'claude.ai', 'platform.claude.com', 'console.anthropic.com',
   // xAI: Grok OAuth and API
   'api.x.ai', 'auth.x.ai', 'accounts.x.ai',
   // OpenAI: Codex OAuth and API
   'api.openai.com', 'auth.openai.com', 'chatgpt.com',
-].join(',')).split(',').map((h) => h.trim().toLowerCase()).filter(Boolean));
+];
+const DNS_TIMEOUT_MS = 5000;
 
-const log = (verdict, host) => console.log(JSON.stringify({ at: new Date().toISOString(), verdict, host }));
+// ---- address check -------------------------------------------------------------------------------------------------
 
-export function allowed(target) {
-  const m = /^([a-z0-9.-]+):(\d+)$/i.exec(target || '');
-  if (!m) return null;
-  const host = m[1].toLowerCase();
-  return m[2] === '443' && ALLOW.has(host) ? host : null;
+function v4Num(ip) {
+  if (!net.isIPv4(ip)) return null;
+  return ip.split('.').reduce((n, o) => n * 256 + Number(o), 0);
 }
 
-const server = http.createServer((req, res) => {
-  log('refused-plain-http', (req.headers.host || '').slice(0, 100));
-  res.writeHead(403, { 'content-type': 'text/plain' }).end('egress: plain HTTP refused\n');
-});
+const V4_REFUSED = [
+  ['0.0.0.0', 8],        // "this network"
+  ['10.0.0.0', 8],       // RFC 1918
+  ['100.64.0.0', 10],    // CGNAT (RFC 6598)
+  ['127.0.0.0', 8],      // loopback
+  ['169.254.0.0', 16],   // link-local, incl. 169.254.169.254 instance metadata and 169.254.169.253 VPC DNS
+  ['172.16.0.0', 12],    // RFC 1918 (Docker networks live here)
+  ['192.0.0.0', 24],     // IETF protocol assignments
+  ['192.0.2.0', 24],     // TEST-NET-1
+  ['192.88.99.0', 24],   // 6to4 relay anycast
+  ['192.168.0.0', 16],   // RFC 1918
+  ['198.18.0.0', 15],    // benchmarking
+  ['198.51.100.0', 24],  // TEST-NET-2
+  ['203.0.113.0', 24],   // TEST-NET-3
+  ['224.0.0.0', 4],      // multicast
+  ['240.0.0.0', 4],      // reserved, incl. 255.255.255.255
+].map(([base, bits]) => [v4Num(base), bits]);
 
-server.on('connect', (req, client, head) => {
-  const host = allowed(req.url);
-  if (!host) {
-    log('refused', String(req.url).slice(0, 100));
-    client.end('HTTP/1.1 403 Forbidden\r\ncontent-type: text/plain\r\n\r\negress: destination not allowed\n');
-    return;
+function v4Refusal(n) {
+  for (const [base, bits] of V4_REFUSED) {
+    const size = 2 ** (32 - bits);
+    if (n >= base && n < base + size) return `${numToV4(base)}/${bits}`;
   }
-  const upstream = net.connect(443, host, () => {
-    log('tunnel', host);
-    client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-    if (head && head.length) upstream.write(head);
-    upstream.pipe(client);
-    client.pipe(upstream);
+  return null;
+}
+
+function numToV4(n) {
+  return [24, 16, 8, 0].map((s) => Math.floor(n / 2 ** s) % 256).join('.');
+}
+
+// IPv6 text -> eight 16-bit groups, or null. Accepts "::" compression and a trailing dotted quad; refuses zone ids.
+function v6Groups(ip) {
+  if (!net.isIPv6(ip) || ip.includes('%')) return null;
+  let text = ip.toLowerCase();
+  const tail = /(\d+\.\d+\.\d+\.\d+)$/.exec(text);
+  if (tail) {
+    const n = v4Num(tail[1]);
+    if (n === null) return null;
+    text = text.slice(0, -tail[1].length) + `${Math.floor(n / 65536).toString(16)}:${(n % 65536).toString(16)}`;
+  }
+  const [head, rest] = text.split('::');
+  const a = head ? head.split(':') : [];
+  const b = rest !== undefined && rest !== '' ? rest.split(':') : [];
+  const fill = text.includes('::') ? 8 - a.length - b.length : 0;
+  const groups = [...a, ...Array(fill).fill('0'), ...b].map((g) => parseInt(g, 16));
+  return groups.length === 8 && groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 0xffff) ? groups : null;
+}
+
+function v6Refusal(g) {
+  const embeddedV4 = (g[6] * 65536) + g[7];
+  const zeroTo = (k) => g.slice(0, k).every((x) => x === 0);
+  // IPv4-mapped ::ffff:a.b.c.d: judge the IPv4 address it carries (a private one is refused, a public one allowed).
+  if (zeroTo(5) && g[5] === 0xffff) {
+    const why = v4Refusal(embeddedV4);
+    return why ? `IPv4-mapped ${why}` : null;
+  }
+  if (zeroTo(8)) return '::/128 (unspecified)';
+  if (zeroTo(7) && g[7] === 1) return '::1/128 (loopback)';
+  if (g[0] === 0x64 && g[1] === 0xff9b) return '64:ff9b::/32 (NAT64, carries IPv4)';
+  if (g[0] === 0x2002) return '2002::/16 (6to4, carries IPv4)';
+  if ((g[0] & 0xfe00) === 0xfc00) return 'fc00::/7 (unique local)';
+  if ((g[0] & 0xffc0) === 0xfe80) return 'fe80::/10 (link-local)';
+  if ((g[0] & 0xffc0) === 0xfec0) return 'fec0::/10 (site-local)';
+  if ((g[0] & 0xff00) === 0xff00) return 'ff00::/8 (multicast)';
+  if ((g[0] & 0xe000) !== 0x2000) return 'outside 2000::/3 (not global unicast)';
+  if (g[0] === 0x2001 && g[1] < 0x0200) return '2001::/23 (IETF special use, incl. Teredo)';
+  if (g[0] === 0x2001 && g[1] === 0x0db8) return '2001:db8::/32 (documentation)';
+  if (g[0] === 0x3fff && g[1] < 0x1000) return '3fff::/20 (documentation)';
+  return null;
+}
+
+/** Why `ip` may not be reached, or null when it is a public address. Anything that is not an IP is refused. */
+export function addressRefusal(ip) {
+  const s = String(ip || '').trim();
+  const n = v4Num(s);
+  if (n !== null) return v4Refusal(n);
+  const g = v6Groups(s.replace(/^\[|\]$/g, ''));
+  if (g) return v6Refusal(g);
+  return 'not an IP address';
+}
+
+export const isPublicAddress = (ip) => addressRefusal(ip) === null;
+
+// ---- CONNECT target ------------------------------------------------------------------------------------------------
+
+/** "host:443" or "[v6]:443" -> {host, port}, or null when malformed. */
+export function parseTarget(target) {
+  const t = String(target || '');
+  let m = /^\[([0-9a-fA-F:.]+)\]:(\d{1,5})$/.exec(t);
+  if (m) return net.isIPv6(m[1]) ? { host: m[1].toLowerCase(), port: Number(m[2]) } : null;
+  m = /^([a-zA-Z0-9_.-]{1,253}):(\d{1,5})$/.exec(t);
+  return m ? { host: m[1].toLowerCase().replace(/\.$/, ''), port: Number(m[2]) } : null;
+}
+
+function defaultLookup(host) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('dns timeout')), DNS_TIMEOUT_MS);
+    dns.lookup(host, { all: true, verbatim: true }, (err, addrs) => {
+      clearTimeout(timer);
+      if (err) reject(err); else resolve(addrs);
+    });
   });
-  const close = () => { upstream.destroy(); client.destroy(); };
-  upstream.on('error', close);
-  client.on('error', close);
-  upstream.setTimeout(10 * 60 * 1000, close);
-});
+}
+
+/**
+ * Decide one CONNECT. Resolves the host (an IP literal resolves to itself), refuses if ANY address is not public, and
+ * returns the checked address to connect to. {ok:true, host, address, family} or {ok:false, host, reason}.
+ */
+export async function checkTarget(target, { lookup = defaultLookup, mode = 'public', allow = PROVIDER_HOSTS } = {}) {
+  const parsed = parseTarget(target);
+  if (!parsed) return { ok: false, host: String(target || '').slice(0, 100), reason: 'malformed target' };
+  const { host, port } = parsed;
+  if (port !== 443) return { ok: false, host, reason: `port ${port} (only 443)` };
+  if (mode === 'allowlist' && !new Set(allow).has(host)) return { ok: false, host, reason: 'not on the provider allowlist' };
+  let addrs;
+  try {
+    addrs = (await lookup(host)) || [];
+  } catch (e) {
+    return { ok: false, host, reason: `dns: ${e.code || e.message}` };
+  }
+  if (!addrs.length) return { ok: false, host, reason: 'dns: no addresses' };
+  for (const a of addrs) {
+    const why = addressRefusal(a.address);
+    if (why) return { ok: false, host, reason: `resolves to ${a.address} (${why})` };
+  }
+  const pick = addrs.find((a) => a.family === 4) || addrs[0];
+  return { ok: true, host, address: pick.address, family: pick.family };
+}
+
+// ---- server --------------------------------------------------------------------------------------------------------
+
+const defaultLog = (entry) => console.log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
+const defaultConnect = (address, family) => net.connect({ host: address, port: 443, family });
+
+export function createEgressServer({
+  lookup = defaultLookup,
+  connect = defaultConnect,
+  mode = 'public',
+  allow = PROVIDER_HOSTS,
+  log = defaultLog,
+} = {}) {
+  const server = http.createServer((req, res) => {
+    log({ verdict: 'refused', host: (req.headers.host || '').slice(0, 100), reason: 'plain HTTP' });
+    res.writeHead(403, { 'content-type': 'text/plain' }).end('egress: plain HTTP refused\n');
+  });
+
+  server.on('connect', async (req, client, head) => {
+    client.on('error', () => client.destroy());
+    const v = await checkTarget(req.url, { lookup, mode, allow });
+    if (!v.ok) {
+      log({ verdict: 'refused', host: v.host, reason: v.reason });
+      client.end('HTTP/1.1 403 Forbidden\r\ncontent-type: text/plain\r\n\r\negress: destination not allowed\n');
+      return;
+    }
+    // Connect to the address that was checked, not the name: no second resolution.
+    const upstream = connect(v.address, v.family);
+    const close = () => { upstream.destroy(); client.destroy(); };
+    let established = false;
+    upstream.once('connect', () => {
+      established = true;
+      log({ verdict: 'tunnel', host: v.host, address: v.address });
+      client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      if (head && head.length) upstream.write(head);
+      upstream.pipe(client);
+      client.pipe(upstream);
+    });
+    upstream.on('error', (e) => {
+      if (!established) {
+        log({ verdict: 'failed', host: v.host, address: v.address, reason: e.code || e.message });
+        client.end('HTTP/1.1 502 Bad Gateway\r\ncontent-type: text/plain\r\n\r\negress: upstream unreachable\n');
+        upstream.destroy();
+        return;
+      }
+      close();
+    });
+    client.on('close', () => upstream.destroy());
+    upstream.setTimeout(10 * 60 * 1000, close);
+  });
+  return server;
+}
 
 if (process.argv[1] && process.argv[1].endsWith('egress-proxy.mjs')) {
-  server.listen(PORT, '0.0.0.0', () => console.log(JSON.stringify({ listening: PORT, allow: [...ALLOW] })));
+  const PORT = Number(process.env.EGRESS_PORT || 3128);
+  const mode = process.env.EGRESS_MODE === 'allowlist' ? 'allowlist' : 'public';
+  const allow = (process.env.EGRESS_ALLOW || PROVIDER_HOSTS.join(','))
+    .split(',').map((h) => h.trim().toLowerCase()).filter(Boolean);
+  createEgressServer({ mode, allow }).listen(PORT, '0.0.0.0', () => console.log(JSON.stringify({
+    listening: PORT, mode, ...(mode === 'allowlist' ? { allow } : { rule: 'any public address on 443' }),
+  })));
 }

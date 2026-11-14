@@ -21,8 +21,8 @@ binding is written for the container).
 
 ## Boundaries (same as dev, checked by the security test)
 
-- `mc-agent` sits only on `minimoi-mc-internal` (no route out). Its one way out is `mc-egress`, which tunnels only to
-  model-provider hosts. No Docker socket, no `.env`, no host credentials, no provider API key (start refuses one).
+- `mc-agent` sits only on `minimoi-mc-internal` (no route out). Its one way out is `mc-egress`, which tunnels to public
+  addresses on port 443 only, checked after DNS resolution and again at every redirect hop (#584, below). No Docker socket, no `.env`, no host credentials, no provider API key (start refuses one).
 - The portal reaches MC only through `mc-relay` on `minimoi-mc-portal`. MC cannot reach postgres, the other services or
   the EC2 instance metadata service (169.254.169.254, which hands out the host's AWS credentials).
 - Mounts: `/opt/minimoi/mc/{work,inbox,workshops}` (rw), `/opt/minimoi/mc/apprenticeship` (ro), `/opt/minimoi/docs` (ro).
@@ -149,3 +149,37 @@ stage C (`scripts/staging/README.md`, "Master Craftsman stage C").
   alone (CoS unaffected; MC's key stops working and MC says search is off). The database and its role stay; putting
   the file back turns it on again. The next main release writes the file again while the parameter exists, so for
   a lasting rollback Robert also deletes `/minimoi/production/litellm_keys_db_password`.
+
+## MC's web fetch (#584, 14 Nov 2026)
+
+MC has OpenClaw's `web_fetch`, like CoS: any public HTTPS page. Its domain focus comes from its instructions, not from an
+allowlist (Robert, 13 Nov, decision 5 of #567 v0.2).
+
+- **Config** (`docker/mc-agent-container/openclaw.json`): `tools.web.fetch` is on with `useTrustedEnvProxy: true`, so
+  `web_fetch` goes through `HTTPS_PROXY` (= `mc-egress`); without it OpenClaw would try to connect directly and fail,
+  since MC has no route out. `web_fetch` is off both deny lists and on `mc-chat`'s allow list. No fallback provider.
+- **Where the rule is enforced: `mc-egress`** (`egress-proxy.mjs`). For each CONNECT it resolves the name itself, refuses
+  the destination if ANY address is private (RFC 1918), loopback, link-local (169.254.0.0/16, so 169.254.169.254
+  metadata), CGNAT, multicast, reserved, documentation, IPv6 loopback / ULA (fd00:ec2::254) / link-local / site-local,
+  or an IPv4-mapped, NAT64 or 6to4 form of these, and then connects to the address it checked (no second lookup).
+  Port 443 only; plain HTTP refused. Numeric tricks (`2852039166`, `0xa9fea9fe`, `127.1`) are caught because the check
+  is on the resolved address, not the text.
+- **Redirects:** OpenClaw's guarded fetch follows redirects itself (`redirect: manual`, at most `maxRedirects: 3`) and
+  builds a new proxy agent for every hop, so every hop is a new CONNECT and gets the same check. OpenClaw also refuses
+  private IP literals and `localhost` names per hop before the proxy sees them.
+- **Why the proxy and not a tool behind the tools door:** the proxy is the network's only way out, it does the DNS
+  lookup and the connect itself (so it sees addresses, not just names), and it sees every hop. A separate fetch tool
+  would duplicate OpenClaw's fetch, extraction and untrusted wrapping for no stronger guarantee.
+- **Untrusted content:** `web_fetch` wraps what it returns with OpenClaw's external-content markers
+  (`wrapWebContent(..., "web_fetch")`), the same wrapper MC's bounded search uses.
+- **Log:** `docker logs minimoi-mc-egress` has one JSON line per decision: `{"verdict":"tunnel","host":...,"address":...}`
+  or `{"verdict":"refused","host":...,"reason":"resolves to 169.254.169.254 (169.254.0.0/16)"}`. Host only, never paths.
+- **The proxy also carries MC's model traffic.** Opening it to public hosts also lets `mc-agent` (the job agent, which
+  has `exec`) reach public HTTPS hosts; `mc-chat` has no runtime tools. Private and metadata addresses stay closed for
+  everything.
+- **Checks:** `mc_container_security_test.py` 2c (private/metadata/internal targets refused, incl. by decimal IP and
+  Docker name) and 2c2 (example.com tunnels); unit tests `tests/test_mc_egress_proxy.py`.
+- **Kill switch (no rebuild):** `MC_EGRESS_MODE=allowlist` in `/opt/minimoi/mc/mc.env`, then
+  `docker compose -p minimoi-mc --env-file /opt/minimoi/mc/mc.env -f /opt/minimoi/docker-compose.mc.prod.yml up -d mc-egress`.
+  The proxy is back to model-provider hosts only (still address-checked); MC's fetches are refused and logged.
+  Full revert: revert the PR and tag a new `mc-agent-v*` release.

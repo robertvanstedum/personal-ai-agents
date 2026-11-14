@@ -166,7 +166,11 @@
         "cacheTtlMinutes": 15
       },
       "fetch": {
-        "enabled": false
+        "enabled": true,
+        "useTrustedEnvProxy": true,
+        "maxRedirects": 3,
+        "timeoutSeconds": 30,
+        "cacheTtlMinutes": 15
       }
     }
   },
@@ -252,8 +256,7 @@
             "sessions_spawn",
             "sessions_send",
             "subagents",
-            "agents_list",
-            "web_fetch"
+            "agents_list"
           ],
           "elevated": {
             "enabled": false
@@ -294,6 +297,7 @@
             "read",
             "ls",
             "web_search",
+            "web_fetch",
             "view_image",
             "session_status",
             "minimoi_agent_ask",
@@ -360,8 +364,7 @@
             "sessions_spawn",
             "sessions_send",
             "subagents",
-            "agents_list",
-            "web_fetch"
+            "agents_list"
           ],
           "elevated": {
             "enabled": false
