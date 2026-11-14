@@ -29,7 +29,7 @@ def _shipped():
 
 def test_the_template_loads_and_is_not_the_installed_catalogue():
     loaded = load_catalogue(TEMPLATE_PATH)
-    assert loaded["revision"] == "2026-11-10.production-template"
+    assert loaded["revision"] == "2026-11-14.production-template"
     assert TEMPLATE_PATH.resolve() != CATALOGUE_PATH.resolve()
     assert loaded["revision"] != _shipped()["revision"]
 
@@ -115,6 +115,9 @@ def test_the_template_changes_only_revision_claude_failover_cos_plan_and_the_gro
             rest_new = {key: value for key, value in new.items() if key not in {"offered", "failover"}}
             rest_old = {key: value for key, value in old.items() if key not in {"offered", "failover"}}
             assert rest_new == rest_old
+        elif new["route_id"] == "api-xai-strong-deep":      # #586: MC's deep route, chosen only by depth_routes' phrases
+            assert old["offered"] == {} and new["offered"] == {"mc": "available"}
+            assert {k: v for k, v in new.items() if k != "offered"} == {k: v for k, v in old.items() if k != "offered"}
         else:
             assert new == old
 

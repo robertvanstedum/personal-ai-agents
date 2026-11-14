@@ -491,12 +491,14 @@ def staged_callbacks_of(config):
 
 def test_staging_gateway_keeps_production_names_and_settings():
     prod, staging = _load(GATEWAY_PROD), _load(GATEWAY_STAGING)
-    # Production's names (MC's discussion route last) plus the explicitly requested local regression route, and the
-    # Dev-only deep route of the opt-in depth policy (0a60e6de, 10 Nov), which production does not carry yet.
-    dev_only = {"minimoi-xai-strong-deep"}
-    assert [m["model_name"] for m in staging["model_list"] if m["model_name"] not in dev_only] == \
+    # Production's names (MC's discussion route last) plus the explicitly requested local regression route. The deep
+    # route of the opt-in depth policy (0a60e6de) is on both since #567; it differs only in its key name and comment.
+    assert [m["model_name"] for m in staging["model_list"]] == \
         [m["model_name"] for m in prod["model_list"]] + ["minimoi-cos-agent-local"]
-    assert not dev_only & {m["model_name"] for m in prod["model_list"]}
+    deep = {name: _routes(path)["minimoi-xai-strong-deep"]["litellm_params"] for name, path in
+            (("prod", GATEWAY_PROD), ("staging", GATEWAY_STAGING))}
+    assert deep["prod"] == {**deep["staging"], "api_key": "os.environ/XAI_API_KEY"}
+    assert deep["prod"]["reasoning_effort"] == "high"
     for block in ("router_settings", "general_settings"):
         assert staging[block] == prod[block], block
     # litellm_settings: production's, and both now carry the usage recorder (usage-record U1).
@@ -521,7 +523,7 @@ def test_staging_cos_agent_route_matches_production_and_other_routes_stay_stable
                "os.environ/GATEWAY_XAI_API_KEY": "os.environ/XAI_API_KEY"}
     for name in staging:
         if name in ("minimoi-cos-agent", "minimoi-cos-agent-anthropic", "minimoi-xai-strong-deep") or name.startswith("minimoi-mc-"):
-            continue                                   # the deep route is Dev-only (0a60e6de) and not in the local config
+            continue                                   # the deep route (0a60e6de, production since #586) is not in the local config
         route = __import__("copy").deepcopy(staging[name])
         if name != "minimoi-cos-agent-local":
             route["litellm_params"]["api_key"] = renamed[route["litellm_params"]["api_key"]]

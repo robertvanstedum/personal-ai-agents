@@ -77,7 +77,7 @@ model_list:
       # turns outran the page's connection (10 Nov). Raise it for work that needs depth.
       reasoning_effort: low
     model_info: {id: tier-xai-strong, mode: chat, supports_function_calling: true}
-  # A separate Dev-only alias makes depth a real routing choice. Activation
+  # A separate alias makes depth a real routing choice; production carries the same one since #586. Activation
   # requires the caller's capped key and runtime allowlist to name this alias.
   - model_name: minimoi-xai-strong-deep
     litellm_params:
