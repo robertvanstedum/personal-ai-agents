@@ -237,3 +237,16 @@ def test_install_dev_writes_a_systemd_timer(tmp_path):
     assert "OnCalendar=*:0/5" in (units / "minimoi-planning-mirror.timer").read_text()
     assert (tmp_path / "scripts/planning_mirror.sh").read_bytes() == SCRIPT.read_bytes()
     assert "enable --now minimoi-planning-mirror.timer" in calls.read_text()
+
+
+def test_bundle_is_xz_and_the_deploy_extracts_xz(tmp_path):
+    """The bundle format and the deploy's extraction must change together (xz keeps it under the SSM limit)."""
+    spec = importlib.util.spec_from_file_location("parity_xz", ROOT / "scripts/operations/host_script_parity.py")
+    parity = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(parity)
+    out = tmp_path / "b.txz"
+    parity.bundle(ROOT, ROOT / "config/host_scripts.json", "0" * 40, out)
+    assert out.read_bytes()[:6] == b"\xfd7zXZ\x00"
+    step = (ROOT / ".github/workflows/deploy.yml").read_text().split("- name: Install host scripts and check parity on EC2", 1)[1]
+    step = step.split("- name:", 1)[0]
+    assert "--out /tmp/host-scripts.txz" in step and "tar -xJf - --no-same-owner" in step and "tar -xzf" not in step
