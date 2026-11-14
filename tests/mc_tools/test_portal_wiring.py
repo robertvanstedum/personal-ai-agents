@@ -198,6 +198,8 @@ class IssueFilerTests(unittest.TestCase):
         self.assertEqual(comment(69, "text"), ("created", 77))
         self.assertEqual(sent[0][0], "https://api.github.com/repos/robertvanstedum/minimoi-issues-test/issues/69/comments")
         self.assertEqual(comment(0, "text"), ("refused", None))
+        self.assertEqual(comment.repo, "robertvanstedum/minimoi-issues-test")   # #585: what the card names
+        self.assertEqual(w.issue_updater(cfg).repo, "robertvanstedum/minimoi-issues-test")
         self.assertIsNone(w.issue_commenter(self.cfg))                    # comments not switched on
 
     def test_dev_does_not_write_the_production_repository(self):

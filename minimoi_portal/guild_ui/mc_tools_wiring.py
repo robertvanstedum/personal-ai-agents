@@ -298,6 +298,7 @@ def issue_commenter(cfg, *, http_post=None):
         if type(number) is not int or not 1 <= number <= 99999:
             return "refused", None
         return _github_post(cfg, f"/issues/{number}/comments", {"body": body}, "id", http_post)
+    comment_issue.repo = _issue_repo(cfg)
     return comment_issue
 
 
@@ -312,6 +313,7 @@ def issue_updater(cfg, *, http_patch=None):
                 or set(fields) - {"title", "body", "labels", "state"}:
             return "refused", None
         return _github_post(cfg, f"/issues/{number}", dict(fields), "number", http_patch, ok=200)
+    update_issue.repo = _issue_repo(cfg)
     return update_issue
 
 
@@ -647,6 +649,7 @@ def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, sho
                        build_jobs=cfg["build_jobs"],
                        invites=cfg["invites"] if invites is None else invites,
                        tickets=issue_filer(cfg) is not None, comments=issue_commenter(cfg) is not None,
+                       issue_repo=_issue_repo(cfg),          # named on every issue card before Robert's yes (#585)
                        guest_rejects=cfg["guest_rejects"], github=github_reader(cfg), github_api=github_api_reader(cfg), show=show, read_shown=read_shown,
                        isolated_runtime=cfg["isolated_runtime"], people=_guest_people,
                        standard_changes=cfg["standard_changes"],
