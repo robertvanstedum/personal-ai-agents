@@ -81,6 +81,10 @@ class Step:
     phase: str                                 # "start" or "end"
     ok: bool | None = None
     ms: int | None = None
+    outcome: str | None = None                 # #599: "refused" or "unknown" when a MiniMoi tool said so (ok is False)
+
+
+STEP_OUTCOMES = ("refused", "unknown")
 
 
 def _step(obj: dict):
@@ -92,7 +96,8 @@ def _step(obj: dict):
     ms = obj.get("ms")
     ms = ms if isinstance(ms, int) and not isinstance(ms, bool) and 0 <= ms <= STEP_MS_MAX else None
     ok = obj.get("ok") if isinstance(obj.get("ok"), bool) else None
-    return Step(n, name, phase, ok if phase == "end" else None, ms if phase == "end" else None)
+    outcome = obj.get("outcome") if obj.get("outcome") in STEP_OUTCOMES and ok is False and phase == "end" else None
+    return Step(n, name, phase, ok if phase == "end" else None, ms if phase == "end" else None, outcome)
 
 
 @dataclass(frozen=True)
