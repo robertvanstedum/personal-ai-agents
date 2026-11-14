@@ -27,7 +27,12 @@ services:
     container_name: minimoi-model-gateway
     restart: unless-stopped
     # mc-portal: MC's tools door reaches the gateway's search route here (MC's own capped key; MC itself is not on it).
-    networks: [default, mc-portal, cos-agent]
+    # cos-agent: every member has a fixed address, so no one can take cos-agent-a's .2 first (14 Nov outage).
+    networks:
+      default:
+      mc-portal:
+      cos-agent:
+        ipv4_address: 192.168.250.3
     command:
       - --config
       - /app/config.yaml
@@ -413,7 +418,10 @@ services:
       - german
 
   cos-bot:
-    networks: [default, cos-agent]
+    networks:
+      default:
+      cos-agent:
+        ipv4_address: 192.168.250.5
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-bot:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-cos-bot
     restart: unless-stopped
@@ -508,9 +516,10 @@ services:
     # is activated: empty URL/token = the hook is disabled. INCLUDE_RAW asks for the full
     # Vault on on-record turns; the Ask service grant still decides.
     networks:
-      - default
-      - vault-internal
-      - cos-agent
+      default:
+      vault-internal:
+      cos-agent:
+        ipv4_address: 192.168.250.4
     depends_on:
       - postgres
       - cos-agent-a
@@ -619,7 +628,9 @@ networks:
   vault-internal:
     internal: true
   # Only cos-agent-a and the three services it talks to. A normal bridge (CoS fetches pages and signs in to its plan);
-  # the host's DOCKER-USER rule drops 192.168.250.2 -> 169.254.169.254.
+  # the host's DOCKER-USER rule drops 192.168.250.2 -> 169.254.169.254. Every member has a fixed address
+  # (cos-agent-a .2, model-gateway .3, cos-scheduler .4, cos-bot .5): on 14 Nov the gateway joined first, was given .2
+  # automatically, and cos-agent-a could not start. tests/test_cos_agent_network.py guards this.
   cos-agent:
     name: minimoi-cos-agent
     ipam:
