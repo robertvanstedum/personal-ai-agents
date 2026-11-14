@@ -160,6 +160,13 @@ _PUBLIC_TEXT_RULES = {
 }
 
 
+def _no_issue_repo():
+    """No repository is set for issue writes here: a card must name its destination before Robert's yes (#585)."""
+    return result("refused", "no_issue_repository", "No repository is set for issue writes in this environment (Dev "
+                  "may not write to the production repository), so there is no destination to show Robert. Nothing "
+                  "was proposed; tell him plainly.")
+
+
 def _public_text_refused(reason):
     """Say which rule the public-repository text broke, so MC fixes that and nothing else."""
     return result("refused", reason, f"{_PUBLIC_TEXT_RULES[reason]}, and the repository is public. Nothing was "
@@ -198,7 +205,7 @@ class ToolService:
                  isolated_runtime: bool = False, worker: str = "mc-tools", guests_lookup=None, people=None,
                  standard_changes=None, display_tz: str = offers.DISPLAY_TZ, policy=None, read_owner_note=None,
                  domain_health=None, registers=None, board=None, tasks=None, export_conversation=None, artifact_root=None, agent_contact=None, recall_source=None,
-                 agent_ask=None, activity_update=None, build_log=None, build_jobs=True):
+                 agent_ask=None, activity_update=None, build_log=None, build_jobs=True, issue_repo=None, web_fetch=None):
         """``connect()`` returns a new psycopg2 connection to the guild database (autocommit off).
         ``lessons`` is a LessonLedger (or None: lessons off). ``guests_lookup(email)`` returns an existing
         guest login with that email (or None); invites are refused while it is missing."""
@@ -209,8 +216,13 @@ class ToolService:
         self.lessons, self.delegation, self.invites = lessons, bool(delegation), bool(invites)
         self.build_jobs = bool(build_jobs)                 # the code-gated build job; off on Dev (MC front door spec §3)
         self.tickets, self.comments, self.guest_rejects = bool(tickets), bool(comments), bool(guest_rejects)
+        # "owner/name" every issue write goes to (portal wiring _issue_repo), or None: none is set for this environment
+        # (Dev may not write to the production repository). A card for an issue or comment names it before Robert's
+        # yes (#567 decision 5, #585); with none, nothing is proposed.
+        self.issue_repo = issue_repo if isinstance(issue_repo, str) and re.fullmatch(r"[\w.-]+/[\w.-]+", issue_repo) else None
         self.github = github                          # core.mc_tools.github.GitHubIssues, or None: GitHub reads off
         self.github_api = github_api                  # core.mc_tools.github_api.GitHubRepoReader, or None (#543)
+        self.web_fetch = web_fetch                    # core.mc_tools.web_fetch.WebFetcher, or None: web fetch off (#584)
         # show(conversation_id, note_key, text) -> bool: the platform posts a proposal verbatim in the conversation;
         # read_shown(conversation_id, note_key) -> note dict | None reads that note back (spec §9.1). Both or no offers.
         self.show, self.read_shown, self.display_tz = show, read_shown, display_tz
@@ -511,6 +523,29 @@ class ToolService:
         state, message, data = self.github_api.get(path, {k: v for k, v in args.items() if k != "path"})
         return result("done" if state == "ok" else "refused", "read" if state == "ok" else state, message, data)
 
+    def _web_fetch(self, args, caller, observation):
+        """#584: one public HTTPS page through the mc-fetch container (core.mc_tools.web_fetch). Read-only, but the text
+        is public and anyone can write it: the turn and the conversation are tainted before the fetch, exactly like a
+        GitHub read, so a later outward effect in this conversation needs Robert's card and code."""
+        if self.web_fetch is None:
+            return refused("tool_unavailable")
+        from .web_fetch import pre_check
+        code = pre_check(args.get("url"))
+        if code:                                        # never fetchable: no taint, no call
+            state, message, data = self.web_fetch.fetch(args.get("url"))
+            return result("refused", state, message, data)
+        with self._tx() as conn:
+            b = self._bind(conn, caller)
+            with _cursor(conn) as cur:                  # public text: proposals need a code from now on
+                cur.execute("""UPDATE guild.mc_tool_turns SET untrusted_read=true WHERE ledger_id=%s
+                    AND claim_generation=%s""", (b.ledger_id, b.generation))
+                cur.execute("""INSERT INTO guild.mc_tool_conversation_taint (principal_id, environment, conversation_id)
+                    VALUES (%s,%s,%s) ON CONFLICT (principal_id, environment, conversation_id)
+                    DO UPDATE SET last_read_at = clock_timestamp()""",
+                    (self.principal, self.environment, b.conversation_id))
+        state, message, data = self.web_fetch.fetch(args["url"], args.get("max_chars"))
+        return result("done" if state == "ok" else "refused", "read" if state == "ok" else state, message, data)
+
     def _open_card(self, args, caller, observation):
         """#553: one of MC's cards (its pinned persona's skills, the handbook's engineering skill), read-only, by name only.
         The one way MC opens a card on every model route, including the Claude plan route where its Read is off."""
@@ -562,17 +597,20 @@ class ToolService:
     def _issue_comment(self, args, caller, observation):
         if not self.comments:
             return refused("tool_unavailable")
-        from .proposals import comment_text
+        if self.issue_repo is None:
+            return _no_issue_repo()
+        from .proposals import comment_text, destination
         payload = {"number": args["number"], "summary": args["summary"],
                    "refs": sorted(args["refs"], key=lambda r: int(r.split(":")[1])), "environment": self.environment,
-                   "agent": caller.agent_id}
+                   "agent": caller.agent_id, "repo": self.issue_repo}
         with self._tx() as conn:
             b = self._bind(conn, caller)
             reason = self._public_text_refusal(conn, args["summary"])
             if reason:
                 return _public_text_refused(reason)
             preview = comment_text(payload, "<operation id>")
-            words = f"Add this comment to issue #{args['number']}? It is public.\n\n{preview}"
+            words = (f"Add this comment to issue #{args['number']} in {self.issue_repo}? It is public.\n"
+                     f"{destination(payload, args['number'])}\n\nFull text, as it will be posted:\n\n{preview}")
             return self._pending_tool_proposal(conn, b, "issue_comment", payload,
                                                effects.request("issue.propose_comment", payload), words)
 
@@ -587,15 +625,18 @@ class ToolService:
         """Propose a new public issue, written for Robert; he approves the exact title, body and labels."""
         if not self.tickets:
             return refused("tool_unavailable")
-        from .proposals import create_preview
+        if self.issue_repo is None:
+            return _no_issue_repo()
+        from .proposals import create_preview, destination
         payload = {"title": args["title"], "body": args["body"], "labels": sorted(args.get("labels", [])),
-                   "environment": self.environment, "agent": caller.agent_id}
+                   "environment": self.environment, "agent": caller.agent_id, "repo": self.issue_repo}
         with self._tx() as conn:
             b = self._bind(conn, caller)
             refusal = self._issue_public_refusal(conn, args["title"], args["body"], *payload["labels"])
             if refusal:
                 return refusal
-            words = f"Open this new issue? It is public.\n\n{create_preview(payload)}"
+            words = (f"Open this new issue in {self.issue_repo}? It is public.\n{destination(payload)}\n\n"
+                     f"{create_preview(payload)}")
             return self._pending_tool_proposal(conn, b, "issue_create", payload,
                                                effects.request("issue.propose_create", payload), words)
 
@@ -606,17 +647,20 @@ class ToolService:
         if not set(args) & {"title", "body", "labels", "state"}:
             return result("refused", "nothing_to_change", "Name at least one change: title, body, labels or state. "
                           "Nothing was proposed.")
-        from .proposals import update_preview
+        if self.issue_repo is None:
+            return _no_issue_repo()
+        from .proposals import update_preview, destination
         payload = {k: args[k] for k in ("number", "title", "body", "state") if k in args}
         if "labels" in args:
             payload["labels"] = sorted(args["labels"])
-        payload.update(environment=self.environment, agent=caller.agent_id)
+        payload.update(environment=self.environment, agent=caller.agent_id, repo=self.issue_repo)
         with self._tx() as conn:
             b = self._bind(conn, caller)
             refusal = self._issue_public_refusal(conn, args.get("title"), args.get("body"), *args.get("labels", []))
             if refusal:
                 return refusal
-            words = f"Make this change to issue #{args['number']}? It is public.\n\n{update_preview(payload)}"
+            words = (f"Make this change to issue #{args['number']} in {self.issue_repo}? It is public.\n"
+                     f"{destination(payload, args['number'])}\n\n{update_preview(payload)}")
             return self._pending_tool_proposal(conn, b, "issue_update", payload,
                                                effects.request("issue.propose_update", payload), words)
 
@@ -624,12 +668,17 @@ class ToolService:
         """Propose a public data-repair ticket naming guest requests by ref only (no names or emails)."""
         if not self.tickets:
             return refused("tool_unavailable")
+        if self.issue_repo is None:
+            return _no_issue_repo()
+        from .proposals import destination, issue_text
         refs = sorted(args["refs"], key=lambda r: int(r.split(":")[1]))
         ids = [int(r.split(":")[1]) for r in refs]
-        payload = {"refs": refs, "change": args["change"], "environment": self.environment}
+        payload = {"refs": refs, "change": args["change"], "environment": self.environment, "repo": self.issue_repo}
         listed = " and ".join(refs) if len(refs) < 3 else ", ".join(refs[:-1]) + " and " + refs[-1]
-        words = (f"Open a data-repair ticket asking Claude Code or Codex to {args['change']} guest request(s) {listed}? "
-                 "It names them by ref only, because the ticket is public.")
+        title, body = issue_text(payload, "<operation id>")
+        words = (f"Open a data-repair ticket in {self.issue_repo} asking Claude Code or Codex to {args['change']} guest "
+                 f"request(s) {listed}? It names them by ref only, because the ticket is public.\n{destination(payload)}"
+                 f"\n\nTitle: {title}\n\n{body}")
         with self._tx() as conn:
             b = self._bind(conn, caller)
             with _cursor(conn) as cur:

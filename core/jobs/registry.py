@@ -30,6 +30,9 @@ Optional fields (FF-19, #537: one master list of every background job on every h
                              recently; with fail_marker, a marker in the last lines of P means its last run failed;
                              {"kind": "none", "why": W}: the job writes nothing a watchdog can read yet (reported as
                              "not watched", never as healthy)
+                             {"kind": "repo_copy", "path": P}: P is the deploy's ``status=ok|skipped commit=..
+                             wanted=.. at=..`` line for MC's repository copy (#585); skipped, or a commit other than the
+                             one deployed, is "watch"; no file yet is "not watched"
 
 Loading never touches a status file and never needs the time-zone database (the portal image
 may lack one); ``tests/jobs`` checks the shipped zone names against it.
@@ -53,7 +56,7 @@ _TZ = re.compile(r"^(UTC|[A-Za-z_]+(/[A-Za-z0-9_+-]+){1,2})$")
 _ROOT = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
 _PATH = re.compile(r"^/[A-Za-z0-9._/@ -]{1,240}$")
 _MARKER = re.compile(r"^[A-Za-z0-9 _:.,;=()+\"-]{1,40}$")
-EVIDENCE_KINDS = ("status_file", "mtime", "none")
+EVIDENCE_KINDS = ("status_file", "mtime", "none", "repo_copy")
 
 
 class RegistryError(ValueError):
@@ -155,6 +158,8 @@ def _evidence(raw: object, where: str) -> dict:
     if not isinstance(path, str) or not _PATH.match(path) or ".." in path:
         raise RegistryError(f"{where} evidence: path must be an absolute path")
     out = {"kind": kind, "path": path}
+    if "fail_marker" in raw and kind == "repo_copy":
+        raise RegistryError(f"{where} evidence: a repo_copy record takes no fail_marker")
     if "fail_marker" in raw:
         if not isinstance(raw["fail_marker"], str) or not _MARKER.match(raw["fail_marker"]):
             raise RegistryError(f"{where} evidence: fail_marker must be a short plain word")

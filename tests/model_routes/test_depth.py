@@ -1,6 +1,7 @@
 """Depth admission must not turn quoted context into routing authority."""
 import copy
 import json
+from pathlib import Path
 
 import pytest
 
@@ -21,7 +22,7 @@ def catalogue():
 
 
 @pytest.mark.parametrize("text,kind", [
-    ("Quick answer: how late?", "quick"), ("Please look into this: delivery failures", "deep"),
+    ("Quick answer: how late?", "quick"), ("Please look into this: delivery failures", None),
     ("Think harder about this", "deep"), ("Think hard. Compare the options", "deep"),
     ("Please think hard about this", "deep"), ("thinking hard", None),
     ("This is important: compare the options", "deep"),
@@ -37,7 +38,7 @@ def test_only_explicit_owner_instruction_prefix(text, kind):
 def test_explicit_depth_pins_route_without_mutating_selection(catalogue, agent):
     conv = {"routes": {agent: {"route_id": "api-xai-strong", "revision": 7}}}
     original = copy.deepcopy(conv)
-    result = for_owner_turn(catalogue, f"{agent}-conversation", conv, "Look into this")
+    result = for_owner_turn(catalogue, f"{agent}-conversation", conv, "Think hard about this")
     assert result["route_id"] == "api-anthropic-strong"
     assert result["selection_revision"] == 7
     assert result["depth"] == {"kind": "deep", "explicit": True, "allow_continuation": False}
@@ -73,7 +74,8 @@ def test_absent_policy_is_unchanged():
         assert for_owner_turn(cat, role, {}, "Go deep") == snapshot(cat, role, {})
 
 
-@pytest.mark.parametrize("invalid", ["unavailable", "same_model", "bad_shape", "non_runtime", "non_selectable"])
+@pytest.mark.parametrize("invalid", ["unavailable", "same_model", "bad_shape", "non_runtime", "non_selectable",
+                                     "phrase_only_not_bool"])
 def test_invalid_host_policy_refuses_on_load(catalogue, tmp_path, invalid):
     deep = next(r for r in catalogue["routes"] if r["route_id"] == "api-anthropic-strong")
     if invalid == "unavailable":
@@ -84,6 +86,8 @@ def test_invalid_host_policy_refuses_on_load(catalogue, tmp_path, invalid):
         catalogue["roles"]["mc-conversation"]["depth_routes"]["extra"] = "x"
     elif invalid == "non_selectable":
         catalogue["roles"]["mc-conversation"]["selectable"] = False
+    elif invalid == "phrase_only_not_bool":
+        catalogue["roles"]["mc-conversation"]["depth_routes"]["phrase_only"] = "yes"
     else:
         deep["runtime_override"] = False
     path = tmp_path / "routes.json"
@@ -95,3 +99,58 @@ def test_invalid_host_policy_refuses_on_load(catalogue, tmp_path, invalid):
 def test_missing_canonical_owner_text_refuses(catalogue):
     with pytest.raises(RouteRefused):
         for_owner_turn(catalogue, "mc-conversation", {}, None)
+
+
+# ── #586: production's pair for MC, gated by phrase ──────────────────────────────────────────────
+TEMPLATE = Path(__file__).resolve().parents[2] / "scripts/operations/production_route_catalogue.json"
+
+
+def test_production_names_mcs_quick_deep_pair_by_phrase_only():
+    cat = load_catalogue(TEMPLATE)
+    assert cat["roles"]["mc-conversation"]["depth_routes"] == {
+        "quick": "api-xai-strong", "deep": "api-xai-strong-deep", "phrase_only": True}
+    assert "depth_routes" not in cat["roles"]["cos-conversation"]
+    deep = next(r for r in cat["routes"] if r["route_id"] == "api-xai-strong-deep")
+    assert deep["model"] == "minimoi-xai-strong-deep" and deep["offered"] == {"mc": "available"}
+    assert "failover" not in deep                       # a deep turn that cannot run stops; it never moves
+
+
+@pytest.mark.parametrize("text,route,explicit", [
+    ("Think hard about the retry design", "api-xai-strong-deep", True),
+    ("Go deep on the cache", "api-xai-strong-deep", True),
+    ("This is important: compare the options", "api-xai-strong-deep", True),
+    ("Look into this: the failed backup", "api-xai-strong", False),     # scope first, on the quick route
+    ("What are the risks?", "api-xai-strong", False),
+    ("Quick answer: is it up?", "api-xai-strong", True),
+])
+def test_production_pair_picks_deep_only_on_the_owners_words(text, route, explicit):
+    result = for_owner_turn(load_catalogue(TEMPLATE), "mc-conversation", {}, text)
+    assert result["route_id"] == route
+    assert result["depth"]["explicit"] is explicit
+    assert result["depth"]["allow_continuation"] is False   # phrase only: the model never escalates by itself
+    assert "continuation_route" not in result["depth"]
+
+
+def test_ordinary_turn_keeps_the_quick_routes_failover():
+    result = for_owner_turn(load_catalogue(TEMPLATE), "mc-conversation", {}, "What are the risks?")
+    assert result["failover"]["route_id"] == "api-anthropic-strong"
+
+
+def test_phrase_only_absent_keeps_model_chosen_continuation(catalogue):
+    assert for_owner_turn(catalogue, "mc-conversation", {}, "What are the risks?")["depth"]["allow_continuation"] is True
+
+
+def test_revert_leaves_nothing_naming_the_deep_alias(tmp_path):
+    """The revert: delete depth_routes and set the deep route's offered back to {} (or delete the route)."""
+    from core.model_routes import relay_routes, view
+    cat = json.loads(TEMPLATE.read_text())
+    del cat["roles"]["mc-conversation"]["depth_routes"]
+    next(r for r in cat["routes"] if r["route_id"] == "api-xai-strong-deep")["offered"] = {}
+    path = tmp_path / "catalogue.json"
+    path.write_text(json.dumps(cat))
+    reverted = load_catalogue(path)
+    assert "strong-deep" not in json.dumps(relay_routes(reverted))
+    for agent in ("mc", "cos"):
+        assert "api-xai-strong-deep" not in {r["route_id"] for r in view(reverted, agent, {})["routes"]}
+    turn = for_owner_turn(reverted, "mc-conversation", {}, "Think hard about this")
+    assert turn["route_id"] == "api-xai-strong" and "depth" not in turn

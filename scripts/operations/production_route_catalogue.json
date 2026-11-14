@@ -1,5 +1,5 @@
 {
-  "revision": "2026-11-10.production-template",
+  "revision": "2026-11-14.production-template",
   "tiers": {
     "strong": {
       "letter": "A",
@@ -250,6 +250,24 @@
       }
     },
     {
+      "route_id": "api-xai-strong-deep",
+      "tier": "strong",
+      "provider": "minimoi-gateway",
+      "model": "minimoi-xai-strong-deep",
+      "label": "Grok 4.7 deep (pay per use)",
+      "reasoning_effort": "high",
+      "billing_mode": "metered_api",
+      "runtime": "openclaw",
+      "auth_profile_ref": null,
+      "capabilities": [
+        "chat",
+        "tools"
+      ],
+      "offered": {
+        "mc": "available"
+      }
+    },
+    {
       "route_id": "api-xai-mid",
       "tier": "mid",
       "provider": "minimoi-gateway",
@@ -295,7 +313,12 @@
       "agent": "mc",
       "task": "Conversation",
       "route": "api-xai-strong",
-      "selectable": true
+      "selectable": true,
+      "depth_routes": {
+        "quick": "api-xai-strong",
+        "deep": "api-xai-strong-deep",
+        "phrase_only": true
+      }
     },
     "mc-private": {
       "agent": "mc",

@@ -143,3 +143,17 @@ def test_the_host_scripts_ssm_command_stays_under_the_limit(tmp_path):
     subprocess.run([sys.executable, str(repo / "scripts/operations/host_script_parity.py"), "bundle", "--commit", "0" * 40,
                     "--out", str(out)], cwd=repo, check=True, capture_output=True)
     assert len(base64.b64encode(out.read_bytes())) < 95_000, "host-scripts bundle near AWS's 97 KB SSM limit: trim or split it"
+
+
+def test_bundle_is_xz_and_the_deploy_extracts_xz(tmp_path):
+    """The bundle format and the deploy's extraction must change together (xz keeps it under the SSM limit; #587)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("parity_xz", ROOT / "scripts/operations/host_script_parity.py")
+    parity = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(parity)
+    out = tmp_path / "b.txz"
+    parity.bundle(ROOT, ROOT / "config/host_scripts.json", "0" * 40, out)
+    assert out.read_bytes()[:6] == b"\xfd7zXZ\x00"
+    step = (ROOT / ".github/workflows/deploy.yml").read_text().split("- name: Install host scripts and check parity on EC2", 1)[1]
+    step = step.split("- name:", 1)[0]
+    assert "--out /tmp/host-scripts.txz" in step and "tar -xJf - --no-same-owner" in step and "tar -xzf" not in step

@@ -590,6 +590,29 @@
       ]
     },
     {
+      "id": "mc-repo-copy-deploy",
+      "name": "MC repository copy refreshed by the production deploy (REPO_COPY_STATUS.txt)",
+      "host": "ec2",
+      "schedule": {
+        "text": "each production deploy (deploy.yml, Deploy on EC2)",
+        "kind": "interval",
+        "every_s": 86400
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 86400,
+      "stuck_after_s": 3600,
+      "evidence": {
+        "kind": "repo_copy",
+        "path": "/opt/minimoi/mc/work/REPO_COPY_STATUS.txt"
+      },
+      "healthy": "the last deploy refreshed MC's repository copy to the commit it deployed (status=ok, commit = wanted)",
+      "owner": "robert",
+      "runbook": ".github/workflows/deploy.yml",
+      "defined_in": [
+        ".github/workflows/deploy.yml::REPO_COPY_STATUS.txt"
+      ]
+    },
+    {
       "id": "mc-judgment-collect",
       "name": "MC judgment collection (/etc/cron.d/minimoi-mc-judgment)",
       "host": "ec2",

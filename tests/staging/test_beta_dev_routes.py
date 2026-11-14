@@ -865,5 +865,23 @@ def test_the_xai_default_runtime_settings_and_key_models():
     assert set(R.key_models(env[R.MC]["MC_FAILOVER_ROUTES"], xai=True)) >= {"minimoi-xai-strong", "minimoi-xai-mid", "minimoi-xai-low", "minimoi-anthropic-low"}
 
 
+
+def test_a_paired_deep_route_reaches_mcs_allowlist_and_key_and_leaves_with_the_pair():
+    """#586: the host adds the deep route and mc-conversation's depth_routes to its catalogue; this tool then gives MC's
+    runtime and capped key the alias, and the relay learns it from relay_routes. Without the pair, none of them name it."""
+    from core.model_routes import load_catalogue, relay_routes
+    template = load_catalogue(ROOT / "scripts/operations/production_route_catalogue.json")
+    deep = "minimoi-gateway/minimoi-xai-strong-deep"
+    env = R.route_env(template, xai=True)
+    assert env[R.MC]["MC_METERED_ROUTES"].split(",") == [*R.XAI_REFS, deep]
+    assert env[R.COS]["COS_METERED_ROUTES"] == ",".join(R.XAI_REFS)
+    assert "minimoi-xai-strong-deep" in R.key_models(env[R.MC]["MC_FAILOVER_ROUTES"], True, env[R.MC]["MC_METERED_ROUTES"])
+    assert relay_routes(template)["api-xai-strong-deep"] == deep
+    del template["roles"]["mc-conversation"]["depth_routes"]
+    next(r for r in template["routes"] if r["route_id"] == "api-xai-strong-deep")["offered"] = {}
+    env = R.route_env(template, xai=True)
+    assert "deep" not in json.dumps(env) and "deep" not in json.dumps(relay_routes(template))
+    assert "minimoi-xai-strong-deep" not in R.key_models(env[R.MC]["MC_FAILOVER_ROUTES"], True, env[R.MC]["MC_METERED_ROUTES"])
+
 def test_the_xai_default_passes_through_the_start_script():
     assert "--failover openai --default xai >" in payload.start_script("apply", R.DEFAULT_FAILOVER, "xai")

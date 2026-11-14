@@ -53,6 +53,14 @@ model_list:
       # turns outran the page's connection (10 Nov). Raise it for work that needs depth.
       reasoning_effort: low
     model_info: {id: tier-xai-strong, mode: chat, supports_function_calling: true}
+  # Depth chosen per turn (#567): the same model at high effort, as on Dev. Used only when a host catalogue names it in
+  # a conversation role's depth_routes and the caller's capped key allows it; otherwise nothing routes here.
+  - model_name: minimoi-xai-strong-deep
+    litellm_params:
+      model: xai/grok-4.7
+      api_key: os.environ/XAI_API_KEY
+      reasoning_effort: high
+    model_info: {id: tier-xai-strong-deep, mode: chat, supports_function_calling: true}
   - model_name: minimoi-xai-mid
     litellm_params: &xai-mid
       model: xai/grok-4.6

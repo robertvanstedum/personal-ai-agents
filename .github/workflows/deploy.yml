@@ -378,12 +378,12 @@ jobs:
       # old copy, so the CoS store had no backup; #506). Drift is reported, never fatal to the deploy.
       - name: Install host scripts and check parity on EC2
         run: |
-          python3 scripts/operations/host_script_parity.py bundle --commit "${{ github.sha }}" --out /tmp/host-scripts.tgz
-          HOST_SCRIPTS=$(base64 -w 0 /tmp/host-scripts.tgz)
+          python3 scripts/operations/host_script_parity.py bundle --commit "${{ github.sha }}" --out /tmp/host-scripts.txz
+          HOST_SCRIPTS=$(base64 -w 0 /tmp/host-scripts.txz)
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
             --document-name "AWS-RunShellScript" \
-            --parameters "commands=[\"set -e\",\"D=\$(mktemp -d /tmp/host-scripts.XXXXXX)\",\"echo $HOST_SCRIPTS | base64 -d | tar -xzf - --no-same-owner -C \$D\",\"python3 -I -B \$D/scripts/operations/host_script_parity.py install --from \$D\",\"rm -rf \$D\",\"python3 -I -B /opt/minimoi/scripts/host_script_parity.py install-cron\",\"python3 -I -B /opt/minimoi/scripts/host_script_parity.py check --notify || echo parity: drift reported\"]" \
+            --parameters "commands=[\"set -e\",\"D=\$(mktemp -d /tmp/host-scripts.XXXXXX)\",\"echo $HOST_SCRIPTS | base64 -d | tar -xJf - --no-same-owner -C \$D\",\"python3 -I -B \$D/scripts/operations/host_script_parity.py install --from \$D\",\"rm -rf \$D\",\"python3 -I -B /opt/minimoi/scripts/host_script_parity.py install-cron\",\"python3 -I -B /opt/minimoi/scripts/host_script_parity.py check --notify || echo parity: drift reported\"]" \
             --query 'Command.CommandId' \
             --output text)
           echo "Host scripts command ID: $COMMAND_ID"

@@ -41,6 +41,11 @@ def settings(environ) -> dict | None:
             "tickets": environ.get("MINIMOI_MC_TOOLS_TICKETS") == "1",
             "comments": environ.get("MINIMOI_MC_TOOLS_COMMENTS") == "1",
             "github_read": environ.get("MINIMOI_MC_TOOLS_GITHUB", "1") != "0",
+            # #584: MC's web fetch through the mc-fetch container. Kill switch MINIMOI_MC_WEB_FETCH=0; also off while the
+            # credential file is absent (the MC deploy writes it beside the policy, /run/secrets/mc/mc-fetch-token).
+            "web_fetch": environ.get("MINIMOI_MC_WEB_FETCH", "1") != "0",
+            "web_fetch_url": environ.get("MINIMOI_MC_WEB_FETCH_URL") or "http://mc-fetch:8791",
+            "web_fetch_token_file": environ.get("MINIMOI_MC_WEB_FETCH_TOKEN_FILE") or "/run/secrets/mc/mc-fetch-token",
             "guest_rejects": environ.get("MINIMOI_MC_GUEST_ACTIONS") == "1",
             # Operator statement, not a check: mc-chat's gateway runs alone under its own OS user (deploy handoff §4).
             "isolated_runtime": environ.get("MINIMOI_MC_TOOLS_RUNTIME_ISOLATED") == "1",
@@ -298,6 +303,7 @@ def issue_commenter(cfg, *, http_post=None):
         if type(number) is not int or not 1 <= number <= 99999:
             return "refused", None
         return _github_post(cfg, f"/issues/{number}/comments", {"body": body}, "id", http_post)
+    comment_issue.repo = _issue_repo(cfg)
     return comment_issue
 
 
@@ -312,6 +318,7 @@ def issue_updater(cfg, *, http_patch=None):
                 or set(fields) - {"title", "body", "labels", "state"}:
             return "refused", None
         return _github_post(cfg, f"/issues/{number}", dict(fields), "number", http_patch, ok=200)
+    update_issue.repo = _issue_repo(cfg)
     return update_issue
 
 
@@ -331,6 +338,22 @@ def github_api_reader(cfg, *, http_get=None):
     from core.mc_tools.github_api import GitHubRepoReader
     return GitHubRepoReader(http_get or requests.get, repo=_repo(cfg),
                             token=_private_token(cfg.get("read_token_file", "")))
+
+
+def web_fetcher(cfg, *, http_post=None):
+    """MC's web fetch client (#584), or None: switched off, or no mc-fetch credential on this host."""
+    if not cfg.get("web_fetch"):
+        return None
+    token = _private_token(cfg.get("web_fetch_token_file", ""))
+    if not token or len(token) < 32:
+        return None
+    import requests
+    from core.mc_tools.web_fetch import WebFetcher
+    try:
+        return WebFetcher(http_post or requests.post, endpoint=cfg["web_fetch_url"], token=token)
+    except ValueError:
+        _log.warning("mc tools: web fetch not configured (endpoint or credential invalid)")
+        return None
 
 
 def _guest_people():
@@ -647,7 +670,8 @@ def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, sho
                        build_jobs=cfg["build_jobs"],
                        invites=cfg["invites"] if invites is None else invites,
                        tickets=issue_filer(cfg) is not None, comments=issue_commenter(cfg) is not None,
-                       guest_rejects=cfg["guest_rejects"], github=github_reader(cfg), github_api=github_api_reader(cfg), show=show, read_shown=read_shown,
+                       issue_repo=_issue_repo(cfg),          # named on every issue card before Robert's yes (#585)
+                       guest_rejects=cfg["guest_rejects"], github=github_reader(cfg), github_api=github_api_reader(cfg), web_fetch=web_fetcher(cfg), show=show, read_shown=read_shown,
                        isolated_runtime=cfg["isolated_runtime"], people=_guest_people,
                        standard_changes=cfg["standard_changes"],
                        guests_lookup=_guests_lookup, policy=policy_source(cfg), read_owner_note=read_owner_note,

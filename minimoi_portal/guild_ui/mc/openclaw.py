@@ -280,7 +280,8 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
                     yield Failure("request_too_large", "refused")
                     return
                 yield Progress("I’ll take a closer look at this.")
-            yield from self._stream(payload, self._headers(req), cancel)
+            # The route's declared failover still applies (#586): a phrase-only quick turn is an ordinary turn.
+            yield from self._stream_with_failover(req, payload, cancel)
             return
         if not callable(req.prepare_depth):
             yield Failure("depth_binding_unavailable", "unavailable")
