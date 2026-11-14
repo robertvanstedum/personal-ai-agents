@@ -109,9 +109,10 @@ def test_production_names_mcs_quick_deep_pair_by_phrase_only():
     cat = load_catalogue(TEMPLATE)
     assert cat["roles"]["mc-conversation"]["depth_routes"] == {
         "quick": "api-xai-strong", "deep": "api-xai-strong-deep", "light": "api-xai-strong-light", "phrase_only": True}
-    assert "depth_routes" not in cat["roles"]["cos-conversation"]
+    # CoS is MC's twin (#567 wave 2): the same pair, by the same phrases.
+    assert cat["roles"]["cos-conversation"]["depth_routes"] == cat["roles"]["mc-conversation"]["depth_routes"]
     deep = next(r for r in cat["routes"] if r["route_id"] == "api-xai-strong-deep")
-    assert deep["model"] == "minimoi-xai-strong-deep" and deep["offered"] == {"mc": "available"}
+    assert deep["model"] == "minimoi-xai-strong-deep" and deep["offered"] == {"mc": "available", "cos": "available"}
     assert "failover" not in deep                       # a deep turn that cannot run stops; it never moves
 
 
@@ -145,6 +146,7 @@ def test_revert_leaves_nothing_naming_the_deep_alias(tmp_path):
     from core.model_routes import relay_routes, view
     cat = json.loads(TEMPLATE.read_text())
     del cat["roles"]["mc-conversation"]["depth_routes"]
+    del cat["roles"]["cos-conversation"]["depth_routes"]
     next(r for r in cat["routes"] if r["route_id"] == "api-xai-strong-deep")["offered"] = {}
     path = tmp_path / "catalogue.json"
     path.write_text(json.dumps(cat))
@@ -263,6 +265,7 @@ def test_revert_leaves_nothing_naming_the_light_alias(tmp_path):
     from core.model_routes import relay_routes, view
     cat = json.loads(TEMPLATE.read_text())
     del cat["roles"]["mc-conversation"]["depth_routes"]["light"]
+    del cat["roles"]["cos-conversation"]["depth_routes"]["light"]
     next(r for r in cat["routes"] if r["route_id"] == "api-xai-strong-light")["offered"] = {}
     path = tmp_path / "catalogue.json"
     path.write_text(json.dumps(cat))

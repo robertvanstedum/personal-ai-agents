@@ -117,11 +117,11 @@ def test_the_template_changes_only_revision_claude_failover_cos_plan_and_the_gro
             rest_new = {key: value for key, value in new.items() if key not in {"offered", "failover"}}
             rest_old = {key: value for key, value in old.items() if key not in {"offered", "failover"}}
             assert rest_new == rest_old
-        elif new["route_id"] == "api-xai-strong-deep":      # #586: MC's deep route, chosen only by depth_routes' phrases
-            assert old["offered"] == {} and new["offered"] == {"mc": "available"}
+        elif new["route_id"] == "api-xai-strong-deep":      # #586: MC's and CoS's deep route, chosen only by depth_routes' phrases
+            assert old["offered"] == {} and new["offered"] == {"mc": "available", "cos": "available"}
             assert {k: v for k, v in new.items() if k != "offered"} == {k: v for k, v in old.items() if k != "offered"}
-        elif new["route_id"] == "api-xai-strong-light":     # #593: MC's light route, chosen only by depth_routes' short-turn test
-            assert old["offered"] == {} and new["offered"] == {"mc": "available"}
+        elif new["route_id"] == "api-xai-strong-light":     # #593: MC's and CoS's light route, chosen only by depth_routes' short-turn test
+            assert old["offered"] == {} and new["offered"] == {"mc": "available", "cos": "available"}
             assert new["failover"] == LIGHT_FAILOVER[new["route_id"]] and "failover" not in old
             assert {k: v for k, v in new.items() if k not in {"offered", "failover"}} == {k: v for k, v in old.items() if k != "offered"}
         else:

@@ -37,7 +37,8 @@ def test_cos_runs_on_grok_with_the_plan_still_configured_and_claude_as_failover(
     assert env["COS_PLAN_MODEL"] == "openai/gpt-6-astra"
     assert env["COS_PLAN_ROUTES"] == "openai/gpt-6-sol,openai/gpt-6-luna"
     assert env["COS_RUNTIME_MODEL_ACCESS"] == "plan"
-    assert env["COS_METERED_ROUTES"] == XAI_TIERS
+    # MC's twin (#567 wave 2): the deep and light aliases, reached only through cos-conversation's depth_routes.
+    assert env["COS_METERED_ROUTES"] == XAI_TIERS + ",minimoi-gateway/minimoi-xai-strong-deep,minimoi-gateway/minimoi-xai-strong-light"
     assert env["COS_PRIMARY_ROUTE"] == "minimoi-gateway/minimoi-xai-strong"
     assert "xai" not in env["COS_FAILOVER_ROUTES"]
     assert env["COS_FAILOVER_ROUTES"].split(",") == FAILOVER_TIERS

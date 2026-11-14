@@ -264,7 +264,8 @@
         "tools"
       ],
       "offered": {
-        "mc": "available"
+        "mc": "available",
+        "cos": "available"
       }
     },
     {
@@ -283,7 +284,8 @@
       ],
       "failover": "api-anthropic-strong",
       "offered": {
-        "mc": "available"
+        "mc": "available",
+        "cos": "available"
       }
     },
     {
@@ -354,7 +356,13 @@
       "agent": "cos",
       "task": "Conversation",
       "route": "api-xai-strong",
-      "selectable": true
+      "selectable": true,
+      "depth_routes": {
+        "quick": "api-xai-strong",
+        "deep": "api-xai-strong-deep",
+        "light": "api-xai-strong-light",
+        "phrase_only": true
+      }
     }
   }
 }
