@@ -113,4 +113,4 @@ def test_light_alias_is_the_quick_model_with_no_reasoning():
         models = {m["model_name"]: m["litellm_params"] for m in doc["model_list"]}
         quick, light = models["minimoi-xai-strong"], models["minimoi-xai-strong-light"]
         assert quick["model"] == light["model"] == "xai/grok-4.7"
-        assert (quick["reasoning_effort"], light["reasoning_effort"]) == ("low", "none")
+        assert (quick["reasoning_effort"], light["reasoning_effort"]) == ("low", "minimal")

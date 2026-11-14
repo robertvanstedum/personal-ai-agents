@@ -507,7 +507,7 @@ def test_staging_gateway_keeps_production_names_and_settings():
     light = {name: _routes(path)["minimoi-xai-strong-light"]["litellm_params"] for name, path in
              (("prod", GATEWAY_PROD), ("staging", GATEWAY_STAGING))}
     assert light["prod"] == {**light["staging"], "api_key": "os.environ/XAI_API_KEY"}
-    assert light["prod"]["model"] == "xai/grok-4.7" and light["prod"]["reasoning_effort"] == "none"
+    assert light["prod"]["model"] == "xai/grok-4.7" and light["prod"]["reasoning_effort"] == "minimal"
     for block in ("router_settings", "general_settings"):
         assert staging[block] == prod[block], block
     # litellm_settings: production's, and both now carry the usage recorder (usage-record U1).

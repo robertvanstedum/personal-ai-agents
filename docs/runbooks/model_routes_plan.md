@@ -150,7 +150,7 @@ The next turn is quick, with nothing restarted. Then take the alias out of steps
 
 ## Short turns take the light route (#593)
 
-A third route in the same pair: `minimoi-xai-strong-light` is Grok 4.7 with **no reasoning** (`reasoning_effort: none`).
+A third route in the same pair: `minimoi-xai-strong-light` is Grok 4.7 with **minimal reasoning** (`reasoning_effort: minimal`; xAI refuses `none` on Grok 4.7, Dev check 14 Nov 2026: 1.8 s against 2.4 s on `low` for a one-sentence answer).
 The portal's admission step (`core/model_routes/depth.py`, `short_turn`) sends a turn there only when all of these hold:
 
 - the conversation is on the quick route (not set to deep or to another model under Options);
@@ -185,7 +185,7 @@ On production they are `docker-compose.mc-1-2-production.yml` (4, 5) and a host 
 is on once its host catalogue pairs `depth_routes` for `cos-conversation` with a `light` entry. That pair also needs a
 `deep` entry, which CoS does not have yet, so turning CoS on is a decision of its own.
 
-**Prove it.** First, before step 2, check that xAI takes no-reasoning on Grok 4.7: one completion through the gateway on
+**Prove it.** First, before step 2, check that xAI takes minimal reasoning on Grok 4.7: one completion through the gateway on
 `minimoi-xai-strong-light` with MC's key returns 200. Then, in a labelled chat: "Good morning!" and "What is a race
 condition?" record `api-xai-strong-light`; "What are the risks?", "Can you check the logs?" and a greeting with a
 document attached record `api-xai-strong`.
