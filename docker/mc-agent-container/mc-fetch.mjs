@@ -186,7 +186,10 @@ export async function guardedFetch(url, {
 
 const defaultLog = (entry) => console.log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
 
-/** POST /v1/fetch {"url": "...", "max_chars": n} with Authorization: Bearer <MC_FETCH_TOKEN>. GET /healthz. */
+/**
+ * POST /v1/fetch {"url": "...", "max_chars": n} with Authorization: Bearer <MC_FETCH_TOKEN>.
+ * GET /health (and /healthz): the container's own health check. Local only: no token, no DNS, no outbound call.
+ */
 export function createFetchServer({ token, lookup, request, log = defaultLog } = {}) {
   if (typeof token !== 'string' || token.length < 32) throw new Error('mc-fetch: token missing or too short');
   const want = createHash('sha256').update(token).digest();
@@ -196,7 +199,7 @@ export function createFetchServer({ token, lookup, request, log = defaultLog } =
   };
   const send = (res, code, body) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(body));
   return http.createServer(async (req, res) => {
-    if (req.method === 'GET' && req.url === '/healthz') return send(res, 200, { status: 'ok' });
+    if (req.method === 'GET' && (req.url === '/health' || req.url === '/healthz')) return send(res, 200, { status: 'ok' });
     if (req.method !== 'POST' || req.url !== '/v1/fetch') return send(res, 404, { error: 'not_found' });
     if (!authorized(req.headers.authorization)) return send(res, 401, { error: 'unauthorized' });
     let raw = '';

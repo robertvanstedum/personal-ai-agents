@@ -190,6 +190,34 @@ class Routing(unittest.TestCase):
         self.assertEqual(compose["services"]["mc-agent"]["networks"], ["mc-internal"])
         self.assertFalse(compose["networks"]["mc-fetch-out"].get("internal", False))
 
+    def test_mc_fetch_has_its_own_health_check_not_the_image_s_gateway_probe(self):
+        # The MC image's HEALTHCHECK probes the OpenClaw gateway, which mc-fetch does not run (Grok, Dev review of #589).
+        import shutil, socket, subprocess, time, yaml
+        compose = yaml.safe_load((ROOT / "docker-compose.mc.prod.yml").read_text())
+        check = compose["services"]["mc-fetch"]["healthcheck"]
+        self.assertEqual(check["test"][:3], ["CMD", "node", "-e"])
+        self.assertIn("http://127.0.0.1:8791/health", check["test"][3])
+        self.assertNotIn("docker-healthcheck", check["test"][3])
+        if not shutil.which("node"):
+            self.skipTest("needs node")
+        with socket.socket() as s:                      # the check names the fixed port; skip if this machine uses it
+            if s.connect_ex(("127.0.0.1", 8791)) == 0:
+                self.skipTest("port 8791 in use")
+        env = {"PATH": os.environ["PATH"], "MC_FETCH_TOKEN": "t" * 40, "MC_FETCH_PORT": "8791"}
+        server = subprocess.Popen(["node", str(ROOT / "docker/mc-agent-container/mc-fetch.mjs")], env=env,
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        try:
+            for _ in range(50):
+                if server.stdout.readline():
+                    break
+            ok = subprocess.run(check["test"][1:], env={"PATH": os.environ["PATH"]}, timeout=10)
+            self.assertEqual(ok.returncode, 0)
+        finally:
+            server.terminate()
+            server.wait(timeout=10)
+        down = subprocess.run(check["test"][1:], env={"PATH": os.environ["PATH"]}, timeout=10)
+        self.assertEqual(down.returncode, 1)
+
     def test_availability_follows_the_fetcher(self):
         from core.mc_tools import catalogue
         from core.mc_tools.service import ToolService
