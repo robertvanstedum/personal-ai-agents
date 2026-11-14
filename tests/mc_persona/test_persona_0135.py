@@ -44,9 +44,10 @@ def test_agents_asks_when_vague_looks_when_concrete_and_offers_a_document():
 
 def test_runtime_names_the_repo_commit_and_the_web_tools():
     r = (NEW / "RUNTIME.openclaw.md").read_text()
-    assert "/minimoi/work/REPO_COPY_STATUS.txt" in r and "name the commit" in r and "`skipped`" in r
-    assert "web pages through a fetch tool if you have one." in r
+    assert "/minimoi/work/REPO_COPY_STATUS.txt" in r and "cite either with the commit" in r
+    assert "web pages via a fetch tool if you have one." in r
     assert "is a clone of `main`" not in r
+    assert "`/minimoi/planning`, if present, is the planning record" in r and "/minimoi/planning/PLANNING_STATUS.txt" in r  # #587
 
 
 def test_front_door_card_matches_the_persona():
