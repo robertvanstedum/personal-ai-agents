@@ -44,6 +44,25 @@ Nothing here authorizes implementation.
 - The current mini-moi version remains 1.1. References to 2.0 are design
   horizons, not release commitments.
 
+## Public by convention (from 10 November 2026)
+
+Planning Studio shows its work in public, one folder per initiative, and keeps the working detail private.
+
+**Public, in this folder, per initiative:**
+
+- the **founding document**: the vision for the initiative, written when its numbered folder is created;
+- the **most recent spec**, once a spec has been versioned (v1 or later). A newer version replaces the older one here.
+
+**Private, in the planning record:** working drafts and v0.x versions, review exchanges, handoffs, evidence and any data.
+Older spec versions stay there too.
+
+**A document named v1 is public, so it is written to be public:** no names of family or friends, no business names other
+than public ones, no finances, no career detail, no account or billing detail. Invented example data where an example is
+needed.
+
+New initiatives follow this from their first day. Existing initiatives are brought in once, with a manifest Robert rules on
+before anything moves. The private planning repository stays private; this folder is a selection from it, not a replacement.
+
 ## Intended long-term home
 
 This scaffold lives in `personal-ai-agents` so the structure and initial
