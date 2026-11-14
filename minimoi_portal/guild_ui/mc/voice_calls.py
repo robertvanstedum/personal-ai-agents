@@ -41,10 +41,27 @@ class VoiceCallLog:
             return False
 
 
-def voice_calls_of(services) -> VoiceCallLog:
-    """The call log in the same folder as MC's turn trace (mc/turn_log.turn_log_of), or one that writes nothing."""
+def call_record_folder(services, environ=None) -> str | None:
+    """Where a call line is written.
+
+    ``MC_TURNS_DIR`` when it names an existing directory (production mounts
+    ``/app/data/mc-turns`` there). Otherwise the Guild store folder, and only
+    when that store has a path. A missing folder writes nothing.
+    """
+    env = os.environ if environ is None else environ
+    turns = str(env.get("MC_TURNS_DIR", "") or "").strip()
+    if turns and os.path.isdir(turns):
+        return turns
     store = getattr(services, "store", None)
-    return VoiceCallLog(getattr(store, "folder", None) if store is not None and getattr(store, "path", None) else None)
+    if store is None or not getattr(store, "path", None):
+        return None
+    folder = getattr(store, "folder", None)
+    return folder if isinstance(folder, str) and folder else None
+
+
+def voice_calls_of(services, environ=None) -> VoiceCallLog:
+    """The call log, or one that writes nothing when no folder exists."""
+    return VoiceCallLog(call_record_folder(services, environ))
 
 
 __all__ = ["VoiceCallLog", "voice_calls_of", "FILE_NAME"]

@@ -97,7 +97,7 @@ export function initMcVoice(page) {
   onChange(paintExport);
 
   // `session` numbers the attempt: stop() moves it on, and every callback of an older attempt (a late transcript, error, state change or answer) is then ignored.
-  let controller = null, starting = false, session = 0, provider = null, showingError = false, managed = null, direct = null, directMod = null, sessionMod = null, directSession = null, directThread = null, transcriptEnding = null, endedAttempt = null, restartBlocked = false, ending = null, transcriptPaint = null, transcriptReveal = null, transcriptCancel = null, transcriptEpoch = 0;
+  let controller = null, starting = false, session = 0, provider = null, showingError = false, managed = null, direct = null, walk = false, directMod = null, sessionMod = null, directSession = null, directThread = null, transcriptEnding = null, endedAttempt = null, restartBlocked = false, ending = null, transcriptPaint = null, transcriptReveal = null, transcriptCancel = null, transcriptEpoch = 0;
 
   let visualState = 'idle', pressed = false;
   const draw = () => {
@@ -153,7 +153,8 @@ export function initMcVoice(page) {
     try {
       const r = await fetch(`${api}/mc/voice/capabilities`, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
       const body = await r.json().catch(() => ({}));
-      direct = body.direct_voice && typeof body.direct_voice === 'object' && (body.direct_voice.providers || []).length ? body.direct_voice : null;
+      walk = body.voice_path === 'realtime';
+      direct = !walk && body.direct_voice && typeof body.direct_voice === 'object' && (body.direct_voice.providers || []).length ? body.direct_voice : null;
       const records = !direct && body.direct_records && typeof body.direct_records === 'object' ? body.direct_records : null;
       if (r.ok && body.ok && records) initThread(records);              // installed, not admitted: the thread only
       if (!r.ok || !body.ok || !((body.providers || []).length || direct)) return null;
@@ -208,7 +209,8 @@ export function initMcVoice(page) {
     const current = () => mine === session;
     setPhase('connecting');
     paint(true);
-    if (!direct && !managed) primeCue();             // on the tap, before any await (the chained path's tone)
+    if (!direct && !managed && !walk) primeCue();    // on the tap, before any await (the chained path's tone)
+    if (walk) { await startWalk(mine, current); return; }
     if (direct) {await startDirect(mine,current);return;}
     if (managed) {await startManaged(mine,current);return;}
     // Neither offered (production today: MINIMOI_MC_VOICE=1, direct not installed or not admitted, managed off): today's chained
@@ -272,6 +274,22 @@ export function initMcVoice(page) {
   // The direct path (UI_CONTRACT_chunk_B.md). Its files are loaded only now that the capabilities answer offered it: the
   // Guild's thread (mc_voice_direct.js) and the shared session module (Spec 165 §4.3), served beside the controller.
   const DIRECT_ENDED = 'Voice ended. What was said is in the conversation.';
+  async function startWalk(mine, current) {
+    say('Connecting…');
+    try {
+      const { startMcWalk } = await import('./mc_voice_walk.js');
+      if (!current()) return;
+      controller = await startMcWalk({
+        api, headers, current,
+        say: (text) => { if (current()) say(text); },
+        setPhase: (phase) => { if (current()) setPhase(phase); },
+      });
+    } catch (e) {
+      if (current()) { stop('failed', { quiet: true }); say(`Voice could not start${e && e.message ? `: ${e.message}` : ''}. Typing still works.`, { loud: true, error: true }); }
+    } finally {
+      if (current()) starting = false;
+    }
+  }
   const loadDirect = () => directMod ? Promise.resolve(directMod) : import('./mc_voice_direct.js').then((m) => (directMod = m));
   const loadSession = () => sessionMod ? Promise.resolve(sessionMod) : import(`${api}/mc/voice/static/direct-voice-session.js`).then((m) => (sessionMod = m));
   const liveBar = () => $('[data-mc-voice-live]');

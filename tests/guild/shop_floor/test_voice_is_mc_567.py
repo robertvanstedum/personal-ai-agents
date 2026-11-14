@@ -1,7 +1,7 @@
 """#567 direction (Robert, 13 Nov 2026: "MC's voice is MC") and #570 (phone versus desktop was not recorded).
 
-- MC's voice path: "chained" by default (speech to text, MC's own turn, his kept reply read aloud), "direct" only when
-  asked for; a stray value is the default, never a third thing.
+- MC's voice path: "chained" by default, "direct" or "realtime" only when asked for.
+  A stray value stays "chained".
 - Each call keeps one durable line: path, provider and device class, never the user agent or any words.
 - The chained page plays one soft tone while MC works, made on the Voice tap (an iPhone plays sound only after a gesture).
 """
@@ -29,7 +29,8 @@ MAC = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KH
 
 
 @pytest.mark.parametrize("value,path", [(None, "chained"), ("", "chained"), ("chained", "chained"), ("CHAINED", "chained"),
-                                        ("direct", "direct"), (" Direct ", "direct"), ("realtime", "chained")])
+                                        ("direct", "direct"), (" Direct ", "direct"), ("realtime", "realtime"),
+                                        ("REALTIME", "realtime"), ("nope", "chained")])
 def test_mcs_voice_path_is_chained_unless_direct_is_asked_for(value, path):
     env = {} if value is None else {direct.PATH_ENV: value}
     assert direct.voice_path(env) == path
