@@ -38,7 +38,10 @@ def retain(bound, cid, sid, role, item, index, text, partial, *, started=None, e
     return {'saved': True, 'parts': len(parts)}
 
 
-def block(owner_text, floor, *, scrub=lambda text: text, include_recent=False):
+def block(owner_text, floor, *, scrub=lambda text: text, include_recent=False, since_last_reply=False):
+    """``since_last_reply`` (#592): unless Robert asks for a transcript, only voice notes newer than the last kept
+    assistant reply here. The turn that reply answered already carried the older ones, and its message stays in the
+    runtime's own transcript, so attaching them again only repeats them."""
     explicit = isinstance(owner_text, str) and bool(WANTED.search(owner_text))
     if not include_recent and not explicit:
         return ''
@@ -54,7 +57,12 @@ def block(owner_text, floor, *, scrub=lambda text: text, include_recent=False):
         return head + '\nRetained voice notes unavailable.'
     if result.data.get('more'):
         head += '\nEarlier floor notes exist outside this supplied window.'
-    selected = [row for row in result.data.get('notes', [])
+    notes = result.data.get('notes', [])
+    if since_last_reply and not explicit:
+        replies = [i for i, row in enumerate(notes) if row.get('author_kind') == 'agent'
+                   and row.get('who') in ('master_craftsman', 'chief_of_staff')]
+        notes = notes[replies[-1] + 1:] if replies else notes
+    selected = [row for row in notes
                 if isinstance(row.get('who'), str) and row['who'].startswith(AUTHOR_PREFIX) and row.get('author_kind') == 'platform'
                 and (row.get('context') or {}).get('page') == PAGE
                 and row.get('record_mode', 'on_record') == 'on_record']

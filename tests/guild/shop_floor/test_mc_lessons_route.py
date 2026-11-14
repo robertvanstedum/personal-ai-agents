@@ -92,7 +92,9 @@ def test_with_tools_owning_actions_the_rules_name_the_preference_tool_not_the_in
     from minimoi_portal.guild_ui import api
     monkeypatch.setattr(api, "_tools_own_actions", lambda principal: principal == "robert")
     ext = lessons.app.extensions["guild_ui_next"]
-    monkeypatch.setitem(ext, "feature_environ", {**ext["feature_environ"], "MINIMOI_MC_OPERATING_RULES": "1"})
+    # #592: with the trim on, MC's persona carries these rules; the attached wording still matters with it off (and for CoS).
+    monkeypatch.setitem(ext, "feature_environ", {**ext["feature_environ"], "MINIMOI_MC_OPERATING_RULES": "1",
+                                                 "MINIMOI_MC_CONTEXT_TRIM": "0"})
     say(lessons, "Going forward, keep your answers short.")
     sent = last_sent(lessons)
     assert "operating rules" in sent and "minimoi_keep_preference" in sent

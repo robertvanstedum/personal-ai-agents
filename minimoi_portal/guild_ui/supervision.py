@@ -333,9 +333,10 @@ def owner_decision_command(found, *, environ, store_factory=store):
             "operation": {"type": "owner_decision", "state": "verified", "decision": code, "answer": answer}}
 
 
-def context_block(principal, *, environ, store_factory=store, notice_plan=None, owner_text=""):
+def context_block(principal, *, environ, store_factory=store, notice_plan=None, owner_text="", detail=True):
     """Trusted platform context for MC on Robert's turns: decisions waiting on him, word for word, and the last
-    check-in. Empty when off or when nothing waits."""
+    check-in. Empty when off or when nothing waits. ``detail=False`` (#592): the decisions stay word for word; the
+    check-in and the agents' exchanges become one count line, given in full when Robert asks about builds or status."""
     if not enabled(environ) or principal != environ.get("MINIMOI_SUPERVISION_OWNER"):
         return ""
     from core.supervision.store import name
@@ -364,6 +365,18 @@ def context_block(principal, *, environ, store_factory=store, notice_plan=None, 
                 line = notice_plan.offer(code, semantic, line, explicit=explicit, current=current)
             if line:
                 lines.append(line)
+    if not detail:
+        if last or exchanges:
+            sm = (last or {}).get("summary") or {}
+            open_sessions = [x for x in sm.get("sessions") or [] if x.get("state") != "done"]
+            parts = [f"Last check-in {last['at']:%H:%M %Z}: {len(sm.get('prs', []))} open PRs, {len(sm.get('running') or [])} "
+                     f"running, {len(open_sessions)} sessions not done, {len(sm.get('open_items') or [])} open items"] if last else []
+            if last and not sm.get("runners"):
+                parts.append("no delegation runner has ever reported")
+            if exchanges:
+                parts.append(f"{len(exchanges)} recent agent exchanges")
+            lines.append("; ".join(parts) + ". The detail comes with Robert's question about builds, agents or status.")
+        return "\n".join(lines)
     if last:
         sm = last["summary"]
         lines.append(f"Last check-in {last['at']:%H:%M %Z}: {len(sm.get('prs', []))} open PRs.")

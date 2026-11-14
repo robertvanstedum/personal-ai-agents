@@ -396,7 +396,7 @@ def test_mc_block_never_fails_the_turn(tmp_path):
 
 def test_mc_turn_context_carries_the_block():
     src = (REPO / "minimoi_portal/guild_ui/api.py").read_text()
-    assert "jobs_health.block(principal, environ=feature_environ())" in src
+    assert "jobs_health.block(principal, environ=feature_environ(), daily_note=not trim or asks_status)" in src   # #592
 
 
 # ---- across hosts: push, pull, silence (FF-19 follow-up) -----------------------------------------------------------
