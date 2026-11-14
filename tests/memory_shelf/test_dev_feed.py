@@ -266,3 +266,34 @@ def test_mc_index_is_published_with_career_turns_filtered_and_served_by_the_mc_p
     answer = client.post("/v1/ask", json={"query": "blue heron", "include_raw": True},
                          headers={"Authorization": f"Bearer {token}"})
     assert answer.status_code == 200 and answer.get_json()["keyword"]
+
+
+def test_ask_keeps_answering_from_the_published_index_while_a_feed_run_is_in_progress(tmp_path):
+    """Dev, 14 Nov: a /v1/ask during the feed's rebuild got 503. The indexes are swapped in whole, so the last good run's
+    files stay servable while the next run works; a stale last success still refuses."""
+    from datetime import timedelta
+    from core.jobs import status
+    from scripts.memory import dev_feed
+    from scripts.memory.dev_ask import app_for
+    from core.memory_ask.identity import add_agent
+    root, _, _ = source(tmp_path)
+    mc_root = tmp_path / "mc"
+    mc_export(mc_root)
+    data = tmp_path / "vault"
+    assert run(cos_root=root, mc_root=mc_root, shelf_root=data / "memory", index_path=data / "memory-index" / "memory.sqlite",
+               jobs_root=data / "jobs", min_free=0)["state"] == "ok"
+    token = add_agent(data / "memory-ask" / "agents.json", "cos", tiers=("curated", "all"))
+    client = app_for(data).test_client()
+    ask = lambda: client.post("/v1/ask", json={"query": "blue heron", "include_raw": True},
+                              headers={"Authorization": f"Bearer {token}"})
+    assert ask().status_code == 200
+    now = datetime.now(timezone.utc)
+    status.start_run(data / "jobs", dev_feed.JOB, "r" * 24, now)            # the next run starts: state "running"
+    answer = ask()
+    assert answer.status_code == 200 and answer.get_json()["keyword"]
+    doc = status.read_status(data / "jobs", "dev-memory-feed.json", "dev-memory-feed")
+    stale = status.build(job_id=doc["job_id"], host=doc["host"], run_id=doc["run_id"], state="running",
+                         started_at=now, summary="run in progress", last_success_at=now - timedelta(hours=1))
+    status.write_status(data / "jobs", "dev-memory-feed.json", stale)
+    refused = ask()
+    assert refused.status_code == 503 and refused.get_json() == {"error": "feed_not_ready"}

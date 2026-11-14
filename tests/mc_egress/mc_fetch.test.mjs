@@ -216,3 +216,28 @@ test('the service needs its bearer credential and a strict body', async () => {
   } finally { server.close(); }
   assert.throws(() => createFetchServer({ token: 'short' }), /token/);
 });
+
+test('GET /health (and /healthz) answer locally: no token, no DNS lookup, no outbound request', async () => {
+  const touched = [];
+  const server = createFetchServer({
+    token: 'h'.repeat(40),
+    lookup: async () => { touched.push('lookup'); throw new Error('no'); },
+    request: async () => { touched.push('request'); throw new Error('no'); },
+    log: () => {},
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const get = (path) => new Promise((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port: server.address().port, path }, (res) => {
+      let b = ''; res.on('data', (c) => { b += c; }); res.on('end', () => resolve({ status: res.statusCode, body: b }));
+    }).on('error', reject);
+  });
+  try {
+    for (const path of ['/health', '/healthz']) {
+      const r = await get(path);
+      assert.equal(r.status, 200, path);
+      assert.deepEqual(JSON.parse(r.body), { status: 'ok' });
+    }
+    assert.equal((await get('/v1/fetch')).status, 404);         // GET on the fetch path is not a health check
+    assert.deepEqual(touched, []);
+  } finally { server.close(); }
+});

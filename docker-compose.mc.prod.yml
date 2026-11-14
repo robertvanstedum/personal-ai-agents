@@ -123,11 +123,14 @@ services:
     read_only: true
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
+    # Its own check: the base image's HEALTHCHECK probes the OpenClaw gateway (dist/docker-healthcheck.js), which this
+    # service does not run. GET /health is local only (no token, no DNS, no outbound call).
     healthcheck:
-      test: [CMD, node, -e, "fetch('http://127.0.0.1:8791/healthz').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
+      test: [CMD, node, -e, "require('http').get('http://127.0.0.1:8791/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 60s
       timeout: 5s
       retries: 3
+      start_period: 10s
     labels: [minimoi.runtime.role=guild-mc-fetch]
 
   # The portal's only way in (relay v2). No host port: the portal reaches it as http://mc-relay:8790/v1 on

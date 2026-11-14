@@ -15,6 +15,10 @@ from core.jobs.status import read_status, parse_time
 from core.memory_ask.service import create_app
 
 
+FRESH_S = 600                 # the feed runs every 5 minutes
+RUNNING_GRACE_S = 900         # during a run (at most 240 s): the last success may be one interval plus the run old
+
+
 class NoModel:
     def release(self):
         pass
@@ -38,9 +42,16 @@ def app_for(data: Path, profile: str | None = None):
     @app.before_request
     def require_fresh_feed():
         doc = read_status(data / "jobs", "dev-memory-feed.json", "dev-memory-feed")
-        finished = parse_time(doc.get("finished_at")) if doc else None
+        if doc and doc.get("state") == "running":
+            # A run in progress publishes its indexes only by atomic replace, so the files on disk are still the last
+            # successful run's: keep answering from them while that run is fresh (Dev, 14 Nov: a 503 mid-rebuild).
+            finished = parse_time(doc.get("last_success_at"))
+            limit = RUNNING_GRACE_S
+        else:
+            finished = parse_time(doc.get("finished_at")) if doc and doc.get("state") == "ok" else None
+            limit = FRESH_S
         age = (datetime.now(timezone.utc) - finished).total_seconds() if finished else -1
-        if not doc or doc.get("state") != "ok" or not 0 <= age <= 600:
+        if not doc or not 0 <= age <= limit:
             response = jsonify({"error": "feed_not_ready"})
             response.status_code = 503
             response.headers["Cache-Control"] = "no-store"
