@@ -21,8 +21,8 @@ binding is written for the container).
 
 ## Boundaries (same as dev, checked by the security test)
 
-- `mc-agent` sits only on `minimoi-mc-internal` (no route out). Its one way out is `mc-egress`, which tunnels to public
-  addresses on port 443 only, checked after DNS resolution and again at every redirect hop (#584, below). No Docker socket, no `.env`, no host credentials, no provider API key (start refuses one).
+- `mc-agent` sits only on `minimoi-mc-internal` (no route out). Its one way out is `mc-egress`, which tunnels only to
+  model-provider hosts (and refuses one whose name resolves to a private address, #584). No Docker socket, no `.env`, no host credentials, no provider API key (start refuses one).
 - The portal reaches MC only through `mc-relay` on `minimoi-mc-portal`. MC cannot reach postgres, the other services or
   the EC2 instance metadata service (169.254.169.254, which hands out the host's AWS credentials).
 - Mounts: `/opt/minimoi/mc/{work,inbox,workshops}` (rw), `/opt/minimoi/mc/apprenticeship` (ro), `/opt/minimoi/docs` (ro).
@@ -152,34 +152,40 @@ stage C (`scripts/staging/README.md`, "Master Craftsman stage C").
 
 ## MC's web fetch (#584, 14 Nov 2026)
 
-MC has OpenClaw's `web_fetch`, like CoS: any public HTTPS page. Its domain focus comes from its instructions, not from an
-allowlist (Robert, 13 Nov, decision 5 of #567 v0.2).
+MC reads public web pages with **`minimoi_web_fetch`**, a MiniMoi tool like its GitHub reads (Robert, 13 Nov, decision 5
+of #567 v0.2: web access like CoS, domain focus from MC's instructions, not an allowlist). OpenClaw's own `web_fetch`
+stays off and denied.
 
-- **Config** (`docker/mc-agent-container/openclaw.json`): `tools.web.fetch` is on with `useTrustedEnvProxy: true`, so
-  `web_fetch` goes through `HTTPS_PROXY` (= `mc-egress`); without it OpenClaw would try to connect directly and fail,
-  since MC has no route out. `web_fetch` is off both deny lists and on `mc-chat`'s allow list. No fallback provider.
-- **Where the rule is enforced: `mc-egress`** (`egress-proxy.mjs`). For each CONNECT it resolves the name itself, refuses
-  the destination if ANY address is private (RFC 1918), loopback, link-local (169.254.0.0/16, so 169.254.169.254
-  metadata), CGNAT, multicast, reserved, documentation, IPv6 loopback / ULA (fd00:ec2::254) / link-local / site-local,
-  or an IPv4-mapped, NAT64 or 6to4 form of these, and then connects to the address it checked (no second lookup).
-  Port 443 only; plain HTTP refused. Numeric tricks (`2852039166`, `0xa9fea9fe`, `127.1`) are caught because the check
-  is on the resolved address, not the text.
-- **Redirects:** OpenClaw's guarded fetch follows redirects itself (`redirect: manual`, at most `maxRedirects: 3`) and
-  builds a new proxy agent for every hop, so every hop is a new CONNECT and gets the same check. OpenClaw also refuses
-  private IP literals and `localhost` names per hop before the proxy sees them.
-- **Why the proxy and not a tool behind the tools door:** the proxy is the network's only way out, it does the DNS
-  lookup and the connect itself (so it sees addresses, not just names), and it sees every hop. A separate fetch tool
-  would duplicate OpenClaw's fetch, extraction and untrusted wrapping for no stronger guarantee.
-- **Untrusted content:** `web_fetch` wraps what it returns with OpenClaw's external-content markers
-  (`wrapWebContent(..., "web_fetch")`), the same wrapper MC's bounded search uses.
-- **Log:** `docker logs minimoi-mc-egress` has one JSON line per decision: `{"verdict":"tunnel","host":...,"address":...}`
-  or `{"verdict":"refused","host":...,"reason":"resolves to 169.254.169.254 (169.254.0.0/16)"}`. Host only, never paths.
-- **The proxy also carries MC's model traffic.** Opening it to public hosts also lets `mc-agent` (the job agent, which
-  has `exec`) reach public HTTPS hosts; `mc-chat` has no runtime tools. Private and metadata addresses stay closed for
-  everything.
-- **Checks:** `mc_container_security_test.py` 2c (private/metadata/internal targets refused, incl. by decimal IP and
-  Docker name) and 2c2 (example.com tunnels); unit tests `tests/test_mc_egress_proxy.py`.
-- **Kill switch (no rebuild):** `MC_EGRESS_MODE=allowlist` in `/opt/minimoi/mc/mc.env`, then
-  `docker compose -p minimoi-mc --env-file /opt/minimoi/mc/mc.env -f /opt/minimoi/docker-compose.mc.prod.yml up -d mc-egress`.
-  The proxy is back to model-provider hosts only (still address-checked); MC's fetches are refused and logged.
-  Full revert: revert the PR and tag a new `mc-agent-v*` release.
+- **Path:** mc-chat's plugin → the portal's tools listener (the call is bound to Robert's live mc-chat turn, as every
+  MiniMoi tool is) → `mc-fetch` (`docker/mc-agent-container/mc-fetch.mjs`, service `mc-fetch` in
+  `docker-compose.mc.prod.yml`) → the page. `mc-fetch` is on `minimoi-mc-portal` (alias `mc-fetch`) and its own egress
+  network `minimoi-mc-fetch-out`, **not** on `minimoi-mc-internal`: nothing in MC's container can reach it, and MC's own
+  egress stays model-provider-only, so the job agent's `exec` gains no open web.
+- **What mc-fetch refuses, at every hop:** anything but `https` on 443; a host that resolves to ANY private (RFC 1918),
+  loopback, link-local (169.254.0.0/16, so 169.254.169.254 metadata), CGNAT, multicast, reserved, documentation, IPv6
+  loopback / ULA (fd00:ec2::254) / link-local / site-local address, or an IPv4-mapped, NAT64 or 6to4 form of one. It
+  resolves the name itself and connects to the address it checked (TLS still verifies the hostname). It follows at
+  most 3 redirects itself, checking each. Numeric forms (`2852039166`, `0xa9fea9fe`) are caught because the check is on
+  the resolved address.
+- **Caps:** 5 fetches per turn (policy `max_operations_per_turn`); at most 2 MB read from a page and 20,000 characters
+  handed to MC (default 12,000); 30 s per fetch; text and web content types only.
+- **Taint:** a fetch marks the turn and the conversation as having read public text, exactly like a GitHub read, so
+  any later outward effect in that conversation needs Robert's card and code.
+- **Untrusted content:** mc-fetch wraps the text in random-id `EXTERNAL_UNTRUSTED_CONTENT` markers (the same shape as
+  OpenClaw's web wrapper) and neutralises spoofed markers; the portal refuses to pass on text that is not wrapped.
+- **Logs (host and verdict, never the path):** `docker logs minimoi-mc-fetch` (`{"verdict":"fetch"|"refused",...}`) and
+  the portal's `mc tools: web fetch host=... verdict=...` lines.
+- **Credential:** `deploy_mc_container_ec2.sh deploy` generates `MC_FETCH_TOKEN` in `/opt/minimoi/mc/mc.env` once and
+  writes the same value to `/opt/minimoi/mc/portal/mc-fetch-token` (root 0600, the portal's `/run/secrets/mc`). The
+  portal offers the tool only while that file is there and owner-only.
+- **Policy approval (needed on the release that adds it):** the prod policy's revision is `mc-prod-20261114-web-fetch`.
+  The new digest needs Robert's approval before ANY MC tool works again:
+  `deploy_mc_container_ec2.sh approve-policy "<Robert's words>"`.
+- **Kill switch, back to today's state:** `docker stop minimoi-mc-fetch` (the tool answers "not available"), and for
+  a lasting off `MINIMOI_MC_WEB_FETCH=0` in `/opt/minimoi/.env` and
+  `deploy_scoped_release.sh <running tag> portal` (env_file is read on recreate), or a policy revision without
+  the `web_fetch_v1` rule (approve-policy again). Full revert: revert the PR.
+- **Checks:** security test 2c (proxy refuses non-provider, private and metadata targets), 2c2 (MC's container
+  cannot tunnel to example.com), 2e (MC's container cannot reach `mc-fetch`), 2c3 (mc-fetch refuses metadata directly
+  and by redirect, reads example.com). Unit tests: `tests/test_mc_egress_proxy.py` (node rigs), and
+  `tests/mc_tools/test_web_fetch_tool.py`.

@@ -26,7 +26,8 @@ TARGETS = {
     "prod": {"agent": "minimoi-mc-agent", "image": None,                        # the image the running container uses
              "ro": ["/minimoi/docs", "/minimoi/apprenticeship"],
              "unreachable": [["minimoi-portal", 5001], ["postgres-ai-agents", 5432], ["minimoi-model-gateway", 4000],
-                             ["cos-agent-a", 18789], ["cos-scheduler", 8769], ["169.254.169.254", 80]],
+                             ["cos-agent-a", 18789], ["cos-scheduler", 8769], ["169.254.169.254", 80],
+                             ["mc-fetch", 8791], ["minimoi-mc-fetch", 8791]],          # #584: only the portal reaches it
              "absent": ["/minimoi/private", "/opt/minimoi/private", "/opt/minimoi/mc/mc.env"],   # the judgment store and MC's tokens
              "tmp": "/root/mc-security-tmp"},
 }
@@ -102,6 +103,21 @@ def _():
                             "r.on('connect',(res,s)=>{console.log(res.statusCode);s.destroy();process.exit(0)});r.on('error',e=>{console.log(e.code);process.exit(1)});r.end()",
                      timeout=40)
     return out.strip() == "403", out
+
+
+@check("2c3", "mc-fetch (prod) refuses the metadata address and a redirect to it, and reads a public page (#584)")
+def _():
+    if T is not TARGETS["prod"]:
+        return True, "skipped: mc-fetch runs on prod only"
+    js = ("const t=process.env.MC_FETCH_TOKEN;const go=u=>fetch('http://127.0.0.1:8791/v1/fetch',{method:'POST',"
+          "headers:{authorization:'Bearer '+t,'content-type':'application/json'},body:JSON.stringify({url:u})}).then(r=>r.json());"
+          "Promise.all([go('https://169.254.169.254/latest/meta-data/'),go('https://2852039166/'),"
+          "go('https://postman-echo.com/redirect-to?url=https%3A%2F%2F169.254.169.254%2F'),go('https://example.com/')])"
+          ".then(a=>console.log(a.map(x=>x.ok?'ok':x.code).join(' '))).catch(e=>console.log('error '+e.message))")
+    code, out = node("minimoi-mc-fetch", js, timeout=60)
+    parts = out.split()
+    return parts[:2] == ["address_refused", "address_refused"] and parts[2] in ("address_refused", "fetch_failed") \
+        and parts[3:] == ["ok"], out
 
 
 @check("2d", "the proxy tunnels to a provider host (api.anthropic.com)")
