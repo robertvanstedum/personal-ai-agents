@@ -101,6 +101,9 @@ prepare() {
   grep -q '^MC_TOOLS_TOKEN=' "$MC_ENV" || printf 'MC_TOOLS_TOKEN=%s\n' "$(openssl rand -base64 48 | tr -d '/+=\n' | cut -c1-48)" >> "$MC_ENV"
   grep -q '^MC_WORKER_TOKEN=' "$MC_ENV" || printf 'MC_WORKER_TOKEN=%s\n' "$(openssl rand -base64 48 | tr -d '/+=\n' | cut -c1-48)" >> "$MC_ENV"
   grep -q '^MC_SEARCH_KEY=' "$MC_ENV" || mint_search_key
+  # MC's web fetch (#584): the portal's credential for the mc-fetch service. mc-fetch gets it from mc.env; the portal
+  # reads the same value from /run/secrets/mc/mc-fetch-token (written below). Never printed.
+  grep -q '^MC_FETCH_TOKEN=' "$MC_ENV" || printf 'MC_FETCH_TOKEN=%s\n' "$(openssl rand -base64 48 | tr -d '/+=\n' | cut -c1-48)" >> "$MC_ENV"
   # Governed artifacts (same path inside MC as the portal names) and a self-contained repo clone (main only).
   install -d -m 0750 -o 1000 -g 1000 "$MC_DIR/artifacts"
   if [[ ! -d "$MC_DIR/repo/.git" ]]; then
@@ -111,6 +114,9 @@ prepare() {
   # authority record only from `approve-policy` with Robert's words; registries start empty.
   install -d -m 0700 -o root -g root "$MC_DIR/portal" "$ROOT/data/mc-lessons"
   install -m 0600 -o root -g root "$ROOT/mc-release/mc-policy.prod.json" "$MC_DIR/portal/mc-policy.prod.json"
+  ( umask 077; env_value "$MC_ENV" MC_FETCH_TOKEN > "$MC_DIR/portal/mc-fetch-token.tmp" )
+  chown root:root "$MC_DIR/portal/mc-fetch-token.tmp"; chmod 0600 "$MC_DIR/portal/mc-fetch-token.tmp"
+  mv -f "$MC_DIR/portal/mc-fetch-token.tmp" "$MC_DIR/portal/mc-fetch-token"
   [[ -f "$MC_DIR/portal/approved-handoff-registry.json" ]] || ( umask 077; echo '{"handoffs":{}}' > "$MC_DIR/portal/approved-handoff-registry.json" )
   [[ -f "$MC_DIR/portal/task-watch-registry.json" ]] || ( umask 077; echo '{"subscriptions":[]}' > "$MC_DIR/portal/task-watch-registry.json" )
   [[ -f "$MC_DIR/portal/enrollment.json" ]] || log "note: $MC_DIR/portal/enrollment.json absent until the Mac worker is enrolled (agent contact stays off)"

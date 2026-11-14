@@ -93,6 +93,12 @@ OPS_ONLY_FILES = frozenset({"scripts/operations/deploy_mc_container_ec2.sh",
                             # MC's 1.2 layer: travels in MC's own image and is refreshed by MC's tag release, only where
                             # an operator already placed it. No service in this pipeline reads it.
                             "docker-compose.mc-1-2-production.yml",
+                            # MC's own compose project and its security check: copied into MC's image (mc-release) and
+                            # deployed by deploy-mc-agent.yml; the dev file runs only on a Mac. No main service reads
+                            # them (#584).
+                            "docker-compose.mc.prod.yml",
+                            "docker-compose.mc-agent.dev.yml",
+                            "scripts/ops/mc_container_security_test.py",
                             # Guildhall on production (#550): no main service runs these. They name the guildhall
                             # target instead (GUILDHALL_DEPLOY_FILES below), which deploy.yml refreshes on its own.
                             ".github/workflows/rooms-worker-image.yml",

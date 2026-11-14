@@ -54,7 +54,7 @@ def test_the_conversation_lane_runs_cos_s_minimal_pattern_with_every_minimoi_too
     minimoi = CONFIG["plugins"]["entries"]["minimoi-tools"]["config"]["tools"]
     assert chat["profile"] == "minimal"
     assert chat["alsoAllow"] == BUILT_INS_KEPT + minimoi
-    assert "minimoi_open_card" in minimoi and "minimoi_vault_search" in minimoi and len(minimoi) == 53
+    assert "minimoi_open_card" in minimoi and "minimoi_vault_search" in minimoi and len(minimoi) == 54   # +web_fetch (#584), +vault_search (#594)
     assert not set(BUILT_INS_DROPPED) & set(chat["alsoAllow"])
     # The cards, the persona and the handbook name no dropped tool.
     texts = [p.read_text() for p in (REPO / "services/mc_operations/personas/mc-chat/releases/0.1.34").rglob("*.md")]

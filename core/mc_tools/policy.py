@@ -91,6 +91,9 @@ HANDLERS = {
     "github_read_v1": Handler("minimoi_github_issues", "github.issues.read", frozenset({1}), None, "github_read"),
     # #543: any GET under the one repository (workflow runs, jobs, deployments...), refusing secret-bearing paths.
     "github_get_v1": Handler("minimoi_github_get", "github.repo.read", frozenset({1}), None, "github_read"),
+    # #584: one public HTTPS page, fetched by the mc-fetch container (every hop's resolved address checked; private,
+    # loopback, link-local/metadata and CGNAT refused). Read-only, but public text: the turn and conversation are tainted.
+    "web_fetch_v1": Handler("minimoi_web_fetch", "web.page.read", frozenset({1}), None, "web_read"),
     # #553: one of MC's own cards (its pinned persona's skills), by name; read-only, no egress.
     "open_card_v1": Handler("minimoi_open_card", "mc.skill.read", frozenset({1}), None, "none"),
     # #594: keyword search of MC's own Vault index (career material filtered out at index time); read-only, internal only.

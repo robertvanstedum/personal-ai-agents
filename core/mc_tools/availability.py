@@ -35,6 +35,7 @@ def snapshot(service, policy_tools, offered_tools):
         "minimoi_guest_request_reject": [(service.guest_rejects, "guest_actions_off")],
         "minimoi_github_issues": [(service.github is not None, "github_reader_unavailable")],
         "minimoi_github_get": [(getattr(service, "github_api", None) is not None, "github_reader_unavailable")],
+        "minimoi_web_fetch": [(getattr(service, "web_fetch", None) is not None, "web_fetch_unavailable")],
         "minimoi_open_card": [(_cards_readable(), "cards_unavailable")],
         "minimoi_vault_search": [(getattr(service, "vault_search", None) is not None, "vault_search_unavailable")],
         "minimoi_issue_comment": [(service.comments, "issue_comments_unavailable")],

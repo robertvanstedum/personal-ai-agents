@@ -1,6 +1,6 @@
 {
   "schema": "mc-policy/1",
-  "revision": "mc-prod-20261114-vault-search",
+  "revision": "mc-prod-20261114-web-fetch-vault-search",
   "rules": [
     {
       "capability": "host.health",
@@ -91,6 +91,24 @@
       "undo": null,
       "egress": "none",
       "max_operations_per_turn": 10
+    },
+    {
+      "capability": "web.page.read",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "web_fetch_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "web_read",
+      "max_operations_per_turn": 5
     },
     {
       "capability": "guest.reject_request",

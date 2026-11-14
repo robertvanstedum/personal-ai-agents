@@ -86,16 +86,18 @@ class Policy(unittest.TestCase):
 
     def test_the_prod_revision_builds_on_547s_so_one_approval_covers_both(self):
         prod = json.loads((ROOT / "services/mc_operations/policy/mc-policy.prod.json").read_text())
-        self.assertEqual(prod["revision"], "mc-prod-20261114-vault-search")      # #594's vault search rule builds on this one
+        # #584 (web fetch) and #594 (vault search) build on this one in a single revision: one approve-policy covers both.
+        self.assertEqual(prod["revision"], "mc-prod-20261114-web-fetch-vault-search")
         handlers = [r["handler"] for r in prod["rules"]]
         self.assertIn("github_get_v1", handlers)            # #547's rule, unchanged
         self.assertEqual(handlers.index("open_card_v1"), handlers.index("github_get_v1") + 1)
         base = subprocess.run(["git", "show", "origin/release/1.2.1:services/mc_operations/policy/mc-policy.prod.json"],
                               cwd=ROOT, capture_output=True, text=True)
-        if base.returncode == 0:                              # the only change from #547's revision is this rule
+        if base.returncode == 0:                              # the only changes from #547's revision are these rules
             before = json.loads(base.stdout)
             self.assertEqual(before["revision"], "mc-prod-20261112-github-get")
-            self.assertEqual([r for r in prod["rules"] if r["handler"] not in ("open_card_v1", "vault_search_v1")], before["rules"])
+            self.assertEqual([r for r in prod["rules"] if r["handler"] not in ("open_card_v1", "web_fetch_v1", "vault_search_v1")],
+                             before["rules"])
 
 
 class Routing(unittest.TestCase):
