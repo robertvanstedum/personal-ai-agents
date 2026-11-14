@@ -9,6 +9,7 @@
     {"host": "/opt/minimoi/scripts/host_script_parity.py", "repo": "scripts/operations/host_script_parity.py", "ship": true, "mode": "0755"},
     {"host": "/opt/minimoi/scripts/install_mc_github_awareness_cron.sh", "repo": "scripts/operations/install_mc_github_awareness_cron.sh", "ship": true, "mode": "0755"},
     {"host": "/opt/minimoi/scripts/guildhall_prod.sh", "repo": "scripts/operations/guildhall_prod.sh", "ship": true, "mode": "0755"},
+    {"host": "/opt/minimoi/scripts/cos_agent_imds_block.sh", "repo": "scripts/operations/cos_agent_imds_block.sh", "ship": true, "mode": "0755"},
     {"host": "/opt/minimoi/scripts/write_production_delivery_record.py", "repo": "scripts/operations/write_production_delivery_record.py", "ship": true, "mode": "0755"},
     {"host": "/opt/minimoi-tools/career-sync/career_sync.py", "repo": "scripts/operations/career_sync.py", "ship": true, "mode": "0500"},
     {"host": "/opt/minimoi/jobs-tools/core/__init__.py", "repo": "core/__init__.py", "ship": true, "mode": "0644"},

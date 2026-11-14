@@ -221,3 +221,79 @@ def test_platform_only_evidence_is_saved_but_not_owner_dialogue(tmp_path):
                            index_path=tmp_path / "index/memory.sqlite", embedder=NoModel(),
                            caller=policy.Caller(tier="all", scopes=("robert",)))
     assert not result["keyword"]
+
+
+def test_mc_index_is_published_with_career_turns_filtered_and_served_by_the_mc_profile(tmp_path):
+    """#594: the feed also publishes MC's career-filtered index; dev_ask's MC profile serves only that index."""
+    root, turns, row = source(tmp_path)
+    career = dict(row, seq=2, turn_id="t-0123456789abcdee", user_text="Rewrite my resume for the recruiter call",
+                  reply_text="Here is a tighter resume summary", status="answered", answered_at=AT)
+    with turns.open("a") as f:
+        f.write(json.dumps(career) + "\n")
+    mc_root = tmp_path / "mc"
+    mc_export(mc_root)
+    export = mc_root / "dev--c-0123456789ab.json"
+    doc = json.loads(export.read_text())
+    doc["turns"] += [{"note_id": 2, "created_at": AT, "author_kind": "owner", "who": "robert", "label": "Robert",
+                      "text": "Neighbour turn, dropped with the next one"},
+                     {"note_id": 3, "created_at": AT, "author_kind": "owner", "who": "robert", "label": "Robert",
+                      "text": "Also, the cover letter for the hiring manager needs a pass"},
+                     {"note_id": 4, "created_at": AT, "author_kind": "owner", "who": "robert", "label": "Robert",
+                      "text": "Unrelated aside about sourdough"},
+                     {"note_id": 5, "created_at": AT, "author_kind": "owner", "who": "robert", "label": "Robert",
+                      "text": "Then wire the green kestrel gauge into health"}]
+    export.write_text(json.dumps(doc))
+    manifest(mc_root)
+    data = tmp_path / "vault"
+    args = dict(cos_root=root, mc_root=mc_root, shelf_root=data / "memory", index_path=data / "memory-index" / "memory.sqlite",
+                jobs_root=data / "jobs", min_free=0, mc_index_path=data / "memory-index" / "memory-mc.sqlite")
+    report = run(**args)
+    assert report["state"] == "ok" and report["mc_index"]["code"] == "ok", report
+    caller = policy.Caller(tier="all", scopes=("robert",))
+    def hits(index, q):
+        return search.search(q, shelf_root=args["shelf_root"], index_path=index, embedder=NoModel(), caller=caller)["keyword"]
+    assert hits(args["index_path"], "recruiter") and hits(args["index_path"], "amber otter")   # CoS's index: unchanged
+    assert hits(args["mc_index_path"], "recruiter") == []                          # MC's: never
+    assert hits(args["mc_index_path"], "amber otter") == []                        # CoS's conversations: excluded by default
+    assert hits(args["index_path"], "cover letter")
+    assert hits(args["mc_index_path"], "cover letter") == []                       # a career turn in an MC conversation
+    assert hits(args["mc_index_path"], "blue heron meeting")                       # MC's: everything else
+    assert hits(args["mc_index_path"], "green kestrel gauge")
+    from scripts.memory.dev_ask import app_for
+    from core.memory_ask.identity import add_agent
+    token = add_agent(data / "memory-ask" / "agents-mc.json", "mc", tiers=("curated", "all"))
+    client = app_for(data, "mc").test_client()
+    answer = client.post("/v1/ask", json={"query": "blue heron", "include_raw": True},
+                         headers={"Authorization": f"Bearer {token}"})
+    assert answer.status_code == 200 and answer.get_json()["keyword"]
+
+
+def test_ask_keeps_answering_from_the_published_index_while_a_feed_run_is_in_progress(tmp_path):
+    """Dev, 14 Nov: a /v1/ask during the feed's rebuild got 503. The indexes are swapped in whole, so the last good run's
+    files stay servable while the next run works; a stale last success still refuses."""
+    from datetime import timedelta
+    from core.jobs import status
+    from scripts.memory import dev_feed
+    from scripts.memory.dev_ask import app_for
+    from core.memory_ask.identity import add_agent
+    root, _, _ = source(tmp_path)
+    mc_root = tmp_path / "mc"
+    mc_export(mc_root)
+    data = tmp_path / "vault"
+    assert run(cos_root=root, mc_root=mc_root, shelf_root=data / "memory", index_path=data / "memory-index" / "memory.sqlite",
+               jobs_root=data / "jobs", min_free=0)["state"] == "ok"
+    token = add_agent(data / "memory-ask" / "agents.json", "cos", tiers=("curated", "all"))
+    client = app_for(data).test_client()
+    ask = lambda: client.post("/v1/ask", json={"query": "blue heron", "include_raw": True},
+                              headers={"Authorization": f"Bearer {token}"})
+    assert ask().status_code == 200
+    now = datetime.now(timezone.utc)
+    status.start_run(data / "jobs", dev_feed.JOB, "r" * 24, now)            # the next run starts: state "running"
+    answer = ask()
+    assert answer.status_code == 200 and answer.get_json()["keyword"]
+    doc = status.read_status(data / "jobs", "dev-memory-feed.json", "dev-memory-feed")
+    stale = status.build(job_id=doc["job_id"], host=doc["host"], run_id=doc["run_id"], state="running",
+                         started_at=now, summary="run in progress", last_success_at=now - timedelta(hours=1))
+    status.write_status(data / "jobs", "dev-memory-feed.json", stale)
+    refused = ask()
+    assert refused.status_code == 503 and refused.get_json() == {"error": "feed_not_ready"}
