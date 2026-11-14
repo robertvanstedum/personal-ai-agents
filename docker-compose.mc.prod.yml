@@ -4,8 +4,7 @@
 # Same image and shape as dev (docker-compose.mc-agent.dev.yml); differences are only EC2 paths, the ECR image and the
 # portal network. Boundaries:
 #   * mc-agent is only on mc-internal (internal: no route out). Its one way out is mc-egress, a CONNECT proxy that
-#     tunnels to public addresses on 443 only, checked after resolution and at every redirect hop (#584).
-#     No published port, no Docker socket, no host credentials, no .env.
+#     tunnels only to model-provider hosts. No published port, no Docker socket, no host credentials, no .env.
 #   * no provider API keys anywhere (start.sh refuses); models run on Robert's plans via signed-in CLIs whose state
 #     lives only on the mc-claude-home / mc-auth volumes.
 #   * the portal reaches MC only through mc-relay on minimoi-mc-portal (created by docker-compose.prod.yml; only the
@@ -17,11 +16,6 @@ services:
     container_name: minimoi-mc-egress
     entrypoint: ["tini", "-g", "--", "node", "/opt/minimoi/mc-agent/egress-proxy.mjs"]
     restart: unless-stopped
-    # #584: "public" admits any public address on 443 (resolved and checked per hop; private, loopback, link-local,
-    # metadata and CGNAT refused) so MC's web_fetch works. Kill switch without a rebuild: MC_EGRESS_MODE=allowlist in
-    # mc.env, then `up -d mc-egress` (back to model-provider hosts only).
-    environment:
-      - EGRESS_MODE=${MC_EGRESS_MODE:-public}
     networks: [mc-internal, mc-egress-out]
     mem_limit: 96m
     read_only: true

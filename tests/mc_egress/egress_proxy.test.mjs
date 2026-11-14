@@ -1,11 +1,11 @@
-// #584: MC's egress proxy admits any public host on 443 and refuses private, loopback, link-local, metadata, CGNAT and
-// IPv6 local addresses, judged on the RESOLVED address and again at every redirect hop (each hop is a new CONNECT).
+// #584: the address check MC's web fetch applies to every hop (shared by mc-fetch.mjs), and MC's egress proxy, which
+// stays allowlist-only (model providers) and now also refuses an allowlisted name that resolves to a private address.
 // Synthetic only: fake DNS answers, and "upstream" is a local plain-HTTP server reached through the tunnel. No network.
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import net from 'node:net';
 import test from 'node:test';
-import { addressRefusal, checkTarget, createEgressServer, isPublicAddress, parseTarget } from '../../docker/mc-agent-container/egress-proxy.mjs';
+import { addressRefusal, checkTarget, createEgressServer, DEFAULT_ALLOW, isPublicAddress, parseTarget } from '../../docker/mc-agent-container/egress-proxy.mjs';
 
 const REFUSED = {
   'RFC1918 10/8': '10.1.2.3',
@@ -117,16 +117,17 @@ test('numeric host forms that the system resolver turns into metadata are refuse
   }
 });
 
-test('allowlist mode keeps the old provider-only rule, still address-checked', async () => {
-  assert.equal((await checkTarget('docs.example.org:443', { lookup: DNS, mode: 'allowlist' })).ok, false);
-  assert.equal((await checkTarget('api.anthropic.com:443', { lookup: DNS, mode: 'allowlist' })).ok, true);
+test('with an allowlist (the proxy), only listed hosts pass, and still address-checked', async () => {
+  const allow = DEFAULT_ALLOW;
+  assert.match((await checkTarget('docs.example.org:443', { lookup: DNS, allow })).reason, /not on the provider allowlist/);
+  assert.equal((await checkTarget('api.anthropic.com:443', { lookup: DNS, allow })).ok, true);
   const badDns = dnsOf({ 'api.anthropic.com': ['10.9.9.9'] });
-  assert.equal((await checkTarget('api.anthropic.com:443', { lookup: badDns, mode: 'allowlist' })).ok, false);
+  assert.equal((await checkTarget('api.anthropic.com:443', { lookup: badDns, allow })).ok, false);
 });
 
 // ---- through the real proxy server ---------------------------------------------------------------------------------
 
-async function rig() {
+async function rig({ allow = [...DEFAULT_ALLOW, 'docs.example.org', 'metadata-alias.example.org', '169.254.169.254'] } = {}) {
   // "Upstream": a plain HTTP server standing in for every public site. "/" redirects to the instance metadata address;
   // "/to-alias" redirects to a public-looking name whose DNS answer is the metadata address; "/page" is a page.
   const site = http.createServer((req, res) => {
@@ -140,6 +141,7 @@ async function rig() {
   const logs = [];
   const proxy = createEgressServer({
     lookup: DNS,
+    allow,
     connect: (address) => { connected.push(address); return net.connect(site.address().port, '127.0.0.1'); },
     log: (e) => logs.push(e),
   });
@@ -243,5 +245,20 @@ test('plain HTTP through the proxy is refused', async () => {
     assert.equal(status, 403);
     assert.deepEqual(r.connected, []);
     assert.deepEqual(r.logs, [{ verdict: 'refused', host: 'docs.example.org', reason: 'plain HTTP' }]);
+  } finally { r.close(); }
+});
+
+test('the proxy (default allowlist) refuses a public non-provider host: MC\'s container has no open web', async () => {
+  const r = await rig({ allow: DEFAULT_ALLOW });
+  try {
+    const { status, socket } = await connectVia(r.proxyPort, 'docs.example.org:443');
+    socket.destroy();
+    assert.equal(status, 403);
+    assert.deepEqual(r.connected, []);
+    assert.deepEqual(r.logs, [{ verdict: 'refused', host: 'docs.example.org', reason: 'not on the provider allowlist' }]);
+    const ok = await connectVia(r.proxyPort, 'api.anthropic.com:443');
+    ok.socket.destroy();
+    assert.equal(ok.status, 200);
+    assert.deepEqual(r.connected, ['160.79.104.10']);
   } finally { r.close(); }
 });

@@ -40,7 +40,7 @@ def test_the_conversation_lane_keeps_its_safety_limits():
     assert CONFIG["agents"]["entries"]["mc-chat"]["memory"]["search"]["enabled"] is False
 
 
-BUILT_INS_KEPT = ["read", "ls", "web_search", "web_fetch", "view_image", "session_status"]  # web_fetch: #584
+BUILT_INS_KEPT = ["read", "ls", "web_search", "view_image", "session_status"]
 BUILT_INS_DROPPED = ["write", "edit", "apply_patch", "skill_workshop", "sessions", "sessions_list", "sessions_history",
                      "sessions_search", "sessions_yield", "agents_wait", "conversations_list", "conversations_send",
                      "conversations_turn", "progress_card", "create_goal", "get_goal", "update_goal", "intent", "ask_user",

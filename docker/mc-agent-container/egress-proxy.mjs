@@ -1,19 +1,12 @@
-// MC's only way out (spec_mc_agent_container v0.2 §4; #584): an HTTP CONNECT proxy. MC's container sits on an internal
-// network with no route out, so what this proxy admits is enforced by the network, not by MC's cooperation.
+// MC's only way out (spec_mc_agent_container v0.2 §4): an HTTP CONNECT proxy that tunnels TLS to an exact allowlist of
+// model-provider hostnames and refuses everything else. MC's container sits on an internal network with no route out, so
+// this allowlist is enforced by the network, not by MC's cooperation. Plain HTTP and non-443 ports are refused.
 //
-// Rule (#584, Robert 13 Nov: web access like CoS, domain focus from MC's instructions, not an allowlist):
-//   * CONNECT to any host on port 443 whose name resolves ONLY to public addresses. The proxy resolves the name itself,
-//     checks every address it gets back, and connects to the address it checked (never resolves twice, so a DNS answer
-//     that changes between check and connect cannot slip through).
-//   * Refused: private (RFC 1918), loopback, link-local (169.254.0.0/16, so 169.254.169.254 metadata), CGNAT
-//     (100.64.0.0/10), "this network", multicast, reserved, documentation and benchmarking ranges; IPv6 loopback,
-//     unspecified, ULA (fc00::/7, so EC2's fd00:ec2::254), link-local, site-local, multicast, anything outside 2000::/3;
-//     and the IPv4-mapped / NAT64 / 6to4 forms that carry an IPv4 address inside IPv6.
-//   * Redirects: OpenClaw's web_fetch (tools.web.fetch.useTrustedEnvProxy) opens a fresh tunnel for every redirect
-//     hop, so each hop is a new CONNECT and gets the same check. Plain HTTP and non-443 ports are refused.
-// EGRESS_MODE=allowlist restores the earlier exact model-provider allowlist (the address check still applies).
-// Logs one JSON line per decision: host, verdict, and for refusals the reason (never paths or bodies).
-// Node standard library only.
+// #584: an allowlisted name is also resolved here and refused if ANY address it resolves to is not public (private,
+// loopback, link-local incl. 169.254.169.254, CGNAT, IPv6 ULA/link-local, IPv4-mapped forms, ...); the tunnel goes to
+// the checked address. The same address check (addressRefusal / checkTarget, exported) is what mc-fetch.mjs applies to
+// every hop of MC's web fetch, which runs in its own container: this proxy does NOT open the web to MC's container.
+// Logs one JSON line per decision: host, verdict, and for refusals the reason. Node standard library only.
 import dns from 'node:dns';
 import http from 'node:http';
 import net from 'node:net';
@@ -140,15 +133,16 @@ function defaultLookup(host) {
 }
 
 /**
- * Decide one CONNECT. Resolves the host (an IP literal resolves to itself), refuses if ANY address is not public, and
- * returns the checked address to connect to. {ok:true, host, address, family} or {ok:false, host, reason}.
+ * Decide one destination ("host:443"). With `allow` (the proxy), the host must be on it; with allow=null (mc-fetch),
+ * any host. Then resolves it (an IP literal resolves to itself), refuses if ANY address is not public, and returns the
+ * checked address to connect to. {ok:true, host, address, family} or {ok:false, host, reason}.
  */
-export async function checkTarget(target, { lookup = defaultLookup, mode = 'public', allow = PROVIDER_HOSTS } = {}) {
+export async function checkTarget(target, { lookup = defaultLookup, allow = null } = {}) {
   const parsed = parseTarget(target);
   if (!parsed) return { ok: false, host: String(target || '').slice(0, 100), reason: 'malformed target' };
   const { host, port } = parsed;
   if (port !== 443) return { ok: false, host, reason: `port ${port} (only 443)` };
-  if (mode === 'allowlist' && !new Set(allow).has(host)) return { ok: false, host, reason: 'not on the provider allowlist' };
+  if (allow && !new Set(allow).has(host)) return { ok: false, host, reason: 'not on the provider allowlist' };
   let addrs;
   try {
     addrs = (await lookup(host)) || [];
@@ -169,11 +163,12 @@ export async function checkTarget(target, { lookup = defaultLookup, mode = 'publ
 const defaultLog = (entry) => console.log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
 const defaultConnect = (address, family) => net.connect({ host: address, port: 443, family });
 
+export const DEFAULT_ALLOW = Object.freeze([...PROVIDER_HOSTS]);
+
 export function createEgressServer({
   lookup = defaultLookup,
   connect = defaultConnect,
-  mode = 'public',
-  allow = PROVIDER_HOSTS,
+  allow = DEFAULT_ALLOW,
   log = defaultLog,
 } = {}) {
   const server = http.createServer((req, res) => {
@@ -183,7 +178,7 @@ export function createEgressServer({
 
   server.on('connect', async (req, client, head) => {
     client.on('error', () => client.destroy());
-    const v = await checkTarget(req.url, { lookup, mode, allow });
+    const v = await checkTarget(req.url, { lookup, allow });
     if (!v.ok) {
       log({ verdict: 'refused', host: v.host, reason: v.reason });
       client.end('HTTP/1.1 403 Forbidden\r\ncontent-type: text/plain\r\n\r\negress: destination not allowed\n');
@@ -218,10 +213,7 @@ export function createEgressServer({
 
 if (process.argv[1] && process.argv[1].endsWith('egress-proxy.mjs')) {
   const PORT = Number(process.env.EGRESS_PORT || 3128);
-  const mode = process.env.EGRESS_MODE === 'allowlist' ? 'allowlist' : 'public';
   const allow = (process.env.EGRESS_ALLOW || PROVIDER_HOSTS.join(','))
     .split(',').map((h) => h.trim().toLowerCase()).filter(Boolean);
-  createEgressServer({ mode, allow }).listen(PORT, '0.0.0.0', () => console.log(JSON.stringify({
-    listening: PORT, mode, ...(mode === 'allowlist' ? { allow } : { rule: 'any public address on 443' }),
-  })));
+  createEgressServer({ allow }).listen(PORT, '0.0.0.0', () => console.log(JSON.stringify({ listening: PORT, allow })));
 }

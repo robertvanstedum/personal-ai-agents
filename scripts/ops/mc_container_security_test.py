@@ -82,7 +82,7 @@ def _():
     return "CONNECTED" not in out, out
 
 
-@check("2c", "the proxy refuses private, loopback, metadata, CGNAT and internal-name destinations (#584)")
+@check("2c", "the proxy refuses non-provider, private, loopback, metadata, CGNAT and internal-name destinations (#584)")
 def _():
     # Judged on the resolved address: 2852039166 is 169.254.169.254 in decimal; mc-tools-door resolves to a Docker
     # (172.16/12) address; port 80 and plain HTTP stay refused.
@@ -96,12 +96,12 @@ def _():
     return out.strip() != "" and all(part.endswith("=403") for part in out.split()), out
 
 
-@check("2c2", "the proxy tunnels to a public non-provider host (example.com), so MC's web_fetch can reach it (#584)")
+@check("2c2", "MC's container cannot tunnel to a public non-provider host (example.com): exec gains no open web (#584)")
 def _():
     code, out = node(AGENT, "const h=require('http');const r=h.request({host:'mc-egress',port:3128,method:'CONNECT',path:'example.com:443'});"
                             "r.on('connect',(res,s)=>{console.log(res.statusCode);s.destroy();process.exit(0)});r.on('error',e=>{console.log(e.code);process.exit(1)});r.end()",
                      timeout=40)
-    return out.strip() == "200", out
+    return out.strip() == "403", out
 
 
 @check("2d", "the proxy tunnels to a provider host (api.anthropic.com)")
