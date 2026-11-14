@@ -42,8 +42,9 @@ export async function startMcWalk({ api, headers, current, say, setPhase }) {
     },
     onStop() { stop('duration_limit'); },
   };
-  // The shared controller runs the tool. The hook name is built so this host file does not wire it by the scanned word.
-  hooks['on' + 'Function' + 'Call'] = (call) => {
+  // The shared controller runs the tool and sends its result; this page only answers the read through the server.
+  // tests/realtime_voice/test_no_copy.py names this file, and only this hook, as an allowed host (#578 S1).
+  hooks.onFunctionCall = (call) => {
     let query = '';
     try { query = JSON.parse(call?.arguments || '{}').query || ''; } catch (_) { query = ''; }
     return post('tool', { name: call?.name, query }).then((body) => JSON.stringify(body || {}));
