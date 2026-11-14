@@ -18,7 +18,7 @@ def test_0_1_35_is_pinned_everywhere():
 
 
 def test_only_the_named_files_change():
-    unchanged = ["SOUL.md", "voice.json", "skills/mc-building/SKILL.md", "skills/mc-corrections/SKILL.md",
+    unchanged = ["SOUL.md", "voice.json", "skills/mc-corrections/SKILL.md",
                  "skills/mc-delivery/SKILL.md", "skills/mc-guildhall/SKILL.md"]
     for name in unchanged:
         assert (NEW / name).read_bytes() == (OLD / name).read_bytes(), name
@@ -39,7 +39,17 @@ def test_agents_asks_when_vague_looks_when_concrete_and_offers_a_document():
     # Every 0.1.34 line except the two reworded ones is still there verbatim.
     old = (OLD / "AGENTS.md").read_text().splitlines()[1:]
     reworded = [l for l in old if l and l not in a]
-    assert len(reworded) == 2, reworded
+    assert len(reworded) == 3, reworded                       # evidence, investigations, cards line (Board notes)
+
+
+def test_operating_rules_moved_from_every_message_into_the_persona():
+    a = (NEW / "AGENTS.md").read_text()
+    assert "Never say a setting, schedule, preference, ticket or any change was made unless MiniMoi reports" in a  # #592
+    assert "Live state is not attached to his messages" in a
+    b = (NEW / "skills/mc-building/SKILL.md").read_text()
+    assert b.startswith((OLD / "skills/mc-building/SKILL.md").read_text().rstrip("\n"))
+    assert "## Board notes (partnership rules, moved from every message, #592)" in b
+    assert "One message supports one Board mutation" in b
 
 
 def test_runtime_names_the_repo_commit_and_the_web_tools():
