@@ -1,7 +1,7 @@
 // The talking call. The shared controller owns the provider session. This page does not
 // call the adapter, and it does not send a tool result itself.
 
-export async function startMcWalk({ api, headers, current, say, setPhase }) {
+export async function startMcWalk({ api, headers, current, say, setPhase, saved }) {
   const { RealtimeVoiceController } = await import(`${api}/mc/voice/static/realtime-voice-controller.js`);
   const turns = [];
   let sessionId = null;
@@ -60,7 +60,12 @@ export async function startMcWalk({ api, headers, current, say, setPhase }) {
     active = false;
     try { controller._wakeLock?.release?.(); } catch (_) { /* already released */ }
     controller.endSession?.(reason);
-    if (sessionId) post('end', { session: sessionId, turns });
+    if (!sessionId) return;
+    // #578: the server keeps the whole call as one file; the page then offers it (read here, download from the server).
+    const id = sessionId, said = turns.slice();
+    post('end', { session: id, turns: said }).then((body) => {
+      if (body?.written && typeof saved === 'function') saved({ turns: said, url: `${api}/mc/voice/walk/transcript/${encodeURIComponent(id)}` });
+    }).catch(() => { /* the call ended; nothing more to offer */ });
   }
 
   const starting = controller.startSession({ provider: 'openai' });

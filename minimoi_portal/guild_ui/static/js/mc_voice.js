@@ -274,6 +274,17 @@ export function initMcVoice(page) {
   // The direct path (UI_CONTRACT_chunk_B.md). Its files are loaded only now that the capabilities answer offered it: the
   // Guild's thread (mc_voice_direct.js) and the shared session module (Spec 165 §4.3), served beside the controller.
   const DIRECT_ENDED = 'Voice ended. What was said is in the conversation.';
+  // #578: after a talking call, its whole transcript, tucked (closed) under the composer, with a download from the server.
+  function showWalkTranscript({ turns, url }) {
+    const box = $('[data-mc-voice-transcript]'), text = $('[data-mc-voice-transcript-text]');
+    if (!box || !text) return;
+    const summary = box.querySelector('summary');
+    if (summary) summary.textContent = `Voice call transcript · ${turns.length} turns · saved`;
+    text.textContent = turns.map((t) => `${t.role === 'user' ? 'You' : 'MC'}: ${t.text}`).join('\n\n');
+    box.hidden = false;
+    box.open = false;
+    if (exportLink && url) { exportLink.setAttribute('href', url); exportLink.hidden = false; }
+  }
   async function startWalk(mine, current) {
     say('Connecting…');
     try {
@@ -283,6 +294,7 @@ export function initMcVoice(page) {
         api, headers, current,
         say: (text) => { if (current()) say(text); },
         setPhase: (phase) => { if (current()) setPhase(phase); },
+        saved: showWalkTranscript,
       });
     } catch (e) {
       if (current()) { stop('failed', { quiet: true }); say(`Voice could not start${e && e.message ? `: ${e.message}` : ''}. Typing still works.`, { loud: true, error: true }); }
