@@ -137,3 +137,28 @@ def test_cos_explicit_instruction_on_both_connector_paths(monkeypatch, bound, ki
     finally:cos.turn_route.reset(token)
     assert len(posts)==1
     assert (DEEP_ANSWER_INSTRUCTION in json.dumps(posts[0]['messages']))==(kind=='deep')
+
+
+def test_mc_phrase_only_quick_turn_still_fails_over(monkeypatch):
+    """#586: with the pair on, an ordinary turn carries depth metadata but keeps Grok's failover to Claude."""
+    from minimoi_portal.guild_ui.mc.stream import Switched
+    backend = OpenClawMasterCraftsman("http://relay/v1", "synthetic-token")
+    posts = []
+    def stream(payload, headers, cancel):
+        posts.append(headers.get("X-MC-Route"))
+        if len(posts) == 1:
+            yield Failure("rate_limited", plan_signal="rate_limit", tools="none")
+        else:
+            yield Delta("Answer")
+            yield Finish("stop")
+    monkeypatch.setattr(backend, "_stream", stream)
+    route = {"route_id": "api-xai-strong", "billing_mode": "metered_api", "provider": "minimoi-gateway",
+             "model": "minimoi-xai-strong", "runtime": "openclaw",
+             "failover": {"route_id": "api-anthropic-strong", "provider": "minimoi-gateway", "model": "minimoi-anthropic-strong",
+                          "billing_mode": "metered_api", "label": "Claude", "tier": "strong", "reasoning_effort": "high",
+                          "runtime": "openclaw"},
+             "depth": {"kind": "quick", "explicit": False, "allow_continuation": False}}
+    events = list(backend.stream_turn(TurnRequest("conversation", "Question", "note", route=route)))
+    assert len(posts) == 2
+    assert any(isinstance(e, Switched) for e in events)
+    assert not any(isinstance(e, Failure) for e in events)

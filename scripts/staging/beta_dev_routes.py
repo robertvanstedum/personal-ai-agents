@@ -209,20 +209,30 @@ def failover_refs(catalogue: dict, agent: str, provider=None) -> list:
     return out
 
 
+def depth_refs(catalogue: dict, agent: str) -> list:
+    """The deep gateway route the host's catalogue pairs for this agent's conversation (depth_routes, #586), or none. The
+    runtime's allowlist and its capped key must name it; removing depth_routes from the catalogue takes it off both."""
+    pair = (catalogue["roles"].get(f"{agent}-conversation") or {}).get("depth_routes") or {}
+    deep = next((r for r in catalogue["routes"] if r["route_id"] == pair.get("deep")), None)
+    return [_ref(deep)] if deep and deep.get("provider") == GATEWAY else []
+
+
 def route_env(catalogue: dict, xai: bool = False) -> dict:
     """{container: {name: value}}, the settings without the key. CoS's runtime holds OpenAI targets only (plan-access.cjs),
-    and Claude's at each level when Grok is the default."""
+    and Claude's at each level when Grok is the default. A deep route the catalogue pairs is added to that agent's
+    pay-per-use list."""
+    def metered(agent):
+        return ",".join([*(XAI_REFS if xai else (GROK_REF,)), *depth_refs(catalogue, agent)])
     if xai:
-        metered = ",".join(XAI_REFS)
-        return {COS: {"COS_METERED_ROUTES": metered, "COS_FAILOVER_ROUTES": ",".join(failover_refs(catalogue, "cos")), "COS_PRIMARY_ROUTE": XAI_DEFAULT_REF},
-                MC: {"MC_METERED_ROUTES": metered, "MC_FAILOVER_ROUTES": ",".join(failover_refs(catalogue, "mc")), "MC_PRIMARY_ROUTE": XAI_DEFAULT_REF}}
-    return {COS: {"COS_METERED_ROUTES": GROK_REF, "COS_FAILOVER_ROUTES": ",".join(failover_refs(catalogue, "cos", "openai"))},
-            MC: {"MC_METERED_ROUTES": GROK_REF, "MC_FAILOVER_ROUTES": ",".join(failover_refs(catalogue, "mc"))}}
+        return {COS: {"COS_METERED_ROUTES": metered("cos"), "COS_FAILOVER_ROUTES": ",".join(failover_refs(catalogue, "cos")), "COS_PRIMARY_ROUTE": XAI_DEFAULT_REF},
+                MC: {"MC_METERED_ROUTES": metered("mc"), "MC_FAILOVER_ROUTES": ",".join(failover_refs(catalogue, "mc")), "MC_PRIMARY_ROUTE": XAI_DEFAULT_REF}}
+    return {COS: {"COS_METERED_ROUTES": metered("cos"), "COS_FAILOVER_ROUTES": ",".join(failover_refs(catalogue, "cos", "openai"))},
+            MC: {"MC_METERED_ROUTES": metered("mc"), "MC_FAILOVER_ROUTES": ",".join(failover_refs(catalogue, "mc"))}}
 
 
-def key_models(env_value: str, xai: bool = False) -> list:
-    """The gateway tiers a key must allow: the failover targets and Grok."""
-    refs = [r for r in env_value.split(",") if r]
+def key_models(env_value: str, xai: bool = False, metered: str = "") -> list:
+    """The gateway tiers a key must allow: the failover targets, Grok, and any other pay-per-use route its runtime holds."""
+    refs = [r for r in f"{env_value},{metered}".split(",") if r]
     grok = {r.split("/")[1] for r in XAI_REFS} if xai else {GROK_MODEL}
     return sorted({r.split("/")[1] for r in refs} | grok)
 
@@ -741,7 +751,7 @@ class RealHost:
         mounts = [m["Destination"] for m in self.O.inspect(COS)["Mounts"]]
         key_file = cos_env.get("COS_GATEWAY_KEY_FILE") or COS_KEY_MOUNT + "/key"
         self.cos_key = {"kind": classify_cos_key(cos_env, mounts, master, self._exec_ok(COS, "test", "-r", key_file))}
-        wanted_cos = key_models(self.env_plan[COS]["COS_FAILOVER_ROUTES"], self.xai)
+        wanted_cos = key_models(self.env_plan[COS]["COS_FAILOVER_ROUTES"], self.xai, self.env_plan[COS]["COS_METERED_ROUTES"])
         if self.cos_key["kind"] == "master":
             self.cos_key.update(budget=CAP_DOLLARS, budget_duration=BUDGET_DURATION, models_after=sorted({*cos_base_models(), *wanted_cos}),
                                 state="reuse this operator's kept key" if self.COS_KEY_FILE.exists() else "new")
@@ -751,7 +761,7 @@ class RealHost:
             self.cos_key.update(budget=info["max_budget"], budget_duration=info.get("budget_duration"), spend=info.get("spend"), models_before=info["models"],
                                 add=sorted(set(wanted_cos) - set(info["models"])), models_after=sorted({*info["models"], *wanted_cos}), state="existing: models extended, budget unchanged",
                                 capped_flag_needed=self.cos_key["kind"] == "env" and cos_env.get("COS_GATEWAY_KEY_CAPPED") != "1")
-        self.mc_models = key_models(self.env_plan[MC]["MC_FAILOVER_ROUTES"], self.xai)
+        self.mc_models = key_models(self.env_plan[MC]["MC_FAILOVER_ROUTES"], self.xai, self.env_plan[MC]["MC_METERED_ROUTES"])
         self.mc_key_state = "reuse this operator's kept key" if self.MC_KEY_FILE.exists() else "new"
         if self.MC_KEY_FILE.exists():
             info = self._key_info(self.MC_KEY_FILE.read_text().strip())

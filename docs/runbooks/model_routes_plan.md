@@ -113,6 +113,40 @@ phrases try Grok first, and Grok becomes the selected model in the conversation 
 **Portuguese text.** `PORTUGUESE_GROK_TEXT=on` in the Portuguese container's environment, then recreate it. Grok is added to
 the conversation picker, with Claude still selected. Unset or anything else: off.
 
+## MC thinks harder on request (#586)
+
+Same model, two efforts: `minimoi-xai-strong` (Grok 4.7, low effort) answers every turn, and `minimoi-xai-strong-deep`
+(Grok 4.7, high effort) answers only when Robert's message **starts** with "think hard", "think harder", "go deep" or
+"this is important" (`core/model_routes/depth.py`). "Quick answer" keeps a turn quick. "Look into this" is not a trigger: MC
+states its scope on the quick route first, and "go deep" then pays for the deep call. Words inside quotes, quoted lines or
+code blocks never route. The deep turn shows "I'll take a closer look at this." and carries `depth.kind = deep` in its
+`routes.mc.last_turn`. The deep route has no failover: if it can't run, the turn stops. The quick turn keeps Grok's
+failover to Claude.
+
+`"phrase_only": true` is what makes it phrase-gated. Without it, an ordinary turn also asks the model whether to go deeper
+(the 10 Nov continuation), which production does not use.
+
+**On, per host.** All five, or deep turns refuse:
+
+1. The gateway serves `minimoi-xai-strong-deep` (`litellm.prod.yaml` / `litellm.staging.yaml`).
+2. The host's catalogue: copy in the `api-xai-strong-deep` route with `"offered": {"mc": "available"}`, and on
+   `mc-conversation` add `"depth_routes": {"quick": "api-xai-strong", "deep": "api-xai-strong-deep", "phrase_only": true}`
+   (as in `scripts/operations/production_route_catalogue.json`). Replace the file atomically; the next turn reads it.
+3. MC's capped key allows `minimoi-xai-strong-deep` (`/key/update` inside the gateway, its other models unchanged).
+4. `mc-agent`: `MC_METERED_ROUTES` ends `,minimoi-gateway/minimoi-xai-strong-deep`.
+5. `mc-relay`: `MC_RELAY_ROUTES` gains `"api-xai-strong-deep":"minimoi-gateway/minimoi-xai-strong-deep"`.
+   Restart `mc-agent` and `mc-relay` (allow 10 minutes).
+
+On Dev, steps 3 to 5 come from `scripts/staging/beta_dev_routes.py --default xai` once step 2 is in the host's catalogue.
+On production they are `docker-compose.mc-1-2-production.yml` (4, 5) and a host key update (3).
+
+**Prove it.** In a labelled chat: "think hard about X" shows the closer-look line and records `api-xai-strong-deep`; reload the
+page during that turn and the answer still lands. An ordinary question records `api-xai-strong`.
+
+**Off.** Delete `depth_routes` from `mc-conversation` and set the deep route back to `"offered": {}` in the host's catalogue.
+The next turn is quick, with nothing restarted. Then take the alias out of steps 3 to 5 and restart; nothing then names it
+(`tests/model_routes/test_depth.py::test_revert_leaves_nothing_naming_the_deep_alias`).
+
 ## Limits
 
 - **Effort:** every MC plan route runs at the runtime's `thinkingDefault` (high), whatever its tier.
