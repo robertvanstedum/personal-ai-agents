@@ -37,7 +37,7 @@ import math
 import os
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 CHICAGO = ZoneInfo("America/Chicago")
@@ -115,6 +115,11 @@ def realtime_charge_micro(elapsed_seconds: float, reserved_micro: int) -> int:
     """What a settled direct voice session keeps: whole minutes rounded up, at least the minimum, times the estimate rate, never more than its reservation."""
     minutes = max(REALTIME_MIN_CHARGE_MINUTES, math.ceil(max(0.0, float(elapsed_seconds)) / 60))
     return min(int(reserved_micro), minutes * REALTIME_ESTIMATE_MICRO_PER_MINUTE)
+
+
+def _who(principal) -> str:
+    """The one-way hash an entry keeps instead of the principal."""
+    return hashlib.sha256(("voice-budget:" + str(principal)).encode()).hexdigest()[:16]
 
 
 def direct_entry_id(session_id: str) -> str:
@@ -301,7 +306,7 @@ class VoiceBudget:
         now = self._clock()
         day = chicago_day(now)
         cap_now = micro(self._cap_usd())
-        who = hashlib.sha256(("voice-budget:" + str(principal)).encode()).hexdigest()[:16]
+        who = _who(principal)
         rid = entry_id or uuid.uuid4().hex
         refused = None
         with self._tx() as run:
@@ -333,15 +338,19 @@ class VoiceBudget:
             run("UPDATE voice_budget_day SET reserved_micro = reserved_micro - ? WHERE day = ? AND reserved_micro >= ?", (res.micro, res.day, res.micro))
         return True
 
-    def settle_session(self, entry_id: str, *, at_maximum: bool = False) -> dict | None:
+    def settle_session(self, entry_id: str, *, at_maximum: bool = False, principal: str | None = None) -> dict | None:
         """A direct voice session ended: keep the estimate for how long it ran and give back the rest, once. Server-side only: the time comes from the entry and this ledger's clock,
         and the caller names no amount (``at_maximum``: the session never said End, so it counts the provider's whole maximum). The day given back to is the entry's own, so a session
         across midnight returns to the day that held it. Returns what was settled, or None when there is nothing to settle (unknown, released, not a direct session, already settled:
         the first End's amount stands). Raises BudgetUnavailable when the ledger cannot do it, including before the migration; the reservation then stays whole."""
         now = self._clock()
         with self._tx() as run:
-            row = run("SELECT day, at, micro FROM voice_budget_entry WHERE id = ? AND kind = ? AND state = 'reserved'", (entry_id, REALTIME_DIRECT_KIND)).fetchone()
+            row = run("SELECT day, at, micro, who FROM voice_budget_entry WHERE id = ? AND kind = ? AND state = 'reserved'", (entry_id, REALTIME_DIRECT_KIND)).fetchone()
             if row is None:
+                return None
+            # ``principal``: only the session's own owner may end it (the row keeps a one-way hash of who reserved it), so a
+            # host whose in-memory session table was emptied by a restart can still bind End to its owner (#578 S5).
+            if principal is not None and row[3] != _who(principal):
                 return None
             day, started, held = row[0], datetime.fromisoformat(row[1]), int(row[2])
             elapsed = REALTIME_SESSION_MAX_MINUTES * 60 if at_maximum else (now - started).total_seconds()
@@ -353,6 +362,16 @@ class VoiceBudget:
             if held > charge:
                 run("UPDATE voice_budget_day SET reserved_micro = reserved_micro - ? WHERE day = ? AND reserved_micro >= ?", (held - charge, day, held - charge))
         return {"day": day, "reserved_micro": held, "settled_micro": charge, "released_micro": held - charge}
+
+    def settle_stale(self, *, domain: str, older_than_minutes: int = REALTIME_SESSION_MAX_MINUTES + 5, limit: int = 50) -> int:
+        """Direct sessions of one domain still reserved past the provider's maximum, settled at the maximum: a call that never
+        said End (closed tab, dead phone, restart) does not hold its whole reservation for the rest of the day. Returns how
+        many were settled. Each goes through settle_session, so a session settles once whoever gets there first (#578 S5)."""
+        cutoff = (self._clock() - timedelta(minutes=older_than_minutes)).astimezone(timezone.utc).isoformat()
+        with self._tx() as run:
+            rows = run("SELECT id FROM voice_budget_entry WHERE kind = ? AND domain = ? AND state = 'reserved' AND settled_micro IS NULL AND at < ? ORDER BY at LIMIT ?",
+                       (REALTIME_DIRECT_KIND, str(domain)[:40], cutoff, int(limit))).fetchall()
+        return sum(1 for (rid,) in rows if self.settle_session(rid, at_maximum=True) is not None)
 
     def status(self) -> dict:
         """Today's position, read-only. Raises BudgetUnavailable if the ledger cannot be read."""
