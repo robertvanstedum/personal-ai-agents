@@ -70,17 +70,28 @@ def build_manifest(repo: Path, entries: list[dict], commit: str) -> dict:
     return {"format": FORMAT, "commit": commit, "files": files}
 
 
+def _plain(info: tarfile.TarInfo) -> tarfile.TarInfo:
+    """No owner names or times in the bundle: the host extracts with --no-same-owner and install rewrites every file, so
+    they carry nothing (and the bundle is the same for the same files)."""
+    info.uid = info.gid = 0
+    info.uname = info.gname = ""
+    info.mtime = 0
+    return info
+
+
 def bundle(repo: Path, config: Path, commit: str, out: Path) -> dict:
     entries = load_config(config)
     manifest = build_manifest(repo, entries, commit)
     raw = json.dumps(manifest, indent=2, sort_keys=True).encode()
-    with tarfile.open(out, "w:gz") as tar:
+    # xz, not gzip: the deploy sends this base64 inside one SSM command (AWS refuses ~97 KB), and xz is ~13 KB smaller
+    # (#587). The host extracts it with tar -xJf (.github/workflows/deploy.yml); Amazon Linux 2023 ships xz.
+    with tarfile.open(out, "w:xz") as tar:
         info = tarfile.TarInfo(MANIFEST_NAME)
         info.size, info.mode = len(raw), 0o644
         tar.addfile(info, io.BytesIO(raw))
         for e in entries:
             if e.get("ship"):
-                tar.add(repo / e["repo"], arcname=e["repo"], recursive=False)
+                tar.add(repo / e["repo"], arcname=e["repo"], recursive=False, filter=_plain)
     return manifest
 
 
