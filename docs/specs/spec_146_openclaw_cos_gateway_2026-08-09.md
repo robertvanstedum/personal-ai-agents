@@ -1,5 +1,7 @@
 # Spec #146: OpenClaw CoS Gateway — Installation, Configuration & Acceptance
 
+> **Related governing proposal:** [MC-OC-001](spec_mc_openclaw_operating_model_2026-10-24.md) defines the new MC configuration/persona operating model and CoS fast follow. This older provisioning specification is context, not proof of current runtime grants or authority to activate the proposal.
+
 **File:** `spec_146_openclaw_cos_gateway_2026-08-09.md`
 **Status:** Draft v2 — revised per Codex review 2026-08-09; pending second review and Robert approval
 **Date:** 2026-08-09

@@ -1,5 +1,7 @@
 # CoS Agent and Master Craftsman — Living Product & Solution Approach
 
+> **Successor proposal — 24 October 2026:** [MC-OC-001](../specs/spec_mc_openclaw_operating_model_2026-10-24.md) proposes MC operational ownership and MC-first / CoS-fast-follow delivery, replacing this document’s older advisory-only MC scope and CoS-first learning sequence upon adoption. Role separation, MiniMoi-owned memory and consequence-based authority remain. Review the successor’s diagrams, matrix and acceptance contract before planning new work.
+
 > **Directional update, 19 September 2026:** [Connected work](../specs/minimoi-connected-work/README.md) defines the current working-area and Records & Rooms target. It augments this approach; CoS does not assume Guild build verification or Master Craftsman's technical authority. See the scoped [impact map](../specs/minimoi-connected-work/IMPACT_AND_SUPERSESSION.md).
 
 **Subtitle:** Proving bounded agent mechanics in one domain, then applying the learning to another<br>

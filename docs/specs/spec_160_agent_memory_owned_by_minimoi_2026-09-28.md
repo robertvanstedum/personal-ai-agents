@@ -1,5 +1,7 @@
 # Agent memory owned by MiniMoi: specification v0.4
 
+> **Configuration/persona integration:** [MC-OC-001](spec_mc_openclaw_operating_model_2026-10-24.md) preserves this specification’s MiniMoi-owned memory and privacy boundaries while defining MC reorganization and CoS adoption. Persona promotion must not replace owner memory or imply a memory migration.
+
 **September 28, 2026 · Claude Code for Robert · INIT-2026-0007 · GitHub issue #246**
 
 **Status: draft v0.4 for final Claude Code review; authorizes no build.** It authorizes no code, container, credential, IAM change, deployment, model call, merge or git write. Robert's acceptance of the review recommendations is design direction, not approval to build.
