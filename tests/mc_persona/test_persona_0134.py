@@ -101,7 +101,8 @@ def test_the_base_is_small_and_the_projection_far_under_the_16k_check(tmp_path):
     chars = len(loaded.replace(str(ws), CONTAINER_WORKSPACE))
     assert chars <= 6000                                             # 0.1.33: 15,942 of the old 16,000 budget
     injected = chars + len((ws / "SOUL.md").read_text())
-    assert injected <= 8600                                          # 0.1.33 in production: 21,449 with the templates
+    # 8,800 since 0.1.35 (#583): ask-or-look and finished-handoff lines, +~400 characters over 0.1.34s 8,317.
+    assert injected <= 8800                                          # 0.1.33 in production: 21,449 with the templates
     assert "workspace files injected each turn:" in r.stderr and "skills: " in r.stderr
 
 
