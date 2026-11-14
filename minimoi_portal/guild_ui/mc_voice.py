@@ -29,8 +29,7 @@ from .security import check_write, json_error
 
 ENV = "MINIMOI_MC_VOICE"
 # A short call ends when Robert hangs up. These bounds only stop an unattended session.
-# 45/60, not the confer page's 13/15: a 15-minute walk must not be warned at 13 or cut at 15.
-# The provider's own realtime cap is 60 minutes, and the daily allowance already reserves that hour.
+# Craft and Confer share them. The provider's own realtime cap is 60 minutes.
 MC_WARNING_MINUTES = 45
 MC_MAX_MINUTES = 60
 _NOTE_ID = re.compile(r"[A-Za-z0-9_-]{8,64}")
@@ -47,10 +46,9 @@ SPEAKING_INSTRUCTIONS = (
 
 
 def session_guard() -> DurationGuard:
-    """How long one MC call may run. Confer and Mein Deutsch keep their own shorter caps."""
-    warning = int(os.environ.get("VOICE_MC_WARNING_MINUTES", MC_WARNING_MINUTES))
-    maximum = int(os.environ.get("VOICE_MC_MAX_MINUTES", MC_MAX_MINUTES))
-    return DurationGuard(warning_minutes=warning, max_minutes=maximum)
+    """How long one Craft call may run. Confer uses the same bounds. Mein Deutsch keeps its own."""
+    from core.realtime_voice.duration_guard import colleague_guard
+    return colleague_guard("VOICE_MC_WARNING_MINUTES", "VOICE_MC_MAX_MINUTES")
 
 
 def enabled(environ=None) -> bool:
@@ -196,11 +194,12 @@ def _bootstrap_walk(principal, guard, device):
     from core.realtime_voice.providers import openai_realtime
     from core.realtime_voice.standards import conversation_turn_detection
     from .mc.voice_calls import voice_calls_of
-    from .mc.voice_walk import instructions, read_tools
+    from .mc.voice_walk import instructions, open_session, read_tools, talking_reservation
     session = uuid.uuid4().hex
+    open_session(session, principal)
+    kind, amount = talking_reservation(guard.max_minutes)
     try:
-        with budget.admit(kind="transcription_session", domain="mc", principal=principal, required=True,
-                          amount_micro=budget.session_allowance_micro()):
+        with budget.admit(kind=kind, domain="mc", principal=principal, required=True, amount_micro=amount):
             credential = openai_realtime.mint_ephemeral_credential(
                 instructions=instructions(),
                 voice="marin",
@@ -229,9 +228,10 @@ def walk_hold():
     refusal = check_write(cfg()["base_url"])
     if refusal is not None:
         return refusal
+    from .api import _principal
     from .mc.voice_walk import hold
     body = request.get_json(force=True, silent=True) or {}
-    return jsonify(hold(str(body.get("session") or ""), str(body.get("sentence") or "")))
+    return jsonify(hold(str(body.get("session") or ""), str(body.get("sentence") or ""), _principal()))
 
 
 def walk_utterance():
@@ -240,9 +240,13 @@ def walk_utterance():
     refusal = check_write(cfg()["base_url"])
     if refusal is not None:
         return refusal
+    from .api import _principal
     from .mc.voice_walk import confirm
     body = request.get_json(force=True, silent=True) or {}
-    return jsonify(confirm(str(body.get("session") or ""), str(body.get("text") or ""), notes_add=_notes_add))
+    return jsonify(confirm(
+        str(body.get("session") or ""), str(body.get("text") or ""),
+        hold_id=str(body.get("hold") or ""), principal=_principal(), notes_add=_notes_add,
+    ))
 
 
 def walk_tool():
@@ -262,10 +266,11 @@ def walk_end():
     refusal = check_write(cfg()["base_url"])
     if refusal is not None:
         return refusal
+    from .api import _principal
     from .mc.voice_walk import transcript_note
     body = request.get_json(force=True, silent=True) or {}
     turns = body.get("turns") if isinstance(body.get("turns"), list) else []
-    return jsonify(transcript_note(str(body.get("session") or ""), turns, notes_add=_notes_add))
+    return jsonify(transcript_note(str(body.get("session") or ""), turns, principal=_principal(), notes_add=_notes_add))
 
 
 def _walk_readers():
@@ -300,7 +305,8 @@ def static_file(name):
     direct = bool(cfg().get("mc_direct_voice"))
     installed = direct or bool(cfg().get("mc_direct_voice_records"))
     from .mc_voice_direct import voice_path
-    walk_static = voice_path(os.environ) == "realtime" and name == "adapters/openai-webrtc-adapter.js"
+    walk_names = {"realtime-voice-controller.js", "adapters/openai-webrtc-adapter.js", "adapters/xai-websocket-adapter.js"}
+    walk_static = voice_path(os.environ) == "realtime" and name in walk_names
     if (name not in _STATIC_OK and not walk_static
             and not ((cfg().get("mc_managed_realtime") or direct) and name in _MANAGED_STATIC)
             and not (installed and name in _DIRECT_STATIC)):

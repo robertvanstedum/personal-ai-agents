@@ -246,6 +246,7 @@ services:
       # Shared voice beta: on-record MC speech and insertion-only dictation.
       - MINIMOI_GUILD_VOICE_PRODUCTION=1
       - MINIMOI_MC_VOICE=1
+      - MINIMOI_MC_VOICE_PATH=realtime
       - MINIMOI_DICTATION=1
       # MC's direct voice (Spec 165 §11.1; minimoi_portal/guild_mounts.py production_environ): MINIMOI_MC_VOICE_DIRECT
       # installs it (its routes, record routes included) and MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION admits starts; both

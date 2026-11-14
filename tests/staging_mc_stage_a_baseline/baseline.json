@@ -5,7 +5,7 @@
   ],
   "deploy_scoped_release_base_sha256": "1ecb4eeeb889a77da45a5f2f253d9c5734693cc2c2195474c9eafac0bc3d5fc1",
   "digests": {
-    "docker-compose.prod.yml": "e5dc91047c12654bafe53ab79f65ab171e015d5d722c8b0bed6f4bb8cc5f31b1",
+    "docker-compose.prod.yml": "a67212a0dd9a9d9d34ba1cdbda6ea8e4c5513c91f57035bbcb538b2f4a37a244",
     "docker-compose.yml": "7d2d96081327078db2182f48f36e56d06ef42968dbef0b2e0f6e8d1596c29e01",
     "docker/Dockerfile.cos-agent-a": "5954c2ec92a1f126e54a2fdf6cd6bf6d5932053b47b45c2ed83268c9c90634ee",
     "docker/cos-agent-a/apply-config.sh": "22b8a773f21ee886903d3a3e7fcb75b532f6b88c3867b7d6007e0cab7462bbe8",

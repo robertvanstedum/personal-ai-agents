@@ -12,6 +12,9 @@ import os
 
 _DEFAULT_WARNING_MINUTES = 20
 _DEFAULT_MAX_MINUTES = 30
+# Craft and Confer, the two colleague calls. Same bounds. Each keeps its own env names.
+COLLEAGUE_WARNING_MINUTES = 45
+COLLEAGUE_MAX_MINUTES = 60
 
 
 class DurationGuard:
@@ -40,3 +43,10 @@ class DurationGuard:
         if elapsed_minutes >= self.warning_minutes:
             return "warning"
         return "ok"
+
+
+def colleague_guard(warning_name: str, max_name: str) -> DurationGuard:
+    """How long one Craft or Confer call may run. A short call still ends when he hangs up."""
+    warning = int(os.environ.get(warning_name, COLLEAGUE_WARNING_MINUTES))
+    maximum = int(os.environ.get(max_name, COLLEAGUE_MAX_MINUTES))
+    return DurationGuard(warning_minutes=warning, max_minutes=maximum)

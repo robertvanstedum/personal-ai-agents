@@ -601,7 +601,7 @@ def voice_path(environ) -> str:
     "chained" is the default (speech to text, a full MC turn, the reply read aloud).
     "direct" is the older realtime path. "realtime" is the walk (spec v1.1): the
     model is MC, and the server writes a note only after a bare yes. Anything else
-    stays "chained". Production does not set this; unset stays chained.
+    stays "chained". Production compose sets "realtime". Unset stays chained.
     """
     value = str(environ.get(PATH_ENV, "") or "").strip().lower()
     return value if value in PATHS else "chained"

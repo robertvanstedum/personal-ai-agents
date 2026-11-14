@@ -3,18 +3,17 @@
 Speech only transcribes; ui/send owns reasoning/actions and ui/speech reads the
 server-owned reply. The durable daily allowance is required before minting.
 """
-import os
 from flask import Blueprint, jsonify, request
 from core.identity import resolve_user_id
 from core.realtime_voice import budget
 from core.realtime_voice.bootstrap import check_voice_rate_limit
 from core.realtime_voice.capabilities import AGENT_CONVERSATION_MODE, ProviderUnavailableError, providers_for_mode
-from core.realtime_voice.duration_guard import DurationGuard
 from core.realtime_voice.providers import openai_realtime
 
 
 def _duration_guard():
-    return DurationGuard(warning_minutes=int(os.environ.get('VOICE_CONFER_WARNING_MINUTES',13)),max_minutes=int(os.environ.get('VOICE_CONFER_MAX_MINUTES',15)))
+    from core.realtime_voice.duration_guard import colleague_guard
+    return colleague_guard("VOICE_CONFER_WARNING_MINUTES", "VOICE_CONFER_MAX_MINUTES")
 
 
 def create_confer_voice_blueprint(*, locale='en-US', build_voice_instructions=None):

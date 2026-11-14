@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import pathlib
 
 import pytest
@@ -19,7 +20,7 @@ from test_mc_voice import _on, provider  # noqa: F401
 
 from core.realtime_voice.devices import device_class
 from minimoi_portal.guild_ui import mc_voice_direct as direct
-from minimoi_portal.guild_ui.mc.voice_calls import FILE_NAME, VoiceCallLog
+from minimoi_portal.guild_ui.mc.voice_calls import FILE_NAME, VoiceCallLog, call_record_folder
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 IPHONE = ("Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) "
@@ -68,10 +69,36 @@ def test_a_call_line_keeps_path_provider_device_and_a_short_session_only(tmp_pat
     assert (tmp_path / FILE_NAME).stat().st_mode & 0o777 == 0o600
 
 
-def test_a_call_line_that_cannot_be_written_says_so_and_never_raises(tmp_path):
+def test_a_call_line_that_cannot_be_written_says_so_and_never_raises(tmp_path, caplog):
     (tmp_path / FILE_NAME).mkdir()                                   # a folder where the file should be
     assert VoiceCallLog(str(tmp_path)).record(path="chained", provider="openai", device="phone") is False
-    assert VoiceCallLog(None).record(path="chained", provider="openai", device="phone") is False
+    with caplog.at_level(logging.WARNING, logger="guild_ui.mc"):
+        assert VoiceCallLog(None).record(path="chained", provider="openai", device="phone") is False
+    assert "no folder" in caplog.text
+
+
+class _Store:
+    def __init__(self, folder, path="x"):
+        self.store = type("S", (), {"folder": folder, "path": path})()
+
+
+def test_mc_turns_dir_wins_when_it_is_a_directory(tmp_path, monkeypatch):
+    turns = tmp_path / "mc-turns"
+    turns.mkdir()
+    monkeypatch.setenv("MC_TURNS_DIR", str(turns))
+    assert call_record_folder(_Store(str(tmp_path / "guild"))) == str(turns)
+
+
+def test_a_missing_turns_dir_falls_back_to_the_store(tmp_path, monkeypatch):
+    monkeypatch.setenv("MC_TURNS_DIR", str(tmp_path / "missing"))
+    guild = tmp_path / "guild"
+    guild.mkdir()
+    assert call_record_folder(_Store(str(guild))) == str(guild)
+
+
+def test_no_folder_writes_nothing(monkeypatch):
+    monkeypatch.delenv("MC_TURNS_DIR", raising=False)
+    assert call_record_folder(_Store(None, path=None)) is None
 
 
 def test_a_chained_call_from_the_iphone_is_recorded_as_a_phone_call(turned, provider, monkeypatch):

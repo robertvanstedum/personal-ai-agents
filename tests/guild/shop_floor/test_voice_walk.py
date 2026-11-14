@@ -4,8 +4,10 @@ from __future__ import annotations
 from core.realtime_voice.confer import _duration_guard
 from minimoi_portal.guild_ui.mc.voice_calls import call_record_folder
 from minimoi_portal.guild_ui.mc_voice import MC_MAX_MINUTES, MC_WARNING_MINUTES, session_guard
+from core.realtime_voice.direct_host import _BARE_NO
 from minimoi_portal.guild_ui.mc.voice_walk import (
-    READ_TOOLS, confirm, drop, hold, instructions, read_tools, run_read, transcript_note,
+    READ_TOOLS, confirm, drop, hold, instructions, open_session, read_tools, run_read,
+    talking_reservation, transcript_note,
 )
 from minimoi_portal.guild_ui.mc_voice_direct import PATH_ENV, may_start, voice_path
 
@@ -27,7 +29,7 @@ def test_a_fifteen_minute_call_is_inside_the_cap_and_a_short_one_is_not_held_ope
     monkeypatch.delenv("VOICE_CONFER_WARNING_MINUTES", raising=False)
     monkeypatch.delenv("VOICE_CONFER_MAX_MINUTES", raising=False)
     confer = _duration_guard()
-    assert (confer.warning_minutes, confer.max_minutes) == (13, 15)
+    assert (confer.warning_minutes, confer.max_minutes) == (45, 60)
 
 
 def test_mc_turns_dir_wins_when_it_is_a_directory(tmp_path, monkeypatch):
@@ -68,6 +70,12 @@ def test_instructions_come_from_the_master_persona():
     assert "Do not say that you noted it" in text
 
 
+def _yes(session, sentence, utterance, add, principal="robert", hold_id=None):
+    open_session(session, principal)
+    held = hold(session, sentence, principal)
+    return confirm(session, utterance, hold_id=hold_id if hold_id is not None else held.get("hold", ""), principal=principal, notes_add=add)
+
+
 def test_a_bare_yes_writes_mcs_sentence_and_a_task_is_an_act_note():
     saved = {}
 
@@ -75,16 +83,14 @@ def test_a_bare_yes_writes_mcs_sentence_and_a_task_is_an_act_note():
         saved.update(kwargs)
         return {"id": "n-test"}
 
-    hold("s1", "Decision: ship the call record first.")
-    out = confirm("s1", "yes", notes_add=add)
+    out = _yes("s1", "Decision: ship the call record first.", "yes", add)
     assert out["receipt"] == "n-test" and out["say"] == "Noted."
     assert saved["by"] == "mc" and saved["said_by"] == "mc"
     assert saved["what_for"] == "remember"
     assert "confirmed by Robert, by voice" in saved["text"]
     assert saved["text"].startswith("Decision:")
 
-    hold("s2", "Task: fix the call record folder.")
-    out = confirm("s2", "go ahead", notes_add=add)
+    out = _yes("s2", "Task: fix the call record folder.", "go ahead", add)
     assert out["for"] == "act" and saved["what_for"] == "act" and saved["topic"] == "voice-task"
 
 
@@ -92,18 +98,49 @@ def test_extra_words_and_a_stop_do_not_write():
     def add(**kwargs):
         raise AssertionError("wrote")
 
-    hold("s3", "Decision: no")
-    assert confirm("s3", "yes, and also deploy", notes_add=add)["confirmed"] is False
-    assert confirm("s3", "stop", notes_add=add)["dropped"] is True
-    assert confirm("s3", "yes", notes_add=add)["stray"] is True
+    assert _yes("s3", "Decision: no", "yes, and also deploy", add)["confirmed"] is False
+    assert _yes("s3b", "Decision: no", "stop", add)["dropped"] is True
+    open_session("s3c", "robert")
+    assert confirm("s3c", "yes", hold_id="missing", principal="robert", notes_add=add)["stray"] is True
+
+
+def test_every_stop_word_refuses_and_a_yes_for_another_sentence_does_not_write():
+    def add(**kwargs):
+        raise AssertionError("wrote")
+
+    for word in sorted(_BARE_NO):
+        out = _yes(f"stop-{word}", "Decision: keep going.", word, add)
+        assert out["confirmed"] is False and out.get("dropped") is True
+    open_session("s-other", "robert")
+    held = hold("s-other", "Decision: the one he answered.", "robert")
+    hold("s-other", "Decision: a later sentence.", "robert")
+    out = confirm("s-other", "yes", hold_id=held["hold"], principal="robert", notes_add=add)
+    assert out["confirmed"] is False
+
+
+def test_an_ordinary_reply_drops_the_hold_and_an_unknown_call_is_refused():
+    def add(**kwargs):
+        raise AssertionError("wrote")
+
+    open_session("s-chat", "robert")
+    first = hold("s-chat", "Decision: keep this.", "robert")
+    assert hold("s-chat", "The weather is fine.", "robert")["dropped"] is True
+    assert confirm("s-chat", "yes", hold_id=first["hold"], principal="robert", notes_add=add)["stray"] is True
+    assert hold("no-such", "Decision: no.", "robert")["error"] == "unknown_session"
+    assert confirm("no-such", "yes", hold_id="x", principal="other", notes_add=add)["error"] == "unknown_session"
+
+
+def test_the_talking_call_reserves_the_realtime_rate():
+    kind, micro = talking_reservation(60)
+    assert kind == "realtime_direct_session"
+    assert micro == 60 * 100_000
 
 
 def test_noted_is_not_said_without_a_receipt():
     def add(**kwargs):
         return {}
 
-    hold("s4", "Decision: keep the chained path.")
-    out = confirm("s4", "yes", notes_add=add)
+    out = _yes("s4", "Decision: keep the chained path.", "yes", add)
     assert out["ok"] is False and "say" not in out
 
 
@@ -119,21 +156,23 @@ def test_the_transcript_is_not_a_decision():
         saved.update(kwargs)
         return {"id": "n-tr"}
 
-    out = transcript_note("s5", [{"role": "user", "text": "hello"}, {"role": "mc", "text": "here"}], notes_add=add)
+    open_session("s5", "robert")
+    out = transcript_note("s5", [{"role": "user", "text": "hello"}, {"role": "mc", "text": "here"}], principal="robert", notes_add=add)
     assert out["written"] is True
     assert saved["topic"] == "voice-transcript"
     assert saved["text"].startswith("Transcript, not a decision.")
 
 
 def test_drop_clears_a_replaced_sentence():
-    hold("s6", "Decision: one")
-    hold("s6", "Decision: two")
+    open_session("s6", "robert")
+    hold("s6", "Decision: one", "robert")
+    later = hold("s6", "Decision: two", "robert")
     saved = {}
 
     def add(**kwargs):
         saved.update(kwargs)
         return {"id": "n-2"}
 
-    confirm("s6", "yes please", notes_add=add)
+    confirm("s6", "yes please", hold_id=later["hold"], principal="robert", notes_add=add)
     assert saved["text"].startswith("Decision: two")
     drop("s6")

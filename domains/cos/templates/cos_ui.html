@@ -131,7 +131,7 @@
           <ul id="cos-files-list"><li class="muted">Loading…</li></ul>
         </details>
         {% if managed_realtime_ready %}
-        <label>Voice mode <select id="voice-mode"><option value="realtime">Realtime · OpenAI</option><option value="chained">Voice · turn by turn</option></select></label>
+        <label>Voice mode <select id="voice-mode"><option value="chained">Voice · turn by turn</option><option value="realtime">Realtime · OpenAI</option></select></label>
         <label><input type="checkbox" id="voice-keep-transcript">Download transcript on End</label>
         {% endif %}
         <div id="voice-transcript" aria-live="polite"></div>
@@ -784,7 +784,7 @@ const controller=new ConferVoiceController({
   onProvisionalTranscript:text=>{transcript.textContent=text?`Hearing: ${text}`:'';},
   onUserTurn:text=>appendMsg('user',text),
   onAssistantTurn:text=>appendMsg('cos',text),
-  onWarning:()=>{status.textContent='Voice will stop in about two minutes.';},
+  onWarning:()=>{status.textContent='This call will close itself after an hour.';},
   onError:error=>{transcript.textContent=`Voice: ${error.detail||error.reason||'could not continue'}. Typing still works.`;},
 });
 let legacyReady=false;

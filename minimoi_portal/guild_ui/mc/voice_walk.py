@@ -19,23 +19,32 @@ Decisions, recorded with the code (13 Nov 2026, while Robert tests Mein Deutsch 
   phone is locked, because the note is already on disk.
 - A call transcript is written at the end, topic ``voice-transcript``, and the text
   says it is not a decision. Nothing is shown during the call.
-- Production stays on ``chained`` until ``MINIMOI_MC_VOICE_PATH=realtime`` is set
-  by a commit Robert names.
+- Production compose sets ``MINIMOI_MC_VOICE_PATH=realtime`` so this deploy
+  turns the talking call on. Removing that line restores the chained path.
 """
 from __future__ import annotations
 
 import os
 import re
 import threading
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from core.realtime_voice.direct_host import bare_confirmation
+from core.realtime_voice.direct_host import _BARE_NO, bare_answer
 
 READ_TOOLS = ("notes_recall", "deploy_status", "issues")
+
+
+def talking_reservation(max_minutes: int) -> tuple[str, int]:
+    """The allowance for one talking call: the realtime rate for its whole cap, not the transcription rate."""
+    from core.realtime_voice import budget
+    return budget.REALTIME_DIRECT_KIND, int(max_minutes) * budget.REALTIME_ESTIMATE_MICRO_PER_MINUTE
+
+
 MARK = "confirmed by Robert, by voice"
 _LOCK = threading.Lock()
-_WAITING: dict[str, dict] = {}
+_SESSIONS: dict[str, dict] = {}
 
 
 def read_tools() -> list[dict]:
@@ -83,26 +92,52 @@ def instructions(release: str | None = None, root: str | None = None, briefing: 
     ))
 
 
-def hold(session: str, sentence: str) -> dict:
-    """Replace the one waiting sentence. The model does not write a record."""
-    sentence = " ".join((sentence or "").split())
-    if not session or not sentence:
-        return {"ok": False, "error": "nothing_to_hold"}
-    item = {"sentence": sentence[:2000], "at": _now()}
+def open_session(session: str, principal: str) -> None:
+    """Remember a session this server just issued, and who it was issued to."""
     with _LOCK:
-        _WAITING[session] = item
-    return {"ok": True, "waiting": True}
+        _SESSIONS[session] = {"principal": principal, "pending": None}
+
+
+def _owned(session: str, principal: str) -> dict | None:
+    with _LOCK:
+        item = _SESSIONS.get(session)
+        if item is None or item.get("principal") != principal:
+            return None
+        return item
+
+
+def hold(session: str, sentence: str, principal: str) -> dict:
+    """Hold one Decision or Task. Any other reply drops the hold. Unknown sessions are refused."""
+    if _owned(session, principal) is None:
+        return {"ok": False, "error": "unknown_session"}
+    sentence = " ".join((sentence or "").split())
+    if not sentence.startswith("Decision:") and not sentence.startswith("Task:"):
+        with _LOCK:
+            item = _SESSIONS.get(session)
+            if item is not None and item.get("principal") == principal:
+                item["pending"] = None
+        return {"ok": True, "waiting": False, "dropped": True}
+    pending = {"id": uuid.uuid4().hex, "sentence": sentence[:2000], "at": _now()}
+    with _LOCK:
+        item = _SESSIONS.get(session)
+        if item is None or item.get("principal") != principal:
+            return {"ok": False, "error": "unknown_session"}
+        item["pending"] = pending
+    return {"ok": True, "waiting": True, "hold": pending["id"]}
 
 
 def drop(session: str) -> None:
     with _LOCK:
-        _WAITING.pop(session, None)
+        item = _SESSIONS.get(session)
+        if item is not None:
+            item["pending"] = None
 
 
 def waiting(session: str) -> dict | None:
     with _LOCK:
-        item = _WAITING.get(session)
-        return dict(item) if item else None
+        item = _SESSIONS.get(session)
+        pending = item.get("pending") if item else None
+        return dict(pending) if pending else None
 
 
 def _now() -> str:
@@ -117,18 +152,28 @@ def _topic(sentence: str) -> str:
     return "voice-task" if _kind(sentence) == "act" else "voice-decision"
 
 
-def confirm(session: str, utterance: str, *, notes_add) -> dict:
-    """Write only on a bare yes. ``notes_add`` is the register's add, injected so tests need no disk policy."""
+def _has_stop(text: str) -> bool:
+    words = re.sub(r"[^\w']+", " ", (text or "").lower().replace("\u2019", "'")).replace("_", " ").split()
+    i = 0
+    while i < len(words):
+        for n in (3, 2, 1):
+            if len(words) - i >= n and " ".join(words[i:i + n]) in _BARE_NO:
+                return True
+        i += 1
+    return False
+
+
+def confirm(session: str, utterance: str, *, hold_id: str, principal: str, notes_add) -> dict:
+    """Write only a bare yes for the held sentence. A stop word never confirms."""
+    if _owned(session, principal) is None:
+        return {"ok": False, "error": "unknown_session"}
     text = utterance or ""
-    if not bare_confirmation(text):
-        return {"ok": True, "confirmed": False}
-    tokens = set(re.findall(r"[a-z']+", text.lower().replace("\u2019", "'")))
-    if tokens & {"no", "nope", "nah", "stop", "cancel", "abort", "nein", "nao", "nevermind"}:
+    if _has_stop(text) or bare_answer(text) == "no":
         drop(session)
         return {"ok": True, "confirmed": False, "dropped": True}
     item = waiting(session)
-    if item is None:
-        return {"ok": True, "confirmed": False, "stray": True}
+    if bare_answer(text) != "yes" or item is None or item.get("id") != hold_id:
+        return {"ok": True, "confirmed": False, "stray": item is None}
     sentence = item["sentence"]
     try:
         note = notes_add(
@@ -148,8 +193,10 @@ def confirm(session: str, utterance: str, *, notes_add) -> dict:
     return {"ok": True, "confirmed": True, "receipt": receipt, "say": "Noted.", "for": _kind(sentence)}
 
 
-def transcript_note(session: str, turns: list, *, notes_add) -> dict:
-    """History at the end of the call. Labelled as a transcript, not a decision."""
+def transcript_note(session: str, turns: list, *, principal: str, notes_add) -> dict:
+    """History at the end of the call. Labelled as a transcript, not a decision. An unknown session is refused."""
+    if _owned(session, principal) is None:
+        return {"ok": False, "error": "unknown_session"}
     lines = []
     for turn in turns or []:
         if not isinstance(turn, dict):

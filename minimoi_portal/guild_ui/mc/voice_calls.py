@@ -25,6 +25,7 @@ class VoiceCallLog:
     def record(self, *, path: str, provider: str | None, device: str, session: str | None = None) -> bool:
         """Append one line; False (and a warning) when it could not be written. Never raises."""
         if not self.path:
+            _log.warning("mc voice: call record not written (no folder)")
             return False
         line = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "path": path,
                 "provider": provider if isinstance(provider, str) else None, "device": device}
@@ -46,7 +47,7 @@ def call_record_folder(services, environ=None) -> str | None:
 
     ``MC_TURNS_DIR`` when it names an existing directory (production mounts
     ``/app/data/mc-turns`` there). Otherwise the Guild store folder, and only
-    when that store has a path. A missing folder writes nothing.
+    when that store has a path. A missing folder writes nothing, and record warns.
     """
     env = os.environ if environ is None else environ
     turns = str(env.get("MC_TURNS_DIR", "") or "").strip()

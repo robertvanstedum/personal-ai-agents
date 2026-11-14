@@ -934,6 +934,28 @@
       "active_from": "2026-11-13T15:00:00Z"
     },
     {
+      "id": "staging-backup",
+      "name": "Staging backup to S3 (Dev: files, volumes, database dump)",
+      "host": "dev",
+      "schedule": {
+        "text": "daily 04:40 Chicago (systemd minimoi-staging-backup.timer)",
+        "kind": "daily",
+        "at": "04:40",
+        "tz": "America/Chicago"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 7200,
+      "status_file": "staging-backup.json",
+      "healthy": "tonight's backup of staging reached s3://minimoi-backups/staging/ with every piece kept",
+      "owner": "robert",
+      "runbook": "scripts/staging/backup_staging.py",
+      "defined_in": [
+        "scripts/jobs/install_host_watchdog.sh::OnCalendar=*-*-* 04:40:00 America/Chicago"
+      ],
+      "active_from": "2026-11-15T10:40:00Z"
+    },
+    {
       "id": "curator-mac",
       "name": "Curator pipeline on the Mac (com.vanstedum.curator)",
       "host": "mac",
