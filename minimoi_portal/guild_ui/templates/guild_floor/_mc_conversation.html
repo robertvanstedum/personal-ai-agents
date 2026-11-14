@@ -161,7 +161,7 @@
     <span class="mc-voice-notice" data-mc-voice-notice hidden></span>
   </div>
   {% endif %}
-  {% if mc_voice_on %}<details data-mc-voice-transcript hidden><summary>Voice transcript from this session · may be partial</summary><pre data-mc-voice-transcript-text></pre></details>{% endif %}
+  {% if mc_voice_on %}<details data-mc-voice-transcript hidden><summary>Voice transcript from this session · may be partial</summary><pre data-mc-voice-transcript-text></pre><a data-mc-voice-call-download hidden>Download transcript</a></details>{% endif %}
   <form class="mc-composer" data-mc-composer>
     {% if page_id == 'floor' %}
     <div class="mc-tray" data-mc-tray aria-label="Files to attach" hidden></div>

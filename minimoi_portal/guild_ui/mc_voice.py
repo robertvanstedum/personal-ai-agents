@@ -194,9 +194,11 @@ def _bootstrap_walk(principal, guard, device):
     from core.realtime_voice.providers import openai_realtime
     from core.realtime_voice.standards import conversation_turn_detection
     from .mc.voice_calls import voice_calls_of
-    from .mc.voice_walk import instructions, open_session, read_tools, talking_reservation
+    from .mc.voice_calls import call_record_folder
+    from .mc.voice_walk import instructions, open_call, open_session, read_tools, talking_reservation
     session = uuid.uuid4().hex
     open_session(session, principal)
+    open_call(session, principal, folder=call_record_folder(cfg().get("services")))
     kind, amount = talking_reservation(guard.max_minutes)
     try:
         with budget.admit(kind=kind, domain="mc", principal=principal, required=True, amount_micro=amount):
@@ -267,10 +269,28 @@ def walk_end():
     if refusal is not None:
         return refusal
     from .api import _principal
-    from .mc.voice_walk import transcript_note
+    from .mc.voice_calls import call_record_folder
+    from .mc.voice_walk import save_call
     body = request.get_json(force=True, silent=True) or {}
     turns = body.get("turns") if isinstance(body.get("turns"), list) else []
-    return jsonify(transcript_note(str(body.get("session") or ""), turns, principal=_principal(), notes_add=_notes_add))
+    # #578: the whole call as one file (as Mein Deutsch keeps a session), in MC's turns folder; not a 2,000-character note.
+    return jsonify(save_call(str(body.get("session") or ""), turns, principal=_principal(),
+                             folder=call_record_folder(cfg().get("services"))))
+
+
+def walk_transcript(session):
+    """The saved call as a text download, for its owner only."""
+    if not enabled():
+        return _off()
+    from .api import _principal
+    from .mc.voice_calls import call_record_folder
+    from .mc.voice_walk import call_text
+    text = call_text(session, principal=_principal(), folder=call_record_folder(cfg().get("services")))
+    if text is None:
+        return json_error("not_found", "No saved call.", 404)
+    name = re.sub(r"[^0-9a-f]", "", session.lower())[:8] or "call"
+    return Response(text, mimetype="text/plain", headers={
+        "Content-Disposition": f'attachment; filename="mc-voice-call-{name}.txt"', "Cache-Control": "no-store"})
 
 
 def _walk_readers():
@@ -323,4 +343,5 @@ RULES = [
     ("/mc/voice/walk/utterance", "api_mc_voice_walk_utterance", walk_utterance, ["POST"]),
     ("/mc/voice/walk/tool", "api_mc_voice_walk_tool", walk_tool, ["POST"]),
     ("/mc/voice/walk/end", "api_mc_voice_walk_end", walk_end, ["POST"]),
+    ("/mc/voice/walk/transcript/<session>", "api_mc_voice_walk_transcript", walk_transcript, ["GET"]),
 ]
