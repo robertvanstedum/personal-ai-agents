@@ -213,6 +213,9 @@ services:
       PARTNERSHIP_GRANTS: /run/secrets/partnership/grants.json
       PARTNERSHIP_OWNER_KEY_FILE: /run/secrets/partnership/owner.key
       PARTNERSHIP_OWNER_NONCE_FILE: /data/owner-nonces.sqlite3
+      # MC's private working documents (#599), under /data/store/private-work-artifacts. A seat still needs
+      # work_artifacts in bindings.json, and MC's policy its work_read_v1/work_save_v1 rules.
+      PARTNERSHIP_WORK_ARTIFACTS: "1"
       PYTHONPATH: /app
     volumes:
       - {type: bind, source: "${MINIMOI_1_2_STATE:?}/partnership", target: /data, bind: {create_host_path: false}}
