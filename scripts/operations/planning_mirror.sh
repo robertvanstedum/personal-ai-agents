@@ -17,9 +17,12 @@ unset GIT_TRACE GIT_TRACE_CURL GIT_TRACE_PACKET GIT_CURL_VERBOSE GIT_TRACE2 GIT_
 export GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/false
 H=""; LAST=""
 
-rules() {  # non-cone, gitignore style: everything, minus the answer key and career material (any case)
+rules() {  # non-cone, gitignore style: everything, minus the answer key and career material (any case), and the
+  # binaries MC's host reader refuses anyway (host_binary_refused): images, archives, PDFs (~380 of 530 MB, Nov 2026)
   printf '%s\n' '/*' '!scorers-only/' '!*[Cc][Aa][Rr][Ee][Ee][Rr]*' '!*[Rr][Ee][Ss][Uu][Mm][Ee]*' \
-    '!*[Cc][Oo][Vv][Ee][Rr]-[Ll][Ee][Tt][Tt][Ee][Rr]*'
+    '!*[Cc][Oo][Vv][Ee][Rr]-[Ll][Ee][Tt][Tt][Ee][Rr]*' '!*.[Pp][Nn][Gg]' '!*.[Jj][Pp][Gg]' '!*.[Jj][Pp][Ee][Gg]' \
+    '!*.[Gg][Ii][Ff]' '!*.[Ww][Ee][Bb][Pp]' '!*.[Zz][Ii][Pp]' '!*.[Pp][Dd][Ff]' '!*.[Gg][Zz]' '!*.[Tt][Gg][Zz]' \
+    '!*.[Mm][Pp]4' '!*.[Mm][Oo][Vv]'
 }
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 g() { GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader GIT_CONFIG_VALUE_0="$H" \
