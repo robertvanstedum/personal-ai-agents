@@ -254,7 +254,7 @@ export function initMcVoice(page) {
           else if (state === 'stopped' && info && info.reason === 'duration_limit') stop('limit');
         }),
         onProvisionalTranscript: guarded((text) => { if (text) say(`Hearing: ${text}`); }),
-        onWarning: guarded(() => say('Voice will stop in about two minutes.', { loud: true })),
+        onWarning: guarded(() => say('This call will close itself after an hour.', { loud: true })),
         onError: guarded((e) => {
           say((e && (e.detail || e.reason)) ? `Voice: ${e.detail || e.reason}` : 'Voice could not continue.', { loud: true, error: true });
           if (e && ['start_failed', 'microphone_denied', 'reconnect_failed'].includes(e.reason)) stop('failed', { quiet: true });
