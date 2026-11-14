@@ -17,7 +17,11 @@ rate limit. A body key, header or query-string value that names an agent, scope,
     401 unauthorized      missing, malformed, unknown, revoked and wrong tokens are indistinguishable
     403 tier_not_permitted include_raw for an agent whose grant lacks the raw tier
     413 too_large         body over 4 KB          415 unsupported_media_type    429 rate_limited
-    503 registry_unavailable | index_missing | index_incompatible | pin_mismatch     (fail closed)
+    503 registry_unavailable | index_missing | index_incompatible | pin_mismatch | index_unfiltered     (fail closed)
+
+``--require-profile mc`` (#594, ``vault-ask-mc``): the service answers only from an index whose ``meta`` names ``profile=mc`` and a
+career-filter digest (``core/memory_index/career_filter.py``). Any other index, such as the full one by a wrong path, is refused
+(503 ``index_unfiltered``) before any search runs, so a configuration mistake can never serve Master Craftsman unfiltered records.
 
 The registry is re-read when its file changes, so a revocation or a rotation applies from the next request. A registry that is missing,
 readable by others or malformed denies everyone (503). Each request builds a fresh embedder, runs one search at a time (the server is
@@ -50,13 +54,44 @@ def _embedder():
     return _embedder()
 
 
+def index_profile(index_path: Path) -> tuple[str | None, str | None]:
+    """``(profile, career_filter_digest)`` from the index's own ``meta``; ``(None, None)`` when it cannot be read."""
+    import sqlite3
+    try:
+        con = sqlite3.connect(f"{Path(index_path).absolute().as_uri()}?mode=ro", uri=True, timeout=5)
+    except sqlite3.Error:
+        return None, None
+    try:
+        meta = dict(con.execute("SELECT key, value FROM meta WHERE key IN ('profile', 'career_filter_digest')").fetchall())
+    except sqlite3.Error:
+        return None, None
+    finally:
+        con.close()
+    return meta.get("profile"), meta.get("career_filter_digest")
+
+
 def create_app(*, registry_path, shelf_root, embedder_factory=None, index_path=None, log_path=None, clock=None,
-               monotonic=time.monotonic) -> Flask:
+               monotonic=time.monotonic, require_profile: str | None = None) -> Flask:
     app = Flask(__name__)
     registry = identity.RegistryFile(registry_path)
     shelf_root = Path(shelf_root)
     index_path = Path(index_path) if index_path else indexer.default_index_path(shelf_root)
     recent: dict[str, deque] = defaultdict(deque)
+    profile_seen: dict = {}
+
+    def profile_ok() -> bool:
+        """True when no profile is required, or the index file (as it is now) carries it and a filter digest."""
+        if require_profile is None:
+            return True
+        try:
+            info = index_path.stat()
+        except OSError:
+            return False
+        key = (info.st_ino, info.st_mtime_ns, info.st_size)
+        if profile_seen.get("key") != key:
+            profile, digest = index_profile(index_path)
+            profile_seen.update(key=key, ok=profile == require_profile and bool(digest))
+        return profile_seen["ok"]
 
     def refuse(status: int, code: str, agent: str = "-"):
         print(f"[ask_service] who={agent} status={status} code={code}", file=sys.stderr, flush=True)
@@ -80,6 +115,8 @@ def create_app(*, registry_path, shelf_root, embedder_factory=None, index_path=N
         grant, why = identity.authenticate(grants, token)
         if grant is None:
             return refuse(401, "unauthorized", agent=why)                   # the log keeps the reason; the caller never sees it
+        if not profile_ok():
+            return refuse(503, "index_unfiltered", grant.name)
         if request.content_length is not None and request.content_length > MAX_BODY:
             return refuse(413, "too_large", grant.name)
         if not request.is_json:
@@ -133,6 +170,7 @@ def main(argv=None) -> int:
     ap.add_argument("--index")
     ap.add_argument("--registry")
     ap.add_argument("--log", help="the Ask query log file (default: beside the index); production keeps the index read-only")
+    ap.add_argument("--require-profile", choices=("mc",), help="serve only an index built with this profile's career filter")
     args = ap.parse_args(argv)
     if args.shelf_root:
         root = Path(args.shelf_root).expanduser()
@@ -141,7 +179,7 @@ def main(argv=None) -> int:
         root = config.load().shelf_root
     registry_file = Path(args.registry).expanduser() if args.registry else identity.registry_path(root)
     app = create_app(registry_path=registry_file, shelf_root=root, index_path=Path(args.index).expanduser() if args.index else None,
-                     log_path=Path(args.log).expanduser() if args.log else None)
+                     log_path=Path(args.log).expanduser() if args.log else None, require_profile=args.require_profile)
     app.run(host=args.host, port=args.port, threaded=False, use_reloader=False)
     return 0
 

@@ -303,6 +303,10 @@ services:
       - MINIMOI_MC_ISSUES_TOKEN_FILE=/run/secrets/mc/github-issues-token
       - MINIMOI_MC_TURN_LEDGER=${MINIMOI_MC_TOOLS:-0}
       - MINIMOI_MC_POLICY_FILE=/run/secrets/mc/mc-policy.prod.json
+      # MC's Vault search (#594): empty = off. Activation sets MINIMOI_MC_VAULT_ASK_URL=http://vault-ask-mc:8772 in .env and
+      # writes MC's grant token (moi ask-agents, registry agents-mc.json) to mc/portal/vault-ask-mc-token, root 0600.
+      - MINIMOI_MC_VAULT_ASK_URL=${MINIMOI_MC_VAULT_ASK_URL:-}
+      - MINIMOI_MC_VAULT_ASK_TOKEN_FILE=/run/secrets/mc/vault-ask-mc-token
       - MINIMOI_MC_POLICY_AUTHORITY_FILE=/run/secrets/mc/mc-policy.prod.authority.json
       - MINIMOI_MC_STATUS_PROTOCOL_VERSION=2
       - MINIMOI_MC_ARTIFACT_ROOT=/opt/minimoi/mc/artifacts
@@ -393,6 +397,7 @@ services:
       - default
       - iotconnect-edge
       - mc-portal
+      - vault-mc-internal
     depends_on:
       - curator
       - german
@@ -606,6 +611,64 @@ services:
       timeout: 5s
       retries: 3
 
+  # Master Craftsman's Vault (#594): the same Ask service, opened ONLY on MC's career-filtered index (built by the root cron
+  # job vault-mc-index: python -m core.memory_index.mc_index, see its docstring) with a registry holding only MC's grant.
+  # --require-profile mc refuses any index without the MC profile and a career-filter digest (503 index_unfiltered).
+  # Behind its own `vault-mc` profile: nothing starts it until activation adds vault-mc to COMPOSE_PROFILES. Reachable only
+  # from the portal (MC's tools door), on vault-mc-internal; never from MC's container, never from CoS.
+  # It mounts the whole /vault tree read-only because a bind of the `current` symlink would freeze one release: the full
+  # index file is therefore present in this container, but the service only ever opens the --index below.
+  vault-ask-mc:
+    profiles: [vault-mc]
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-vault-ask-mc
+    restart: unless-stopped
+    command: [python, -m, core.memory_ask.service, --host, 0.0.0.0, --port, "8772",
+              --shelf-root, /vault/current/shelf, --index, /vault-mc/index/memory-mc.sqlite,
+              --registry, /vault-mc/memory-ask/agents-mc.json, --log, /vault-log/ask-mc-log.jsonl, --require-profile, mc]
+    environment:
+      - MINIMOI_ROLE=production
+      - PYTHONDONTWRITEBYTECODE=1
+      - MOI_OLLAMA_URL=http://127.0.0.1:9         # no embedder in production: refuse fast, never reach out
+    volumes:
+      - type: bind
+        source: ${MINIMOI_ROOT:-/opt/minimoi}/vault
+        target: /vault
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind                                  # MC's index only (never the private career rules beside it)
+        source: ${MINIMOI_ROOT:-/opt/minimoi}/vault-mc/index
+        target: /vault-mc/index
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MINIMOI_ROOT:-/opt/minimoi}/vault-mc/memory-ask
+        target: /vault-mc/memory-ask
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MINIMOI_ROOT:-/opt/minimoi}/vault-log
+        target: /vault-log
+        bind:
+          create_host_path: false
+    networks:
+      - vault-mc-internal
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    mem_limit: 384m
+    cpus: 0.5
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: [CMD, python, -c, "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:8772/v1/health', timeout=3); assert all(os.path.isfile(p) for p in ('/vault-mc/index/memory-mc.sqlite','/vault/current/shelf/_ledger/source_index.json','/vault-mc/memory-ask/agents-mc.json'))"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+
 volumes:
   mc-observations:
   postgres-data:
@@ -626,6 +689,9 @@ networks:
     internal: true
   # Only cos-scheduler and vault-ask: no route out, no other service.
   vault-internal:
+    internal: true
+  # Only the portal (MC's tools door) and vault-ask-mc (#594): no route out, no other service, never MC's container.
+  vault-mc-internal:
     internal: true
   # Only cos-agent-a and the three services it talks to. A normal bridge (CoS fetches pages and signs in to its plan);
   # the host's DOCKER-USER rule drops 192.168.250.2 -> 169.254.169.254. Every member has a fixed address
