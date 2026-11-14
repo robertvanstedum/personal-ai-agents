@@ -26,7 +26,7 @@ REAL_JOB_COMMAND = jobs_api.job_command               # the fixture stubs it; th
 
 CID = "c-123456abcdef"
 BASE = "/guild-next/api/v1/mc/voice/direct/api/realtime-voice"
-ON = {"MINIMOI_MC_VOICE": "1", "MINIMOI_MC_VOICE_DIRECT": "1", "MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO": "2000000",
+ON = {"MINIMOI_MC_VOICE": "1", "MINIMOI_MC_VOICE_DIRECT": "1", "MINIMOI_MC_VOICE_PATH": "direct", "MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO": "2000000",
       "MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_MC": "test-only-summary-key"}       # MC's capped summary key (Spec 165 §5.4)
 # mc_managed_realtime.install as of 670d3e09; MANAGED_VOICE_CHANNEL's one definition. Re-pinned in the A4 fix round
 # (verification S-7, Robert's rule of 29 Oct): the sideband's two platform-receipt returns now pass through

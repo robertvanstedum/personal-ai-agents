@@ -307,6 +307,11 @@ class _MasterCraftsman(DirectVoiceAdapter):
         """Whether this owner turn is waiting in line for MC (the core then says "I'll take that next", #566)."""
         return self.line.in_line((sid, item))
 
+    def call_started(self, sid, *, provider, device):
+        """The durable line for this call (#570): the portal drops INFO logs, so the core's log line alone is lost here."""
+        from .mc.voice_calls import voice_calls_of
+        voice_calls_of(self.config.get("services")).record(path="direct", provider=provider, device=device, session=sid)
+
     def owner(self):
         user = self.config["current_user"]() or {}
         who = user.get("username")
@@ -575,9 +580,25 @@ class _MasterCraftsman(DirectVoiceAdapter):
 def may_start(environ):
     """Whether a session may start on this mount (Spec 165 §11.1). ADMITTED absent (not the production mount): True,
     installing allows starts, as before. Present: only "1". production_environ always writes it, so a stray value
-    anywhere else can only hold starts off, never admit what production holds off."""
+    anywhere else can only hold starts off, never admit what production holds off. MC's voice path set to "chained"
+    (voice_path) holds starts off too: Voice then takes the chained path, where MC himself answers."""
     admitted = environ.get(ADMITTED)
-    return admitted is None or admitted == "1"
+    return (admitted is None or admitted == "1") and voice_path(environ) == "direct"
+
+
+# #567 direction (Robert, 13 Nov 2026: "MC's voice is MC"): which path MC's Voice takes. "chained": speech to text, the
+# same MC turn as typed chat (the kept-note path), and MC's own kept reply read aloud (mc_voice.py, the relay); the direct
+# path stays installed, not admitted (S1/S3), so earlier sessions still reveal and are decided. This is the default.
+# "direct": the realtime voice model with MC behind each consult (Spec 164/165), today's behaviour until 13 Nov; the
+# rollback is MINIMOI_MC_VOICE_PATH=direct in the host's .env (env_file reaches the portal) and a restart.
+PATH_ENV = "MINIMOI_MC_VOICE_PATH"
+PATHS = ("direct", "chained")
+
+
+def voice_path(environ) -> str:
+    """MC's voice path: "chained" (the default: MC's voice is MC) or "direct", never a third thing."""
+    value = str(environ.get(PATH_ENV, "") or "").strip().lower()
+    return value if value in PATHS else "chained"
 
 
 def install(app, mount, *, environ, budget=None, clock=time.time, summary_http=None):

@@ -1036,6 +1036,11 @@ class DirectVoiceAdapter:
         derives (operation_id, or the host's own form), so the backend's dedup holds too."""
         raise NotImplementedError
 
+    def call_started(self, sid, *, provider, device):
+        """A call started on this host: its provider and device class (#570). The core logs it; a host whose INFO logs
+        are dropped (the portal) keeps its own durable line here. Default: nothing more."""
+        return None
+
     def in_line(self, sid, item):
         """Whether this owner turn is waiting for the person to finish another one (#566 fault 1: MC answers one note at
         a time, and what he says meanwhile waits in line). Its pending answer then says it is next, not "taking longer"."""
@@ -1169,6 +1174,17 @@ class DirectSessions(ConsultLedger):
                                "slot": None, "confirmed": {}, "consumed": {}, "decided": {}, "last_place": -1}
             self._deciding[sid] = threading.Lock()
         self.open_session(sid, owner)
+        # #570 (13 Nov 2026): which path, provider and device each call ran on, so phone versus desktop is read from the
+        # records. The core's log line (CoS logs INFO); the host keeps its own durable line where its logs are dropped.
+        from core.realtime_voice.devices import device_class
+        device = device_class(request.headers.get("User-Agent") if has_request_context() else None)
+        chosen = provider if isinstance(provider, str) else None
+        log.info("%s direct voice start: session=%s path=direct provider=%s device=%s", self._adapter.person["domain"],
+                 sid[:8], chosen or "-", device)
+        try:
+            self._adapter.call_started(sid, provider=chosen, device=device)
+        except Exception:                                  # a record that cannot be kept never refuses the call
+            log.exception("%s direct voice: call record not kept", self._adapter.person["domain"])
         return sid
 
     def known(self, sid):

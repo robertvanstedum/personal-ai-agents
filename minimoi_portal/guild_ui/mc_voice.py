@@ -121,6 +121,11 @@ def bootstrap():
         return jsonify({"ok": False, "error": str(exc)}), 400
     except openai_realtime.OpenAIRealtimeError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 502
+    # #570: the path, provider and device of each call, kept durably (the portal drops INFO logs).
+    from core.realtime_voice.devices import device_class
+    from .mc.voice_calls import voice_calls_of
+    voice_calls_of(cfg().get("services")).record(path="chained", provider="openai",
+                                                 device=device_class(request.headers.get("User-Agent")))
     return jsonify({"ok": True, **credential, "warning_minutes": guard.warning_minutes, "max_minutes": guard.max_minutes})
 
 

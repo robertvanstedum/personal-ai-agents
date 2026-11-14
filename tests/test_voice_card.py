@@ -101,14 +101,16 @@ def test_language_is_an_allowed_locale_and_accent_a_short_label(tmp_path):
 
 
 def test_mcs_card_is_pinned_and_verified():
-    manifest = json.loads((MC_ROOT / "releases/0.1.29/manifest.json").read_text())
+    # The release pin.json names (0.1.29 when this was written, 0.1.34 since), not a hard-coded one: a persona release must
+    # not have to edit this test, only keep its voice card verified and its manner.
+    release = json.loads((MC_ROOT / "pin.json").read_text())["release"]
+    manifest = json.loads((MC_ROOT / f"releases/{release}/manifest.json").read_text())
     assert "voice.json" in manifest["files"]
-    assert json.loads((MC_ROOT / "pin.json").read_text()) == {"release": "0.1.29"}
     pinned = load_pinned(MC_ROOT)
-    assert pinned["release"] == "0.1.29" and pinned["language"] == "en-US" and pinned["transcription"] == "bilingual"
+    assert pinned["release"] == release and pinned["language"] == "en-US" and pinned["transcription"] == "bilingual"
     assert pinned["card"].startswith("You are Master Craftsman, MC. You and Robert have been building this together for a long time:")
     assert pinned["voices"] == {"openai": "marin", "xai": "leo"} and pinned["named"] == ["openai", "xai"]   # by ear, 29 Oct
-    assert pinned == load_card(MC_ROOT, "0.1.29")
+    assert pinned == load_card(MC_ROOT, release)
 
 
 def test_mcs_card_restates_the_manner_for_the_direct_path_and_carries_no_sentence_of_it():

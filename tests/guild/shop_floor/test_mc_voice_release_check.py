@@ -16,7 +16,7 @@ from minimoi_portal.guild_ui.mc.openclaw import VOICE_CHANNEL_WORDS
 
 API = "/guild-next/api/v1"
 DIRECT = API + "/mc/voice/direct/api/realtime-voice"
-ON = {"MINIMOI_MC_VOICE": "1", "MINIMOI_MC_VOICE_DIRECT": "1", "MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO": "2000000"}
+ON = {"MINIMOI_MC_VOICE": "1", "MINIMOI_MC_VOICE_DIRECT": "1", "MINIMOI_MC_VOICE_PATH": "direct", "MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO": "2000000"}
 COMPOSER = Path(__file__).resolve().parents[3] / "minimoi_portal/guild_ui/static/js/mc_voice.js"
 
 
