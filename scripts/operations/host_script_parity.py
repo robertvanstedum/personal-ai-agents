@@ -11,7 +11,8 @@ listed entry, the sha256 it must have at this commit. On the host, as root:
     ``--notify`` sends one Telegram line (an alert means action is needed).
   * ``install-cron`` adds the daily check to root's crontab once (marker ``# minimoi-host-script-parity``), and installs
     the scheduled-jobs watchdog and daily health check (/etc/cron.d/minimoi-jobs-health, FF-19 #537) when the deploy has
-    shipped their tools, so every deploy keeps them in place.
+    shipped their tools, so every deploy keeps them in place; and MC's read-only planning copy every 5 minutes
+    (/etc/cron.d/minimoi-planning-mirror, #587) when the deploy has shipped scripts/operations/planning_mirror.sh.
 
 Why: the deploy copied a fixed list of scripts, so the hand-installed backup script stayed old and the CoS store had no
 backup in production (#505). Standard library only; nothing here reads file contents beyond hashing.
@@ -39,6 +40,7 @@ CRON_LINE = ("20 5 * * * /usr/bin/python3 -I -B /opt/minimoi/scripts/host_script
              ">> /opt/minimoi/logs/host_script_parity.log 2>&1 " + CRON_MARKER)
 TELEGRAM_CHAT_ID = "8379221702"
 JOBS_HEALTH_INSTALLER = "/opt/minimoi/jobs-tools/scripts/jobs/install_host_watchdog.sh"
+PLANNING_MIRROR = "/opt/minimoi/scripts/planning_mirror.sh"
 
 
 def sha256_file(path: Path) -> str:
@@ -70,6 +72,15 @@ def build_manifest(repo: Path, entries: list[dict], commit: str) -> dict:
     return {"format": FORMAT, "commit": commit, "files": files}
 
 
+def _plain(info: tarfile.TarInfo) -> tarfile.TarInfo:
+    """No owner names or times in the bundle: the host extracts with --no-same-owner and install rewrites every file, so
+    they carry nothing, and dropping them keeps the base64 bundle under the SSM command limit (#587)."""
+    info.uid = info.gid = 0
+    info.uname = info.gname = ""
+    info.mtime = 0
+    return info
+
+
 def bundle(repo: Path, config: Path, commit: str, out: Path) -> dict:
     entries = load_config(config)
     manifest = build_manifest(repo, entries, commit)
@@ -80,7 +91,7 @@ def bundle(repo: Path, config: Path, commit: str, out: Path) -> dict:
         tar.addfile(info, io.BytesIO(raw))
         for e in entries:
             if e.get("ship"):
-                tar.add(repo / e["repo"], arcname=e["repo"], recursive=False)
+                tar.add(repo / e["repo"], arcname=e["repo"], recursive=False, filter=_plain)
     return manifest
 
 
@@ -164,6 +175,14 @@ def install_jobs_health(installer: str = JOBS_HEALTH_INSTALLER) -> str:
     return "installed" if done.returncode == 0 else "failed"
 
 
+def install_planning_mirror(script: str = PLANNING_MIRROR) -> str:
+    """MC's read-only planning copy (#587): its cron file, rewritten from the shipped script each deploy. Never fatal."""
+    if not os.path.isfile(script):
+        return "not_shipped"
+    done = subprocess.run(["/bin/bash", script, "install", "ec2"], capture_output=True, text=True)
+    return "installed" if done.returncode == 0 else "failed"
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -193,7 +212,8 @@ def main(argv=None) -> int:
         if not res["ok"] and a.notify:
             notify(res)
         return 0 if res["ok"] else 1
-    print(json.dumps({"cron": install_cron(), "jobs_health": install_jobs_health()}))
+    print(json.dumps({"cron": install_cron(), "jobs_health": install_jobs_health(),
+                      "planning_mirror": install_planning_mirror()}))
     return 0
 
 
