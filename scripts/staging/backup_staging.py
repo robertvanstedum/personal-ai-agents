@@ -84,9 +84,16 @@ def lines(cmd: list[str]) -> list[str]:
     return [l for l in subprocess.run(cmd, capture_output=True, text=True, check=True).stdout.splitlines() if l.strip()]
 
 
+def changed_files_ok(cmd: list[str]) -> list[str]:
+    """GNU tar exits 1 when a live file (a log) changed while it was read; the archive is still complete. Exit 2 and
+    above stay failures. Seen on staging 14 Nov 2026: one changed file failed the whole files piece."""
+    return ["sh", "-c", '"$@"; rc=$?; [ "$rc" -le 1 ]', "tar-tolerant", *cmd]
+
+
 def pieces(with_images: bool, root: str = ROOT) -> list[tuple[str, list[str], bool]]:
     """(name, producer command, gzip it here) for every piece of tonight's backup, read from the running host."""
-    out = [("files/opt-minimoi-staging.tar.gz", ["tar", "-C", str(Path(root).parent), "-czf", "-", Path(root).name], False)]
+    out = [("files/opt-minimoi-staging.tar.gz",
+            changed_files_ok(["tar", "--warning=no-file-changed", "-C", str(Path(root).parent), "-czf", "-", Path(root).name]), False)]
     running = lines(["docker", "ps", "--format", "{{.Names}} {{.Image}}"])
     tool = next((img for _, img in (r.split(" ", 1) for r in running) if "portal" in img), None)
     if tool:                                           # any running image with tar; the portal's always has it

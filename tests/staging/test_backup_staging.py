@@ -70,6 +70,22 @@ def test_one_failed_piece_fails_the_night_and_names_it(tmp_path):
     assert doc.get("last_success_at") is None                      # a failed night is never counted as a success
 
 
+def test_a_file_that_changed_while_tar_read_it_does_not_fail_the_files_piece(tmp_path):
+    for code, kept in ((0, True), (1, True), (2, False)):
+        cmd = backup.changed_files_ok(["sh", "-c", f"printf files; exit {code}"])
+        try:
+            backup.stream(cmd, f"s3://b/x/{code}", uploader=file_uploader(tmp_path))
+            assert kept and (tmp_path / f"b/x/{code}").read_bytes() == b"files"
+        except RuntimeError:
+            assert not kept
+
+
+def test_the_files_piece_tolerates_only_changed_files(monkeypatch):
+    monkeypatch.setattr(backup, "lines", lambda cmd: [])
+    [(name, cmd, _)] = [p for p in backup.pieces(False) if p[0].startswith("files/")]
+    assert cmd[:3] == ["sh", "-c", '"$@"; rc=$?; [ "$rc" -le 1 ]'] and "--warning=no-file-changed" in cmd
+
+
 def test_images_are_kept_only_when_asked(monkeypatch):
     out = {"docker ps": "minimoi-portal minimoi-staging/portal:x\npostgres-ai-agents postgres:latest",
            "docker volume": "minimoi-mc-state"}
