@@ -25,6 +25,7 @@ carries its own ``checked_at``, so a host that stops reporting reads "no new wat
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -34,7 +35,9 @@ REPORT_VERSION = 1
 NEEDS_ACTION, WATCH, FINE = "needs action", "watch", "fine"
 SEVERITY_ORDER = {NEEDS_ACTION: 0, WATCH: 1, FINE: 2}
 RED_CODES = ("failed", "missed", "stuck", "never_ran", "no_success")
-WATCH_CODES = ("late", "warn", "skew", "report_stale", "report_missing", "report_unreadable")
+REPO_CODES = ("repo_skipped", "repo_behind", "repo_unreadable")      # MC's repository copy (#585)
+WATCH_CODES = ("late", "warn", "skew", "report_stale", "report_missing", "report_unreadable") + REPO_CODES
+REPO_COPY_MAX = 1024                # the deploy writes one short line
 TAIL_BYTES = 4096
 TAIL_LINES = 5
 REPORT_STALE_S = 3 * 3600           # a host's watchdog report older than this is itself a problem (hourly watchdogs)
@@ -45,7 +48,10 @@ HOW = {"failed": "last run failed", "missed": "no completed run in time", "stuck
        "warn": "last run finished with warnings", "skew": "status time is in the future (clock skew)",
        "not_due": "not due yet", "first_run": "first run in progress", "not_tracked": "not watched yet",
        "report_stale": "no new watchdog report", "report_missing": "no watchdog report has arrived",
-       "report_unreadable": "watchdog report unreadable", "ok": "ok"}
+       "report_unreadable": "watchdog report unreadable", "ok": "ok",
+       "repo_skipped": "the deploy could not refresh MC's repository copy, so MC reads older code",
+       "repo_behind": "MC's repository copy is not at the commit the deploy wanted",
+       "repo_unreadable": "the deploy's record of MC's repository copy is unreadable"}
 
 
 def report_name(host: str) -> str:
@@ -84,9 +90,58 @@ def observe(job, roots: dict, now: datetime):
         doc = {"run_id": "mtime", "state": "failed" if failed else "ok", "started_at": moment, "finished_at": moment,
                "last_success_at": None if failed else moment}
         return doc, judge.judge(job, doc, now)
+    if kind == "repo_copy":
+        return repo_copy(Path(job.evidence["path"]))
     root = root_for(job, roots)
     doc = status.read_status(root, job.status_file, job.id) if root is not None else None
     return doc, judge.judge(job, doc, now)
+
+
+def _repo_fields(path: Path) -> dict | None:
+    """The deploy's ``status=.. commit=.. wanted=.. at=..`` line as a dict, or None when there is no such file yet.
+    Raises ValueError when it is there but not that line."""
+    try:
+        with open(path, "rb") as f:
+            raw = f.read(REPO_COPY_MAX + 1)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise ValueError("unreadable") from exc
+    if len(raw) > REPO_COPY_MAX:
+        raise ValueError("too long")
+    fields = {}
+    for part in raw.decode("utf-8", "replace").split():
+        key, sep, value = part.partition("=")
+        if sep and key in ("status", "commit", "wanted", "at"):
+            fields[key] = value
+    if fields.get("status") not in ("ok", "skipped"):
+        raise ValueError("no status")
+    return fields
+
+
+def repo_copy(path: Path):
+    """``(doc, verdict)`` for MC's repository copy from the deploy's record (#585). skipped: watch, since when the deploy
+    wrote it. ok but not at the wanted commit: watch. ok at the wanted commit: green. No record yet: not watched."""
+    try:
+        fields = _repo_fields(path)
+    except ValueError:
+        return None, judge.Verdict("yellow", "repo_unreadable", "unreadable")
+    if fields is None:
+        return None, judge.Verdict("unknown", "not_tracked", "none")
+    sha = lambda v: v if re.fullmatch(r"[0-9a-f]{7,40}", v or "") else ""                      # noqa: E731
+    commit, wanted = sha(fields.get("commit")), sha(fields.get("wanted"))     # only a commit id reaches a report
+    moment = status.iso(status.parse_time(fields.get("at")))
+    short = lambda v: v[:12] if v else "unknown"                                              # noqa: E731
+    if fields["status"] == "skipped":
+        code = "repo_skipped"
+    elif not commit or (wanted and commit != wanted):
+        code = "repo_behind"
+    else:
+        code = "ok"
+    doc = {"run_id": "repo_copy", "state": "ok" if code == "ok" else "warn", "started_at": moment,
+           "finished_at": moment, "last_success_at": moment if code == "ok" else None,
+           "summary": f"copy at {short(commit)}, deploy wanted {short(wanted)}, recorded {moment or 'unknown'}"}
+    return doc, judge.Verdict("green" if code == "ok" else "yellow", code, f"{commit}:{wanted}")
 
 
 def _off_since(code: str, doc: dict | None, job, prior: dict | None, now: datetime) -> str | None:
@@ -94,6 +149,8 @@ def _off_since(code: str, doc: dict | None, job, prior: dict | None, now: dateti
     without a good run). Other conditions: carried forward from the previous report, else now."""
     if code in ("ok", "not_tracked"):
         return None
+    if code in REPO_CODES and (doc or {}).get("finished_at"):
+        return doc["finished_at"]                     # when the deploy recorded it, not when a watchdog first saw it
     if prior and prior.get("off_since") and prior.get("code") != "ok":
         carried = prior["off_since"]
     else:
@@ -120,7 +177,8 @@ def host_report(reg, host: str, roots: dict, now: datetime, previous: dict | Non
         items.append({"id": job.id, "name": job.name, "host": host, "light": verdict.state, "code": verdict.code,
                       "evidence": job.evidence.get("kind", "status_file"),
                       "last_success_at": (doc or {}).get("last_success_at"), "off_since": since,
-                      "summary": (doc or {}).get("summary", "") if job.evidence.get("kind") == "status_file" else ""})
+                      "summary": (doc or {}).get("summary", "")
+                      if job.evidence.get("kind") in ("status_file", "repo_copy") else ""})
     return {"schema_version": REPORT_VERSION, "host": host, "checked_at": status.iso(now),
             "worst": judge.worst(i["light"] for i in items if i["code"] != "not_tracked"),
             "counts": _counts(items), "items": items}
@@ -209,6 +267,8 @@ def line(item: dict) -> str:
         how = f"{how}, not working for {item['off_for']}"
     elif item.get("off_for"):
         how = f"{how}, for {item['off_for']}"
+    if item.get("code") in REPO_CODES and item.get("summary"):
+        how = f"{how} ({item['summary']})"
     return f"[{item['severity']}] {item['name']} ({item['host']}): {how}"
 
 

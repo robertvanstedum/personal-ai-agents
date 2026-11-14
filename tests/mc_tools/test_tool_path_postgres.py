@@ -104,6 +104,7 @@ class Base(PostgresFixture):
         self.policy = self.install_policy()
         self.service = ToolService(self.connect, principal=OWNER, environment="dev", lessons=self.ledger,
                                    delegation=True, invites=True, tickets=True, comments=True, guest_rejects=True,
+                                   issue_repo="example/minimoi-dev-issues",
                                    github=FakeGitHub(), show=self.show, read_shown=self.read_shown,
                                    isolated_runtime=True,
                                    guests_lookup=lambda email: None, policy=self.policy,
@@ -461,6 +462,8 @@ class ToolTests(Base, unittest.TestCase):
         self.assertEqual(r["status"], "needs_confirmation")
         self.assertIn(summary, self.shown[-1][2])
         self.assertIn("guild:1, guild:2", self.shown[-1][2])
+        self.assertIn("Destination: example/minimoi-dev-issues (https://github.com/example/minimoi-dev-issues/issues/69)",
+                      self.shown[-1][2])                                           # #585: the card names the repository
         posted = []
         proposals = ToolProposals(self.connect, policy=self.policy, principal=OWNER, environment="dev",
                                   comment_issue=lambda n, body: posted.append((n, body)) or ("created", 9001))
@@ -483,6 +486,8 @@ class ToolTests(Base, unittest.TestCase):
         self.assertIn(title, self.shown[-1][2])
         self.assertIn(body, self.shown[-1][2])
         self.assertIn("Labels: enhancement, ui", self.shown[-1][2])
+        self.assertIn("in example/minimoi-dev-issues", self.shown[-1][2])          # #585: repository and footer shown
+        self.assertIn("Opened by MiniMoi's Master Craftsman after Robert approved this exact text", self.shown[-1][2])
         filed = []
         proposals = ToolProposals(self.connect, policy=self.policy, principal=OWNER, environment="dev",
                                   file_issue=lambda t, b, labels=(): filed.append((t, b, labels)) or ("created", 412))
