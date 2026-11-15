@@ -921,6 +921,21 @@ def test_typed_turns_keep_the_bare_forms_exactly(waiting, monkeypatch):
     assert waiting.jobs.stopped == ["j1"] and body["job_command"] == "stop"
 
 
+def test_a_typed_yes_with_a_remark_approves_and_a_retracted_one_is_asked_again_615(waiting):
+    """#615: "yes P-XXXX (remark)" approves; a reply naming the code that is not a clear yes is answered by the
+    platform, never passed to the model, and nothing is done."""
+    r = waiting.r
+    conv = {"id": CID, "principal": "robert"}
+    owner = lambda text, n: (r.config["services"], "robert", conv, r.notes,  # noqa: E731
+                             {"text": text, "author_kind": "owner", "who": "robert"}, n, n, [])
+    with r.app.test_request_context():
+        unclear = api._owner_tool_proposal_command(owner("yes P-7K3M, but wait", "n-1"))
+        assert unclear is not None and "Nothing was done for P-7K3M" in unclear[0].get_json()["message"]
+        assert waiting.handler.handled == []
+        api._owner_tool_proposal_command(owner("yes p-7K3M (but loosen this rule later)", "n-2"))
+    assert waiting.handler.handled == [("confirm", "P-7K3M")]
+
+
 def test_a_bare_confirm_of_a_waiting_lesson_or_guest_rejection_in_voice_asks_for_it_in_writing(ready, monkeypatch):
     from core.mc_domain_actions import guest_commands
     from core.mc_lessons import commands as lessons

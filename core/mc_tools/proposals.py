@@ -47,18 +47,50 @@ _NAMED = re.compile(r"^(?P<word>yes|ja|ok(?:ay)?|confirm|approve|no|nein|cancel)
                     re.I)
 
 
+# #615: the named answer may carry a remark after the code ("yes P-UKWX, but loosen this later"). The code is what
+# proves the owner meant this proposal; the remark changes nothing, unless it takes the yes back.
+_NAMED_REMARK = re.compile(r"^(?P<word>yes|ja|ok(?:ay)?|confirm|approve|no|nein|cancel)[,:]?\s+(?:proposal\s+)?"
+                           r"p-?(?P<code>[a-z0-9]{4})(?![a-z0-9])(?P<rest>.*)$", re.I | re.S)
+_TAKES_BACK = re.compile(r"\b(?:no|not|nein|nicht|don['’]?t|do\s+not|wait|hold|stop|cancel|never\s*mind)\b", re.I)
+_ANY_CODE = re.compile(r"(?<![a-z0-9])p-(?P<code>[a-z0-9]{4})(?![a-z0-9])", re.I)
+REMARK_MAX = 300
+
+
 def parse(text):
-    """(kind, code) for the owner's own short reply, else None: kind 'confirm' or 'cancel'; code 'P-XXXX' when he
-    named the proposal ("yes P-7K3M"), else None. Only the whole short message counts, and the caller claims it only
+    """(kind, code) for the owner's own reply, else None. kind 'confirm' or 'cancel'; code 'P-XXXX' when he named the
+    proposal ("yes P-7K3M"), else None. A plain yes/no counts only as the whole short message. A named yes may carry a
+    remark after the code (#615). kind 'unclear' when the reply names a code but is not a clear yes or no (for example
+    "yes P-7K3M, wait"): the platform asks again instead of passing it to the model. The caller claims any of these only
     while a proposal waits in this conversation."""
-    if not isinstance(text, str) or len(text) > 60:
+    if not isinstance(text, str):
         return None
     t = text.strip()
-    m = _NAMED.match(t)
+    if len(t) <= 60:
+        m = _NAMED.match(t)
+        if m:
+            kind = "cancel" if m.group("word").lower() in ("no", "nein", "cancel") else "confirm"
+            return kind, "P-" + m.group("code").upper()
+        if _YES.match(t):
+            return "confirm", None
+        if _NO.match(t):
+            return "cancel", None
+    if len(t) > REMARK_MAX:
+        return None
+    m = _NAMED_REMARK.match(t)
     if m:
-        kind = "cancel" if m.group("word").lower() in ("no", "nein", "cancel") else "confirm"
-        return kind, "P-" + m.group("code").upper()
-    return ("confirm", None) if _YES.match(t) else ("cancel", None) if _NO.match(t) else None
+        code = "P-" + m.group("code").upper()
+        if m.group("word").lower() in ("no", "nein", "cancel"):
+            return "cancel", code                 # a no stays a no, whatever follows
+        rest = m.group("rest")
+        return ("unclear", code) if _TAKES_BACK.search(rest) or _ANY_CODE.search(rest) else ("confirm", code)
+    m = _ANY_CODE.search(t)
+    return ("unclear", "P-" + m.group("code").upper()) if m else None
+
+
+def unclear_reply(code):
+    """The platform's answer to a reply that names a waiting proposal but is not a clear yes or no. Nothing was done."""
+    return (f"Nothing was done for {code}: I couldn't read that as a clear yes or no. "
+            f"Reply “yes {code}” to approve it, or “no” to drop it.")
 
 
 # Voice only (mc_voice_direct's consult): speech recognition writes a spoken code with spaces, dots or hyphens, and may
