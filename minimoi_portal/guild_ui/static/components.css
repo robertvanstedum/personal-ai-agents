@@ -216,6 +216,12 @@ body.gu[data-mc-mode="floating"] .mc-pill, body.gu[data-mc-mode="docked"] .mc-pi
 .participant[data-state="joined"] { border-width: 2px; }
 .mc-thread { flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column; gap: var(--gu-s2); min-height: 120px; max-height: 44vh; padding-right: 4px; }
 .mc-panel[data-mode="docked"] .mc-thread { max-height: none; }
+/* #607 follow-up (15 Nov production): the voice call transcript uses the site's font, keeps its line breaks, and
+   scrolls inside a capped box, so the download link below it stays reachable on a narrow or short window. */
+[data-mc-voice-transcript] { margin: 0 var(--gu-s3); }
+[data-mc-voice-transcript-text] { font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; margin: var(--gu-s2) 0;
+  max-height: min(40dvh, 22rem); overflow: auto; }
+[data-mc-voice-call-download] { display: inline-block; margin-bottom: var(--gu-s2); }
 .msg { background: var(--gu-msg-bg); border: 1px solid var(--gu-border); border-radius: 10px 10px 10px 2px; padding: 7px 10px; }
 .msg[data-who="robert"] { background: var(--gu-msg-own-bg); border-color: transparent; border-radius: 10px 10px 2px 10px; margin-left: 24px; }
 .msg-meta { font-size: var(--gu-size-xs); color: var(--gu-text-muted); }
