@@ -1521,3 +1521,10 @@ body.gu .mc-panel:is([data-mode="floating"], [data-mode="docked"]) [data-mc-reco
   .prototype-lab .area-hero:has(.area-hero-art-wide){height:112px;grid-template-columns:minmax(0,1fr) 42%}
   .prototype-lab .area-hero-art.area-hero-art-wide{height:112px}
 }
+
+/* #622: the chat's one status chip (a light at Problem, or cost not good); everything else is on Operate. */
+.floor-alert { display: flex; flex-wrap: wrap; gap: var(--gu-s2); align-items: center; justify-content: center;
+  margin: var(--gu-s2) auto; padding: 4px 12px; border-radius: 999px; width: fit-content;
+  background: var(--gu-warn-bg, #fbeae5); color: var(--gu-warn-fg, #8a2c14); }
+.floor-alert[hidden] { display: none; }
+.floor-alert-link { color: inherit; font-weight: 600; }

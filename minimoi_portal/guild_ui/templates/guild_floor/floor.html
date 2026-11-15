@@ -6,7 +6,7 @@
   Chat (the Shop floor), Guild 1.1: desktop is  history | chat | live context;
   phone is chat first, with the context expandable below it. The hero sits in
   the chat's header (slice 1, the v4 design; no chooser), on every width.
-  Status lights sit in a compact strip low on the page (detail in Operate);
+  Status lights live on Operate (#622); the chat shows one chip only when a light is at Problem or cost isn't good;
   post-its live on the Board (the wall), not here.
 #}
 
@@ -91,27 +91,12 @@
 {% endblock %}
 
 {% block below %}
-<section class="zone zone-status floor-strip" data-zone="status" aria-labelledby="z-status">
-  <h2 class="visually-hidden" id="z-status">{{ floor_cfg.title }} · Status · {{ rules_label }}</h2>
-  <button type="button" class="status-compact" data-lights-toggle aria-expanded="false" aria-controls="lights-full">
-    {% for l in state.lights %}
-    <span class="lc" data-lc="{{ l.id }}" data-light-state="{{ l.state }}">{{ shape(l) }}<span class="lc-name">{{ l.short }}</span> <span class="lc-word" data-lc-word>{{ l.word }}</span></span>
-    {% endfor %}
-    <span class="lc-more" data-lights-more>Details ▾</span>
-  </button>
-  {% if state.cost_level and state.cost_level != 'good' %}<span class="strip-cost small" data-strip-cost>Cost: {{ state.cost_level }}</span>{% endif %}
-  <a class="strip-operate small" href="{{ urls.operate }}">Operate →</a>
-  <ul class="lights" id="lights-full" data-lights-full>
-    {% for l in state.lights %}
-    <li class="light" data-light="{{ l.id }}" data-light-state="{{ l.state }}">
-      {{ shape(l) }}
-      <span class="light-body">
-        <a class="light-name" href="{{ l.href }}" data-light-link>{{ l.label }}</a>
-        <span class="light-word" data-light-word>{{ l.word }}</span>
-        <span class="light-reason"><span data-light-reason>{{ l.reason }}</span> <span class="light-src" data-light-src data-source="{{ l.source }}">{{ l.source_mark }}</span></span>
-      </span>
-    </li>
-    {% endfor %}
-  </ul>
-</section>
+{# #622 (Robert, 15 Nov: "Everywhere"): no status strip on the chat, on any screen size. The lights and their details live
+   on Operate. The chat shows one chip only when something needs him: a light at Problem, or cost that isn't good. #}
+{% set red = state.lights | selectattr('state', 'equalto', 'red') | list %}
+{% set cost_note = state.cost_level if state.cost_level and state.cost_level != 'good' else '' %}
+<p class="floor-alert small" data-floor-alert data-cost="{{ cost_note }}" role="status"{% if not red and not cost_note %} hidden{% endif %}>
+  <span data-floor-alert-text>{% for l in red %}{{ l.short }}: Problem{% if not loop.last %} · {% endif %}{% endfor %}{% if cost_note %}{% if red %} · {% endif %}Cost: {{ cost_note }}{% endif %}</span>
+  <a class="floor-alert-link" href="{{ urls.operate }}">Operate →</a>
+</p>
 {% endblock %}

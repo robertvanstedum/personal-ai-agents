@@ -56,6 +56,17 @@ function renderLights(lights) {
   }
 }
 
+// #622: the chat's one chip. Shown only when a light is at Problem or cost isn't good; the lights themselves live on Operate.
+function renderAlert(lights) {
+  const chip = $('[data-floor-alert]');
+  if (!chip) return;
+  const at = since();
+  const parts = lights.filter((l) => lightView(l, fresh.mode, at).state === 'red').map((l) => `${l.short}: Problem`);
+  if (chip.dataset.cost) parts.push(`Cost: ${chip.dataset.cost}`);
+  chip.querySelector('[data-floor-alert-text]').textContent = parts.join(' · ');
+  chip.hidden = parts.length === 0;
+}
+
 function needsLineText(needs) {
   return needs.text;
 }
@@ -118,6 +129,7 @@ function renderFreshness() {
 function render() {
   if (!current) return;
   renderLights(current.lights || []);
+  renderAlert(current.lights || []);
   renderNeeds(current.needs);
   renderFloorNeeds(current.needs, fresh.mode, since());
   if (current.briefing) {
@@ -208,8 +220,8 @@ export function initFloorState(p) {
   window.clearInterval(ticker);
   ticker = window.setInterval(() => applyFreshness(), TICK_MS);
   if (page.page !== 'floor') return;
-  const lightsBtn = $('[data-lights-toggle]');
-  lightsBtn.addEventListener('click', () => toggle('lightsOpen', lightsBtn, 'Hide ▴', 'Details ▾'));
+  const lightsBtn = $('[data-lights-toggle]');      // the status strip left the chat (#622); kept for any page that still has it
+  if (lightsBtn) lightsBtn.addEventListener('click', () => toggle('lightsOpen', lightsBtn, 'Hide ▴', 'Details ▾'));
   const sheetBtn = $('[data-sheet-toggle]');     // the pre-1.1 floor's post-it sheet; gone from the 1.1 layout
   if (sheetBtn) sheetBtn.addEventListener('click', () => toggle('sheetOpen', sheetBtn));
   // (The context rail's folding follows the width: floorlayout.js.)
