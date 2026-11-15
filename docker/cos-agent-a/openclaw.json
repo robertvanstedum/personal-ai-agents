@@ -150,7 +150,14 @@
         ]
       },
       "bootstrapMaxChars": 32000,
-      "bootstrapTotalMaxChars": 64000
+      "bootstrapTotalMaxChars": 64000,
+      "contextPruning": {
+        "mode": "cache-ttl",
+        "ttl": "30m",
+        "hardClear": {
+          "enabled": false
+        }
+      }
     },
     "entries": {
       "cos-agent-a": {

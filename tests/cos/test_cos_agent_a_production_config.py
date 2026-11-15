@@ -68,7 +68,7 @@ def test_production_agent_runtime_has_memory_cap_and_never_self_updates():
     service = yaml.safe_load(PROD_COMPOSE.read_text())["services"]["cos-agent-a"]
 
     # Real turns on staging peaked at about 1,031 MB; 900m OOMed in probes.
-    assert service["mem_limit"] == "1400m"
+    assert service["mem_limit"] == "2048m"
     assert "OPENCLAW_NO_AUTO_UPDATE=1" in service["environment"]
     # The only measured idle lever (about -60 MB). A heap cap did not help.
     assert "MALLOC_ARENA_MAX=2" in service["environment"]

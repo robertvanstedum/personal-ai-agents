@@ -8,12 +8,15 @@ REPO = Path(__file__).resolve().parents[1]
 CONFIG = json.loads((REPO / "docker/mc-agent-container/openclaw.json").read_text())
 
 
-def test_proactive_compaction_is_off_until_recall_exists_and_nothing_is_dropped():
-    """#553 review: with no memory flush and no MiniMoi recall yet, compaction would make long chats forget silently.
-    Threshold compaction is off; OpenClaw's overflow recovery (a real context-overflow error) still compacts, in safeguard
-    mode with a 20k verbatim tail. It comes back once capture -> notes and recall (step 2) work."""
+def test_compaction_is_on_so_a_long_chat_never_locks_mc_out():
+    """15 Nov production: with threshold compaction off (#553), one MC conversation reached 116k tokens of a 131k window
+    and its replies stopped after 1-142 tokens (stopReason=length), locking Robert out of MC in that chat. Robert: "I need
+    MC always available no matter what." Compaction is on again (OpenClaw compacts at the smaller of 75% of the window and
+    the window minus a 20k reserve, about 98k here), in safeguard mode with a 20k verbatim tail; MiniMoi keeps the whole
+    transcript and MC can search the Vault, so a summarised older part is recoverable. No memory flush: MiniMoi owns
+    MC's memory, not MEMORY.md."""
     d = CONFIG["agents"]["defaults"]
-    assert d["compaction"] == {"enabled": False, "mode": "safeguard", "keepRecentTokens": 20000, "memoryFlush": {"enabled": False}}
+    assert d["compaction"] == {"enabled": True, "mode": "safeguard", "keepRecentTokens": 20000, "memoryFlush": {"enabled": False}}
     # Pruning only soft-trims OLD tool results (over 4,000 chars: first and last 1,500 kept) after 30 min idle, in the
     # in-memory context sent to the model; conversation text, images and the transcript on disk are never touched, and
     # the hard-clear step that replaces whole results is off.

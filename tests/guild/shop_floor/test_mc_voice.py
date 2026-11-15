@@ -255,3 +255,27 @@ def test_the_request_sent_to_the_provider_forbids_any_provider_response(turned, 
     assert session["audio"]["input"]["transcription"]["model"]=="gpt-live-transcribe"
     assert session["audio"]["input"]["transcription"]["languages"]==["en"]
     assert seen["headers"]["OpenAI-Safety-Identifier"] and "robert" not in seen["headers"]["OpenAI-Safety-Identifier"]       # hashed, not the name
+
+
+def test_a_talking_call_settles_at_end_to_the_minutes_it_ran_for_its_owner_only(turned, provider, monkeypatch):
+    """#578 S5: the talking call reserves an hour at the realtime rate under its own ledger id; End brings it down to the
+    one-minute minimum here, bound to its owner by the ledger row (not the in-memory table, which a restart empties)."""
+    from core.realtime_voice import budget
+    from core.realtime_voice.providers import openai_realtime
+    from minimoi_portal.guild_ui.mc import voice_walk
+    _on(monkeypatch)
+    monkeypatch.setenv("MINIMOI_MC_VOICE_PATH", "realtime")
+    monkeypatch.setattr(openai_realtime, "mint_ephemeral_credential",
+                        lambda **kw: {"ok": True, "provider": "openai", "client_secret": "ek_test_secret", "expires_at": 1, "model": "stand-in"})
+    client = turned.owner()
+    token = turned.csrf(client)
+    body = client.post(f"{API}/mc/voice/bootstrap", json={}, headers=write_headers(token)).get_json()
+    assert body["ok"] and body["voice_path"] == "realtime"
+    session = body["voice_session_id"]
+    assert budget.default_budget().status()["reserved_usd"] == pytest.approx(6.0)
+    voice_walk._SESSIONS.pop(session, None)                        # the portal restarted mid-call
+    out = client.post(f"{API}/mc/voice/walk/end", json={"session": session, "turns": []}, headers=write_headers(token)).get_json()
+    assert out["settled"] is True
+    assert budget.default_budget().status()["reserved_usd"] == pytest.approx(0.10)
+    again = client.post(f"{API}/mc/voice/walk/end", json={"session": session, "turns": []}, headers=write_headers(token)).get_json()
+    assert again["settled"] is False                                # once

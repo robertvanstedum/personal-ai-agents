@@ -491,6 +491,13 @@ export function conferVoice(d) {
     },
     elapsed: (text) => { elapsed.textContent = text; },
     notice: (text) => { notice.textContent = text || ''; notice.hidden = !text; },
+    // #607: each spoken answer stays on screen after it is said. The status line still changes.
+    spoken: (text) => {
+      if (!text) return;
+      const line = `Voice: ${text}`;
+      notice.textContent = notice.textContent ? `${notice.textContent}\n\n${line}` : line;
+      notice.hidden = false;
+    },
     propose: (yes) => { propose.hidden = !yes; },
     // Check shows the words it sends (review B N8): as it sends them, then with the answer, until the next Check or End.
     checking: (yes, words) => {

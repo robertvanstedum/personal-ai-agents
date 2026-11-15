@@ -400,7 +400,7 @@ def test_compose_service_has_isolated_state_and_local_only_ui_access():
     assert "cos-agent-a-auth:/home/node/.config/openclaw" in service
     assert "image: minimoi/cos-agent-a:openclaw-2026.9.6" in service
     assert "OPENCLAW_NO_AUTO_UPDATE=1" in service
-    assert "mem_limit: 1400m" in service
+    assert "mem_limit: 2048m" in service
     assert "MALLOC_ARENA_MAX=2" in service
     assert "NODE_OPTIONS" not in service
     assert '"127.0.0.1:18790:18789"' in service

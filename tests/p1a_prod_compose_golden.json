@@ -34,7 +34,7 @@
     "timeout": "5s"
    },
    "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:agent-a-${MINIMOI_IMAGE_TAG:-latest}",
-   "mem_limit": "1400m",
+   "mem_limit": "2048m",
    "networks": {
     "cos-agent": {
      "ipv4_address": "192.168.250.2"

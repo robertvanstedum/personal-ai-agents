@@ -1,15 +1,19 @@
 // The talking call. The shared controller owns the provider session. This page does not
 // call the adapter, and it does not send a tool result itself.
 
-export async function startMcWalk({ api, headers, current, say, setPhase }) {
+export async function startMcWalk({ api, headers, current, say, setPhase, saved }) {
   const { RealtimeVoiceController } = await import(`${api}/mc/voice/static/realtime-voice-controller.js`);
   const turns = [];
   let sessionId = null;
   let holdId = null;
   let active = true;
-  const post = (path, body) => fetch(`${api}/mc/voice/walk/${path}`, {
-    method: 'POST', credentials: 'same-origin', headers: headers(), body: JSON.stringify(body),
-  }).then((r) => r.json().catch(() => ({})));
+  const post = (path, body) => {
+    const data = JSON.stringify(body);
+    // keepalive lets End finish when the tab is closing; browsers cap such a body at 64 KiB, so a long call goes plainly.
+    return fetch(`${api}/mc/voice/walk/${path}`, {
+      method: 'POST', credentials: 'same-origin', headers: headers(), body: data, keepalive: data.length < 60000,
+    }).then((r) => r.json().catch(() => ({})));
+  };
 
   let ready;
   let failed;
@@ -42,8 +46,9 @@ export async function startMcWalk({ api, headers, current, say, setPhase }) {
     },
     onStop() { stop('duration_limit'); },
   };
-  // The shared controller runs the tool. The hook name is built so this host file does not wire it by the scanned word.
-  hooks['on' + 'Function' + 'Call'] = (call) => {
+  // The shared controller runs the tool and sends its result; this page only answers the read through the server.
+  // tests/realtime_voice/test_no_copy.py names this file, and only this hook, as an allowed host (#578 S1).
+  hooks.onFunctionCall = (call) => {
     let query = '';
     try { query = JSON.parse(call?.arguments || '{}').query || ''; } catch (_) { query = ''; }
     return post('tool', { name: call?.name, query }).then((body) => JSON.stringify(body || {}));
@@ -60,7 +65,12 @@ export async function startMcWalk({ api, headers, current, say, setPhase }) {
     active = false;
     try { controller._wakeLock?.release?.(); } catch (_) { /* already released */ }
     controller.endSession?.(reason);
-    if (sessionId) post('end', { session: sessionId, turns });
+    if (!sessionId) return;
+    // #578: the server keeps the whole call as one file; the page then offers it (read here, download from the server).
+    const id = sessionId, said = turns.slice();
+    post('end', { session: id, turns: said }).then((body) => {
+      if (body?.written && typeof saved === 'function') saved({ turns: said, url: `${api}/mc/voice/walk/transcript/${encodeURIComponent(id)}` });
+    }).catch(() => { /* the call ended; nothing more to offer */ });
   }
 
   const starting = controller.startSession({ provider: 'openai' });

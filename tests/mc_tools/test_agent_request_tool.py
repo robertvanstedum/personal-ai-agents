@@ -173,6 +173,15 @@ class TypedRequestTests(Base):
         [req] = self.docs()
         self.assertEqual(req["envelope"]["analysis"]["text"], "Worth a second look at the inbox.")     # the first is frozen
 
+    def test_grok_will_not_watch_the_old_planning_folder(self):
+        from scripts import agent_requests as cli
+        old = "planning-studio/operations/OPS-2026-11-06-1-2-beta-release/coordination/agent_requests"
+        args = SimpleNamespace(root=old, actor="grok", interval=30, max_seconds=1, session="")
+        with mock.patch("sys.stderr") as err:
+            self.assertEqual(cli.cmd_watch(args), 2)
+        self.assertIn("not the request ledger", " ".join(str(c.args[0]) for c in err.write.call_args_list if c.args))
+        self.assertFalse(cli.retired_grok_root(self.ledger))
+
     def test_a_recipient_sees_it_marked_as_data(self):
         self.call(self.review())
         from scripts import agent_requests as cli

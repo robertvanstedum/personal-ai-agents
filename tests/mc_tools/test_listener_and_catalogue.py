@@ -222,8 +222,22 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(parse("confirm p7k3m"), ("confirm", "P-7K3M"))
         self.assertEqual(parse("no P-7K3M"), ("cancel", "P-7K3M"))
         self.assertEqual(parse("No thanks"), ("cancel", None))
-        for text in ("yes, but change it", "yes P-7K3M and also P-AAAA", "maybe", "", None, "y" * 70):
+        for text in ("yes, but change it", "maybe", "", None, "y" * 70):
             self.assertIsNone(parse(text), text)
+        # #615: two codes in one reply is not a clear yes for either; the platform asks again.
+        self.assertEqual(parse("yes P-7K3M and also P-AAAA"), ("unclear", "P-7K3M"))
+
+    def test_named_yes_with_a_remark_615(self):
+        from core.mc_tools.proposals import parse, unclear_reply
+        # The 15 Nov production reply that fell through to the model.
+        self.assertEqual(parse("yes p-UKWX ( but in the future we need to loosen this rule)"), ("confirm", "P-UKWX"))
+        self.assertEqual(parse("Yes P-7K3M, thanks. Good draft."), ("confirm", "P-7K3M"))
+        self.assertEqual(parse("no P-7K3M, the wording is off"), ("cancel", "P-7K3M"))
+        for text in ("yes P-7K3M but wait", "yes P-7K3M, no, change the title first", "ok P-7K3M hold on"):
+            self.assertEqual(parse(text), ("unclear", "P-7K3M"), text)
+        self.assertEqual(parse("what does P-7K3M post?"), ("unclear", "P-7K3M"))
+        self.assertIsNone(parse("yes P-7K3M " + "x" * 400))
+        self.assertIn("Nothing was done for P-7K3M", unclear_reply("P-7K3M"))
 
 
 if __name__ == "__main__":

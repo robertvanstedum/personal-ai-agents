@@ -274,6 +274,19 @@ export function initMcVoice(page) {
   // The direct path (UI_CONTRACT_chunk_B.md). Its files are loaded only now that the capabilities answer offered it: the
   // Guild's thread (mc_voice_direct.js) and the shared session module (Spec 165 §4.3), served beside the controller.
   const DIRECT_ENDED = 'Voice ended. What was said is in the conversation.';
+  // #578: after a talking call, its whole transcript, tucked (closed) under the composer, with a download from the server.
+  function showWalkTranscript({ turns, url }) {
+    const box = $('[data-mc-voice-transcript]'), text = $('[data-mc-voice-transcript-text]');
+    if (!box || !text) return;
+    const summary = box.querySelector('summary');
+    if (summary) summary.textContent = `Voice call transcript · ${turns.length} turns · saved`;
+    text.textContent = turns.map((t) => `${t.role === 'user' ? 'You' : 'MC'}: ${t.text}`).join('\n\n');
+    box.hidden = false;
+    box.open = false;
+    // Its own link inside the box: the options menu's export link is hidden on this path and repainted per conversation.
+    const link = box.querySelector('[data-mc-voice-call-download]');
+    if (link && url) { link.setAttribute('href', url); link.hidden = false; }
+  }
   async function startWalk(mine, current) {
     say('Connecting…');
     try {
@@ -283,6 +296,7 @@ export function initMcVoice(page) {
         api, headers, current,
         say: (text) => { if (current()) say(text); },
         setPhase: (phase) => { if (current()) setPhase(phase); },
+        saved: showWalkTranscript,
       });
     } catch (e) {
       if (current()) { stop('failed', { quiet: true }); say(`Voice could not start${e && e.message ? `: ${e.message}` : ''}. Typing still works.`, { loud: true, error: true }); }
@@ -326,7 +340,7 @@ export function initMcVoice(page) {
   }
   async function initDirect() {
     const choice = $('[data-mc-voice-transcript-choice]');
-    if (choice?.parentElement) choice.parentElement.hidden = true;          // no running text on this path: it is revealed at End
+    if (choice?.parentElement) choice.parentElement.hidden = true;          // the checkbox is unused: spoken lines stay in the transcript box
     await initThread(direct);
     $('[data-mc-voice-end]')?.addEventListener?.('click', () => { if (directSession?.proposing()) directSession.sumUp(); else if (busy()) stop('user_ended'); });
     $('[data-mc-voice-check]')?.addEventListener?.('click', () => directSession?.check());
@@ -336,6 +350,9 @@ export function initMcVoice(page) {
   async function startDirect(mine,current) {
     const selector=$('[data-mc-voice-provider]');
     if(selector)selector.disabled=true;
+    const spokenBox=$('[data-mc-voice-transcript]'),spokenText=$('[data-mc-voice-transcript-text]');
+    if(spokenText)spokenText.textContent='';
+    if(spokenBox)spokenBox.hidden=true;
     say('Connecting voice…');
     let handle=null,mineSession=null;
     const mineNow=()=>controller===handle&&handle!==null;
@@ -345,6 +362,14 @@ export function initMcVoice(page) {
       live:(on)=>{const bar=liveBar();if(bar)bar.hidden=!on||!current();if(!on){const p=$('[data-mc-voice-propose]');if(p)p.hidden=true;}},
       elapsed:(text)=>{const n=$('[data-mc-voice-elapsed]');if(n)n.textContent=text;},
       notice:(text)=>{const n=$('[data-mc-voice-notice]');if(n){n.textContent=text||'';n.hidden=!text;}},
+      // #607: each spoken answer stays in the transcript box after it is said. The status line still changes.
+      spoken:(text)=>{
+        const box=$('[data-mc-voice-transcript]'),node=$('[data-mc-voice-transcript-text]');
+        if(!box||!node||!text)return;
+        const line=`Voice: ${text}`;
+        node.textContent=node.textContent?`${node.textContent}\n\n${line}`:line;
+        box.hidden=false;box.open=true;
+      },
       propose:(on)=>{const p=$('[data-mc-voice-propose]');if(p)p.hidden=!on||!current();if(on&&current())announce('Shall I sum up?');},
       checking:(on)=>{const b=$('[data-mc-voice-check]');if(b)b.disabled=Boolean(on);},
       // The session ended by itself (a refusal, the provider, the summary, the time limit): the button is ready again.

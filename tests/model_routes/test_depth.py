@@ -284,3 +284,31 @@ def test_revert_leaves_nothing_naming_the_light_alias(tmp_path):
 def test_portal_admission_knows_whether_a_turn_carries_anything_beyond_words(files, context, attached):
     from minimoi_portal.guild_ui.api import _turn_attached
     assert _turn_attached(files, context) is attached
+
+
+# 15 Nov production: Robert's German practice lines took the strong route in both MC and CoS (5–14 s each).
+GERMAN_PRACTICE = [
+    "Guten Tag - Sontag und die Sonne scheint", "Ich denke dass ich mit meiner Frau spazieren gehen.",
+    "Danke dir für mich korriegeren.", "Danke, dass du mich korrigierst.", "Die Sonne scheint heute.",
+    "Auf jeden Fall.  Sie hat mir gesagt, dass sie mit mir spazieren gehen würde.",
+    "Es ist sicher.  Sie möchte auch mit mir spazieren gehen.", "Wie geht es dir?",
+]
+NOT_LIGHT = [
+    "Sontag - did Sonne scheine....", "die Sonne scheine. is that correct?",          # mixed: asks about English
+    "Kannst du die Datei für mich finden?", "Was steht heute auf dem Plan?", "Zeig mir den Status der Produktion",
+    "Erinnere mich morgen an den Termin", "Warum ist der Server langsam?",            # German requests stay quick
+    "I will die in the war", "The war will end", "Will you deploy the fix today?",     # English sharing German words
+    "Denk gründlich nach: soll ich die Datei löschen?",
+]
+
+
+def test_a_short_german_practice_line_is_light():
+    from core.model_routes.depth import short_turn
+    for text in GERMAN_PRACTICE:
+        assert short_turn(text), text
+
+
+def test_a_german_request_or_english_lookalike_is_not_light():
+    from core.model_routes.depth import short_turn
+    for text in NOT_LIGHT:
+        assert not short_turn(text), text

@@ -194,12 +194,17 @@ def _bootstrap_walk(principal, guard, device):
     from core.realtime_voice.providers import openai_realtime
     from core.realtime_voice.standards import conversation_turn_detection
     from .mc.voice_calls import voice_calls_of
-    from .mc.voice_walk import instructions, open_session, read_tools, talking_reservation
+    from .mc.voice_calls import call_record_folder
+    from .mc.voice_walk import instructions, open_call, open_session, read_tools, talking_reservation
     session = uuid.uuid4().hex
     open_session(session, principal)
+    open_call(session, principal, folder=call_record_folder(cfg().get("services")))
     kind, amount = talking_reservation(guard.max_minutes)
+    _settle_stale_walks()
     try:
-        with budget.admit(kind=kind, domain="mc", principal=principal, required=True, amount_micro=amount):
+        # #578 S5: reserved under the session's own ledger id, so End (or the sweep) can settle it to the minutes used.
+        with budget.admit(kind=kind, domain="mc", principal=principal, required=True, amount_micro=amount,
+                          entry_id=budget.direct_entry_id(session)):
             credential = openai_realtime.mint_ephemeral_credential(
                 instructions=instructions(),
                 voice="marin",
@@ -260,6 +265,23 @@ def walk_tool():
     return jsonify(run_read(str(body.get("name") or ""), str(body.get("query") or ""), readers=_walk_readers()))
 
 
+def _settle_stale_walks():
+    """Talking calls that never said End, settled at the maximum before a new one is admitted. Never raises."""
+    try:
+        budget.default_budget().settle_stale(domain="mc")
+    except Exception:
+        pass
+
+
+def _settle_walk(session, principal):
+    """The call's allowance down to the minutes it ran, on the ledger's clock. Bound to its owner by the ledger row, so it
+    works after a portal restart. Returns what was settled, or None. Never raises: a failure leaves the reservation."""
+    try:
+        return budget.default_budget().settle_session(budget.direct_entry_id(session), principal=principal)
+    except Exception:
+        return None
+
+
 def walk_end():
     if not enabled():
         return _off()
@@ -267,10 +289,32 @@ def walk_end():
     if refusal is not None:
         return refusal
     from .api import _principal
-    from .mc.voice_walk import transcript_note
+    from .mc.voice_calls import call_record_folder
+    from .mc.voice_walk import save_call
     body = request.get_json(force=True, silent=True) or {}
+    session = str(body.get("session") or "")
+    settled = _settle_walk(session, _principal()) if session else None
     turns = body.get("turns") if isinstance(body.get("turns"), list) else []
-    return jsonify(transcript_note(str(body.get("session") or ""), turns, principal=_principal(), notes_add=_notes_add))
+    # #578: the whole call as one file (as Mein Deutsch keeps a session), in MC's turns folder; not a 2,000-character note.
+    # #607/#578 S5: the call's allowance was settled above, before the save, so a failed save never holds an hour.
+    out = save_call(session, turns, principal=_principal(), folder=call_record_folder(cfg().get("services")))
+    out["settled"] = bool(settled)
+    return jsonify(out)
+
+
+def walk_transcript(session):
+    """The saved call as a text download, for its owner only."""
+    if not enabled():
+        return _off()
+    from .api import _principal
+    from .mc.voice_calls import call_record_folder
+    from .mc.voice_walk import call_text
+    text = call_text(session, principal=_principal(), folder=call_record_folder(cfg().get("services")))
+    if text is None:
+        return json_error("not_found", "No saved call.", 404)
+    name = re.sub(r"[^0-9a-f]", "", session.lower())[:8] or "call"
+    return Response(text, mimetype="text/plain", headers={
+        "Content-Disposition": f'attachment; filename="mc-voice-call-{name}.txt"', "Cache-Control": "no-store"})
 
 
 def _walk_readers():
@@ -323,4 +367,5 @@ RULES = [
     ("/mc/voice/walk/utterance", "api_mc_voice_walk_utterance", walk_utterance, ["POST"]),
     ("/mc/voice/walk/tool", "api_mc_voice_walk_tool", walk_tool, ["POST"]),
     ("/mc/voice/walk/end", "api_mc_voice_walk_end", walk_end, ["POST"]),
+    ("/mc/voice/walk/transcript/<session>", "api_mc_voice_walk_transcript", walk_transcript, ["GET"]),
 ]
