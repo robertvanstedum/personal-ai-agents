@@ -219,3 +219,26 @@ def test_the_operator_migration_is_additive_and_names_both_columns():
     assert "ADD COLUMN IF NOT EXISTS settled_micro BIGINT" in words and "ADD COLUMN IF NOT EXISTS settled_at TEXT" in words
     statements = [line for line in words.splitlines() if line.strip() and not line.startswith("--")]
     assert len(statements) == 2 and all(line.startswith("ALTER TABLE guild.voice_budget_entry ADD COLUMN IF NOT EXISTS") for line in statements)
+
+
+def test_only_the_owner_can_settle_and_the_owner_can_after_a_restart(ledger):
+    """#578 S5: End is bound to the owner by the ledger row itself, not a host's in-memory table."""
+    open_session(ledger, "walk1")
+    ledger.clock.now += timedelta(minutes=2)
+    assert ledger.settle_session(B.direct_entry_id("walk1"), principal="someone-else") is None
+    out = ledger.settle_session(B.direct_entry_id("walk1"), principal="robert")
+    assert out["settled_micro"] == 2 * B.REALTIME_ESTIMATE_MICRO_PER_MINUTE      # a 2-minute call keeps $0.20
+    assert ledger.settle_session(B.direct_entry_id("walk1"), principal="robert") is None   # once
+
+
+def test_a_call_that_never_ended_is_swept_at_the_maximum_and_only_in_its_domain(ledger):
+    open_session(ledger, "old", usd=6.0)
+    ledger.reserve(kind=DIRECT, domain="cos", principal="robert", amount_micro=B.micro(6.0), entry_id=B.direct_entry_id("cos-old"))
+    ledger.clock.now += timedelta(minutes=30)
+    open_session(ledger, "young", usd=6.0)
+    assert ledger.settle_stale(domain="mc") == 0                     # nothing past the cap yet
+    ledger.clock.now += timedelta(minutes=40)                        # "old" is 70 minutes, "young" 40
+    assert ledger.settle_stale(domain="mc") == 1
+    assert ledger.settle_session(B.direct_entry_id("old")) is None   # already settled, at the maximum
+    assert ledger.settle_session(B.direct_entry_id("young"), principal="robert")["settled_micro"] == 40 * B.REALTIME_ESTIMATE_MICRO_PER_MINUTE
+    assert ledger.settle_session(B.direct_entry_id("cos-old")) is not None   # CoS's row was left to her own host
