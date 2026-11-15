@@ -35,7 +35,9 @@ def test_the_floor_is_history_chat_and_context_with_the_hero_in_the_chat_header(
     assert not re.search(r"hero[-_ ]?(chooser|picker|option)|data-hero=", page)
     assert 'data-mode="rail"' not in page and "data-postit=" not in page        # no post-it stack on the floor
     assert page.index('data-chat-hero') < page.index('data-mc-thread')         # the header above the thread
-    assert page.index('data-layout') < page.index('data-zone="status"')          # the strip is low on the page
+    # #622 (Robert, 15 Nov: "Everywhere"): no status strip on the chat; one chip, low on the page, only when needed.
+    assert 'data-zone="status"' not in page and "data-lights-toggle" not in page
+    assert page.index('data-layout') < page.index('data-floor-alert')
 
 
 def test_the_chat_hero_images_are_same_origin_and_exist():
@@ -132,3 +134,17 @@ def test_chat_v2_art_is_served_without_changing_the_original_asset(staging):
     assert 'aria-label="Workshop picture"' in page and '<img src="/static/guild/guild-craftsman.webp"' in page    # calm-craft picture, ff53eef7
     for asset in ("guild-workshop-team.webp", "guild-build.webp", "guild-chat-hero.webp"):
         assert staging.owner().get("/static/guild/" + asset).status_code == 200
+
+
+def test_the_status_chip_shows_only_when_a_light_is_at_problem_622(staging):
+    page = _floor(staging)
+    chip = page[page.index("data-floor-alert"):]
+    chip = chip[:chip.index("</p>")]
+    text = re.search(r"data-floor-alert-text>([^<]*)<", chip).group(1)
+    assert "Operate →" in chip
+    js = (REPO / "minimoi_portal/guild_ui/static/js/floor.js").read_text()
+    assert "function renderAlert(lights)" in js and "renderAlert(current.lights || [])" in js
+    assert "=== 'red'" in js                                                     # only Problem raises the chip
+    hidden = " hidden" in chip.split(">", 1)[0]
+    assert hidden == (text.strip() == "")                                         # shown exactly when it has something to say
+    assert all(p.endswith(": Problem") or p.startswith("Cost: ") for p in text.split(" · ") if p)
