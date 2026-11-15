@@ -68,6 +68,10 @@ refresh_mc_layer() {
 }
 env_value() { sed -n "s/^$2=//p" "$1" | tail -1; }
 
+gateway_listening() {   # STARTED_AT: true once the gateway in the current mc-agent container has opened its server
+  docker logs --since "$1" minimoi-mc-agent 2>&1 | grep -q "http server listening"
+}
+
 relay_health() {
   # From inside the relay container (no host port exists). Prints the HTTP status only.
   docker exec minimoi-mc-relay node -e \
@@ -181,7 +185,16 @@ deploy() {
     sleep 10
   done
   [[ "$(relay_health)" == "200" ]] || { docker logs --tail 40 minimoi-mc-agent 2>&1 | tail -20; die "relay not healthy"; }
-  log "MC project on $tag; relay healthy. The portal is unchanged (switch separately)."
+  # #619 (15 Nov): the relay is healthy before MC's own gateway is. A new gateway can wait out the old one's owner lease
+  # for minutes, and the release must not report success until MC can answer. Wait for this container's gateway.
+  local started
+  started="$(docker inspect -f '{{.State.StartedAt}}' minimoi-mc-agent)"
+  for _ in $(seq 1 60); do
+    gateway_listening "$started" && break
+    sleep 10
+  done
+  gateway_listening "$started" || { docker logs --tail 40 minimoi-mc-agent 2>&1 | tail -20; die "MC gateway not listening after 10 minutes"; }
+  log "MC project on $tag; relay healthy and MC's gateway listening. The portal is unchanged (switch separately)."
 }
 
 status() {

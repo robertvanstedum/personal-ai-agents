@@ -164,3 +164,15 @@ def test_openclaw_validates_the_config_with_zero_warnings():
         capture_output=True, text=True, timeout=300)
     verdict = json.loads(result.stdout[result.stdout.index("{"):])
     assert verdict == {"valid": True, "path": "/tmp/cfg/openclaw.json", "warnings": []}
+
+
+def test_the_mc_deploy_waits_for_mcs_own_gateway_not_only_the_relay_619():
+    """#619 (15 Nov): the relay was healthy while MC's new gateway waited out the old owner lease for 5 minutes, and the
+    release reported success. The deploy now waits for this container's gateway to listen, and fails loudly if it never does."""
+    from pathlib import Path
+    script = (Path(__file__).resolve().parents[1] / "scripts/operations/deploy_mc_container_ec2.sh").read_text()
+    deploy = script[script.index("\ndeploy() {"):script.index("\nstatus() {")]
+    assert 'started="$(docker inspect -f \'{{.State.StartedAt}}\' minimoi-mc-agent)"' in deploy
+    assert deploy.index('relay_health)" == "200" ]] ||') < deploy.index('gateway_listening "$started" && break')
+    assert 'die "MC gateway not listening after 10 minutes"' in deploy
+    assert 'docker logs --since "$1" minimoi-mc-agent 2>&1 | grep -q "http server listening"' in script
