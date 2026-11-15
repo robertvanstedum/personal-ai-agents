@@ -68,6 +68,48 @@ _LOOKUP = re.compile(r"\b(?:" + "|".join([
 ]) + r")\b", re.I)
 _NOT_PLAIN = re.compile(r"[\n`>#@/\\|{}\[\]<=_*~]|\d|https?:|www\.|\w\.\w")
 
+# Third shape (15 Nov production, MC and CoS): a short everyday German line, as Robert writes when he practises
+# ("Die Sonne scheint heute.", "Danke, dass du mich korrigierst."). Both agents answered every such line on the strong
+# route, 5–14 s each. It counts only when it is plainly German and carries no request: no German word for looking
+# something up, recalling it, or acting, and none of MiniMoi's own nouns. A wrong "light" costs some depth on one turn.
+_LIGHT_GERMAN_MAX_CHARS = 160
+_LIGHT_GERMAN_MAX_WORDS = 24
+_GERMAN = re.compile(r"\b(?:" + "|".join([
+    "ich", "du", "er", "sie", "es", "wir", "ihr", "mich", "dich", "mir", "dir", "uns", "euch", "ihm", "ihn",
+    "und", "oder", "aber", "dass", "daß", "weil", "wenn", "auch", "nicht", "kein", "keine", "noch", "schon", "sehr",
+    "der", "die", "das", "den", "dem", "des", "ein", "eine", "einen", "einem", "einer", "mit", "mein", "meine", "meiner",
+    "meinem", "dein", "deine", "ist", "bin", "bist", "sind", "war", "hat", "habe", "hast", "haben", "wird", "würde",
+    "möchte", "will", "kann", "danke", "bitte", "heute", "gestern", "morgen", "gut", "schön", "ja", "nein", "doch",
+    "guten", "tag", "sonntag", "für", "auf", "zu", "im", "am", "vom", "zum", "zur", "fürs",
+]) + r")\b", re.I)
+_GERMAN_LOOKUP = re.compile(r"\b(?:" + "|".join([
+    # looking up, recalling, acting
+    "such\\w*", "find\\w*", "prüf\\w*", "zeig\\w*", "lies", "lese\\w*", "schreib\\w*", "erstell\\w*", "schick\\w*",
+    "send\\w*", "speicher\\w*", "lösch\\w*", "änder\\w*", "öffne\\w*", "erinner\\w*", "notier\\w*", "plan\\w*",
+    "termin\\w*", "status", "stand", "neu\\w*", "letzte\\w*", "was\\s+steht", "wie\\s+weit", "erklär\\w*",
+    "warum", "wieso", "weshalb", "welche\\w*", "kannst\\s+du", "könntest\\s+du", "würdest\\s+du", "sag\\s+mir",
+    # MiniMoi's own nouns
+    "datei\\w*", "dokument\\w*", "notiz\\w*", "ticket\\w*", "issue\\w*", "vault", "board", "release", "deploy\\w*",
+    "produktion", "server", "fehler\\w*", "kosten", "budget", "mc", "cos", "grok", "github", "repo\\w*",
+]) + r")\b", re.I)
+
+
+_EN_HOMOGRAPHS = {"die", "will", "war", "am", "tag", "bin", "es", "er", "an", "in", "so", "hat", "den"}
+
+
+def _short_german_line(text: str) -> bool:
+    if len(text) > _LIGHT_GERMAN_MAX_CHARS or _NOT_PLAIN.search(text) or explicit_depth(text):
+        return False
+    words = re.findall(r"[A-Za-zÄÖÜäöüß]+", text)
+    if not 2 <= len(words) <= _LIGHT_GERMAN_MAX_WORDS:
+        return False
+    hits = [w.lower() for w in words if _GERMAN.fullmatch(w)]
+    german = len(hits)
+    umlaut = re.search(r"[äöüßÄÖÜ]", text) is not None
+    plainly = umlaut or any(w not in _EN_HOMOGRAPHS for w in hits)   # "The war will end" is English
+    return (plainly and (german >= 2 or (german >= 1 and umlaut)) and german * 4 >= len(words)
+            and _GERMAN_LOOKUP.search(text) is None and _LOOKUP.search(text) is None)
+
 
 def explicit_depth(owner_text: str) -> str | None:
     if _QUICK.match(owner_text):
@@ -82,6 +124,8 @@ def short_turn(owner_text: str) -> bool:
     if not isinstance(owner_text, str):
         return False
     text = owner_text.strip()
+    if text and _short_german_line(text):
+        return True
     if not text or len(text) > _LIGHT_MAX_CHARS or _NOT_PLAIN.search(text) or explicit_depth(text):
         return False
     words = text.split()
