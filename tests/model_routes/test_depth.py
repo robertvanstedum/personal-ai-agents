@@ -108,10 +108,11 @@ TEMPLATE = Path(__file__).resolve().parents[2] / "scripts/operations/production_
 def test_production_names_mcs_quick_deep_pair_by_phrase_only():
     cat = load_catalogue(TEMPLATE)
     assert cat["roles"]["mc-conversation"]["depth_routes"] == {
-        "quick": "api-xai-strong", "deep": "api-xai-strong-deep", "phrase_only": True}
-    assert "depth_routes" not in cat["roles"]["cos-conversation"]
+        "quick": "api-xai-strong", "deep": "api-xai-strong-deep", "light": "api-xai-strong-light", "phrase_only": True}
+    # CoS is MC's twin (#567 wave 2): the same pair, by the same phrases.
+    assert cat["roles"]["cos-conversation"]["depth_routes"] == cat["roles"]["mc-conversation"]["depth_routes"]
     deep = next(r for r in cat["routes"] if r["route_id"] == "api-xai-strong-deep")
-    assert deep["model"] == "minimoi-xai-strong-deep" and deep["offered"] == {"mc": "available"}
+    assert deep["model"] == "minimoi-xai-strong-deep" and deep["offered"] == {"mc": "available", "cos": "available"}
     assert "failover" not in deep                       # a deep turn that cannot run stops; it never moves
 
 
@@ -145,6 +146,7 @@ def test_revert_leaves_nothing_naming_the_deep_alias(tmp_path):
     from core.model_routes import relay_routes, view
     cat = json.loads(TEMPLATE.read_text())
     del cat["roles"]["mc-conversation"]["depth_routes"]
+    del cat["roles"]["cos-conversation"]["depth_routes"]
     next(r for r in cat["routes"] if r["route_id"] == "api-xai-strong-deep")["offered"] = {}
     path = tmp_path / "catalogue.json"
     path.write_text(json.dumps(cat))
@@ -154,3 +156,131 @@ def test_revert_leaves_nothing_naming_the_deep_alias(tmp_path):
         assert "api-xai-strong-deep" not in {r["route_id"] for r in view(reverted, agent, {})["routes"]}
     turn = for_owner_turn(reverted, "mc-conversation", {}, "Think hard about this")
     assert turn["route_id"] == "api-xai-strong" and "depth" not in turn
+
+
+# ── #593: short turns take the light route ───────────────────────────────────────────────────────
+from core.model_routes import served_receipt
+from core.model_routes.depth import short_turn
+
+LIGHT_TURNS = [
+    "Hi", "hey MC", "Good morning!", "Morning", "thanks!", "Thank you so much", "cheers", "How are you?",
+    "Hi, how are you doing today?", "What's up?",
+    "What is a race condition?", "Why is the sky blue?", "How does TCP slow start work?",
+    "Is Python garbage collected?", "What does idempotent mean?",
+]
+QUICK_TURNS = [
+    "", "   ", "yes", "ok", "go ahead", "do it", "no", "why?", "Why is that?",                 # approvals, follow-ups
+    "Is prod up?", "What did we decide about Grok?", "Can you check the logs?",               # lookup and recall
+    "What's the latest on the backup?", "How much did we spend today?", "Is the deploy done?",
+    "Hi, can you check prod?", "hey, look at issue 593", "What is #593 about?",                # greeting plus work
+    "What is in docs/runbooks?", "What does https://example.com say?", "What does foo.py do?",
+    "Think hard: what is a race condition?", "Go deep", "Quick answer: what is TCP?",          # explicit depth stays explicit
+    "What is the difference between optimistic and pessimistic locking in large databases?",  # over the word cap
+    "> How are you?", "`What is TCP?`", "What is TCP?\nAnd UDP?",                                # quoted, code, multi-line
+    "Explain the plan", "Write a haiku about rain", "Tell me a joke",                          # actions, not questions
+    "What is TCP? And UDP?",
+    "What are the risks?", "Which is better?", "What are the options?", "What is the time?",   # about the thread
+    "What should we do next?", "How about the other one?",
+]
+
+
+@pytest.mark.parametrize("text", LIGHT_TURNS)
+def test_short_turn_accepts_a_social_line_or_a_short_general_question(text):
+    assert short_turn(text) is True
+
+
+@pytest.mark.parametrize("text", QUICK_TURNS)
+def test_short_turn_refuses_anything_that_may_need_a_look_a_tool_or_the_thread(text):
+    assert short_turn(text) is False
+
+
+@pytest.mark.parametrize("text", [None, 12, b"hi"])
+def test_short_turn_refuses_a_non_text(text):
+    assert short_turn(text) is False
+
+
+def test_production_pair_sends_a_short_turn_with_no_files_to_the_light_route():
+    result = for_owner_turn(load_catalogue(TEMPLATE), "mc-conversation", {}, "Good morning!", attached=False)
+    assert result["route_id"] == "api-xai-strong-light" and result["model"] == "minimoi-xai-strong-light"
+    assert result["depth"] == {"kind": "light", "explicit": False, "allow_continuation": False}
+    assert result["failover"]["route_id"] == "api-anthropic-strong"      # never worse off than an ordinary turn
+
+
+@pytest.mark.parametrize("attached", [True, None])
+def test_a_short_turn_with_files_or_unknown_files_stays_quick(attached):
+    result = for_owner_turn(load_catalogue(TEMPLATE), "mc-conversation", {}, "Good morning!", attached=attached)
+    assert result["route_id"] == "api-xai-strong" and result["depth"]["kind"] == "quick"
+
+
+@pytest.mark.parametrize("text,route", [
+    ("What are the risks?", "api-xai-strong"),                  # ordinary question keeps the normal route
+    ("Can you check the logs?", "api-xai-strong"),
+    ("Think hard about the retry design", "api-xai-strong-deep"),
+    ("Quick answer: is it up?", "api-xai-strong"),
+])
+def test_an_ordinary_or_explicit_turn_never_takes_the_light_route(text, route):
+    assert for_owner_turn(load_catalogue(TEMPLATE), "mc-conversation", {}, text, attached=False)["route_id"] == route
+
+
+def test_a_conversation_set_to_deep_or_another_model_never_goes_light():
+    cat = load_catalogue(TEMPLATE)
+    deep_conv = {"routes": {"mc": {"route_id": "api-xai-strong-deep", "revision": 1}}}
+    assert for_owner_turn(cat, "mc-conversation", deep_conv, "Hi", attached=False)["route_id"] == "api-xai-strong-deep"
+    other = {"routes": {"mc": {"route_id": "api-xai-low", "revision": 1}}}
+    assert for_owner_turn(cat, "mc-conversation", other, "Hi", attached=False)["route_id"] == "api-xai-low"
+
+
+def test_the_light_turns_route_shows_in_last_turn():
+    route = for_owner_turn(load_catalogue(TEMPLATE), "mc-conversation", {}, "Hi", attached=False)
+    receipt = served_receipt(route, {"provider": "minimoi-gateway", "model": "minimoi-xai-strong-light"})
+    assert receipt["route_id"] == "api-xai-strong-light" and receipt["depth"] == "light" and receipt["served_matches"] is True
+    quick = for_owner_turn(load_catalogue(TEMPLATE), "mc-conversation", {}, "What are the risks?", attached=False)
+    assert served_receipt(quick, None)["depth"] == "quick"
+
+
+def test_cos_gets_the_light_route_when_its_catalogue_names_one(catalogue):
+    """MC and CoS are twins: the same policy serves cos-conversation once its host pairs a light route."""
+    light = next(r for r in catalogue["routes"] if r["route_id"] == "api-xai-strong-light")
+    light["offered"] = {"mc": "available", "cos": "available"}
+    catalogue["roles"]["cos-conversation"]["depth_routes"]["light"] = "api-xai-strong-light"
+    assert for_owner_turn(catalogue, "cos-conversation", {}, "Hi", attached=False)["route_id"] == "api-xai-strong-light"
+    assert for_owner_turn(catalogue, "cos-conversation", {}, "Hi", attached=True)["route_id"] == "api-xai-strong"
+
+
+@pytest.mark.parametrize("bad", [
+    lambda p: p.update(light=7),                                # not a route id
+    lambda p: p.update(light="api-xai-strong"),                 # the same runtime model as quick
+    lambda p: p.update(light="unknown"),
+])
+def test_an_invalid_light_route_refuses_the_catalogue(bad):
+    cat = json.loads(TEMPLATE.read_text())
+    bad(cat["roles"]["mc-conversation"]["depth_routes"])
+    from core.model_routes.depth import validate_policy
+    with pytest.raises((ValueError, RouteRefused)):
+        validate_policy(cat, "mc-conversation")
+
+
+def test_revert_leaves_nothing_naming_the_light_alias(tmp_path):
+    """The revert: drop "light" from depth_routes and set the light route's offered back to {}."""
+    from core.model_routes import relay_routes, view
+    cat = json.loads(TEMPLATE.read_text())
+    del cat["roles"]["mc-conversation"]["depth_routes"]["light"]
+    del cat["roles"]["cos-conversation"]["depth_routes"]["light"]
+    next(r for r in cat["routes"] if r["route_id"] == "api-xai-strong-light")["offered"] = {}
+    path = tmp_path / "catalogue.json"
+    path.write_text(json.dumps(cat))
+    reverted = load_catalogue(path)
+    assert "strong-light" not in json.dumps(relay_routes(reverted))
+    assert "api-xai-strong-light" not in {r["route_id"] for r in view(reverted, "mc", {})["routes"]}
+    turn = for_owner_turn(reverted, "mc-conversation", {}, "Hi", attached=False)
+    assert turn["route_id"] == "api-xai-strong" and turn["depth"]["kind"] == "quick"
+    assert for_owner_turn(reverted, "mc-conversation", {}, "Go deep")["route_id"] == "api-xai-strong-deep"
+
+
+@pytest.mark.parametrize("files,context,attached", [
+    (None, None, False), (None, {}, False), (None, {"area": "board", "page": "/guild"}, False),
+    (object(), None, True), (None, {"item_ref": "board:12"}, True),
+])
+def test_portal_admission_knows_whether_a_turn_carries_anything_beyond_words(files, context, attached):
+    from minimoi_portal.guild_ui.api import _turn_attached
+    assert _turn_attached(files, context) is attached

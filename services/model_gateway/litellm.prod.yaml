@@ -61,6 +61,15 @@ model_list:
       api_key: os.environ/XAI_API_KEY
       reasoning_effort: high
     model_info: {id: tier-xai-strong-deep, mode: chat, supports_function_calling: true}
+  # Short everyday turns (#593): a greeting or a short general question, chosen at admission by
+  # core/model_routes/depth.py when a host catalogue names this alias as a conversation's "light" route and the
+  # caller's capped key allows it; otherwise nothing routes here. Same model as minimoi-xai-strong, minimal reasoning.
+  - model_name: minimoi-xai-strong-light
+    litellm_params:
+      model: xai/grok-4.7
+      api_key: os.environ/XAI_API_KEY
+      reasoning_effort: minimal   # xAI refuses `none` on Grok 4.7 (Dev check, 14 Nov)
+    model_info: {id: tier-xai-strong-light, mode: chat, supports_function_calling: true}
   - model_name: minimoi-xai-mid
     litellm_params: &xai-mid
       model: xai/grok-4.6

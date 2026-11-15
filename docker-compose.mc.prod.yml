@@ -67,6 +67,10 @@ services:
       - /opt/minimoi/mc/repo:/minimoi/repo
       # Published specs and design docs (scripts/sync_docs.sh), for reference only.
       - /opt/minimoi/docs:/minimoi/docs:ro
+      # The current planning record (#587): a sparse copy of the private planning repository, refreshed every 5 minutes
+      # by scripts/operations/planning_mirror.sh. Files only (its git data stays outside, root-only); no scorers-only/
+      # answer key and no career material. PLANNING_STATUS.txt at its root names the commit and the fetch time.
+      - /opt/minimoi/planning/tree:/minimoi/planning:ro
     networks: [mc-internal]
     mem_limit: 2048m          # dev, 25 Oct: OpenClaw ~600-770 MiB idle plus a Claude Code subprocess per turn; 1024m/1536m OOM-killed
     oom_score_adj: 1000

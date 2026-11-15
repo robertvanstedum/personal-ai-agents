@@ -9,8 +9,8 @@ NEW, OLD = RELEASES / "0.1.35", RELEASES / "0.1.34"
 
 
 def test_0_1_35_is_pinned_everywhere():
-    assert pinned_release() == "0.1.35" and pinned_handbook() == "0.1.3"
-    assert json.loads((REPO / "services/mc_operations/personas/mc-chat/pin.json").read_text()) == {"release": "0.1.35"}
+    # Pinned until 0.1.36 (#567 wave 2); test_persona_0136.py checks the pin now. Its release folder stays as reviewed.
+    assert pinned_release() in ("0.1.35", "0.1.36") and pinned_handbook() == "0.1.3"
     m = json.loads((NEW / "manifest.json").read_text())
     assert m["version"] == "0.1.35" and m["base"] == "0.1.34" and m["status"] == "candidate" and "DRAFT" in m["spec"]
     for name, digest in m["files"].items():

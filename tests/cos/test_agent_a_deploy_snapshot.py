@@ -36,6 +36,8 @@ case "$1" in
     [ "$2" = inspect ] && [ "$3" = minimoi-vault-ask ] && [ "${STUB_VAULT_EXISTS:-0}" != 1 ] && exit 1
     # Likewise the build supervisor (activated by deploy_mc_container_ec2.sh supervision on): absent unless a test says so.
     [ "$2" = inspect ] && [ "$3" = minimoi-supervisor ] && [ "${STUB_SUPERVISOR_EXISTS:-0}" != 1 ] && exit 1
+    # MC's Vault Ask (#594) exists only once activated: absent here.
+    [ "$2" = inspect ] && [ "$3" = minimoi-vault-ask-mc ] && exit 1
     exit 0 ;;
   ps)
     [ "$2" = -a ] && [ "$3" = --format ] && [ "$4" = '{{.Names}}' ] || exit 1

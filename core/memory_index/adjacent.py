@@ -76,7 +76,7 @@ def _basis(facts: dict, top: list[dict]) -> str | None:
 
 
 def pick(con, shelf_root, pool: list[dict], hits: list[dict], caller: policy.Caller, unresolved: list,
-         parsed: dict | None = None, *, limit: float | None = None) -> dict:
+         parsed: dict | None = None, *, limit: float | None = None, successor: bool = True) -> dict:
     """The adjacent hit (the resolver's hit plus ``label``, ``basis``, ``distance``) or ``{"none": reason}``."""
     if not hits:
         return {"none": "no_results"}
@@ -100,7 +100,7 @@ def pick(con, shelf_root, pool: list[dict], hits: list[dict], caller: policy.Cal
     if not ranked:
         return {"none": "nothing_close_enough_elsewhere"}
     for _, _, row, basis in sorted(ranked, key=lambda t: (t[0], t[1], t[2]["chunk_id"])):
-        hit, bad = resolver.resolve(shelf_root, row, caller, "adjacent", parsed)
+        hit, bad = resolver.resolve(shelf_root, row, caller, "adjacent", parsed, successor=successor)
         if bad:
             unresolved.append(bad)
             continue

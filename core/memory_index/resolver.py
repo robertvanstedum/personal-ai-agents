@@ -58,9 +58,11 @@ def permitted(shelf_root: Path, rel: str) -> Path | None:
 
 
 def resolve(shelf_root: Path, row: dict, caller: policy.Caller, source: str,
-            parsed: dict | None = None) -> tuple[dict | None, dict | None]:
+            parsed: dict | None = None, *, successor: bool = True) -> tuple[dict | None, dict | None]:
     """``(hit, None)`` or ``(None, unresolved)`` for one index row. ``parsed`` is an optional per-query cache of
-    the source-derived chunks, so several hits in one record parse it once."""
+    the source-derived chunks, so several hits in one record parse it once. ``successor=False`` (a career-filtered
+    index, #594) never reads a superseded record's successor: that excerpt would come from a second record straight off
+    the shelf, not from a row the filtered index holds."""
     def fail(reason: str):
         return None, {"chunk_id": row["chunk_id"], "list": source, "reason": reason}
 
@@ -113,7 +115,10 @@ def resolve(shelf_root: Path, row: dict, caller: policy.Caller, source: str,
         decisive["kind"] in ("approved-direct", "approved-under-mandate"))
     successor_evidence = None
     decision_gap = None
-    if decision["weight"] == "superseded":
+    if decision["weight"] == "superseded" and not successor:
+        decision_gap = "successor_evidence_unavailable"
+        provenance = f"written by {meta.get('chair', 'unknown')} · superseded; successor evidence unavailable in this caller scope"
+    elif decision["weight"] == "superseded":
         # Resolve the successor under the same effective caller gate before
         # reading its original edition or disclosing an identity/range.
         try:

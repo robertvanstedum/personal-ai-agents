@@ -16,6 +16,15 @@ embedder (same digest and dimensions) and the same chunker; otherwise nothing is
 Both also have a **keyword-only** mode (``keyword_only=True``, production): the same chunker and policy, no embedder (pass
 ``None``), no vector table; chunk rows record embedder ``none``. It writes only an index made keyword-only, and never a vector one.
 
+**Career-filtered** mode (``career=CareerFilter``, #594: Master Craftsman's index): the same procedure, but a career record is
+held (``career_excluded``) and a career turn's chunks are never written (``core/memory_index/career_filter.py``). The index's
+``meta`` then names ``profile=mc`` and the filter's digest and version. A filtered index is only ever updated with the same
+filter, and an unfiltered one never with a filter (``career_mismatch``: rebuild): otherwise an unchanged record would keep
+chunks that the other rules exclude.
+
+Held records whose reason can heal without a new edition (``unknown_provider``: the code learned the provider;
+``awaiting_reprocess``: the retrieval floor moved) are re-checked on every visit instead of being skipped as unchanged.
+
 Both run under the index lock (one writer), check headroom first (``disk_low``: skip, never delete to make room;
 a rebuild needs room for a second copy), and check the embedder pin before embedding anything. Neither writes to
 the shelf. A failed embedding never blocks filing: the record simply stays unindexed and the freshness check says so.
@@ -38,7 +47,7 @@ except ImportError:                         # building an index needs it; readin
     sqlite_vec = None
 
 from core.jobs import batch_window
-from core.memory_index import chunker, policy, store
+from core.memory_index import career_filter, chunker, policy, store
 from core.memory_index.embedder import Embedder, EmbedderUnavailable, Identity, PinMismatch
 from core.memory_shelf import fsio
 from core.memory_shelf.shelf import Shelf, read_front_matter
@@ -50,6 +59,9 @@ OUTSIDE_WINDOW = "outside_window"
 # Result codes (fixed vocabulary).
 OK, DISK_LOW, BUSY, EMBEDDER_UNAVAILABLE, PIN_MISMATCH, INCOMPATIBLE = (
     "ok", "disk_low", "index_busy", "embedder_unavailable", "pin_mismatch", "rebuild_needed")
+CAREER_MISMATCH = "career_mismatch"        # filtered vs unfiltered, or another filter digest: rebuild, never patch
+# Held reasons that a code change (not a new record edition) can lift: never skipped as "unchanged".
+RECHECK_HELD = frozenset({policy.UNKNOWN_PROVIDER, policy.AWAITING_REPROCESS})
 
 
 class IndexBusy(RuntimeError):
@@ -113,13 +125,32 @@ def check_compatible(con, ident: Identity | None) -> str | None:
     return None
 
 
+def career_meta(career) -> dict:
+    """The ``meta`` keys that name a filtered index (empty for an unfiltered one)."""
+    if career is None:
+        return {}
+    return {"profile": career_filter.PROFILE, "career_filter_digest": career.digest,
+            "career_filter_version": career_filter.FILTER_VERSION}
+
+
+def check_career(meta: dict, career) -> str | None:
+    """``None`` when an existing index was built with exactly this filter (or none, for none), else ``career_mismatch``."""
+    want = career_meta(career)
+    have = {k: meta.get(k) for k in ("profile", "career_filter_digest", "career_filter_version")}
+    if {k: (str(v) if v is not None else None) for k, v in want.items()} != {k: have[k] for k in want} or \
+            (career is None and any(have.values())):
+        return CAREER_MISMATCH
+    return None
+
+
 KEYWORD_ONLY_EMBEDDER = ("none", "0")      # (name, version) on chunk rows written without vectors
 
 
 class _Run:
     def __init__(self, con, shelf_root: Path, embedder: Embedder | None, ident: Identity | None, now: Callable[[], datetime],
-                 keyword_only: bool = False, donor=None):
+                 keyword_only: bool = False, donor=None, career=None):
         self.con, self.root, self.embedder, self.ident, self.now = con, shelf_root, embedder, ident, now
+        self.career = career            # career_filter.CareerFilter, or None (the full index)
         self.keyword_only = keyword_only
         self.donor = donor              # a previous index whose vectors may be reused (``rebuild(reuse_vectors=True)``)
         self.counts: Counter = Counter()
@@ -152,7 +183,8 @@ class _Run:
             return
         row = self.con.execute("SELECT file_size, file_mtime_ns, file_sha256, state, reason FROM records WHERE record_id=?",
                                (rid,)).fetchone()
-        if row and row[0] == st.st_size and row[1] == st.st_mtime_ns:
+        recheck = bool(row and row[3] == "held" and row[4] in RECHECK_HELD)
+        if row and row[0] == st.st_size and row[1] == st.st_mtime_ns and not recheck:
             self.counts["unchanged"] += 1
             if row[3] == "held":
                 self.held[row[4]] += 1
@@ -162,6 +194,10 @@ class _Run:
         except (OSError, ValueError):
             head = None
         early = policy.record_gate(head) if isinstance(head, dict) else None
+        if recheck and early == row[4] and row[0] == st.st_size and row[1] == st.st_mtime_ns:
+            self.counts["unchanged"] += 1                   # re-checked, still held for the same reason: nothing to write
+            self.held[early] += 1
+            return
         if early and head.get("id") == rid:
             # Held on its front matter alone (most often awaiting_reprocess): the body is never read or parsed.
             self._hold(rid, rel, st, None, head, early)
@@ -173,7 +209,7 @@ class _Run:
             self.counts["missing_file"] += 1
             return
         sha = hashlib.sha256(data).hexdigest()
-        if row and row[2] == sha:
+        if row and row[2] == sha and not recheck:
             self.con.execute("UPDATE records SET file_size=?, file_mtime_ns=? WHERE record_id=?",
                              (st.st_size, st.st_mtime_ns, rid))
             self.con.commit()
@@ -196,6 +232,14 @@ class _Run:
             self._hold(rid, rel, st, sha, meta, reason)
             self.con.commit()
             return
+        if self.career is not None:
+            reason, chunks, dropped = self.career.apply(meta, chunks)
+            if reason:
+                self.counts["career_turns_excluded"] += dropped
+                self._hold(rid, rel, st, sha, meta, reason)
+                self.con.commit()
+                return
+            self.counts["career_turns_excluded"] += dropped
         if self.keyword_only:
             reuse, vectors = {}, {}
             embedder_name, embedder_version = KEYWORD_ONLY_EMBEDDER
@@ -244,9 +288,9 @@ class _Run:
 
 
 def _sync(con, shelf_root: Path, embedder: Embedder | None, ident: Identity | None, now, only: Iterable[str] | None,
-          limit: int | None, keyword_only: bool = False, donor=None) -> dict:
+          limit: int | None, keyword_only: bool = False, donor=None, career=None) -> dict:
     started = time.monotonic()
-    run = _Run(con, shelf_root, embedder, ident, now, keyword_only, donor)
+    run = _Run(con, shelf_root, embedder, ident, now, keyword_only, donor, career)
     entries = shelf_entries(shelf_root)
     if only is not None:
         wanted = set(only)
@@ -287,16 +331,17 @@ def _pin(embedder: Embedder) -> tuple[Identity | None, str | None]:
         return None, EMBEDDER_UNAVAILABLE
 
 
-def _keyword_meta(con, now) -> None:
+def _keyword_meta(con, now, career=None) -> None:
     store.set_meta(con, embedder=KEYWORD_ONLY_EMBEDDER[0], policy_version=policy.POLICY_VERSION,
-                   chunker_version=chunker.CHUNKER_VERSION, built_at=_utc(now()))
+                   chunker_version=chunker.CHUNKER_VERSION, built_at=_utc(now()), **career_meta(career))
 
 
 def update(shelf_root: str | Path, embedder: Embedder | None, *, index_path: str | Path | None = None,
            min_free_bytes: int | None = fsio.DEFAULT_MIN_FREE_BYTES, now: Callable[[], datetime] | None = None,
-           only: Iterable[str] | None = None, limit: int | None = None, keyword_only: bool = False) -> dict:
+           only: Iterable[str] | None = None, limit: int | None = None, keyword_only: bool = False, career=None) -> dict:
     """Bring the index up to date with the shelf (creating it if missing). Returns counts and a result code.
-    ``keyword_only``: no embedder (``None``), no vectors; the index must be (or is created) keyword-only."""
+    ``keyword_only``: no embedder (``None``), no vectors; the index must be (or is created) keyword-only.
+    ``career``: a ``career_filter.CareerFilter``; the index must be (or is created) filtered with exactly it."""
     shelf_root = Path(shelf_root)
     index_path = Path(index_path) if index_path else default_index_path(shelf_root)
     now = now or (lambda: datetime.now(timezone.utc))
@@ -318,13 +363,16 @@ def update(shelf_root: str | Path, embedder: Embedder | None, *, index_path: str
                 if code:
                     return {"code": code}
                 meta = store.get_meta(con)
-                if keyword_only and "built_at" not in meta:
-                    _keyword_meta(con, now)
-                elif not keyword_only and "embedder_digest" not in meta:
+                fresh = "built_at" not in meta if keyword_only else "embedder_digest" not in meta
+                if not fresh and check_career(meta, career):
+                    return {"code": CAREER_MISMATCH}
+                if keyword_only and fresh:
+                    _keyword_meta(con, now, career)
+                elif fresh:
                     store.set_meta(con, embedder=ident.name, embedder_digest=ident.digest, dims=ident.dims,
                                    policy_version=policy.POLICY_VERSION, chunker_version=chunker.CHUNKER_VERSION,
-                                   built_at=_utc(now()))
-                return _sync(con, shelf_root, embedder, ident, now, only, limit, keyword_only)
+                                   built_at=_utc(now()), **career_meta(career))
+                return _sync(con, shelf_root, embedder, ident, now, only, limit, keyword_only, career=career)
             finally:
                 con.close()
     except IndexBusy:
@@ -352,7 +400,7 @@ def _donor(index_path: Path, ident: Identity):
 
 def rebuild(shelf_root: str | Path, embedder: Embedder | None, *, index_path: str | Path | None = None,
             min_free_bytes: int | None = fsio.DEFAULT_MIN_FREE_BYTES, now: Callable[[], datetime] | None = None,
-            keyword_only: bool = False, reuse_vectors: bool = False) -> dict:
+            keyword_only: bool = False, reuse_vectors: bool = False, career=None) -> dict:
     """Build a complete new index from the shelf alone and swap it in. The old file stays until the swap. With
     ``reuse_vectors`` (a vector index only) the old index lends the vectors of unchanged chunk text (see the module note)."""
     shelf_root = Path(shelf_root)
@@ -375,13 +423,13 @@ def rebuild(shelf_root: str | Path, embedder: Embedder | None, *, index_path: st
             donor = None
             try:
                 if keyword_only:
-                    _keyword_meta(con, now)
+                    _keyword_meta(con, now, career)
                 else:
                     donor = _donor(index_path, ident) if reuse_vectors else None
                     store.set_meta(con, embedder=ident.name, embedder_digest=ident.digest, dims=ident.dims,
                                    policy_version=policy.POLICY_VERSION, chunker_version=chunker.CHUNKER_VERSION,
-                                   built_at=_utc(now()))
-                result = _sync(con, shelf_root, embedder, ident, now, None, None, keyword_only, donor)
+                                   built_at=_utc(now()), **career_meta(career))
+                result = _sync(con, shelf_root, embedder, ident, now, None, None, keyword_only, donor, career)
                 if reuse_vectors and not keyword_only:
                     result["vectors_from_old_index"] = donor is not None
             except BaseException:
@@ -407,5 +455,6 @@ def rebuild(shelf_root: str | Path, embedder: Embedder | None, *, index_path: st
         return {"code": BUSY}
 
 
-__all__ = ["update", "rebuild", "default_index_path", "index_lock", "check_compatible", "shelf_entries",
-           "OK", "DISK_LOW", "BUSY", "EMBEDDER_UNAVAILABLE", "PIN_MISMATCH", "INCOMPATIBLE"]
+__all__ = ["update", "rebuild", "default_index_path", "index_lock", "check_compatible", "check_career", "career_meta",
+           "shelf_entries", "OK", "DISK_LOW", "BUSY", "EMBEDDER_UNAVAILABLE", "PIN_MISMATCH", "INCOMPATIBLE", "CAREER_MISMATCH",
+           "RECHECK_HELD"]

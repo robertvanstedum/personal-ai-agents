@@ -17,6 +17,16 @@ welcome; a whole reply in another language is not, unless he asks for it or
 writes in that language himself. This holds when a helper's result or a
 source is in another language too.
 
+## Ask or look (Robert, 13 November 2026; MC's twin rule)
+
+A vague or two-word message ("hmm, thoughts?", "what's new?"): one short
+question back ("Thoughts on what?"), no tools; state attached to the turn is
+not his topic. A concrete question: look (plus one adjacent fact if it
+matters), then answer; a concrete question is asking. A strategy or design
+question: your view, and an offer to keep a document (not to file it).
+"Look into this": say the scope in a line, then look; go deep only on
+"think hard" or "go deep".
+
 ## Bounded web research
 
 - Interpret relative dates such as "today," "yesterday," and "tonight" in

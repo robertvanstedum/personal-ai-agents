@@ -88,3 +88,29 @@ def test_dev_gateway_aliases_pin_same_model_with_different_effort():
 @pytest.mark.parametrize("bad", ["minimoi-gateway/minimoi-openai-strong", "xai/grok-4.7", "minimoi-gateway/minimoi-xai-pro"])
 def test_mc_refuses_a_primary_that_is_not_an_offered_grok_tier(bad):
     assert _node(MC_SCRIPT, {**MC_ENV, "MC_PRIMARY_ROUTE": bad}).returncode != 0
+
+
+@pytest.mark.parametrize("agent_script,env_name,extra", [
+    (MC_SCRIPT, "MC_METERED_ROUTES", "mc"), (None, "COS_METERED_ROUTES", "cos")])
+def test_light_alias_is_allowed_only_when_the_host_lists_it(agent_script, env_name, extra):
+    """#593: the runtimes accept the light alias the same way as the deep one: named by the host, never by default."""
+    light = XAI + "-light"
+    if extra == "mc":
+        assert _node(MC_SCRIPT, {**MC_ENV, "MC_PRIMARY_ROUTE": light}).returncode != 0
+        run = _node(MC_SCRIPT, {**MC_ENV, "MC_METERED_ROUTES": XAI_ALL + "," + light, "MC_PRIMARY_ROUTE": light})
+        assert run.returncode == 0, run.stderr
+        assert json.loads(run.stdout) == {"primary": light, "fallbacks": []}
+    else:
+        script = "const p=require('./docker/cos-agent-a/plan-access.cjs');console.log(JSON.stringify(p.offeredRoutes(process.env)))"
+        env = {"COS_METERED_ROUTES": light, "COS_GATEWAY_KEY_FILE": "/nonexistent/synthetic-key", "COS_GATEWAY_KEY_CAPPED": "1"}
+        assert json.loads(_node(script, env).stdout) == [light]
+
+
+def test_light_alias_is_the_quick_model_with_no_reasoning():
+    import yaml
+    for name in ("litellm.staging.yaml", "litellm.prod.yaml"):
+        doc = yaml.safe_load((ROOT / "services/model_gateway" / name).read_text())
+        models = {m["model_name"]: m["litellm_params"] for m in doc["model_list"]}
+        quick, light = models["minimoi-xai-strong"], models["minimoi-xai-strong-light"]
+        assert quick["model"] == light["model"] == "xai/grok-4.7"
+        assert (quick["reasoning_effort"], light["reasoning_effort"]) == ("low", "minimal")

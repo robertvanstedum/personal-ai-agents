@@ -873,15 +873,36 @@ def test_a_paired_deep_route_reaches_mcs_allowlist_and_key_and_leaves_with_the_p
     template = load_catalogue(ROOT / "scripts/operations/production_route_catalogue.json")
     deep = "minimoi-gateway/minimoi-xai-strong-deep"
     env = R.route_env(template, xai=True)
-    assert env[R.MC]["MC_METERED_ROUTES"].split(",") == [*R.XAI_REFS, deep]
-    assert env[R.COS]["COS_METERED_ROUTES"] == ",".join(R.XAI_REFS)
+    assert env[R.MC]["MC_METERED_ROUTES"].split(",") == [*R.XAI_REFS, deep, "minimoi-gateway/minimoi-xai-strong-light"]
+    # CoS is MC's twin (#567 wave 2): the same pair reaches CoS's runtime list too.
+    assert env[R.COS]["COS_METERED_ROUTES"] == env[R.MC]["MC_METERED_ROUTES"]
     assert "minimoi-xai-strong-deep" in R.key_models(env[R.MC]["MC_FAILOVER_ROUTES"], True, env[R.MC]["MC_METERED_ROUTES"])
     assert relay_routes(template)["api-xai-strong-deep"] == deep
     del template["roles"]["mc-conversation"]["depth_routes"]
+    del template["roles"]["cos-conversation"]["depth_routes"]
     next(r for r in template["routes"] if r["route_id"] == "api-xai-strong-deep")["offered"] = {}
     env = R.route_env(template, xai=True)
-    assert "deep" not in json.dumps(env) and "deep" not in json.dumps(relay_routes(template))
+    assert "strong-deep" not in json.dumps(env) and "strong-deep" not in json.dumps(relay_routes(template))
     assert "minimoi-xai-strong-deep" not in R.key_models(env[R.MC]["MC_FAILOVER_ROUTES"], True, env[R.MC]["MC_METERED_ROUTES"])
+
+
+def test_a_paired_light_route_reaches_mcs_allowlist_and_key_and_its_revert_leaves_deep_alone():
+    """#593: the light alias rides with depth_routes like the deep one. Its revert (drop "light" from the pair, offer the
+    route to nobody) takes it off MC's runtime list, key and relay, and leaves the deep route as it was."""
+    from core.model_routes import load_catalogue, relay_routes
+    template = load_catalogue(ROOT / "scripts/operations/production_route_catalogue.json")
+    deep, light = "minimoi-gateway/minimoi-xai-strong-deep", "minimoi-gateway/minimoi-xai-strong-light"
+    env = R.route_env(template, xai=True)
+    assert env[R.MC]["MC_METERED_ROUTES"].split(",") == [*R.XAI_REFS, deep, light]
+    assert env[R.COS]["COS_METERED_ROUTES"] == env[R.MC]["MC_METERED_ROUTES"]
+    assert "minimoi-xai-strong-light" in R.key_models(env[R.MC]["MC_FAILOVER_ROUTES"], True, env[R.MC]["MC_METERED_ROUTES"])
+    assert relay_routes(template)["api-xai-strong-light"] == light
+    del template["roles"]["mc-conversation"]["depth_routes"]["light"]
+    del template["roles"]["cos-conversation"]["depth_routes"]["light"]
+    next(r for r in template["routes"] if r["route_id"] == "api-xai-strong-light")["offered"] = {}
+    env = R.route_env(template, xai=True)
+    assert "light" not in json.dumps(env) and "light" not in json.dumps(relay_routes(template))
+    assert env[R.MC]["MC_METERED_ROUTES"].split(",") == [*R.XAI_REFS, deep] == env[R.COS]["COS_METERED_ROUTES"].split(",")
 
 def test_the_xai_default_passes_through_the_start_script():
     assert "--failover openai --default xai >" in payload.start_script("apply", R.DEFAULT_FAILOVER, "xai")

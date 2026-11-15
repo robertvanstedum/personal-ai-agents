@@ -92,6 +92,16 @@ def test_deep_alias_is_forwarded_only_from_host_route_map(relay):
     assert {k.lower(): v for k, v in sent["headers"].items()}["x-openclaw-model"] == model
 
 
+def test_light_alias_is_forwarded_only_from_host_route_map(relay):
+    """#593: the relay accepts the light alias in its host map and forwards it like any route."""
+    model = "minimoi-gateway/minimoi-xai-strong-light"
+    env = relay(MC_RELAY_ROUTES=json.dumps({"api-xai-strong-light": model}))
+    status, _, _ = post(env, chat("openclaw/mc-chat"), **{"X-MC-Route": "api-xai-strong-light"})
+    assert status == 200
+    sent = env.gateway.seen[-1]
+    assert {k.lower(): v for k, v in sent["headers"].items()}["x-openclaw-model"] == model
+
+
 def test_a_known_route_goes_on_as_the_maps_model_and_a_callers_header_never_does(relay):
     env = relay()
     status, _, _ = post(env, chat("openclaw/mc-chat"), **{"X-MC-Route": "plan-openai-strong", "x-openclaw-model": "anthropic/evil"})

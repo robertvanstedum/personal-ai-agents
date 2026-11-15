@@ -37,7 +37,8 @@ def test_cos_runs_on_grok_with_the_plan_still_configured_and_claude_as_failover(
     assert env["COS_PLAN_MODEL"] == "openai/gpt-6-astra"
     assert env["COS_PLAN_ROUTES"] == "openai/gpt-6-sol,openai/gpt-6-luna"
     assert env["COS_RUNTIME_MODEL_ACCESS"] == "plan"
-    assert env["COS_METERED_ROUTES"] == XAI_TIERS
+    # MC's twin (#567 wave 2): the deep and light aliases, reached only through cos-conversation's depth_routes.
+    assert env["COS_METERED_ROUTES"] == XAI_TIERS + ",minimoi-gateway/minimoi-xai-strong-deep,minimoi-gateway/minimoi-xai-strong-light"
     assert env["COS_PRIMARY_ROUTE"] == "minimoi-gateway/minimoi-xai-strong"
     assert "xai" not in env["COS_FAILOVER_ROUTES"]
     assert env["COS_FAILOVER_ROUTES"].split(",") == FAILOVER_TIERS
@@ -60,12 +61,13 @@ def test_mc_plan_settings_are_required_and_have_no_compose_default():
         assert env[key] == f"${{{variable}:?{env[key].split(':?', 1)[1]}"
         assert ":-" not in env[key]
     assert "openai/gpt-6-astra" in env["MC_PLAN_MODEL"]
-    # The Grok tiers, then the deep alias the production template pairs for mc-conversation (#586). The revert takes it
-    # out here, out of MC_RELAY_ROUTES, and out of the template's depth_routes together.
+    # The Grok tiers, then the deep (#586) and light (#593) aliases the production template pairs for mc-conversation.
+    # Each revert takes its alias out here, out of MC_RELAY_ROUTES, and out of the template's depth_routes together.
     from core.model_routes import load_catalogue, route_of
     template = load_catalogue(_Path(__file__).resolve().parents[1] / "scripts/operations/production_route_catalogue.json")
-    deep = route_of(template, template["roles"]["mc-conversation"]["depth_routes"]["deep"])
-    assert env["MC_METERED_ROUTES"] == XAI_TIERS + f",{deep['provider']}/{deep['model']}"
+    pair = template["roles"]["mc-conversation"]["depth_routes"]
+    deep, light = route_of(template, pair["deep"]), route_of(template, pair["light"])
+    assert env["MC_METERED_ROUTES"] == XAI_TIERS + f",{deep['provider']}/{deep['model']},{light['provider']}/{light['model']}"
     assert env["MC_PRIMARY_ROUTE"] == "minimoi-gateway/minimoi-xai-strong"
     assert "xai" not in env["MC_FAILOVER_ROUTES"]
     assert env["MC_FAILOVER_ROUTES"].split(",") == FAILOVER_TIERS

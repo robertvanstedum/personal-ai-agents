@@ -118,6 +118,10 @@ EXPECTED_PROD_MOUNTS = [
     ("system-bot", "/opt/minimoi/data/german", "/app/domains/german/data"),
     ("vault-ask", "/opt/minimoi/vault", "/vault"),
     ("vault-ask", "/opt/minimoi/vault-log", "/vault-log"),
+    ("vault-ask-mc", "/opt/minimoi/vault", "/vault"),
+    ("vault-ask-mc", "/opt/minimoi/vault-mc/index", "/vault-mc/index"),
+    ("vault-ask-mc", "/opt/minimoi/vault-mc/memory-ask", "/vault-mc/memory-ask"),
+    ("vault-ask-mc", "/opt/minimoi/vault-log", "/vault-log"),
 ]
 EXPECTED_ENV_FILES = {
     name: "/opt/minimoi/.env"
@@ -130,7 +134,7 @@ IMAGE_MAP = {
     "cos-scheduler": ("cos-scheduler", ""), "cos-agent-a": ("cos-scheduler", "agent-a-"),
     "model-gateway": ("cos-scheduler", "model-gateway-"),
 }
-PYTHON_SERVICES = ("curator", "german", "portuguese", "portal", "system-bot", "cos-bot", "cos-scheduler", "vault-ask",
+PYTHON_SERVICES = ("curator", "german", "portuguese", "portal", "system-bot", "cos-bot", "cos-scheduler", "vault-ask", "vault-ask-mc",
                    "supervisor")
 
 
@@ -499,6 +503,11 @@ def test_staging_gateway_keeps_production_names_and_settings():
             (("prod", GATEWAY_PROD), ("staging", GATEWAY_STAGING))}
     assert deep["prod"] == {**deep["staging"], "api_key": "os.environ/XAI_API_KEY"}
     assert deep["prod"]["reasoning_effort"] == "high"
+    # #593: the light route for short turns, the same model with no reasoning, on both the same way.
+    light = {name: _routes(path)["minimoi-xai-strong-light"]["litellm_params"] for name, path in
+             (("prod", GATEWAY_PROD), ("staging", GATEWAY_STAGING))}
+    assert light["prod"] == {**light["staging"], "api_key": "os.environ/XAI_API_KEY"}
+    assert light["prod"]["model"] == "xai/grok-4.7" and light["prod"]["reasoning_effort"] == "minimal"
     for block in ("router_settings", "general_settings"):
         assert staging[block] == prod[block], block
     # litellm_settings: production's, and both now carry the usage recorder (usage-record U1).
@@ -522,8 +531,9 @@ def test_staging_cos_agent_route_matches_production_and_other_routes_stay_stable
                "os.environ/GATEWAY_OPENAI_API_KEY": "os.environ/OPENAI_API_KEY",
                "os.environ/GATEWAY_XAI_API_KEY": "os.environ/XAI_API_KEY"}
     for name in staging:
-        if name in ("minimoi-cos-agent", "minimoi-cos-agent-anthropic", "minimoi-xai-strong-deep") or name.startswith("minimoi-mc-"):
-            continue                                   # the deep route (0a60e6de, production since #586) is not in the local config
+        if name in ("minimoi-cos-agent", "minimoi-cos-agent-anthropic", "minimoi-xai-strong-deep",
+                    "minimoi-xai-strong-light") or name.startswith("minimoi-mc-"):
+            continue                                   # the deep (#586) and light (#593) routes are not in the local config
         route = __import__("copy").deepcopy(staging[name])
         if name != "minimoi-cos-agent-local":
             route["litellm_params"]["api_key"] = renamed[route["litellm_params"]["api_key"]]
