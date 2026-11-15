@@ -206,6 +206,8 @@ BACKEND_IMPORT_ALLOWED = ("core/workshop_journal/", "core/vault_t1/", "core/agen
 # Exact new homes and only their actual backend dependencies, not a package/domain waiver.
 BACKEND_IMPORT_EXPECTED = {
     # Dev Vault's feed and ask (04481770): read job status only, and they run on the Dev host, not in a release image.
+    # The public-history leak scan (#612, PR 613): borrows the shared secret patterns; runs on the Mac, no running service imports it.
+    "core/leak_scan.py": ("utils.credential_scrub",),
     "scripts/memory/dev_ask.py": ("core.jobs.status",),
     "scripts/memory/dev_feed.py": ("core.jobs",),
     "scripts/staging/backup_staging.py": ("core.jobs",),     # the daily staging backup reports to the Dev watchdog

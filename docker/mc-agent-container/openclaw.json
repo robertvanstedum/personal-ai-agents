@@ -198,7 +198,7 @@
       },
       "skipBootstrap": true,
       "compaction": {
-        "enabled": false,
+        "enabled": true,
         "mode": "safeguard",
         "keepRecentTokens": 20000,
         "memoryFlush": {
