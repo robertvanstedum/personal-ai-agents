@@ -39,8 +39,22 @@ def _body(args) -> str:
     return args.text or ""
 
 
+# The older coordination folder is not a second ledger. A Grok session that watches it misses asks MC wrote
+# on the real one (#616). Claude and Codex may still be given an explicit root; Grok may not sit on this one.
+RETIRED_GROK_LEDGER = "planning-studio/operations/OPS-2026-11-06-1-2-beta-release/coordination/agent_requests"
+
+
+def retired_grok_root(root: str) -> bool:
+    return RETIRED_GROK_LEDGER in str(root).replace("\\", "/")
+
+
 def cmd_watch(args) -> int:
-    root, seen, end = _root(args), set(), (time.time() + args.max_seconds) if args.max_seconds else None
+    root = _root(args)
+    if args.actor == "grok" and retired_grok_root(root):
+        print("This folder is not the request ledger. Watch the default ledger and omit --root. "
+              "A missed listener is already in the ask's own words.", file=sys.stderr)
+        return 2
+    seen, end = set(), (time.time() + args.max_seconds) if args.max_seconds else None
     owner = ar.connection_owner(root, args.actor)
     if owner is not None and args.session != owner.get("session_id"):
         print(f"owned_by_managed_session: {args.actor} is connected through a managed session ({owner.get('session_id')}); a second watcher would be a second session acting on the same requests.", file=sys.stderr)
