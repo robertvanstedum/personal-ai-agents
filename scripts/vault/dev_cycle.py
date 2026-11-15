@@ -168,7 +168,9 @@ def cycle(image, principal):
                 command += ["-v", f"{src}:{dst}:{mode}"]
             command += [image, "-B", "/app/scripts/memory/dev_feed.py", "--cos-root", "/source/cos", "--mc-root",
                         "/source/mc", "--shelf-root", "/vault/memory", "--index-path", "/vault/memory-index/memory.sqlite",
-                        "--jobs-root", "/vault/jobs"]
+                        "--jobs-root", "/vault/jobs",
+                        # #594: MC's own index beside the full one; a failed MC build never fails the feed.
+                        "--mc-index-path", "/vault/memory-index/memory-mc.sqlite"]
             run_worker(command, worker)
             publish_status()
 
