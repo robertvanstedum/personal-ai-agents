@@ -17,13 +17,22 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=True, separators=(',', ':')).encode()).hexdigest()
 
 
+# Same refusal code; words that let MC correct the call in one step (a bare refusal made it guess, 14 Nov Dev check).
+PATH_WORDS = ('That path was not used. Give an absolute path with no "." or ".." parts: resolve a relative link '
+              'against the folder of the file it came from. Nothing was read.')
+OFFSET_WORDS = ('That page was not read. To continue past the first page, pass the sha256 from the first page '
+                'with offset. Nothing was read.')
+
+
 def admit(service, args, caller):
     from .service import result, refused
     path = args['path']
-    if (caller.offered_tools is None or caller.tool not in caller.offered_tools or
-            not path.startswith('/') or (path != '/' and any(p in ('', '.', '..') for p in path[1:].split('/'))) or
-            args.get('offset', 0) and 'sha256' not in args):
+    if caller.offered_tools is None or caller.tool not in caller.offered_tools:
         return refused('tool_arguments_invalid')
+    if not path.startswith('/') or (path != '/' and any(p in ('', '.', '..') for p in path[1:].split('/'))):
+        return result('refused', 'tool_arguments_invalid', PATH_WORDS)
+    if args.get('offset', 0) and 'sha256' not in args:
+        return result('refused', 'tool_arguments_invalid', OFFSET_WORDS)
     with service._tx() as conn:
         b = service._bind(conn, caller)
         with _cursor(conn) as cur:
