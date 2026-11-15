@@ -526,6 +526,12 @@ await check('openai: fault 1, every line the page has the voice say goes as a sy
   assert.ok(creates.length === 2 && creates.every((f) => f.response?.metadata?.minimoi_tag), JSON.stringify(creates));
 }, { routes: table({ [WORDS]: ASK, 'Yes.': YES }) }));
 
+await check('#607: a follow-up answers the words just spoken and does not repeat the previous answer', () => {
+  assert.match(D.CHAT_LINE, /Answer only the words he just spoke/);
+  assert.match(D.CHAT_LINE, /Do not repeat, resume, or summarise your previous answer/);
+  assert.match(D.CHAT_LINE, /Do not ask him to confirm/);
+});
+
 await check('openai: fault 2, a chat, a lost decision and a refused fold each get one response with CHAT_LINE beside it', () => {
   let lost = false;
   return run('openai', async (t) => {

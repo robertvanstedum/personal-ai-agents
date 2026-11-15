@@ -340,7 +340,7 @@ export function initMcVoice(page) {
   }
   async function initDirect() {
     const choice = $('[data-mc-voice-transcript-choice]');
-    if (choice?.parentElement) choice.parentElement.hidden = true;          // no running text on this path: it is revealed at End
+    if (choice?.parentElement) choice.parentElement.hidden = true;          // the checkbox is unused: spoken lines stay in the transcript box
     await initThread(direct);
     $('[data-mc-voice-end]')?.addEventListener?.('click', () => { if (directSession?.proposing()) directSession.sumUp(); else if (busy()) stop('user_ended'); });
     $('[data-mc-voice-check]')?.addEventListener?.('click', () => directSession?.check());
@@ -350,6 +350,9 @@ export function initMcVoice(page) {
   async function startDirect(mine,current) {
     const selector=$('[data-mc-voice-provider]');
     if(selector)selector.disabled=true;
+    const spokenBox=$('[data-mc-voice-transcript]'),spokenText=$('[data-mc-voice-transcript-text]');
+    if(spokenText)spokenText.textContent='';
+    if(spokenBox)spokenBox.hidden=true;
     say('Connecting voice…');
     let handle=null,mineSession=null;
     const mineNow=()=>controller===handle&&handle!==null;
@@ -359,6 +362,14 @@ export function initMcVoice(page) {
       live:(on)=>{const bar=liveBar();if(bar)bar.hidden=!on||!current();if(!on){const p=$('[data-mc-voice-propose]');if(p)p.hidden=true;}},
       elapsed:(text)=>{const n=$('[data-mc-voice-elapsed]');if(n)n.textContent=text;},
       notice:(text)=>{const n=$('[data-mc-voice-notice]');if(n){n.textContent=text||'';n.hidden=!text;}},
+      // #607: each spoken answer stays in the transcript box after it is said. The status line still changes.
+      spoken:(text)=>{
+        const box=$('[data-mc-voice-transcript]'),node=$('[data-mc-voice-transcript-text]');
+        if(!box||!node||!text)return;
+        const line=`Voice: ${text}`;
+        node.textContent=node.textContent?`${node.textContent}\n\n${line}`:line;
+        box.hidden=false;box.open=true;
+      },
       propose:(on)=>{const p=$('[data-mc-voice-propose]');if(p)p.hidden=!on||!current();if(on&&current())announce('Shall I sum up?');},
       checking:(on)=>{const b=$('[data-mc-voice-check]');if(b)b.disabled=Boolean(on);},
       // The session ended by itself (a refusal, the provider, the summary, the time limit): the button is ready again.

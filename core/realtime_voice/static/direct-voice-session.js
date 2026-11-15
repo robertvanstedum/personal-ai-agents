@@ -84,9 +84,10 @@ export const GOODBYE_LINE = `Say only this, then stop: "${GOODBYE}"`;
 // 31 Oct, fault 2) found a plain response there asking "Shall I go ahead?" by itself (4 of 4), a question the app never
 // asked; this reminder is sent beside it as a system item (Robert, 31 Oct: option c, with the stray-yes line on every
 // provider). At the hold's bound the decision is not known yet, so that response stays plain; the stray-yes line covers it.
-export const CHAT_LINE = 'Nothing from his last words is waiting to be done: answer them as conversation. Do not ask him to ' +
-  'confirm anything, and do not say anything is or will be done. Do not mention requests, the work side, or anything not ' +
-  'coming through, unless he clearly asked you to do something; only then say briefly that typing it in the chat will do it.';
+export const CHAT_LINE = 'Nothing from his last words is waiting to be done. Answer only the words he just spoke. Do not repeat, ' +
+  'resume, or summarise your previous answer unless he asked you to. Do not ask him to confirm anything, and do not say ' +
+  'anything is or will be done. Do not mention requests, the work side, or anything not coming through, unless he clearly ' +
+  'asked you to do something; only then say briefly that typing it in the chat will do it.';
 export const SAY = 'Say this briefly, adding nothing: ';
 export const SAVED = 'Saved.';
 export const POSTED = 'Post-it added.';              // the fix round's own words (b337f1cd), kept (coordinator addition 2)
@@ -1401,7 +1402,7 @@ export function directVoice(d) {
       onTranscriptUpdate: (turns) => { lastTurns = turns; if (!finalized) capture.update(turns); },
       oncePerItem: true,                          // a replayed completion is not a new turn (review F2)
       onUserTurn: (text) => { if (replying) replying(text); },   // the summary's window hears its one reply; nothing acts
-      onAssistantTurn: (text) => { spoke(text); responding = false; pump(); },
+      onAssistantTurn: (text) => { spoke(text); responding = false; pump(); if (text && typeof ui.spoken === 'function') ui.spoken(text); },
       // Spec 165 §5.3: a response's audio has played out. Only the summary's own response ends the session.
       onPlaybackDrained: (responseId, outcome) => {
         if (drains.has(responseId)) drains.get(responseId)();
