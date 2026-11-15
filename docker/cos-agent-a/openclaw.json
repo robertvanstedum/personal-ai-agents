@@ -150,7 +150,22 @@
         ]
       },
       "bootstrapMaxChars": 32000,
-      "bootstrapTotalMaxChars": 64000
+      "bootstrapTotalMaxChars": 64000,
+      "compaction": {
+        "enabled": false,
+        "mode": "safeguard",
+        "keepRecentTokens": 20000,
+        "memoryFlush": {
+          "enabled": false
+        }
+      },
+      "contextPruning": {
+        "mode": "cache-ttl",
+        "ttl": "30m",
+        "hardClear": {
+          "enabled": false
+        }
+      }
     },
     "entries": {
       "cos-agent-a": {
