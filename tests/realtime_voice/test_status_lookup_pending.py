@@ -24,7 +24,9 @@ def test_the_page_says_checking_once_and_each_answer_once():
 
 def test_a_pending_lookup_says_once_it_is_checking_and_never_guesses():
     rules = direct_host.direct_rules(MC, "Robert")
-    assert "Say once, in a word or two, that you're checking (for example \"Checking.\"), then stay quiet" in rules
+    assert ("No spoken status words. Consult without announcing it. If the wait is long, one natural half-sentence, "
+            "never \"Checking\". Then stay quiet") in rules
+    assert "Checking." not in rules and "Say once, in a word or two, that you're checking" not in rules
     assert "never say what you think it is, not from your briefing, the platform status" in rules
     assert "a real check can take a minute" in rules
     assert "say it once, and never say it again when the same result is shown later" in rules
