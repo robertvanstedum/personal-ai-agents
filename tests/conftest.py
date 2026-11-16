@@ -12,6 +12,20 @@ sys.path.insert(0, str(ROOT / "domains" / "german"))
 # .flask_secret during tests.
 os.environ.setdefault("FLASK_SECRET", "minimoi-test-secret")
 
+
+def pytest_sessionfinish(session, exitstatus):
+    """Record a shop-floor browser run (#214).
+
+    This hook stays in the root conftest. A conftest.py under tests/guild/shop_floor
+    is imported as the module name ``conftest``, and tests/cos does ``from conftest
+    import OWNER_SIGNING_KEY`` (#634).
+    """
+    folder = str(Path(__file__).parent / "guild" / "shop_floor")
+    if folder not in sys.path:
+        sys.path.append(folder)
+    import browser_host
+    browser_host.finish_session(exitstatus)
+
 # NOTE on all four fixtures below: none use `with app.test_client() as
 # client:`. That form preserves each request's context on Flask's global
 # context stack for later inspection (e.g. flask.g) -- safe with a single
