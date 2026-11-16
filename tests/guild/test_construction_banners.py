@@ -12,10 +12,12 @@ def test_the_banner_says_in_construction():
     assert 'content: "In construction"' in CSS
 
 
-def test_the_page_banner_is_a_large_diagonal_sash():
+def test_the_page_banner_says_the_sentence_in_plain_text():
     assert "gu-construction-top" in PARTIAL
-    assert "transform: rotate(-4deg)" in CSS
-    assert "font-size: 32px" in CSS
+    assert "<b>In construction.</b>" in PARTIAL
+    assert "<span>{{ construction_text }}</span>" in PARTIAL
+    assert "content: none" in CSS
+    assert "font-size: 28px" in CSS
 
 
 def test_operate_improve_and_lab_show_the_banner_above_the_title():

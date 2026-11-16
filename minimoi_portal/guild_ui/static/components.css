@@ -1522,26 +1522,28 @@ body.gu .mc-panel:is([data-mode="floating"], [data-mode="docked"]) [data-mc-reco
   .prototype-lab .area-hero-art.area-hero-art-wide{height:112px}
 }
 
-/* Operate, Improve and Lab are not ready for 1.2. A large diagonal sash above the title.
-   The bar is wider than the card so the clipped ends read as a diagonal stripe. The words stay centered. */
-.area-under-construction { position: relative; margin: 4px 0 16px; overflow: hidden; padding: 28px 0 0; }
+/* Operate, Improve and Lab are not ready for 1.2. A plain notice above the title, in words. */
+.area-under-construction { margin: 8px 0 16px; }
 .area-under-construction > .gu-construction-top {
-  display: block; position: relative; z-index: 2; top: auto; right: auto; left: auto;
-  width: 130%; min-height: 0; margin: 0 0 28px -15%; padding: 0; border: 0;
-  background: transparent; overflow: visible; pointer-events: none;
-  transform: rotate(-4deg); transform-origin: center;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px;
+  position: relative; z-index: 2; top: auto; right: auto; left: auto; width: auto; max-width: none;
+  min-height: 0; margin: 0 0 12px; padding: 16px 22px; overflow: visible; transform: none;
+  border: 0; border-radius: 10px; background: var(--gu-sig-attention, #e0a63b); color: #2a1f14;
+  box-shadow: 0 2px 8px #30281733; pointer-events: none;
 }
-.area-under-construction > .gu-construction-top::after {
-  position: static; inset: auto; display: block; width: 100%; box-sizing: border-box; clip-path: none;
-  padding: 14px 8px; background: var(--gu-sig-attention, #e0a63b); color: #2a1f14;
-  font-family: var(--gu-font-body, Georgia, serif); font-weight: 700; font-size: 32px; line-height: 1;
-  letter-spacing: .18em; text-align: center; text-transform: uppercase; white-space: nowrap;
-  box-shadow: 0 3px 8px #30281744;
+.area-under-construction > .gu-construction-top::after { content: none; }
+.area-under-construction > .gu-construction-top b {
+  color: #2a1f14; font-size: 28px; font-weight: 700; letter-spacing: 0; line-height: 1.15;
+  text-transform: none;
+}
+.area-under-construction > .gu-construction-top span {
+  color: #2a1f14; font-size: 18px; font-weight: 600; letter-spacing: 0; line-height: 1.3;
+  text-transform: none;
 }
 @media (max-width: 640px) {
-  .area-under-construction { padding-top: 16px; }
-  .area-under-construction > .gu-construction-top { width: 146%; margin: 0 0 14px -23%; transform: rotate(-7deg); }
-  .area-under-construction > .gu-construction-top::after { font-size: 20px; padding: 12px 6px; letter-spacing: .08em; }
+  .area-under-construction > .gu-construction-top { padding: 14px 16px; }
+  .area-under-construction > .gu-construction-top b { font-size: 22px; }
+  .area-under-construction > .gu-construction-top span { font-size: 16px; }
 }
 
 /* #622: the chat's one status chip (a light at Problem, or cost not good); everything else is on Operate. */
