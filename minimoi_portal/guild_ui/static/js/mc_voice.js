@@ -19,6 +19,30 @@ import { paintVoiceButton } from './voice_button.js';
 import { live, onChange } from './state.js';
 import { recordMode } from './api.js';
 import { submitVoiceUtterance, panelMode, mergeNotes } from './conversation.js';
+import { stripSpokenLabel } from './mc_voice_walk.js';
+
+// #607: a finished turn goes into the open thread as a plain line. Synchronous. Nothing here is awaited, and nothing
+// here is posted: the voice must not wait on the writing.
+function paintSpoken(role, text) {
+  const clean = role === 'user' ? String(text || '').trim() : stripSpokenLabel(text);
+  const thread = $('[data-mc-thread]');
+  if (!thread || !clean) return;
+  const li = document.createElement('li');
+  li.className = 'msg msg-voice msg-note';
+  li.setAttribute('data-live-spoken', '');
+  const meta = document.createElement('p');
+  meta.className = 'msg-meta';
+  const label = document.createElement('span');
+  label.className = 'msg-label';
+  label.textContent = role === 'user' ? 'You:' : 'MC:';
+  meta.append(label);
+  const body = document.createElement('p');
+  body.className = 'msg-text';
+  body.textContent = clean;
+  li.append(meta, body);
+  thread.append(li);
+  try { li.scrollIntoView({ block: 'nearest' }); } catch (_) { /* the line is already in the thread */ }
+}
 
 const WORDS = {
   private: 'Voice stopped: it is not built for Private yet. Typing in Private works as before.',
@@ -297,6 +321,7 @@ export function initMcVoice(page) {
         say: (text) => { if (current()) say(text); },
         setPhase: (phase) => { if (current()) setPhase(phase); },
         saved: showWalkTranscript,
+        paint: (role, text) => { if (current()) paintSpoken(role, text); },
       });
     } catch (e) {
       if (current()) { stop('failed', { quiet: true }); say(`Voice could not start${e && e.message ? `: ${e.message}` : ''}. Typing still works.`, { loud: true, error: true }); }
@@ -362,14 +387,9 @@ export function initMcVoice(page) {
       live:(on)=>{const bar=liveBar();if(bar)bar.hidden=!on||!current();if(!on){const p=$('[data-mc-voice-propose]');if(p)p.hidden=true;}},
       elapsed:(text)=>{const n=$('[data-mc-voice-elapsed]');if(n)n.textContent=text;},
       notice:(text)=>{const n=$('[data-mc-voice-notice]');if(n){n.textContent=text||'';n.hidden=!text;}},
-      // #607: each spoken answer stays in the transcript box after it is said. The status line still changes.
-      spoken:(text)=>{
-        const box=$('[data-mc-voice-transcript]'),node=$('[data-mc-voice-transcript-text]');
-        if(!box||!node||!text)return;
-        const line=`Voice: ${text}`;
-        node.textContent=node.textContent?`${node.textContent}\n\n${line}`:line;
-        box.hidden=false;box.open=true;
-      },
+      // #607: each finished turn is a plain line in the thread. The status line still replaces itself. The draw is synchronous.
+      spoken:(text)=>{ if(current()) paintSpoken('mc', text); },
+      heard:(text)=>{ if(current()) paintSpoken('user', text); },
       propose:(on)=>{const p=$('[data-mc-voice-propose]');if(p)p.hidden=!on||!current();if(on&&current())announce('Shall I sum up?');},
       checking:(on)=>{const b=$('[data-mc-voice-check]');if(b)b.disabled=Boolean(on);},
       // The session ended by itself (a refusal, the provider, the summary, the time limit): the button is ready again.
