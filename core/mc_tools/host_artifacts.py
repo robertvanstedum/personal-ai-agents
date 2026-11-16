@@ -8,6 +8,7 @@ Missing/partial files remain unknown, since an interrupted writer may have run.
 import base64
 import hashlib
 import json
+import re
 import secrets
 import time
 from uuid import uuid4
@@ -20,6 +21,14 @@ TOOLS=frozenset({'minimoi_working_write','minimoi_conversation_export','minimoi_
 ROOT='/Users/vanstedum/Projects/personal-ai-agents/_working'
 MAX=1024*1024
 CHUNK=4096
+TEXT_MAX=20000
+_FILE_NAME=re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.(?:md|txt|csv|json)$')
+
+
+def file_name(args):
+    """Optional working-file name. Omitted stays artifact.txt. A path or other extension is refused."""
+    name=args.get('name','artifact.txt') if isinstance(args,dict) else None
+    return name if isinstance(name,str) and _FILE_NAME.fullmatch(name) else None
 
 
 def _hash(raw):return hashlib.sha256(raw).hexdigest()
@@ -91,9 +100,12 @@ def prepare(service,args,caller):
                     try:payload,summary=service.export_conversation(b.conversation_id,b.note_request_id)
                     except Exception:return refused('export_snapshot_unavailable')
                 else:
-                    payload=json.dumps({'files':[{'name':'artifact.txt','text':args['text']}]},
+                    name,text=file_name(args),args.get('text')
+                    if name is None or type(text) is not str or not 1<=len(text)<=TEXT_MAX:
+                        return refused('artifact_payload_invalid')
+                    payload=json.dumps({'files':[{'name':name,'text':text}]},
                         sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()
-                    summary={'source':'model_supplied_artifact','note_count':0}
+                    summary={'source':'model_supplied_artifact','note_count':0,'name':name}
                 if type(payload) is not bytes or len(payload)>MAX:return refused('artifact_payload_invalid')
                 try:
                     bundle=json.loads(payload)
