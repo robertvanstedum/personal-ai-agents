@@ -23,3 +23,4 @@ def test_render_events_never_replace_the_whole_message():
     stream = js[js.index("async function streamMasterCraftsman("):js.index("function appendOffRecord(")]
     assert "applyRendered(rendered, ev.html);" in stream
     assert "rendered.innerHTML" not in stream
+    assert "rendered.replaceChildren" not in stream

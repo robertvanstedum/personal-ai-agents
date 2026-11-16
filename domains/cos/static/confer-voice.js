@@ -283,11 +283,25 @@ export function conferSessions(d) {
     return decided ? make('div', { class: 'voice-line' }, decided) : null;
   }
 
+  function doneLine(view) {
+    const records = Array.isArray(view.records) ? view.records : [];
+    const n = records.filter((r) => r && (r.role === 'user' || r.role === 'assistant')).length;
+    const start = Date.parse(view.started_at || '');
+    const end = Date.parse(view.ended_at || '');
+    let span = '0s';
+    if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
+      const seconds = Math.round((end - start) / 1000);
+      span = seconds < 60 ? `${seconds}s` : `${Math.max(1, Math.round(seconds / 60))} min`;
+    }
+    return `Done · ${span} · ${n} turn${n === 1 ? '' : 's'}`;
+  }
+
   // One session's block: what the reveal adds to the conversation, and what Open shows in the list.
   function render(view, { listed = false } = {}) {
     const block = make('div', { class: 'voice-session', 'data-voice-session': view.session_id });
     const when = [clock(view.started_at), view.ended_at ? clock(view.ended_at).slice(11) : ''].filter(Boolean).join('–');
     block.append(make('div', { class: 'msg-label' }, `Voice with ${short}${when ? ` · ${when}` : ''}`));
+    block.append(make('div', { class: 'voice-line', 'data-voice-done': '' }, doneLine(view)));
     block.append(make('div', { class: 'voice-line', 'data-voice-capture': view.capture || '' }, captureLine(view)));
     const notActed = view.not_acted && typeof view.not_acted === 'object' ? view.not_acted : {};
     const records = make('div', { class: 'voice-records' });
@@ -320,6 +334,7 @@ export function conferSessions(d) {
     if (!view || view.state === 'live') return false;
     shown.add(sid);
     d.chat.append(render(view));
+    try { doc.dispatchEvent(new CustomEvent('cos:voice-ended')); } catch (_) { /* a test document with no events */ }
     if (typeof d.chat.scrollHeight === 'number') d.chat.scrollTop = d.chat.scrollHeight;
     await refresh();
     return true;

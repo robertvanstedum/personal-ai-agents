@@ -297,6 +297,7 @@ export function initMcVoice(page) {
         say: (text) => { if (current()) say(text); },
         setPhase: (phase) => { if (current()) setPhase(phase); },
         saved: showWalkTranscript,
+        conversationId: () => page.conversation?.id,
       });
     } catch (e) {
       if (current()) { stop('failed', { quiet: true }); say(`Voice could not start${e && e.message ? `: ${e.message}` : ''}. Typing still works.`, { loud: true, error: true }); }
