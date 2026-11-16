@@ -42,7 +42,8 @@
   {%- if n.turn and n.turn.steps %}{# What the turn did (issue #545): plain step names only, folded; never what a tool was given or returned. #}
   <details class="msg-steps" data-turn-steps><summary data-turn-steps-headline>{{ n.turn.steps.headline }}</summary><ol class="msg-steps-list">{% for label in n.turn.steps.labels %}<li>{{ label }}</li>{% endfor %}</ol></details>
   {%- endif %}
-  {%- if n.html %}
+  {%- if n.attachment_only %}{# A file with no message (#335): the files list below is the message. #}
+  {%- elif n.html %}
   <div class="msg-text msg-md">{{ n.html|safe }}</div>{# sanitised server-side (markdown_render.py) #}
   {%- else %}
   <p class="msg-text">{{ n.text }}</p>
@@ -62,6 +63,7 @@
   {% set ask_about = {'build_log': 'the Build Log'}.get(page_id) %}
   {% if page_id in ('board', 'board_popout') %}<span class="visually-hidden" data-mc-ask-label>Chat with {{ mc_name }}</span>{% elif ask_about %}<span data-mc-ask-label>Ask {{ mc_name }} about {{ ask_about }}</span>{% else %}<span>Chat<span class="visually-hidden"> with {{ mc_name }}</span></span>{% endif %}
 </button>
+<button type="button" class="mc-pill-reset" data-mc-pill-reset hidden>Reset</button>
 <aside id="mc-panel" class="mc-panel" data-mc-panel data-mode="pill" data-pos="right" aria-label="Conversation">
   <header class="mc-head">
     <h2 class="mc-title">{{ mc_name }}</h2>
@@ -133,6 +135,14 @@
     {% if state.notes.more %}<li class="msg msg-platform" data-kind="platform" data-notes-earlier><p class="msg-text small">Earlier notes are kept; the latest {{ state.notes.recent|length }} are shown.</p></li>{% endif %}
     {% for n in state.notes.recent %}{{ note_row(n) }}{% endfor %}
     {% endif %}
+    {% for call in voice_calls or [] %}
+    <li class="msg msg-platform" data-voice-call="{{ call.session }}" data-at="{{ call.started_at }}">
+      <p class="msg-meta"><span class="msg-label">Voice call</span>{% if call.started_at %} · <span data-iso="{{ call.started_at }}">{{ hhmm(call.started_at) }}</span>{% endif %}</p>
+      <pre class="msg-text">{{ call.text }}</pre>
+      {% if call.href %}<p><a data-mc-voice-call-download href="{{ call.href }}">Download transcript</a></p>{% endif %}
+      {% if call.done %}<p class="msg-foot" data-turn-foot><span data-turn-done>{{ call.done }}</span></p>{% endif %}
+    </li>
+    {% endfor %}
   </ol>
   {% if page_id == 'floor' %}
   {# Selection actions (Guild 1.1 slice 1): shown only on the record, for text

@@ -151,6 +151,66 @@ function syncFloatPosition() {                       // on opening, on resize: w
   if (panel.dataset.pos === 'xy') { panel.dataset.pos = 'right'; panel.style.removeProperty('--mc-x'); panel.style.removeProperty('--mc-y'); }
   const reset = $('[data-mc-resetpos]'); if (reset) reset.hidden = !(canMove() && kept);
 }
+// On a phone the Chat button is the floating control (#357). A drag moves it and is remembered with the
+// panel. A short press still opens the chat. Reset puts it back. A wide window keeps moving the panel by its header.
+function initPillMove(onDrag) {
+  const reset = $('[data-mc-pill-reset]');
+  const narrow = () => window.matchMedia('(max-width: 640px)').matches && getComputedStyle(pill).display !== 'none';
+  const kept = () => { try { const v = JSON.parse(window.localStorage.getItem(POS_KEY) || 'null'); return v && Number.isFinite(v.x) && Number.isFinite(v.y) ? v : null; } catch (e) { return null; } };
+  function clamp(x, y) {
+    const r = pill.getBoundingClientRect();
+    return {
+      x: Math.round(Math.min(Math.max(8, x), Math.max(8, window.innerWidth - r.width - 8))),
+      y: Math.round(Math.min(Math.max(8, y), Math.max(8, window.innerHeight - r.height - 8))),
+    };
+  }
+  function place(x, y, keep) {
+    if (!narrow()) return;
+    const p = clamp(x, y);
+    pill.style.left = `${p.x}px`; pill.style.top = `${p.y}px`; pill.style.right = 'auto'; pill.style.bottom = 'auto';
+    pill.dataset.placed = 'true';
+    if (reset) {
+      const beside = p.x + pill.offsetWidth + 80 < window.innerWidth ? p.x + pill.offsetWidth + 8 : Math.max(8, p.x - 76);
+      reset.style.left = `${beside}px`; reset.style.top = `${p.y}px`; reset.hidden = false;
+    }
+    if (keep) { try { window.localStorage.setItem(POS_KEY, JSON.stringify(p)); } catch (e) { /* the place is a convenience */ } }
+  }
+  function clearInline() {
+    pill.style.left = pill.style.top = pill.style.right = pill.style.bottom = '';
+    delete pill.dataset.placed;
+    if (reset) reset.hidden = true;
+  }
+  if (kept() && narrow()) place(kept().x, kept().y, false);
+  let drag = null;
+  pill.addEventListener('pointerdown', (e) => {
+    if (!narrow() || e.button !== 0) return;
+    const r = pill.getBoundingClientRect();
+    drag = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top, x: e.clientX, y: e.clientY, moved: false };
+    pill.setPointerCapture(e.pointerId);
+  });
+  pill.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 8) return;
+    drag.moved = true;
+    const p = clamp(e.clientX - drag.dx, e.clientY - drag.dy);
+    pill.style.left = `${p.x}px`; pill.style.top = `${p.y}px`; pill.style.right = 'auto'; pill.style.bottom = 'auto';
+  });
+  const end = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const did = drag.moved;
+    drag = null;
+    try { pill.releasePointerCapture(e.pointerId); } catch (er) { /* already released */ }
+    if (!did) return;
+    onDrag();
+    const r = pill.getBoundingClientRect();
+    place(r.left, r.top, true);
+  };
+  pill.addEventListener('pointerup', end);
+  pill.addEventListener('pointercancel', end);
+  if (reset) reset.addEventListener('click', () => { clearInline(); try { window.localStorage.removeItem(POS_KEY); } catch (e) { /* nothing was kept */ } announce('Master Craftsman is back in its usual place.'); });
+  window.addEventListener('resize', () => { const now = kept(); if (narrow() && now) place(now.x, now.y, false); else clearInline(); });
+}
+
 function initMove() {
   const head = $('.mc-head', panel); if (!head || inPage()) return;
   head.setAttribute('role', 'group');
@@ -308,7 +368,9 @@ function noteLine(note) {
   // The server renders Markdown and sanitises it with an allow-list
   // (markdown_render.py: no raw HTML, scripts, handlers, javascript: URLs or
   // images). Without it, the note's own text is shown as plain text.
-  if (typeof note.html === 'string' && note.html) body.innerHTML = note.html;
+  // A file with no message (#335): the stored marker is not something he wrote.
+  if (note.attachment_only || note.text === '\u2060') { body.hidden = true; body.textContent = ''; }
+  else if (typeof note.html === 'string' && note.html) body.innerHTML = note.html;
   else body.textContent = note.text;
   const steps = stepsFold(note.turn && note.turn.steps);
   if (steps) body.before(steps);
@@ -808,12 +870,8 @@ async function streamMasterCraftsman(t, via) {
       announce(ev.text);
     } else if (ev.t === 'step' && Number.isInteger(ev.n) && typeof ev.label === 'string' && typeof ev.headline === 'string') {
       if (ev.phase === 'start') {
-        // What it said before this step is what it is doing: one status line, and the text clears for what comes next.
+        // What it said before this step is what it is doing: one status line. The answer already drawn stays (#459).
         status = status || firstSentence(deltas.join('')) || 'Working…';
-        deltas.length = 0;
-        upto = 0;
-        rendered.replaceChildren();
-        tail.textContent = '';
         if (li.dataset.stopping !== 'true') setSlot(li, 'state', status);
       }
       stepLabels[ev.n - 1] = ev.label;
@@ -1076,9 +1134,10 @@ async function queueTurn(note, files, ctx, target) {
 async function sendNote(input, send) {
   const originalDraft = input.value;
   const originalDraftKey = draftKey();
-  // A neutral attachment label preserves the existing kept-note contract without inventing an instruction.
-  const text = input.value.trim() || (!live.off && trayCount() ? 'Attached files.' : '');
-  if (!text) {
+  // An attachment with an empty box is a real message (#335). Nothing is invented to stand in for his words.
+  const text = input.value.trim();
+  const filesOnly = !text && !live.off && trayCount();
+  if (!text && !filesOnly) {
     if (trayBusy()) refuse('A file is still being read. Wait for it to finish, then send.');
     return;
   }
@@ -1116,6 +1175,7 @@ async function sendNote(input, send) {
   try {
   const r = await apiPost('/notes', {
     request_id: noteKey, text, record_mode: recordMode(), chat_scope: target.chatScope, conversation_id: target.conversationId,
+    ...(files.length ? { attachment_ids: files.map((f) => f.id) } : {}),
     context: { area: document.body.dataset.area || null, item_ref: page.item_id || null, page: page.page },
   });
   const body = r.body || {};
@@ -1240,7 +1300,12 @@ export function initConversation(p) {
   new MutationObserver(decorateMessages).observe(thread, { childList: true, subtree: true });
   // On The Work, Board and Build Log the pill is the ask bar and opens as a sheet over the work; elsewhere it opens the side panel.
   const asksInPlace = ['board', 'board_popout', 'build_log'].includes(document.body.dataset.page);
-  pill.addEventListener('click', () => { setMode(asksInPlace ? 'floating' : 'docked'); const i = $('[data-mc-input]'); if (i) i.focus(); });
+  let pillMoved = false;
+  initPillMove(() => { pillMoved = true; });
+  pill.addEventListener('click', (e) => {
+    if (pillMoved) { pillMoved = false; e.preventDefault(); return; }   // a drag is not a tap (#357)
+    setMode(asksInPlace ? 'floating' : 'docked'); const i = $('[data-mc-input]'); if (i) i.focus();
+  });
   $('[data-mc-min]').addEventListener('click', () => { setMode('pill'); pill.focus(); });
   initMove();
   $('[data-mc-dock]').addEventListener('click', () => setMode(mode === 'docked' ? 'floating' : 'docked'));

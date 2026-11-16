@@ -52,6 +52,10 @@ EVIDENCE = "guild.floor_messages, guild.floor_postits, guild.floor_continue (rea
 DEFAULT_FLOOR = "guild"
 POSTIT_MAX = 280            # Guild 1.1 slice 3 (spec §5.1); the database allows 400
 NOTE_MAX = 2000
+# A kept note that carries files and no owner words (#335). One format character, so the floor's
+# length check (at least one character) can store it. It is not an instruction. The page shows no
+# text for it, and the model is sent the file block only.
+ATTACHMENT_ONLY = "\u2060"
 RAIL_CAP = 4
 BIN_PAGE = 100
 NOTES_PAGE = 50
@@ -541,4 +545,4 @@ class FloorStores(BoardMixin):
 
 
 __all__ = ["Author", "WriteResult", "FloorStores", "FloorStoreUnavailable", "FloorStoreNotConfigured", "MASTER_CRAFTSMAN", "CHIEF_OF_STAFF", "CLAUDE_CODE", "CODEX",
-           "GROK", "GUILD_PLATFORM", "POSTIT_MAX", "NOTE_MAX", "RAIL_CAP", "DEFAULT_FLOOR", "utc_now"]
+           "GROK", "GUILD_PLATFORM", "POSTIT_MAX", "NOTE_MAX", "ATTACHMENT_ONLY", "RAIL_CAP", "DEFAULT_FLOOR", "utc_now"]

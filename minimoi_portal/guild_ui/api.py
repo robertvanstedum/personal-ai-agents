@@ -22,7 +22,7 @@ from .mc.turn_capture import capturer
 from .mc.turn_log import turn_log_of
 from .payment_scrub import scrub
 from .security import OFF_RECORD_TEXT, check_private, check_stop, check_upload, check_write, csrf_token, json_error
-from .stores import (GUILD_PLATFORM, NOTE_MAX, POSTIT_MAX, Author, FloorStoreNotConfigured,
+from .stores import (ATTACHMENT_ONLY, GUILD_PLATFORM, NOTE_MAX, POSTIT_MAX, Author, FloorStoreNotConfigured,
                      FloorStoreUnavailable)
 
 API_VERSION = 1
@@ -458,11 +458,16 @@ def _mismatch():
     return json_error("idempotency_mismatch", MISMATCH, 409, result="idempotency_mismatch")
 
 
+def _owner_words(text: str) -> str:
+    """What the model is told the owner wrote. An attachment-only note stores a marker, not words (#335)."""
+    return "" if text == ATTACHMENT_ONLY else text
+
+
 def _clean_text(value, limit: int, what: str):
     """The owner's own text, kept as he wrote it: empty or over-long is refused (422). It is input, not output, so
     nothing is removed or cut from it (Robert, 26 Oct, #406: the payment scrub had removed his email from his own
     résumé). A later safety check may flag his input; it never edits it."""
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, str) or not value.strip() or value == ATTACHMENT_ONLY:
         return None, json_error("invalid", f"The {what} is empty.", 422)
     if len(value) > limit:
         return None, json_error("invalid", f"The {what} is longer than {limit} characters.", 422)
@@ -516,9 +521,23 @@ def notes_add():
     if refusal is not None:
         return refusal
     request_id = body["_key"]   # a note's request id is its idempotency key
-    text, bad = _clean_text(body.get("text"), NOTE_MAX, "note")
-    if bad is not None:
-        return bad
+    raw = body.get("text")
+    attachment_only = not isinstance(raw, str) or not raw.strip() or raw == ATTACHMENT_ONLY
+    if attachment_only:
+        # Empty words are a note only when this same request names the files that go with it (#335).
+        # The stored marker is not owner text. A turn that arrives without those files is refused later.
+        from .turn_files import FilesRefused, clean_ids
+        try:
+            file_ids = clean_ids(body.get("attachment_ids"))
+        except FilesRefused as exc:
+            return json_error(exc.code, exc.message, exc.status)
+        if not file_ids:
+            return json_error("invalid", "The note is empty.", 422)
+        text = ATTACHMENT_ONLY
+    else:
+        text, bad = _clean_text(raw, NOTE_MAX, "note")
+        if bad is not None:
+            return bad
     conv, refusal = _conversation(body.get("conversation_id"))
     if refusal is not None:
         return refusal
@@ -534,7 +553,7 @@ def notes_add():
         return _mismatch()
     with_html([done.value] if done.value else None)
     from .conversations import public
-    conv = _touch(conv, first_text=text) if not done.repeated else conv
+    conv = _touch(conv, first_text=None if text == ATTACHMENT_ONLY else text) if not done.repeated else conv
     return jsonify({"result": "kept", "repeated": done.repeated, "note": done.value, "message": NOTE_WORDS["kept"],
                     "conversation": public(conv), "observed_at": now_iso()})
 
@@ -1717,7 +1736,9 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
     except FilesRefused as exc:
         return "refused", {"error": exc.code, "message": exc.message}, exc.status
     ctx = note.get("context") or {}
-    sent_text = note["text"]                    # the owner's own words, as he wrote them (#406)
+    sent_text = _owner_words(note["text"])      # the owner's own words, as he wrote them (#406); a file-only note has none (#335)
+    if note["text"] == ATTACHMENT_ONLY and files is None:
+        return "refused", {"error": "invalid", "message": "This message has no text and no file. Nothing was sent."}, 422
     agent_state = _agent_state(conv)
     route, route_refusal = _route_snapshot(services, conv, sent_text,  # unaugmented owner words only
                                            attached=_turn_attached(files, ctx))
@@ -2514,7 +2535,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
     if files is not None and files.report and not getattr(services.mc, "accepts_files", True):
         return {"error": "files_unsupported", "message": f"The {getattr(services.mc, 'display_name', 'assistant')} does not read "
                 "attached documents. Your note is kept; nothing was sent."}, 422
-    route, route_refusal = _route_snapshot(services, conv, note["text"],  # before attachment/context augmentation
+    route, route_refusal = _route_snapshot(services, conv, _owner_words(note["text"]),  # before attachment/context augmentation
                                            attached=_turn_attached(files, note.get("context")))
     if route_refusal is None:
         carried, route_refusal = _carried_history(services, conv, principal, route, note)
@@ -2541,7 +2562,10 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         # Each conversation is its own session in the backend (the adapter maps
         # the id: OpenClaw hashes it into its `user` field). Only this note is
         # sent: other conversations never reach the model's context.
-        sent_text = note["text"]                    # the owner's own words, as he wrote them (#406)
+        sent_text = _owner_words(note["text"])      # the owner's own words, as he wrote them (#406); a file-only note has none (#335)
+        if note["text"] == ATTACHMENT_ONLY and files is None:
+            DISPATCHED.forget(request_id)
+            return {"error": "invalid", "message": "This message has no text and no file. Nothing was sent."}, 422
         agent_state = _agent_state(conv)
         # Opt-in on the non-streaming shared CoS transport only. Authority is
         # this authenticated kept owner turn; Board/model text grants nothing.

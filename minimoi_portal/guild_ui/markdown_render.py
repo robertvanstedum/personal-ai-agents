@@ -209,10 +209,17 @@ def render_markdown(text: str) -> str:
 
 
 def with_html(notes):
-    """Add ``html`` (rendered, sanitised) to each note dict; the text is kept."""
+    """Add ``html`` (rendered, sanitised) to each note dict; the text is kept.
+    An attachment-only note is shown with no words: the stored marker is not owner text (#335)."""
+    from .stores import ATTACHMENT_ONLY
     for n in notes or ():
         if isinstance(n, dict) and isinstance(n.get("text"), str):
-            n["html"] = render_markdown(n["text"])
+            if n["text"] == ATTACHMENT_ONLY:
+                n["text"] = ""
+                n["html"] = ""
+                n["attachment_only"] = True
+            else:
+                n["html"] = render_markdown(n["text"])
     return notes
 
 

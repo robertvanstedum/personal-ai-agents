@@ -271,6 +271,26 @@ class ChiefOfStaff(DirectVoiceAdapter):
     def conversation_ok(self, cid):
         return cid == voice_store.HANDLE or (isinstance(cid, str) and cid.startswith("cosc-"))
 
+    def ended(self, handle, sid):
+        """A call that began on a new chat names that chat. A chat that already has words keeps its name."""
+        if self._history is None or not isinstance(handle, str) or not handle.startswith("cosc-"):
+            return
+        try:
+            from datetime import datetime, timezone
+            from core.realtime_voice.call_title import voice_call_title
+            turns, _ok = self.store.turns(handle, sid)
+            start = self.store.read_marker(handle, sid, "start") or {}
+            end = self.store.read_marker(handle, sid, "end") or {}
+            words = next((t.get("text") for t in turns if t.get("role") == "user" and t.get("text")), "")
+            raw = end.get("ended_at") or start.get("started_at")
+            try:
+                when = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            except (TypeError, ValueError):
+                when = datetime.now(timezone.utc)
+            self._history.name_voice_call(handle, voice_call_title(when, words or ""))
+        except Exception:
+            log.exception("cos direct voice: chat list title not kept")
+
     def conversation(self, cid):
         if cid == voice_store.HANDLE:
             return voice_store.HANDLE, None
