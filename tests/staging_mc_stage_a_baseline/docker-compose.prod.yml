@@ -124,12 +124,14 @@ services:
     # of 17 starts); cap it so it can never starve the rest of the host. The
     # staging override inherits this limit. NODE_OPTIONS stays unset: a heap
     # cap measured no idle gain and risks fatal heap exhaustion mid-turn.
+    # 15 Nov production: about 900 MB resident with memory-pressure warnings all morning and one critical at 10:42,
+    # while CoS turns ran slow; raised from 1400m to 2048m, the same as MC's container (host had 3 GB available).
     # Its own network with a fixed address, so one host rule can keep it away from the EC2 instance role
     # (169.254.169.254) while the services that need the role keep it. See scripts/operations/cos_agent_imds_block.sh.
     networks:
       cos-agent:
         ipv4_address: 192.168.250.2
-    mem_limit: 1400m
+    mem_limit: 2048m
     # The image's own check runs only every 180 s; the deploy waits 360 s.
     # Probe the unauthenticated liveness endpoint with the image's node.
     healthcheck:
