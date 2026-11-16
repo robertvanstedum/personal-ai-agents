@@ -3186,6 +3186,24 @@ details[open] > .gesprache-transcript-summary::before {
 
 .w-german { font-weight: 600; color: var(--md-text-primary); }
 .w-english { color: var(--md-text-primary); }
+.w-english-edit {
+  background: none;
+  border: 0;
+  padding: 0.35rem 0;
+  min-height: 44px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.w-english-edit:hover { text-decoration: underline; }
+.w-english-input {
+  width: 100%;
+  min-height: 44px;
+  font: inherit;
+  color: inherit;
+}
+.btn-hide { margin-left: 0.35rem; }
 .w-source {
   font-family: var(--font-mono);
   font-size: 0.72rem;
@@ -3193,7 +3211,7 @@ details[open] > .gesprache-transcript-summary::before {
   text-transform: uppercase;
 }
 .w-date { font-size: 0.8rem; color: var(--md-text-muted); white-space: nowrap; }
-.w-expand-col { width: 6.5rem; text-align: center; white-space: nowrap; }
+.w-expand-col { width: auto; text-align: center; white-space: nowrap; }
 
 .btn-expand {
   background: transparent;

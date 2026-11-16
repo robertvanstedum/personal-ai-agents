@@ -80,8 +80,17 @@
           data-source="{{ entry.scene or '' }}"
           data-status="{{ entry.status or 'library' }}">
         <td class="w-german">{{ entry.german }}</td>
-        <td class="w-english">{{ entry.english }}</td>
-        <td class="w-expand-col"><button class="btn-expand" aria-label="Details" title="Show details">Details</button></td>
+        <td class="w-english">
+          <button type="button" class="w-english-edit" data-id="{{ entry.id }}"
+                  data-english="{{ entry.english or '' }}" title="Edit the English translation">
+            {{ entry.english or '—' }}
+          </button>
+        </td>
+        <td class="w-expand-col">
+          <button class="btn-expand" aria-label="Details" title="Show details">Details</button>
+          <button type="button" class="btn-ghost btn-hide" data-id="{{ entry.id }}"
+                  title="Hide this phrase. It stays saved.">Ausblenden</button>
+        </td>
       </tr>
       <tr class="woerter-detail" id="detail-{{ entry.id }}" style="display:none"
           data-german="{{ entry.german }}" data-english="{{ entry.english }}">
@@ -311,6 +320,82 @@ document.body.classList.add('parch-mode');
         // Reload to reflect updated status
         window.location.reload();
       }
+    });
+  });
+
+  document.querySelectorAll('.w-english-edit').forEach(btn => {
+    btn.addEventListener('click', () => beginEnglishEdit(btn));
+  });
+
+  function beginEnglishEdit(btn) {
+    if (btn.dataset.editing === '1') return;
+    btn.dataset.editing = '1';
+    const original = btn.dataset.english || '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'w-english-input';
+    input.value = original;
+    input.maxLength = 500;
+    btn.replaceWith(input);
+    input.focus();
+    let settled = false;
+    async function settle(save) {
+      if (settled) return;
+      settled = true;
+      const next = input.value.trim();
+      if (!save || !next || next === original) {
+        input.replaceWith(btn);
+        btn.dataset.editing = '';
+        return;
+      }
+      let data = {};
+      try {
+        const resp = await fetch('/api/phrase-update-translation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: btn.dataset.id, english: next })
+        });
+        data = await resp.json();
+      } catch (err) {
+        data = {};
+      }
+      if (!data.ok) {
+        input.replaceWith(btn);
+        btn.dataset.editing = '';
+        const statusEl = document.getElementById('manual-status');
+        if (statusEl) statusEl.textContent = 'Die Übersetzung konnte nicht gespeichert werden.';
+        return;
+      }
+      btn.textContent = data.english;
+      btn.dataset.english = data.english;
+      btn.dataset.editing = '';
+      const detail = document.getElementById('detail-' + btn.dataset.id);
+      if (detail) detail.dataset.english = data.english;
+      const pooled = drillPool.find(p => String(p.id) === String(btn.dataset.id));
+      if (pooled) pooled.english = data.english;
+      input.replaceWith(btn);
+    }
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); settle(true); }
+      if (e.key === 'Escape') { e.preventDefault(); settle(false); }
+    });
+    input.addEventListener('blur', () => settle(true));
+  }
+
+  document.querySelectorAll('.btn-hide').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const resp = await fetch('/api/phrase-hide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: btn.dataset.id })
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        window.location.reload();
+        return;
+      }
+      const statusEl = document.getElementById('manual-status');
+      if (statusEl) statusEl.textContent = 'Die Phrase konnte nicht ausgeblendet werden.';
     });
   });
 

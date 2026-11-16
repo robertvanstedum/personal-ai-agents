@@ -1487,7 +1487,10 @@ def get_phrasebook_entries(source: str = None, status: str = None,
     """
     user_key = str(user_id) if user_id is not None else user
     data = _load_phrasebook()
-    entries = [e for e in data.get("phrases", []) if e.get("user") == user_key]
+    entries = [
+        e for e in data.get("phrases", [])
+        if e.get("user") == user_key and not e.get("hidden")
+    ]
     if source:
         entries = [e for e in entries if e.get("scene", "") == source]
     if status:
@@ -1532,6 +1535,41 @@ def save_drill_result(phrase_id: str, result: str, user: str = DEFAULT_USER, use
             _publish_activity()
             return entry
     return {}
+
+
+_TRANSLATION_MAX = 500
+
+
+def update_phrase_translation(phrase_id: str, english: str,
+                              user: str = DEFAULT_USER, user_id=None) -> dict:
+    """Replace the English text on one of this user's phrases. Returns the entry, or {}."""
+    user_id = _require_numeric_user_id(user_id)
+    english = (english or "").strip()
+    if not phrase_id or not english or len(english) > _TRANSLATION_MAX:
+        return {}
+    user_key = str(user_id)
+    data = _load_phrasebook()
+    for entry in data.get("phrases", []):
+        if entry.get("id") == phrase_id and entry.get("user") == user_key and not entry.get("hidden"):
+            entry["english"] = english
+            _save_phrasebook(data)
+            return entry
+    return {}
+
+
+def hide_phrase(phrase_id: str, user: str = DEFAULT_USER, user_id=None) -> bool:
+    """Soft-hide a phrase. The row stays in the phrasebook with hidden set."""
+    user_id = _require_numeric_user_id(user_id)
+    if not phrase_id:
+        return False
+    user_key = str(user_id)
+    data = _load_phrasebook()
+    for entry in data.get("phrases", []):
+        if entry.get("id") == phrase_id and entry.get("user") == user_key:
+            entry["hidden"] = True
+            _save_phrasebook(data)
+            return True
+    return False
 
 
 def update_phrase_status(phrase_id: str, new_status: str,
