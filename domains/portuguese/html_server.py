@@ -658,7 +658,7 @@ def _get_vocabulary(user_id, source=None, status=None, limit=100) -> list:
     try:
         conn = _db_conn()
         with conn, conn.cursor() as cur:
-            clauses = ["user_id = %s"]
+            clauses = ["user_id = %s", "(status IS NULL OR status <> 'oculto')"]
             params: list = [user_id]
             if source:
                 clauses.append("source = %s")
@@ -1166,6 +1166,64 @@ def api_pt_palavras_status():
     except Exception as e:
         print(f"[portuguese] palavras-status error: {e}", flush=True)
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/pt/phrase-update-translation", methods=["POST"])
+def api_pt_phrase_update_translation():
+    body = request.get_json(force=True)
+    word_id = body.get("id")
+    english = (body.get("english") or "").strip()
+    user_id = _request_user_id()
+    if not word_id or not english:
+        return jsonify({"ok": False, "error": "id and english required"}), 400
+    if len(english) > 500:
+        return jsonify({"ok": False, "error": "english is too long"}), 400
+    if user_id is None:
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE portuguese.vocabulary SET english = %s"
+                " WHERE id = %s AND user_id = %s"
+                " AND (status IS NULL OR status <> 'oculto')",
+                (english, word_id, user_id),
+            )
+            updated = cur.rowcount
+        if not updated:
+            return jsonify({"ok": False, "error": "not found"}), 404
+        return jsonify({"ok": True, "english": english})
+    except Exception as e:
+        print(f"[portuguese] phrase-update-translation error: {type(e).__name__}", flush=True)
+        return jsonify({"ok": False, "error": "save failed"}), 500
+
+
+@app.route("/api/pt/phrase-hide", methods=["POST"])
+def api_pt_phrase_hide():
+    """Soft-hide. The row stays, with status oculto. Migration 010 widens the check."""
+    body = request.get_json(force=True)
+    word_id = body.get("id")
+    user_id = _request_user_id()
+    if not word_id:
+        return jsonify({"ok": False, "error": "id required"}), 400
+    if user_id is None:
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE portuguese.vocabulary SET status = 'oculto'"
+                " WHERE id = %s AND user_id = %s"
+                " AND (status IS NULL OR status <> 'oculto')",
+                (word_id, user_id),
+            )
+            updated = cur.rowcount
+        if not updated:
+            return jsonify({"ok": False, "error": "not found"}), 404
+        return jsonify({"ok": True})
+    except Exception as e:
+        print(f"[portuguese] phrase-hide error: {type(e).__name__}", flush=True)
+        return jsonify({"ok": False, "error": "save failed"}), 500
 
 
 # ── API: Transcribe ───────────────────────────────────────────────────────────

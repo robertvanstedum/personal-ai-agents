@@ -29,6 +29,7 @@ from german_domain import (
     _phrase_next_id, _run,
     _load_drill_pool, _save_drill_pool,
     _load_phrasebook, _save_phrasebook,
+    update_phrase_translation, hide_phrase, get_phrasebook_entries, get_drill_pool,
     _load_keyword_map_bot,
     _call_llm, _fetch_conjugations, _fetch_phrases,
     _write_drill_anki, _drill_completion_message,
@@ -445,6 +446,46 @@ def test_D31():
     passed = result is not None and result["verb"] == "nehmen"
     report("D31", name, passed, f"verb={result and result['verb']}", expected="nehmen", got=str(result and result['verb']))
 
+def test_D33():
+    name = "translation edit and hide stay on that user and leave the list and the drill"
+    with tempfile.TemporaryDirectory() as tmp:
+        original = german_domain._PHRASEBOOK_FILE
+        german_domain._PHRASEBOOK_FILE = Path(tmp) / "phrasebook.json"
+        try:
+            _save_phrasebook({"phrases": [
+                {"id": "ph_1", "user": "7", "german": "noch einmal", "english": "again again",
+                 "status": "practice", "scene": "lesen", "added": "2026-06-01"},
+                {"id": "ph_2", "user": "8", "german": "bitte", "english": "please",
+                 "status": "library", "added": "2026-06-02"},
+            ]})
+            edited = update_phrase_translation("ph_1", "once more", user_id=7)
+            blank = update_phrase_translation("ph_1", "   ", user_id=7)
+            other = update_phrase_translation("ph_2", "pardon", user_id=7)
+            hidden = hide_phrase("ph_1", user_id=7)
+            listed = get_phrasebook_entries(user_id=7)
+            practice = get_drill_pool(user_id=7)
+            still = _load_phrasebook()
+        finally:
+            german_domain._PHRASEBOOK_FILE = original
+    kept = next(p for p in still["phrases"] if p["id"] == "ph_1")
+    other_row = next(p for p in still["phrases"] if p["id"] == "ph_2")
+    passed = (
+        edited.get("english") == "once more"
+        and blank == {}
+        and other == {}
+        and hidden is True
+        and listed == []
+        and practice == []
+        and kept.get("hidden") is True
+        and kept.get("status") == "practice"
+        and kept.get("german") == "noch einmal"
+        and kept.get("english") == "once more"
+        and other_row.get("english") == "please"
+        and "hidden" not in other_row
+    )
+    report("D33", name, passed, expected="edited, hidden, other user untouched", got=str(kept))
+
+
 def test_D32():
     name = "_resolve_drill_verb: callback fired when scene keyword resolves to verb"
     pool = {"core": {"verbs": [{"verb": "nehmen", "english": "to take", "conjugations": {}, "scenes": ["cafe"]}]}}
@@ -466,6 +507,7 @@ ALL_TESTS = [
     test_D21, test_D22, test_D23, test_D24, test_D25,
     test_D26, test_D27,
     test_D28, test_D29, test_D30, test_D31, test_D32,
+    test_D33,
 ]
 
 if __name__ == "__main__":
