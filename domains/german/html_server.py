@@ -40,6 +40,8 @@ from german_domain import (
     save_lesen_drill,
     get_phrasebook_entries,
     update_phrase_status,
+    update_phrase_translation,
+    hide_phrase,
     get_personas,
     get_drill_pool,
     save_drill_result,
@@ -580,6 +582,36 @@ def api_phrase_update():
         return _identity_required_response()
     ok = update_phrase_status(phrase_id, new_status, user_id=user_id)
     return jsonify({"ok": ok})
+
+
+@app.route("/api/phrase-update-translation", methods=["POST"])
+def api_phrase_update_translation():
+    body = request.get_json(force=True)
+    phrase_id = (body.get("id") or "").strip()
+    english = (body.get("english") or "").strip()
+    if not phrase_id or not english:
+        return jsonify({"ok": False, "error": "id and english required"}), 400
+    if len(english) > 500:
+        return jsonify({"ok": False, "error": "english is too long"}), 400
+    user_id = _de_numeric_user_id()
+    if user_id is None:
+        return _identity_required_response()
+    entry = update_phrase_translation(phrase_id, english, user_id=user_id)
+    if not entry:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    return jsonify({"ok": True, "english": entry["english"]})
+
+
+@app.route("/api/phrase-hide", methods=["POST"])
+def api_phrase_hide():
+    body = request.get_json(force=True)
+    phrase_id = (body.get("id") or "").strip()
+    if not phrase_id:
+        return jsonify({"ok": False, "error": "id required"}), 400
+    user_id = _de_numeric_user_id()
+    if user_id is None:
+        return _identity_required_response()
+    return jsonify({"ok": hide_phrase(phrase_id, user_id=user_id)})
 
 
 @app.route("/api/anki-export")
