@@ -69,6 +69,25 @@ class ArtifactHelperTests(unittest.TestCase):
         self.assertFalse(H.run(dict(request(),operation_id='../escape'),str(self.root))['verified'])
         self.assertFalse((self.root/'escape').exists())
 
+    def test_summary_md_keeps_its_name_and_a_20000_character_document_saves(self):
+        text='x'*20000
+        raw=json.dumps({'files':[{'name':'summary.md','text':text}]},sort_keys=True,separators=(',',':')).encode()
+        r=request(raw)
+        self.assertTrue(H.run(r,str(self.root))['verified'])
+        path=self.root/'mc-artifacts'/r['operation_id']/'summary.md'
+        self.assertEqual(path.read_text(),text)
+        bad=json.dumps({'files':[{'name':'../summary.md','text':'no'}]}).encode()
+        self.assertFalse(H.run(request(bad),str(self.root))['verified'])
+        self.assertFalse((self.root/'summary.md').exists())
+        from core.mc_tools.catalogue import validate, ArgumentsRefused
+        from core.mc_tools.host_artifacts import file_name
+        self.assertEqual(file_name({'text':'hi'}),'artifact.txt')
+        self.assertEqual(file_name({'name':'summary.md','text':'hi'}),'summary.md')
+        self.assertIsNone(file_name({'name':'../summary.md','text':'hi'}))
+        validate('minimoi_working_write',{'name':'summary.md','text':'x'*20000})
+        with self.assertRaises(ArgumentsRefused):
+            validate('minimoi_working_write',{'text':'x'*20001})
+
     def test_expired_missing_partial_and_hash_mismatch_are_unknown(self):
         r=request();self.assertFalse(H.run(dict(r,expires_at=0),str(self.root))['verified'])
         self.assertFalse(H.run(dict(r,mode='verify'),str(self.root))['verified'])
