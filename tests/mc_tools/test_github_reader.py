@@ -176,6 +176,31 @@ class GitHubTests(unittest.TestCase):
         self.assertIn('"operation": "latest"',bad['message'])
         self.assertEqual(self.requests,[]);cursor.__enter__.assert_not_called()
 
+    def test_a_48_hour_window_is_one_list_and_drops_older_rows(self):
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        fresh = (now - timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        stale = (now - timedelta(hours=80)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        def row(number, stamp, pull=False):
+            item = {'number': number, 'state': 'closed', 'title': f'Item {number}', 'updated_at': stamp,
+                    'repository_url': f'{API}/repos/{DEFAULT_REPO}'}
+            if pull:
+                item['pull_request'] = {'url': 'ignored'}
+            return item
+        reader = self.reader(lambda url, _: Reply({'total_count': 2, 'items': [row(411, fresh), row(403, stale, pull=True)]}))
+        state, message, data = reader.window(hours=48)
+        self.assertEqual(state, 'ok')
+        self.assertEqual([r['number'] for r in data['results']], [411])
+        self.assertIn('One list call', message)
+        self.assertIn('Do not open each item', message)
+        self.assertTrue(data['complete'])
+        params = self.requests[0][1]['params']
+        self.assertEqual(params['per_page'], 100)
+        self.assertIn('updated:>=', params['q'])
+        self.assertTrue(valid_request(validate('minimoi_github_issues', {'operation': 'window', 'hours': 48})))
+        self.assertFalse(valid_request({'operation': 'window', 'hours': 0}))
+        self.assertFalse(valid_request({'operation': 'window', 'query': 'xx'}))
+
     def test_search_keeps_working_with_and_without_page(self):
         row = {'number':69,'state':'open','title':'Guest','created_at':'2026-01-01T00:00:00Z','updated_at':'2026-02-01T00:00:00Z',
                'repository_url':f'{API}/repos/{DEFAULT_REPO}'}
