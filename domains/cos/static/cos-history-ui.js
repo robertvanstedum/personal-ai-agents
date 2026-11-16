@@ -292,6 +292,7 @@
     visualViewport.addEventListener('resize', fit); visualViewport.addEventListener('scroll', fit); phoneWidth.addEventListener('change', fit); fit();
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshList(); });
+  document.addEventListener('cos:voice-ended', () => refreshList());
   refreshList();
   (async()=>{try{const d=await api('history/selection?device='+encodeURIComponent(device)); voiceConversation=d.voice_conversation_id; await select(d.conversation_id,d.conversation,true);window.cosHistory.ready=true;document.dispatchEvent(new CustomEvent('cos:history-ready'));}catch(_){state.textContent='History is unavailable. Nothing will be sent until it returns.';}})();
   setInterval(()=>{if(!document.hidden)reload().catch(()=>{state.textContent='History could not be refreshed.';});},5000);

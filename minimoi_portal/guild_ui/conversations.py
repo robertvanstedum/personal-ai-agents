@@ -689,6 +689,27 @@ class ConversationStore:
                     pass
         return removed
 
+    def file_voice_call(self, cid, principal, call: dict, *, title: str | None) -> dict:
+        """A finished talking call belongs to this chat (#620).
+
+        A chat with nothing in it takes the voice-call title and stays in the list.
+        A chat that already has words keeps its title; the call is one more record on it.
+        The same session filed again changes nothing.
+        """
+        session = call.get("session")
+
+        def fn(c):
+            rows = [r for r in (c.get("voice_calls") or []) if isinstance(r, dict)]
+            if any(r.get("session") == session for r in rows):
+                return
+            empty = is_empty_chat(c)
+            rows.append(call)
+            c["voice_calls"] = rows[-20:]
+            c["updated_at"] = c["kept_at"] = now_iso()
+            if empty and c.get("title_source") == "default" and title:
+                c["title"], c["title_source"] = title[:TITLE_MAX], "first_message"
+        return self._change(cid, principal, fn)
+
     def touch(self, cid, principal, *, first_text: str | None = None) -> dict:
         """A note or reply was kept: bump updated_at; the first message titles it."""
         def fn(c):

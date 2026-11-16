@@ -133,6 +133,14 @@
     {% if state.notes.more %}<li class="msg msg-platform" data-kind="platform" data-notes-earlier><p class="msg-text small">Earlier notes are kept; the latest {{ state.notes.recent|length }} are shown.</p></li>{% endif %}
     {% for n in state.notes.recent %}{{ note_row(n) }}{% endfor %}
     {% endif %}
+    {% for call in voice_calls or [] %}
+    <li class="msg msg-platform" data-voice-call="{{ call.session }}" data-at="{{ call.started_at }}">
+      <p class="msg-meta"><span class="msg-label">Voice call</span>{% if call.started_at %} · <span data-iso="{{ call.started_at }}">{{ hhmm(call.started_at) }}</span>{% endif %}</p>
+      <pre class="msg-text">{{ call.text }}</pre>
+      {% if call.href %}<p><a data-mc-voice-call-download href="{{ call.href }}">Download transcript</a></p>{% endif %}
+      {% if call.done %}<p class="msg-foot" data-turn-foot><span data-turn-done>{{ call.done }}</span></p>{% endif %}
+    </li>
+    {% endfor %}
   </ol>
   {% if page_id == 'floor' %}
   {# Selection actions (Guild 1.1 slice 1): shown only on the record, for text

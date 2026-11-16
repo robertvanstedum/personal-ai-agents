@@ -297,9 +297,57 @@ def walk_end():
     turns = body.get("turns") if isinstance(body.get("turns"), list) else []
     # #578: the whole call as one file (as Mein Deutsch keeps a session), in MC's turns folder; not a 2,000-character note.
     # #607/#578 S5: the call's allowance was settled above, before the save, so a failed save never holds an hour.
-    out = save_call(session, turns, principal=_principal(), folder=call_record_folder(cfg().get("services")))
+    folder = call_record_folder(cfg().get("services"))
+    out = save_call(session, turns, principal=_principal(), folder=folder)
     out["settled"] = bool(settled)
+    if out.get("written"):
+        filed = _file_walk_in_chat(session, _principal(), str(body.get("conversation") or ""), folder)
+        if filed:
+            out.update(filed)
     return jsonify(out)
+
+
+def _file_walk_in_chat(session, principal, conversation_id, folder):
+    """The saved call becomes a chat-list entry when it began on a new chat, or stays in the open chat."""
+    from datetime import datetime, timezone
+
+    from core.realtime_voice.call_title import done_line, voice_call_title
+    from .conversations import ConversationNotFound, ConversationStoreUnavailable, ID_RE, conversations_of
+    from .mc.voice_walk import _find_call
+    from core.durable_files import read_doc
+
+    path = _find_call(folder, session) if folder else None
+    record = read_doc(path) if path else None
+    if not isinstance(record, dict) or record.get("principal") != principal or not record.get("raw_transcript"):
+        return None
+    words = next((t.get("text") for t in record["raw_transcript"] if t.get("role") == "robert" and t.get("text")), "")
+    if not words:
+        words = next((t.get("text") for t in record["raw_transcript"] if t.get("text")), "")
+    try:
+        when = datetime.fromisoformat(str(record.get("saved_at") or record.get("started_at")).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        when = datetime.now(timezone.utc)
+    title = voice_call_title(when, words)
+    call = {"session": session, "started_at": record.get("started_at") or "", "saved_at": record.get("saved_at") or "",
+            "turn_count": record.get("turn_count") or len(record["raw_transcript"]),
+            "done": done_line(record.get("started_at") or "", record.get("saved_at") or "",
+                              record.get("turn_count") or len(record["raw_transcript"]))}
+    try:
+        store = conversations_of(cfg().get("services"))
+        conv = None
+        if ID_RE.fullmatch(conversation_id or ""):
+            try:
+                found = store.get(conversation_id, principal)
+            except ConversationNotFound:
+                found = None
+            if found is not None and not found.get("archived"):
+                conv = found
+        if conv is None:
+            conv, _repeated = store.create(principal, key=f"voice-call-{session}")
+        kept = store.file_voice_call(conv["id"], principal, call, title=title)
+    except (ConversationStoreUnavailable, ConversationNotFound, OSError):
+        return None
+    return {"conversation": kept["id"], "title": kept.get("title") or title}
 
 
 def walk_transcript(session):
