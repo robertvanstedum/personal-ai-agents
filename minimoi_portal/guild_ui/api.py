@@ -800,12 +800,81 @@ def _tools_own_actions(principal) -> bool:
         return False
 
 
+def _owner_send_card_command(found):
+    """#618: a tell/ask for an agent becomes a send card. yes S-n sends that card's exact text. edit S-n: words
+    reissues the card. The model is not asked, so it cannot claim a send that did not happen. CoS has no agent-ask
+    front door, so this path is MC's."""
+    from flask import g
+    from . import agent_ask
+    from .send_cards import Store, parse_reply, propose, render
+    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    if attachment_ids or getattr(g, "topic_context", None) or not isinstance(note, dict):
+        return None
+    try:
+        svc = agent_ask.service()
+    except Exception:
+        return None
+    if svc is None or not isinstance(conv, dict) or not conv.get("id"):
+        return None
+    text = note.get("text") or ""
+    store = Store(svc.root)
+    parsed = parse_reply(text)
+    if parsed:
+        kind, code, body = parsed
+        card = store.get(conv["id"], code)
+        if card is None or card.get("state") != "pending":
+            result = {"reply": f"No send card {code} is waiting. Nothing was sent.",
+                      "operation": {"type": "send_card", "state": "nothing_pending", "card": code}}
+        elif kind == "unclear":
+            result = {"reply": f"Not approved: reply yes {code}",
+                      "operation": {"type": "send_card", "state": "unclear", "card": code}}
+        elif kind == "no":
+            store.mark(conv["id"], code, "cancelled")
+            result = {"reply": f"Send card {code} is cancelled. Nothing was sent.",
+                      "operation": {"type": "send_card", "state": "cancelled", "card": code}}
+        elif kind == "edit":
+            new = store.replace(conv["id"], code, body)
+            result = {"reply": render([new]) if new else f"Send card {code} can no longer be edited. Nothing was sent.",
+                      "operation": {"type": "send_card", "state": "edited" if new else "nothing_pending",
+                                    "card": None if new is None else new["id"]}}
+        else:
+            made = svc.ask(conv, {"text": card["text"]}, f"{note_id}:{code}", [card["to"]])
+            if made and made[0].get("ok") is True:
+                store.mark(conv["id"], code, "sent")
+                result = {"reply": svc.words(made), "operation": {"type": "send_card", "state": "sent", "card": code}}
+            else:
+                result = {"reply": "The send card was not sent. Nothing was delivered.",
+                          "operation": {"type": "send_card", "state": "not_sent", "card": code}}
+        return _platform_outcome(floor, "send-card-" + str(note_id) + "-reply", result, area="Guild")
+    earlier = []
+    try:
+        res = floor.list_notes(limit=12)
+        rows = (res.data or {}).get("notes") if getattr(res, "ok", False) else []
+    except Exception:
+        rows = []
+    for row in rows or []:
+        if isinstance(row, dict) and row.get("request_id") != note_id:
+            earlier.append(row)
+    drafts = propose(text, earlier)
+    if not drafts:
+        return None
+    # #618: a line the direct ask path already accepts is the owner's own ask. The card is for
+    # the phrasings that path refuses ("tell it", "per Robert", different words for two agents).
+    recipients = sorted({d["to"] for d in drafts})
+    if len(drafts) == len(recipients) and agent_ask.owner_ask_proposal(text, {"to": recipients}, ())[0] is not None:
+        return None
+    result = {"reply": render(store.issue(conv["id"], drafts)),
+              "operation": {"type": "send_card", "state": "proposed"}}
+    return _platform_outcome(floor, "send-card-" + str(note_id) + "-reply", result, area="Guild")
+
+
 def _platform_command(found):
     """The owner's deterministic commands, in their existing order; None for an ordinary message. With MC's tools on,
     the guest-rejection phrases are not parsed at all and lessons are adopted only through MC's offer (A15)."""
     tools = _tools_own_actions(found[1])
     for command in (_owner_register_command, _owner_library_command, _owner_board_command, _owner_action_command,
-                    *(() if tools else (_owner_guest_command,)), _owner_lesson_command, _owner_tool_proposal_command,
+                    *(() if tools else (_owner_guest_command,)), _owner_lesson_command, _owner_send_card_command,
+                    _owner_tool_proposal_command,
                     _owner_decision_command, _owner_waiting_command):
         result = command(found)
         if result is not None:
