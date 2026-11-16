@@ -81,6 +81,10 @@ def test_cos_images_can_import_shared_core_package():
     for path in ("docker/Dockerfile.cos", "docker/Dockerfile.cos-scheduler"):
         dockerfile = (ROOT / path).read_text(encoding="utf-8")
         assert "ENV PYTHONPATH=/app" in dockerfile
+        assert "--workers 1" in dockerfile
+        assert "--timeout 0" in dockerfile
+        assert "domains.cos.chief_of_staff:app" in dockerfile
+        assert "chief_of_staff.py" not in dockerfile
 
 
 def test_remote_deploy_requires_cos_health():

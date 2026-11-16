@@ -25,4 +25,6 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=8769
 ENV PYTHONPATH=/app
 
-CMD ["python", "domains/cos/chief_of_staff.py"]
+# One worker: the scheduler starts when the module is imported, so a second
+# worker would run the loops twice. Timeout 0 leaves a slow reply alive.
+CMD ["sh", "-c", "exec gunicorn --workers 1 --bind 0.0.0.0:${PORT:-8769} --timeout 0 domains.cos.chief_of_staff:app"]
