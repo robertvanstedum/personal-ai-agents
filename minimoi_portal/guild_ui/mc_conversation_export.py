@@ -5,6 +5,7 @@ import json
 import hashlib
 import re
 from .mc_voice_export import _entry as voice_entry
+from .stores import ATTACHMENT_ONLY
 
 MAX_BYTES=1024*1024
 
@@ -33,6 +34,8 @@ def render(rows, *, boundary_request, principal):
             _,speaker,stamp,part,total,partial,_=parsed
             note['voice_attribution']={'speaker':speaker,'timestamp':stamp,'part':part,'parts':total,'partial':partial,
                                        'evidence':'retained provider transcript; ASR/playback unverified'}
+        if note['text'] == ATTACHMENT_ONLY:
+            note['text'] = ''
         notes.append(note)
         text.extend([f"Note {note['id']} · {note['author_kind']} · {note['author_label'] or note['who']} · {note['created_at']}",note['text'],''])
     canonical=json.dumps({'schema':'minimoi-retained-conversation/1','boundary_note_id':rows[-1]['id'],

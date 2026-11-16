@@ -42,7 +42,8 @@
   {%- if n.turn and n.turn.steps %}{# What the turn did (issue #545): plain step names only, folded; never what a tool was given or returned. #}
   <details class="msg-steps" data-turn-steps><summary data-turn-steps-headline>{{ n.turn.steps.headline }}</summary><ol class="msg-steps-list">{% for label in n.turn.steps.labels %}<li>{{ label }}</li>{% endfor %}</ol></details>
   {%- endif %}
-  {%- if n.html %}
+  {%- if n.attachment_only %}{# A file with no message (#335): the files list below is the message. #}
+  {%- elif n.html %}
   <div class="msg-text msg-md">{{ n.html|safe }}</div>{# sanitised server-side (markdown_render.py) #}
   {%- else %}
   <p class="msg-text">{{ n.text }}</p>

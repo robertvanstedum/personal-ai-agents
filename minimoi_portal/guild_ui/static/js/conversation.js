@@ -308,7 +308,9 @@ function noteLine(note) {
   // The server renders Markdown and sanitises it with an allow-list
   // (markdown_render.py: no raw HTML, scripts, handlers, javascript: URLs or
   // images). Without it, the note's own text is shown as plain text.
-  if (typeof note.html === 'string' && note.html) body.innerHTML = note.html;
+  // A file with no message (#335): the stored marker is not something he wrote.
+  if (note.attachment_only || note.text === '\u2060') { body.hidden = true; body.textContent = ''; }
+  else if (typeof note.html === 'string' && note.html) body.innerHTML = note.html;
   else body.textContent = note.text;
   const steps = stepsFold(note.turn && note.turn.steps);
   if (steps) body.before(steps);
@@ -1072,9 +1074,10 @@ async function queueTurn(note, files, ctx, target) {
 async function sendNote(input, send) {
   const originalDraft = input.value;
   const originalDraftKey = draftKey();
-  // A neutral attachment label preserves the existing kept-note contract without inventing an instruction.
-  const text = input.value.trim() || (!live.off && trayCount() ? 'Attached files.' : '');
-  if (!text) {
+  // An attachment with an empty box is a real message (#335). Nothing is invented to stand in for his words.
+  const text = input.value.trim();
+  const filesOnly = !text && !live.off && trayCount();
+  if (!text && !filesOnly) {
     if (trayBusy()) refuse('A file is still being read. Wait for it to finish, then send.');
     return;
   }
@@ -1112,6 +1115,7 @@ async function sendNote(input, send) {
   try {
   const r = await apiPost('/notes', {
     request_id: noteKey, text, record_mode: recordMode(), chat_scope: target.chatScope, conversation_id: target.conversationId,
+    ...(files.length ? { attachment_ids: files.map((f) => f.id) } : {}),
     context: { area: document.body.dataset.area || null, item_ref: page.item_id || null, page: page.page },
   });
   const body = r.body || {};
