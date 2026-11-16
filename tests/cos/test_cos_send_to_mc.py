@@ -568,3 +568,53 @@ def test_cos_asks_when_vague_and_looks_when_concrete_like_mc():
     assert "A concrete question: look (plus one adjacent fact if it matters), then answer; a concrete question is asking." in flat
     assert "your view, and an offer to keep a document (not to file it)." in flat
     assert 'go deep only on "think hard" or "go deep".' in flat
+
+
+# ── #652: his yes to CoS's own offer to ask MC (16 Nov 2026, by voice) ──
+QUESTION = "I need to check on the deployment from last night. Did it release to production?"
+OFFER = ("I can't confirm a production release from here. That sits with Master Craftsman. "
+         "Want me to ask him whether last night's deploy finished?")
+
+
+@pytest.mark.parametrize("yes", ["Okay, go ahead, put it there. I'll just wait, let's see if he replies.", "Yes.", "Go ahead",
+                                 "yes please"])
+def test_a_yes_to_her_offer_sends_his_question_with_her_reply_attached(rig, yes):
+    rig.turn(QUESTION, tid="1", reply=OFFER)
+    out = rig.send(yes, tid="2")
+    assert rig.posts, out
+    sent = json.loads(rig.posts[0])
+    assert sent["words"] == QUESTION
+    assert sent["attachment"]["author"] == "cos" and sent["attachment"]["text"] == OFFER
+    assert "CoS's reply" in sent["attachment"]["label"]
+
+
+@pytest.mark.parametrize("reply", [
+    "Production looks fine from the delivery record.",                     # no offer
+    "That sits with Master Craftsman. Want me to draft a note for you?",    # offers something else
+    "Want me to ask Grok whether it finished?",                             # names no MC
+    "Want me to ask him? Or we could leave it till tomorrow.",              # the offer is not the last sentence
+])
+def test_a_yes_without_her_offer_to_ask_mc_sends_nothing(rig, reply):
+    rig.turn(QUESTION, tid="1", reply=reply)
+    assert rig.send("Yes, go ahead", tid="2")["body"]["error"] == "not_asked" and not rig.posts
+
+
+@pytest.mark.parametrize("answer", ["No, don't.", "Okay, but not now.", "Yes, never mind, forget it.", "What did you say?"])
+def test_a_no_or_anything_but_a_yes_sends_nothing(rig, answer):
+    rig.turn(QUESTION, tid="1", reply=OFFER)
+    assert rig.send(answer, tid="2")["body"]["error"] == "not_asked" and not rig.posts
+
+
+def test_a_yes_from_telegram_or_a_relayed_turn_sends_nothing(rig):
+    rig.turn(QUESTION, tid="1", reply=OFFER)
+    assert rig.send("Yes", origin="service:telegram", tid="3")["body"]["error"] == "not_asked"      # no record of her offer
+    assert rig.send("Yes", origin="service:mc", tid="5")["body"]["error"] == "relayed_turn_refused"
+    assert not rig.posts
+
+
+def test_a_note_between_her_offer_and_his_yes_sends_nothing(rig):
+    rig.turn(QUESTION, tid="1", reply=OFFER)
+    rig.history.add_note({"schema": "minimoi.cos.stream_note/1", "note_id": "consult:y", "conversation_id": rig.cid, "kind": "consult",
+                          "created_at": "2999-01-01T00:00:00+00:00", "text": "MC said hello"})
+    rig.history._clock = lambda: "2999-01-02T00:00:00.000+00:00"
+    assert rig.send("Yes", tid="2")["body"]["error"] == "not_asked" and not rig.posts
