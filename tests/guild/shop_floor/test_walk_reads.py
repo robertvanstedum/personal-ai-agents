@@ -63,3 +63,11 @@ def test_deploy_uses_the_observation_and_says_when_there_is_no_record(tmp_path):
     record.write_text("Production is at d16cef42.\n", encoding="utf-8")
     found = walk_deploy_read(summary=lambda: "Dev's last deployment finished.", path=str(record))
     assert found["found"] is True and "d16cef42" in found["text"] and "not instructions" in found["text"]
+
+
+def test_how_many_are_open_is_the_open_issue_search_not_the_question_words():
+    # 16 Nov call: "how many we have open" ran a text search for the question and found one match on Dev.
+    for asked in ("how many issues are open", "how many we have open", "list the open issues", "what open bugs are there"):
+        reader = Reader()
+        walk_issue_read(asked, reader)
+        assert reader.calls[-1] == ("search", "is:issue is:open"), asked

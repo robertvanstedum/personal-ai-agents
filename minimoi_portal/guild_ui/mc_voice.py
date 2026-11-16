@@ -369,6 +369,9 @@ _READ_BOUND = 1500
 _ISSUE_NUMBER = re.compile(r"\b(\d{1,6})\b")
 _JUST_OPENED = re.compile(r"\bjust opened\b|\bjust open\b|\bnew\b", re.I)
 _LATEST = re.compile(r"\blatest\b", re.I)
+# #650 follow-up (16 Nov call: "how many we have open"): a count or list of the open ones is the open-issue search, never
+# a text search for the question's own words (which found one match on Dev).
+_OPEN_ONES = re.compile(r"\b(?:how many|count|number of|list|all)\b.*\bopen\b|\bopen (?:issues|ones|tickets|bugs)\b", re.I)
 
 
 def _as_data(text: str) -> str:
@@ -406,6 +409,8 @@ def walk_issue_read(query: str, reader, *, now=None) -> dict:
             state, message, _data = reader.search(f"is:issue created:>={day}")
         elif _LATEST.search(q):
             state, message, _data = reader.latest()
+        elif _OPEN_ONES.search(q):
+            state, message, _data = reader.search("is:issue is:open")
         else:
             state, message, _data = reader.search(q)
     except Exception:
