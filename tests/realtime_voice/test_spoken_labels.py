@@ -25,3 +25,31 @@ def test_a_sentence_that_uses_the_word_stays():
     assert strip_spoken_label("Next step: open the issue.") == "open the issue."
     assert for_speech("Decision: keep the call file.") == "Decision: keep the call file."
     assert for_speech("Task: refresh the baseline.") == "Task: refresh the baseline."
+
+
+# #654, mc-voice-call-f9e91d75.txt (16 Nov, 16:18Z): after #641 the model swapped in other labels.
+NEW_LABELS = (
+    ("My view: we can't plan from a blank slate.", "we can't plan from a blank slate."),
+    ("Short answer: not at the moment.", "not at the moment."),
+    ("Bottom line: the read failed twice.", "the read failed twice."),
+)
+
+
+def test_any_short_lead_label_goes():
+    for line, said in NEW_LABELS:
+        assert strip_spoken_label(line) == said
+        assert not for_speech(line).lower().startswith(line.split(':')[0].lower())
+
+
+def test_a_longer_lead_and_a_clock_stay():
+    said = "The way I read the record is simple: it went in."
+    assert strip_spoken_label(said) == said
+    assert strip_spoken_label("10:30 is when it ran.") == "10:30 is when it ran."
+    assert strip_spoken_label("Decision: keep the call file.") == "Decision: keep the call file."
+
+
+def test_walk_keeps_decision_for_what_he_decided():
+    from minimoi_portal.guild_ui.mc.voice_walk import instructions
+    text = instructions()
+    assert "never a decision" in text and "My view:" in text
+    assert "Start a decision with" not in text

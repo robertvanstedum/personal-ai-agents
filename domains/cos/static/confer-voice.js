@@ -498,7 +498,7 @@ export function conferVoice(d) {
   }
   function paintLive(who, text) {
     const clean = String(text || '').split(/(?<=[.!?])\s+/).map((part) => part.replace(
-      /^(?:recommendation|answer|summary|next step|status|note)\s*[:\-–—]\s*/i, '')).filter((part) => part.trim()).join(' ');
+      /^(?!(?:decision|task)\s*:)(?:(?:recommendation|answer|summary|next step|status|note)\s*[:\-–—]\s*|[A-Za-z][\w'’]*(?:\s+[A-Za-z][\w'’]*){0,2}\s*:\s+)/i, '')).filter((part) => part.trim()).join(' ');
     const log = els.chat;
     if (!log || !clean || typeof log.append !== 'function') return;
     const box = make('div', { class: who === 'You:' ? 'msg msg-voice msg-user' : 'msg msg-voice msg-cos', 'data-live-spoken': '' });

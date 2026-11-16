@@ -23,8 +23,11 @@ _CHROME = re.compile(r"not (?:a )?live refresh|whole[- ]platform|owner acceptanc
 _ISO = re.compile(r"(?:\bat\s+)?\b(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|\+00:00)(?![\w:])")
 _UTC = re.compile(r"\b(?:at\s+)?([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\s*(?:UTC|Z)\b")
 # A heading the model announces ("Recommendation:"). The word inside a sentence ("my recommendation is") stays.
-# Decision and Task are not in this list: the walk uses those prefixes to hold a note.
-_LABEL = re.compile(r"^(?:recommendation|answer|summary|next step|status|note)\s*[:\-–—]\s*", re.I)
+# #654: the model swaps in another word ("Decision:", "My view:"), so any short lead of one to three words and a colon
+# goes too, not only the named six. Decision and Task are kept where the walk holds a note (keep_decision=True).
+_LABEL = re.compile(r"^(?:(?:recommendation|answer|summary|next step|status|note)\s*[:\-–—]\s*"
+                    r"|[A-Za-z][\w'’]*(?:\s+[A-Za-z][\w'’]*){0,2}\s*:\s+)", re.I)
+_HELD = re.compile(r"^(?:decision|task)\s*:", re.I)
 
 
 def _number(n: int) -> str:
@@ -66,8 +69,9 @@ def _utc_clock(hour: int, minute: int, now: datetime) -> datetime:
 
 
 def strip_spoken_label(text: str) -> str:
-    """Drop a leading category label. A sentence that only uses the word is unchanged."""
-    return _LABEL.sub("", text or "", count=1)
+    """Drop a leading category label. A sentence that only uses the word is unchanged, and so is a held Decision or Task."""
+    text = text or ""
+    return text if _HELD.match(text) else _LABEL.sub("", text, count=1)
 
 
 def for_speech(text: str, now: datetime | None = None) -> str:

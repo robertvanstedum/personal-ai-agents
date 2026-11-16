@@ -4,7 +4,7 @@
 // A leading category label is not part of the conversation. Decision and Task stay: the server holds those.
 export function stripSpokenLabel(text) {
   return String(text || '').split(/(?<=[.!?])\s+/).map((part) => part.replace(
-    /^(?:recommendation|answer|summary|next step|status|note)\s*[:\-–—]\s*/i, '')).filter((part) => part.trim()).join(' ');
+    /^(?!(?:decision|task)\s*:)(?:(?:recommendation|answer|summary|next step|status|note)\s*[:\-–—]\s*|[A-Za-z][\w'’]*(?:\s+[A-Za-z][\w'’]*){0,2}\s*:\s+)/i, '')).filter((part) => part.trim()).join(' ');
 }
 
 export async function startMcWalk({ api, headers, current, say, setPhase, saved, conversationId, paint }) {
