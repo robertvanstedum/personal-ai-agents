@@ -196,3 +196,60 @@ feat(guild): navigation redesign — lifecycle statuses, write API, live roadmap
 ---
 
 *Spec · 2026-07-04 · Claude.ai design session · Status: Backlog*
+
+---
+
+## Addendum — Phase B: dashboard and filterable log (2026-09-06)
+
+**Status: captured, not started.** Recorded from Robert's direction after
+reviewing the Build Log and Build Queue pages on dev, following the
+build-queue cleanup merged as `e49bd24`. Nothing in this addendum is
+approved for build. It supersedes the Kanban emphasis in the original
+spec above.
+
+### Robert's direction, verbatim
+
+> I think we are not ready. i'd like to do a bigger redesign. the build
+> log should just have filterable columns like we did in the IoT POC for
+> subscriptions. All of the buttons on top are confusing and add to
+> noise. the Kanban also is not really working. I think I prefere a
+> dashboard with a status and health view of build overall. Maybe a small
+> kanban underneath, but really a quick view over all for what's in build
+> and ready for build, and then counts and status/flags for everything
+> else. we need a bigger redesign and UI rethink, in my mind, and this is
+> bigger that I want to handle today
+
+### What this changes
+
+1. **Build Log becomes a table, not a list.** Sortable, filterable
+   columns in the pattern already shipped and accepted in the IoT Connect
+   prototype's subscription table. That table is the reference
+   implementation, not a fresh design: same interaction model, same
+   filter-and-clear behaviour, same deep-linkable filter state.
+2. **The action buttons across the top come off.** They are noise. Any
+   action that survives moves next to the row it acts on, or into the
+   item view.
+3. **The Kanban is demoted.** It is not doing its job as the primary
+   view. It may survive as a small strip underneath the dashboard, or not
+   at all.
+4. **A dashboard becomes the landing view.** Overall build status and
+   health first: what is in build, what is ready for build, then counts
+   and status or flag rollups for everything else. The detail lives one
+   click down.
+
+### Open questions for the design session
+
+- What are the health signals? Age in status, blocked items, items with
+  no spec, items in build past an expected window are candidates, but
+  none of these are decided.
+- Which columns does the log actually need, and which are filters versus
+  display?
+- Does the item detail view from the original spec still hold, or does it
+  get rethought alongside the dashboard?
+- Does the Prototype Lab grid, which Robert wants tightened along the
+  same lines, share this table component?
+
+### Sequencing
+
+This is a design session before it is a build. It does not start until
+Robert opens it.
