@@ -8,8 +8,9 @@
 // The session itself (the bridge to her typed Confer turn, capture, End, the summary) is the shared session module,
 // core/realtime_voice/static/direct-voice-session.js (Spec 165 §4.3), which the page hands in as `session`; this file adds
 // nothing to its rules. It draws what the module reports: while live, only that voice is on, the time so far, End and
-// Check with CoS (and Sum up and Keep talking when offered), never what is said, except the words Check sends (review
-// B N8). End reveals the session's kept records from her store (§6.5, the session detail), in Confer's own message style;
+// Check with CoS (and Sum up and Keep talking when offered). A finished spoken turn is a plain line in the thread
+// as it is said (#607). The notice under the composer stays one short status and replaces itself. End still reveals
+// the session's kept records from her store (§6.5, the session detail), in Confer's own message style;
 // sessions needing attention are listed below the composer with their line, their summary card and Download transcript.
 //
 // No imports: the page hands in the document, its nodes, the session module, the fetch, the headers and the timers, so the
@@ -495,6 +496,16 @@ export function conferVoice(d) {
     b.disabled = ending;
     select.disabled = active || ending || !usable.length;
   }
+  function paintLive(who, text) {
+    const clean = String(text || '').split(/(?<=[.!?])\s+/).map((part) => part.replace(
+      /^(?:recommendation|answer|summary|next step|status|note)\s*[:\-–—]\s*/i, '')).filter((part) => part.trim()).join(' ');
+    const log = els.chat;
+    if (!log || !clean || typeof log.append !== 'function') return;
+    const box = make('div', { class: who === 'You:' ? 'msg msg-voice msg-user' : 'msg msg-voice msg-cos', 'data-live-spoken': '' });
+    box.append(make('div', { class: 'msg-label' }, who), make('div', { class: 'msg-text' }, clean));
+    log.append(box);
+    try { log.scrollTop = log.scrollHeight; } catch (_) { /* the line is already in the thread */ }
+  }
   const ui = {
     say: (text, o) => say(text, o),
     phase: (state) => { status(PHASES[state] || ''); },
@@ -506,13 +517,10 @@ export function conferVoice(d) {
     },
     elapsed: (text) => { elapsed.textContent = text; },
     notice: (text) => { notice.textContent = text || ''; notice.hidden = !text; },
-    // #607: each spoken answer stays on screen after it is said. The status line still changes.
-    spoken: (text) => {
-      if (!text) return;
-      const line = `Voice: ${text}`;
-      notice.textContent = notice.textContent ? `${notice.textContent}\n\n${line}` : line;
-      notice.hidden = false;
-    },
+    // #607: the thread gets the line. The notice is only the one status above. Nothing here is awaited.
+    heard: (text) => { paintLive('You:', text); },
+    spoken: (text) => { paintLive('CoS:', text); },
+    repaint: () => { try { doc.dispatchEvent(new CustomEvent('cos:turn-completed')); } catch (_) { /* the poll still reads history */ } },
     propose: (yes) => { propose.hidden = !yes; },
     // Check shows the words it sends (review B N8): as it sends them, then with the answer, until the next Check or End.
     checking: (yes, words) => {

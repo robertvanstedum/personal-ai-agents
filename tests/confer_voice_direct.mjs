@@ -5,7 +5,7 @@
 // fake_dom.mjs) and fake timers. No provider, microphone, network, page server or browser.
 //
 // Covered: not admitted = today, by behaviour (one capabilities read, then today's two modes, Dictate and the handover as
-// before); admitted: one Voice button, the provider choice, the live bar, nothing said shown while live, Check's words,
+// before); admitted: one Voice button, the provider choice, the live bar, spoken lines in the thread, Check's words,
 // xAI's Check-only words, Sum up and Keep talking, End and the reveal (capture, not acted on with why, partial, LV6's
 // repeated words kept), Download transcript, the summary card, Ask for a summary, the needs-attention list, a refused
 // start, Dictate and the companion handover (the microphone released first, a connecting session included), pagehide's
@@ -297,7 +297,7 @@ await scenario('admitted: a provider the card names is offered, with no Check-on
 });
 
 // ── item 2: the live bar ────────────────────────────────────────────────────────────────────────────────────────────
-await scenario('the live bar: voice on, the time, Check with CoS and End; nothing said shows while live', {}, async (p) => {
+await scenario('the live bar: voice on, the time, Check with CoS and End; spoken lines are in the thread, not the notice', {}, async (p) => {
   await p.voice();
   assert.deepEqual(p.dictation.stops, ['voice_started']);                          // Dictate yields first, as today
   const c = p.c;
@@ -316,9 +316,13 @@ await scenario('the live bar: voice on, the time, Check with CoS and End; nothin
   await p.advance(65000);
   assert.equal(textOf(p.bar('[data-voice-elapsed]')), '1m 05s');
   c.utter('What is on my agenda?'); c.reply('Two meetings.'); await flush();
-  assert.deepEqual(p.appended, [], 'what was said went into the conversation while live');
+  assert.deepEqual(p.appended, [], 'a spoken turn does not use the typed send path');
   assert.equal(p.line(), '');
-  assert.ok(!p.nodes('voice-live').textContent.includes('agenda') && !p.chat.textContent.includes('agenda'));
+  assert.ok(!p.nodes('voice-live').textContent.includes('agenda') && !p.nodes('voice-live').textContent.includes('Voice:'));
+  assert.match(p.chat.textContent, /You:/);
+  assert.match(p.chat.textContent, /What is on my agenda\?/);
+  assert.match(p.chat.textContent, /CoS:/);
+  assert.match(p.chat.textContent, /Two meetings\./);
   assert.equal(p.posts('/transcript').length >= 1, true);                          // kept on her server as it is said
 });
 // Adapted for v3: the end is offered by the utterance route's decision (the session's one waiting action), not a post.

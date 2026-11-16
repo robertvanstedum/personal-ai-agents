@@ -22,6 +22,9 @@ _CHROME = re.compile(r"not (?:a )?live refresh|whole[- ]platform|owner acceptanc
                      r"not (?:feature|login|user[- ]journey) acceptance|not proof of (?:the )?latest", re.I)
 _ISO = re.compile(r"(?:\bat\s+)?\b(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|\+00:00)(?![\w:])")
 _UTC = re.compile(r"\b(?:at\s+)?([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\s*(?:UTC|Z)\b")
+# A heading the model announces ("Recommendation:"). The word inside a sentence ("my recommendation is") stays.
+# Decision and Task are not in this list: the walk uses those prefixes to hold a note.
+_LABEL = re.compile(r"^(?:recommendation|answer|summary|next step|status|note)\s*[:\-–—]\s*", re.I)
 
 
 def _number(n: int) -> str:
@@ -62,14 +65,21 @@ def _utc_clock(hour: int, minute: int, now: datetime) -> datetime:
     return at - timedelta(days=1) if at > now_utc + timedelta(minutes=5) else at
 
 
+def strip_spoken_label(text: str) -> str:
+    """Drop a leading category label. A sentence that only uses the word is unchanged."""
+    return _LABEL.sub("", text or "", count=1)
+
+
 def for_speech(text: str, now: datetime | None = None) -> str:
-    """``text`` as it should be spoken: timestamps as words, disclaimer sentences out, single full stops."""
+    """``text`` as it should be spoken: timestamps as words, disclaimer sentences out, single full stops, no leading label."""
     now = now or datetime.now(timezone.utc)
     t = _ISO.sub(lambda m: time_words(datetime.fromisoformat(f"{m[1]}T{m[2]}:{m[3]}:00+00:00"), now), text or "")
     t = _UTC.sub(lambda m: time_words(_utc_clock(int(m[1]), int(m[2]), now), now), t)
     sentences = [s for s in re.split(r"(?<=[.!?])\s+", t.strip()) if s]
     kept = [s for s in sentences if not _CHROME.search(s)] or sentences[:1]
-    return single_stops(" ".join(kept))
+    cleaned = [strip_spoken_label(s).strip() for s in kept]
+    cleaned = [s for s in cleaned if s] or kept[:1]
+    return single_stops(" ".join(cleaned))
 
 
 def single_stops(text: str) -> str:

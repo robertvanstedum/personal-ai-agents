@@ -1,7 +1,13 @@
 // The talking call. The shared controller owns the provider session. This page does not
 // call the adapter, and it does not send a tool result itself.
 
-export async function startMcWalk({ api, headers, current, say, setPhase, saved, conversationId }) {
+// A leading category label is not part of the conversation. Decision and Task stay: the server holds those.
+export function stripSpokenLabel(text) {
+  return String(text || '').split(/(?<=[.!?])\s+/).map((part) => part.replace(
+    /^(?:recommendation|answer|summary|next step|status|note)\s*[:\-–—]\s*/i, '')).filter((part) => part.trim()).join(' ');
+}
+
+export async function startMcWalk({ api, headers, current, say, setPhase, saved, conversationId, paint }) {
   const { RealtimeVoiceController } = await import(`${api}/mc/voice/static/realtime-voice-controller.js`);
   const turns = [];
   let sessionId = null;
@@ -32,6 +38,7 @@ export async function startMcWalk({ api, headers, current, say, setPhase, saved,
     onUserTurn(text) {
       if (!active || !sessionId || !text) return;
       turns.push({ role: 'user', text });
+      try { paint?.('user', text); } catch (_) { /* the line is also in the call file at End */ }
       post('utterance', { session: sessionId, text, hold: holdId }).then((body) => {
         if (body?.say && body.receipt) controller.speak('Say only: Noted.');
       });
@@ -39,6 +46,7 @@ export async function startMcWalk({ api, headers, current, say, setPhase, saved,
     onAssistantTurn(text) {
       if (!active || !sessionId || !text) return;
       turns.push({ role: 'mc', text });
+      try { paint?.('mc', stripSpokenLabel(text)); } catch (_) { /* the line is also in the call file at End */ }
       post('hold', { session: sessionId, sentence: text }).then((body) => { holdId = body?.hold || null; });
     },
     onWarning() {
@@ -52,7 +60,11 @@ export async function startMcWalk({ api, headers, current, say, setPhase, saved,
   hooks.onFunctionCall = (call) => {
     let query = '';
     try { query = JSON.parse(call?.arguments || '{}').query || ''; } catch (_) { query = ''; }
-    return post('tool', { name: call?.name, query }).then((body) => JSON.stringify(body || {}));
+    return post('tool', { name: call?.name, query }).then((body) => {
+      const shown = typeof body?.text === 'string' ? body.text.slice(0, 1500) : '';
+      if (shown) { try { paint?.('mc', stripSpokenLabel(shown)); } catch (_) { /* the call carries on */ } }
+      return JSON.stringify(body || {});
+    });
   };
   const controller = new RealtimeVoiceController(hooks);
 
