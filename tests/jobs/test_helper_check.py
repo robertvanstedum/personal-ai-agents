@@ -20,6 +20,12 @@ from tests.partnership.synth import Flow, cmd, service
 from tests.partnership.test_helper_charters import GRANT, KIND
 from tests.partnership.test_helper_worker import Client
 
+
+class _Mc(Client):
+    def open_work(self):
+        from services.partnership_tasks.reconstruct import open_work
+        return open_work(self.svc, self.token)
+
 REPO = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("helper_check_t", REPO / "scripts" / "jobs" / "helper_check.py")
 hc = importlib.util.module_from_spec(spec)
@@ -59,7 +65,7 @@ def rig(tmp_path):
             return getattr(ctx_for, "reply", "needs action: Production backup S3 (ec2) failing 2 days.\nwatch: no report from the Mac for 40 h.")
         return T.Ctx(health_dir=folder, ask_model=ask, now=NOW)
     worker = Worker(Client(svc, "tok-worker"), "worker-a", CHARTER, environment="synthetic", ledger=ledger, ctx_for=ctx_for)
-    return svc, Client(svc, "tok-mc"), Client(svc, "tok-platform"), worker, folder, calls, ctx_for
+    return svc, _Mc(svc, "tok-mc"), Client(svc, "tok-platform"), worker, folder, calls, ctx_for
 
 
 def run(rig, **kw):
@@ -104,6 +110,8 @@ def test_items_that_do_not_match_the_reports_are_not_accepted(rig):
     note = run(rig)
     assert note["accepted_by"] is None and "did not match" in note["why"]
     assert note["note_by"] == "deterministic" and "Production backup, tier 2 S3" in note["note"]
+    task = mc.get("task", note["task_id"])
+    assert task["state"] == "failed" and task["execution_refs"] and "did not match" in task["reason"]
 
 
 def test_a_model_failure_keeps_the_deterministic_words_and_is_still_accepted(rig):
@@ -150,6 +158,89 @@ def test_the_lead_cannot_forge_a_schedule_record(rig):
                                                                                           "position": 1}, "content": "x", "correction_of": None}), "tok-mc")
     if out["outcome"] == "accepted":                         # MC may record events, but never as the platform
         assert svc.get("source_event", "SE-forged", "tok-mc")["producer"] != "platform"
+
+
+def _failed(mc, tid):
+    task = mc.get("task", tid)
+    assert task["state"] == "failed" and task["reason"] and task["execution_refs"]
+    assert {"store", "id"} <= set(task["execution_refs"][-1])
+    return task
+
+
+def test_a_helper_that_does_not_finish_within_the_wait_is_failed(rig):
+    svc, mc, platform, *_ = rig
+    tid = hc.start(mc, platform, CHARTER, "2026-11-14", environment="synthetic", seat="worker-a")
+    task = mc.get("task", tid)
+    req = mc.get("request", task["request_ref"])
+    svc.submit(cmd("task.transition", "task", tid, {"to": "working", "reason": "picked up", "waiting": None,
+                                                    "evidence_refs": [{"store": "task_service", "id": req["source_event_id"],
+                                                                        "edition": None, "digest": None}],
+                                                    "fence_generation": task["fence_generation"]},
+                   expected=task["revision"]), "tok-worker")
+    assert mc.get("task", tid)["state"] == "working"
+    note = hc.run_once(mc, platform, CHARTER, environment="synthetic", health_dir=rig[4], now=NOW, wait_s=0,
+                       sleep=lambda _s: None, seat="worker-a")
+    assert note["accepted_by"] is None and "had not finished" in note["why"]
+    failed = _failed(mc, note["task_id"])
+    assert "had not finished" in failed["reason"]
+
+
+def test_a_stopped_helper_fails_the_task(rig):
+    svc, mc, platform, worker, *_ = rig
+
+    def boom(task, kind, round_no):
+        raise RuntimeError("boom")
+    worker.ctx_for = boom
+    note = run(rig)
+    assert note["accepted_by"] is None and "stopped" in note["why"]
+    assert "stopped" in _failed(mc, note["task_id"])["reason"]
+
+
+def test_a_refused_review_fails_the_task(rig):
+    svc, mc, platform, worker, folder, *_ = rig
+
+    class Platform:
+        def get(self, *args, **kwargs):
+            return platform.get(*args, **kwargs)
+
+        def submit(self, command):
+            if command["kind"] == "source_event.record" and str(command["target"]["id"]).startswith("SE-review-"):
+                return {"outcome": "refused", "code": "refused", "detail": "no"}
+            return platform.submit(command)
+
+    note = hc.run_once(mc, Platform(), CHARTER, environment="synthetic", health_dir=folder, now=NOW, wait_s=3,
+                       sleep=lambda _s: worker.pass_once(), seat="worker-a")
+    assert "review not recorded" in note["why"] and note["accepted_by"] is None
+    assert "review not recorded" in _failed(mc, note["task_id"])["reason"]
+
+
+def test_the_next_run_fails_an_earlier_open_health_check_with_no_result(rig):
+    svc, mc, platform, *_ = rig
+    earlier = hc.start(mc, platform, CHARTER, "2026-11-13", environment="synthetic", seat="worker-a")
+    note = run(rig)
+    assert note["accepted_by"] == "mc" and note["task_id"] != earlier
+    assert "had not finished" in _failed(mc, earlier)["reason"]
+
+
+def test_the_next_run_accepts_an_earlier_health_check_when_its_late_result_matches(rig):
+    svc, mc, platform, worker, *_ = rig
+    earlier = hc.start(mc, platform, CHARTER, "2026-11-13", environment="synthetic", seat="worker-a")
+    assert worker.pass_once() == 1
+    note = run(rig)
+    old = mc.get("task", earlier)
+    assert old["state"] == "completed" and any(a["status"] == "current" for a in old["acceptances"])
+    assert note["accepted_by"] == "mc" and note["task_id"] != earlier
+
+
+def test_the_next_run_fails_an_earlier_health_check_when_its_result_does_not_match(rig):
+    svc, mc, platform, worker, folder, *_ = rig
+    earlier = hc.start(mc, platform, CHARTER, "2026-11-13", environment="synthetic", seat="worker-a")
+    assert worker.pass_once() == 1
+    health.publish(folder, "health-ec2.json", {"schema_version": 1, "host": "ec2", "checked_at": status.iso(NOW),
+                                               "worst": "green", "counts": {}, "items": []})
+    note = run(rig)
+    assert note["task_id"] != earlier
+    assert "did not match" in _failed(mc, earlier)["reason"]
 
 
 # ---- charters ------------------------------------------------------------------------------------------------------
