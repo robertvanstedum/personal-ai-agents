@@ -56,6 +56,7 @@ def test_an_ask_line_writes_the_owners_own_words_to_the_ledger_and_claims_no_del
     assert req["request"]["origin"] == "owner_message_via_mc" and req["request"]["from"] == "mc"
     words = done["reply_note"]["text"]
     assert words.startswith("Asked Claude Code: ") and "Nothing has been delivered yet" in words and words.count("I will say here") == 1
+    assert "Nothing is sent until you say yes" not in words
     assert "I have sent it" not in words and "Check the tabs" not in req["request"]["action"]          # the model's words are never the task
     assert req["stage"] == "queued"
 

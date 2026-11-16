@@ -858,6 +858,11 @@ def _owner_send_card_command(found):
     drafts = propose(text, earlier)
     if not drafts:
         return None
+    # #618: a line the direct ask path already accepts is the owner's own ask. The card is for
+    # the phrasings that path refuses ("tell it", "per Robert", different words for two agents).
+    recipients = sorted({d["to"] for d in drafts})
+    if len(drafts) == len(recipients) and agent_ask.owner_ask_proposal(text, {"to": recipients}, ())[0] is not None:
+        return None
     result = {"reply": render(store.issue(conv["id"], drafts)),
               "operation": {"type": "send_card", "state": "proposed"}}
     return _platform_outcome(floor, "send-card-" + str(note_id) + "-reply", result, area="Guild")
