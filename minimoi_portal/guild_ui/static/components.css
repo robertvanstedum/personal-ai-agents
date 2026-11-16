@@ -1525,6 +1525,30 @@ body.gu .mc-panel:is([data-mode="floating"], [data-mode="docked"]) [data-mc-reco
   .prototype-lab .area-hero-art.area-hero-art-wide{height:112px}
 }
 
+/* Operate, Improve and Lab are not ready for 1.2. A plain notice above the title, in words. */
+.area-under-construction { margin: 8px 0 16px; }
+.area-under-construction > .gu-construction-top {
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px;
+  position: relative; z-index: 2; top: auto; right: auto; left: auto; width: auto; max-width: none;
+  min-height: 0; margin: 0 0 12px; padding: 16px 22px; overflow: visible; transform: none;
+  border: 0; border-radius: 10px; background: var(--gu-sig-attention, #e0a63b); color: #2a1f14;
+  box-shadow: 0 2px 8px #30281733; pointer-events: none;
+}
+.area-under-construction > .gu-construction-top::after { content: none; }
+.area-under-construction > .gu-construction-top b {
+  color: #2a1f14; font-size: 28px; font-weight: 700; letter-spacing: 0; line-height: 1.15;
+  text-transform: none;
+}
+.area-under-construction > .gu-construction-top span {
+  color: #2a1f14; font-size: 18px; font-weight: 600; letter-spacing: 0; line-height: 1.3;
+  text-transform: none;
+}
+@media (max-width: 640px) {
+  .area-under-construction > .gu-construction-top { padding: 14px 16px; }
+  .area-under-construction > .gu-construction-top b { font-size: 22px; }
+  .area-under-construction > .gu-construction-top span { font-size: 16px; }
+}
+
 /* #622: the chat's one status chip (a light at Problem, or cost not good); everything else is on Operate. */
 .floor-alert { display: flex; flex-wrap: wrap; gap: var(--gu-s2); align-items: center; justify-content: center;
   margin: var(--gu-s2) auto; padding: 4px 12px; border-radius: 999px; width: fit-content;
