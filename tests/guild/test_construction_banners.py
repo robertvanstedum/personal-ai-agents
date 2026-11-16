@@ -8,11 +8,17 @@ CSS = (ROOT / "minimoi_portal/guild_ui/static/components.css").read_text()
 
 
 def test_the_banner_says_in_construction():
-    assert 'class="gu-construction"' in PARTIAL
+    assert 'class="gu-construction' in PARTIAL
     assert 'content: "In construction"' in CSS
 
 
-def test_operate_improve_and_lab_show_the_banner_under_the_title():
+def test_the_page_banner_is_a_large_diagonal_sash():
+    assert "gu-construction-top" in PARTIAL
+    assert "transform: rotate(-4deg)" in CSS
+    assert "font-size: 32px" in CSS
+
+
+def test_operate_improve_and_lab_show_the_banner_above_the_title():
     pages = {
         "operate.html": "Operate is not ready for 1.2.",
         "library.html": "Improve is not ready for 1.2.",
@@ -20,7 +26,14 @@ def test_operate_improve_and_lab_show_the_banner_under_the_title():
     }
     for name, sentence in pages.items():
         text = (FLOOR / name).read_text()
-        hero, _, rest = text.partition("{% include 'guild_floor/_area_hero.html' %}")
-        assert hero and rest
-        assert rest.lstrip().startswith("{% set construction_text = \"" + sentence + "\" %}")
-        assert "{% include 'guild_floor/_in_construction.html' %}" in rest[:240]
+        banner, _, hero = text.partition("{% include 'guild_floor/_area_hero.html' %}")
+        assert hero
+        assert '<div class="area-under-construction">' in banner
+        assert "{% set construction_top = true %}" in banner
+        assert sentence in banner
+        assert "{% include 'guild_floor/_in_construction.html' %}" in banner
+        if "{% include 'guild_floor/_area_preview.html' %}" in text:
+            assert "{% set construction_top = false %}" in text
+            assert text.index("{% set construction_top = false %}") < text.index(
+                "{% include 'guild_floor/_area_preview.html' %}"
+            )

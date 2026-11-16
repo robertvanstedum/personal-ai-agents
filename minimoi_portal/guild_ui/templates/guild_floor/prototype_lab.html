@@ -17,10 +17,13 @@
 {%- endmacro %}
 {% block main %}
 <article class="gu-reference prototype-lab area-page" data-proto-lab>
-{% set hero_title = "Prototype Lab" %}{% set hero_tagline = "Ideas, demos and experiments." %}{% set hero_art = "/static/guild/guild-experiment.webp" %}{% set hero_wide = true %}
-{% include 'guild_floor/_area_hero.html' %}
+<div class="area-under-construction">
+{% set construction_top = true %}
 {% set construction_text = "Lab is not ready for 1.2." %}
 {% include 'guild_floor/_in_construction.html' %}
+{% set hero_title = "Prototype Lab" %}{% set hero_tagline = "Ideas, demos and experiments." %}{% set hero_art = "/static/guild/guild-experiment.webp" %}{% set hero_wide = true %}
+{% include 'guild_floor/_area_hero.html' %}
+</div>
 <div class="proto-controls">
 {% set kinds = prototypes|map(attribute='kind')|unique|list %}
 {% if kinds|length > 1 %}
