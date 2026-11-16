@@ -662,6 +662,23 @@ body.show-cos-board .tab-panel-photo, body.show-cos-board #mc-both { display: no
 body.show-cos-board .tab-content { width: 100%; padding: 0; }
 #cos-board { display: block; width: 100%; height: calc(100dvh - 150px); min-height: 420px; border: 0; }
 
+/* #633: a phone call must not keep this desktop column. 100vh under the picture is taller than the screen, so the composer covers the reply. The call layout in calm-confer.css caps it. */
+@media (max-width: 700px) {
+  body.founders-cos[data-cos-tab=confer]:has(#voice-live:not([hidden])) .tab-layout-split {
+    height: 100%;
+    min-height: 0;
+  }
+  body.founders-cos[data-cos-tab=confer]:has(#voice-live:not([hidden])) .tab-content {
+    height: 100dvh;
+    max-height: 100%;
+    min-height: 0;
+  }
+  body.founders-cos[data-cos-tab=confer]:has(#voice-live:not([hidden])) .tab-panel-photo {
+    height: auto;
+    min-height: 0;
+  }
+}
+
 /* Review 06: CoS's mark (the Marcus Aurelius bust) beside each reply's name. A relative url, so it resolves directly and through the portal. */
 .founders-cos .msg-cos .msg-label::before {
   content: ""; width: 22px; height: 22px; flex: none; border-radius: 50%;
