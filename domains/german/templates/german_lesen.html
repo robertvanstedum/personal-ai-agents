@@ -468,6 +468,7 @@
   const btnClose   = document.getElementById('btn-close-popover');
   const translationCache = new Map();
   let currentPhrase = '';
+  let currentFromNote = false;
 
   const readingTextEl = document.getElementById('reading-text');
   let selectionTimer = null;
@@ -480,16 +481,38 @@
       if (!readingTextEl.contains(range.commonAncestorContainer)) return null;
       const phrase = sel.toString().trim();
       if (!phrase || phrase.length < 2 || phrase.length > 300) return null;
-      return { range, phrase };
+      return { range, phrase, note: false };
     } catch {
       return null;
     }
   }
 
+  // A selection inside the notes box is the textarea's own range. window.getSelection()
+  // does not see it, so a save from Notizen used to read the article instead (#89).
+  function selectedNotePhrase() {
+    const box = document.getElementById('notizen-original');
+    if (!box || document.activeElement !== box) return null;
+    const start = box.selectionStart, end = box.selectionEnd;
+    if (start == null || end == null || start === end) return null;
+    const phrase = box.value.slice(Math.min(start, end), Math.max(start, end)).trim();
+    if (!phrase || phrase.length < 2 || phrase.length > 300) return null;
+    return { phrase, rect: box.getBoundingClientRect(), note: true };
+  }
+
+  function selectedPhrase() {
+    return selectedNotePhrase() || selectedReadingRange();
+  }
+
   function scheduleReadingSelection(delay = 300) {
     clearTimeout(selectionTimer);
-    if (!selectedReadingRange()) return;
+    if (!selectedPhrase()) return;
     selectionTimer = setTimeout(handleSelection, delay);
+  }
+
+  const notesBox = document.getElementById('notizen-original');
+  if (notesBox) {
+    notesBox.addEventListener('select', () => scheduleReadingSelection(200));
+    notesBox.addEventListener('keyup', () => scheduleReadingSelection(200));
   }
 
   document.addEventListener('mouseup', () => scheduleReadingSelection(300));
@@ -550,12 +573,13 @@
 
   function handleSelection() {
     selectionTimer = null;
-    const selected = selectedReadingRange();
+    const selected = selectedPhrase();
     if (!selected) return;
-    const { range, phrase } = selected;
+    const { phrase } = selected;
     currentPhrase = phrase;
+    currentFromNote = selected.note;
     currentTranslation = '';
-    const rect = range.getBoundingClientRect();
+    const rect = selected.note ? selected.rect : selected.range.getBoundingClientRect();
     popPhrase.textContent = phrase;
     popTrans.textContent = 'Übersetzung…';
     popTiming.textContent = '';
@@ -563,7 +587,7 @@
     btnSave.textContent = '＋ In Bibliothek';
     showPopover(rect);
     fetchTranslation(phrase);
-    setTimeout(() => {
+    if (!selected.note) setTimeout(() => {
       const activeSelection = window.getSelection();
       if (activeSelection && activeSelection.toString().trim() === phrase) {
         activeSelection.removeAllRanges();
@@ -626,8 +650,11 @@
   btnSave.addEventListener('click', async () => {
     if (!currentPhrase || !currentTranslation) return;
     const art = filteredArticles[currentIdx];
+    const noteBox = document.getElementById('notizen-original');
     const contextEl = document.getElementById('reading-text');
-    const contextSentence = contextEl ? contextEl.textContent.slice(0, 200) : '';
+    const contextSentence = currentFromNote && noteBox
+      ? noteBox.value.slice(0, 200)
+      : (contextEl ? contextEl.textContent.slice(0, 200) : '');
     btnSave.textContent = 'Speichern…';
     btnSave.disabled = true;
     try {
