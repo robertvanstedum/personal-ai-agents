@@ -808,12 +808,8 @@ async function streamMasterCraftsman(t, via) {
       announce(ev.text);
     } else if (ev.t === 'step' && Number.isInteger(ev.n) && typeof ev.label === 'string' && typeof ev.headline === 'string') {
       if (ev.phase === 'start') {
-        // What it said before this step is what it is doing: one status line, and the text clears for what comes next.
+        // What it said before this step is what it is doing: one status line. The answer already drawn stays (#459).
         status = status || firstSentence(deltas.join('')) || 'Working…';
-        deltas.length = 0;
-        upto = 0;
-        rendered.replaceChildren();
-        tail.textContent = '';
         if (li.dataset.stopping !== 'true') setSlot(li, 'state', status);
       }
       stepLabels[ev.n - 1] = ev.label;

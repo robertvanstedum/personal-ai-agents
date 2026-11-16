@@ -567,11 +567,8 @@ def browser_events(run: StreamRun, *, render: Callable[[str], str], clock=time.m
                 yield _line(payload)
                 continue
             if kind == "step":
-                # A step begins: the text so far was the model saying what it is about to do. The page lifts its first
-                # sentence into the status line and clears the text, so only what follows the last step is shown live
-                # (the kept answer replaces it all at the end). The renders count from here again, as the page does.
-                if payload.get("phase") == "start":
-                    text, deltas, last_render, rendered = "", 0, None, -1
+                # A step begins. The page may lift the first sentence into the status line. The words already
+                # shown stay in the next render: clearing them redrew the whole answer on every tool call (#459).
                 yield _line(payload)
                 continue
             if kind == "delta":
