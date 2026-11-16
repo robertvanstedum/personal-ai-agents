@@ -4,6 +4,8 @@
 <article class="gu-reference area-page">
 {% set hero_title = "Improve" %}{% set hero_tagline = "Review · Analyze · Improve" %}{% set hero_art = "/static/guild/guild-improve-banner.webp" %}{% set hero_wide = true %}
 {% include 'guild_floor/_area_hero.html' %}
+{% set construction_text = "Improve is not ready for 1.2." %}
+{% include 'guild_floor/_in_construction.html' %}
 <form method="get" class="library-search">
 <label for="library-query">Search saved references</label><input id="library-query" type="search" name="q" value="{{ query }}" maxlength="200">
 <label for="library-tag">Topic</label><select id="library-tag" name="tag"><option value="">All topics</option>{% for t in tags %}<option{% if t == tag %} selected{% endif %}>{{ t }}</option>{% endfor %}</select>

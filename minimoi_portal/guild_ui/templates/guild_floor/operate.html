@@ -5,6 +5,8 @@
 <div class="area-page" data-area-page>
 {% set hero_title = "Operate" %}{% set hero_tagline = "Monitor · Maintain" %}{% set hero_art = "/static/guild/guild-operate-banner.webp" %}{% set hero_wide = true %}
 {% include 'guild_floor/_area_hero.html' %}
+{% set construction_text = "Operate is not ready for 1.2." %}
+{% include 'guild_floor/_in_construction.html' %}
 <div class="operate-overview" aria-label="Current operations">
 <details class="card" id="usage-limits" data-usage-limits data-health="{{ usage_limits.light.state }}"><summary><h2>Usage &amp; limits</h2><b>{{ usage_limits.light.word }}</b><small>{{ usage_limits.light.reason }}</small></summary>
 <section aria-label="Usage and limits details">
