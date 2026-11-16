@@ -1059,15 +1059,21 @@
       "name": "minimoi_working_write",
       "label": "working write",
       "capability": "host.artifacts.create",
-      "description": "Create a new private artifact.txt in an operation-owned _working directory. Never overwrites; use artifact recovery after uncertainty.",
+      "description": "Create a new private file in an operation-owned directory. Optional name uses .md, .txt, .csv or .json (for example summary.md); omitted name is artifact.txt. Up to 20000 characters. Never overwrites; use artifact recovery after uncertainty.",
       "parameters": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\\.(md|txt|csv|json)$",
+            "minLength": 4,
+            "maxLength": 80
+          },
           "text": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 6000
+            "maxLength": 20000
           }
         },
         "required": [
