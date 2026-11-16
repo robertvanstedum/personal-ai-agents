@@ -36,7 +36,8 @@ def overview():
                                                 "request": {"recorded", "active"}}.get(row["type"], set()):
                 continue
             rows.append({**row, "state": record.get("state"), "outcome": record.get("outcome") or (record.get("intent") or {}).get("text", ""),
-                         "lead": record.get("lead"), "holder": record.get("holder")})
+                         "lead": record.get("lead"), "holder": record.get("holder"), "done_when": record.get("done_when"),
+                         "created_at": record.get("created_at"), "updated_at": record.get("updated_at")})
         return jsonify(proposals=proposals, work=rows, more=len(open_rows) > 20, total=len(open_rows))
     except TaskServiceUnavailable:
         return json_error("unavailable", "The task service could not confirm the current state. Try Refresh.", 503)
