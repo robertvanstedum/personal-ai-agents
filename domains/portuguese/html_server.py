@@ -384,6 +384,10 @@ def _ensure_persona_progress_table():
                     UNIQUE(user_id, persona_slug)
                 )
             """)
+            cur.execute(
+                "ALTER TABLE portuguese.persona_progress"
+                " ADD COLUMN IF NOT EXISTS round_limit INTEGER DEFAULT 5"
+            )
     except Exception as e:
         print(f"[portuguese] migration persona_progress: {e}", flush=True)
 
@@ -725,9 +729,10 @@ def _get_persona_progress(user_id) -> dict:
         with conn, conn.cursor() as cur:
             if user_id is not None:
                 cur.execute(
-                    "SELECT persona_slug, current_round, sessions_in_round, sessions_total"
+                    "SELECT persona_slug, current_round, sessions_in_round, sessions_total,"
+                    " COALESCE(round_limit, %s)"
                     " FROM portuguese.persona_progress WHERE user_id = %s",
-                    (user_id,),
+                    (SESSIONS_PER_ROUND, user_id),
                 )
             else:
                 return {}
@@ -737,7 +742,8 @@ def _get_persona_progress(user_id) -> dict:
                 "round": r[1],
                 "sessions_in_round": r[2],
                 "sessions_total": r[3],
-                "ready": r[2] >= SESSIONS_PER_ROUND,
+                "round_limit": r[4] or SESSIONS_PER_ROUND,
+                "ready": r[2] >= (r[4] or SESSIONS_PER_ROUND),
             }
             for r in rows
         }
@@ -866,7 +872,40 @@ def arquivo():
 
 @app.route("/admin")
 def admin():
-    return render_template("portuguese_admin.html", active="admin")
+    user_id = _request_user_id()
+    personas = _load_personas()
+    progress = _get_persona_progress(user_id)
+    rounds = []
+    for persona in personas:
+        slug = _name_to_slug(persona["name"])
+        prog = progress.get(slug, {})
+        limit = prog.get("round_limit") or SESSIONS_PER_ROUND
+        rounds.append({
+            "name": persona["name"],
+            "emoji": persona.get("emoji", ""),
+            "role": persona.get("role", ""),
+            "slug": slug,
+            "round": prog.get("round", 1),
+            "sessions": prog.get("sessions_in_round", 0),
+            "limit": limit,
+            "ready": bool(prog.get("ready")),
+        })
+    sources = []
+    sources_unavailable = False
+    try:
+        import leitura_rss
+        sources = leitura_rss.load_sources().get("sources", [])
+    except Exception as e:
+        print(f"[portuguese] admin sources: {type(e).__name__}", flush=True)
+        sources_unavailable = True
+    return render_template(
+        "portuguese_admin.html",
+        active="admin",
+        personas=personas,
+        rounds=rounds,
+        sources=sources,
+        sources_unavailable=sources_unavailable,
+    )
 
 
 def _deployed_commit_sha() -> str | None:
@@ -1608,6 +1647,95 @@ def api_pt_send_prompt_telegram():
     return jsonify({"ok": resp.ok})
 
 
+def _admin_writer():
+    """A guest changes nothing. A request with no identity is refused."""
+    if _request_user_tier() == "guest":
+        return None, jsonify({"ok": True, "guest": True})
+    user_id = _request_user_id()
+    if user_id is None:
+        return None, (jsonify({"ok": False, "error": "unauthorized"}), 401)
+    return user_id, None
+
+
+@app.route("/api/pt/admin/round", methods=["POST"])
+def api_pt_admin_round():
+    body = request.get_json(force=True)
+    persona_slug = (body.get("persona_slug") or "").strip()
+    action = (body.get("action") or "").strip()
+    if not persona_slug or action not in ("close", "extend"):
+        return jsonify({"ok": False, "error": "invalid params"}), 400
+    user_id, refusal = _admin_writer()
+    if refusal:
+        return refusal
+    known = {_name_to_slug(p["name"]) for p in _load_personas()}
+    if persona_slug not in known:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    try:
+        conn = _db_conn()
+        with conn, conn.cursor() as cur:
+            if action == "close":
+                cur.execute(
+                    """UPDATE portuguese.persona_progress
+                       SET current_round = current_round + 1,
+                           sessions_in_round = 0,
+                           round_limit = %s
+                       WHERE user_id = %s AND persona_slug = %s
+                         AND sessions_in_round >= COALESCE(round_limit, %s)""",
+                    (SESSIONS_PER_ROUND, user_id, persona_slug, SESSIONS_PER_ROUND),
+                )
+            else:
+                cur.execute(
+                    """UPDATE portuguese.persona_progress
+                       SET round_limit = COALESCE(round_limit, %s) + 3
+                       WHERE user_id = %s AND persona_slug = %s
+                         AND sessions_in_round >= COALESCE(round_limit, %s)""",
+                    (SESSIONS_PER_ROUND, user_id, persona_slug, SESSIONS_PER_ROUND),
+                )
+            updated = cur.rowcount
+        if not updated:
+            return jsonify({"ok": False, "error": "not ready"}), 409
+        return jsonify({"ok": True})
+    except Exception as e:
+        print(f"[portuguese] admin round error: {type(e).__name__}", flush=True)
+        return jsonify({"ok": False, "error": "save failed"}), 500
+
+
+@app.route("/api/pt/admin/source", methods=["POST"])
+def api_pt_admin_source():
+    body = request.get_json(force=True)
+    action = (body.get("action") or "").strip()
+    name = (body.get("name") or "").strip()
+    if action not in ("add", "pause", "resume", "remove") or not name:
+        return jsonify({"ok": False, "error": "invalid params"}), 400
+    _user_id, refusal = _admin_writer()
+    if refusal:
+        return refusal
+    try:
+        import leitura_rss
+        if action == "add":
+            leitura_rss.add_source(
+                name,
+                body.get("url") or "",
+                body.get("category") or "",
+                body.get("level") or "iniciante",
+            )
+        elif action == "pause":
+            if not leitura_rss.set_source_active(name, False):
+                return jsonify({"ok": False, "error": "not found"}), 404
+        elif action == "resume":
+            if not leitura_rss.set_source_active(name, True):
+                return jsonify({"ok": False, "error": "not found"}), 404
+        else:
+            if not leitura_rss.remove_source(name):
+                return jsonify({"ok": False, "error": "not found"}), 404
+        return jsonify({"ok": True})
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    except Exception as e:
+        print(f"[portuguese] admin source error: {type(e).__name__}", flush=True)
+        return jsonify({"ok": False, "error": "save failed"}), 500
+
+
 # ── API: Persona round management ────────────────────────────────────────────
 
 @app.route("/api/pt/persona-progress")
@@ -1630,9 +1758,10 @@ def api_pt_persona_advance():
             cur.execute(
                 """UPDATE portuguese.persona_progress
                    SET current_round = current_round + 1,
-                       sessions_in_round = 0
+                       sessions_in_round = 0,
+                       round_limit = %s
                    WHERE user_id = %s AND persona_slug = %s""",
-                (user_id, persona_slug),
+                (SESSIONS_PER_ROUND, user_id, persona_slug),
             )
         return jsonify({"ok": True})
     except Exception as e:

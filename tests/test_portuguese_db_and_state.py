@@ -58,6 +58,41 @@ def test_html_server_db_conn_has_no_hardcoded_fallback(pt_html_server):
     assert "environment_scoped=True" in source
 
 
+def test_reading_sources_add_pause_and_remove(pt_leitura_rss, tmp_path, monkeypatch):
+    path = tmp_path / "leitura_sources.json"
+    path.write_text(
+        '{"sources": [{"name": "G1", "url": "https://g1.globo.com/rss/g1/",'
+        ' "category": "cotidiano", "active": true}], "max_articles_per_source": 3}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(pt_leitura_rss, "SOURCES_FILE", path)
+
+    added = pt_leitura_rss.add_source(
+        "Veja Rio", "https://vejario.abril.com.br/feed/", "rio", "intermediario"
+    )
+    assert added["active"] is True
+    saved = pt_leitura_rss.load_sources()
+    assert saved["max_articles_per_source"] == 3
+    assert [s["name"] for s in saved["sources"]] == ["G1", "Veja Rio"]
+
+    assert pt_leitura_rss.set_source_active("Veja Rio", False) is True
+    paused = next(s for s in pt_leitura_rss.load_sources()["sources"] if s["name"] == "Veja Rio")
+    assert paused["active"] is False
+
+    try:
+        pt_leitura_rss.add_source("O Dia errado", "https://odia.ig.com.br/feed", "cotidiano")
+        refused = False
+    except ValueError:
+        refused = True
+    assert refused is True
+    names = [s["name"] for s in pt_leitura_rss.load_sources()["sources"]]
+    assert names == ["G1", "Veja Rio"]
+
+    assert pt_leitura_rss.remove_source("Veja Rio") is True
+    assert [s["name"] for s in pt_leitura_rss.load_sources()["sources"]] == ["G1"]
+    assert pt_leitura_rss.remove_source("Veja Rio") is False
+
+
 def test_leitura_rss_db_conn_has_no_hardcoded_fallback(pt_leitura_rss):
     import inspect
     source = inspect.getsource(pt_leitura_rss._db_conn)
