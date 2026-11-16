@@ -88,6 +88,12 @@ export const CHAT_LINE = 'Nothing from his last words is waiting to be done. Ans
   'resume, or summarise your previous answer unless he asked you to. Do not ask him to confirm anything, and do not say ' +
   'anything is or will be done. Do not mention requests, the work side, or anything not coming through, unless he clearly ' +
   'asked you to do something; only then say briefly that typing it in the chat will do it.';
+// #653 (Robert, 16 Nov 2026, by phone): while one lookup ran, the voice said "Let me check with Master Craftsman" four times
+// in two minutes, twice back to back, a garbled line among what it answered. While a check of his is still out (sent, or
+// answered pending and not yet back), each chat response is told this beside CHAT_LINE (OpenAI: the page makes every response).
+export const CHECK_RUNNING = 'A check for something he asked earlier is still running: say nothing about it, about checking, ' +
+  'or about who is being asked, and never guess its answer; the app gives it to you when it is back. If his words are ' +
+  'unclear or make no sense here, ask him briefly to say them again.';
 export const SAY = 'Say this briefly, adding nothing: ';
 export const SAVED = 'Saved.';
 export const POSTED = 'Post-it added.';              // the fix round's own words (b337f1cd), kept (coordinator addition 2)
@@ -517,6 +523,10 @@ export function directVoice(d) {
   let playback = null;                                             // how the spoken summary ended (v0.3 §5.3, G3), for End
   let held = null, heldTimer = null, closed, sentFinal = false, settled = false;
   let consultedItem = null, checking = false;                     // the owner item last consulted (by the model or Check)
+  // #653: his owner items whose check is out (sent, or answered pending and not back yet), and each one's pending line while
+  // it may still be withdrawn (an answer in hand before that line was said replaces it).
+  const awaiting = new Set(), pendingLines = new Map();
+  const chatLine = () => (awaiting.size ? `${CHAT_LINE} ${CHECK_RUNNING}` : CHAT_LINE);
   // His items not acted on (review B S3, N2): a commit let go before its reply, or a reply cancelled or overtaken before its
   // call could run. Named at End by capture id (the controller's placeOf), less any turn consulted after all, so the reveal
   // marks them "Not acted on: say it again if you still want it". Each with why (Gate 1 n2, n3): overtaken (by his speech),
@@ -590,10 +600,13 @@ export function directVoice(d) {
   }
   // A line still waiting for its pause is let go (a holding line once its consult has answered: it would no longer be true),
   // and so is one handed on that still waits its turn in the controller (review B N4).
-  function letGo(line) {
+  function letGo(line) { withdraw(line); }
+  // Whether the line was let go before it was said (true), or had been sent already (false).
+  function withdraw(line) {
     const i = line ? lines.indexOf(line) : -1;
-    if (i >= 0) lines.splice(i, 1);
-    else if (line && line.handle) { try { line.handle.withdraw(); } catch (e) { /* sent already: it stands */ } }
+    if (i >= 0) { lines.splice(i, 1); return true; }
+    if (line && line.handle) { try { return line.handle.withdraw() === true; } catch (e) { /* sent already: it stands */ } }
+    return false;
   }
   function pump() {
     if (finalized) return;
@@ -687,6 +700,7 @@ export function directVoice(d) {
     const stopHolding = held || holding();
     consultedItem = item;                                             // by a confirmation or by Check with <person>
     consulted.add(item);
+    if (typeof item === 'string') awaiting.add(item);                // out until its answer is said (sayResult, #653)
     const lost = (x) => x.status === 0 || x.status >= 500;
     const inFlight = (x) => x.status === 409 && x.body.error === 'in flight';
     try {
@@ -794,8 +808,8 @@ export function directVoice(d) {
       case 'nothing_waiting': return { instruction: SAY + NOTHING_WAITING };
       case 'summary_later': return { instruction: SAY + SUMMARY_LATER };
       case 'summary_now': return { instruction: SAY + ALL_RIGHT };     // his own ask: the summary follows (follow)
-      case 'dropped': return { instruction: x.reason === 'no' ? SAY + ALL_RIGHT : CHAT_LINE };
-      default: return { instruction: CHAT_LINE };          // chat: answered as conversation, never asked (fault 2)
+      case 'dropped': return { instruction: x.reason === 'no' ? SAY + ALL_RIGHT : chatLine() };
+      default: return { instruction: chatLine() };         // chat: answered as conversation, never asked (fault 2)
     }
   }
   function answerCommit(i, x) {
@@ -828,7 +842,7 @@ export function directVoice(d) {
           // A lookup's checking line is the response's own (follow() says nothing for a confirm), so it is still said.
           const followed = x.followed === true && x.decision !== 'ask' && !(x.decision === 'confirm' && x.lookup);
           x.via = 'response';
-          waits(followed ? (x.decision === 'chat' ? { instruction: CHAT_LINE } : { skip: true }) : wordFor(x));
+          waits(followed ? (x.decision === 'chat' ? { instruction: chatLine() } : { skip: true }) : wordFor(x));
         });
       }
     });
@@ -1096,14 +1110,26 @@ export function directVoice(d) {
   // result arriving again by another path (a retried post's replay, the heartbeat's finished list, a second call on the
   // turn) is acknowledged and never said again. Pending and unknown are not answers, so a later finished result is said
   // once. Returns the line, or null when that turn's answer was already said.
+  // #653 (16 Nov 2026): the pending line ("That's taking longer…") and the answer, both waiting for a pause, were said back
+  // to back as "That's taking longer; …" then "About what you asked earlier: …". An answer in hand before its pending line
+  // was said withdraws that line and is said plainly at the next pause, with no lead (nothing was said about waiting).
   function sayResult(item, kind, body, lead = '') {
     const final = Boolean(body) && (body.outcome === 'done' || body.outcome === 'not_done');
     if (typeof item === 'string' && final) {
       if (told.has(item)) return null;
       told.add(item);
     }
+    const pending = Boolean(body) && body.outcome === 'pending';
+    if (typeof item === 'string' && !pending) {
+      awaiting.delete(item);
+      const waitingLine = pendingLines.get(item);
+      pendingLines.delete(item);
+      if (waitingLine && withdraw(waitingLine)) lead = '';
+    }
     if (typeof ui.repaint === 'function') { try { ui.repaint(); } catch (_) { /* the history read is not on the audio path */ } }
-    return sayAtPause(outcomeSay(kind, body, lead));
+    const line = sayAtPause(outcomeSay(kind, body, lead));
+    if (typeof item === 'string' && pending && line) pendingLines.set(item, line);
+    return line;
   }
 
   // Check with <person>: a tap. With an action waiting it confirms that action, through the server's same consumption (the

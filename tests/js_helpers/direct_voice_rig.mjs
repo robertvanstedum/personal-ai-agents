@@ -138,15 +138,16 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
     // v3, as the real controller does where the page makes every response (OpenAI): his committed item's one response waits
     // for the page's word on it (respondFor, its server decision), then starts (onResponseStarted, owned by the item), with
     // the page's instruction if it gave one; {skip} makes none. The provider's item id here is "i" + its place. A chat's
-    // word (CHAT_LINE, the v3 live check's fix round) goes with that item's own response, as a plain one did before, so it
-    // is kept in chats, apart from the page's lines the tests count in instructions.
+    // word (CHAT_LINE, the v3 live check's fix round; with CHECK_RUNNING beside it while a check is out, #653) goes with
+    // that item's own response, as a plain one did before, so it is kept in chats, apart from the page's lines the tests
+    // count in instructions.
     ownsResponses() { return this.owns !== false; }
     placeOf(id) { return typeof id === 'string' && /^i\d+$/.test(id) ? Number(id.slice(1)) : null; }
     commit(i) {
       if (typeof this.options.respondFor !== 'function') return;
       Promise.resolve(this.options.respondFor(`i${i}`)).then((word) => {
         if (word && word.skip) return;
-        if (word && word.instruction) (word.instruction === D.CHAT_LINE ? this.chats : this.instructions).push(word.instruction);
+        if (word && word.instruction) (word.instruction.startsWith(D.CHAT_LINE) ? this.chats : this.instructions).push(word.instruction);
         const id = `turn_resp_${i}`;
         this.options.onResponseStarted?.({ response_id: id, owner: `i${i}`, page: true, kind: 'turn' });
         this.options.onAudioStarted?.(id);                // its first audio, as the transport reports it (review M2)

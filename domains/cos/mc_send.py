@@ -57,6 +57,12 @@ _CONNECT = re.compile(r"[\s,:;\-–—]*(?:(?:to|that|saying|and|please)\b)?[\s,
 _NOTHING = re.compile(r"(?:nothing|no\b|not\b|never\b)", re.I)
 _ACK = re.compile(r"(?:(?:thanks|thank\s+you|ok|okay|great|perfect|good|nice|yes|yeah|right|cool)[\s,.!]*)*", re.I)
 _SPLIT = re.compile(r"[.!?;\n]")
+# #652: a plain yes to CoS's own offer to ask MC (_accepted_offer). It must open his message and nothing may decline.
+_YES_LEAD = re.compile(r"\A\W*(?:yes|yeah|yep|yup|ok(?:ay)?|sure|please(?:\s+do)?|go\s+ahead|do\s+(?:it|that)|send\s+it"
+                       r"|ask\s+(?:him|mc|master\s+craftsman)|put\s+it\s+there|ja|bitte|mach\s+das)\b", re.I)
+_DECLINE = re.compile(r"\b(?:no|nope|don'?t|don’t|do\s+not|not\s+now|never\s*mind|cancel|stop|nein|forget\s+it)\b", re.I)
+_OFFER_TO_MC = re.compile(r"\b(?:(?:do\s+you\s+)?want\s+me\s+to|would\s+you\s+like\s+me\s+to|shall\s+i|should\s+i|soll\s+ich)"
+                          r"\s+(?:ask|tell|send|pass|forward|check\s+with|message|put)\b[^?]*\?\s*\Z", re.I)
 
 
 def enabled(environ=None) -> bool:
@@ -152,7 +158,13 @@ class CosMcSend:
             return refusal
         asked = parse(source)
         if asked is None:
-            return _refuse(403, "not_asked", "Robert's message does not tell you to send something to MC. Nothing was sent.")
+            accepted = self._accepted_offer(binding, source, conversation)
+            if accepted is None:
+                return _refuse(403, "not_asked", "Robert's message does not tell you to send something to MC. Nothing was sent.")
+            words, attached = accepted
+            if len(words) > WORDS_MAX:
+                return _refuse(422, "words_too_long", f"Nothing was sent: that is over {WORDS_MAX} characters. Ask Robert to shorten it or attach it in MC.")
+            return self._deliver(binding, did, words, attached, conversation)
         words = asked["words"]
         if not words:
             return _refuse(422, "nothing_to_send", "Nothing was sent: Robert did not say what to send. Ask him what MC should get.")
@@ -186,6 +198,41 @@ class CosMcSend:
         if conversation.get("private"):
             return None, None, _refuse(403, "private_conversation", "This is a Private conversation, so nothing goes to MC. Nothing was sent.")
         return turn["user_text"], {"conversation_id": ref["conversation_id"], "turn": turn}, None
+
+    def _accepted_offer(self, binding, source, conversation):
+        """#652 (Robert, 16 Nov 2026, by voice): CoS answered "That sits with Master Craftsman. Want me to ask him whether
+        last night's deploy finished?" and he said "Okay, go ahead, put it there". His yes names no MC, so parse refused
+        it, by voice and in writing alike. A yes is a send only here: his message opens with a plain yes and declines
+        nothing, and the turn just before it in this conversation is CoS's answered reply that names MC and ends by
+        offering to ask, tell or send to MC. What goes is HIS message before that, verbatim (his question), with CoS's
+        reply attached as quoted material under its true author. Never the reply's words as his. Returns (words,
+        attachment) or None."""
+        if binding.origin != "owner" or conversation is None:
+            return None
+        if not _YES_LEAD.match(source or "") or _DECLINE.search(_masked(source)):
+            return None
+        turn = conversation["turn"]
+        try:
+            page = self.history.turns(conversation["conversation_id"], before_seq=turn["seq"], limit=1)
+        except Exception:
+            return None
+        items = page.get("items") or []
+        if not items:
+            return None
+        prior = items[-1]
+        reply = prior.get("reply_text") if prior.get("status") in ("answered", "recovered") else None
+        words = prior.get("user_text")
+        if not isinstance(reply, str) or not isinstance(words, str) or not words.strip():
+            return None
+        last = prior.get("answered_at") or prior["created_at"]
+        if any(_after(n["created_at"], last) and not _after(n["created_at"], turn["created_at"]) for n in page.get("notes") or ()):
+            return None                                        # a note came between: the yes may answer that
+        offer = [part for part in re.split(r"(?<=[.!?])\s+", reply.strip()) if part.strip()]
+        if not offer or not _OFFER_TO_MC.search(offer[-1]) or not re.search(_MC, reply, re.I):
+            return None
+        cut_text, was_cut = R.cut(reply, ATTACH_MAX)
+        return words.strip(), {"author": "cos", "label": "CoS's reply" + R.time_label(last), "text": cut_text,
+                               "cut": was_cut, "full_chars": len(reply)}
 
     def _referent(self, conversation, phrase):
         ask = _refuse(409, "no_referent", "Nothing was sent: I can't tell what that points at. Ask Robert what to send, or to say it in this message.")
