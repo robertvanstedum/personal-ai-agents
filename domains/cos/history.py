@@ -143,6 +143,30 @@ class History:
         with self._locked():
             return self._ensure_conversation("cosc-" + secrets.token_hex(12), title, private=bool(private))
 
+    def name_voice_call(self, conversation_id: str, title: str) -> dict | None:
+        """A voice call that began on a new chat names that chat (#620).
+
+        A chat that already has a turn, or a title Robert chose, keeps its name.
+        The call itself stays in that chat's voice records.
+        """
+        title = " ".join(str(title or "").split())[:120]
+        if not title or not _CONVERSATION_ID.match(conversation_id or ""):
+            return None
+        with self._locked():
+            path = self._conversation_path(conversation_id)
+            doc = fsio.read_doc(path)
+            if not isinstance(doc, dict) or doc.get("private") or doc.get("read_only"):
+                return None
+            if _fold(fsio.read_stream(self._turns_path(conversation_id))):
+                return doc
+            if doc.get("title") not in ("New conversation", "New chat"):
+                return doc
+            named = dict(doc, title=title)
+            if contracts.errors("conversation", "conversation", named):
+                return doc
+            fsio.write_doc(path, named)
+            return named
+
     def conversation(self, conversation_id: str) -> dict | None:
         if not _CONVERSATION_ID.match(conversation_id or ""):
             return None

@@ -21,7 +21,7 @@ def test_file_only_turn_reaches_backend_without_invented_instruction(browser, se
     posts = [p for p in streaming_mc["runtime"].posts if p["url"].endswith("/chat/completions")]
     assert len(posts) == 1
     content = posts[0]["body"]["messages"][0]["content"]
-    assert "Attached files." in content and "Synthetic source: three concise bullets." in content
+    assert "Attached files." not in content and "Synthetic source: three concise bullets." in content
     page.click("[data-mc-send]")
     assert len(streaming_mc["runtime"].posts) == len(posts)
     ctx.close()

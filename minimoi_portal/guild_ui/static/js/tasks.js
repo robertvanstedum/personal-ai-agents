@@ -24,6 +24,8 @@ export function initTasks(page) {
   const detail = root.querySelector('[data-task-detail]');
   const record = root.querySelector('[data-task-record]');
   let loading = false, writing = false, detailRead = 0;
+  const cards = new Map();
+  const TASK_ID = /^TK-[A-Za-z0-9_-]{4,64}$/;
   const say = (text) => { status.textContent = text; };
   const key = () => crypto.randomUUID();
   const button = (text, action) => {
@@ -87,7 +89,7 @@ export function initTasks(page) {
     if (!terms || !p.interpretation_id || !p.proposal_digest) {
       card.append(node('p', 'This proposal is incomplete. It cannot be confirmed here.')); return card;
     }
-    facts(card, [...(p.proposed.outcome && p.proposed.outcome !== terms.outcome ? [['Request', p.proposed.outcome]] : []), ['Lead', terms.lead], ['Next step', terms.holder], ['Done when', terms.done_when], ['Return window', terms.return_window == null ? 'Not set' : JSON.stringify(terms.return_window)], ['Scope', p.proposed.scope], ['Recipients', (p.proposed.recipients || []).join(', ')], ['Continuing work', p.proposed.continuing ? 'Yes' : 'No']]);
+    facts(card, [...(p.proposed.outcome && p.proposed.outcome !== terms.outcome ? [['Request', p.proposed.outcome]] : []), ['Lead', terms.lead], ['With', terms.holder], ['Done when', terms.done_when], ['Return window', terms.return_window == null ? 'Not set' : JSON.stringify(terms.return_window)], ['Scope', p.proposed.scope], ['Recipients', (p.proposed.recipients || []).join(', ')], ['Continuing work', p.proposed.continuing ? 'Yes' : 'No']]);
     const sources = node('details');
     sources.append(node('summary', 'Source words and references'));
     const shown = new Set([terms.outcome, p.proposed.outcome].filter(Boolean));
@@ -121,16 +123,54 @@ export function initTasks(page) {
     }
     card.append(actions); return card;
   }
+  function runDate(doneWhen) {
+    if (typeof doneWhen !== 'string') return '';
+    try {
+      const parsed = JSON.parse(doneWhen);
+      if (parsed && typeof parsed.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date)) return parsed.date;
+    } catch (_) { /* done_when is a sentence, not a health-check date */ }
+    return '';
+  }
+  function dayOf(value) {
+    return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : '';
+  }
+  function mark(card, on) {
+    if (!card) return;
+    card.className = on ? 'task-card is-open' : 'task-card';
+    if (typeof card.setAttribute === 'function') {
+      if (on) card.setAttribute('aria-current', 'true');
+      else card.removeAttribute('aria-current');
+    }
+  }
+  function slotFor(card) {
+    if (!card.detailSlot) { card.detailSlot = node('div', undefined, 'task-detail-slot'); card.append(card.detailSlot); }
+    return card.detailSlot;
+  }
   async function showTask(id) {
     const read = ++detailRead;
+    const opened = cards.get(id) || null;
+    for (const [other, el] of cards) {
+      mark(el, other === id);
+      if (other !== id && el.detailSlot) el.detailSlot.replaceChildren();
+    }
+    const host = opened ? slotFor(opened) : record;
+    if (opened) { detail.hidden = true; record.replaceChildren(); }
+    else detail.hidden = false;
+    if (!TASK_ID.test(String(id || ''))) {
+      const message = 'Choose a tracked task.';
+      host.replaceChildren(node('p', message)); say(message); return false;
+    }
     const response = await apiGet(`/tasks/item/${encodeURIComponent(id)}`);
     if (read !== detailRead) return;
-    detail.hidden = false; record.replaceChildren();
-    if (!response.ok) { const message = response.body?.message || 'This task could not be read.'; record.append(node('p', message)); say(message); return false; }
+    if (!response.ok) {
+      const message = response.body?.message || 'This task could not be read.';
+      host.replaceChildren(node('p', message)); say(message); return false;
+    }
     const task = response.body.task;
     const card = node('article', undefined, 'task-card');
     card.append(node('h3', task.outcome));
-    facts(card, [['Status', task.state], ['Lead', task.lead], ['Next step', task.holder], ['Done when', task.done_when]]);
+    const run = runDate(task.done_when);
+    facts(card, [['Id', task.task_id], ...(run ? [['Date', run]] : []), ['Opened', task.created_at], ['Updated', task.updated_at], ['Status', task.state], ['Lead', task.lead], ['With', task.holder], ['Done when', task.done_when]]);
     evidence(card, `${task.task_id}\nRevision ${task.revision}`);
     if (['submitted', 'working', 'waiting'].includes(task.state)) {
       const label = node('label', 'What should change?');
@@ -151,13 +191,18 @@ export function initTasks(page) {
           } else if (result.state === 'cancel_recorded') {
             if (!await showTask(task.task_id)) return;
             say('Cancellation recorded. Existing external effects may still need reconciliation.');
-            if (result.open_effects?.length) record.append(node('p', `Unresolved effects: ${JSON.stringify(result.open_effects)}`));
+            if (result.open_effects?.length) {
+              const where = cards.get(task.task_id)?.detailSlot || record;
+              where.append(node('p', `Unresolved effects: ${JSON.stringify(result.open_effects)}`));
+            }
           } else say('The service returned an unexpected result. Refresh to reconcile it.');
         }));
       }
       card.append(actions);
     }
-    record.append(card);
+    host.replaceChildren(card);
+    if (typeof host.scrollIntoView === 'function') host.scrollIntoView({block: 'nearest'});
+    say(`Showing task ${id}.`);
     return true;
   }
   async function refresh() {
@@ -170,10 +215,15 @@ export function initTasks(page) {
       const data = response.body;
       for (const p of data.proposals || []) proposals.append(proposalCard(p));
       if (!data.proposals?.length) proposals.append(node('p', 'No proposals waiting for your decision.'));
+      cards.clear();
       for (const row of data.work || []) {
         const card = node('article', undefined, 'task-card'); card.append(node('h3', row.outcome || 'Awaiting an answer'));
-        facts(card, [['Status', row.state], ['Lead', row.lead], ['Next step', row.holder]]);
-        if (row.type === 'task') card.append(button('Open task', () => { if (loading || writing) return; linkState({ task: row.id }); showTask(row.id); }));
+        const date = runDate(row.done_when) || dayOf(row.created_at) || dayOf(row.updated_at);
+        facts(card, [['Id', row.id], ['Date', date], ['Status', row.state], ['Lead', row.lead], ['With', row.holder]]);
+        if (row.type === 'task') {
+          cards.set(row.id, card);
+          card.append(button('Open task', () => { if (loading || writing) return; linkState({ task: row.id }); showTask(row.id); }));
+        }
         work.append(card);
       }
       if (!data.work?.length) work.append(node('p', 'No open work recorded. Completed work stays in its task link.'));
@@ -187,8 +237,8 @@ export function initTasks(page) {
           else { say(recovered.body?.message || 'The previous decision needs reconciliation.'); return; }
         }
       }
-      if (query.has('task') && !await showTask(query.get('task'))) return false;
-      say('Current record loaded. No action is taken until you choose it.');
+      if (query.has('task')) { if (!await showTask(query.get('task'))) return false; }
+      else say('Current record loaded. No action is taken until you choose it.');
       return true;
     } catch (_) { say('The current record could not be read. Try Refresh.');
     } finally { loading = false; }

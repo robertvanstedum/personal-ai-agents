@@ -67,6 +67,7 @@ def test_instructions_come_from_the_master_persona():
     text = instructions(release="0.1.34")
     assert "Master Craftsman" in text or "MC" in text
     assert "Decision:" in text and "Task:" in text
+    assert "Never start a spoken sentence with a category label" in text
     assert "Do not say that you noted it" in text
 
 

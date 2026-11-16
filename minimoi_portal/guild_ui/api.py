@@ -22,7 +22,7 @@ from .mc.turn_capture import capturer
 from .mc.turn_log import turn_log_of
 from .payment_scrub import scrub
 from .security import OFF_RECORD_TEXT, check_private, check_stop, check_upload, check_write, csrf_token, json_error
-from .stores import (GUILD_PLATFORM, NOTE_MAX, POSTIT_MAX, Author, FloorStoreNotConfigured,
+from .stores import (ATTACHMENT_ONLY, GUILD_PLATFORM, NOTE_MAX, POSTIT_MAX, Author, FloorStoreNotConfigured,
                      FloorStoreUnavailable)
 
 API_VERSION = 1
@@ -458,11 +458,16 @@ def _mismatch():
     return json_error("idempotency_mismatch", MISMATCH, 409, result="idempotency_mismatch")
 
 
+def _owner_words(text: str) -> str:
+    """What the model is told the owner wrote. An attachment-only note stores a marker, not words (#335)."""
+    return "" if text == ATTACHMENT_ONLY else text
+
+
 def _clean_text(value, limit: int, what: str):
     """The owner's own text, kept as he wrote it: empty or over-long is refused (422). It is input, not output, so
     nothing is removed or cut from it (Robert, 26 Oct, #406: the payment scrub had removed his email from his own
     résumé). A later safety check may flag his input; it never edits it."""
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, str) or not value.strip() or value == ATTACHMENT_ONLY:
         return None, json_error("invalid", f"The {what} is empty.", 422)
     if len(value) > limit:
         return None, json_error("invalid", f"The {what} is longer than {limit} characters.", 422)
@@ -516,9 +521,23 @@ def notes_add():
     if refusal is not None:
         return refusal
     request_id = body["_key"]   # a note's request id is its idempotency key
-    text, bad = _clean_text(body.get("text"), NOTE_MAX, "note")
-    if bad is not None:
-        return bad
+    raw = body.get("text")
+    attachment_only = not isinstance(raw, str) or not raw.strip() or raw == ATTACHMENT_ONLY
+    if attachment_only:
+        # Empty words are a note only when this same request names the files that go with it (#335).
+        # The stored marker is not owner text. A turn that arrives without those files is refused later.
+        from .turn_files import FilesRefused, clean_ids
+        try:
+            file_ids = clean_ids(body.get("attachment_ids"))
+        except FilesRefused as exc:
+            return json_error(exc.code, exc.message, exc.status)
+        if not file_ids:
+            return json_error("invalid", "The note is empty.", 422)
+        text = ATTACHMENT_ONLY
+    else:
+        text, bad = _clean_text(raw, NOTE_MAX, "note")
+        if bad is not None:
+            return bad
     conv, refusal = _conversation(body.get("conversation_id"))
     if refusal is not None:
         return refusal
@@ -534,7 +553,7 @@ def notes_add():
         return _mismatch()
     with_html([done.value] if done.value else None)
     from .conversations import public
-    conv = _touch(conv, first_text=text) if not done.repeated else conv
+    conv = _touch(conv, first_text=None if text == ATTACHMENT_ONLY else text) if not done.repeated else conv
     return jsonify({"result": "kept", "repeated": done.repeated, "note": done.value, "message": NOTE_WORDS["kept"],
                     "conversation": public(conv), "observed_at": now_iso()})
 
@@ -800,12 +819,81 @@ def _tools_own_actions(principal) -> bool:
         return False
 
 
+def _owner_send_card_command(found):
+    """#618: a tell/ask for an agent becomes a send card. yes S-n sends that card's exact text. edit S-n: words
+    reissues the card. The model is not asked, so it cannot claim a send that did not happen. CoS has no agent-ask
+    front door, so this path is MC's."""
+    from flask import g
+    from . import agent_ask
+    from .send_cards import Store, parse_reply, propose, render
+    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    if attachment_ids or getattr(g, "topic_context", None) or not isinstance(note, dict):
+        return None
+    try:
+        svc = agent_ask.service()
+    except Exception:
+        return None
+    if svc is None or not isinstance(conv, dict) or not conv.get("id"):
+        return None
+    text = note.get("text") or ""
+    store = Store(svc.root)
+    parsed = parse_reply(text)
+    if parsed:
+        kind, code, body = parsed
+        card = store.get(conv["id"], code)
+        if card is None or card.get("state") != "pending":
+            result = {"reply": f"No send card {code} is waiting. Nothing was sent.",
+                      "operation": {"type": "send_card", "state": "nothing_pending", "card": code}}
+        elif kind == "unclear":
+            result = {"reply": f"Not approved: reply yes {code}",
+                      "operation": {"type": "send_card", "state": "unclear", "card": code}}
+        elif kind == "no":
+            store.mark(conv["id"], code, "cancelled")
+            result = {"reply": f"Send card {code} is cancelled. Nothing was sent.",
+                      "operation": {"type": "send_card", "state": "cancelled", "card": code}}
+        elif kind == "edit":
+            new = store.replace(conv["id"], code, body)
+            result = {"reply": render([new]) if new else f"Send card {code} can no longer be edited. Nothing was sent.",
+                      "operation": {"type": "send_card", "state": "edited" if new else "nothing_pending",
+                                    "card": None if new is None else new["id"]}}
+        else:
+            made = svc.ask(conv, {"text": card["text"]}, f"{note_id}:{code}", [card["to"]])
+            if made and made[0].get("ok") is True:
+                store.mark(conv["id"], code, "sent")
+                result = {"reply": svc.words(made), "operation": {"type": "send_card", "state": "sent", "card": code}}
+            else:
+                result = {"reply": "The send card was not sent. Nothing was delivered.",
+                          "operation": {"type": "send_card", "state": "not_sent", "card": code}}
+        return _platform_outcome(floor, "send-card-" + str(note_id) + "-reply", result, area="Guild")
+    earlier = []
+    try:
+        res = floor.list_notes(limit=12)
+        rows = (res.data or {}).get("notes") if getattr(res, "ok", False) else []
+    except Exception:
+        rows = []
+    for row in rows or []:
+        if isinstance(row, dict) and row.get("request_id") != note_id:
+            earlier.append(row)
+    drafts = propose(text, earlier)
+    if not drafts:
+        return None
+    # #618: a line the direct ask path already accepts is the owner's own ask. The card is for
+    # the phrasings that path refuses ("tell it", "per Robert", different words for two agents).
+    recipients = sorted({d["to"] for d in drafts})
+    if len(drafts) == len(recipients) and agent_ask.owner_ask_proposal(text, {"to": recipients}, ())[0] is not None:
+        return None
+    result = {"reply": render(store.issue(conv["id"], drafts)),
+              "operation": {"type": "send_card", "state": "proposed"}}
+    return _platform_outcome(floor, "send-card-" + str(note_id) + "-reply", result, area="Guild")
+
+
 def _platform_command(found):
     """The owner's deterministic commands, in their existing order; None for an ordinary message. With MC's tools on,
     the guest-rejection phrases are not parsed at all and lessons are adopted only through MC's offer (A15)."""
     tools = _tools_own_actions(found[1])
     for command in (_owner_register_command, _owner_library_command, _owner_board_command, _owner_action_command,
-                    *(() if tools else (_owner_guest_command,)), _owner_lesson_command, _owner_tool_proposal_command,
+                    *(() if tools else (_owner_guest_command,)), _owner_lesson_command, _owner_send_card_command,
+                    _owner_tool_proposal_command,
                     _owner_decision_command, _owner_waiting_command):
         result = command(found)
         if result is not None:
@@ -1653,7 +1741,9 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
     except FilesRefused as exc:
         return "refused", {"error": exc.code, "message": exc.message}, exc.status
     ctx = note.get("context") or {}
-    sent_text = note["text"]                    # the owner's own words, as he wrote them (#406)
+    sent_text = _owner_words(note["text"])      # the owner's own words, as he wrote them (#406); a file-only note has none (#335)
+    if note["text"] == ATTACHMENT_ONLY and files is None:
+        return "refused", {"error": "invalid", "message": "This message has no text and no file. Nothing was sent."}, 422
     agent_state = _agent_state(conv)
     route, route_refusal = _route_snapshot(services, conv, sent_text,  # unaugmented owner words only
                                            attached=_turn_attached(files, ctx))
@@ -2450,7 +2540,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
     if files is not None and files.report and not getattr(services.mc, "accepts_files", True):
         return {"error": "files_unsupported", "message": f"The {getattr(services.mc, 'display_name', 'assistant')} does not read "
                 "attached documents. Your note is kept; nothing was sent."}, 422
-    route, route_refusal = _route_snapshot(services, conv, note["text"],  # before attachment/context augmentation
+    route, route_refusal = _route_snapshot(services, conv, _owner_words(note["text"]),  # before attachment/context augmentation
                                            attached=_turn_attached(files, note.get("context")))
     if route_refusal is None:
         carried, route_refusal = _carried_history(services, conv, principal, route, note)
@@ -2477,7 +2567,10 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         # Each conversation is its own session in the backend (the adapter maps
         # the id: OpenClaw hashes it into its `user` field). Only this note is
         # sent: other conversations never reach the model's context.
-        sent_text = note["text"]                    # the owner's own words, as he wrote them (#406)
+        sent_text = _owner_words(note["text"])      # the owner's own words, as he wrote them (#406); a file-only note has none (#335)
+        if note["text"] == ATTACHMENT_ONLY and files is None:
+            DISPATCHED.forget(request_id)
+            return {"error": "invalid", "message": "This message has no text and no file. Nothing was sent."}, 422
         agent_state = _agent_state(conv)
         # Opt-in on the non-streaming shared CoS transport only. Authority is
         # this authenticated kept owner turn; Board/model text grants nothing.
@@ -2550,9 +2643,13 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
                 fresh = conversations.get(conv['id'], principal)
                 if fresh.get('archived') or fresh.get('notes_floor') != conv.get('notes_floor'):
                     raise mc_deliveries.BundleRefused('conversation_changed')
-                from .mc_tools_wiring import saved_artifacts
+                from .mc_tools_wiring import saved_artifacts, writes_this_turn
+                written = []
+                if ledger_turn is not None and getattr(getattr(ledger_turn, "claim", None), "ledger_id", None):
+                    written = writes_this_turn(feature_environ(), principal, conv['id'], ledger_turn.claim.ledger_id)
+                outgoing = mc_deliveries.handoff_packet(result.text, written) or result.text
                 text, delivery_operation = mc_deliveries.deliver(conversations, principal, conv['id'], note_id,
-                    result.text, scrub=scrub, base_url=cfg()['base_url'].rstrip('/') + cfg()['url_prefix'],
+                    outgoing, scrub=scrub, base_url=cfg()['base_url'].rstrip('/') + cfg()['url_prefix'],
                     artifact_files=saved_artifacts(feature_environ(), principal, conv['id']))
             except mc_deliveries.DeliveryFull:
                 text = "The file delivery limit has been reached: 10 packages per conversation or 50 MiB overall. Expired packages still count. No new download was created."

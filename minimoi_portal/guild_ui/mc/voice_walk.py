@@ -19,7 +19,8 @@ Decisions, recorded with the code (13 Nov 2026, while Robert tests Mein Deutsch 
   phone is locked, because the note is already on disk.
 - The whole call is saved at the end as one file, like a Mein Deutsch session: every
   turn, no length cap, in MC's turns folder (#578). It is not a note and not a decision.
-  Nothing is shown during the call.
+  While the call is up, each finished turn is also drawn in the open thread (#607).
+  That draw does not wait on a server write, and the voice does not wait on it.
 - Production compose sets ``MINIMOI_MC_VOICE_PATH=realtime`` so this deploy
   turns the talking call on. Removing that line restores the chained path.
 """
@@ -53,7 +54,7 @@ def read_tools() -> list[dict]:
     specs = {
         "notes_recall": "Read the current notes Robert has settled. Do not invent one.",
         "deploy_status": "Read the release the delivery record says is live. Do not invent a check.",
-        "issues": "Read what a named issue says in the one repository. Do not invent a status.",
+        "issues": "Read issues in the one repository: one by number, the ones just opened, or a search. Do not invent a number or a title.",
     }
     return [{
         "type": "function",
@@ -81,6 +82,9 @@ def instructions(release: str | None = None, root: str | None = None, briefing: 
         persona_excerpt(release, root),
         "",
         "You are MC on a walk. Speak in your own words. British English.",
+        "Lead with your view in plain words. Never start a spoken sentence with a category label such as "
+        "Recommendation, Answer, Summary, Next step, Status, or Note, and never write one. "
+        "A decision still starts with Decision: and a task still starts with Task:.",
         "Do not invent a check, a release, or a note. If you need a live fact, say so and use a read tool.",
         "A design talk may run long. A question that needs the code or a build is a task, not something you finish on the call.",
         "When a decision is ready, say one or two sentences and stop. Start a decision with 'Decision:'.",

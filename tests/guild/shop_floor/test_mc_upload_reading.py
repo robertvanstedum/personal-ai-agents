@@ -542,3 +542,31 @@ def test_a_streamed_turn_abandoned_before_it_starts_records_no_files(streaming):
     opened[1].abandon_if_not_started()                  # the browser left before ack: nothing was dispatched
     assert streaming.extra["runtime"].posts == []
     assert not convs.get(cid, "robert").get("turn_files")
+
+
+def test_a_file_alone_is_sent_without_invented_owner_words(turned):
+    """#335: an attachment with an empty composer is a message. The model sees the file, not words he did not write."""
+    client = turned.owner()
+    token = turned.csrf(client)
+    cid = _new(client, token)
+    doc = _doc(client, token, cid, "Synthetic source: three concise bullets.", "brief.txt")
+    empty = client.post(f"{API}/notes", json=keyed(text="", conversation_id=cid), headers=write_headers(token))
+    assert empty.status_code == 422 and empty.get_json()["message"] == "The note is empty."
+    key = "file-only-note-1"
+    kept = client.post(f"{API}/notes", json=keyed(text="", conversation_id=cid, attachment_ids=[doc], idempotency_key=key),
+                       headers=write_headers(token))
+    assert kept.status_code == 200, kept.get_json()
+    body = kept.get_json()
+    assert body["note"]["text"] == "" and body["note"]["attachment_only"] is True
+    assert body["conversation"]["title"] == "New conversation"
+    again = client.post(f"{API}/notes", json=keyed(text="  ", conversation_id=cid, attachment_ids=[doc], idempotency_key=key),
+                        headers=write_headers(token))
+    assert again.status_code == 200 and again.get_json()["repeated"] is True
+    bare = _ask(client, token, body["note"]["request_id"], cid)
+    assert bare.status_code == 422 and turned.extra["runtime"].sent == []
+    sent = _ask(client, token, body["note"]["request_id"], cid, ids=[doc])
+    assert sent.status_code == 200, sent.get_json()
+    content = _sent(turned)
+    assert "Attached files." not in content and "\u2060" not in content
+    assert "Synthetic source: three concise bullets." in content
+    assert "[Files the owner attached" in content

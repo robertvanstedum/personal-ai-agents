@@ -134,12 +134,30 @@ def fresh_queue(server):
     return server["queue"]
 
 
+def _canary_browser():
+    import browser_host
+    with sync_playwright() as p:
+        b = p.chromium.launch(channel="chrome", headless=True, timeout=browser_host.CANARY_S * 1000)
+        page = b.new_page()
+        page.goto("about:blank", timeout=browser_host.CANARY_S * 1000)
+        b.close()
+
+
 @pytest.fixture(scope="module")
 def browser():
+    import browser_host
+    before = browser_host.flag_pids()
+    note = browser_host.prepare(_canary_browser)
+    if note["status"] == "blocked":
+        pytest.skip(note["reason"])
     with sync_playwright() as p:
         b = p.chromium.launch(channel="chrome", headless=True)
-        yield b
-        b.close()
+        browser_host.remember_new(before)
+        try:
+            yield b
+        finally:
+            b.close()
+            browser_host.clear_record()
 
 
 def _context(browser, server, width=1280, height=800):

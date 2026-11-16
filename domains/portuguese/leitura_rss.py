@@ -51,6 +51,77 @@ def load_sources() -> dict:
         return json.load(f)
 
 
+SOURCE_CATEGORIES = {"cotidiano", "cultura", "noticias", "rio"}
+SOURCE_LEVELS = {"iniciante", "intermediario", "avancado"}
+
+
+def _write_sources(config: dict) -> None:
+    """Replace the source file only when the category rules still hold."""
+    if not validate_sources(config):
+        raise ValueError("source config refused")
+    text = json.dumps(config, indent=2, ensure_ascii=False) + "\n"
+    tmp = SOURCES_FILE.with_suffix(".json.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(SOURCES_FILE)
+
+
+def add_source(name: str, url: str, category: str, level: str = "iniciante") -> dict:
+    """Append one reading source. Refuses a duplicate address or a bad category."""
+    name = (name or "").strip()
+    url = (url or "").strip()
+    category = (category or "").strip()
+    level = (level or "iniciante").strip()
+    if not name or len(name) > 80:
+        raise ValueError("name required")
+    if not url.startswith(("http://", "https://")) or len(url) > 500:
+        raise ValueError("url required")
+    if category not in SOURCE_CATEGORIES:
+        raise ValueError("category refused")
+    if level not in SOURCE_LEVELS:
+        raise ValueError("level refused")
+    config = load_sources()
+    sources = config.setdefault("sources", [])
+    if any(s.get("url") == url or s.get("name") == name for s in sources):
+        raise ValueError("source already exists")
+    entry = {
+        "name": name,
+        "url": url,
+        "category": category,
+        "level": level,
+        "active": True,
+    }
+    sources.append(entry)
+    _write_sources(config)
+    return entry
+
+
+def set_source_active(name: str, active: bool) -> bool:
+    """Pause or resume one source by name. The row stays in the file."""
+    config = load_sources()
+    found = False
+    for source in config.get("sources", []):
+        if source.get("name") == name:
+            source["active"] = bool(active)
+            found = True
+            break
+    if not found:
+        return False
+    _write_sources(config)
+    return True
+
+
+def remove_source(name: str) -> bool:
+    """Drop one source from the reading list. Other file settings stay."""
+    config = load_sources()
+    sources = config.get("sources", [])
+    kept = [s for s in sources if s.get("name") != name]
+    if len(kept) == len(sources):
+        return False
+    config["sources"] = kept
+    _write_sources(config)
+    return True
+
+
 def validate_sources(config: dict) -> bool:
     """Abort pipeline if source config has known bad assignments or duplicates."""
     seen_urls: dict[str, str] = {}

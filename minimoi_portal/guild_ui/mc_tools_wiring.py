@@ -978,6 +978,27 @@ def proposals(environ, *, start_research, delivery, lessons=None, read_shown=Non
                          policy=policy_source(cfg))
 
 
+def writes_this_turn(environ, principal, conversation_id, ledger_id):
+    """Verified working-file saves from this turn, so a download asked in the same message can use them (#417)."""
+    cfg = settings(environ)
+    if cfg is None or not ledger_id:
+        return []
+    from core.minimoi_actions.receipts import _cursor
+    conn = _connect(cfg["dsn"])()
+    try:
+        with conn, _cursor(conn) as cur:
+            cur.execute("""SELECT DISTINCT a.operation_id::text AS operation_id FROM guild.mc_host_artifacts a
+                JOIN guild.mc_host_artifact_challenges c ON c.operation_id=a.operation_id
+                WHERE c.ledger_id=%s AND c.tool='minimoi_working_write' AND a.state='verified'
+                  AND a.principal_id=%s AND a.environment=%s AND a.conversation_id=%s
+                LIMIT 6""", (ledger_id, principal, cfg["environment"], conversation_id))
+            return [row["operation_id"] for row in cur.fetchall()]
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+
 def saved_artifacts(environ, principal, conversation_id):
     """For an owner's download request: files(refs) -> [{name, content}] from MC's verified artifact records (bytes
     kept in the database with their sha256), only this principal's, this environment's and this conversation's.

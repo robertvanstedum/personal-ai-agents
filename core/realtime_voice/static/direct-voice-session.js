@@ -1102,6 +1102,7 @@ export function directVoice(d) {
       if (told.has(item)) return null;
       told.add(item);
     }
+    if (typeof ui.repaint === 'function') { try { ui.repaint(); } catch (_) { /* the history read is not on the audio path */ } }
     return sayAtPause(outcomeSay(kind, body, lead));
   }
 
@@ -1401,7 +1402,10 @@ export function directVoice(d) {
       onPlayback: () => {},
       onTranscriptUpdate: (turns) => { lastTurns = turns; if (!finalized) capture.update(turns); },
       oncePerItem: true,                          // a replayed completion is not a new turn (review F2)
-      onUserTurn: (text) => { if (replying) replying(text); },   // the summary's window hears its one reply; nothing acts
+      onUserTurn: (text) => {
+        if (replying) replying(text);   // the summary's window hears its one reply; nothing acts
+        if (text && typeof ui.heard === 'function') ui.heard(text);   // the thread line; not awaited
+      },
       onAssistantTurn: (text) => { spoke(text); responding = false; pump(); if (text && typeof ui.spoken === 'function') ui.spoken(text); },
       // Spec 165 §5.3: a response's audio has played out. Only the summary's own response ends the session.
       onPlaybackDrained: (responseId, outcome) => {

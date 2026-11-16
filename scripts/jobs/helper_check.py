@@ -13,7 +13,9 @@ Runs inside the portal, which holds MC's task-service token and the platform tok
 2. **Wait** (up to ``WAIT_S``) for the Apprentice to submit. It reads every host's job-health reports (``health.read``),
    judges them with the same deterministic code, and words a short note in one capped model call.
 3. **Review as MC**: the note's items must match what the reports say now (same jobs, same severities). Then MC records its
-   review and accepts. A mismatch is not accepted, and the note falls back to the deterministic words.
+   review and accepts. A mismatch is not accepted, and the note falls back to the deterministic words. Every path that
+   does not accept moves today's task to failed (MC as lead, with a reason and evidence). The next run first settles any
+   earlier open ``TK-hc-*`` task: accept it when a late result matches, otherwise fail it.
 4. **File it for MC**: ``helper-note.json`` beside the reports; MC's health block shows it on the next owner turn.
 
 Telegram stays with the deterministic daily check (scripts/jobs/daily_health.py): only ``needs action``. A helper has no
@@ -163,6 +165,87 @@ def review(mc, platform, task, outcome: dict, expected: list, *, environment: st
     return True
 
 
+ACTIVE = ("submitted", "working", "waiting")
+
+
+def _ref(store, id_, edition=None, digest_=None) -> dict:
+    return {"store": store, "id": id_, "edition": edition, "digest": digest_}
+
+
+def evidence_for(mc, task) -> list:
+    sets = task.get("artifact_sets") or []
+    if sets and sets[-1].get("artifacts"):
+        art = sets[-1]["artifacts"][0]
+        return [_ref(art.get("store") or "task_service", art["id"], art.get("edition"), art.get("digest"))]
+    req = mc.get("request", task["request_ref"]) if task.get("request_ref") else None
+    sid = (req or {}).get("source_event_id")
+    if sid:
+        return [_ref("task_service", sid)]
+    return [_ref("task_service", task["task_id"], str(task.get("revision") or 0))]
+
+
+def fail_open(mc, task, reason, *, environment, scope) -> None:
+    """MC as lead. Failed is only from an active state, by the lead or the holder, and it needs a reason and evidence."""
+    if not task or task.get("state") not in ACTIVE:
+        return
+    t = mc.get("task", task["task_id"])
+    if not t or t.get("state") not in ACTIVE:
+        return
+    why = (reason or "MC did not accept the helper note").strip()[:2000]
+    _send(mc, _command("task.transition", "task", t["task_id"], {
+        "to": "failed", "reason": why, "waiting": None, "evidence_refs": evidence_for(mc, t),
+        "fence_generation": t["fence_generation"]}, f"cmd-sched-fail-{t['task_id']}-r{t['revision']}",
+        expected=t["revision"], environment=environment, scope=scope))
+
+
+def close_unaccepted(mc, tid, reason, *, environment, scope) -> None:
+    if not tid:
+        return
+    try:
+        fail_open(mc, mc.get("task", tid), reason, environment=environment, scope=scope)
+    except NotStarted:
+        return
+
+
+def settle_earlier(mc, platform, *, day, items, environment, scope) -> None:
+    """Accept an earlier open health check whose late result matches; otherwise fail it."""
+    today = ids(day)["tid"]
+    try:
+        rows = mc.open_work()
+    except Exception:                                   # noqa: BLE001 - today's note still files if the open list cannot be read
+        return
+    for row in rows or []:
+        if not isinstance(row, dict) or row.get("type") != "task":
+            continue
+        tid = row.get("id")
+        if not isinstance(tid, str) or not tid.startswith("TK-hc-") or tid == today:
+            continue
+        try:
+            task = mc.get("task", tid)
+        except NotStarted:
+            continue
+        if not task or task.get("state") not in ACTIVE:
+            continue
+        accepted, reason = False, "the helper had not finished within the wait"
+        if task.get("artifact_sets"):
+            outcome = result_of(mc, task)
+            if outcome.get("stopped"):
+                reason = f"the helper stopped ({outcome.get('stopped')})"
+            else:
+                try:
+                    accepted = review(mc, platform, task, outcome, items, environment=environment, scope=scope)
+                except NotStarted as exc:
+                    reason = f"review not recorded ({exc})"
+                else:
+                    if not accepted:
+                        reason = "the helper's items did not match the reports, so MC did not accept them"
+        if not accepted:
+            try:
+                fail_open(mc, mc.get("task", tid) or task, reason, environment=environment, scope=scope)
+            except NotStarted:
+                continue
+
+
 def result_of(mc, task) -> dict:
     record = mc.get("source_event", task["artifact_sets"][-1]["artifacts"][0]["id"])
     try:
@@ -181,20 +264,27 @@ def run_once(mc, platform, charter, *, environment, health_dir, now, scope="pers
     note = {"schema_version": 1, "date": day, "written_at": status.iso(now), "drafted_by": None, "accepted_by": None,
             "note": plain, "note_by": "deterministic", "needs_action": sum(1 for i in items if i["severity"] == health.NEEDS_ACTION),
             "task_id": None, "why": None}
+    settle_earlier(mc, platform, day=day, items=items, environment=environment, scope=scope)
     try:
         tid = start(mc, platform, charter, day, environment=environment, scope=scope, seat=seat)
     except NotStarted as exc:
         note["why"] = f"helper not started ({exc})"
         return note
     note["task_id"] = tid
+    task = mc.get("task", tid)
+    if task and task.get("state") not in ACTIVE and not any(a.get("status") == "current" for a in task.get("acceptances") or []):
+        note["why"] = task.get("reason") or f"the health check is already {task['state']}"
+        return note
     task = wait_for_result(mc, tid, wait_s=wait_s, sleep=sleep)
     if not task or not task["artifact_sets"]:
         note["why"] = "the helper had not finished; the deterministic note is filed instead"
+        close_unaccepted(mc, tid, "the helper had not finished within the wait", environment=environment, scope=scope)
         return note
     outcome = result_of(mc, task)
     note["drafted_by"] = seat
     if outcome.get("stopped"):
         note["why"] = f"the helper stopped ({outcome.get('stopped')})"
+        close_unaccepted(mc, tid, note["why"], environment=environment, scope=scope)
         return note
     try:
         accepted = review(mc, platform, task, outcome, items, environment=environment, scope=scope)
@@ -205,6 +295,8 @@ def run_once(mc, platform, charter, *, environment, health_dir, now, scope="pers
         note.update(note=outcome["note"].strip()[:1500], note_by=outcome.get("note_by", "model"), accepted_by=LEAD)
     elif not accepted and not note["why"]:
         note["why"] = "the helper's items did not match the reports, so MC did not accept them"
+    if not accepted:
+        close_unaccepted(mc, tid, note["why"] or "MC did not accept the helper note", environment=environment, scope=scope)
     return note
 
 

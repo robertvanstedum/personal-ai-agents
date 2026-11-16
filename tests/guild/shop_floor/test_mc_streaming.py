@@ -561,6 +561,21 @@ def test_render_events_are_throttled_and_stop_above_32_kb():
     assert run.consumer_gone.is_set()
 
 
+def test_a_tool_step_keeps_the_words_already_shown():
+    """#459: a step used to empty the live answer, so a long reply flashed and came back shorter."""
+    from minimoi_portal.guild_ui.mc.streaming import browser_events
+    run = _FakeRun([])
+    run.queue.put(("delta", "I'll check the list. "))
+    run.queue.put(("step", {"t": "step", "n": 1, "phase": "start", "label": "Looked up issues", "headline": "Ran 1 command"}))
+    run.queue.put(("delta", "Twelve are open."))
+    run.queue.put(("end", {"t": "done", "status": "answered"}))
+    times = iter([0.0, 0.6])
+    events = [json.loads(line) for line in browser_events(run, render=lambda text: f"<p>{text}</p>",
+                                                           clock=lambda: next(times, 2.0), ping_s=30)]
+    renders = [event["html"] for event in events if event["t"] == "render"]
+    assert renders and "I'll check the list." in renders[-1] and "Twelve are open." in renders[-1]
+
+
 def test_ping_every_ten_seconds_of_silence():
     from minimoi_portal.guild_ui.mc.streaming import browser_events
     run = _FakeRun([])

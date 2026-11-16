@@ -124,6 +124,22 @@ def ready(meta,base_url):
 
 _ARTIFACT_REF=re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
 
+def handoff_packet(reply, operation_ids):
+ """When this same message asked for a download and a working file was saved, the platform hands that file over.
+ A reply that is already a files or artifacts packet is left to the existing path. Prose is not a second request."""
+ import json
+ ids=[i for i in (operation_ids or []) if isinstance(i,str) and _ARTIFACT_REF.fullmatch(i)]
+ if not ids:
+  return None
+ try:
+  doc=json.loads(packet(reply if isinstance(reply,str) else ""))
+ except ValueError:
+  doc=None
+ if isinstance(doc,dict) and set(doc) in ({"files"},{"artifacts"}):
+  return None
+ return json.dumps({"artifacts":ids[:6]})
+
+
 def from_artifacts(text,artifact_files):
  """{"artifacts":[ids]} from the model becomes {"files":[...]} built by the platform from its own verified artifact
  records (artifact_files); any other packet is returned unchanged for prepare() to judge."""

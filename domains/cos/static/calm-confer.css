@@ -190,3 +190,16 @@
   .founders-cos .cos-private-exit{min-height:36px;padding:0 14px}
   .founders-cos .cos-options-body>.cos-lock{min-height:44px}
 }
+
+/* #633: on a phone, a live call. The table is not a fixed grid row (that row, plus the desktop 100vh column, covered the reply). It is a 160px band at the top of the thread, the same idea as .cos-hero on a new chat and as MC's phone picture: it scrolls away, the words stay above the composer. Desktop and a phone that is not in a call keep their rows. */
+@media (max-width: 700px) {
+  .founders-cos[data-cos-tab=confer]:not(.both-open):has(#voice-live:not([hidden])) .tab-layout-split{grid-template-rows:minmax(0,1fr)}
+  .founders-cos[data-cos-tab=confer]:not(.both-open):has(#voice-live:not([hidden])) .tab-content{grid-row:1;height:100dvh;max-height:100%;min-height:0;overflow:hidden}
+  .founders-cos[data-cos-tab=confer]:not(.both-open):has(#voice-live:not([hidden])) .confer-workspace{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);height:100%;min-height:0;overflow:hidden}
+  .founders-cos[data-cos-tab=confer]:not(.both-open):has(#voice-live:not([hidden])) .confer-picture{display:none}
+  .founders-cos[data-cos-tab=confer]:not(.both-open):has(#voice-live:not([hidden])) .confer-chat{grid-row:1;height:100%;min-height:0;overflow:hidden}
+  .founders-cos[data-cos-tab=confer]:not(.both-open):has(#voice-live:not([hidden])) #chat-log{flex:1;min-height:0;overflow:auto;padding:0 14px 10px}
+  .founders-cos[data-cos-tab=confer]:not(.both-open):not([data-picture=hidden]):has(#voice-live:not([hidden])) #chat-log::before{content:"";flex:none;display:block;width:calc(100% + 28px);height:160px;min-height:160px;margin:0 -14px 4px;border-radius:0;background:url(photos/cos_discuss_private.png?v=1) 50% 29%/cover no-repeat}
+  .founders-cos[data-cos-tab=confer]:not(.both-open):has(#voice-live:not([hidden])) .input-row,
+  .founders-cos[data-cos-tab=confer]:not(.both-open):has(#voice-live:not([hidden])) #voice-live{flex:none}
+}

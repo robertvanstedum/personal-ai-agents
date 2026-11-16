@@ -77,9 +77,15 @@
       // The greeting stays at the top of a chat that started empty in this view, so it scrolls away instead of vanishing
       // on the next refresh; a chat opened with turns already in it never shows it.
       const keepHero = hero.isConnected && hero.dataset.conversation === (cid || '');
+      const live = [...log.querySelectorAll('[data-live-spoken]')];
       log.replaceChildren(frag);
       if (keepHero) log.prepend(hero);
       else if (!d.items.length && !(d.notes || []).length) { greet(); hero.dataset.conversation = cid || ''; log.append(hero); }
+      const have = new Set([...log.querySelectorAll('.msg-text')].map((n) => (n.textContent || '').trim()));
+      for (const node of live) {
+        const t = (node.querySelector('.msg-text')?.textContent || '').trim();
+        if (t && !have.has(t)) { log.append(node); have.add(t); }
+      }
       if (atBottom) log.scrollTop = log.scrollHeight;
     }
     document.getElementById('history-earlier').hidden = !before;
@@ -292,8 +298,10 @@
     visualViewport.addEventListener('resize', fit); visualViewport.addEventListener('scroll', fit); phoneWidth.addEventListener('change', fit); fit();
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshList(); });
+  document.addEventListener('cos:voice-ended', () => refreshList());
   refreshList();
   (async()=>{try{const d=await api('history/selection?device='+encodeURIComponent(device)); voiceConversation=d.voice_conversation_id; await select(d.conversation_id,d.conversation,true);window.cosHistory.ready=true;document.dispatchEvent(new CustomEvent('cos:history-ready'));}catch(_){state.textContent='History is unavailable. Nothing will be sent until it returns.';}})();
+  document.addEventListener('cos:turn-completed', () => { reload().catch(() => {}); });
   setInterval(()=>{if(!document.hidden)reload().catch(()=>{state.textContent='History could not be refreshed.';});},5000);
 })();
 // ── One voice at a time beside MC (FF-04, #526). With MC open in #mc-both both pages have a microphone. MC's pane posts a

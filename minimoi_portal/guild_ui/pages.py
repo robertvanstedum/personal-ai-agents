@@ -219,7 +219,41 @@ def _context(page_id: str, area: str, context_item: str, *, conversation_id=None
                 filing_off=FILING_OFF, invite_off=INVITE_OFF, rules_label=RULES_LABEL,
                 hhmm=hhmm, age=age, badge=badge, statuses=STATUSES, conversation=conversation,
                 conv_notice=conv_notice, mc_voice_on=_mc_voice_on(), mc_voice_direct_on=_mc_voice_direct_on(),
-                dictation_on=_dictation_on(), **extra)
+                dictation_on=_dictation_on(), voice_calls=_saved_voice_calls(conversation), **extra)
+
+
+def _saved_voice_calls(conversation):
+    """A talking call filed on this chat (#620): its saved transcript, the download, and the Done line."""
+    if not isinstance(conversation, dict):
+        return []
+    calls = conversation.get("voice_calls")
+    if not isinstance(calls, list) or not calls:
+        return []
+    try:
+        from core.durable_files import read_doc
+        from .mc.voice_calls import call_record_folder
+        from .mc.voice_walk import _find_call
+        folder = call_record_folder(cfg().get("services"))
+        prefix = cfg()["url_prefix"]
+        principal = conversation.get("principal")
+        rows = []
+        for call in calls[:20]:
+            if not isinstance(call, dict):
+                continue
+            session = str(call.get("session") or "")
+            path = _find_call(folder, session) if folder else None
+            record = read_doc(path) if path else None
+            text = ""
+            if isinstance(record, dict) and record.get("principal") == principal:
+                from .mc.voice_walk import call_text
+                text = call_text(session, principal=principal, folder=folder) or ""
+            rows.append({"session": session, "started_at": call.get("started_at") or "",
+                         "text": text or "The saved transcript could not be read.",
+                         "href": f"{prefix}/api/v1/mc/voice/walk/transcript/{session}" if text else "",
+                         "done": call.get("done") or ""})
+        return rows
+    except Exception:
+        return []
 
 
 def _mc_queue_on(c) -> bool:
