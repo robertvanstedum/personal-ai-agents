@@ -59,6 +59,16 @@ def test_an_unverified_or_foreign_artifact_yields_nothing_and_is_refused():
         from_artifacts(json.dumps({"artifacts": [REF]}), None)         # MC tools off: no resolver
 
 
+def test_same_turn_prose_hands_over_the_saved_file():
+    from minimoi_portal.guild_ui.mc_deliveries import handoff_packet
+    prose = "Saved. Ask for it as a download and it comes from that operation."
+    packet = handoff_packet(prose, [REF])
+    assert json.loads(packet) == {"artifacts": [REF]}
+    already = json.dumps({"files": [{"name": "a.md", "content": "x"}]})
+    assert handoff_packet(already, [REF]) is None
+    assert handoff_packet(prose, []) is None
+
+
 def test_a_files_packet_is_unchanged():
     text = json.dumps({"files": [{"name": "a.md", "content": "x"}]})
     assert from_artifacts(text, lambda refs: []) == text
