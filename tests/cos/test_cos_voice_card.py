@@ -43,13 +43,18 @@ STATUS_LINE = (" Deployments, what production runs and job health are Master Cra
                " them; say \"Let me check with Master Craftsman\", and when he asks you to, his question goes to MC, whose"
                " answer comes back as a note in your chat.")
 ANCHOR = "When there is nothing to add, say a word or two and stop."
+# 0.1.7 (#653, 16 Nov 2026: "Let me check with Master Craftsman" four times in a two-minute call for one question): the
+# status line says it once a question.
+STATUS_LINE_ONCE = STATUS_LINE.replace('Craftsman\", and when', 'Craftsman\" once for a question, never again while it is'
+                                       ' being checked, and when')
 
 
 def test_her_card_is_pinned_and_verified_with_the_fields_the_spec_gives_it():
-    assert json.loads((ROOT / "pin.json").read_text()) == {"release": "0.1.6"}
+    assert json.loads((ROOT / "pin.json").read_text()) == {"release": "0.1.7"}
     card = load_pinned(ROOT)
-    assert card == load_card(ROOT, "0.1.6")
-    assert card["card"] == FINAL.replace(ANCHOR, ANCHOR + STATUS_LINE)
+    assert card == load_card(ROOT, "0.1.7")
+    assert card["card"] == FINAL.replace(ANCHOR, ANCHOR + STATUS_LINE_ONCE)
+    assert load_card(ROOT, "0.1.6")["card"] == FINAL.replace(ANCHOR, ANCHOR + STATUS_LINE)
     assert load_card(ROOT, "0.1.5")["card"] == FINAL
     assert (card["language"], card["accent"], card["transcription"]) == ("en-US", "British English; Austrian German", "bilingual")
 
@@ -100,3 +105,14 @@ def test_0_1_6_adds_only_the_status_line():
     new, old = (json.loads((ROOT / f"releases/{v}/manifest.json").read_text()) for v in ("0.1.6", "0.1.5"))
     assert new["persona"] == old["persona"] and new["status"] == "candidate" and new["version"] == "0.1.6"
     assert "#542" in new["spec"]
+
+
+def test_0_1_7_says_the_check_line_once_and_changes_nothing_else():
+    """#653: 0.1.7 changes only the status line, to say "Let me check with Master Craftsman" once a question; voices,
+    accents, language, transcription and the persona it restates are 0.1.6's."""
+    assert STATUS_LINE_ONCE != STATUS_LINE and "once for a question, never again while it is being checked" in STATUS_LINE_ONCE
+    new, old = (json.loads((ROOT / f"releases/{v}/voice.json").read_text()) for v in ("0.1.7", "0.1.6"))
+    assert new.pop("card") == old.pop("card").replace(STATUS_LINE, STATUS_LINE_ONCE) and new == old
+    new, old = (json.loads((ROOT / f"releases/{v}/manifest.json").read_text()) for v in ("0.1.7", "0.1.6"))
+    assert new["persona"] == old["persona"] and new["status"] == "candidate" and new["version"] == "0.1.7"
+    assert "#653" in new["spec"]

@@ -120,16 +120,23 @@ _ASKS = "ask Robert briefly to confirm that you should check; the app then check
 _PAGE_ASKS = ("never ask Robert to confirm on your own: when the app has heard such a request its own instruction tells you "
               "to ask him; after his yes it checks through your work runtime ")
 _ANSWER = ("and returns the result: say it in the same short spoken style, preserving its uncertainty and action status, "
-           "rather than reading it out in full. Never claim that a note was saved unless the app says so. ")
+           "rather than reading it out in full. Never claim that a note was saved, or that anything was sent or handed "
+           "off, unless the app says so. ")
 _WRITING = ("Set reminders in writing: you cannot set a reminder by voice, so if Robert asks for one, tell him to set it in "
             "writing in Confer. Commands such as /new are done in writing too.")
 
 
 # #542 (Robert, 12 Nov 2026: "not it's job to know deployment status"): what replaces MC's status rule in her session.
+# #653 (16 Nov 2026, by phone): she said "Let me check with Master Craftsman" four times in two minutes for one question,
+# so it is said once a question. #652: she said "Got it, I'll handle that handoff for you" and nothing was sent, so she
+# never says it was or will be sent; his yes to her answer's own offer is what the app runs.
 STATUS_TO_MC = ("Deployments, what production runs and job health are Master Craftsman's to know, not yours: never guess "
-                "or report them. Say \"Let me check with Master Craftsman\", and when Robert asks you to (\"ask MC whether "
-                "the push finished\"), his question goes to MC through the app; MC's answer comes back as a note in this "
-                "chat, not in this call. ")
+                "or report them. Say \"Let me check with Master Craftsman\" once for such a question, and never again for it "
+                "while it is being checked, whatever else is said meanwhile. When Robert asks you to (\"ask MC whether "
+                "the push finished\"), or says yes when an answer offers to ask him, his words go to your work runtime "
+                "through the app, and its result says whether they reached MC; MC's answer comes back as a note in this chat, "
+                "not in this call. Never say you sent, passed or handed anything to Master Craftsman, or that you will: "
+                "only the app's result says whether it went. ")
 
 
 def her_rules(actions=False, *, page_asks=False):

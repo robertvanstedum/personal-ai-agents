@@ -170,6 +170,34 @@ _NO = re.compile(r"\b(?:no|not|don'?t|don’t|nein|wait)\b", re.I)
 # The voice asking him to confirm, however it ends: "Sure, just confirm for me." ended in a full stop on Dev (7 Nov), so his
 # "Confirm, yes" after it was conversation, and the voice went on to say "On it" with nothing waiting.
 _ASKS_CONFIRM = re.compile(r"\b(?:confirm for me|just confirm|shall i|should i|want me to|go ahead\?)", re.I)
+# #652 (Robert, 16 Nov 2026, by voice): CoS's lookup answer ended "Want me to ask him whether last night's deploy finished?",
+# the app held nothing, so his "Okay, go ahead, put it there" was chat and the voice said "Got it, I'll handle that handoff"
+# with nothing sent. An answer whose last sentence offers to do something waits as an offer (offer_of, DirectSessions.offer).
+_OFFERS = re.compile(r"\A\W*(?:(?:so|and|or|ok|okay|then|well)\W+)?(?:(?:do you )?want me to|would you like me to|shall i|"
+                     r"should i|soll ich)\b[^?]*\?\s*\Z", re.I)
+OFFER_MAX_CHARS = 400
+
+
+def offer_of(spoken):
+    """The question a consult's answer ends with when it offers to do something ("Want me to ask him whether …?"), or None.
+    Only the last sentence counts: an answer that asks something earlier and then goes on offers nothing."""
+    if not isinstance(spoken, str) or not spoken.strip():
+        return None
+    last = re.split(r"(?<=[.!?])\s+", spoken.strip())[-1]
+    return last if len(last) <= OFFER_MAX_CHARS and _OFFERS.match(last) else None
+
+
+def said_offer(voice_text, question):
+    """Whether the voice's own turn said the offer ``question`` (evidence that he heard it, never authority): the turn asks
+    something, and holds most of the question's words (the voice reads an answer as it is, but a transcript of speech may
+    differ in a word or two)."""
+    if not isinstance(voice_text, str) or not isinstance(question, str):
+        return False
+    if not (voice_text.rstrip().endswith(("?", "？")) or "?" in voice_text or _ASKS_CONFIRM.search(voice_text)):
+        return False
+    words = lambda t: re.findall(r"\w{3,}", t.casefold().replace("’", "'"))      # noqa: E731
+    wanted, heard = set(words(question)), set(words(voice_text))
+    return bool(wanted) and len(wanted & heard) >= 0.6 * len(wanted)
 
 
 def done_intent(text):
@@ -254,7 +282,8 @@ def bare_confirmation(text):
 # Each finished owner item is posted once to the utterance route, which hears it by a closed grammar first (no model call)
 # and, only when that says nothing, by one small understanding call (intent_gateway); the result is one word, which has no
 # power to act. A request becomes the session's one waiting action; his next item decides it.
-KINDS = ("note", "postit", "consult", "end")                     # what may wait; end is "Shall I sum up?"
+KINDS = ("note", "postit", "consult", "end", "offer")            # what may wait; end is "Shall I sum up?"; offer (#652) is
+                                                                  # an answer's own offer, his yes to it runs as his turn
 LABELS = ("note", "postit", "consult", "lookup", "yes", "no", "read_back", "read_summary", "chat")   # what the understanding call says
 DECISIONS = ("ask", "confirm", "dropped", "read_back", "nothing_waiting", "summary_later", "summary_now", "chat")
 ANSWER_S = 30            # the answer window, from the question starting to play; paused during a read-back
@@ -464,6 +493,12 @@ def fast_label(adapter, grammar, text, waiting):
     return None
 
 
+def _heard_slot(slot):
+    """The waiting action as his next words are heard against it: an offer the voice has not said yet (#652) is not one,
+    so nothing he says before it is said answers it or drops it."""
+    return None if slot is not None and slot["kind"] == "offer" and slot["state"] != "asked" else slot
+
+
 def item_place(item):
     """An owner item's place ("t12" -> 12), or -1."""
     return int(item[1:]) if owner_item(item) else -1
@@ -525,6 +560,11 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False, platfor
               "the machinery: never say you are waiting on a result, or that a result has not arrived. Never say you couldn't get "
               "an answer: the app tells you when a check could not be done or is taking longer. If he says something else "
               "meanwhile, answer that, and if he asks about the check, say only that it is still running. "
+              # #653 (Robert, 16 Nov 2026, by phone): "Let me check with Master Craftsman" four times in two minutes, twice
+              # back to back, while one lookup ran, and a garbled line got one more.
+              "That one line is all for a question, however long its check takes and whatever is said meanwhile: never a "
+              "second line about checking, the app or who is being asked. If his words are unclear or make no sense here, "
+              "ask him briefly to say them again, and say nothing about the check. "
               f"A written record of this call is kept: after the call {owner} can download its transcript from the chat. ")
     lookup += _status_rule(platform_status)
     request = lookup + f"When {owner} asks for a note, a post-it, or work that changes something (making, changing, " \
@@ -539,7 +579,11 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False, platfor
             f"and only after {owner} confirms. This is an internal execution boundary: speak as {short} throughout, "
             "including when the app returns your result. Never pretend a lookup or action happened without that result. " + ask +
             "Never repeat his words back unless he asks you to. Outcomes come from the app: say only what it gives "
-            f"you, and never claim anything was checked, saved or done otherwise. {clock_line()} When {owner} says he is done "
+            f"you, and never claim anything was checked, saved or done otherwise. "
+            # #652: "Got it, I'll handle that handoff for you", with nothing sent.
+            "Never say you sent, passed on or handed off anything, or that you will: when he says yes to something an "
+            "answer offered, the app runs it, and its result, said to you, is the only word on whether it was sent. "
+            f"{clock_line()} When {owner} says he is done "
             f"(\"we're done\"), answer only: \"{GOODBYE}\" A negated or questioned one (\"we're not done\") is "
             "not an ending; carry on. Never offer a recap or summary. Never summarize from memory: one is made from this "
             "session's kept record only when he asks.")
@@ -1393,13 +1437,39 @@ class DirectSessions(ConsultLedger):
 
     def voice_said(self, sid, item, text):
         """One of the voice's own turns was kept (a transcript post): whether it asked a question (its words end in "?")
-        is noted for _stray. Its words are not kept here."""
+        is noted for _stray. Its words are not kept here. An answer's offer (#652) waiting to be said is asked once a turn
+        of the voice after the answer's own owner item says it: from then his next item may answer it."""
         with self._meta_lock:
             meta = self._meta.get(sid)
             place = item_place(item)
             if meta is not None and place > (meta.get("voice_said") or (-1, False))[0]:
                 meta["voice_said"] = (place, isinstance(text, str) and (text.rstrip().endswith(("?", "？"))
                                                                       or bool(_ASKS_CONFIRM.search(text))))
+            slot = self._live(meta, self.clock()) if meta is not None else None
+            if (slot is not None and slot["kind"] == "offer" and slot["state"] == "waiting"
+                    and place > max(item_place(slot["owner_item_id"]), meta["last_place"]) and said_offer(text, slot["text"])):
+                now = self.clock()
+                slot.update(state="asked", after=item, asked_at=now, expires=now + ANSWER_S, created=now)
+
+    def offer(self, sid, item, result):
+        """#652: a consult's answer for owner item ``item`` that ends by offering to do something ("Want me to ask him
+        whether …?") waits as the session's offer, unless an action already waits (his request comes first). It is
+        nothing until the voice has said it (voice_said); then his yes runs as his own typed turn, never read-only, on his
+        words (the answer's words are never run: they are the typed turn's own, in its thread); a no or anything else drops
+        it. Returns whether it waits."""
+        question = offer_of(result.get("spoken")) if isinstance(result, dict) and result.get("outcome") == "done" \
+            and result.get("saved") is not True else None
+        if question is None or not self.is_open(sid) or self.expired(sid):
+            return False
+        with self._meta_lock:
+            meta = self._meta.get(sid)
+            if meta is None or self._live(meta, self.clock()) is not None:
+                return False
+            now = self.clock()
+            meta["slot"] = {"action_id": uuid.uuid4().hex, "kind": "offer", "owner_item_id": item, "text": question,
+                            "text_hash": digest(question), "tool": "consult", "state": "waiting", "created": now,
+                            "after": item, "asked_at": None, "expires": None, "paused": False, "screen": False}
+            return True
 
     def deciding(self, sid):
         with self._meta_lock:
@@ -1427,8 +1497,10 @@ class DirectSessions(ConsultLedger):
                 if item_place(item) <= meta["last_place"]:
                     meta["decided"][item] = {"decision": "chat", "heard": "chat", "stale": True}
                     return dict(meta["decided"][item])
-                slot = self._live(meta, self.clock())
-                waiting = slot["kind"] if slot else None
+                slot = _heard_slot(self._live(meta, self.clock()))
+                # #652: an offer is heard as a request to the person waiting for his yes, its own words the pending ones
+                # (the answer's question, as data), so "Okay, go ahead, put it there" can be heard as yes to it.
+                waiting = ("consult" if slot["kind"] == "offer" else slot["kind"]) if slot else None
                 pending = slot["text"] if slot else None
                 pending_id = slot["action_id"] if slot else None
             try:
@@ -1442,7 +1514,7 @@ class DirectSessions(ConsultLedger):
                     return None
                 # A slow contextual yes belongs only to the exact request it classified. A concurrent
                 # screen action/replacement must not let it confirm a different request.
-                current = self._live(meta, self.clock())
+                current = _heard_slot(self._live(meta, self.clock()))
                 if label == "yes" and pending_id is not None and (current is None or current["action_id"] != pending_id):
                     decision = {"decision": "chat", "heard": "yes", "stale": True}
                     meta["decided"][item] = decision
@@ -1464,9 +1536,11 @@ class DirectSessions(ConsultLedger):
         A fold (FOLDS_OVERTAKEN: the provider repeats an overtaken item's words at the start of the next, LV6) of the
         waiting action's own words is refused: dropped, never a note holding "yes" (review CC_25 §2)."""
         now = self.clock()
-        slot = self._live(meta, now)
+        live = self._live(meta, now)
+        slot = _heard_slot(live)
+        unsaid = live if slot is None else None             # an offer not said yet (#652): only a new request replaces it
         norm = lambda words: " ".join(str(words).split()).casefold()          # noqa: E731
-        if (slot is not None and slot["kind"] != "end" and meta.get("provider") in FOLDS_OVERTAKEN
+        if (slot is not None and slot["kind"] not in ("end", "offer") and meta.get("provider") in FOLDS_OVERTAKEN
                 and norm(text) != norm(slot["text"]) and norm(text).startswith(norm(slot["text"]))):
             self._let_go(meta, slot, "folded", now)
             return {"decision": "dropped", "action_id": slot["action_id"], "kind": slot["kind"], "reason": "folded"}
@@ -1495,9 +1569,11 @@ class DirectSessions(ConsultLedger):
             return {"decision": "confirm", "action_id": new["action_id"], "kind": "consult", "confirm_item_id": item,
                     "owner_item_id": item, "text_sha256": new["text_hash"], "lookup": True}
         if label in ("note", "postit", "consult", "end"):
-            old = slot
-            if old is not None:
-                self._let_go(meta, old, "replaced", now)    # a new request replaces it: a yes now confirms the new one
+            for gone in (unsaid, slot):
+                if gone is not None:
+                    self._let_go(meta, gone, "replaced", now)   # a new request replaces it: a yes now confirms the new one
+            # #652: his own request comes before an answer's offer, which the page never showed: nothing named replaced.
+            old = slot if slot is not None and slot["kind"] != "offer" else None
             tool = None if label == "end" else tool_of(label, text)
             # Review v3 M1: what waits is what will run. A note or post-it only the understanding call heard (or a post-it
             # on a host with no Board) runs as his typed turn, so it waits as a request (kind consult): the screen says
@@ -1521,6 +1597,8 @@ class DirectSessions(ConsultLedger):
                             "confirm_item_id": last["confirm_item"], "owner_item_id": last["owner_item_id"],
                             "text_sha256": last["text_hash"], "again": True}
                 return {"decision": "nothing_waiting" if self._stray(meta, item, now) else "chat"}
+            if slot["kind"] == "offer":
+                return self._take_offer(meta, slot, item, text, now)
             question = max(item_place(slot["after"]), item_place(slot["owner_item_id"]))
             if slot["state"] != "asked" or slot.get("screen") or item_place(item) <= question:
                 # Before its question started (or said over it), or asked on screen only (tap-only, review v3 S1): no
@@ -1550,7 +1628,7 @@ class DirectSessions(ConsultLedger):
         if label == "read_back":
             if slot is None:                                # read-back after expiry reads nothing; with nothing ever
                 return {"decision": "nothing_waiting" if now < meta.get("stray_until", 0) else "chat"}   # waiting: chat
-            if slot["kind"] != "end":
+            if slot["kind"] not in ("end", "offer"):       # an offer's words are the answer's, never his: not read
                 slot["paused"] = True                       # the answer window waits while his words are read
                 return {"decision": "read_back", "action_id": slot["action_id"], "kind": slot["kind"],
                         "owner_item_id": slot["owner_item_id"], "text": slot["text"]}
@@ -1558,6 +1636,25 @@ class DirectSessions(ConsultLedger):
             self._let_go(meta, slot, "other", now)
             return {"decision": "chat", "dropped": slot["action_id"], "dropped_kind": slot["kind"]}
         return {"decision": "chat"}
+
+    def _take_offer(self, meta, slot, item, text, now):
+        """#652: his yes to an answer's offer, after the voice said it. What runs is HIS yes item, its own words, through
+        the one action path as a confirmed request (kind consult, never read-only): the typed turn reads the offer in its
+        own thread and his words answer it. The answer's words never run. A yes said before or over the offer is chat and
+        leaves it waiting."""
+        if item_place(item) <= item_place(slot["after"]):
+            return {"decision": "chat"}
+        meta["slot"] = None
+        slot["state"] = "done"
+        new = {"action_id": slot["action_id"], "kind": "consult", "owner_item_id": item, "text": text,
+               "text_hash": digest(text), "tool": "consult", "offer": True, "state": "confirmed", "created": now,
+               "after": slot["after"], "asked_at": slot["asked_at"], "expires": None, "paused": False, "screen": False,
+               "confirm_item": item, "confirmed_at": now}
+        meta["confirmed"][new["action_id"]] = new
+        meta["last_confirmed"] = {"action_id": new["action_id"], "kind": "consult", "confirm_item": item, "at": now,
+                                  "owner_item_id": item, "text_hash": new["text_hash"]}
+        return {"decision": "confirm", "action_id": new["action_id"], "kind": "consult", "confirm_item_id": item,
+                "owner_item_id": item, "text_sha256": new["text_hash"], "offer": True}
 
     def asked(self, sid, action_id, after, screen=False):
         """The page says the question of waiting action ``action_id`` started playing (again, after a read-back or a
@@ -1612,7 +1709,7 @@ class DirectSessions(ConsultLedger):
                     return "not_waiting", None
                 del meta["confirmed"][action_id]
             elif action_id is not None:                                     # a tap on Check, naming what it shows
-                if live is not None and live["action_id"] == action_id and live["kind"] != "end":
+                if live is not None and live["action_id"] == action_id and live["kind"] not in ("end", "offer"):
                     slot, meta["slot"] = live, None
                 elif action_id in meta["confirmed"]:
                     slot = meta["confirmed"].pop(action_id)
@@ -1620,8 +1717,9 @@ class DirectSessions(ConsultLedger):
                     return "again", consumed[action_id]
                 else:
                     return "not_waiting", None
-            elif live is not None and live["kind"] != "end" and live["owner_item_id"] == tap_item:
+            elif live is not None and live["kind"] not in ("end", "offer") and live["owner_item_id"] == tap_item:
                 slot, meta["slot"] = live, None                             # a tap on the request's own words
+                # (#652: never an answer's offer, whose words are not his; Check sends his last words as before)
             elif live is not None and live["kind"] == "end" and live["owner_item_id"] == tap_item:
                 return "end_waiting", None          # review v3 S4: Check never sends "we're done" as a consult
             else:
@@ -1843,7 +1941,7 @@ def compact(result, limit=RECORD_MAX - 400):
     return keep
 
 
-def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item, *, read_only=False):
+def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item, *, read_only=False, offer=False):
     """One owner action, admitted durably before it is dispatched (Spec 165 §5.1). The key is (session, owner_item_id):
     one effect per owner turn, whichever tool asks (the tool is recorded, not keyed: a consult on "make a note that …"
     saves the note, so Check and the model's save_note are one action). Before dispatch a consult_request record is put
@@ -1857,7 +1955,11 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item, 
     note, or the request record not kept) binds nothing, so another tool may still act on the turn (review R1 P3-5,
     R2 S3). On a provider that folds an overtaken turn into the next (FOLDS_OVERTAKEN), a new turn whose words begin with
     a turn already consulted here is refused too, "Check it in writing" (Gate 2 Q S6). Returns (the answer the provider
-    is given, HTTP status)."""
+    is given, HTTP status).
+
+    ``offer`` (#652, server-held, never from a request): his yes to an answer's offer, consumed on the action path. Its
+    words are his yes, and a bare one ("Yes.") is what answers the offer in the typed turn's own thread, so D16's refusal
+    of a bare confirmation does not apply to it; it is still a confirmed waiting action, as D16 requires."""
     replayed, prior = sessions.replay_call(sid, call_id)
     if replayed == "replay":
         return prior, 200
@@ -1885,10 +1987,11 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item, 
     except Exception:                             # a hook that raises refuses: nothing has run (review L N5)
         log.exception("%s direct voice: in_writing hook failed; refused", adapter.person["domain"])
         in_writing = True
-    if bare_confirmation(text) or in_writing:
+    bare = bare_confirmation(text) and not offer
+    if bare or in_writing:
         if not sessions.is_open(sid) or sessions.expired(sid):          # the session first (review L N4)
             return not_done("session ended"), 409
-        if bare_confirmation(text):               # D16: a bare yes or stop authorizes nothing (Spec 165 v0.3 §6.4)
+        if bare:                                  # D16: a bare yes or stop authorizes nothing (Spec 165 v0.3 §6.4)
             return refused_here({"error": "confirmation", "spoken": CONFIRM_IN_WRITING})
         return refused_here({"error": "in_writing", "spoken": IN_WRITING})
     words = digest(text)
@@ -2094,6 +2197,11 @@ def dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, ite
     result = keep_receipt(adapter, handle, principal, sid, voice_item, name, result, began, late=after_summary(adapter, handle, sid))
     if not kept_record or result.get("receipt_kept") is False:
         result = {**result, "record_kept": False, "spoken": f"{(result.get('spoken') or '').rstrip()} {RECORD_LOST}".strip()}
+    if name == "consult":
+        try:                                             # #652: an answer that offers to do something waits for his yes
+            sessions.offer(sid, item, result)
+        except Exception:                                # never changes the result said
+            log.exception("%s direct voice: offer not kept", adapter.person["domain"])
     sessions.settle(sid, item, call_id, result, name)
     return result
 
@@ -2632,7 +2740,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         """A consumed waiting action through the one dispatcher, on the action's own owner item and text, never the yes
         item's: the (session, owner_item_id) key, receipts, one effect per owner item, reconcile and retry unchanged."""
         answer, status = consult(adapter, sessions, who, sid, call_id, slot["tool"], slot["text"], slot["owner_item_id"],
-                                 read_only=slot.get("read_only") is True)
+                                 read_only=slot.get("read_only") is True, offer=slot.get("offer") is True)
         return jsonify({**answer, "action_id": slot["action_id"], "kind": slot["kind"],
                         "owner_item_id": slot["owner_item_id"]}), status
 
