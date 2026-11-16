@@ -5,7 +5,8 @@
 #minimoi-companion button, #minimoi-companion a { font:inherit; }
 #minimoi-companion button { cursor:pointer; }
 #minimoi-companion :focus-visible { outline:var(--gu-focus); outline-offset:3px; }
-#minimoi-companion .companion-launch { position:fixed; z-index:999990; right:16px; bottom:calc(16px + env(safe-area-inset-bottom)); display:flex; gap:8px; align-items:center; padding:6px 14px 6px 6px; border:1px solid var(--gu-border); border-radius:99px; background:var(--gu-nav-bg); color:var(--gu-on-dark); box-shadow:var(--gu-shadow-pill); }
+#minimoi-companion .companion-launch { position:fixed; z-index:999990; right:16px; bottom:calc(16px + env(safe-area-inset-bottom)); display:flex; gap:8px; align-items:center; padding:6px 14px 6px 6px; border:1px solid var(--gu-border); border-radius:99px; background:var(--gu-nav-bg); color:var(--gu-on-dark); box-shadow:var(--gu-shadow-pill); touch-action:none; }
+#minimoi-companion .companion-reset { position:fixed; z-index:999991; min-width:44px; min-height:44px; padding:0 10px; border:1px solid var(--gu-border); border-radius:99px; background:var(--gu-surface, #fff); color:var(--gu-text, #30291f); box-shadow:var(--gu-shadow-pill); }
 #minimoi-companion img { border-radius:50%; object-fit:cover; flex:none; }
 #companion-dialog { position:fixed; inset:auto 16px 16px auto; margin:0; padding:0; width:min(540px, calc(100vw - 32px)); height:min(780px, calc(100dvh - 64px)); max-width:none; max-height:none; overflow:hidden; border:1px solid var(--gu-border); border-radius:var(--gu-radius, 12px); background:var(--gu-zone-conv); color:inherit; box-shadow:var(--gu-shadow-pill); }
 #companion-dialog[open] { display:flex; flex-direction:column; }

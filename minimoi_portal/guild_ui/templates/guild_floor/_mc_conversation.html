@@ -63,6 +63,7 @@
   {% set ask_about = {'build_log': 'the Build Log'}.get(page_id) %}
   {% if page_id in ('board', 'board_popout') %}<span class="visually-hidden" data-mc-ask-label>Chat with {{ mc_name }}</span>{% elif ask_about %}<span data-mc-ask-label>Ask {{ mc_name }} about {{ ask_about }}</span>{% else %}<span>Chat<span class="visually-hidden"> with {{ mc_name }}</span></span>{% endif %}
 </button>
+<button type="button" class="mc-pill-reset" data-mc-pill-reset hidden>Reset</button>
 <aside id="mc-panel" class="mc-panel" data-mc-panel data-mode="pill" data-pos="right" aria-label="Conversation">
   <header class="mc-head">
     <h2 class="mc-title">{{ mc_name }}</h2>
