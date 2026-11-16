@@ -8,13 +8,112 @@
 <div class="admin-grid">
   <div class="admin-card">
     <h3>Personas</h3>
-    <p>Gerencie as personas de conversa — em breve</p>
+    {% if personas %}
+    <ul class="admin-persona-names">
+      {% for persona in personas %}
+      <li>{{ persona.emoji }} {{ persona.name }} — {{ persona.role }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>Nenhuma persona configurada.</p>
+    {% endif %}
   </div>
   <div class="admin-card">
     <h3>Serviço</h3>
     <p>Porta: 8770 · status: online</p>
   </div>
 </div>
+
+<section class="admin-section">
+  <div class="admin-section-head">
+    <h2>Rodadas</h2>
+  </div>
+  <div class="admin-list" id="round-list">
+    {% for item in rounds %}
+    <div class="admin-list-item {% if item.ready %}runde-ready{% endif %}">
+      <div class="admin-item-info">
+        <span class="admin-item-name">{{ item.emoji }} {{ item.name }}</span>
+        <span class="admin-item-meta">
+          Rodada {{ item.round }} · {{ item.sessions }}/{{ item.limit }} sessões
+          {% if item.ready %}<span class="round-ready-dot" title="Ready to close this round">●</span>{% endif %}
+        </span>
+      </div>
+      {% if item.ready %}
+      <div class="admin-item-actions">
+        <button type="button" class="btn-ghost btn-sm btn-round-action"
+                data-slug="{{ item.slug }}" data-action="close">Encerrar rodada</button>
+        <button type="button" class="btn-ghost btn-sm btn-round-action"
+                data-slug="{{ item.slug }}" data-action="extend">Estender +3</button>
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="hint">Nenhuma persona — as rodadas aparecem quando houver personas.</p>
+    {% endfor %}
+  </div>
+  <p class="hint" id="round-status"></p>
+</section>
+
+<section class="admin-section">
+  <div class="admin-section-head">
+    <h2>Fontes</h2>
+    <button type="button" class="btn-ghost" id="btn-source-add">＋ Adicionar fonte</button>
+  </div>
+  <form id="source-form" class="admin-form admin-source-form" hidden>
+    <label>
+      <span>Nome</span>
+      <input type="text" id="s-name" maxlength="80" required>
+    </label>
+    <label>
+      <span>URL</span>
+      <input type="url" id="s-url" maxlength="500" required placeholder="https://…">
+    </label>
+    <label>
+      <span>Categoria</span>
+      <select id="s-category" required>
+        <option value="">— selecionar —</option>
+        <option value="cotidiano">Cotidiano</option>
+        <option value="cultura">Cultura</option>
+        <option value="noticias">Notícias</option>
+        <option value="rio">Rio</option>
+      </select>
+    </label>
+    <label>
+      <span>Nível</span>
+      <select id="s-level">
+        <option value="iniciante">Iniciante</option>
+        <option value="intermediario">Intermediário</option>
+        <option value="avancado">Avançado</option>
+      </select>
+    </label>
+    <button type="submit" class="btn-primary">Salvar fonte</button>
+  </form>
+  <p class="hint" id="source-status"></p>
+  {% if sources_unavailable %}
+  <p class="hint">A lista de fontes não pôde ser lida.</p>
+  {% elif sources %}
+  <div class="admin-list" id="source-list">
+    {% for source in sources %}
+    <div class="admin-list-item">
+      <div class="admin-item-info">
+        <span class="admin-item-name">{{ source.name }}</span>
+        <span class="admin-item-meta">{{ source.category }} · {% if source.active %}ativa{% else %}pausada{% endif %}</span>
+      </div>
+      <div class="admin-item-actions">
+        {% if source.active %}
+        <button type="button" class="btn-ghost btn-sm btn-source-action" data-action="pause" data-name="{{ source.name }}">Pausar</button>
+        {% else %}
+        <button type="button" class="btn-ghost btn-sm btn-source-action" data-action="resume" data-name="{{ source.name }}">Ativar</button>
+        {% endif %}
+        <button type="button" class="btn-ghost btn-sm btn-source-action" data-action="remove" data-name="{{ source.name }}">Remover</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="hint">Nenhuma fonte de leitura.</p>
+  {% endif %}
+</section>
 
 <!-- ── Add Article ─────────────────────────────────────────────────── -->
 <div class="admin-section" style="margin-top:2rem;">
@@ -57,6 +156,86 @@
 document.body.classList.add('parch-mode');
 (function () {
   'use strict';
+  async function postAdmin(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { res, data };
+  }
+
+  document.querySelectorAll('.btn-round-action').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const status = document.getElementById('round-status');
+      btn.disabled = true;
+      const { data } = await postAdmin('/api/pt/admin/round', {
+        persona_slug: btn.dataset.slug,
+        action: btn.dataset.action,
+      });
+      if (data.guest) {
+        status.textContent = 'Entre para alterar.';
+        btn.disabled = false;
+        return;
+      }
+      if (data.ok) {
+        window.location.reload();
+        return;
+      }
+      status.textContent = 'A rodada não foi alterada.';
+      btn.disabled = false;
+    });
+  });
+
+  const sourceForm = document.getElementById('source-form');
+  document.getElementById('btn-source-add').addEventListener('click', () => {
+    sourceForm.hidden = !sourceForm.hidden;
+  });
+  sourceForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const status = document.getElementById('source-status');
+    status.textContent = 'Salvando…';
+    const { data } = await postAdmin('/api/pt/admin/source', {
+      action: 'add',
+      name: document.getElementById('s-name').value.trim(),
+      url: document.getElementById('s-url').value.trim(),
+      category: document.getElementById('s-category').value,
+      level: document.getElementById('s-level').value,
+    });
+    if (data.guest) {
+      status.textContent = 'Entre para alterar.';
+      return;
+    }
+    if (data.ok) {
+      window.location.reload();
+      return;
+    }
+    status.textContent = 'A fonte não foi salva.';
+  });
+  document.querySelectorAll('.btn-source-action').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (btn.dataset.action === 'remove' && !confirm('Remover ' + btn.dataset.name + '?')) return;
+      const status = document.getElementById('source-status');
+      btn.disabled = true;
+      const { data } = await postAdmin('/api/pt/admin/source', {
+        action: btn.dataset.action,
+        name: btn.dataset.name,
+      });
+      if (data.guest) {
+        status.textContent = 'Entre para alterar.';
+        btn.disabled = false;
+        return;
+      }
+      if (data.ok) {
+        window.location.reload();
+        return;
+      }
+      status.textContent = 'A fonte não foi alterada.';
+      btn.disabled = false;
+    });
+  });
+
   document.getElementById('article-form').addEventListener('submit', async function (e) {
     e.preventDefault();
     const status = document.getElementById('article-status');

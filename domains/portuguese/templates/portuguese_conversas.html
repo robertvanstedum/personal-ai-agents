@@ -27,6 +27,7 @@
           {% set prog = persona_progress.get(p.slug, {}) %}
           {% set p_round = prog.get('round', 1) %}
           {% set p_sessions = prog.get('sessions_in_round', 0) %}
+          {% set p_limit = prog.get('round_limit', sessions_per_round) %}
           {% set p_ready = prog.get('ready', false) %}
           <div class="persona-list-item" data-idx="{{ loop.index0 }}" data-name="{{ p.name }}"
                data-slug="{{ p.slug }}"
@@ -42,12 +43,12 @@
               <div class="persona-role">
                 {{ p.role }}
                 {% if p_sessions > 0 %}
-                <span class="round-counter">Ronda {{ p_round }}/{{ sessions_per_round }}</span>
+                <span class="round-counter">Ronda {{ p_round }}/{{ p_limit }}</span>
                 {% endif %}
               </div>
               {% if p_sessions > 0 %}
               <div class="persona-progress">
-                <span class="round-label">{{ p_sessions }}/{{ sessions_per_round }} sessões</span>
+                <span class="round-label">{{ p_sessions }}/{{ p_limit }} sessões</span>
               </div>
               {% endif %}
               {% if p_ready %}
