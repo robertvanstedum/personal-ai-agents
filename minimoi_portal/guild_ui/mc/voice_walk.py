@@ -54,7 +54,7 @@ def read_tools() -> list[dict]:
     specs = {
         "notes_recall": "Read the current notes Robert has settled. Do not invent one.",
         "deploy_status": "Read the release the delivery record says is live. Do not invent a check.",
-        "issues": "Read what a named issue says in the one repository. Do not invent a status.",
+        "issues": "Read issues in the one repository: one by number, the ones just opened, or a search. Do not invent a number or a title.",
     }
     return [{
         "type": "function",
