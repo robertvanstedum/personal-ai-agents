@@ -74,3 +74,51 @@ def test_production_reads_the_token_from_the_portals_mounted_mc_secrets_folder()
     text = open(os.path.join(os.path.dirname(__file__), "..", "..", "docker-compose.prod.yml")).read()
     assert "/mc/portal:/run/secrets/mc:ro" in text
     assert mc_context.READ_TOKEN_DEFAULT == "/run/secrets/mc/github-read-token"
+
+
+# #650: production MC could not read GitHub; a refused token must be said and the public read tried without it.
+class _Resp:
+    def __init__(self, code, payload=None):
+        self.status_code, self._payload = code, payload or {}
+        self.content = b"{}"
+        self.headers = {}
+
+    def json(self):
+        return self._payload
+
+
+def _refusing_get(calls):
+    def get(url, headers=None, **_):
+        calls.append(bool((headers or {}).get("Authorization")))
+        if (headers or {}).get("Authorization"):
+            return _Resp(401)
+        return _Resp(200, {"number": 650, "title": "MC cannot read GitHub", "state": "open", "html_url": "u",
+                           "body": "", "comments": 0, "user": {"login": "x"}, "labels": []})
+    return get
+
+
+def test_a_refused_token_is_said_and_the_read_retried_without_it():
+    from core.mc_tools.github import GitHubIssues, TOKEN_REFUSED
+    calls = []
+    reader = GitHubIssues(_refusing_get(calls), token="expired")
+    state, message, _ = reader.issue(650)
+    assert calls[:2] == [True, False]
+    assert state == "ok" and message.startswith(TOKEN_REFUSED) and "expired" not in message
+
+
+def test_the_api_reader_says_a_refused_token_too():
+    from core.mc_tools.github import TOKEN_REFUSED
+    from core.mc_tools.github_api import GitHubRepoReader
+    calls = []
+    reader = GitHubRepoReader(_refusing_get(calls), token="expired")
+    state, message, _ = reader.get("/repos/robertvanstedum/personal-ai-agents/issues/650")
+    assert calls[:2] == [True, False] and message.startswith(TOKEN_REFUSED)
+
+
+def test_unreachable_is_not_the_same_words_as_unreadable():
+    from core.mc_tools.github import GitHubIssues
+
+    def down(*_a, **_k):
+        raise OSError("no route")
+    state, message, _ = GitHubIssues(down).issue(650)
+    assert state == "unreachable" and "could not be reached" in message

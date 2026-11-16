@@ -10,6 +10,7 @@ the session's instructions baked in server-side.
 Endpoint/request/response shape verified 2026-07-24 against
 https://developers.openai.com/api/docs/guides/realtime-webrtc.
 """
+import os
 import requests
 
 from core.get_secret import get_secret
@@ -150,6 +151,19 @@ def _mint_transcription_credential(
     }
 
 
+def noise_reduction(environ=None) -> dict:
+    """#651: the provider's input noise reduction, before turn detection and transcription, for every voice host (German,
+    Portuguese, CoS, MC). On 16 Nov phone calls in all three apps showed lines nobody said ("Rauchentwicklung.",
+    "goodbye") and agent turns cut off mid-sentence; room noise passing server VAD is the hypothesis. Near field is a
+    phone or headset held close. It runs on the provider before the model hears the audio, so nothing waits here.
+    ``MINIMOI_VOICE_NOISE_REDUCTION``: near_field (default), far_field, or off."""
+    env = os.environ if environ is None else environ
+    kind = str(env.get("MINIMOI_VOICE_NOISE_REDUCTION", "near_field") or "near_field").strip().lower()
+    if kind in ("off", "0", "none", "false"):
+        return {}
+    return {"noise_reduction": {"type": kind if kind in ("near_field", "far_field") else "near_field"}}
+
+
 def mint_ephemeral_credential(
     *,
     instructions: str,
@@ -190,6 +204,7 @@ def mint_ephemeral_credential(
             "audio": {
                 "output": {"voice": voice},
                 "input": {
+                    **noise_reduction(),
                     "turn_detection": turn_detection,
                     "transcription": {
                         "model": "gpt-4o-transcribe",

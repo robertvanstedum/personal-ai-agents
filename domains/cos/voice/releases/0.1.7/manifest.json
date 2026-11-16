@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "card": "chief-of-staff voice",
+  "version": "0.1.7",
+  "status": "candidate",
+  "spec": "0.1.6 with its status line said once (#653, 16 Nov 2026: \"Let me check with Master Craftsman\" four times in a two-minute call for one question): she says it once for a question, never again while it is being checked. Voices, accents, language, transcription and the restated persona as 0.1.6",
+  "persona": {
+    "source": "MASTER_CRAFTSMAN_PERSONA.md",
+    "version": "1.1",
+    "sha256": "f07078f5c913323f1098381faf44d38f77223258e48498ddd0552f53042c4f1b"
+  },
+  "files": {
+    "voice.json": "400755d30906339efd500fc81f61fb4f2b77492519025579bb5317d2cd2ded96"
+  }
+}

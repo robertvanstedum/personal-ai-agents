@@ -20,7 +20,7 @@ import json
 import re
 from datetime import datetime, timezone
 
-from .github import API, DEFAULT_REPO, _REPO
+from .github import API, DEFAULT_REPO, TOKEN_REFUSED, _REPO, log
 
 TIMEOUT_S = 8
 MAX_BYTES = 3_000_000            # what we will download at all (a 100-run page is ~1 MB)
@@ -71,6 +71,7 @@ class GitHubRepoReader:
         self.repo = repo if _REPO.fullmatch(repo or "") else DEFAULT_REPO
         self._token = token if isinstance(token, str) and token else None      # never logged or returned
         self.authenticated = self._token is not None
+        self.token_refused = False
 
     def get(self, path: str, query: dict | None = None) -> tuple[str, str, dict]:
         """(state, message, data). state is "ok" or a fixed code; message never holds GitHub's raw error body."""
@@ -93,6 +94,12 @@ class GitHubRepoReader:
         rh = {k.lower(): v for k, v in (getattr(r, "headers", None) or {}).items()}
         if 300 <= code < 400:
             return "redirect_not_followed", _WORDS["redirect_not_followed"], {}
+        if code == 401 and self._token:
+            # #650: a refused token is said and the public read is tried once without it, never hidden.
+            log.warning("GitHub refused the MC read token (401); reading without it")
+            self._token, self.authenticated, self.token_refused = None, False, True
+            state, words, data = self.get(path, query)
+            return state, f"{TOKEN_REFUSED}\n{words}", data
         if code == 401:
             return "unauthenticated", _WORDS["unauthenticated"], {}
         if code == 429 or (code == 403 and (rh.get("x-ratelimit-remaining") == "0" or "retry-after" in rh)):

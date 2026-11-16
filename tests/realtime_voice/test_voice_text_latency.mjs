@@ -67,3 +67,7 @@ for (const line of [
 }
 assert.equal(stripSpokenLabel('My recommendation is to leave it.'), 'My recommendation is to leave it.');
 assert.equal(stripSpokenLabel('Decision: keep the file.'), 'Decision: keep the file.');
+// #654: any short lead label goes, not only the six named words.
+assert.equal(stripSpokenLabel('My view: we wait. Short answer: not now.'), 'we wait. not now.');
+assert.equal(stripSpokenLabel('Task: refresh it.'), 'Task: refresh it.');
+assert.equal(stripSpokenLabel('The way I read the record is simple: it went in.'), 'The way I read the record is simple: it went in.');
