@@ -2,6 +2,8 @@
 .task-heading {display:flex; align-items:start; justify-content:space-between; gap:1rem;}
 .task-heading p {max-width:42rem; line-height:1.5;}
 .task-card {border:1px solid var(--border, #d5d5d0); border-radius:.6rem; padding:1.1rem; margin:1rem 0;}
+.task-card.is-open {border-color:#1f4b99; box-shadow:inset 4px 0 0 #1f4b99;}
+.task-detail-slot {margin-top:.8rem;}
 .task-card h3 {margin:0 0 .7rem;}
 .task-card p, .task-card blockquote {white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.5;}
 .task-card blockquote {margin:1rem 0; padding:.7rem 1rem; border-left:3px solid var(--border, #d5d5d0);}

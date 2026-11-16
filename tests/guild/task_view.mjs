@@ -38,4 +38,43 @@ async function rig({search='',get,post,storage=new Map()}={}){
 {
  const r=await rig({search:'?task='+task.task_id,get:p=>({ok:true,body:p.startsWith('/tasks/item')?{task:{...task,state:'canceled'}}:{proposals:[],work:[]}})});assert.ok(!r.root.all().some(e=>e.textContent==='Cancel task'));
 }
+{
+ const work=[{type:'task',id:'TK-hc-day1',state:'working',outcome:'Daily job-health note',lead:'mc',holder:'apprentice',done_when:'{"date": "2026-11-14"}',created_at:'2026-11-14T15:00:00+00:00',updated_at:'2026-11-14T15:10:00+00:00'},{type:'task',id:'TK-hc-day2',state:'working',outcome:'Daily job-health note',lead:'mc',holder:'apprentice',done_when:'{"date": "2026-11-15"}',created_at:'2026-11-15T15:00:00+00:00',updated_at:'2026-11-15T15:10:00+00:00'}];
+ const taskFor=id=>({task_id:id,revision:2,state:'working',outcome:'Daily job-health note',lead:'mc',holder:'apprentice',done_when:id.endsWith('day1')?'{"date": "2026-11-14"}':'{"date": "2026-11-15"}',created_at:'2026-11-15T15:00:00+00:00',updated_at:'2026-11-15T16:00:00+00:00'});
+ const get=p=>p.startsWith('/tasks/item/')?{ok:true,body:{task:taskFor(decodeURIComponent(p.split('/').pop()))}}:{ok:true,body:{proposals:[],work}};
+ const r=await rig({get});
+ const text=r.text();
+ assert.ok(text.includes('TK-hc-day1')&&text.includes('TK-hc-day2')&&text.includes('2026-11-14')&&text.includes('2026-11-15'),text);
+ assert.ok(text.includes('With')&&!text.includes('Next step'));
+ const buttons=r.root.all().filter(e=>e.tag==='button'&&e.textContent==='Open task');
+ assert.equal(buttons.length,2);
+ await buttons[1].events.click();
+ for(let i=0;i<8;i++)await settle();
+ assert.equal(r.fields.status.textContent,'Showing task TK-hc-day2.');
+ const card=r.fields.open.children[1];
+ assert.equal(card.className,'task-card is-open');
+ assert.equal(r.fields.open.children[0].className,'task-card');
+ assert.ok(card.detailSlot.all().some(e=>e.tag==='textarea'));
+ assert.ok(card.detailSlot.all().map(e=>e.textContent).join('\n').includes('TK-hc-day2'));
+ assert.ok(card.detailSlot.all().map(e=>e.textContent).join('\n').includes('2026-11-15T16:00:00+00:00'));
+ assert.equal(r.fields.record.children.length,0);
+ assert.equal(r.fields.detail.hidden,true);
+}
+{
+ const work=[{type:'task',id:'TK-hc-day2',state:'working',outcome:'Daily job-health note',lead:'mc',holder:'apprentice',done_when:'{"date": "2026-11-15"}',created_at:'2026-11-15T15:00:00+00:00',updated_at:'2026-11-15T15:10:00+00:00'}];
+ const get=p=>p.startsWith('/tasks/item/')?{ok:true,body:{task:{task_id:'TK-hc-day2',revision:1,state:'working',outcome:'Daily job-health note',lead:'mc',holder:'apprentice',done_when:'{"date": "2026-11-15"}',created_at:'2026-11-15T15:00:00+00:00',updated_at:'2026-11-15T16:00:00+00:00'}}}:{ok:true,body:{proposals:[],work}};
+ const r=await rig({search:'?task=TK-hc-day2',get});
+ assert.equal(r.fields.status.textContent,'Showing task TK-hc-day2.');
+ assert.equal(r.fields.open.children[0].className,'task-card is-open');
+ assert.ok(r.fields.open.children[0].detailSlot.all().some(e=>e.textContent==='Id'));
+}
+{
+ const r=await rig({search:'?task=not-a-task',get:()=>({ok:true,body:{proposals:[],work:[]}})});
+ assert.equal(r.fields.status.textContent,'Choose a tracked task.');
+ assert.ok(!r.fields.status.textContent.startsWith('Showing task'));
+}
+{
+ const r=await rig({get:()=>({ok:true,body:{proposals:[proposal],work:[]}})});
+ assert.ok(r.text().includes('With')&&!r.text().includes('Next step'));
+}
 console.log('task UI behavioral checks passed');

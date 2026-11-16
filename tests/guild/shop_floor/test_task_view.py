@@ -23,7 +23,9 @@ def test_view_confirm_reload_cancel(view):
     tid = result['task_id']
     rows = c.get('/tasks/view').json
     assert not rows['proposals']
-    assert any(r['id'] == tid and r['outcome'] == p['proposed']['outcome'] for r in rows['work'])
+    opened = next(r for r in rows['work'] if r['id'] == tid)
+    assert opened['outcome'] == p['proposed']['outcome']
+    assert opened['created_at'] and opened['updated_at'] and opened['done_when']
     assert c.get('/tasks/item/' + tid).json['task']['lead'] == 'mc'
     assert post(c, '/tasks/cancel', task_id=tid, text='Cancel this synthetic task.').status_code == 200
     assert c.get('/tasks/item/' + tid).json['task']['state'] == 'canceled'
@@ -69,6 +71,25 @@ def test_real_portal_owner_guard_and_task_page(load_portal, monkeypatch):
     assert page.status_code == 200
     assert b'data-task-view' in page.data and b'css/tasks.css' in page.data
     assert c.get('/guild-next/api/v1/tasks/view').status_code == 409
+
+
+def test_open_rows_carry_the_dates_that_tell_two_health_checks_apart(view, monkeypatch):
+    _, c = view
+    class Rows:
+        def pending(self): return []
+        def open_work(self):
+            return [{"type": "task", "id": "TK-hc-one", "state": "working"},
+                    {"type": "task", "id": "TK-hc-two", "state": "working"}]
+        def get(self, kind, rid):
+            day = "2026-11-14" if rid.endswith("one") else "2026-11-15"
+            return {"state": "working", "outcome": "Daily job-health note", "lead": "mc", "holder": "apprentice",
+                    "done_when": '{"date": "%s"}' % day, "created_at": day + "T15:00:00+00:00",
+                    "updated_at": day + "T16:00:00+00:00"}
+    monkeypatch.setattr(T, "_client", lambda: Rows())
+    rows = c.get("/tasks/view").json["work"]
+    assert [r["id"] for r in rows] == ["TK-hc-one", "TK-hc-two"]
+    assert rows[0]["done_when"] == '{"date": "2026-11-14"}' and rows[1]["done_when"] == '{"date": "2026-11-15"}'
+    assert rows[0]["created_at"].startswith("2026-11-14") and rows[1]["updated_at"].startswith("2026-11-15")
 
 
 def test_open_list_reconciles_new_terminal_state(view, monkeypatch):
