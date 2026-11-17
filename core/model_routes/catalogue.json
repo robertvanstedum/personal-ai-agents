@@ -60,7 +60,7 @@
      "capabilities": ["chat", "tools"],
      "offered": {}},
     {"route_id": "api-xai-strong", "tier": "strong", "provider": "minimoi-gateway", "model": "minimoi-xai-strong", "label": "Grok 4.7 (pay per use)",
-     "reasoning_effort": "high", "billing_mode": "metered_api", "runtime": "openclaw", "auth_profile_ref": null,
+     "reasoning_effort": "low", "billing_mode": "metered_api", "runtime": "openclaw", "auth_profile_ref": null,
      "capabilities": ["chat", "tools"],
      "offered": {}},
     {"route_id": "api-xai-strong-deep", "tier": "strong", "provider": "minimoi-gateway", "model": "minimoi-xai-strong-deep", "label": "Grok 4.7 deep (pay per use)",

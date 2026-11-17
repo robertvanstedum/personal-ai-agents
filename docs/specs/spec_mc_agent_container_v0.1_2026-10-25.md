@@ -56,6 +56,11 @@ Anthropic API calls afterwards.
 - **Plan limits are the ceiling.** When they're hit, MC errors loudly; there's
   no metered fallback.
 
+**Status, 17 Nov 2026.** Production has moved on from the lines above. The MC
+container `mem_limit` is 2048m, and the 1.2 overlay adds plan routes plus
+metered routes on a capped key. The 768 MB and "no metered fallback" lines
+are the 25 Oct decision, kept here as lineage.
+
 ## 3a. v0.1 text, kept for lineage: model credential (OpenClaw review, point 1)
 
 Verified 25 Oct: native dev MC calls **Anthropic directly with a metered API

@@ -1,7 +1,7 @@
 # Guildhall Meeting Flow and Etiquette
 
 **Version:** 0.2 · **Date:** 2 November 2026 · **Decision owner:** Robert · **Author:** Codex
-**Status:** Implemented and live-tested on dev through `e866033e`, including the `ec5b7fc3` timing correction; production integration pending. The limits of the live checks are recorded below.
+**Status:** Implemented and live-tested on dev through `e866033e`, including the `ec5b7fc3` timing correction. Guildhall's production compose is in place (17 Nov 2026). The limits of the live checks are recorded below.
 
 ## Purpose
 

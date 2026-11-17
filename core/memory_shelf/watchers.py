@@ -1,6 +1,6 @@
 """Standing watchers for Claude Code and Codex session files and MC conversation exports (v0.5 B6, amendment §2/§3).
 
-``run_source`` is a function (and a ``moi`` command); **no launchd job is installed**.
+``run_source`` is a function (and a ``moi`` command). The Mac launchd job is ``memory-watch`` in ``config/scheduled_jobs.json``.
 Per source:
 
 * **Approval gate.** A source with no approval record never captures. Its first run

@@ -14,7 +14,9 @@ provider key loaded into nearly every dev container.
 1. **Plans stay in the vendor's own product.** Claude plans cover Claude Code
    and Claude.ai. ChatGPT plans cover Codex and ChatGPT. Grok plans cover
    Grok's own apps. A plan token is never used inside OpenClaw, the gateway
-   or a MiniMoi service. (For Claude this is Anthropic's reported terms since
+   or a MiniMoi service, except the 6 Nov 2026 decision for MC: that container
+   uses signed-in plan CLIs, and the 1.2 overlay also offers metered routes on
+   a capped key. (For Claude this is Anthropic's reported terms since
    Feb 2026; verify each vendor's current terms, §6.)
 2. **Only the model gateway holds MiniMoi's provider keys.** Agents and
    services get **capped virtual keys**: one per agent or service, per
