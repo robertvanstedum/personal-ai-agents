@@ -311,8 +311,16 @@ export function initMcVoice(page) {
     const link = box.querySelector('[data-mc-voice-call-download]');
     if (link && url) { link.setAttribute('href', url); link.hidden = false; }
   }
+  function walkAskedForGrok() {
+    const route = $('[data-mc-route]');
+    const voicePick = $('[data-mc-voice-provider]');
+    return (route && /xai/i.test(route.value || '')) || (voicePick && voicePick.value === 'xai');
+  }
   async function startWalk(mine, current) {
-    say('Connecting…');
+    const notice = $('[data-mc-voice-notice]');
+    const grok = walkAskedForGrok();
+    if (notice) { notice.textContent = grok ? 'MC voice runs on OpenAI for now.' : ''; notice.hidden = !grok; }
+    say(grok ? 'MC voice runs on OpenAI for now.' : 'Connecting…');
     try {
       const { startMcWalk } = await import('./mc_voice_walk.js');
       if (!current()) return;

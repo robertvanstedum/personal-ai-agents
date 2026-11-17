@@ -188,6 +188,19 @@ def speech(note_request_id):
     return out
 
 
+WALK_OPENAI_ONLY = "MC voice runs on OpenAI for now."
+
+
+def _walk_openai_voice():
+    """The OpenAI voice the pinned MC card names. The walk cannot speak on Grok yet, and it does not invent a voice."""
+    from core.realtime_voice.voice_card import load_pinned
+    from .mc_voice_direct import CARD_ROOT
+    card = load_pinned(CARD_ROOT)
+    if "openai" not in card["named"]:
+        raise ValueError("MC voice card does not name an OpenAI voice")
+    return card["voices"]["openai"]
+
+
 def _bootstrap_walk(principal, guard, device):
     """A talking session. The model is MC. The server still writes the note. Production never reaches this unless the env says realtime."""
     import uuid
@@ -196,6 +209,13 @@ def _bootstrap_walk(principal, guard, device):
     from .mc.voice_calls import voice_calls_of
     from .mc.voice_calls import call_record_folder
     from .mc.voice_walk import instructions, open_call, open_session, read_tools, talking_reservation
+    asked = (request.get_json(silent=True) or {}).get("provider") or "openai"
+    if asked != "openai":
+        return jsonify({"ok": False, "error": WALK_OPENAI_ONLY}), 409
+    try:
+        voice = _walk_openai_voice()
+    except (OSError, ValueError):
+        return jsonify({"ok": False, "error": "MC voice is not configured."}), 503
     session = uuid.uuid4().hex
     open_session(session, principal)
     open_call(session, principal, folder=call_record_folder(cfg().get("services")))
@@ -207,7 +227,7 @@ def _bootstrap_walk(principal, guard, device):
                           entry_id=budget.direct_entry_id(session)):
             credential = openai_realtime.mint_ephemeral_credential(
                 instructions=instructions(),
-                voice="marin",
+                voice=voice,
                 turn_detection=conversation_turn_detection("openai"),
                 transcription_language="en",
                 user_id_for_safety_identifier=principal,
