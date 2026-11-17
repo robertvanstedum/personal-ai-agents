@@ -74,6 +74,11 @@ class GitHubTests(unittest.TestCase):
         self.assertEqual(state, 'rate_limited')
         self.assertIn('Rate limited, try again in 12 s.', message)
         self.assertNotIn('github_pat_', message)
+        again = GitHubIssues(lambda *a, **k: Reply({}, 429), token='github_pat_' + 'y' * 20)
+        again.retry_after_s = 12
+        state, message, _ = again.open()
+        self.assertEqual(state, 'rate_limited')
+        self.assertNotIn('12 s', message)
 
     def test_search_links_and_fixed_repository(self):
         row={'number':12,'title':'PR','state':'closed','pull_request':{},'repository_url':API+'/repos/'+DEFAULT_REPO}

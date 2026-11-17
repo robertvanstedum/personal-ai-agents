@@ -51,6 +51,7 @@ class GitHubIssues:
         return f"{TOKEN_REFUSED}\n{message}" if self.token_refused and message else message
 
     def _json(self, path, params=None):
+        self.retry_after_s = None
         try:
             r = self._get(f"{API}/repos/{self.repo}{path}" if not path.startswith("/search") else f"{API}{path}",
                           params=params, timeout=TIMEOUT_S, allow_redirects=False,
