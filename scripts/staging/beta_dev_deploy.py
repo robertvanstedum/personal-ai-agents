@@ -119,8 +119,6 @@ TARGETS = {
                    rules=_app("core/", "domains/cos/", "domains/guild/", "minimoi_portal/", "contracts/partnership/", "services/partnership_tasks/", "services/helper_seats/", "config/partnership/charters/",
                               "services/rooms_worker/", "services/mc_operations/"),
                    exclude=_BOTS_ONLY, layout=("core/", "domains/cos/", "minimoi_portal/", "services/partnership_tasks/", "services/rooms_worker/", "services/helper_seats/", "config/partnership/charters/"),
-                   # Dev's running portal has a newer about page than this commit. Keep it, and do not fail the update on it.
-                   layout_hold=("minimoi_portal/templates/about.html",),
                    # The portal reads domains/cos/ (CoS's page files at startup, its modules per request) but did not ship it until 8 Nov:
                    # Dev's portal holds the 5 Nov base's copy. An update ships that folder as the full chain would, from the base, until
                    # a release built with it runs on Dev; then this line goes.
@@ -182,8 +180,9 @@ class Refused(RuntimeError):
 # bin/mc.sh is the stack an update recreates. The 5 Nov MC operator still renders the older stack.
 # Measured on Dev, 17 Nov 2026: the wrapper has the plan-route env and the planning mount, the
 # operator's gateway key is empty, and the operator's relay list is the short one. The running
-# containers match the wrapper. Any other field still fails this gate. The failure line names
-# fields, never values.
+# containers match the wrapper. The key's value stays unchecked, but a non-empty MC_METERED_ROUTES
+# on the wrapper requires a non-empty MC_MODEL_GATEWAY_KEY. Any other field still fails this gate.
+# The failure line names fields, never values.
 MC_WRAPPER_ENV_ABSENT_ON_OPERATOR = {
     "mc-agent": frozenset({
         "MC_FAILOVER_ROUTES", "MC_METERED_ROUTES", "MC_PRIMARY_ROUTE",
@@ -220,6 +219,11 @@ def mc_update_services_agree(reviewed: dict, wrapper: dict, service: str, image_
     unchecked = MC_WRAPPER_ENV_VALUE_UNCHECKED.get(service, frozenset())
     if isinstance(left.get("environment"), dict) and isinstance(right.get("environment"), dict):
         operator_env, wrapper_env = dict(left["environment"]), dict(right["environment"])
+        if service == "mc-agent":
+            metered = str(wrapper_env.get("MC_METERED_ROUTES") or "").strip()
+            gateway_key = str(wrapper_env.get("MC_MODEL_GATEWAY_KEY") or "").strip()
+            if metered and not gateway_key:
+                raise AssertionError("bin/mc.sh: MC_METERED_ROUTES is set and MC_MODEL_GATEWAY_KEY is empty")
         for key in absent:
             if key not in operator_env:
                 wrapper_env.pop(key, None)
@@ -1127,8 +1131,7 @@ class RealHost:                                     # pragma: no cover  (exercis
     def _check_layout_digest(self, key, spec, new_id):
         """An update ships only what changed since the running release, so every other reviewed file must already be the commit's."""
         want = spec.get("layout_digest") or {"prefixes": [], "count": 0, "sha256": layout_digest({})}
-        paths = layout_paths(self.meta.get("tree", ()), want["prefixes"], spec["files"],
-                             tuple(want.get("exclude") or ()) + tuple(want.get("hold") or ()))
+        paths = layout_paths(self.meta.get("tree", ()), want["prefixes"], spec["files"], want.get("exclude", ()))
         got = json.loads(self._sealed(new_id, "python", "-c", LAYOUT_HASHES, input=json.dumps(paths)).strip().splitlines()[-1])
         self._write_private(self.OP / f"layout-{key}.private.json", json.dumps(got, indent=0))
         self.layout_report[key] = {"differs": [] if layout_digest(got) == want["sha256"] else ["digest"], "missing": sorted(p for p, h in got.items() if not h)}

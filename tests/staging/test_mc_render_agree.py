@@ -68,6 +68,19 @@ def test_image_is_compared_when_the_override_does_not_name_the_service():
         agree(reviewed, wrapper, "mc-egress", False)
 
 
+def test_metered_routes_without_a_gateway_key_fail():
+    reviewed = _agent({"MC_MODEL_GATEWAY_KEY": "", "HOME": "/app"})
+    wrapper = _agent({"MC_MODEL_GATEWAY_KEY": "", "MC_METERED_ROUTES": "minimoi-gateway/minimoi-xai-strong", "HOME": "/app"})
+    with pytest.raises(AssertionError, match="MC_METERED_ROUTES is set and MC_MODEL_GATEWAY_KEY is empty"):
+        agree(reviewed, wrapper, "mc-agent", True)
+
+
+def test_empty_metered_routes_may_have_an_empty_gateway_key():
+    reviewed = _agent({"MC_MODEL_GATEWAY_KEY": "", "HOME": "/app"})
+    wrapper = _agent({"MC_MODEL_GATEWAY_KEY": "", "MC_METERED_ROUTES": "", "HOME": "/app"})
+    agree(reviewed, wrapper, "mc-agent", True)
+
+
 def test_a_shared_env_value_change_still_fails():
     reviewed = _agent({"HOME": "/app"})
     wrapper = _agent({"HOME": "/elsewhere"})

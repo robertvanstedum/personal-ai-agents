@@ -71,7 +71,7 @@ API_ROUTES = {r["route_id"]: r for r in (
     _api("api-anthropic-strong", "strong", "minimoi-anthropic-strong", "Claude Opus 5.5 (API)", "high"),
     _api("api-anthropic-mid", "mid", "minimoi-anthropic-mid", "Claude Sonnet 5.5 (API)", "medium"),
     _api("api-anthropic-low", "low", "minimoi-anthropic-low", "Claude Haiku 5.5 (API)", "low"),
-    _api("api-xai-strong", "strong", "minimoi-xai-strong", "Grok 4.7 (pay per use)", "high"),
+    _api("api-xai-strong", "strong", "minimoi-xai-strong", "Grok 4.7 (pay per use)", "low"),
     _api("api-xai-mid", "mid", "minimoi-xai-mid", "Grok 4.6 (pay per use)", "medium"),
     _api(GROK_ROUTE, "low", GROK_MODEL, "Grok 4.3 (pay per use)", "low"),
 )}

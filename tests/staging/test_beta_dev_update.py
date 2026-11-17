@@ -677,10 +677,8 @@ def test_a_file_an_image_is_built_without_on_purpose_is_not_held_against_an_upda
     meta, _ = next_meta(["minimoi_portal/static/site.css"])
     portal = meta["targets"]["portal"]["layout_digest"]
     assert portal["exclude"] == list(op._BOTS_ONLY)
+    assert "hold" not in portal
     assert "/app/core/telegram/telegram_bot.py" not in op.layout_paths(meta["tree"], portal["prefixes"], set(), portal["exclude"])
-    assert portal["hold"] == ["minimoi_portal/templates/about.html"]
-    assert "/app/minimoi_portal/templates/about.html" not in op.layout_paths(
-        ["/app/minimoi_portal/templates/about.html", "/app/minimoi_portal/other.py"], ("minimoi_portal/",), set(), portal["hold"])
 
 
 def test_a_small_update_goes_in_one_ssm_call_to_release_next_and_never_replaces_the_running_release():
