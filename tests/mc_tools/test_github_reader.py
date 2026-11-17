@@ -53,6 +53,33 @@ class GitHubTests(unittest.TestCase):
         self.assertEqual((state,data['kind'],data['state']), ('ok','pull request','merged'))
         self.assertIn('/pull/12',msg);self.assertIn(REF,msg);self.assertNotIn('evil',msg)
 
+    def test_open_lists_issues_only_with_labels_and_says_the_wait(self):
+        row = {'number': 656, 'title': 'Drifts', 'state': 'open', 'labels': [{'name': 'voice'}],
+               'updated_at': '2026-11-17T00:00:00Z', 'repository_url': API + '/repos/' + DEFAULT_REPO}
+        pr = dict(row, number=655, title='PR', pull_request={'url': 'ignored'})
+        reader = self.reader(lambda *_: Reply({'items': [pr, row], 'total_count': 1}))
+        self.assertEqual(reader.open()[0], 'unreadable')          # a pull request in an open-issue list is refused
+        reader = self.reader(lambda *_: Reply({'items': [row], 'total_count': 1}))
+        state, msg, data = reader.open(query='voice')
+        self.assertEqual(state, 'ok')
+        self.assertIn('#656 · Drifts · voice · updated 2026-11-17', msg)
+        self.assertIn('is:issue is:open', self.requests[-1][1]['params']['q'])
+        self.assertTrue(valid_request({'operation': 'open', 'query': 'label:voice'}))
+        self.assertFalse(valid_request({'operation': 'open', 'query': 'repo:other/repo'}))
+
+        class Limited(Reply):
+            headers = {'Retry-After': '12'}
+        limited = GitHubIssues(lambda *a, **k: Limited({}, 403), token='github_pat_' + 'x' * 20)
+        state, message, _ = limited.open()
+        self.assertEqual(state, 'rate_limited')
+        self.assertIn('Rate limited, try again in 12 s.', message)
+        self.assertNotIn('github_pat_', message)
+        again = GitHubIssues(lambda *a, **k: Reply({}, 429), token='github_pat_' + 'y' * 20)
+        again.retry_after_s = 12
+        state, message, _ = again.open()
+        self.assertEqual(state, 'rate_limited')
+        self.assertNotIn('12 s', message)
+
     def test_search_links_and_fixed_repository(self):
         row={'number':12,'title':'PR','state':'closed','pull_request':{},'repository_url':API+'/repos/'+DEFAULT_REPO}
         # GitHub supplies a nonempty PR descriptor.

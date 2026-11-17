@@ -480,9 +480,10 @@ class ToolService:
         if not valid_request(args):
             # Said in full: with only "do not fit", a model retried the same search seven times and gave up (7 Nov).
             return result("refused", "tool_arguments_invalid", "Those arguments do not fit minimoi_github_issues. Nothing "
-                          "was done. For the newest issues send {\"operation\": \"latest\"}; for a recent window send "
-                          "{\"operation\": \"window\", \"hours\": 48}; to search send {\"query\": "
-                          "\"words\"}, optionally with page; for one issue or PR send {\"number\": 123}.", {})
+                          "was done. For what is open send {\"operation\": \"open\"}; for the newest issues send "
+                          "{\"operation\": \"latest\"}; for a recent window send {\"operation\": \"window\", \"hours\": 48}; "
+                          "to search send {\"query\": \"words\"} (GitHub qualifiers such as is:open and label: are allowed), "
+                          "optionally with page; for one issue or PR send {\"number\": 123}.", {})
         with self._tx() as conn:
             b = self._bind(conn, caller)
             with _cursor(conn) as cur:                # anyone can write on GitHub: proposals need a code from now on
