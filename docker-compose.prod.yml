@@ -109,7 +109,7 @@ services:
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos/outbox:/minimoi/cos/outbox
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos/conversations:/minimoi/cos/conversations:ro
       # The same live planning mirror MC reads (#666). Read-only. The 26 Oct copy under cos/planning-studio
-      # is no longer mounted; cos_prod.sh keep-planning copies anything unique there into the outbox and does not delete it.
+      # is no longer mounted; cos_prod.sh keep-planning copies anything unique there into cos/planning-kept and does not delete it.
       - ${MINIMOI_ROOT:-/opt/minimoi}/planning/tree:/minimoi/planning-studio:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/mc/repo:/minimoi/repo:ro
       # Prototype Lab lives in the code repo. Both partners read that one copy.

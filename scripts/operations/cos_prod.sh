@@ -4,7 +4,7 @@
 #
 #   cos_prod.sh prepare           create CoS's folders (every main release runs this before the deploy; idempotent)
 #   cos_prod.sh keep-planning     copy files from the old Planning Studio folder that the live mirror does not have,
-#                                 into the outbox, and leave the old folder in place (#666)
+#                                 into cos/planning-kept (not the outbox), and leave the old folder in place (#666)
 #   cos_prod.sh key <dollars>     mint CoS's own capped key inside the gateway (CoS's routes, its API failover tiers, Grok; chat completions and
 #                                 responses only, a 30-day budget, rpm 60) and recreate only cos-agent-a, which then uses
 #                                 it instead of the master key. A re-run rotates (the old key is deleted).
@@ -55,7 +55,7 @@ keep_planning() {
   local old="${COS_PLANNING_OLD:-$COS/planning-studio}" live="${PLANNING_TREE:-$ROOT/planning/tree}" dest moved=0 f rel
   [[ -d "$old" ]] || { log "no old Planning Studio copy at $old"; return 0; }
   [[ -d "$live" ]] || die "the live planning mirror is not there yet ($live)"
-  dest="${COS_PLANNING_KEEP:-$COS/outbox}/planning-studio-kept-$(date -u +%Y%m%dT%H%M%SZ)"
+  dest="${COS_PLANNING_KEEP:-$COS/planning-kept}/planning-studio-kept-$(date -u +%Y%m%dT%H%M%SZ)"
   install -d -m 0750 "$dest"
   while IFS= read -r -d '' f; do
     rel="${f#"$old"/}"
