@@ -2181,5 +2181,61 @@
     "loop_name": "devagent_watcher",
     "status": "pending",
     "created_at": "2026-07-13T03:25:17.416008+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-08-09T18:11:54.790109+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-08-09T18:11:55.344732+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-08-09T18:11:55.966724+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-08-09T18:11:56.885657+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-08-09T22:17:04.464146+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-08-14T22:31:15.710394+00:00"
+  },
+  {
+    "domain": "design_dev",
+    "description": "[memory_cap_approaching] devagent_memory.md: devagent memory approaching 8k cap",
+    "confidence": 0.8,
+    "loop_name": "devagent_watcher",
+    "status": "pending",
+    "created_at": "2026-08-14T22:56:36.330159+00:00"
   }
 ]
