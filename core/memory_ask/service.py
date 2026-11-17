@@ -1,5 +1,5 @@
-"""The Ask service: the host that binds an agent's identity (Codex lane, 5 Oct 2026). **Not started by anything**: no launchd, no
-compose entry, no wiring into an agent. This is the frozen contract and its implementation, for review.
+"""The Ask service: the host that binds an agent's identity (Codex lane, 5 Oct 2026). Compose starts it for `vault-ask` and
+`vault-ask-mc`. This is the frozen contract and its implementation, for review.
 
     POST /v1/ask        Authorization: Bearer <agent token>     Content-Type: application/json
         {"query": str, "include_raw": bool?, "created_after": "YYYY-MM-DD"?, "created_before": "YYYY-MM-DD"?, "k": int?,

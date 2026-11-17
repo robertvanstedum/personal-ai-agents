@@ -535,8 +535,8 @@ services:
       - postgres
       - cos-agent-a
 
-  # Production Vault: keyword search over the Mac-published snapshot (scripts/vault/
-  # production_refresh.py installs /opt/minimoi/vault/current). Behind the `vault` profile,
+  # Production Vault: keyword search over the applied snapshot at /opt/minimoi/vault/current.
+  # vault-sync and vault-apply carry that copy; production_refresh.py is retired (13 Nov). Behind the `vault` profile,
   # so ordinary releases never create it until activation sets COMPOSE_PROFILES=vault.
   # Same portal image (the repository copy); no sqlite-vec, so meaning search reports
   # vector_unavailable. Reachable only on the internal network, never published.
