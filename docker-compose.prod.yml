@@ -102,14 +102,18 @@ services:
       - ${MINIMOI_ROOT:-/opt/minimoi}/scripts:/minimoi/scripts:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/agent_logs:/minimoi/agent_logs
       # CoS gets Master Craftsman's working skills (Robert, 26 Oct 2026; #215, #335). Test phase: wide read, writes in
-      # its own folders and Planning Studio; narrowing per subdomain comes later. Folders are prepared by
+      # its own folders. Planning Studio and the Prototype Lab are the live read-only mirrors (#666). Folders are prepared by
       # scripts/operations/cos_prod.sh prepare (every main release). No credential is reachable: never /opt/minimoi
       # itself, .env, mc.env, mc/portal, auth, private, backups, ~/.ssh or the Docker socket.
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos/inbox:/minimoi/cos/inbox:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos/outbox:/minimoi/cos/outbox
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos/conversations:/minimoi/cos/conversations:ro
-      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/planning-studio:/minimoi/planning-studio
+      # The same live planning mirror MC reads (#666). Read-only. The 26 Oct copy under cos/planning-studio
+      # is no longer mounted; cos_prod.sh keep-planning copies anything unique there into cos/planning-kept and does not delete it.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/planning/tree:/minimoi/planning-studio:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/mc/repo:/minimoi/repo:ro
+      # Prototype Lab lives in the code repo. Both partners read that one copy.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/mc/repo/prototype-lab:/minimoi/prototype-lab:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/mc/work:/minimoi/mc/work:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/mc/workshops:/minimoi/mc/workshops:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/mc/artifacts:/minimoi/mc/artifacts:ro
