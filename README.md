@@ -2,57 +2,223 @@
 
 <div><a name="overview"></a></div>
 
-mini-moi is a personal AI agent platform. It carries
-context across reading and research, language learning, and the work of building
-and running the system itself. It remembers my interests, what I have already
-investigated, how my thinking develops, what I decide to follow up on, and what
-I got wrong.
+*1.2 beta, November 2026.*
+
+mini-moi is a personal AI agent platform. It carries context across reading and
+research, language learning, and the work of building and running the system
+itself. It remembers my interests, what I have already investigated, how my
+thinking develops, what I decide to follow up on, and what I got wrong.
 
 The same pattern applies beyond one person. Persistent context and feedback can
 help teams, organizations, and their systems learn and improve over time. This
 repository is the personal version.
 
-mini-moi has been in daily use since February 2026, on AWS since June 2026. This
-repository documents the system as it works today: architecture, operations,
-roadmap, and ongoing development, with current capability kept distinct from
-planned work.
+mini-moi has been in daily use since February 2026 and on AWS since June 2026.
+Release 1.2 went to production as a beta on 9 November 2026. This repository
+documents the system as it works today, with current capability kept distinct
+from planned work. Where the 1.2 end state is ahead of production, I say
+**1.2 (beta)** and name the open issue. [ARCHITECTURE.md](ARCHITECTURE.md) is the
+reference; this page is the short form of it.
 
 ---
 
-## Current state (August 2026)
+## Current state (1.2 beta, November 2026)
 
-| Domain | Current role |
+Five user-facing domains. Two are partner domains, formalized in 1.2, where
+agents and I work on the platform and on my own priorities. Three are the
+learning domains the platform grew from.
+
+| Domain | What it does today |
 |---|---|
-| **Curator** | Supports daily reading and sustained research in geopolitics and finance. Each morning, it distills roughly 700 candidates from international RSS feeds, X bookmarks, and theme-driven web search into a curated shortlist of 20. Selected articles can become scans, research threads, or deeper dives. Reactions, comments, and recorded leanings shape later selections. A serendipity pool guards against a closed loop, while AI synthesis surfaces patterns across the accumulated record. |
-| **Mein Deutsch** | Originally inspired by an upcoming trip to Vienna and a lack of opportunities to speak German, this domain uses AI personas in everyday scenarios for unscripted conversations adapted to the learner’s ability. The intent is immersion, including the tension of following and speaking in a new language. It was road-tested during the trip itself, when unexpected communication challenges could be turned into new scenes and relived later. Reading and writing reinforce the learning loop and preserve locally grounded context. The learner’s activity then shapes future sessions. |
-| **Meu Português** | Portuguese was chosen to fill a family need: maintaining a second language used at home across varying levels of proficiency. AI personas, scenes, and reading content are Brazilian-focused. The domain does not put users into fixed proficiency levels. The intent is still immersion. A more advanced learner can choose a more demanding scenario and speak or write in a more complex way. A novice can use simpler scenarios and rely more heavily on targeted drills or traditional vocabulary practice. Usability enhancements were added across the site, including hover translation, tips in English, and the option to speak throughout. |
-| **Guild** | Guild was created to bring discipline, visibility, and learning to the development of the platform. Build, Operate, and Improve are its three working areas. Build currently maintains a Kanban view of work in progress, an inventory of specifications, and an evolving roadmap. With more than one coding agent now in use and operational concerns becoming more important, the planned **Master Craftsman** will coordinate build quality, code review, domain standards, and consistency between specifications and implementation. |
-| **Chief of Staff** | Chief of Staff is intended to become my personal strategic thinking and cross-domain working partner. It will carry context across mini-moi, notice connections, support decisions, and help direct follow-through. Its scope will also extend to learning and professional priorities beyond the current domains, using the platform’s shared tools and capabilities. The beta supports discussion, investigation, and refinement of possible actions but cannot alter the platform itself. OpenClaw is the current bounded agent, running independently on AWS behind a stable interface so it can be replaced without redesigning the domain. Once proven, the same approach will support **Master Craftsman**, a separate build-focused agent in Guild. |
+| **Guild** | Design and build. Master Craftsman (MC), the main agent of my Workshop, works here and is live in production by chat, and by voice as a lighter walk until voice parity in 1.2 (beta) (#659). It coordinates the coding agents that build mini-moi, judges what comes back, and acts only through mini-moi's tools under a policy I approved. |
+| **Chief of Staff** | My thinking partner across all of mini-moi, live in production by chat and voice. It keeps my goals, plans, decisions, reminders and a Board, watches on a schedule, and pushes back. |
+| **Curator** | Daily reading and sustained research. Each morning it ranks about 700 candidates from international RSS feeds, X bookmarks, and theme-driven web search down to 20, with a serendipity reserve against a closed loop. Selected articles become investigations, deeper dives with a separate challenger pass, and a thinking record. Research intelligence lives here. |
+| **Mein Deutsch** | German immersion that began with a trip to Vienna and no chance to speak beforehand. AI personas I write, in everyday scenes, hold unscripted voice conversations adapted to what I can manage. Reading (Lesen) and writing with correction feed the same loop, and each session shapes the next. |
+| **Meu Português** | The same design for Brazilian Portuguese, for a family with different levels. Each person keeps a separate learning record; nobody is sorted into a level. |
 
-Production runs on AWS EC2, with a Mac development standby. The deployment
-consists of nine application/runtime containers plus PostgreSQL, with host-level
-Cloudflare Tunnel, nginx, and cron. Production currently uses a full
-immutable-image, health-gated deployment. A reviewed but not yet shipped CI/CD
-change adds document-only and domain-scoped releases so documentation can publish
-without container restarts and one domain can deploy without interrupting the
-others; shared or ambiguous changes continue to select the full path.
-Error tracking and scheduled health checks monitor the running system.
+Records and Guildhall are foundations, not domains: Guildhall is the room where I
+meet both partners, and Records keeps those meetings.
 
-The August 16 milestone is deliberately called a **beta**, not 1.0. It proves a
-real agentic loop—conversation, bounded research, model routing, verified note
-mutation, and realtime voice—while longer-term conversation retention, privacy
-controls, natural capture intents, cross-domain reach, and cost governance remain
-explicit follow-up work.
+---
 
-The maintained reference documents are:
+## What is new in 1.2
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) - system design and rationale
-- [OPERATIONS.md](OPERATIONS.md) - how the production system runs
-- [ROADMAP.md](ROADMAP.md) - current plans and the record of what shipped
+The August release was a beta with one agent inside the product. Since then the
+solution has changed shape. Three changes define 1.2.
 
-The [product tour](#product-tour) shows the current production interface across
-all five domains and follows one Curator topic from the daily briefing into
-long-form research.
+**1. Two AI partners, live in production.** Master Craftsman and Chief of Staff,
+each on its own runtime, reachable by chat and voice, each acting only through
+its own tools bound to my turn. MC's voice is lighter today; see item 6.
+
+**2. Agent coordination.**
+- **Guildhall:** MC, CoS and I meet in one room. A message to no one gets one
+  answer; "both of you" asks both. Records keeps the meeting and knows which
+  partner has proven it can answer there.
+- **Helpers:** each partner has one helper (the Apprentice for MC, the EA for
+  CoS) under a charter I approved, with read-only tools and small caps. Helpers
+  hand back drafts only, and the partner records a verdict before using one.
+- **Delegation:** bigger coding or research work goes from MC to the coding
+  agents on my workstation (Claude Code, Codex, Grok), only on my exact approval,
+  supervised, and they report back.
+- **One approval model:** a card with the exact text and a one-time code. Only my
+  own reply acts, and a receipt is kept. The receipt, not the agent's words, is
+  the confirmation.
+
+**3. Memory that every participant builds.**
+- **The Vault:** builder sessions (Claude Code, Codex, Grok), partner
+  conversations (MC, CoS, Guildhall) and chat exports (claude.ai, Grok, ChatGPT)
+  land on one file-first shelf. A source captures nothing until I approve it, and
+  sync never deletes. MC searches its own index, built through a privacy filter;
+  CoS has its own ask service, and which CoS conversations consult it is set
+  on the host.
+- **Search:** keyword search works in production today. Meaning search in
+  production, with the embedder beside the Vault, is 1.2 (beta) (#660). Grok CLI
+  capture is 1.2 (beta) (#668).
+- **Other memory:** an append-only register of the decisions I settle in chat,
+  CoS's full conversation history, MC's recall of its own chats, and persona
+  memory in the language domains.
+
+And three smaller ones.
+
+**4. Governance you can check.** An owner-approved, digest-pinned policy of about
+fifty rules in three tiers is checked on every MC tool call; CoS acts through a
+fixed set of turn-bound tools. There is a receipt per call, a capped key per agent, and a daily cost check.
+
+**5. Model choice without lock-in.** Callers ask for a task, and a route
+catalogue maps tasks to models, one line per task. Plan logins where they fit, and
+a capped gateway key for metered chat, which is the partners' default today. A
+plan switch is announced in the answer; gateway fallbacks show in receipts, and
+on screen in 1.2 (beta) (#658). There is no local model in production. Curator
+and the language domains still call their providers directly; moving them onto
+the gateway is #469.
+
+**6. Voice with the same power as text.** The browser talks to the voice model
+directly, deep work goes to the real partner, and notes need my spoken yes. My
+voice model choice follows me on every device. This is 1.2 (beta) (#659, #661,
+#662). Today German and Portuguese tutoring and CoS's voice use the full path;
+MC's voice is a lighter talking session that can read notes, issues and deploy
+status.
+
+[ARCHITECTURE.md](ARCHITECTURE.md) has the figures behind each of these, and two
+longer sections:
+[How the agents work together](ARCHITECTURE.md#how-the-agents-work-together) and
+[How MiniMoi remembers](ARCHITECTURE.md#how-minimoi-remembers).
+
+---
+
+## The two partners
+
+**Guild** is the platform's workshop, where specs become build items and Claude
+Code, Codex and Grok do the build work. **Master Craftsman (MC)**, the main
+agent of my Workshop, is the front door for build and operations requests. It
+takes my words, writes them into a request ledger the coding agents pick up, and
+judges what comes back. It posts outside mini-moi only after my exact approval.
+Bigger coding or research work goes to the agents on my workstation, also only
+on exact approval, and supervised. MC runs in its own container stack with no
+provider keys. It has one helper, the Apprentice.
+
+**Chief of Staff (CoS)** is a working partner, not an executive assistant. It
+should keep the reasoning behind decisions, not only the task list; watch across
+domains; bring up relevant things I did not ask for; and disagree when the
+evidence points away from the easy answer. Every change to its store, reminders
+and Board goes through a bound tool with a receipt. It reads my professional
+records through a read-only mirror, and sends my question to MC when I ask or
+say yes to its offer. Its model work runs in its own container behind a stable
+interface, on its own capped key. It has no write access to mini-moi's code or
+release scripts. It has one helper, the EA.
+
+### How an approval works
+
+```mermaid
+flowchart LR
+    O([owner types]) --> M{{Master Craftsman<br/>drafts 'post X'}}
+    M --> P[platform shows card<br/>exact text + code]
+    P --> O2([owner replies<br/>'yes CODE'])
+    O2 -.-> Q[platform checks<br/>the code exactly]
+    Q --> G[GitHub]
+    G --> R[(receipt)]
+    class M ai
+    class R store
+    classDef ai fill:#eef3ff,stroke:#4a6fd1
+    classDef store fill:#f4f4f4,stroke:#777
+```
+
+- **MC (AI)** understands, answers and drafts. It cannot post anywhere.
+- **The platform (mini-moi's code, no AI)** turns the draft into a card with the
+  exact text and a one-time code. It checks my own reply exactly, then acts and
+  keeps a receipt.
+- **Safety rule:** nothing reaches an outside system unless the platform sees my
+  own message with the right code. The receipt, not MC's words, is the
+  confirmation (#615).
+
+### Master Craftsman's runtime
+
+```mermaid
+flowchart LR
+    O([owner]) --> P[portal chat]
+    P --> A
+    subgraph CLOUD [cloud · MC container stack]
+        A{{MC chat + job agents}}
+        A --> X[egress proxy<br/>providers only]
+        A --> D[tools door]
+    end
+    X --> L{{model providers}}
+    D --> T[portal tool service<br/>owner-approved policy]
+    D --> W[model gateway<br/>capped key]
+    T --> V[(planning studio · prototype lab<br/>Vault · repo copy)]
+    T -.->|handoff, on approval| H
+    subgraph LOCAL [local workshop · owner's workstation]
+        H{{coding agents<br/>Claude Code · Codex · Grok}}
+    end
+    H -.->|report back| T
+    class A,L,H ai
+    class V store
+    classDef ai fill:#eef3ff,stroke:#4a6fd1
+    classDef store fill:#f4f4f4,stroke:#777
+```
+
+- **Its own container stack,** with no provider keys. It uses my signed-in plans
+  where they fit, and metered models through the gateway on its own capped key.
+- **Two ways out:** a proxy that reaches only model providers, and a fixed door
+  into mini-moi's tool service and gateway.
+- **Reads:** the planning studio, the Vault through its own filtered index, and
+  a repository copy at the deployed commit. The prototype lab is 1.2 (beta)
+  (#666).
+- **Local workshop:** coding work goes to the agents on my workstation, only on
+  exact approval and supervised. They work there and report back.
+- **It is not a sandbox.** The job agent can run commands inside its container.
+  The protection is the network and tool limits.
+
+### Chief of Staff's runtime
+
+```mermaid
+flowchart LR
+    O([owner]) --> P[CoS chat · voice]
+    P --> A{{CoS Agent A}}
+    A --> B[bound tools<br/>Board · reminders · notes<br/>receipt per call]
+    A -.->|consult| M{{Master Craftsman}}
+    A --> W[model gateway<br/>capped key]
+    W --> L{{model providers}}
+    PR[(professional records<br/>read-only mirror)] --> A
+    S[minimoi-private<br/>professional] -->|career sync| PR
+    PS[(planning studio ·<br/>prototype lab)] --> A
+    class A,M,L ai
+    class PR,PS store
+    classDef ai fill:#eef3ff,stroke:#4a6fd1
+    classDef store fill:#f4f4f4,stroke:#777
+```
+
+- **Bound tools:** every Board, reminder and note change goes through CoS's
+  bound tools. Each change is tied to my turn and leaves a receipt.
+- **Professional records** come from my private repository into a read-only
+  mirror.
+- **The planning studio and the prototype lab** are 1.2 (beta) for CoS (#666).
+- **CoS sends a question to MC** when I ask, or say yes to its offer. From voice
+  that hand-off is 1.2 (beta) (#652).
+
+[ARCHITECTURE.md](ARCHITECTURE.md#the-two-partners) has the detail behind these
+three figures, and the figures for Guildhall, the helpers, the Vault, voice and
+the model gateway.
 
 ---
 
@@ -63,94 +229,60 @@ One turns daily reading into a continuing research practice. The other turns an
 unscripted conversation into material for the next session.
 
 ```mermaid
-flowchart TB
-    U([you])
-
-    U --> C1[CURATOR<br/>daily reading]
-    C1 --> C2{{feedback and research<br/>interpreted by AI}}
-    C2 --> C3[better selection<br/>and deeper inquiry]
-
-    U --> L1[LANGUAGE<br/>free-form conversation]
-    L1 --> L2{{review and memory<br/>interpreted by AI}}
-    L2 --> L3[next session builds<br/>on what happened]
-
-    classDef curator fill:#E7F4F1,stroke:#25776F,color:#173A36,stroke-width:1.5px
-    classDef language fill:#F2ECFA,stroke:#7655A6,color:#30223F,stroke-width:1.5px
-    classDef ai fill:#FFF3D6,stroke:#A56B16,color:#4C3312,stroke-width:1.5px
-    class C1,C3 curator
-    class L1,L3 language
-    class C2,L2 ai
+flowchart LR
+    A[sources] --> B{{analysis}} --> D[output] --> E([owner responses])
+    C[(learned profile)] --> B
+    E --> C
+    S[serendipity +<br/>counterpoint] --> D
+    class B ai
+    class C store
+    class S wide
+    classDef ai fill:#eef3ff,stroke:#4a6fd1
+    classDef store fill:#f4f4f4,stroke:#777
+    classDef wide fill:#fff4e5,stroke:#c98a2b
 ```
 
-The colors separate the two domains; the double-braced nodes mark the places
-where a model interprets activity rather than simply storing or displaying it.
+Every figure uses one key: hexagons and blue boxes are model calls, cylinders
+are stored data, and orange marks deliberate variety, the rule that keeps a
+learned profile from becoming a closed loop.
 
 ### Curator: from reading to research
 
 A selected article can remain a quick read, contribute feedback to later
 selection, or become the starting point for a longer investigation.
 
-**Reading and feedback**
+**The daily loop**
 
 ```mermaid
-flowchart TB
-    subgraph TOP[" "]
-        direction LR
-        A["daily briefing<br/>20 articles"] --> B[choose an article]
-        B --> C[read on the<br/>original site]
-    end
-
-    subgraph BOTTOM[" "]
-        direction RL
-        R[like, dislike,<br/>save, or comment] --> P{{AI updates the<br/>preference profile}}
-        P --> F[(updated profile)]
-    end
-
-    B --> R
-    F --> A
-
-    classDef curator fill:#E7F4F1,stroke:#25776F,color:#173A36,stroke-width:1.5px
-    classDef ai fill:#F2ECFA,stroke:#7655A6,color:#30223F,stroke-width:1.5px
-    class A,B,C,R,F curator
-    class P ai
-    style TOP fill:transparent,stroke:transparent
-    style BOTTOM fill:transparent,stroke:transparent
+flowchart LR
+    A[RSS · web · X<br/>about 700 a day] --> B[trust + quality<br/>filters] --> C{{AI ranking vs<br/>learned profile}}
+    C --> S[selection<br/>20% serendipity reserve<br/>source diversity] --> D[daily briefing<br/>20 articles]
+    D --> E([owner responses<br/>react · save · comment])
+    E --> F{{AI extracts<br/>preferences}} --> G[(preference memory)] --> C
+    class C,F ai
+    class G store
+    class S wide
+    classDef ai fill:#eef3ff,stroke:#4a6fd1
+    classDef store fill:#f4f4f4,stroke:#777
+    classDef wide fill:#fff4e5,stroke:#c98a2b
 ```
 
-**Research**
+**Going deeper**
 
 ```mermaid
-flowchart TB
-    subgraph TOP[" "]
-        direction LR
-        A[selected article] --> S{{AI scan:<br/>argument · implications<br/>counterpoint · data · sources}}
-        S --> N[choose the<br/>next depth]
-    end
-
-    subgraph PATHS[" "]
-        direction LR
-        O[optional deeper dive<br/>on this article]
-        T[research thread<br/>sources + questions] --> R[comment · react<br/>redirect]
-        R --> W[continue across<br/>wider sources]
-    end
-
-    subgraph RECORD[" "]
-        direction RL
-        DD{{multi-session synthesis<br/>and challenge}} --> L[thinking record<br/>question · leaning · hold]
-        L --> E[evidence<br/>support · complicate · neutral]
-    end
-
-    N --> O
-    N --> T
-    W --> DD
-
-    classDef curator fill:#E7F4F1,stroke:#25776F,color:#173A36,stroke-width:1.5px
-    classDef ai fill:#F2ECFA,stroke:#7655A6,color:#30223F,stroke-width:1.5px
-    class A,N,O,T,R,W,L,E curator
-    class S,DD ai
-    style TOP fill:transparent,stroke:transparent
-    style PATHS fill:transparent,stroke:transparent
-    style RECORD fill:transparent,stroke:transparent
+flowchart LR
+    D[briefing article] --> I{{investigate<br/>summary + counterpoint}}
+    I --> DD{{deeper dive<br/>synthesis + challenger<br/>+ bibliography}}
+    DD --> R[(thinking record<br/>and evidence)]
+    R --> E([owner responses<br/>notes · leaning · next question])
+    E --> I
+    O{{AI observations, off cycle<br/>blind spots · lateral links}} --> E
+    class I,DD,O ai
+    class R store
+    class O wide
+    classDef ai fill:#eef3ff,stroke:#4a6fd1
+    classDef store fill:#f4f4f4,stroke:#777
+    classDef wide fill:#fff4e5,stroke:#c98a2b
 ```
 
 Feedback operates at two timescales. Immediate actions - likes, dislikes, saves,
@@ -179,30 +311,42 @@ relive later.
 
 ```mermaid
 flowchart TB
-    subgraph TOP[" "]
-        direction LR
-        A[persona +<br/>real-world scene] --> B[choose a<br/>voice model]
-        B --> C[run in mini-moi<br/>or export prompt]
-        C --> D[free-form<br/>conversation]
+    subgraph C3 [3 · Review and drilling]
+        direction TB
+        L[word library] --> X[drills + review] --> K[Anki cards]
     end
-
-    subgraph BOTTOM[" "]
-        direction RL
-        E[save transcript] --> F{{"AI tutor review:<br/>corrections · strengths<br/>vocabulary · next focus"}}
-        F --> G[(saved progress<br/>and session history)]
-        G --> H[next session]
+    subgraph C2 [2 · Reading and writing]
+        direction TB
+        R[real local sources<br/>Brazil · Rio de Janeiro]
+        C[four fixed categories<br/>day-to-day · culture and arts<br/>news · local Rio]
+        F[content rotates<br/>to stay fresh]
+        V[brief view<br/>write · paint to translate<br/>add to library]
+        T{{AI feedback<br/>correction · translation}}
+        R --> C --> F --> V --> T
     end
-
-    D --> E
-    H --> A
-
-    classDef language fill:#F2ECFA,stroke:#7655A6,color:#30223F,stroke-width:1.5px
-    classDef ai fill:#FFF3D6,stroke:#A56B16,color:#4C3312,stroke-width:1.5px
-    class A,B,C,D,E,G,H language
-    class F ai
-    style TOP fill:transparent,stroke:transparent
-    style BOTTOM fill:transparent,stroke:transparent
+    subgraph C1 [1 · Conversation]
+        direction TB
+        P[personas the owner writes<br/>service · Maria<br/>social · Lucas<br/>travel · Carlos<br/>+ more…]
+        S[assemble today's scene<br/>persona + scenario<br/>+ memory of past sessions<br/>+ tutor's next focus]
+        B{{live voice<br/>conversation}}
+        D{{AI tutor review}}
+        P --> S --> B --> D
+    end
+    D --> E[(progress + persona memory)]
+    T --> E
+    K --> E
+    class B,D,T ai
+    class E store
+    class F wide
+    classDef ai fill:#eef3ff,stroke:#4a6fd1
+    classDef store fill:#f4f4f4,stroke:#777
+    classDef wide fill:#fff4e5,stroke:#c98a2b
 ```
+
+The figure uses Portuguese as the example: personas I write, a scene assembled
+fresh for each session, real local reading from Brazil and Rio de Janeiro in four
+fixed categories that rotate, and drills. German works the same way, with Vienna
+as its local scene.
 
 German came first and remains more developed in the backend, including the use
 of reviewed conversation context in later persona prompts. Portuguese followed
@@ -226,29 +370,6 @@ reason to read: **Alltag** (everyday life), **Kultur** (culture),
 opens with a short excerpt drawn from the beginning of the source. The full
 article remains available on its original site.
 
-```mermaid
-flowchart TB
-    subgraph TOP[" "]
-        direction LR
-        A[choose a topic] --> B[choose a current article]
-        B --> C[read or listen<br/>full article remains linked]
-    end
-
-    subgraph PRACTICE[" "]
-        direction LR
-        V["vocabulary<br/>highlight · translate · save"] --> P[reuse in later practice<br/>and conversation]
-        N["writing<br/>respond · correct · review · save"] --> P
-    end
-
-    C --> V
-    C --> N
-
-    classDef language fill:#F2ECFA,stroke:#7655A6,color:#30223F,stroke-width:1.5px
-    class A,B,C,V,N,P language
-    style TOP fill:transparent,stroke:transparent
-    style PRACTICE fill:transparent,stroke:transparent
-```
-
 Translation help and other contextual hints are available without replacing the
 reading. They keep unfamiliar language from turning an interesting article into
 a burdensome decoding exercise. A highlighted word or phrase can be translated
@@ -271,8 +392,8 @@ retrieved.
 
 ## Continuity while the system changes
 
-mini-moi is intended to keep its history even as the technology changes. Five
-years from now, the useful part should be the knowledge gathered, lessons
+mini-moi is intended to keep its history even as the technology changes. Over
+time, the useful part should be the knowledge gathered, lessons
 learned, language practice, decisions, and some continuity of character from
 daily interaction - not any particular model, memory system, interface, or
 hosting arrangement. Provider memory can be used when it helps, while
@@ -295,68 +416,119 @@ collaborator. [ROADMAP.md](ROADMAP.md) records that boundary as it changes.
 
 ---
 
+## How it is governed
+
+These are mechanisms in the repository, each with tests. Where something is a
+working rule rather than code, it says so.
+
+- **Approval tiers.** Every mini-moi tool MC can call is listed in an
+  owner-approved, digest-pinned policy with a tier; CoS's tools are a fixed,
+  turn-bound set with receipts. Tier 1 reads. Tier 2 runs
+  private, reversible writes under standing rules I have set. Tier 3 needs my
+  exact approval for that one effect, every time: the platform shows a card with
+  the exact text and a one-time code, reads my yes from my own message, issues a
+  single-use grant, runs the effect through a fenced receipt, and reads the
+  result back. An edited policy file approves nothing.
+- **Spend limits per agent.** Each agent has its own gateway key limited to
+  named model routes, with a spend cap and a rate limit. Production setup
+  refuses to make a key without a cap. Helpers reserve their budget before each
+  model call, inside small per-task and daily caps set in their charters. MC and
+  CoS voice run under a daily budget.
+- **A request ledger, not a chat.** Build and review requests are files: an
+  immutable request and an append-only event log. A receipt means pickup, not
+  completion; a result is the worker's report, not verification.
+- **Model routes.** A route catalogue maps each task to a route, by tier and
+  billing. Metered calls go through one gateway with a receipt per call, and a
+  daily cost check reports and never changes a route.
+- **A pipeline.** A push to main is classified by what it touched, tested, built
+  into an image, and deployed behind container health checks. A
+  documentation-only change restarts nothing. The whole suite runs nightly and
+  files an issue when it fails.
+- **A supervisor.** A separate container reports what has stopped and what is
+  waiting on me, over Telegram. It approves nothing on my behalf.
+
+Working rules, not code: a specification before a build, a reviewer other
+than the author on every non-trivial change, usually from a different provider,
+and my go before
+a deployment. The pipeline deploys a merge to main after tests pass; the gate is
+me, not the code. [ARCHITECTURE.md](ARCHITECTURE.md#design-principles) says where
+each principle lives.
+
+### Deployment
+
+Production is one modest AWS EC2 instance, with Cloudflare in front through a
+tunnel to the host: PostgreSQL, the model gateway, the five domains behind one
+portal, the CoS agent and bots, and the CoS scheduler. The 1.2 layers (the task
+service and helpers, the CoS Board, the supervisor, the Vault's search services,
+Records and the Guildhall workers) are opt-in by design and on in production
+today. MC is its own container stack, deployed on a release tag. Dev and staging
+run on a second, smaller instance. My workstation (today a Mac) holds the
+Vault's master shelf and runs delegated work. Backups run daily, local and
+encrypted off-site, with a weekly second copy.
+[ARCHITECTURE.md](ARCHITECTURE.md#runtime-topology) has the detail.
+
+The maintained reference documents are:
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) - system design and the implementation as it stands (1.2 beta)
+- [OPERATIONS.md](OPERATIONS.md) - how the production system runs (being revised for 1.2)
+- [ROADMAP.md](ROADMAP.md) - current plans and the record of what shipped (being revised for 1.2)
+
+---
+
 ## Design approach
 
-A few choices explain most of the architecture.
+Six choices explain most of the architecture; the full statement of each, and
+where the code keeps it, is in [ARCHITECTURE.md](ARCHITECTURE.md#design-principles).
 
-**Keep learned state outside the model.** Personal context lives in files owned
-by the application rather than inside one model provider. The files are
-structured to match a later database schema, and migration paths have already
-been used in the Guild and research layers. Infrastructure is added when the
-volume or behavior requires it.
+**Files first, database when needed.** Personal context lives in files owned by
+the application, structured to match a later database schema. PostgreSQL holds
+the Guild floor, every agent action and grant, supervision, the voice budget,
+the Portuguese records, and a rebuildable copy of the research records whose
+source stays in files. Append-only ledgers on disk are the
+pattern for anything that must be auditable, and the Vault keeps agent memory as
+plain files.
 
-**Use different models for different work.** Model control rests on three
-considerations:
+**Model-agnostic, by construction.** Callers ask for a task, not a model, and the
+route catalogue makes a swap one line. Model choices are made by comparing the
+same tasks across routes. The first version ran on a local model; local models
+now stay on Dev and staging for regression runs, and production uses cloud
+models only. The goal is an open-source model that passes the same tests.
 
-- **Cost.** Model costs became significant, then dropped substantially when
-  different tasks were routed to different models, including a local option
-  with no per-call charge.
-- **Quality for the task and evaluation.** Models differ in conversation, translation,
-  analysis, review, and coding, and those differences change over time. The
-  ability to switch models also supports direct A/B evaluation on the same task.
-- **Vendor independence and continuity.** Personal context remains above the
-  model layer, so changing providers does not reset the history or require a
-  redesign of the personalization logic. Provider-managed memory can supplement
-  that record without becoming its only home.
+**Platform-owned identity.** Domains never trust identity sent by the client;
+the portal strips every client identity header and adds its own, and agents
+receive a portal-signed assertion for one subject and one request.
 
-Applying model choice consistently at every call site remains ongoing work; a
-July audit found several places where implementation still lagged the intended
-configuration.
+**Agents act under policy, and I own the consequences.** The tiers, keys and
+receipts above. I define the intent, decide what enters the system, and remain
+responsible for the result. Claude Code, Codex and Grok contribute planning,
+design alternatives, implementation, testing, and review; inside the product,
+MC and CoS act only through the tools the platform exposes, with their own keys
+and budgets.
 
-The production history reflects these tradeoffs. The first version ran on a
-local model, and a local model remains the last resort in German's translation
-fallback chain. Curator scoring moved to cloud models after the cost and quality
-tradeoff was measured. The path back to local execution remains part of the
-design and is scheduled for end-to-end verification on the current EC2 setup.
+**Agent-to-agent paths under approval, never autonomous ones.** Agents can ask
+each other questions through the ledger, a partner can hand a chartered,
+read-only job to its helper, and an approved delegation card lets a coding agent
+run on my workstation in a fresh workspace with no push. Each is limited by a
+charter, a cap, or a one-time approval. There is no path by which an agent
+grants another agent authority.
 
-**Use AI agents as contributors, with human direction.** The director defines the
-intent, decides what enters the system, and remains responsible for the result.
-Claude Code, Claude.ai, OpenClaw, Grok, and OpenAI Codex contribute planning,
-design alternatives, implementation, testing, and review. Separately, the
-Chief of Staff beta introduces OpenClaw as the first bounded agent operating
-inside the product. The particular agents and models will change; the
-separation of roles and the platform-owned boundaries are more durable.
-Important changes receive review from more than one agent before they are
-treated as complete.
-
-**Operate while the system is evolving.** Keeping daily use dependable is
-important and not trivial, especially while development continues. Drift can
-appear between domains, between code and documentation, and between assumed
-safeguards and the protection that actually exists during an incident.
-Operations is therefore a continuing process: observe production, test
-assumptions, learn from failures, reconcile code and documentation, and close
-gaps in safeguards as they are found.
+**Operate while the system is evolving.** Drift appears between domains, between
+code and documentation, and between assumed safeguards and the protection that
+actually exists. Operations is a continuing process of observing production,
+testing assumptions, and reconciling code and documents. This page and
+ARCHITECTURE.md are checked against the code production runs before they are
+published.
 
 ---
 
 ## Product tour
 
-These production captures from July 21, 2026 show the five domain environments
-and several workflows behind their landing pages. The descriptions reflect the
-current August 16 state, including the newer Chief of Staff beta. Each image
-opens at full size.
+These production captures from July 21, 2026 show the domain environments and
+several workflows behind their landing pages. They predate 1.2: the Guild and
+Chief of Staff images show those domains before the partners went live, and a
+1.2 capture set is still to come. Each image opens at full size.
 
-### Five domains
+### The domains
 
 | Curator | Mein Deutsch |
 |---|---|
@@ -366,7 +538,7 @@ opens at full size.
 | Meu Português | Guild | Chief of Staff |
 |---|---|---|
 | [![Meu Português landing page with a Rio photograph and language-practice entry points](docs/screenshots/2026-07-21/portuguese-landing.jpg)](docs/screenshots/2026-07-21/portuguese-landing.jpg) | [![Guild landing page with Build, Operate, and Improve](docs/screenshots/2026-07-21/guild-landing.jpg)](docs/screenshots/2026-07-21/guild-landing.jpg) | [![Chief of Staff landing page with a Chicago photograph](docs/screenshots/2026-07-21/chief-of-staff-landing.jpg)](docs/screenshots/2026-07-21/chief-of-staff-landing.jpg) |
-| Family Portuguese practice with separate learning records, level-agnostic immersion, and voice throughout. | Build, Operate, and Improve make platform development and operations visible. | A production beta for conversation, bounded investigation, and platform-owned notes; the image predates the agent release. |
+| Family Portuguese practice with separate learning records, level-agnostic immersion, and voice throughout. | Guild's Build, Operate, and Improve landing; Master Craftsman now works here. The image predates 1.2. | The Chief of Staff landing; the image predates the 1.2 partner release. |
 
 ### Curator: daily reading becomes research
 
@@ -403,21 +575,18 @@ refresh can be added without overwriting this one.
 
 ## More detail
 
-- [Guildhall meeting harness](ARCHITECTURE.md#guildhall-meeting-harness) describes
-  the developing interaction model for natural conversations with distinct agents:
-  addressing, turn-taking, owner corrections and bounded action authority. Its
-  standalone spec includes acceptance checks; implementation is still in progress.
-- [docs/README.md](docs/README.md) is the guide to working references and
-  historical context, including the April 2026 platform vision.
-- [docs/journal/](docs/journal/) is the tracked home for the public build narrative.
-  Its publishing conventions are present; dated sprint notes, plans, and records
-  of how the project changed are still being populated.
-- [docs/releases/](docs/releases/) contains release notes.
-- [ARCHITECTURE.md](ARCHITECTURE.md), [OPERATIONS.md](OPERATIONS.md), and
-  [ROADMAP.md](ROADMAP.md) are
-  the maintained core documents.
+- [ARCHITECTURE.md](ARCHITECTURE.md): the thirteen figures, the two partners'
+  runtimes, how the agents work together, how mini-moi remembers, voice, the
+  model layer, runtime topology, delivery, identity, and the open items the code
+  does not settle.
+- [docs/runbooks/](docs/runbooks/): operating procedures for model tiers,
+  supervision, the Vault, and the production agents.
+- [docs/README.md](docs/README.md): working references and historical context,
+  including the April 2026 platform vision.
+- [docs/journal/](docs/journal/) and [docs/decision-records/](docs/decision-records/):
+  the build narrative and the decisions behind it.
 
 ---
 
-**Status:** In daily use since February 2026; running on AWS since June 2026.  
+**Status:** 1.2 beta. In daily use since February 2026; on AWS since June 2026; release 1.2 in production beta since 9 November 2026.  
 **Author:** Robert van Stedum

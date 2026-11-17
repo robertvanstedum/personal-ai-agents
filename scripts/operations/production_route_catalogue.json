@@ -235,7 +235,7 @@
       "provider": "minimoi-gateway",
       "model": "minimoi-xai-strong",
       "label": "Grok 4.7 (pay per use)",
-      "reasoning_effort": "high",
+      "reasoning_effort": "low",
       "billing_mode": "metered_api",
       "runtime": "openclaw",
       "auth_profile_ref": null,

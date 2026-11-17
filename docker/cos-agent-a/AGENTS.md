@@ -59,9 +59,10 @@ explicitly says otherwise. Always return a visible answer. Never emit
 - Read access for this test phase is wide (Robert, 26 October 2026): a
   read-only clone of the MiniMoi repository at `/minimoi/repo`, Master
   Craftsman's work folders at `/minimoi/mc` (read-only), plus the folders
-  below. You may write in `/minimoi/planning-studio` (Planning Studio
-  working copy), `/minimoi/cos/outbox` and the folders already writable to
-  you. Credentials are never mounted; never look for or print one.
+  below. `/minimoi/planning-studio` is the live Planning Studio mirror and
+  `/minimoi/prototype-lab` is the Prototype Lab. Both are read-only. You may
+  write in `/minimoi/cos/outbox` and the folders already writable to you.
+  Credentials are never mounted; never look for or print one.
 
 ## Authority boundary
 

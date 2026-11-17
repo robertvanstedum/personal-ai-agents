@@ -1,6 +1,6 @@
 """CoS's wide test-phase access never reaches a credential (Robert, 26 Oct 2026; #215).
 
-Read everything, write in its own folders and Planning Studio — but no .env, mc.env, MC's portal secrets, auth files,
+Read everything, write in its own folders — but no .env, mc.env, MC's portal secrets, auth files,
 private stores, backups, SSH keys or the Docker socket; no writable copy of scripts root runs; and with CoS's own key,
 no master key in its environment.
 """
@@ -39,7 +39,8 @@ def test_cos_agent_folders_and_modes():
     assert m["/minimoi/cos/inbox"] == ("/opt/minimoi/cos/inbox", True)
     assert m["/minimoi/cos/outbox"] == ("/opt/minimoi/cos/outbox", False)
     assert m["/minimoi/cos/conversations"] == ("/opt/minimoi/cos/conversations", True)
-    assert m["/minimoi/planning-studio"] == ("/opt/minimoi/cos/planning-studio", False)
+    assert m["/minimoi/planning-studio"] == ("/opt/minimoi/planning/tree", True)
+    assert m["/minimoi/prototype-lab"] == ("/opt/minimoi/mc/repo/prototype-lab", True)
     assert m["/minimoi/repo"] == ("/opt/minimoi/mc/repo", True)
     assert m["/run/cos-key"] == ("/opt/minimoi/cos/agent-key", True)
     for t in ("/minimoi/mc/work", "/minimoi/mc/workshops", "/minimoi/mc/artifacts"):
@@ -53,6 +54,28 @@ def test_scheduler_writes_inbox_and_only_reads_the_outbox():
     env = COMPOSE["services"]["cos-scheduler"]["environment"]
     assert "COS_AGENT_INBOX=/minimoi/cos/inbox" in env and "COS_AGENT_OUTBOX=/minimoi/cos/outbox" in env
     assert "MINIMOI_VAULT_ASK_CONVERSATIONS=${MINIMOI_COS_VAULT_CONVERSATIONS:-guild-}" in env
+
+
+def test_keep_planning_copies_only_what_the_live_mirror_lacks(tmp_path):
+    old, live, out = tmp_path / "old", tmp_path / "live", tmp_path / "out"
+    (old / "notes").mkdir(parents=True)
+    (live / "notes").mkdir(parents=True)
+    (old / "notes" / "hers.md").write_text("written by CoS\n")
+    (old / "shared.md").write_text("same\n")
+    (live / "shared.md").write_text("same\n")
+    (old / "edited.md").write_text("her edit\n")
+    (live / "edited.md").write_text("live\n")
+    env = {"COS_PLANNING_OLD": str(old), "PLANNING_TREE": str(live), "COS_PLANNING_KEEP": str(out),
+           "PATH": "/usr/bin:/bin"}
+    run = subprocess.run(["bash", str(REPO / "scripts/operations/cos_prod.sh"), "keep-planning"],
+                         env=env, capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    kept = list(out.glob("planning-studio-kept-*"))
+    assert len(kept) == 1
+    assert (kept[0] / "notes" / "hers.md").read_text() == "written by CoS\n"
+    assert (kept[0] / "edited.md").read_text() == "her edit\n"
+    assert not (kept[0] / "shared.md").exists()
+    assert (old / "notes" / "hers.md").is_file()
 
 
 def test_master_key_is_withheld_once_cos_has_its_own():

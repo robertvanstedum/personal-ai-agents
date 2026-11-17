@@ -1,5 +1,9 @@
 # Operations: Mini-moi
 
+> **Being revised for mini-moi 1.2 (beta, November 2026).** This document still describes the earlier baseline
+> (ROADMAP: August 2026; OPERATIONS: September 2026). For the current system, see README and ARCHITECTURE. The 1.2
+> version of this document is in progress.
+
 [Download the formatted PDF](OPERATIONS.pdf)
 
 *Maintained runbook, reviewed through 2026-08-17. Use this document to identify

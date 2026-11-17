@@ -198,6 +198,7 @@ def test_mc_mounts_only_the_files_read_only():
         planning = [v for v in vols if v.startswith("/opt/minimoi/planning")]
         if name == "mc-agent":
             assert planning == ["/opt/minimoi/planning/tree:/minimoi/planning:ro"]
+            assert "/opt/minimoi/mc/repo/prototype-lab:/minimoi/prototype-lab:ro" in vols
         else:
             assert planning == [], name
 

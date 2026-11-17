@@ -26,7 +26,7 @@ def test_symlink_and_public_state_refused(inputs,tmp_path):
  with pytest.raises(ValueError,match='symlink'):m.plan(inputs)
 def test_optional_profile_no_ports_external_network_no_bootstrap():
  config=yaml.safe_load((ROOT/'docker-compose.records-production.yml').read_text());service=config['services']['minimoi-records']
- assert service['profiles']==['records-production'];assert service['restart']=='no';assert 'ports'not in service and 'build'not in service and 'env_file'not in service
+ assert service['profiles']==['records-production'];assert service['restart']=='unless-stopped';assert 'ports'not in service and 'build'not in service and 'env_file'not in service
  assert config['networks']['records-production']['external']is True
  assert all(v['bind']['create_host_path']is False for v in service['volumes']);assert len(service['volumes'])==2
  assert service['command']==['python','-m','services.records_runtime','--data-dir','/var/lib/minimoi-records','--execute']

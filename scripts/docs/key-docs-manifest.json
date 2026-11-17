@@ -1,50 +1,50 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-06T17:31:52.475908+00:00",
+  "generated_at": "2026-11-17T05:14:29.153449+00:00",
   "publisher": "python3 scripts/docs/publish_key_docs.py",
   "documents": [
     {
       "source": "README.md",
       "pdf": "README.pdf",
-      "source_sha256": "c67c14d577e5e7d7e6ff1b29b81223613f055de1accb1e8fb2eb39f678723a1b",
+      "source_sha256": "7c0d3f55c94c5566b9519ec4569a2fe9adfffd760d18f0dd7665a4d97f0a48ad",
       "renderer_sha256": "d6b762ea5ed9e605152865845dca8ec2d3f7812d930f4a899774724578d88323",
-      "pdf_sha256": "8fa95d3e930f4c579e6329a46d9bc3c93f6e395de34aff900c7cd197d8ce0d79",
-      "mermaid_diagrams": 5,
+      "pdf_sha256": "c498db0623f06a2ff75601c3dc8b665aa275dec154b73fef387dd16939347aec",
+      "mermaid_diagrams": 7,
       "pages": 12,
-      "extractable_text_characters": 18680,
+      "extractable_text_characters": 26155,
       "title": "mini-moi"
     },
     {
       "source": "ARCHITECTURE.md",
       "pdf": "ARCHITECTURE.pdf",
-      "source_sha256": "c2915956f9e58ffd738e76b5c00a3a7343c03f3be3a0c7856d153043667892f7",
+      "source_sha256": "4cc557852ca886b812fc84d6f95a0c6bfa2fe1b7d4289aa4e76b81d683d866f1",
       "renderer_sha256": "d6b762ea5ed9e605152865845dca8ec2d3f7812d930f4a899774724578d88323",
-      "pdf_sha256": "9f9975158889387274cf7a3ad932832b1efeca98f71725672a17a3a2ddbb4f45",
-      "mermaid_diagrams": 9,
-      "pages": 15,
-      "extractable_text_characters": 37703,
+      "pdf_sha256": "394ab1595a3c394edb88432adf5252d8e684b93facaff7626404c22ec6e40d4e",
+      "mermaid_diagrams": 13,
+      "pages": 25,
+      "extractable_text_characters": 70702,
       "title": "mini-moi Architecture"
     },
     {
       "source": "OPERATIONS.md",
       "pdf": "OPERATIONS.pdf",
-      "source_sha256": "cf3100bea6751427ac6c19a482ad82947627c6b8e8330673dd9a9e5349f5e4a6",
+      "source_sha256": "450a077f06de2767e7aa18253533d3c7aa44a0da5bc06633b7eefec70aa6c2dc",
       "renderer_sha256": "d6b762ea5ed9e605152865845dca8ec2d3f7812d930f4a899774724578d88323",
-      "pdf_sha256": "c617ef3b5373e704dda56233178b9e1d431a315afce1fcb3f15651bf4887273b",
+      "pdf_sha256": "222b941e707f72c7c67833329860bc34326833487af90ace0343c0fa9db27494",
       "mermaid_diagrams": 1,
       "pages": 13,
-      "extractable_text_characters": 28864,
+      "extractable_text_characters": 29123,
       "title": "mini-moi Operations"
     },
     {
       "source": "ROADMAP.md",
       "pdf": "ROADMAP.pdf",
-      "source_sha256": "2a1a8dfd776689976ca90244c09ee9d5ad83d1963cadee5d1a11d1da8dcf5ebb",
+      "source_sha256": "eb9ed5c3e5a661d3157431f3e83bff9bcebb3fb5c99dc7a67bbc6c8d2607eeab",
       "renderer_sha256": "d6b762ea5ed9e605152865845dca8ec2d3f7812d930f4a899774724578d88323",
-      "pdf_sha256": "33e89b565de38b7e2fd4dd570e6b5a0a615ea7622a845cf73e9bc8448ad4bdba",
+      "pdf_sha256": "bdc7a1e2da5d3c2870e137ce133dfb20b354d94d1ea2e83f43f0c2d1f06d5d3f",
       "mermaid_diagrams": 3,
       "pages": 8,
-      "extractable_text_characters": 20018,
+      "extractable_text_characters": 20277,
       "title": "mini-moi Roadmap"
     }
   ]

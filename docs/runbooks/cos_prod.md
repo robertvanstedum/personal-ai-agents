@@ -22,9 +22,10 @@ path with a CoS policy that Robert approves by digest) follows as its own change
 
 Read: `/minimoi/data` (rw, as before), `/minimoi/docs` (rw), `/minimoi/agent_logs` (rw), `/minimoi/scripts` (**now
 read-only**: root runs these on every release), the repo clone `/minimoi/repo` (ro; MC's clone, refreshed 04:40), MC's
-`work`, `workshops`, `artifacts` (ro), its inbox and conversations (ro). Write: `/minimoi/cos/outbox`,
-`/minimoi/planning-studio` (a working copy seeded from the repo's `planning-studio/`; changes reach git only through a
-builder, since CoS has no git credential), and the folders above marked rw.
+`work`, `workshops`, `artifacts` (ro), its inbox and conversations (ro).
+`/minimoi/planning-studio` is the same live read-only planning mirror MC reads (`/opt/minimoi/planning/tree`).
+`/minimoi/prototype-lab` is the Prototype Lab from the deployed code repo, also read-only.
+Write: `/minimoi/cos/outbox` and the folders above marked rw. CoS does not write Planning Studio.
 
 Never mounted: `/opt/minimoi` itself, `.env*`, `mc.env`, `mc/portal`, `gateway-keys.env`, `vault-reader.env`, `auth/`,
 `private/`, `backups/`, `operators/`, `~/.ssh`, the Docker socket. `tests/cos/test_cos_access_mounts.py` holds this.
@@ -44,7 +45,10 @@ With its own key CoS depends on the gateway's key database (Postgres), as MC's s
 ## Release steps
 
 1. **Main release** (this PR): new `cos-scheduler`, `cos-agent-a` and `portal` images, the compose mounts, and
-   `cos_prod.sh prepare` in the deploy (creates `/opt/minimoi/cos/{inbox,outbox,conversations,planning-studio,agent-key}`).
+   `cos_prod.sh prepare` in the deploy (creates `/opt/minimoi/cos/{inbox,outbox,conversations,agent-key}`).
+   It no longer seeds a writable Planning Studio copy. Before that old folder is removed, run
+   `cos_prod.sh keep-planning` while CoS is idle. It copies files the live mirror lacks into
+   `/opt/minimoi/cos/planning-kept/` (not the outbox, so they are not offered as downloads) and does not delete the old folder.
    CoS restarts with the release (Robert is told first). CoS keeps the master key until step 2.
 2. `sudo /opt/minimoi/scripts/cos_prod.sh key 50`, then `cos_prod.sh audit` (no credential readable; no master key).
 3. `sudo /opt/minimoi/scripts/cos_prod.sh vault on`.
