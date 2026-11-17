@@ -37,9 +37,10 @@ class GitHubIssues:
         self._token = token if isinstance(token, str) and token else None      # optional read token; never logged
         self.authenticated = self._token is not None
         self.token_refused = False
+        self.retry_after_s = None
 
     def _failed(self, state, what):
-        return self.flagged(_failed(state, what, authenticated=self.authenticated))
+        return self.flagged(_failed(state, what, authenticated=self.authenticated, retry_after_s=self.retry_after_s))
 
     @property
     def head(self):
@@ -65,6 +66,7 @@ class GitHubIssues:
         if r.status_code == 404:
             return "not_found", None
         if r.status_code in (403, 429):
+            self.retry_after_s = _retry_after_s(r)
             return "rate_limited", None
         if r.status_code != 200 or len(r.content or b"") > MAX_BYTES:
             return "unreadable", None
@@ -205,6 +207,36 @@ class GitHubIssues:
         lines += [f"- #{r['number']} · {r['kind']} · {r['state']} (search state; read PR to verify merge) · {r['title']} · updated {r['updated']} · {r['url']}" for r in rows]
         return "ok", "\n".join(lines), {"results": rows}
 
+    def open(self, query: str = "", page: int = 1) -> tuple[str, str, dict]:
+        """Open issues only, pull requests left out, newest update first. ``query`` adds GitHub qualifiers."""
+        if type(page) is not int or not 1 <= page <= 300:
+            return "invalid", "A page is 1 to 300.", {}
+        if query and re.search(r'(?:^|\s)-?(?:repo|org|user):', query, re.I):
+            return "invalid", "The repository is fixed. Send topic words, not a repo: qualifier.", {}
+        extra = f"{query} " if query else ""
+        state, found = self._json("/search/issues", {
+            "q": f"{extra}repo:{self.repo} is:issue is:open",
+            "sort": "updated", "order": "desc", "per_page": RESULTS,
+            **({"page": page} if page > 1 else {})})
+        if state != "ok" or not isinstance(found, dict):
+            return (state if state != "ok" else "unreadable"), self._failed(state, "open issues"), {}
+        items = [i for i in found.get("items") or [] if isinstance(i, dict)][:RESULTS]
+        if any(type(i.get("number")) is not int or i["number"] < 1 or i.get("pull_request")
+               or i.get("repository_url") != f"{API}/repos/{self.repo}" for i in items):
+            return "unreadable", "Search results did not match the fixed repository.", {}
+        rows = []
+        for item in items:
+            names = [lab.get("name") for lab in item.get("labels") or [] if isinstance(lab, dict) and lab.get("name")]
+            labels = ", ".join(str(name) for name in names) or "no labels"
+            rows.append({"number": item["number"], "title": _t(item.get("title"), 200),
+                         "labels": labels, "updated": str(item.get("updated_at"))[:10],
+                         "url": f"https://github.com/{self.repo}/issues/{item['number']}"})
+        if not rows:
+            return "ok", f"{self.head}\nNo open issues match.", {"results": []}
+        lines = [self.head, f"{found.get('total_count', len(rows))} open issue(s); the most recently updated:"]
+        lines += [f"- #{r['number']} · {r['title']} · {r['labels']} · updated {r['updated']}" for r in rows]
+        return "ok", "\n".join(lines), {"results": rows}
+
     def window(self, hours: int = 48, page: int = 1) -> tuple[str, str, dict]:
         """Every issue and pull request updated in the last ``hours``, one search. The caller does not open each item."""
         from datetime import datetime, timedelta, timezone
@@ -268,10 +300,23 @@ def _cut(value, n):
     return text[:n] + (f" [cut: {len(text) - n} more characters on GitHub]" if len(text) > n else "")
 
 
-def _failed(state, what, *, authenticated=False):
+def _retry_after_s(response):
+    """Seconds until GitHub will take another call, from the response headers, or None."""
+    headers = getattr(response, "headers", None) or {}
+    get = getattr(headers, "get", None)
+    if get is None:
+        return None
+    raw = get("Retry-After")
+    if isinstance(raw, str) and raw.isdigit():
+        return min(int(raw), 3600)
+    return None
+
+
+def _failed(state, what, *, authenticated=False, retry_after_s=None):
+    wait = f" Rate limited, try again in {retry_after_s} s." if isinstance(retry_after_s, int) else ""
     limited = ("GitHub is limiting requests just now, even with MiniMoi's read token; try again later." if authenticated else
                "GitHub is limiting requests just now; try again later. MiniMoi reads GitHub without a credential, so it shares "
-               "the address's small anonymous allowance.")
+               "the address's small anonymous allowance.") + wait
     return {"not_found": f"GitHub has no {what}.", "rate_limited": limited,
             "unreachable": f"GitHub could not be reached from this host just now, so I can't say anything about {what}.",
             }.get(state, f"GitHub could not be read just now, so I can't say anything about {what}.")
@@ -290,6 +335,9 @@ def valid_request(args):
     fields = set(args) - {'operation'}
     if op == 'search':
         return 'query' in fields and fields <= {'query', 'page'} and not re.search(r'(?:^|\s)-?(?:repo|org|user):', args['query'], re.I)
+    if op == 'open':
+        return fields <= {'query', 'page'} and ( 'query' not in fields or (
+            isinstance(args.get('query'), str) and not re.search(r'(?:^|\s)-?(?:repo|org|user):', args['query'], re.I)))
     if op == 'latest':
         return fields <= {'page'}
     if op == 'window':
