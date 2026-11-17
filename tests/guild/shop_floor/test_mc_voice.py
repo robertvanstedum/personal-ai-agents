@@ -257,6 +257,33 @@ def test_the_request_sent_to_the_provider_forbids_any_provider_response(turned, 
     assert seen["headers"]["OpenAI-Safety-Identifier"] and "robert" not in seen["headers"]["OpenAI-Safety-Identifier"]       # hashed, not the name
 
 
+def test_the_talking_call_uses_the_persona_voice_and_refuses_a_silent_grok_swap(turned, provider, monkeypatch):
+    """#662 interim: the walk speaks the pinned card's OpenAI voice, and a Grok request is refused in words."""
+    import json
+    from pathlib import Path
+    from core.realtime_voice.providers import openai_realtime
+    from minimoi_portal.guild_ui import mc_voice
+    _on(monkeypatch)
+    monkeypatch.setenv("MINIMOI_MC_VOICE_PATH", "realtime")
+    minted = {}
+    monkeypatch.setattr(openai_realtime, "mint_ephemeral_credential",
+                        lambda **kw: minted.update(kw) or {"ok": True, "provider": "openai", "client_secret": "ek", "expires_at": 1, "model": "stand-in"})
+    card = json.loads(Path(mc_voice.__file__).resolve().parents[2].joinpath(
+        "services/mc_operations/personas/mc-chat/pin.json").read_text())
+    release = card["release"]
+    voice = json.loads(Path(mc_voice.__file__).resolve().parents[2].joinpath(
+        f"services/mc_operations/personas/mc-chat/releases/{release}/voice.json").read_text())["voices"]["openai"]
+    source = Path(mc_voice.__file__).read_text()
+    assert 'voice="marin"' not in source and "voice='marin'" not in source
+    client = turned.owner()
+    token = turned.csrf(client)
+    refused = client.post(f"{API}/mc/voice/bootstrap", json={"provider": "xai"}, headers=write_headers(token))
+    assert refused.status_code == 409 and refused.get_json()["error"] == "MC voice runs on OpenAI for now."
+    assert minted == {}
+    ok = client.post(f"{API}/mc/voice/bootstrap", json={"provider": "openai"}, headers=write_headers(token))
+    assert ok.status_code == 200 and minted["voice"] == voice
+
+
 def test_a_talking_call_settles_at_end_to_the_minutes_it_ran_for_its_owner_only(turned, provider, monkeypatch):
     """#578 S5: the talking call reserves an hour at the realtime rate under its own ledger id; End brings it down to the
     one-minute minimum here, bound to its owner by the ledger row (not the in-memory table, which a restart empties)."""
